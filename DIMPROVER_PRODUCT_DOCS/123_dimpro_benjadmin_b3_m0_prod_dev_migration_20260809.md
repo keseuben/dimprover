@@ -350,8 +350,8 @@ DEV backup:
 - napi ütemezés: aktív
 - source/worktree/repo/config/Nginx/TLS/PM2/SSH/firewall állapot mentése
 - PostgreSQL DEV client certificate/private key titkosított Restic snapshotba bekerül
-- checkpoint snapshot: `e29b300e`
-- külön Nginx fájl restore teszt: PASS
+- legfrissebb M0 checkpoint snapshot: `a0e897f5`
+- legfrissebb snapshotból külön Nginx fájl restore teszt és byte-compare: PASS
 
 DB backup:
 
