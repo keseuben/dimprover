@@ -1,0 +1,252 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { BellRing, Download, LoaderCircle, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+type PushConfigResponse = {
+  ok?: boolean;
+  publicKey?: string;
+  subscriptionCount?: number;
+  error?: string;
+};
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+}
+
+function adminHeaders(includeJson = false) {
+  const key = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
+  return {
+    ...(includeJson ? { "content-type": "application/json" } : {}),
+    "x-dimpro-license-admin-key": key,
+  };
+}
+
+export default function DevPwaControls() {
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+  const [supported, setSupported] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [ringEnabled, setRingEnabled] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [subscriptionCount, setSubscriptionCount] = useState(0);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+      || ("standalone" in window.navigator && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone));
+    setInstalled(isStandalone);
+    setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+    setPermission("Notification" in window ? Notification.permission : "unsupported");
+    setRingEnabled(localStorage.getItem(DEV_RING_STORAGE_KEY) === "true");
+
+    const onBeforeInstall = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+      setMessage("A DIMPRO Dev alkalmazás telepítve lett.");
+    };
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+
+    async function inspectPushState() {
+      if (!("serviceWorker" in navigator)) return;
+      try {
+        const registration = await navigator.serviceWorker.register("/dimpro-dev-sw.js", { scope: "/admin/" });
+        const existing = await registration.pushManager.getSubscription();
+        setSubscribed(Boolean(existing));
+        const response = await fetch("/api/dev/push/public-key", { headers: adminHeaders(), cache: "no-store" });
+        const payload = await response.json().catch(() => null) as PushConfigResponse | null;
+        if (response.ok && payload?.ok) setSubscriptionCount(payload.subscriptionCount || 0);
+      } catch {
+        setMessage("A PWA szolgáltatás ellenőrzése nem sikerült.");
+      }
+    }
+    void inspectPushState();
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (!installPrompt) {
+      setMessage(installed
+        ? "A DIMPRO Dev már telepített alkalmazásként fut."
+        : "Mobilon nyissa meg a Chrome menüt, majd válassza a „Telepítés” vagy „Kezdőképernyőhöz adás” lehetőséget.");
+      return;
+    }
+    setBusy("install");
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setMessage(choice.outcome === "accepted" ? "A telepítés elindult." : "A telepítés megszakadt.");
+    setBusy("");
+  }
+
+  async function enablePush() {
+    if (!supported) {
+      setMessage("Ez a böngésző nem támogatja a PWA push értesítést.");
+      return;
+    }
+    setBusy("push");
+    setMessage("");
+    try {
+      const nextPermission = await Notification.requestPermission();
+      setPermission(nextPermission);
+      if (nextPermission !== "granted") throw new Error("Az értesítési engedély nem lett megadva.");
+
+      const registration = await navigator.serviceWorker.register("/dimpro-dev-sw.js", { scope: "/admin/" });
+      await navigator.serviceWorker.ready;
+      const keyResponse = await fetch("/api/dev/push/public-key", { headers: adminHeaders(), cache: "no-store" });
+      const keyPayload = await keyResponse.json().catch(() => null) as PushConfigResponse | null;
+      if (!keyResponse.ok || !keyPayload?.publicKey) throw new Error(keyPayload?.error || "A push nyilvános kulcs nem érhető el.");
+
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyPayload.publicKey),
+      });
+
+      const response = await fetch("/api/dev/push/subscribe", {
+        method: "POST",
+        headers: adminHeaders(true),
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          deviceLabel: `${navigator.platform || "Mobil eszköz"} – DIMPRO Dev`,
+        }),
+      });
+      const payload = await response.json().catch(() => null) as PushConfigResponse | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A push feliratkozás sikertelen.");
+
+      setSubscribed(true);
+      setSubscriptionCount(payload.subscriptionCount || 1);
+      setMessage("A hangos rendszerértesítés engedélyezve lett ezen az eszközön.");
+      await registration.showNotification("DIMPRO Dev értesítések engedélyezve", {
+        body: "A fejlesztések elkészüléséről ez az eszköz rendszerértesítést kap.",
+        icon: "/pwa/dimpro-dev-192.png",
+        badge: "/pwa/dimpro-dev-192.png",
+        tag: "dimpro-dev-enabled",
+        data: { url: "/admin/dev#ertesitesek" },
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Az értesítés bekapcsolása sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function disablePush() {
+    setBusy("push");
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await fetch("/api/dev/push/unsubscribe", {
+          method: "POST",
+          headers: adminHeaders(true),
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      setSubscribed(false);
+      setSubscriptionCount((count) => Math.max(0, count - 1));
+      setMessage("A push értesítés ki lett kapcsolva ezen az eszközön.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A leiratkozás sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function toggleRing() {
+    const next = !ringEnabled;
+    localStorage.setItem(DEV_RING_STORAGE_KEY, String(next));
+    setRingEnabled(next);
+    setMessage(next
+      ? "Az egyedi DIMPRO jelzőhang bekapcsolva. A Hangteszt gombbal azonnal meghallgatható."
+      : "Az egyedi DIMPRO jelzőhang kikapcsolva. A telefon rendszerhangja továbbra is működhet.");
+  }
+
+  async function testStrongRing() {
+    localStorage.setItem(DEV_RING_STORAGE_KEY, "true");
+    setRingEnabled(true);
+    const played = await playDimproDevBell();
+    setMessage(played
+      ? "Az erős, egyedi DIMPRO jelzőhang megszólalt. A tényleges hangerőt a telefon médiahangereje szabályozza."
+      : "A böngésző ezen az eszközön nem tudta lejátszani az egyedi hangot.");
+  }
+
+  async function sendTestPush() {
+    setBusy("test");
+    setMessage("");
+    try {
+      if (!subscribed) throw new Error("Előbb engedélyezze a push értesítést ezen az eszközön.");
+      const response = await fetch("/api/dev/push/test", { method: "POST", headers: adminHeaders(true), body: "{}" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; sent?: number; failed?: number; error?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A tesztértesítés sikertelen.");
+      setMessage(payload.sent
+        ? `Tesztértesítés elküldve ${payload.sent} eszközre.`
+        : "Nincs aktív push eszköz. Kapcsolja ki, majd engedélyezze újra az értesítést.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A tesztértesítés sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <section className="dev-pwa-controls" aria-label="PWA és hangos értesítések">
+      <div className="dev-pwa-status-row">
+        <span className={installed ? "is-active" : ""}><Smartphone size={15} /> {installed ? "PWA telepítve" : "PWA böngészőben"}</span>
+        <span className={subscribed ? "is-active" : ""}><BellRing size={15} /> {subscribed ? "Push aktív" : "Push kikapcsolva"}</span>
+        <span className={ringEnabled ? "is-active" : ""}>{ringEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />} {ringEnabled ? "Egyedi hang aktív" : "Egyedi hang kikapcsolva"}</span>
+      </div>
+
+      <div className="dev-pwa-actions">
+        <button type="button" onClick={installApp} disabled={busy === "install"}>
+          {busy === "install" ? <LoaderCircle className="dev-spin" size={17} /> : <Download size={17} />}
+          {installed ? "Telepítve" : "Telepítés mobilra"}
+        </button>
+        <button type="button" onClick={subscribed ? disablePush : enablePush} disabled={busy === "push"}>
+          {busy === "push" ? <LoaderCircle className="dev-spin" size={17} /> : <BellRing size={17} />}
+          {subscribed ? "Push kikapcsolása" : "Push engedélyezése"}
+        </button>
+        <button type="button" onClick={toggleRing}>
+          {ringEnabled ? <VolumeX size={17} /> : <Volume2 size={17} />}
+          {ringEnabled ? "Egyedi hang kikapcsolása" : "Egyedi hang bekapcsolása"}
+        </button>
+        <button type="button" className="is-strong-sound" onClick={() => void testStrongRing()}>
+          <Volume2 size={17} />
+          Erős DIMPRO hang teszt
+        </button>
+        <button type="button" onClick={sendTestPush} disabled={busy === "test" || !subscribed}>
+          {busy === "test" ? <LoaderCircle className="dev-spin" size={17} /> : <BellRing size={17} />}
+          Push teszt
+        </button>
+      </div>
+
+      <p className="dev-pwa-note">
+        Engedély: <strong>{permission}</strong> · Regisztrált eszközök: <strong>{subscriptionCount}</strong>
+      </p>
+      <p className="dev-pwa-sound-note">
+        Az egyedi DIMPRO hang a megnyitott PWA-ban szól. Háttérben vagy lezárt képernyőn az Android saját értesítési hangja és rezgése működik.
+      </p>
+      {message ? <p className="dev-pwa-message">{message}</p> : null}
+    </section>
+  );
+}

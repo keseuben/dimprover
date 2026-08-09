@@ -1,0 +1,255 @@
+{
+  "schema": "dimpro.material-development-catalog.v1",
+  "developmentOnly": true,
+  "items": [
+    {
+      "id": "concrete-normal",
+      "categoryId": "concrete",
+      "name": "normál beton",
+      "lambdaWmK": 1.7,
+      "densityKgM3": 2300,
+      "specificHeatJkgK": 900,
+      "mu": 80,
+      "defaultThicknessMm": 200
+    },
+    {
+      "id": "reinforced-concrete",
+      "categoryId": "concrete",
+      "name": "vasbeton",
+      "lambdaWmK": 2.1,
+      "densityKgM3": 2500,
+      "specificHeatJkgK": 900,
+      "mu": 100,
+      "defaultThicknessMm": 200
+    },
+    {
+      "id": "solid-brick",
+      "categoryId": "masonry",
+      "name": "tömör égetett tégla",
+      "lambdaWmK": 0.72,
+      "densityKgM3": 1700,
+      "specificHeatJkgK": 840,
+      "mu": 10,
+      "defaultThicknessMm": 380
+    },
+    {
+      "id": "hollow-brick",
+      "categoryId": "masonry",
+      "name": "üreges falazóelem",
+      "lambdaWmK": 0.33,
+      "densityKgM3": 850,
+      "specificHeatJkgK": 840,
+      "mu": 8,
+      "defaultThicknessMm": 300
+    },
+    {
+      "id": "aerated-concrete",
+      "categoryId": "aerated-concrete",
+      "name": "pórusbeton",
+      "lambdaWmK": 0.13,
+      "densityKgM3": 500,
+      "specificHeatJkgK": 1000,
+      "mu": 6,
+      "defaultThicknessMm": 300
+    },
+    {
+      "id": "calcium-silicate",
+      "categoryId": "calcium-silicate",
+      "name": "mészhomoktégla",
+      "lambdaWmK": 0.8,
+      "densityKgM3": 1800,
+      "specificHeatJkgK": 850,
+      "mu": 12,
+      "defaultThicknessMm": 250
+    },
+    {
+      "id": "cement-plaster",
+      "categoryId": "plaster-mortar",
+      "name": "cementvakolat",
+      "lambdaWmK": 0.9,
+      "densityKgM3": 1800,
+      "specificHeatJkgK": 840,
+      "mu": 18,
+      "defaultThicknessMm": 15
+    },
+    {
+      "id": "lime-plaster",
+      "categoryId": "plaster-mortar",
+      "name": "mészvakolat",
+      "lambdaWmK": 0.7,
+      "densityKgM3": 1600,
+      "specificHeatJkgK": 850,
+      "mu": 10,
+      "defaultThicknessMm": 15
+    },
+    {
+      "id": "cement-screed",
+      "categoryId": "screed",
+      "name": "cementesztrich",
+      "lambdaWmK": 1.2,
+      "densityKgM3": 2000,
+      "specificHeatJkgK": 900,
+      "mu": 35,
+      "defaultThicknessMm": 60
+    },
+    {
+      "id": "eps",
+      "categoryId": "eps",
+      "name": "fehér EPS hőszigetelés",
+      "lambdaWmK": 0.039,
+      "densityKgM3": 18,
+      "specificHeatJkgK": 1450,
+      "mu": 30,
+      "defaultThicknessMm": 100
+    },
+    {
+      "id": "graphite-eps",
+      "categoryId": "graphite-eps",
+      "name": "grafitos EPS hőszigetelés",
+      "lambdaWmK": 0.032,
+      "densityKgM3": 18,
+      "specificHeatJkgK": 1450,
+      "mu": 30,
+      "defaultThicknessMm": 120
+    },
+    {
+      "id": "xps",
+      "categoryId": "xps",
+      "name": "XPS hőszigetelés",
+      "lambdaWmK": 0.036,
+      "densityKgM3": 35,
+      "specificHeatJkgK": 1450,
+      "mu": 100,
+      "defaultThicknessMm": 100
+    },
+    {
+      "id": "rock-wool",
+      "categoryId": "mineral-wool",
+      "name": "kőzetgyapot",
+      "lambdaWmK": 0.038,
+      "densityKgM3": 50,
+      "specificHeatJkgK": 1030,
+      "mu": 1,
+      "defaultThicknessMm": 150
+    },
+    {
+      "id": "glass-wool",
+      "categoryId": "mineral-wool",
+      "name": "üveggyapot",
+      "lambdaWmK": 0.04,
+      "densityKgM3": 20,
+      "specificHeatJkgK": 840,
+      "mu": 1,
+      "defaultThicknessMm": 200
+    },
+    {
+      "id": "pir",
+      "categoryId": "pir-pur",
+      "name": "PIR hőszigetelő lemez",
+      "lambdaWmK": 0.024,
+      "densityKgM3": 32,
+      "specificHeatJkgK": 1400,
+      "mu": 60,
+      "defaultThicknessMm": 100
+    },
+    {
+      "id": "softwood",
+      "categoryId": "wood",
+      "name": "szerkezeti fa",
+      "lambdaWmK": 0.14,
+      "densityKgM3": 500,
+      "specificHeatJkgK": 1600,
+      "mu": 40,
+      "defaultThicknessMm": 100
+    },
+    {
+      "id": "osb",
+      "categoryId": "wood",
+      "name": "OSB lap",
+      "lambdaWmK": 0.13,
+      "densityKgM3": 650,
+      "specificHeatJkgK": 1700,
+      "mu": 50,
+      "defaultThicknessMm": 18
+    },
+    {
+      "id": "gypsum-board",
+      "categoryId": "gypsum",
+      "name": "gipszkarton lap",
+      "lambdaWmK": 0.21,
+      "densityKgM3": 850,
+      "specificHeatJkgK": 1090,
+      "mu": 10,
+      "defaultThicknessMm": 12.5
+    },
+    {
+      "id": "ceramic-tile",
+      "categoryId": "cladding",
+      "name": "kerámia burkolólap",
+      "lambdaWmK": 1.05,
+      "densityKgM3": 2000,
+      "specificHeatJkgK": 850,
+      "mu": 100,
+      "defaultThicknessMm": 10
+    },
+    {
+      "id": "gravel-fill",
+      "categoryId": "fill",
+      "name": "kavicsfeltöltés",
+      "lambdaWmK": 0.7,
+      "densityKgM3": 1700,
+      "specificHeatJkgK": 900,
+      "mu": 5,
+      "defaultThicknessMm": 150
+    },
+    {
+      "id": "dry-soil",
+      "categoryId": "soil",
+      "name": "száraz talaj",
+      "lambdaWmK": 1.2,
+      "densityKgM3": 1600,
+      "specificHeatJkgK": 1000,
+      "mu": 10
+    },
+    {
+      "id": "air-layer",
+      "categoryId": "air-layer",
+      "name": "zárt légréteg – csak tesztazonosító",
+      "lambdaWmK": 0.18,
+      "densityKgM3": 1.2,
+      "specificHeatJkgK": 1000,
+      "mu": 1,
+      "defaultThicknessMm": 50
+    },
+    {
+      "id": "bitumen-membrane",
+      "categoryId": "waterproofing",
+      "name": "bitumenes vízszigetelő lemez",
+      "lambdaWmK": 0.17,
+      "densityKgM3": 1100,
+      "specificHeatJkgK": 1000,
+      "mu": 20000,
+      "defaultThicknessMm": 4
+    },
+    {
+      "id": "sheet-steel",
+      "categoryId": "metal",
+      "name": "acéllemez",
+      "lambdaWmK": 50,
+      "densityKgM3": 7850,
+      "specificHeatJkgK": 470,
+      "mu": 100000,
+      "defaultThicknessMm": 1
+    },
+    {
+      "id": "building-glass",
+      "categoryId": "glass",
+      "name": "építési üveg",
+      "lambdaWmK": 1,
+      "densityKgM3": 2500,
+      "specificHeatJkgK": 750,
+      "mu": 100000,
+      "defaultThicknessMm": 4
+    }
+  ]
+}

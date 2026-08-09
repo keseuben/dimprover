@@ -1,0 +1,71 @@
+begin;
+
+create or replace function public.drive_core_add_version_atomic(
+  p_project_id text,
+  p_document_id text,
+  p_version jsonb,
+  p_actor_user_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_document public.drive_core_documents;
+  v_version public.drive_core_document_versions;
+  v_expected integer;
+  v_next integer;
+begin
+  select * into v_document from public.drive_core_documents
+    where id = p_document_id and project_id = p_project_id and status = 'ACTIVE' for update;
+  if v_document.id is null then
+    raise exception 'DRIVE_CORE_DOCUMENT_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  v_expected := coalesce((p_version->>'expected_current_version')::integer,0);
+  if v_expected > 0 and v_expected <> v_document.current_version_number then
+    raise exception 'DRIVE_CORE_VERSION_CONFLICT' using errcode = 'P0001';
+  end if;
+  v_next := v_document.current_version_number + 1;
+
+  insert into public.drive_core_document_versions (
+    id, project_id, document_id, version_number, revision_code, original_name, mime_type, size_bytes,
+    sha256, storage_provider, storage_bucket, storage_key, status, change_note, created_by, created_at
+  ) values (
+    p_version->>'id', p_project_id, p_document_id, v_next,
+    coalesce(nullif(p_version->>'revision_code',''),'V' || v_next::text), p_version->>'original_name',
+    coalesce(p_version->>'mime_type',v_document.mime_type), coalesce((p_version->>'size_bytes')::bigint,0),
+    nullif(p_version->>'sha256',''), 'METADATA_ONLY', null, null, 'METADATA_ONLY',
+    coalesce(p_version->>'change_note',''), p_actor_user_id,
+    coalesce(nullif(p_version->>'created_at','')::timestamptz,now())
+  ) returning * into v_version;
+
+  update public.drive_core_documents
+  set current_version_number = v_next,
+      mime_type = v_version.mime_type,
+      updated_at = now()
+  where id = p_document_id
+  returning * into v_document;
+
+  insert into public.project_core_audit_events (
+    id, project_id, actor_user_id, event_type, entity_type, entity_id, summary, metadata
+  ) values (
+    'project-audit-' || substr(replace(gen_random_uuid()::text,'-',''),1,12), p_project_id, p_actor_user_id,
+    'DRIVE_DOCUMENT_VERSION_CREATED','document_version',v_version.id,
+    'Új DRIVE dokumentumverzió: ' || v_document.name || ' · V' || v_next::text,
+    jsonb_build_object('documentId',v_document.id,'version',v_next,'storageMode','METADATA_ONLY')
+  );
+
+  insert into public.drive_core_change_events (id, project_id, event_type, entity_type, entity_id, payload, actor_user_id)
+  values ('drive-change-' || substr(replace(gen_random_uuid()::text,'-',''),1,16), p_project_id,
+    'DOCUMENT_VERSION_CREATED','document_version',v_version.id,
+    jsonb_build_object('document',to_jsonb(v_document),'version',to_jsonb(v_version)),p_actor_user_id);
+
+  return jsonb_build_object('document',to_jsonb(v_document),'version',to_jsonb(v_version));
+end;
+$$;
+
+revoke all on function public.drive_core_add_version_atomic(text,text,jsonb,text) from public, anon, authenticated;
+grant execute on function public.drive_core_add_version_atomic(text,text,jsonb,text) to service_role;
+
+commit;

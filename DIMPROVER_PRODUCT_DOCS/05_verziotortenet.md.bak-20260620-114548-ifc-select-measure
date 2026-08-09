@@ -1,0 +1,101 @@
+# 05 Verziótörténet
+
+## Aktuális fejlesztési kör
+
+### HexPin tervi hibajelölés
+
+Elkészült:
+
+- PDF.js alapú tervnéző
+- DIMPROVER HexPin marker
+- marker drag / pozicionálás
+- szakági színek
+- A5/A4/A3 exportkeret
+- PDF.js canvasból mentett tervrészlet-kép
+- hibajegyhez kötött markeradatok
+- PDF export előtti hiányzó részletkép figyelmeztetés
+- Export / PDF panel státusz
+- tervkapcsolat panel státusz
+
+
+### Terepi hibafelvételi PDF export pontosítás
+
+Frissítve:
+
+- HJ jelölések PDF listáiban színezett szakág, súlyosság és státusz jelenik meg.
+- A HJ jelölések alatt kompakt HexPin jelmagyarázat segíti a PDF-et önállóan olvasó címzetteket.
+- A fotómelléklet blokk jelzi a kapcsolódó terepi hibafelvételi tervrészlet melléklet meglétét és oldalszámát.
+- A hibalista összesítő státusz oszlopa hosszabb státuszoknál is tördelhetőbb.
+
+
+### HexPin jelmagyarázat kiegészítés
+
+A terepi hibafelvételi PDF export HexPin jelmagyarázata kiegészült az észrevétel és lezárt állapot jelölésével. A lezárt státusz pipája rajzolt CSS/PDF elemként jelenik meg, hogy ne okozzon betűkódolási hibát.
+
+
+### Tervrészlet melléklet jelzés áthelyezése
+
+A terepi hibafelvételi PDF exportban a tervrészlet melléklet oldalszámát és HJ darabszámát jelző blokk kikerült a fotómelléklet alól, és önálló PDF információs blokként jelenik meg.
+
+
+### Több PDF tervlap egy TH hibához és fotóforrás választó
+
+Frissítve:
+
+- egy TH hibához több PDF tervlap kapcsolása és tervlaponkénti HJ HexPin jelölés egyértelmű UI támogatást kapott;
+- a kapcsolt tervlapok sorszámozott tervkártyaként jelennek meg;
+- a fotó / tervfotó feltöltés modális ablak helyett lenyíló forrásválasztót kapott a PDF tervfeltöltés logikájához igazítva.
+
+
+### Fotóhely HexPin jelölés
+
+Frissítve:
+
+- a PDF.js tervnézőben külön HJ hibahely / Fotóhely jelölési mód választható;
+- a fotóhely marker a kiválasztott fotó (`F-001`, `F-002`, stb.) tervi készítési helyét jelöli DIMPROVER hexagonként;
+- a fotóhely marker kék, külön megkülönböztetett megjelenést kap;
+- a HJ listázás és tervrészlet melléklet számítás a fotóhely markereket nem számolja HJ hibajelölésként.
+
+
+### Lebegő fotóhely választó panel
+
+Frissítve:
+
+- a PDF.js fotóhely jelölési mód mozgatható, összecsukható lebegő panelt kapott;
+- a panelben a feltöltött képek kicsinyített előnézete látható;
+- a kiválasztott fotó vizuálisan kiemelve jelenik meg, majd a PDF tervlapra kattintva kék fotóhely HexPin marker helyezhető el.
+
+
+### Fotóhely marker kártyaforma és drag javítás
+
+Frissítve:
+
+- javítva lett a fotóhely választó lebegő panelének drag állapota;
+- a fotóhely marker külön kék fotókártya formát kapott, nem azonos a HJ HexPinnel;
+- a fotóhely marker a tervnézőben képes a fotó kicsinyített előnézetét is megjeleníteni.
+
+
+### Fotóhely marker megjelenítése a tervrészlet PDF exportban
+
+Frissítve:
+
+- a vektoros A4 tervrészlet melléklet már nem csak az aktuális HJ HexPint rajzolja ki;
+- a kapcsolódó tervlap kivágási keretén belül lévő fotóhely markereket is rárajzolja a PDF tervrészletre;
+- a fotóhely marker PDF-ben külön kék fotókártya-jelölőként jelenik meg, nem HJ HexPinként;
+- a fotóhely markerek továbbra sem növelik a HJ darabszámot.
+
+### FHJ fotóhely jelölés
+
+A terepi hibafelvételi tervi jelölések között a fotóhely külön azonosítót kapott: `FHJ-001`, `FHJ-002`, stb. A `F-001` továbbra is maga a fotó sorszáma, míg az `FHJ-001` a fotó tervi helyének jelölése.
+
+A jegyzőkönyv PDF-ben a HJ és FHJ jelölések egy közös tervi jelölési blokkban jelennek meg, hogy a tervrészlet melléklet önállóan is értelmezhető legyen.
+
+### FHJ teljes tervi jelölés és külön tervrészlet export
+
+Frissítve:
+
+- az FHJ fotóhely marker ugyanazokat a súlyosság- és státuszjeleket kapja a PDF.js tervnézőn, mint a HJ marker;
+- az A4 vektoros tervrészlet mellékletben minden HJ és FHJ külön saját kivágásként jelenik meg;
+- a HJ kivágásokra nem rajzolódnak rá automatikusan a közel eső FHJ markerek;
+- az FHJ kivágásokra nem rajzolódnak rá automatikusan a közel eső HJ markerek;
+- az aktuális tervrészlet exportverzió: `fhj-parity-separate-crops-v1`.

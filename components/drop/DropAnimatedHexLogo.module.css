@@ -1,0 +1,258 @@
+.root {
+  --drop-cycle: 2.8s;
+  --drop-accent: #18b8b1;
+  --drop-accent-soft: #8cf5e8;
+  --drop-accent-strong: #0891b2;
+  --drop-highlight: #d7fffb;
+  --drop-panel-top: #071b2d;
+  --drop-panel-bottom: #0a2f43;
+  --drop-file-fill: #0c2d3d;
+  --drop-file-line: #baf8f0;
+  --drop-platform-top: #0d4350;
+  --drop-platform-front: #092535;
+  display: inline-grid;
+  place-items: center;
+  aspect-ratio: 1;
+  isolation: isolate;
+}
+
+.hero {
+  width: min(100%, 22rem);
+}
+
+.compact {
+  width: 7.25rem;
+}
+
+.dark {
+  --drop-accent: #22d3c5;
+  --drop-accent-soft: #99f6e4;
+  --drop-accent-strong: #0891b2;
+  --drop-highlight: #ecfeff;
+  --drop-panel-top: #071625;
+  --drop-panel-bottom: #092f3d;
+  --drop-file-fill: #0b2634;
+  --drop-file-line: #d8fffa;
+  --drop-platform-top: #0b3e49;
+  --drop-platform-front: #061c2c;
+}
+
+.light {
+  --drop-accent: #0f9f9a;
+  --drop-accent-soft: #77e6d8;
+  --drop-accent-strong: #0e7490;
+  --drop-highlight: #f4fffd;
+  --drop-panel-top: #ffffff;
+  --drop-panel-bottom: #e9f8f7;
+  --drop-file-fill: #f8fffe;
+  --drop-file-line: #0f766e;
+  --drop-platform-top: #d9f4f1;
+  --drop-platform-front: #b9e8e2;
+}
+
+.active {
+  --drop-cycle: 1.55s;
+}
+
+.svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 18px 34px rgba(8, 47, 73, 0.22));
+}
+
+.outerHex {
+  filter: drop-shadow(0 0 12px rgba(34, 211, 197, 0.34));
+}
+
+.innerHex {
+  stroke: color-mix(in srgb, var(--drop-highlight) 28%, transparent);
+  stroke-width: 2;
+}
+
+.guideHex {
+  fill: none;
+  stroke: color-mix(in srgb, var(--drop-accent-soft) 26%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 8 10;
+}
+
+.fileGroup {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: filePulse var(--drop-cycle) ease-in-out infinite;
+}
+
+.fileShape,
+.fileFold {
+  vector-effect: non-scaling-stroke;
+}
+
+.particleGroup {
+  fill: var(--drop-highlight);
+  stroke: var(--drop-accent-soft);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.particle {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: particleFall var(--drop-cycle) linear infinite;
+}
+
+.dataStreak {
+  opacity: 0;
+  stroke-dasharray: 8 8;
+  animation: streakFall var(--drop-cycle) linear infinite;
+}
+
+.arrowGroup {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: arrowDrop var(--drop-cycle) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.platformGroup {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.platformTop,
+.platformFront {
+  vector-effect: non-scaling-stroke;
+}
+
+.platformCore {
+  fill: var(--drop-highlight);
+  opacity: 0.34;
+  animation: coreGlow var(--drop-cycle) ease-out infinite;
+}
+
+.pulseRing {
+  fill: none;
+  stroke: var(--drop-accent-soft);
+  stroke-width: 3;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: platformRing var(--drop-cycle) ease-out infinite;
+}
+
+@keyframes filePulse {
+  0%, 12%, 100% {
+    opacity: 0.82;
+    transform: translateY(0) scale(0.985);
+  }
+  22%, 34% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.025);
+  }
+  58% {
+    opacity: 0.94;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes particleFall {
+  0%, 18% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.72);
+  }
+  28% {
+    opacity: 0.92;
+  }
+  66% {
+    opacity: 0.55;
+  }
+  82%, 100% {
+    opacity: 0;
+    transform: translateY(91px) scale(0.45);
+  }
+}
+
+@keyframes streakFall {
+  0%, 22% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+  34% {
+    opacity: 0.72;
+  }
+  74% {
+    opacity: 0.28;
+  }
+  88%, 100% {
+    opacity: 0;
+    stroke-dashoffset: -52;
+  }
+}
+
+@keyframes arrowDrop {
+  0%, 24%, 100% {
+    opacity: 0.8;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(2px);
+  }
+  66% {
+    opacity: 1;
+    transform: translateY(9px);
+  }
+  80% {
+    opacity: 0.88;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes platformRing {
+  0%, 52% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  68% {
+    opacity: 0.85;
+  }
+  90%, 100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
+}
+
+@keyframes coreGlow {
+  0%, 50%, 100% {
+    opacity: 0.22;
+    transform: scaleX(0.72);
+  }
+  70% {
+    opacity: 0.95;
+    transform: scaleX(1.16);
+  }
+  86% {
+    opacity: 0.48;
+    transform: scaleX(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fileGroup,
+  .particle,
+  .dataStreak,
+  .arrowGroup,
+  .platformCore,
+  .pulseRing {
+    animation: none !important;
+  }
+
+  .particle,
+  .dataStreak {
+    opacity: 0.34;
+  }
+
+  .pulseRing {
+    opacity: 0.35;
+  }
+}

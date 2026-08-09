@@ -1,0 +1,256 @@
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib"
+import type { IssuePlanLink } from "./FieldPlanLinksPanel"
+
+const PLAN_CROP_APPENDIX_EXPORT_VERSION = "pdf-ifc-unified-crop-appendix-v2"
+
+export type PlanCropAppendixEntry = {
+  link: IssuePlanLink
+  marker: NonNullable<IssuePlanLink["planMarkers"]>[number]
+  cropFrame: NonNullable<NonNullable<IssuePlanLink["planMarkers"]>[number]["cropFrame"]>
+}
+
+export type PlanCropAppendixContext = {
+  recordDate: string
+  documentLabel?: string
+}
+
+function fitRect(sourceWidth: number, sourceHeight: number, maxWidth: number, maxHeight: number) {
+  const scale = Math.min(maxWidth / Math.max(1, sourceWidth), maxHeight / Math.max(1, sourceHeight))
+  return { width: sourceWidth * scale, height: sourceHeight * scale }
+}
+
+async function embedMarkerCropImage(pdf: PDFDocument, dataUrl?: string) {
+  if (!dataUrl) return null
+  try {
+    const response = await fetch(dataUrl)
+    const bytes = await response.arrayBuffer()
+    const lower = dataUrl.slice(0, 40).toLowerCase()
+    if (lower.includes("image/png")) return pdf.embedPng(bytes)
+    return pdf.embedJpg(bytes)
+  } catch (error) {
+    console.warn("Plan crop appendix image embed failed", error)
+    return null
+  }
+}
+
+function lightDisciplineColor(discipline: string) {
+  if (discipline === "mechanical") return rgb(0.65, 0.95, 0.99)
+  if (discipline === "electrical") return rgb(0.99, 0.90, 0.54)
+  if (discipline === "technology") return rgb(0.80, 0.84, 0.88)
+  if (discipline === "other") return rgb(0.87, 0.84, 0.99)
+  return rgb(0.65, 0.95, 0.82)
+}
+
+function disciplineShortLabel(discipline: string) {
+  if (discipline === "mechanical") return "G"
+  if (discipline === "electrical") return "E"
+  if (discipline === "technology") return "T"
+  if (discipline === "other") return "X"
+  return "E"
+}
+
+function drawCenteredText(page: PDFPage, text: string, centerX: number, y: number, size: number, font: PDFFont, color: ReturnType<typeof rgb>) {
+  const width = font.widthOfTextAtSize(text, size)
+  page.drawText(text, { x: centerX - width / 2, y, size, font, color })
+}
+
+function severityPdfVisual(value?: string) {
+  const severity = value || "Javítandó hiba"
+  if (severity === "Észrevétel" || severity === "Alacsony") return { borderColor: rgb(0.42, 0.45, 0.5), borderWidth: 1.35, bang: false, bangColor: rgb(0, 0, 0), repair: false }
+  if (severity === "Azonnali intézkedést igényel" || severity === "Kritikus") return { borderColor: rgb(0.72, 0.11, 0.11), borderWidth: 2.9, bang: true, bangColor: rgb(0.72, 0.11, 0.11), repair: false }
+  if (severity === "Súlyos hiba" || severity === "Magas") return { borderColor: rgb(0.98, 0.45, 0.09), borderWidth: 2.7, bang: true, bangColor: rgb(0.98, 0.45, 0.09), repair: false }
+  return { borderColor: rgb(0.98, 0.45, 0.09), borderWidth: 2.2, bang: false, bangColor: rgb(0, 0, 0), repair: true }
+}
+
+function statusPdfVisual(value?: string) {
+  const status = value || "Nyitott"
+  if (status === "Folyamatban") return { type: "dots", color: rgb(0.02, 0.45, 0.19) }
+  if (status === "Ellenőrzésre vár") return { type: "dot", color: rgb(0.98, 0.45, 0.09) }
+  if (status === "Lezárt" || status === "Lezárva" || status === "Ellenőrizve" || status === "Javítva") return { type: "check", color: rgb(0.09, 0.64, 0.29) }
+  return { type: "none", color: rgb(0, 0, 0) }
+}
+
+function drawHexPin(page: PDFPage, marker: PlanCropAppendixEntry["marker"], issueSerial: string, anchorX: number, anchorY: number, boldFont: PDFFont) {
+  const pinPath = "M25 8 L75 8 L97 50 L75 92 L59 92 L50 142 L41 92 L25 92 L3 50 Z"
+  const label = issueSerial || marker.issueSerial || "TH"
+  const hjText = marker.serial || "HJ"
+  const fill = lightDisciplineColor(marker.discipline)
+  const severity = severityPdfVisual(marker.issueSeverity)
+  const status = statusPdfVisual(marker.status || marker.issueStatus)
+  const textColor = rgb(0.04, 0.14, 0.2)
+  const headSize = 46
+  const scale = headSize / 100
+  const x = anchorX - headSize / 2
+  const y = anchorY + 142 * scale
+
+  page.drawSvgPath(pinPath, { x, y, scale, color: fill, borderColor: severity.borderColor, borderWidth: severity.borderWidth })
+  drawCenteredText(page, label, anchorX, anchorY + 52.3, 5.7, boldFont, textColor)
+  drawCenteredText(page, hjText, anchorX, anchorY + 41.2, 8.8, boldFont, textColor)
+
+  if (marker.showLetter) drawCenteredText(page, disciplineShortLabel(marker.discipline), anchorX, anchorY + 27.4, 11.8, boldFont, textColor)
+
+  if (severity.bang) {
+    page.drawCircle({ x: anchorX + 17.8, y: anchorY + 53.4, size: 4.2, color: severity.bangColor, borderColor: rgb(1, 1, 1), borderWidth: 0.45 })
+    drawCenteredText(page, "!", anchorX + 17.8, anchorY + 50.9, 7.1, boldFont, rgb(1, 1, 1))
+  }
+
+  if (severity.repair) page.drawRectangle({ x: anchorX - 23.8, y: anchorY + 30.0, width: 3.5, height: 10.2, color: rgb(0.98, 0.45, 0.09), borderColor: rgb(1, 1, 1), borderWidth: 0.35 })
+
+  if (status.type !== "none") {
+    if (status.type === "dots") {
+      page.drawCircle({ x: anchorX + 13.6, y: anchorY + 31.0, size: 2.25, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.3 })
+      page.drawCircle({ x: anchorX + 17.5, y: anchorY + 31.0, size: 2.25, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.3 })
+      page.drawCircle({ x: anchorX + 21.4, y: anchorY + 31.0, size: 2.25, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.3 })
+    } else {
+      page.drawCircle({ x: anchorX + 17.5, y: anchorY + 31.0, size: 4.1, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.45 })
+    }
+    if (status.type === "check") {
+      page.drawLine({ start: { x: anchorX + 14.9, y: anchorY + 30.6 }, end: { x: anchorX + 16.8, y: anchorY + 28.5 }, thickness: 0.9, color: rgb(1, 1, 1) })
+      page.drawLine({ start: { x: anchorX + 16.8, y: anchorY + 28.5 }, end: { x: anchorX + 20.4, y: anchorY + 33.1 }, thickness: 0.9, color: rgb(1, 1, 1) })
+    }
+  }
+}
+
+function drawPhotoPlaceMarker(page: PDFPage, marker: PlanCropAppendixEntry["marker"], anchorX: number, anchorY: number, boldFont: PDFFont) {
+  const label = marker.serial || "FHJ"
+  const photoLabel = marker.photoSerial || "FOTO"
+  const severity = severityPdfVisual(marker.issueSeverity)
+  const status = statusPdfVisual(marker.status || marker.issueStatus)
+  const cardWidth = 38
+  const cardHeight = 26
+  const tipHeight = 8
+  const x = anchorX - cardWidth / 2
+  const y = anchorY + tipHeight
+
+  page.drawRectangle({ x, y, width: cardWidth, height: cardHeight, color: rgb(0.86, 0.92, 1), borderColor: severity.borderColor, borderWidth: Math.max(1.7, severity.borderWidth) })
+  page.drawRectangle({ x: x + 3.2, y: y + 9.2, width: cardWidth - 6.4, height: cardHeight - 12.4, color: rgb(0.94, 0.97, 1), borderColor: rgb(0.74, 0.83, 1), borderWidth: 0.6 })
+  page.drawRectangle({ x, y, width: cardWidth, height: 7.6, color: rgb(0.11, 0.30, 0.85), borderColor: rgb(0.11, 0.30, 0.85), borderWidth: 0.4 })
+  drawCenteredText(page, label, anchorX, y + 1.8, 6.7, boldFont, rgb(1, 1, 1))
+  drawCenteredText(page, photoLabel, anchorX, y + 14.0, 5.1, boldFont, rgb(0.11, 0.30, 0.85))
+
+  page.drawSvgPath("M 0 0 L 8 8 L 16 0 Z", { x: anchorX - 8, y: anchorY + 0.4, scale: 1, color: severity.borderColor })
+  page.drawCircle({ x: anchorX, y: anchorY, size: 2.2, color: severity.borderColor, borderColor: rgb(1, 1, 1), borderWidth: 0.35 })
+
+  if (severity.bang) {
+    page.drawCircle({ x: anchorX + 17.1, y: y + cardHeight - 2.5, size: 4.0, color: severity.bangColor, borderColor: rgb(1, 1, 1), borderWidth: 0.45 })
+    drawCenteredText(page, "!", anchorX + 17.1, y + cardHeight - 5.0, 6.7, boldFont, rgb(1, 1, 1))
+  }
+  if (severity.repair) page.drawRectangle({ x: x - 2.4, y: y + 9.2, width: 3.4, height: 9.8, color: rgb(0.98, 0.45, 0.09), borderColor: rgb(1, 1, 1), borderWidth: 0.3 })
+  if (status.type !== "none") {
+    if (status.type === "dots") {
+      page.drawCircle({ x: anchorX + 10.0, y: y + 10.7, size: 2.0, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.25 })
+      page.drawCircle({ x: anchorX + 13.7, y: y + 10.7, size: 2.0, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.25 })
+      page.drawCircle({ x: anchorX + 17.4, y: y + 10.7, size: 2.0, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.25 })
+    } else {
+      page.drawCircle({ x: anchorX + 15.5, y: y + 10.7, size: 3.7, color: status.color, borderColor: rgb(1, 1, 1), borderWidth: 0.4 })
+    }
+    if (status.type === "check") {
+      page.drawLine({ start: { x: anchorX + 13.1, y: y + 10.2 }, end: { x: anchorX + 14.8, y: y + 8.5 }, thickness: 0.8, color: rgb(1, 1, 1) })
+      page.drawLine({ start: { x: anchorX + 14.8, y: y + 8.5 }, end: { x: anchorX + 18.4, y: y + 12.8 }, thickness: 0.8, color: rgb(1, 1, 1) })
+    }
+  }
+}
+
+async function loadSourcePdf(link: IssuePlanLink, cache: Map<string, PDFDocument>) {
+  const sourceUrl = link.planViewerUrl || link.planPreviewUrl
+  if (!sourceUrl) throw new Error(`${link.planName} tervlaphoz nincs PDF forras`)
+  const cacheKey = `${link.id}:${sourceUrl}`
+  const existing = cache.get(cacheKey)
+  if (existing) return existing
+  const response = await fetch(sourceUrl)
+  if (!response.ok) throw new Error(`${link.planName} PDF forras nem toltheto be`)
+  const bytes = await response.arrayBuffer()
+  const sourcePdf = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  cache.set(cacheKey, sourcePdf)
+  return sourcePdf
+}
+
+function getMarkerPdfPoint(marker: PlanCropAppendixEntry["marker"], sourceWidth: number, sourceHeight: number) {
+  return { x: (marker.xPercent / 100) * sourceWidth, y: sourceHeight - (marker.yPercent / 100) * sourceHeight }
+}
+
+function getMarkerDrawPoint(marker: PlanCropAppendixEntry["marker"], sourceWidth: number, sourceHeight: number, crop: { left: number; bottom: number; width: number; height: number }, target: { x: number; y: number; width: number; height: number }) {
+  const point = getMarkerPdfPoint(marker, sourceWidth, sourceHeight)
+  const rx = Math.max(0, Math.min(1, (point.x - crop.left) / crop.width))
+  const ry = Math.max(0, Math.min(1, (point.y - crop.bottom) / crop.height))
+  return { x: target.x + rx * target.width, y: target.y + ry * target.height }
+}
+
+export async function createPlanCropAppendixPdf(entries: PlanCropAppendixEntry[], context: PlanCropAppendixContext) {
+  const pdf = await PDFDocument.create()
+  const sourceCache = new Map<string, PDFDocument>()
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold)
+  const a4Width = 595.28
+  const a4Height = 841.89
+  const margin = 24
+  const gap = 16
+  const slotHeight = (a4Height - margin * 2 - gap) / 2
+  const slotWidth = a4Width - margin * 2
+  const headerHeight = 42
+  let page = pdf.addPage([a4Width, a4Height])
+
+  for (const [index, entry] of entries.entries()) {
+    if (index > 0 && index % 2 === 0) page = pdf.addPage([a4Width, a4Height])
+    const slotIndex = index % 2
+    const slotY = slotIndex === 0 ? margin + slotHeight + gap : margin
+    const slotX = margin
+    const drawAreaX = slotX + 8
+    const drawAreaY = slotY + 10
+    const drawAreaWidth = slotWidth - 16
+    const drawAreaHeight = slotHeight - headerHeight - 16
+    const headerY = slotY + slotHeight - headerHeight + 8
+    const { link, marker, cropFrame } = entry
+    const issueSerial = marker.issueSerial || "TH"
+    const sourceKindLabel = link.planName.toLowerCase().endsWith(".ifc") ? "IFC modellnézet" : "PDF tervrészlet"
+    const markerKindLabel = marker.markerKind === "photo" ? `FHJ fotohely · ${sourceKindLabel}` : `HJ hibahely · ${sourceKindLabel}`
+
+    page.drawRectangle({ x: slotX, y: slotY, width: slotWidth, height: slotHeight, borderColor: rgb(0.71, 0.76, 0.82), borderWidth: 0.8, color: rgb(0.98, 0.99, 1) })
+    page.drawRectangle({ x: slotX, y: slotY + slotHeight - headerHeight, width: slotWidth, height: headerHeight, color: rgb(0.94, 0.98, 0.96), borderColor: rgb(0.71, 0.76, 0.82), borderWidth: 0.4 })
+    page.drawText(`${issueSerial} / ${marker.serial}`, { x: slotX + 10, y: headerY + 14, size: 11, font: boldFont, color: rgb(0.02, 0.31, 0.22) })
+    page.drawText(`${markerKindLabel} · ${marker.issueTitle || marker.title || "Tervreszlet"}`, { x: slotX + 10, y: headerY, size: 8, font, color: rgb(0.2, 0.28, 0.38), maxWidth: 260 })
+    page.drawText(`${context.documentLabel || "Terepi hibafelveteli PDF melleklete"} · ${context.recordDate.replaceAll("-", ". ")}.`, { x: slotX + 290, y: headerY + 14, size: 7, font: boldFont, color: rgb(0.2, 0.28, 0.38), maxWidth: 230 })
+    page.drawText(`${link.planName} · ${cropFrame.pageNumber || marker.pageNumber || link.pageNumber}. oldal`, { x: slotX + 290, y: headerY, size: 7, font, color: rgb(0.38, 0.45, 0.55), maxWidth: 230 })
+    page.drawText(`HexPin export: ${PLAN_CROP_APPENDIX_EXPORT_VERSION}`, { x: slotX + 290, y: headerY - 10, size: 5.5, font, color: rgb(0.45, 0.5, 0.56), maxWidth: 230 })
+
+    const embeddedCropImage = await embedMarkerCropImage(pdf, marker.cropImageDataUrl)
+    if (embeddedCropImage) {
+      const imageSize = embeddedCropImage.size()
+      const fitted = fitRect(imageSize.width, imageSize.height, drawAreaWidth, drawAreaHeight)
+      const drawX = drawAreaX + (drawAreaWidth - fitted.width) / 2
+      const drawY = drawAreaY + (drawAreaHeight - fitted.height) / 2
+      page.drawRectangle({ x: drawX, y: drawY, width: fitted.width, height: fitted.height, color: rgb(1, 1, 1), borderColor: rgb(0.79, 0.84, 0.9), borderWidth: 0.5 })
+      page.drawImage(embeddedCropImage, { x: drawX, y: drawY, width: fitted.width, height: fitted.height })
+      page.drawText("Mentett PDF/IFC tervreszlet-kep", { x: drawAreaX, y: drawAreaY - 7, size: 5.7, font, color: rgb(0.38, 0.45, 0.55), maxWidth: drawAreaWidth })
+      continue
+    }
+
+    const sourcePdf = await loadSourcePdf(link, sourceCache)
+    const pageIndex = Math.max(0, Math.min(sourcePdf.getPageCount() - 1, (cropFrame.pageNumber || marker.pageNumber || link.pageNumber || 1) - 1))
+    const sourcePage = sourcePdf.getPage(pageIndex)
+    const sourceSize = sourcePage.getSize()
+    const left = Math.max(0, Math.min(sourceSize.width - 1, (cropFrame.xPercent / 100) * sourceSize.width))
+    const cropWidth = Math.max(8, Math.min(sourceSize.width - left, (cropFrame.widthPercent / 100) * sourceSize.width))
+    const cropHeight = Math.max(8, Math.min(sourceSize.height, (cropFrame.heightPercent / 100) * sourceSize.height))
+    const topFromTop = (cropFrame.yPercent / 100) * sourceSize.height
+    const bottom = Math.max(0, Math.min(sourceSize.height - cropHeight, sourceSize.height - topFromTop - cropHeight))
+    const embeddedPage = await pdf.embedPage(sourcePage, { left, bottom, right: left + cropWidth, top: bottom + cropHeight })
+    const fitted = fitRect(cropWidth, cropHeight, drawAreaWidth, drawAreaHeight)
+    const drawX = drawAreaX + (drawAreaWidth - fitted.width) / 2
+    const drawY = drawAreaY + (drawAreaHeight - fitted.height) / 2
+    page.drawRectangle({ x: drawX, y: drawY, width: fitted.width, height: fitted.height, color: rgb(1, 1, 1), borderColor: rgb(0.79, 0.84, 0.9), borderWidth: 0.5 })
+    page.drawPage(embeddedPage, { x: drawX, y: drawY, width: fitted.width, height: fitted.height })
+
+    const cropBounds = { left, bottom, width: cropWidth, height: cropHeight }
+    const targetBounds = { x: drawX, y: drawY, width: fitted.width, height: fitted.height }
+    const point = getMarkerDrawPoint(marker, sourceSize.width, sourceSize.height, cropBounds, targetBounds)
+    if (marker.markerKind === "photo") drawPhotoPlaceMarker(page, marker, point.x, point.y, boldFont)
+    else drawHexPin(page, marker, issueSerial, point.x, point.y, boldFont)  }
+
+  const pages = pdf.getPages()
+  pages.forEach((pdfPage, pageIndex) => {
+    pdfPage.drawText(`${pageIndex + 1} / ${pages.length} oldal`, { x: a4Width / 2 - 22, y: 14, size: 8, font, color: rgb(0.38, 0.45, 0.55) })
+  })
+
+  return pdf.save()
+}

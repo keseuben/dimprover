@@ -1,0 +1,17 @@
+# DIMPRO Árutér - Supabase / repository mód minta
+# Ezt ne töltsd fel publikus helyre kitöltött kulcsokkal.
+
+# Alapértelmezett biztonságos fejlesztési mód:
+ARUTER_REPOSITORY_MODE=mock
+
+# Adatbázisos módhoz:
+# ARUTER_REPOSITORY_MODE=database
+
+# Supabase projekt URL:
+NEXT_PUBLIC_SUPABASE_URL=https://SAJAT-PROJEKT.supabase.co
+
+# Supabase anon/public kulcs:
+NEXT_PUBLIC_SUPABASE_ANON_KEY=SAJAT-ANON-KULCS
+
+# Supabase service role kulcs, csak szerveren:
+SUPABASE_SERVICE_ROLE_KEY=SAJAT-SERVICE-ROLE-KULCS

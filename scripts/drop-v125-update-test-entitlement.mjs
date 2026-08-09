@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { createClient } from '@supabase/supabase-js';
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.trim(); const key=process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+assert.ok(url&&key,'Supabase env hiányzik');
+const c=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+const email='keseru.benjamin@nagisz.hu';
+const u=await c.from('dimpro_users').select('id,email_normalized,status,email_verified_at').eq('email_normalized',email).maybeSingle(); if(u.error)throw u.error; assert.ok(u.data?.id,'A NAGISZ felhasználó nem található');
+const ents=await c.from('dimpro_send_entitlements').select('id,status,valid_from,expires_at,max_recipients,max_saved_contacts,can_use_quick_image_send').eq('user_id',u.data.id).in('status',['active','trial']).eq('can_use_quick_image_send',true).order('expires_at',{ascending:false}); if(ents.error)throw ents.error;
+const now=Date.now(); const target=(ents.data||[]).find(e=>(!e.valid_from||Date.parse(e.valid_from)<=now)&&(!e.expires_at||Date.parse(e.expires_at)>now)); assert.ok(target?.id,'Nincs aktív Gyors KépSend entitlement');
+const upd=await c.from('dimpro_send_entitlements').update({max_recipients:6,max_saved_contacts:10,updated_at:new Date().toISOString()}).eq('id',target.id).select('id,max_recipients,max_saved_contacts,status,expires_at').single(); if(upd.error)throw upd.error;
+const audit=await c.from('dimpro_access_audit_logs').insert({user_id:u.data.id,entitlement_id:target.id,event_type:'send_entitlement_limit_updated',success:true,metadata:{reason:'DROP 1.2.5 Quick Send UX',maxRecipients:6,maxSavedContacts:10}}); if(audit.error)throw audit.error;
+console.log(JSON.stringify({ok:true,userEmail:email,entitlementId:upd.data.id,maxRecipients:upd.data.max_recipients,maxSavedContacts:upd.data.max_saved_contacts,status:upd.data.status,expiresAt:upd.data.expires_at},null,2));

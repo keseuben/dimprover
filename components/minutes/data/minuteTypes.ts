@@ -1,19 +1,36 @@
+export type MinuteTypeCard = {
+  title: string
+  description: string
+  count: number
+  open: number
+  icon: string
+  actionLabel?: string
+  moduleOnly?: boolean
+}
+
 export const projectMinuteGroups = [
+  "Tervezői / megrendelői egyeztetés",
   "Beruházói jegyzőkönyv",
   "Kooperációs jegyzőkönyv",
-  "Tervezői jegyzőkönyv",
-  "Helyszíni jegyzőkönyv",
+  "Terepi állapotrögzítés",
+  "Terepi hibafelvétel",
   "Hibajegyzék",
-  "Emlékeztető",
-  "Egyéb feljegyzések",
-  "Fotós melléklet",
+  "Egyéb feljegyzés",
 ]
 
-export const minuteTypeCards = [
+export const minuteTypeCards: MinuteTypeCard[] = [
+  {
+    title: "Tervezői / megrendelői egyeztetés",
+    description:
+      "Tervi kérdések, megrendelői döntések és módosítási igények rögzítése.",
+    count: 8,
+    open: 1,
+    icon: "📐",
+  },
   {
     title: "Beruházói jegyzőkönyv",
     description:
-      "Beruházói döntések, költség- és határidő egyeztetések.",
+      "Beruházói döntések, költség-, határidő- és teljesítési egyeztetések.",
     count: 12,
     open: 2,
     icon: "🏢",
@@ -21,57 +38,43 @@ export const minuteTypeCards = [
   {
     title: "Kooperációs jegyzőkönyv",
     description:
-      "Heti kooperációk, FMV és műszaki ellenőri egyeztetések.",
+      "Heti kooperációk, felelősök, határidők és nyitott feladatok rögzítése.",
     count: 24,
     open: 5,
     icon: "🤝",
   },
   {
-    title: "Tervezői jegyzőkönyv",
+    title: "Terepi állapotrögzítés",
     description:
-      "Tervezői egyeztetések, tervmódosítások és pontosítások.",
-    count: 8,
-    open: 1,
-    icon: "📐",
+      "Helyszíni állapotok, fotók, készültség és bejárási megállapítások rögzítése.",
+    count: 0,
+    open: 0,
+    icon: "🏗️📸",
   },
   {
-    title: "Helyszíni jegyzőkönyv",
+    title: "Terepi hibafelvétel",
     description:
-      "Helyszíni bejárások, ellenőrzések és műszaki megállapítások.",
-    count: 31,
-    open: 7,
-    icon: "🏗️",
+      "Helyszíni hibák gyors rögzítése fotóval, felelőssel és tervi HJ jelöléssel.",
+    count: 0,
+    open: 0,
+    icon: "📍📸",
   },
   {
     title: "Hibajegyzék",
     description:
-      "Hibák, hiányosságok, felelősök és határidők.",
+      "Hibák, felelősök, határidők és javítási státuszok követése.",
     count: 18,
     open: 6,
     icon: "⚠️",
+    actionLabel: "Hibajegyzék megnyitása →",
+    moduleOnly: true,
   },
   {
-    title: "Emlékeztető",
+    title: "Egyéb feljegyzés",
     description:
-      "Határidők, vállalások és későbbi visszajelzések rögzítése.",
-    count: 6,
-    open: 3,
-    icon: "⏰",
-  },
-  {
-    title: "Egyéb feljegyzések",
-    description:
-      "Gyors feljegyzések és projekt nélküli jegyzetek.",
+      "Gyors projektfeljegyzések, belső megjegyzések és egyedi rögzítések.",
     count: 9,
     open: 2,
     icon: "📝",
-  },
-  {
-    title: "Fotós melléklet",
-    description:
-      "Fotódokumentáció és képes mellékletek.",
-    count: 42,
-    open: 0,
-    icon: "📷",
   },
 ]

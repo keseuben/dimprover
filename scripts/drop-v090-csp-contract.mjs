@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const source=fs.readFileSync("proxy.ts","utf8");
+assert.match(source,/safeHttpsOrigin/);
+assert.match(source,/DIMPRO_DROP_S3_ENDPOINT/);
+assert.match(source,/DIMPRO_DROP_S3_BUCKET/);
+assert.match(source,/resolveDropObjectStorageUploadOrigin/);
+assert.match(source,/uploadUrl\.hostname = `\$\{bucket\}\.\$\{uploadUrl\.hostname\}`/);
+assert.match(source,/url\.protocol === "https:"/);
+assert.match(source,/connect-src 'self'\$\{dropObjectStorageOrigin/);
+assert.doesNotMatch(source,/connect-src[^;]*\*/);
+assert.doesNotMatch(source,/connect-src[^;]*https:\s/);
+console.log(JSON.stringify({ok:true,version:"DROP 0.9.0",checks:9,exactConfiguredBucketHttpsOriginOnly:true,wildcard:false},null,2));

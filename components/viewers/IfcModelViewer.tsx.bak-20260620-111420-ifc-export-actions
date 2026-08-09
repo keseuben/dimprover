@@ -1,0 +1,1440 @@
+"use client"
+
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Box3, Raycaster, Vector2, Vector3, type Camera, type Object3D } from "three"
+import PlanHexMarker from "./PlanHexMarker"
+import {
+  planIssueDisciplines,
+  planMarkerSeverityOptions,
+  type IfcMarkerCameraSnapshot,
+  type IfcMarkerElementReference,
+  type IfcMarkerWorldPosition,
+  type PlanIssueDiscipline,
+  type PlanIssueMarker,
+} from "./PlanMarkerTypes"
+import type { PlanViewerFile } from "./viewerTypes"
+
+type IfcModelViewerProps = {
+  file: PlanViewerFile
+}
+
+type IfcEngineStatus = "idle" | "loading-engine" | "loading-model" | "ready" | "missing-source" | "fallback"
+type IfcLoadingStage = "engine" | "download" | "wasm" | "convert" | "camera" | "ready"
+
+type IfcLoadingState = {
+  progress: number
+  stage: IfcLoadingStage
+  label: string
+  detail: string
+  fileSizeLabel?: string
+}
+
+type IfcRuntime = {
+  world?: LooseIfcRecord
+  model?: Object3D
+  rawModel?: LooseIfcRecord
+  fragmentsManager?: LooseIfcRecord
+  components?: LooseIfcRecord
+  dispose?: () => void | Promise<void>
+}
+
+type LooseIfcRecord = Record<string, unknown>
+type RuntimeFunction = (...args: unknown[]) => unknown
+
+type IfcPickResult = {
+  elementReference: IfcMarkerElementReference
+}
+
+type MarkerDragState = {
+  markerId: string
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  startXPercent: number
+  startYPercent: number
+  moved: boolean
+}
+
+const IFC_MARKER_ZOOM = 1
+
+function isLooseRecord(value: unknown): value is LooseIfcRecord {
+  return typeof value === "object" && value !== null
+}
+
+function asVectorPosition(vector?: Vector3 | null): IfcMarkerWorldPosition | undefined {
+  if (!vector) return undefined
+  return {
+    x: Number(vector.x.toFixed(4)),
+    y: Number(vector.y.toFixed(4)),
+    z: Number(vector.z.toFixed(4)),
+  }
+}
+
+function readUnknownRecordValue(record: LooseIfcRecord | undefined, keys: string[]) {
+  if (!record) return undefined
+  for (const key of keys) {
+    const value = record[key]
+    if (value !== undefined && value !== null && value !== "") return value
+  }
+  return undefined
+}
+
+function readNumberRecordValue(record: LooseIfcRecord | undefined, keys: string[]) {
+  const value = readUnknownRecordValue(record, keys)
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return undefined
+}
+
+function readStringRecordValue(record: LooseIfcRecord | undefined, keys: string[]) {
+  const value = readUnknownRecordValue(record, keys)
+  if (typeof value === "string") return value
+  if (typeof value === "number") return String(value)
+  return undefined
+}
+
+function formatIfcLoadError(error: unknown) {
+  if (error instanceof Error) {
+    const message = error.message || error.name
+    return message || "Ismeretlen IFC betöltési hiba."
+  }
+  if (typeof error === "string" && error.trim()) return error
+  try {
+    const serialized = JSON.stringify(error)
+    return serialized && serialized !== "{}" ? serialized : "Ismeretlen IFC betöltési hiba."
+  } catch {
+    return "Ismeretlen IFC betöltési hiba."
+  }
+}
+
+function formatIfcFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "ismeretlen méret"
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function clampIfcLoadingProgress(value: number) {
+  return Math.min(99, Math.max(1, Math.round(value)))
+}
+
+function getIfcLoadingStageLabel(stage: IfcLoadingStage) {
+  if (stage === "engine") return "IFC motor"
+  if (stage === "download") return "Fájl letöltés"
+  if (stage === "wasm") return "WASM inicializálás"
+  if (stage === "convert") return "Fragments konverzió"
+  if (stage === "camera") return "Kamera igazítás"
+  return "Kész"
+}
+
+async function readIfcResponseBuffer(
+  response: Response,
+  onProgress: (progress: number, detail: string, fileSizeLabel?: string) => void,
+) {
+  const totalBytes = Number(response.headers.get("content-length") || 0)
+  const fileSizeLabel = totalBytes > 0 ? formatIfcFileSize(totalBytes) : undefined
+  if (!response.body) {
+    const fallbackBuffer = new Uint8Array(await response.arrayBuffer())
+    onProgress(70, `IFC fájl letöltve: ${formatIfcFileSize(fallbackBuffer.byteLength)}`, formatIfcFileSize(fallbackBuffer.byteLength))
+    return fallbackBuffer
+  }
+
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let receivedBytes = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    chunks.push(value)
+    receivedBytes += value.byteLength
+    if (totalBytes > 0) {
+      const downloadProgress = 28 + (receivedBytes / totalBytes) * 42
+      onProgress(downloadProgress, `${formatIfcFileSize(receivedBytes)} / ${fileSizeLabel}`, fileSizeLabel)
+    } else {
+      onProgress(Math.min(68, 34 + chunks.length * 2), `${formatIfcFileSize(receivedBytes)} letöltve`, formatIfcFileSize(receivedBytes))
+    }
+  }
+
+  const buffer = new Uint8Array(receivedBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  onProgress(72, `IFC fájl letöltve: ${formatIfcFileSize(buffer.byteLength)}`, formatIfcFileSize(buffer.byteLength))
+  return buffer
+}
+
+function isThreeObject3D(value: unknown): value is Object3D {
+  return isLooseRecord(value) && typeof value.updateWorldMatrix === "function" && typeof value.traverse === "function"
+}
+
+function getObjectBoundingBox(object: Object3D) {
+  if (!isThreeObject3D(object)) return null
+  const box = new Box3().setFromObject(object)
+  const size = new Vector3()
+  const center = new Vector3()
+  box.getSize(size)
+  box.getCenter(center)
+  const maxDimension = Math.max(size.x, size.y, size.z)
+  if (!Number.isFinite(maxDimension) || maxDimension <= 0) return null
+  return { box, size, center, maxDimension }
+}
+
+function formatIfcModelSize(size: Vector3) {
+  return `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}`
+}
+
+function getRecordCallable(record: LooseIfcRecord | undefined, key: string): RuntimeFunction | null {
+  const candidate = record?.[key]
+  return typeof candidate === "function" ? candidate as RuntimeFunction : null
+}
+
+function getDomCanvas(container: HTMLDivElement | null): HTMLCanvasElement | null {
+  return container?.querySelector("canvas") ?? null
+}
+
+function normalizeFragmentsRaycastResult(result: unknown): {
+  expressId?: number
+  modelId?: string
+  object?: Object3D
+  point?: Vector3
+  source?: string
+} | null {
+  if (!isLooseRecord(result)) return null
+  const fragments = isLooseRecord(result.fragments) ? result.fragments : undefined
+  const object = isThreeObject3D(result.object) ? result.object : undefined
+  const point = result.point instanceof Vector3 ? result.point : undefined
+  const expressId = typeof result.itemId === "number"
+    ? result.itemId
+    : typeof result.localId === "number"
+      ? result.localId
+      : undefined
+  const modelIdValue = fragments?.modelId
+  return {
+    expressId,
+    modelId: typeof modelIdValue === "string" ? modelIdValue : undefined,
+    object,
+    point,
+    source: "fragmentsManager.raycast",
+  }
+}
+
+function unwrapIfcPropertyValue(value: unknown): unknown {
+  if (isLooseRecord(value)) {
+    const lowerValue = value.value
+    if (lowerValue !== undefined && lowerValue !== null) return lowerValue
+    const upperValue = value.Value
+    if (upperValue !== undefined && upperValue !== null) return upperValue
+  }
+  return value
+}
+
+function readIfcTextValue(record: LooseIfcRecord | undefined, keys: string[]) {
+  if (!record) return undefined
+  for (const key of keys) {
+    const value = unwrapIfcPropertyValue(record[key])
+    if (typeof value === "string" && value.trim()) return value
+    if (typeof value === "number" && Number.isFinite(value)) return String(value)
+  }
+  return undefined
+}
+
+function readIfcNumberValue(record: LooseIfcRecord | undefined, keys: string[]) {
+  if (!record) return undefined
+  for (const key of keys) {
+    const value = unwrapIfcPropertyValue(record[key])
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    if (typeof value === "string") {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return undefined
+}
+
+function findNestedIfcTextValue(value: unknown, keys: string[], maxDepth = 4, visited = new Set<unknown>()): string | undefined {
+  if (maxDepth < 0 || value === null || value === undefined) return undefined
+  const unwrapped = unwrapIfcPropertyValue(value)
+  if (typeof unwrapped === "string" || typeof unwrapped === "number") return undefined
+  if (Array.isArray(unwrapped)) {
+    for (const item of unwrapped) {
+      const found = findNestedIfcTextValue(item, keys, maxDepth - 1, visited)
+      if (found) return found
+    }
+    return undefined
+  }
+  if (!isLooseRecord(unwrapped) || visited.has(unwrapped)) return undefined
+  visited.add(unwrapped)
+  const direct = readIfcTextValue(unwrapped, keys)
+  if (direct) return direct
+  for (const nestedValue of Object.values(unwrapped)) {
+    const found = findNestedIfcTextValue(nestedValue, keys, maxDepth - 1, visited)
+    if (found) return found
+  }
+  return undefined
+}
+
+function findIfcStoreyName(value: unknown): string | undefined {
+  const stack: unknown[] = [value]
+  const visited = new Set<unknown>()
+  while (stack.length) {
+    const current = unwrapIfcPropertyValue(stack.pop())
+    if (!current || visited.has(current)) continue
+    if (Array.isArray(current)) {
+      current.forEach((item) => stack.push(item))
+      continue
+    }
+    if (!isLooseRecord(current)) continue
+    visited.add(current)
+    const text = Object.values(current)
+      .map((item) => {
+        const unwrapped = unwrapIfcPropertyValue(item)
+        return typeof unwrapped === "string" ? unwrapped.toLowerCase() : ""
+      })
+      .join(" ")
+    const recordKeys = Object.keys(current).join(" ").toLowerCase()
+    const looksLikeStorey = recordKeys.includes("storey") || text.includes("ifcbuildingstorey") || text.includes("buildingstorey")
+    if (looksLikeStorey) {
+      const name = readIfcTextValue(current, ["Name", "name", "LongName", "longName", "levelName", "level"])
+      if (name) return name
+    }
+    Object.values(current).forEach((item) => stack.push(item))
+  }
+  return undefined
+}
+
+function normalizeIfcPropertyPatch(source: string, payload: unknown): Partial<IfcMarkerElementReference> {
+  const recordPayload = Array.isArray(payload) ? payload.find(isLooseRecord) : payload
+  if (!isLooseRecord(recordPayload)) return {}
+  const directRecord = recordPayload
+  const elementName =
+    readIfcTextValue(directRecord, ["Name", "name", "LongName", "longName", "ObjectType", "objectType"])
+    ?? findNestedIfcTextValue(directRecord, ["Name", "name", "LongName", "longName", "ObjectType", "objectType"])
+  const patch: Partial<IfcMarkerElementReference> = {
+    expressId: readIfcNumberValue(directRecord, ["expressID", "expressId", "ExpressID", "id", "elementId"]),
+    globalId:
+      readIfcTextValue(directRecord, ["GlobalId", "globalId", "guid", "ifcGuid"])
+      ?? findNestedIfcTextValue(directRecord, ["GlobalId", "globalId", "guid", "ifcGuid"]),
+    entityType:
+      readIfcTextValue(directRecord, ["type", "ifcType", "entityType", "PredefinedType", "predefinedType"])
+      ?? findNestedIfcTextValue(directRecord, ["type", "ifcType", "entityType", "PredefinedType", "predefinedType"]),
+    elementName,
+    levelName:
+      readIfcTextValue(directRecord, ["levelName", "level", "storey", "buildingStorey"])
+      ?? findIfcStoreyName(directRecord),
+    propertySource: source,
+    propertiesLoadedAt: new Date().toISOString(),
+  }
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined && value !== "")) as Partial<IfcMarkerElementReference>
+}
+
+function mergeIfcElementReference(base: IfcMarkerElementReference, patch: Partial<IfcMarkerElementReference>): IfcMarkerElementReference {
+  return {
+    ...base,
+    ...patch,
+    expressId: patch.expressId ?? base.expressId,
+    globalId: patch.globalId ?? base.globalId,
+    entityType: patch.entityType ?? base.entityType,
+    elementName: patch.elementName ?? base.elementName,
+    levelName: patch.levelName ?? base.levelName,
+    worldPosition: base.worldPosition,
+    cameraSnapshot: base.cameraSnapshot,
+    screenPosition: base.screenPosition,
+  }
+}
+
+async function readIfcPropertiesFromModel(model: Object3D | LooseIfcRecord | undefined, expressId?: number): Promise<Partial<IfcMarkerElementReference>> {
+  if (!model || expressId === undefined) return {}
+  const modelRecord = model as unknown as LooseIfcRecord
+  const attempts: Array<{ name: string; key: string; args: unknown[] }> = [
+    { name: "model.getItemsData", key: "getItemsData", args: [[expressId]] },
+    { name: "model.getItemProperties", key: "getItemProperties", args: [expressId] },
+    { name: "model.getProperties", key: "getProperties", args: [expressId] },
+    { name: "model.getPropertiesData", key: "getPropertiesData", args: [[expressId]] },
+  ]
+  for (const attempt of attempts) {
+    const callable = getRecordCallable(modelRecord, attempt.key)
+    if (!callable) continue
+    try {
+      const payload = await Promise.resolve(callable.call(modelRecord, ...attempt.args))
+      const patch = normalizeIfcPropertyPatch(attempt.name, payload)
+      if (patch.globalId || patch.elementName || patch.entityType || patch.levelName) return patch
+    } catch (propertyError) {
+      console.warn("IFC property read failed", attempt.name, propertyError)
+    }
+  }
+  return {}
+}
+
+function buildMarkerIssuePatch(file: PlanViewerFile, issueId?: string) {
+  const issue = file.issues?.find((item) => item.id === issueId)
+  return {
+    issueId: issue?.id ?? issueId ?? file.issueId,
+    issueSerial: issue?.serial ?? file.issueSerial,
+    issueTitle: issue?.title ?? file.issueTitle,
+    issueLocation: issue?.location,
+    issueDescription: issue?.description,
+    issueSeverity: issue?.severity,
+    issueResponsible: issue?.responsible,
+    issueContractorRepresentative: issue?.contractorRepresentative,
+    issueDeadline: issue?.deadline,
+    issueStatus: issue?.status,
+    issueNote: issue?.note,
+  }
+}
+
+function getNextIfcMarkerSerial(markers: PlanIssueMarker[], issueId?: string) {
+  const nextNumber = markers.filter((marker) => marker.issueId === issueId && marker.sourceType === "ifc" && marker.markerKind !== "photo").length + 1
+  return `HJ-${String(nextNumber).padStart(3, "0")}`
+}
+
+function getNextIfcPhotoMarkerSerial(markers: PlanIssueMarker[], issueId?: string) {
+  const nextNumber = markers.filter((marker) => marker.issueId === issueId && marker.sourceType === "ifc" && marker.markerKind === "photo").length + 1
+  return `FHJ-${String(nextNumber).padStart(3, "0")}`
+}
+
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function isIfcMarkerUiTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest('[data-ifc-marker-ui="true"], [data-plan-marker="true"]'))
+}
+
+export default function IfcModelViewer({ file }: IfcModelViewerProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const viewerRef = useRef<HTMLDivElement | null>(null)
+  const markerLayerRef = useRef<HTMLDivElement | null>(null)
+  const runtimeRef = useRef<IfcRuntime | null>(null)
+  const placementPointerRef = useRef<{ pointerId: number; clientX: number; clientY: number; placedOnDown?: boolean } | null>(null)
+  const lastPlacementRef = useRef<{ time: number; clientX: number; clientY: number } | null>(null)
+  const markerDragRef = useRef<MarkerDragState | null>(null)
+  const [viewMode, setViewMode] = useState<"orbit" | "section" | "measure" | "mark">("orbit")
+  const [showGrid, setShowGrid] = useState(true)
+  const [showLevels, setShowLevels] = useState(true)
+  const [markers, setMarkers] = useState<PlanIssueMarker[]>(file.markers ?? [])
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(file.selectedMarkerId ?? file.markers?.[0]?.id ?? null)
+  const [activeIssueId, setActiveIssueId] = useState(file.activeIssueId || file.issueId || file.issues?.[0]?.id || "")
+  const [activeDiscipline, setActiveDiscipline] = useState<PlanIssueDiscipline>("architecture")
+  const [markerPlacementMode, setMarkerPlacementMode] = useState<"issue" | "photo">("issue")
+  const [selectedPhotoIdForMarker, setSelectedPhotoIdForMarker] = useState(file.photos?.[0]?.id || "")
+  const [engineStatus, setEngineStatus] = useState<IfcEngineStatus>(file.url ? "idle" : "missing-source")
+  const [loadingState, setLoadingState] = useState<IfcLoadingState>({
+    progress: 1,
+    stage: "engine",
+    label: "IFC előkészítés",
+    detail: "DIMPROVER modellnéző indul",
+  })
+  const [statusMessage, setStatusMessage] = useState(file.url ? "IFC forrás előkészítve" : "Nincs IFC URL megadva")
+  const [placementMessage, setPlacementMessage] = useState("")
+  const [engineErrorDetail, setEngineErrorDetail] = useState("")
+
+  const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null
+  const activeIssue = file.issues?.find((issue) => issue.id === activeIssueId)
+  const activeIssuePhotosForMarker = (file.photos || []).filter((photo) => !activeIssueId || photo.issueId === activeIssueId)
+  const selectedPhotoForMarker = activeIssuePhotosForMarker.find((photo) => photo.id === selectedPhotoIdForMarker) || activeIssuePhotosForMarker[0] || null
+  const isIfcLoading = engineStatus === "loading-engine" || engineStatus === "loading-model"
+
+  function scrollIfcViewerIntoFocus() {
+    const shell = shellRef.current
+    if (!shell) return
+    window.requestAnimationFrame(() => {
+      shell.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" })
+    })
+  }
+
+  useEffect(() => {
+    if (!isIfcLoading) return
+    scrollIfcViewerIntoFocus()
+    const timer = window.setTimeout(scrollIfcViewerIntoFocus, 250)
+    return () => window.clearTimeout(timer)
+  }, [isIfcLoading, file.id])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!activeIssuePhotosForMarker.length) {
+        if (markerPlacementMode === "photo") setMarkerPlacementMode("issue")
+        return
+      }
+      setSelectedPhotoIdForMarker((current) => current && activeIssuePhotosForMarker.some((photo) => photo.id === current) ? current : activeIssuePhotosForMarker[0]?.id || "")
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [activeIssuePhotosForMarker, markerPlacementMode])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.key !== "Delete" && event.key !== "Backspace") || !selectedMarkerId) return
+      const target = event.target
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return
+      event.preventDefault()
+      const nextMarkers = markers.filter((marker) => marker.id !== selectedMarkerId)
+      commitMarkers(nextMarkers)
+      selectMarker(nextMarkers[0]?.id ?? null)
+      setPlacementMessage("Kijelölt marker törölve.")
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  // commitMarkers and selectMarker are stable local handlers for this keyboard shortcut context.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markers, selectedMarkerId])
+
+  const engineLabel = useMemo(() => {
+    if (engineStatus === "ready") return "IFC modell betöltve"
+    if (engineStatus === "loading-engine") return "IFC motor betöltése..."
+    if (engineStatus === "loading-model") return "IFC modell betöltése..."
+    if (engineStatus === "fallback") return "IFC shell aktív, motor fallback állapotban"
+    if (engineStatus === "missing-source") return "Nincs IFC URL megadva"
+    return "IFC forrás előkészítve"
+  }, [engineStatus])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMarkers(file.markers ?? [])
+      setSelectedMarkerId(file.selectedMarkerId ?? file.markers?.[0]?.id ?? null)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [file.id, file.markers, file.selectedMarkerId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setActiveIssueId(file.activeIssueId || file.issueId || file.issues?.[0]?.id || "")
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [file.id, file.activeIssueId, file.issueId, file.issues])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function disposeRuntime() {
+      const runtime = runtimeRef.current
+      runtimeRef.current = null
+      try {
+        await runtime?.dispose?.()
+      } catch (disposeError) {
+        console.warn("IFC viewer dispose failed", disposeError)
+      }
+    }
+
+    async function loadIfcViewer() {
+      const container = viewerRef.current
+      if (!container) return
+      await disposeRuntime()
+      container.innerHTML = ""
+
+      if (!file.url) {
+        setEngineStatus("missing-source")
+        setStatusMessage("IFC megjelenítéshez szükséges egy elérhető .ifc fájl URL.")
+        return
+      }
+
+      try {
+        setEngineStatus("loading-engine")
+        setLoadingState({ progress: 6, stage: "engine", label: "IFC motor indítása", detail: "DIMPROVER modellnéző előkészítése" })
+        setStatusMessage("@thatopen/components + web-ifc motor betöltése...")
+
+        // The IFC package exposes a dynamic runtime API; this local cast keeps the dependency isolated from the rest of DIMPROVER.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const OBC = await import("@thatopen/components") as unknown as Record<string, any>
+        setLoadingState({ progress: 12, stage: "engine", label: "IFC motor betöltve", detail: "Fragments modul előkészítése" })
+        const FRAGS = await import("@thatopen/fragments")
+        if (cancelled) return
+
+        const components = new OBC.Components()
+        const worlds = components.get(OBC.Worlds)
+        const world = worlds.create()
+
+        world.scene = new OBC.SimpleScene(components)
+        world.renderer = new OBC.SimpleRenderer(components, container)
+        world.camera = new OBC.SimpleCamera(components)
+
+        await components.init?.()
+        setLoadingState({ progress: 20, stage: "engine", label: "IFC világ létrehozva", detail: "Renderer, kamera és scene inicializálva" })
+
+        const fragmentsManager = OBC.FragmentsManager ? components.get(OBC.FragmentsManager) : null
+        if (fragmentsManager) {
+          const fragmentsManagerRecord = isLooseRecord(fragmentsManager) ? fragmentsManager : undefined
+          const initFragments = getRecordCallable(fragmentsManagerRecord, "init")
+          const alreadyInitialized = fragmentsManagerRecord?.initialized === true
+          if (initFragments && !alreadyInitialized) {
+            let workerUrl: string | undefined
+            try {
+              workerUrl = typeof OBC.FragmentsManager?.getWorker === "function"
+                ? await OBC.FragmentsManager.getWorker()
+                : undefined
+            } catch (workerError) {
+              console.warn("Fragments worker URL resolve failed, using default init fallback", workerError)
+            }
+            if (workerUrl) initFragments.call(fragmentsManager, workerUrl)
+            else initFragments.call(fragmentsManager)
+          }
+        }
+
+        world.scene.setup?.()
+        world.scene.three.background = null
+
+        if (showGrid && OBC.Grids) {
+          const grids = components.get(OBC.Grids)
+          grids.create(world)
+        }
+
+        setEngineStatus("loading-model")
+        setEngineErrorDetail("")
+        setStatusMessage("IFC fájl letöltése, web-ifc WASM inicializálása és modell betöltése...")
+
+        setLoadingState({ progress: 24, stage: "wasm", label: "WASM motor előkészítése", detail: "/wasm/web-ifc/ betöltési útvonal ellenőrzése" })
+        const ifcLoader = components.get(OBC.IfcLoader)
+        await ifcLoader.setup({
+          autoSetWasm: false,
+          wasm: {
+            path: "/wasm/web-ifc/",
+            absolute: true,
+          },
+          customLocateFileHandler: (requestedFileName: string) => {
+            const normalizedFileName = requestedFileName.split("/").pop() || "web-ifc.wasm"
+            return `/wasm/web-ifc/${normalizedFileName}`
+          },
+        })
+        setLoadingState({ progress: 28, stage: "download", label: "IFC fájl letöltése", detail: "Nagy méretű modell beolvasása folyamatban" })
+        const response = await fetch(file.url)
+        if (!response.ok) throw new Error(`IFC fájl nem elérhető: ${response.status}`)
+        const buffer = await readIfcResponseBuffer(response, (progress, detail, fileSizeLabel) => {
+          setLoadingState({ progress: clampIfcLoadingProgress(progress), stage: "download", label: "IFC fájl letöltése", detail, fileSizeLabel })
+        })
+        setLoadingState({ progress: 76, stage: "convert", label: "IFC modell konvertálása", detail: `${formatIfcFileSize(buffer.byteLength)} · Fragments modell építése`, fileSizeLabel: formatIfcFileSize(buffer.byteLength) })
+        setStatusMessage(`IFC fájl letöltve (${formatIfcFileSize(buffer.byteLength)}). Modell konvertálása Fragments formátumra...`)
+        const model = await ifcLoader.load(buffer, true, file.name)
+        if (cancelled) return
+
+        const modelRecord = isLooseRecord(model) ? model : undefined
+        const fragmentsCore = isLooseRecord(fragmentsManager) ? fragmentsManager.core : undefined
+        const updateFragments = isLooseRecord(fragmentsCore) ? getRecordCallable(fragmentsCore, "update") : null
+        const refreshFragments = async (force = true) => {
+          if (updateFragments) await Promise.resolve(updateFragments.call(fragmentsCore, force))
+        }
+
+        const modelObject = modelRecord?.object
+        const visibleModelObject = isThreeObject3D(modelObject) ? modelObject : isThreeObject3D(model) ? model : null
+        const useCamera = getRecordCallable(modelRecord, "useCamera")
+        if (useCamera && world.camera?.three) {
+          useCamera.call(model, world.camera.three)
+        }
+
+        const setLodMode = getRecordCallable(modelRecord, "setLodMode")
+        if (setLodMode && FRAGS.LodMode?.ALL_GEOMETRY !== undefined) {
+          await Promise.resolve(setLodMode.call(model, FRAGS.LodMode.ALL_GEOMETRY))
+        }
+
+        if (visibleModelObject && !visibleModelObject.parent) {
+          world.scene.three.add(visibleModelObject)
+        }
+
+        setLoadingState({ progress: 86, stage: "convert", label: "Geometria feldolgozása", detail: "Fragments render frissítés" })
+        await refreshFragments(true)
+
+        const controlsRecord = isLooseRecord(world.camera?.controls) ? world.camera.controls : undefined
+        const addControlListener = getRecordCallable(controlsRecord, "addEventListener")
+        const removeControlListener = getRecordCallable(controlsRecord, "removeEventListener")
+        const handleCameraSettled = () => {
+          void refreshFragments(true)
+          // IFC marker MVP: keep overlay markers at the clicked screen position.
+          // 3D worldPosition is stored as metadata only until stable element snapping is implemented.
+        }
+        if (addControlListener) {
+          addControlListener.call(controlsRecord, "rest", handleCameraSettled)
+          addControlListener.call(controlsRecord, "sleep", handleCameraSettled)
+          addControlListener.call(controlsRecord, "controlend", handleCameraSettled)
+        }
+
+        const modelBounds = visibleModelObject ? getObjectBoundingBox(visibleModelObject) : null
+        if (modelBounds) {
+          const { center, size, maxDimension } = modelBounds
+          const cameraDistance = Math.max(12, maxDimension * 1.65)
+          await world.camera.controls?.setLookAt?.(
+            center.x + cameraDistance,
+            center.y + cameraDistance * 0.72,
+            center.z + cameraDistance,
+            center.x,
+            center.y,
+            center.z,
+            true,
+          )
+          setLoadingState({ progress: 94, stage: "camera", label: "Kamera igazítása", detail: `Modellméret: ${formatIfcModelSize(size)}` })
+          await refreshFragments(true)
+          setStatusMessage(`IFC modell betöltve · modellméret: ${formatIfcModelSize(size)} · kamera a modellre igazítva.`)
+        } else {
+          await world.camera.controls?.setLookAt?.(12, 10, 12, 0, 0, 0, true)
+          setLoadingState({ progress: 94, stage: "camera", label: "Kamera alapnézet", detail: "Befoglaló méret nem olvasható" })
+          await refreshFragments(true)
+          setStatusMessage("IFC modell betöltve, de a modell befoglaló mérete nem olvasható. Próbáld az Orbit nézetet / görgős zoomot.")
+        }
+        world.renderer.resize?.()
+        await refreshFragments(true)
+        // IFC marker MVP: keep overlay markers at the clicked screen position.
+
+        runtimeRef.current = {
+          world: world as LooseIfcRecord,
+          model: visibleModelObject ?? (model as Object3D),
+          rawModel: modelRecord,
+          fragmentsManager: isLooseRecord(fragmentsManager) ? fragmentsManager : undefined,
+          components: components as LooseIfcRecord,
+          dispose: async () => {
+            if (removeControlListener) {
+              try { removeControlListener.call(controlsRecord, "rest", handleCameraSettled) } catch {}
+              try { removeControlListener.call(controlsRecord, "sleep", handleCameraSettled) } catch {}
+              try { removeControlListener.call(controlsRecord, "controlend", handleCameraSettled) } catch {}
+            }
+            try { world.renderer?.dispose?.() } catch {}
+            try { components.dispose?.() } catch {}
+          },
+        }
+        setLoadingState({ progress: 100, stage: "ready", label: "IFC modell betöltve", detail: "DIMPROVER modellnéző kész" })
+        setEngineStatus("ready")
+        if (!modelBounds) setStatusMessage("IFC modell betöltve. HJ jelölés módban a marker modellnézeti pontot, 3D találati pozíciót és kameraállást is ment.")
+      } catch (error) {
+        const errorMessage = formatIfcLoadError(error)
+        console.error("DIMPROVER IFC model load failed", {
+          fileName: file.name,
+          fileType: file.type,
+          error,
+        })
+        if (cancelled) return
+        await disposeRuntime()
+        setEngineStatus("fallback")
+        setEngineErrorDetail(errorMessage)
+        setStatusMessage(`IFC motor fallback: ${errorMessage}`)
+      }
+    }
+
+    loadIfcViewer()
+
+    return () => {
+      cancelled = true
+      void disposeRuntime()
+    }
+  }, [file.id, file.name, file.type, file.url, showGrid])
+
+  function commitMarkers(nextMarkers: PlanIssueMarker[]) {
+    setMarkers(nextMarkers)
+    file.onMarkersChange?.(nextMarkers)
+  }
+
+  function selectMarker(markerId: string | null) {
+    setSelectedMarkerId(markerId)
+    file.onSelectedMarkerChange?.(markerId)
+  }
+
+  function getCameraSnapshot(): IfcMarkerCameraSnapshot | undefined {
+    const world = runtimeRef.current?.world
+    if (!world) return undefined
+    const cameraWrapper = isLooseRecord(world.camera) ? world.camera : undefined
+    const camera = cameraWrapper && isLooseRecord(cameraWrapper.three) ? cameraWrapper.three as unknown as Camera : undefined
+    const controls = cameraWrapper && isLooseRecord(cameraWrapper.controls) ? cameraWrapper.controls : undefined
+    const targetCandidate = controls && isLooseRecord(controls.target) ? controls.target as unknown as Vector3 : undefined
+    if (!camera) return undefined
+    return {
+      position: asVectorPosition(camera.position) ?? { x: 0, y: 0, z: 0 },
+      target: asVectorPosition(targetCandidate),
+      zoom: "zoom" in camera && typeof camera.zoom === "number" ? camera.zoom : undefined,
+    }
+  }
+
+  function getWorldCamera(): Camera | null {
+    const world = runtimeRef.current?.world
+    if (!world || !isLooseRecord(world.camera)) return null
+    const cameraWrapper = world.camera
+    if (!isLooseRecord(cameraWrapper.three)) return null
+    return cameraWrapper.three as unknown as Camera
+  }
+
+  function getBestEffortElementReference(object: Object3D | null, worldPosition?: IfcMarkerWorldPosition): IfcMarkerElementReference {
+    let current: Object3D | null = object
+    let foundUserData: LooseIfcRecord | undefined
+
+    while (current) {
+      if (isLooseRecord(current.userData) && Object.keys(current.userData).length) {
+        foundUserData = current.userData
+        break
+      }
+      current = current.parent
+    }
+
+    return {
+      modelFileName: file.name,
+      modelUrl: file.url,
+      modelId: file.id,
+      expressId: readNumberRecordValue(foundUserData, ["expressID", "expressId", "ExpressID", "id", "elementId"]),
+      globalId: readStringRecordValue(foundUserData, ["GlobalId", "globalId", "guid", "ifcGuid"]),
+      entityType: readStringRecordValue(foundUserData, ["type", "ifcType", "entityType", "Name"]),
+      elementName: readStringRecordValue(foundUserData, ["Name", "name", "LongName", "longName", "ObjectType"]),
+      levelName: readStringRecordValue(foundUserData, ["level", "levelName", "storey", "buildingStorey"]),
+      worldPosition,
+      cameraSnapshot: getCameraSnapshot(),
+    }
+  }
+
+  function getOverlayOnlyElementReference(xPercent: number, yPercent: number): IfcMarkerElementReference {
+    return {
+      modelFileName: file.name,
+      modelUrl: file.url,
+      modelId: file.id,
+      propertySource: "ifc-overlay-screen",
+      cameraSnapshot: getCameraSnapshot(),
+      screenPosition: { xPercent, yPercent },
+    }
+  }
+
+  // Reserved for later true IFC element snapping / Express ID lookup. MVP placement uses overlay coordinates only.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function pickIfcElement(clientX: number, clientY: number, xPercent: number, yPercent: number): Promise<IfcPickResult> {
+    const container = viewerRef.current
+    const camera = getWorldCamera()
+    const model = runtimeRef.current?.model
+    if (!container || !camera || !model) {
+      return {
+        elementReference: {
+          modelFileName: file.name,
+          modelUrl: file.url,
+          modelId: file.id,
+          cameraSnapshot: getCameraSnapshot(),
+          screenPosition: { xPercent, yPercent },
+        },
+      }
+    }
+
+    const canvas = getDomCanvas(container)
+    const raycastRect = canvas?.getBoundingClientRect() ?? container.getBoundingClientRect()
+    const pointer = new Vector2(
+      ((clientX - raycastRect.left) / raycastRect.width) * 2 - 1,
+      -((clientY - raycastRect.top) / raycastRect.height) * 2 + 1,
+    )
+
+    const fragmentsManager = runtimeRef.current?.fragmentsManager
+    const fragmentsRaycast = getRecordCallable(fragmentsManager, "raycast")
+    if (fragmentsRaycast && canvas) {
+      try {
+        const fragmentsHit = normalizeFragmentsRaycastResult(await Promise.resolve(fragmentsRaycast.call(fragmentsManager, {
+          camera,
+          mouse: pointer,
+          dom: canvas,
+        })))
+        if (fragmentsHit) {
+          const worldPosition = asVectorPosition(fragmentsHit.point)
+          return {
+            elementReference: {
+              ...getBestEffortElementReference(fragmentsHit.object ?? null, worldPosition),
+              modelFileName: file.name,
+              modelUrl: file.url,
+              modelId: fragmentsHit.modelId ?? file.id,
+              expressId: fragmentsHit.expressId,
+              propertySource: fragmentsHit.source,
+              worldPosition,
+              cameraSnapshot: getCameraSnapshot(),
+              screenPosition: { xPercent, yPercent },
+            },
+          }
+        }
+      } catch (raycastError) {
+        console.warn("IFC fragments raycast failed", raycastError)
+      }
+    }
+
+    const raycaster = new Raycaster()
+    raycaster.setFromCamera(pointer, camera)
+    const intersections = raycaster.intersectObject(model, true)
+    const firstHit = intersections[0]
+    const worldPosition = asVectorPosition(firstHit?.point)
+
+    return {
+      elementReference: {
+        ...getBestEffortElementReference(firstHit?.object ?? null, worldPosition),
+        screenPosition: { xPercent, yPercent },
+      },
+    }
+  }
+
+  // Reserved for later true IFC property loading.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function enrichIfcElementReference(base: IfcMarkerElementReference) {
+    const propertyPatch = await readIfcPropertiesFromModel(runtimeRef.current?.rawModel ?? runtimeRef.current?.model, base.expressId)
+    return mergeIfcElementReference(base, propertyPatch)
+  }
+
+  async function addMarkerFromClientPoint(clientX: number, clientY: number) {
+    const container = markerLayerRef.current ?? viewerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const xPercent = Math.min(99, Math.max(1, ((clientX - rect.left) / rect.width) * 100))
+    const yPercent = Math.min(99, Math.max(1, ((clientY - rect.top) / rect.height) * 100))
+    const elementReference = getOverlayOnlyElementReference(xPercent, yPercent)
+    const hasModelHit = false
+    const pickedElementLabel = undefined
+    const isPhotoPlacement = markerPlacementMode === "photo" && Boolean(selectedPhotoForMarker)
+    const nextMarker: PlanIssueMarker = isPhotoPlacement
+      ? {
+          id: `ifc-photo-marker-${Date.now()}`,
+          sourceType: "ifc",
+          ifcReference: elementReference,
+          markerKind: "photo",
+          ...buildMarkerIssuePatch(file, activeIssueId),
+          photoId: selectedPhotoForMarker?.id,
+          photoSerial: selectedPhotoForMarker?.serial,
+          photoName: selectedPhotoForMarker?.name,
+          photoNote: selectedPhotoForMarker?.note,
+          photoPreviewUrl: selectedPhotoForMarker?.url || selectedPhotoForMarker?.dataUrl,
+          serial: getNextIfcPhotoMarkerSerial(markers, activeIssueId),
+          title: `IFC fotóhely jelölés · ${selectedPhotoForMarker?.serial || "F"}`,
+          note: selectedPhotoForMarker?.note || "Fotó készítésének helye az IFC modellen.",
+          issueSeverity: "Észrevétel",
+          status: "Nyitott",
+          issueStatus: "Nyitott",
+          responsible: activeIssue?.responsible || "",
+          dueDate: activeIssue?.deadline || formatDateInput(new Date()),
+          discipline: "other",
+          xPercent,
+          yPercent,
+          pageNumber: 1,
+          showLetter: true,
+          paperSize: "A4",
+          orientation: "landscape",
+          pdfFileName: file.name,
+        }
+      : {
+          id: `ifc-marker-${Date.now()}`,
+          sourceType: "ifc",
+          ifcReference: elementReference,
+          markerKind: "issue",
+          ...buildMarkerIssuePatch(file, activeIssueId),
+          serial: getNextIfcMarkerSerial(markers, activeIssueId),
+          title: activeIssue?.title || file.issueTitle || "IFC modell hibahely",
+          note: activeIssue?.description || activeIssue?.note || (pickedElementLabel ? `IFC elemhez kapcsolt hibahely: ${pickedElementLabel}` : "IFC modellnézeten képernyőpozícióként rögzített hibahely. A marker a modellnézeti pozíciót és a kameraállást menti."),
+          issueSeverity: "Észrevétel",
+          status: activeIssue?.status || "Nyitott",
+          issueStatus: activeIssue?.status || "Nyitott",
+          responsible: activeIssue?.responsible || "",
+          dueDate: activeIssue?.deadline || formatDateInput(new Date()),
+          discipline: activeDiscipline,
+          xPercent,
+          yPercent,
+          pageNumber: 1,
+          showLetter: true,
+          paperSize: "A4",
+          orientation: "landscape",
+          pdfFileName: file.name,
+        }
+    const nextMarkers = [...markers, nextMarker]
+    commitMarkers(nextMarkers)
+    selectMarker(nextMarker.id)
+    setPlacementMessage(hasModelHit
+      ? `Marker rögzítve: ${nextMarker.serial} · ${Math.round(xPercent)}% / ${Math.round(yPercent)}%. IFC találat mentve metaadatként.`
+      : `Marker rögzítve ott, ahová kattintottál: ${nextMarker.serial} · ${Math.round(xPercent)}% / ${Math.round(yPercent)}%.`)
+    // IFC marker MVP: keep overlay markers at the clicked screen position.
+  }
+
+  function requestMarkerPlacement(clientX: number, clientY: number) {
+    const now = Date.now()
+    const previous = lastPlacementRef.current
+    const isDuplicate = previous
+      && now - previous.time < 700
+      && Math.abs(previous.clientX - clientX) < 18
+      && Math.abs(previous.clientY - clientY) < 18
+    if (isDuplicate) return
+    lastPlacementRef.current = { time: now, clientX, clientY }
+    void addMarkerFromClientPoint(clientX, clientY)
+  }
+
+  function handlePlacementPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (viewMode !== "mark") return
+    if (isIfcMarkerUiTarget(event.target)) return
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    placementPointerRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      placedOnDown: true,
+    }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {}
+    requestMarkerPlacement(event.clientX, event.clientY)
+  }
+
+  function handlePlacementPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (viewMode !== "mark") return
+    if (isIfcMarkerUiTarget(event.target)) return
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const start = placementPointerRef.current
+    placementPointerRef.current = null
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {}
+    if (start?.placedOnDown) return
+    const movedDistance = start && start.pointerId === event.pointerId
+      ? Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY)
+      : 0
+    if (movedDistance > 45) {
+      setPlacementMessage("Kameramozgatásnak érzékeltem, ezért nem rögzítettem új HJ-t.")
+      return
+    }
+    requestMarkerPlacement(event.clientX, event.clientY)
+  }
+
+  function handlePlacementClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (viewMode !== "mark") return
+    if (isIfcMarkerUiTarget(event.target)) return
+    event.preventDefault()
+    event.stopPropagation()
+    requestMarkerPlacement(event.clientX, event.clientY)
+  }
+
+  function deleteSelectedMarker() {
+    if (!selectedMarker) return
+    const nextMarkers = markers.filter((marker) => marker.id !== selectedMarker.id)
+    commitMarkers(nextMarkers)
+    selectMarker(nextMarkers[0]?.id ?? null)
+    setPlacementMessage(`Marker törölve: ${selectedMarker.serial}`)
+  }
+
+  function updateSelectedMarker(patch: Partial<PlanIssueMarker>) {
+    if (!selectedMarker) return
+    commitMarkers(markers.map((marker) => marker.id === selectedMarker.id ? { ...marker, ...patch } : marker))
+  }
+
+  function changeSelectedMarkerIssue(issueId: string) {
+    if (!selectedMarker) return
+    const issue = file.issues?.find((item) => item.id === issueId)
+    updateSelectedMarker({
+      ...buildMarkerIssuePatch(file, issueId),
+      title: selectedMarker.title || issue?.title || file.issueTitle || "Új terepi hiba",
+      issueLocation: selectedMarker.issueLocation || issue?.location || "",
+      issueDescription: selectedMarker.issueDescription || issue?.description || "",
+      issueSeverity: selectedMarker.issueSeverity || issue?.severity || "Észrevétel",
+      responsible: selectedMarker.responsible || issue?.responsible || "",
+      dueDate: selectedMarker.dueDate || issue?.deadline || formatDateInput(new Date()),
+      status: selectedMarker.status || issue?.status || "Nyitott",
+      issueStatus: selectedMarker.issueStatus || issue?.status || "Nyitott",
+    })
+  }
+
+  function setDueDateOffset(days: number) {
+    const base = selectedMarker?.dueDate ? new Date(`${selectedMarker.dueDate}T00:00:00`) : new Date()
+    if (Number.isNaN(base.getTime())) return
+    base.setDate(base.getDate() + days)
+    updateSelectedMarker({ dueDate: formatDateInput(base) })
+  }
+
+  function setDueDateToday() {
+    updateSelectedMarker({ dueDate: formatDateInput(new Date()) })
+  }
+
+  function moveMarkerOnViewer(markerId: string, clientX: number, clientY: number) {
+    const container = viewerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const xPercent = Math.min(99, Math.max(1, ((clientX - rect.left) / rect.width) * 100))
+    const yPercent = Math.min(99, Math.max(1, ((clientY - rect.top) / rect.height) * 100))
+    commitMarkers(markers.map((marker) => marker.id === markerId ? { ...marker, xPercent, yPercent } : marker))
+    setPlacementMessage(`Marker áthelyezve: ${Math.round(xPercent)}% / ${Math.round(yPercent)}%`)
+  }
+
+  function handleMarkerPointerDown(marker: PlanIssueMarker, event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    selectMarker(marker.id)
+    markerDragRef.current = {
+      markerId: marker.id,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startXPercent: marker.xPercent,
+      startYPercent: marker.yPercent,
+      moved: false,
+    }
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {}
+  }
+
+  function handleMarkerPointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = markerDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const container = viewerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const dx = event.clientX - drag.startClientX
+    const dy = event.clientY - drag.startClientY
+    if (Math.hypot(dx, dy) > 3) drag.moved = true
+    const xPercent = Math.min(99, Math.max(1, drag.startXPercent + (dx / rect.width) * 100))
+    const yPercent = Math.min(99, Math.max(1, drag.startYPercent + (dy / rect.height) * 100))
+    commitMarkers(markers.map((marker) => marker.id === drag.markerId ? { ...marker, xPercent, yPercent } : marker))
+  }
+
+  function handleMarkerPointerUp(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = markerDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    markerDragRef.current = null
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {}
+    if (drag.moved) moveMarkerOnViewer(drag.markerId, event.clientX, event.clientY)
+  }
+
+  function handleMarkerPointerCancel(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = markerDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    markerDragRef.current = null
+  }
+
+  return (
+    <div ref={shellRef} className="flex h-full min-h-[520px] scroll-mt-4 flex-col border border-slate-200 bg-slate-950 text-white">
+      <div className="flex flex-col gap-3 border-b border-white/10 bg-white/5 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-300">IFC.js / web-ifc modellnéző + DIMPROVER HJ overlay</div>
+          <div className="mt-1 truncate text-sm font-black text-white">{file.name}</div>
+          <div className="mt-1 text-[11px] font-bold text-slate-400">{engineLabel} · {statusMessage}</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {(["orbit", "section", "measure", "mark"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setViewMode(mode)
+                if (mode === "mark") setPlacementMessage("HJ jelölés mód bekapcsolva. Most kattints közvetlenül a modellre.")
+              }}
+              className={`border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] ${viewMode === mode ? "border-emerald-300 bg-emerald-400/20 text-emerald-100" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
+            >
+              {mode === "orbit" ? "Orbit" : mode === "section" ? "Metszet" : mode === "measure" ? "Mérés" : "HJ jelölés"}
+            </button>
+          ))}
+          <button type="button" onClick={() => setShowGrid((value) => !value)} className="border border-white/10 bg-white/5 px-3 py-2 text-xs font-black uppercase text-slate-300 hover:bg-white/10">Rács {showGrid ? "be" : "ki"}</button>
+          <button type="button" onClick={() => setShowLevels((value) => !value)} className="border border-white/10 bg-white/5 px-3 py-2 text-xs font-black uppercase text-slate-300 hover:bg-white/10">Szintek {showLevels ? "be" : "ki"}</button>
+        </div>
+      </div>
+
+      <div
+        className={`relative min-h-0 flex-1 overflow-hidden ${showGrid ? "bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.18),transparent_34%),linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[size:auto,32px_32px,32px_32px]" : "bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.16),transparent_36%)]"}`}
+      >
+        <div data-ifc-marker-ui="true" className="absolute left-4 top-4 z-20 grid gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-100">
+          <div className="border border-emerald-300/30 bg-slate-900/80 px-3 py-2 shadow">Nézet: {viewMode === "orbit" ? "Orbit / forgatás" : viewMode === "section" ? "Metszősík előkészítés" : viewMode === "measure" ? "Mérőeszköz előkészítés" : "HJ marker elhelyezés"}</div>
+          <div className="border border-emerald-300/30 bg-slate-900/80 px-3 py-2 shadow">IFC motor: @thatopen/components + web-ifc</div>
+          <div className="border border-emerald-300/30 bg-slate-900/80 px-3 py-2 shadow">Markerek: {markers.length}</div>
+        </div>
+
+        {showLevels ? (
+          <div data-ifc-marker-ui="true" className="absolute right-4 top-4 z-20 w-44 border border-white/10 bg-slate-900/80 p-3 shadow-xl">
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">Szintek</div>
+            <div className="mt-2 grid gap-1 text-xs font-bold text-slate-300">
+              <div className="flex justify-between border-b border-white/10 py-1"><span>Tető</span><span>+9.60</span></div>
+              <div className="flex justify-between border-b border-white/10 py-1"><span>II. emelet</span><span>+6.40</span></div>
+              <div className="flex justify-between border-b border-white/10 py-1"><span>I. emelet</span><span>+3.20</span></div>
+              <div className="flex justify-between py-1"><span>Földszint</span><span>±0.00</span></div>
+            </div>
+          </div>
+        ) : null}
+
+        <div ref={viewerRef} className={`absolute inset-0 z-0 ${viewMode === "mark" ? "pointer-events-none" : ""}`} />
+
+        {isIfcLoading ? (
+          <div className="absolute inset-0 z-50 grid place-items-center bg-slate-950/70 backdrop-blur-[2px]">
+            <div className="relative w-[360px] max-w-[calc(100%-48px)] overflow-hidden border-2 border-cyan-300/70 bg-slate-950/95 p-5 text-center shadow-[0_0_0_1px_rgba(34,211,238,0.25),0_24px_80px_rgba(8,47,73,0.72)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.22),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.08)_0,transparent_38%)]" />
+              <div className="relative mx-auto grid h-28 w-28 place-items-center">
+                <div className="absolute inset-0 animate-ping bg-cyan-300/15" style={{ clipPath: "polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%)" }} />
+                <div className="absolute inset-1 bg-cyan-300/10 shadow-[0_0_36px_rgba(34,211,238,0.45)]" style={{ clipPath: "polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%)" }} />
+                <div className="relative grid h-24 w-24 place-items-center border border-cyan-200/70 bg-slate-900/95" style={{ clipPath: "polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%)" }}>
+                  <div className="absolute bottom-0 left-0 right-0 bg-cyan-400/45 transition-all duration-500" style={{ height: `${loadingState.progress}%` }} />
+                  <div className="relative text-center">
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100">DIMPROVER</div>
+                    <div className="mt-1 text-2xl font-black text-white">{loadingState.progress}%</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative mt-4 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">{getIfcLoadingStageLabel(loadingState.stage)}</div>
+              <div className="relative mt-1 text-sm font-black text-white">{loadingState.label}</div>
+              <div className="relative mt-1 min-h-5 text-xs font-bold text-slate-300">{loadingState.detail}</div>
+              {loadingState.fileSizeLabel ? <div className="relative mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">Fájlméret: {loadingState.fileSizeLabel}</div> : null}
+
+              <div className="relative mt-4 h-2 overflow-hidden border border-cyan-300/40 bg-slate-900">
+                <div className="h-full bg-cyan-300 transition-all duration-500" style={{ width: `${loadingState.progress}%` }} />
+              </div>
+              <div className="relative mt-3 grid grid-cols-5 gap-1 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">
+                <span className={loadingState.progress >= 10 ? "text-cyan-200" : ""}>Motor</span>
+                <span className={loadingState.progress >= 28 ? "text-cyan-200" : ""}>Fájl</span>
+                <span className={loadingState.progress >= 72 ? "text-cyan-200" : ""}>WASM</span>
+                <span className={loadingState.progress >= 86 ? "text-cyan-200" : ""}>IFC</span>
+                <span className={loadingState.progress >= 96 ? "text-cyan-200" : ""}>Kész</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {engineStatus === "fallback" || engineStatus === "missing-source" ? (
+          <div className="absolute inset-8 z-10 border border-dashed border-emerald-300/30 bg-slate-900/70">
+            <div className="grid h-full place-items-center p-6 text-center">
+              <div>
+                <div className="mx-auto grid h-32 w-32 place-items-center border border-emerald-300/30 bg-emerald-400/10 shadow-[0_0_60px_rgba(16,185,129,0.20)]">
+                  <div className="text-4xl font-black text-emerald-300">IFC</div>
+                </div>
+                <p className="mt-5 max-w-xl text-sm font-semibold leading-6 text-slate-300">
+                  A közös tervnéző már külön IFC motorral próbálja betölteni a modellt. Ha nincs URL vagy a böngészős web-ifc betöltés hibára fut, ez a fallback shell marad látható, a DIMPROVER HJ marker overlay viszont továbbra is működik.
+                </p>
+                {engineErrorDetail ? (
+                  <div className="mx-auto mt-4 max-w-3xl border border-amber-300/40 bg-amber-950/30 p-3 text-left text-[11px] font-bold text-amber-100 shadow">
+                    <div className="mb-1 font-black uppercase tracking-[0.12em] text-amber-300">Betöltési hiba részlete</div>
+                    <div className="break-words normal-case tracking-normal">{engineErrorDetail}</div>
+                  </div>
+                ) : null}
+                <div className="mt-5 grid gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500 sm:grid-cols-3">
+                  <div className="border border-white/10 bg-white/5 px-3 py-2">modell betöltés</div>
+                  <div className="border border-white/10 bg-white/5 px-3 py-2">elem azonosító</div>
+                  <div className="border border-white/10 bg-white/5 px-3 py-2">3D hibahely marker</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          ref={markerLayerRef}
+          className={`absolute inset-0 z-30 ${viewMode === "mark" ? "cursor-crosshair pointer-events-auto" : "pointer-events-none"}`}
+          onClickCapture={handlePlacementClick}
+          onPointerDownCapture={handlePlacementPointerDown}
+          onPointerUpCapture={handlePlacementPointerUp}
+        >
+          {markers.map((marker) => (
+            <PlanHexMarker
+              key={marker.id}
+              marker={marker}
+              zoom={IFC_MARKER_ZOOM}
+              anchorMode="center"
+              selected={marker.id === selectedMarkerId}
+              pulse={false}
+              onClick={() => {
+                selectMarker(marker.id)
+                setPlacementMessage(`Kijelölt marker: ${marker.serial}. A jobb alsó panelen törölhető, vagy egérrel áthúzható.`)
+              }}
+              onPointerDown={(event) => handleMarkerPointerDown(marker, event)}
+              onPointerMove={handleMarkerPointerMove}
+              onPointerUp={handleMarkerPointerUp}
+              onPointerCancel={handleMarkerPointerCancel}
+            />
+          ))}
+        </div>
+
+        {viewMode === "mark" ? (
+          <div data-ifc-marker-ui="true" className="absolute bottom-4 left-4 right-4 z-40 border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm font-bold text-emerald-100 shadow">
+            <div>HJ jelölés mód aktív: kattints a modellnézetre. A rendszer menti a modellfájl kapcsolatot, a képernyőpozíciót, kameraállást és találat esetén a 3D pozíciót / IFC elem azonosítót.</div>
+            {placementMessage ? <div className="mt-1 text-xs text-emerald-200">{placementMessage}</div> : null}
+          </div>
+        ) : null}
+
+        <div data-ifc-marker-ui="true" className="absolute bottom-4 right-4 z-40 w-80 border-2 border-cyan-300/70 bg-cyan-950/95 p-3 shadow-[0_0_0_1px_rgba(34,211,238,0.25),0_20px_60px_rgba(8,47,73,0.60)] backdrop-blur-sm">
+          <div className="-mx-3 -mt-3 mb-3 border-b border-cyan-300/40 bg-cyan-400/15 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-cyan-100">IFC HJ marker panel</div>
+          <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+            Aktív TH
+            <select value={activeIssueId} onChange={(event) => setActiveIssueId(event.target.value)} className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-black text-white outline-none focus:border-emerald-400">
+              {(file.issues?.length ? file.issues : [{ id: file.issueId || "active-issue", serial: file.issueSerial || "TH", title: file.issueTitle || "Tervi hibahely" }]).map((issue) => (
+                <option key={issue.id} value={issue.id}>{issue.serial} · {issue.title}</option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            <button type="button" onClick={() => setMarkerPlacementMode("issue")} className={`border px-2 py-1 text-[10px] font-black uppercase ${markerPlacementMode === "issue" ? "border-cyan-300 bg-cyan-400/20 text-cyan-100" : "border-white/10 bg-white/5 text-slate-300"}`}>HJ hibahely</button>
+            <button type="button" onClick={() => setMarkerPlacementMode("photo")} disabled={!activeIssuePhotosForMarker.length} className={`border px-2 py-1 text-[10px] font-black uppercase disabled:opacity-40 ${markerPlacementMode === "photo" ? "border-blue-300 bg-blue-400/20 text-blue-100" : "border-white/10 bg-white/5 text-slate-300"}`}>FHJ fotóhely</button>
+          </div>
+          {markerPlacementMode === "photo" ? (
+            <select value={selectedPhotoForMarker?.id || ""} onChange={(event) => setSelectedPhotoIdForMarker(event.target.value)} className="mt-2 h-8 w-full border border-blue-300/30 bg-slate-950 px-2 text-[10px] font-black uppercase text-blue-100 outline-none">
+              {activeIssuePhotosForMarker.length ? activeIssuePhotosForMarker.map((photo) => <option key={photo.id} value={photo.id}>{photo.serial} · {photo.category === "plan-photo" ? "Tervfotó" : "Fotó"}</option>) : <option value="">Nincs fotó</option>}
+            </select>
+          ) : null}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {planIssueDisciplines.map((item) => (
+              <button key={item.value} type="button" onClick={() => setActiveDiscipline(item.value)} className={`border px-2 py-1 text-[10px] font-black uppercase ${activeDiscipline === item.value ? "border-emerald-300 bg-emerald-400/20 text-emerald-100" : "border-white/10 bg-white/5 text-slate-300"}`}>{item.shortLabel}</button>
+            ))}
+          </div>
+          {selectedMarker ? (
+            <div className="mt-3 max-h-[52vh] overflow-y-auto border border-emerald-300/45 bg-slate-950/80 p-2 pr-1 shadow-inner">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-black text-white">{selectedMarker.serial}</div>
+                  <div className="mt-0.5 text-[10px] font-bold text-slate-400">{selectedMarker.markerKind === "photo" ? "FHJ fotóhely" : "HJ hibahely"} · X {selectedMarker.xPercent.toFixed(1)}% · Y {selectedMarker.yPercent.toFixed(1)}%</div>
+                </div>
+              </div>
+
+              {selectedMarker.markerKind === "photo" ? (
+                <div className="mt-2 border border-blue-300/20 bg-blue-400/10 px-2 py-2 text-[11px] font-bold leading-4 text-blue-100">
+                  FHJ fotóhely marker. Fotó: {selectedMarker.photoSerial || selectedMarker.photoName || "nincs kiválasztott fotó"}
+                </div>
+              ) : null}
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Kapcsolt TH / hiba
+                <select
+                  value={selectedMarker.issueId || activeIssueId || file.issueId || ""}
+                  onChange={(event) => changeSelectedMarkerIssue(event.target.value)}
+                  className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-black text-white outline-none focus:border-emerald-400"
+                >
+                  {(file.issues?.length ? file.issues : [{ id: file.issueId || "active-issue", serial: file.issueSerial || "TH", title: file.issueTitle || "Tervi hibahely" }]).map((issue) => (
+                    <option key={issue.id} value={issue.id}>{issue.serial} · {issue.title}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Szakág
+                <select
+                  value={selectedMarker.discipline}
+                  onChange={(event) => updateSelectedMarker({ discipline: event.target.value as PlanIssueDiscipline })}
+                  className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-black text-white outline-none focus:border-emerald-400"
+                >
+                  {planIssueDisciplines.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </label>
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Hiba megnevezése
+                <input
+                  value={selectedMarker.title || ""}
+                  onChange={(event) => updateSelectedMarker({ title: event.target.value })}
+                  className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-emerald-400"
+                  placeholder="Pl.: Sérült burkolat / hiányzó rögzítés"
+                />
+              </label>
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Helyszín
+                <input
+                  value={selectedMarker.issueLocation || ""}
+                  onChange={(event) => updateSelectedMarker({ issueLocation: event.target.value })}
+                  className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-emerald-400"
+                  placeholder="Pl.: földszint / északi oldal / 3. tengely"
+                />
+              </label>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Súlyosság
+                  <select
+                    value={selectedMarker.issueSeverity || "Észrevétel"}
+                    onChange={(event) => updateSelectedMarker({ issueSeverity: event.target.value })}
+                    className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-[11px] font-black text-white outline-none focus:border-emerald-400"
+                  >
+                    {planMarkerSeverityOptions.map((severity) => <option key={severity} value={severity}>{severity}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Státusz
+                  <select
+                    value={selectedMarker.status || "Nyitott"}
+                    onChange={(event) => updateSelectedMarker({ status: event.target.value, issueStatus: event.target.value })}
+                    className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-[11px] font-black text-white outline-none focus:border-emerald-400"
+                  >
+                    <option value="Nyitott">Nyitott</option>
+                    <option value="Folyamatban">Folyamatban</option>
+                    <option value="Ellenőrzésre vár">Ellenőrzésre vár</option>
+                    <option value="Lezárt">Lezárt</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Felelős / kapcsolattartó
+                  <input
+                    value={selectedMarker.responsible || ""}
+                    onChange={(event) => updateSelectedMarker({ responsible: event.target.value, issueResponsible: event.target.value })}
+                    className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-emerald-400"
+                    placeholder="Pl.: alvállalkozó / művezető"
+                  />
+                </label>
+                <label className="block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Határidő
+                  <input
+                    type="date"
+                    value={selectedMarker.dueDate || ""}
+                    onChange={(event) => updateSelectedMarker({ dueDate: event.target.value, issueDeadline: event.target.value })}
+                    className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-black text-white outline-none focus:border-emerald-400"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-1">
+                <button type="button" onClick={() => setDueDateOffset(3)} className="border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-100">+3 nap</button>
+                <button type="button" onClick={() => setDueDateOffset(7)} className="border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-100">+7 nap</button>
+                <button type="button" onClick={setDueDateToday} className="border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black uppercase text-slate-200">Mai nap</button>
+              </div>
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Érintett vállalkozó
+                <input
+                  value={selectedMarker.issueContractorRepresentative || ""}
+                  onChange={(event) => updateSelectedMarker({ issueContractorRepresentative: event.target.value })}
+                  className="mt-1 h-9 w-full border border-white/10 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-emerald-400"
+                  placeholder="Pl.: Generálkivitelező Kft."
+                />
+              </label>
+
+              <label className="mt-2 block text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                Leírás / megjegyzés
+                <textarea
+                  value={selectedMarker.note || selectedMarker.issueDescription || ""}
+                  onChange={(event) => updateSelectedMarker({ note: event.target.value, issueDescription: event.target.value })}
+                  className="mt-1 h-20 w-full resize-none border border-white/10 bg-slate-950 px-2 py-2 text-xs font-semibold text-white outline-none focus:border-emerald-400"
+                  placeholder="Részletes hiba leírása, intézkedési javaslat, megjegyzés"
+                />
+              </label>
+
+              <div className="mt-2 grid gap-1 border border-cyan-300/25 bg-cyan-950/45 p-2 text-[10px] font-bold text-slate-200">
+                <div className="font-black uppercase tracking-[0.08em] text-emerald-300">IFC kapcsolat</div>
+                <div>Express ID: <span className="text-white">{selectedMarker.ifcReference?.expressId ?? "nincs találat"}</span></div>
+                <div>GlobalId: <span className="text-white">{selectedMarker.ifcReference?.globalId || "nincs"}</span></div>
+                <div>Elem: <span className="text-white">{selectedMarker.ifcReference?.elementName || selectedMarker.ifcReference?.entityType || "nincs elemadat"}</span></div>
+                <div>Szint: <span className="text-white">{selectedMarker.ifcReference?.levelName || "nincs"}</span></div>
+                <div>Property API: <span className="text-white">{selectedMarker.ifcReference?.propertySource || "nincs"}</span></div>
+                <div>Adat olvasva: <span className="text-white">{selectedMarker.ifcReference?.propertiesLoadedAt ? "igen" : "nem"}</span></div>
+                <div>3D pont: <span className="text-white">{selectedMarker.ifcReference?.worldPosition ? `${selectedMarker.ifcReference.worldPosition.x}, ${selectedMarker.ifcReference.worldPosition.y}, ${selectedMarker.ifcReference.worldPosition.z}` : "nincs"}</span></div>
+                <div>Kamera: <span className="text-white">{selectedMarker.ifcReference?.cameraSnapshot ? "mentve" : "nincs"}</span></div>
+              </div>
+              <button
+                type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  deleteSelectedMarker()
+                }}
+                className="mt-2 w-full border border-red-300/30 bg-red-500/10 px-2 py-2 text-[10px] font-black uppercase text-red-100 hover:bg-red-500/20"
+              >
+                Kijelölt marker törlése
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300">Nincs kijelölt marker.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

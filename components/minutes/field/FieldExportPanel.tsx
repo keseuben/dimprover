@@ -1,0 +1,195 @@
+type FieldExportPanelProps = {
+  progressPercent: number
+  responsibleGroupCount: number
+  responsibleExportItems?: { id: string; label: string; issueCount: number }[]
+  photoCount: number
+  planLinkCount: number
+  missingPlanCropCount: number
+  missingPlanCropItems: { issueSerial: string; markerSerial: string; planName: string }[]
+  pdfAttachmentCount: number
+  saveMessage: string
+  isExporting: boolean
+  onExportFieldPdf: () => void
+  onExportResponsiblePdfs: () => void
+  onExportSingleResponsiblePdf?: (responsibleKey: string) => void
+  onExportPlanCropAppendixPdf: () => void
+  planCropAppendixCount: number
+  onOpenEmailPrepare: () => void
+  onOpenFirstMissingPlanCrop?: () => void
+}
+
+type ExportPackageItem = {
+  number: number
+  title: string
+  helper: string
+  status: "ready" | "partial" | "missing" | "manual"
+  statusLabel: string
+  actionLabel: string
+  onAction?: () => void
+  disabled?: boolean
+}
+
+function exportStatusClass(status: ExportPackageItem["status"]) {
+  if (status === "ready") return "border-cyan-200 bg-cyan-50 text-cyan-900"
+  if (status === "partial") return "border-amber-200 bg-amber-50 text-amber-900"
+  if (status === "manual") return "border-cyan-200 bg-cyan-50 text-cyan-900"
+  return "border-slate-200 bg-slate-50 text-slate-600"
+}
+
+function exportStatusBadgeClass(status: ExportPackageItem["status"]) {
+  if (status === "ready") return "border-cyan-700 bg-cyan-700 text-white"
+  if (status === "partial") return "border-amber-500 bg-amber-100 text-amber-800"
+  if (status === "manual") return "border-cyan-700 bg-cyan-100 text-cyan-800"
+  return "border-slate-300 bg-white text-slate-500"
+}
+
+export default function FieldExportPanel({
+  progressPercent,
+  responsibleGroupCount,
+  responsibleExportItems = [],
+  photoCount,
+  planLinkCount,
+  missingPlanCropCount,
+  missingPlanCropItems,
+  pdfAttachmentCount,
+  saveMessage,
+  isExporting,
+  onExportFieldPdf,
+  onExportResponsiblePdfs,
+  onExportSingleResponsiblePdf,
+  onExportPlanCropAppendixPdf,
+  planCropAppendixCount,
+  onOpenEmailPrepare,
+  onOpenFirstMissingPlanCrop,
+}: FieldExportPanelProps) {
+  const hasFieldPdfBase = progressPercent >= 35
+  const hasPlanAppendix = planCropAppendixCount > 0
+  const hasResponsiblePdfs = responsibleGroupCount > 0
+  const exportPackageReady = hasFieldPdfBase && (!planLinkCount || hasPlanAppendix) && hasResponsiblePdfs
+  const exportItems: ExportPackageItem[] = [
+    {
+      number: 1,
+      title: "Teljes jegyzőkönyv PDF",
+      helper: hasFieldPdfBase ? `${photoCount} fotóval előkészíthető. Ha van tervrészlet, a melléklet is egy PDF-be kerül.` : "Hiányos alapadatok, előbb rögzíts hibát és státuszt.",
+      status: hasFieldPdfBase ? "ready" : "partial",
+      statusLabel: hasFieldPdfBase ? "Készíthető" : "Hiányos",
+      actionLabel: isExporting ? "PDF készül..." : "Teljes PDF letöltése",
+      onAction: onExportFieldPdf,
+      disabled: isExporting,
+    },
+    {
+      number: 2,
+      title: "Tervrészlet / IFC melléklet PDF",
+      helper: planLinkCount
+        ? hasPlanAppendix
+          ? `${planCropAppendixCount} mentett PDF/IFC tervrészlet exportálható.`
+          : "Van tervjelölés, de nincs mentett PDF/IFC tervrészlet-kép."
+        : "Nincs kapcsolt tervjelölés, ezért ez opcionális.",
+      status: planLinkCount ? (hasPlanAppendix ? "ready" : "partial") : "manual",
+      statusLabel: planLinkCount ? (hasPlanAppendix ? "Készíthető" : "Hiányos") : "Opcionális",
+      actionLabel: `Terv/IFC PDF (${planCropAppendixCount})`,
+      onAction: onExportPlanCropAppendixPdf,
+      disabled: isExporting || planCropAppendixCount === 0,
+    },
+    {
+      number: 3,
+      title: "Felelősönkénti PDF",
+      helper: hasResponsiblePdfs ? `${responsibleGroupCount} felelős / vállalkozó szerinti csomag.` : "Nincs felelős csoport, előbb adj meg felelőst.",
+      status: hasResponsiblePdfs ? "ready" : "partial",
+      statusLabel: hasResponsiblePdfs ? "Készíthető" : "Hiányos",
+      actionLabel: "Külön PDF-ek",
+      onAction: onExportResponsiblePdfs,
+      disabled: isExporting || !hasResponsiblePdfs,
+    },
+    {
+      number: 4,
+      title: "Teljes exportcsomag",
+      helper: exportPackageReady
+        ? "A fő jegyzőkönyv, tervmelléklet és felelősönkénti export külön gombokkal elkészíthető."
+        : "Még nem minden exportelem kész. A hiányos sorokat kell előbb rendezni.",
+      status: exportPackageReady ? "ready" : "partial",
+      statusLabel: exportPackageReady ? "Előkészítve" : "Hiányos",
+      actionLabel: "Email / csomag előkészítés",
+      onAction: onOpenEmailPrepare,
+      disabled: false,
+    },
+  ]
+
+  return (
+    <div className="overflow-hidden border border-cyan-200 bg-white shadow-[0_10px_24px_rgba(8,145,178,0.08)] xl:sticky xl:top-4 xl:z-20">
+      <div className="bg-cyan-50/60 p-4">
+        <div className="grid gap-3 xl:grid-cols-2">
+          {exportItems.map((item) => (
+            <div key={item.number} className={`border p-3 ${exportStatusClass(item.status)}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center border border-current bg-white/70 text-[11px] font-black">{item.number}</span>
+                    <div className="truncate text-xs font-black uppercase tracking-[0.08em]">{item.title}</div>
+                  </div>
+                  <div className="mt-1 text-[11px] font-bold leading-4 opacity-85">{item.helper}</div>
+                </div>
+                <span className={`shrink-0 border px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${exportStatusBadgeClass(item.status)}`}>{item.statusLabel}</span>
+              </div>
+              <button
+                type="button"
+                onClick={item.onAction}
+                disabled={item.disabled}
+                className="mt-3 flex w-full items-center justify-center gap-3 border border-emerald-700 bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <span className="grid h-7 w-7 place-items-center rounded-full border-2 border-white/70 text-[9px] font-black">{isExporting ? "..." : "↓"}</span>
+                <span>{item.actionLabel}</span>
+              </button>
+              {item.number === 3 && responsibleExportItems.length > 1 ? (
+                <div className="mt-3 space-y-1 border-t border-slate-200 pt-2">
+                  <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Egyesével letölthető felelősök</div>
+                  {responsibleExportItems.map((responsibleItem) => (
+                    <div key={responsibleItem.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-white/70 bg-white/70 px-2 py-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-[11px] font-black text-slate-800">{responsibleItem.label}</div>
+                        <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">{responsibleItem.issueCount} hiba</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onExportSingleResponsiblePdf?.(responsibleItem.id)}
+                        disabled={isExporting || !onExportSingleResponsiblePdf}
+                        className="border border-emerald-700 bg-emerald-600 px-2 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        PDF
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+
+        {missingPlanCropCount > 0 ? (
+          <div className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-black uppercase leading-5 tracking-[0.06em] text-amber-800">
+            Hiányzó HexPin tervrészlet / IFC kép: {missingPlanCropCount} marker. Export előtt nyisd meg a tervnézőt és ments PDF/IFC részletképet.
+            <div className="mt-2 space-y-1 normal-case tracking-normal">
+              {missingPlanCropItems.slice(0, 4).map((item, index) => (
+                <div key={`${item.issueSerial}-${item.markerSerial}-${index}`} className="border border-amber-200 bg-white/70 px-2 py-1 text-[11px] font-bold leading-4 text-amber-900">
+                  {item.issueSerial} · {item.markerSerial} · {item.planName}
+                </div>
+              ))}
+              {missingPlanCropItems.length > 4 ? <div className="text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">+ {missingPlanCropItems.length - 4} további hiányzó marker</div> : null}
+              {onOpenFirstMissingPlanCrop ? (
+                <button type="button" onClick={onOpenFirstMissingPlanCrop} className="mt-2 w-full border border-amber-500 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-amber-800 hover:bg-amber-100">
+                  Első hiányos terv megnyitása
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : planLinkCount > 0 ? (
+          <div className="mt-3 border border-cyan-200 bg-cyan-50 px-3 py-2 text-[11px] font-black uppercase leading-5 tracking-[0.06em] text-cyan-800">
+            HexPin PDF/IFC tervrészlet státusz rendben.
+          </div>
+        ) : null}
+
+        <div className="mt-3 border-t border-cyan-200 pt-2 text-[11px] font-bold text-slate-600">{saveMessage}</div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="620" viewBox="0 0 1600 620" role="img" aria-labelledby="title desc">
+  <title id="title">Projektpulzus – Terület nézet</title>
+  <desc id="desc">Öt projektrész eltérő előrehaladása absztrakt kockatornyokkal.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbfefd"/><stop offset="1" stop-color="#edf8f5"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#123f3a" flood-opacity=".13"/></filter>
+    <pattern id="hexgrid" width="72" height="62" patternUnits="userSpaceOnUse"><path d="M18 1h36l17 30-17 30H18L1 31z" fill="none" stroke="#89bcb4" stroke-opacity=".12"/></pattern>
+    <symbol id="cube" viewBox="0 0 40 44">
+      <polygon points="20,0 39,10 20,20 1,10" fill="currentColor" opacity=".82"/>
+      <polygon points="1,10 20,20 20,43 1,33" fill="currentColor" opacity=".98"/>
+      <polygon points="39,10 20,20 20,43 39,33" fill="currentColor" opacity=".68"/>
+      <path d="M20 20v23M1 10l19 10 19-10" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1"/>
+    </symbol>
+    <symbol id="platform" viewBox="0 0 230 120">
+      <path d="M52 7h126l47 53-47 53H52L5 60z" fill="#fff" stroke="#c8dfdb" stroke-width="4"/>
+      <path d="M56 17h118l38 43-38 43H56L18 60z" fill="#edf7f5" stroke="#7ec5bd" stroke-width="2"/>
+      <path d="M56 103h118l38-43v13l-38 39H56L18 73V60z" fill="#d5e7e4" opacity=".85"/>
+    </symbol>
+  </defs>
+  <rect width="1600" height="620" rx="26" fill="url(#bg)"/>
+  <rect width="1600" height="620" rx="26" fill="url(#hexgrid)"/>
+  <g fill="none" stroke="#5b9f96" stroke-opacity=".16" stroke-width="2">
+    <path d="M-20 430C180 320 330 510 520 385S900 260 1110 405s360 20 520-80"/>
+    <path d="M-10 470c230-110 400 75 610-60s400-140 610 15 300 50 420-20"/>
+    <path d="M20 215c220-80 360 55 540-25s335-120 520-15 330 80 510 0"/>
+  </g>
+  <g font-family="Inter,Segoe UI,sans-serif">
+    <!-- A épület -->
+    <g transform="translate(80 255)" filter="url(#shadow)">
+      <use href="#platform" width="230" height="120"/>
+      <g transform="translate(75 -135)" color="#079b98">
+        <use href="#cube" width="40" height="44" x="0" y="120"/><use href="#cube" width="40" height="44" x="38" y="120"/>
+        <use href="#cube" width="40" height="44" x="19" y="89"/><use href="#cube" width="40" height="44" x="19" y="58"/>
+        <use href="#cube" width="40" height="44" x="19" y="27"/><use href="#cube" width="40" height="44" x="19" y="-4" opacity=".38"/>
+      </g>
+    </g>
+    <g transform="translate(46 105)"><rect width="185" height="110" rx="16" fill="#fff" stroke="#d2e5e1"/><text x="20" y="30" font-size="18" font-weight="800" fill="#153432">A épület</text><text x="20" y="63" font-size="31" font-weight="900" fill="#153432">72%</text><circle cx="23" cy="88" r="6" fill="#39a86b"/><text x="37" y="94" font-size="14" fill="#607a76">Jó ütemben</text></g>
+    <!-- B épület -->
+    <g transform="translate(390 240)" filter="url(#shadow)">
+      <use href="#platform" width="230" height="120"/>
+      <g transform="translate(72 -168)" color="#3479d4">
+        <use href="#cube" width="40" height="44" x="0" y="150"/><use href="#cube" width="40" height="44" x="38" y="150"/>
+        <use href="#cube" width="40" height="44" x="19" y="119"/><use href="#cube" width="40" height="44" x="19" y="88"/>
+        <use href="#cube" width="40" height="44" x="19" y="57"/><use href="#cube" width="40" height="44" x="19" y="26"/>
+        <use href="#cube" width="40" height="44" x="19" y="-5" opacity=".32"/>
+      </g>
+    </g>
+    <g transform="translate(372 88)"><rect width="185" height="110" rx="16" fill="#fff" stroke="#d2e5e1"/><text x="20" y="30" font-size="18" font-weight="800" fill="#153432">B épület</text><text x="20" y="63" font-size="31" font-weight="900" fill="#153432">68%</text><circle cx="23" cy="88" r="6" fill="#e5a533"/><text x="37" y="94" font-size="14" fill="#607a76">2 ütemben</text></g>
+    <!-- C épület -->
+    <g transform="translate(710 270)" filter="url(#shadow)">
+      <use href="#platform" width="230" height="120"/>
+      <g transform="translate(72 -112)" color="#8a56bd">
+        <use href="#cube" width="40" height="44" x="0" y="95"/><use href="#cube" width="40" height="44" x="38" y="95"/>
+        <use href="#cube" width="40" height="44" x="19" y="64"/><use href="#cube" width="40" height="44" x="19" y="33"/>
+        <use href="#cube" width="40" height="44" x="19" y="2" opacity=".3"/>
+      </g>
+    </g>
+    <g transform="translate(695 125)"><rect width="185" height="110" rx="16" fill="#fff" stroke="#d2e5e1"/><text x="20" y="30" font-size="18" font-weight="800" fill="#153432">C épület</text><text x="20" y="63" font-size="31" font-weight="900" fill="#153432">45%</text><circle cx="23" cy="88" r="6" fill="#e55e4c"/><text x="37" y="94" font-size="14" fill="#607a76">Enyhén késésben</text></g>
+    <!-- Közmű -->
+    <g transform="translate(1030 300)" filter="url(#shadow)">
+      <use href="#platform" width="230" height="120"/>
+      <g transform="translate(74 -90)" color="#6fb60f">
+        <use href="#cube" width="40" height="44" x="0" y="72"/><use href="#cube" width="40" height="44" x="38" y="72"/>
+        <use href="#cube" width="40" height="44" x="76" y="72"/><use href="#cube" width="40" height="44" x="38" y="41"/>
+        <use href="#cube" width="40" height="44" x="38" y="10" opacity=".4"/>
+      </g>
+    </g>
+    <g transform="translate(1002 150)"><rect width="210" height="110" rx="16" fill="#fff" stroke="#d2e5e1"/><text x="20" y="30" font-size="18" font-weight="800" fill="#153432">Külső közművek</text><text x="20" y="63" font-size="31" font-weight="900" fill="#153432">63%</text><circle cx="23" cy="88" r="6" fill="#39a86b"/><text x="37" y="94" font-size="14" fill="#607a76">Jó ütemben</text></g>
+    <!-- Út -->
+    <g transform="translate(1320 280)" filter="url(#shadow)">
+      <use href="#platform" width="230" height="120"/>
+      <g transform="translate(74 -105)" color="#f0a41d">
+        <use href="#cube" width="40" height="44" x="0" y="88"/><use href="#cube" width="40" height="44" x="38" y="88"/>
+        <use href="#cube" width="40" height="44" x="76" y="88"/><use href="#cube" width="40" height="44" x="38" y="57"/>
+        <use href="#cube" width="40" height="44" x="38" y="26"/><use href="#cube" width="40" height="44" x="38" y="-5" opacity=".38"/>
+      </g>
+    </g>
+    <g transform="translate(1300 130)"><rect width="240" height="110" rx="16" fill="#fff" stroke="#d2e5e1"/><text x="20" y="30" font-size="18" font-weight="800" fill="#153432">Út és tereprendezés</text><text x="20" y="63" font-size="31" font-weight="900" fill="#153432">81%</text><circle cx="23" cy="88" r="6" fill="#39a86b"/><text x="37" y="94" font-size="14" fill="#607a76">Jó ütemben</text></g>
+    <g transform="translate(530 578)" font-size="15" fill="#607a76"><text x="0" y="0">Jelmagyarázat:</text><rect x="135" y="-14" width="14" height="14" rx="2" fill="#079b98"/><text x="158" y="0">Elkészült</text><rect x="255" y="-14" width="14" height="14" rx="2" fill="#3479d4"/><text x="278" y="0">Folyamatban</text><rect x="400" y="-14" width="14" height="14" rx="2" fill="#cdd7d5"/><text x="423" y="0">Tervezett</text><rect x="520" y="-14" width="14" height="14" rx="2" fill="#e55e4c"/><text x="543" y="0">Kritikus késés</text></g>
+  </g>
+</svg>

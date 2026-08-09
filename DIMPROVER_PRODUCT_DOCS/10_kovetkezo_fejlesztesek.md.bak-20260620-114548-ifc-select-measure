@@ -1,0 +1,17 @@
+# 10 Következő fejlesztések
+
+## HexPin / tervi hibajelölés
+
+- automatikus részletkép-generálás export előtt
+- több marker listás kezelése egy hibán belül
+- QR pecsét / tervlap azonosítás
+- tervlap metaadatok kezelése
+- tervtári integráció
+
+## Platform
+
+- adatbázis perzisztencia
+- felhasználói jogosultságok
+- projektválasztó bővítése
+- email küldési napló
+- export sablonok verziózása

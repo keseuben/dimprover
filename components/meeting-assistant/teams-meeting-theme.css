@@ -1,0 +1,421 @@
+.dimpro-meeting-theme {
+  min-height: 100%;
+  color-scheme: light;
+  background: #f7f8fc;
+}
+
+/* Microsoft Teams dark theme */
+.dimpro-meeting-theme[data-theme="dark"] {
+  min-height: 100%;
+  color-scheme: dark;
+  background: #1f1f1f;
+  color: #f5f5f5;
+
+  --dimpro-dark-canvas: #1f1f1f;
+  --dimpro-dark-surface: #292929;
+  --dimpro-dark-surface-raised: #303030;
+  --dimpro-dark-surface-soft: #353535;
+  --dimpro-dark-border: #4a4a4a;
+  --dimpro-dark-border-strong: #5c5c5c;
+  --dimpro-dark-text: #f5f5f5;
+  --dimpro-dark-text-secondary: #d2d2d2;
+  --dimpro-dark-text-muted: #b6b6b6;
+}
+
+/* The panel uses Tailwind opacity variants such as bg-white/95. The
+   substring selectors are intentional so those variants are themed too. */
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-[#f7f8fc]"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-white"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-slate-50"] {
+  background-color: var(--dimpro-dark-surface) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-slate-100"] {
+  background-color: var(--dimpro-dark-surface-raised) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-slate-200"] {
+  background-color: var(--dimpro-dark-surface-soft) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .bg-slate-950 {
+  background-color: #111111 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-950,
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-900,
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-700 {
+  color: var(--dimpro-dark-text) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-500 {
+  color: var(--dimpro-dark-text-secondary) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-400,
+.dimpro-meeting-theme[data-theme="dark"] .text-slate-300 {
+  color: var(--dimpro-dark-text-muted) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-slate-100"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-slate-200"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-slate-300"] {
+  border-color: var(--dimpro-dark-border) !important;
+}
+
+/* Accessible accent colours on dark Teams surfaces. */
+.dimpro-meeting-theme[data-theme="dark"] .text-indigo-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-indigo-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-indigo-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-indigo-900 {
+  color: #aeb8ff !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-violet-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-violet-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-violet-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-violet-900 {
+  color: #d8b9ff !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-sky-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-sky-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-sky-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-sky-900 {
+  color: #95d8ff !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-teal-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-teal-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-teal-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-teal-900,
+.dimpro-meeting-theme[data-theme="dark"] .text-emerald-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-emerald-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-emerald-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-emerald-900 {
+  color: #83e6c6 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-amber-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-amber-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-amber-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-amber-900 {
+  color: #ffd27a !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .text-rose-600,
+.dimpro-meeting-theme[data-theme="dark"] .text-rose-700,
+.dimpro-meeting-theme[data-theme="dark"] .text-rose-800,
+.dimpro-meeting-theme[data-theme="dark"] .text-rose-900 {
+  color: #ff9cac !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-indigo-"] {
+  border-color: #5963a6 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-violet-"] {
+  border-color: #76599b !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-sky-"] {
+  border-color: #467b9a !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-teal-"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-emerald-"] {
+  border-color: #407c70 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-amber-"] {
+  border-color: #8b713c !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-rose-"] {
+  border-color: #8d4e59 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-indigo-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-indigo-100"] {
+  background-color: #302e4b !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-violet-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-violet-100"] {
+  background-color: #392d49 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-sky-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-sky-100"] {
+  background-color: #203747 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-teal-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-teal-100"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-emerald-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-emerald-100"] {
+  background-color: #1d3a34 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-amber-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-amber-100"] {
+  background-color: #42361f !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-rose-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-rose-100"] {
+  background-color: #472830 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] input,
+.dimpro-meeting-theme[data-theme="dark"] textarea,
+.dimpro-meeting-theme[data-theme="dark"] select {
+  border-color: var(--dimpro-dark-border-strong) !important;
+  background: #272727 !important;
+  color: var(--dimpro-dark-text) !important;
+  caret-color: #aeb8ff;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] select option {
+  background: #272727;
+  color: var(--dimpro-dark-text);
+}
+
+.dimpro-meeting-theme[data-theme="dark"] input::placeholder,
+.dimpro-meeting-theme[data-theme="dark"] textarea::placeholder {
+  color: #a9a9a9 !important;
+  opacity: 1;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] input:focus,
+.dimpro-meeting-theme[data-theme="dark"] textarea:focus,
+.dimpro-meeting-theme[data-theme="dark"] select:focus,
+.dimpro-meeting-theme[data-theme="dark"] button:focus-visible,
+.dimpro-meeting-theme[data-theme="dark"] a:focus-visible {
+  outline: 2px solid #8f9cff;
+  outline-offset: 2px;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] button:disabled,
+.dimpro-meeting-theme[data-theme="dark"] select:disabled,
+.dimpro-meeting-theme[data-theme="dark"] input:disabled {
+  color: #9c9c9c !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .shadow-xl,
+.dimpro-meeting-theme[data-theme="dark"] [class*="shadow-"] {
+  --tw-shadow-color: rgba(0, 0, 0, 0.55) !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] a:hover,
+.dimpro-meeting-theme[data-theme="dark"] button:hover {
+  filter: brightness(1.1);
+}
+
+/* Teams-like scrollbar rather than a bright browser default. */
+.dimpro-meeting-theme[data-theme="dark"] * {
+  scrollbar-color: #686868 #252525;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] *::-webkit-scrollbar-track {
+  background: #252525;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  border: 2px solid #252525;
+  border-radius: 999px;
+  background: #686868;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background: #7a7a7a;
+}
+
+/* Microsoft Teams high-contrast theme */
+.dimpro-meeting-theme[data-theme="contrast"] {
+  min-height: 100%;
+  color-scheme: dark;
+  background: #000000;
+  color: #ffffff;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] [class*="bg-white"],
+.dimpro-meeting-theme[data-theme="contrast"] [class*="bg-slate-50"],
+.dimpro-meeting-theme[data-theme="contrast"] [class*="bg-slate-100"],
+.dimpro-meeting-theme[data-theme="contrast"] [class*="bg-[#f7f8fc]"] {
+  background-color: #000000 !important;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] [class*="text-slate-"] {
+  color: #ffffff !important;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] [class*="border-slate-"] {
+  border-color: #ffffff !important;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] input,
+.dimpro-meeting-theme[data-theme="contrast"] textarea,
+.dimpro-meeting-theme[data-theme="contrast"] select {
+  border: 2px solid #ffffff !important;
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] input::placeholder,
+.dimpro-meeting-theme[data-theme="contrast"] textarea::placeholder {
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+/* v0.1.5 compact full-width meeting worksheet */
+.dimpro-meeting-theme[data-theme="dark"] .meeting-notebook-sheet {
+  border-color: #407c70 !important;
+  background-color: #1d332f !important;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 25px, rgba(131, 230, 198, .10) 26px) !important;
+  color: #e8fff8 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .meeting-notebook-sheet [class*="text-slate-"] {
+  color: #e8fff8 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .meeting-notebook-sheet [class*="border-teal-"] {
+  border-color: #407c70 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] section.scroll-mt-\[92px\] {
+  background-color: #292929 !important;
+  border-color: #454545 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] header.sticky {
+  background-color: rgba(31, 31, 31, .97) !important;
+  border-color: #454545 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-fuchsia-50"],
+.dimpro-meeting-theme[data-theme="dark"] [class*="bg-fuchsia-100"] {
+  background-color: #472a48 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="text-fuchsia-"] {
+  color: #f0b7f4 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] [class*="border-fuchsia-"] {
+  border-color: #875487 !important;
+}
+
+.dimpro-meeting-theme[data-theme="contrast"] .meeting-notebook-sheet {
+  border: 2px solid #ffff00 !important;
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* Webes Értekezleti Asszisztens – kézi témaváltó */
+.dimpro-meeting-theme.meeting-web-shell[data-theme="dark"] {
+  background: #171c1b !important;
+}
+
+.dimpro-meeting-theme.meeting-web-shell[data-theme="dark"] [class*="bg-[#eef5f3]"] {
+  background-color: #171c1b !important;
+}
+
+.dimpro-meeting-theme.meeting-web-shell[data-theme="dark"] [class*="shadow-"] {
+  --tw-shadow-color: rgba(0, 0, 0, 0.48) !important;
+}
+
+.dimpro-meeting-theme.meeting-web-shell[data-theme="dark"] article,
+.dimpro-meeting-theme.meeting-web-shell[data-theme="dark"] section {
+  scrollbar-color: #5c6966 #202725;
+}
+
+
+/* A webes értekezleti munkatér mindig kitölti a teljes böngészőablakot. */
+.dimpro-meeting-theme.meeting-web-shell {
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+}
+
+html[data-meeting-web-theme="dark"],
+html[data-meeting-web-theme="dark"] body {
+  min-height: 100%;
+  background: #171c1b !important;
+  color: #f5f5f5;
+}
+
+html[data-meeting-web-theme="light"],
+html[data-meeting-web-theme="light"] body {
+  min-height: 100%;
+  background: #eef5f3 !important;
+}
+
+
+/* Stabil, húzható webes kétoldali értekezletvezető */
+@media (min-width: 1280px) {
+  .meeting-dual-resizable-grid {
+    grid-template-columns:
+      minmax(560px, var(--meeting-organizer-width))
+      12px
+      minmax(360px, var(--meeting-participant-width));
+  }
+
+  .meeting-dual-resizable-grid[data-participant-collapsed="true"] {
+    grid-template-columns: minmax(0, 1fr) 12px 0;
+  }
+
+  .meeting-dual-resizable-grid[data-participant-collapsed="true"] .meeting-participant-pane {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .meeting-dual-divider {
+  border-color: #4a4a4a !important;
+  background-color: #242b29 !important;
+}
+
+.dimpro-meeting-theme[data-theme="dark"] .meeting-dual-divider:hover,
+.dimpro-meeting-theme[data-theme="dark"] .meeting-dual-divider:focus {
+  background-color: #1d3a34 !important;
+}
+
+/* v0.1.14 – olvashatóbb Értekezleti Asszisztens kezelőfelület.
+   A dokumentum-előnézet saját, nyomtatási arányú tipográfiája változatlan marad. */
+.dimpro-meeting-theme [class~="text-[8px]"]:not(.meeting-document-preview *),
+.dimpro-meeting-theme [class~="text-[8.5px]"]:not(.meeting-document-preview *) {
+  font-size: 11px !important;
+}
+
+.dimpro-meeting-theme [class~="text-[9px]"]:not(.meeting-document-preview *) {
+  font-size: 12px !important;
+}
+
+.dimpro-meeting-theme [class~="text-[10px]"]:not(.meeting-document-preview *) {
+  font-size: 13px !important;
+}
+
+.dimpro-meeting-theme [class~="text-[11px]"]:not(.meeting-document-preview *) {
+  font-size: 14px !important;
+}
+
+.dimpro-meeting-theme [class~="text-[12px]"]:not(.meeting-document-preview *),
+.dimpro-meeting-theme [class~="text-[13px]"]:not(.meeting-document-preview *) {
+  font-size: 15px !important;
+}
+
+.dimpro-meeting-theme .text-xs:not(.meeting-document-preview *) {
+  font-size: 14px !important;
+}
+
+.dimpro-meeting-theme .text-sm:not(.meeting-document-preview *) {
+  font-size: 15px !important;
+}

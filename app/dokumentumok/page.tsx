@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import DashboardHeaderBlock from "@/components/layout/DashboardHeaderBlock";
+import ModulePanel from "@/components/layout/ModulePanel";
 import {
   FileText,
   Upload,
@@ -50,25 +52,20 @@ export default function DokumentumokPage() {
 
   return (
     <AppLayout>
-      <div className="mb-7 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500">
-            DIMDOR Dokumentumtár
-          </p>
+      <DashboardHeaderBlock />
 
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">
-            Dokumentumok
-          </h1>
+      <ModulePanel storageKey="dokumentumok:intro" title="DIMPROVER Dokumentumtár" contentClassName="p-4" className="mb-5 mt-5">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-xl font-black text-slate-950">Dokumentumok</h1>
+            <p className="mt-1 text-sm text-slate-500">Projektfájlok, műszaki dokumentumok, tervlapok és ellenőrzési anyagok egységes kezelése.</p>
+          </div>
+          <button className="flex items-center justify-center gap-2 border border-slate-900 bg-slate-950 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800"><Upload size={18} />Dokumentum feltöltése</button>
         </div>
+      </ModulePanel>
 
-        <button className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800">
-          <Upload size={18} />
-          Dokumentum feltöltése
-        </button>
-      </div>
-
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <ModulePanel storageKey="dokumentumok:summary" title="Dokumentum összesítő" contentClassName="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="border border-blue-200/50 bg-white/75 p-5 shadow-[0_8px_18px_rgba(37,99,235,0.08)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">Összes dokumentum</p>
@@ -81,7 +78,7 @@ export default function DokumentumokPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="border border-blue-200/50 bg-white/75 p-5 shadow-[0_8px_18px_rgba(37,99,235,0.08)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">PDF fájlok</p>
@@ -92,7 +89,7 @@ export default function DokumentumokPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="border border-blue-200/50 bg-white/75 p-5 shadow-[0_8px_18px_rgba(37,99,235,0.08)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">Feltöltött méret</p>
@@ -105,7 +102,7 @@ export default function DokumentumokPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="border border-blue-200/50 bg-white/75 p-5 shadow-[0_8px_18px_rgba(37,99,235,0.08)]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">Aktív projektek</p>
@@ -115,13 +112,13 @@ export default function DokumentumokPage() {
             <Building2 size={26} className="text-slate-400" />
           </div>
         </div>
-      </section>
+      </ModulePanel>
 
-      <section className="mt-7 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <ModulePanel storageKey="dokumentumok:upload-search" title="Dokumentum feltöltés és keresés" contentClassName="p-6" className="mt-5">
         <div className="mb-6">
           <label
             htmlFor="fileUpload"
-            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-500 hover:bg-slate-100"
+            className="flex cursor-pointer flex-col items-center justify-center border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition hover:border-slate-500 hover:bg-slate-100"
           >
             <Upload size={42} className="text-slate-400" />
 
@@ -141,7 +138,7 @@ export default function DokumentumokPage() {
           </label>
         </div>
 
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3">
+        <div className="mb-5 flex items-center gap-2 border border-slate-200 px-4 py-3">
           <Search size={18} className="text-slate-400" />
 
           <input
@@ -156,7 +153,7 @@ export default function DokumentumokPage() {
           {filteredDocuments.map((document) => (
             <div
               key={document.id}
-              className="flex flex-col gap-4 rounded-2xl border border-slate-100 p-5 transition hover:bg-slate-50 xl:flex-row xl:items-center xl:justify-between"
+              className="flex flex-col gap-4 border border-blue-200/45 bg-white/75 p-5 transition hover:bg-slate-50 xl:flex-row xl:items-center xl:justify-between"
             >
               <div className="flex items-center gap-4">
                 <div className="rounded-xl bg-slate-100 p-4">
@@ -185,22 +182,22 @@ export default function DokumentumokPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="rounded-xl border border-slate-200 p-3 hover:bg-slate-100">
+                <button className="border border-slate-200 p-3 hover:bg-slate-100">
                   <Eye size={18} />
                 </button>
 
-                <button className="rounded-xl border border-slate-200 p-3 hover:bg-slate-100">
+                <button className="border border-slate-200 p-3 hover:bg-slate-100">
                   <Download size={18} />
                 </button>
 
-                <button className="rounded-xl border border-red-200 p-3 text-red-600 hover:bg-red-50">
+                <button className="border border-red-200 p-3 text-red-600 hover:bg-red-50">
                   <Trash2 size={18} />
                 </button>
               </div>
             </div>
           ))}
         </div>
-      </section>
+      </ModulePanel>
     </AppLayout>
   );
 }

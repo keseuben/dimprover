@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch DIMPRO DROP 0.9.6 immediate scan requests
+After=local-fs.target
+
+[Path]
+DirectoryNotEmpty=/root/dimprover/.data/drop-worker-trigger
+Unit=dimpro-drop-scan-trigger-v096.service
+
+[Install]
+WantedBy=multi-user.target

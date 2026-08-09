@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const read=(p)=>fs.readFileSync(p,'utf8');
+const landing=read('app/drop/page.tsx');
+const card=read('components/drop/DropInactiveFeatureCard.tsx');
+const form=read('components/drop/DropOpenForm.tsx');
+const route=read('app/api/drop/access/pin-recovery/route.ts');
+const recovery=read('app/lib/drop/dropPinRecovery.ts');
+const flags=read('app/lib/drop/dropFeatureFlags.ts');
+const proxy=read('proxy.ts');
+const checks=[];
+function has(name,src,text){assert.ok(src.includes(text),`${name}: ${text}`);checks.push(name);}
+function no(name,src,text){assert.ok(!src.includes(text),`${name}: ${text}`);checks.push(name);}
+has('version',flags,'version: "DROP 0.9.2"');
+has('landing-dynamic',landing,'export const dynamic = "force-dynamic"');
+has('landing-live-readiness',landing,'getDropGlobalUploadReadiness');
+has('landing-upload-active',landing,'Feltöltőmotor aktív');
+has('landing-anonymous-disabled',landing,'Anonim, azonosítatlan feltöltés');
+no('landing-no-old-disabled',landing,'Feltöltés még tiltva');
+no('landing-no-inactive',landing,'INAKTÍV');
+no('landing-no-preview',landing,'látványelőnézet');
+has('active-feature-link',card,'active ? (');
+has('active-feature-action',card,'<Link href={href}');
+has('pin-request-id',route,'requestId');
+has('pin-generic-accepted',route,'A kérelmet fogadtuk');
+has('pin-no-false-delivery-ui',form,'Jogosultság esetén az új PIN e-mailben érkezik');
+has('pin-spam-hint',form,'Levélszemét/Spam');
+has('pin-success-only-invalidates',form,'csak a sikeres e-mail-küldés után');
+has('pin-rejection-audit',recovery,'access.pin_recovery_rejected');
+has('pin-outcome',recovery,'DropPinRecoveryOutcome');
+has('rate-only-sent',recovery,'.eq("status", "sent")');
+has('success-log-safe',recovery,'DROP PIN recovery sent-email log failed');
+has('success-audit-safe',recovery,'DROP PIN recovery success audit failed');
+has('rollback-on-send-failure',recovery,'DROP PIN recovery rollback failed');
+has('route-version',route,'version: "DROP 0.9.2"');
+has('pin-public-route',proxy,'pathname === "/api/drop/access/pin-recovery"');
+console.log(JSON.stringify({ok:true,version:'DROP 0.9.2',checks:checks.length,names:checks},null,2));

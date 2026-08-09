@@ -1,0 +1,94 @@
+import Link from "next/link";
+import { ArrowRight, Boxes, ClipboardList, Leaf, Store, Wrench } from "lucide-react";
+
+const modules = [
+  {
+    title: "DIMPRO Árutér",
+    text: "Külső árutér, pult, raktár és pénztár közötti papírmentes árurögzítés.",
+    href: "https://aruter.dimpro.hu",
+    icon: Store,
+    status: "Fejlesztés alatt",
+  },
+  {
+    title: "DIMPRO Munkalap",
+    text: "Helyszíni szerelési és szervizmunkák digitális munkalapja.",
+    href: "#",
+    icon: ClipboardList,
+    status: "Tervezés alatt",
+  },
+  {
+    title: "DIMPRO Field",
+    text: "Terepi rögzítések, fotók és gyors állapotjelentések egyszerű felületen.",
+    href: "#",
+    icon: Leaf,
+    status: "Későbbi modul",
+  },
+];
+
+export function DimproPublicLanding() {
+  return (
+    <main className="min-h-screen bg-[#f6fbf8] text-slate-950">
+      <section className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-lime-300 bg-lime-50 text-xl font-black text-teal-700 shadow-[0_12px_40px_rgba(163,217,0,0.22)]">P</span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-500">DIMPRO</p>
+              <h1 className="text-2xl font-black text-teal-700">digitális munkafolyamat-rendszerek</h1>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="https://aruter.dimpro.hu" className="rounded-2xl bg-teal-700 px-5 py-3 font-black text-white shadow-lg shadow-teal-700/20">Árutér megnyitása</Link>
+            <Link href="https://dimprover.hu/login" className="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-800">Belépés</Link>
+          </div>
+        </header>
+
+        <div className="grid flex-1 items-center gap-10 py-14 lg:grid-cols-[1.05fr_0.95fr]">
+          <div>
+            <p className="mb-4 inline-flex rounded-full border border-lime-200 bg-white px-4 py-2 text-sm font-black text-teal-700 shadow-sm">DIMPRO modul appok kisvállalkozásoknak</p>
+            <h2 className="max-w-4xl text-5xl font-black leading-[1.03] tracking-tight md:text-7xl">Kisebb digitális appok napi munkafolyamatokra.</h2>
+            <p className="mt-6 max-w-2xl text-xl font-semibold leading-8 text-slate-600">A DIMPRO a DIMPROVER különálló, könnyebb termékcsaládja. Itt a kisebb, célzott modul appok jelennek meg: árutér, munkalap, terepi rögzítés és egyedi vállalkozási workflow-k.</p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Link href="https://aruter.dimpro.hu" className="inline-flex items-center gap-3 rounded-2xl bg-teal-700 px-6 py-4 text-lg font-black text-white shadow-xl shadow-teal-700/20">DIMPRO Árutér <ArrowRight /></Link>
+              <Link href="https://dimprover.hu" className="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-lg font-black text-slate-800">DIMPROVER platform</Link>
+            </div>
+          </div>
+
+          <div className="rounded-[36px] border border-teal-100 bg-white p-5 shadow-[0_24px_80px_rgba(15,118,110,0.12)]">
+            <div className="rounded-[28px] bg-slate-950 p-6 text-white">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300">aktuális modul</p>
+                  <h3 className="text-3xl font-black">Árutér</h3>
+                </div>
+                <Boxes className="text-lime-300" size={42} />
+              </div>
+              <div className="space-y-3">
+                {["Árufelvevő", "Pénztár", "Foglalások", "Előkészítés"].map((item) => (
+                  <div key={item} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <span className="font-bold">{item}</span>
+                    <span className="rounded-full bg-lime-300 px-3 py-1 text-xs font-black text-slate-950">MVP</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section className="grid gap-4 pb-8 md:grid-cols-3">
+          {modules.map((module) => {
+            const Icon = module.icon;
+            return (
+              <Link key={module.title} href={module.href} className="rounded-[28px] border border-teal-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+                <Icon className="mb-4 text-teal-700" size={34} />
+                <h3 className="text-2xl font-black text-teal-700">{module.title}</h3>
+                <p className="mt-3 font-semibold leading-7 text-slate-600">{module.text}</p>
+                <span className="mt-5 inline-flex rounded-full bg-lime-50 px-3 py-1 text-sm font-black text-teal-700">{module.status}</span>
+              </Link>
+            );
+          })}
+        </section>
+      </section>
+    </main>
+  );
+}

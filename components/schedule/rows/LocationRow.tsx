@@ -21,12 +21,14 @@ type LocationRowProps = {
   stickySecondCol: string;
   leftColWidth: number;
   typeColWidth: number;
+  rowNumber: string;
   onToggle: () => void;
 };
 
 export default function LocationRow({
   locationName,
   collapsed,
+  rowNumber,
   tasks,
   features,
   weekWidth,
@@ -37,16 +39,18 @@ export default function LocationRow({
   typeColWidth,
   onToggle,
 }: LocationRowProps) {
+  const dayWidth = weekWidth / 7;
+
   return (
     <div
-      className="relative z-10 grid h-full border-b border-slate-200 bg-transparent"
+      className="relative z-[120] grid h-full border-b border-slate-200 bg-transparent"
       style={{
         gridTemplateColumns: `${leftColWidth}px ${typeColWidth}px 1fr`,
       }}
     >
       <button
         onClick={onToggle}
-        className={`${stickyFirstCol} shadow-[6px_0_10px_rgba(0,0,0,0.04)]`}
+        className={`${stickyFirstCol} z-[240] isolate bg-slate-300 hover:bg-slate-300 text-sm font-semibold text-slate-900 shadow-[6px_0_10px_rgba(0,0,0,0.04)]`}
       >
         {collapsed ? (
           <ChevronRight size={13} />
@@ -56,11 +60,11 @@ export default function LocationRow({
 
         <MapPin size={13} className="text-purple-600" />
 
-        {locationName}
+        {rowNumber ? <span className="min-w-8 font-mono text-xs font-black text-slate-600">{rowNumber}</span> : null}{locationName}
       </button>
 
       <div
-        className={`${stickySecondCol} bg-slate-50 px-2 py-1.5 text-xs text-slate-600`}
+        className={`${stickySecondCol} z-[230] isolate bg-slate-300 px-2 py-1.5 text-sm text-slate-600`}
         style={{
           left: `${leftColWidth}px`,
         }}
@@ -69,16 +73,16 @@ export default function LocationRow({
       </div>
 
       <div
-  className="relative h-full"
-  style={{
-    backgroundImage: `linear-gradient(to right, rgba(203,213,225,0.75) 1px, transparent 1px)`,
-    backgroundSize: `${weekWidth / 7}px 100%`,
-  }}
->
+        className="relative h-full overflow-hidden bg-white"
+        style={{
+          backgroundImage: `linear-gradient(to right, rgba(100,116,139,0.26) 0 1px, transparent 1px), linear-gradient(to right, rgba(203,213,225,0.50) 1px, transparent 1px)`,
+          backgroundSize: `${weekWidth}px 100%, ${dayWidth}px 100%`,
+        }}
+      >
         {collapsed && features.showCollapsedSummaryBars && (
           <SummaryBar
             tasks={tasks}
-            color="bg-purple-600"
+            color={"bg-purple-500"}
             weekWidth={weekWidth}
             timelineStartDate={timelineStartDate}
           />

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/client";
 import { useSessionTimer } from "./useSessionTimer";
 
 const THIRTY_MINUTES = 30 * 60;
 
 export default function SessionGuardClient() {
+  const pathname = usePathname();
   const supabase = createClient();
 
   const remainingSeconds = useSessionTimer(
@@ -18,6 +20,8 @@ export default function SessionGuardClient() {
   );
 
   useEffect(() => {
+    if (pathname.startsWith("/teams/meeting-assistant")) return;
+
     async function logout() {
       await supabase.auth.signOut();
       localStorage.removeItem("dimprover_login_started_at");
@@ -49,7 +53,7 @@ export default function SessionGuardClient() {
       window.removeEventListener("click", resetTimer);
       window.removeEventListener("scroll", resetTimer);
     };
-  }, [remainingSeconds, setRemainingSeconds, supabase.auth]);
+  }, [pathname, remainingSeconds, setRemainingSeconds, supabase.auth]);
 
   return null;
 }

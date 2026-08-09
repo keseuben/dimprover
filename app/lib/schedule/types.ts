@@ -26,41 +26,36 @@ export type ScheduleFeatureState = {
   showPdfExport: boolean;
   showViewSwitcher: boolean;
   showFloatingToolbar: boolean;
+  showWeekendHighlight: boolean;
+  showHolidayHighlight: boolean;
+  showMilestoneTypeIcon: boolean;
+  showMilestoneStatusIcon: boolean;
+  showMilestonePriorityMarker: boolean;
 };
 
 export type ScheduleTask = {
   id: number;
   order: number;
-
   name: string;
   contractor: string;
   category: string;
-
   startWeek: number;
   duration: number;
-
   contractStartWeek: number;
   contractDuration: number;
-
   actualStartWeek: number;
   actualDuration: number;
-
   startDate: string;
   endDate: string;
-
   contractStartDate: string;
   contractEndDate: string;
-
   actualStartDate: string;
   actualEndDate: string;
-
   color?: string;
   taskType?: string;
   workType?: string;
-
   progress?: number;
-
-predecessors?: number[];
+  predecessors?: number[];
 };
 
 export type ScheduleCategory = {
@@ -85,8 +80,12 @@ export type ScheduleLocation = {
   buildings: ScheduleBuilding[];
 };
 
+export type ScheduleBarInteractionMode = "move" | "resize-start" | "resize-end";
+
 export type ResizeState = {
   taskId: number;
   startX: number;
+  originalStartDate: string;
   originalEndDate: string;
+  mode: ScheduleBarInteractionMode;
 };

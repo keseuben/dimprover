@@ -18,13 +18,19 @@ export type TimelineDay = {
 }
 
 export function toDate(dateString: string): Date {
-  const date = new Date(dateString)
+  const [year, month, day] = dateString.split("-").map(Number)
+  const date = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+    ? new Date(year, month - 1, day)
+    : new Date(dateString)
   date.setHours(0, 0, 0, 0)
   return date
 }
 
 export function toIsoDate(date: Date): string {
-  return date.toISOString().split("T")[0]
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 export function addDays(date: Date, days: number): Date {

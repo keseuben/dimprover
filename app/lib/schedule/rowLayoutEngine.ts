@@ -1,11 +1,6 @@
 import { VisibleRow } from "@/app/lib/schedule/rowBuilder";
 
 import {
-  getCachedVisibleRows,
-  setCachedVisibleRows,
-} from "@/app/lib/schedule/virtualizationCache";
-
-import {
   getCachedRowLayout,
   setCachedRowLayout,
 } from "@/app/lib/schedule/rowLayoutCache";
@@ -19,8 +14,27 @@ export function calculateVisibleRowLayout(
   rows: VisibleRow[]
 ): VisibleRowLayout[] {
   const cacheKey = rows
-  .map((row) => `${row.rowType}-${row.id}`)
-  .join("|");
+    .map((row) => {
+      if (row.rowType === "task") {
+        const task = row.task;
+        return [
+          row.rowType,
+          row.id,
+          task.name,
+          task.actualStartDate,
+          task.actualEndDate,
+          task.contractStartDate,
+          task.contractEndDate,
+          task.progress,
+          task.color,
+          task.taskType,
+          task.contractor,
+        ].join(":");
+      }
+
+      return `${row.rowType}-${row.id}-${row.height}`;
+    })
+    .join("|");
 
   const cached = getCachedRowLayout(cacheKey);
 
@@ -54,16 +68,6 @@ export function getVisibleRowRange(
   overscan = 300
 ): VisibleRowLayout[] {
   if (rows.length === 0) return [];
-
-  const cached = getCachedVisibleRows(
-    scrollTop,
-    viewportHeight,
-    overscan
-  );
-
-  if (cached) {
-    return cached;
-  }
 
   const visibleTop = scrollTop - overscan;
   const visibleBottom = scrollTop + viewportHeight + overscan;
@@ -99,14 +103,5 @@ export function getVisibleRowRange(
     }
   }
 
-  const visibleRows = rows.slice(startIndex, endIndex + 1);
-
-  setCachedVisibleRows(
-    scrollTop,
-    viewportHeight,
-    overscan,
-    visibleRows
-  );
-
-  return visibleRows;
+  return rows.slice(startIndex, endIndex + 1);
 }

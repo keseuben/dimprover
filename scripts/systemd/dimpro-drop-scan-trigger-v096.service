@@ -1,0 +1,31 @@
+[Unit]
+Description=DIMPRO DROP immediate malware scan trigger
+After=network-online.target clamav-daemon.service
+Wants=network-online.target clamav-daemon.service
+StartLimitIntervalSec=60
+StartLimitBurst=30
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/root/dimprover
+UMask=0077
+Environment=DIMPRO_DROP_SCAN_TRIGGER_DIR=/root/dimprover/.data/drop-worker-trigger
+ExecStart=/usr/bin/node -r /root/dimprover/scripts/load-next-env.cjs /root/dimprover/scripts/run-drop-scan-trigger-v096.mjs
+TimeoutStartSec=1200
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=4
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/root/dimprover/.data/drop-worker-trigger
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+import { type NextRequest, NextResponse } from "next/server";
+import { dropErrorResponse, dropNoStoreHeaders } from "@/app/lib/drop/dropApi";
+import { issueDropPackageTextReportDownload } from "@/app/lib/drop/download/dropDownloadService";
+export const dynamic="force-dynamic"; export const runtime="nodejs";
+const ALLOWED_HOSTS=new Set(["drop.dimpro.hu","www.drop.dimpro.hu","localhost","127.0.0.1"]);
+function host(request:NextRequest){return(request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()||request.headers.get("host")||"").replace(/:\d+$/,"").toLowerCase();}
+function disposition(filename:string){const ascii=filename.normalize("NFKD").replace(/[^\x20-\x7E]/g,"_").replace(/["\\]/g,"_").slice(0,160)||"DIMPRO_DROP_megjegyzesek.txt";return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;}
+export async function POST(request:NextRequest){if(!ALLOWED_HOSTS.has(host(request)))return NextResponse.json({ok:false,error:"Az útvonal nem található."},{status:404,headers:dropNoStoreHeaders()});try{const body=await request.json().catch(()=>null)as Record<string,unknown>|null;const rawToken=String(body?.token||"").trim();if(!rawToken||rawToken.length>180)return NextResponse.json({ok:false,error:"Hiányzó vagy hibás letöltési token."},{status:400,headers:dropNoStoreHeaders()});const report=await issueDropPackageTextReportDownload({rawToken,headers:request.headers});return new NextResponse(new Uint8Array(report.buffer),{status:200,headers:{...dropNoStoreHeaders(),"content-type":"text/plain; charset=utf-8","content-disposition":disposition(report.filename),"x-content-type-options":"nosniff","x-dimpro-drop-version":"DROP 1.2.11"}});}catch(error){return dropErrorResponse(error);}}

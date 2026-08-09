@@ -3,6 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
+import DashboardHeaderBlock from "@/components/layout/DashboardHeaderBlock";
+import ModulePanel from "@/components/layout/ModulePanel";
 
 import {
   ClipboardList,
@@ -42,38 +44,22 @@ const templates = [
 export default function ENaploDashboardPage() {
   return (
     <AppLayout>
-      <main className="min-h-screen bg-slate-100 p-6 text-slate-900">
-        <div className="mx-auto max-w-7xl space-y-6">
-          <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h1 className="text-2xl font-bold">
-              Építési napló rögzítő
-            </h1>
+      <main className="min-h-screen bg-slate-100 px-8 pb-8 pt-6 text-slate-900">
+        <div className="w-full">
+          <DashboardHeaderBlock />
 
-            <p className="mt-2 text-sm text-slate-500">
-              Központi felület napi jelentések, építési napló
-              segédrögzítések, offline sablonok és későbbi exportok
-              kezeléséhez.
-            </p>
-
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <ModulePanel storageKey="enaplo:intro" title="DIMPROVER Építési napló" contentClassName="p-4" className="mt-0">
+            <h1 className="text-xl font-black text-slate-950">Építési napló rögzítő</h1>
+            <p className="mt-1 text-sm text-slate-500">Központi felület napi jelentések, építési napló segédrögzítések, offline sablonok és későbbi exportok kezeléséhez.</p>
+            <div className="mt-4 max-w-3xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-900">
               <div className="flex gap-2">
-                <AlertTriangle
-                  size={18}
-                  className="mt-0.5 shrink-0"
-                />
-
-                <p>
-                  <strong>Fontos:</strong> Ez a modul nem
-                  helyettesíti a kötelező állami e-építési
-                  naplót. A felület segéd napi rögzítésre,
-                  előkészítésre, belső dokumentálásra és export
-                  készítésre szolgál.
-                </p>
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <p><strong>Fontos:</strong> Ez a modul nem helyettesíti a kötelező állami e-építési naplót. A felület segéd napi rögzítésre, előkészítésre, belső dokumentálásra és export készítésre szolgál.</p>
               </div>
             </div>
-          </section>
+          </ModulePanel>
 
-          <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <ModulePanel storageKey="enaplo:modules" title="Építési napló modulok" contentClassName="grid gap-5 p-5 md:grid-cols-2 xl:grid-cols-3">
             {templates.map((item) => {
               const Icon = item.icon;
               const disabled = item.href === "#";
@@ -82,19 +68,19 @@ export default function ENaploDashboardPage() {
                 <Link
                   key={item.title}
                   href={item.href}
-                  className={`rounded-2xl border bg-white p-5 shadow-sm transition ${
+                  className={`border border-blue-200/50 bg-white/75 p-5 shadow-[0_8px_18px_rgba(37,99,235,0.08)] transition ${
                     disabled
                       ? "pointer-events-none opacity-60"
-                      : "hover:-translate-y-0.5 hover:shadow-md"
+                      : "hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(37,99,235,0.12)]"
                   }`}
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
+                    <div className="bg-blue-50 p-3 text-blue-700">
                       <Icon size={22} />
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      className={`px-3 py-1 text-xs font-bold ${
                         item.status === "Elérhető"
                           ? "bg-emerald-50 text-emerald-700"
                           : "bg-slate-100 text-slate-500"
@@ -119,7 +105,7 @@ export default function ENaploDashboardPage() {
                 </Link>
               );
             })}
-          </section>
+          </ModulePanel>
         </div>
       </main>
     </AppLayout>

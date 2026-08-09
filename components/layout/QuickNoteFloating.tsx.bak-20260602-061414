@@ -1,0 +1,3544 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  Bold,
+  BookOpen,
+  Calculator,
+  Copy,
+  Grid3X3,
+  HelpCircle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Filter,
+  Sigma,
+  FileText,
+  Printer,
+  Redo2,
+  Undo2,
+  Grip,
+  Italic,
+  Mail,
+  Save,
+  Search,
+  StickyNote,
+  Strikethrough,
+  Trash2,
+  Underline,
+  X,
+} from "lucide-react";
+
+const quickNoteTopics = [
+  { value: "projects", label: "Projektek" },
+  { value: "documents", label: "Dokumentumok" },
+  { value: "schedule", label: "Ütemterv" },
+  { value: "finance", label: "Pénzügy" },
+  { value: "registry", label: "Iktató" },
+  { value: "private", label: "Saját jegyzetek" },
+];
+
+const quickNoteProjectTargets = [
+  { value: "current-project", label: "Aktuális projekt" },
+  { value: "project-1", label: "Társasház homlokzati felújítás" },
+  { value: "project-2", label: "Ipari csarnok bővítés" },
+  { value: "project-3", label: "Lakóépület energetikai korszerűsítés" },
+  { value: "general", label: "Általános mentés" },
+];
+
+const sampleQuickNotes = [
+  {
+    id: "qn-1",
+    title: "Homlokzati egyeztetés",
+    target: "Társasház homlokzati felújítás",
+    date: "ma 09:20",
+  },
+  {
+    id: "qn-2",
+    title: "Alapkiemelés ellenőrzés",
+    target: "Ipari csarnok bővítés",
+    date: "tegnap 15:10",
+  },
+  {
+    id: "qn-3",
+    title: "Számla melléklet pótlás",
+    target: "Pénzügy / Iktató",
+    date: "2026.05.14",
+  },
+];
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+function getStoredString(key: string, fallback = "") {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  return window.localStorage.getItem(key) ?? fallback;
+}
+
+function getStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const value = window.localStorage.getItem(key);
+
+  if (value === null) {
+    return fallback;
+  }
+
+  return value === "true";
+}
+
+function getStoredJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const value = window.localStorage.getItem(key);
+
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function setStoredValue(key: string, value: unknown) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    key,
+    typeof value === "string" ? value : JSON.stringify(value)
+  );
+}
+
+const calculatorPanelWidth = 318;
+const calculatorPanelHeight = 390;
+const miniSheetPanelWidth = 680;
+const miniSheetPanelHeight = 520;
+const quickNoteDefaultWidth = 620;
+const quickNoteDefaultHeight = 540;
+
+function getDefaultCalculatorPosition() {
+  if (typeof window === "undefined") {
+    return { x: 260, y: 260 };
+  }
+
+  const quickNoteLeft = window.innerWidth - 28 - quickNoteDefaultWidth;
+
+  return {
+    x: clamp(quickNoteLeft - calculatorPanelWidth - 28, 8, window.innerWidth - calculatorPanelWidth - 8),
+    y: clamp(window.innerHeight - 28 - quickNoteDefaultHeight, 8, window.innerHeight - calculatorPanelHeight - 8),
+  };
+}
+
+
+function getDefaultMiniSheetPosition() {
+  if (typeof window === "undefined") {
+    return { x: 340, y: 240 };
+  }
+
+  const quickNoteLeft = window.innerWidth - 28 - quickNoteDefaultWidth;
+
+  return {
+    x: clamp(quickNoteLeft - miniSheetPanelWidth - 28, 8, window.innerWidth - miniSheetPanelWidth - 8),
+    y: clamp(window.innerHeight - 28 - quickNoteDefaultHeight + 36, 8, window.innerHeight - miniSheetPanelHeight - 8),
+  };
+}
+
+const initialMiniSheetColumns = Array.from({ length: 20 }, (_, index) => getColumnName(index));
+const initialMiniSheetRows = Array.from({ length: 20 }, (_, index) => index + 1);
+const miniSheetDefaultRowHeight = 20;
+function normalizeMiniSheetRowHeights(heights: number[] | undefined, rowCount: number) {
+  return Array.from({ length: rowCount }, (_, index) => {
+    const height = heights?.[index];
+    return height && height !== 36 ? height : miniSheetDefaultRowHeight;
+  });
+}
+type MiniSheetAlign = "left" | "center" | "right";
+type MiniSheetBorder = "none" | "soft" | "thin" | "thick";
+type MiniSheetCellStyle = {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  textColor?: string;
+  bgColor?: string;
+  border?: MiniSheetBorder;
+  borderColor?: string;
+  fontSize?: number;
+  fontFamily?: string;
+};
+type MiniSheetTab = { id: string; name: string };
+type FloatingWindowKey = "calculator" | "miniSheet" | "quickNote";
+type MiniSheetFormulaMap = Record<string, string>;
+type MiniSheetHeaderMenu = { type: "column" | "row"; index: number; x: number; y: number } | null;
+const miniSheetTextColorOptions = [
+  { value: "#0f172a", label: "Fekete" },
+  { value: "#374151", label: "Szürke" },
+  { value: "#166534", label: "Zöld" },
+  { value: "#1d4ed8", label: "Kék" },
+  { value: "#7c2d12", label: "Barna" },
+  { value: "#7e22ce", label: "Lila" },
+];
+const miniSheetBgColorOptions = [
+  { value: "#ffffff", label: "Fehér" },
+  { value: "#f8fafc", label: "Halvány szürke" },
+  { value: "#fef9c3", label: "Halvány sárga" },
+  { value: "#dcfce7", label: "Halvány zöld" },
+  { value: "#dbeafe", label: "Halvány kék" },
+  { value: "#fce7f3", label: "Halvány rózsaszín" },
+  { value: "#000000", label: "Fekete" },
+  { value: "#fff200", label: "Citromsárga" },
+  { value: "#f97316", label: "Narancssárga" },
+  { value: "#7e22ce", label: "Lila" },
+  { value: "#16a34a", label: "Zöld" },
+  { value: "#dc2626", label: "Piros" },
+  { value: "#111827", label: "Sötét kékesszürke" },
+  { value: "#1f2937", label: "Sötét szürke" },
+  { value: "#14532d", label: "Sötét zöld" },
+  { value: "#7f1d1d", label: "Sötét piros" },
+  { value: "#312e81", label: "Sötét lila" },
+];
+const miniSheetBorderColorOptions = [
+  { value: "#cbd5e1", label: "Halvány szürke" },
+  { value: "#94a3b8", label: "Szürke" },
+  { value: "#86efac", label: "Halvány zöld" },
+  { value: "#93c5fd", label: "Halvány kék" },
+  { value: "#fde68a", label: "Halvány sárga" },
+  { value: "#f9a8d4", label: "Halvány rózsaszín" },
+  { value: "#000000", label: "Fekete" },
+  { value: "#fff200", label: "Citromsárga" },
+  { value: "#f97316", label: "Narancssárga" },
+  { value: "#7e22ce", label: "Lila" },
+  { value: "#16a34a", label: "Zöld" },
+  { value: "#dc2626", label: "Piros" },
+  { value: "#111827", label: "Sötét kékesszürke" },
+  { value: "#1f2937", label: "Sötét szürke" },
+  { value: "#14532d", label: "Sötét zöld" },
+  { value: "#7f1d1d", label: "Sötét piros" },
+  { value: "#312e81", label: "Sötét lila" },
+];
+const miniSheetBorders: { value: MiniSheetBorder; label: string }[] = [
+  { value: "none", label: "Nincs" },
+  { value: "soft", label: "Halvány" },
+  { value: "thin", label: "Vékony" },
+  { value: "thick", label: "Vastag" },
+];
+const miniSheetFontSizeOptions = [10, 11, 12, 13, 14, 16, 18, 20, 24];
+const miniSheetFontFamilyOptions = [
+  { value: "Aptos Narrow, Arial Narrow, Arial, sans-serif", label: "Aptos Narrow" },
+  { value: "Arial, sans-serif", label: "Arial" },
+  { value: "Verdana, sans-serif", label: "Verdana" },
+  { value: "Tahoma, sans-serif", label: "Tahoma" },
+  { value: "Trebuchet MS, sans-serif", label: "Trebuchet" },
+  { value: "Georgia, serif", label: "Georgia" },
+  { value: "Times New Roman, serif", label: "Times" },
+  { value: "Courier New, monospace", label: "Courier" },
+];
+const initialMiniSheetTabs: MiniSheetTab[] = [{ id: "sheet-1", name: "Munka1" }];
+const miniSheetFunctionOptions = [
+  { value: "", label: "Függvény" },
+  { value: "=SUM()", label: "SUM - összeg" },
+  { value: "=ÁTLAG()", label: "ÁTLAG - átlag" },
+  { value: "=ATLAG()", label: "ATLAG - átlag" },
+  { value: "=MIN()", label: "MIN - legkisebb" },
+  { value: "=MAX()", label: "MAX - legnagyobb" },
+  { value: "=COUNT()", label: "COUNT - darabszám" },
+  { value: "=COUNTIF()", label: "COUNTIF - feltételes darab" },
+  { value: "=ROUND()", label: "ROUND - kerekítés" },
+  { value: "=NPV()", label: "NPV - nettó jelenérték" },
+  { value: "=PMT()", label: "PMT - törlesztőrészlet" },
+];
+type MiniSheetCurrency = "none" | "HUF" | "EUR" | "USD" | "CHF" | "GBP" | "CZK" | "PLN" | "RON" | "HRK" | "RSD";
+type MiniSheetOperation = "sum" | "avg" | "add" | "subtract" | "multiply" | "divide";
+const miniSheetCurrencyOptions: { value: MiniSheetCurrency; label: string; symbol: string; rate?: number }[] = [
+  { value: "none", label: "Semmi (-)", symbol: "" },
+  { value: "HUF", label: "Forint", symbol: "Ft", rate: 1 },
+  { value: "EUR", label: "Euro", symbol: "€", rate: 390 },
+  { value: "USD", label: "Dollár", symbol: "$", rate: 360 },
+  { value: "CHF", label: "Svájci frank", symbol: "CHF", rate: 405 },
+  { value: "GBP", label: "Angol font", symbol: "GBP", rate: 455 },
+  { value: "CZK", label: "Cseh korona", symbol: "CZK", rate: 16 },
+  { value: "PLN", label: "Lengyel złoty", symbol: "PLN", rate: 91 },
+  { value: "RON", label: "Román lej", symbol: "RON", rate: 78 },
+  { value: "HRK", label: "Horvát kuna", symbol: "HRK", rate: 52 },
+  { value: "RSD", label: "Szerb dinár", symbol: "RSD", rate: 3.3 },
+];
+const miniSheetFxOptions: { value: Exclude<MiniSheetCurrency, "none">; label: string; rate: number; symbol: string }[] = miniSheetCurrencyOptions
+  .filter((option): option is { value: Exclude<MiniSheetCurrency, "none">; label: string; symbol: string; rate: number } => option.value !== "none" && typeof option.rate === "number")
+  .map((option) => ({ value: option.value, label: option.label, rate: option.rate, symbol: option.symbol }));
+function getColumnName(index: number) {
+  let name = "";
+  let current = index;
+  do {
+    name = String.fromCharCode(65 + (current % 26)) + name;
+    current = Math.floor(current / 26) - 1;
+  } while (current >= 0);
+  return name;
+}
+function createEmptySheetData(rowCount = initialMiniSheetRows.length, colCount = initialMiniSheetColumns.length) {
+  return Array.from({ length: rowCount }, () => Array.from({ length: colCount }, () => ""));
+}
+
+
+
+type MiniSheetCell = {
+  rowIndex: number;
+  colIndex: number;
+};
+
+function cellKey(rowIndex: number, colIndex: number) {
+  return `${rowIndex}-${colIndex}`;
+}
+
+function miniSheetTabKey(tabId: string, key: string) {
+  return `dimprover.miniSheet.tabs.${tabId}.${key}`;
+}
+
+function createMiniSheetTabId() {
+  return `sheet-${Date.now()}`;
+}
+
+function parseSheetNumber(value: string): number | null {
+  let cleaned = value
+    .replace(/forint|ft|huf|€|eur|euro|\$|usd|dollár|dollar|chf|gbp|czk|pln|ron|hrk|rsd|dinár|dinar|kuna|lej|złoty|zloty/gi, "")
+    .replace(/\s/g, "")
+    .trim();
+
+  if (!cleaned || cleaned.startsWith("=")) {
+    return null;
+  }
+
+  const commaIndex = cleaned.lastIndexOf(",");
+  const dotIndex = cleaned.lastIndexOf(".");
+  const decimalSeparator = commaIndex > dotIndex ? "," : dotIndex > commaIndex ? "." : "";
+
+  if (decimalSeparator) {
+    const separatorIndex = cleaned.lastIndexOf(decimalSeparator);
+    const decimals = cleaned.slice(separatorIndex + 1);
+    const hasThousandsPattern = decimalSeparator === "." && /^\d{1,3}(\.\d{3})+$/.test(cleaned);
+
+    if (!hasThousandsPattern && decimals.length > 0 && decimals.length <= 4) {
+      const integerPart = cleaned.slice(0, separatorIndex).replace(/[.,]/g, "");
+      cleaned = `${integerPart}.${decimals.replace(/[.,]/g, "")}`;
+    } else {
+      cleaned = cleaned.replace(/[.,]/g, "");
+    }
+  }
+
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+function isNumericCell(value: string) {
+  return parseSheetNumber(value) !== null;
+}
+
+function formatSheetNumber(value: number, decimalPlaces: number, currency: MiniSheetCurrency) {
+  const formatted = new Intl.NumberFormat("hu-HU", {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  }).format(value);
+
+  if (currency === "none") {
+    return formatted;
+  }
+
+  const currencyOption = miniSheetCurrencyOptions.find((option) => option.value === currency);
+  return currencyOption?.symbol ? `${formatted} ${currencyOption.symbol}` : formatted;
+}
+
+function normalizeCellValue(value: string, decimalPlaces: number, currency: MiniSheetCurrency) {
+  const numericValue = parseSheetNumber(value);
+
+  if (isMiniSheetSeriesSeed(value)) {
+    return value.trim();
+  }
+
+  if (numericValue === null) {
+    return value;
+  }
+
+  return formatSheetNumber(numericValue, decimalPlaces, currency);
+}
+
+function getMiniSheetDisplayValue(value: string, isEditing: boolean, formula = "") {
+  if (isEditing) return formula || value;
+  return value;
+}
+
+function isMiniSheetSeriesSeed(value: string) {
+  return /^\s*-?\d+[.,]\s*$/.test(value);
+}
+
+function detectMiniSheetCurrency(value: string): MiniSheetCurrency {
+  const normalized = value.toLowerCase();
+
+  if (/ft|huf/.test(normalized)) {
+    return "HUF";
+  }
+
+  if (/€|eur|euro/.test(normalized)) {
+    return "EUR";
+  }
+
+  if (/\$|usd|dollár|dollar/.test(normalized)) {
+    return "USD";
+  }
+
+  if (/chf|svájci/.test(normalized)) return "CHF";
+  if (/gbp|font/.test(normalized)) return "GBP";
+  if (/czk|cseh/.test(normalized)) return "CZK";
+  if (/pln|złoty|zloty/.test(normalized)) return "PLN";
+  if (/ron|lej/.test(normalized)) return "RON";
+  if (/hrk|kuna/.test(normalized)) return "HRK";
+  if (/rsd|dinár|dinar/.test(normalized)) return "RSD";
+
+  return "none";
+}
+
+function getMiniSheetCurrencyLabel(currency: MiniSheetCurrency) {
+  const option = miniSheetCurrencyOptions.find((item) => item.value === currency);
+  return option?.symbol || option?.label || "-";
+}
+
+function getFallbackMiniSheetRate(currency: Exclude<MiniSheetCurrency, "none">) {
+  return miniSheetFxOptions.find((option) => option.value === currency)?.rate ?? 1;
+}
+
+function getSelectedNumbers(data: string[][], selectedCells: MiniSheetCell[]) {
+  return selectedCells
+    .map((cell) => parseSheetNumber(data[cell.rowIndex]?.[cell.colIndex] ?? ""))
+    .filter((value): value is number => value !== null);
+}
+
+function miniSheetCellAddress(rowIndex: number, colIndex: number) {
+  return `${getColumnName(colIndex)}${rowIndex + 1}`;
+}
+
+function miniSheetRangeText(cells: MiniSheetCell[]) {
+  if (!cells.length) {
+    return "";
+  }
+
+  const rows = cells.map((cell) => cell.rowIndex);
+  const cols = cells.map((cell) => cell.colIndex);
+  const minRow = Math.min(...rows);
+  const maxRow = Math.max(...rows);
+  const minCol = Math.min(...cols);
+  const maxCol = Math.max(...cols);
+
+  if (minRow === maxRow && minCol === maxCol) {
+    return miniSheetCellAddress(minRow, minCol);
+  }
+
+  return `${miniSheetCellAddress(minRow, minCol)}:${miniSheetCellAddress(maxRow, maxCol)}`;
+}
+
+function parseMiniSheetFormula(value: string) {
+  const sumMatch = value.match(/^=SUM\((.*)\)$/i);
+  const avgMatch = value.match(/^=(ÁTLAG|ATLAG|AVERAGE)\((.*)\)$/i);
+  const minMatch = value.match(/^=MIN\((.*)\)$/i);
+  const maxMatch = value.match(/^=MAX\((.*)\)$/i);
+  const countMatch = value.match(/^=COUNT\((.*)\)$/i);
+
+  if (sumMatch) {
+    return { type: "sum" as const, range: sumMatch[1] };
+  }
+
+  if (avgMatch) {
+    return { type: "avg" as const, range: avgMatch[2] };
+  }
+
+  if (minMatch) {
+    return { type: "min" as const, range: minMatch[1] };
+  }
+
+  if (maxMatch) {
+    return { type: "max" as const, range: maxMatch[1] };
+  }
+
+  if (countMatch) {
+    return { type: "count" as const, range: countMatch[1] };
+  }
+
+  return null;
+}
+
+function resolveMiniSheetRange(range: string, columns: string[], rows: number[]) {
+  const parseAddress = (address: string): MiniSheetCell | null => {
+    const match = address.trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const colIndex = columns.indexOf(match[1]);
+    const rowIndex = Number(match[2]) - 1;
+
+    if (colIndex < 0 || rowIndex < 0 || rowIndex >= rows.length) {
+      return null;
+    }
+
+    return { rowIndex, colIndex };
+  };
+
+  const parts = range.split(":");
+  const start = parseAddress(parts[0] ?? "");
+  const end = parseAddress(parts[1] ?? parts[0] ?? "");
+
+  if (!start || !end) {
+    return [];
+  }
+
+  const cells: MiniSheetCell[] = [];
+
+  for (let rowIndex = Math.min(start.rowIndex, end.rowIndex); rowIndex <= Math.max(start.rowIndex, end.rowIndex); rowIndex += 1) {
+    for (let colIndex = Math.min(start.colIndex, end.colIndex); colIndex <= Math.max(start.colIndex, end.colIndex); colIndex += 1) {
+      cells.push({ rowIndex, colIndex });
+    }
+  }
+
+  return cells;
+}
+
+function columnNameToIndex(name: string) {
+  return name.split("").reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1;
+}
+
+function replaceMiniSheetCellReferences(expression: string, data: string[][], currentCell?: MiniSheetCell) {
+  return expression.replace(/\b([A-Z]+)(\d+)\b/g, (match, colName: string, rowText: string) => {
+    const colIndex = columnNameToIndex(colName.toUpperCase());
+    const rowIndex = Number(rowText) - 1;
+
+    if (currentCell && currentCell.rowIndex === rowIndex && currentCell.colIndex === colIndex) {
+      return "0";
+    }
+
+    const rawValue = data[rowIndex]?.[colIndex] ?? "";
+    const numericValue = parseSheetNumber(rawValue);
+    return numericValue === null ? "0" : String(numericValue);
+  });
+}
+
+function isMiniSheetSimpleFormula(value: string) {
+  return value.trim().startsWith("=") && !/^=(SUM|ÁTLAG|ATLAG|AVERAGE|MIN|MAX|COUNT)\(/i.test(value.trim());
+}
+
+function calculateMiniSheetOperation(values: number[], operation: MiniSheetOperation | "min" | "max" | "count") {
+  if (!values.length) {
+    return null;
+  }
+
+  if (operation === "sum") {
+    return values.reduce((total, value) => total + value, 0);
+  }
+
+  if (operation === "avg") {
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  }
+
+  if (operation === "min") {
+    return Math.min(...values);
+  }
+
+  if (operation === "max") {
+    return Math.max(...values);
+  }
+
+  if (operation === "count") {
+    return values.length;
+  }
+
+  if (operation === "add") {
+    return values.reduce((total, value) => total + value, 0);
+  }
+
+  if (operation === "subtract") {
+    return values.slice(1).reduce((total, value) => total - value, values[0]);
+  }
+
+  if (operation === "multiply") {
+    return values.reduce((total, value) => total * value, 1);
+  }
+
+  const result = values.slice(1).reduce((total, value) => total / value, values[0]);
+  return Number.isFinite(result) ? result : null;
+}
+
+const calculatorButtons = [
+  "7",
+  "8",
+  "9",
+  "/",
+  "4",
+  "5",
+  "6",
+  "*",
+  "1",
+  "2",
+  "3",
+  "-",
+  "0",
+  ".",
+  "=",
+  "+",
+];
+
+const scientificButtons = ["sin", "cos", "tan", "sqrt", "log", "ln", "^", "π", "(", ")"];
+
+function normalizeExpression(expression: string) {
+  return expression
+    .replace(/π/g, "Math.PI")
+    .replace(/sqrt\(/g, "Math.sqrt(")
+    .replace(/sin\(/g, "Math.sin(")
+    .replace(/cos\(/g, "Math.cos(")
+    .replace(/tan\(/g, "Math.tan(")
+    .replace(/log\(/g, "Math.log10(")
+    .replace(/ln\(/g, "Math.log(")
+    .replace(/\^/g, "**");
+}
+
+function calculateExpression(expression: string): string {
+  if (!expression.trim()) {
+    return "";
+  }
+
+  const normalized = normalizeExpression(expression);
+  const allowed = /^[0-9+\-*/().\sMathPIsqrtincotagl\*]+$/;
+
+  if (!allowed.test(normalized)) {
+    return "Hibás képlet";
+  }
+
+  try {
+    const result = Function(`"use strict"; return (${normalized});`)();
+
+    if (typeof result !== "number" || !Number.isFinite(result)) {
+      return "Hibás eredmény";
+    }
+
+    return String(Number(result.toFixed(10)));
+  } catch {
+    return "Hibás képlet";
+  }
+}
+
+export default function QuickNoteFloating() {
+  const [floatingZOrder, setFloatingZOrder] = useState<Record<FloatingWindowKey, number>>(() =>
+    getStoredJson<Record<FloatingWindowKey, number>>("dimprover.floating.zOrder", {
+      calculator: 10030,
+      miniSheet: 10025,
+      quickNote: 10020,
+    })
+  );
+  const [noteOpen, setNoteOpen] = useState(() =>
+    getStoredBoolean("dimprover.quickNote.open", true)
+  );
+  const [libraryOpen, setLibraryOpen] = useState(() =>
+    getStoredBoolean("dimprover.quickNote.libraryOpen", false)
+  );
+  const [calculatorOpen, setCalculatorOpen] = useState(() =>
+    getStoredBoolean("dimprover.calculator.open", false)
+  );
+  const [miniSheetOpen, setMiniSheetOpen] = useState(() =>
+    getStoredBoolean("dimprover.miniSheet.open", false)
+  );
+  const [scientificMode, setScientificMode] = useState(() =>
+    getStoredBoolean("dimprover.calculator.scientificMode", false)
+  );
+  const calculatorInputRef = useRef<HTMLInputElement | null>(null);
+  const [calculatorInput, setCalculatorInput] = useState(() =>
+    getStoredString("dimprover.calculator.input")
+  );
+  const [calculatorResult, setCalculatorResult] = useState(() =>
+    getStoredString("dimprover.calculator.result")
+  );
+  const [calculatorLog, setCalculatorLog] = useState<string[]>(() =>
+    getStoredJson<string[]>("dimprover.calculator.log", [])
+  );
+  const [calculatorPosition, setCalculatorPosition] = useState(() =>
+    getStoredJson("dimprover.calculator.position", getDefaultCalculatorPosition())
+  );
+  const [miniSheetPosition, setMiniSheetPosition] = useState(() =>
+    getStoredJson("dimprover.miniSheet.position", getDefaultMiniSheetPosition())
+  );
+  const [miniSheetTabs, setMiniSheetTabs] = useState<MiniSheetTab[]>(() =>
+    getStoredJson<MiniSheetTab[]>("dimprover.miniSheet.tabs", initialMiniSheetTabs)
+  );
+  const [activeMiniSheetTabId, setActiveMiniSheetTabId] = useState(() =>
+    getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id)
+  );
+  const [miniSheetData, setMiniSheetData] = useState<string[][]>(() =>
+    getStoredJson<string[][]>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "data"), getStoredJson<string[][]>("dimprover.miniSheet.data", createEmptySheetData()))
+  );
+  const [miniSheetColumns, setMiniSheetColumns] = useState<string[]>(() =>
+    getStoredJson<string[]>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "columns"), getStoredJson<string[]>("dimprover.miniSheet.columns", initialMiniSheetColumns))
+  );
+  const [miniSheetRows, setMiniSheetRows] = useState<number[]>(() =>
+    getStoredJson<number[]>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "rows"), getStoredJson<number[]>("dimprover.miniSheet.rows", initialMiniSheetRows))
+  );
+  const [miniSheetAlignments, setMiniSheetAlignments] = useState<Record<string, MiniSheetAlign>>(() =>
+    getStoredJson<Record<string, MiniSheetAlign>>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "alignments"), getStoredJson<Record<string, MiniSheetAlign>>("dimprover.miniSheet.alignments", {}))
+  );
+  const [miniSheetStyles, setMiniSheetStyles] = useState<Record<string, MiniSheetCellStyle>>(() =>
+    getStoredJson<Record<string, MiniSheetCellStyle>>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "styles"), getStoredJson<Record<string, MiniSheetCellStyle>>("dimprover.miniSheet.styles", {}))
+  );
+  const [miniSheetFormulas, setMiniSheetFormulas] = useState<MiniSheetFormulaMap>(() =>
+    getStoredJson<MiniSheetFormulaMap>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "formulas"), getStoredJson<MiniSheetFormulaMap>("dimprover.miniSheet.formulas", {}))
+  );
+  const [miniSheetColumnWidths, setMiniSheetColumnWidths] = useState<number[]>(() =>
+    getStoredJson<number[]>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "columnWidths"), getStoredJson<number[]>("dimprover.miniSheet.columnWidths", Array.from({ length: initialMiniSheetColumns.length }, () => 96)))
+  );
+  const [miniSheetRowHeights, setMiniSheetRowHeights] = useState<number[]>(() =>
+    normalizeMiniSheetRowHeights(getStoredJson<number[]>(miniSheetTabKey(getStoredString("dimprover.miniSheet.activeTab", initialMiniSheetTabs[0].id), "rowHeights"), getStoredJson<number[]>("dimprover.miniSheet.rowHeights", [])), initialMiniSheetRows.length)
+  );
+  const [miniSheetHeaderMenu, setMiniSheetHeaderMenu] = useState<MiniSheetHeaderMenu>(null);
+  const [miniSheetZoom, setMiniSheetZoom] = useState(() =>
+    Number(getStoredString("dimprover.miniSheet.zoom", "100"))
+  );
+  const [miniSheetHelpOpen, setMiniSheetHelpOpen] = useState(() =>
+    getStoredBoolean("dimprover.miniSheet.helpOpen", false)
+  );
+  const [miniSheetPrintView, setMiniSheetPrintView] = useState(() =>
+    getStoredBoolean("dimprover.miniSheet.printView", false)
+  );
+  const [miniSheetUndoStack, setMiniSheetUndoStack] = useState<string[][][]>([]);
+  const [miniSheetRedoStack, setMiniSheetRedoStack] = useState<string[][][]>([]);
+  const [selectedMiniSheetTextColor, setSelectedMiniSheetTextColor] = useState(() =>
+    getStoredString("dimprover.miniSheet.selectedTextColor", "#0f172a")
+  );
+  const [selectedMiniSheetBgColor, setSelectedMiniSheetBgColor] = useState(() =>
+    getStoredString("dimprover.miniSheet.selectedBgColor", "#ffffff")
+  );
+  const [selectedMiniSheetBorderColor, setSelectedMiniSheetBorderColor] = useState(() =>
+    getStoredString("dimprover.miniSheet.selectedBorderColor", "#94a3b8")
+  );
+  const [editingMiniSheetCell, setEditingMiniSheetCell] = useState<MiniSheetCell | null>(null);
+  const [miniSheetFormulaBar, setMiniSheetFormulaBar] = useState(() =>
+    getStoredString("dimprover.miniSheet.formulaBar")
+  );
+  const [miniSheetSaveStatus, setMiniSheetSaveStatus] = useState(() =>
+    getStoredString("dimprover.miniSheet.saveStatus")
+  );
+  const miniSheetSelectionStartRef = useRef<MiniSheetCell | null>(null);
+  const miniSheetInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const miniSheetFormulaTargetRef = useRef<MiniSheetCell | null>(null);
+  const miniSheetFormulaSelectionRef = useRef(false);
+  const miniSheetFormulaCursorRef = useRef<number | null>(null);
+  const miniSheetFormulaLastRangeRef = useRef<{ targetKey: string; range: string } | null>(null);
+  const miniSheetMouseSelectingRef = useRef(false);
+  const [miniSheetSize, setMiniSheetSize] = useState(() =>
+    getStoredJson("dimprover.miniSheet.size", {
+      width: miniSheetPanelWidth,
+      height: miniSheetPanelHeight,
+    })
+  );
+  const [selectedMiniSheetCells, setSelectedMiniSheetCells] = useState<MiniSheetCell[]>(() =>
+    getStoredJson<MiniSheetCell[]>("dimprover.miniSheet.selectedCells", [])
+  );
+  const [miniSheetDecimalPlaces, setMiniSheetDecimalPlaces] = useState(() =>
+    Number(getStoredString("dimprover.miniSheet.decimalPlaces", "0"))
+  );
+  const [miniSheetCurrency, setMiniSheetCurrency] = useState<MiniSheetCurrency>(() =>
+    "none" as MiniSheetCurrency
+  );
+  const [miniSheetFxRate, setMiniSheetFxRate] = useState(() =>
+    Number(getStoredString("dimprover.miniSheet.fxRate", "390"))
+  );
+  const [miniSheetFxAmount, setMiniSheetFxAmount] = useState(() =>
+    getStoredString("dimprover.miniSheet.fxAmount", "")
+  );
+  const [miniSheetFxCurrency, setMiniSheetFxCurrency] = useState<Exclude<MiniSheetCurrency, "none">>(() =>
+    (getStoredString("dimprover.miniSheet.fxCurrency", "EUR") as Exclude<MiniSheetCurrency, "none">)
+  );
+  const [miniSheetFxTargetCurrency, setMiniSheetFxTargetCurrency] = useState<Exclude<MiniSheetCurrency, "none">>(() =>
+    (getStoredString("dimprover.miniSheet.fxTargetCurrency", "HUF") as Exclude<MiniSheetCurrency, "none">)
+  );
+  const [miniSheetResult, setMiniSheetResult] = useState(() =>
+    getStoredString("dimprover.miniSheet.result")
+  );
+  const [miniSheetFxStatus, setMiniSheetFxStatus] = useState(() =>
+    getStoredString("dimprover.miniSheet.fxStatus", "")
+  );
+  const [miniSheetFxRates, setMiniSheetFxRates] = useState<Record<string, number>>(() =>
+    getStoredJson<Record<string, number>>("dimprover.miniSheet.fxRates", {})
+  );
+  const [miniSheetFilterActive, setMiniSheetFilterActive] = useState(() =>
+    getStoredBoolean("dimprover.miniSheet.filterActive", false)
+  );
+  const [miniSheetFilterRow, setMiniSheetFilterRow] = useState(() =>
+    Number(getStoredString("dimprover.miniSheet.filterRow", "0"))
+  );
+  const [miniSheetFilterCol, setMiniSheetFilterCol] = useState(() =>
+    Number(getStoredString("dimprover.miniSheet.filterCol", "0"))
+  );
+  const [miniSheetFilterText, setMiniSheetFilterText] = useState(() =>
+    getStoredString("dimprover.miniSheet.filterText")
+  );
+  const [miniSheetFilterValues, setMiniSheetFilterValues] = useState<string[]>(() =>
+    getStoredJson<string[]>("dimprover.miniSheet.filterValues", [])
+  );
+  const [miniSheetFilterPanelOpen, setMiniSheetFilterPanelOpen] = useState(false);
+  const [miniSheetSearchText, setMiniSheetSearchText] = useState(() =>
+    getStoredString("dimprover.miniSheet.searchText")
+  );
+  const [miniSheetSearchMatches, setMiniSheetSearchMatches] = useState<MiniSheetCell[]>([]);
+  const [miniSheetSearchIndex, setMiniSheetSearchIndex] = useState(0);
+  const [title, setTitle] = useState(() =>
+    getStoredString("dimprover.quickNote.title")
+  );
+  const [summary, setSummary] = useState(() =>
+    getStoredString("dimprover.quickNote.summary")
+  );
+  const [body, setBody] = useState(() =>
+    getStoredString("dimprover.quickNote.body")
+  );
+  const [topic, setTopic] = useState(() =>
+    getStoredString("dimprover.quickNote.topic", quickNoteTopics[0].value)
+  );
+  const [projectTarget, setProjectTarget] = useState(() =>
+    getStoredString("dimprover.quickNote.projectTarget", quickNoteProjectTargets[0].value)
+  );
+  const [size, setSize] = useState(() =>
+    (() => {
+      const storedSize = getStoredJson("dimprover.quickNote.size", {
+        width: quickNoteDefaultWidth,
+        height: quickNoteDefaultHeight,
+      });
+
+      return {
+        width: storedSize.width,
+        height: Math.max(storedSize.height, quickNoteDefaultHeight),
+      };
+    })()
+  );
+
+  useEffect(() => {
+    const normalizedHeights = normalizeMiniSheetRowHeights(miniSheetRowHeights, miniSheetRows.length);
+    if (normalizedHeights.some((height, index) => height !== miniSheetRowHeights[index])) {
+      updateMiniSheetRowHeights(normalizedHeights);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function bringFloatingWindowToFront(windowKey: FloatingWindowKey) {
+    const nextTop = Math.max(...Object.values(floatingZOrder)) + 1;
+    const nextZOrder = { ...floatingZOrder, [windowKey]: nextTop };
+    setFloatingZOrder(nextZOrder);
+    setStoredValue("dimprover.floating.zOrder", nextZOrder);
+  }
+
+  function updateNoteOpen(open: boolean) {
+    setNoteOpen(open);
+    setStoredValue("dimprover.quickNote.open", open);
+  }
+
+  function updateLibraryOpen(open: boolean) {
+    setLibraryOpen(open);
+    setStoredValue("dimprover.quickNote.libraryOpen", open);
+  }
+
+  function updateCalculatorOpen(open: boolean) {
+    setCalculatorOpen(open);
+    setStoredValue("dimprover.calculator.open", open);
+  }
+
+  function updateMiniSheetOpen(open: boolean) {
+    setMiniSheetOpen(open);
+    setStoredValue("dimprover.miniSheet.open", open);
+  }
+
+  function updateScientificMode(open: boolean) {
+    setScientificMode(open);
+    setStoredValue("dimprover.calculator.scientificMode", open);
+  }
+
+  function updateCalculatorInput(value: string) {
+    setCalculatorInput(value);
+    setStoredValue("dimprover.calculator.input", value);
+  }
+
+  function updateCalculatorResult(value: string) {
+    setCalculatorResult(value);
+    setStoredValue("dimprover.calculator.result", value);
+  }
+
+  function updateCalculatorLog(value: string[]) {
+    setCalculatorLog(value);
+    setStoredValue("dimprover.calculator.log", value);
+  }
+
+  function updateCalculatorPosition(value: { x: number; y: number }) {
+    setCalculatorPosition(value);
+    setStoredValue("dimprover.calculator.position", value);
+  }
+
+  function updateMiniSheetPosition(value: { x: number; y: number }) {
+    setMiniSheetPosition(value);
+    setStoredValue("dimprover.miniSheet.position", value);
+  }
+
+  function updateMiniSheetTabs(tabs: MiniSheetTab[]) {
+    setMiniSheetTabs(tabs);
+    setStoredValue("dimprover.miniSheet.tabs", tabs);
+  }
+
+  function switchMiniSheetTab(tabId: string) {
+    setActiveMiniSheetTabId(tabId);
+    setStoredValue("dimprover.miniSheet.activeTab", tabId);
+    const nextData = getStoredJson<string[][]>(miniSheetTabKey(tabId, "data"), createEmptySheetData());
+    const nextColumns = getStoredJson<string[]>(miniSheetTabKey(tabId, "columns"), initialMiniSheetColumns);
+    const nextRows = getStoredJson<number[]>(miniSheetTabKey(tabId, "rows"), initialMiniSheetRows);
+    setMiniSheetData(nextData);
+    setMiniSheetColumns(nextColumns);
+    setMiniSheetRows(nextRows);
+    setMiniSheetAlignments(getStoredJson<Record<string, MiniSheetAlign>>(miniSheetTabKey(tabId, "alignments"), {}));
+    setMiniSheetStyles(getStoredJson<Record<string, MiniSheetCellStyle>>(miniSheetTabKey(tabId, "styles"), {}));
+    setMiniSheetFormulas(getStoredJson<MiniSheetFormulaMap>(miniSheetTabKey(tabId, "formulas"), {}));
+    setMiniSheetColumnWidths(getStoredJson<number[]>(miniSheetTabKey(tabId, "columnWidths"), Array.from({ length: nextColumns.length }, () => 96)));
+    setMiniSheetRowHeights(normalizeMiniSheetRowHeights(getStoredJson<number[]>(miniSheetTabKey(tabId, "rowHeights"), []), nextRows.length));
+    updateMiniSheetSelection([]);
+    updateMiniSheetFormulaBar("");
+    setEditingMiniSheetCell(null);
+  }
+
+  function addMiniSheetTab() {
+    const id = createMiniSheetTabId();
+    const nextTab = { id, name: `Munka${miniSheetTabs.length + 1}` };
+    updateMiniSheetTabs([...miniSheetTabs, nextTab]);
+    setStoredValue(miniSheetTabKey(id, "data"), createEmptySheetData());
+    setStoredValue(miniSheetTabKey(id, "columns"), initialMiniSheetColumns);
+    setStoredValue(miniSheetTabKey(id, "rows"), initialMiniSheetRows);
+    setStoredValue(miniSheetTabKey(id, "alignments"), {});
+    setStoredValue(miniSheetTabKey(id, "styles"), {});
+    setStoredValue(miniSheetTabKey(id, "formulas"), {});
+    setStoredValue(miniSheetTabKey(id, "columnWidths"), Array.from({ length: initialMiniSheetColumns.length }, () => 96));
+    setStoredValue(miniSheetTabKey(id, "rowHeights"), Array.from({ length: initialMiniSheetRows.length }, () => miniSheetDefaultRowHeight));
+    switchMiniSheetTab(id);
+  }
+
+  function renameMiniSheetTab(tabId: string) {
+    const currentName = miniSheetTabs.find((tab) => tab.id === tabId)?.name ?? "Munka";
+    const nextName = window.prompt("Táblázatfül neve", currentName)?.trim();
+    if (!nextName) return;
+    updateMiniSheetTabs(miniSheetTabs.map((tab) => tab.id === tabId ? { ...tab, name: nextName } : tab));
+  }
+
+  function deleteMiniSheetTab(tabId: string) {
+    if (miniSheetTabs.length <= 1) return;
+    const nextTabs = miniSheetTabs.filter((tab) => tab.id !== tabId);
+    updateMiniSheetTabs(nextTabs);
+    if (activeMiniSheetTabId === tabId) {
+      switchMiniSheetTab(nextTabs[0].id);
+    }
+  }
+
+  function setMiniSheetFormulaForCell(rowIndex: number, colIndex: number, value: string) {
+    const key = cellKey(rowIndex, colIndex);
+    const nextFormulas = { ...miniSheetFormulas };
+
+    if (value.trim().startsWith("=")) {
+      nextFormulas[key] = value;
+    } else if (!value.trim()) {
+      delete nextFormulas[key];
+    }
+
+    updateMiniSheetFormulas(nextFormulas);
+  }
+
+  function updateMiniSheetCell(rowIndex: number, colIndex: number, value: string) {
+    pushMiniSheetUndoState();
+    const nextData = miniSheetData.map((row, currentRowIndex) =>
+      row.map((cell, currentColIndex) =>
+        currentRowIndex === rowIndex && currentColIndex === colIndex ? value : cell
+      )
+    );
+
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+  }
+
+  function updateMiniSheetSize(value: { width: number; height: number }) {
+    setMiniSheetSize(value);
+    setStoredValue("dimprover.miniSheet.size", value);
+  }
+
+  function updateMiniSheetSelection(cells: MiniSheetCell[]) {
+    setSelectedMiniSheetCells(cells);
+    setStoredValue("dimprover.miniSheet.selectedCells", cells);
+
+    if (cells[0]) {
+      const key = cellKey(cells[0].rowIndex, cells[0].colIndex);
+      updateMiniSheetFormulaBar(miniSheetFormulas[key] ?? miniSheetData[cells[0].rowIndex]?.[cells[0].colIndex] ?? "");
+    }
+  }
+
+  function updateMiniSheetColumns(columns: string[]) {
+    setMiniSheetColumns(columns);
+    setStoredValue("dimprover.miniSheet.columns", columns);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "columns"), columns);
+  }
+
+  function updateMiniSheetRows(rows: number[]) {
+    setMiniSheetRows(rows);
+    setStoredValue("dimprover.miniSheet.rows", rows);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "rows"), rows);
+  }
+
+  function updateMiniSheetAlignments(alignments: Record<string, MiniSheetAlign>) {
+    setMiniSheetAlignments(alignments);
+    setStoredValue("dimprover.miniSheet.alignments", alignments);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "alignments"), alignments);
+  }
+
+  function updateMiniSheetStyles(styles: Record<string, MiniSheetCellStyle>) {
+    setMiniSheetStyles(styles);
+    setStoredValue("dimprover.miniSheet.styles", styles);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "styles"), styles);
+  }
+
+  function updateMiniSheetFormulas(formulas: MiniSheetFormulaMap) {
+    setMiniSheetFormulas(formulas);
+    setStoredValue("dimprover.miniSheet.formulas", formulas);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "formulas"), formulas);
+  }
+
+  function updateMiniSheetColumnWidths(widths: number[]) {
+    setMiniSheetColumnWidths(widths);
+    setStoredValue("dimprover.miniSheet.columnWidths", widths);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "columnWidths"), widths);
+  }
+
+  function updateMiniSheetRowHeights(heights: number[]) {
+    setMiniSheetRowHeights(heights);
+    setStoredValue("dimprover.miniSheet.rowHeights", heights);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "rowHeights"), heights);
+  }
+
+  function getMiniSheetGridTemplate() {
+    return `42px ${miniSheetColumns.map((_, index) => `${miniSheetColumnWidths[index] ?? 96}px`).join(" ")}`;
+  }
+
+  function getMiniSheetUsedRange() {
+    let maxRow = 0;
+    let maxCol = 0;
+    miniSheetData.forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        if (String(cell || "").trim()) {
+          maxRow = Math.max(maxRow, rowIndex);
+          maxCol = Math.max(maxCol, colIndex);
+        }
+      });
+    });
+    return { maxRow: Math.max(maxRow, 0), maxCol: Math.max(maxCol, 0) };
+  }
+
+  function getMiniSheetGridMinWidth() {
+    return 42 + miniSheetColumns.reduce((total, _, index) => total + (miniSheetColumnWidths[index] ?? 96), 0);
+  }
+
+  function updateMiniSheetFormulaBar(value: string) {
+    setMiniSheetFormulaBar(value);
+    setStoredValue("dimprover.miniSheet.formulaBar", value);
+  }
+
+  function updateMiniSheetSaveStatus(value: string) {
+    setMiniSheetSaveStatus(value);
+    setStoredValue("dimprover.miniSheet.saveStatus", value);
+  }
+
+  function updateMiniSheetZoom(value: number) {
+    const nextZoom = clamp(value, 50, 200);
+    setMiniSheetZoom(nextZoom);
+    setStoredValue("dimprover.miniSheet.zoom", String(nextZoom));
+  }
+
+  function updateMiniSheetHelpOpen(open: boolean) {
+    setMiniSheetHelpOpen(open);
+    setStoredValue("dimprover.miniSheet.helpOpen", open);
+  }
+
+  function updateMiniSheetPrintView(open: boolean) {
+    setMiniSheetPrintView(open);
+    setStoredValue("dimprover.miniSheet.printView", open);
+  }
+
+  function cloneMiniSheetData(data = miniSheetData) {
+    return data.map((row) => [...row]);
+  }
+
+  function pushMiniSheetUndoState() {
+    setMiniSheetUndoStack((current) => [...current.slice(-24), cloneMiniSheetData()]);
+    setMiniSheetRedoStack([]);
+  }
+
+  function undoMiniSheetChange() {
+    setMiniSheetUndoStack((current) => {
+      if (!current.length) return current;
+      const previousData = current[current.length - 1];
+      setMiniSheetRedoStack((redo) => [...redo.slice(-24), cloneMiniSheetData()]);
+      setMiniSheetData(previousData);
+      setStoredValue("dimprover.miniSheet.data", previousData);
+      setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), previousData);
+      return current.slice(0, -1);
+    });
+  }
+
+  function redoMiniSheetChange() {
+    setMiniSheetRedoStack((current) => {
+      if (!current.length) return current;
+      const nextData = current[current.length - 1];
+      setMiniSheetUndoStack((undo) => [...undo.slice(-24), cloneMiniSheetData()]);
+      setMiniSheetData(nextData);
+      setStoredValue("dimprover.miniSheet.data", nextData);
+      setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+      return current.slice(0, -1);
+    });
+  }
+
+  function applyMiniSheetFormatToSelected(decimalPlaces = miniSheetDecimalPlaces, currency = miniSheetCurrency) {
+    if (!selectedMiniSheetCells.length) return;
+    pushMiniSheetUndoState();
+    pushMiniSheetUndoState();
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+    const nextData = miniSheetData.map((row, rowIndex) =>
+      row.map((cell, colIndex) => selectedKeys.has(cellKey(rowIndex, colIndex)) ? normalizeCellValue(cell, decimalPlaces, currency) : cell)
+    );
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+  }
+
+  function setSelectedMiniSheetAlignment(align: MiniSheetAlign) {
+    const nextAlignments = { ...miniSheetAlignments };
+    selectedMiniSheetCells.forEach((cell) => {
+      nextAlignments[cellKey(cell.rowIndex, cell.colIndex)] = align;
+    });
+    updateMiniSheetAlignments(nextAlignments);
+  }
+
+  function getMiniSheetCellAlignment(rowIndex: number, colIndex: number, value: string): MiniSheetAlign {
+    return miniSheetAlignments[cellKey(rowIndex, colIndex)] ?? (isNumericCell(value) ? "right" : "left");
+  }
+
+  function setSelectedMiniSheetFontSize(fontSize: number) {
+    setSelectedMiniSheetStyle({ fontSize });
+    const rowsToAdjust = [...new Set(selectedMiniSheetCells.map((cell) => cell.rowIndex))];
+    if (!rowsToAdjust.length) return;
+    const nextHeights = [...miniSheetRowHeights];
+    rowsToAdjust.forEach((rowIndex) => {
+      nextHeights[rowIndex] = Math.max(nextHeights[rowIndex] ?? 36, fontSize + 18);
+    });
+    updateMiniSheetRowHeights(nextHeights);
+  }
+
+  function setSelectedMiniSheetStyle(stylePatch: MiniSheetCellStyle) {
+    const nextStyles = { ...miniSheetStyles };
+    selectedMiniSheetCells.forEach((cell) => {
+      const key = cellKey(cell.rowIndex, cell.colIndex);
+      nextStyles[key] = { ...(nextStyles[key] ?? {}), ...stylePatch };
+    });
+    updateMiniSheetStyles(nextStyles);
+  }
+
+  function toggleSelectedMiniSheetStyle(styleKey: "bold" | "italic" | "underline" | "strike") {
+    const nextStyles = { ...miniSheetStyles };
+    selectedMiniSheetCells.forEach((cell) => {
+      const key = cellKey(cell.rowIndex, cell.colIndex);
+      const current = nextStyles[key] ?? {};
+      nextStyles[key] = { ...current, [styleKey]: !current[styleKey] };
+    });
+    updateMiniSheetStyles(nextStyles);
+  }
+
+  function getMiniSheetStyleClass(style: MiniSheetCellStyle) {
+    return [
+      style.bold ? "font-bold" : "font-normal",
+      style.italic ? "italic" : "not-italic",
+      style.underline ? "underline" : "",
+      style.strike ? "line-through" : "",
+      style.border === "soft" ? "" : "",
+      style.border === "thin" ? "" : "",
+      style.border === "thick" ? "" : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  function applyMiniSheetColor(styleKey: "textColor" | "bgColor" | "borderColor", color: string) {
+    setSelectedMiniSheetStyle({ [styleKey]: color });
+
+    if (styleKey === "textColor") {
+      setSelectedMiniSheetTextColor(color);
+      setStoredValue("dimprover.miniSheet.selectedTextColor", color);
+    }
+
+    if (styleKey === "bgColor") {
+      setSelectedMiniSheetBgColor(color);
+      setStoredValue("dimprover.miniSheet.selectedBgColor", color);
+    }
+
+    if (styleKey === "borderColor") {
+      setSelectedMiniSheetBorderColor(color);
+      setStoredValue("dimprover.miniSheet.selectedBorderColor", color);
+    }
+  }
+
+  function applyMiniSheetColorAndReset(
+    event: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>,
+    styleKey: "textColor" | "bgColor" | "borderColor"
+  ) {
+    if (!event.target.value) {
+      return;
+    }
+
+    applyMiniSheetColor(styleKey, event.target.value);
+  }
+
+  function pasteMiniSheetTable(startRowIndex: number, startColIndex: number, text: string) {
+    if (!text) {
+      return;
+    }
+
+    pushMiniSheetUndoState();
+    const rows = text.replace(/\r/g, "").split("\n").filter((row) => row.length > 0);
+    const parsedRows = rows.map((row) => row.split("	"));
+    const requiredRows = startRowIndex + parsedRows.length;
+    const requiredCols = startColIndex + Math.max(0, ...parsedRows.map((row) => row.length));
+    const nextRowCount = Math.max(miniSheetRows.length, requiredRows);
+    const nextColCount = Math.max(miniSheetColumns.length, requiredCols);
+    const nextData = Array.from({ length: nextRowCount }, (_, rowIndex) =>
+      Array.from({ length: nextColCount }, (_, colIndex) => miniSheetData[rowIndex]?.[colIndex] ?? "")
+    );
+    const nextFormulas = { ...miniSheetFormulas };
+
+    parsedRows.forEach((row, rowOffset) => {
+      row.forEach((value, colOffset) => {
+        const targetRow = startRowIndex + rowOffset;
+        const targetCol = startColIndex + colOffset;
+        nextData[targetRow][targetCol] = value;
+        if (value.trim().startsWith("=")) {
+          nextFormulas[cellKey(targetRow, targetCol)] = value;
+        } else {
+          delete nextFormulas[cellKey(targetRow, targetCol)];
+        }
+      });
+    });
+
+    const nextColumns = Array.from({ length: nextColCount }, (_, index) => getColumnName(index));
+    const nextRows = Array.from({ length: nextRowCount }, (_, index) => index + 1);
+    updateMiniSheetColumns(nextColumns);
+    updateMiniSheetRows(nextRows);
+    updateMiniSheetColumnWidths(Array.from({ length: nextColCount }, (_, index) => miniSheetColumnWidths[index] ?? 96));
+    updateMiniSheetRowHeights(Array.from({ length: nextRowCount }, (_, index) => miniSheetRowHeights[index] ?? 36));
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetFormulas(nextFormulas);
+  }
+
+  async function cutMiniSheetSelection() {
+    await copyMiniSheetSelection();
+    clearSelectedMiniSheetCells();
+  }
+
+  async function pasteMiniSheetFromClipboard() {
+    const target = selectedMiniSheetCells[0];
+    if (!target) {
+      return;
+    }
+
+    const text = await navigator.clipboard.readText();
+    pasteMiniSheetTable(target.rowIndex, target.colIndex, text);
+  }
+
+  function emailMiniSheetDraft() {
+    updateMiniSheetSaveStatus("E-mail küldés előkészítve. Címzett és küldési mód később kapcsolható.");
+  }
+
+  function addMiniSheetColumn(afterIndex: number) {
+    pushMiniSheetUndoState();
+    const nextColumns = Array.from({ length: miniSheetColumns.length + 1 }, (_, index) => getColumnName(index));
+    const nextData = miniSheetData.map((row) => [...row.slice(0, afterIndex + 1), "", ...row.slice(afterIndex + 1)]);
+    updateMiniSheetColumns(nextColumns);
+    updateMiniSheetColumnWidths([...miniSheetColumnWidths.slice(0, afterIndex + 1), 96, ...miniSheetColumnWidths.slice(afterIndex + 1)]);
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+  }
+
+  function addMiniSheetRow(afterIndex: number) {
+    pushMiniSheetUndoState();
+    const nextData = [...miniSheetData.slice(0, afterIndex + 1), Array.from({ length: miniSheetColumns.length }, () => ""), ...miniSheetData.slice(afterIndex + 1)];
+    updateMiniSheetRows(Array.from({ length: nextData.length }, (_, index) => index + 1));
+    updateMiniSheetRowHeights([...miniSheetRowHeights.slice(0, afterIndex + 1), 36, ...miniSheetRowHeights.slice(afterIndex + 1)]);
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+  }
+
+  function deleteMiniSheetColumn(columnIndex: number) {
+    if (miniSheetColumns.length <= 1) {
+      return;
+    }
+
+    pushMiniSheetUndoState();
+    const nextData = miniSheetData.map((row) =>
+      row.filter((_, currentColIndex) => currentColIndex !== columnIndex)
+    );
+    const nextColumns = Array.from({ length: miniSheetColumns.length - 1 }, (_, index) =>
+      getColumnName(index)
+    );
+    const nextAlignments: Record<string, MiniSheetAlign> = {};
+
+    Object.entries(miniSheetAlignments).forEach(([key, value]) => {
+      const [rowText, colText] = key.split("-");
+      const rowIndex = Number(rowText);
+      const colIndex = Number(colText);
+
+      if (colIndex < columnIndex) {
+        nextAlignments[cellKey(rowIndex, colIndex)] = value;
+      } else if (colIndex > columnIndex) {
+        nextAlignments[cellKey(rowIndex, colIndex - 1)] = value;
+      }
+    });
+
+    updateMiniSheetColumns(nextColumns);
+    updateMiniSheetColumnWidths(miniSheetColumnWidths.filter((_, index) => index !== columnIndex));
+    updateMiniSheetAlignments(nextAlignments);
+    updateMiniSheetStyles({});
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetSelection([]);
+  }
+
+  function deleteMiniSheetRow(rowIndex: number) {
+    if (miniSheetRows.length <= 1) {
+      return;
+    }
+
+    pushMiniSheetUndoState();
+    const nextData = miniSheetData.filter((_, currentRowIndex) => currentRowIndex !== rowIndex);
+    const nextRows = Array.from({ length: nextData.length }, (_, index) => index + 1);
+    const nextAlignments: Record<string, MiniSheetAlign> = {};
+
+    Object.entries(miniSheetAlignments).forEach(([key, value]) => {
+      const [rowText, colText] = key.split("-");
+      const currentRowIndex = Number(rowText);
+      const colIndex = Number(colText);
+
+      if (currentRowIndex < rowIndex) {
+        nextAlignments[cellKey(currentRowIndex, colIndex)] = value;
+      } else if (currentRowIndex > rowIndex) {
+        nextAlignments[cellKey(currentRowIndex - 1, colIndex)] = value;
+      }
+    });
+
+    updateMiniSheetRows(nextRows);
+    updateMiniSheetRowHeights(miniSheetRowHeights.filter((_, index) => index !== rowIndex));
+    updateMiniSheetAlignments(nextAlignments);
+    updateMiniSheetStyles({});
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetSelection([]);
+  }
+
+  function handleMiniSheetColumnHeaderClick(event: React.MouseEvent<HTMLButtonElement>, colIndex: number) {
+    if (event.ctrlKey && event.altKey) {
+      deleteMiniSheetColumn(colIndex);
+      return;
+    }
+
+    addMiniSheetColumn(colIndex);
+  }
+
+  function handleMiniSheetRowHeaderClick(event: React.MouseEvent<HTMLButtonElement>, rowIndex: number) {
+    if (event.ctrlKey && event.altKey) {
+      deleteMiniSheetRow(rowIndex);
+      return;
+    }
+
+    addMiniSheetRow(rowIndex);
+  }
+
+  function deleteMiniSheetRowsByIndexes(rowIndexes: number[]) {
+    const rowsToDelete = [...new Set(rowIndexes)].filter((index) => miniSheetRows.length > 1 && index >= 0 && index < miniSheetRows.length).sort((a, b) => b - a);
+    if (!rowsToDelete.length || miniSheetRows.length - rowsToDelete.length < 1) return;
+    pushMiniSheetUndoState();
+    const deleteSet = new Set(rowsToDelete);
+    const nextData = miniSheetData.filter((_, rowIndex) => !deleteSet.has(rowIndex));
+    updateMiniSheetRows(Array.from({ length: nextData.length }, (_, index) => index + 1));
+    updateMiniSheetRowHeights(miniSheetRowHeights.filter((_, index) => !deleteSet.has(index)));
+    updateMiniSheetAlignments({});
+    updateMiniSheetStyles({});
+    updateMiniSheetFormulas({});
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetSelection([]);
+    setMiniSheetHeaderMenu(null);
+  }
+
+  function deleteMiniSheetColumnsByIndexes(colIndexes: number[]) {
+    const colsToDelete = [...new Set(colIndexes)].filter((index) => miniSheetColumns.length > 1 && index >= 0 && index < miniSheetColumns.length).sort((a, b) => b - a);
+    if (!colsToDelete.length || miniSheetColumns.length - colsToDelete.length < 1) return;
+    pushMiniSheetUndoState();
+    const deleteSet = new Set(colsToDelete);
+    const nextData = miniSheetData.map((row) => row.filter((_, colIndex) => !deleteSet.has(colIndex)));
+    const nextColumns = Array.from({ length: miniSheetColumns.length - colsToDelete.length }, (_, index) => getColumnName(index));
+    updateMiniSheetColumns(nextColumns);
+    updateMiniSheetColumnWidths(miniSheetColumnWidths.filter((_, index) => !deleteSet.has(index)));
+    updateMiniSheetAlignments({});
+    updateMiniSheetStyles({});
+    updateMiniSheetFormulas({});
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetSelection([]);
+    setMiniSheetHeaderMenu(null);
+  }
+
+  function deleteSelectedMiniSheetRows() {
+    if (!selectedMiniSheetCells.length) return;
+    deleteMiniSheetRowsByIndexes(selectedMiniSheetCells.map((cell) => cell.rowIndex));
+  }
+
+  function deleteSelectedMiniSheetColumns() {
+    if (!selectedMiniSheetCells.length) return;
+    deleteMiniSheetColumnsByIndexes(selectedMiniSheetCells.map((cell) => cell.colIndex));
+  }
+
+  function clearSelectedMiniSheetCells() {
+    if (!selectedMiniSheetCells.length) {
+      return;
+    }
+
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+    const nextData = miniSheetData.map((row, rowIndex) =>
+      row.map((cell, colIndex) => selectedKeys.has(cellKey(rowIndex, colIndex)) ? "" : cell)
+    );
+
+    const nextFormulas = { ...miniSheetFormulas };
+    selectedMiniSheetCells.forEach((cell) => delete nextFormulas[cellKey(cell.rowIndex, cell.colIndex)]);
+
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetFormulas(nextFormulas);
+    updateMiniSheetFormulaBar("");
+    setEditingMiniSheetCell(null);
+  }
+
+  function insertMiniSheetColumnRight() {
+    const colIndex = selectedMiniSheetCells[0]?.colIndex ?? miniSheetColumns.length - 1;
+    addMiniSheetColumn(colIndex);
+  }
+
+  function insertMiniSheetRowBelow() {
+    const rowIndex = selectedMiniSheetCells[0]?.rowIndex ?? miniSheetRows.length - 1;
+    addMiniSheetRow(rowIndex);
+  }
+
+  function selectMiniSheetRange(from: MiniSheetCell, to: MiniSheetCell) {
+    const cells: MiniSheetCell[] = [];
+    for (let rowIndex = Math.min(from.rowIndex, to.rowIndex); rowIndex <= Math.max(from.rowIndex, to.rowIndex); rowIndex += 1) {
+      for (let colIndex = Math.min(from.colIndex, to.colIndex); colIndex <= Math.max(from.colIndex, to.colIndex); colIndex += 1) {
+        cells.push({ rowIndex, colIndex });
+      }
+    }
+    updateMiniSheetSelection(cells);
+    updateMiniSheetFormulaFromSelection(cells);
+  }
+
+  function updateMiniSheetDecimalPlaces(value: number) {
+    setMiniSheetDecimalPlaces(value);
+    setStoredValue("dimprover.miniSheet.decimalPlaces", String(value));
+    applyMiniSheetFormatToSelected(value, miniSheetCurrency);
+  }
+
+  function updateMiniSheetCurrency(value: MiniSheetCurrency) {
+    setMiniSheetCurrency(value);
+    setStoredValue("dimprover.miniSheet.currency", value);
+
+    if (!selectedMiniSheetCells.length) {
+      return;
+    }
+
+    pushMiniSheetUndoState();
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+    const nextData = miniSheetData.map((row, rowIndex) =>
+      row.map((cell, colIndex) => selectedKeys.has(cellKey(rowIndex, colIndex)) ? normalizeCellValue(cell, miniSheetDecimalPlaces, value) : cell)
+    );
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+
+    const activeCell = selectedMiniSheetCells[0];
+    if (activeCell) {
+      updateMiniSheetFormulaBar(nextData[activeCell.rowIndex]?.[activeCell.colIndex] ?? "");
+    }
+  }
+
+  function updateMiniSheetFxRate(value: number) {
+    setMiniSheetFxRate(value);
+    setStoredValue("dimprover.miniSheet.fxRate", String(value));
+  }
+
+  function currentMiniSheetFxOption(currency = miniSheetFxCurrency) {
+    return miniSheetFxOptions.find((option) => option.value === currency) ?? miniSheetFxOptions[0];
+  }
+
+  function getMiniSheetRate(currency: Exclude<MiniSheetCurrency, "none">) {
+    if (currency === "HUF") return 1;
+    return miniSheetFxRates[currency] || getFallbackMiniSheetRate(currency);
+  }
+
+  function getMiniSheetPairRate(from: Exclude<MiniSheetCurrency, "none">, to: Exclude<MiniSheetCurrency, "none">) {
+    if (from === to) return 1;
+    if (from === "HUF" && to !== "HUF") return getMiniSheetRate(to);
+    if (from !== "HUF" && to === "HUF") return getMiniSheetRate(from);
+    if (from !== "HUF" && to !== "HUF") return getMiniSheetRate(from);
+    return 1;
+  }
+
+  function convertMiniSheetAmountBetweenCurrencies(amount: number, from: Exclude<MiniSheetCurrency, "none">, to: Exclude<MiniSheetCurrency, "none">, pairRate = miniSheetFxRate) {
+    if (from === to) return amount;
+    const safePairRate = pairRate > 0 ? pairRate : getMiniSheetPairRate(from, to);
+    if (from === "HUF" && to !== "HUF") return amount / safePairRate;
+    if (from !== "HUF" && to === "HUF") return amount * safePairRate;
+    const amountInHuf = amount * getMiniSheetRate(from);
+    return amountInHuf / getMiniSheetRate(to);
+  }
+
+  function convertMiniSheetSelectedAmount(amount: number, from: Exclude<MiniSheetCurrency, "none">, to: Exclude<MiniSheetCurrency, "none">) {
+    return convertMiniSheetAmountBetweenCurrencies(amount, from, to, miniSheetFxRate);
+  }
+
+  function updateMiniSheetFxAmount(value: string) {
+    setMiniSheetFxAmount(value);
+    setStoredValue("dimprover.miniSheet.fxAmount", value);
+  }
+
+  function updateMiniSheetFxCurrency(value: Exclude<MiniSheetCurrency, "none">) {
+    setMiniSheetFxCurrency(value);
+    setStoredValue("dimprover.miniSheet.fxCurrency", value);
+    updateMiniSheetFxRate(getMiniSheetPairRate(value, miniSheetFxTargetCurrency));
+  }
+
+  function updateMiniSheetFxTargetCurrency(value: Exclude<MiniSheetCurrency, "none">) {
+    setMiniSheetFxTargetCurrency(value);
+    setStoredValue("dimprover.miniSheet.fxTargetCurrency", value);
+    updateMiniSheetFxRate(getMiniSheetPairRate(miniSheetFxCurrency, value));
+  }
+
+  function getMiniSheetFxQuickResult() {
+    const amount = parseSheetNumber(miniSheetFxAmount);
+    if (amount === null) return "-";
+    if (miniSheetFxCurrency === miniSheetFxTargetCurrency) return "Azonos pénznem nem választható";
+    const result = convertMiniSheetAmountBetweenCurrencies(amount, miniSheetFxCurrency, miniSheetFxTargetCurrency, miniSheetFxRate);
+    return formatSheetNumber(result, miniSheetFxTargetCurrency === "HUF" ? 0 : Math.max(2, miniSheetDecimalPlaces), miniSheetFxTargetCurrency);
+  }
+
+  function updateMiniSheetFxStatus(value: string) {
+    setMiniSheetFxStatus(value);
+    setStoredValue("dimprover.miniSheet.fxStatus", value);
+  }
+
+  async function refreshMiniSheetFxRates(preferredCurrency = miniSheetFxCurrency) {
+    try {
+      const response = await fetch("/api/mnb-rates", { cache: "no-store" });
+      if (!response.ok) throw new Error("MNB árfolyam nem elérhető");
+      const xmlText = await response.text();
+      const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+      const nextRates: Record<string, number> = { HUF: 1 };
+      xml.querySelectorAll("Rate").forEach((rateNode) => {
+        const currency = rateNode.getAttribute("curr") as Exclude<MiniSheetCurrency, "none"> | null;
+        const unit = Number(rateNode.getAttribute("unit") || "1") || 1;
+        const raw = (rateNode.textContent || "").replace(/\s/g, "").replace(",", ".");
+        const value = Number(raw);
+        if (currency && Number.isFinite(value)) nextRates[currency] = value / unit;
+      });
+      setMiniSheetFxRates(nextRates);
+      setStoredValue("dimprover.miniSheet.fxRates", nextRates);
+      updateMiniSheetFxRate(getMiniSheetPairRate(preferredCurrency, miniSheetFxTargetCurrency));
+      updateMiniSheetFxStatus("✓ MNB középárfolyam frissítve");
+    } catch {
+      updateMiniSheetFxStatus("⚠ MNB árfolyam nem érhető el, mentett/alap árfolyam használatban");
+    }
+  }
+
+  function getMiniSheetActiveCellForFx(): MiniSheetCell | null {
+    const activeElement = document.activeElement as HTMLElement | null;
+    const activeCellElement = activeElement?.closest("[data-mini-row][data-mini-col]") as HTMLElement | null;
+
+    if (activeCellElement?.dataset.miniRow !== undefined && activeCellElement.dataset.miniCol !== undefined) {
+      return {
+        rowIndex: Number(activeCellElement.dataset.miniRow),
+        colIndex: Number(activeCellElement.dataset.miniCol),
+      };
+    }
+
+    return selectedMiniSheetCells[0] ?? null;
+  }
+
+  function getMiniSheetVisibleCellValue(cell: MiniSheetCell) {
+    const input = miniSheetInputRefs.current[cellKey(cell.rowIndex, cell.colIndex)];
+    return input?.value ?? "";
+  }
+
+  function writeMiniSheetFxConversionBelow() {
+    const sourceCell = getMiniSheetActiveCellForFx();
+    if (!sourceCell) {
+      updateMiniSheetResult("⚠ Nincs kijelölt cella az átszámításhoz");
+      updateMiniSheetFxStatus("⚠ Jelölj ki egy pénznemes cellát");
+      return;
+    }
+
+    const storedValue = miniSheetData[sourceCell.rowIndex]?.[sourceCell.colIndex] ?? "";
+    const visibleValue = getMiniSheetVisibleCellValue(sourceCell);
+    const formulaBarValue = miniSheetFormulaBar || "";
+    const candidateValues = [storedValue, visibleValue, formulaBarValue].filter(Boolean);
+    const sourceNumber = candidateValues.map(parseSheetNumber).find((value): value is number => value !== null) ?? null;
+    let detectedCurrency = candidateValues.map(detectMiniSheetCurrency).find((currency) => currency !== "none") ?? "none";
+
+    // Ha a cellában a szám már megvan, de a pénznem csak a felső jelölőben van kiválasztva
+    // (például manuális beírás után Ft jelölő), akkor azt tekintjük forrás-pénznemnek.
+    if (detectedCurrency === "none" && miniSheetCurrency !== "none" && sourceNumber !== null) {
+      detectedCurrency = miniSheetCurrency;
+    }
+
+    if (sourceNumber === null) {
+      updateMiniSheetResult("⚠ Nincs átszámítható számérték a kijelölt cellában");
+      updateMiniSheetFxStatus("⚠ A kijelölt cellában nincs számérték");
+      return;
+    }
+
+    if (detectedCurrency === "none") {
+      updateMiniSheetResult("⚠ Nincs azonosított pénznemű kijelölt érték");
+      updateMiniSheetFxStatus("⚠ A kijelölt cellában nincs felismerhető pénznem");
+      return;
+    }
+
+    const sourceCurrency = detectedCurrency as Exclude<MiniSheetCurrency, "none">;
+    const targetCurrency = miniSheetFxTargetCurrency;
+    if (sourceCurrency === targetCurrency) {
+      updateMiniSheetResult("⚠ Azonos valutanem nem lehet");
+      updateMiniSheetFxStatus("⚠ Válassz eltérő célpénznemet");
+      return;
+    }
+    const pairRate = getMiniSheetPairRate(sourceCurrency, targetCurrency);
+    const effectiveRate = miniSheetFxRate > 0 ? miniSheetFxRate : pairRate;
+    updateMiniSheetFxAmount(String(sourceNumber));
+    setMiniSheetFxCurrency(sourceCurrency);
+    setStoredValue("dimprover.miniSheet.fxCurrency", sourceCurrency);
+    updateMiniSheetFxRate(effectiveRate);
+    const resultValue = convertMiniSheetAmountBetweenCurrencies(sourceNumber, sourceCurrency, targetCurrency, effectiveRate);
+    const formattedResult = formatSheetNumber(resultValue, targetCurrency === "HUF" ? 0 : Math.max(2, miniSheetDecimalPlaces), targetCurrency);
+    let nextData = miniSheetData.map((row) => [...row]);
+    let nextRows = [...miniSheetRows];
+    let nextHeights = [...miniSheetRowHeights];
+    const ensureRow = (rowIndex: number) => {
+      while (nextRows.length <= rowIndex) {
+        nextRows = [...nextRows, nextRows.length + 1];
+        nextHeights = [...nextHeights, miniSheetDefaultRowHeight];
+        nextData = [...nextData, Array.from({ length: miniSheetColumns.length }, () => "")];
+      }
+    };
+    let targetRow = sourceCell.rowIndex + 1;
+    const targetCol = sourceCell.colIndex;
+    ensureRow(targetRow);
+    while ((nextData[targetRow]?.[targetCol] ?? "").trim()) {
+      targetRow += 1;
+      ensureRow(targetRow);
+    }
+    pushMiniSheetUndoState();
+    const shownRate = effectiveRate > 0 ? effectiveRate : pairRate;
+    const rateCellText = `Árfolyam: ${formatSheetNumber(shownRate, 2, "none")} ${getMiniSheetCurrencyLabel(sourceCurrency)} / ${getMiniSheetCurrencyLabel(targetCurrency)}`;
+    nextData[targetRow][targetCol] = formattedResult;
+    if (targetCol + 1 < miniSheetColumns.length && !(nextData[targetRow]?.[targetCol + 1] ?? "").trim()) {
+      nextData[targetRow][targetCol + 1] = rateCellText;
+    } else if (targetCol > 0 && !(nextData[targetRow]?.[targetCol - 1] ?? "").trim()) {
+      nextData[targetRow][targetCol - 1] = rateCellText;
+    }
+    if (nextRows.length !== miniSheetRows.length) {
+      updateMiniSheetRows(nextRows);
+      updateMiniSheetRowHeights(nextHeights);
+    }
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetSelection([{ rowIndex: targetRow, colIndex: targetCol }]);
+    updateMiniSheetResult(`✓ Azonosított pénznem: ${getMiniSheetCurrencyLabel(sourceCurrency)} → ${getMiniSheetCurrencyLabel(targetCurrency)}`);
+    updateMiniSheetFxStatus(`✓ ${formatSheetNumber(sourceNumber, sourceCurrency === "HUF" ? 0 : Math.max(2, miniSheetDecimalPlaces), sourceCurrency)} átszámolva: ${formattedResult}`);
+  }
+
+  function updateMiniSheetResult(value: string) {
+    setMiniSheetResult(value);
+    setStoredValue("dimprover.miniSheet.result", value);
+  }
+
+  function updateMiniSheetSearchText(value: string) {
+    setMiniSheetSearchText(value);
+    setStoredValue("dimprover.miniSheet.searchText", value);
+    if (!value.trim()) {
+      setMiniSheetSearchMatches([]);
+      setMiniSheetSearchIndex(0);
+    }
+  }
+
+  function runMiniSheetSearch(direction: "next" | "prev" = "next") {
+    const search = miniSheetSearchText.trim().toLowerCase();
+    if (!search) {
+      setMiniSheetSearchMatches([]);
+      updateMiniSheetResult("Adj meg keresési szöveget");
+      return;
+    }
+    const matches: MiniSheetCell[] = [];
+    miniSheetData.forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const formula = miniSheetFormulas[cellKey(rowIndex, colIndex)] ?? "";
+        if (String(cell).toLowerCase().includes(search) || formula.toLowerCase().includes(search)) {
+          matches.push({ rowIndex, colIndex });
+        }
+      });
+    });
+    setMiniSheetSearchMatches(matches);
+    if (!matches.length) {
+      updateMiniSheetResult("Nincs találat");
+      return;
+    }
+    const nextIndex = direction === "prev"
+      ? (miniSheetSearchIndex - 1 + matches.length) % matches.length
+      : miniSheetSearchIndex % matches.length;
+    const nextCell = matches[nextIndex];
+    setMiniSheetSearchIndex(direction === "prev" ? nextIndex : (nextIndex + 1) % matches.length);
+    updateMiniSheetSelection([nextCell]);
+    updateMiniSheetResult(`Keresés: ${nextIndex + 1}/${matches.length} találat`);
+    window.setTimeout(() => miniSheetInputRefs.current[cellKey(nextCell.rowIndex, nextCell.colIndex)]?.focus(), 0);
+  }
+
+  function updateQuickNoteSize(value: { width: number; height: number }) {
+    setSize(value);
+    setStoredValue("dimprover.quickNote.size", value);
+  }
+
+  function updateTitle(value: string) {
+    setTitle(value);
+    setStoredValue("dimprover.quickNote.title", value);
+  }
+
+  function updateSummary(value: string) {
+    setSummary(value);
+    setStoredValue("dimprover.quickNote.summary", value);
+  }
+
+  function updateBody(value: string) {
+    setBody(value);
+    setStoredValue("dimprover.quickNote.body", value);
+  }
+
+  function updateTopic(value: string) {
+    setTopic(value);
+    setStoredValue("dimprover.quickNote.topic", value);
+  }
+
+  function updateProjectTarget(value: string) {
+    setProjectTarget(value);
+    setStoredValue("dimprover.quickNote.projectTarget", value);
+  }
+
+
+  function startTopLeftResize(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = size.width;
+    const startHeight = size.height;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const maxWidth = Math.max(460, window.innerWidth - 80);
+      const maxHeight = Math.max(360, window.innerHeight - 110);
+
+      updateQuickNoteSize({
+        width: clamp(startWidth + startX - moveEvent.clientX, 420, maxWidth),
+        height: clamp(startHeight + startY - moveEvent.clientY, 510, maxHeight),
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "nwse-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function openCalculator() {
+    const nextOpenState = !calculatorOpen;
+
+    if (nextOpenState) {
+      const quickNoteLeft = window.innerWidth - 28 - size.width;
+      const quickNoteTop = window.innerHeight - 28 - 56 - 12 - size.height;
+
+      updateCalculatorPosition({
+        x: clamp(quickNoteLeft - calculatorPanelWidth - 28, 8, window.innerWidth - calculatorPanelWidth - 8),
+        y: clamp(quickNoteTop, 8, window.innerHeight - calculatorPanelHeight - 8),
+      });
+    }
+
+    updateCalculatorOpen(nextOpenState);
+    if (nextOpenState) {
+      bringFloatingWindowToFront("calculator");
+    }
+
+    window.setTimeout(() => {
+      calculatorInputRef.current?.focus();
+    }, 0);
+  }
+
+
+
+  function openMiniSheet() {
+    const nextOpenState = !miniSheetOpen;
+
+    if (nextOpenState) {
+      const quickNoteLeft = window.innerWidth - 28 - size.width;
+      const quickNoteTop = window.innerHeight - 28 - 56 - 12 - size.height;
+
+      updateMiniSheetPosition({
+        x: clamp(quickNoteLeft - miniSheetPanelWidth - 28, 8, window.innerWidth - miniSheetPanelWidth - 8),
+        y: clamp(quickNoteTop + 42, 8, window.innerHeight - miniSheetPanelHeight - 8),
+      });
+    }
+
+    updateMiniSheetOpen(nextOpenState);
+    if (nextOpenState) {
+      bringFloatingWindowToFront("miniSheet");
+    }
+  }
+
+
+  function startMiniSheetResize(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = miniSheetSize.width;
+    const startHeight = miniSheetSize.height;
+    const startLeft = miniSheetPosition.x;
+    const startTop = miniSheetPosition.y;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = clamp(startWidth + startX - moveEvent.clientX, 520, window.innerWidth - 80);
+      const nextHeight = clamp(startHeight + startY - moveEvent.clientY, 420, window.innerHeight - 110);
+
+      updateMiniSheetSize({
+        width: nextWidth,
+        height: nextHeight,
+      });
+
+      updateMiniSheetPosition({
+        x: clamp(startLeft + startWidth - nextWidth, 8, window.innerWidth - nextWidth - 8),
+        y: clamp(startTop + startHeight - nextHeight, 8, window.innerHeight - nextHeight - 8),
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "nwse-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function startMiniSheetBottomRightResize(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = miniSheetSize.width;
+    const startHeight = miniSheetSize.height;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      updateMiniSheetSize({
+        width: clamp(startWidth + moveEvent.clientX - startX, 520, window.innerWidth - 80),
+        height: clamp(startHeight + moveEvent.clientY - startY, 420, window.innerHeight - 110),
+      });
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "nwse-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function updateMiniSheetCellValueInData(data: string[][], rowIndex: number, colIndex: number, value: string) {
+    return data.map((row, currentRowIndex) =>
+      row.map((cell, currentColIndex) =>
+        currentRowIndex === rowIndex && currentColIndex === colIndex ? value : cell
+      )
+    );
+  }
+
+  function insertMiniSheetFormula(formulaText: string) {
+    const target = selectedMiniSheetCells[0] ?? { rowIndex: 0, colIndex: 0 };
+    updateMiniSheetSelection([target]);
+    updateMiniSheetCell(target.rowIndex, target.colIndex, formulaText);
+    setMiniSheetFormulaForCell(target.rowIndex, target.colIndex, formulaText);
+    updateMiniSheetFormulaBar(formulaText);
+    miniSheetFormulaTargetRef.current = target;
+    miniSheetFormulaSelectionRef.current = true;
+    window.setTimeout(() => {
+      const input = miniSheetInputRefs.current[cellKey(target.rowIndex, target.colIndex)];
+      const cursorPosition = formulaText.length;
+      input?.focus();
+      input?.setSelectionRange(cursorPosition, cursorPosition);
+    }, 0);
+  }
+
+  function handleMiniSheetFunctionSelect(value: string) {
+    if (!value) return;
+    insertMiniSheetFormula(value);
+  }
+
+  function updateMiniSheetFilterActive(open: boolean) {
+    setMiniSheetFilterActive(open);
+    setStoredValue("dimprover.miniSheet.filterActive", open);
+  }
+
+  function updateMiniSheetFilterText(value: string) {
+    setMiniSheetFilterText(value);
+    setStoredValue("dimprover.miniSheet.filterText", value);
+  }
+
+  function updateMiniSheetFilterValues(values: string[]) {
+    setMiniSheetFilterValues(values);
+    setStoredValue("dimprover.miniSheet.filterValues", values);
+  }
+
+  function getMiniSheetFilterUniqueValues(colIndex = miniSheetFilterCol) {
+    const values = miniSheetData
+      .map((row) => String(row[colIndex] ?? "").trim() || "(Üres)");
+    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "hu", { numeric: true }));
+  }
+
+  function setAllMiniSheetFilterValues(colIndex = miniSheetFilterCol) {
+    updateMiniSheetFilterValues(getMiniSheetFilterUniqueValues(colIndex));
+  }
+
+  function toggleMiniSheetFilterValue(value: string) {
+    const exists = miniSheetFilterValues.includes(value);
+    updateMiniSheetFilterValues(exists ? miniSheetFilterValues.filter((item) => item !== value) : [...miniSheetFilterValues, value]);
+  }
+
+  function toggleMiniSheetFilter(forcedColIndex?: number) {
+    const activeCell = selectedMiniSheetCells[0] ?? { rowIndex: 0, colIndex: 0 };
+    const nextColIndex = forcedColIndex ?? activeCell.colIndex;
+    setMiniSheetFilterRow(-1);
+    setMiniSheetFilterCol(nextColIndex);
+    setStoredValue("dimprover.miniSheet.filterRow", "-1");
+    setStoredValue("dimprover.miniSheet.filterCol", String(nextColIndex));
+    const nextActive = !miniSheetFilterActive;
+    updateMiniSheetFilterActive(nextActive);
+    if (nextActive) {
+      updateMiniSheetFilterValues(getMiniSheetFilterUniqueValues(nextColIndex));
+      setMiniSheetFilterPanelOpen(true);
+    } else {
+      updateMiniSheetFilterValues([]);
+      setMiniSheetFilterPanelOpen(false);
+    }
+  }
+
+  const miniSheetFilterUniqueValues = getMiniSheetFilterUniqueValues();
+  const miniSheetFilterHasCriteria = miniSheetFilterActive && (!!miniSheetFilterText.trim() || (miniSheetFilterValues.length > 0 && miniSheetFilterValues.length < miniSheetFilterUniqueValues.length));
+
+  function isMiniSheetRowVisible(rowIndex: number) {
+    if (!miniSheetFilterHasCriteria || rowIndex <= miniSheetFilterRow) {
+      return true;
+    }
+    const rawValue = String(miniSheetData[rowIndex]?.[miniSheetFilterCol] ?? "").trim() || "(Üres)";
+    const textMatches = !miniSheetFilterText.trim() || rawValue.toLowerCase().includes(miniSheetFilterText.toLowerCase());
+    const valueMatches = !miniSheetFilterValues.length || miniSheetFilterValues.includes(rawValue);
+    return textMatches && valueMatches;
+  }
+
+  function startMiniSheetFormulaRangeSelection(cell: MiniSheetCell) {
+    const formulaTarget = miniSheetFormulaTargetRef.current;
+    if (!formulaTarget) return false;
+    const isFormulaTarget = formulaTarget.rowIndex === cell.rowIndex && formulaTarget.colIndex === cell.colIndex;
+    if (!miniSheetFormulaSelectionRef.current || isFormulaTarget) return false;
+
+    miniSheetSelectionStartRef.current = cell;
+    miniSheetMouseSelectingRef.current = true;
+    updateMiniSheetSelection([cell]);
+    updateMiniSheetFormulaFromSelection([cell]);
+    return true;
+  }
+
+  function updateMiniSheetFormulaFromSelection(cells: MiniSheetCell[]) {
+    const target = miniSheetFormulaTargetRef.current;
+
+    if (!target || !cells.length || !miniSheetFormulaSelectionRef.current) {
+      return;
+    }
+
+    const targetKey = cellKey(target.rowIndex, target.colIndex);
+    const input = miniSheetInputRefs.current[targetKey];
+    const currentValue = input?.value || miniSheetFormulas[targetKey] || miniSheetFormulaBar || miniSheetData[target.rowIndex]?.[target.colIndex] || "";
+
+    if (!currentValue.trim().startsWith("=")) {
+      return;
+    }
+
+    const range = miniSheetRangeText(cells);
+    const formula = parseMiniSheetFormula(currentValue);
+    let nextFormula = currentValue;
+    let nextCursorPosition = currentValue.length;
+
+    if (formula && currentValue.includes("(")) {
+      const functionName = currentValue.slice(1, currentValue.indexOf("("));
+      nextFormula = `=${functionName}(${range})`;
+      nextCursorPosition = nextFormula.length;
+    } else {
+      const cursorPosition = input?.selectionStart ?? currentValue.length;
+      const before = currentValue.slice(0, cursorPosition);
+      const after = currentValue.slice(cursorPosition);
+      nextFormula = `${before}${range}${after}`;
+      nextCursorPosition = before.length + range.length;
+      miniSheetFormulaLastRangeRef.current = { targetKey, range };
+      miniSheetFormulaCursorRef.current = null;
+    }
+
+    updateMiniSheetCell(target.rowIndex, target.colIndex, nextFormula);
+    setMiniSheetFormulaForCell(target.rowIndex, target.colIndex, nextFormula);
+    updateMiniSheetFormulaBar(nextFormula);
+    window.setTimeout(() => {
+      const targetInput = miniSheetInputRefs.current[targetKey];
+      targetInput?.focus();
+      targetInput?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    }, 0);
+  }
+
+  function evaluateMiniSheetFormula(rowIndex: number, colIndex: number, value: string) {
+    const formula = parseMiniSheetFormula(value);
+
+    if (!formula || !formula.range) {
+      if (isMiniSheetSimpleFormula(value)) {
+        const expressionWithValues = replaceMiniSheetCellReferences(value.trim().slice(1), miniSheetData, { rowIndex, colIndex });
+        const rawResult = calculateExpression(expressionWithValues);
+
+        if (rawResult && !rawResult.startsWith("Hibás")) {
+          const numericResult = Number(rawResult);
+          const formattedResult = Number.isFinite(numericResult)
+            ? formatSheetNumber(numericResult, miniSheetDecimalPlaces, miniSheetCurrency)
+            : rawResult;
+          const nextData = updateMiniSheetCellValueInData(miniSheetData, rowIndex, colIndex, formattedResult);
+          setMiniSheetFormulaForCell(rowIndex, colIndex, value);
+          setMiniSheetData(nextData);
+          setStoredValue("dimprover.miniSheet.data", nextData);
+          setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+          updateMiniSheetFormulaBar(value);
+          updateMiniSheetResult(formattedResult);
+          miniSheetFormulaTargetRef.current = null;
+          miniSheetFormulaSelectionRef.current = false;
+          return formattedResult;
+        }
+
+        updateMiniSheetResult(rawResult || "Hibás képlet");
+      }
+
+      return null;
+    }
+
+    const rangeCells = resolveMiniSheetRange(formula.range, miniSheetColumns, miniSheetRows);
+    const values = getSelectedNumbers(miniSheetData, rangeCells);
+    const result = calculateMiniSheetOperation(values, formula.type);
+
+    if (result === null) {
+      updateMiniSheetResult("Nincs kijelölt számtartomány");
+      return null;
+    }
+
+    const formattedResult = formatSheetNumber(result, miniSheetDecimalPlaces, miniSheetCurrency);
+    const nextData = updateMiniSheetCellValueInData(miniSheetData, rowIndex, colIndex, formattedResult);
+    setMiniSheetFormulaForCell(rowIndex, colIndex, value);
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    updateMiniSheetFormulaBar(value);
+    updateMiniSheetResult(formattedResult);
+    miniSheetFormulaTargetRef.current = null;
+    miniSheetFormulaSelectionRef.current = false;
+
+    return formattedResult;
+  }
+
+  function handleMiniSheetCellChange(rowIndex: number, colIndex: number, value: string) {
+    updateMiniSheetCell(rowIndex, colIndex, value);
+    setMiniSheetFormulaForCell(rowIndex, colIndex, value);
+    updateMiniSheetFormulaBar(value);
+
+    if (value.trim().startsWith("=")) {
+      const targetKey = cellKey(rowIndex, colIndex);
+      const lastRange = miniSheetFormulaLastRangeRef.current;
+      if (lastRange?.targetKey === targetKey && !value.includes(lastRange.range)) {
+        miniSheetFormulaLastRangeRef.current = null;
+      }
+      miniSheetFormulaCursorRef.current = miniSheetInputRefs.current[targetKey]?.selectionStart ?? value.length;
+      miniSheetFormulaTargetRef.current = { rowIndex, colIndex };
+      miniSheetFormulaSelectionRef.current = true;
+
+      if (/^=(SUM|ÁTLAG|ATLAG|AVERAGE|MIN|MAX|COUNT)\(\)$/i.test(value)) {
+        window.setTimeout(() => {
+          const input = miniSheetInputRefs.current[cellKey(rowIndex, colIndex)];
+          const cursorPosition = value.indexOf("(") + 1;
+          input?.focus();
+          input?.setSelectionRange(cursorPosition, cursorPosition);
+        }, 0);
+      }
+    } else if (miniSheetFormulaTargetRef.current?.rowIndex === rowIndex && miniSheetFormulaTargetRef.current?.colIndex === colIndex) {
+      miniSheetFormulaTargetRef.current = null;
+      miniSheetFormulaSelectionRef.current = false;
+      miniSheetFormulaCursorRef.current = null;
+      miniSheetFormulaLastRangeRef.current = null;
+    }
+  }
+
+  function confirmMiniSheetCellAndMoveDown(rowIndex: number, colIndex: number, value: string) {
+    const formulaResult = evaluateMiniSheetFormula(rowIndex, colIndex, value);
+    const valueCurrency = detectMiniSheetCurrency(value);
+    const normalizedValue = formulaResult ?? normalizeCellValue(value, miniSheetDecimalPlaces, valueCurrency);
+
+    if (formulaResult === null) {
+      updateMiniSheetCell(rowIndex, colIndex, normalizedValue);
+    }
+
+    const nextRowIndex = rowIndex + 1;
+
+    if (nextRowIndex < miniSheetRows.length) {
+      updateMiniSheetSelection([{ rowIndex: nextRowIndex, colIndex }]);
+
+      window.setTimeout(() => {
+        miniSheetInputRefs.current[cellKey(nextRowIndex, colIndex)]?.focus();
+        miniSheetInputRefs.current[cellKey(nextRowIndex, colIndex)]?.select();
+      }, 0);
+    }
+  }
+
+  function fillMiniSheetSeriesFromCell(origin: MiniSheetCell, target: MiniSheetCell) {
+    const sourceValue = miniSheetData[origin.rowIndex]?.[origin.colIndex] ?? "";
+    const sourceNumber = parseSheetNumber(sourceValue);
+    if (sourceNumber === null || !isMiniSheetSeriesSeed(sourceValue)) return;
+
+    pushMiniSheetUndoState();
+    const nextData = miniSheetData.map((row) => [...row]);
+    const detectedCurrency = detectMiniSheetCurrency(sourceValue);
+    const horizontal = Math.abs(target.colIndex - origin.colIndex) >= Math.abs(target.rowIndex - origin.rowIndex);
+    const minRow = Math.min(origin.rowIndex, target.rowIndex);
+    const maxRow = Math.max(origin.rowIndex, target.rowIndex);
+    const minCol = Math.min(origin.colIndex, target.colIndex);
+    const maxCol = Math.max(origin.colIndex, target.colIndex);
+
+    for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex += 1) {
+      for (let colIndex = minCol; colIndex <= maxCol; colIndex += 1) {
+        const delta = horizontal ? colIndex - origin.colIndex : rowIndex - origin.rowIndex;
+        const nextValue = sourceNumber + delta;
+        const sourceHasOrdinalDot = /^\s*-?\d+[.,]\s*$/.test(sourceValue);
+        nextData[rowIndex][colIndex] = sourceHasOrdinalDot && detectedCurrency === "none"
+          ? `${formatSheetNumber(nextValue, miniSheetDecimalPlaces, "none")}.`
+          : formatSheetNumber(nextValue, miniSheetDecimalPlaces, detectedCurrency === "none" ? "none" : detectedCurrency);
+      }
+    }
+
+    setMiniSheetData(nextData);
+    setStoredValue("dimprover.miniSheet.data", nextData);
+    setStoredValue(miniSheetTabKey(activeMiniSheetTabId, "data"), nextData);
+    selectMiniSheetRange(origin, target);
+  }
+
+  function startMiniSheetFillHandle(event: React.MouseEvent<HTMLButtonElement>, origin: MiniSheetCell) {
+    event.preventDefault();
+    event.stopPropagation();
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      const element = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest("[data-mini-row][data-mini-col]") as HTMLElement | null;
+      if (element) {
+        const target = { rowIndex: Number(element.dataset.miniRow), colIndex: Number(element.dataset.miniCol) };
+        fillMiniSheetSeriesFromCell(origin, target);
+      }
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "crosshair";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function toggleMiniSheetCell(rowIndex: number, colIndex: number, multiSelect: boolean) {
+    const nextCell = { rowIndex, colIndex };
+
+    if (!multiSelect) {
+      updateMiniSheetSelection([nextCell]);
+      updateMiniSheetFormulaFromSelection([nextCell]);
+      return;
+    }
+
+    const key = cellKey(rowIndex, colIndex);
+    const exists = selectedMiniSheetCells.some((cell) => cellKey(cell.rowIndex, cell.colIndex) === key);
+
+    const nextSelection = exists
+      ? selectedMiniSheetCells.filter((cell) => cellKey(cell.rowIndex, cell.colIndex) !== key)
+      : [...selectedMiniSheetCells, nextCell];
+
+    updateMiniSheetSelection(nextSelection);
+    updateMiniSheetFormulaFromSelection(nextSelection);
+  }
+
+  function runMiniSheetOperation(operation: MiniSheetOperation) {
+    const values = getSelectedNumbers(miniSheetData, selectedMiniSheetCells);
+    const result = calculateMiniSheetOperation(values, operation);
+
+    if (result === null) {
+      updateMiniSheetResult("Nincs kijelölt számtartomány");
+      return;
+    }
+
+    updateMiniSheetResult(formatSheetNumber(result, miniSheetDecimalPlaces, miniSheetCurrency));
+  }
+
+  function applyMiniSheetFormulaBar() {
+    const target = selectedMiniSheetCells[0];
+
+    if (!target) {
+      return;
+    }
+
+    setEditingMiniSheetCell(target);
+    handleMiniSheetCellChange(target.rowIndex, target.colIndex, miniSheetFormulaBar);
+    miniSheetFormulaTargetRef.current = miniSheetFormulaBar.trim().startsWith("=") ? target : null;
+    miniSheetFormulaSelectionRef.current = miniSheetFormulaBar.trim().startsWith("=");
+  }
+
+  function saveMiniSheetDraft() {
+    setStoredValue("dimprover.miniSheet.savedSnapshot", {
+      data: miniSheetData,
+      columns: miniSheetColumns,
+      rows: miniSheetRows,
+      alignments: miniSheetAlignments,
+      styles: miniSheetStyles,
+      formulas: miniSheetFormulas,
+      columnWidths: miniSheetColumnWidths,
+      rowHeights: miniSheetRowHeights,
+      tabs: miniSheetTabs,
+      activeTabId: activeMiniSheetTabId,
+      savedAt: new Date().toISOString(),
+    });
+    updateMiniSheetSaveStatus("Mentve helyi vázlatként. Mentési cél később állítható.");
+  }
+
+  async function copyMiniSheetSelection() {
+    if (!selectedMiniSheetCells.length) {
+      return;
+    }
+
+    const rows = selectedMiniSheetCells.map((cell) => cell.rowIndex);
+    const cols = selectedMiniSheetCells.map((cell) => cell.colIndex);
+    const minRow = Math.min(...rows);
+    const maxRow = Math.max(...rows);
+    const minCol = Math.min(...cols);
+    const maxCol = Math.max(...cols);
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+
+    const text = Array.from({ length: maxRow - minRow + 1 }, (_, rowOffset) =>
+      Array.from({ length: maxCol - minCol + 1 }, (_, colOffset) => {
+        const rowIndex = minRow + rowOffset;
+        const colIndex = minCol + colOffset;
+
+        return selectedKeys.has(cellKey(rowIndex, colIndex)) ? miniSheetData[rowIndex]?.[colIndex] ?? "" : "";
+      }).join("\t")
+    ).join("\n");
+
+    await navigator.clipboard.writeText(text);
+  }
+
+  function convertMiniSheetCurrency(direction: "huf-to-eur" | "eur-to-huf") {
+    const convertedData = miniSheetData.map((row, rowIndex) =>
+      row.map((cell, colIndex) => {
+        const isSelected = selectedMiniSheetCells.some(
+          (selectedCell) => selectedCell.rowIndex === rowIndex && selectedCell.colIndex === colIndex
+        );
+        const numericValue = parseSheetNumber(cell);
+
+        if (!isSelected || numericValue === null || !miniSheetFxRate) {
+          return cell;
+        }
+
+        const convertedValue = direction === "huf-to-eur" ? numericValue / miniSheetFxRate : numericValue * miniSheetFxRate;
+        return formatSheetNumber(convertedValue, miniSheetDecimalPlaces, direction === "huf-to-eur" ? "EUR" : "HUF");
+      })
+    );
+
+    setMiniSheetData(convertedData);
+    setStoredValue("dimprover.miniSheet.data", convertedData);
+    updateMiniSheetCurrency(direction === "huf-to-eur" ? "EUR" : "HUF");
+  }
+
+  function selectMiniSheetColumnHeader(colIndex: number, multiSelect: boolean) {
+    const columnCells = miniSheetRows.map((_, rowIndex) => ({ rowIndex, colIndex }));
+
+    if (!multiSelect) {
+      updateMiniSheetSelection(columnCells);
+      return;
+    }
+
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+    const columnSelected = columnCells.every((cell) => selectedKeys.has(cellKey(cell.rowIndex, cell.colIndex)));
+    const nextCells = columnSelected
+      ? selectedMiniSheetCells.filter((cell) => cell.colIndex !== colIndex)
+      : [...selectedMiniSheetCells, ...columnCells.filter((cell) => !selectedKeys.has(cellKey(cell.rowIndex, cell.colIndex)))];
+
+    updateMiniSheetSelection(nextCells);
+  }
+
+  function selectMiniSheetRowHeader(rowIndex: number, multiSelect: boolean) {
+    const rowCells = miniSheetColumns.map((_, colIndex) => ({ rowIndex, colIndex }));
+
+    if (!multiSelect) {
+      updateMiniSheetSelection(rowCells);
+      return;
+    }
+
+    const selectedKeys = new Set(selectedMiniSheetCells.map((cell) => cellKey(cell.rowIndex, cell.colIndex)));
+    const rowSelected = rowCells.every((cell) => selectedKeys.has(cellKey(cell.rowIndex, cell.colIndex)));
+    const nextCells = rowSelected
+      ? selectedMiniSheetCells.filter((cell) => cell.rowIndex !== rowIndex)
+      : [...selectedMiniSheetCells, ...rowCells.filter((cell) => !selectedKeys.has(cellKey(cell.rowIndex, cell.colIndex)))];
+
+    updateMiniSheetSelection(nextCells);
+  }
+
+  function startMiniSheetColumnWidthResize(event: React.MouseEvent<HTMLSpanElement>, colIndex: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = miniSheetColumnWidths[colIndex] ?? 96;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidths = [...miniSheetColumnWidths];
+      nextWidths[colIndex] = clamp(startWidth + moveEvent.clientX - startX, 56, 320);
+      updateMiniSheetColumnWidths(nextWidths);
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function startMiniSheetRowHeightResize(event: React.MouseEvent<HTMLSpanElement>, rowIndex: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = miniSheetRowHeights[rowIndex] ?? 36;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextHeights = [...miniSheetRowHeights];
+      nextHeights[rowIndex] = clamp(startHeight + moveEvent.clientY - startY, 28, 140);
+      updateMiniSheetRowHeights(nextHeights);
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function setHeaderDimensionFromPrompt(menu: Exclude<MiniSheetHeaderMenu, null>) {
+    const currentValue = menu.type === "column" ? miniSheetColumnWidths[menu.index] ?? 96 : miniSheetRowHeights[menu.index] ?? 36;
+    const value = window.prompt(menu.type === "column" ? "Oszlopszélesség px-ben" : "Sormagasság px-ben", String(currentValue));
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return;
+    }
+
+    if (menu.type === "column") {
+      const nextWidths = [...miniSheetColumnWidths];
+      nextWidths[menu.index] = clamp(numericValue, 56, 320);
+      updateMiniSheetColumnWidths(nextWidths);
+    } else {
+      const nextHeights = [...miniSheetRowHeights];
+      nextHeights[menu.index] = clamp(numericValue, 28, 140);
+      updateMiniSheetRowHeights(nextHeights);
+    }
+
+    setMiniSheetHeaderMenu(null);
+  }
+
+  function startMiniSheetDrag(event: React.MouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startPosition = miniSheetPosition;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      updateMiniSheetPosition({
+        x: clamp(startPosition.x + moveEvent.clientX - startX, 8, window.innerWidth - miniSheetPanelWidth - 8),
+        y: clamp(startPosition.y + moveEvent.clientY - startY, 8, window.innerHeight - miniSheetPanelHeight - 8),
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "move";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function startCalculatorDrag(event: React.MouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startPosition = calculatorPosition;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      updateCalculatorPosition({
+        x: clamp(startPosition.x + moveEvent.clientX - startX, 8, window.innerWidth - calculatorPanelWidth - 8),
+        y: clamp(startPosition.y + moveEvent.clientY - startY, 8, window.innerHeight - calculatorPanelHeight - 8),
+      });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "move";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }
+
+  function evaluateCalculator() {
+    const result = calculateExpression(calculatorInput);
+    updateCalculatorResult(result);
+
+    if (calculatorInput.trim() && result && !result.startsWith("Hibás")) {
+      const nextLog = [`${calculatorInput} = ${result}`, ...calculatorLog].slice(0, 8);
+      updateCalculatorLog(nextLog);
+    }
+  }
+
+  function handleCalculatorButton(value: string) {
+    if (value === "=") {
+      evaluateCalculator();
+      return;
+    }
+
+    if (["sin", "cos", "tan", "sqrt", "log", "ln"].includes(value)) {
+      updateCalculatorInput(`${calculatorInput}${value}(`);
+      return;
+    }
+
+    updateCalculatorInput(`${calculatorInput}${value}`);
+  }
+
+  function renderMiniSheetColorDropdown(
+    label: string,
+    options: { value: string; label: string }[],
+    styleKey: "textColor" | "bgColor" | "borderColor",
+    currentColor: string
+  ) {
+    return (
+      <details className="relative rounded-lg bg-slate-200 text-slate-800 hover:bg-slate-300" onMouseLeave={(event) => event.currentTarget.removeAttribute("open")}>
+        <summary className="flex h-8 cursor-pointer list-none items-center gap-1 px-2 text-xs font-semibold">
+          <span>{label}</span>
+          <span className="h-3.5 w-3.5 rounded border border-slate-400" style={{ backgroundColor: currentColor }} />
+        </summary>
+        <div className="absolute left-0 top-10 z-[10120] grid w-44 grid-cols-6 gap-1 rounded-xl border border-slate-300 bg-white p-2 shadow-xl">
+          {options.map((color) => (
+            <button
+              key={color.value}
+              type="button"
+              onClick={(event) => {
+                applyMiniSheetColor(styleKey, color.value);
+                event.currentTarget.closest("details")?.removeAttribute("open");
+              }}
+              className="h-6 w-6 rounded border border-slate-300 hover:ring-2 hover:ring-slate-500"
+              style={{ backgroundColor: color.value }}
+              title={color.label}
+            />
+          ))}
+          <label className="col-span-6 mt-1 flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
+            Egyedi
+            <input type="color" value={currentColor} onChange={(event) => applyMiniSheetColorAndReset(event, styleKey)} className="h-6 w-8 cursor-pointer rounded border border-slate-200" />
+          </label>
+        </div>
+      </details>
+    );
+  }
+
+  function toggleMiniSheetMaximize() {
+    const isMaximized = miniSheetSize.width >= window.innerWidth - 96 && miniSheetSize.height >= window.innerHeight - 130;
+    if (isMaximized) {
+      updateMiniSheetSize({ width: miniSheetPanelWidth, height: miniSheetPanelHeight });
+      updateMiniSheetPosition(getDefaultMiniSheetPosition());
+      return;
+    }
+    updateMiniSheetPosition({ x: 48, y: 48 });
+    updateMiniSheetSize({ width: window.innerWidth - 96, height: window.innerHeight - 120 });
+  }
+
+  function toggleQuickNoteMaximize() {
+    const isMaximized = size.width >= window.innerWidth - 96 && size.height >= window.innerHeight - 130;
+    if (isMaximized) {
+      updateQuickNoteSize({ width: quickNoteDefaultWidth, height: quickNoteDefaultHeight });
+      return;
+    }
+    updateQuickNoteSize({ width: window.innerWidth - 96, height: window.innerHeight - 120 });
+  }
+
+  async function copyCalculatorWorkflow() {
+    const workflow = [
+      calculatorInput ? `Aktuális képlet: ${calculatorInput}` : null,
+      calculatorResult ? `Eredmény: ${calculatorResult}` : null,
+      calculatorLog.length ? `Előzmények:\n${calculatorLog.join("\n")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (workflow) {
+      await navigator.clipboard.writeText(workflow);
+    }
+  }
+
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (miniSheetOpen && event.key === "Escape") {
+        event.preventDefault();
+        setEditingMiniSheetCell(null);
+        miniSheetFormulaTargetRef.current = null;
+        miniSheetFormulaSelectionRef.current = false;
+        miniSheetFormulaLastRangeRef.current = null;
+        miniSheetFormulaCursorRef.current = null;
+        setMiniSheetFilterPanelOpen(false);
+        const activeCell = selectedMiniSheetCells[0];
+        if (activeCell) {
+          miniSheetInputRefs.current[cellKey(activeCell.rowIndex, activeCell.colIndex)]?.blur();
+        }
+        return;
+      }
+      if (miniSheetOpen && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        undoMiniSheetChange();
+        return;
+      }
+      if (miniSheetOpen && (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redoMiniSheetChange();
+        return;
+      }
+      if (!event.ctrlKey || !event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (!["0", "1", "2", "3", "5", "6", "9"].includes(key)) return;
+      event.preventDefault();
+
+      if (key === "9") {
+        if (miniSheetOpen) {
+          writeMiniSheetFxConversionBelow();
+          bringFloatingWindowToFront("miniSheet");
+        }
+      }
+
+      if (key === "1") {
+        updateCalculatorOpen(!calculatorOpen);
+        bringFloatingWindowToFront("calculator");
+        window.setTimeout(() => calculatorInputRef.current?.focus(), 0);
+      }
+
+      if (key === "2" || key === "5") {
+        updateMiniSheetOpen(!miniSheetOpen);
+        bringFloatingWindowToFront("miniSheet");
+        if (!miniSheetOpen) {
+          window.setTimeout(() => {
+            const target = selectedMiniSheetCells[0] ?? { rowIndex: 0, colIndex: 0 };
+            miniSheetInputRefs.current[cellKey(target.rowIndex, target.colIndex)]?.focus();
+          }, 0);
+        }
+      }
+
+      if (key === "3") {
+        updateNoteOpen(!noteOpen);
+        bringFloatingWindowToFront("quickNote");
+      }
+
+      if (key === "6") {
+        updateNoteOpen(true);
+        bringFloatingWindowToFront("quickNote");
+        window.setTimeout(toggleQuickNoteMaximize, 0);
+      }
+
+      if (key === "0") {
+        updateNoteOpen(false);
+        updateMiniSheetOpen(false);
+        updateCalculatorOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+    // dimprover floating shortcut handler
+  }, [noteOpen, miniSheetOpen, calculatorOpen, floatingZOrder, size, miniSheetSize, selectedMiniSheetCells, miniSheetData, miniSheetRows, miniSheetRowHeights, miniSheetColumns, miniSheetFxCurrency, miniSheetFxTargetCurrency, miniSheetFxRate, miniSheetDecimalPlaces]);
+
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const activeCell = selectedMiniSheetCells[0];
+      if (!activeCell) return;
+      const value = miniSheetData[activeCell.rowIndex]?.[activeCell.colIndex] ?? "";
+      const detectedCurrency = detectMiniSheetCurrency(value);
+      const detectedNumber = parseSheetNumber(value);
+      if (detectedCurrency !== "none" && detectedNumber !== null) {
+        updateMiniSheetFxAmount(String(detectedNumber));
+        setMiniSheetFxCurrency(detectedCurrency as Exclude<MiniSheetCurrency, "none">);
+        setStoredValue("dimprover.miniSheet.fxCurrency", detectedCurrency);
+        updateMiniSheetFxRate(getMiniSheetPairRate(detectedCurrency as Exclude<MiniSheetCurrency, "none">, miniSheetFxTargetCurrency));
+        updateMiniSheetFormulaBar(value);
+        updateMiniSheetResult(`✓ Azonosított pénznem: ${getMiniSheetCurrencyLabel(detectedCurrency)}`);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMiniSheetCells, miniSheetData]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      refreshMiniSheetFxRates(miniSheetFxCurrency);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (miniSheetFxCurrency === miniSheetFxTargetCurrency) {
+        updateMiniSheetFxStatus("⚠ Azonos valutanem nem lehet");
+      } else if (!miniSheetFxAmount.trim()) {
+        updateMiniSheetFxStatus("⚠ Adj meg összeget az árfolyam gyorsszámolóban");
+      } else if (parseSheetNumber(miniSheetFxAmount) === null) {
+        updateMiniSheetFxStatus("⚠ Hibás összeg az árfolyam gyorsszámolóban");
+      } else {
+        updateMiniSheetFxStatus("✓ Árfolyam gyorsszámoló kitöltve");
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [miniSheetFxAmount, miniSheetFxCurrency, miniSheetFxTargetCurrency, miniSheetFxRate]);
+
+  return (
+    <div className="fixed bottom-7 right-[5.75rem] z-[10000] hidden lg:block">
+      {calculatorOpen ? (
+        <div
+          className="fixed w-[318px] rounded-2xl border border-slate-500 bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700 p-3 shadow-2xl shadow-slate-900/25"
+          style={{ left: calculatorPosition.x, top: calculatorPosition.y, zIndex: floatingZOrder.calculator }}
+          onMouseDown={() => bringFloatingWindowToFront("calculator")}
+        >
+          <div
+                onMouseDown={startCalculatorDrag}
+            className="mb-3 flex cursor-move items-center justify-between rounded-xl bg-gradient-to-r from-slate-500 to-slate-600 px-3 py-2 text-white ring-1 ring-slate-400/70"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Calculator size={16} />
+                  Számológép
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateCalculatorOpen(false)}
+              className="rounded-full p-1 text-slate-100 hover:bg-slate-500 hover:text-white"
+                  title="Számológép bezárása"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+          <input
+            ref={calculatorInputRef}
+            value={calculatorInput}
+            onChange={(event) => updateCalculatorInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                evaluateCalculator();
+              }
+            }}
+                placeholder="Pl.: 1250*1.27 vagy sqrt(144)"
+            className="mb-2 h-10 w-full rounded-xl border border-slate-400 bg-slate-200 px-3 text-sm font-semibold text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-700"
+              />
+
+              <div className="mb-2 rounded-xl bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-950 ring-1 ring-slate-400">
+                {calculatorResult || "Eredmény"}
+              </div>
+
+              <div className="mb-2 grid grid-cols-4 gap-1.5">
+                {calculatorButtons.map((button) => (
+                  <button
+                    key={button}
+                    type="button"
+                    onClick={() => handleCalculatorButton(button)}
+                    className="h-8 rounded-lg bg-slate-400 text-sm font-semibold text-slate-950 ring-1 ring-slate-500 hover:bg-slate-300"
+                  >
+                    {button}
+                  </button>
+                ))}
+              </div>
+
+              {scientificMode ? (
+                <div className="mb-2 grid grid-cols-5 gap-1.5">
+                  {scientificButtons.map((button) => (
+                    <button
+                      key={button}
+                      type="button"
+                      onClick={() => handleCalculatorButton(button)}
+                      className="h-8 rounded-lg bg-slate-500 text-xs font-semibold text-slate-950 ring-1 ring-slate-600 hover:bg-slate-400"
+                    >
+                      {button}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => updateScientificMode(!scientificMode)}
+              className="h-9 rounded-lg bg-slate-800 px-2 text-xs font-semibold text-white hover:bg-slate-900"
+                >
+                  Tudományos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateCalculatorInput("");
+                    updateCalculatorResult("");
+                  }}
+                  className="h-9 rounded-lg bg-slate-200 px-2 text-xs font-semibold text-slate-900 ring-1 ring-slate-400 hover:bg-slate-100"
+                >
+                  Törlés
+                </button>
+                <button
+                  type="button"
+                  onClick={copyCalculatorWorkflow}
+              className="flex h-9 items-center justify-center gap-1 rounded-lg bg-slate-800 px-2 text-xs font-semibold text-white hover:bg-slate-900"
+                >
+                  <Copy size={14} />
+                  Másolás
+                </button>
+              </div>
+
+              {calculatorLog.length ? (
+                <div className="mt-2 max-h-[74px] overflow-y-auto rounded-xl bg-slate-100 p-2 text-[11px] text-slate-700 ring-1 ring-slate-400">
+                  {calculatorLog.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+      {miniSheetOpen ? (
+        <div
+          className="fixed flex flex-col overflow-visible rounded-2xl border border-emerald-700/40 bg-slate-100 p-3 shadow-2xl shadow-slate-900/20"
+          style={{ left: miniSheetPosition.x, top: miniSheetPosition.y, width: miniSheetSize.width, height: miniSheetSize.height, zIndex: floatingZOrder.miniSheet }}
+          onMouseDown={() => bringFloatingWindowToFront("miniSheet")}
+        >
+          <button
+            type="button"
+            onMouseDown={startMiniSheetResize}
+            onDoubleClick={toggleMiniSheetMaximize}
+            className="absolute left-[-10px] top-[-10px] flex h-8 w-8 cursor-nwse-resize items-center justify-center rounded-lg border border-emerald-700/40 bg-emerald-100 text-emerald-900 shadow-md hover:bg-emerald-200"
+            title="Bal és felső oldal méretezése"
+          >
+            <Grip size={16} />
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={startMiniSheetBottomRightResize}
+            onDoubleClick={toggleMiniSheetMaximize}
+            className="absolute bottom-[-10px] right-[-10px] flex h-8 w-8 cursor-nwse-resize items-center justify-center rounded-lg border border-emerald-700/40 bg-emerald-100 text-emerald-900 shadow-md hover:bg-emerald-200"
+            title="Mini táblázat méretezése jobb alsó sarokból"
+          >
+            <Grip size={16} />
+          </button>
+
+          <div
+            onMouseDown={startMiniSheetDrag}
+            onDoubleClick={toggleMiniSheetMaximize}
+            className="mb-3 flex shrink-0 cursor-move items-center justify-between rounded-xl bg-emerald-700 px-3 py-2 text-white"
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Grid3X3 size={16} />
+              Mini táblázat
+            </div>
+            <button
+              type="button"
+              onClick={() => updateMiniSheetOpen(false)}
+              className="rounded-full p-1 text-emerald-50 hover:bg-emerald-800"
+              title="Mini táblázat bezárása"
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          <div className="mb-3 flex shrink-0 flex-wrap items-end gap-2 text-xs">
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={undoMiniSheetChange} className="inline-flex h-9 w-16 items-center justify-center rounded-lg bg-slate-200 font-semibold text-slate-800 hover:bg-slate-300" title="Visszavonás Ctrl+Z"><Undo2 size={16} /></button>
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={redoMiniSheetChange} className="inline-flex h-9 w-16 items-center justify-center rounded-lg bg-slate-200 font-semibold text-slate-800 hover:bg-slate-300" title="Ismét Ctrl+Y"><Redo2 size={16} /></button>
+            <button
+              type="button"
+              onClick={copyMiniSheetSelection}
+              className="h-9 rounded-lg bg-slate-700 px-3 font-semibold text-white hover:bg-slate-800"
+            >
+              Másolás
+            </button>
+            <button
+              type="button"
+              onClick={cutMiniSheetSelection}
+              className="h-9 rounded-lg bg-slate-200 px-3 font-semibold text-slate-800 hover:bg-slate-300"
+            >
+              Kivágás
+            </button>
+            <button
+              type="button"
+              onClick={pasteMiniSheetFromClipboard}
+              className="h-9 rounded-lg bg-slate-200 px-3 font-semibold text-slate-800 hover:bg-slate-300"
+            >
+              Beillesztés
+            </button>
+            <div className="grid gap-1 font-semibold text-slate-600">
+              <div className={`min-h-[16px] text-[11px] font-semibold ${miniSheetFxStatus.includes("⚠") ? "text-red-700" : "text-emerald-700"}`}>{miniSheetFxStatus || "✓ Árfolyam gyorszámoló készen áll"}</div>
+              <div className="flex h-9 overflow-hidden rounded-lg border border-slate-300 bg-white">
+                <input
+                  value={miniSheetFxAmount}
+                  onChange={(event) => updateMiniSheetFxAmount(event.target.value)}
+                  className="w-24 border-r border-emerald-200 bg-emerald-50 px-2 text-right text-slate-900 outline-none focus:bg-emerald-100"
+                  placeholder="Összeg"
+                />
+                <select
+                  value={miniSheetFxCurrency}
+                  onChange={(event) => updateMiniSheetFxCurrency(event.target.value as Exclude<MiniSheetCurrency, "none">)}
+                  className="w-24 border-r border-slate-300 bg-blue-50 px-2 text-slate-900 outline-none"
+                  title="Miből váltunk"
+                >
+                  {miniSheetFxOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                <select
+                  value={miniSheetFxTargetCurrency}
+                  onChange={(event) => updateMiniSheetFxTargetCurrency(event.target.value as Exclude<MiniSheetCurrency, "none">)}
+                  className="w-24 border-r border-slate-300 bg-orange-50 px-2 text-slate-900 outline-none"
+                  title="Mire váltunk"
+                >
+                  {miniSheetFxOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                <input
+                  value={miniSheetFxRate}
+                  onChange={(event) => updateMiniSheetFxRate(Number(event.target.value) || 0)}
+                  className="w-24 border-r border-slate-300 bg-slate-100 px-2 text-right text-slate-900 outline-none focus:bg-slate-50"
+                  title="Középárfolyam: 1 kiválasztott pénznem Ft értéke. Forintnál az EUR árfolyamot add meg, ha Ft / Euro átszámítást kérsz."
+                />
+                <div className="flex min-w-44 items-center px-2 text-right font-semibold text-slate-900">
+                  <span className="w-full truncate">{getMiniSheetFxQuickResult()}</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={writeMiniSheetFxConversionBelow}
+              className="h-9 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-800"
+              title="Kijelölt pénznemes érték átszámítása az alatta lévő cellába. Gyorsbillentyű: Ctrl+Alt+9"
+            >
+              Számold alá
+            </button>
+
+            <div className={`flex h-9 min-w-52 items-center px-1 text-sm font-semibold ${miniSheetResult.includes("Nincs") || miniSheetResult.includes("⚠") ? "text-red-700" : miniSheetResult.includes("Azonosított") || miniSheetResult.includes("✓") ? "text-emerald-700" : "text-slate-700"}`} title="Állapotjelző">
+              <span className="w-full truncate">{miniSheetResult || "-"}</span>
+            </div>
+          </div>
+
+          <div className="mb-3 flex shrink-0 flex-wrap items-start gap-2 text-xs font-semibold">
+            <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-200/80 p-1" title="Igazítás">
+              <button type="button" onClick={() => setSelectedMiniSheetAlignment("left")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Balra"><AlignLeft size={15} /></button>
+              <button type="button" onClick={() => setSelectedMiniSheetAlignment("center")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Középre"><AlignCenter size={15} /></button>
+              <button type="button" onClick={() => setSelectedMiniSheetAlignment("right")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Jobbra"><AlignRight size={15} /></button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-200/80 p-1" title="Betűstílus">
+              <button type="button" onClick={() => toggleSelectedMiniSheetStyle("bold")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Félkövér"><Bold size={14} /></button>
+              <button type="button" onClick={() => toggleSelectedMiniSheetStyle("italic")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Dőlt"><Italic size={14} /></button>
+              <button type="button" onClick={() => toggleSelectedMiniSheetStyle("underline")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Aláhúzott"><Underline size={14} /></button>
+              <button type="button" onClick={() => toggleSelectedMiniSheetStyle("strike")} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-800 hover:bg-white" title="Áthúzott"><Strikethrough size={14} /></button>
+              <select onChange={(event) => setSelectedMiniSheetFontSize(Number(event.target.value))} defaultValue="" className="h-8 w-24 rounded-lg border border-slate-300 bg-white px-2 text-slate-800" title="Betűméret">
+                <option value="">Méret</option>
+                {miniSheetFontSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}
+              </select>
+              <select onChange={(event) => setSelectedMiniSheetStyle({ fontFamily: event.target.value })} defaultValue="" className="h-8 w-28 rounded-lg border border-slate-300 bg-white px-2 text-slate-800" title="Betűtípus">
+                <option value="">Betű</option>
+                {miniSheetFontFamilyOptions.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+              </select>
+              <select
+                value={miniSheetCurrency}
+                onChange={(event) => updateMiniSheetCurrency(event.target.value as MiniSheetCurrency)}
+                className="h-8 w-28 rounded-lg border border-slate-300 bg-white px-2 text-slate-800"
+                title="Pénznem jelölés a kijelölt cellákra"
+              >
+                {miniSheetCurrencyOptions.map((currency) => (
+                  <option key={currency.value} value={currency.value}>{currency.symbol ? `${currency.symbol} - ${currency.label}` : currency.label}</option>
+                ))}
+              </select>
+              <select
+                value={miniSheetDecimalPlaces}
+                onChange={(event) => updateMiniSheetDecimalPlaces(Number(event.target.value))}
+                className="h-8 w-32 rounded-lg border border-slate-300 bg-white px-2 text-slate-800"
+                title="Tizedes megjelenítés"
+              >
+                <option value={0}>Egész szám (0)</option>
+                <option value={1}>Tizedes (1)</option>
+                <option value={2}>Százados (2)</option>
+                <option value={3}>Ezrelékes (3)</option>
+                <option value={4}>4 tizedes</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-200/80 p-1" title="Színek és szegély">
+              {renderMiniSheetColorDropdown("Betű", miniSheetTextColorOptions, "textColor", selectedMiniSheetTextColor)}
+              {renderMiniSheetColorDropdown("Háttér", miniSheetBgColorOptions, "bgColor", selectedMiniSheetBgColor)}
+              {renderMiniSheetColorDropdown("Keret", miniSheetBorderColorOptions, "borderColor", selectedMiniSheetBorderColor)}
+              <select onChange={(event) => setSelectedMiniSheetStyle({ border: event.target.value as MiniSheetBorder })} className="h-8 w-24 rounded-lg border border-slate-300 bg-white px-2 text-slate-800" title="Szegély">
+                {miniSheetBorders.map((border) => <option key={border.value} value={border.value}>{border.label}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-200/80 p-1" title="Sor és oszlop műveletek">
+              <button type="button" onClick={insertMiniSheetColumnRight} className="h-8 rounded-lg bg-emerald-100 px-2 text-emerald-900 hover:bg-emerald-200" title="Oszlop beszúrás jobbra">+O</button>
+              <button type="button" onClick={insertMiniSheetRowBelow} className="h-8 rounded-lg bg-emerald-100 px-2 text-emerald-900 hover:bg-emerald-200" title="Sor beszúrás alulra">+S</button>
+              <button type="button" onClick={deleteSelectedMiniSheetRows} className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-100 px-2 text-red-800 hover:bg-red-200" title="Kijelölt sor törlése"><Trash2 size={13} />S</button>
+              <button type="button" onClick={deleteSelectedMiniSheetColumns} className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-100 px-2 text-red-800 hover:bg-red-200" title="Kijelölt oszlop törlése"><Trash2 size={13} />O</button>
+            </div>
+
+          </div>
+
+          {miniSheetHelpOpen ? (
+            <div className="mb-3 max-h-40 shrink-0 overflow-y-auto rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
+              <div className="mb-2 flex items-center gap-2 font-bold"><HelpCircle size={15} /> Gyorsbillentyűk és használat</div>
+              <div className="grid gap-1 sm:grid-cols-2">
+                <span><b>Egy kattintás:</b> cella kijelölése</span>
+                <span><b>Dupla kattintás:</b> cella szerkesztése</span>
+                <span><b>Enter:</b> érték rögzítése és lefelé lépés</span>
+                <span><b>Delete:</b> kijelölt cellák tartalmának törlése</span>
+                <span><b>Nyilak:</b> mozgás a cellák között</span>
+                <span><b>Ctrl + C / X / V:</b> másolás, kivágás, beillesztés</span>
+                <span><b>Ctrl + B / I / U:</b> félkövér, dőlt, aláhúzott</span>
+                <span><b>Egér nyomva tartása + húzás:</b> cellatartomány kijelölése, függvényhez is több cella kijelölhető</span>
+                <span><b>Ctrl + fejléc:</b> több sor/oszlop kijelölése</span>
+                <span><b>Fejléc kattintás:</b> új sor/oszlop beszúrása</span>
+                <span><b>Ctrl + Alt + fejléc:</b> sor/oszlop törlése</span>
+                <span><b>Jobb klikk fejlécen:</b> szélesség/magasság beállítása</span>
+                <span><b>Függvényválasztó:</b> SUM, ÁTLAG, MIN, MAX, COUNT, pénzügyi képletek</span>
+                <span><b>Szűrő:</b> aktív cella oszlopa alapján szűri az alatta lévő sorokat</span>
+                <span><b>=12*1.27:</b> alap számológép művelet cellában</span>
+                <span><b>Nagyítás:</b> alsó − / + / 100% gombokkal</span>
+                <span><b>Ctrl+Alt+1/2/3/0:</b> számológép, táblázat, jegyzet, mind bezár</span>
+                <span><b>Ctrl+Alt+9:</b> kijelölt pénznemes érték átszámítása az alatta lévő cellába</span>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mb-2 flex shrink-0 items-center gap-1 rounded-xl border border-slate-300 bg-white/80 p-2 text-xs">
+            <button type="button" onClick={() => { const activeCol = selectedMiniSheetCells[0]?.colIndex ?? 0; if (miniSheetFilterActive) { if (activeCol !== miniSheetFilterCol) { setMiniSheetFilterCol(activeCol); setStoredValue("dimprover.miniSheet.filterCol", String(activeCol)); updateMiniSheetFilterValues(getMiniSheetFilterUniqueValues(activeCol)); } setMiniSheetFilterPanelOpen(!miniSheetFilterPanelOpen); } else { toggleMiniSheetFilter(activeCol); } }} className={`${miniSheetFilterHasCriteria ? "bg-red-600 text-white hover:bg-red-700" : "bg-blue-100 text-blue-900 hover:bg-blue-200"} flex h-8 items-center gap-1 rounded-lg px-2 font-semibold`} title="Szűrő bekapcsolása az aktív cella oszlopára"><Filter size={14} /> Szűrő</button>
+            <input value={miniSheetFilterText} onChange={(event) => updateMiniSheetFilterText(event.target.value)} disabled={!miniSheetFilterActive} className="h-8 w-24 rounded-lg border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100" placeholder="Szűrés..." />
+            <div className="flex h-8 overflow-hidden rounded-lg border border-slate-300 bg-white">
+              <input value={miniSheetSearchText} onChange={(event) => updateMiniSheetSearchText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); runMiniSheetSearch(event.shiftKey ? "prev" : "next"); } }} className="w-28 px-2 text-slate-900 outline-none" placeholder="Keresés..." />
+              <button type="button" onClick={() => runMiniSheetSearch("next")} className="flex w-8 items-center justify-center bg-slate-100 text-slate-700 hover:bg-slate-200" title="Keresés következő"><Search size={14} /></button>
+            </div>
+            <select defaultValue="" onChange={(event) => handleMiniSheetFunctionSelect(event.target.value)} className="h-8 w-36 rounded-lg border border-slate-300 bg-white px-2 font-semibold text-slate-800" title="Függvényválasztó">
+              {miniSheetFunctionOptions.map((fn) => <option key={fn.value || fn.label} value={fn.value}>{fn.label}</option>)}
+            </select>
+            <button type="button" onClick={() => insertMiniSheetFormula("=SUM()")} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1.5 font-semibold text-white hover:bg-emerald-700"><Sigma size={14} /></button>
+            <button type="button" onClick={() => insertMiniSheetFormula("=ÁTLAG()")} className="rounded-lg bg-emerald-600 px-2 py-1.5 font-semibold text-white hover:bg-emerald-700">Átlag</button>
+            <input
+              value={miniSheetFormulaBar}
+              onChange={(event) => {
+                updateMiniSheetFormulaBar(event.target.value);
+                miniSheetFormulaCursorRef.current = event.target.selectionStart ?? event.target.value.length;
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyMiniSheetFormulaBar();
+                }
+              }}
+              onBlur={() => {
+                if (miniSheetFormulaBar.trim().startsWith("=")) {
+                  applyMiniSheetFormulaBar();
+                }
+              }}
+              className="h-8 min-w-[180px] flex-1 rounded-lg border border-slate-300 bg-white px-3 text-slate-900 outline-none focus:border-emerald-500"
+              placeholder="Aktív cella értéke vagy képlete..."
+            />
+          </div>
+
+
+          {miniSheetFilterPanelOpen && miniSheetFilterActive ? (
+            <div className="mb-2 shrink-0 rounded-xl border border-slate-300 bg-white p-3 text-xs shadow-lg">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="font-bold text-slate-800">Szűrő: {miniSheetColumns[miniSheetFilterCol]} oszlop</div>
+                <button type="button" onClick={() => setMiniSheetFilterPanelOpen(false)} className="rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-100">Bezárás</button>
+              </div>
+              <input value={miniSheetFilterText} onChange={(event) => updateMiniSheetFilterText(event.target.value)} className="mb-2 h-8 w-full rounded-lg border border-slate-300 px-2 text-slate-900" placeholder="Keresés" />
+              <div className="mb-2 flex gap-2">
+                <button type="button" onClick={() => setAllMiniSheetFilterValues()} className="rounded-lg bg-slate-100 px-2 py-1 font-semibold hover:bg-slate-200">Összes kijelölése</button>
+                <button type="button" onClick={() => updateMiniSheetFilterValues([])} className="rounded-lg bg-slate-100 px-2 py-1 font-semibold hover:bg-slate-200">Mind látszik</button>
+              </div>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                {getMiniSheetFilterUniqueValues().map((value) => (
+                  <label key={value} className="flex cursor-pointer items-center gap-2 py-0.5 text-slate-800 hover:bg-slate-50">
+                    <input type="checkbox" checked={miniSheetFilterValues.includes(value)} onChange={() => toggleMiniSheetFilterValue(value)} />
+                    <span>{value}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className={`min-h-0 flex-1 overflow-auto rounded-xl border border-slate-300 ${miniSheetPrintView ? "bg-slate-200 p-6" : "bg-white"}`}
+          >
+            <div className={miniSheetPrintView ? "mx-auto bg-white shadow-xl ring-1 ring-slate-300" : ""} style={{ transform: `scale(${miniSheetZoom / 100})`, transformOrigin: "top left", width: miniSheetPrintView ? "794px" : `${10000 / miniSheetZoom}%`, minHeight: miniSheetPrintView ? "1123px" : undefined }}>
+            <div className="grid bg-slate-200 text-center text-xs font-semibold text-slate-700" style={{ minWidth: getMiniSheetGridMinWidth(), gridTemplateColumns: getMiniSheetGridTemplate() }}>
+              <div className="border-r border-slate-300 px-2 py-2" />
+              {miniSheetColumns.map((column) => (
+                <button
+                  key={column}
+                  type="button"
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                      selectMiniSheetColumnHeader(miniSheetColumns.indexOf(column), true);
+                      return;
+                    }
+                    handleMiniSheetColumnHeaderClick(event, miniSheetColumns.indexOf(column));
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMiniSheetHeaderMenu({ type: "column", index: miniSheetColumns.indexOf(column), x: event.clientX, y: event.clientY });
+                  }}
+                  className="relative border-r border-slate-300 px-2 py-2 last:border-r-0 hover:bg-emerald-100"
+                  title="Kattintás: új oszlop jobbra | Ctrl+kattintás: oszlop kijelölés | Jobb klikk: szélesség | Ctrl+Alt+kattintás: törlés"
+                >
+                  {column}
+                  <span onMouseDown={(event) => startMiniSheetColumnWidthResize(event, miniSheetColumns.indexOf(column))} className="absolute right-[-3px] top-0 z-10 h-full w-2 cursor-col-resize" />
+                </button>
+              ))}
+            </div>
+
+            {miniSheetRows.map((rowNumber, rowIndex) => isMiniSheetRowVisible(rowIndex) ? (
+              <div key={rowNumber} className="grid border-t border-slate-200" style={{ minWidth: getMiniSheetGridMinWidth(), gridTemplateColumns: getMiniSheetGridTemplate() }}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                      selectMiniSheetRowHeader(rowIndex, true);
+                      return;
+                    }
+                    handleMiniSheetRowHeaderClick(event, rowIndex);
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMiniSheetHeaderMenu({ type: "row", index: rowIndex, x: event.clientX, y: event.clientY });
+                  }}
+                  className="relative border-r border-slate-300 bg-slate-100 px-2 text-center text-xs font-semibold text-slate-600 hover:bg-emerald-100"
+                  style={{ height: miniSheetRowHeights[rowIndex] ?? miniSheetDefaultRowHeight }}
+                  title="Kattintás: új sor alá | Ctrl+kattintás: sor kijelölés | Jobb klikk: magasság | Ctrl+Alt+kattintás: törlés"
+                >
+                  {rowNumber}
+                  <span onMouseDown={(event) => startMiniSheetRowHeightResize(event, rowIndex)} className="absolute bottom-[-3px] left-0 z-10 h-2 w-full cursor-row-resize" />
+                </button>
+                {miniSheetColumns.map((column, colIndex) => {
+                  const value = miniSheetData[rowIndex]?.[colIndex] ?? "";
+                  const selected = selectedMiniSheetCells.some(
+                    (cell) => cell.rowIndex === rowIndex && cell.colIndex === colIndex
+                  );
+                  const cellStyle = miniSheetStyles[cellKey(rowIndex, colIndex)] ?? {};
+                  const isEditing = editingMiniSheetCell?.rowIndex === rowIndex && editingMiniSheetCell?.colIndex === colIndex;
+
+                  return (
+                    <div key={`${column}-${rowNumber}`} className="relative min-w-0 border-r border-slate-300 last:border-r-0" data-mini-row={rowIndex} data-mini-col={colIndex}>
+                    <input
+                      ref={(element) => {
+                        miniSheetInputRefs.current[cellKey(rowIndex, colIndex)] = element;
+                      }}
+                      value={getMiniSheetDisplayValue(value, isEditing, miniSheetFormulas[cellKey(rowIndex, colIndex)])}
+                      readOnly={!isEditing}
+                      onDoubleClick={() => {
+                        setEditingMiniSheetCell({ rowIndex, colIndex });
+                        updateMiniSheetFormulaBar(miniSheetFormulas[cellKey(rowIndex, colIndex)] ?? value);
+                        window.setTimeout(() => miniSheetInputRefs.current[cellKey(rowIndex, colIndex)]?.focus(), 0);
+                      }}
+                      onMouseDown={(event) => {
+                        const clickedCell = { rowIndex, colIndex };
+                        if (startMiniSheetFormulaRangeSelection(clickedCell)) {
+                          event.preventDefault();
+                          return;
+                        }
+                        miniSheetSelectionStartRef.current = clickedCell;
+                        miniSheetMouseSelectingRef.current = true;
+                        setEditingMiniSheetCell(null);
+                        toggleMiniSheetCell(rowIndex, colIndex, event.ctrlKey || event.metaKey || event.shiftKey);
+                        window.setTimeout(() => {
+                          miniSheetInputRefs.current[cellKey(rowIndex, colIndex)]?.focus();
+                        }, 0);
+                      }}
+                      onMouseEnter={(event) => {
+                        if (event.buttons === 1 && miniSheetSelectionStartRef.current && miniSheetMouseSelectingRef.current) {
+                          selectMiniSheetRange(miniSheetSelectionStartRef.current, { rowIndex, colIndex });
+                        }
+                      }}
+                      onMouseUp={() => {
+                        const formulaTarget = miniSheetFormulaTargetRef.current;
+                        miniSheetSelectionStartRef.current = null;
+                        miniSheetMouseSelectingRef.current = false;
+                        if (miniSheetFormulaSelectionRef.current && formulaTarget) {
+                          window.setTimeout(() => {
+                            const input = miniSheetInputRefs.current[cellKey(formulaTarget.rowIndex, formulaTarget.colIndex)];
+                            const value = input?.value || miniSheetFormulaBar || "";
+                            input?.focus();
+                            input?.setSelectionRange(value.length, value.length);
+                          }, 0);
+                        }
+                      }}
+                      onChange={(event) => handleMiniSheetCellChange(rowIndex, colIndex, event.target.value)}
+                      onPaste={(event) => {
+                        const pastedText = event.clipboardData.getData("text/plain");
+                        if (pastedText.includes("\t") || pastedText.includes("\n")) {
+                          event.preventDefault();
+                          pasteMiniSheetTable(rowIndex, colIndex, pastedText);
+                        }
+                      }}
+                      onCopy={(event) => {
+                        if (selectedMiniSheetCells.length) {
+                          event.preventDefault();
+                          copyMiniSheetSelection();
+                        }
+                      }}
+                      onCut={(event) => {
+                        if (selectedMiniSheetCells.length) {
+                          event.preventDefault();
+                          cutMiniSheetSelection();
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+                          event.preventDefault();
+                          undoMiniSheetChange();
+                          return;
+                        }
+
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+                          event.preventDefault();
+                          redoMiniSheetChange();
+                          return;
+                        }
+
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+                          event.preventDefault();
+                          toggleSelectedMiniSheetStyle("bold");
+                          return;
+                        }
+
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "i") {
+                          event.preventDefault();
+                          toggleSelectedMiniSheetStyle("italic");
+                          return;
+                        }
+
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "u") {
+                          event.preventDefault();
+                          toggleSelectedMiniSheetStyle("underline");
+                          return;
+                        }
+
+                        if (!isEditing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+                          event.preventDefault();
+                          copyMiniSheetSelection();
+                          return;
+                        }
+
+                        if (!isEditing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "x") {
+                          event.preventDefault();
+                          cutMiniSheetSelection();
+                          return;
+                        }
+
+                        if (!isEditing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+                          event.preventDefault();
+                          pasteMiniSheetFromClipboard();
+                          return;
+                        }
+
+                        if (!isEditing && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+                          event.preventDefault();
+                          const nextCell = {
+                            rowIndex: clamp(rowIndex + (event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0), 0, miniSheetRows.length - 1),
+                            colIndex: clamp(colIndex + (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0), 0, miniSheetColumns.length - 1),
+                          };
+                          updateMiniSheetSelection([nextCell]);
+                          window.setTimeout(() => miniSheetInputRefs.current[cellKey(nextCell.rowIndex, nextCell.colIndex)]?.focus(), 0);
+                          return;
+                        }
+
+                        if (!isEditing && event.key === "Delete") {
+                          event.preventDefault();
+                          clearSelectedMiniSheetCells();
+                          return;
+                        }
+
+                        if (!isEditing && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                          event.preventDefault();
+                          setEditingMiniSheetCell({ rowIndex, colIndex });
+                          handleMiniSheetCellChange(rowIndex, colIndex, event.key);
+                          window.setTimeout(() => miniSheetInputRefs.current[cellKey(rowIndex, colIndex)]?.focus(), 0);
+                          return;
+                        }
+
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          miniSheetFormulaTargetRef.current = null;
+                          miniSheetFormulaSelectionRef.current = false;
+                          miniSheetFormulaCursorRef.current = null;
+                          miniSheetFormulaLastRangeRef.current = null;
+                          setEditingMiniSheetCell(null);
+                          updateMiniSheetFormulaBar(miniSheetData[rowIndex]?.[colIndex] ?? "");
+                          event.currentTarget.blur();
+                          return;
+                        }
+
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          confirmMiniSheetCellAndMoveDown(rowIndex, colIndex, event.currentTarget.value);
+                          setEditingMiniSheetCell(null);
+                        }
+                      }}
+                      onBlur={(event) => {
+                        if (miniSheetFormulaSelectionRef.current && miniSheetFormulaTargetRef.current) {
+                          return;
+                        }
+                        if (event.target.value.startsWith("=")) {
+                          evaluateMiniSheetFormula(rowIndex, colIndex, event.target.value);
+                        } else if (!parseMiniSheetFormula(event.target.value)) {
+                          updateMiniSheetCell(rowIndex, colIndex, normalizeCellValue(event.target.value, miniSheetDecimalPlaces, detectMiniSheetCurrency(event.target.value)));
+                        }
+                        setEditingMiniSheetCell(null);
+                      }}
+                      style={{
+                        color: cellStyle.textColor,
+                        backgroundColor: cellStyle.bgColor,
+                        borderColor: cellStyle.borderColor,
+                        borderStyle: cellStyle.border && cellStyle.border !== "none" ? "solid" : undefined,
+                        borderWidth: cellStyle.border === "soft" ? 1 : cellStyle.border === "thin" ? 1 : cellStyle.border === "thick" ? 2 : undefined,
+                        height: miniSheetRowHeights[rowIndex] ?? 36,
+                        fontSize: cellStyle.fontSize ?? 12,
+                        fontFamily: cellStyle.fontFamily,
+                      }}
+                      className={`h-9 w-full border-r border-slate-300 px-2 text-xs text-slate-900 outline-none last:border-r-0 focus:bg-emerald-50 focus:ring-1 focus:ring-inset focus:ring-emerald-500 ${
+                        getMiniSheetCellAlignment(rowIndex, colIndex, value) === "right"
+                          ? "text-right tabular-nums"
+                          : getMiniSheetCellAlignment(rowIndex, colIndex, value) === "center"
+                            ? "text-center"
+                            : "text-left"
+                      } ${selected ? "bg-emerald-100 ring-1 ring-inset ring-emerald-500" : ""} ${miniSheetSearchMatches.some((cell) => cell.rowIndex === rowIndex && cell.colIndex === colIndex) ? "ring-2 ring-inset ring-yellow-400" : ""} ${getMiniSheetStyleClass(cellStyle)} ${!isEditing ? "cursor-default caret-transparent" : "caret-auto"}`}
+                      title={`${column}${rowNumber} - dupla kattintás: szerkesztés`}
+                    />
+                    {selected && !isEditing && isMiniSheetSeriesSeed(value) ? (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => startMiniSheetFillHandle(event, { rowIndex, colIndex })}
+                        className="absolute bottom-[-4px] right-[-4px] z-20 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-emerald-700 bg-emerald-600 text-[9px] font-bold leading-none text-white shadow-sm"
+                        title="Sorozat kitöltés: jobbra/le +1, balra/fel -1"
+                      >
+                        +
+                      </button>
+                    ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null)}
+            </div>
+          </div>
+
+          {miniSheetHeaderMenu ? (
+            <div
+              className="fixed z-[10080] w-48 rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-700 shadow-xl"
+              style={{ left: miniSheetHeaderMenu.x, top: miniSheetHeaderMenu.y }}
+            >
+              <button
+                type="button"
+                onClick={() => setHeaderDimensionFromPrompt(miniSheetHeaderMenu)}
+                className="w-full rounded-lg px-3 py-2 text-left hover:bg-slate-100"
+              >
+                {miniSheetHeaderMenu.type === "column" ? "Oszlopszélesség beállítása" : "Sormagasság beállítása"}
+              </button>
+              <button
+                type="button"
+                onClick={() => miniSheetHeaderMenu.type === "column"
+                  ? deleteMiniSheetColumnsByIndexes(selectedMiniSheetCells.some((cell) => cell.colIndex === miniSheetHeaderMenu.index) ? selectedMiniSheetCells.map((cell) => cell.colIndex) : [miniSheetHeaderMenu.index])
+                  : deleteMiniSheetRowsByIndexes(selectedMiniSheetCells.some((cell) => cell.rowIndex === miniSheetHeaderMenu.index) ? selectedMiniSheetCells.map((cell) => cell.rowIndex) : [miniSheetHeaderMenu.index])}
+                className="w-full rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50"
+              >
+                {miniSheetHeaderMenu.type === "column" ? "Oszlop törlése" : "Sor törlése"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMiniSheetHeaderMenu(null)}
+                className="w-full rounded-lg px-3 py-2 text-left hover:bg-slate-100"
+              >
+                Bezárás
+              </button>
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid shrink-0 grid-cols-[1fr_auto] items-center gap-3 text-xs text-slate-600">
+            <span>{miniSheetSaveStatus || ""}</span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="rounded-lg bg-white px-3 py-2 font-semibold text-slate-700 ring-1 ring-slate-300">{miniSheetZoom}%</span>
+              <button type="button" onClick={() => updateMiniSheetZoom(100)} className="rounded-lg bg-white px-3 py-2 font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">100%</button>
+              <button type="button" onClick={() => updateMiniSheetZoom(miniSheetZoom - 10)} className="rounded-lg bg-white px-3 py-2 font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">−</button>
+              <button type="button" onClick={() => updateMiniSheetZoom(miniSheetZoom + 10)} className="rounded-lg bg-white px-3 py-2 font-semibold text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">+</button>
+              <button type="button" onClick={() => updateMiniSheetHelpOpen(!miniSheetHelpOpen)} className="flex items-center gap-1 rounded-lg bg-blue-100 px-3 py-2 font-semibold text-blue-800 hover:bg-blue-200"><HelpCircle size={14} /> Súgó</button>
+              <button
+                type="button"
+                onClick={() => {
+                  const emptyData = createEmptySheetData();
+                  setMiniSheetData(emptyData);
+                  setStoredValue("dimprover.miniSheet.data", emptyData);
+                  updateMiniSheetColumns(initialMiniSheetColumns);
+                  updateMiniSheetRows(initialMiniSheetRows);
+                  updateMiniSheetAlignments({});
+                  updateMiniSheetStyles({});
+                  updateMiniSheetFormulas({});
+                  updateMiniSheetColumnWidths(Array.from({ length: initialMiniSheetColumns.length }, () => 96));
+                  updateMiniSheetRowHeights(Array.from({ length: initialMiniSheetRows.length }, () => miniSheetDefaultRowHeight));
+                  updateMiniSheetZoom(100);
+                  updateMiniSheetSelection([]);
+                  updateMiniSheetResult("");
+                }}
+                className="rounded-lg bg-slate-200 px-2 py-1.5 font-semibold text-slate-800 hover:bg-slate-300"
+              >
+                Törlés
+              </button>
+              <button type="button" onClick={() => updateMiniSheetPrintView(!miniSheetPrintView)} className={`flex items-center gap-1 rounded-lg px-3 py-2 font-semibold ${miniSheetPrintView ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-800 hover:bg-slate-300"}`}><Printer size={14} /> Nyomtatási kép</button>
+              <button type="button" onClick={emailMiniSheetDraft} className="flex items-center gap-1 rounded-lg bg-blue-100 px-3 py-2 font-semibold text-blue-800 hover:bg-blue-200"><Mail size={14} /> E-mail</button>
+              <button type="button" onClick={saveMiniSheetDraft} className="flex items-center gap-1 rounded-lg bg-slate-700 px-2 py-1.5 font-semibold text-white hover:bg-slate-800"><Save size={14} /> Mentés</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {noteOpen ? (
+        <div
+          className="relative mb-3 flex flex-col overflow-visible rounded-2xl border border-yellow-300/70 bg-yellow-100/85 p-4 pt-7 shadow-2xl shadow-slate-900/10 backdrop-blur-sm"
+          style={{ width: size.width, height: size.height, zIndex: floatingZOrder.quickNote }}
+          onMouseDown={() => bringFloatingWindowToFront("quickNote")}
+        >
+          <button
+            type="button"
+            onMouseDown={startTopLeftResize}
+            onDoubleClick={toggleQuickNoteMaximize}
+            className="absolute left-[-10px] top-[-10px] flex h-8 w-8 cursor-nwse-resize items-center justify-center rounded-lg border border-yellow-300/80 bg-yellow-200 text-yellow-950 shadow-md hover:bg-yellow-300"
+            title="Méretezés bal felső sarokból"
+          >
+            <Grip size={16} />
+          </button>
+
+
+
+          <div onDoubleClick={toggleQuickNoteMaximize} className="mb-3 flex shrink-0 items-center justify-between gap-3 pl-4">
+            <div className="flex items-center gap-2">
+              <StickyNote size={18} className="text-yellow-800" />
+              <div>
+                <h3 className="text-sm font-semibold text-yellow-950">Gyorsjegyzet</h3>
+                <p className="text-[11px] text-yellow-800/80">Kevésbé áttetsző, munka közben nyitva marad.</p>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => updateLibraryOpen(!libraryOpen)}
+                className="flex h-8 items-center gap-2 rounded-full bg-white/70 px-3 text-xs font-semibold text-yellow-950 ring-1 ring-yellow-300/50 hover:bg-white/90"
+                title="Gyorsjegyzettár megnyitása"
+              >
+                <BookOpen size={15} />
+                Gyorsjegyzettár
+              </button>
+              <button
+                type="button"
+                onClick={() => updateNoteOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-yellow-900 hover:bg-white/90"
+                title="Gyorsjegyzet bezárása"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {libraryOpen ? (
+            <div className="mb-3 rounded-2xl border border-yellow-300/60 bg-white/65 p-3 shadow-sm">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-yellow-950">
+                  <BookOpen size={16} />
+                  Gyorsjegyzettár
+                </div>
+                <span className="text-[11px] font-medium text-yellow-800/70">mentett jegyzetek</span>
+              </div>
+
+              <div className="grid max-h-[118px] gap-2 overflow-y-auto pr-1">
+                {sampleQuickNotes.map((note) => (
+                  <button
+                    key={note.id}
+                    type="button"
+                    className="flex items-center justify-between rounded-xl border border-yellow-200/80 bg-yellow-50/75 px-3 py-2 text-left hover:bg-yellow-50"
+                    title="Gyorsjegyzet megnyitása (Ctrl+Alt+3)"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <FileText size={15} className="shrink-0 text-yellow-800" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-yellow-950">
+                          {note.title}
+                        </span>
+                        <span className="block truncate text-[11px] text-yellow-800/70">
+                          {note.target}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="ml-3 shrink-0 text-[11px] text-yellow-800/70">
+                      {note.date}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <input
+            value={title}
+            onChange={(event) => updateTitle(event.target.value)}
+            placeholder="Jegyzet címe..."
+            className="mb-2 h-10 shrink-0 rounded-xl border border-yellow-300/70 bg-yellow-50/80 px-3 text-sm font-semibold text-yellow-950 outline-none placeholder:text-yellow-800/50 focus:border-yellow-500/80 focus:bg-yellow-50"
+          />
+
+          <input
+            value={summary}
+            onChange={(event) => updateSummary(event.target.value)}
+            placeholder="Rövid leírás egy sorban..."
+            className="mb-2 h-10 shrink-0 rounded-xl border border-yellow-300/70 bg-yellow-50/80 px-3 text-sm text-yellow-950 outline-none placeholder:text-yellow-800/50 focus:border-yellow-500/80 focus:bg-yellow-50"
+          />
+
+          <textarea
+            value={body}
+            onChange={(event) => updateBody(event.target.value)}
+            placeholder="Nagyméretű szövegmező / részletes jegyzet..."
+            className="min-h-[230px] flex-1 resize-none rounded-xl border border-yellow-300/70 bg-yellow-50/80 px-3 py-3 text-sm text-yellow-950 outline-none placeholder:text-yellow-800/50 focus:border-yellow-500/80 focus:bg-yellow-50"
+          />
+
+          <div className="mt-3 flex shrink-0 justify-end">
+            <button
+              type="button"
+              className="flex h-10 items-center justify-center gap-2 rounded-xl bg-yellow-500 px-5 text-xs font-semibold text-yellow-950 shadow-sm hover:bg-yellow-400"
+              title="Mentéskor külön mentési kártyán választható ki a cél, formátum és jogosultság."
+            >
+              <Save size={15} />
+              Mentés
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={openCalculator}
+          className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-500 bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700 text-white shadow-xl shadow-slate-900/20 hover:from-slate-400 hover:to-slate-600"
+          title="Számológép megnyitása (Ctrl+Alt+1)"
+        >
+          <Calculator size={23} />
+        </button>
+
+        <button
+          type="button"
+          onClick={openMiniSheet}
+          className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-700 bg-emerald-600 text-white shadow-xl shadow-slate-900/20 hover:bg-emerald-500"
+          title="Mini táblázat megnyitása (Ctrl+Alt+2)"
+        >
+          <Grid3X3 size={23} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            updateNoteOpen(!noteOpen);
+            bringFloatingWindowToFront("quickNote");
+          }}
+          className="flex h-14 w-14 items-center justify-center rounded-2xl border border-yellow-300 bg-yellow-300/85 text-yellow-950 shadow-xl shadow-slate-900/15 backdrop-blur hover:bg-yellow-300"
+          title="Gyorsjegyzet megnyitása (Ctrl+Alt+3)"
+        >
+          <StickyNote size={23} />
+        </button>
+      </div>
+    </div>
+  );
+}

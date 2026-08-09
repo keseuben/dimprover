@@ -1,0 +1,239 @@
+# 02 Modulok és funkciók
+
+## Jelenlegi fő modulirányok
+
+- Dashboard
+- Dokumentumok
+- E-napló
+- Jegyzőkönyvek
+- Terepi hibafelvétel
+- Ütemezés
+- Naptár
+- Munkaerő
+- Ajánlatkészítés
+- Projektiktató
+- Pénzügyi iktató
+
+## Jegyzőkönyvek modul véglegesített nézetlogikája
+
+A terepi hibafelvétel és a Hibajegyzék nem azonos funkció.
+
+- Terepi hibafelvétel: gyors helyszíni rögzítés fotóval, felelőssel, határidővel, súlyossággal és tervi HJ / HexPin jelöléssel.
+- Hibajegyzék: élő hibakövető és státuszkezelő modul, amely ugyanazokat a hibákat központi listában követi.
+- PDF jegyzőkönyv / jelentés: a terepi rögzítés vagy az aktuális hibalista dokumentált exportja.
+- Értesítés: az első rendszerüzenet a terepi hibafelvétel után megy ki, az ismételt és rendszeres hibakövetési értesítések a Hibajegyzékből indulnak.
+
+Adatáramlás:
+
+Terepi hibafelvétel rögzíti → Hibajegyzék tárolja és követi → PDF dokumentálja → Értesítés kiküldi.
+
+A terepi hibafelvételből létrehozott hibák nem duplikált rekordként jelennek meg, hanem ugyanannak a hibának több modulnézeteként.
+
+## Új jegyzőkönyv almenü
+
+Az `Új jegyzőkönyv` almenü önálló indítófelületet kapott. A vizuális felépítés a terepi hibafelvétel fejléc- és lapszélesség logikáját követi, de irodai / mérnöki grafit-kék-cián színvilággal.
+
+A sablonkártyák nem egyetlen vegyes rácsban jelennek meg, hanem három csoportban:
+
+1. Irodai / mérnöki jegyzőkönyvek
+   - Tervezői / megrendelői egyeztetés
+   - Beruházói jegyzőkönyv
+   - Kooperációs jegyzőkönyv
+
+2. Terepi rögzítések
+   - Terepi állapotrögzítés
+   - Terepi hibafelvétel
+
+3. Hibakövetés és egyéb
+   - Hibajegyzék
+   - Egyéb feljegyzés
+
+A kártyák hexagon logikát követő vizuális jelölést kapnak, a csoportok pedig külön fejlécblokkal és leírással indulnak.
+
+## Jegyzőkönyv sablonválasztó kártyák
+
+A sablonválasztó végleges fő kártyái:
+
+1. Tervezői / megrendelői egyeztetés
+2. Beruházói jegyzőkönyv
+3. Kooperációs jegyzőkönyv
+4. Terepi állapotrögzítés
+5. Terepi hibafelvétel
+6. Hibajegyzék
+7. Egyéb feljegyzés
+
+A Hibajegyzék kártya nem klasszikus jegyzőkönyv sablonként működik, hanem élő hibakövető / jelentéskészítő felületként nyílik meg.
+
+Nem fő sablonkártyák:
+
+- Emlékeztető: naptár / feladat / emlékeztető funkció irányába kezelendő.
+- Helyszíni jegyzőkönyv: későbbi exporttípus lehet, de nem külön fő sablonkártya.
+- Döntési napló: az Egyeztetések alá kerül altípusként.
+- Műszaki egyeztetés: az Egyeztetések csoport része.
+
+## Jegyzőkönyvek oldalsó almenü
+
+- Áttekintés
+- Új jegyzőkönyv
+- Kooperációk
+- Egyeztetések
+- Terepi rögzítések
+- Hibajegyzék
+- Archívum
+
+## Terepi hibafelvétel
+
+A terepi hibafelvétel modul támogatja:
+
+- hibajegyek rögzítését
+- fotók és tervfotók kezelését
+- kapcsolódó PDF tervlapok kezelését
+- HexPin tervi hibahely jelölést
+- hibajegyhez kötött PDF exportot
+- aláírás és email előkészítést
+
+
+## Képszerkesztő mentés és kijelölt elemek törlése
+
+A terepi fotó / tervfotó képszerkesztő ablak a böngészőablak méretéhez igazodik, magas z-indexen nyílik, és a betöltött fotót alapértelmezésben teljes képre illesztve mutatja. A felhasználó ezután kézzel nagyíthat vagy visszaválthat a `Teljes kép` nézetre.
+
+A rajzolt elemek kijelölhetők és törölhetők. A kijelölt elem törlése gombbal, illetve Delete / Backspace billentyűvel is eltávolítható. A mentési gomb neve `Mentés és vissza`; mentés után a szerkesztő bezáródik és a frissített kép visszakerül a hiba szerkesztő felületre.
+
+
+## Képszerkesztő bővített eszköztár
+
+A fotó / tervfotó képszerkesztő bővített színpalettát kapott: piros, citromsárga, lila, kék, zöld, narancs, rózsaszín, cián, fekete és fehér színek érhetők el.
+
+A szöveg eszköznél külön háttérszín választható a jobb olvashatóság érdekében. A háttér lehet átlátszó, sárga, fehér, világoszöld, világoskék, rózsaszín vagy sötét.
+
+Az eszköztár gombjain az ikon mellett az eszköz neve is megjelenik. A rajzoló eszközök köre bővült: toll, nyíl, szaggatott kör, téglalap, DIMPROVER hexagon és szöveg.
+
+
+### Hibajegyzék önálló oldal / route
+
+- Route: `/jegyzokonyvek/hibajegyzek`.
+- Stílus: a Jegyzőkönyvek / Új jegyzőkönyv blueprint-cián fejlécét és rajzlapos kártyarendszerét követi.
+- Szerep: élő hibakövető felület státuszokkal, határidőkkel, felelősökkel, értesítési és PDF jelentési blokkokkal.
+- Jelenlegi állapot: UI/mintaadat alapú nézet; később a terepi hibafelvétel közös hiba adatmodelljéből olvas.
+
+### Jegyzőkönyvek áttekintés blueprint frissítés
+
+- Az áttekintő oldal stílusa az `Új jegyzőkönyv` oldalhoz igazodik.
+- Cián/blueprint fejlécet, nagyított ferde hexagon-vonalazást és rajzlapos raszter munkaterületet használ.
+- A régi dashboard hero/dekoráció helyett egységes jegyzőkönyv modulfejléc jelenik meg.
+- Az oldalon marad a szűrés, QR keresés, legutóbbi jegyzőkönyvek és típusonkénti lista logika.
+
+
+### Jegyzőkönyv új sablonválasztó route szétbontás
+
+Az Új jegyzőkönyv kiválasztó és a konkrét új jegyzőkönyv/munkalap nézetek külön URL-t kaptak, hogy böngészőfrissítés után ne álljanak vissza a Jegyzőkönyvek áttekintő vagy a sablonválasztó state-alapú nézetére.
+
+Stabil útvonalak:
+- `/jegyzokonyvek/uj` – sablonválasztó
+- `/jegyzokonyvek/uj/terepi-hibafelvetel` – Terepi hibafelvétel
+- `/jegyzokonyvek/uj/terepi-allapotrogzites` – Terepi állapotrögzítés
+- `/jegyzokonyvek/uj/kooperacios-jegyzokonyv` – Kooperációs jegyzőkönyv
+- `/jegyzokonyvek/uj/tervezoi-megrendeloi-egyeztetes` – Tervezői / megrendelői egyeztetés
+- `/jegyzokonyvek/uj/beruhazoi-jegyzokonyv` – Beruházói jegyzőkönyv
+- `/jegyzokonyvek/uj/foto-melleklet` – Fotódokumentáció / melléklet
+- `/jegyzokonyvek/uj/muszaki-feljegyzes` – Műszaki feljegyzés
+
+A kiválasztás URL-navigációval történik, nem belső React `view` state alapján.
+
+
+### Terepi hibafelvétel munkakártya finomítások
+
+A terepi hibafelvétel workflow készültségi logikája bővült. A hibatétel százalék számítása a következő önellenőrzési elemekből áll:
+- Adat
+- Fotó
+- Fotószerkesztés / képaláírás
+- Terv
+- HJ felvétel
+- KÉSZ
+
+A Tervi hibajelölés kártyából kikerült a helyi tervlap-metaadat szerkesztő rész, mert a HJ elhelyezése a külön tervszerkesztő / HexPin néző modulban történik.
+
+A Fotók / tervfotók kártyában a képaláírás mező külön címkét és kereshető mintaszöveg választót kapott.
+
+Az Aláírás kártya többhasábos beviteli elrendezést kapott, hogy az aláírási mezők ne legyenek túl szélesek.
+
+A Mentés / Lezárás kártyából kikerült a duplikált export összesítő fejléc, az export műveletek kéthasábosabb, kompaktabb PDF letöltési elrendezést kaptak.
+
+
+### PDF export fájlnév és HexPin tervkép export pontosítás
+
+A terepi hibafelvételi PDF export fájlnevei aláhúzásos formátumot kaptak:
+- teljes PDF: `th_jkv_teljes_YY_MMDD_HHMM.pdf`
+- csak jegyzőkönyv PDF: `th_jkv_YY_MMDD_HHMM.pdf`
+- tervrészlet melléklet: `th_jkv_tervreszlet_YY_MMDD_HHMM.pdf`
+- felelősönkénti PDF: `th_jkv_felelos_<nev>_YY_MMDD_HHMM.pdf`
+
+A tervnézőben mentett tervrészlet-képek HexPin rajzolása a React tervnéző markerformájához igazodik: külső jelölőfej, belső szakági hexagon, TH felirat és státusz/súlyosság jelzések.
+
+
+### Terepi hibafelvételi PDF export jelmagyarázat és HJ megjelenítés
+
+A terepi hibafelvételi jegyzőkönyv PDF exportja bővült:
+
+- a HJ sorokban a HJ saját súlyossága és státusza jelenik meg, nem a TH főhiba adata;
+- a súlyosság, státusz és szakág színezett, PDF-kompatibilis jelölést kap;
+- a HJ jelölések blokk alatt kompakt HexPin jelmagyarázat jelenik meg;
+- a fotómelléklet elején megjelenik, ha a jegyzőkönyv külön terepi hibafelvételi tervrészlet mellékletet is tartalmaz, a HJ tervrészletek és PDF oldalak számával;
+- a státusz oszlop PDF-ben tördelhetőbb lett, hogy a hosszabb státuszok ne lógjanak ki a táblázatból.
+
+
+#### HexPin jelmagyarázat pontosítás
+
+A PDF jelmagyarázat kiegészült minden jelenleg használt állapot- és súlyosságjellel:
+- szakág színe,
+- észrevétel,
+- javítandó hiba,
+- súlyos hiba,
+- azonnali intézkedést igényel,
+- folyamatban,
+- ellenőrzésre vár,
+- lezárt.
+
+A lezárt állapot pipa jelölése CSS/PDF-kompatibilis rajzolt jelként jelenik meg, nem speciális betűkarakterként.
+
+
+#### Tervrészlet melléklet jelzése fotómelléklet nélkül is
+
+A terepi hibafelvételi PDF exportban a tervrészlet melléklet megléte önálló információs blokkban jelenik meg, nem a nagyított fotómelléklet részeként. Így akkor is látható, ha a jegyzőkönyv nem tartalmaz fotómellékletet, de tartalmaz HJ tervrészlet mellékletet.
+
+
+#### Egy TH hibához több PDF tervlap és fotóforrás választó
+
+A terepi hibafelvétel tervi hibajelölése támogatja, hogy egy TH hibához több PDF tervlap is kapcsolható legyen. Például ugyanazon terepi hiba jelölhető földszinti és emeleti alaprajzon is. A kapcsolt PDF tervlapok külön tervkártyaként jelennek meg, és mindegyiken saját HJ HexPin jelölések menthetők.
+
+A fotó / tervfotó hozzáadása a PDF tervfeltöltéshez hasonló lenyíló forrásválasztót kapott. Aktív források: kamera és galéria; későbbi előkészített források: projekt fotótár, dokumentumtár / tervfotó, Google Drive, OneDrive / SharePoint.
+
+
+#### Fotóhely HexPin marker a PDF tervlapon
+
+A terepi hibafelvétel PDF.js tervnézője bővült fotóhely jelöléssel. A felhasználó a HJ hibahely marker mellett külön `Fotóhely` módot választhat, majd a kiválasztott fotó (`F-001`, `F-002`, stb.) készítési helyét DIMPROVER hexagon markerrel elhelyezheti a PDF tervlapon. A fotóhely marker nem maga a fotó, hanem annak tervi pozíciója.
+
+A HJ és fotóhely markerek ugyanazon tervlapon együtt látszanak, de a HJ darabszámba és HJ tervrészlet mellékletbe csak a hibahely markerek számítanak bele.
+
+
+#### Lebegő fotóhely választó panel
+
+A PDF.js tervnéző fotóhely jelölési módja bővült mozgatható, lebegő fotóhely választó panellel. A panel a feltöltött képek kicsinyített előnézetét, `F-001` jelét és fotótípusát jeleníti meg, így a felhasználó vizuálisan tudja kiválasztani, melyik fotó készítési helyét szeretné a tervlapon megjelölni.
+
+
+#### Fotóhely marker kártyaforma és panelhúzás javítás
+
+A PDF.js tervnéző fotóhely választó lebegő panelének húzása stabilizálva lett. A panel nem marad drag állapotban az egér elengedése után, és a fotópanel saját pozícióját használja mozgatáskor.
+
+A fotóhely jelölő a HJ HexPintől eltérő megjelenést kapott: kék keretes fotókártya-marker, alsó tervi mutató tüskével. Ha rendelkezésre áll a feltöltött kép előnézete, a markerben kisméretű fotó-előnézet is megjelenik.
+
+
+#### Fotóhely marker a tervrészlet PDF exportban
+
+A terepi hibafelvételi A4 tervrészlet melléklet PDF exportja a HJ HexPin mellett a kivágási kereten belül lévő fotóhely markereket is rárajzolja a rajzra. A fotóhely marker PDF-ben külön kék fotókártya-jelölőként jelenik meg, alsó mutató tüskével. A fotóhely marker továbbra sem számít HJ hibajelölésnek, ezért a HJ darabszám változatlan marad.
+
+### FHJ fotóhely jelölés
+
+A terepi hibafelvételi tervi jelölések között a fotóhely külön azonosítót kapott: `FHJ-001`, `FHJ-002`, stb. A `F-001` továbbra is maga a fotó sorszáma, míg az `FHJ-001` a fotó tervi helyének jelölése.
+
+A jegyzőkönyv PDF-ben a HJ és FHJ jelölések egy közös tervi jelölési blokkban jelennek meg, hogy a tervrészlet melléklet önállóan is értelmezhető legyen.

@@ -1,0 +1,22 @@
+# DIMPRO Drop 0.3.4 – kizárólag a multipart részfeltöltési útvonalhoz.
+# Ezt a drop.dimpro.hu HTTPS server blokkjában a generikus location / elé kell helyezni.
+# A teljes fájl maximumát nem az Nginx, hanem a DIMPRO Drop 500 MB-os kvótaellenőrzése szabályozza.
+
+location ~ ^/api/drop/uploads/[0-9a-fA-F-]{36}/parts/[0-9]{1,5}$ {
+    client_max_body_size 70m;
+
+    # A feltöltési részt az Nginx ne pufferelje lemezre a Node továbbítása előtt.
+    proxy_request_buffering off;
+    proxy_buffering off;
+
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+}

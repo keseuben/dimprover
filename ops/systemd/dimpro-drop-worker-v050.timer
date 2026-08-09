@@ -1,0 +1,13 @@
+[Unit]
+Description=Run DIMPRO DROP 0.5.0 worker every two minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+RandomizedDelaySec=15
+AccuracySec=10
+Persistent=true
+Unit=dimpro-drop-worker-v050.service
+
+[Install]
+WantedBy=timers.target

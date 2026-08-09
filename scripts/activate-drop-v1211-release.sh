@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT="/root/dimprover"
+RELEASE=".next-v1211-release-final"
+EXPECTED_PREVIOUS=".next-v1210-release-final"
+EXPECTED_BUILD="XFvAsUHhS9ZELCepVr65m"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP="$ROOT/backups/drop_v1211_release_activation_$STAMP"
+TIMER_WAS_ACTIVE="$(systemctl is-active dimpro-drop-worker-v050.timer 2>/dev/null || true)"
+PATH_WAS_ACTIVE="$(systemctl is-active dimpro-drop-scan-trigger-v096.path 2>/dev/null || true)"
+cd "$ROOT"
+[[ -f "$RELEASE/BUILD_ID" && -f "$RELEASE/standalone/server.js" ]] || { echo "Hiányos DROP 1.2.11 release." >&2; exit 2; }
+[[ "$(cat "$RELEASE/BUILD_ID")" == "$EXPECTED_BUILD" ]] || { echo "Váratlan DROP 1.2.11 BUILD_ID." >&2; exit 3; }
+CURRENT="$(tr -d '\r\n' < .dimprover/active-next-release)"
+if [[ "$CURRENT" == "$RELEASE" ]]; then echo "DROP 1.2.11 már aktív."; exit 0; fi
+[[ "$CURRENT" == "$EXPECTED_PREVIOUS" ]] || { echo "Váratlan aktív release: $CURRENT" >&2; exit 4; }
+mkdir -p "$BACKUP"; chmod 700 "$BACKUP"
+cp -a .dimprover/active-next-release "$BACKUP/active-next-release"
+pm2 jlist > "$BACKUP/pm2-before.json"
+curl -fsS --max-time 15 https://drop.dimpro.hu/api/drop/health > "$BACKUP/drop-health-before.json"
+printf '%s\n' "$EXPECTED_BUILD" > "$BACKUP/new-build-id"
+printf '%s\n' "$TIMER_WAS_ACTIVE" > "$BACKUP/worker-timer-before"
+printf '%s\n' "$PATH_WAS_ACTIVE" > "$BACKUP/scan-path-before"
+chmod 600 "$BACKUP"/*
+printf '%s\n' "${BACKUP#$ROOT/}" > .work_drop_v1211_release_activation_backup
+chmod 600 .work_drop_v1211_release_activation_backup
+rollback(){
+  local code="${1:-1}"
+  trap - ERR
+  echo "[DROP 1.2.11] Aktiválási hiba, automatikus rollback." >&2
+  cp -a "$BACKUP/active-next-release" .dimprover/active-next-release.tmp || true
+  chmod 600 .dimprover/active-next-release.tmp 2>/dev/null || true
+  mv -f .dimprover/active-next-release.tmp .dimprover/active-next-release 2>/dev/null || true
+  NEXT_DIST_DIR="$EXPECTED_PREVIOUS" pm2 restart dimprover --update-env >/dev/null 2>&1 || true
+  [[ "$TIMER_WAS_ACTIVE" == "active" ]] && systemctl start dimpro-drop-worker-v050.timer >/dev/null 2>&1 || true
+  [[ "$PATH_WAS_ACTIVE" == "active" ]] && systemctl start dimpro-drop-scan-trigger-v096.path >/dev/null 2>&1 || true
+  exit "$code"
+}
+trap 'rollback $?' ERR
+[[ "$TIMER_WAS_ACTIVE" == "active" ]] && systemctl stop dimpro-drop-worker-v050.timer
+[[ "$PATH_WAS_ACTIVE" == "active" ]] && systemctl stop dimpro-drop-scan-trigger-v096.path
+printf '%s\n' "$RELEASE" > .dimprover/active-next-release.tmp
+chmod 600 .dimprover/active-next-release.tmp
+mv -f .dimprover/active-next-release.tmp .dimprover/active-next-release
+NEXT_DIST_DIR="$RELEASE" pm2 restart dimprover --update-env >/dev/null
+READY=0
+for _ in $(seq 1 90); do
+  if curl -fsS --max-time 8 -H 'Host: drop.dimpro.hu' http://127.0.0.1:3000/api/drop/health > /tmp/drop-v1211-live-health.json 2>/dev/null \
+    && curl -fsS --max-time 8 -H 'Host: drop.dimpro.hu' http://127.0.0.1:3000/api/dimpro-identity/health > /tmp/drop-v1211-live-identity.json 2>/dev/null; then READY=1; break; fi
+  sleep 2
+done
+[[ "$READY" == "1" ]]
+node - <<'NODE'
+const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/drop-v1211-live-health.json','utf8'));const i=JSON.parse(fs.readFileSync('/tmp/drop-v1211-live-identity.json','utf8'));
+if(h.version!=='DROP 1.2.11') throw new Error(`Várt DROP 1.2.11, kapott ${h.version}`);
+if(h.coreReady!==true||h.readiness?.identityCoreConsumer!==true||h.readiness?.dimproSend!==true||h.readiness?.emailNotifications!==true||h.readiness?.virusScanner!==true) throw new Error('Drop core/Identity/Send/e-mail/ClamAV nem READY.');
+if(h.readiness?.pwaUpdateNotification!==true) throw new Error('PWA frissítésjelzés nem READY.');
+if(h.worker?.claimLimit!==4) throw new Error(`Worker claimLimit nem 4: ${h.worker?.claimLimit}`);
+if(h.publicWorkflows?.emailPreviewMaxImages!==20) throw new Error('Az e-mail preview health nem 20.');
+const checks=i.checks||{};if(i.ready!==true||i.enabled!==true||Object.keys(checks).length!==12||!Object.values(checks).every(Boolean)) throw new Error('Identity Core nem 12/12 READY.');
+console.log(JSON.stringify({ok:true,dropVersion:h.version,identityReady:i.ready,identityChecks:Object.keys(checks).length,email:h.readiness.emailNotifications,send:h.readiness.dimproSend,clamav:h.readiness.virusScanner,pwaUpdate:h.readiness.pwaUpdateNotification,claimLimit:h.worker.claimLimit},null,2));
+NODE
+curl -fsS --max-time 20 https://drop.dimpro.hu/api/drop/health > /tmp/drop-v1211-live-https-health.json
+curl -sSI --max-time 20 https://drop.dimpro.hu/send | grep -i '^permissions-policy:' | grep -q 'microphone=(self)'
+curl -fsS --max-time 20 https://drop.dimpro.hu/drop-sw.js > /tmp/drop-v1211-live-sw.js
+grep -q 'DROP_SW_VERSION = "DROP 1.2.11"' /tmp/drop-v1211-live-sw.js
+grep -q 'dimpro-drop-static-v1211' /tmp/drop-v1211-live-sw.js
+node - <<'NODE'
+const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/drop-v1211-live-https-health.json','utf8'));if(h.version!=='DROP 1.2.11'||h.coreReady!==true||h.readiness?.dimproSend!==true||h.readiness?.pwaUpdateNotification!==true||h.worker?.claimLimit!==4) throw new Error('HTTPS DROP 1.2.11 health hibás.');
+NODE
+pm2 save >/dev/null
+[[ "$TIMER_WAS_ACTIVE" == "active" ]] && systemctl start dimpro-drop-worker-v050.timer
+[[ "$PATH_WAS_ACTIVE" == "active" ]] && systemctl start dimpro-drop-scan-trigger-v096.path
+trap - ERR
+echo "DROP 1.2.11 aktiválva. Release: $RELEASE; build: $EXPECTED_BUILD; rollback: $EXPECTED_PREVIOUS"

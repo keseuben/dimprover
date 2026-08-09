@@ -1,0 +1,1366 @@
+"use client";
+
+import Link from "next/link";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CalendarDays,
+  CloudSun,
+  Diamond,
+  Eye,
+  Minus,
+  MoreHorizontal,
+  Percent,
+  Pin,
+  Plus,
+  Printer,
+  Save,
+  SlidersHorizontal,
+  SplitSquareVertical,
+  X,
+} from "lucide-react";
+
+import AppLayout from "@/components/layout/AppLayout";
+import ModulePanel from "@/components/layout/ModulePanel";
+import FeatureToggle from "@/components/schedule/FeatureToggle";
+import GridLines from "@/components/schedule/GridLines";
+import TimelineHeader from "@/components/schedule/TimelineHeader";
+import VirtualScheduleRenderer from "@/components/schedule/VirtualScheduleRenderer";
+import DependencyLayer from "@/components/schedule/layers/DependencyLayer";
+import CreateTaskModal, { ScheduleTaskInput } from "@/components/schedule/CreateTaskModal";
+
+import { buildVisibleRows } from "@/app/lib/schedule/rowBuilder";
+import {
+  calculateVisibleRowLayout,
+  getVisibleRowRange,
+} from "@/app/lib/schedule/rowLayoutEngine";
+import {
+  addTaskToCategory,
+  createEmptySchedule,
+  deleteTaskFromSchedule,
+  updateTaskInSchedule,
+} from "@/app/lib/schedule/helpers";
+import { initialSchedule } from "@/app/lib/schedule/sampleSchedule";
+import { normalizeSchedule } from "@/app/lib/schedule/normalizer";
+import { selectAllTasks, selectTaskRows } from "@/app/lib/schedule/selectors";
+import { getVisibleDateRange } from "@/app/lib/schedule/viewportEngine";
+import {
+  differenceInDays,
+  getXFromDate,
+  toDate,
+  toIsoDate,
+} from "@/app/lib/schedule/timelineEngine";
+import {
+  LEFT_COL_WIDTH,
+  TYPE_COL_WIDTH,
+  diffInDays,
+} from "@/app/lib/schedule/timeline";
+import {
+  ScheduleBarInteractionMode,
+  ScheduleFeatureState,
+  ScheduleLocation,
+  ScheduleSource,
+  ScheduleTask,
+  ViewMode,
+} from "@/app/lib/schedule/types";
+
+const STORAGE_KEY = "dimprover.practice.schedule.v1";
+const SCHEDULE_BUILD_MARKER = "Ütemterv javítás aktív: drag-collapse-v3";
+
+const stickyFirstCol =
+  "sticky left-0 z-[220] flex items-center gap-2 border-r border-slate-300 px-4 text-left shadow-[3px_0_0_rgba(226,232,240,0.9)]";
+
+const stickySecondCol = "sticky z-[220] border-r border-slate-200";
+
+const initialFeatures: ScheduleFeatureState = {
+  showContractBars: true,
+  showActualBars: true,
+  showProgressOverlay: true,
+  showTodayLine: true,
+  showLegend: true,
+  showCollapsedSummaryBars: true,
+  showFilters: true,
+  showPdfExport: true,
+  showViewSwitcher: true,
+  showFloatingToolbar: true,
+  showWeekendHighlight: true,
+  showHolidayHighlight: true,
+};
+
+type ScheduleBoundary = {
+  id: string;
+  title: string;
+  date: string;
+  color: string;
+};
+
+type SavedVersion = {
+  id: string;
+  name: string;
+  savedAt: string;
+  template: string;
+};
+
+type ManualHoliday = {
+  id: string;
+  title: string;
+  date: string;
+};
+
+
+type PdfPaperSize = "A4" | "A3" | "A2" | "A1";
+type PdfOrientation = "landscape" | "portrait";
+
+const PDF_PAGE_MM: Record<PdfPaperSize, { width: number; height: number; chart: number }> = {
+  A4: { width: 297, height: 210, chart: 1050 },
+  A3: { width: 420, height: 297, chart: 1500 },
+  A2: { width: 594, height: 420, chart: 2150 },
+  A1: { width: 841, height: 594, chart: 3050 },
+};
+
+type PersistedSchedule = {
+  scheduleName: string;
+  schedule: ScheduleLocation[];
+  boundaries: ScheduleBoundary[];
+  versions: SavedVersion[];
+  timelineStartDate: string;
+  timelineEndDate: string;
+  manualHolidays?: ManualHoliday[];
+};
+
+const boundaryColors = [
+  { label: "Kék", value: "#2563eb" },
+  { label: "Piros", value: "#dc2626" },
+  { label: "Narancs", value: "#ea580c" },
+  { label: "Zöld", value: "#059669" },
+  { label: "Lila", value: "#7c3aed" },
+  { label: "Fekete", value: "#111827" },
+];
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function parseDateInput(value: string) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function getTimelineEndDate(startDate: Date, viewMode: ViewMode) {
+  if (viewMode === "day") return new Date(startDate);
+  if (viewMode === "week") return addDays(startDate, 6);
+  if (viewMode === "month") return addDays(addMonths(startDate, 1), -1);
+  if (viewMode === "year") return addDays(addMonths(startDate, 12), -1);
+  return addDays(addMonths(startDate, 4), -1);
+}
+
+function getIsoWeekNumber(date: Date) {
+  const temp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = temp.getUTCDay() || 7;
+  temp.setUTCDate(temp.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+  return Math.ceil((((temp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+function getIsoWeekYear(date: Date) {
+  const temp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = temp.getUTCDay() || 7;
+  temp.setUTCDate(temp.getUTCDate() + 4 - day);
+  return temp.getUTCFullYear();
+}
+
+function getViewLabel(viewMode: ViewMode) {
+  const labels: Record<ViewMode, string> = {
+    year: "Éves nézet",
+    fourMonth: "4 havi nézet",
+    month: "Havi nézet",
+    week: "Heti nézet",
+    day: "Napi nézet",
+  };
+  return labels[viewMode];
+}
+
+function getTaskActualStartDate(task: ScheduleTask) {
+  return task.actualStartDate || task.startDate;
+}
+
+function getTaskActualEndDate(task: ScheduleTask) {
+  return task.actualEndDate || task.endDate;
+}
+
+function getWeekOffsetFromDate(timelineStartDate: Date, date: string) {
+  return Math.max(1, Math.floor(diffInDays(timelineStartDate, new Date(date)) / 7) + 1);
+}
+
+function getDurationWeeks(startDate: string, endDate: string) {
+  return Math.max(1, Math.ceil((differenceInDays(startDate, endDate) + 1) / 7));
+}
+
+function actualStartDateForStatus(schedule: ScheduleLocation[], taskId: number) {
+  for (const location of schedule) for (const building of location.buildings) for (const category of building.categories) for (const task of category.tasks) if (task.id === taskId) return task.actualStartDate || task.startDate;
+  return "";
+}
+
+function actualEndDateForStatus(schedule: ScheduleLocation[], taskId: number) {
+  for (const location of schedule) for (const building of location.buildings) for (const category of building.categories) for (const task of category.tasks) if (task.id === taskId) return task.actualEndDate || task.endDate;
+  return "";
+}
+
+function getCategoryColor(schedule: ScheduleLocation[], categoryName: string) {
+  for (const location of schedule) {
+    for (const building of location.buildings) {
+      for (const category of building.categories) {
+        if (category.name === categoryName) return category.color;
+      }
+    }
+  }
+  return "bg-blue-600";
+}
+
+function NewScheduleModal({
+  isOpen,
+  onClose,
+  onCreate,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (name: string, startDate: string, endDate: string, withSampleTask: boolean) => void;
+}) {
+  const [name, setName] = useState("Új munkaközi ütemterv");
+  const [startDate, setStartDate] = useState("2026-05-01");
+  const [endDate, setEndDate] = useState("2026-08-31");
+  const [withSampleTask, setWithSampleTask] = useState(true);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 p-6">
+      <div className="w-full max-w-6xl rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Új ütemterv létrehozása</h2>
+            <p className="text-sm text-slate-500">Gyakorló ütemterv, dátumtartomány és kezdő sáv beállítása.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Ütemterv neve</label>
+            <input value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Kezdő dátum</label>
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Záró dátum</label>
+              <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input type="checkbox" checked={withSampleTask} onChange={(event) => setWithSampleTask(event.target.checked)} />
+            Hozzon létre egy kezdő 1 sávos próbaütemtervet
+          </label>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Mégse</button>
+          <button onClick={() => onCreate(name, startDate, endDate, withSampleTask)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Létrehozás</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoundaryModal({
+  isOpen,
+  onClose,
+  boundaries,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  boundaries: ScheduleBoundary[];
+  onSave: (boundaries: ScheduleBoundary[]) => void;
+}) {
+  const [items, setItems] = useState<ScheduleBoundary[]>(boundaries);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setItems(boundaries);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isOpen, boundaries]);
+
+  if (!isOpen) return null;
+
+  const addBoundary = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `boundary-${Date.now()}`,
+        title: "Új szakaszhatár",
+        date: toIsoDate(new Date()),
+        color: "#dc2626",
+      },
+    ]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden bg-slate-950/60 p-6">
+      <div className="max-h-[calc(100vh-48px)] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Szakaszhatárolók</h2>
+            <p className="text-sm text-slate-500">Projekt kezdés, szakaszhatárok és befejező vonalak beállítása.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1fr_160px_160px_44px]">
+              <input value={item.title} onChange={(event) => setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, title: event.target.value } : entry))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input type="date" value={item.date} onChange={(event) => setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, date: event.target.value } : entry))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <select value={item.color} onChange={(event) => setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, color: event.target.value } : entry))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
+                {boundaryColors.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}
+              </select>
+              <button onClick={() => setItems((prev) => prev.filter((entry) => entry.id !== item.id))} className="rounded-lg border border-red-200 text-red-600 hover:bg-red-50">×</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 flex flex-wrap justify-between gap-3">
+          <button onClick={addBoundary} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">+ Új vonal</button>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Mégse</button>
+            <button onClick={() => { onSave(items); onClose(); }} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Mentés</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HolidayModal({
+  isOpen,
+  onClose,
+  holidays,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  holidays: ManualHoliday[];
+  onSave: (holidays: ManualHoliday[]) => void;
+}) {
+  const [items, setItems] = useState<ManualHoliday[]>(holidays);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timeoutId = window.setTimeout(() => setItems(holidays), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [isOpen, holidays]);
+
+  if (!isOpen) return null;
+
+  const addHoliday = () => {
+    setItems((prev) => [
+      ...prev,
+      { id: `holiday-${Date.now()}`, title: "Mozgó ünnepnap", date: toIsoDate(new Date()) },
+    ]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex justify-end overflow-hidden bg-slate-950/35">
+      <div className="h-full w-full max-w-[580px] overflow-y-auto border-l border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Mozgó ünnepnapok</h2>
+            <p className="text-sm text-slate-500">Manuálisan felvett ünnepnapok halvány piros háttérrel jelennek meg az ütemterv rácsában.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+        </div>
+
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1fr_150px_42px]">
+              <input value={item.title} onChange={(event) => setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, title: event.target.value } : entry))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <input type="date" value={item.date} onChange={(event) => setItems((prev) => prev.map((entry) => entry.id === item.id ? { ...entry, date: event.target.value } : entry))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              <button onClick={() => setItems((prev) => prev.filter((entry) => entry.id !== item.id))} className="rounded-lg border border-red-200 text-red-600 hover:bg-red-50">×</button>
+            </div>
+          ))}
+          {items.length === 0 && <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Még nincs manuális ünnepnap felvéve.</div>}
+        </div>
+
+        <div className="mt-5 flex flex-wrap justify-between gap-3">
+          <button onClick={addHoliday} className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">+ Új ünnepnap</button>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Mégse</button>
+            <button onClick={() => { onSave(items); onClose(); }} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Mentés</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrintSettingsModal({
+  isOpen,
+  onClose,
+  onPrint,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onPrint: (paperSize: "A4" | "A3", template: string) => void;
+}) {
+  const [paperSize, setPaperSize] = useState<"A4" | "A3">("A3");
+  const [template, setTemplate] = useState("Részletes sávos ütemterv");
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 p-6">
+      <div className="w-full max-w-6xl rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Nyomtatási kép / PDF export</h2>
+            <p className="text-sm text-slate-500">A munkaközi mentés külön történik, ez csak kiadási/export nézet.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Lapméret</label>
+            <select value={paperSize} onChange={(event) => setPaperSize(event.target.value as "A4" | "A3")} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+              <option value="A3">A3 fekvő</option>
+              <option value="A4">A4 fekvő</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Sablon</label>
+            <select value={template} onChange={(event) => setTemplate(event.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+              <option>Munkaközi ütemterv</option>
+              <option>Tervezett ütemterv jóváhagyásra</option>
+              <option>Részletes sávos ütemterv</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+          <p className="font-semibold text-slate-800">Fejléc/lábléc sablon:</p>
+          <p className="mt-1">Fejléc: projekt neve, dokumentumtípus, dátumtartomány, verzió és készítés dátuma.</p>
+          <p>Lábléc: DIMPROVER, oldalszám, státusz és készítő megjegyzés.</p>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Mégse</button>
+          <button onClick={() => onPrint(paperSize, template)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Nyomtatási kép</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SchedulePdfPreviewModal({
+  isOpen,
+  html,
+  paperSize,
+  orientation,
+  onPaperSizeChange,
+  onOrientationChange,
+  onClose,
+}: {
+  isOpen: boolean;
+  html: string;
+  paperSize: PdfPaperSize;
+  orientation: PdfOrientation;
+  onPaperSizeChange: (value: PdfPaperSize) => void;
+  onOrientationChange: (value: PdfOrientation) => void;
+  onClose: () => void;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  if (!isOpen) return null;
+
+  const printFrame = () => {
+    const frameWindow = iframeRef.current?.contentWindow;
+    if (!frameWindow) return;
+    frameWindow.focus();
+    frameWindow.print();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[12000] bg-slate-950/70 p-4">
+      <div className="mx-auto flex h-full max-w-[1480px] flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Ütemterv PDF előnézet</h2>
+            <p className="text-xs text-slate-500">Lapméret és tájolás választása után indítható a PDF / nyomtatás.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={paperSize}
+              onChange={(event) => onPaperSizeChange(event.target.value as PdfPaperSize)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-50"
+            >
+              <option value="A4">A4</option>
+              <option value="A3">A3</option>
+              <option value="A2">A2</option>
+              <option value="A1">A1</option>
+            </select>
+            <select
+              value={orientation}
+              onChange={(event) => onOrientationChange(event.target.value as PdfOrientation)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-50"
+            >
+              <option value="landscape">Fekvő</option>
+              <option value="portrait">Álló</option>
+            </select>
+            <button onClick={printFrame} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">
+              <Printer size={14} /> PDF / nyomtatás
+            </button>
+            <button onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Bezárás</button>
+          </div>
+        </div>
+        <iframe ref={iframeRef} title="Ütemterv PDF előnézet" srcDoc={html} className="h-full w-full bg-slate-100" />
+      </div>
+    </div>
+  );
+}
+
+export default function UtemezesPage() {
+  const [scheduleName, setScheduleName] = useState("Ütemterv (Gantt diagram)");
+  const [schedule, setSchedule] = useState<ScheduleLocation[]>(initialSchedule);
+  const [features, setFeatures] = useState<ScheduleFeatureState>(initialFeatures);
+  const [selectedSource, setSelectedSource] = useState<ScheduleSource>("sample");
+  const [viewMode, setViewMode] = useState<ViewMode>("fourMonth");
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isNewScheduleOpen, setIsNewScheduleOpen] = useState(false);
+  const [isBoundaryModalOpen, setIsBoundaryModalOpen] = useState(false);
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
+  const [pdfPreviewHtml, setPdfPreviewHtml] = useState("");
+  const [pdfPaperSize, setPdfPaperSize] = useState<PdfPaperSize>("A3");
+  const [pdfOrientation, setPdfOrientation] = useState<PdfOrientation>("landscape");
+  const [selectedTask, setSelectedTask] = useState<ScheduleTask | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(1400);
+  const [viewportHeight, setViewportHeight] = useState(900);
+  const [scheduleViewportHeight, setScheduleViewportHeight] = useState(620);
+  const [timelineStartDate, setTimelineStartDate] = useState(new Date(2026, 4, 1));
+  const [customTimelineEndDate, setCustomTimelineEndDate] = useState<Date | null>(null);
+  const [statusMessage, setStatusMessage] = useState(SCHEDULE_BUILD_MARKER);
+  const [versions, setVersions] = useState<SavedVersion[]>([]);
+  const [manualHolidays, setManualHolidays] = useState<ManualHoliday[]>([]);
+  const [boundaries, setBoundaries] = useState<ScheduleBoundary[]>([
+    { id: "start", title: "Projekt kezdés", date: "2026-05-05", color: "#2563eb" },
+    { id: "phase-1", title: "I. szakasz", date: "2026-07-01", color: "#ea580c" },
+    { id: "finish", title: "Projekt befejezés", date: "2026-10-19", color: "#dc2626" },
+  ]);
+  const [scheduleRevision, setScheduleRevision] = useState(0);
+
+  const timelineEndDate = useMemo(
+    () => customTimelineEndDate ?? getTimelineEndDate(timelineStartDate, viewMode),
+    [customTimelineEndDate, timelineStartDate, viewMode]
+  );
+
+  const timelineStartIso = toIsoDate(timelineStartDate);
+  const timelineEndIso = toIsoDate(timelineEndDate);
+  const totalDays = Math.max(1, differenceInDays(timelineStartIso, timelineEndIso) + 1);
+  const visibleTimelineWidth = Math.max(720, viewportWidth - LEFT_COL_WIDTH - TYPE_COL_WIDTH - 24);
+  const dayWidth = Math.max(6, (visibleTimelineWidth / totalDays) * zoomLevel);
+  const weekWidth = dayWidth * 7;
+  const timelineWidth = Math.max(totalDays * dayWidth, visibleTimelineWidth);
+  const minTableWidth = LEFT_COL_WIDTH + TYPE_COL_WIDTH + timelineWidth;
+
+  const normalizedSchedule = useMemo(() => normalizeSchedule(schedule), [schedule]);
+  const allTasks = useMemo(() => selectAllTasks(normalizedSchedule), [normalizedSchedule]);
+
+  const visibleDateRange = useMemo(
+    () => getVisibleDateRange(timelineStartDate, { scrollLeft, viewportWidth, dayWidth, overscanDays: 14 }),
+    [scrollLeft, viewportWidth, timelineStartDate, dayWidth]
+  );
+
+  const visibleRows = useMemo(() => buildVisibleRows(schedule, collapsedRows), [schedule, collapsedRows]);
+  const visibleRowLayouts = useMemo(() => calculateVisibleRowLayout(visibleRows), [visibleRows]);
+  const visibleViewportRows = useMemo(
+    () => getVisibleRowRange(visibleRowLayouts, scrollTop, viewportHeight, 300),
+    [visibleRowLayouts, scrollTop, viewportHeight]
+  );
+  const dependencyTaskRows = useMemo(() => selectTaskRows(visibleRowLayouts), [visibleRowLayouts]);
+  const totalVirtualHeight = useMemo(() => visibleRowLayouts.at(-1)?.bottom ?? 0, [visibleRowLayouts]);
+  useEffect(() => {
+    const updateScheduleViewportHeight = () => {
+      const element = scheduleScrollRef.current;
+      const rect = element?.getBoundingClientRect();
+      const top = Math.max(0, rect?.top ?? 360);
+      const bottomReserve = 24;
+      const availableHeight = Math.floor(window.innerHeight - top - bottomReserve);
+      const tallTarget = Math.floor(window.innerHeight * 0.58);
+      const nextHeight = Math.max(520, Math.min(Math.max(availableHeight, tallTarget), Math.floor(window.innerHeight * 0.78)));
+
+      setScheduleViewportHeight(nextHeight);
+      if (element) {
+        setViewportWidth(element.clientWidth);
+        setViewportHeight(nextHeight);
+      } else {
+        setViewportHeight(nextHeight);
+      }
+    };
+
+    updateScheduleViewportHeight();
+    const timeoutId = window.setTimeout(updateScheduleViewportHeight, 0);
+    const timeoutId2 = window.setTimeout(updateScheduleViewportHeight, 250);
+    window.addEventListener("resize", updateScheduleViewportHeight);
+    window.addEventListener("scroll", updateScheduleViewportHeight, true);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId2);
+      window.removeEventListener("resize", updateScheduleViewportHeight);
+      window.removeEventListener("scroll", updateScheduleViewportHeight, true);
+    };
+  }, [features.showLegend, viewMode, zoomLevel, scheduleRevision, isPdfPreviewOpen]);
+
+  const todayIso = toIsoDate(new Date());
+  const todayVisible = todayIso >= timelineStartIso && todayIso <= timelineEndIso;
+  const todayLeftPx = LEFT_COL_WIDTH + TYPE_COL_WIDTH + getXFromDate(todayIso, timelineStartIso) * (dayWidth / 28);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw) as PersistedSchedule;
+        setScheduleName(saved.scheduleName || "DIMPROVER gyakorló ütemterv");
+        setSchedule(saved.schedule || initialSchedule);
+        setBoundaries(saved.boundaries || []);
+        setVersions(saved.versions || []);
+        setManualHolidays(saved.manualHolidays || []);
+        if (saved.timelineStartDate) setTimelineStartDate(parseDateInput(saved.timelineStartDate));
+        if (saved.timelineEndDate) setCustomTimelineEndDate(parseDateInput(saved.timelineEndDate));
+        setStatusMessage("Korábbi munkaközi mentés betöltve");
+      } catch {
+        setStatusMessage("A korábbi mentés nem volt betölthető, mintaadat indult");
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const payload: PersistedSchedule = {
+        scheduleName,
+        schedule,
+        boundaries,
+        versions,
+        timelineStartDate: timelineStartIso,
+        timelineEndDate: timelineEndIso,
+        manualHolidays,
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    }, 450);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [scheduleName, schedule, boundaries, versions, timelineStartIso, timelineEndIso, manualHolidays]);
+
+
+  useEffect(() => {
+    const element = scheduleScrollRef.current;
+    if (!element) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || !event.altKey) return;
+      event.preventDefault();
+      setZoomLevel((prev) => {
+        const next = Math.min(10, Math.max(0.25, Number((prev + (event.deltaY < 0 ? 0.5 : -0.5)).toFixed(2))));
+        setStatusMessage(`Nagyítás: ${Math.round(next * 100)}%`);
+        return next;
+      });
+    };
+
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, []);
+
+
+
+  const saveWorkingSchedule = (template = "Munkaközi ütemterv") => {
+    const nextVersion: SavedVersion = {
+      id: `version-${Date.now()}`,
+      name: `${template} v${versions.length + 1}`,
+      savedAt: new Date().toISOString(),
+      template,
+    };
+    const nextVersions = [nextVersion, ...versions].slice(0, 20);
+    const payload: PersistedSchedule = {
+      scheduleName,
+      schedule,
+      boundaries,
+      versions: nextVersions,
+      timelineStartDate: timelineStartIso,
+      timelineEndDate: timelineEndIso,
+      manualHolidays,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    setVersions(nextVersions);
+    setStatusMessage(`Mentve: ${nextVersion.name}`);
+  };
+
+  const toggleFeature = (featureKey: keyof ScheduleFeatureState) => setFeatures((prev) => ({ ...prev, [featureKey]: !prev[featureKey] }));
+  const toggleRow = (id: string) => setCollapsedRows((prev) => {
+    const next = new Set(prev);
+    const willOpen = next.has(id);
+    if (willOpen) next.delete(id);
+    else next.add(id);
+    setStatusMessage(willOpen ? "Csoport kinyitva" : "Csoport összecsukva");
+    return next;
+  });
+
+  const handleCreateTask = (task: ScheduleTaskInput) => {
+    const actualStart = task.startDate || timelineStartIso;
+    const actualEnd = task.endDate || formatLocalDate(addDays(toDate(actualStart), task.duration * 7 - 1));
+    const contractStart = task.contractStartDate || actualStart;
+    const contractEnd = task.contractEndDate || actualEnd;
+
+    const editedTaskId = selectedTask?.id ?? selectedTaskId;
+
+    if (editedTaskId !== null) {
+      setSchedule((prev) => {
+        const updated = updateTaskInSchedule(prev, editedTaskId, (item) => ({
+          ...item,
+          ...task,
+          actualStartDate: actualStart,
+          actualEndDate: actualEnd,
+          startDate: actualStart,
+          endDate: actualEnd,
+          contractStartDate: contractStart,
+          contractEndDate: contractEnd,
+          actualStartWeek: getWeekOffsetFromDate(timelineStartDate, actualStart),
+          startWeek: getWeekOffsetFromDate(timelineStartDate, actualStart),
+          actualDuration: getDurationWeeks(actualStart, actualEnd),
+          duration: getDurationWeeks(actualStart, actualEnd),
+          contractStartWeek: getWeekOffsetFromDate(timelineStartDate, contractStart),
+          contractDuration: getDurationWeeks(contractStart, contractEnd),
+          predecessors: task.predecessors || [],
+        }));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          scheduleName,
+          schedule: updated,
+          boundaries,
+          versions,
+          timelineStartDate: timelineStartIso,
+          timelineEndDate: timelineEndIso,
+          manualHolidays,
+        }));
+        setScheduleRevision((rev) => rev + 1);
+        return updated;
+      });
+    } else {
+      const nextTask: ScheduleTask = {
+        id: Date.now(),
+        order: allTasks.length + 1,
+        name: task.name,
+        contractor: task.contractor || "Vállalkozó neve",
+        category: task.category,
+        color: task.color,
+        taskType: task.taskType,
+        workType: task.workType,
+        progress: task.progress ?? 0,
+        startWeek: getWeekOffsetFromDate(timelineStartDate, actualStart),
+        duration: getDurationWeeks(actualStart, actualEnd),
+        contractStartWeek: getWeekOffsetFromDate(timelineStartDate, contractStart),
+        contractDuration: getDurationWeeks(contractStart, contractEnd),
+        actualStartWeek: getWeekOffsetFromDate(timelineStartDate, actualStart),
+        actualDuration: getDurationWeeks(actualStart, actualEnd),
+        startDate: actualStart,
+        endDate: actualEnd,
+        contractStartDate: contractStart,
+        contractEndDate: contractEnd,
+        actualStartDate: actualStart,
+        actualEndDate: actualEnd,
+        predecessors: task.predecessors || [],
+      };
+      setSchedule((prev) => {
+        const updated = addTaskToCategory(prev, nextTask, task.category);
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          scheduleName,
+          schedule: updated,
+          boundaries,
+          versions,
+          timelineStartDate: timelineStartIso,
+          timelineEndDate: timelineEndIso,
+          manualHolidays,
+        }));
+        setScheduleRevision((rev) => rev + 1);
+        return updated;
+      });
+    }
+    setSelectedTask(null);
+    setSelectedTaskId(null);
+    setIsCreateModalOpen(false);
+    setStatusMessage("Feladat mentve az ütemtervben");
+  };
+
+  const handleSelectTask = (task: ScheduleTask) => {
+    setSelectedTask(task);
+    setSelectedTaskId(task.id);
+    setIsCreateModalOpen(true);
+  };
+
+  const handleDeleteTask = () => {
+    if (selectedTaskId === null) return;
+    setSchedule((prev) => {
+      const updated = deleteTaskFromSchedule(prev, selectedTaskId);
+      setScheduleRevision((rev) => rev + 1);
+      return updated;
+    });
+    setIsCreateModalOpen(false);
+    setSelectedTask(null);
+    setSelectedTaskId(null);
+    setStatusMessage("Feladat törölve");
+  };
+
+
+  const applyTaskBarChange = (
+    taskId: number,
+    mode: ScheduleBarInteractionMode,
+    originalStartDate: string,
+    originalEndDate: string,
+    deltaDays: number
+  ) => {
+    setSchedule((prev) => {
+      const updated = updateTaskInSchedule(prev, taskId, (task) => {
+        const originalStart = toDate(originalStartDate);
+        const originalEnd = toDate(originalEndDate);
+        let nextStartDate = originalStart;
+        let nextEndDate = originalEnd;
+
+        if (mode === "move") {
+          nextStartDate = addDays(originalStart, deltaDays);
+          nextEndDate = addDays(originalEnd, deltaDays);
+        } else if (mode === "resize-start") {
+          const limitedStart = addDays(originalStart, deltaDays);
+          nextStartDate = limitedStart >= originalEnd ? addDays(originalEnd, -1) : limitedStart;
+        } else {
+          const limitedEnd = addDays(originalEnd, deltaDays);
+          nextEndDate = limitedEnd <= originalStart ? addDays(originalStart, 1) : limitedEnd;
+        }
+
+        const actualStartDate = formatLocalDate(nextStartDate);
+        const actualEndDate = formatLocalDate(nextEndDate);
+        const calculatedWeeks = getDurationWeeks(actualStartDate, actualEndDate);
+        return {
+          ...task,
+          duration: calculatedWeeks,
+          actualDuration: calculatedWeeks,
+          actualStartDate,
+          actualEndDate,
+          startDate: actualStartDate,
+          endDate: actualEndDate,
+          contractStartDate: task.contractStartDate || actualStartDate,
+          contractEndDate: task.contractEndDate || actualEndDate,
+          actualStartWeek: getWeekOffsetFromDate(timelineStartDate, actualStartDate),
+          startWeek: getWeekOffsetFromDate(timelineStartDate, actualStartDate),
+        };
+      });
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        scheduleName,
+        schedule: updated,
+        boundaries,
+        versions,
+        timelineStartDate: timelineStartIso,
+        timelineEndDate: timelineEndIso,
+        manualHolidays,
+      }));
+      setScheduleRevision((rev) => rev + 1);
+      setStatusMessage(`${mode === "move" ? "Feladat mozgatva" : "Feladat dátuma módosítva"}: ${actualStartDateForStatus(updated, taskId)} – ${actualEndDateForStatus(updated, taskId)}`);
+      return updated;
+    });
+  };
+
+  const handleTaskBarInteractionStart = (mode: ScheduleBarInteractionMode) => {
+    setStatusMessage(mode === "move" ? "Feladatsáv mozgatása aktív" : "Feladatsáv átméretezése aktív");
+  };
+
+  const handleTaskBarInteractionEnd = () => {
+    // A pontos módosított dátumot az applyTaskBarChange állítja be.
+  };
+
+
+  const changeZoom = (direction: "in" | "out") => {
+    setZoomLevel((prev) => {
+      const next = Math.min(10, Math.max(0.25, Number((direction === "in" ? prev + 0.5 : prev - 0.5).toFixed(2))));
+      setStatusMessage(`Nagyítás: ${Math.round(next * 100)}%`);
+      return next;
+    });
+  };
+  const handleViewChange = (nextViewMode: ViewMode) => {
+    setViewMode(nextViewMode);
+    setCustomTimelineEndDate(null);
+    setZoomLevel(1);
+    setScrollLeft(0);
+    setStatusMessage(`${getViewLabel(nextViewMode)} aktív`);
+  };
+
+  const buildSchedulePdfHtml = (paperSize: PdfPaperSize = "A3", orientation: PdfOrientation = "landscape", template = "Ütemterv (Gantt diagram)") => {
+    const escapeHtml = (value: string | number | undefined | null) =>
+      String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] || char));
+
+    const tasks = selectAllTasks(normalizedSchedule);
+    const rangeDays = Math.max(1, differenceInDays(timelineStartIso, timelineEndIso) + 1);
+    const pageBase = PDF_PAGE_MM[paperSize];
+    const pageWidthMm = orientation === "landscape" ? pageBase.width : pageBase.height;
+    const pageHeightMm = orientation === "landscape" ? pageBase.height : pageBase.width;
+    const printableWidth = orientation === "landscape" ? pageBase.chart : Math.round(pageBase.chart * (pageHeightMm / pageWidthMm));
+    const chartWidth = printableWidth - 390;
+    const dayPx = chartWidth / rangeDays;
+    const monthLabels: string[] = [];
+    let monthCursor = new Date(timelineStartDate);
+    monthCursor.setDate(1);
+    while (monthCursor <= timelineEndDate) {
+      const monthStart = new Date(Math.max(monthCursor.getTime(), timelineStartDate.getTime()));
+      const nextMonth = addMonths(monthCursor, 1);
+      const monthEnd = new Date(Math.min(addDays(nextMonth, -1).getTime(), timelineEndDate.getTime()));
+      const left = Math.max(0, differenceInDays(timelineStartIso, formatLocalDate(monthStart)) * dayPx);
+      const width = Math.max(24, (differenceInDays(formatLocalDate(monthStart), formatLocalDate(monthEnd)) + 1) * dayPx);
+      monthLabels.push(`<div class="month" style="left:${left}px;width:${width}px">${escapeHtml(monthStart.toLocaleDateString("hu-HU", { year: "numeric", month: "long" }))}</div>`);
+      monthCursor = nextMonth;
+    }
+
+    const weekLabels: string[] = [];
+    let currentWeekKey = "";
+    let weekStartIndex = 0;
+    for (let index = 0; index < rangeDays; index += 1) {
+      const current = addDays(timelineStartDate, index);
+      const key = `${getIsoWeekYear(current)}-${getIsoWeekNumber(current)}`;
+      if (!currentWeekKey) {
+        currentWeekKey = key;
+        weekStartIndex = index;
+      }
+      const isLast = index === rangeDays - 1;
+      const next = !isLast ? addDays(timelineStartDate, index + 1) : null;
+      const nextKey = next ? `${getIsoWeekYear(next)}-${getIsoWeekNumber(next)}` : "";
+      if (isLast || nextKey !== currentWeekKey) {
+        const weekNo = getIsoWeekNumber(addDays(timelineStartDate, weekStartIndex));
+        const left = weekStartIndex * dayPx;
+        const width = (index - weekStartIndex + 1) * dayPx;
+        const label = `${weekNo}.`;
+        weekLabels.push(`<div class="week" style="left:${left}px;width:${width}px">${label}</div>`);
+        currentWeekKey = nextKey;
+        weekStartIndex = index + 1;
+      }
+    }
+
+    const weekendBands = Array.from({ length: rangeDays }, (_, index) => {
+      const current = addDays(timelineStartDate, index);
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) return "";
+      return `<div class="weekend" style="left:${index * dayPx}px;width:${dayPx}px"></div>`;
+    }).join("");
+
+    const holidayBands = manualHolidays
+      .filter((holiday) => holiday.date >= timelineStartIso && holiday.date <= timelineEndIso)
+      .map((holiday) => {
+        const left = Math.max(0, differenceInDays(timelineStartIso, holiday.date) * dayPx);
+        return `<div class="holiday" style="left:${left}px;width:${dayPx}px"></div>`;
+      })
+      .join("");
+
+    const pdfMarkers = [
+      ...(features.showTodayLine && todayVisible ? [{ id: "today", title: "MA", date: todayIso, color: "#2563eb" }] : []),
+      ...boundaries.filter((b) => b.date >= timelineStartIso && b.date <= timelineEndIso).map((b) => ({ id: b.id, title: b.title, date: b.date, color: b.color })),
+    ];
+
+    const markerLabels = pdfMarkers.map((marker, index) => {
+      const left = Math.max(0, Math.min(chartWidth, differenceInDays(timelineStartIso, marker.date) * dayPx));
+      const lane = index % 2;
+      return `<div class="marker-label" style="left:${left}px;top:${4 + lane * 22}px;background:${marker.color}">${escapeHtml(marker.title)}</div>`;
+    }).join("");
+
+    const markerLines = pdfMarkers.map((marker) => {
+      const left = Math.max(0, Math.min(chartWidth, differenceInDays(timelineStartIso, marker.date) * dayPx));
+      return `<div class="marker-line" style="left:${left}px;border-color:${marker.color}"></div>`;
+    }).join("");
+
+    const dayLabels = Array.from({ length: rangeDays }, (_, index) => {
+      const current = addDays(timelineStartDate, index);
+      return `<div class="day" style="left:${index * dayPx}px;width:${dayPx}px"><b>${current.getDate()}</b><small>${current.toLocaleDateString("hu-HU", { weekday: "short" }).replace(".", "")}</small></div>`;
+    }).join("");
+
+    const chartBackground = `${weekendBands}${holidayBands}${markerLines}`;
+
+    const pdfRows = visibleRowLayouts.map((row) => {
+      if (row.rowType === "location") {
+        return `<tr class="row-location"><td class="name level-0"><strong>⌄ ${escapeHtml(row.location.name)}</strong></td><td>Helyszín</td><td></td><td class="chart-cell"><div class="chart bg-only">${chartBackground}</div></td></tr>`;
+      }
+      if (row.rowType === "building") {
+        return `<tr class="row-building"><td class="name level-1"><strong>⌄ ${escapeHtml(row.building.name)}</strong></td><td>Épület</td><td></td><td class="chart-cell"><div class="chart bg-only">${chartBackground}</div></td></tr>`;
+      }
+      if (row.rowType === "category") {
+        return `<tr class="row-category"><td class="name level-2"><strong>⌄ ${escapeHtml(row.category.name)}</strong></td><td>Munkanem</td><td></td><td class="chart-cell"><div class="chart bg-only">${chartBackground}</div></td></tr>`;
+      }
+
+      const task = row.task;
+      const start = getTaskActualStartDate(task);
+      const end = getTaskActualEndDate(task);
+      const left = Math.max(0, differenceInDays(timelineStartIso, start) * dayPx);
+      const width = Math.max(12, (differenceInDays(start, end) + 1) * dayPx);
+      const progress = Math.max(0, Math.min(100, task.progress ?? 0));
+      const color = task.color?.replace("bg-", "") || "blue-600";
+      const barColor = color.includes("orange") ? "#ea580c" : color.includes("green") ? "#059669" : color.includes("purple") ? "#9333ea" : color.includes("red") ? "#dc2626" : "#2563eb";
+      return `
+        <tr class="row-task">
+          <td class="name level-3"><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(task.contractor)}</small></td>
+          <td>${escapeHtml(task.taskType || "Feladat")}</td>
+          <td>${escapeHtml(start)} – ${escapeHtml(end)}</td>
+          <td class="chart-cell"><div class="chart">${chartBackground}<div class="contract-bar" style="left:${left}px;width:${width}px"></div><div class="bar" style="left:${left}px;width:${width}px;background:${barColor}"><i style="width:${progress}%"></i><span>${escapeHtml(task.name)}</span><b>${progress}%</b></div></div></td>
+        </tr>`;
+    }).join("");
+
+    return `<!doctype html><html lang="hu"><head><meta charset="utf-8" /><title>${escapeHtml(scheduleName)} - PDF előnézet</title><style>
+      @page{size:${paperSize} ${orientation};margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#0f172a}.page{width:${pageWidthMm}mm;min-height:${pageHeightMm}mm;margin:20px auto;background:white;padding:14mm;box-shadow:0 18px 50px rgba(15,23,42,.18)}header{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #2563eb;padding-bottom:10px;margin-bottom:12px}h1{margin:0;font-size:22px}.meta{font-size:11px;color:#475569;line-height:1.7}.badge{display:inline-block;border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:5px 10px;font-weight:700}.gantt{width:${390 + chartWidth}px}.marker-band{position:relative;height:52px;margin-left:390px;border:1px solid #e2e8f0;border-bottom:0;background:#fff}.marker-label{position:absolute;z-index:5;transform:translateX(-50%);color:white;border-radius:5px;padding:3px 7px;font-size:9px;font-weight:800;white-space:nowrap}.months{position:relative;height:30px;margin-left:390px;background:#e5e7eb;color:#0f172a;border-radius:0;overflow:hidden;border-top:1px solid #cbd5e1;border-left:1px solid #cbd5e1}.month{position:absolute;top:0;height:30px;display:flex;align-items:center;justify-content:center;border-right:1px solid #cbd5e1;font-size:11px;font-weight:800}.weeks{position:relative;height:22px;margin-left:390px;background:#f1f5f9;color:#1e3a8a;overflow:hidden;border-left:1px solid #cbd5e1}.week{position:absolute;top:0;height:22px;display:flex;align-items:center;justify-content:center;border-right:1px solid #cbd5e1;font-size:10px;font-weight:900;white-space:nowrap}.days{position:relative;height:34px;margin-left:390px;background:#f8fafc;color:#334155;overflow:hidden;border-left:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1}.day{position:absolute;top:0;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid #dbe4ef;font-size:7px;line-height:1.05}.day b{font-size:8px;color:#0f172a}.day small{font-size:6px;color:#475569}table{width:${390 + chartWidth}px;border-collapse:collapse;font-size:10px}th{background:#e5e7eb;color:#0f172a;text-align:left;border:1px solid #cbd5e1;padding:8px}td{height:28px;border:1px solid #dbe4ef;padding:5px;vertical-align:middle}.name{width:250px}.name strong{font-weight:700}.name small{display:block;color:#64748b;font-size:9px;margin-top:2px}.level-0{padding-left:10px}.level-1{padding-left:26px}.level-2{padding-left:42px}.level-3{padding-left:58px}.row-location td{background:#cbd5e1;font-weight:700}.row-building td{background:#e2e8f0;font-weight:700}.row-category td{background:#f1f5f9;font-weight:700}.row-task td{background:#fff}.chart-cell{width:${chartWidth}px;padding:0}.chart{position:relative;height:100%;min-height:28px;overflow:hidden;background-color:#fff;background-image:linear-gradient(to right,#dbe4ef 1px,transparent 1px);background-size:${dayPx}px 100%}.bg-only{background-color:transparent}.weekend{position:absolute;top:0;bottom:0;background:rgba(248,113,113,.16)}.holiday{position:absolute;top:0;bottom:0;background:rgba(239,68,68,.20)}.marker-line{position:absolute;top:0;bottom:0;border-left:2px solid;z-index:3}.contract-bar{position:absolute;top:9px;height:10px;border-radius:3px;background:#cbd5e1;opacity:.55}.bar{position:absolute;top:5px;height:18px;border-radius:4px;color:white;overflow:visible;box-shadow:0 1px 2px rgba(15,23,42,.22);z-index:8}.bar i{position:absolute;left:0;top:0;bottom:0;background:rgba(16,185,129,.55);z-index:1}.bar span{position:relative;z-index:2;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px 6px;font-size:9px;font-weight:700}.bar b{position:absolute;right:4px;top:50%;transform:translateY(-50%);color:white;background:transparent;border:0;border-radius:0;padding:0;font-size:8px;font-weight:900;z-index:9;text-shadow:0 1px 2px rgba(15,23,42,.75)}footer{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:10px;color:#64748b;display:flex;justify-content:space-between}@media print{body{background:white}.page{margin:0;box-shadow:none;width:auto;min-height:auto}}
+    </style></head><body><main class="page"><header><div><span class="badge">${escapeHtml(template)}</span><h1>${escapeHtml(scheduleName)}</h1><div class="meta">Dátumtartomány: ${escapeHtml(timelineStartIso)} – ${escapeHtml(timelineEndIso)} · Nézet: ${escapeHtml(getViewLabel(viewMode))}</div></div><div class="meta">DIMPROVER<br/>Készítés: ${escapeHtml(new Date().toLocaleString("hu-HU"))}<br/>Látható sorok: ${visibleRowLayouts.length}</div></header><section class="gantt"><div class="marker-band">${markerLabels}</div><div class="months">${monthLabels.join("")}</div><div class="weeks">${weekLabels.join("")}</div><div class="days">${dayLabels}</div><table><thead><tr><th>Feladat</th><th>Típus</th><th>Dátum</th><th>Gantt diagram</th></tr></thead><tbody>${pdfRows || '<tr><td colspan="4">Nincs megjeleníthető sor.</td></tr>'}</tbody></table></section><footer><span>DIMPROVER · Ütemterv PDF előnézet</span><span>${escapeHtml(statusMessage)}</span></footer></main></body></html>`;
+  };
+
+  const openPdfPreview = () => {
+    saveWorkingSchedule("Ütemterv PDF előnézet");
+    setPdfPreviewHtml(buildSchedulePdfHtml(pdfPaperSize, pdfOrientation, "Ütemterv (Gantt diagram)"));
+    setIsPdfPreviewOpen(true);
+    setStatusMessage("Ütemterv PDF előnézet megnyitva");
+  };
+
+  const handlePrint = (paperSize: PdfPaperSize, template: string) => {
+    saveWorkingSchedule(template);
+    const style = document.createElement("style");
+    style.innerHTML = `@page { size: ${paperSize} landscape; margin: 10mm; } @media print { body { background: white !important; } .no-print { display: none !important; } }`;
+    document.head.appendChild(style);
+    setStatusMessage(`Nyomtatási kép: ${paperSize} fekvő · ${template}`);
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => style.remove(), 500);
+    }, 100);
+    setIsPrintModalOpen(false);
+  };
+
+  const setProjectSource = (source: ScheduleSource) => {
+    setSelectedSource(source);
+    setSchedule(initialSchedule);
+    setStatusMessage(source === "sample" ? "Minta ütemterv megjelenítve" : "Projektadat betöltés előkészítve; jelenleg mintaadat töltődik");
+  };
+
+  const getTimelineStep = (direction: "prev" | "next") => {
+    const sign = direction === "next" ? 1 : -1;
+    if (viewMode === "day") return { days: sign, months: 0 };
+    if (viewMode === "week") return { days: sign * 7, months: 0 };
+    if (viewMode === "month") return { days: 0, months: sign };
+    if (viewMode === "year") return { days: 0, months: sign * 12 };
+    return { days: 0, months: sign * 4 };
+  };
+
+  const moveDateByStep = (date: Date, direction: "prev" | "next") => {
+    const step = getTimelineStep(direction);
+    return step.months ? addMonths(date, step.months) : addDays(date, step.days);
+  };
+
+  const shiftTimeline = (direction: "prev" | "next") => {
+    setTimelineStartDate((prev) => moveDateByStep(prev, direction));
+    setCustomTimelineEndDate((prev) => (prev ? moveDateByStep(prev, direction) : prev));
+    setScrollLeft(0);
+    setStatusMessage(direction === "next" ? "Ütemterv előreléptetve" : "Ütemterv visszaléptetve");
+  };
+
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || !event.altKey) return;
+      const key = event.key;
+      if (key === "Enter" || event.code === "NumpadEnter") {
+        event.preventDefault();
+        setSelectedTask(null);
+        setSelectedTaskId(null);
+        setIsCreateModalOpen(true);
+        setStatusMessage("Új feladat létrehozása");
+        return;
+      }
+      if (key === "+" || key === "=" || event.code === "NumpadAdd") {
+        event.preventDefault();
+        shiftTimeline("next");
+      }
+      if (key === "-" || event.code === "NumpadSubtract") {
+        event.preventDefault();
+        shiftTimeline("prev");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [viewMode, customTimelineEndDate]);
+
+  const handlePlaceholderAction = (message: string) => setStatusMessage(message);
+
+  const handleCreateNewSchedule = (name: string, startDate: string, endDate: string, withSampleTask: boolean) => {
+    const empty = createEmptySchedule();
+    let nextSchedule = empty;
+    if (withSampleTask) {
+      const task: ScheduleTask = {
+        id: Date.now(),
+        order: 1,
+        name: "Első próba feladat",
+        contractor: "Vállalkozó neve",
+        category: "Előkészítés",
+        startWeek: 1,
+        duration: getDurationWeeks(startDate, endDate),
+        contractStartWeek: 1,
+        contractDuration: getDurationWeeks(startDate, endDate),
+        actualStartWeek: 1,
+        actualDuration: getDurationWeeks(startDate, endDate),
+        startDate,
+        endDate,
+        contractStartDate: startDate,
+        contractEndDate: endDate,
+        actualStartDate: startDate,
+        actualEndDate: endDate,
+        progress: 0,
+        predecessors: [],
+      };
+      nextSchedule = addTaskToCategory(empty, task, "Előkészítés");
+    }
+    setScheduleName(name || "Új munkaközi ütemterv");
+    setSchedule(nextSchedule);
+    setTimelineStartDate(parseDateInput(startDate));
+    setCustomTimelineEndDate(parseDateInput(endDate));
+    setCollapsedRows(new Set());
+    setVersions([]);
+    setManualHolidays([]);
+    setStatusMessage("Új ütemterv létrehozva");
+    setIsNewScheduleOpen(false);
+  };
+
+  const zoomControls = (
+    <div className="no-print flex shrink-0 rounded-lg border border-slate-700 bg-slate-900 shadow-sm">
+      <button onClick={() => changeZoom("out")} className="border-r border-slate-700 p-1.5 text-slate-200 hover:bg-slate-800"><Minus size={13} /></button>
+      <button onClick={() => setZoomLevel(1)} className="border-r border-slate-700 px-2 text-[10px] font-semibold text-slate-200 hover:bg-slate-800">{Math.round(zoomLevel * 100)}%</button>
+      <button onClick={() => changeZoom("in")} className="p-1.5 text-slate-200 hover:bg-slate-800"><Plus size={13} /></button>
+    </div>
+  );
+
+  return (
+    <AppLayout>
+      <section className="relative mb-0 min-h-screen overflow-hidden px-8 pb-8 pt-7">
+        <div className="relative z-[1]">
+          <div className="no-print mb-5 rounded-none border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <div className="mb-3 text-sm font-medium text-blue-600">← Vissza a projekt áttekintéshez</div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="mb-2 text-sm text-slate-500">Projektek / Ütemterv / Gantt diagram</div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950">Ütemterv (Gantt diagram)</h1>
+                <p className="mt-2 text-sm text-emerald-600">Automatikus mentés aktív · {statusMessage}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex overflow-hidden rounded-none border border-slate-200 bg-white p-1 text-sm font-semibold text-slate-600 shadow-sm">
+                  <Link href="/utemezes" className="rounded-none bg-blue-600 px-4 py-1.5 text-white shadow-sm">Gantt diagram</Link>
+                  <Link href="/utemezes/lista" className="rounded-none px-4 py-1.5 hover:bg-slate-50">Lista nézet</Link>
+                </div>
+                <button
+                  onClick={() => saveWorkingSchedule("Kézi mentés")}
+                  className="rounded-none border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Mentés
+                </button>
+                <button
+                  onClick={openPdfPreview}
+                  className="rounded-none border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  PDF előnézet / export
+                </button>
+                <button
+                  onClick={() => handlePlaceholderAction("Ütemterv véglegesítése előkészítve")}
+                  className="rounded-none bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+                >
+                  Véglegesítés
+                </button>
+              </div>
+            </div>
+          </div>
+      <ModulePanel storageKey="utemezes:display-editor" title="Megjelenítés és szerkesztő" contentClassName="px-5 py-4" className="no-print mb-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900"><Eye size={16} />Megjelenítés és szerkesztő</div>
+        <div className="flex flex-wrap gap-2">
+          <FeatureToggle label="Szerződéses sáv" checked={features.showContractBars} onChange={() => toggleFeature("showContractBars")} />
+          <FeatureToggle label="Aktuális sáv" checked={features.showActualBars} onChange={() => toggleFeature("showActualBars")} />
+          <FeatureToggle label="Készültség" checked={features.showProgressOverlay} onChange={() => toggleFeature("showProgressOverlay")} />
+          <FeatureToggle label="Mai nap vonal" checked={features.showTodayLine} onChange={() => toggleFeature("showTodayLine")} />
+          <FeatureToggle label="Hétvégék jelölése" checked={features.showWeekendHighlight} onChange={() => toggleFeature("showWeekendHighlight")} />
+          <FeatureToggle label="Ünnepnapok jelölése" checked={features.showHolidayHighlight} onChange={() => toggleFeature("showHolidayHighlight")} />
+          <FeatureToggle label="Összesítő sáv" checked={features.showCollapsedSummaryBars} onChange={() => toggleFeature("showCollapsedSummaryBars")} />
+          <FeatureToggle label="Jelmagyarázat" checked={features.showLegend} onChange={() => toggleFeature("showLegend")} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+          <button onClick={() => handlePlaceholderAction("Kezdőlapra rögzítés előkészítve")} className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"><Pin size={14} />Kezdőlapra rögzítés</button>
+          <button onClick={() => handlePlaceholderAction("Készültség a feladat szerkesztésében módosítható")} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Percent size={14} />Készültség</button>
+          <button onClick={() => handlePlaceholderAction("Időjárás overlay előkészítve")} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><CloudSun size={14} />Időjárás</button>
+          <button onClick={() => handlePlaceholderAction("Mérföldkő később külön layerbe kerül")} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Diamond size={14} />Mérföldkő</button>
+          <button onClick={() => setIsHolidayModalOpen(true)} className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><CalendarDays size={14} />Mozgó ünnepnap</button>
+          <button onClick={() => handlePlaceholderAction("Egyéb műveletek előkészítve")} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><MoreHorizontal size={14} />Egyéb</button>
+        </div>
+      </ModulePanel>
+
+      <ModulePanel storageKey="utemezes:period-view" title="Időszak és nézet" contentClassName="px-5 py-4" className="no-print mb-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftTimeline("prev")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">←</button>
+            <button onClick={() => shiftTimeline("next")} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">→</button>
+            <div className="ml-2"><h2 className="text-sm font-semibold text-slate-900">{getViewLabel(viewMode)}</h2><p className="text-xs text-slate-500">{timelineStartDate.toLocaleDateString("hu-HU")} – {timelineEndDate.toLocaleDateString("hu-HU")}</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+            <span className="font-semibold text-slate-700">Időszak:</span>
+            <input type="date" value={timelineStartIso} onChange={(event) => { setTimelineStartDate(parseDateInput(event.target.value)); setScrollLeft(0); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-500" />
+            <span className="text-slate-400">–</span>
+            <input type="date" value={timelineEndIso} min={timelineStartIso} onChange={(event) => { setCustomTimelineEndDate(parseDateInput(event.target.value)); setScrollLeft(0); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-500" />
+          </div>
+          {features.showViewSwitcher && (
+            <div className="flex flex-wrap rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-medium text-slate-600">
+              {[
+                { label: "Éves", value: "year" as ViewMode },
+                { label: "4 havi", value: "fourMonth" as ViewMode },
+                { label: "Havi", value: "month" as ViewMode },
+                { label: "Heti", value: "week" as ViewMode },
+                { label: "Napi", value: "day" as ViewMode },
+              ].map((view) => <button key={view.value} onClick={() => handleViewChange(view.value)} className={`rounded-md px-3 py-1.5 ${viewMode === view.value ? "bg-blue-600 text-white shadow-sm" : "hover:bg-white"}`}>{view.label}</button>)}
+            </div>
+          )}
+        </div>
+      </ModulePanel>
+
+      <div className="relative border border-blue-200/70 bg-white shadow-[0_10px_24px_rgba(37,99,235,0.10)]">
+          {features.showLegend && (
+            <div className="border-b border-slate-100 px-4 py-3 text-xs">
+              <div className="mb-2 flex flex-wrap items-center gap-4">
+                <span className="font-semibold text-slate-800">Munkanemek</span>
+                {Array.from(new Set(allTasks.map((task) => task.category))).map((category) => <span key={category} className="flex items-center gap-1.5 text-slate-600"><span className={`h-2.5 w-2.5 rounded ${getCategoryColor(schedule, category)}`} />{category}</span>)}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-2">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="font-semibold text-slate-800">Jelölések</span>
+                  <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-8 rounded bg-slate-200" />Szerződéses ütem</span>
+                  <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-8 rounded bg-blue-600" />Aktuális ütem</span>
+                  <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-8 rounded bg-green-500/40" />Készültség</span>
+                  <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-[2px] rounded bg-blue-500" />MA vonal</span>
+                  <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-[2px] rounded bg-red-600" />Szakaszhatároló</span>
+                  {features.showWeekendHighlight && <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-8 rounded bg-red-100" />Hétvége</span>}
+                  {features.showHolidayHighlight && <span className="flex items-center gap-1.5 text-slate-600"><span className="h-2.5 w-8 rounded bg-red-200/70" />Ünnepnap{manualHolidays.length ? ` (${manualHolidays.length} manuális)` : ""}</span>}
+                </div>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button onClick={() => { setSelectedSource("sample"); setScheduleName("Minta ütemterv"); setSchedule(initialSchedule); setCollapsedRows(new Set()); setScheduleRevision((rev) => rev + 1); setStatusMessage("Minta ütemterv betöltve"); }} className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100" title="Minta Gantt és lista ütemterv betöltése"><CalendarDays size={14} />Minta ütemterv</button>
+                  <button onClick={() => { setSelectedTask(null); setSelectedTaskId(null); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" title="Ctrl + Alt + Enter"><Plus size={14} />Új feladat</button>
+                  <button onClick={() => setIsBoundaryModalOpen(true)} className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100"><SplitSquareVertical size={14} />Szakaszhatároló</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={scheduleScrollRef}
+            className="overflow-auto"
+            style={{ height: `${scheduleViewportHeight}px`, minHeight: "520px" }}
+            onScroll={(event) => { const target = event.currentTarget; setScrollTop(target.scrollTop); setScrollLeft(target.scrollLeft); setViewportWidth(target.clientWidth); setViewportHeight(target.clientHeight); }}
+          >
+            <div className="w-max min-w-full pb-10" style={{ minWidth: `${minTableWidth}px` }}>
+              <TimelineHeader
+                weekWidth={weekWidth}
+                leftColWidth={LEFT_COL_WIDTH}
+                typeColWidth={TYPE_COL_WIDTH}
+                timelineStartDate={timelineStartDate}
+                timelineEndDate={timelineEndDate}
+                viewMode={viewMode}
+                zoomControls={zoomControls}
+                markers={[
+                  ...(features.showTodayLine && todayVisible
+                    ? [{ id: "today", left: getXFromDate(todayIso, timelineStartIso) * (dayWidth / 28), color: "#2563eb", label: "MA" }]
+                    : []),
+                  ...boundaries
+                    .filter((boundary) => boundary.date >= timelineStartIso && boundary.date <= timelineEndIso)
+                    .map((boundary) => ({
+                      id: boundary.id,
+                      left: getXFromDate(boundary.date, timelineStartIso) * (dayWidth / 28),
+                      color: boundary.color,
+                      label: boundary.title,
+                    })),
+                ]}
+              />
+
+              <div className="relative">
+                <DependencyLayer taskRows={dependencyTaskRows} weekWidth={weekWidth} offsetLeft={LEFT_COL_WIDTH + TYPE_COL_WIDTH} timelineStartDate={timelineStartDate} totalHeight={totalVirtualHeight} />
+
+                <VirtualScheduleRenderer key={`gantt-${scheduleRevision}-${dayWidth}-${visibleViewportRows.map((row) => row.rowType === "task" ? `${row.id}-${row.task.actualStartDate}-${row.task.actualEndDate}-${row.task.progress}` : row.id).join("|")}`} rows={visibleViewportRows} totalHeight={totalVirtualHeight} features={features} weekWidth={weekWidth} timelineStartDate={timelineStartDate} stickyFirstCol={stickyFirstCol} stickySecondCol={stickySecondCol} leftColWidth={LEFT_COL_WIDTH} typeColWidth={TYPE_COL_WIDTH} collapsedRows={collapsedRows} onToggle={toggleRow} onTaskClick={handleSelectTask} onTaskBarChange={applyTaskBarChange} onInteractionStart={handleTaskBarInteractionStart} onInteractionEnd={handleTaskBarInteractionEnd} />
+
+                <div className="pointer-events-none absolute bottom-0 top-0 z-[20]" style={{ left: `${LEFT_COL_WIDTH + TYPE_COL_WIDTH}px`, width: `${timelineWidth}px` }}>
+                  <GridLines dayWidth={dayWidth} timelineStartDate={timelineStartDate} timelineEndDate={timelineEndDate} showWeekends={features.showWeekendHighlight} showHolidays={features.showHolidayHighlight} manualHolidayDates={manualHolidays.map((holiday) => holiday.date)} />
+                </div>
+
+                {features.showTodayLine && todayVisible && (
+                  <div className="pointer-events-none absolute z-[930]" style={{ top: "0px", height: `${totalVirtualHeight}px`, left: `${todayLeftPx}px` }}>
+                    <div className="absolute bottom-0 top-0 w-[4px] -translate-x-1/2 bg-blue-400/10" />
+                    <div className="absolute bottom-0 top-0 w-[2px] -translate-x-1/2 bg-blue-500" />
+                    
+                  </div>
+                )}
+
+                {boundaries.map((boundary) => {
+                  if (boundary.date < timelineStartIso || boundary.date > timelineEndIso) return null;
+                  const left = LEFT_COL_WIDTH + TYPE_COL_WIDTH + getXFromDate(boundary.date, timelineStartIso) * (dayWidth / 28);
+                  return (
+                    <div key={boundary.id} className="pointer-events-none absolute z-[940]" style={{ top: "0px", height: `${totalVirtualHeight}px`, left: `${left}px` }}>
+                      <div className="absolute bottom-0 top-0 w-[2px] -translate-x-1/2" style={{ backgroundColor: boundary.color }} />
+                      
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      <CreateTaskModal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); setSelectedTask(null); setSelectedTaskId(null); }} onCreate={handleCreateTask} onDelete={handleDeleteTask} selectedTask={selectedTask} timelineStartDate={timelineStartIso} dependencyOptions={allTasks.filter((task) => task.id !== selectedTaskId).map((task) => ({ id: task.id, name: task.name, category: task.category }))} />
+      <NewScheduleModal isOpen={isNewScheduleOpen} onClose={() => setIsNewScheduleOpen(false)} onCreate={handleCreateNewSchedule} />
+      <BoundaryModal isOpen={isBoundaryModalOpen} onClose={() => setIsBoundaryModalOpen(false)} boundaries={boundaries} onSave={(next) => { setBoundaries(next); setStatusMessage("Szakaszhatárolók frissítve"); }} />
+      <HolidayModal isOpen={isHolidayModalOpen} onClose={() => setIsHolidayModalOpen(false)} holidays={manualHolidays} onSave={(next) => { setManualHolidays(next); setStatusMessage("Mozgó ünnepnapok frissítve"); }} />
+      <PrintSettingsModal isOpen={isPrintModalOpen} onClose={() => setIsPrintModalOpen(false)} onPrint={handlePrint} />
+      <SchedulePdfPreviewModal isOpen={isPdfPreviewOpen} html={pdfPreviewHtml} paperSize={pdfPaperSize} orientation={pdfOrientation} onPaperSizeChange={(value) => { setPdfPaperSize(value); setPdfPreviewHtml(buildSchedulePdfHtml(value, pdfOrientation, "Ütemterv (Gantt diagram)")); }} onOrientationChange={(value) => { setPdfOrientation(value); setPdfPreviewHtml(buildSchedulePdfHtml(pdfPaperSize, value, "Ütemterv (Gantt diagram)")); }} onClose={() => setIsPdfPreviewOpen(false)} />
+        </div>
+      </section>
+    </AppLayout>
+  );
+}

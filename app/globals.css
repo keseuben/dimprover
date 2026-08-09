@@ -2,9 +2,1603 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --dimpro-blue: #0ea5e9;
+  --dimpro-blue-dark: #0284c7;
+  --dimpro-blue-deep: #2563eb;
+  --dimpro-navy-950: #020617;
+  --dimpro-navy-900: #07111f;
+  --dimpro-navy-850: #081827;
+  --dimpro-navy-800: #0b1220;
+  --dimpro-paper: #f8fafc;
+  --dimpro-paper-soft: #f3f6fa;
+  --dimpro-paper-line: #e5eaf0;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   font-family: Arial, Helvetica, sans-serif;
+  background: var(--dimpro-paper-soft);
+}
+
+.dimpro-architect-grid {
+  background-color: var(--dimpro-paper-soft);
+  background-image:
+    linear-gradient(
+      112deg,
+      transparent 0 18%,
+      rgba(14, 165, 233, 0.045) 18.15%,
+      transparent 18.8% 100%
+    ),
+    linear-gradient(
+      112deg,
+      transparent 0 42%,
+      rgba(37, 99, 235, 0.035) 42.15%,
+      transparent 42.75% 100%
+    ),
+    linear-gradient(
+      28deg,
+      transparent 0 27%,
+      rgba(2, 132, 199, 0.04) 27.1%,
+      transparent 27.75% 100%
+    ),
+    linear-gradient(
+      28deg,
+      transparent 0 68%,
+      rgba(15, 23, 42, 0.035) 68.15%,
+      transparent 68.75% 100%
+    ),
+    linear-gradient(
+      90deg,
+      transparent 0 9%,
+      rgba(2, 132, 199, 0.035) 9.12%,
+      transparent 9.55% 100%
+    ),
+    radial-gradient(
+      circle at 18% 22%,
+      rgba(14, 165, 233, 0.08),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 82% 76%,
+      rgba(37, 99, 235, 0.055),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(248, 250, 252, 0.98),
+      rgba(243, 246, 250, 0.96)
+    );
+  background-size:
+    980px 720px,
+    1180px 860px,
+    1040px 760px,
+    1320px 920px,
+    860px 640px,
+    auto,
+    auto,
+    auto;
+  background-position:
+    -320px -180px,
+    160px -260px,
+    -220px 180px,
+    380px 120px,
+    -140px 0,
+    0 0,
+    0 0,
+    0 0;
+  background-attachment: fixed;
+}
+
+.dimpro-architect-grid::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent 0 14%,
+      rgba(2, 132, 199, 0.032) 14.08%,
+      rgba(2, 132, 199, 0.032) 14.24%,
+      transparent 14.32% 100%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 0 32%,
+      rgba(15, 23, 42, 0.026) 32.08%,
+      rgba(15, 23, 42, 0.026) 32.22%,
+      transparent 32.32% 100%
+    ),
+    linear-gradient(
+      90deg,
+      transparent 0 61%,
+      rgba(37, 99, 235, 0.028) 61.08%,
+      rgba(37, 99, 235, 0.028) 61.22%,
+      transparent 61.32% 100%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 0 74%,
+      rgba(2, 132, 199, 0.024) 74.08%,
+      rgba(2, 132, 199, 0.024) 74.22%,
+      transparent 74.32% 100%
+    );
+  background-size:
+    720px 520px,
+    920px 680px,
+    1120px 760px,
+    1280px 840px;
+  background-position:
+    -180px -120px,
+    240px -240px,
+    -360px 120px,
+    180px 220px;
+  opacity: 0.9;
+  mask-image: radial-gradient(circle at 50% 42%, black, transparent 82%);
+}
+
+.dimpro-paper-panel {
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+}
+
+.dimpro-sidebar-shell {
+  background:
+    radial-gradient(
+      circle at 30% 0%,
+      rgba(14, 165, 233, 0.22),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      var(--dimpro-navy-900),
+      var(--dimpro-navy-950) 52%,
+      #01040b
+    );
+}
+
+/* DIMPROVER FullCalendar - Heti szervező */
+.dimpro-calendar-shell .fc {
+  --fc-border-color: rgba(191, 219, 254, 0.9);
+  --fc-page-bg-color: rgba(255, 255, 255, 0.75);
+  --fc-neutral-bg-color: rgba(239, 246, 255, 0.75);
+  --fc-today-bg-color: rgba(219, 234, 254, 0.45);
+  --fc-now-indicator-color: #0284c7;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+.dimpro-calendar-shell .fc-scrollgrid,
+.dimpro-calendar-shell .fc-theme-standard td,
+.dimpro-calendar-shell .fc-theme-standard th {
+  border-color: rgba(191, 219, 254, 0.9);
+}
+
+.dimpro-calendar-shell .fc-col-header-cell {
+  background: rgba(239, 246, 255, 0.78);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dimpro-calendar-shell .fc-timegrid-slot {
+  border-bottom: 1px dotted rgba(148, 163, 184, 0.55) !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-slot-lane {
+  height: 22px;
+}
+
+.dimpro-calendar-shell .fc-timegrid-axis,
+.dimpro-calendar-shell .fc-timegrid-slot-label {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dimpro-calendar-shell .fc-day-sat,
+.dimpro-calendar-shell .fc-day-sun {
+  background-color: rgba(254, 226, 226, 0.45);
+}
+
+.dimpro-calendar-shell .dimpro-bg-offhours {
+  background-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-now-indicator-line {
+  border-color: #0284c7;
+}
+
+.dimpro-calendar-shell .fc-event {
+  border-radius: 2px;
+  border-width: 1px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dimpro-calendar-shell .dimpro-event-blue {
+  border-color: rgba(147, 197, 253, 0.95) !important;
+  background: rgba(239, 246, 255, 0.95) !important;
+  color: #1e3a8a !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-cyan {
+  border-color: rgba(103, 232, 249, 0.95) !important;
+  background: rgba(236, 254, 255, 0.95) !important;
+  color: #155e75 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-sky {
+  border-color: rgba(125, 211, 252, 0.95) !important;
+  background: rgba(240, 249, 255, 0.95) !important;
+  color: #075985 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-indigo {
+  border-color: rgba(199, 210, 254, 0.95) !important;
+  background: rgba(238, 242, 255, 0.95) !important;
+  color: #3730a3 !important;
+}
+
+.dimpro-calendar-shell .fc-list,
+.dimpro-calendar-shell .fc-list-table {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.dimpro-calendar-shell .fc-list-day-cushion {
+  background: rgba(239, 246, 255, 0.9) !important;
+  color: #1d4ed8;
+  font-weight: 900;
+}
+
+/* DIMPROVER FullCalendar - naptári hét szám */
+.dimpro-calendar-shell .fc-timegrid-axis-frame,
+.dimpro-calendar-shell .fc-col-header-cell.fc-day,
+.dimpro-calendar-shell .fc-daygrid-day-number,
+.dimpro-calendar-shell .fc-daygrid-week-number,
+.dimpro-calendar-shell .fc-timegrid-col-frame .fc-timegrid-col-events {
+  position: relative;
+}
+
+.dimpro-calendar-shell .fc .fc-daygrid-week-number,
+.dimpro-calendar-shell .fc .fc-timegrid-axis-cushion,
+.dimpro-calendar-shell .fc .fc-col-header-cell-cushion {
+  font-weight: 800;
+}
+
+.dimpro-calendar-shell .fc .fc-daygrid-week-number {
+  border: 1px solid rgba(147, 197, 253, 0.8);
+  background: rgba(239, 246, 255, 0.92);
+  color: #1d4ed8;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.dimpro-calendar-shell .fc .fc-timegrid-axis-cushion::after,
+.dimpro-calendar-shell .fc .fc-daygrid-week-number::before {
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* DIMPROVER FullCalendar - stabil heti szamozas */
+.dimpro-calendar-shell .fc .fc-daygrid-week-number {
+  min-width: 44px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(191, 219, 254, 0.95);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08);
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number::before {
+  content: "" !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number .fc-daygrid-week-number-text,
+.dimpro-calendar-shell .fc .fc-daygrid-week-number a {
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 900;
+  text-decoration: none;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number:hover {
+  background: rgba(239, 246, 255, 0.98);
+}
+
+.dimpro-calendar-shell .fc .fc-daygrid-week-number {
+  min-width: 52px !important;
+  height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08) !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number::before {
+  content: "" !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number a,
+.dimpro-calendar-shell
+  .fc
+  .fc-daygrid-week-number
+  .fc-daygrid-week-number-text {
+  color: #0f172a !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  text-decoration: none !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number:hover {
+  background: rgba(248, 250, 252, 0.98) !important;
+}
+
+/* DIMPROVER Outlook-like calendar surface */
+.dimpro-calendar-shell .fc {
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+.dimpro-calendar-shell .fc-scrollgrid {
+  border-color: rgba(191, 219, 254, 0.95) !important;
+}
+.dimpro-calendar-shell .fc-col-header-cell {
+  height: 24px !important;
+  background: rgba(239, 246, 255, 0.82) !important;
+}
+.dimpro-calendar-shell .fc-col-header-cell-cushion {
+  padding: 3px 4px !important;
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+}
+.dimpro-calendar-shell .fc-daygrid-day {
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+.dimpro-calendar-shell .fc-day-sat,
+.dimpro-calendar-shell .fc-day-sun {
+  background: rgba(254, 226, 226, 0.48) !important;
+}
+.dimpro-calendar-shell .fc-daygrid-day-frame {
+  min-height: 82px !important;
+  padding: 4px !important;
+}
+.dimpro-calendar-shell .fc-daygrid-day-top {
+  justify-content: flex-end !important;
+}
+.dimpro-calendar-shell .fc-daygrid-day-number {
+  padding: 4px 5px !important;
+  color: #0f172a !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+.dimpro-calendar-shell .fc-day-other .fc-daygrid-day-number {
+  color: #a8b0bd !important;
+}
+.dimpro-calendar-shell .fc-day-today {
+  background: rgba(219, 234, 254, 0.58) !important;
+}
+
+/* DIMPROVER Outlook-like week number column */
+.dimpro-calendar-shell .fc .fc-daygrid-week-number {
+  width: 58px !important;
+  min-width: 58px !important;
+  height: 34px !important;
+  margin: 7px auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid rgba(15, 23, 42, 0.18) !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  color: #111827 !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06) !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number::before {
+  content: "" !important;
+}
+.dimpro-calendar-shell .fc .fc-daygrid-week-number a {
+  color: #111827 !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  text-decoration: none !important;
+}
+
+/* DIMPROVER Outlook-refined calendar style */
+.dimpro-outlook-month {
+  background: #ffffff;
+  border-color: #d1d5db !important;
+}
+.dimpro-outlook-month > div:first-child {
+  background: #f8fafc !important;
+  border-bottom-color: #cbd5e1 !important;
+  color: #1f2937 !important;
+}
+.dimpro-outlook-month > div:first-child > div {
+  border-right-color: #d1d5db !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+.dimpro-outlook-month > div:not(:first-child) {
+  min-height: 112px !important;
+  border-bottom-color: #d1d5db !important;
+}
+.dimpro-outlook-month > div:not(:first-child) > div {
+  border-right-color: #d1d5db !important;
+}
+.dimpro-outlook-month > div:not(:first-child) > div:first-child {
+  background: #f8fafc !important;
+}
+.dimpro-outlook-month .rounded-full {
+  border-radius: 999px !important;
+  border-color: #d1d5db !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-size: 18px !important;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.1) !important;
+}
+.dimpro-calendar-shell .fc {
+  --fc-border-color: #d1d5db;
+  --fc-today-bg-color: rgba(226, 239, 255, 0.55);
+  background: #ffffff !important;
+}
+.dimpro-calendar-shell .fc-scrollgrid,
+.dimpro-calendar-shell .fc-theme-standard td,
+.dimpro-calendar-shell .fc-theme-standard th {
+  border-color: #d1d5db !important;
+}
+.dimpro-calendar-shell .fc-col-header-cell {
+  background: #f8fafc !important;
+  height: 28px !important;
+}
+.dimpro-calendar-shell .fc-col-header-cell-cushion {
+  color: #1f2937 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 5px 4px !important;
+  text-transform: none !important;
+}
+.dimpro-calendar-shell .fc-timegrid-slot {
+  border-bottom: 1px dotted #cbd5e1 !important;
+}
+.dimpro-calendar-shell .fc-timegrid-slot-minor {
+  border-bottom-style: dotted !important;
+}
+.dimpro-calendar-shell .fc-timegrid-slot-label,
+.dimpro-calendar-shell .fc-timegrid-axis {
+  color: #111827 !important;
+  font-size: 11px !important;
+  background: #ffffff !important;
+}
+.dimpro-calendar-shell .fc-day-sat,
+.dimpro-calendar-shell .fc-day-sun {
+  background-color: rgba(248, 244, 244, 0.92) !important;
+}
+
+/* DIMPROVER Outlook two-line week/day header */
+.dimpro-calendar-shell .fc-col-header-cell {
+  height: 72px !important;
+  vertical-align: top !important;
+}
+.dimpro-calendar-shell .fc-col-header-cell-cushion {
+  display: block !important;
+  width: 100% !important;
+  padding: 6px 4px 8px !important;
+  text-decoration: none !important;
+}
+.dimpro-outlook-day-header {
+  display: flex;
+  min-height: 54px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+.dimpro-outlook-day-name {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+.dimpro-outlook-day-number {
+  display: inline-flex;
+  min-width: 30px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+.dimpro-outlook-today-pill {
+  background: #0f172a;
+  color: #ffffff !important;
+}
+.dimpro-week-corner-badge {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  z-index: 30;
+  display: flex;
+  height: 44px;
+  min-width: 54px;
+  align-items: center;
+  justify-content: center;
+  color: #111827;
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+}
+.dimpro-calendar-shell .fc-timegrid-axis-frame,
+.dimpro-calendar-shell .fc-timegrid-axis-cushion {
+  min-height: 72px !important;
+}
+
+/* DIMPROVER calendar header corrections */
+.dimpro-outlook-day-name {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #374151 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+.dimpro-outlook-day-number {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #374151 !important;
+  padding: 0 !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+.dimpro-outlook-today-number {
+  min-width: 32px !important;
+  min-height: 28px !important;
+  justify-content: center !important;
+  border: 2px solid #111827 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #111827 !important;
+  padding: 1px 8px !important;
+  font-weight: 900 !important;
+}
+.dimpro-outlook-today-pill {
+  background: transparent !important;
+  color: #111827 !important;
+}
+.dimpro-week-corner-badge {
+  left: 18px !important;
+  top: 18px !important;
+  height: auto !important;
+  min-width: auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  ring: 0 !important;
+  color: #111827 !important;
+  font-size: 34px !important;
+  font-weight: 900 !important;
+}
+
+/* DIMPROVER week corner number sizing */
+.dimpro-week-corner-badge {
+  left: 0 !important;
+  top: 0 !important;
+  width: 62px !important;
+  height: 72px !important;
+  min-width: 62px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 24px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+/* DIMPROVER Outlook-style event cards */
+.dimpro-calendar-shell .fc-v-event,
+.dimpro-calendar-shell .fc-timegrid-event,
+.dimpro-calendar-shell .fc-daygrid-event {
+  position: relative !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+}
+
+.dimpro-calendar-shell .fc-v-event::before,
+.dimpro-calendar-shell .fc-timegrid-event::before,
+.dimpro-calendar-shell .fc-daygrid-event::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  z-index: 2;
+}
+
+.dimpro-calendar-shell .dimpro-event-blue,
+.dimpro-calendar-shell .dimpro-event-blue .dimpro-event-card-content {
+  background: #dbeafe !important;
+}
+.dimpro-calendar-shell .dimpro-event-blue::before {
+  background: #1d4ed8 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-cyan,
+.dimpro-calendar-shell .dimpro-event-cyan .dimpro-event-card-content {
+  background: #cffafe !important;
+}
+.dimpro-calendar-shell .dimpro-event-cyan::before {
+  background: #0891b2 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-sky,
+.dimpro-calendar-shell .dimpro-event-sky .dimpro-event-card-content {
+  background: #e0f2fe !important;
+}
+.dimpro-calendar-shell .dimpro-event-sky::before {
+  background: #0369a1 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-indigo,
+.dimpro-calendar-shell .dimpro-event-indigo .dimpro-event-card-content {
+  background: #e0e7ff !important;
+}
+.dimpro-calendar-shell .dimpro-event-indigo::before {
+  background: #4338ca !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-green,
+.dimpro-calendar-shell .dimpro-event-green .dimpro-event-card-content {
+  background: #dcfce7 !important;
+}
+.dimpro-calendar-shell .dimpro-event-green::before {
+  background: #15803d !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-lime,
+.dimpro-calendar-shell .dimpro-event-lime .dimpro-event-card-content {
+  background: #ecfccb !important;
+}
+.dimpro-calendar-shell .dimpro-event-lime::before {
+  background: #4d7c0f !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-yellow,
+.dimpro-calendar-shell .dimpro-event-yellow .dimpro-event-card-content {
+  background: #fef9c3 !important;
+}
+.dimpro-calendar-shell .dimpro-event-yellow::before {
+  background: #a16207 !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-orange,
+.dimpro-calendar-shell .dimpro-event-orange .dimpro-event-card-content {
+  background: #ffedd5 !important;
+}
+.dimpro-calendar-shell .dimpro-event-orange::before {
+  background: #c2410c !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-red,
+.dimpro-calendar-shell .dimpro-event-red .dimpro-event-card-content {
+  background: #fee2e2 !important;
+}
+.dimpro-calendar-shell .dimpro-event-red::before {
+  background: #b91c1c !important;
+}
+
+.dimpro-calendar-shell .dimpro-event-purple,
+.dimpro-calendar-shell .dimpro-event-purple .dimpro-event-card-content {
+  background: #f3e8ff !important;
+}
+.dimpro-calendar-shell .dimpro-event-purple::before {
+  background: #7e22ce !important;
+}
+
+.dimpro-event-card-content {
+  position: relative;
+  min-height: 100%;
+  padding: 4px 18px 4px 12px;
+  color: #0f172a;
+  line-height: 1.12;
+}
+
+.dimpro-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dimpro-event-meta,
+.dimpro-event-person {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dimpro-event-sync-icon {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  color: #0f172a;
+  opacity: 0.88;
+}
+
+.dimpro-calendar-shell .fc-list-event-dot {
+  border-color: #0067b8 !important;
+}
+
+.dimpro-calendar-shell .fc-list-event-title .dimpro-event-card-content {
+  min-height: 38px;
+  margin: 2px 0;
+  border-left: 8px solid #0067b8;
+}
+
+.dimpro-month-event {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  padding: 4px 16px 4px 12px;
+  color: #0f172a;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.dimpro-month-event::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+}
+
+.dimpro-month-event-blue {
+  background: #dbeafe;
+}
+.dimpro-month-event-blue::before {
+  background: #1d4ed8;
+}
+.dimpro-month-event-cyan {
+  background: #cffafe;
+}
+.dimpro-month-event-cyan::before {
+  background: #0891b2;
+}
+.dimpro-month-event-sky {
+  background: #e0f2fe;
+}
+.dimpro-month-event-sky::before {
+  background: #0369a1;
+}
+.dimpro-month-event-indigo {
+  background: #e0e7ff;
+}
+.dimpro-month-event-indigo::before {
+  background: #4338ca;
+}
+.dimpro-month-event-green {
+  background: #dcfce7;
+}
+.dimpro-month-event-green::before {
+  background: #15803d;
+}
+.dimpro-month-event-lime {
+  background: #ecfccb;
+}
+.dimpro-month-event-lime::before {
+  background: #4d7c0f;
+}
+.dimpro-month-event-yellow {
+  background: #fef9c3;
+}
+.dimpro-month-event-yellow::before {
+  background: #a16207;
+}
+.dimpro-month-event-orange {
+  background: #ffedd5;
+}
+.dimpro-month-event-orange::before {
+  background: #c2410c;
+}
+.dimpro-month-event-red {
+  background: #fee2e2;
+}
+.dimpro-month-event-red::before {
+  background: #b91c1c;
+}
+.dimpro-month-event-purple {
+  background: #f3e8ff;
+}
+.dimpro-month-event-purple::before {
+  background: #7e22ce;
+}
+
+/* DIMPROVER fix: timegrid események valós időtartam szerinti magassága */
+.dimpro-calendar-shell .fc-timegrid-event-harness,
+.dimpro-calendar-shell .fc-timegrid-event-harness-inset {
+  overflow: visible !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-event,
+.dimpro-calendar-shell .fc-timegrid-event .fc-event-main,
+.dimpro-calendar-shell .fc-timegrid-event .fc-event-main-frame {
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-event .dimpro-event-card-content {
+  height: 100% !important;
+  min-height: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-event.fc-event-mirror {
+  height: auto !important;
+}
+
+.dimpro-calendar-shell .fc-timegrid-event-resizer {
+  display: block !important;
+  height: 8px !important;
+  cursor: ns-resize !important;
+}
+
+/* DIMPROVER calendar source filters and Google cards */
+.dimpro-calendar-shell .dimpro-source-google,
+.dimpro-calendar-shell .dimpro-source-google .dimpro-event-card-content {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #064e3b !important;
+}
+
+.dimpro-calendar-shell .dimpro-source-google::before {
+  background: #16a34a !important;
+  width: 10px !important;
+}
+
+.dimpro-calendar-shell .dimpro-source-google .dimpro-event-card-content {
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  padding-left: 14px;
+}
+
+.dimpro-event-source-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.dimpro-event-source-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dimpro-calendar-shell .dimpro-source-google .dimpro-event-source-pill {
+  background: rgba(22, 163, 74, 0.14);
+  color: #065f46;
+}
+
+.dimpro-calendar-shell .dimpro-source-outlook,
+.dimpro-calendar-shell .dimpro-source-outlook .dimpro-event-card-content {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e3a8a !important;
+}
+
+.dimpro-calendar-shell .dimpro-source-outlook::before {
+  background: #2563eb !important;
+  width: 10px !important;
+}
+
+.dimpro-month-google-card,
+.dimpro-month-source-google {
+  background: #dcfce7 !important;
+  color: #064e3b !important;
+}
+
+.dimpro-month-google-card::before,
+.dimpro-month-source-google::before {
+  background: #16a34a !important;
+  width: 10px !important;
+}
+
+/* DIMPRO jegyzőkönyv szerkesztő */
+.dimpro-toolbar-btn {
+  border-radius: 0.5rem;
+  border: 1px solid rgb(226 232 240);
+  background: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+
+.dimpro-toolbar-btn:hover {
+  background: rgb(248 250 252);
+}
+
+.dimpro-toolbar-select {
+  border-radius: 0.5rem;
+  border: 1px solid rgb(226 232 240);
+  background: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+
+.dimpro-a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  padding: 14mm;
+  color: #0f172a;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+  position: relative;
+}
+
+.dimpro-a4-page::before {
+  content: "";
+  position: absolute;
+  inset: 14mm;
+  border: 1px dashed rgba(100, 116, 139, 0.55);
+  pointer-events: none;
+}
+
+.dimpro-doc-head,
+.dimpro-doc-foot,
+.dimpro-editor-content {
+  position: relative;
+  z-index: 1;
+}
+
+.dimpro-doc-head {
+  display: grid;
+  grid-template-columns: 1.1fr 1.6fr 1fr;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid #cbd5e1;
+  padding-bottom: 12px;
+}
+
+.dimpro-doc-head h2 {
+  text-align: center;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.dimpro-logo-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-right: 1px solid #cbd5e1;
+  padding-right: 12px;
+}
+
+.dimpro-logo-box span {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.dimpro-logo-mark {
+  display: grid;
+  height: 36px;
+  width: 36px;
+  place-items: center;
+  border: 2px solid #1d4ed8;
+  color: #1d4ed8;
+  font-weight: 900;
+}
+
+.dimpro-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dimpro-doc-table th,
+.dimpro-doc-table td {
+  border: 1px solid #cbd5e1;
+  padding: 8px 9px;
+  vertical-align: top;
+}
+
+.dimpro-doc-table th {
+  background: #f8fafc;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.dimpro-editor-content {
+  outline: none;
+  font-size: 12pt;
+  line-height: 1.55;
+}
+
+.dimpro-editor-content h3 {
+  margin: 22px 0 10px;
+  color: #0f2f66;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.dimpro-editor-content ol {
+  margin: 0 0 12px 20px;
+  padding-left: 14px;
+}
+
+.dimpro-page-break {
+  height: 0;
+  margin: 28px 0;
+  border-top: 2px dashed #2563eb;
+  position: relative;
+  break-before: page;
+  page-break-before: always;
+}
+
+.dimpro-page-break span {
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  transform: translateX(-50%);
+  background: white;
+  color: #2563eb;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.dimpro-locked-template {
+  margin: 14px 0;
+  border: 2px solid #0f172a;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  user-select: none;
+}
+
+.dimpro-locked-label {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #0f172a;
+  color: white;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.dimpro-locked-title {
+  margin-top: 8px;
+  font-weight: 900;
+}
+
+.dimpro-locked-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 6px 10px;
+  font-size: 12px;
+}
+
+.dimpro-sign-table td {
+  height: 70px;
+  text-align: center;
+  vertical-align: bottom;
+}
+
+.dimpro-doc-foot {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #cbd5e1;
+  padding-top: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media print {
+  .dimpro-a4-page {
+    width: 210mm;
+    min-height: 297mm;
+    box-shadow: none;
+    page-break-after: always;
+  }
+
+  .dimpro-a4-page::before,
+  .dimpro-page-break span {
+    display: none;
+  }
+
+  .dimpro-page-break {
+    border: none;
+    margin: 0;
+  }
+}
+
+.dimpro-editor-scroll {
+  height: min(78vh, 920px);
+  overflow: auto;
+  padding: 32px;
+  border-top: 1px solid rgb(226 232 240);
+}
+
+.dimpro-zoom-stage {
+  position: relative;
+  margin: 0 auto;
+  transform-origin: top left;
+}
+
+.dimpro-zoom-stage .dimpro-a4-page {
+  transform-origin: top left;
+}
+
+.dimpro-template-edit-active {
+  outline: 3px solid #f59e0b;
+  outline-offset: 8px;
+}
+
+.dimpro-template-edit-active [contenteditable="true"] {
+  outline: 2px dashed #f59e0b;
+  outline-offset: 3px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.dimpro-signature-image {
+  max-width: 180px;
+  max-height: 70px;
+  display: inline-block;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .dimpro-a4-page,
+  .dimpro-a4-page * {
+    visibility: visible;
+  }
+
+  .dimpro-a4-page {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: none !important;
+  }
+
+  .dimpro-editor-scroll {
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+}
+
+.dimpro-signature-slot {
+  min-height: 64px;
+  min-width: 160px;
+  margin-bottom: 10px;
+  border: 2px dashed #334155;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dimpro-signature-slot:hover {
+  background: #1e293b;
+}
+
+.dimpro-signature-slot .dimpro-signature-image,
+.dimpro-signature-slot img {
+  background: white;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+@media print {
+  .dimpro-signature-slot {
+    border: 0;
+    background: transparent;
+    color: transparent;
+  }
+}
+
+/* Aláírás és sablon-zárolás finomítás */
+.dimpro-signature-slot {
+  min-height: 64px;
+  min-width: 160px;
+  margin-bottom: 10px;
+  border: 2px dashed #6b7280 !important;
+  border-radius: 12px;
+  background: #374151 !important;
+  color: #f8fafc !important;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dimpro-signature-slot:hover {
+  background: #4b5563 !important;
+}
+
+.dimpro-signature-slot.is-signed {
+  min-height: auto;
+  min-width: auto;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0;
+  color: transparent !important;
+}
+
+.dimpro-template-locked [data-template-readonly="true"],
+.dimpro-template-locked .dimpro-doc-head,
+.dimpro-template-locked .dimpro-doc-table th,
+.dimpro-template-locked .dimpro-doc-foot {
+  color: #64748b !important;
+}
+
+.dimpro-template-locked .dimpro-logo-mark {
+  color: #64748b !important;
+  border-color: #94a3b8 !important;
+}
+
+@media print {
+  .dimpro-template-locked [data-template-readonly="true"],
+  .dimpro-template-locked .dimpro-doc-head,
+  .dimpro-template-locked .dimpro-doc-table th,
+  .dimpro-template-locked .dimpro-doc-foot,
+  .dimpro-template-locked .dimpro-logo-mark {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+
+  .dimpro-signature-slot,
+  .dimpro-signature-slot.is-signed {
+    background: transparent !important;
+    border: 0 !important;
+    color: transparent !important;
+  }
+}
+
+/* DIMPRO javítás: aláírás, zárolt sablon, súgó */
+.dimpro-signature-slot {
+  min-height: 46px !important;
+  min-width: 138px !important;
+  margin-bottom: 8px !important;
+  border: 1px dashed #94a3b8 !important;
+  border-radius: 10px !important;
+  background: #e5e7eb !important;
+  color: #334155 !important;
+  font-size: 11px !important;
+}
+
+.dimpro-signature-slot:hover {
+  background: #d1d5db !important;
+}
+
+.dimpro-signature-slot.is-signed {
+  min-height: auto !important;
+  min-width: auto !important;
+  margin-bottom: 4px !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: transparent !important;
+}
+
+.dimpro-signature-slot.is-signed img {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.dimpro-template-locked [data-template-readonly="true"],
+.dimpro-template-locked .dimpro-doc-head,
+.dimpro-template-locked .dimpro-doc-table th,
+.dimpro-template-locked .dimpro-doc-foot {
+  color: #1d4ed8 !important;
+}
+
+.dimpro-template-locked .dimpro-logo-mark {
+  color: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+}
+
+.dimpro-help-modal {
+  position: fixed;
+  z-index: 9999;
+  width: 520px;
+  min-width: 320px;
+  min-height: 210px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  resize: both;
+  overflow: auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  background: #eff6ff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.dimpro-help-modal-header {
+  display: flex;
+  cursor: move;
+  user-select: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #bfdbfe;
+  background: #dbeafe;
+  padding: 10px 14px;
+  color: #1e3a8a;
+}
+
+.dimpro-help-modal-header button {
+  border-radius: 999px;
+  background: white;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.dimpro-help-modal-body {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.dimpro-help-modal-body p + p {
+  margin-top: 8px;
+}
+
+@media print {
+  .dimpro-help-modal { display: none !important; }
+  .dimpro-template-locked [data-template-readonly="true"],
+  .dimpro-template-locked .dimpro-doc-head,
+  .dimpro-template-locked .dimpro-doc-table th,
+  .dimpro-template-locked .dimpro-doc-foot,
+  .dimpro-template-locked .dimpro-logo-mark {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+}
+
+/* DIMPRO PDF előnézet */
+.dimpro-pdf-preview-modal {
+  position: fixed;
+  inset: 32px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 18px;
+  background: #f8fafc;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.35);
+}
+
+.dimpro-pdf-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #cbd5e1;
+  background: white;
+  padding: 12px 16px;
+}
+
+.dimpro-pdf-preview-header strong {
+  display: block;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.dimpro-pdf-preview-header span {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dimpro-pdf-preview-header button,
+.dimpro-pdf-preview-header a,
+.dimpro-pdf-preview-error button {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: white;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.dimpro-pdf-preview-body {
+  flex: 1;
+  min-height: 0;
+  background: #334155;
+}
+
+.dimpro-pdf-preview-body iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+}
+
+.dimpro-pdf-preview-error {
+  margin: 32px auto;
+  max-width: 760px;
+  border-radius: 18px;
+  background: white;
+  padding: 24px;
+  color: #334155;
+}
+
+.dimpro-pdf-preview-error strong {
+  color: #991b1b;
+}
+
+.dimpro-pdf-preview-error p {
+  margin: 10px 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media print {
+  .dimpro-pdf-preview-modal { display: none !important; }
+}
+
+/* DIMPRO HTML nyomtatási előnézet fallback */
+.dimpro-html-preview-wrap {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dimpro-html-preview-wrap iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: white;
+}
+
+.dimpro-pdf-preview-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #facc15;
+  background: #fef9c3;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #713f12;
+}
+
+.dimpro-pdf-preview-warning span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* license.dimpro.hu – biztonságos, előzményfüggetlen visszalépés */
+.dimpro-license-safe-back {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 150;
+  min-height: 46px;
+  max-width: min(280px, calc(100vw - 28px));
+  padding: 8px 13px;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  border-radius: 14px;
+  color: #ecfeff;
+  background: rgba(7, 20, 34, 0.94);
+  box-shadow: 0 14px 38px rgba(2, 8, 23, 0.28);
+  backdrop-filter: blur(16px);
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "icon label"
+    "icon target";
+  align-items: center;
+  column-gap: 8px;
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.dimpro-license-safe-back:hover {
+  transform: translateY(-2px);
+  border-color: #67e8f9;
+  background: rgba(8, 31, 48, 0.98);
+}
+
+.dimpro-license-safe-back > svg {
+  grid-area: icon;
+}
+
+.dimpro-license-safe-back > span {
+  grid-area: label;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.dimpro-license-safe-back > small {
+  grid-area: target;
+  overflow: hidden;
+  color: #a5f3fc;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .dimpro-license-safe-back {
+    min-height: 42px;
+    padding: 7px 11px;
+    border-radius: 12px;
+  }
+
+  .dimpro-license-safe-back.has-structure-dock,
+  .dimpro-license-safe-back.has-dev-center-dock {
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 72px);
+  }
 }

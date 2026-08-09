@@ -1,0 +1,378 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import IfcModelViewer from "./IfcModelViewer"
+import PdfPlanViewer from "./PdfPlanViewer"
+import type { PlanIssueMarker, PlanPageExport } from "./PlanMarkerTypes"
+import type { PlanViewerFile } from "./viewerTypes"
+
+export default function PlanViewerShell({ file, onClose }: { file: PlanViewerFile; onClose?: () => void }) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const [localMarkers, setLocalMarkers] = useState<PlanIssueMarker[]>(file.markers ?? [])
+  const [localPlanPageExports, setLocalPlanPageExports] = useState<PlanPageExport[]>(file.planPageExports ?? [])
+  const [activeIssueId, setActiveIssueId] = useState(file.issueId || file.issues?.[0]?.id || "")
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(file.markers?.[0]?.id ?? null)
+  const [focusMarkerRequest, setFocusMarkerRequest] = useState(0)
+  const [fullScreenMode, setFullScreenMode] = useState(false)
+  const [treePanelCollapsed, setTreePanelCollapsed] = useState(false)
+  const [treePanelPosition, setTreePanelPosition] = useState({ x: 16, y: 16 })
+  const [treePanelDrag, setTreePanelDrag] = useState<{ startClientX: number; startClientY: number; startX: number; startY: number } | null>(null)
+  const [collapsedIssueIds, setCollapsedIssueIds] = useState<string[]>([])
+  const [treeSearch, setTreeSearch] = useState("")
+  const [showOnlyMissingCrops, setShowOnlyMissingCrops] = useState(false)
+  const viewerTitle = file.type === "pdf" ? "PDF.js tervlapnéző" : file.type === "ifc" ? "IFC.js / web-ifc modellnéző" : "Tervnéző modul"
+
+  useEffect(() => {
+    setLocalMarkers(file.markers ?? [])
+    setLocalPlanPageExports(file.planPageExports ?? [])
+    setSelectedMarkerId(file.markers?.[0]?.id ?? null)
+  }, [file.id, file.markers, file.planPageExports])
+
+  useEffect(() => {
+    setActiveIssueId(file.issueId || file.issues?.[0]?.id || "")
+    setCollapsedIssueIds([])
+    setTreeSearch("")
+    setShowOnlyMissingCrops(false)
+  }, [file.id, file.issueId, file.issues])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFullScreenMode(false)
+    }
+    function handleFullscreenChange() {
+      if (!document.fullscreenElement) setFullScreenMode(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+    }
+  }, [])
+
+  function handleMarkersChange(markers: PlanIssueMarker[]) {
+    setLocalMarkers(markers)
+    file.onMarkersChange?.(markers)
+  }
+
+  function handlePlanPageExportsChange(exports: PlanPageExport[]) {
+    setLocalPlanPageExports(exports)
+    file.onPlanPageExportsChange?.(exports)
+  }
+
+  function expandIssue(issueId: string) {
+    setCollapsedIssueIds((current) => current.filter((id) => id !== issueId))
+  }
+
+  function toggleIssueCollapsed(issueId: string) {
+    setCollapsedIssueIds((current) => current.includes(issueId) ? current.filter((id) => id !== issueId) : [...current, issueId])
+  }
+
+  function selectIssue(issueId: string) {
+    setActiveIssueId(issueId)
+    expandIssue(issueId)
+    const firstMarker = localMarkers.find((marker) => marker.issueId === issueId)
+    setSelectedMarkerId(firstMarker?.id ?? null)
+    file.onActiveIssueChange?.(issueId)
+    if (firstMarker) setFocusMarkerRequest((current) => current + 1)
+  }
+
+  function selectMarker(marker: PlanIssueMarker) {
+    if (marker.issueId) {
+      setActiveIssueId(marker.issueId)
+      expandIssue(marker.issueId)
+    }
+    setSelectedMarkerId(marker.id)
+    file.onSelectedMarkerChange?.(marker.id)
+    setFocusMarkerRequest((current) => current + 1)
+  }
+
+  function getNextMarkerSerialForIssue(issueId: string, markerId?: string) {
+    const nextNumber = localMarkers.filter((marker) => marker.issueId === issueId && marker.id !== markerId).length + 1
+    return `HJ-${String(nextNumber).padStart(3, "0")}`
+  }
+
+  function moveMarkerToIssue(markerId: string, issueId: string) {
+    const targetIssue = (file.issues || []).find((issue) => issue.id === issueId)
+    const markerToMove = localMarkers.find((marker) => marker.id === markerId)
+    if (!targetIssue || !markerToMove || markerToMove.issueId === issueId) return
+    const nextSerial = getNextMarkerSerialForIssue(issueId, markerId)
+    const nextMarkers = localMarkers.map((marker) => marker.id === markerId ? {
+      ...marker,
+      issueId,
+      issueSerial: targetIssue.serial,
+      issueTitle: targetIssue.title,
+      issueLocation: targetIssue.location,
+      issueDescription: targetIssue.description,
+      issueSeverity: marker.issueSeverity || targetIssue.severity,
+      issueResponsible: targetIssue.responsible,
+      issueContractorRepresentative: targetIssue.contractorRepresentative,
+      issueDeadline: targetIssue.deadline,
+      issueStatus: marker.status || targetIssue.status,
+      issueNote: targetIssue.note,
+      serial: nextSerial,
+    } : marker)
+    handleMarkersChange(nextMarkers)
+    setActiveIssueId(issueId)
+    setSelectedMarkerId(markerId)
+    file.onActiveIssueChange?.(issueId)
+    file.onSelectedMarkerChange?.(markerId)
+    expandIssue(issueId)
+    setFocusMarkerRequest((current) => current + 1)
+  }
+
+  function selectNextMissingCropMarker() {
+    const missingMarkers = localMarkers.filter((marker) => !marker.cropImageDataUrl)
+    if (!missingMarkers.length) return
+    const currentIndex = selectedMarkerId ? missingMarkers.findIndex((marker) => marker.id === selectedMarkerId) : -1
+    const nextMarker = missingMarkers[(currentIndex + 1 + missingMarkers.length) % missingMarkers.length]
+    selectMarker(nextMarker)
+    setShowOnlyMissingCrops(true)
+  }
+
+  function normalizeSearch(value: string) {
+    return value.trim().toLowerCase()
+  }
+
+  function markerMatchesSearch(marker: PlanIssueMarker, query: string) {
+    const haystack = [
+      marker.serial,
+      marker.title,
+      marker.note,
+      marker.status,
+      marker.responsible,
+      marker.dueDate,
+      marker.issueSerial,
+      marker.issueTitle,
+      marker.issueLocation,
+      marker.issueDescription,
+      marker.issueSeverity,
+      marker.issueResponsible,
+      marker.issueContractorRepresentative,
+      marker.issueDeadline,
+      marker.issueStatus,
+      marker.issueNote,
+    ].filter(Boolean).join(" ").toLowerCase()
+    return haystack.includes(query)
+  }
+
+  const viewerFile: PlanViewerFile = {
+    ...file,
+    markers: localMarkers,
+    planPageExports: localPlanPageExports,
+    activeIssueId,
+    selectedMarkerId,
+    focusMarkerRequest,
+    onMarkersChange: handleMarkersChange,
+    onPlanPageExportsChange: handlePlanPageExportsChange,
+    onActiveIssueChange: (issueId) => {
+      setActiveIssueId(issueId)
+      expandIssue(issueId)
+    },
+    onSelectedMarkerChange: (markerId) => {
+      setSelectedMarkerId(markerId)
+      const markerIssueId = localMarkers.find((marker) => marker.id === markerId)?.issueId
+      if (markerIssueId) expandIssue(markerIssueId)
+    },
+  }
+  const searchQuery = normalizeSearch(treeSearch)
+  const rawIssueGroups = (file.issues?.length ? file.issues : [{ id: file.issueId || "active-issue", serial: file.issueSerial || "TH", title: file.issueTitle || "Tervi hibahely" }]).map((issue) => {
+    const allMarkers = localMarkers.filter((marker) => marker.issueId === issue.id)
+    const issueHaystack = [issue.serial, issue.title, issue.location, issue.description, issue.severity, issue.responsible, issue.contractorRepresentative, issue.deadline, issue.status, issue.note].filter(Boolean).join(" ").toLowerCase()
+    const issueMatches = searchQuery ? issueHaystack.includes(searchQuery) : true
+    const searchFilteredMarkers = searchQuery && !issueMatches ? allMarkers.filter((marker) => markerMatchesSearch(marker, searchQuery)) : allMarkers
+    const markers = showOnlyMissingCrops ? searchFilteredMarkers.filter((marker) => !marker.cropImageDataUrl) : searchFilteredMarkers
+    return {
+      issue,
+      markers,
+      allMarkers,
+      savedCropCount: allMarkers.filter((marker) => marker.cropImageDataUrl).length,
+      issueMatches,
+    }
+  })
+  const issueGroups = searchQuery || showOnlyMissingCrops ? rawIssueGroups.filter((group) => group.issueMatches || group.markers.length > 0) : rawIssueGroups
+  const orphanMarkersAll = localMarkers.filter((marker) => !rawIssueGroups.some((group) => group.issue.id === marker.issueId))
+  const orphanMarkersSearchFiltered = searchQuery ? orphanMarkersAll.filter((marker) => markerMatchesSearch(marker, searchQuery)) : orphanMarkersAll
+  const orphanMarkers = showOnlyMissingCrops ? orphanMarkersSearchFiltered.filter((marker) => !marker.cropImageDataUrl) : orphanMarkersSearchFiltered
+  const treeVisibleMarkerCount = issueGroups.reduce((sum, group) => sum + group.markers.length, 0) + orphanMarkers.length
+  const missingCropCount = localMarkers.filter((marker) => !marker.cropImageDataUrl).length
+  const totalMarkers = localMarkers.length
+  const totalSavedCrops = localMarkers.filter((marker) => marker.cropImageDataUrl).length
+  const totalPlanPageExports = localPlanPageExports.length
+  async function enterBrowserFullscreen() {
+    setFullScreenMode(true)
+    try {
+      const target = shellRef.current || document.documentElement
+      if (!document.fullscreenElement && target.requestFullscreen) await target.requestFullscreen()
+    } catch (fullscreenError) {
+      console.warn("Browser fullscreen request failed", fullscreenError)
+    }
+  }
+
+  async function exitBrowserFullscreen() {
+    setFullScreenMode(false)
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen()
+    } catch (fullscreenError) {
+      console.warn("Browser fullscreen exit failed", fullscreenError)
+    }
+  }
+
+  async function toggleBrowserFullscreen() {
+    if (fullScreenMode) await exitBrowserFullscreen()
+    else await enterBrowserFullscreen()
+  }
+
+  function beginTreePanelDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!fullScreenMode) return
+    event.preventDefault()
+    event.stopPropagation()
+    setTreePanelDrag({ startClientX: event.clientX, startClientY: event.clientY, startX: treePanelPosition.x, startY: treePanelPosition.y })
+  }
+
+  function moveTreePanelDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!treePanelDrag) return
+    event.preventDefault()
+    event.stopPropagation()
+    const maxX = Math.max(0, window.innerWidth - 340)
+    const maxY = Math.max(0, window.innerHeight - 120)
+    setTreePanelPosition({
+      x: Math.max(0, Math.min(maxX, treePanelDrag.startX + event.clientX - treePanelDrag.startClientX)),
+      y: Math.max(0, Math.min(maxY, treePanelDrag.startY + event.clientY - treePanelDrag.startClientY)),
+    })
+  }
+
+  function endTreePanelDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!treePanelDrag) return
+    event.preventDefault()
+    event.stopPropagation()
+    setTreePanelDrag(null)
+  }
+
+  const shellRootClass = fullScreenMode ? "fixed inset-0 z-[10000] bg-slate-950 p-0" : "fixed inset-x-0 bottom-0 top-20 z-[9999] bg-slate-900/78 p-2 backdrop-blur md:p-4"
+  const shellFrameClass = fullScreenMode ? "flex h-screen w-screen flex-col overflow-hidden border-0 bg-slate-100 shadow-2xl" : "mx-auto flex h-[calc(100vh-6rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border border-slate-300 bg-slate-100 shadow-2xl md:max-w-[calc(100vw-2rem)]"
+  const shellGridClass = fullScreenMode ? "grid min-h-0 flex-1 gap-0 md:grid-cols-[320px_minmax(0,1fr)]" : "grid min-h-0 flex-1 gap-0 md:grid-cols-[280px_minmax(0,1fr)]"
+  const treeContent = (
+    <div className="mt-3 grid gap-2 text-xs font-bold text-slate-600">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="border border-slate-200 bg-white p-3">Fájltípus: <span className="font-black text-slate-950">{file.type}</span></div>
+        <div className="border border-slate-200 bg-white p-3">Forrás: <span className="font-black text-slate-950">{file.url ? "elérhető" : "hiányzik"}</span></div>
+      </div>
+      <div className="border border-slate-200 bg-white p-3">Viewer: <span className="font-black text-slate-950">{viewerTitle}</span></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="border border-cyan-200 bg-cyan-50 p-3">HJ markerek: <span className="font-black text-cyan-900">{totalMarkers}</span></div>
+        <div className="border border-emerald-200 bg-emerald-50 p-3">Részletképek: <span className="font-black text-emerald-900">{totalSavedCrops}</span></div>
+        <div className="col-span-2 border border-slate-300 bg-slate-50 p-3">Teljes tervlap mellékletek: <span className="font-black text-slate-950">{totalPlanPageExports}</span></div>
+      </div>
+      <div className="grid gap-2 border border-slate-200 bg-white p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">TH hibalista / HJ fa nézet</div>
+          <button type="button" onClick={() => setCollapsedIssueIds([])} className="border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-black uppercase text-slate-600 hover:bg-cyan-50">Mind nyit</button>
+        </div>
+        <div className="grid gap-1">
+          <input value={treeSearch} onChange={(event) => setTreeSearch(event.target.value)} placeholder="Keresés: TH, HJ, cím, helyszín, felelős" className="h-9 w-full border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-700 outline-none focus:border-cyan-500 focus:bg-white" />
+          <div className="grid grid-cols-2 gap-1">
+            <button type="button" onClick={() => setShowOnlyMissingCrops((current) => !current)} className={`border px-2 py-1.5 text-[10px] font-black uppercase ${showOnlyMissingCrops ? "border-amber-400 bg-amber-100 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-amber-50"}`}>Hiányzó képek: {showOnlyMissingCrops ? "csak hiányzó" : `${missingCropCount} hiányzik`}</button>
+            <button type="button" onClick={selectNextMissingCropMarker} disabled={!missingCropCount} className="border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[10px] font-black uppercase text-cyan-800 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40">Következő hiányzó</button>
+          </div>
+          {searchQuery || showOnlyMissingCrops ? (
+            <div className="flex items-center justify-between gap-2 text-[10px] font-black uppercase text-slate-500">
+              <span>{issueGroups.length} TH találat · {treeVisibleMarkerCount} HJ látható a fában</span>
+              <button type="button" onClick={() => { setTreeSearch(""); setShowOnlyMissingCrops(false) }} className="border border-slate-200 bg-white px-2 py-1 text-[9px] font-black uppercase text-slate-600 hover:bg-red-50 hover:text-red-700">Törlés</button>
+            </div>
+          ) : null}
+        </div>
+        {issueGroups.length ? issueGroups.map(({ issue, markers, allMarkers, savedCropCount }) => {
+          const hasSelectedMarker = markers.some((marker) => marker.id === selectedMarkerId)
+          const isCollapsed = collapsedIssueIds.includes(issue.id) && activeIssueId !== issue.id && !hasSelectedMarker
+          return (
+            <div
+              key={issue.id}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault()
+                const markerId = event.dataTransfer.getData("text/plain")
+                if (markerId) moveMarkerToIssue(markerId, issue.id)
+              }}
+              className={`border ${activeIssueId === issue.id ? "border-cyan-500 bg-cyan-50" : "border-slate-200 bg-slate-50"}`}
+            >
+              <div className="flex items-stretch border-b border-slate-200 bg-white">
+                <button type="button" onClick={() => toggleIssueCollapsed(issue.id)} className="w-8 border-r border-slate-200 text-[11px] font-black text-slate-600 hover:bg-cyan-50" aria-label={isCollapsed ? `${issue.serial} nyitása` : `${issue.serial} zárása`}>{isCollapsed ? "▶" : "▼"}</button>
+                <button type="button" onClick={() => selectIssue(issue.id)} className="flex min-w-0 flex-1 items-start justify-between gap-2 px-2 py-2 text-left hover:bg-cyan-50">
+                  <div className="min-w-0"><div className="text-[11px] font-black uppercase text-slate-900">{issue.serial}</div><div className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{issue.title || "Terepi hiba"}</div></div>
+                  <div className="shrink-0 text-right text-[10px] font-black uppercase text-slate-500"><div>{searchQuery ? `${markers.length}/${allMarkers.length}` : markers.length} HJ</div><div className={savedCropCount === allMarkers.length && allMarkers.length ? "text-emerald-700" : allMarkers.length ? "text-amber-700" : "text-slate-400"}>{savedCropCount}/{allMarkers.length} kép</div></div>
+                </button>
+              </div>
+              {!isCollapsed ? (
+                <div className="grid gap-1 p-2">
+                  {markers.length ? markers.map((marker) => (
+                    <button
+                      key={marker.id}
+                      type="button"
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", marker.id)
+                        event.dataTransfer.effectAllowed = "move"
+                      }}
+                      onClick={() => selectMarker(marker)}
+                      className={`cursor-grab border px-2 py-1.5 text-left active:cursor-grabbing hover:border-cyan-300 hover:bg-cyan-50 ${selectedMarkerId === marker.id ? "border-cyan-500 bg-cyan-50" : "border-slate-200 bg-white"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-800">└ {marker.serial} · {marker.pageNumber || 1}. oldal</span><span className={`border px-1.5 py-0.5 text-[9px] font-black uppercase ${marker.cropImageDataUrl ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{marker.cropImageDataUrl ? "kép mentve" : "kép hiányzik"}</span></div>
+                      <div className="mt-1 truncate text-[10px] font-semibold text-slate-500">{marker.title || marker.issueTitle || issue.title}</div>
+                    </button>
+                  )) : <div className="text-[11px] font-bold text-slate-400">Ehhez a TH-hoz még nincs HJ marker.</div>}
+                </div>
+              ) : <div className="px-2 py-1.5 text-[10px] font-black uppercase text-slate-400">Csoport összecsukva · {searchQuery ? `${markers.length}/${allMarkers.length}` : allMarkers.length} HJ</div>}
+            </div>
+          )
+        }) : <div className="text-[11px] font-bold text-slate-400">{searchQuery || showOnlyMissingCrops ? "Nincs találat a TH/HJ fában." : "Nincs átadott TH hibalista."}</div>}
+        {orphanMarkers.length ? <div className="border border-amber-200 bg-amber-50 p-2"><div className="text-[10px] font-black uppercase text-amber-800">Kapcsolat nélküli HJ markerek</div><div className="mt-1 grid gap-1">{orphanMarkers.map((marker) => <button key={marker.id} type="button" onClick={() => selectMarker(marker)} className="border border-amber-200 bg-white px-2 py-1 text-left text-[10px] font-black uppercase text-amber-800 hover:bg-amber-100">{marker.issueSerial || "TH?"} / {marker.serial}</button>)}</div></div> : null}
+      </div>
+      <div className="border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">A PDF tervlap és az IFC modell külön modulban fut. Nem kerül vissza a jegyzőkönyv oldali panelbe.</div>
+    </div>
+  )
+
+  return (
+    <div ref={shellRef} className={shellRootClass}>
+      <div className={shellFrameClass}>
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-300 bg-slate-200 px-4 py-2">
+          <div className="min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">DIMPROVER közös tervnéző</div>
+            <h2 className="mt-1 truncate text-lg font-black text-slate-950">{file.name}</h2>
+            <div className="mt-1 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
+              <span className="border border-slate-200 bg-white px-2 py-1">{viewerTitle}</span>
+              <span className="border border-slate-200 bg-white px-2 py-1">{file.type}</span>
+              {file.pageNumber ? <span className="border border-slate-200 bg-white px-2 py-1">{file.pageNumber}. oldal</span> : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button type="button" onClick={toggleBrowserFullscreen} className="border border-cyan-700 bg-cyan-700 px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-cyan-800">{fullScreenMode ? "Kilépés teljes képernyőből" : "Monitor teljes képernyő"}</button>
+            {fullScreenMode ? <span className="border border-slate-300 bg-white px-2 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-600">ESC / F11 kilépés</span> : null}
+            {onClose ? <button type="button" onClick={onClose} className="border border-emerald-700 bg-emerald-700 px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-emerald-800">Mentés és vissza</button> : null}
+          </div>
+        </header>
+        <div className={shellGridClass}>
+          <aside className="min-h-0 overflow-auto border-b border-slate-300 bg-slate-200 p-4 md:border-b-0 md:border-r">
+            <div className="flex items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+              <span>TH / HJ állapotfa</span>
+              {fullScreenMode ? <span className="border border-slate-300 bg-white px-2 py-1 text-[9px] text-slate-600">bal oldalon rögzítve</span> : null}
+            </div>
+            {treeContent}
+          </aside>
+          <main className="min-h-0 overflow-hidden p-2">
+            {file.type === "pdf" ? <PdfPlanViewer file={viewerFile} onSaveAndClose={onClose} /> : null}
+            {file.type === "ifc" ? <IfcModelViewer file={file} /> : null}
+            {file.type === "dwg" || file.type === "unknown" ? (
+              <div className="grid min-h-[520px] place-items-center border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <div>
+                  <div className="text-3xl font-black text-slate-500">{file.type.toUpperCase()}</div>
+                  <p className="mt-3 max-w-md text-sm font-bold leading-6 text-slate-700">Ehhez a fájltípushoz későbbi konverziós vagy viewer workflow szükséges. A DWG/DXF kezelést nem PDF.js és nem IFC.js fogja megoldani.</p>
+                </div>
+              </div>
+            ) : null}
+          </main>
+        </div>
+      </div>
+    </div>
+  )
+}

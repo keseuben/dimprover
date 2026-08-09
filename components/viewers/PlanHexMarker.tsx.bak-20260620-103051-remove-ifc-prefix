@@ -1,0 +1,227 @@
+"use client"
+
+import { getMarkerSeverityVisual, getMarkerStatusVisual, getMarkerViewportSize, getPlanIssueDisciplineMeta, type PlanIssueMarker } from "./PlanMarkerTypes"
+
+type PlanHexMarkerProps = {
+  marker: PlanIssueMarker
+  zoom: number
+  selected?: boolean
+  pulse?: boolean
+  onClick?: () => void
+  onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onPointerMove?: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onPointerUp?: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onPointerCancel?: (event: React.PointerEvent<HTMLButtonElement>) => void
+  anchorMode?: "tip" | "center"
+}
+
+export default function PlanHexMarker({ marker, zoom, selected = false, pulse = false, onClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, anchorMode = "tip" }: PlanHexMarkerProps) {
+  const meta = getPlanIssueDisciplineMeta(marker.discipline)
+  const severityVisual = getMarkerSeverityVisual(marker.issueSeverity)
+  const statusVisual = getMarkerStatusVisual(marker.status || marker.issueStatus)
+  const size = Math.round(getMarkerViewportSize(zoom) * 1.34)
+  const headSize = size
+  const pinHeight = Math.round(size * 0.58)
+  const totalHeight = headSize + pinHeight
+  const serialTextSize = Math.max(16, Math.round(size * 0.32))
+  const innerSize = Math.round(size * 0.42)
+  const isPhotoMarker = marker.markerKind === "photo"
+  const issueSerial = isPhotoMarker ? marker.issueSerial || marker.issueId || "TH" : marker.issueSerial || marker.issueId || "TH"
+  const displaySerial = isPhotoMarker ? marker.serial || marker.photoSerial || "FHJ" : marker.serial
+  const headFill = isPhotoMarker ? "#dbeafe" : meta.lightHexColor
+  const headStroke = isPhotoMarker ? severityVisual.strokeColor : severityVisual.strokeColor
+  const headStrokeWidth = isPhotoMarker ? Math.max(3, severityVisual.strokeWidth) : severityVisual.strokeWidth
+  const innerLabel = isPhotoMarker ? "F" : marker.showLetter ? meta.shortLabel : ""
+  const markerTransform = anchorMode === "center" ? "translate(-50%, -50%)" : "translate(-50%, -100%)"
+
+  if (isPhotoMarker) {
+    const cardWidth = Math.max(58, Math.round(size * 1.18))
+    const cardHeight = Math.max(48, Math.round(size * 0.88))
+    const tipHeight = Math.max(12, Math.round(size * 0.22))
+    const totalPhotoHeight = cardHeight + tipHeight
+    const thumbUrl = marker.photoPreviewUrl
+
+    return (
+      <button
+        type="button"
+        data-plan-marker="true"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onClick?.()
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        className="group pointer-events-auto absolute z-20 -translate-x-1/2 cursor-grab touch-none outline-none active:cursor-grabbing"
+        style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, width: `${cardWidth}px`, height: `${totalPhotoHeight}px`, transform: markerTransform }}
+        aria-label={`${displaySerial} fotóhely · ${marker.photoName || "fotó"}`}
+      >
+        <span
+          className={`absolute left-1/2 top-0 -translate-x-1/2 transition group-hover:scale-110 ${selected ? "ring-4 ring-blue-300" : ""} ${pulse ? "animate-pulse scale-125 ring-8 ring-blue-200" : ""}`}
+          style={{ width: `${cardWidth}px`, height: `${totalPhotoHeight}px`, filter: "drop-shadow(0 8px 9px rgba(15,23,42,0.28)) drop-shadow(0 2px 4px rgba(15,23,42,0.20))" }}
+        >
+          <span
+            className="absolute left-0 top-0 overflow-hidden bg-blue-50 shadow"
+            style={{ width: `${cardWidth}px`, height: `${cardHeight}px`, borderRadius: "8px", border: `${headStrokeWidth}px solid ${headStroke}` }}
+          >
+            <span
+              className="absolute left-1 top-1 grid place-items-center border border-blue-100 bg-slate-100 bg-cover bg-center text-[10px] font-black uppercase text-blue-700"
+              style={{ right: "4px", bottom: "18px", backgroundImage: thumbUrl ? `url(${thumbUrl})` : undefined }}
+            >
+              {!thumbUrl ? "FOTÓ" : ""}
+            </span>
+            <span className="absolute bottom-0 left-0 right-0 flex h-5 items-center justify-center bg-blue-700 px-1 text-[10px] font-black uppercase tracking-[0.06em] text-white">
+              {displaySerial}
+            </span>
+          </span>
+          <span
+            className="absolute left-1/2"
+            style={{ top: `${cardHeight - 1}px`, transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "8px solid transparent", borderRight: "8px solid transparent", borderTop: `${tipHeight}px solid ${headStroke}` }}
+          />
+          <span className="absolute left-1/2 grid h-2 w-2 -translate-x-1/2 place-items-center rounded-full border border-white" style={{ top: `${cardHeight + tipHeight - 4}px`, backgroundColor: headStroke }} />
+          {severityVisual.showBang ? (
+            <span
+              className="absolute right-[-6px] top-[-7px] grid h-5 w-5 place-items-center rounded-full border-2 border-white text-[13px] font-black leading-none text-white shadow"
+              style={{ backgroundColor: severityVisual.bangColor }}
+            >
+              !
+            </span>
+          ) : null}
+          {severityVisual.showRepairMark ? (
+            <span className="absolute left-[-5px] top-[18px] h-5 w-2 rounded-full border border-white bg-orange-500 shadow" aria-label="Javítandó hiba jelölés" />
+          ) : null}
+          {statusVisual.type !== "none" ? (
+            <span
+              className="absolute right-[-7px] top-[28px] z-30 grid min-h-4 min-w-4 place-items-center rounded-full border-2 border-white text-[10px] font-black leading-none text-white shadow-[0_3px_8px_rgba(15,23,42,0.32)]"
+              style={{ backgroundColor: statusVisual.color }}
+              aria-label={statusVisual.label}
+            >
+              {statusVisual.type === "check" ? "✓" : null}
+              {statusVisual.type === "dots" ? (
+                <span className="flex gap-[2px] px-[2px]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
+        <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] mt-0 hidden w-72 -translate-x-1/2 border border-slate-200 bg-white p-4 text-left shadow-2xl group-hover:block">
+          <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">FHJ fotóhely marker · {issueSerial}</span>
+          <span className="mt-1 block text-base font-black text-slate-950">{displaySerial} · {marker.photoSerial || "FOTÓ"}</span>
+          <span className="mt-1 block text-xs font-black uppercase leading-5 text-slate-700">{marker.photoName || marker.title || "Fotó készítési helye"}</span>
+          <span className="mt-2 block text-[11px] font-semibold leading-5 text-slate-600">Súlyosság: {severityVisual.severity}</span>
+          <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Státusz: {statusVisual.label}</span>
+          {marker.responsible || marker.issueResponsible ? <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Felelős: {marker.responsible || marker.issueResponsible}</span> : null}
+          {marker.dueDate || marker.issueDeadline ? <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Határidő: {marker.dueDate || marker.issueDeadline}</span> : null}
+          <span className="mt-2 block text-[11px] font-semibold leading-5 text-slate-600">Megjegyzés: {marker.photoNote || marker.note || "nincs megadva"}</span>
+        </span>
+      </button>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      data-plan-marker="true"
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onClick?.()
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      className="group pointer-events-auto absolute z-20 -translate-x-1/2 cursor-grab touch-none outline-none active:cursor-grabbing"
+      style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, width: `${headSize}px`, height: `${totalHeight}px`, transform: markerTransform }}
+      aria-label={`${displaySerial} tervi hibahely · ${issueSerial}`}
+    >
+      <span className="pointer-events-none absolute left-1/2 top-[-24px] -translate-x-1/2 whitespace-nowrap border border-slate-300 bg-white/95 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-700 shadow-sm">
+        {issueSerial}
+      </span>
+      <span
+        className={`absolute left-1/2 top-0 -translate-x-1/2 transition group-hover:scale-110 ${selected ? "ring-4 ring-cyan-300" : ""} ${pulse ? "animate-pulse scale-125 ring-8 ring-amber-300" : ""}`}
+        style={{
+          width: `${headSize}px`,
+          height: `${totalHeight}px`,
+          filter: "drop-shadow(0 9px 10px rgba(15,23,42,0.34)) drop-shadow(0 3px 4px rgba(15,23,42,0.20))",
+        }}
+      >
+        <svg width={headSize} height={totalHeight} viewBox="0 0 100 150" className="block overflow-visible">
+          <path
+            d="M25 8 L75 8 L97 50 L75 92 L59 92 L50 142 L41 92 L25 92 L3 50 Z"
+            fill={headFill}
+            stroke={headStroke}
+            strokeWidth={headStrokeWidth}
+            strokeLinejoin="round"
+          />
+          <text
+            x="50"
+            y="40"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#334155"
+            fontSize={serialTextSize}
+            fontWeight="900"
+            fontFamily="Arial, sans-serif"
+          >
+            {displaySerial}
+          </text>
+        </svg>
+        {severityVisual.showBang ? (
+          <span
+            className="absolute right-[-3px] top-[-3px] grid h-5 w-5 place-items-center rounded-full border-2 border-white text-[13px] font-black leading-none text-white shadow"
+            style={{ backgroundColor: severityVisual.bangColor }}
+          >
+            !
+          </span>
+        ) : null}
+        {severityVisual.showRepairMark ? (
+          <span className="absolute left-[-4px] top-[36px] h-5 w-2 rounded-full border border-white bg-orange-500 shadow" aria-label="Javítandó hiba jelölés" />
+        ) : null}
+        {statusVisual.type !== "none" ? (
+          <span
+            className="absolute right-[-5px] top-[44px] z-30 grid min-h-4 min-w-4 place-items-center rounded-full border-2 border-white text-[10px] font-black leading-none text-white shadow-[0_3px_8px_rgba(15,23,42,0.32)]"
+            style={{ backgroundColor: statusVisual.color }}
+            aria-label={statusVisual.label}
+          >
+            {statusVisual.type === "check" ? "✓" : null}
+            {statusVisual.type === "dots" ? (
+              <span className="flex gap-[2px] px-[2px]">
+                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        <span
+          className={`${meta.colorClass} absolute left-1/2 grid -translate-x-1/2 place-items-center text-[11px] font-black leading-none text-white shadow-inner`}
+          style={{
+            top: `${Math.round(headSize * 0.66)}px`,
+            width: `${innerSize}px`,
+            height: `${innerSize}px`,
+            transform: "translate(-50%, -50%)",
+            clipPath: "polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%)",
+          }}
+        >
+          {innerLabel}
+        </span>
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] mt-0 hidden w-72 -translate-x-1/2 border border-slate-200 bg-white p-4 text-left shadow-2xl group-hover:block">
+        <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">{meta.label} · {issueSerial}</span>
+        <span className="mt-1 block text-base font-black text-slate-950">{marker.issueSerial ? `${marker.issueSerial} / ` : ""}{marker.serial}</span>
+        <span className="mt-1 block text-xs font-black uppercase leading-5 text-slate-700">{marker.title || marker.issueTitle || "Tervi hibahely"}</span>
+        <span className="mt-2 block text-[11px] font-semibold leading-5 text-slate-600">Súlyosság: {severityVisual.severity}</span>
+        <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Státusz: {statusVisual.label}</span>
+        {marker.responsible || marker.issueResponsible ? <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Felelős: {marker.responsible || marker.issueResponsible}</span> : null}
+        {marker.dueDate || marker.issueDeadline ? <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-600">Határidő: {marker.dueDate || marker.issueDeadline}</span> : null}
+        <span className="mt-2 block text-[11px] font-semibold leading-5 text-slate-600">Megjegyzés: {marker.note || marker.issueNote || marker.issueDescription || "nincs megadva"}</span>
+      </span>
+    </button>
+  )
+}

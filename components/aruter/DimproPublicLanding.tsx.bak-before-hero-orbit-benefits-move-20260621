@@ -1,0 +1,329 @@
+import Link from "next/link";
+import {
+  ArrowRight,
+  ClipboardList,
+  FileText,
+  Heart,
+  Leaf,
+  Lightbulb,
+  LockKeyhole,
+  MessageCircle,
+  Puzzle,
+  ShieldCheck,
+  Sparkles,
+  Store,
+  Target,
+  UserCircle2,
+  Users,
+  Zap,
+} from "lucide-react";
+
+function DimproShieldLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={compact ? "relative h-10 w-10" : "relative h-28 w-28"} aria-hidden="true">
+      <svg viewBox="0 0 512 512" className="h-full w-full drop-shadow-[0_16px_36px_rgba(6,95,70,0.18)]">
+        <rect width="512" height="512" rx="112" fill="#fff" />
+        <path
+          d="M256 35L448 146V366L256 477L64 366V146L256 35Z"
+          fill="none"
+          stroke="#7BD800"
+          strokeWidth="24"
+          strokeLinejoin="round"
+        />
+        <path d="M256 96L394 176V336L256 416L118 336V176L256 96Z" fill="url(#dimproShieldGradient)" />
+        <path
+          d="M199 178L256 145L336 191V282L279 315V237L256 224L233 237V366L199 347V178Z"
+          fill="white"
+        />
+        <path d="M250 235L290 258V293L250 316V235Z" fill="white" />
+        <defs>
+          <linearGradient id="dimproShieldGradient" x1="145" y1="130" x2="372" y2="392" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#07A7A4" />
+            <stop offset="1" stopColor="#00684F" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+
+const orbitModules = [
+  {
+    title: "DIMPRO Árutér",
+    text: "külső árutér, pult, raktár, pénztár",
+    status: "Elérhető",
+    icon: Store,
+    className: "left-1/2 top-0 -translate-x-1/2",
+  },
+  {
+    title: "DIMPRO Munkalap",
+    text: "helyszíni szerelés és szerviz",
+    status: "Elérhető",
+    icon: ClipboardList,
+    className: "right-0 top-[25%]",
+  },
+  {
+    title: "DIMPRO Field",
+    text: "terepi rögzítés és fotók",
+    status: "Későbbi modul",
+    icon: Leaf,
+    className: "right-2 bottom-[13%]",
+  },
+  {
+    title: "Új modul ötlet?",
+    text: "írd meg nekünk",
+    status: "Te döntesz",
+    icon: Lightbulb,
+    className: "bottom-0 left-1/2 -translate-x-1/2",
+  },
+  {
+    title: "Egyedi workflow",
+    text: "vállalkozásra szabva",
+    status: "Tervezés alatt",
+    icon: Sparkles,
+    className: "bottom-[14%] left-0",
+  },
+  {
+    title: "DIMPRO Docs",
+    text: "egyszerű dokumentumkezelés",
+    status: "Tervezés alatt",
+    icon: FileText,
+    className: "left-2 top-[27%]",
+  },
+];
+
+const bottomModules = [
+  {
+    title: "DIMPRO Árutér",
+    text: "Külső árutér, pult, raktár és pénztár közötti papírmentes árurögzítés.",
+    status: "Fejlesztés alatt",
+    icon: Store,
+    href: "https://aruter.dimpro.hu",
+  },
+  {
+    title: "DIMPRO Munkalap",
+    text: "Helyszíni szerelési és szervizmunkák digitális munkalapja.",
+    status: "Tervezés alatt",
+    icon: ClipboardList,
+    href: "#",
+  },
+  {
+    title: "DIMPRO Field",
+    text: "Terepi rögzítések, fotók és gyors állapotjelentések egyszerű felületen.",
+    status: "Későbbi modul",
+    icon: Leaf,
+    href: "#",
+  },
+];
+
+const benefits = [
+  {
+    title: "Kisebb, célzott appok",
+    text: "Pont azt tudják, amire a napi munkádban szükséged van.",
+    icon: Target,
+  },
+  {
+    title: "Gyors indulás, egyszerű kezelés",
+    text: "Hamar bevezethető, könnyű megtanulni és használni.",
+    icon: Zap,
+  },
+  {
+    title: "Közös DIMPRO fiók",
+    text: "Egy fiók, több modul – adatok és jogosultságok központilag.",
+    icon: Users,
+  },
+  {
+    title: "Folyamatosan bővülő modulok",
+    text: "Új funkciók és modulok rendszeres frissítésekkel.",
+    icon: Puzzle,
+  },
+];
+
+export function DimproPublicLanding() {
+  return (
+    <main className="min-h-screen overflow-hidden bg-[#f7fbf9] text-slate-950">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/86 shadow-[0_10px_34px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-3 px-4 py-3 sm:gap-5 sm:px-6 sm:py-4 xl:px-10">
+          <Link href="https://dimpro.hu" className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <DimproShieldLogo compact />
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+              <span className="text-2xl font-black uppercase tracking-[0.18em] text-slate-950 sm:tracking-[0.23em] md:text-3xl">DIMPRO</span>
+              <span className="hidden text-sm font-semibold text-slate-500 lg:inline">
+                digitális munkafolyamat-rendszerek vállalkozásoknak
+              </span>
+            </div>
+          </Link>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <Link
+              href="https://aruter.dimpro.hu"
+              className="hidden items-center gap-2 rounded-2xl bg-teal-700 px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(15,118,110,0.24)] transition hover:-translate-y-0.5 hover:bg-teal-800 sm:inline-flex"
+            >
+              Árutér megnyitása <ArrowRight size={18} />
+            </Link>
+            <Link
+              href="https://aruter.dimpro.hu/login"
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:bg-slate-50"
+            >
+              <UserCircle2 size={19} /> Belépés
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <section className="relative border-b border-slate-200/70 bg-white">
+        <div className="absolute inset-0 opacity-[0.28] [background-image:linear-gradient(rgba(20,184,166,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.12)_1px,transparent_1px)] [background-size:58px_58px]" />
+        <div className="absolute right-0 top-0 hidden h-full w-[38%] opacity-35 lg:block">
+          <svg viewBox="0 0 520 520" className="h-full w-full text-teal-700/30" fill="none">
+            <path d="M460 70H190v360h230V130H260v220h90V210" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M60 420h120V240h90V90h190" stroke="currentColor" strokeWidth="1.1" opacity="0.45" />
+            <path d="M110 130l65-38 65 38v76l-65 38-65-38v-76Z" stroke="currentColor" strokeWidth="1" opacity="0.55" />
+            <path d="M350 390l54-32 54 32v64l-54 32-54-32v-64Z" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+          </svg>
+        </div>
+
+        <div className="relative mx-auto grid max-w-[1680px] gap-8 px-6 py-12 lg:grid-cols-[minmax(0,1fr)_420px] xl:px-10 xl:py-16 2xl:grid-cols-[minmax(0,0.88fr)_minmax(520px,0.9fr)_minmax(360px,0.62fr)] 2xl:gap-9">
+          <div className="flex flex-col justify-center">
+            <p className="mb-7 inline-flex w-fit rounded-full border border-lime-200 bg-lime-50 px-4 py-2 text-sm font-black text-teal-800 shadow-sm">
+              DIMPRO modul appok kisvállalkozásoknak
+            </p>
+            <h1 className="max-w-[720px] break-words text-[42px] font-black leading-[1.04] tracking-[-0.055em] text-slate-950 sm:text-5xl md:text-6xl xl:text-[64px] 2xl:text-[68px]">
+              Kisebb digitális appok napi munkafolyamatokra.
+            </h1>
+            <p className="mt-6 max-w-[720px] text-base font-semibold leading-7 text-slate-600 sm:text-lg md:text-xl md:leading-8">
+              A DIMPRO a kisebb, célzott modul appok termékcsaládja. Itt az árutér, munkalap, terepi rögzítés és egyedi vállalkozási workflow-k kapnak önálló, gyorsan használható felületet.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-4 sm:flex-row md:mt-10">
+              <Link
+                href="https://aruter.dimpro.hu"
+                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-teal-700 px-6 py-4 text-base font-black text-white shadow-[0_18px_42px_rgba(15,118,110,0.25)] transition hover:-translate-y-0.5 hover:bg-teal-800 sm:px-7"
+              >
+                DIMPRO Árutér <ArrowRight size={20} />
+              </Link>
+              <Link
+                href="https://dimprover.hu"
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-4 text-base font-black text-slate-900 shadow-sm transition hover:bg-slate-50 sm:px-7"
+              >
+                DIMPROVER platform
+              </Link>
+            </div>
+
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold text-slate-500 md:mt-10 md:gap-x-6">
+              <span className="inline-flex items-center gap-2"><ShieldCheck size={18} className="text-lime-500" /> Gyors bevezetés</span>
+              <span className="inline-flex items-center gap-2"><Target size={18} className="text-lime-500" /> Könnyen használható</span>
+              <span className="inline-flex items-center gap-2"><LockKeyhole size={18} className="text-lime-500" /> Biztonságos és megbízható</span>
+            </div>
+          </div>
+
+          <div className="relative order-3 hidden min-h-[560px] items-center justify-center 2xl:flex">
+            <div className="absolute h-[470px] w-[470px] rounded-full border border-dashed border-slate-300" />
+            <div className="absolute h-[330px] w-[330px] rounded-full border border-dashed border-lime-300/70" />
+            <div className="relative z-10 flex h-52 w-52 flex-col items-center justify-center rounded-[2rem] border border-lime-300 bg-white shadow-[0_24px_80px_rgba(15,118,110,0.16)]">
+              <DimproShieldLogo />
+              <div className="mt-1 text-2xl font-black uppercase tracking-[0.20em] text-slate-950">DIMPRO</div>
+            </div>
+
+            {orbitModules.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.title}
+                  className={`absolute z-20 w-52 rounded-[1.35rem] border border-slate-200 bg-white/94 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur ${item.className}`}
+                >
+                  <Icon className="mb-3 text-teal-700" size={33} />
+                  <h3 className="text-base font-black text-slate-950">{item.title}</h3>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{item.text}</p>
+                  <span className="mt-3 inline-flex rounded-full bg-lime-50 px-3 py-1 text-xs font-black text-teal-700">{item.status}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <aside className="flex items-center lg:row-span-1 2xl:row-auto">
+            <div className="w-full rounded-[2rem] border border-slate-200 bg-white/92 p-7 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur">
+              <h2 className="text-2xl font-black tracking-[-0.03em] text-teal-700">Miért jó a DIMPRO?</h2>
+              <div className="mt-7 space-y-6">
+                {benefits.map((benefit) => {
+                  const Icon = benefit.icon;
+                  return (
+                    <div key={benefit.title} className="flex gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-lime-100 text-teal-700">
+                        <Icon size={29} />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-950">{benefit.title}</h3>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">{benefit.text}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 flex gap-4 rounded-2xl bg-lime-50 p-4 text-teal-800">
+                <Heart className="shrink-0" size={27} />
+                <p className="text-sm font-black leading-6">
+                  A DIMPRO a vállalkozók visszajelzései alapján fejlődik – együtt építjük!
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-[1680px] gap-7 px-6 py-10 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_1.45fr] xl:px-10">
+        {bottomModules.map((module) => {
+          const Icon = module.icon;
+          return (
+            <Link
+              key={module.title}
+              href={module.href}
+              className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.07)] transition hover:-translate-y-1 hover:shadow-[0_26px_80px_rgba(15,118,110,0.14)]"
+            >
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-lime-100 text-teal-700">
+                <Icon size={32} />
+              </div>
+              <h3 className="text-xl font-black text-slate-950">{module.title}</h3>
+              <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">{module.text}</p>
+              <span className="mt-6 inline-flex rounded-full bg-lime-50 px-4 py-2 text-xs font-black text-teal-700">{module.status}</span>
+            </Link>
+          );
+        })}
+
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-[0_18px_55px_rgba(15,23,42,0.07)]">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-lime-100 text-teal-700">
+            <Lightbulb size={33} />
+          </div>
+          <h3 className="text-xl font-black text-slate-950">Van jó ötleted?</h3>
+          <p className="mt-4 text-sm font-semibold leading-7 text-slate-600">
+            Ha hiányzik egy modul a saját munkafolyamatodhoz, írd meg nekünk, és lehet, hogy a következő DIMPRO app pont erre épül.
+          </p>
+          <Link
+            href="mailto:info@dimpro.hu?subject=DIMPRO modul ötlet"
+            className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-teal-700 px-5 py-3 text-sm font-black text-white hover:bg-teal-800"
+          >
+            Ötlet beküldése <ArrowRight size={18} />
+          </Link>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-lime-200 bg-lime-50 p-7 shadow-[0_18px_55px_rgba(15,23,42,0.06)] xl:col-span-1">
+          <h3 className="text-2xl font-black tracking-[-0.03em] text-teal-700">Te milyen modult használnál?</h3>
+          <p className="mt-3 text-sm font-black leading-6 text-teal-900">
+            A még nem kitalált modulok helyére várjuk a vállalkozók és felhasználók ötleteit.
+          </p>
+          <div className="mt-7 grid gap-3 text-sm font-semibold text-slate-700">
+            <span className="inline-flex items-center gap-2"><MessageCircle size={20} className="text-teal-700" /> Mondd el az ötleted</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck size={20} className="text-lime-500" /> Segíts másoknak is</span>
+            <span className="inline-flex items-center gap-2"><Users size={20} className="text-teal-700" /> Alakítsuk együtt a DIMPRO-t</span>
+          </div>
+          <Link
+            href="mailto:info@dimpro.hu?subject=DIMPRO modul ötlet"
+            className="mt-7 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-teal-700 px-5 py-4 text-sm font-black text-white shadow-[0_16px_42px_rgba(15,118,110,0.20)] hover:bg-teal-800"
+          >
+            Írd meg az ötletedet <ArrowRight size={18} />
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
