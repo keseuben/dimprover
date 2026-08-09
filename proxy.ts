@@ -115,7 +115,11 @@ export async function proxy(request: NextRequest) {
   const isGazdaSegedHost = host === "gazdaseged.dimpro.hu" || host === "www.gazdaseged.dimpro.hu";
   const isEventHost = host === "esemeny.dimpro.hu" || host === "www.esemeny.dimpro.hu";
   const isLicenseHost = host === "license.dimpro.hu";
-  const isDevHost = host === "dev.dimprover.hu";
+  const isDevHost = new Set([
+    "dev.dimpro.hu",
+    "admin.dev.dimpro.hu",
+    "dev.dimprover.hu",
+  ]).has(host);
   const isLicenseAdminArea = (isLicenseHost || isDevHost) && (
     pathname === "/" ||
     pathname === "/admin" ||
@@ -258,7 +262,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDimproFajlmuhelyReleasePage) {
+  if (isDimproFajlmuhelyReleasePage && !isDevHost) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.hostname = "license.dimpro.hu";
@@ -267,7 +271,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDrivePage && !isLicenseHost) {
+  if (isDrivePage && !isLicenseHost && !isDevHost) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.hostname = "license.dimpro.hu";
