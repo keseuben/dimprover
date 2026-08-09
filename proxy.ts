@@ -60,7 +60,8 @@ export async function proxy(request: NextRequest) {
   const host = hostHeader.replace(/:\d+$/, "");
   const isLoginPage = pathname.startsWith("/login");
   const isLegacyMeetingAssistantPath = pathname.startsWith("/jegyzokonyvek/ertekezleti-kisero");
-  const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu";
+  const isDevEnvironment = host === "dev.dimpro.hu" || host === "dev.dimprover.hu" || host.endsWith(".dev.dimpro.hu");
+  const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu" || host === "app.dev.dimpro.hu";
   const isDimproHost = host === "dimpro.hu" || host === "www.dimpro.hu";
   const isDimproPublicHome = isDimproHost && pathname === "/";
   const isDimproLegalPage = pathname === "/adatvedelem" || pathname === "/felhasznalasi-feltetelek";
@@ -68,10 +69,10 @@ export async function proxy(request: NextRequest) {
   const isDimproRenovationCalculator = isDimproHost && pathname.startsWith("/felujitasi-gyorskalkulator");
   const isDimproPropertySurvey = isDimproHost && pathname.startsWith("/ingatlanfelmero");
   const isDimproCostDatabase = isDimproHost && pathname.startsWith("/koltsegadatbazis");
-  const isDropHost = host === "drop.dimpro.hu" || host === "www.drop.dimpro.hu";
+  const isDropHost = host === "drop.dimpro.hu" || host === "www.drop.dimpro.hu" || host === "drop.dev.dimpro.hu";
   const isLocalInternalHost = host === "127.0.0.1" || host === "localhost";
   const isDropInternalWorkerApi = isLocalInternalHost && pathname === "/api/drop/worker/run";
-  const isProjectGateHost = host === "projektkapu.dimpro.hu" || host === "www.projektkapu.dimpro.hu";
+  const isProjectGateHost = host === "projektkapu.dimpro.hu" || host === "www.projektkapu.dimpro.hu" || host === "projektkapu.dev.dimpro.hu";
   const isProjectGateBrandHost = host === "door.dimpro.hu" || host === "www.door.dimpro.hu";
   let projectGateRewriteUrl: URL | null = null;
   const isDropPublicPage =
@@ -111,10 +112,10 @@ export async function proxy(request: NextRequest) {
   const isDropInternalPage = pathname === "/drop" || pathname.startsWith("/drop/");
   const isDropInternalRewrite = request.headers.get("x-dimpro-drop-internal") === "1";
   const isDropBlockedRewrite = request.headers.get("x-dimpro-drop-blocked") === "1";
-  const isAruterHost = host === "aruter.dimpro.hu" || host === "www.aruter.dimpro.hu";
+  const isAruterHost = host === "aruter.dimpro.hu" || host === "www.aruter.dimpro.hu" || host === "aruter.dev.dimpro.hu";
   const isGazdaSegedHost = host === "gazdaseged.dimpro.hu" || host === "www.gazdaseged.dimpro.hu";
   const isEventHost = host === "esemeny.dimpro.hu" || host === "www.esemeny.dimpro.hu";
-  const isLicenseHost = host === "license.dimpro.hu";
+  const isLicenseHost = host === "license.dimpro.hu" || host === "license.dev.dimpro.hu";
   const isDevHost = new Set([
     "dev.dimpro.hu",
     "admin.dev.dimpro.hu",
@@ -220,7 +221,8 @@ export async function proxy(request: NextRequest) {
   if (isAruterHost) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
-    url.hostname = "app.dimpro.hu";
+    url.hostname = isDevEnvironment ? "app.dev.dimpro.hu" : "app.dimpro.hu";
+    url.port = "";
     url.pathname = pathname === "/" ? "/aruter" : pathname;
     return NextResponse.redirect(url);
   }
@@ -236,7 +238,7 @@ export async function proxy(request: NextRequest) {
   if (isLegacyMeetingAssistantPath) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
-    url.hostname = "app.dimpro.hu";
+    url.hostname = isDevEnvironment ? "app.dev.dimpro.hu" : "app.dimpro.hu";
     url.port = "";
     url.pathname = "/ertekezleti-kisero";
     return NextResponse.redirect(url);
@@ -262,7 +264,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDimproFajlmuhelyReleasePage && !isDevHost) {
+  if (isDimproFajlmuhelyReleasePage && !isDevEnvironment) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.hostname = "license.dimpro.hu";
@@ -271,7 +273,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDrivePage && !isLicenseHost && !isDevHost) {
+  if (isDrivePage && !isLicenseHost && !isDevEnvironment) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.hostname = "license.dimpro.hu";
