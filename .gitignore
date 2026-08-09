@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# DIMPRO runtime and migration artifacts
+/.dimprover/
+/.data/
+/.work_*
+/.next-*/
+/backups/
+/public/downloads/
+/public/tmp_check/
+*.zip
+*.bak
+*.bak-*
