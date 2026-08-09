@@ -432,12 +432,11 @@ Az infrastruktúra-baseline és a külön Supabase DEV backend működik. A kor�
 
 M0-t még nem szabad teljesen lezártnak jelölni az alábbi pontok miatt:
 
-1. Supabase Auth DEV kézi konfiguráció és valódi 6 számjegyű e-mail OTP end-to-end teszt még hátravan. A jelenlegi DIMPRO login `signInWithOtp` + `verifyOtp(type=email)` folyamatot használ; az e-mail sablonnak OTP tokent kell küldenie.
-2. `admin.dev.dimpro.hu` publikus DNS A rekord még hiányzik.
-3. DEV VPS GitHub write credential/deploy key még nincs telepítve; origin read működik, push nem.
-4. DEV Object Storage írás továbbra is tudatosan disabled, amíg külön DEV-only storage credential nem kerül provisionálásra.
+1. `admin.dev.dimpro.hu` publikus DNS A rekord még hiányzik.
+2. DEV VPS GitHub write credential/deploy key még nincs telepítve; origin read működik, push nem. A 2026-08-09-i dry-run push hitelesítés hiányában elutasítva.
+3. DEV Object Storage írás továbbra is tudatosan disabled, amíg külön DEV-only storage credential nem kerül provisionálásra.
 
-A következő közvetlen lépés a Supabase Auth DEV URL- és e-mail OTP sablon konfigurációja, majd egy engedélyezett DEV tesztfiókkal request/verify/session smoke. Ezután a teljes M0 funkcionális acceptance újrafuttatható és az M0 lezárható, ha a többi release-gate is teljesül.
+A Supabase Auth DEV URL-, SMTP-, sablon-, signup- és OTP-konfiguráció elkészült. A 6 számjegyű e-mail OTP request/verify/login E2E teszt sikeres. A teljes M0 lezárás előtt a fenti három infrastruktúra release-gate maradt nyitva.
 
 ## Biztonsági korlát
 
@@ -453,4 +452,9 @@ PROD-on a magas lemezhasználat ellenére régi build-, backup- és work-állom�
 - Negatív teszt: `keseru.benjamin@nagisz.hu` -> HTTP 403, OTP nem küldhető.
 - Engedélyezett DEV Auth user előkészítve: `keseruben90@gmail.com`.
 - Build PASS: `IGufj1j-QidbvaUr0jPQs`; TypeScript PASS; lint 0 error / 108 legacy warning; auth hardening contract 10/10 PASS; HTTP smoke 4/4 PASS.
-- Fennmaradó kézi blocker: külön Google App Password mentése a DEV Supabase custom SMTP Password mezőjébe. Az engedélyezett OTP-kérés jelenleg SMTP provider hibán áll meg.
+- DEV custom SMTP javítva: `smtp.gmail.com:587`, SMTP username `keseruben@gmail.com`, külön DEV Google App Password.
+- DEV Email OTP Length: 6.
+- Valódi böngészős E2E: `keseruben90@gmail.com` -> OTP elküldve -> `verify_otp` -> `otp_verified` -> belépés sikeres.
+- Supabase Auth `Allow new users to sign up`: kikapcsolva; közvetlen anonim signup negatív teszt: `Signups not allowed for this instance`, user nem jött létre.
+- DEV Auth user count: 1; engedélyezett user: `keseruben90@gmail.com`.
+- Nyitott M0 infrastruktúra-gate-ek: `admin.dev.dimpro.hu` DNS, DEV GitHub write credential/deploy key, külön DEV Object Storage credential és írási mód aktiválása.
