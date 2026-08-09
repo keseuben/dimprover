@@ -327,19 +327,51 @@ DEV adatkapcsolat:
 
 A jelenlegi PROD továbbra is a meglévő Supabase PostgreSQL/API rendszert használja. PROD cutover nem történt és M0 alatt nem is történhet.
 
-## Fontos adatoldali korlát
+## Supabase-kompatibilis külön DEV backend
 
-A jelenlegi DIMPRO/DIMPROVER modulok jelentős része `@supabase/supabase-js` / Supabase Auth / PostgREST szerződésre épül. A nyers PostgreSQL 16 adatbázis önmagában nem helyettesíti ezt az API/Auth réteget.
+A korábbi M0 blokk feloldására külön hosted Supabase projekt készült kizárólag DEV célra.
 
-Ezért a DEV VPS szándékosan nem kapott PROD Supabase service-role secretet. Az eredmény:
+- projekt: `dimpro-dev`
+- régió: Central EU (Frankfurt), `eu-central-1`
+- PROD Supabase-től teljesen külön projekt
+- Session pooler: `aws-0-eu-central-1.pooler.supabase.com:5432`
+- PostgreSQL kapcsolat DEV VPS-ről: PASS
+- Project URL, legacy anon/service-role, új publishable/secret és DB-jelszó root-only titkos tárban
+- DEV `.env.local` csak a külön DEV Supabase-t használja
+- PROD Supabase secret nem került DEV-re
 
-- build/UI/shell smoke működik
-- raw PostgreSQL DEV kapcsolat működik
-- PROD adat írása kizárt
-- teljes adatbázis-, auth-, Project Core-, Drive Core- és Identity Core funkcionális regresszió még nem végezhető el
-- `/api/dimpro-identity/health` DEV alatt helyesen HTTP 503-at ad `DIMPRO_IDENTITY_DATABASE_CONFIG_MISSING` állapottal
+A migráció első futása két valós clean-install hibát tárt fel és fail-closed módon megállt:
 
-Az M0 teljes elfogadásához külön Supabase-kompatibilis DEV backend szükséges, vagy külön jóváhagyott repository/API migráció a központi PostgreSQL felé. Ezt nem szabad a PROD Supabase bekötésével megkerülni.
+1. A `20260802_*` fájlok lexikografikus sorrendje a `decide_core` migrációt a kötelező Project Core / Project Calendar előtt futtatta. Javítás: explicit, verziózott függőségi sorrend készült `supabase/DIMPRO_MIGRATION_ORDER_V1.txt` néven, hozzá automatikus szerződéses teszttel.
+2. Az Identity Core V010 Project Core compatibility backfill friss adatbázisban is feltételezte a legacy `dimpro_companies` és `dimpro_account_users` táblákat. A migráció és bootstrap clean-install kompatibilis lett: legacy táblák hiányában nullable canonical organization/user hivatkozással folytat, meglévő legacy környezetben az eredeti bridge működés megmarad.
+
+A Supabase projekt létrehozásakor az `Automatically expose new tables` biztonsági opció kikapcsolva maradt. Emiatt a trusted `service_role` sem kapta meg automatikusan a szükséges táblajogokat. Külön explicit migráció készült: `20260809214500_service_role_backend_grants_v010.sql`. Ez csak a szerveroldali `service_role` számára ad DML jogot; `anon`/`authenticated` automatikus táblakitettséget nem hoz létre.
+
+Aktuális DEV adatbázis eredmény:
+
+- public táblák: 68
+- public függvények: 93
+- RLS-enabled public táblák: 68
+- Identity Core marker: `0.1.0`
+- Project Core marker: `0.2.0`
+- Drop storage marker: `DROP 0.5.0`
+- Drop Identity consumer/admin bridge: `DROP 1.1.0`
+- service-role PostgREST olvasás: HTTP 200
+- Identity Core SQL acceptance: 24/24 PASS, tranzakció végén ROLLBACK
+- Identity Core schema/security contract: PASS
+- Project Core / Calendar / Drive / Dialog / Decide / Diary fő contract tesztek: PASS
+
+Valós DEV Supabase környezettel a Next.js build PASS. Build ID: `JdxzQt-R_wMr3_deTbqTJ`. A `dimpro-benjadmin-m0-dev` PM2 folyamat újraindult és online.
+
+Runtime smoke:
+
+- `https://dev.dimpro.hu/login`: HTTP 200
+- `https://app.dev.dimpro.hu/login`: HTTP 200
+- `/api/dimpro-identity/health`: HTTP 200, `ready=true`
+- Project/Drive health token nélkül HTTP 401: helyes védett viselkedés
+- Drop health HTTP 200, de release/storage gate továbbra is szándékosan fail-closed
+
+A Supabase DEV `public` sémáról PostgreSQL 17 klienssel custom-format logical dump készült, `pg_restore --list` validációval. A dump titkosított Restic offsite snapshotba került; snapshot: `570dce86`, restore-stream SHA-256 egyezés: PASS.
 
 ## DEV és DB offsite backup
 
@@ -350,8 +382,8 @@ DEV backup:
 - systemd service/timer: `dimpro-dev-backup`
 - napi ütemezés: aktív
 - source/worktree/repo/config/Nginx/TLS/PM2/SSH/firewall állapot mentése
-- PostgreSQL DEV client certificate/private key titkosított Restic snapshotba bekerül
-- legfrissebb M0 checkpoint snapshot: `a0e897f5`
+- PostgreSQL DEV client certificate/private key és a külön Supabase DEV root-only secret készlet titkosított Restic snapshotba bekerül
+- legfrissebb M0 checkpoint snapshot: `751a2ae0`
 - legfrissebb snapshotból külön Nginx fájl restore teszt és byte-compare: PASS
 
 DB backup:
@@ -396,45 +428,16 @@ A képernyőképek és a `results.json` a DEV logkönyvtárban találhatók: `/s
 
 ## M0 jelenlegi állapot és nyitott pontok
 
-Az infrastruktúra-baseline stabil és izolált. Elkészült:
-
-- PROD audit
-- külső backup és restore teszt
-- migrációs osztályozás
-- tényleges PROD állapotból tiszta Git baseline
-- Large DEV VPS alapozás
-- szelektív forrásmigráció
-- külön worktree/repo struktúra
-- központi build lock
-- DEV-specifikus build tuning
-- explicit DNS-host routing
-- TLS
-- PM2 recovery
-- Nginx default deny
-- külön DEV/STAG/PROD PostgreSQL struktúra
-- DEV→DB mTLS
-- külön DEV Object Storage targetek fail-closed módban
-- DEV/DB automatikus offsite backup + restore teszt
-- TypeScript/lint/build smoke
-- desktop/tablet/mobile vizuális smoke
+Az infrastruktúra-baseline és a külön Supabase DEV backend működik. A korábbi legnagyobb M0 blokkoló megszűnt: Identity/Core adatbázis és PostgREST funkcionális DEV validáció futtatható anélkül, hogy a PROD Supabase-hez írás történne.
 
 M0-t még nem szabad teljesen lezártnak jelölni az alábbi pontok miatt:
 
-1. Külön Supabase-kompatibilis DEV backend hiányzik, ezért a meglévő adat/auth modulok teljes funkcionális regressziója nem végezhető el biztonságosan.
+1. Supabase Auth DEV kézi konfiguráció és valódi 6 számjegyű e-mail OTP end-to-end teszt még hátravan. A jelenlegi DIMPRO login `signInWithOtp` + `verifyOtp(type=email)` folyamatot használ; az e-mail sablonnak OTP tokent kell küldenie.
 2. `admin.dev.dimpro.hu` publikus DNS A rekord még hiányzik.
 3. DEV VPS GitHub write credential/deploy key még nincs telepítve; origin read működik, push nem.
+4. DEV Object Storage írás továbbra is tudatosan disabled, amíg külön DEV-only storage credential nem kerül provisionálásra.
 
-Az 1. pont M0 acceptance blocker, mert a B3 kifejezetten előírja a meglévő modulok funkcionális DEV validálását. A 2–3. pont előkészített, külön kezelhető infrastruktúra-feladat.
-
-## Következő lépés
-
-A legkisebb kockázatú folytatás külön Supabase DEV projekt/backend létrehozása, majd a szükséges schema/migration snapshot alkalmazása erre a DEV backend-re. Ezután:
-
-1. DEV-only Supabase URL/anon/service-role secret biztonságos szerveroldali telepítése.
-2. Identity Core, Project Core, Drive Core, Drop és auth schema/readiness tesztek.
-3. Jogosultság- és írási regresszió kizárólag DEV adatokkal.
-4. M0 teljes acceptance.
-5. Csak ezután BENJADMIN M1 shell/login/protective screen fejlesztés.
+A következő közvetlen lépés a Supabase Auth DEV URL- és e-mail OTP sablon konfigurációja, majd egy engedélyezett DEV tesztfiókkal request/verify/session smoke. Ezután a teljes M0 funkcionális acceptance újrafuttatható és az M0 lezárható, ha a többi release-gate is teljesül.
 
 ## Biztonsági korlát
 

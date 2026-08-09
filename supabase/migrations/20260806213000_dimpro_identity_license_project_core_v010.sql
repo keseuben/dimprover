@@ -977,50 +977,87 @@ end;
 $$;
 
 -- Safe Project Core bridge and backfill. The existing project_core tables remain intact.
+-- Clean-install safety: legacy account/company tables are optional. A fresh DIMPRO DEV
+-- database may have Project Core without the older account-core compatibility tables.
 do $$
 begin
   if to_regclass('public.project_core_projects') is not null then
-    insert into public.dimpro_projects (
-      public_project_code, name, short_name, description, organization_id,
-      status, project_drop_enabled, created_by, created_at, updated_at,
-      legacy_project_core_id, legacy_project_code
-    )
-    select
-      public.dimpro_generate_project_code(),
-      pc.name,
-      null,
-      coalesce(pc.description, ''),
-      (
-        select c.dimpro_organization_id
-        from public.dimpro_companies c
-        where c.id::text = pc.organization_id
-        limit 1
-      ),
-      case lower(coalesce(pc.status, 'draft'))
-        when 'read_only' then 'read_only'
-        when 'deletion_scheduled' then 'deletion_scheduled'
-        when 'draft' then 'draft'
-        when 'active' then 'active'
-        when 'closing' then 'closing'
-        when 'archived' then 'archived'
-        when 'deleted' then 'deleted'
-        else 'draft'
-      end,
-      false,
-      (
-        select a.dimpro_user_id
-        from public.dimpro_account_users a
-        where a.id::text = pc.created_by or a.auth_user_id::text = pc.created_by
-        limit 1
-      ),
-      coalesce(pc.created_at, now()),
-      coalesce(pc.updated_at, now()),
-      pc.id,
-      pc.code
-    from public.project_core_projects pc
-    where not exists (
-      select 1 from public.dimpro_projects p where p.legacy_project_core_id = pc.id
-    );
+    if to_regclass('public.dimpro_companies') is not null
+      and to_regclass('public.dimpro_account_users') is not null then
+      insert into public.dimpro_projects (
+        public_project_code, name, short_name, description, organization_id,
+        status, project_drop_enabled, created_by, created_at, updated_at,
+        legacy_project_core_id, legacy_project_code
+      )
+      select
+        public.dimpro_generate_project_code(),
+        pc.name,
+        null,
+        coalesce(pc.description, ''),
+        (
+          select c.dimpro_organization_id
+          from public.dimpro_companies c
+          where c.id::text = pc.organization_id
+          limit 1
+        ),
+        case lower(coalesce(pc.status, 'draft'))
+          when 'read_only' then 'read_only'
+          when 'deletion_scheduled' then 'deletion_scheduled'
+          when 'draft' then 'draft'
+          when 'active' then 'active'
+          when 'closing' then 'closing'
+          when 'archived' then 'archived'
+          when 'deleted' then 'deleted'
+          else 'draft'
+        end,
+        false,
+        (
+          select a.dimpro_user_id
+          from public.dimpro_account_users a
+          where a.id::text = pc.created_by or a.auth_user_id::text = pc.created_by
+          limit 1
+        ),
+        coalesce(pc.created_at, now()),
+        coalesce(pc.updated_at, now()),
+        pc.id,
+        pc.code
+      from public.project_core_projects pc
+      where not exists (
+        select 1 from public.dimpro_projects p where p.legacy_project_core_id = pc.id
+      );
+    else
+      insert into public.dimpro_projects (
+        public_project_code, name, short_name, description, organization_id,
+        status, project_drop_enabled, created_by, created_at, updated_at,
+        legacy_project_core_id, legacy_project_code
+      )
+      select
+        public.dimpro_generate_project_code(),
+        pc.name,
+        null,
+        coalesce(pc.description, ''),
+        null,
+        case lower(coalesce(pc.status, 'draft'))
+          when 'read_only' then 'read_only'
+          when 'deletion_scheduled' then 'deletion_scheduled'
+          when 'draft' then 'draft'
+          when 'active' then 'active'
+          when 'closing' then 'closing'
+          when 'archived' then 'archived'
+          when 'deleted' then 'deleted'
+          else 'draft'
+        end,
+        false,
+        null,
+        coalesce(pc.created_at, now()),
+        coalesce(pc.updated_at, now()),
+        pc.id,
+        pc.code
+      from public.project_core_projects pc
+      where not exists (
+        select 1 from public.dimpro_projects p where p.legacy_project_core_id = pc.id
+      );
+    end if;
 
     update public.project_core_projects pc
     set dimpro_project_id = p.id
