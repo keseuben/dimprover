@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/app/lib/supabase/client";
 import { LockKeyhole, Mail, Send } from "lucide-react";
 import DimproMotionBackdrop from "@/components/layout/DimproMotionBackdrop";
 
@@ -72,7 +71,6 @@ function LoginSystemVisual() {
 
 export function DimproverOtpLogin() {
   const router = useRouter();
-  const supabase = createClient();
   const codeInputRef = useRef<HTMLInputElement>(null);
 
   const [email, setEmail] = useState("");
@@ -98,24 +96,28 @@ export function DimproverOtpLogin() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: cleanEmail,
-      options: {
-        shouldCreateUser: true,
-      },
-    });
+    try {
+      const response = await fetch("/api/dimpro-auth/request-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail.toLowerCase() }),
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
 
-    setLoading(false);
+      if (!response.ok || !data?.ok) {
+        setMessage(data?.error || "A belépési kód küldése nem sikerült.");
+        return;
+      }
 
-    if (error) {
-      setMessage(error.message);
-      return;
+      setCodeSent(true);
+      setCode("");
+      setMessage("Belépési kód elküldve.");
+      window.setTimeout(() => codeInputRef.current?.focus(), 80);
+    } catch {
+      setMessage("A belépési szolgáltatás jelenleg nem érhető el.");
+    } finally {
+      setLoading(false);
     }
-
-    setCodeSent(true);
-    setCode("");
-    setMessage("Belépési kód elküldve.");
-    window.setTimeout(() => codeInputRef.current?.focus(), 80);
   }
 
   async function loginWithCode(codeOverride?: string) {
@@ -125,23 +127,27 @@ export function DimproverOtpLogin() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: tokenCode,
-      type: "email",
-    });
+    try {
+      const response = await fetch("/api/dimpro-auth/verify-otp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail.toLowerCase(), token: tokenCode }),
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
 
-    setLoading(false);
+      if (!response.ok || !data?.ok) {
+        setMessage(data?.error || "Hibás vagy lejárt belépési kód.");
+        return;
+      }
 
-    if (error) {
-      setMessage("Hibás vagy lejárt belépési kód.");
-      return;
+      localStorage.setItem("dimprover_login_started_at", Date.now().toString());
+      router.push("/");
+      router.refresh();
+    } catch {
+      setMessage("A belépési szolgáltatás jelenleg nem érhető el.");
+    } finally {
+      setLoading(false);
     }
-
-    localStorage.setItem("dimprover_login_started_at", Date.now().toString());
-
-    router.push("/");
-    router.refresh();
   }
 
   return (

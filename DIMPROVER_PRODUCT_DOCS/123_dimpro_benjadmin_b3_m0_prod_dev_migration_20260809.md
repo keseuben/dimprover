@@ -442,3 +442,15 @@ A következő közvetlen lépés a Supabase Auth DEV URL- és e-mail OTP sablon 
 ## Biztonsági korlát
 
 PROD-on a magas lemezhasználat ellenére régi build-, backup- és work-állomány nem törölhető addig, amíg a DEV/STAG migráció, a külső mentés és a szükséges restore-próbák nem igazoltak. PROD Supabase secret, production Object Storage credential vagy production write-jog nem használható a DEV funkcionális teszt megkerülésére.
+
+## Auth hardening – 2026-08-09 23:xx CEST
+
+- DEV Supabase `Allow new users to sign up`: kikapcsolva (`disable_signup=true`).
+- DEV alkalmazás engedélylista: `keseruben90@gmail.com`.
+- OTP request és verify kizárólag a szerveroldali `/api/dimpro-auth/*` végpontokon keresztül fut.
+- Automatikus Supabase Auth user-létrehozás tiltva (`shouldCreateUser=false`).
+- A legacy DIMPROVER login közvetlen kliensoldali Supabase OTP kerülőútja lezárva.
+- Negatív teszt: `keseru.benjamin@nagisz.hu` -> HTTP 403, OTP nem küldhető.
+- Engedélyezett DEV Auth user előkészítve: `keseruben90@gmail.com`.
+- Build PASS: `IGufj1j-QidbvaUr0jPQs`; TypeScript PASS; lint 0 error / 108 legacy warning; auth hardening contract 10/10 PASS; HTTP smoke 4/4 PASS.
+- Fennmaradó kézi blocker: külön Google App Password mentése a DEV Supabase custom SMTP Password mezőjébe. Az engedélyezett OTP-kérés jelenleg SMTP provider hibán áll meg.

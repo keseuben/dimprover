@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: false },
     });
 
     if (error) {
