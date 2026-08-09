@@ -119,8 +119,18 @@ add("github.write-routing", remote.startsWith("git@") || remote.startsWith("ssh:
 
 const driveMode = env.DIMPRO_DRIVE_STORAGE_MODE || "missing";
 const dropMode = env.DIMPRO_DROP_STORAGE_MODE || "missing";
-add("storage.drive-dev-write", driveMode !== "disabled" && driveMode !== "missing" ? "PASS" : "BLOCKED", `mode=${driveMode}`);
-add("storage.drop-dev-write", dropMode !== "disabled" && dropMode !== "missing" ? "PASS" : "BLOCKED", `mode=${dropMode}`);
+const driveStorageReady = ["quarantine", "active"].includes(driveMode)
+  && Boolean(env.DIMPRO_DRIVE_S3_ENDPOINT && env.DIMPRO_DRIVE_S3_REGION && env.DIMPRO_DRIVE_S3_BUCKET
+    && env.DIMPRO_DRIVE_S3_ACCESS_KEY_ID && env.DIMPRO_DRIVE_S3_SECRET_ACCESS_KEY);
+const dropStorageReady = ["quarantine", "active"].includes(dropMode)
+  && Boolean(env.DIMPRO_DROP_S3_ENDPOINT && env.DIMPRO_DROP_S3_REGION && env.DIMPRO_DROP_S3_BUCKET
+    && env.DIMPRO_DROP_S3_ACCESS_KEY_ID && env.DIMPRO_DROP_S3_SECRET_ACCESS_KEY)
+  && env.DIMPRO_DROP_S3_BUCKET !== env.DIMPRO_DRIVE_S3_BUCKET
+  && env.DIMPRO_DROP_S3_ACCESS_KEY_ID !== env.DIMPRO_DRIVE_S3_ACCESS_KEY_ID;
+add("storage.drive-dev-write", driveStorageReady ? "PASS" : "BLOCKED",
+  `mode=${driveMode}; config=${driveStorageReady ? "ready" : "incomplete"}`);
+add("storage.drop-dev-write", dropStorageReady ? "PASS" : "BLOCKED",
+  `mode=${dropMode}; config=${dropStorageReady ? "ready+isolated" : "incomplete"}`);
 
 let gitStatus = "unknown";
 try {

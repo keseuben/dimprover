@@ -37,11 +37,14 @@ const client = new S3Client({
   credentials: { accessKeyId, secretAccessKey },
 });
 
-const expectedOrigin = "https://projektkapu.dimpro.hu";
+const expectedOrigins = (process.env.DIMPRO_DRIVE_CORS_ORIGINS || "https://projektkapu.dimpro.hu")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const expectedMethods = ["GET", "HEAD", "PUT"];
 const corsRules = [{
   ID: "dimpro-drive-projectgate-v081",
-  AllowedOrigins: [expectedOrigin],
+  AllowedOrigins: expectedOrigins,
   AllowedMethods: expectedMethods,
   AllowedHeaders: ["*"],
   ExposeHeaders: ["ETag", "x-amz-request-id", "x-amz-id-2"],
@@ -56,7 +59,7 @@ try {
   const current = await client.send(new GetBucketCorsCommand({ Bucket: bucket }));
   const rules = current.CORSRules || [];
   const matching = rules.find((rule) =>
-    rule.AllowedOrigins?.includes(expectedOrigin)
+    expectedOrigins.every((origin) => rule.AllowedOrigins?.includes(origin))
     && expectedMethods.every((method) => rule.AllowedMethods?.includes(method))
     && rule.AllowedHeaders?.includes("*"),
   );
@@ -66,7 +69,7 @@ try {
     ok: true,
     bucketConfigured: true,
     corsConfigured: true,
-    origin: expectedOrigin,
+    origins: expectedOrigins,
     methods: expectedMethods,
     allowedHeaders: ["*"],
     secretsExposed: false,

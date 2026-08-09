@@ -426,17 +426,16 @@ Eredmény:
 
 A képernyőképek és a `results.json` a DEV logkönyvtárban találhatók: `/srv/dimpro-dev/logs/m0-visual-smoke/`.
 
-## M0 jelenlegi állapot és nyitott pontok
+## M0 végleges állapot
 
-Az infrastruktúra-baseline és a külön Supabase DEV backend működik. A korábbi legnagyobb M0 blokkoló megszűnt: Identity/Core adatbázis és PostgREST funkcionális DEV validáció futtatható anélkül, hogy a PROD Supabase-hez írás történne.
+A BENJADMIN B3 M0 infrastruktúra-baseline lezárási acceptance teljesült. A külön DEV VPS, külön Supabase DEV backend, külön DB-környezet, GitHub write útvonal, `admin.dev.dimpro.hu` DNS/TLS, valamint a DRIVE és DROP külön DEV-only Object Storage kapcsolata működik.
 
-M0-t még nem szabad teljesen lezártnak jelölni az alábbi pontok miatt:
-
-1. `admin.dev.dimpro.hu` publikus DNS A rekord még hiányzik.
-2. DEV VPS GitHub write credential/deploy key még nincs telepítve; origin read működik, push nem. A 2026-08-09-i dry-run push hitelesítés hiányában elutasítva.
-3. DEV Object Storage írás továbbra is tudatosan disabled, amíg külön DEV-only storage credential nem kerül provisionálásra.
-
-A Supabase Auth DEV URL-, SMTP-, sablon-, signup- és OTP-konfiguráció elkészült. A 6 számjegyű e-mail OTP request/verify/login E2E teszt sikeres. A teljes M0 lezárás előtt a fenti három infrastruktúra release-gate maradt nyitva.
+- M0 release-gate automata: 13/13 PASS.
+- GitHub DEV push: PASS.
+- Auth 6 számjegyű OTP E2E: PASS.
+- DRIVE/DROP storage: külön credential és bucket, `quarantine` mód, szerveroldali read/write/delete smoke PASS.
+- PROD továbbra sem fejlesztési célpont; PROD write jogosultság nem került DEV-be.
+- Ismert utómunka: a DROP Hetzner bucket böngészős `OPTIONS` preflight 403 vizsgálata a DROP közvetlen browser-upload release előtt.
 
 ## Biztonsági korlát
 
@@ -457,4 +456,14 @@ PROD-on a magas lemezhasználat ellenére régi build-, backup- és work-állom�
 - Valódi böngészős E2E: `keseruben90@gmail.com` -> OTP elküldve -> `verify_otp` -> `otp_verified` -> belépés sikeres.
 - Supabase Auth `Allow new users to sign up`: kikapcsolva; közvetlen anonim signup negatív teszt: `Signups not allowed for this instance`, user nem jött létre.
 - DEV Auth user count: 1; engedélyezett user: `keseruben90@gmail.com`.
-- Nyitott M0 infrastruktúra-gate-ek: `admin.dev.dimpro.hu` DNS, DEV GitHub write credential/deploy key, külön DEV Object Storage credential és írási mód aktiválása.
+
+
+## Object Storage M0 lezárás – 2026-08-10
+
+- DRIVE DEV credential külön Hetzner projektből, root-only secret fájlban és gitignored `.env.local` runtime kötésben.
+- DROP DEV credential külön Hetzner projektből, DRIVE credentialtől és buckettől izoláltan.
+- DRIVE put/head/read/delete/delete-verify: PASS.
+- DROP put/head/read/delete/delete-verify: PASS.
+- Mindkét storage mód: `quarantine`; írás engedélyezett, letöltés nem aktív.
+- DEV CORS: DRIVE origin `https://projektkapu.dev.dimpro.hu`, DROP origin `https://drop.dev.dimpro.hu`.
+- DRIVE OPTIONS preflight: PASS. DROP esetén a Hetzner S3 OPTIONS preflight 403 ismert utómunka, miközben a presigned PUT PASS és CORS response header jelen van. Ez nem blokkolja az M0 szerveroldali storage izoláció acceptance-et, de a DROP közvetlen böngészős feltöltés release-e előtt kötelező külön lezárni.

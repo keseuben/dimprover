@@ -17,25 +17,22 @@ Branch: `infra/benjadmin-b3-m0`
 - DEV HTTP smoke: `dev`, `app.dev`, `drop.dev`, Identity health: 4/4 PASS.
 - TypeScript: PASS.
 - Lint: 0 error / 108 örökölt warning.
-- Build: PASS, build ID `IGufj1j-QidbvaUr0jPQs`.
+- Build: PASS, build ID `twdXp2Z5LPyLFEKs-b9iM`.
 - Auth hardening contract: 10/10 PASS.
-- DEV Restic backup: snapshot `2aa634f6`.
+- DEV Restic backup: záró snapshot a Dev Center lezárási rekordban naplózva.
 
-## Nyitott M0 release-gate-ek
+## M0 release-gate-ek – lezárva
 
-1. `admin.dev.dimpro.hu` publikus DNS A rekord hiányzik. Cél: `213.160.68.32`.
-2. GitHub DEV write hozzáférés még nincs aktiválva. Dedikált ED25519 deploy key előkészítve a DEV VPS-en; a publikus kulcsot a GitHub repositoryhoz write jogosultsággal kell hozzáadni, ezután a remote SSH-ra váltható és push smoke futtatható.
-   - Deploy key fingerprint: `SHA256:FalOxZgItl1Hg6z4RFzw0UBXYApvGIsU0VoG0U788v0`.
-3. Drive és Drop külön DEV Object Storage credential még nincs provisionálva; a write mód ezért tudatosan `disabled`, fail-closed.
+- `admin.dev.dimpro.hu` DNS/TLS: PASS (`213.160.68.32`, HTTPS 200).
+- GitHub DEV write: PASS dedikált deploy key + SSH remote + valós push smoke.
+- DRIVE DEV Object Storage: külön DEV credential + bucket, put/head/read/delete smoke PASS, `quarantine` mód aktív.
+- DROP DEV Object Storage: külön DEV credential + külön bucket, credential isolation PASS, put/head/read/delete smoke PASS, `quarantine` mód aktív.
+- DEV CORS originok környezetfüggővé téve: DRIVE `projektkapu.dev.dimpro.hu`, DROP `drop.dev.dimpro.hu`.
+- Ismert nem-M0 blokkoló: a Hetzner DROP bucket `OPTIONS` preflight jelenleg 403-at ad, miközben az aláírt PUT sikeres és az `Access-Control-Allow-Origin` fejlécet visszaadja. Ezt a DROP böngészős közvetlen feltöltési körben külön kell tovább vizsgálni; az M0 szerveroldali Object Storage izoláció és read/write/delete acceptance sikeres.
 
-## Következő két óra végrehajtási sorrend
+## Következő fejlesztési pont
 
-1. M0 acceptance automatizálás és állapotriport véglegesítése.
-2. GitHub deploy-key bekötés, amint a publikus kulcs manuálisan felkerül a repositoryhoz; SSH remote + push smoke.
-3. `admin.dev.dimpro.hu` DNS létrehozása után Nginx/TLS bekötés és HTTP/TLS smoke.
-4. Ha rendelkezésre áll külön DEV-only Object Storage access key: credential telepítés, Drive/Drop izolált write/read/delete smoke, majd csak siker esetén a DEV storage mód aktiválása.
-5. M0 végső build/smoke/backup/restore-check, Dev Center lezárás.
-6. M1 csak akkor indulhat el, ha az M0 kötelező gate-ek lezártak.
+Az M0 kötelező gate-ek lezárása után a következő fejlesztési kör a BENJADMIN B3 M1 előkészítése. M1 csak új Dev Center verzióval, új backup/checkpointtal és külön worktree/branch munkafolyamattal indulhat.
 
 ## Automatikus ellenőrző
 

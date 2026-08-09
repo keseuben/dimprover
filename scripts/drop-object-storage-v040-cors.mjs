@@ -14,7 +14,10 @@ if (!endpoint || !region || !bucket || !accessKeyId || !secretAccessKey || bucke
   process.exit(2);
 }
 const client = new S3Client({ endpoint, region, forcePathStyle, credentials: { accessKeyId, secretAccessKey } });
-const origins = ["https://drop.dimpro.hu", "https://www.drop.dimpro.hu"];
+const origins = (env("DIMPRO_DROP_CORS_ORIGINS") || "https://drop.dimpro.hu,https://www.drop.dimpro.hu")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const expected = {
   AllowedOrigins: origins,
   AllowedMethods: ["GET", "HEAD", "PUT"],
