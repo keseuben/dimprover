@@ -91,10 +91,22 @@ for (const url of [
 }
 
 try {
-  const addresses = await dns.resolve4("admin.dev.dimpro.hu");
+  const resolver = new dns.Resolver();
+  resolver.setServers(["1.1.1.1", "8.8.8.8"]);
+  const addresses = await resolver.resolve4("admin.dev.dimpro.hu");
   add("dns.admin-dev", addresses.includes("213.160.68.32") ? "PASS" : "BLOCKED", addresses.join(","));
 } catch (error) {
   add("dns.admin-dev", "BLOCKED", error instanceof Error ? error.code || error.message : "DNS lookup failed");
+}
+
+try {
+  const adminStatus = execFileSync("curl", [
+    "-sS", "--max-time", "15", "--resolve", "admin.dev.dimpro.hu:443:213.160.68.32",
+    "-o", "/dev/null", "-w", "%{http_code}", "https://admin.dev.dimpro.hu/",
+  ], { encoding: "utf8" }).trim();
+  add("http.admin-dev-tls", adminStatus === "200" ? "PASS" : "BLOCKED", `http=${adminStatus}`);
+} catch (error) {
+  add("http.admin-dev-tls", "BLOCKED", error instanceof Error ? error.message : "admin DEV HTTPS failed");
 }
 
 const deployKey = "/root/.ssh/dimpro_dev_github_ed25519.pub";
