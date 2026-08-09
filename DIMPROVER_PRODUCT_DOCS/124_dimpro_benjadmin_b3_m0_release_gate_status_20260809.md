@@ -25,6 +25,7 @@ Branch: `infra/benjadmin-b3-m0`
 
 1. `admin.dev.dimpro.hu` publikus DNS A rekord hiányzik. Cél: `213.160.68.32`.
 2. GitHub DEV write hozzáférés még nincs aktiválva. Dedikált ED25519 deploy key előkészítve a DEV VPS-en; a publikus kulcsot a GitHub repositoryhoz write jogosultsággal kell hozzáadni, ezután a remote SSH-ra váltható és push smoke futtatható.
+   - Deploy key fingerprint: .
 3. Drive és Drop külön DEV Object Storage credential még nincs provisionálva; a write mód ezért tudatosan `disabled`, fail-closed.
 
 ## Következő két óra végrehajtási sorrend
