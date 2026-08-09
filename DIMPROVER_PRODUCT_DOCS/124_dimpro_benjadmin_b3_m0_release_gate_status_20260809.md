@@ -19,13 +19,13 @@ Branch: `infra/benjadmin-b3-m0`
 - Lint: 0 error / 108 örökölt warning.
 - Build: PASS, build ID `IGufj1j-QidbvaUr0jPQs`.
 - Auth hardening contract: 10/10 PASS.
-- DEV Restic backup: snapshot `420c45d1`.
+- DEV Restic backup: snapshot `2aa634f6`.
 
 ## Nyitott M0 release-gate-ek
 
 1. `admin.dev.dimpro.hu` publikus DNS A rekord hiányzik. Cél: `213.160.68.32`.
 2. GitHub DEV write hozzáférés még nincs aktiválva. Dedikált ED25519 deploy key előkészítve a DEV VPS-en; a publikus kulcsot a GitHub repositoryhoz write jogosultsággal kell hozzáadni, ezután a remote SSH-ra váltható és push smoke futtatható.
-   - Deploy key fingerprint: .
+   - Deploy key fingerprint: `SHA256:FalOxZgItl1Hg6z4RFzw0UBXYApvGIsU0VoG0U788v0`.
 3. Drive és Drop külön DEV Object Storage credential még nincs provisionálva; a write mód ezért tudatosan `disabled`, fail-closed.
 
 ## Következő két óra végrehajtási sorrend
