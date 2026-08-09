@@ -133,7 +133,8 @@ DEV baseline Git:
 - tag: `benjadmin-b3-m0-prod-baseline`
 - aktív infra worktree: `/srv/dimpro-dev/worktrees/benjadmin-m0-infra`
 - aktív branch: `infra/benjadmin-b3-m0`
-- jelenlegi infra commit: `c60424610e8a39904bba8dbfd45ab6c5145ed484`
+- utolsó funkcionális infrastruktúra/kód commit: `c60424610e8a39904bba8dbfd45ab6c5145ed484`
+- ezt követően kizárólag M0 dokumentációs commitok készültek
 
 Fontos M0 commitok:
 
