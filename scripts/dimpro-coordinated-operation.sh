@@ -2,10 +2,17 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOCK_DIR="$ROOT/.dimprover/locks"
+if [[ -n "${DIMPRO_COORDINATION_ROOT:-}" ]]; then
+  COORDINATION_ROOT="$DIMPRO_COORDINATION_ROOT"
+elif [[ "$ROOT" == /srv/dimpro-dev/* ]]; then
+  COORDINATION_ROOT="/srv/dimpro-dev/coordination"
+else
+  COORDINATION_ROOT="$ROOT/.dimprover"
+fi
+LOCK_DIR="$COORDINATION_ROOT/locks"
 LOCK_FILE="$LOCK_DIR/exclusive-operation.lock"
-STATE_FILE="$ROOT/.dimprover/active-development.json"
-HISTORY_FILE="$ROOT/.dimprover/development-operations.jsonl"
+STATE_FILE="$COORDINATION_ROOT/active-development.json"
+HISTORY_FILE="$COORDINATION_ROOT/development-operations.jsonl"
 
 OPERATION="${1:-}"
 if [[ -z "$OPERATION" ]]; then
@@ -27,8 +34,8 @@ case "$OPERATION" in
     ;;
 esac
 
-mkdir -p "$LOCK_DIR"
-chmod 700 "$ROOT/.dimprover" "$LOCK_DIR" 2>/dev/null || true
+mkdir -p "$COORDINATION_ROOT" "$LOCK_DIR"
+chmod 700 "$COORDINATION_ROOT" "$LOCK_DIR" 2>/dev/null || true
 touch "$LOCK_FILE" "$HISTORY_FILE"
 chmod 600 "$LOCK_FILE" "$HISTORY_FILE" 2>/dev/null || true
 
