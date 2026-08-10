@@ -93,3 +93,16 @@ Kiemelt ellenőrzések:
 2. DEV aktiválás rollback-védelemmel;
 3. Operator UI további adatdrill-down;
 4. B3 M4 – License + AI keret + audit/refaktor integráció az új Operator UI-ba.
+
+## DEV aktiválás
+
+- DEV aktiválva: 2026-08-10
+- normál DEV port: 3100
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev`
+- korábbi `dimpro-integrated-dev` leállítva, rollbackként megtartva
+- aktiválás előtti Restic backup: `4936ea73`
+- aktivált build ID: `BVBxp0VY2rsX_15ngh792`
+- aktiválás utáni böngészős acceptance: 26/26 PASS
+- Drop 1.2.12 regresszió: PASS
+- Identity health: ready/enabled PASS
+- PROD: nem módosult
