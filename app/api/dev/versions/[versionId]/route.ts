@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
-import { updateDevVersion } from "@/app/lib/dev-center/store";
+import { updateDevVersion } from "@/app/lib/dev-center/postgres-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

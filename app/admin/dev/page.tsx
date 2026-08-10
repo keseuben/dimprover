@@ -6,6 +6,7 @@ import type { DevProject, DevVersion, DevWorkCategory, DevWorkSession } from "@/
 import DevPwaControls from "@/components/admin/DevPwaControls";
 import DevChatStarterCard from "@/components/admin/DevChatStarterCard";
 import DevPortfolioOverview from "@/components/admin/DevPortfolioOverview";
+import DevEnginePanel from "@/components/admin/DevEnginePanel";
 import {
   Activity,
   BellRing,
@@ -527,6 +528,8 @@ export default function DeveloperCenterPage() {
           <SummaryCard icon={CircleEllipsis} label="Kézi beavatkozás" value={String(summaryCounts.blocked)} note={summaryCounts.blocked ? "beavatkozást igényel" : "nincs blokkoló feladat"} tone="amber" />
           <SummaryCard icon={Timer} label="Bruttó fejlesztési idő" value={formatDurationCompact(totalTrackedMinutes)} note={`${activeSessionCount} aktív munkamenet`} tone="cyan" />
         </section>
+
+        <DevEnginePanel />
 
         <section className="dev-section" id="projektek">
           <div className="dev-section-heading">
