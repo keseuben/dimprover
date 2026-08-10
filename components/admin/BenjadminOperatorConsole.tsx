@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -26,8 +27,10 @@ import {
 } from "lucide-react";
 import type { DevEngineGateStatus, DevEngineTask, DevEngineWorker, DevEngineWorkerSession } from "@/app/lib/dev-center/engine-types";
 import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-center/types";
+import BenjadminEntitlementsPanel from "./BenjadminEntitlementsPanel";
+import BenjadminControlPlanePanel from "./BenjadminControlPlanePanel";
 
-type OperatorView = "overview" | "tasks" | "team" | "workers" | "environments" | "release" | "audit";
+type OperatorView = "overview" | "control" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
 
 type RawEnvironment = { id?: string; code?: string; name?: string; kind?: string; status?: string; read_only?: boolean; updated_at?: string };
 type RawLease = { id?: string; session_id?: string; task_id?: string; branch_name?: string; worktree_path?: string; status?: string; lease_expires_at?: string };
@@ -67,10 +70,12 @@ const PAGE_SIZE = 8;
 
 const views: Array<{ id: OperatorView; label: string; icon: typeof Activity }> = [
   { id: "overview", label: "Áttekintés", icon: Activity },
+  { id: "control", label: "Control", icon: TerminalSquare },
   { id: "tasks", label: "Taskok", icon: ListTodo },
   { id: "team", label: "Csapat", icon: Bot },
   { id: "workers", label: "Worker-ek", icon: Bot },
   { id: "environments", label: "Környezetek", icon: ServerCog },
+  { id: "entitlements", label: "Licenc / AI", icon: KeyRound },
   { id: "release", label: "Release", icon: GitBranch },
   { id: "audit", label: "Audit", icon: ShieldCheck },
 ];
@@ -103,6 +108,21 @@ function statusTone(status?: string) {
   if (["busy", "running", "in_progress", "testing", "claimed", "open"].includes(value)) return "is-active";
   if (["blocked", "failed", "offline", "expired", "cancelled"].includes(value)) return "is-danger";
   return "is-muted";
+}
+
+function workerAvatarSrc(code?: string) {
+  const avatars: Record<string, string> = {
+    ARMINAI: "/benjadmin/team/03_ArminAI.webp",
+    JAZMINAI: "/benjadmin/team/04_JazminAI.webp",
+    OUTMINAI: "/benjadmin/team/05_OutminAI.webp",
+  };
+  return avatars[(code || "").toUpperCase()] || "/benjadmin/team/02_BenAI.webp";
+}
+
+function teamAvatarSrc(id?: string, code?: string) {
+  if (id === "benjadmin") return "/benjadmin/team/01_BenjAdmin.webp";
+  if (id === "benai") return "/benjadmin/team/02_BenAI.webp";
+  return workerAvatarSrc(code);
 }
 
 function statusLabel(status?: string) {
@@ -141,34 +161,56 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [lastLiveAt, setLastLiveAt] = useState("");
+  const refreshInFlightRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
+    if (refreshInFlightRef.current) return;
     const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
     if (!key) return;
-    setBusy(true);
+
+    refreshInFlightRef.current = true;
+    if (!silent) setBusy(true);
     try {
       const headers = { "x-dimpro-license-admin-key": key };
-      const [stateResponse, gateResponse, orchestrationResponse] = await Promise.all([
-        fetch("/api/dev/engine/state", { headers, cache: "no-store" }),
-        fetch("/api/dev/engine/gate", { headers, cache: "no-store" }),
-        fetch("/api/dev/engine/orchestration", { headers, cache: "no-store" }),
-      ]);
-      const statePayload = await stateResponse.json().catch(() => null) as { state?: EngineState; error?: string } | null;
-      const gatePayload = await gateResponse.json().catch(() => null) as { gate?: DevEngineGateStatus } | null;
-      const orchestrationPayload = await orchestrationResponse.json().catch(() => null) as { orchestration?: OrchestrationSnapshot } | null;
-      if (!stateResponse.ok || !statePayload?.state) throw new Error(statePayload?.error || "Az engine állapot nem tölthető be.");
-      setState(statePayload.state);
-      setGate(gatePayload?.gate || null);
-      setOrchestration(orchestrationPayload?.orchestration || null);
+      const response = await fetch("/api/dev/engine/live", { headers, cache: "no-store" });
+      const payload = await response.json().catch(() => null) as {
+        state?: EngineState;
+        gate?: DevEngineGateStatus;
+        orchestration?: OrchestrationSnapshot;
+        live?: { generatedAt?: string };
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.state) throw new Error(payload?.error || "Az élő BENJADMIN állapot nem tölthető be.");
+      setState(payload.state);
+      setGate(payload.gate || null);
+      setOrchestration(payload.orchestration || null);
+      setLastLiveAt(payload.live?.generatedAt || new Date().toISOString());
       setError("");
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "A BENJADMIN állapot nem tölthető be.");
+      setError(loadError instanceof Error ? loadError.message : "A BENJADMIN élő adatfrissítés nem érhető el.");
     } finally {
-      setBusy(false);
+      refreshInFlightRef.current = false;
+      if (!silent) setBusy(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load(false);
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void load(true);
+    };
+    const intervalId = window.setInterval(refreshIfVisible, 5000);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [load]);
   useEffect(() => { setPage(1); }, [view, query]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase("hu-HU");
@@ -187,10 +229,11 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
   const environmentRows = useMemo(() => (state?.environments || []).filter((item) => !normalizedQuery || [item.code, item.name, item.status].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [state?.environments, normalizedQuery]);
 
   const teamRows = useMemo(() => [
-    { id: "benjadmin", name: "BenjAdmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
-    { id: "benai", name: "BenAI", type: "FEJLESZTÉSIRÁNYÍTÓ AI", role: "Task-, worker-, branch-, worktree- és scope-kiosztás", slot: "Koordinátor", status: gate?.ready ? "ready" : "active" },
+    { id: "benjadmin", code: "BENJADMIN", name: "BenjAdmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
+    { id: "benai", code: "BENAI", name: "BenAI", type: "FEJLESZTÉSIRÁNYÍTÓ AI", role: "Task-, worker-, branch-, worktree- és scope-kiosztás", slot: "Koordinátor", status: gate?.ready ? "ready" : "active" },
     ...workers.map((worker) => ({
       id: worker.id,
+      code: worker.code,
       name: worker.name,
       type: worker.code === "OUTMINAI" ? "KÜLSŐ KÓDMÉRNÖK" : "KÓDMÉRNÖK",
       role: worker.code === "OUTMINAI" ? "Partner- és külső projektek, alapból korlátozott scope" : worker.role,
@@ -229,8 +272,9 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         </div>
         <div className="operator-compact-header__right">
           <span className={`operator-live-pill ${gate?.ready ? "is-ok" : "is-danger"}`}><span /> Engine {gate?.ready ? "READY" : "CHECK"}</span>
+          <span className="operator-live-pill is-ok"><span /> ÉLŐ · 5 MP</span>
           <span className="operator-live-pill is-ok"><span /> DEV CANONICAL</span>
-          <button type="button" className="operator-icon-action" onClick={() => void load()} disabled={busy} title="Frissítés"><RefreshCw size={18} className={busy ? "is-spinning" : ""} /></button>
+          <button type="button" className="operator-icon-action" onClick={() => void load(false)} disabled={busy} title="Frissítés"><RefreshCw size={18} className={busy ? "is-spinning" : ""} /></button>
         </div>
       </header>
 
@@ -277,7 +321,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
                 <div className="operator-table-title"><div><span>WORKER-EK</span><h2>BenAI kiosztás</h2></div></div>
                 {workers.map((worker) => {
                   const session = sessionForWorker(worker.id);
-                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><div><strong>{worker.name}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív task" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
+                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív task" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
                 })}
               </div>
               <div className="operator-mini-table-card">
@@ -302,12 +346,12 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
           <div className="operator-table-card is-full">
             <div className="operator-table-title"><div><span>BENJADMIN CSAPAT</span><h2>Irányítók és aktív kódolói slotok</h2></div><span>5 tag · 3 kódolói slot</span></div>
             <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Tag</th><th>Típus</th><th>Szerepkör</th><th>Slot</th><th>Állapot</th><th className="hide-small">Aktív feladat</th><th className="hide-medium">Session / handshake</th></tr></thead><tbody>
-              {(pageData.items as Array<{ id: string; name: string; type: string; role: string; slot: string; status: string }>).map((member) => {
+              {(pageData.items as Array<{ id: string; code: string; name: string; type: string; role: string; slot: string; status: string }>).map((member) => {
                 const worker = workers.find((item) => item.id === member.id);
                 const session = worker ? sessionForWorker(worker.id) : undefined;
                 const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined;
                 return <tr key={member.id}>
-                  <td><strong>{member.name}</strong><small>{member.id === "benjadmin" ? "emberi vezérlés" : member.id === "benai" ? "AI koordináció" : "AI végrehajtás"}</small></td>
+                  <td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={teamAvatarSrc(member.id, member.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{member.name}</strong><small>{member.id === "benjadmin" ? "emberi vezérlés" : member.id === "benai" ? "AI koordináció" : "AI végrehajtás"}</small></div></div></td>
                   <td>{member.type}</td>
                   <td><strong>{member.role}</strong></td>
                   <td><code>{member.slot}</code></td>
@@ -325,7 +369,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
           <div className="operator-table-card is-full">
             <div className="operator-table-title"><div><span>BENAI WORKER-EK</span><h2>Session és worktree állapot</h2></div><span>{workerRows.length} worker</span></div>
             <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Worker</th><th>Szerep</th><th>Státusz</th><th>Session</th><th>Task</th><th className="hide-small">Branch</th><th className="hide-medium">Worktree</th><th>Heartbeat</th></tr></thead><tbody>
-              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><strong>{worker.name}</strong><small>{worker.code}</small></td><td>{worker.role}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív session"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
+              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{worker.code}</small></div></div></td><td>{worker.role}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív session"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={workerRows.length} onPage={setPage} />
           </div>
         ) : null}
@@ -338,6 +382,10 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={environmentRows.length} onPage={setPage} />
           </div>
         ) : null}
+
+        {view === "control" ? <BenjadminControlPlanePanel query={query} /> : null}
+
+        {view === "entitlements" ? <BenjadminEntitlementsPanel query={query} /> : null}
 
         {view === "release" ? (
           <div className="operator-table-card is-full">
@@ -360,7 +408,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
 
       <footer className="operator-compact-footer">
         <div><HardDrive size={14} /> canonical DEV · `integration/prod-v1212-benjadmin-m35`</div>
-        <div><Clock3 size={14} /> {formatDateTime(state?.updatedAt || orchestration?.checkedAt)}</div>
+        <div><Clock3 size={14} /> élő: {formatDateTime(lastLiveAt || state?.updatedAt || orchestration?.checkedAt)}</div>
         <button type="button" onClick={onOpenLicense}><KeyRound size={14} /> Licencadmin</button>
         <button type="button" onClick={onLogout}><LogOut size={14} /> Kijelentkezés</button>
       </footer>

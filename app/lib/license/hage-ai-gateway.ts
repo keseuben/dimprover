@@ -207,6 +207,62 @@ function successfulCost(records: AiUsageRecord[]) {
   return records.filter((record) => record.status === "success").reduce((sum, record) => sum + Number(record.costHuf || 0), 0);
 }
 
+export async function getHageAiAdminUsageSnapshot() {
+  const records = (await readUsageStore()).records;
+  const now = new Date();
+  const month = now.toISOString().slice(0, 7);
+  const monthRecords = records.filter((record) => record.createdAt.startsWith(month));
+  const successful = monthRecords.filter((record) => record.status === "success");
+
+  const byLicense = Object.values(monthRecords.reduce<Record<string, {
+    licenseId: string;
+    companyId: string;
+    companyName: string;
+    requests: number;
+    successfulRequests: number;
+    failedRequests: number;
+    inputTokens: number;
+    outputTokens: number;
+    costHuf: number;
+    lastUsedAt?: string;
+  }>>((acc, record) => {
+    acc[record.licenseId] ??= {
+      licenseId: record.licenseId,
+      companyId: record.companyId,
+      companyName: record.companyName,
+      requests: 0,
+      successfulRequests: 0,
+      failedRequests: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costHuf: 0,
+    };
+    const target = acc[record.licenseId];
+    target.requests += 1;
+    target.successfulRequests += record.status === "success" ? 1 : 0;
+    target.failedRequests += record.status === "error" ? 1 : 0;
+    target.inputTokens += Number(record.inputTokens || 0);
+    target.outputTokens += Number(record.outputTokens || 0);
+    target.costHuf += record.status === "success" ? Number(record.costHuf || 0) : 0;
+    target.lastUsedAt = !target.lastUsedAt || record.createdAt > target.lastUsedAt ? record.createdAt : target.lastUsedAt;
+    return acc;
+  }, {})).sort((a, b) => b.costHuf - a.costHuf);
+
+  return {
+    month,
+    totals: {
+      requests: monthRecords.length,
+      successfulRequests: successful.length,
+      failedRequests: monthRecords.length - successful.length,
+      costHuf: successful.reduce((sum, record) => sum + Number(record.costHuf || 0), 0),
+      inputTokens: successful.reduce((sum, record) => sum + Number(record.inputTokens || 0), 0),
+      outputTokens: successful.reduce((sum, record) => sum + Number(record.outputTokens || 0), 0),
+    },
+    byLicense,
+    recent: records.slice().reverse().slice(0, 100),
+  };
+}
+
 function approximateTokens(value: unknown) {
   const record = value && typeof value === "object" ? value as Record<string, unknown> : null;
   const pageImages = record && Array.isArray(record.pageImages) ? record.pageImages.length : 0;

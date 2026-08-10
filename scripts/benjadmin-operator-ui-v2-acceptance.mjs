@@ -60,13 +60,16 @@ try {
   await page.click(".benjadmin-rail__top .benjadmin-rail__button");
   await page.waitForFunction(() => { const el = document.querySelector(".benjadmin-floating-board"); return Boolean(el?.classList.contains("is-open") && getComputedStyle(el).visibility === "visible" && Number(getComputedStyle(el).opacity) > 0.9); });
   check("Explorer floating mode opens", await page.$eval(".benjadmin-floating-board", (el) => getComputedStyle(el).visibility === "visible"));
-  check("Explorer has Fa Modulok Fájlok views", await page.$$eval(".benjadmin-explorer-switcher button", (items) => items.map((item) => (item.textContent || "").trim()).join("|") === "Fa|Modulok|Fájlok"));
+  check("Explorer has Fa Modulok Fájlok Változások views", await page.$$eval(".benjadmin-explorer-switcher button", (items) => items.map((item) => (item.textContent || "").trim()).join("|") === "Fa|Modulok|Fájlok|Változások"));
   const afterFloat = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
   check("floating Explorer does not resize workspace", Math.abs(beforeFloat.width - afterFloat.width) < 1 && Math.abs(beforeFloat.left - afterFloat.left) < 1, `before=${JSON.stringify(beforeFloat)} after=${JSON.stringify(afterFloat)}`);
 
   await page.$$eval(".benjadmin-explorer-switcher button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Fájlok"))?.click());
   await page.waitForSelector(".benjadmin-file-view");
   check("file-manager view renders", await page.$$eval(".benjadmin-file-row", (items) => items.length) >= 8);
+  await page.$$eval(".benjadmin-explorer-switcher button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Változások"))?.click());
+  await page.waitForSelector(".benjadmin-change-view");
+  check("changes view renders", await page.$$eval(".benjadmin-change-view .benjadmin-file-row", (items) => items.length) >= 3);
   await page.$$eval(".benjadmin-explorer-switcher button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Fa"))?.click());
   await page.waitForSelector(".benjadmin-tree-view");
   check("tree view renders", await page.$$eval(".benjadmin-tree-row", (items) => items.length) >= 6);
@@ -99,6 +102,7 @@ try {
   check("B3 five-member team visible", ["BenjAdmin", "BenAI", "ÁrminAI", "JázminAI", "OutminAI"].every((name) => teamText.includes(name)));
   check("three coding slots stated", teamText.includes("3 kódolói slot"));
   check("OutminAI external role visible", teamText.includes("KÜLSŐ KÓDMÉRNÖK"));
+  check("team portraits loaded", await page.$$eval(".operator-worker-identity .operator-worker-avatar", (items) => items.length >= 5 && items.every((item) => item instanceof HTMLImageElement && item.complete && item.naturalWidth > 0)));
 
   await clickTab("Taskok");
   const firstTaskPage = await page.$eval(".operator-pagination", (el) => el.textContent || "");
@@ -110,6 +114,31 @@ try {
 
   await clickTab("Környezetek");
   check("DEV STAGING PROD table visible", await page.evaluate(() => ["DEV", "STAGING", "PRODUCTION"].every((value) => (document.body.textContent || "").includes(value))));
+  check("main operator text stays at least 12px while compact nav/sidebar may use 10px", await page.evaluate(() => {
+    const root = document.querySelector(".operator-console");
+    if (!root) return false;
+    const nodes = Array.from(root.querySelectorAll("span,small,strong,td,th,code,button,input,a,p,label"));
+    return nodes.filter((node) => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    }).every((node) => {
+      const size = Number.parseFloat(getComputedStyle(node).fontSize);
+      const compact = Boolean(node.closest(".operator-view-tabs, .operator-overview-side, .operator-compact-header__right"));
+      return size >= (compact ? 9.99 : 11.99);
+    });
+  }));
+
+  const liveBefore = await page.evaluate(() => ({
+    view: Array.from(document.querySelectorAll(".operator-view-tabs button")).find((item) => item.classList.contains("is-active"))?.textContent || "",
+    navCount: performance.getEntriesByType("navigation").length,
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 5500));
+  const liveAfter = await page.evaluate(() => ({
+    view: Array.from(document.querySelectorAll(".operator-view-tabs button")).find((item) => item.classList.contains("is-active"))?.textContent || "",
+    navCount: performance.getEntriesByType("navigation").length,
+  }));
+  check("silent refresh preserves active view without page reload", liveBefore.view === liveAfter.view && liveBefore.navCount === liveAfter.navCount, `before=${JSON.stringify(liveBefore)} after=${JSON.stringify(liveAfter)}`);
 
   await page.evaluate(() => localStorage.setItem("dimpro-benjadmin-board-pinned", "false"));
   await openAt(768, 1024);

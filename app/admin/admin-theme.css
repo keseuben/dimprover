@@ -5064,3 +5064,392 @@
     overscroll-behavior-x: contain;
   }
 }
+
+/* BENJADMIN Operator UI 2.0 accessibility baseline: no operational text below 12px. */
+.operator-console.operator-compact :is(span, small, strong, td, th, code, button, input, a, p, label),
+.benjadmin-explorer-board :is(span, small, strong, button, input, a, code, p, label),
+.benjadmin-rail :is(span, small, strong, button, a) {
+  font-size: max(12px, 1em);
+}
+
+.operator-data-table th,
+.operator-data-table td,
+.operator-pagination,
+.operator-status-badge,
+.operator-view-tabs button,
+.operator-compact-stats span,
+.operator-compact-footer,
+.benjadmin-tree-row,
+.benjadmin-file-row,
+.benjadmin-explorer-module-row,
+.benjadmin-explorer-switcher button {
+  font-size: 12px;
+}
+
+/* Operator sidebar legibility + worker visual identity */
+.operator-worker-line {
+  grid-template-columns: 8px 34px minmax(0, 1fr) auto;
+  min-height: 50px;
+}
+.operator-worker-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--admin-accent) 45%, var(--admin-border));
+  background: var(--admin-surface-muted);
+}
+
+.operator-worker-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.operator-worker-identity > div {
+  min-width: 0;
+}
+.operator-environment-line {
+  grid-template-columns: 8px minmax(88px, 0.8fr) minmax(78px, 1fr) minmax(88px, auto);
+  min-height: 50px;
+}
+.operator-environment-line > strong,
+.operator-environment-line > span,
+.operator-environment-line > small {
+  min-width: 0;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.operator-environment-line > span {
+  justify-self: start;
+}
+.operator-environment-line > small {
+  justify-self: end;
+  text-align: right;
+}
+
+.benjadmin-change-note {
+  margin: 10px 2px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--admin-border);
+  border-radius: 10px;
+  color: var(--admin-text-soft);
+  line-height: 1.45;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .operator-console.operator-compact {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .operator-console.operator-compact > *,
+  .operator-compact-header,
+  .operator-compact-stats,
+  .operator-compact-toolbar,
+  .operator-table-stage,
+  .operator-overview-grid,
+  .operator-overview-side,
+  .operator-table-card,
+  .operator-mini-table-card,
+  .operator-compact-warning,
+  .operator-compact-footer {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .operator-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+}
+
+/* B3.1 compact typography tuning — requested after visual review. */
+.operator-view-tabs button {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.operator-compact-header__right .operator-live-pill {
+  font-size: 11px;
+}
+
+.operator-overview-side .operator-table-title > div > span {
+  font-size: 10px;
+}
+
+.operator-overview-side .operator-table-title h2 {
+  font-size: 12px;
+}
+
+.operator-overview-side .operator-worker-line strong,
+.operator-overview-side .operator-environment-line strong,
+.operator-overview-side .operator-compact-warning strong {
+  font-size: 11px;
+}
+
+.operator-overview-side .operator-worker-line small,
+.operator-overview-side .operator-worker-line > span:last-child,
+.operator-overview-side .operator-environment-line > span,
+.operator-overview-side .operator-environment-line small,
+.operator-overview-side .operator-compact-warning span {
+  font-size: 10px;
+}
+
+.operator-overview-side .operator-worker-line,
+.operator-overview-side .operator-environment-line {
+  min-height: 46px;
+}
+
+.operator-overview-side .operator-worker-avatar {
+  width: 30px;
+  height: 30px;
+}
+
+/* B3 M4 entitlement/control-plane read model */
+.operator-entitlement-panel {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.operator-entitlement-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.operator-entitlement-summary > div {
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 9px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--admin-accent-strong);
+  background: var(--admin-surface);
+}
+
+.operator-entitlement-summary span {
+  overflow: hidden;
+  color: var(--admin-text-muted);
+  font-size: 10px !important;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operator-entitlement-summary strong {
+  color: var(--admin-text);
+  font-size: 13px !important;
+  white-space: nowrap;
+}
+
+.operator-entitlement-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.operator-entitlement-actions button,
+.operator-entitlement-actions a {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--admin-text-muted);
+  background: var(--admin-surface-soft);
+  font-size: 10px !important;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.operator-entitlement-actions button.is-active,
+.operator-entitlement-actions button:hover,
+.operator-entitlement-actions a:hover {
+  color: var(--admin-accent-strong);
+  border-color: color-mix(in srgb, var(--admin-accent) 35%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-accent) 7%, var(--admin-surface-soft));
+}
+
+@media (max-width: 1180px) {
+  .operator-entitlement-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .operator-entitlement-panel { height: auto; }
+  .operator-entitlement-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operator-entitlement-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+}
+
+/* Visual correction: keep navigation/status chrome compact despite global accessibility rule. */
+.operator-console.operator-compact .operator-view-tabs button {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.operator-console.operator-compact .operator-compact-header__right .operator-live-pill {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.operator-console.operator-compact .operator-overview-side .operator-table-title > div > span {
+  font-size: 10px;
+}
+
+.operator-console.operator-compact .operator-overview-side .operator-table-title h2 {
+  font-size: 12px;
+}
+
+.operator-console.operator-compact .operator-overview-side .operator-worker-line strong,
+.operator-console.operator-compact .operator-overview-side .operator-environment-line strong,
+.operator-console.operator-compact .operator-overview-side .operator-compact-warning strong {
+  font-size: 11px;
+}
+
+.operator-console.operator-compact .operator-overview-side .operator-worker-line small,
+.operator-console.operator-compact .operator-overview-side .operator-worker-line > span:last-child,
+.operator-console.operator-compact .operator-overview-side .operator-environment-line > span,
+.operator-console.operator-compact .operator-overview-side .operator-environment-line small,
+.operator-console.operator-compact .operator-overview-side .operator-compact-warning span {
+  font-size: 10px;
+}
+
+.operator-console.operator-compact .operator-entitlement-summary span,
+.operator-console.operator-compact .operator-entitlement-actions button,
+.operator-console.operator-compact .operator-entitlement-actions a {
+  font-size: 10px;
+}
+
+.operator-console.operator-compact .operator-entitlement-summary strong {
+  font-size: 13px;
+}
+
+/* B3.1 Control Plane operator view */
+.operator-control-plane-panel {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+}
+.operator-control-plane-head {
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--admin-surface);
+}
+.operator-control-plane-head > div:first-child { min-width: 0; }
+.operator-control-plane-head > div:first-child > span {
+  color: var(--admin-accent-strong);
+  font-size: 10px !important;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.operator-control-plane-head h2 { margin: 2px 0 0; color: var(--admin-text); font-size: 14px; }
+.operator-control-plane-head p { margin: 2px 0 0; color: var(--admin-text-muted); font-size: 10px !important; }
+.operator-control-plane-badges {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.operator-control-plane-badges .operator-status-badge { min-height: 27px; font-size: 10px !important; }
+.operator-control-plane-badges > button {
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--admin-text-muted);
+  background: var(--admin-surface-soft);
+  cursor: pointer;
+}
+.operator-control-plane-badges > button:hover { color: var(--admin-accent-strong); }
+.operator-start-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.operator-start-card {
+  min-width: 0;
+  min-height: 82px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: var(--admin-surface);
+}
+.operator-start-card.is-dev { border-color: color-mix(in srgb, #22c55e 28%, var(--admin-border)); }
+.operator-start-card.is-prod { border-color: color-mix(in srgb, #f59e0b 35%, var(--admin-border)); }
+.operator-start-card > div { display: flex; align-items: center; gap: 6px; color: var(--admin-accent-strong); }
+.operator-start-card > div strong { color: var(--admin-text); font-size: 11px !important; }
+.operator-start-card > span { display: block; margin-top: 3px; color: var(--admin-accent-strong); font-size: 10px !important; font-weight: 850; }
+.operator-start-card p { margin: 4px 0 3px; color: var(--admin-text-soft); font-size: 10px !important; line-height: 1.25; }
+.operator-start-card small { color: var(--admin-text-muted); font-size: 9.5px !important; font-weight: 800; }
+.operator-control-plane-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 8px;
+}
+.operator-control-plane-grid > .operator-table-card { height: 100%; }
+.operator-control-plane-side {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.operator-control-plane-side .operator-mini-table-card { min-height: 0; overflow: hidden; }
+.operator-probe-list { max-height: 100%; overflow: auto; }
+.operator-probe-list > div {
+  min-height: 34px;
+  padding: 5px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--admin-border) 70%, transparent);
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.operator-probe-list strong { overflow: hidden; color: var(--admin-text); font-size: 10px !important; text-overflow: ellipsis; white-space: nowrap; }
+.operator-probe-list small { color: var(--admin-text-muted); font-size: 9.5px !important; font-weight: 800; }
+.operator-control-plane-side .operator-compact-warning strong { font-size: 11px !important; }
+.operator-control-plane-side .operator-compact-warning span { font-size: 10px !important; }
+@media (max-width: 1180px) {
+  .operator-control-plane-grid { grid-template-columns: minmax(0, 1fr) 260px; }
+  .operator-control-plane-head { align-items: flex-start; }
+  .operator-control-plane-badges { flex-wrap: wrap; }
+}
+@media (max-width: 900px) {
+  .operator-control-plane-panel { height: auto; }
+  .operator-control-plane-grid { grid-template-columns: 1fr; }
+  .operator-control-plane-side { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
+}
+@media (max-width: 700px) {
+  .operator-control-plane-head { flex-direction: column; }
+  .operator-control-plane-badges { width: 100%; justify-content: flex-start; }
+  .operator-start-grid { grid-template-columns: 1fr; }
+  .operator-control-plane-side { grid-template-columns: 1fr; }
+}

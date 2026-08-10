@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 
-type ExplorerView = "tree" | "modules" | "files";
+type ExplorerView = "tree" | "modules" | "files" | "changes";
 
 type Props = {
   pinned: boolean;
@@ -81,7 +81,7 @@ export default function BenjadminExplorerPanel({ pinned, onPinnedChange, onClose
 
   useEffect(() => {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    if (stored === "tree" || stored === "modules" || stored === "files") setView(stored);
+    if (stored === "tree" || stored === "modules" || stored === "files" || stored === "changes") setView(stored);
   }, []);
 
   useEffect(() => {
@@ -116,6 +116,7 @@ export default function BenjadminExplorerPanel({ pinned, onPinnedChange, onClose
         <button type="button" className={view === "tree" ? "is-active" : ""} onClick={() => setView("tree")}><FolderTree size={15} /> Fa</button>
         <button type="button" className={view === "modules" ? "is-active" : ""} onClick={() => setView("modules")}><ListTree size={15} /> Modulok</button>
         <button type="button" className={view === "files" ? "is-active" : ""} onClick={() => setView("files")}><Files size={15} /> Fájlok</button>
+        <button type="button" className={view === "changes" ? "is-active" : ""} onClick={() => setView("changes")}><GitBranch size={15} /> Változások</button>
       </div>
 
       <div className="benjadmin-explorer-content">
@@ -169,6 +170,22 @@ export default function BenjadminExplorerPanel({ pinned, onPinnedChange, onClose
                 ))}
               </section>
             ))}
+          </div>
+        ) : null}
+
+        {view === "changes" ? (
+          <div className="benjadmin-file-view benjadmin-change-view">
+            <div className="benjadmin-file-breadcrumb"><GitBranch size={14} /><span>DEV / VÁLTOZÁSOK</span></div>
+            <Link href="/admin/dev" className="benjadmin-file-row" onClick={onNavigate}>
+              <Code2 size={14} /><span><strong>Aktív taskok és branch-ek</strong><small>Development Center ·élő fejlesztési állapot</small></span>
+            </Link>
+            <Link href="/admin/release-kozpont" className="benjadmin-file-row" onClick={onNavigate}>
+              <GitBranch size={14} /><span><strong>Commit / release különbségek</strong><small>Release Központ · verzió és környezet diff</small></span>
+            </Link>
+            <Link href="/admin/dev/rendszerstruktura" className="benjadmin-file-row" onClick={onNavigate}>
+              <Network size={14} /><span><strong>Komponensváltozások</strong><small>Rendszerstruktúra · érintett modulok és függőségek</small></span>
+            </Link>
+            <p className="benjadmin-change-note">A nyers Git diff szerveroldali scope- és jogosultságellenőrzéssel kerül ide a következő API-fázisban.</p>
           </div>
         ) : null}
       </div>
