@@ -178,7 +178,7 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
   }
 
   let userResult = await client.from("dimpro_users")
-    .select("id,public_user_code,full_name,email,status,email_verified_at")
+    .select("id,public_user_code,full_name,email,status,email_verified_at,auth_user_id")
     .eq("email_normalized", inviteEmail)
     .maybeSingle();
   if (userResult.error) dbError("A meghívott e-mail-címe nem ellenőrizhető.", userResult.error);
@@ -202,16 +202,23 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
   if (!userId) throw new DimproIdentityError("A meghívott felhasználó azonosítója hiányzik.", "DIMPRO_INVITED_USER_INVALID", 500);
 
   const currentMembership = await client.from("dimpro_organization_memberships")
-    .select("id,status,is_primary")
+    .select("id,status,is_primary,role_code,role_label")
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .neq("status", "revoked")
     .maybeSingle();
   if (currentMembership.error) dbError("A meglévő tagság nem ellenőrizhető.", currentMembership.error);
   const current = currentMembership.data as DbRow | null;
-  if (current?.status === "active") {
-    throw new DimproIdentityError("Ez a felhasználó már aktív tagja a szervezetnek.", "DIMPRO_ORGANIZATION_MEMBER_ALREADY_ACTIVE", 409);
+  const activeMemberOnboarding = current?.status === "active" && !user.auth_user_id;
+  if (current?.status === "active" && user.auth_user_id) {
+    throw new DimproIdentityError(
+      "Ez a felhasználó már aktív, belépési fiókkal rendelkező tagja a szervezetnek.",
+      "DIMPRO_ORGANIZATION_MEMBER_ALREADY_REGISTERED",
+      409,
+    );
   }
+  const effectiveRoleCode = activeMemberOnboarding ? text(current?.role_code, 60) || roleCode : roleCode;
+  const effectiveRoleLabel = activeMemberOnboarding ? text(current?.role_label, 160) || roleLabel : roleLabel;
 
   const seats = await getDimproOrganizationSeatSummary(licenseId);
   if (!current && seats.used >= maxUsers) {
@@ -226,20 +233,23 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
   let membershipId = current ? normalizeUuid(current.id) : "";
   try {
     if (membershipId) {
-      const updated = await client.from("dimpro_organization_memberships").update({
-        role_code: roleCode,
-        role_label: roleLabel,
-        status: "invited",
-        access_ends_at: null,
-        updated_at: now,
-      }).eq("id", membershipId);
+      const membershipPatch = activeMemberOnboarding
+        ? { updated_at: now }
+        : {
+            role_code: effectiveRoleCode,
+            role_label: effectiveRoleLabel,
+            status: "invited",
+            access_ends_at: null,
+            updated_at: now,
+          };
+      const updated = await client.from("dimpro_organization_memberships").update(membershipPatch).eq("id", membershipId);
       if (updated.error) dbError("A szervezeti meghívott tagsága nem frissíthető.", updated.error);
     } else {
       const inserted = await client.from("dimpro_organization_memberships").insert({
         user_id: userId,
         organization_id: organizationId,
-        role_code: roleCode,
-        role_label: roleLabel,
+        role_code: effectiveRoleCode,
+        role_label: effectiveRoleLabel,
         status: "invited",
         joined_at: now,
         access_ends_at: null,
@@ -266,8 +276,8 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
         invited_user_id: userId,
         email_normalized: inviteEmail,
         full_name: fullName,
-        role_code: roleCode,
-        role_label: roleLabel,
+        role_code: effectiveRoleCode,
+        role_label: effectiveRoleLabel,
         token_hash: token.tokenHash,
         token_hint: token.tokenHint,
         status: "pending",
@@ -286,8 +296,8 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
         invited_user_id: userId,
         email_normalized: inviteEmail,
         full_name: fullName,
-        role_code: roleCode,
-        role_label: roleLabel,
+        role_code: effectiveRoleCode,
+        role_label: effectiveRoleLabel,
         token_hash: token.tokenHash,
         token_hint: token.tokenHint,
         status: "pending",
@@ -301,14 +311,15 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
       user_id: userId,
       organization_id: organizationId,
       license_id: licenseId,
-      event_type: "organization_user_invited",
+      event_type: activeMemberOnboarding ? "organization_user_onboarding_invited" : "organization_user_invited",
       success: true,
       metadata: {
         source: "identity-license-center",
-        roleCode,
+        roleCode: effectiveRoleCode,
         moduleCodes: selectedModules,
         seatUsageBeforeInvite: seats.used,
         maxUsers,
+        activeMemberOnboarding,
         legacyLicenseRef: license.legacy_license_ref || null,
       },
     });
@@ -323,12 +334,13 @@ export async function createDimproOrganizationInvitationAdmin(input: Record<stri
         userId,
         email: inviteEmail,
         fullName,
-        roleCode,
-        roleLabel,
+        roleCode: effectiveRoleCode,
+        roleLabel: effectiveRoleLabel,
         moduleCodes: selectedModules,
         status: "pending",
         expiresAt,
         tokenHint: token.tokenHint,
+        activeMemberOnboarding,
       },
       rawToken: token.token,
       seatUsage: { used: current ? seats.used : seats.used + 1, maxUsers },
@@ -432,13 +444,23 @@ export async function acceptDimproOrganizationInvitation(rawToken: unknown) {
   }).eq("id", userId);
   if (userUpdate.error) dbError("A meghívott felhasználó nem aktiválható.", userUpdate.error);
 
-  const membershipUpdate = await client.from("dimpro_organization_memberships").update({
-    status: "active",
-    joined_at: now,
-    is_primary: !(primaryResult.data || []).length,
-    updated_at: now,
-  }).eq("id", membershipId).eq("status", "invited");
-  if (membershipUpdate.error) dbError("A szervezeti tagság nem aktiválható.", membershipUpdate.error);
+  const membershipState = await client.from("dimpro_organization_memberships")
+    .select("status,is_primary")
+    .eq("id", membershipId)
+    .maybeSingle();
+  if (membershipState.error) dbError("A szervezeti tagság állapota nem ellenőrizhető.", membershipState.error);
+  if (!membershipState.data || !["invited", "active"].includes(String(membershipState.data.status))) {
+    throw new DimproIdentityError("A meghíváshoz tartozó tagság már nem aktiválható.", "DIMPRO_ORGANIZATION_INVITATION_MEMBERSHIP_INACTIVE", 409);
+  }
+  if (membershipState.data.status === "invited") {
+    const membershipUpdate = await client.from("dimpro_organization_memberships").update({
+      status: "active",
+      joined_at: now,
+      is_primary: !(primaryResult.data || []).length,
+      updated_at: now,
+    }).eq("id", membershipId).eq("status", "invited");
+    if (membershipUpdate.error) dbError("A szervezeti tagság nem aktiválható.", membershipUpdate.error);
+  }
 
   const accepted = await client.from("dimpro_organization_invitations").update({
     status: "accepted",

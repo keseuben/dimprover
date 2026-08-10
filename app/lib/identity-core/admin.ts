@@ -82,8 +82,7 @@ export async function getDimproSendAdminOverview() {
       .select("id,public_license_code,owner_type,owner_user_id,owner_organization_id,product_code,plan_code,status,activated_at,expires_at")
       .order("created_at", { ascending: false }),
     client.from("dimpro_license_modules")
-      .select("id,license_id,module_code,enabled,valid_from,valid_until")
-      .in("module_code", ["DROP_SEND", "DROP_QUICK_IMAGE_SEND", "DROP_PROJECT_INBOX", "DROP_QUICK_VOICE_NOTE"]),
+      .select("id,license_id,module_code,enabled,valid_from,valid_until"),
     client.from("dimpro_send_entitlements")
       .select("id,user_id,license_id,organization_id,code_hint,status,valid_from,expires_at,can_use_standard_send,can_use_quick_image_send,can_use_image_groups,can_use_file_comments,can_use_project_drop,recipient_mode,default_recipient_id,max_recipients,max_saved_contacts,upload_rules_acceptance_count,upload_rules_version,upload_rules_last_accepted_at,max_package_size_bytes,monthly_send_limit,current_month_send_count,send_count_month,last_used_at,created_at,updated_at")
       .order("created_at", { ascending: false }),
@@ -329,6 +328,44 @@ export async function createDimproSendEntitlementAdmin(input: Record<string, unk
     const accessEndsAt = (membership.data as DbRow | null)?.access_ends_at;
     if (!membershipId || (accessEndsAt && Date.parse(String(accessEndsAt)) < Date.now())) {
       throw new DimproIdentityError("A felhasználó nem aktív tagja a licenctulajdonos szervezetnek.", "DIMPRO_SEND_ORGANIZATION_MEMBERSHIP_REQUIRED", 403);
+    }
+    const requestedMembershipModules = [
+      canUseStandardSend ? "DROP_SEND" : null,
+      canUseQuickImageSend ? "DROP_QUICK_IMAGE_SEND" : null,
+      canUseProjectDrop ? "DROP_PROJECT_INBOX" : null,
+    ].filter((item): item is string => Boolean(item));
+    if (input.grantMembershipModules === true && requestedMembershipModules.length) {
+      const licensedModules = await client.from("dimpro_license_modules")
+        .select("module_code,enabled,valid_from,valid_until")
+        .eq("license_id", licenseId)
+        .in("module_code", requestedMembershipModules)
+        .eq("enabled", true);
+      if (licensedModules.error) dbError("A licenc Send-moduljai nem ellenőrizhetők.", licensedModules.error);
+      const nowMs = Date.now();
+      const licensed = new Set(((licensedModules.data || []) as DbRow[]).filter((row) => {
+        const from = row.valid_from ? Date.parse(String(row.valid_from)) : 0;
+        const until = row.valid_until ? Date.parse(String(row.valid_until)) : Number.POSITIVE_INFINITY;
+        return (!Number.isFinite(from) || from <= nowMs) && (!Number.isFinite(until) || until >= nowMs);
+      }).map((row) => String(row.module_code || "").toUpperCase()));
+      const missingFromLicense = requestedMembershipModules.filter((moduleCode) => !licensed.has(moduleCode));
+      if (missingFromLicense.length) {
+        throw new DimproIdentityError(
+          `A szervezeti licenc nem tartalmazza a kért Send-modult: ${missingFromLicense.join(", ")}.`,
+          "DIMPRO_SEND_MODULE_NOT_LICENSED",
+          403,
+        );
+      }
+      const granted = await client.from("dimpro_membership_modules").upsert(
+        requestedMembershipModules.map((moduleCode) => ({
+          membership_id: membershipId,
+          module_code: moduleCode,
+          enabled: true,
+          limits: {},
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "membership_id,module_code" },
+      );
+      if (granted.error) dbError("A kiválasztott Send-modulok nem rendelhetők a felhasználóhoz.", granted.error);
     }
     const membershipModules = await client.from("dimpro_membership_modules")
       .select("module_code")

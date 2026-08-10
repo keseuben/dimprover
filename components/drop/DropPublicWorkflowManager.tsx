@@ -16,6 +16,7 @@ import {
   KeyRound,
   LoaderCircle,
   LockKeyhole,
+  Mail,
   Plus,
   RefreshCw,
   Send,
@@ -46,6 +47,13 @@ type IdentityMembership = {
   status: string;
   access_ends_at: string | null;
   is_primary: boolean;
+};
+type IdentityOrganization = {
+  id: string;
+  public_organization_code: string;
+  display_name: string;
+  legal_name: string;
+  status: string;
 };
 type IdentityLicense = {
   id: string;
@@ -154,9 +162,9 @@ type EntitlementForm = {
 type InlineUserDraft = {
   fullName: string;
   email: string;
-  phone: string;
-  organizationName: string;
-  emailVerified: boolean;
+  licenseId: string;
+  roleCode: "member" | "manager" | "admin";
+  moduleCodes: string[];
 };
 type InlineLicenseDraft = {
   publicLicenseCode: string;
@@ -212,9 +220,9 @@ const initialGateForm: GateForm = {
 const initialInlineUserDraft = (): InlineUserDraft => ({
   fullName: "",
   email: "",
-  phone: "",
-  organizationName: "",
-  emailVerified: true,
+  licenseId: "",
+  roleCode: "member",
+  moduleCodes: [],
 });
 const initialInlineLicenseDraft = (): InlineLicenseDraft => ({
   publicLicenseCode: "",
@@ -269,11 +277,29 @@ function formatDate(value: string | null | undefined) {
 function recipientModeLabel(value: DropSendRecipientMode) {
   return value === "locked_default" ? "Zárolt alapcímzett" : value === "approved_list" ? "Jóváhagyott lista" : "Szabad címzett";
 }
+function identityModuleLabel(code: string) {
+  return ({
+    HAGE_WORKSPACE: "HAGE-INVEST Munkatér",
+    TASKS: "Feladatok",
+    VACATIONS: "Szabadságok",
+    AI_ASSISTANT: "AI asszisztens",
+    DRIVE: "DIMPRO Drive",
+    MEETING_ASSISTANT: "Értekezleti asszisztens",
+    DROP_SEND: "Normál Send",
+    DROP_QUICK_IMAGE_SEND: "Gyors KépSend",
+    DROP_PROJECT_INBOX: "Projekt Beérkező Drop",
+    DROP_QUICK_VOICE_NOTE: "Hangos megjegyzés",
+  } as Record<string, string>)[code] || code;
+}
+function identityRoleLabel(code: InlineUserDraft["roleCode"]) {
+  return code === "admin" ? "Szervezeti admin" : code === "manager" ? "Vezető / projektvezető" : "Munkatárs";
+}
 
 export default function DropPublicWorkflowManager() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [adminKey, setAdminKey] = useState("");
   const [users, setUsers] = useState<IdentityUser[]>([]);
+  const [organizations, setOrganizations] = useState<IdentityOrganization[]>([]);
   const [memberships, setMemberships] = useState<IdentityMembership[]>([]);
   const [licenses, setLicenses] = useState<IdentityLicense[]>([]);
   const [licenseModules, setLicenseModules] = useState<IdentityLicenseModule[]>([]);
@@ -288,6 +314,7 @@ export default function DropPublicWorkflowManager() {
   const [inlineLicenseDraft, setInlineLicenseDraft] = useState<InlineLicenseDraft>(() => initialInlineLicenseDraft());
   const [gateForm, setGateForm] = useState<GateForm>(initialGateForm);
   const [createdCode, setCreatedCode] = useState("");
+  const [createdInvitationUrl, setCreatedInvitationUrl] = useState("");
   const [createdGateUrl, setCreatedGateUrl] = useState("");
   const [legacyTarget, setLegacyTarget] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -303,6 +330,11 @@ export default function DropPublicWorkflowManager() {
       || Boolean(license.owner_organization_id && organizationIds.has(license.owner_organization_id))
     ));
   }, [entitlementForm.userId, licenses, memberships]);
+
+  const organizationLicenses = useMemo(() => licenses.filter((license) => identityLicenseUsable(license) && license.owner_type === "organization" && Boolean(license.owner_organization_id)), [licenses]);
+  const inlineInvitationModules = useMemo(() => licenseModules.filter((module) =>
+    module.license_id === inlineUserDraft.licenseId && module.enabled,
+  ), [inlineUserDraft.licenseId, licenseModules]);
 
   const selectedVoiceLicenseModule = useMemo(() => licenseModules.find((module) =>
     module.license_id === entitlementForm.licenseId
@@ -321,6 +353,7 @@ export default function DropPublicWorkflowManager() {
     if (!gateResponse.ok) throw new Error(gatePayload.error || "A Beküldőkapuk nem tölthetők be.");
     const nextUsers = Array.isArray(identityPayload.users) ? identityPayload.users as IdentityUser[] : [];
     setUsers(nextUsers);
+    setOrganizations(Array.isArray(identityPayload.organizations) ? identityPayload.organizations : []);
     setMemberships(Array.isArray(identityPayload.organizationMemberships) ? identityPayload.organizationMemberships : []);
     setLicenses(Array.isArray(identityPayload.licenses) ? identityPayload.licenses : []);
     setLicenseModules(Array.isArray(identityPayload.licenseModules) ? identityPayload.licenseModules : []);
@@ -369,31 +402,63 @@ export default function DropPublicWorkflowManager() {
     && (entitlementForm.canUseStandardSend || entitlementForm.canUseQuickImageSend || entitlementForm.canUseProjectDrop),
   );
 
+  function toggleInlineUserCreator() {
+    const next = !showInlineUserCreator;
+    if (next && !inlineUserDraft.licenseId) {
+      const licenseId = organizationLicenses[0]?.id || "";
+      const moduleCodes = licenseModules.filter((module) => module.license_id === licenseId && module.enabled).map((module) => module.module_code);
+      setInlineUserDraft((current) => ({ ...current, licenseId, moduleCodes }));
+    }
+    if (next) { setCreatedInvitationUrl(""); setMessage(""); }
+    setShowInlineUserCreator(next);
+  }
+
+  function toggleInlineInvitationModule(moduleCode: string) {
+    setInlineUserDraft((current) => ({
+      ...current,
+      moduleCodes: current.moduleCodes.includes(moduleCode)
+        ? current.moduleCodes.filter((code) => code !== moduleCode)
+        : [...current.moduleCodes, moduleCode],
+    }));
+  }
+
   async function createInlineUser() {
-    if (busy || inlineUserDraft.fullName.trim().length < 2 || !validEmail(inlineUserDraft.email) || !inlineUserDraft.emailVerified) return;
-    setBusy("user:create"); setMessage("");
+    if (busy || inlineUserDraft.fullName.trim().length < 2 || !validEmail(inlineUserDraft.email) || !inlineUserDraft.licenseId || !inlineUserDraft.moduleCodes.length) return;
+    setBusy("user:invite"); setMessage(""); setCreatedInvitationUrl("");
     try {
-      const response = await fetch("/api/dimpro-identity/admin/send-entitlements", {
+      const response = await fetch("/api/dimpro-identity/admin/organization-invitations", {
         method: "POST", headers,
         body: JSON.stringify({
-          action: "createUser",
-          fullName: inlineUserDraft.fullName,
-          email: inlineUserDraft.email,
-          phone: inlineUserDraft.phone,
-          organizationName: inlineUserDraft.organizationName,
-          emailVerified: inlineUserDraft.emailVerified,
+          licenseId: inlineUserDraft.licenseId,
+          fullName: inlineUserDraft.fullName.trim(),
+          email: inlineUserDraft.email.trim(),
+          roleCode: inlineUserDraft.roleCode,
+          roleLabel: identityRoleLabel(inlineUserDraft.roleCode),
+          moduleCodes: inlineUserDraft.moduleCodes,
         }),
       });
-      const payload = await response.json() as { created?: { user?: IdentityUser; organization?: { display_name?: string | null; legal_name?: string | null } | null }; error?: string };
-      if (!response.ok || !payload.created?.user?.id) throw new Error(payload.error || "A központi felhasználó nem hozható létre.");
-      await loadData(adminKey);
-      const user = payload.created.user;
-      setEntitlementForm((old) => ({ ...old, userId: user.id, licenseId: "" }));
+      const payload = await response.json() as {
+        invitation?: { userId?: string; activeMemberOnboarding?: boolean };
+        invitationUrl?: string;
+        emailDelivery?: { sent?: boolean; messageId?: string; error?: string };
+        note?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.invitation?.userId) throw new Error(payload.error || "A szervezeti meghívás nem hozható létre.");
+      setCreatedInvitationUrl(payload.invitationUrl || "");
+      const existingActiveUser = users.find((user) => user.id === payload.invitation?.userId && user.status === "active" && user.email_verified_at);
+      if (existingActiveUser) {
+        setEntitlementForm((old) => ({ ...old, userId: existingActiveUser.id, licenseId: inlineUserDraft.licenseId }));
+      }
+      const delivery = payload.emailDelivery?.sent
+        ? "A meghívó e-mail elküldve."
+        : `A meghívó létrejött, de az e-mail nem ment ki${payload.emailDelivery?.error ? `: ${payload.emailDelivery.error}` : "."}`;
+      const onboarding = payload.invitation.activeMemberOnboarding ? " A meglévő HAGE-tagság megmaradt; ez belépési/onboarding meghívó." : "";
+      setMessage(`${payload.note || delivery}${onboarding} ${existingActiveUser ? "A felhasználó kiválasztva; a Send entitlement most létrehozható." : "Az új felhasználó a meghívás elfogadása után választható ki Send entitlementhez."}`);
       setInlineUserDraft(initialInlineUserDraft());
       setShowInlineUserCreator(false);
-      setShowInlineLicenseCreator(true);
-      setMessage(`Központi felhasználó létrehozva és kiválasztva: ${user.full_name} · ${user.email}. Következő lépés: hozzon létre vagy válasszon aktív licencet.`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "A központi felhasználó létrehozása sikertelen."); }
+      await loadData(adminKey);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "A szervezeti meghívás sikertelen."); }
     finally { setBusy(""); }
   }
 
@@ -467,6 +532,7 @@ export default function DropPublicWorkflowManager() {
           canUseImageGroups: entitlementForm.canUseImageGroups,
           canUseFileComments: entitlementForm.canUseFileComments,
           canUseProjectDrop: entitlementForm.canUseProjectDrop,
+          grantMembershipModules: true,
         }),
       });
       const payload = await response.json() as { created?: { formattedCode?: string; rawCode?: string }; error?: string };
@@ -540,7 +606,7 @@ export default function DropPublicWorkflowManager() {
   }
 
   return <main className="min-h-screen bg-[#eef4f8] text-slate-900">
-    <header className="border-b border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-8"><div className="mx-auto flex max-w-[1600px] flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div><Link href="/drive/drop" className="inline-flex items-center gap-2 text-sm font-black text-cyan-800"><ArrowLeft size={17}/> Vissza a CsomagDrophoz</Link><p className="mt-5 text-xs font-black uppercase tracking-[.24em] text-teal-700">DROP 1.2.11 · IDENTITY CORE 0.1.0</p><h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">DIMPRO Send és Beküldőkapu</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">A Send entitlementek a központi DIMPRO felhasználó-, licenc-, szervezet- és projektadatbázist használják. A legacy Drop Send-kódok csak egyenként, auditált adminművelettel vezethetők át.</p></div><div className="flex flex-wrap gap-2"><Link href="/drive/drop/operations" className="inline-flex items-center gap-2 rounded-xl border border-amber-500 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-950"><Activity size={16}/> Üzemeltetés</Link><Link href="https://drop.dimpro.hu/send" target="_blank" className="inline-flex items-center gap-2 rounded-xl border border-cyan-600 bg-cyan-50 px-4 py-2.5 text-sm font-black text-cyan-900"><Send size={16}/> Send megnyitása</Link><button type="button" onClick={() => void loadData(adminKey)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700"><RefreshCw size={16}/> Frissítés</button></div></div></header>
+    <header className="border-b border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-8"><div className="mx-auto flex max-w-[1600px] flex-col gap-5 xl:flex-row xl:items-center xl:justify-between"><div><Link href="/drive/drop" className="inline-flex items-center gap-2 text-sm font-black text-cyan-800"><ArrowLeft size={17}/> Vissza a CsomagDrophoz</Link><p className="mt-5 text-xs font-black uppercase tracking-[.24em] text-teal-700">DROP 1.2.11 · IDENTITY CORE 0.2.1</p><h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">DIMPRO Send és Beküldőkapu</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">A Send entitlementek a központi DIMPRO felhasználó-, licenc-, szervezet- és projektadatbázist használják. A legacy Drop Send-kódok csak egyenként, auditált adminművelettel vezethetők át.</p></div><div className="flex flex-wrap gap-2"><Link href="/drive/drop/operations" className="inline-flex items-center gap-2 rounded-xl border border-amber-500 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-950"><Activity size={16}/> Üzemeltetés</Link><Link href="https://drop.dimpro.hu/send" target="_blank" className="inline-flex items-center gap-2 rounded-xl border border-cyan-600 bg-cyan-50 px-4 py-2.5 text-sm font-black text-cyan-900"><Send size={16}/> Send megnyitása</Link><button type="button" onClick={() => void loadData(adminKey)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700"><RefreshCw size={16}/> Frissítés</button></div></div></header>
     <section className="mx-auto max-w-[1600px] px-5 py-6 sm:px-8">
       <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-950">{message}</div>
       <DropPublicStoreMigrationPanel adminKey={adminKey}/>
@@ -548,6 +614,7 @@ export default function DropPublicWorkflowManager() {
       <DropEmailClientValidationPanel adminKey={adminKey}/>
 
       {createdCode ? <section className="mt-5 rounded-[1.5rem] border border-amber-300 bg-amber-50 p-5"><p className="text-xs font-black uppercase tracking-[.16em] text-amber-800">Egyszer megjelenő központi Send-kód</p><div className="mt-3 flex flex-wrap items-center gap-4"><strong className="font-mono text-3xl tracking-[.12em] text-slate-950">{createdCode}</strong><button type="button" onClick={() => void copy(createdCode)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">{copied === createdCode ? <Check size={16}/> : <Clipboard size={16}/>} Másolás</button><button type="button" onClick={() => setCreatedCode("")} className="rounded-xl border border-amber-300 bg-white p-2.5 text-amber-800"><X size={16}/></button></div><p className="mt-3 text-sm font-semibold text-amber-950">A teljes kód később nem olvasható vissza. A központi adatbázis HMAC SHA-256 lenyomatot tárol.</p></section> : null}
+      {createdInvitationUrl ? <section className="mt-5 rounded-[1.5rem] border border-cyan-300 bg-cyan-50 p-5"><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-800">Szervezeti meghívó elkészült</p><div className="mt-3 flex flex-wrap items-center gap-3"><code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-800">{createdInvitationUrl}</code><button type="button" onClick={() => void copy(createdInvitationUrl)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">{copied === createdInvitationUrl ? <Check size={16}/> : <Clipboard size={16}/>} Link másolása</button><a href={createdInvitationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-cyan-300 bg-white px-4 py-2.5 text-sm font-black text-cyan-900"><ExternalLink size={16}/> Meghívó megnyitása</a></div><p className="mt-3 text-xs font-semibold text-cyan-950">A link csak tartalék: normál esetben a meghívott e-mailben kapja meg.</p></section> : null}
       {createdGateUrl ? <section className="mt-5 rounded-[1.5rem] border border-emerald-300 bg-emerald-50 p-5"><p className="text-xs font-black uppercase tracking-[.16em] text-emerald-800">Új Beküldőkapu</p><div className="mt-3 flex flex-wrap items-center gap-3"><code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-800">{createdGateUrl}</code><button type="button" onClick={() => void copy(createdGateUrl)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white">{copied === createdGateUrl ? <Check size={16}/> : <Clipboard size={16}/>} Másolás</button><a href={createdGateUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-black text-emerald-900"><ExternalLink size={16}/> Megnyitás</a></div></section> : null}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
@@ -555,7 +622,7 @@ export default function DropPublicWorkflowManager() {
           <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-800"><KeyRound size={21}/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-700">Központi DIMPRO Send</p><h2 className="mt-1 text-xl font-black text-slate-950">Új Send entitlement</h2><p className="mt-1 text-sm leading-6 text-slate-600">Meglévő, ellenőrzött központi felhasználóhoz és hozzá tartozó aktív licenchez rendelhető. Párhuzamos Drop-felhasználói adat nem jön létre.</p></div></div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Saját DIMPRO Send-kód"><input value={entitlementForm.sendCode} onChange={(event) => setEntitlementForm((old) => ({ ...old, sendCode: formatAdminSendInput(event.target.value) }))} placeholder="HAGE-123-456" className={`${inputClass} font-mono uppercase tracking-[.12em]`}/><span className="mt-1 block text-[10px] font-medium leading-4 text-slate-500">A kódot Ön választja. Négy betű + hat számjegy. A szerver csak HMAC-lenyomatot tárol.</span></Field>
-            <div><Field label="Központi felhasználó"><select value={entitlementForm.userId} onChange={(event) => setEntitlementForm((old) => ({ ...old, userId: event.target.value, licenseId: "" }))} className={inputClass}><option value="">Válasszon felhasználót</option>{users.filter((user) => user.status === "active" && user.email_verified_at).map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.email} · {user.public_user_code}</option>)}</select></Field><button type="button" onClick={() => setShowInlineUserCreator((value) => !value)} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-900"><Plus size={14}/>{showInlineUserCreator ? "Új felhasználó panel bezárása" : "Új központi felhasználó létrehozása"}</button></div>
+            <div><Field label="Központi felhasználó"><select value={entitlementForm.userId} onChange={(event) => setEntitlementForm((old) => ({ ...old, userId: event.target.value, licenseId: "" }))} className={inputClass}><option value="">Válasszon felhasználót</option>{users.filter((user) => user.status === "active" && user.email_verified_at).map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.email} · {user.public_user_code}</option>)}</select></Field><button type="button" onClick={toggleInlineUserCreator} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-900"><Mail size={14}/>{showInlineUserCreator ? "Meghívópanel bezárása" : "Felhasználó meghívása a szervezeti licencbe"}</button></div>
             <div><Field label="Hozzárendelhető DIMPRO licenc"><select value={entitlementForm.licenseId} onChange={(event) => setEntitlementForm((old) => ({ ...old, licenseId: event.target.value }))} className={inputClass}><option value="">Válasszon licencet</option>{eligibleLicenses.map((license) => <option key={license.id} value={license.id}>{license.public_license_code} · {license.product_code}{license.plan_code ? ` / ${license.plan_code}` : ""}</option>)}</select></Field><button type="button" onClick={() => setShowInlineLicenseCreator((value) => !value)} disabled={!entitlementForm.userId} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-900 disabled:opacity-40"><Plus size={14}/>{showInlineLicenseCreator ? "Új licenc panel bezárása" : "Új központi licenc létrehozása"}</button></div>
             <Field label="Lejárat"><input type="date" value={entitlementForm.expiresAt} onChange={(event) => setEntitlementForm((old) => ({ ...old, expiresAt: event.target.value }))} className={inputClass}/></Field>
             <Field label="Csomagméret-korlát (MB)"><input type="number" min={1} max={5120} value={entitlementForm.maxPackageSizeMb} onChange={(event) => setEntitlementForm((old) => ({ ...old, maxPackageSizeMb: Number(event.target.value) }))} className={inputClass}/></Field>
@@ -563,7 +630,7 @@ export default function DropPublicWorkflowManager() {
             <Field label="Mentett címjegyzék-limit"><input type="number" min={0} max={100} value={entitlementForm.maxSavedContacts} onChange={(event) => setEntitlementForm((old) => ({ ...old, maxSavedContacts: Number(event.target.value) }))} className={inputClass}/><span className="mt-1 block text-[10px] text-slate-500">A felhasználó ennyi saját, bármikor módosítható Send-kontaktot tárolhat.</span></Field>
             <Field label="Havi Send-limit · opcionális"><input type="number" min={1} value={entitlementForm.monthlySendLimit} onChange={(event) => setEntitlementForm((old) => ({ ...old, monthlySendLimit: event.target.value }))} className={inputClass} placeholder="Korlátlan"/></Field>
           </div>
-          {showInlineUserCreator ? <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-sky-800">Új vagy meglévő központi DIMPRO felhasználó aktiválása</p><p className="mt-1 text-xs leading-5 text-slate-600">A név és az egyedi e-mail kötelező; telefon és szervezet opcionális. Ha az e-mail már létezik, a rendszer nem készít duplikált felhasználót, hanem a központi rekordot frissíti és Send-használatra aktiválja.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><Field label="Teljes név"><input value={inlineUserDraft.fullName} onChange={(event) => setInlineUserDraft((old) => ({ ...old, fullName: event.target.value.slice(0,160) }))} className={inputClass} placeholder="pl. Kiss Péter"/></Field><Field label="E-mail-cím"><input type="email" value={inlineUserDraft.email} onChange={(event) => setInlineUserDraft((old) => ({ ...old, email: event.target.value.slice(0,254) }))} className={inputClass} placeholder="nev@ceg.hu"/></Field><Field label="Telefonszám · opcionális"><input value={inlineUserDraft.phone} onChange={(event) => setInlineUserDraft((old) => ({ ...old, phone: event.target.value.slice(0,60) }))} className={inputClass} placeholder="+36 ..."/></Field><Field label="Szervezet · opcionális"><input value={inlineUserDraft.organizationName} onChange={(event) => setInlineUserDraft((old) => ({ ...old, organizationName: event.target.value.slice(0,180) }))} className={inputClass} placeholder="pl. Példa Kft."/></Field></div><label className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-950"><input type="checkbox" checked={inlineUserDraft.emailVerified} onChange={(event) => setInlineUserDraft((old) => ({ ...old, emailVerified: event.target.checked }))} className="mt-0.5 accent-emerald-700"/><span><strong>E-mail-cím adminisztratívan ellenőrizve.</strong><br/>A Send-jogosultság csak ellenőrzött e-mailhez aktiválható. Ez a belső admin jóváhagyás nem helyettesíti a későbbi auth.dimpro.hu OTP/passkey regisztrációt.</span></label><button type="button" onClick={() => void createInlineUser()} disabled={busy !== "" || inlineUserDraft.fullName.trim().length < 2 || !validEmail(inlineUserDraft.email) || !inlineUserDraft.emailVerified} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-sky-800 px-4 py-3 text-xs font-black text-white disabled:bg-slate-300">{busy === "user:create" ? <LoaderCircle size={15} className="animate-spin"/> : <Plus size={15}/>} Felhasználó létrehozása és kiválasztása</button></section> : null}
+          {showInlineUserCreator ? <section className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-sky-800">Szervezeti DIMPRO felhasználó meghívása</p><p className="mt-1 text-xs leading-5 text-slate-600">Ez már a központi Identity 0.2.0 meghívási folyamat: a felhasználó bekerül a kiválasztott szervezeti licencbe, e-mailben egyszer használható meghívólinket kap, majd elfogadás után OTP-belépést kérhet. Már meglévő, de még belépési fiókkal nem rendelkező HAGE-taghoz onboarding meghívó is küldhető.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><Field label="Szervezeti licenc"><select value={inlineUserDraft.licenseId} onChange={(event) => { const licenseId = event.target.value; const moduleCodes = licenseModules.filter((module) => module.license_id === licenseId && module.enabled).map((module) => module.module_code); setInlineUserDraft((old) => ({ ...old, licenseId, moduleCodes })); }} className={inputClass}><option value="">Válasszon szervezeti licencet</option>{organizationLicenses.map((license) => { const org = organizations.find((item) => item.id === license.owner_organization_id); return <option key={license.id} value={license.id}>{license.public_license_code} · {org?.display_name || org?.legal_name || license.product_code}</option>; })}</select></Field><Field label="Szerepkör"><select value={inlineUserDraft.roleCode} onChange={(event) => setInlineUserDraft((old) => ({ ...old, roleCode: event.target.value as InlineUserDraft["roleCode"] }))} className={inputClass}><option value="member">Munkatárs</option><option value="manager">Vezető / projektvezető</option><option value="admin">Szervezeti admin</option></select></Field><Field label="Teljes név"><input value={inlineUserDraft.fullName} onChange={(event) => setInlineUserDraft((old) => ({ ...old, fullName: event.target.value.slice(0,160) }))} className={inputClass} placeholder="pl. Kiss Péter"/></Field><Field label="E-mail-cím"><input type="email" value={inlineUserDraft.email} onChange={(event) => setInlineUserDraft((old) => ({ ...old, email: event.target.value.slice(0,254) }))} className={inputClass} placeholder="nev@ceg.hu"/></Field></div><div className="mt-4"><p className="text-xs font-black uppercase tracking-[.1em] text-slate-600">Engedélyezett szolgáltatások</p><div className="mt-2 flex flex-wrap gap-2">{inlineInvitationModules.map((module) => <label key={module.id} className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold ${inlineUserDraft.moduleCodes.includes(module.module_code) ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={inlineUserDraft.moduleCodes.includes(module.module_code)} onChange={() => toggleInlineInvitationModule(module.module_code)} className="accent-emerald-700"/>{identityModuleLabel(module.module_code)}</label>)}</div></div><div className="mt-4 rounded-xl border border-cyan-200 bg-white p-3 text-xs font-semibold leading-5 text-cyan-950"><strong>Fontos:</strong> új kollégánál először a meghívót kell elfogadni. Ezután a „Frissítés” gombbal megjelenik az aktív központi felhasználók között, és létrehozható számára a Send entitlement. Már meglévő HAGE-tagnál a meghívó onboarding e-mailként működik.</div><button type="button" onClick={() => void createInlineUser()} disabled={busy !== "" || inlineUserDraft.fullName.trim().length < 2 || !validEmail(inlineUserDraft.email) || !inlineUserDraft.licenseId || inlineUserDraft.moduleCodes.length < 1} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-sky-800 px-4 py-3 text-xs font-black text-white disabled:bg-slate-300">{busy === "user:invite" ? <LoaderCircle size={15} className="animate-spin"/> : <Mail size={15}/>} Meghívó e-mail küldése</button></section> : null}
           {showInlineLicenseCreator ? <section className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-800">Új központi licenc a kiválasztott felhasználóhoz</p><p className="mt-1 text-xs leading-5 text-slate-600">A licenc közvetlenül a LIVE Identity Core `dimpro_licenses` táblába kerül. A kódot Ön választja; automatikus generálás nincs.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label="Saját licenckód"><input value={inlineLicenseDraft.publicLicenseCode} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, publicLicenseCode: normalizeDimproLicenseCodeInput(event.target.value) }))} onBlur={(event) => setInlineLicenseDraft((old) => ({ ...old, publicLicenseCode: formatDimproLicenseCodeInput(event.target.value) }))} placeholder="LIC-26-HAGE-2468" className={`${inputClass} font-mono uppercase tracking-[.1em]`}/><span className="mt-1 block text-[10px] text-slate-500">Formátum: LIC-ÉÉ-XXXX-XXXX. Nem használható: 0, 1, I, L, O.</span></Field><Field label="Termék"><input value={inlineLicenseDraft.productCode} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, productCode: event.target.value.toUpperCase().slice(0,60) }))} className={inputClass}/></Field><Field label="Csomag"><input value={inlineLicenseDraft.planCode} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, planCode: event.target.value.slice(0,80) }))} className={inputClass}/></Field><Field label="Státusz"><select value={inlineLicenseDraft.status} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, status: event.target.value as "active" | "trial" }))} className={inputClass}><option value="active">Aktív</option><option value="trial">Próba</option></select></Field><Field label="Aktiválás"><input type="date" value={inlineLicenseDraft.activatedAt} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, activatedAt: event.target.value }))} className={inputClass}/></Field><Field label="Lejárat"><input type="date" value={inlineLicenseDraft.expiresAt} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, expiresAt: event.target.value }))} className={inputClass}/></Field></div><label className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-950"><input type="checkbox" checked={inlineLicenseDraft.enableQuickVoiceNote} onChange={(event) => setInlineLicenseDraft((old) => ({ ...old, enableQuickVoiceNote: event.target.checked }))} className="mt-0.5 accent-emerald-700"/><span><strong>Gyors hangos megjegyzés licencmodul</strong><br/>Bekapcsolva a licenc megkapja a `DROP_QUICK_VOICE_NOTE` modult, legfeljebb 60 mp-es device/böngésző diktálással képenként.</span></label><button type="button" onClick={() => void createInlineLicense()} disabled={busy !== "" || !entitlementForm.userId || !isValidDimproLicenseCode(inlineLicenseDraft.publicLicenseCode)} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-800 px-4 py-3 text-xs font-black text-white disabled:bg-slate-300">{busy === "license:create" ? <LoaderCircle size={15} className="animate-spin"/> : <Plus size={15}/>} Licenc létrehozása és kiválasztása</button><Link href="/admin/licenckozpont" target="_blank" className="ml-2 inline-flex rounded-xl border border-cyan-300 bg-white px-4 py-3 text-xs font-black text-cyan-900">Teljes Licencközpont megnyitása</Link></section> : null}
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-700">Címzettkezelés</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><ModeButton selected={entitlementForm.recipientMode === "locked_default"} title="Zárolt címzett" note="A felhasználó nem módosíthatja." onClick={() => setEntitlementForm((old) => ({ ...old, recipientMode: "locked_default" }))}/><ModeButton selected={entitlementForm.recipientMode === "approved_list"} title="Jóváhagyott lista" note="Csak központilag rögzített címzettek." onClick={() => setEntitlementForm((old) => ({ ...old, recipientMode: "approved_list" }))}/><ModeButton selected={entitlementForm.recipientMode === "free_entry"} title="Szabad címzett" note="Explicit entitlement esetén új cím is megadható." onClick={() => setEntitlementForm((old) => ({ ...old, recipientMode: "free_entry" }))}/></div>{entitlementForm.recipientMode !== "free_entry" ? <div className="mt-4 grid gap-3 sm:grid-cols-3"><Field label="Alap címzett neve"><input value={entitlementForm.defaultRecipientName} onChange={(event) => setEntitlementForm((old) => ({ ...old, defaultRecipientName: event.target.value.slice(0, 160) }))} className={inputClass}/></Field><Field label="Alap címzett e-mail"><input type="email" value={entitlementForm.defaultRecipientEmail} onChange={(event) => setEntitlementForm((old) => ({ ...old, defaultRecipientEmail: event.target.value.slice(0, 254) }))} className={inputClass}/></Field><Field label="Címzett szervezete"><input value={entitlementForm.defaultRecipientOrganization} onChange={(event) => setEntitlementForm((old) => ({ ...old, defaultRecipientOrganization: event.target.value.slice(0, 180) }))} className={inputClass}/></Field></div> : null}{entitlementForm.recipientMode === "approved_list" ? <div className="mt-4"><Field label="További jóváhagyott címzettek · név | e-mail | szervezet | címke"><textarea value={entitlementForm.approvedRecipientsText} onChange={(event) => setEntitlementForm((old) => ({ ...old, approvedRecipientsText: event.target.value }))} className={`${inputClass} min-h-28 resize-y`} placeholder="Projektvezető | projekt@example.hu | Példa Kft. | Projekt"/></Field></div> : null}</div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><FeatureToggle checked={entitlementForm.canUseStandardSend} title="Normál Send" onChange={(checked) => setEntitlementForm((old) => ({ ...old, canUseStandardSend: checked }))}/><FeatureToggle checked={entitlementForm.canUseQuickImageSend} title="Gyors KépSend" onChange={(checked) => setEntitlementForm((old) => ({ ...old, canUseQuickImageSend: checked }))}/><FeatureToggle checked={entitlementForm.canUseImageGroups} title="Képcsoportok" onChange={(checked) => setEntitlementForm((old) => ({ ...old, canUseImageGroups: checked }))}/><FeatureToggle checked={entitlementForm.canUseFileComments} title="Megjegyzések" onChange={(checked) => setEntitlementForm((old) => ({ ...old, canUseFileComments: checked }))}/><FeatureToggle checked={entitlementForm.canUseProjectDrop} title="Projekt Beérkező Drop" onChange={(checked) => setEntitlementForm((old) => ({ ...old, canUseProjectDrop: checked }))}/></div>
