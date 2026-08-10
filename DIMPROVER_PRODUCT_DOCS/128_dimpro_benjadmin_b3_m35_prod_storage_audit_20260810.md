@@ -111,3 +111,33 @@ A PROD 93%-os lemezhasználat miatt addig kerülendő:
 - koordinálatlan migration/restart
 
 A kódolás és DEV candidate munka folytatható, mert a DEV lemezhasználata jelenleg 12%.
+
+## PROD build cleanup végrehajtva
+
+Jóváhagyás után a guarded cleanup executor koordinált `maintenance` lock alatt lefutott.
+
+Előfeltételek:
+- friss PROD Restic backup: `bc20c84b`
+- backup repository check/prune: PASS
+- aktív build: `.next-drop-v1212-release-final`
+- azonnali rollback build: `.next-v1211-release-final`
+- friss Identity hold: `.next-identity-v020-release-final`, `.next-identity-v021-release-final`
+- normál `.next` protected
+
+Dry-run:
+- cleanup candidate: 23 buildkönyvtár
+- becsült reclaim: 13.98 GB
+
+Apply eredmény:
+- eltávolított régi build: 23/23
+- felszabadított terület: 13.98 GB
+- PROD lemezhasználat: **93% → 74%**
+- szabad terület: kb. **5.4 GB → 20 GB**
+- aktív PM2 `dimprover`: online
+- aktív `NEXT_DIST_DIR`: változatlan `.next-drop-v1212-release-final`
+- Drop HTTPS health: 200 / `DROP 1.2.12`
+- License admin HTTPS: 200
+
+A teljes smoke-check TypeScript része a PROD kis memóriája miatt először ~2 GB Node heap OOM-mal, majd 4 GB heap mellett túl hosszú futással állt meg. A hosszú typecheck folyamatot leállítottuk; az alkalmazás runtime végig online maradt. A további TypeScript/build kapuk DEV-en futnak.
+
+További helyi backup törlés **nem történt**. A 74%-os lemezhasználat már megfelelő biztonsági tartalékot ad, ezért a backup-retention külön későbbi, dokumentált döntés marad.
