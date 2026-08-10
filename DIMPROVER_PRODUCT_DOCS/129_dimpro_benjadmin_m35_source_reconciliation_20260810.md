@@ -99,3 +99,27 @@ Javasolt további sorrend:
 ## Következő fejlesztési lépés
 
 A szerver- és forrásalap stabilizálása után következhet a **BENJADMIN Operator UI 2.0**, már ezen a kanonikus integrációs ágon.
+
+## DEV kanonikus runtime aktiválva
+
+Az integrációs branch sikeres candidate validációja után a DEV 3100-as runtime átállt az új kanonikus forrásra.
+
+Aktív DEV process:
+- `dimpro-integrated-dev`
+- port: `3100`
+- source worktree: `/srv/dimpro-dev/worktrees/integration-prod-v1212-benjadmin-m35`
+- branch: `integration/prod-v1212-benjadmin-m35`
+
+Rollback:
+- `dimpro-benjadmin-m1-dev` leállított PM2 processként megmaradt
+- korábbi candidate processzek leállítva
+- PM2 processlista `pm2 save` művelettel mentve
+
+Aktiválás utáni health:
+- Admin: 200
+- DROP: 200 / `DROP 1.2.12`
+- Identity: 200 / ready=true / enabled=true
+- meghívó oldal: 200
+- BENJADMIN engine: 200 / schema 0.3.0 / READY / 20 tábla
+
+Ettől a ponttól a DEV további fejlesztési alapja az integrációs ág, nem a régi M1 worktree.
