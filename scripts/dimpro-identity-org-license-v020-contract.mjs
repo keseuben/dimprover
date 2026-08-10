@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 const read = (file) => readFile(file, "utf8");
-const [migration, admin, invitations, security, authz, requestOtp, verifyOtp, proxy, licensePage, memberUi, inviteUi] = await Promise.all([
+const [migration, admin, invitations, security, authz, requestOtp, verifyOtp, proxy, licensePage, memberUi, inviteUi, healthRoute] = await Promise.all([
   read("supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql"),
   read("app/lib/identity-core/admin.ts"),
   read("app/lib/identity-core/invitations.ts"),
@@ -13,11 +13,14 @@ const [migration, admin, invitations, security, authz, requestOtp, verifyOtp, pr
   read("app/admin/licenckozpont/page.tsx"),
   read("components/license/OrganizationLicenseMembers.tsx"),
   read("components/license/OrganizationInvitationClient.tsx"),
+  read("app/api/dimpro-identity/health/route.ts"),
 ]);
 const checks=[];
 function has(text,value,label){assert.ok(text.includes(value),`${label}: hiányzik: ${value}`);checks.push(label)}
 has(migration,"max_users integer not null default 1","külön felhasználói keret");
 has(migration,"legacy_license_ref text null","legacy licenchivatkozás");
+has(migration,"max_saved_contacts integer not null default 10","Send clean-install max saved contacts");
+has(migration,"upload_rules_acceptance_count integer not null default 0","Send clean-install upload rules count");
 has(migration,"create table if not exists public.dimpro_membership_modules","tagsági modulok");
 has(migration,"create table if not exists public.dimpro_organization_invitations","szervezeti meghívások");
 has(migration,"token_hash text not null","csak token hash tárolás");
@@ -40,4 +43,5 @@ has(licensePage,"Max. eszköz","Licencközpont device UI");
 has(memberUi,"Felhasználó meghívása","szervezeti meghívás UI");
 has(memberUi,"Egyszer megjelenő meghívólink","egyszeri link UX");
 has(inviteUi,"Meghívás elfogadása","publikus elfogadó UX");
+has(healthRoute,'version: "0.2.0"',"Identity health verzió 0.2.0");
 console.log(JSON.stringify({ok:true,contract:"DIMPRO Identity organization license V020",checks:checks.length},null,2));

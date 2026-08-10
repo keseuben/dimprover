@@ -98,6 +98,10 @@ DEV forrásbackup:
 - HAGE szervezeti licenc + invitation integráció: 19/19 PASS
 - ellenőrizve: seat limit, külön device limit, legacy hivatkozás, tokenhash, preview, elfogadás, OTP jogosultság, tagsági modul-szűkítés, Send tiltás, keretcsökkentés-védelem, cap enforcement, revoke/seat release és teszttakarítás.
 
+### DEV séma-paritási javítás
+
+A compiled Licencközpont teszt során kiderült, hogy a production Send motorban már használt `max_saved_contacts`, `upload_rules_acceptance_count`, `upload_rules_version` és `upload_rules_last_accepted_at` mezők productionben léteznek, de a DEV clean-install migrációs láncból hiányoztak. Az Identity 0.2.0 migráció idempotensen verziózza ezeket is; productionön a meglévő oszlopokat nem írja felül.
+
 ## Production migrációs elv
 
 Csak DEV candidate build és E2E PASS után:

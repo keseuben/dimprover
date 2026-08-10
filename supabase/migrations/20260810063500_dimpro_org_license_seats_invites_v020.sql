@@ -4,6 +4,24 @@ alter table public.dimpro_licenses
   add column if not exists max_users integer not null default 1,
   add column if not exists legacy_license_ref text null;
 
+-- A production Send motorban már használt, korábban kézzel létrehozott mezők
+-- bekerülnek a verziózott clean-install migrációs láncba is.
+alter table public.dimpro_send_entitlements
+  add column if not exists max_saved_contacts integer not null default 10,
+  add column if not exists upload_rules_acceptance_count integer not null default 0,
+  add column if not exists upload_rules_version text null,
+  add column if not exists upload_rules_last_accepted_at timestamptz null;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'dimpro_send_entitlements_max_saved_contacts_check') then
+    alter table public.dimpro_send_entitlements add constraint dimpro_send_entitlements_max_saved_contacts_check check (max_saved_contacts between 0 and 100);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'dimpro_send_entitlements_upload_rules_count_check') then
+    alter table public.dimpro_send_entitlements add constraint dimpro_send_entitlements_upload_rules_count_check check (upload_rules_acceptance_count between 0 and 3);
+  end if;
+end $$;
+
 do $$
 begin
   if not exists (
