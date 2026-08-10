@@ -71,3 +71,9 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `117_dimpro_drop_v127_voice_session_comment_fix_release.md` – hangátírás állapotgép, levélüzenet-diktálás, karantén utáni megjegyzésmódosítás és Send session/package mismatch javítás.
 - `118_dimpro_terepi_kontroll_handoff_after_drop_v127.md` – DIMPRO Terepi Kontroll következő csevegés átadás: almodulok, szerveres/offline speech, AI, képjelölés, projekt- és dokumentumintegráció.
 - `119_dimpro_drop_v128_microphone_group_move_hotfix.md` – explicit webes mikrofonengedély, `microphone=(self)`, azonnali képkártya-diktálás, feltöltött képek csoportáthelyezése és `Csoport nélkül` bulk csoportképzés.
+
+## BENJADMIN B3
+
+- `123_dimpro_benjadmin_b3_m0_prod_dev_migration_20260809.md` – PROD → DEV migráció, tiszta baseline és elkülönített infrastruktúra.
+- `124_dimpro_benjadmin_b3_m0_release_gate_status_20260809.md` – M0 13/13 release-gate lezárás, auth és storage acceptance.
+- `125_dimpro_benjadmin_b3_m1_shell_login_navigation_20260810.md` – M1 protective screen, rejtett admin login, BENJADMIN shell és reszponzív navigáció.

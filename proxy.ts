@@ -116,12 +116,13 @@ export async function proxy(request: NextRequest) {
   const isGazdaSegedHost = host === "gazdaseged.dimpro.hu" || host === "www.gazdaseged.dimpro.hu";
   const isEventHost = host === "esemeny.dimpro.hu" || host === "www.esemeny.dimpro.hu";
   const isLicenseHost = host === "license.dimpro.hu" || host === "license.dev.dimpro.hu";
+  const isBenjadminHost = host === "admin.dimpro.hu" || host === "admin.dev.dimpro.hu" || host === "admin.stag.dimpro.hu";
   const isDevHost = new Set([
     "dev.dimpro.hu",
     "admin.dev.dimpro.hu",
     "dev.dimprover.hu",
   ]).has(host);
-  const isLicenseAdminArea = (isLicenseHost || isDevHost) && (
+  const isLicenseAdminArea = (isLicenseHost || isDevHost || isBenjadminHost) && (
     pathname === "/" ||
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
@@ -163,6 +164,12 @@ export async function proxy(request: NextRequest) {
     isDropInternalWorkerApi;
   const isPublicAruterPage = pathname === "/aruter/kovacs-kerteszet";
   const isTeamsMeetingAssistantPage = pathname.startsWith("/teams/meeting-assistant");
+
+  if (isBenjadminHost && pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    return NextResponse.redirect(url);
+  }
 
   if (isProjectGateBrandHost) {
     const url = request.nextUrl.clone();

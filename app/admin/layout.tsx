@@ -7,11 +7,11 @@ import "./admin-theme.css";
 export const viewport: Viewport = { themeColor: "#0e7490" };
 
 export const metadata: Metadata = {
-  title: "DIMPRO Fejlesztési és Licencközpont",
+  title: "DIMPRO BENJADMIN – AI Fejlesztési és Üzemeltetési Központ",
   manifest: "/dimpro-dev.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "DIMPRO Dev",
+    title: "BENJADMIN",
     statusBarStyle: "default",
   },
   icons: {

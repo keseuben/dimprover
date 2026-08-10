@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/app/lib/supabase/client";
 import DevPortfolioOverview from "@/components/admin/DevPortfolioOverview";
+import BenjadminBrandScreen from "@/components/admin/BenjadminBrandScreen";
 import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-center/types";
 
 type Device = {
@@ -645,6 +646,7 @@ export default function LicenseAdminPage() {
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [entryUnlocked, setEntryUnlocked] = useState(false);
   const [adminKey, setAdminKey] = useState("");
   const [store, setStore] = useState<AdminStore | null>(null);
   const [drafts, setDrafts] = useState<Record<string, LicenseDraft>>({});
@@ -801,13 +803,22 @@ export default function LicenseAdminPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.ok) {
+        if (skipOtpGuard) {
+          localStorage.removeItem("dimproLicenseAdminKey");
+          sessionStorage.removeItem("dimproBenjadminSession");
+          window.dispatchEvent(new Event("dimpro-admin-auth-changed"));
+        }
         setMessage(data.error ?? "Nem sikerült betölteni a licencadatokat.");
         return;
       }
 
+      if (skipOtpGuard) setOtpVerified(true);
+      setEntryUnlocked(true);
       setStore(data.store);
       setDrafts(Object.fromEntries(data.store.licenses.map((license: License) => [license.id, toDraft(license)])));
       localStorage.setItem("dimproLicenseAdminKey", key.trim());
+      sessionStorage.setItem("dimproBenjadminSession", "active");
+      window.dispatchEvent(new Event("dimpro-admin-auth-changed"));
       void loadDevCenterOverview(key.trim());
       setAdminEntryView("launcher");
       setMessage("Licencadatok betöltve. Válaszd ki, melyik admin felületet nyitod meg.");
@@ -1036,17 +1047,45 @@ export default function LicenseAdminPage() {
     setDevWorkSessions([]);
     setAdminEntryView("launcher");
     localStorage.removeItem("dimproLicenseAdminKey");
+    sessionStorage.removeItem("dimproBenjadminSession");
+    setEntryUnlocked(false);
+    window.dispatchEvent(new Event("dimpro-admin-auth-changed"));
     setMessage("Admin munkamenet lezárva.");
   }
 
   useEffect(() => {
     const storedEmail = localStorage.getItem("dimproLicenseAdminEmail");
     if (storedEmail) setOtpEmail(storedEmail);
+
+    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    const sessionActive = sessionStorage.getItem("dimproBenjadminSession") === "active";
+    if (storedAdminKey && sessionActive) {
+      setAdminKey(storedAdminKey);
+      setEntryUnlocked(true);
+      void loadStore(storedAdminKey, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (store) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        setEntryUnlocked(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [store]);
 
   useEffect(() => {
     if (otpSent) codeInputRef.current?.focus();
   }, [otpSent]);
+
+  if (!store && !entryUnlocked) {
+    return <BenjadminBrandScreen mode="entry" onActivate={() => setEntryUnlocked(true)} />;
+  }
 
   return (
     <main className="min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8">
