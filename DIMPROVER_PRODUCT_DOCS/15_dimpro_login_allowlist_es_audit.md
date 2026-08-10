@@ -123,3 +123,7 @@ Sikeres tesztek:
 12. TypeScript és production build sikeres.
 
 A teljes repository lintben továbbra is fennáll a korábbi `scripts/load-next-env.cjs` CommonJS import szabályhiba. Az új belépési és auditfájlok célzott lintje hibamentes; két meglévő Hook-figyelmeztetés maradt az admin naplóoldalakon.
+
+## Identity Core 0.2.0 utódmodell – 2026-08-10
+
+A dokumentumban szereplő tulajdonosi allowlist már nem a végleges jogosultsági modell. Az Identity Core 0.2.0-tól fallbackként marad meg. A normál szervezeti felhasználók adatbázisos meghívással, aktív tagsággal és érvényes szervezeti licenccel kapnak OTP-belépési jogot. A részletes utódmodell: `126_dimpro_identity_org_license_v020_hage_invites.md`.

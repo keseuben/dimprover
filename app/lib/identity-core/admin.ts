@@ -5,6 +5,7 @@ import {
   normalizeUuid,
 } from "./security";
 import { DimproIdentityError } from "./types";
+import { getDimproOrganizationSeatSummary } from "./invitations";
 
 type DbRow = Record<string, unknown>;
 type DbError = { code?: string | null; message?: string | null; details?: string | null } | null;
@@ -310,6 +311,37 @@ export async function createDimproSendEntitlementAdmin(input: Record<string, unk
   }
 
   const client = getDimproIdentitySupabaseClient();
+  const licenseOwner = await client.from("dimpro_licenses")
+    .select("owner_type,owner_organization_id")
+    .eq("id", licenseId)
+    .maybeSingle();
+  if (licenseOwner.error) dbError("A Send-licenc tulajdonosa nem ellenőrizhető.", licenseOwner.error);
+  const ownerOrganizationId = normalizeUuid((licenseOwner.data as DbRow | null)?.owner_organization_id);
+  if ((licenseOwner.data as DbRow | null)?.owner_type === "organization" && ownerOrganizationId) {
+    const membership = await client.from("dimpro_organization_memberships")
+      .select("id,status,access_ends_at")
+      .eq("organization_id", ownerOrganizationId)
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (membership.error) dbError("A szervezeti tagság nem ellenőrizhető.", membership.error);
+    const membershipId = normalizeUuid((membership.data as DbRow | null)?.id);
+    const accessEndsAt = (membership.data as DbRow | null)?.access_ends_at;
+    if (!membershipId || (accessEndsAt && Date.parse(String(accessEndsAt)) < Date.now())) {
+      throw new DimproIdentityError("A felhasználó nem aktív tagja a licenctulajdonos szervezetnek.", "DIMPRO_SEND_ORGANIZATION_MEMBERSHIP_REQUIRED", 403);
+    }
+    const membershipModules = await client.from("dimpro_membership_modules")
+      .select("module_code")
+      .eq("membership_id", membershipId)
+      .eq("enabled", true);
+    if (membershipModules.error) dbError("A felhasználó szolgáltatásjogai nem ellenőrizhetők.", membershipModules.error);
+    const assigned = new Set(((membershipModules.data || []) as DbRow[]).map((row) => String(row.module_code || "").toUpperCase()));
+    if (assigned.size > 0) {
+      if (canUseStandardSend && !assigned.has("DROP_SEND")) throw new DimproIdentityError("A felhasználó nem kapott DIMPRO Send jogosultságot.", "DIMPRO_MEMBERSHIP_DROP_SEND_NOT_ALLOWED", 403);
+      if (canUseQuickImageSend && !assigned.has("DROP_QUICK_IMAGE_SEND")) throw new DimproIdentityError("A felhasználó nem kapott Gyors KépSend jogosultságot.", "DIMPRO_MEMBERSHIP_QUICK_SEND_NOT_ALLOWED", 403);
+      if (canUseProjectDrop && !assigned.has("DROP_PROJECT_INBOX")) throw new DimproIdentityError("A felhasználó nem kapott Projekt Drop jogosultságot.", "DIMPRO_MEMBERSHIP_PROJECT_DROP_NOT_ALLOWED", 403);
+    }
+  }
   const result = await client.rpc("dimpro_admin_create_send_entitlement", {
     p_user_id: userId,
     p_license_id: licenseId,
@@ -502,15 +534,17 @@ async function replaceDimproLicenseModulesAdmin(licenseId: string, modulesInput:
 
 export async function getDimproLicenseCenterOverview() {
   const client = getDimproIdentitySupabaseClient();
-  const [users, organizations, memberships, licenses, modules, entitlements] = await Promise.all([
+  const [users, organizations, memberships, licenses, modules, membershipModules, invitations, entitlements] = await Promise.all([
     client.from("dimpro_users").select("id,public_user_code,full_name,email,status,email_verified_at").order("full_name", { ascending: true }),
     client.from("dimpro_organizations").select("id,public_organization_code,display_name,legal_name,email,status").order("display_name", { ascending: true }),
-    client.from("dimpro_organization_memberships").select("id,user_id,organization_id,role_code,status,is_primary").eq("status", "active"),
-    client.from("dimpro_licenses").select("id,public_license_code,owner_type,owner_user_id,owner_organization_id,product_code,plan_code,status,activated_at,expires_at,offline_grace_until,max_devices,created_at,updated_at").order("created_at", { ascending: false }),
+    client.from("dimpro_organization_memberships").select("id,user_id,organization_id,role_code,role_label,status,joined_at,access_ends_at,is_primary").neq("status", "revoked").order("created_at", { ascending: true }),
+    client.from("dimpro_licenses").select("id,public_license_code,owner_type,owner_user_id,owner_organization_id,product_code,plan_code,status,activated_at,expires_at,offline_grace_until,max_users,max_devices,legacy_license_ref,created_at,updated_at").order("created_at", { ascending: false }),
     client.from("dimpro_license_modules").select("id,license_id,module_code,enabled,limits,feature_flags,valid_from,valid_until,created_at,updated_at").order("module_code", { ascending: true }),
+    client.from("dimpro_membership_modules").select("id,membership_id,module_code,enabled,limits,created_at,updated_at").order("module_code", { ascending: true }),
+    client.from("dimpro_organization_invitations").select("id,organization_id,license_id,membership_id,invited_user_id,email_normalized,full_name,role_code,role_label,token_hint,status,expires_at,accepted_at,revoked_at,created_at,updated_at").order("created_at", { ascending: false }),
     client.from("dimpro_send_entitlements").select("id,user_id,license_id,status,code_hint,expires_at,can_use_standard_send,can_use_quick_image_send,can_use_project_drop,monthly_send_limit,current_month_send_count,last_used_at").order("created_at", { ascending: false }),
   ]);
-  for (const result of [users, organizations, memberships, licenses, modules, entitlements]) {
+  for (const result of [users, organizations, memberships, licenses, modules, membershipModules, invitations, entitlements]) {
     if (result.error) dbError("A központi Licencközpont adatai nem tölthetők be.", result.error);
   }
   return {
@@ -519,6 +553,8 @@ export async function getDimproLicenseCenterOverview() {
     organizationMemberships: memberships.data || [],
     licenses: licenses.data || [],
     licenseModules: modules.data || [],
+    membershipModules: membershipModules.data || [],
+    organizationInvitations: invitations.data || [],
     sendEntitlements: entitlements.data || [],
   };
 }
@@ -550,7 +586,9 @@ export async function createDimproLicenseAdmin(input: Record<string, unknown>) {
     status,
     activated_at: activatedAt,
     expires_at: expiresAt,
+    max_users: integer(input.maxUsers, ownerType === "organization" ? 5 : 1, 1, 10000),
     max_devices: integer(input.maxDevices, 1, 1, 10000),
+    legacy_license_ref: text(input.legacyLicenseRef, 160) || null,
   }).select("*").single();
   if (created.error) {
     const source = `${created.error.message || ""} ${created.error.details || ""}`;
@@ -591,6 +629,19 @@ export async function updateDimproLicenseAdmin(input: Record<string, unknown>) {
   if (activatedAt && expiresAt && Date.parse(String(expiresAt)) < Date.parse(String(activatedAt))) {
     throw new DimproIdentityError("A licenc lejárata nem lehet korábbi az aktiválásnál.", "DIMPRO_LICENSE_DATE_ORDER_INVALID", 400);
   }
+  const nextMaxUsers = input.maxUsers === undefined
+    ? Number(current.max_users || 1)
+    : integer(input.maxUsers, Number(current.max_users || 1), 1, 10000);
+  if (String(current.owner_type) === "organization" && input.maxUsers !== undefined) {
+    const seats = await getDimproOrganizationSeatSummary(licenseId);
+    if (nextMaxUsers < seats.used) {
+      throw new DimproIdentityError(
+        `A felhasználói keret nem csökkenthető ${seats.used} alá, mert ennyi aktív/meghívott hely foglalt.`,
+        "DIMPRO_LICENSE_USER_SEAT_LIMIT_BELOW_USAGE",
+        409,
+      );
+    }
+  }
   const patch = {
     product_code: input.productCode === undefined ? current.product_code : text(input.productCode, 60).toUpperCase().replace(/[^A-Z0-9_-]/g, "_") || "DIMPRO",
     plan_code: input.planCode === undefined ? current.plan_code : text(input.planCode, 80) || null,
@@ -598,7 +649,9 @@ export async function updateDimproLicenseAdmin(input: Record<string, unknown>) {
     activated_at: activatedAt,
     expires_at: expiresAt,
     offline_grace_until: input.offlineGraceUntil === undefined ? current.offline_grace_until : optionalIso(input.offlineGraceUntil),
+    max_users: nextMaxUsers,
     max_devices: input.maxDevices === undefined ? current.max_devices : integer(input.maxDevices, Number(current.max_devices || 1), 1, 10000),
+    legacy_license_ref: input.legacyLicenseRef === undefined ? current.legacy_license_ref : text(input.legacyLicenseRef, 160) || null,
     updated_at: new Date().toISOString(),
   };
   const updated = await getDimproIdentitySupabaseClient().from("dimpro_licenses").update(patch).eq("id", licenseId).select("*").single();

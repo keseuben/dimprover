@@ -244,3 +244,7 @@ A következő munka a fogyasztói integráció:
 10. a régi user/license/project jogosultsági olvasásokat fokozatosan vezesse ki, de a bridge kompatibilitást egyelőre tartsa meg.
 
 A teljes `auth.dimpro.hu` passkey/Eszközhíd/session/recovery implementáció NEM része ennek a következő Drop-integrációs lépésnek; az külön későbbi fejlesztési szakasz.
+
+## Utódverzió – Identity Core 0.2.0 (2026-08-10)
+
+A V010 alapot a szervezeti licenc-, felhasználói hely- és meghívási motor bővíti. Részletes dokumentáció: `126_dimpro_identity_org_license_v020_hage_invites.md`. A V010 táblák és Send/Project Core kompatibilitás megmarad.

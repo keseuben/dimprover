@@ -46,6 +46,8 @@ const requiredTables = [
   "dimpro_organization_memberships",
   "dimpro_licenses",
   "dimpro_license_modules",
+  "dimpro_membership_modules",
+  "dimpro_organization_invitations",
   "dimpro_projects",
   "dimpro_project_memberships",
   "dimpro_project_drop_settings",
@@ -73,9 +75,9 @@ const tableResults = await Promise.all(requiredTables.map(async (table) => {
 const marker = markerResult.data || null;
 const ready = !markerResult.error
   && marker?.component === "dimpro-identity-core"
-  && marker?.schema_version === "0.1.0"
-  && Number(marker?.migration_count || 0) >= 3
-  && marker?.bootstrap_id === "dimpro-identity-core-security-hardening-v010-20260807"
+  && marker?.schema_version === "0.2.0"
+  && Number(marker?.migration_count || 0) >= 4
+  && marker?.bootstrap_id === "dimpro-identity-org-license-v020-20260810"
   && tableResults.every((item) => item.ready);
 
 console.log(JSON.stringify({
@@ -97,5 +99,5 @@ console.log(JSON.stringify({
   tables: tableResults,
   nextAction: ready
     ? "A központi Identity Core séma telepítve van; a feature gate és az API-regresszió ellenőrizhető."
-    : "Futtassa a supabase/DIMPRO_IDENTITY_CORE_V010_BOOTSTRAP.sql fájlt a kijelölt Supabase SQL Editorban, majd ismételje meg a preflightot.",
+    : "Futtassa a supabase/IDENTITY 0.2.0 migrációkat a kijelölt Supabase SQL Editorban, majd ismételje meg a preflightot.",
 }, null, 2));

@@ -26,8 +26,8 @@ export async function GET(request: Request) {
   try {
     return dimproIdentityJson({
       ok: true,
-      version: "LICENSE CENTER 0.1.0",
-      identityCoreVersion: "0.1.0",
+      version: "LICENSE CENTER 0.3.0",
+      identityCoreVersion: "0.2.0",
       ...(await getDimproLicenseCenterOverview()),
     });
   } catch (error) {

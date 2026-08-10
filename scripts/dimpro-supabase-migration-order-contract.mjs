@@ -44,13 +44,15 @@ before('supabase/migrations/20260806213000_dimpro_identity_license_project_core_
 before('supabase/migrations/20260806214000_dimpro_send_project_access_v010.sql', 'supabase/migrations/20260807083000_dimpro_identity_core_security_hardening_v010.sql');
 before('supabase/migrations/20260807083000_dimpro_identity_core_security_hardening_v010.sql', 'supabase/migrations/20260807110000_drop_identity_core_consumer_bridge_v110.sql');
 before('supabase/migrations/20260807110000_drop_identity_core_consumer_bridge_v110.sql', 'supabase/migrations/20260807111500_dimpro_identity_send_admin_bridge_v110.sql');
-assert.equal(order.at(-1), 'supabase/migrations/20260809214500_service_role_backend_grants_v010.sql', 'A service-role grant migrációnak a lista végén kell lennie.');
+before('supabase/migrations/20260807111500_dimpro_identity_send_admin_bridge_v110.sql', 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql');
+before('supabase/migrations/20260809214500_service_role_backend_grants_v010.sql', 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql');
+assert.equal(order.at(-1), 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql', 'Az Identity 0.2.0 szervezeti licenc migrációnak a lista végén kell lennie.');
 
 console.log(JSON.stringify({
   ok: true,
   contract: 'DIMPRO Supabase migration order V1',
   migrationCount: order.length,
-  dependencyChecks: 14,
+  dependencyChecks: 15,
   first: order[0],
   last: order.at(-1),
 }, null, 2));

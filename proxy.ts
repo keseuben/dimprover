@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
 
 function safeHttpsOrigin(value: string | undefined) {
   const candidate = value?.trim();
@@ -59,6 +60,7 @@ export async function proxy(request: NextRequest) {
   const hostHeader = request.headers.get("host") ?? "";
   const host = hostHeader.replace(/:\d+$/, "");
   const isLoginPage = pathname.startsWith("/login");
+  const isDimproInvitationPage = pathname.startsWith("/account/meghivas");
   const isLegacyMeetingAssistantPath = pathname.startsWith("/jegyzokonyvek/ertekezleti-kisero");
   const isDevEnvironment = host === "dev.dimpro.hu" || host === "dev.dimprover.hu" || host.endsWith(".dev.dimpro.hu");
   const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu" || host === "app.dev.dimpro.hu";
@@ -296,6 +298,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     isLoginPage ||
+    isDimproInvitationPage ||
     isPublicApiRoute ||
     isProtectedReleaseDownloadPage ||
     isPublicStaticDownload ||
@@ -358,12 +361,8 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isLoggedIn && isDimproAppHost) {
-    const allowedEmails = (process.env.DIMPRO_APP_ALLOWED_EMAILS || "keseruben90@gmail.com")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (!loggedInEmail || !allowedEmails.includes(loggedInEmail)) {
+    const authorization = await resolveDimproLoginAuthorization(loggedInEmail);
+    if (!authorization.allowed) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("access", "blocked");

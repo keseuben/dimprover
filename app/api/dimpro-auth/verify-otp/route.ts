@@ -3,9 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import {
   appendDimproLoginAttempt,
-  isDimproEmailAllowed,
   normalizeDimproEmail,
 } from "@/app/lib/dimpro/login-access";
+import { linkDimproAuthUser, resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
   const token = body && typeof body === "object" && typeof (body as { token?: unknown }).token === "string"
     ? String((body as { token: string }).token).replace(/\D/g, "").slice(0, 6)
     : "";
-  const allowed = isDimproEmailAllowed(email);
+  const authorization = await resolveDimproLoginAuthorization(email);
+  const allowed = authorization.allowed;
 
   if (!allowed) {
     await appendDimproLoginAttempt(request.headers, {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       allowed: false,
       action: "verify_otp",
       result: "blocked",
-      message: "Tiltott e-mail címhez tartozó kódellenőrzési próbálkozás.",
+      message: `Nincs aktív központi DIMPRO belépési jogosultság: ${authorization.reason}.`,
     });
     return NextResponse.json(
       { ok: false, allowed: false, error: "Ez az e-mail cím jelenleg nem jogosult a DIMPRO használatára." },
@@ -84,19 +85,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isDimproEmailAllowed(data.user.email)) {
+    const verifiedEmail = normalizeDimproEmail(data.user.email) || email;
+    const verifiedAuthorization = await resolveDimproLoginAuthorization(verifiedEmail);
+    if (!verifiedAuthorization.allowed) {
       await supabase.auth.signOut();
       await appendDimproLoginAttempt(request.headers, {
-        email: normalizeDimproEmail(data.user.email) || email,
+        email: verifiedEmail,
         allowed: false,
         action: "verify_otp",
         result: "blocked",
-        message: "A hitelesített Supabase felhasználó nincs az engedélyezési listán.",
+        message: `A hitelesített fiók központi jogosultsága nem aktív: ${verifiedAuthorization.reason}.`,
       });
       return NextResponse.json(
         { ok: false, allowed: false, error: "A fiók nincs engedélyezve a DIMPRO használatára." },
         { status: 403, headers: { "cache-control": "no-store" } },
       );
+    }
+
+    if (verifiedAuthorization.source !== "legacy_allowlist") {
+      await linkDimproAuthUser(verifiedEmail, data.user.id);
     }
 
     await appendDimproLoginAttempt(request.headers, {

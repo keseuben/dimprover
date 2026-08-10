@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   appendDimproLoginAttempt,
-  isDimproEmailAllowed,
   normalizeDimproEmail,
 } from "@/app/lib/dimpro/login-access";
+import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,7 +25,8 @@ function getSupabaseClient() {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = normalizeDimproEmail(body && typeof body === "object" ? (body as { email?: unknown }).email : "");
-  const allowed = isDimproEmailAllowed(email);
+  const authorization = await resolveDimproLoginAuthorization(email);
+  const allowed = authorization.allowed;
 
   if (!allowed) {
     await appendDimproLoginAttempt(request.headers, {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       allowed: false,
       action: "request_otp",
       result: "blocked",
-      message: "Az e-mail cím nincs a DIMPRO ideiglenes engedélyezési listáján.",
+      message: `A központi DIMPRO belépési jogosultság nem aktív: ${authorization.reason}.`,
     });
 
     return NextResponse.json(
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false },
+      options: { shouldCreateUser: authorization.source !== "legacy_allowlist" },
     });
 
     if (error) {

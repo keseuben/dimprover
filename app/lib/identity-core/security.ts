@@ -86,6 +86,29 @@ export function hashDimproRequestIp(rawIp: string) {
     .digest("hex");
 }
 
+export function hashDimproOrganizationInvitationToken(rawToken: unknown) {
+  const token = typeof rawToken === "string" ? rawToken.trim() : "";
+  if (!/^[A-Za-z0-9_-]{32,160}$/.test(token)) {
+    throw new DimproIdentityError(
+      "A szervezeti meghívó nem érvényes.",
+      "DIMPRO_ORGANIZATION_INVITATION_TOKEN_INVALID",
+      400,
+    );
+  }
+  return createHmac("sha256", requiredSecret("DIMPRO_ACCESS_HASH_PEPPER"))
+    .update(`dimpro-organization-invitation:v1:${token}`, "utf8")
+    .digest("hex");
+}
+
+export function createDimproOrganizationInvitationToken() {
+  const token = randomBytes(32).toString("base64url");
+  return {
+    token,
+    tokenHash: hashDimproOrganizationInvitationToken(token),
+    tokenHint: `${token.slice(0, 4)}…${token.slice(-4)}`,
+  };
+}
+
 export function getRequestIp(headers: Headers) {
   const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwarded

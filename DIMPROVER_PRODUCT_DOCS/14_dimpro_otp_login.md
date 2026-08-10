@@ -100,3 +100,7 @@ Rollback:
 3. `npx tsc --noEmit`.
 4. `npm run build`.
 5. PM2 `dimprover` újraindítás.
+
+## 9. Identity Core 0.2.0 – szervezeti felhasználók (2026-08-10)
+
+A statikus `DIMPRO_APP_ALLOWED_EMAILS` lista az Identity 0.2.0-tól csak biztonsági fallback. Az OTP-kérés, OTP-ellenőrzés és az `app.dimpro.hu` proxy kapuja központi Identity Core jogosultságot is elfogad: aktív, igazolt felhasználó + aktív saját licenc vagy aktív szervezeti tagság + aktív szervezeti licenc. A szervezeti meghívás elfogadása után az első OTP folyamat szükség esetén létrehozza a Supabase Auth felhasználót és összekapcsolja a központi `dimpro_users` rekorddal.

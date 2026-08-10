@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   try {
     return dimproIdentityJson({
       ok: true,
-      version: "IDENTITY CORE 0.1.0",
+      version: "IDENTITY CORE 0.2.0",
       ...(await getDimproSendAdminOverview()),
     });
   } catch (error) {
@@ -49,14 +49,14 @@ export async function POST(request: Request) {
     if (body.action === "createUser") {
       return dimproIdentityJson({
         ok: true,
-        version: "IDENTITY CORE 0.1.0",
+        version: "IDENTITY CORE 0.2.0",
         created: await createDimproSendUserAdmin(body),
       }, 201);
     }
     const created = await createDimproSendEntitlementAdmin(body);
     return dimproIdentityJson({
       ok: true,
-      version: "IDENTITY CORE 0.1.0",
+      version: "IDENTITY CORE 0.2.0",
       created,
     }, 201);
   } catch (error) {

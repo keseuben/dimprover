@@ -20,9 +20,9 @@ import {
 
 const EXPECTED_SCHEMA = {
   component: "dimpro-identity-core",
-  schemaVersion: "0.1.0",
-  migrationCount: 3,
-  bootstrapId: "dimpro-identity-core-security-hardening-v010-20260807",
+  schemaVersion: "0.2.0",
+  migrationCount: 4,
+  bootstrapId: "dimpro-identity-org-license-v020-20260810",
 } as const;
 
 const REQUIRED_TABLE_CHECKS = [
@@ -31,6 +31,8 @@ const REQUIRED_TABLE_CHECKS = [
   "dimpro_organization_memberships",
   "dimpro_licenses",
   "dimpro_license_modules",
+  "dimpro_membership_modules",
+  "dimpro_organization_invitations",
   "dimpro_projects",
   "dimpro_project_memberships",
   "dimpro_project_drop_settings",
@@ -344,7 +346,32 @@ export async function getDimproSendContextByEntitlementId(entitlementId: string)
   const activeModuleRows = ((moduleResult.data || []) as DbRow[])
     .filter((row) => parseOr(row.valid_from, 0) <= now && parseOr(row.valid_until, Number.POSITIVE_INFINITY) >= now);
   const activeModules = new Set(activeModuleRows.map((row) => text(row.module_code).toUpperCase()));
-  const quickVoiceModule = activeModuleRows.find((row) => text(row.module_code).toUpperCase() === "DROP_QUICK_VOICE_NOTE") || null;
+  const ownerOrganizationId = normalizeUuid(licenseRow?.owner_organization_id);
+  if (ownerOrganizationId) {
+    const membershipResult = await client.from("dimpro_organization_memberships")
+      .select("id,status,access_ends_at")
+      .eq("organization_id", ownerOrganizationId)
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (membershipResult.error) databaseError("A Send szervezeti tagsága nem ellenőrizhető.", membershipResult.error);
+    const membershipRow = membershipResult.data as DbRow | null;
+    const membershipId = normalizeUuid(membershipRow?.id);
+    const membershipEnds = parseOr(membershipRow?.access_ends_at, Number.POSITIVE_INFINITY);
+    if (!membershipId || membershipEnds < now) {
+      throw new DimproIdentityError("A DIMPRO Send szervezeti tagsága nem aktív.", "DIMPRO_SEND_ORGANIZATION_MEMBERSHIP_NOT_ACTIVE", 403);
+    }
+    const membershipModulesResult = await client.from("dimpro_membership_modules")
+      .select("module_code")
+      .eq("membership_id", membershipId)
+      .eq("enabled", true);
+    if (membershipModulesResult.error) databaseError("A Send felhasználói moduljogai nem ellenőrizhetők.", membershipModulesResult.error);
+    const assignedModules = new Set(((membershipModulesResult.data || []) as DbRow[]).map((row) => text(row.module_code).toUpperCase()));
+    if (assignedModules.size > 0) {
+      for (const moduleCode of [...activeModules]) if (!assignedModules.has(moduleCode)) activeModules.delete(moduleCode);
+    }
+  }
+  const quickVoiceModule = activeModuleRows.find((row) => activeModules.has(text(row.module_code).toUpperCase()) && text(row.module_code).toUpperCase() === "DROP_QUICK_VOICE_NOTE") || null;
   const quickVoiceLimits = objectValue(quickVoiceModule?.limits);
   const quickVoiceSecondsPerNote = Math.max(10, Math.min(60, numberValue(quickVoiceLimits.maxSecondsPerNote ?? quickVoiceLimits.max_seconds_per_note, 60)));
   const recipientMode = text(entitlementRow.recipient_mode);
@@ -360,7 +387,7 @@ export async function getDimproSendContextByEntitlementId(entitlementId: string)
   }
 
   let organizationName: string | null = null;
-  const organizationId = normalizeUuid(entitlementRow.organization_id) || normalizeUuid(licenseRow?.owner_organization_id);
+  const organizationId = normalizeUuid(entitlementRow.organization_id) || ownerOrganizationId;
   if (organizationId) {
     const organizationResult = await client
       .from("dimpro_organizations")
