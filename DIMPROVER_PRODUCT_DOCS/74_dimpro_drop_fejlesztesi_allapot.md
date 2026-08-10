@@ -1038,3 +1038,14 @@ Validáció: PWA contract **19/19**; TypeScript PASS; teljes lint **0 error / 10
 A hotfix DEV-first módon javítja a Send entitlementhez hiányzó automatikus `Saját DIMPRO Send-kód` levelet és hozzáadja a biztonságos `Új kód + e-mail` rotációt; iPhone HEIC/HEIF konverziós hiba esetén az eredeti fájl feltölthető marad; az iOS PWA telepítési gomb pedig Safari-specifikus, lépésről lépésre telepítési útmutatót nyit. A Drop release- és service-worker verzió 1.2.12, az Identity admin API 0.2.2. Private pilot marad, GA=false.
 
 **DROP 1.2.12 DEV candidate gate:** BUILD_ID `AK30OQyQBMklA3SZKvKWX`; standalone 141/141; Send integráció 16/16; HEIC fallback PASS; contract 27/27; compiled browser 15/15; TypeScript PASS; lint 0 error / 108 baseline warning; tesztmaradvány 0. A production release-gate következik.
+
+## DROP 1.2.12 / IDENTITY 0.2.2 – éles
+
+**Dátum:** 2026-08-10.  
+**Fejlesztési Központ:** `version_1ac59d3a-d29`.  
+**Éles release:** `.next-drop-v1212-release-final`.  
+**BUILD_ID:** `DAcj-ZwTkKDHf3repNMgZ`.  
+**Rollback:** `.next-identity-v021-release-final`.  
+**Részletes dokumentáció:** `127_dimpro_drop_v1212_ios_sendmail_heic_pwa_hotfix.md`.
+
+Éles a Send-kód automatikus e-mail kézbesítés és biztonságos `Új kód + e-mail` rotáció, az iPhone HEIC/HEIF konverziós fallback, valamint az iOS Safari PWA telepítési útmutató. Csató Ferenc és Nagy Róbert Send-kódja élesben újragenerálva és SMTP által elfogadva; Csató hiányzó `DROP_QUICK_VOICE_NOTE` tagsági modulja engedélyezve. Production candidate browser 12/12, live browser 8/8, contract 27/27, Send DEV integráció 16/16, standalone 141/141, TypeScript PASS, lint 0 error / 108 baseline warning. Private pilot marad; fizikai iPhone HEIC/PWA validáció szükséges.
