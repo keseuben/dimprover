@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DevWorktreeValidationError, validateDevGitWorktree } from "./worktree-validation";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEV_CENTER_ENGINE_BOOTSTRAP_ID, DEV_CENTER_ENGINE_REQUIRED_WORKERS, DEV_CENTER_ENGINE_SCHEMA_VERSION, DEV_CENTER_ENGINE_TABLES } from "./engine-schema";
 import type { DevEngineGateStatus, DevEngineHandshakeStage, DevEngineOperation, DevEngineScope, DevEngineTask, DevEngineTaskStatus, DevEngineWorker, DevEngineWorkerSession } from "./engine-types";
@@ -251,8 +252,17 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
   if (action === "bind_worktree") {
     const worktreePath = text(input.worktreePath);
     if (!worktreePath || !worktreePath.startsWith("/srv/dimpro-dev/worktrees/")) return { ok: false as const, error: "Érvényes DEV worktreePath kötelező." };
-    const session = await updateSessionStage(client, sessionId, "BRANCH_BOUND", "WORKTREE_BOUND", { worktree_path: worktreePath }, "WORKTREE_BOUND", `Worktree hozzárendelve: ${worktreePath}`);
-    return { ok: true as const, session };
+    const current = mapSession(await getSessionRow(client, sessionId));
+    if (current.handshakeStage !== "BRANCH_BOUND" || !current.branchName) throw new DevCenterEngineError("A worktree előtt érvényes branch binding szükséges.", "DEV_CENTER_HANDSHAKE_ORDER", 409);
+    let verifiedWorktree;
+    try {
+      verifiedWorktree = await validateDevGitWorktree(worktreePath, current.branchName);
+    } catch (error) {
+      if (error instanceof DevWorktreeValidationError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+      throw error;
+    }
+    const session = await updateSessionStage(client, sessionId, "BRANCH_BOUND", "WORKTREE_BOUND", { worktree_path: verifiedWorktree.worktreePath }, "WORKTREE_BOUND", "Worktree hozzárendelve: " + verifiedWorktree.worktreePath);
+    return { ok: true as const, session, verifiedWorktree };
   }
   if (action === "lock_scope") {
     const current = mapSession(await getSessionRow(client, sessionId));

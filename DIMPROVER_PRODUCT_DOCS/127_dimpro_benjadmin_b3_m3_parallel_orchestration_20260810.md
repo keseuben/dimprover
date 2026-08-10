@@ -73,14 +73,14 @@ M3 DEV előmentés Restic snapshot: `74b12a5e`.
 - célzott ESLint: PASS
 - teljes lint: 0 error / 108 örökölt warning
 - production build: PASS
-- build ID: `s4KjYzmBtK8cT9I77Clw7`
+- build ID: `LV6epauH-mU-jMK9kHP4Z`
 - standalone asset check: 141/141
 
 ## Candidate acceptance
 
 Candidate port: `3301`.
 
-Automatizált M3 acceptance: **48/48 PASS**.
+Automatizált M3 acceptance: **49/49 PASS**, valódi Git worktree-kkel.
 
 Bizonyított fő esetek:
 1. task létrehozás
@@ -91,21 +91,23 @@ Bizonyított fő esetek:
 6. pontosan egy claim nyer
 7. második claim 409 konfliktussal blokkolódik
 8. branch binding
-9. worktree binding
-10. scope lease acquisition
-11. azonos scope második workernek 409 konfliktus
-12. eltérő scope párhuzamosan engedélyezett
-13. 3 READY worker session
-14. 3 aktív worktree lease
-15. heartbeat lease-megújítás
-16. DEV write authorization
-17. DEV migration authorization
-18. DEV build authorization
-19. task completion felszabadítja a workert
-20. kényszerített stale lease felismerése
-21. stale session automatikus lezárása
-22. stale task automatikus requeue
-23. konfliktus audit rögzítése
+9. nem létező worktree 409 blokkolás
+10. valódi Git worktree és branch HEAD ellenőrzés
+11. worktree binding
+12. scope lease acquisition
+13. azonos scope második workernek 409 konfliktus
+14. eltérő scope párhuzamosan engedélyezett
+15. 3 READY worker session
+16. 3 aktív worktree lease
+17. heartbeat lease-megújítás
+18. DEV write authorization
+19. DEV migration authorization
+20. DEV build authorization
+21. task completion felszabadítja a workert
+22. kényszerített stale lease felismerése
+23. stale session automatikus lezárása
+24. stale task automatikus requeue
+25. konfliktus audit rögzítése
 
 A teljes acceptance napló:
 `/srv/dimpro-dev/logs/benjadmin-m3-acceptance.log`
@@ -156,3 +158,7 @@ Az új UI már a végleges M3 adatokra épül:
 - build/test/release
 - backup/audit/idő
 
+
+## Záró aktiválási döntés
+
+Az M3 candidate technikailag release-ready, de a 3100-as stabil BENJADMIN M1 runtime automatikus lecserélése elhalasztva. Indok: a M3 fejlesztés közben külön csevegőben licencfelületi módosítások történtek, ezért a következő integráció előtt branch/release reconciliation szükséges. A PROD továbbra is érintetlen.

@@ -10,6 +10,11 @@ const versionId = "version_d4bf9700-96e";
 const repoId = "repo_dimprover";
 const projectId = "project_dimprover";
 const checks = [];
+const workspaces = {
+  worker_arminai: { branch: "worker/benjadmin-m3-armin", path: "/srv/dimpro-dev/worktrees/benjadmin-m3-worker-armin" },
+  worker_jazminai: { branch: "worker/benjadmin-m3-jazmin", path: "/srv/dimpro-dev/worktrees/benjadmin-m3-worker-jazmin" },
+  worker_outminai: { branch: "worker/benjadmin-m3-outmin", path: "/srv/dimpro-dev/worktrees/benjadmin-m3-worker-outmin" },
+};
 
 function pass(name, details = "") { checks.push({ name, ok: true, details }); console.log(`PASS ${name}${details ? ` :: ${details}` : ""}`); }
 function fail(name, details = "") { checks.push({ name, ok: false, details }); console.error(`FAIL ${name}${details ? ` :: ${details}` : ""}`); }
@@ -63,13 +68,18 @@ assert("atomic claim exactly one conflict", losers.length === 1, `conflictCount=
 const winner = winners[0];
 const loser = losers[0];
 
-await bindWorkspace(winner.sessionId, `worker/m3-race-${winner.workerId}`, `/srv/dimpro-dev/worktrees/m3-race-${winner.workerId}`);
-let result = await acquire(winner.sessionId, [{ type: "module", key: "benjadmin-m3-shared" }]);
+let result = await request(`/api/dev/engine/sessions/${winner.sessionId}`, "PATCH", { action: "bind_branch", branchName: workspaces[winner.workerId].branch });
+assert("winner real branch bound", result.status === 200 && result.payload?.session?.handshakeStage === "BRANCH_BOUND");
+result = await request(`/api/dev/engine/sessions/${winner.sessionId}`, "PATCH", { action: "bind_worktree", worktreePath: "/srv/dimpro-dev/worktrees/not-existing-m3-worktree" });
+assert("fake worktree blocked", result.status === 409 && result.payload?.code === "DEV_CENTER_WORKTREE_NOT_FOUND", `status=${result.status} code=${result.payload?.code}`);
+result = await request(`/api/dev/engine/sessions/${winner.sessionId}`, "PATCH", { action: "bind_worktree", worktreePath: workspaces[winner.workerId].path });
+assert("winner real worktree verified", result.status === 200 && result.payload?.verifiedWorktree?.branchName === workspaces[winner.workerId].branch, `status=${result.status}`);
+result = await acquire(winner.sessionId, [{ type: "module", key: "benjadmin-m3-shared" }]);
 assert("winner scope acquired", result.status === 200, `status=${result.status}`);
 
 result = await claim(loser.sessionId, loser.workerId, fallbackTask);
 assert("loser claims independent task", result.status === 200, `status=${result.status}`);
-await bindWorkspace(loser.sessionId, `worker/m3-independent-${loser.workerId}`, `/srv/dimpro-dev/worktrees/m3-independent-${loser.workerId}`);
+await bindWorkspace(loser.sessionId, workspaces[loser.workerId].branch, workspaces[loser.workerId].path);
 result = await acquire(loser.sessionId, [{ type: "module", key: "benjadmin-m3-shared" }]);
 assert("scope conflict blocked", result.status === 409 && result.payload?.code === "DEV_CENTER_SCOPE_CONFLICT", `status=${result.status} code=${result.payload?.code}`);
 result = await acquire(loser.sessionId, [{ type: "module", key: "benjadmin-m3-independent" }]);
@@ -78,7 +88,7 @@ assert("loser independent scope acquired", result.status === 200, `status=${resu
 const outmin = await openWorker("worker_outminai", "OutminAI");
 result = await claim(outmin, "worker_outminai", outminTask);
 assert("Outmin task claimed", result.status === 200, `status=${result.status}`);
-await bindWorkspace(outmin, "worker/m3-outmin", "/srv/dimpro-dev/worktrees/m3-outmin");
+await bindWorkspace(outmin, workspaces.worker_outminai.branch, workspaces.worker_outminai.path);
 result = await acquire(outmin, [{ type: "release", key: "benjadmin-m3-candidate" }]);
 assert("Outmin release scope acquired", result.status === 200, `status=${result.status}`);
 
@@ -100,7 +110,7 @@ assert("Outmin completion releases worker", result.status === 200, `status=${res
 const recoverySession = await openWorker("worker_outminai", "OutminAI recovery");
 result = await claim(recoverySession, "worker_outminai", recoveryTask);
 assert("recovery task claimed", result.status === 200, `status=${result.status}`);
-await bindWorkspace(recoverySession, "worker/m3-recovery", "/srv/dimpro-dev/worktrees/m3-recovery");
+await bindWorkspace(recoverySession, workspaces.worker_outminai.branch, workspaces.worker_outminai.path);
 result = await acquire(recoverySession, [{ type: "module", key: "benjadmin-m3-recovery" }]);
 assert("recovery scope acquired", result.status === 200, `status=${result.status}`);
 const expired = new Date(Date.now() - 60000).toISOString();
