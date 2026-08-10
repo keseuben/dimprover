@@ -1036,3 +1036,5 @@ Validáció: PWA contract **19/19**; TypeScript PASS; teljes lint **0 error / 10
 **Részletes dokumentáció:** `127_dimpro_drop_v1212_ios_sendmail_heic_pwa_hotfix.md`.
 
 A hotfix DEV-first módon javítja a Send entitlementhez hiányzó automatikus `Saját DIMPRO Send-kód` levelet és hozzáadja a biztonságos `Új kód + e-mail` rotációt; iPhone HEIC/HEIF konverziós hiba esetén az eredeti fájl feltölthető marad; az iOS PWA telepítési gomb pedig Safari-specifikus, lépésről lépésre telepítési útmutatót nyit. A Drop release- és service-worker verzió 1.2.12, az Identity admin API 0.2.2. Private pilot marad, GA=false.
+
+**DROP 1.2.12 DEV candidate gate:** BUILD_ID `AK30OQyQBMklA3SZKvKWX`; standalone 141/141; Send integráció 16/16; HEIC fallback PASS; contract 27/27; compiled browser 15/15; TypeScript PASS; lint 0 error / 108 baseline warning; tesztmaradvány 0. A production release-gate következik.

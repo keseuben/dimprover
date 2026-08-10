@@ -72,3 +72,27 @@ Ha a felhasználó Chrome/Firefox/Edge iOS böngészőből nyitja meg a felület
 - célzott ESLint: PASS.
 
 A végleges dokumentumot a DEV candidate build/browser E2E, majd production candidate/release eredményeivel kell lezárni.
+
+## DEV candidate eredmény
+
+- commit: `6432ffb`
+- candidate dist: `.next-drop-v1212-dev-candidate`
+- BUILD_ID: `AK30OQyQBMklA3SZKvKWX`
+- Next compile: 117 mp
+- build TypeScript: 105 mp
+- standalone static asset: 141/141 PASS
+- Send-kód integráció: 16/16 PASS
+- tesztfixture-maradvány: 0 user / 0 licenc
+- HEIC fallback viselkedés: PASS
+- 1.2.12 contract: 27/27 PASS
+- compiled candidate browser: 15/15 PASS
+- iPhone Safari telepítési modal: PASS
+- iOS Chrome → Safari figyelmeztetés: PASS
+- 390 px mobil overflow: PASS
+- public-workflows 1.2.12 / Identity 0.2.2: PASS
+- Identity admin API: `IDENTITY CORE 0.2.2`, PASS
+- teljes lint: 0 error / 108 baseline warning
+- aktív `DROP 1.2.11` / `dimpro-drop-static-v1211` referencia a kijelölt Drop forrásutakon: 0
+- candidate runtime leállítva; 3230-as port felszabadítva.
+
+A DEV `/api/drop/health` `coreReady=false` állapota környezeti baseline: `coreEnabled=false`, Drop worker disabled és scanner nem fut ezen az izolált DEV candidate-en. Az Identity rész közben `enabled=true`, `schemaReady=true`, `secretsReady=true`, `consumerReady=true`. A production release-gate ezért külön production candidate-en köteles teljes `coreReady=true`, e-mail és ClamAV READY ellenőrzést teljesíteni.
