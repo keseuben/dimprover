@@ -132,3 +132,134 @@ Candidate eredmények:
   - `D` hosszú érintés: PASS
 
 A candidate külön `127.0.0.1:3201` porton futott. Az aktív DEV 3100-as runtime ezen ellenőrzések alatt nem változott.
+
+## DEV aktiválás és live acceptance – 2026-08-10
+
+Az M1 candidate minden gate PASS eredménye után kontrolláltan aktiválásra került kizárólag a DEV VPS-en.
+
+Aktív DEV runtime:
+
+- PM2 process: `dimpro-benjadmin-m1-dev`
+- port: `3100`
+- build ID: `zlfd79DEmENOtTNpBA4FA`
+- standalone asset ellenőrzés: 141/141 PASS
+- M0 rollback process: `dimpro-benjadmin-m0-dev`, leállított állapotban megtartva
+- PROD változtatás: nem történt; PROD továbbra is read-only
+
+Aktiválás előtti második DEV Restic checkpoint:
+
+- `12720a53`
+
+M1 előtti első checkpoint:
+
+- `8ffdd72e`
+
+A DEV runtime adatfolytonosság megtartása érdekében az M0 `.dimprover` és `.data` runtime állományai átöröklésre kerültek az M1 worktree-be. Visszaellenőrzés:
+
+- admin kulcs egyezés: PASS
+- login audit log egyezés: PASS
+- Drop runtime state egyezés: PASS
+- M1 Dev Center állapot megmaradt: PASS
+
+Aktiválás utáni helyi health gate:
+
+- `admin.dev.dimpro.hu/admin`: 200
+- `admin.dev.dimpro.hu/`: 307 → `/admin`
+- Drop health: 200
+- Identity health: 200
+
+Publikus HTTPS ellenőrzés:
+
+- `https://admin.dev.dimpro.hu/`: 307 → `/admin`
+- `https://admin.dev.dimpro.hu/admin`: 200
+- `https://admin.dev.dimpro.hu/login`: 307 → `/admin`
+- Drop health: 200
+- Identity health: 200
+
+### Live responsive browser acceptance
+
+A candidate 6/6 responsive browser acceptance után ugyanez a teszt az aktív DEV HTTPS környezeten is lefutott:
+
+- live browser acceptance: 6/6 PASS
+- desktop public + shell: PASS
+- tablet public + shell: PASS
+- mobil public + shell: PASS
+- horizontal overflow: 0 mind a hat esetben
+- lebegő board workspace-szélesség változás: 0 px desktop/tablet/mobil
+- privacy restore: PASS desktop/tablet/mobil
+
+### Kibővített M1 UI acceptance
+
+További 19 külön live böngészős acceptance eset futott, 19/19 PASS eredménnyel. A responsive 6 esettel együtt az M1 lezárási UI acceptance készlet 25 PASS esetet tartalmaz.
+
+A kibővített ellenőrzés többek között lefedte:
+
+- publikus felületen login rejtett: PASS
+- publikus felületen belső AI család rejtett: PASS
+- `Ctrl+Alt+B` rejtett login előhívás: PASS
+- `/login` protective entry: PASS
+- jogosulatlan `/admin/dev` védett: PASS
+- admin API kulcs nélkül 401: PASS
+- hitelesített BENJADMIN shell: PASS
+- hat fő navigációs elem: PASS
+- lebegő board nem szűkíti a workspace-t: PASS
+- belső AI család csak hitelesített shellben: PASS
+- `Ctrl+Alt+Space` privacy cover: PASS
+- privacy restore: PASS
+- theme váltás és reload utáni megőrzés: PASS
+- Környezetek / Infrastruktúra / Licencek / Audit shell route: PASS
+- kijelentkezés törli a BENJADMIN sessiont és visszaadja a protective entryt: PASS
+
+Tesztlogok:
+
+- `/srv/dimpro-dev/logs/m1-live-visual-smoke/results.json`
+- `/srv/dimpro-dev/logs/benjadmin-m1-live-additional-acceptance.json`
+
+### M1 release-gate
+
+A korábbi M0 gate az admin rooton közvetlen HTTP 200-at várt. M1-ben ez szándékosan megváltozott: a root 307-tel `/admin`-ra irányít, ahol 200 érkezik. Emiatt az M1 gate ezt az új route-szerződést ellenőrzi.
+
+Végső M1 release-gate:
+
+- 13/13 PASS
+- 0 blocker
+- auth allowlist: PASS
+- signup disabled: PASS
+- valós OTP E2E audit: PASS
+- DEV/App/Drop/Identity health: PASS
+- admin DNS/TLS: PASS
+- admin root 307 → `/admin`, `/admin` 200: PASS
+- GitHub deploy key/write routing: PASS
+- Drive DEV storage quarantine/write config: PASS
+- Drop DEV storage quarantine/isoláció: PASS
+
+Gate log:
+
+- `/srv/dimpro-dev/logs/benjadmin-m1-live-release-gate.json`
+
+A legacy M0 gate aktiválás előtt továbbra is 13/13 PASS volt. Aktiválás után ugyanaz a régi gate 12/13-at jelez kizárólag azért, mert még a régi admin-root HTTP 200 szerződést várja; funkcionális regressziót nem talált.
+
+## Végső forrás- és buildállapot
+
+- M1 forrás commit: `28aca6bac3456631eed733266effb193882b6df9`
+- branch: `feat/benjadmin-b3-m1-shell`
+- GitHub push: PASS, remote commit egyezés PASS
+- TypeScript: PASS
+- teljes ESLint: 0 error, 108 meglévő warning, az M0 baseline-nal azonos warning-szint
+- build: PASS
+- végső aktív build ID: `zlfd79DEmENOtTNpBA4FA`
+- standalone assets: 141/141 PASS
+- `git diff --check`: PASS
+
+Az M1 saját kódja új lint hibát nem vezetett be. Az `npm ci` a jelenlegi dependency lockfile alapján 11 npm audit találatot jelzett (1 low, 10 high); automatikus `npm audit fix` nem futott, mert az külön dependency-hardening feladat és nem keverhető kockázat nélkül az M1 UI release-be.
+
+## Ismert, M1-et nem blokkoló utómunka
+
+- DROP Hetzner böngészős `OPTIONS` preflight 403 továbbra is külön ismert tétel; presigned PUT működik és az M1 nem módosította ezt a réteget.
+- dependency audit/hardening külön fejlesztési körben kezelendő.
+
+## M1 lezárási állapot
+
+Az M1 shell / login / protective screen / navigáció fejlesztési céljai teljesültek, DEV-en aktívak és a release-gate szerint elfogadottak. Az M0 rollback állapot szándékosan megmarad a DEV VPS-en.
+
+Következő terv szerinti fázis: BENJADMIN B3 M2 – Development Center + PostgreSQL task/session engine, központi session/task/worker/lock modell és párhuzamos AI fejlesztési munkafolyamat alapozása.
