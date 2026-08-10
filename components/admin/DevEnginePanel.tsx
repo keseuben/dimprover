@@ -9,6 +9,8 @@ type EngineState = {
   tasks: DevEngineTask[];
   sessions: DevEngineWorkerSession[];
   locks: Array<{ id: string; scope_key?: string; scope_type?: string; session_id?: string }>;
+  worktreeLeases: Array<{ id: string; branch_name?: string; worktree_path?: string; lease_expires_at?: string; status?: string }>;
+  conflicts: Array<{ id: string; conflict_type?: string; status?: string; summary?: string; created_at?: string }>;
 };
 
 export default function DevEnginePanel() {
@@ -49,13 +51,13 @@ export default function DevEnginePanel() {
     <section className="dev-section dev-engine-panel" id="m2-engine">
       <div className="dev-section-heading">
         <div>
-          <p className="dev-section-label">BENJADMIN B3 M2</p>
-          <h2>PostgreSQL task / worker / session engine</h2>
+          <p className="dev-section-label">BENJADMIN B3 M3</p>
+          <h2>Parallel worker orchestration / lease / recovery</h2>
         </div>
         <div className="dev-engine-heading-actions">
           <span className={`dev-engine-gate ${gate?.ready ? "is-ready" : "is-pending"}`}>
             {gate?.ready ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}
-            {gate?.ready ? "M2 gate READY" : "M2 gate folyamatban"}
+            {gate?.ready ? "Engine gate READY" : "Engine gate ellenőrzés"}
           </span>
           <button type="button" className="dev-secondary-button" onClick={() => void load()} disabled={busy}>
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} /> {busy ? "Frissítés…" : "Frissítés"}
@@ -69,7 +71,8 @@ export default function DevEnginePanel() {
         <article><Bot size={19} /><span>Worker-ek</span><strong>{state?.workers.length ?? 0}/3</strong><small>ÁrminAI · JázminAI · OutminAI</small></article>
         <article><Activity size={19} /><span>READY session</span><strong>{readySessions.length}/3</strong><small>teljes handshake + scope lock</small></article>
         <article><ListTodo size={19} /><span>Task queue</span><strong>{queue.length}</strong><small>aktív / végrehajtható feladat</small></article>
-        <article><LockKeyhole size={19} /><span>Aktív lock</span><strong>{state?.locks.length ?? 0}</strong><small>ütközésvédett scope</small></article>
+        <article><LockKeyhole size={19} /><span>Worktree lease</span><strong>{state?.worktreeLeases.length ?? 0}</strong><small>branch + worktree foglalás</small></article>
+        <article><CircleAlert size={19} /><span>Nyitott konfliktus</span><strong>{state?.conflicts.filter((item) => item.status === "open").length ?? 0}</strong><small>scope / branch / task ütközés</small></article>
       </div>
 
       <div className="dev-engine-grid">
@@ -92,7 +95,7 @@ export default function DevEnginePanel() {
         </article>
       </div>
 
-      {gate?.blockers?.length ? <div className="dev-engine-blockers"><strong>M2 gate hátralévő feltételek:</strong>{gate.blockers.map((blocker) => <span key={blocker}>• {blocker}</span>)}</div> : null}
+      {gate?.blockers?.length ? <div className="dev-engine-blockers"><strong>Engine gate hátralévő feltételek:</strong>{gate.blockers.map((blocker) => <span key={blocker}>• {blocker}</span>)}</div> : null}
     </section>
   );
 }

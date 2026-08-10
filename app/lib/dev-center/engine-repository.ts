@@ -18,14 +18,14 @@ function getDatabaseClient(): SupabaseClient {
   }
   return createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-client-info": "dimpro-benjadmin-dev-center/0.2.0" } },
+    global: { headers: { "x-client-info": "dimpro-benjadmin-dev-center/0.3.0" } },
   });
 }
 
 function databaseError(message: string, error: DbError, status = 500): never {
   const missing = error?.code === "PGRST205" || error?.code === "42P01";
   throw new DevCenterEngineError(
-    missing ? "A BENJADMIN M2 PostgreSQL-sémája még nincs alkalmazva." : message,
+    missing ? "A BENJADMIN M3 PostgreSQL-sémája még nincs alkalmazva." : message,
     missing ? "DEV_CENTER_SCHEMA_NOT_READY" : error?.code || "DEV_CENTER_DATABASE_ERROR",
     missing ? 503 : status,
     error ? { message: error.message, details: error.details, hint: error.hint } : undefined,
@@ -34,6 +34,7 @@ function databaseError(message: string, error: DbError, status = 500): never {
 
 function text(value: unknown, fallback = "") { return typeof value === "string" ? value.trim() : fallback; }
 function nowIso() { return new Date().toISOString(); }
+function leaseIso(seconds = 900) { return new Date(Date.now() + Math.max(60, Math.min(3600, seconds)) * 1000).toISOString(); }
 function jsonRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
 function stringArray(value: unknown) { return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : []; }
 function normalizeScope(value: unknown): DevEngineScope[] {
@@ -49,9 +50,9 @@ function mapWorker(row: JsonRecord): DevEngineWorker {
 function mapTask(row: JsonRecord): DevEngineTask {
   return { id: text(row.id), projectId: text(row.project_id), versionId: text(row.version_id) || null, repositoryId: text(row.repository_id) || null,
     title: text(row.title), description: text(row.description), status: text(row.status) as DevEngineTaskStatus, priority: Number(row.priority || 0),
-    requestedWorkerId: text(row.requested_worker_id) || null, assignedWorkerId: text(row.assigned_worker_id) || null,
+    requestedWorkerId: text(row.requested_worker_id) || null, assignedWorkerId: text(row.assigned_worker_id) || null, claimedBySessionId: text(row.claimed_by_session_id) || null,
     branchName: text(row.branch_name) || null, worktreePath: text(row.worktree_path) || null, scope: normalizeScope(row.scope), acceptance: stringArray(row.acceptance),
-    blockedReason: text(row.blocked_reason) || null, createdBy: text(row.created_by), createdAt: text(row.created_at), updatedAt: text(row.updated_at),
+    blockedReason: text(row.blocked_reason) || null, claimExpiresAt: text(row.claim_expires_at) || null, lastClaimedAt: text(row.last_claimed_at) || null, attemptCount: Number(row.attempt_count || 0), createdBy: text(row.created_by), createdAt: text(row.created_at), updatedAt: text(row.updated_at),
     startedAt: text(row.started_at) || null, completedAt: text(row.completed_at) || null, metadata: jsonRecord(row.metadata) };
 }
 function mapSession(row: JsonRecord): DevEngineWorkerSession {
@@ -60,7 +61,7 @@ function mapSession(row: JsonRecord): DevEngineWorkerSession {
     repositoryId: text(row.repository_id) || null, environmentId: text(row.environment_id) || null,
     status: text(row.status) as DevEngineWorkerSession["status"], handshakeStage: text(row.handshake_stage) as DevEngineHandshakeStage,
     branchName: text(row.branch_name) || null, worktreePath: text(row.worktree_path) || null, scope: normalizeScope(row.scope), note: text(row.note) || null,
-    openedAt: text(row.opened_at), lastHeartbeatAt: text(row.last_heartbeat_at), closedAt: text(row.closed_at) || null, closeReason: text(row.close_reason) || null,
+    openedAt: text(row.opened_at), lastHeartbeatAt: text(row.last_heartbeat_at), leaseExpiresAt: text(row.lease_expires_at) || null, recoveryCount: Number(row.recovery_count || 0), lastRecoveredAt: text(row.last_recovered_at) || null, closedAt: text(row.closed_at) || null, closeReason: text(row.close_reason) || null,
     metadata: jsonRecord(row.metadata), updatedAt: text(row.updated_at) };
 }
 
@@ -87,7 +88,7 @@ export async function getDevCenterEngineHealth() {
 
 async function requireClient() {
   const health = await getDevCenterEngineHealth();
-  if (!health.ready) throw new DevCenterEngineError("A BENJADMIN M2 PostgreSQL engine nem áll készen.", health.errorCode || "DEV_CENTER_SCHEMA_NOT_READY", 503, health);
+  if (!health.ready) throw new DevCenterEngineError("A BENJADMIN M3 PostgreSQL engine nem áll készen.", health.errorCode || "DEV_CENTER_SCHEMA_NOT_READY", 503, health);
   return getDatabaseClient();
 }
 
@@ -110,26 +111,28 @@ async function addSessionEvent(client: SupabaseClient, sessionId: string, stage:
 
 export async function getDevCenterEngineState() {
   const client = await requireClient();
-  const [workers, tasks, dependencies, sessions, locks, environments, repositories, builds, releases, backups] = await Promise.all([
+  const [workers, tasks, dependencies, sessions, locks, worktreeLeases, conflicts, environments, repositories, builds, releases, backups] = await Promise.all([
     client.from("dev_center_workers").select("*").order("code"),
     client.from("dev_center_tasks").select("*").order("priority", { ascending: false }).order("created_at"),
     client.from("dev_center_task_dependencies").select("*"),
     client.from("dev_center_worker_sessions").select("*").order("opened_at", { ascending: false }),
     client.from("dev_center_scope_locks").select("*").eq("status", "active").order("acquired_at", { ascending: false }),
+    client.from("dev_center_worktree_leases").select("*").eq("status", "active").order("acquired_at", { ascending: false }),
+    client.from("dev_center_conflicts").select("*").order("created_at", { ascending: false }).limit(100),
     client.from("dev_center_environments").select("*").order("code"),
     client.from("dev_center_repositories").select("*").order("name"),
     client.from("dev_center_build_runs").select("*").order("created_at", { ascending: false }).limit(100),
     client.from("dev_center_releases").select("*").order("created_at", { ascending: false }).limit(100),
     client.from("dev_center_backup_runs").select("*").order("started_at", { ascending: false }).limit(100),
   ]);
-  for (const result of [workers, tasks, dependencies, sessions, locks, environments, repositories, builds, releases, backups]) {
+  for (const result of [workers, tasks, dependencies, sessions, locks, worktreeLeases, conflicts, environments, repositories, builds, releases, backups]) {
     if (result.error) databaseError("A BENJADMIN engine állapot betöltése sikertelen.", result.error);
   }
   return {
     workers: (workers.data || []).map((row) => mapWorker(row as JsonRecord)),
     tasks: (tasks.data || []).map((row) => mapTask(row as JsonRecord)),
     dependencies: dependencies.data || [], sessions: (sessions.data || []).map((row) => mapSession(row as JsonRecord)),
-    locks: locks.data || [], environments: environments.data || [], repositories: repositories.data || [],
+    locks: locks.data || [], worktreeLeases: worktreeLeases.data || [], conflicts: conflicts.data || [], environments: environments.data || [], repositories: repositories.data || [],
     builds: builds.data || [], releases: releases.data || [], backups: backups.data || [], updatedAt: nowIso(),
   };
 }
@@ -163,7 +166,7 @@ export async function openDevEngineSession(input: Record<string, unknown>) {
   const id = text(input.id) || `dev-session-${randomUUID().slice(0, 12)}`;
   const now = nowIso();
   const row = { id, coordinator: "BenAI", opened_by: text(input.openedBy, "BenjAdmin"), environment_id: text(input.environmentId, "env_dev"),
-    status: "open", handshake_stage: "SESSION_OPEN", note: text(input.note) || null, metadata: jsonRecord(input.metadata), last_heartbeat_at: now, updated_at: now };
+    status: "open", handshake_stage: "SESSION_OPEN", note: text(input.note) || null, metadata: jsonRecord(input.metadata), last_heartbeat_at: now, lease_expires_at: leaseIso(), updated_at: now };
   const { data, error } = await client.from("dev_center_worker_sessions").insert(row).select("*").single();
   if (error) databaseError("A BENJADMIN worker session megnyitása sikertelen.", error, 400);
   await addSessionEvent(client, id, "SESSION_OPEN", "SESSION_OPENED", "Session megnyitva; fejlesztési művelet még nem engedélyezett.");
@@ -183,7 +186,7 @@ async function updateSessionStage(client: SupabaseClient, sessionId: string, exp
   if (current.status === "closed") throw new DevCenterEngineError("A lezárt session nem módosítható.", "DEV_CENTER_SESSION_CLOSED", 409);
   if (current.handshakeStage !== expected) throw new DevCenterEngineError(`Érvénytelen handshake sorrend: ${current.handshakeStage} → ${next}.`, "DEV_CENTER_HANDSHAKE_ORDER", 409);
   const now = nowIso();
-  const { data, error } = await client.from("dev_center_worker_sessions").update({ ...patch, handshake_stage: next, updated_at: now, last_heartbeat_at: now }).eq("id", sessionId).select("*").single();
+  const { data, error } = await client.from("dev_center_worker_sessions").update({ ...patch, handshake_stage: next, updated_at: now, last_heartbeat_at: now, lease_expires_at: leaseIso() }).eq("id", sessionId).select("*").single();
   if (error) databaseError("A worker session handshake frissítése sikertelen.", error, 409);
   await addSessionEvent(client, sessionId, next, eventType, summary, patch);
   return mapSession(data as JsonRecord);
@@ -309,15 +312,24 @@ export async function assertDevEngineOperation(sessionId: string, operation: Dev
   const client = await requireClient();
   const session = mapSession(await getSessionRow(client, sessionId));
   if (session.status !== "active" || session.handshakeStage !== "READY") throw new DevCenterEngineError("A művelethez READY worker session szükséges.", "DEV_CENTER_SESSION_NOT_READY", 403);
+  if (session.leaseExpiresAt && Date.parse(session.leaseExpiresAt) <= Date.now()) throw new DevCenterEngineError("A worker session lease lejárt; heartbeat vagy recovery szükséges.", "DEV_CENTER_SESSION_LEASE_EXPIRED", 403, { leaseExpiresAt: session.leaseExpiresAt });
   if (!session.environmentId) throw new DevCenterEngineError("A sessionhöz nincs környezet rendelve.", "DEV_CENTER_ENVIRONMENT_MISSING", 403);
   const { data: environment, error } = await client.from("dev_center_environments").select("id,code,kind,status,read_only").eq("id", session.environmentId).maybeSingle();
   if (error) databaseError("A környezet ellenőrzése sikertelen.", error);
   if (!environment || environment.status !== "online") throw new DevCenterEngineError("A célkörnyezet nem online.", "DEV_CENTER_ENVIRONMENT_OFFLINE", 403);
   if (environment.read_only && ["write", "migration", "restart", "deploy"].includes(operation)) throw new DevCenterEngineError("A célkörnyezet read-only; a művelet tiltott.", "DEV_CENTER_ENVIRONMENT_READ_ONLY", 403, { environment: environment.code, operation });
-  const { data: locks, error: lockError } = await client.from("dev_center_scope_locks").select("id").eq("session_id", sessionId).eq("status", "active");
-  if (lockError) databaseError("A session lockjainak ellenőrzése sikertelen.", lockError);
-  if (!(locks || []).length) throw new DevCenterEngineError("A sessionhöz nincs aktív scope lock.", "DEV_CENTER_SCOPE_LOCK_REQUIRED", 403);
-  return { ok: true as const, session, environment, operation, activeLockCount: locks?.length || 0 };
+  const [locksResult, worktreeResult] = await Promise.all([
+    client.from("dev_center_scope_locks").select("id,expires_at").eq("session_id", sessionId).eq("status", "active"),
+    client.from("dev_center_worktree_leases").select("id,lease_expires_at").eq("session_id", sessionId).eq("status", "active"),
+  ]);
+  if (locksResult.error) databaseError("A session lockjainak ellenőrzése sikertelen.", locksResult.error);
+  if (worktreeResult.error) databaseError("A worktree lease ellenőrzése sikertelen.", worktreeResult.error);
+  const now = Date.now();
+  const locks = (locksResult.data || []).filter((item) => !item.expires_at || Date.parse(item.expires_at) > now);
+  const worktreeLeases = (worktreeResult.data || []).filter((item) => item.lease_expires_at && Date.parse(item.lease_expires_at) > now);
+  if (!locks.length) throw new DevCenterEngineError("A sessionhöz nincs érvényes scope lock.", "DEV_CENTER_SCOPE_LOCK_REQUIRED", 403);
+  if (!worktreeLeases.length) throw new DevCenterEngineError("A sessionhöz nincs érvényes worktree lease.", "DEV_CENTER_WORKTREE_LEASE_REQUIRED", 403);
+  return { ok: true as const, session, environment, operation, activeLockCount: locks.length, activeWorktreeLeaseCount: worktreeLeases.length };
 }
 
 export async function getDevCenterEngineGate(): Promise<DevEngineGateStatus> {
@@ -333,5 +345,9 @@ export async function getDevCenterEngineGate(): Promise<DevEngineGateStatus> {
   if (requiredWorkers.length < 3) blockers.push("A három kötelező worker nincs regisztrálva.");
   if (readyWorkerCodes.filter((code) => (DEV_CENTER_ENGINE_REQUIRED_WORKERS as readonly string[]).includes(code)).length < 3) blockers.push("Nincs három READY worker session.");
   if (actionable < 1) blockers.push("A task queue üres.");
-  return { ready: blockers.length === 0, schemaReady: true, workers: { total: requiredWorkers.length, required: 3, readyCodes: requiredWorkers.map((worker) => worker.code) }, sessions: { ready: readySessions.length, required: 3, readyWorkerCodes }, queue: { total: state.tasks.length, actionable, required: 1 }, locks: { active: state.locks.length }, blockers };
+  const now = Date.now();
+  const openConflicts = state.conflicts.filter((item) => item.status === "open").length;
+  const activeWorktreeLeases = state.worktreeLeases.filter((item) => item.status === "active" && Date.parse(String(item.lease_expires_at || "")) > now).length;
+  const expiringSessions = state.sessions.filter((session) => session.status !== "closed" && session.leaseExpiresAt && Date.parse(session.leaseExpiresAt) <= now + 120000).length;
+  return { ready: blockers.length === 0, schemaReady: true, workers: { total: requiredWorkers.length, required: 3, readyCodes: requiredWorkers.map((worker) => worker.code) }, sessions: { ready: readySessions.length, required: 3, readyWorkerCodes }, queue: { total: state.tasks.length, actionable, required: 1 }, locks: { active: state.locks.length }, orchestration: { activeWorktreeLeases, openConflicts, expiringSessions }, blockers };
 }
