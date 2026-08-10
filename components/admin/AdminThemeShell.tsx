@@ -4,30 +4,27 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Bell,
-  Boxes,
   Code2,
   GitBranch,
   History,
   KeyRound,
   LayoutDashboard,
-  LogOut,
   Menu,
   Moon,
-  Network,
   PanelLeftClose,
   ServerCog,
   ShieldCheck,
   Sun,
-  X,
 } from "lucide-react";
 import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
 import BenjadminBrandScreen from "./BenjadminBrandScreen";
+import BenjadminExplorerPanel from "./BenjadminExplorerPanel";
 
 type AdminTheme = "light" | "dark";
 type AccessState = "checking" | "guest" | "authorized";
 
 const STORAGE_KEY = "dimpro-admin-theme";
+const BOARD_PIN_STORAGE_KEY = "dimpro-benjadmin-board-pinned";
 const ADMIN_AUTH_EVENT = "dimpro-admin-auth-changed";
 
 const navigationItems = [
@@ -39,11 +36,6 @@ const navigationItems = [
   { id: "audit", label: "Audit", href: "/admin/dimpro-belepesek", icon: History, note: "Belépési és biztonsági események" },
 ] as const;
 
-const utilityLinks = [
-  { label: "Rendszerstruktúra", href: "/admin/dev/rendszerstruktura", icon: Network },
-  { label: "Release feltöltő", href: "/admin/releases", icon: Boxes },
-  { label: "Értesítések", href: "/admin/dev#ertesitesek", icon: Bell },
-] as const;
 
 function matchesPath(pathname: string, href: string) {
   if (href === "/admin") return pathname === "/admin";
@@ -57,6 +49,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   const [themeReady, setThemeReady] = useState(false);
   const [accessState, setAccessState] = useState<AccessState>("checking");
   const [boardOpen, setBoardOpen] = useState(false);
+  const [boardPinned, setBoardPinned] = useState(false);
   const [privacyCover, setPrivacyCover] = useState(false);
 
   const activeItem = useMemo(
@@ -93,7 +86,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
+    const storedBoardPinned = window.localStorage.getItem(BOARD_PIN_STORAGE_KEY) === "true";
     setTheme(stored === "light" ? "light" : "dark");
+    setBoardPinned(storedBoardPinned);
+    setBoardOpen(storedBoardPinned);
     setThemeReady(true);
     void verifyStoredAdminKey();
 
@@ -112,9 +108,11 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!themeReady) return;
     window.localStorage.setItem(STORAGE_KEY, theme);
+    window.localStorage.setItem(BOARD_PIN_STORAGE_KEY, String(boardPinned));
     document.documentElement.dataset.adminTheme = theme;
     document.documentElement.style.colorScheme = theme;
-  }, [themeReady, theme]);
+    if (boardPinned) setBoardOpen(true);
+  }, [boardPinned, themeReady, theme]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -143,27 +141,18 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       event.preventDefault();
       if (privacyCover) void restoreFromPrivacyCover();
       else {
-        setBoardOpen(false);
+        if (!boardPinned) setBoardOpen(false);
         setPrivacyCover(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [accessState, privacyCover, restoreFromPrivacyCover]);
+  }, [accessState, boardPinned, privacyCover, restoreFromPrivacyCover]);
 
   useEffect(() => {
     if (accessState === "guest" && pathname !== "/admin") router.replace("/admin");
   }, [accessState, pathname, router]);
 
-  function logout() {
-    window.localStorage.removeItem("dimproLicenseAdminKey");
-    window.sessionStorage.removeItem("dimproBenjadminSession");
-    window.dispatchEvent(new Event(ADMIN_AUTH_EVENT));
-    setAccessState("guest");
-    setBoardOpen(false);
-    setPrivacyCover(false);
-    router.replace("/admin");
-  }
 
   if (accessState === "checking") {
     return <BenjadminBrandScreen mode="entry" />;
@@ -178,7 +167,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className={`dimpro-admin-shell admin-theme-${theme} benjadmin-shell`} data-theme={theme}>
+    <div className={`dimpro-admin-shell admin-theme-${theme} benjadmin-shell ${boardPinned && boardOpen ? "is-board-pinned" : ""}`} data-theme={theme}>
       <aside className="benjadmin-rail" aria-label="BENJADMIN fő navigáció">
         <div className="benjadmin-rail__top">
           <Link href="/admin" className="benjadmin-rail__brand" aria-label="BENJADMIN áttekintés" title="BENJADMIN">
@@ -208,7 +197,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
                 aria-label={item.label}
                 title={item.label}
                 aria-current={active ? "page" : undefined}
-                onClick={() => setBoardOpen(false)}
+                onClick={() => { if (!boardPinned) setBoardOpen(false); }}
               >
                 <Icon size={20} />
               </Link>
@@ -240,62 +229,23 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
 
       <aside
         id="benjadmin-floating-board"
-        className={`benjadmin-floating-board ${boardOpen ? "is-open" : ""}`}
+        className={`benjadmin-floating-board benjadmin-explorer-board ${boardOpen ? "is-open" : ""} ${boardPinned ? "is-pinned" : ""}`}
         aria-hidden={!boardOpen}
       >
-        <div className="benjadmin-floating-board__header">
-          <div>
-            <p>DIMPRO</p>
-            <h2>BENJADMIN</h2>
-            <span>AI Fejlesztési és Üzemeltetési Központ</span>
-          </div>
-          <button type="button" className="benjadmin-board-close" onClick={() => setBoardOpen(false)} aria-label="Navigáció bezárása">
-            <X size={18} />
-          </button>
-        </div>
-
-        <nav className="benjadmin-board-nav" aria-label="BENJADMIN részletes navigáció">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const active = matchesPath(pathname, item.href);
-            return (
-              <Link key={item.id} href={item.href} className={`benjadmin-board-link ${active ? "is-active" : ""}`} onClick={() => setBoardOpen(false)}>
-                <span className="benjadmin-board-link__icon"><Icon size={19} /></span>
-                <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.note}</small>
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="benjadmin-board-section">
-          <p className="benjadmin-board-section__label">Gyors elérés</p>
-          {utilityLinks.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.href} href={item.href} className="benjadmin-board-utility" onClick={() => setBoardOpen(false)}>
-                <Icon size={17} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="benjadmin-board-section benjadmin-board-ai">
-          <p className="benjadmin-board-section__label">Belső AI struktúra</p>
-          <strong>BenjAdmin → BenAI</strong>
-          <span>ÁrminAI · JázminAI · OutminAI</span>
-        </div>
-
-        <div className="benjadmin-board-actions">
-          <button type="button" onClick={() => setPrivacyCover(true)}><ShieldCheck size={17} /> Takaróképernyő</button>
-          <button type="button" onClick={logout}><LogOut size={17} /> Kijelentkezés</button>
-        </div>
+        <BenjadminExplorerPanel
+          pinned={boardPinned}
+          onPinnedChange={(value) => {
+            setBoardPinned(value);
+            if (value) setBoardOpen(true);
+          }}
+          onClose={() => setBoardOpen(false)}
+          onNavigate={() => {
+            if (!boardPinned) setBoardOpen(false);
+          }}
+        />
       </aside>
 
-      {boardOpen ? <button type="button" className="benjadmin-board-backdrop" aria-label="Navigáció bezárása" onClick={() => setBoardOpen(false)} /> : null}
+      {boardOpen && !boardPinned ? <button type="button" className="benjadmin-board-backdrop" aria-label="Explorer bezárása" onClick={() => setBoardOpen(false)} /> : null}
 
       <div className="benjadmin-workspace">
         <header className="benjadmin-shell-topbar">
@@ -304,6 +254,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
             <strong>{activeItem.label}</strong>
           </div>
           <div className="benjadmin-shell-topbar__actions">
+            <span className="benjadmin-canonical-badge">CANONICAL</span>
             <span className="benjadmin-environment-badge">DEV</span>
             <button type="button" onClick={() => setPrivacyCover(true)} title="Takaróképernyő: Ctrl+Alt+Space" aria-label="Takaróképernyő">
               <ShieldCheck size={18} />

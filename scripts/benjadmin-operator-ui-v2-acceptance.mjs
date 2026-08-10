@@ -27,68 +27,100 @@ try {
     localStorage.setItem("dimproLicenseAdminKey", adminKey);
     sessionStorage.setItem("dimproBenjadminSession", "active");
     localStorage.setItem("dimpro-admin-theme", "dark");
+    localStorage.setItem("dimpro-benjadmin-board-pinned", "false");
   }, key);
 
   async function openAt(width, height) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.goto(base, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForSelector(".operator-console", { timeout: 30000 });
-    await page.waitForFunction(() => document.querySelectorAll(".operator-pulse-card").length >= 6, { timeout: 30000 });
-    await page.waitForFunction(() => document.querySelectorAll(".operator-worker-card").length >= 3, { timeout: 30000 });
+    await page.waitForSelector(".operator-console.operator-compact", { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelectorAll(".operator-compact-stats > div").length === 6, { timeout: 30000 });
+    await page.waitForSelector(".operator-data-table", { timeout: 30000 });
+  }
+
+  async function clickTab(label) {
+    await page.$$eval(".operator-view-tabs button", (buttons, target) => {
+      const button = buttons.find((item) => (item.textContent || "").trim().includes(String(target)));
+      if (!button) throw new Error(`Tab not found: ${target}`);
+      button.click();
+    }, label);
+    await page.waitForFunction((target) => Array.from(document.querySelectorAll(".operator-view-tabs button")).some((item) => item.classList.contains("is-active") && (item.textContent || "").includes(String(target))), {}, label);
   }
 
   await openAt(1440, 900);
-  check("desktop operator console visible", await page.$(".operator-console") !== null);
-  check("desktop title rendered", (await page.$eval(".operator-command-header h1", (el) => el.textContent || "")).includes("parancsnoki"));
-  check("six pulse cards rendered", await page.$$eval(".operator-pulse-card", (items) => items.length) === 6);
-  check("three worker cards rendered", await page.$$eval(".operator-worker-card", (items) => items.length) >= 3);
-  check("environment cards rendered", await page.$$eval(".operator-environment-card", (items) => items.length) >= 3);
-  check("quick tools rendered", await page.$$eval(".operator-quick-grid > *", (items) => items.length) >= 6);
-  check("dark operator theme active", await page.$eval(".dimpro-admin-shell", (el) => el.classList.contains("admin-theme-dark")));
+  check("desktop compact operator visible", await page.$(".operator-console.operator-compact") !== null);
+  check("six compact status cells", await page.$$eval(".operator-compact-stats > div", (items) => items.length) === 6);
+  check("table stage visible", await page.$(".operator-table-stage") !== null);
+  check("dark mode active", await page.$eval(".dimpro-admin-shell", (el) => el.classList.contains("admin-theme-dark")));
 
-  const before = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
+  const desktopScroll = await page.evaluate(() => ({ scrollHeight: document.documentElement.scrollHeight, innerHeight: window.innerHeight }));
+  check("desktop main page avoids vertical scrolling", desktopScroll.scrollHeight <= desktopScroll.innerHeight + 2, JSON.stringify(desktopScroll));
+
+  const beforeFloat = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
   await page.click(".benjadmin-rail__top .benjadmin-rail__button");
-  await page.waitForFunction(() => document.querySelector(".benjadmin-floating-board")?.classList.contains("is-open"));
-  const boardVisible = await page.$eval(".benjadmin-floating-board", (el) => {
-    const style = getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    return style.visibility === "visible" && rect.width > 300;
-  });
-  check("floating board opens", boardVisible);
-  const after = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
-  check("floating board does not resize workspace", Math.abs(before.width - after.width) < 1 && Math.abs(before.left - after.left) < 1, `before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
-  await page.click(".benjadmin-board-backdrop");
+  await page.waitForFunction(() => { const el = document.querySelector(".benjadmin-floating-board"); return Boolean(el?.classList.contains("is-open") && getComputedStyle(el).visibility === "visible" && Number(getComputedStyle(el).opacity) > 0.9); });
+  check("Explorer floating mode opens", await page.$eval(".benjadmin-floating-board", (el) => getComputedStyle(el).visibility === "visible"));
+  check("Explorer has Fa Modulok Fájlok views", await page.$$eval(".benjadmin-explorer-switcher button", (items) => items.map((item) => (item.textContent || "").trim()).join("|") === "Fa|Modulok|Fájlok"));
+  const afterFloat = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
+  check("floating Explorer does not resize workspace", Math.abs(beforeFloat.width - afterFloat.width) < 1 && Math.abs(beforeFloat.left - afterFloat.left) < 1, `before=${JSON.stringify(beforeFloat)} after=${JSON.stringify(afterFloat)}`);
 
-  await openAt(1024, 768);
-  const tabletLayout = await page.evaluate(() => ({
-    mainColumns: getComputedStyle(document.querySelector(".operator-layout-main")).gridTemplateColumns,
-    pulseColumns: getComputedStyle(document.querySelector(".operator-pulse-grid")).gridTemplateColumns.split(" ").length,
-    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  }));
-  check("tablet main layout collapses", tabletLayout.mainColumns.split(" ").length === 1, tabletLayout.mainColumns);
-  check("tablet has no horizontal overflow", tabletLayout.overflow <= 1, `overflow=${tabletLayout.overflow}`);
+  await page.$$eval(".benjadmin-explorer-switcher button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Fájlok"))?.click());
+  await page.waitForSelector(".benjadmin-file-view");
+  check("file-manager view renders", await page.$$eval(".benjadmin-file-row", (items) => items.length) >= 8);
+  await page.$$eval(".benjadmin-explorer-switcher button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Fa"))?.click());
+  await page.waitForSelector(".benjadmin-tree-view");
+  check("tree view renders", await page.$$eval(".benjadmin-tree-row", (items) => items.length) >= 6);
 
+  await page.click(".benjadmin-board-pin");
+  await page.waitForFunction(() => document.querySelector(".benjadmin-shell")?.classList.contains("is-board-pinned"));
+  await page.waitForFunction(() => document.querySelector(".benjadmin-workspace")?.getBoundingClientRect().left > 300);
+  const pinned = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
+  check("pinned Explorer docks beside rail", pinned.left > beforeFloat.left + 250 && pinned.width < beforeFloat.width - 250, `before=${JSON.stringify(beforeFloat)} pinned=${JSON.stringify(pinned)}`);
+  check("pinned state persisted", await page.evaluate(() => localStorage.getItem("dimpro-benjadmin-board-pinned") === "true"));
+
+  await page.click(".benjadmin-board-close");
+  await page.waitForFunction(() => !document.querySelector(".benjadmin-floating-board")?.classList.contains("is-open"));
+  await page.waitForFunction(() => { const rect = document.querySelector(".benjadmin-workspace")?.getBoundingClientRect(); return Boolean(rect && rect.left < 73 && rect.width > 1367); });
+  const hidden = await page.$eval(".benjadmin-workspace", (el) => ({ width: el.getBoundingClientRect().width, left: el.getBoundingClientRect().left }));
+  check("Explorer can be hidden even when pin preference exists", Math.abs(hidden.width - beforeFloat.width) < 1 && Math.abs(hidden.left - beforeFloat.left) < 1);
+
+  const themeButton = ".benjadmin-rail__bottom .benjadmin-rail__button:last-child";
+  await page.click(themeButton);
+  await page.waitForFunction(() => document.querySelector(".dimpro-admin-shell")?.classList.contains("admin-theme-light"));
+  check("light mode works", await page.$eval(".dimpro-admin-shell", (el) => el.classList.contains("admin-theme-light")));
+  check("table remains visible in light mode", await page.$(".operator-data-table") !== null);
+  await page.click(themeButton);
+  await page.waitForFunction(() => document.querySelector(".dimpro-admin-shell")?.classList.contains("admin-theme-dark"));
+  check("dark mode restores", await page.$eval(".dimpro-admin-shell", (el) => el.classList.contains("admin-theme-dark")));
+
+  await clickTab("Csapat");
+  await page.waitForFunction(() => (document.querySelector(".operator-table-title")?.textContent || "").includes("BENJADMIN CSAPAT"));
+  const teamText = await page.$eval(".operator-table-card", (el) => el.textContent || "");
+  check("B3 five-member team visible", ["BenjAdmin", "BenAI", "ÁrminAI", "JázminAI", "OutminAI"].every((name) => teamText.includes(name)));
+  check("three coding slots stated", teamText.includes("3 kódolói slot"));
+  check("OutminAI external role visible", teamText.includes("KÜLSŐ KÓDMÉRNÖK"));
+
+  await clickTab("Taskok");
+  const firstTaskPage = await page.$eval(".operator-pagination", (el) => el.textContent || "");
+  check("task table is paginated", firstTaskPage.includes("15 rekord") && firstTaskPage.includes("1/2. oldal"), firstTaskPage.trim());
+  await page.$$eval(".operator-pagination button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Következő"))?.click());
+  await page.waitForFunction(() => (document.querySelector(".operator-pagination")?.textContent || "").includes("2/2. oldal"));
+  const secondPageRows = await page.$$eval(".operator-data-table tbody tr", (rows) => rows.length);
+  check("task pagination second page row count", secondPageRows === 7, "rows=" + secondPageRows);
+
+  await clickTab("Környezetek");
+  check("DEV STAGING PROD table visible", await page.evaluate(() => ["DEV", "STAGING", "PRODUCTION"].every((value) => (document.body.textContent || "").includes(value))));
+
+  await page.evaluate(() => localStorage.setItem("dimpro-benjadmin-board-pinned", "false"));
   await openAt(768, 1024);
-  const mobileRail = await page.$eval(".benjadmin-rail", (el) => {
-    const style = getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    return { width: rect.width, height: rect.height, bottom: style.bottom, top: style.top };
-  });
-  check("mobile/tablet rail becomes bottom bar", mobileRail.width > 700 && mobileRail.height <= 70, JSON.stringify(mobileRail));
-  const mobileWorkspace = await page.$eval(".benjadmin-workspace", (el) => ({ marginLeft: getComputedStyle(el).marginLeft, width: el.getBoundingClientRect().width }));
-  check("mobile workspace no left rail offset", mobileWorkspace.marginLeft === "0px", JSON.stringify(mobileWorkspace));
-  check("mobile has no horizontal overflow", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
+  const mobileRail = await page.$eval(".benjadmin-rail", (el) => ({ width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height, bottom: getComputedStyle(el).bottom }));
+  check("tablet rail becomes bottom bar", mobileRail.width > 700 && mobileRail.height <= 70 && mobileRail.bottom === "0px", JSON.stringify(mobileRail));
+  check("tablet no horizontal page overflow", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
 
   await openAt(390, 844);
-  check("phone pulse cards single column", await page.$eval(".operator-pulse-grid", (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length === 1));
-  check("phone quick tools single column", await page.$eval(".operator-quick-grid", (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length === 1));
-  check("phone has no horizontal overflow", await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
-
-  const text = await page.$eval(".operator-console", (el) => el.textContent || "");
-  check("BenAI hierarchy visible", text.includes("BenAI") && text.includes("ÁrminAI") && text.includes("JázminAI") && text.includes("OutminAI"));
-  check("task queue visible", text.includes("TASK QUEUE"));
-  check("worktree protection visible", text.includes("WORKTREE / SCOPE"));
-  check("environment section visible", text.includes("KÖRNYEZETEK"));
+  const phoneOverflow = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, offenders: Array.from(document.querySelectorAll("body *")).map((el) => ({ tag: el.tagName, cls: el.className, left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right, width: el.getBoundingClientRect().width })).filter((item) => item.right > document.documentElement.clientWidth + 1 || item.left < -1).sort((a, b) => b.right - a.right).slice(0, 8) }));
+  check("phone no horizontal page overflow", phoneOverflow.scrollWidth <= phoneOverflow.clientWidth + 1, JSON.stringify(phoneOverflow));
+  check("phone stats use two columns", await page.$eval(".operator-compact-stats", (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length === 2));
 
   const failed = checks.filter((item) => !item.ok);
   console.log(JSON.stringify({ ok: failed.length === 0, passed: checks.length - failed.length, failed: failed.length, checks }, null, 2));
