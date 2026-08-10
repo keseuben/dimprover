@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/app/lib/supabase/client";
-import DevPortfolioOverview from "@/components/admin/DevPortfolioOverview";
+import BenjadminOperatorConsole from "@/components/admin/BenjadminOperatorConsole";
 import BenjadminBrandScreen from "@/components/admin/BenjadminBrandScreen";
 import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-center/types";
 
@@ -574,67 +574,13 @@ function AdminEntrySelector({
   devWorkSessions: DevWorkSession[];
 }) {
   return (
-    <section id="admin-entry-selector" className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center gap-6">
-      <div className="rounded-[2rem] border border-lime-300/25 bg-slate-950/85 p-7 shadow-[0_0_90px_rgba(163,230,53,0.08)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-lime-300/75">DIMPRO admin belépési felületek</p>
-        <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-[-0.045em] text-white md:text-5xl">
-          Válaszd ki, melyik admin munkafelületet nyitod meg
-        </h1>
-        <p className="mt-5 max-w-4xl text-sm leading-7 text-slate-300">
-          A belépés sikeres. Innen indulhat a szoftverfejlesztői kezdőlap vagy a klasszikus DIMPRO licencadmin dashboard.
-        </p>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-        <a href="/admin/dev" className="group rounded-[2rem] border border-lime-300/30 bg-lime-300/10 p-6 shadow-[0_0_50px_rgba(163,230,53,0.08)] transition hover:bg-lime-300/15">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-lime-200/80">Szoftverfejlesztés</p>
-          <h2 className="mt-3 text-3xl font-black text-white">DIMPRO szoftverfejlesztő kezdőlap</h2>
-          <p className="mt-3 text-sm leading-7 text-lime-50/80">
-            A fejlesztéshez készített linkek: Fájlműhely release, Drive API/token, szerverállapot, verzióoldal és fejlesztési munkafolyamat.
-          </p>
-          <div className="mt-5 rounded-2xl border border-lime-300/30 bg-slate-950/50 px-4 py-3 text-sm font-bold text-lime-100">Fejlesztői kezdőlap megnyitása →</div>
-        </a>
-
-        <button type="button" onClick={onOpenLicense} className="group rounded-[2rem] border border-cyan-300/30 bg-cyan-300/10 p-6 text-left shadow-[0_0_50px_rgba(34,211,238,0.08)] transition hover:bg-cyan-300/15">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200/80">Licencadmin</p>
-          <h2 className="mt-3 text-3xl font-black text-white">DIMPRO licencadmin</h2>
-          <p className="mt-3 text-sm leading-7 text-cyan-50/80">
-            Licencelés, gépaktiválás és előfizetés-kezelés. Licencek, gépek, moduljogosultságok, audit napló és ügyféladatok.
-          </p>
-          <div className="mt-5 rounded-2xl border border-cyan-300/30 bg-slate-950/50 px-4 py-3 text-sm font-bold text-cyan-100">Licencadmin dashboard megnyitása →</div>
-        </button>
-
-        <a href="/drive/drop" className="dimpro-drop-launcher-card group rounded-[2rem] border p-6 transition">
-          <p className="dimpro-drop-launcher-card__eyebrow text-xs font-semibold uppercase tracking-[0.25em]">DIMPRO Drop</p>
-          <h2 className="dimpro-drop-launcher-card__title mt-3 text-3xl font-black">Drop hozzáférési tér</h2>
-          <p className="dimpro-drop-launcher-card__description mt-3 text-sm font-medium leading-7">
-            Projektalapú hozzáférések, meghívott tagok és a téren belül létrehozott kép-, fájl- és dokumentumcsomagok kezelése.
-          </p>
-          <div className="dimpro-drop-launcher-card__button mt-5 rounded-2xl border px-4 py-3 text-sm font-bold shadow-sm">Drop csomagkezelő megnyitása →</div>
-        </a>
-      </div>
-
-
-      <section className="dev-license-portfolio-shell">
-        <DevPortfolioOverview
-          projects={devProjects}
-          versions={devVersions}
-          workSessions={devWorkSessions}
-          compact
-        />
-      </section>
-
-      <div className="flex flex-wrap gap-3">
-        <a href="/admin/releases" className="rounded-xl border border-emerald-300/40 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-300/10">Release feltöltő</a>
-        <a href="/admin/drive" className="rounded-xl border border-sky-300/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-300/10">Drive API admin</a>
-        <a href="/admin/szerver" className="rounded-xl border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/10">Szerverállapot</a>
-              <a href="/admin/dimpro-belepesek" className="rounded-xl border border-teal-300/40 px-4 py-2 text-sm font-semibold text-teal-100 hover:bg-teal-300/10">DIMPRO belépési napló</a>
-              <a href="/admin/email" className="rounded-xl border border-sky-300/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-300/10">E-mail beállítások</a>
-        <a href="/admin/release-kozpont" className="rounded-xl border border-amber-300/40 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-300/10">Release Központ</a>
-        <a href="/admin/fejlesztesi-naplo" className="rounded-xl border border-lime-300/40 px-4 py-2 text-sm font-semibold text-lime-100 hover:bg-lime-300/10">Fejlesztési napló</a>
-        <button type="button" onClick={onLogout} className="rounded-xl border border-slate-500/60 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-400/10">Admin kilépés</button>
-      </div>
-    </section>
+    <BenjadminOperatorConsole
+      onOpenLicense={onOpenLicense}
+      onLogout={onLogout}
+      devProjects={devProjects}
+      devVersions={devVersions}
+      devWorkSessions={devWorkSessions}
+    />
   );
 }
 
@@ -1088,7 +1034,7 @@ export default function LicenseAdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8">
+    <main className={store && adminEntryView === "launcher" ? "benjadmin-admin-root" : "min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8"}>
       {!store ? (
         <section className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="rounded-[2rem] border border-cyan-400/20 bg-slate-950/80 p-8 shadow-[0_0_80px_rgba(34,211,238,0.10)]">

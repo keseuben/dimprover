@@ -53,7 +53,7 @@ function matchesPath(pathname: string, href: string) {
 export default function AdminThemeShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [theme, setTheme] = useState<AdminTheme>("light");
+  const [theme, setTheme] = useState<AdminTheme>("dark");
   const [themeReady, setThemeReady] = useState(false);
   const [accessState, setAccessState] = useState<AccessState>("checking");
   const [boardOpen, setBoardOpen] = useState(false);
@@ -93,7 +93,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    setTheme(stored === "dark" ? "dark" : "light");
+    setTheme(stored === "light" ? "light" : "dark");
     setThemeReady(true);
     void verifyStoredAdminKey();
 

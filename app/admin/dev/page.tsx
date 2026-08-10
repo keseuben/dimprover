@@ -491,12 +491,12 @@ export default function DeveloperCenterPage() {
   return (
     <main className="dev-center-page">
       <section className="dev-center-container">
-        <header className="dev-hero" id="attekintes">
+        <header className="dev-hero operator-dev-hero" id="attekintes">
           <div>
-            <p className="dev-kicker">DIMPRO belső fejlesztési vezérlőpult</p>
+            <p className="dev-kicker">BENJADMIN · FEJLESZTÉSI VEZÉRLÉS</p>
             <h1>Fejlesztési Központ</h1>
             <p className="dev-hero-copy">
-              Projektek, verziók, fejlesztési állapotok, kiadási linkek és értesítések egyetlen áttekinthető munkafelületen.
+              A részletes projekt-, verzió- és időnyilvántartás az Operator UI mögött: fejlesztési körök, engine állapot, tesztek és kiadási kapuk egy helyen.
             </p>
           </div>
           <div className="dev-hero-actions">
