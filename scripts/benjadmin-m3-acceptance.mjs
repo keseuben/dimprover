@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
-const base = "http://127.0.0.1:3301";
+const base = process.env.BENJADMIN_BASE_URL || "http://127.0.0.1:3301";
 const host = "admin.dev.dimpro.hu";
 const key = fs.readFileSync(".dimprover/license/admin-key.txt", "utf8").trim();
 const headers = { host, "x-dimpro-license-admin-key": key, "content-type": "application/json" };
