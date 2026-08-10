@@ -221,3 +221,7 @@ A teszt igazolta az új user invite → accept, aktív member onboarding → acc
 - candidate runtime leállítva, candidate build törölve
 
 A `license.dimpro.hu/drive/drop/public-workflows` felületen most a központi felhasználó létrehozása helyett valódi szervezeti meghívási/onboarding folyamat érhető el. Új HAGE-felhasználó e-mailben meghívható; meglévő, auth-fiókkal még nem rendelkező HAGE-taghoz onboarding meghívó küldhető a meglévő aktív tagság megtartásával.
+
+## IDENTITY 0.2.2 – Send-kód kézbesítési kiegészítés
+
+A 0.2.1 szervezeti meghívási/onboarding logika változatlanul megmarad. A 0.2.2 alkalmazás-hotfix a Send entitlement létrehozása után automatikusan e-mailben továbbítja a felhasználó saját Send-kódját, és kézbesítési auditot ír. Mivel a teljes kód továbbra sem tárolható visszafejthetően, meglévő entitlementnél az admin csak új kódot generálhat; az `Új kód + e-mail` művelet a korábbi kódot azonnal érvényteleníti. Adatbázis-séma változás nincs; az Identity Core DB marker továbbra is `0.2.0 / migration_count=4`.

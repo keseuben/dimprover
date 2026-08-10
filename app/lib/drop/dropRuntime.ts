@@ -119,7 +119,7 @@ export async function getDropRuntimeHealth() {
   return {
     ok: true as const,
     service: "DIMPRO Drop",
-    version: "DROP 1.2.11",
+    version: "DROP 1.2.12",
     stage: featureState.stage,
     timestamp: new Date().toISOString(),
     publicBaseUrl: process.env.DROP_PUBLIC_BASE_URL || "https://drop.dimpro.hu",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Share2, Smartphone, X } from "lucide-react";
 import DropMobileDock, {
   dropMobileDockAllowed,
   type DropInstallState,
@@ -61,6 +62,8 @@ export default function DropPwaShell({ children }: { children: React.ReactNode }
   const previousOnlineRef = useRef(true);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [showIosInstall, setShowIosInstall] = useState(false);
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
+  const [iosSafari, setIosSafari] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const [wakeSupported, setWakeSupported] = useState(false);
   const [wakeManual, setWakeManual] = useState(false);
@@ -194,6 +197,7 @@ export default function DropPwaShell({ children }: { children: React.ReactNode }
   useEffect(() => {
     const wakeNavigator = navigator as WakeLockNavigator;
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isIosSafari = isIos && /safari/i.test(navigator.userAgent) && !/(crios|fxios|edgios|opios)/i.test(navigator.userAgent);
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean(wakeNavigator.standalone);
     const supported = Boolean(wakeNavigator.wakeLock?.request);
     const storedPreference = window.localStorage.getItem(WAKE_PREFERENCE_KEY);
@@ -203,6 +207,7 @@ export default function DropPwaShell({ children }: { children: React.ReactNode }
     const storedNotifications = window.localStorage.getItem(NOTIFICATION_PREFERENCE_KEY) === "true";
     setStandalone(isStandalone);
     setShowIosInstall(isIos && !isStandalone);
+    setIosSafari(isIosSafari);
     setWakeSupported(supported);
     setWakeManual(defaultManual);
     setWakeStatus(supported ? "idle" : "unsupported");
@@ -276,6 +281,10 @@ export default function DropPwaShell({ children }: { children: React.ReactNode }
   }, [releaseWakeLock, requestWakeLock]);
 
   async function install() {
+    if (showIosInstall && !installPrompt) {
+      setShowIosInstallHelp(true);
+      return;
+    }
     if (!installPrompt) return;
     await installPrompt.prompt();
     const result = await installPrompt.userChoice;
@@ -350,6 +359,25 @@ export default function DropPwaShell({ children }: { children: React.ReactNode }
         {updateAvailable ? <div data-drop-update-banner className="pointer-events-auto flex items-center justify-between gap-3 rounded-2xl border border-cyan-300 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-950 shadow-xl"><span>Új DIMPRO Drop verzió érhető el.</span><button type="button" onClick={applyUpdate} className="rounded-xl bg-cyan-800 px-3 py-2 text-xs font-black text-white">Frissítés</button></div> : null}
       </div>
       <div className={dockAllowed ? "min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0" : undefined}>{children}</div>
+      {showIosInstallHelp ? (
+        <div data-drop-ios-install-guide className="fixed inset-0 z-[190] flex items-end justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-label="DIMPRO Drop telepítése iPhone-ra" onClick={() => setShowIosInstallHelp(false)}>
+          <section className="w-full max-w-md rounded-[1.75rem] border border-cyan-200 bg-white p-5 shadow-[0_28px_90px_rgba(15,23,42,.35)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-800"><Smartphone size={21}/></span><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">iPhone · webalkalmazás</p><h2 className="mt-1 text-xl font-black text-slate-950">DIMPRO Drop telepítése</h2></div></div>
+              <button data-drop-ios-install-close type="button" aria-label="Telepítési útmutató bezárása" onClick={() => setShowIosInstallHelp(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600"><X size={18}/></button>
+            </div>
+            {!iosSafari ? <div data-drop-ios-safari-warning className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-6 text-amber-950"><strong>Először nyissa meg ezt az oldalt Safari böngészőben.</strong> iPhone-on a DIMPRO Drop kezdőképernyős telepítése a Safari megosztási menüjéből végezhető el.</div> : null}
+            <ol className="mt-4 space-y-3 text-sm font-semibold leading-6 text-slate-700">
+              <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan-100 text-xs font-black text-cyan-900">1</span><span>Nyissa meg a <strong>drop.dimpro.hu</strong> oldalt Safari böngészőben.</span></li>
+              <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan-100 text-xs font-black text-cyan-900">2</span><span>Érintse meg a <strong>Megosztás</strong> ikont <Share2 className="mx-1 inline" size={16}/> az alsó vagy felső Safari eszköztáron.</span></li>
+              <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan-100 text-xs font-black text-cyan-900">3</span><span>A menüben válassza a <strong>Főképernyőhöz adás</strong> lehetőséget. Ha nem látszik, görgessen lejjebb a műveletek között.</span></li>
+              <li className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-cyan-100 text-xs font-black text-cyan-900">4</span><span>Ha megjelenik, hagyja bekapcsolva a <strong>Megnyitás webalkalmazásként</strong> opciót, majd érintse meg a <strong>Hozzáadás</strong> gombot.</span></li>
+            </ol>
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-950">Telepítés után a DIMPRO Drop ikon megjelenik az iPhone főképernyőjén. Nem App Store-os alkalmazás, hanem telepített webalkalmazás (PWA).</div>
+            <button type="button" onClick={() => setShowIosInstallHelp(false)} className="mt-4 min-h-11 w-full rounded-xl bg-slate-950 px-4 text-sm font-black text-white">Értem</button>
+          </section>
+        </div>
+      ) : null}
       <DropMobileDock
         wake={wake}
         network={network}

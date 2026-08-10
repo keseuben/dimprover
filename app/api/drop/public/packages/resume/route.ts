@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const rawSession = request.cookies.get(DROP_PUBLIC_SESSION_COOKIE)?.value?.trim() || "";
     if (!rawSession) {
-      return NextResponse.json({ ok: true, version: "DROP 1.2.11", resume: null }, { headers: dropNoStoreHeaders() });
+      return NextResponse.json({ ok: true, version: "DROP 1.2.12", resume: null }, { headers: dropNoStoreHeaders() });
     }
     const expectedWorkflowType = request.nextUrl.searchParams.get("workflowType");
     const expectedGateSlug = request.nextUrl.searchParams.get("gateSlug")?.trim() || undefined;
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       expectedWorkflowType: expectedWorkflowType === "send" || expectedWorkflowType === "submission_gate" ? expectedWorkflowType : undefined,
       expectedGateSlug,
     });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", resume }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", resume }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

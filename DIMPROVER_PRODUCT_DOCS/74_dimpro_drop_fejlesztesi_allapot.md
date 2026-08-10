@@ -1028,3 +1028,11 @@ Validáció: TypeScript PASS; teljes lint **0 error / 108 meglévő warning**; s
 A mobil PWA Menü új alkalmazásadat-kártyát kapott: `DIMPRO Drop · v1.2.11`, utolsó frissítési dátum, `Telepített webalkalmazás (PWA)` megjelölés, `Naprakész / Frissítés elérhető / Ellenőrzés… / Offline` állapot és kézi `Frissítés keresése` gomb. A service worker `DROP 1.2.11`, a cache `dimpro-drop-static-v1211`; a meglévő automatikus update-check és Frissítés folyamat megmaradt. Az aktív Drop API-k release-jelölései is egységesen 1.2.11-re frissültek.
 
 Validáció: PWA contract **19/19**; TypeScript PASS; teljes lint **0 error / 108 meglévő warning**; candidate build PASS / **141 chunk**; candidate browser **41/41**; candidate teljes infrastruktúra E2E végleges újrafuttatás **75/75**; production browser **41/41**; production teljes S3/ClamAV/finalize/SMTP/album/PDF/TXT/ZIP E2E **75/75**; Identity Core **12/12 READY**; Object Storage takarítás **11/11**; tesztmaradvány **0**. Private pilot marad, GA=false.
+
+## DROP 1.2.12 / IDENTITY 0.2.2 – Send-kód e-mail, iPhone HEIC és PWA hotfix – fejlesztés alatt
+
+**Dátum:** 2026-08-10.  
+**Fejlesztési Központ:** `version_1ac59d3a-d29`, `in_progress`.  
+**Részletes dokumentáció:** `127_dimpro_drop_v1212_ios_sendmail_heic_pwa_hotfix.md`.
+
+A hotfix DEV-first módon javítja a Send entitlementhez hiányzó automatikus `Saját DIMPRO Send-kód` levelet és hozzáadja a biztonságos `Új kód + e-mail` rotációt; iPhone HEIC/HEIF konverziós hiba esetén az eredeti fájl feltölthető marad; az iOS PWA telepítési gomb pedig Safari-specifikus, lépésről lépésre telepítési útmutatót nyit. A Drop release- és service-worker verzió 1.2.12, az Identity admin API 0.2.2. Private pilot marad, GA=false.

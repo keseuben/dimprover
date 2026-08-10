@@ -25,7 +25,7 @@ export type DropOperationsStorageAudit = {
 };
 
 export type DropOperationsSnapshot = {
-  version: "DROP 1.2.11";
+  version: "DROP 1.2.12";
   source: "manual" | "worker" | "api";
   collectedAt: string;
   durationMs: number;

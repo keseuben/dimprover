@@ -9,6 +9,6 @@ export async function POST(request: NextRequest, context: Context) {
     const { packageId } = await context.params;
     const rawSession = request.cookies.get(DROP_PUBLIC_SESSION_COOKIE)?.value?.trim() || "";
     const result = await finalizeDropPublicPackage({ rawSession, headers: request.headers, packageId });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", result }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

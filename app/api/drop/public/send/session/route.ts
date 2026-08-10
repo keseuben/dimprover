@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     });
     const response = NextResponse.json({
       ok: true,
-      version: "DROP 1.2.11",
+      version: "DROP 1.2.12",
       session: {
         expiresAt: session.record.expiresAt,
         maxRecipients: context.entitlement.maxRecipients,

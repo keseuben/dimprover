@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   try {
     const grant = await resolveGrant(request);
     const groups = await listDropPackageGroups(grant.packageId);
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", groups }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", groups }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       email: packageRow.uploader_email || null,
       source: "drop-public-uploader",
     });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", ...result }, { status: result.created ? 201 : 200, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { status: result.created ? 201 : 200, headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }
@@ -54,7 +54,7 @@ export async function PATCH(request: NextRequest) {
     const packageRow = await findDropPackageById(grant.packageId);
     if (!packageRow) throw Object.assign(new Error("A Drop csomag nem található."), { code: "DROP_PACKAGE_NOT_FOUND", status: 404 });
     const result = await updateDropPackageGroup(grant.packageId, body, { name: packageRow.uploader_name || "Publikus Drop feladó", email: packageRow.uploader_email || null, source: "drop-public-uploader" });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", ...result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }
 
@@ -65,6 +65,6 @@ export async function DELETE(request: NextRequest) {
     const packageRow = await findDropPackageById(grant.packageId);
     if (!packageRow) throw Object.assign(new Error("A Drop csomag nem található."), { code: "DROP_PACKAGE_NOT_FOUND", status: 404 });
     const removed = await deleteDropPackageGroup(grant.packageId, body, { name: packageRow.uploader_name || "Publikus Drop feladó", email: packageRow.uploader_email || null, source: "drop-public-uploader" });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", removed }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", removed }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

@@ -37,6 +37,6 @@ export async function POST(request: NextRequest) {
       deepStorageAudit: body.deepStorageAudit === true,
       notify: body.notify !== false,
     });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", snapshot }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", snapshot }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

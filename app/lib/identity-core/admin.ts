@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { getDimproIdentitySupabaseClient } from "./repository";
 import {
   hashDimproSendCode,
@@ -418,9 +419,132 @@ export async function createDimproSendEntitlementAdmin(input: Record<string, unk
   }
   return {
     result: resultRow,
+    entitlementId: createdEntitlementId,
+    userId,
+    licenseId,
+    expiresAt: expiresAt.toISOString(),
     rawCode,
     formattedCode: rawCode,
     warning: "A teljes Send-kódot az admin adta meg. Az adatbázis kizárólag HMAC hash-t tárol, a nyers kódot nem.",
+  };
+}
+
+function sendCodePrefix(value: string) {
+  const letters = value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z]/g, "");
+  return (letters || "DIMP").padEnd(4, "X").slice(0, 4);
+}
+
+function generateSendCode(prefix: string) {
+  const digits = randomInt(0, 1_000_000).toString().padStart(6, "0");
+  return `${prefix}-${digits.slice(0, 3)}-${digits.slice(3)}`;
+}
+
+export async function getDimproSendCodeDeliveryContextAdmin(entitlementIdInput: unknown) {
+  const entitlementId = normalizeUuid(entitlementIdInput);
+  if (!entitlementId) throw new DimproIdentityError("A Send entitlement azonosítója hiányzik.", "DIMPRO_SEND_ENTITLEMENT_REQUIRED", 400);
+  const client = getDimproIdentitySupabaseClient();
+  const entitlement = await client.from("dimpro_send_entitlements")
+    .select("id,user_id,license_id,status,expires_at,can_use_standard_send,can_use_quick_image_send,can_use_project_drop")
+    .eq("id", entitlementId)
+    .maybeSingle();
+  if (entitlement.error) dbError("A Send entitlement nem tölthető be.", entitlement.error);
+  if (!entitlement.data) throw new DimproIdentityError("A Send entitlement nem található.", "DIMPRO_SEND_ENTITLEMENT_NOT_FOUND", 404);
+  const row = entitlement.data as DbRow;
+  const userId = normalizeUuid(row.user_id);
+  const licenseId = normalizeUuid(row.license_id);
+  if (!userId || !licenseId) throw new DimproIdentityError("A Send entitlement tulajdonosi adatai hiányosak.", "DIMPRO_SEND_ENTITLEMENT_OWNER_INVALID", 500);
+  const [userResult, licenseResult] = await Promise.all([
+    client.from("dimpro_users").select("id,full_name,email,status,email_verified_at").eq("id", userId).maybeSingle(),
+    client.from("dimpro_licenses").select("id,public_license_code,owner_type,owner_organization_id").eq("id", licenseId).maybeSingle(),
+  ]);
+  if (userResult.error) dbError("A Send felhasználó nem tölthető be.", userResult.error);
+  if (licenseResult.error) dbError("A Send licenc nem tölthető be.", licenseResult.error);
+  const user = userResult.data as DbRow | null;
+  const license = licenseResult.data as DbRow | null;
+  const recipientEmail = email(user?.email);
+  const recipientName = text(user?.full_name, 160);
+  if (!user || !recipientEmail || recipientName.length < 2) throw new DimproIdentityError("A Send felhasználó e-mail adata hiányos.", "DIMPRO_SEND_EMAIL_RECIPIENT_INVALID", 409);
+  let organizationName = "";
+  const organizationId = normalizeUuid(license?.owner_organization_id);
+  if (organizationId) {
+    const organization = await client.from("dimpro_organizations")
+      .select("display_name,legal_name")
+      .eq("id", organizationId)
+      .maybeSingle();
+    if (organization.error) dbError("A Send szervezet neve nem tölthető be.", organization.error);
+    organizationName = text((organization.data as DbRow | null)?.display_name, 180) || text((organization.data as DbRow | null)?.legal_name, 180);
+  }
+  return {
+    entitlementId,
+    userId,
+    licenseId,
+    status: String(row.status || ""),
+    recipientName,
+    recipientEmail,
+    organizationName: organizationName || String(license?.public_license_code || "DIMPRO"),
+    expiresAt: row.expires_at ? String(row.expires_at) : null,
+    canUseStandardSend: row.can_use_standard_send === true,
+    canUseQuickImageSend: row.can_use_quick_image_send === true,
+    canUseProjectDrop: row.can_use_project_drop === true,
+  };
+}
+
+export async function recordDimproSendCodeDeliveryAuditAdmin(input: {
+  entitlementId: string; userId: string; licenseId: string; sent: boolean; messageId?: string; error?: string; trigger: "created" | "rotated";
+}) {
+  const result = await getDimproIdentitySupabaseClient().from("dimpro_access_audit_logs").insert({
+    user_id: input.userId,
+    license_id: input.licenseId,
+    entitlement_id: input.entitlementId,
+    event_type: input.sent ? "send_code_email_sent" : "send_code_email_failed",
+    success: input.sent,
+    metadata: {
+      source: "identity-send-admin",
+      trigger: input.trigger,
+      messageId: input.messageId || null,
+      error: input.error ? input.error.slice(0, 500) : null,
+    },
+  });
+  if (result.error) dbError("A Send-kód e-mail auditnaplója nem írható.", result.error);
+}
+
+export async function rotateDimproSendEntitlementCodeAdmin(input: Record<string, unknown>) {
+  const entitlementId = normalizeUuid(input.entitlementId);
+  if (!entitlementId) throw new DimproIdentityError("A Send entitlement kiválasztása kötelező.", "DIMPRO_SEND_ENTITLEMENT_REQUIRED", 400);
+  const context = await getDimproSendCodeDeliveryContextAdmin(entitlementId);
+  if (context.status === "revoked") throw new DimproIdentityError("Visszavont Send entitlementhez nem adható új kód.", "DIMPRO_SEND_ENTITLEMENT_REVOKED", 409);
+  const client = getDimproIdentitySupabaseClient();
+  const prefix = sendCodePrefix(context.organizationName);
+  let rawCode = "";
+  let updatedRow: DbRow | null = null;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    rawCode = generateSendCode(prefix);
+    const updated = await client.from("dimpro_send_entitlements").update({
+      code_hash: hashDimproSendCode(rawCode),
+      code_hint: codeHint(rawCode),
+      updated_at: new Date().toISOString(),
+    }).eq("id", entitlementId).select("id,user_id,license_id,code_hint,status,updated_at").maybeSingle();
+    if (!updated.error && updated.data) { updatedRow = updated.data as DbRow; break; }
+    const source = `${updated.error?.message || ""} ${updated.error?.details || ""}`;
+    if (updated.error?.code === "23505" || source.includes("code_hash")) continue;
+    dbError("Az új Send-kód nem menthető.", updated.error);
+  }
+  if (!updatedRow || !rawCode) throw new DimproIdentityError("Nem sikerült egyedi új Send-kódot létrehozni.", "DIMPRO_SEND_CODE_GENERATION_FAILED", 500);
+  const audit = await client.from("dimpro_access_audit_logs").insert({
+    user_id: context.userId,
+    license_id: context.licenseId,
+    entitlement_id: entitlementId,
+    event_type: "send_entitlement_code_rotated",
+    success: true,
+    metadata: { source: "identity-send-admin", codeHint: codeHint(rawCode) },
+  });
+  if (audit.error) dbError("A Send-kód cseréjének auditnaplója nem írható.", audit.error);
+  return {
+    ...context,
+    result: updatedRow,
+    rawCode,
+    formattedCode: rawCode,
+    warning: "Az előző Send-kód érvényét vesztette. Az adatbázis az új kódból is kizárólag HMAC-lenyomatot tárol.",
   };
 }
 

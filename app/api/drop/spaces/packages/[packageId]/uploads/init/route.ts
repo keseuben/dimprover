@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       headers: request.headers,
     });
     const initialized = await initializeDropSpaceUpload({ session, packageId, body });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", initialized, warning: "A feltöltési intent egyszer használható. A fájl karanténba kerül, letölteni csak vírusellenőrzés után lehet." }, { status: 201, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", initialized, warning: "A feltöltési intent egyszer használható. A fájl karanténba kerül, letölteni csak vírusellenőrzés után lehet." }, { status: 201, headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

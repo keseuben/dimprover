@@ -70,7 +70,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.11",
+        version: "DROP 1.2.12",
         comments: commentsResult.data || [],
         files: filesResult.data || [],
         canComment: resolved.canComment,
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       payload: { commentId: comment.id, fileId, textLength: commentText.length },
     });
     return NextResponse.json(
-      { ok: true, version: "DROP 1.2.11", comment },
+      { ok: true, version: "DROP 1.2.12", comment },
       { status: 201, headers: dropNoStoreHeaders() },
     );
   } catch (error) {

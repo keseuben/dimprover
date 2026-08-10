@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       headers: request.headers,
     });
     const initialized = await initializeDropCapabilityUpload({ grant, body });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", initialized, warning: "A fájl privát karanténba kerül. Vírusellenőrzés előtt nem tölthető le." }, { status: 201, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", initialized, warning: "A fájl privát karanténba kerül. Vírusellenőrzés előtt nem tölthető le." }, { status: 201, headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

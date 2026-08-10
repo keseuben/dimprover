@@ -230,7 +230,7 @@ export async function requestDropPersistentStorage() {
 }
 
 export const DROP_OFFLINE_QUEUE_SECURITY = Object.freeze({
-  version: "DROP 1.2.11",
+  version: "DROP 1.2.12",
   database: DB_NAME,
   rawUploadCapabilityStored: false,
   rawSessionTokenStored: false,

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, context: Context) {
     const inserted = await client.from("drop_comments").insert({ package_id: packageId, file_id: fileId, parent_comment_id: null, author_recipient_id: null, author_user_id: "drop-public-sender", author_name: packageRow.data.uploader_name, author_email: packageRow.data.uploader_email, comment_text: commentText, status: "active" }).select("id,file_id,comment_text,created_at").single();
     if (inserted.error) throw inserted.error;
     await writeDropEvent({ packageId, fileId, eventType: "public.comment.created", actorName: packageRow.data.uploader_name, actorEmail: packageRow.data.uploader_email, payload: { workflowType: workflow.workflowType, scope: fileId ? "file" : "package" } });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", comment: inserted.data }, { status: 201, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", comment: inserted.data }, { status: 201, headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }
 
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest, context: Context) {
         if (removed.error) throw removed.error;
         await writeDropEvent({ packageId, fileId, eventType: "public.comment.updated", payload: { scope: "file", action: "cleared" } });
       }
-      return NextResponse.json({ ok: true, version: "DROP 1.2.11", comment: null }, { headers: dropNoStoreHeaders() });
+      return NextResponse.json({ ok: true, version: "DROP 1.2.12", comment: null }, { headers: dropNoStoreHeaders() });
     }
     const packageRow = await client.from("drop_packages").select("uploader_name,uploader_email").eq("id", packageId).single();
     if (packageRow.error) throw packageRow.error;
@@ -94,7 +94,7 @@ export async function PUT(request: NextRequest, context: Context) {
       comment = inserted.data;
     }
     await writeDropEvent({ packageId, fileId, eventType: "public.comment.updated", actorName: packageRow.data.uploader_name, actorEmail: packageRow.data.uploader_email, payload: { workflowType: workflow.workflowType, scope: "file", textLength: commentText.length } });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.11", comment }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.12", comment }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

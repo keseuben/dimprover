@@ -414,7 +414,15 @@ async function optimizeImage(file: File, options: DropImageOptimizationOptions) 
     const sourceLabel = heicSource ? "HEIC/HEIF → JPG; " : "";
     return { file: optimizedFile, optimized: true, note: `${sourceLabel}${source.width}×${source.height} → ${width}×${height}; ${savingsPercent}% méretmegtakarítás; EXIF- és GPS-metaadatok eltávolítva.`, width, height };
   } catch (error) {
-    if (heicSource) throw new Error(`A(z) ${file.name} HEIC/HEIF képet a böngésző nem tudta JPG-vé alakítani. Próbálja újra, vagy alakítsa át a képet JPG-re. Technikai ok: ${error instanceof Error ? error.message : "ismeretlen konverziós hiba"}`);
+    if (heicSource) {
+      return {
+        file,
+        optimized: false,
+        note: `Az iPhone HEIC/HEIF képet a böngésző nem tudta helyben JPG-vé alakítani, ezért az eredeti HEIC fájl kerül feltöltésre. Az eredeti EXIF/GPS-metaadatok megmaradhatnak. Technikai ok: ${error instanceof Error ? error.message : "ismeretlen konverziós hiba"}`,
+        width: null,
+        height: null,
+      };
+    }
     return { file, optimized: false, note: "A böngésző ezt a képformátumot nem tudta biztonságosan átméretezni; az eredeti kép kerül feltöltésre.", width: null, height: null };
   } finally {
     source?.close();
@@ -445,7 +453,7 @@ export async function prepareDropFiles(files: File[], options: DropFilePreparati
       uploadSize: uploadFile.size,
       optimized: imageResult.optimized,
       optimizationNote: imageResult.note,
-      previewUrl: uploadFile.type.startsWith("image/") ? URL.createObjectURL(uploadFile) : null,
+      previewUrl: uploadFile.type.startsWith("image/") && !isHeicFile(uploadFile) ? URL.createObjectURL(uploadFile) : null,
       width: imageResult.width,
       height: imageResult.height,
       capturedAt: captured.date.toISOString(),

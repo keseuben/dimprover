@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.11",
+        version: "DROP 1.2.12",
         packages,
         activeMembers,
         projects: session.projects.map((project) => ({
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.11",
+        version: "DROP 1.2.12",
         created,
         emailNotification,
         warning: emailNotification.sent > 0

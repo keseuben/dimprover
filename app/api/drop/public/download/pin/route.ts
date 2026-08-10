@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     await writeDropEvent({ packageId: grant.packageId, eventType: valid ? "public.download_pin.accepted" : "public.download_pin.rejected", severity: valid ? "info" : "warning", payload: { workflowType: workflow.workflowType } });
     if (!valid) return NextResponse.json({ ok: false, error: "A letöltési kód hibás.", code: "DROP_DOWNLOAD_PIN_INVALID" }, { status: 403, headers: dropNoStoreHeaders() });
     const proof = createDropDownloadProof(grant.packageId);
-    const response = NextResponse.json({ ok: true, version: "DROP 1.2.11", verified: true, expiresAt: proof.expiresAt }, { headers: dropNoStoreHeaders() });
+    const response = NextResponse.json({ ok: true, version: "DROP 1.2.12", verified: true, expiresAt: proof.expiresAt }, { headers: dropNoStoreHeaders() });
     response.cookies.set(dropDownloadProofCookie(proof.value, proof.expiresAt));
     return response;
   } catch (error) { return dropErrorResponse(error); }

@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       pragma: "no-cache",
       expires: "0",
       "x-content-type-options": "nosniff",
-      "x-dimpro-drop-version": "DROP 1.2.11",
+      "x-dimpro-drop-version": "DROP 1.2.12",
       "x-dimpro-drop-file-count": String(prepared.fileCount),
       "x-dimpro-drop-source-bytes": String(prepared.totalBytes),
       "x-dimpro-drop-persistent-archive": "false",

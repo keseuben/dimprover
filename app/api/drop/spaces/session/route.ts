@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.11",
+        version: "DROP 1.2.12",
         session: {
           space: {
             publicCode: session.space.publicCode,
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE() {
   const response = NextResponse.json(
-    { ok: true, version: "DROP 1.2.11", signedOut: true },
+    { ok: true, version: "DROP 1.2.12", signedOut: true },
     { headers: dropNoStoreHeaders() },
   );
   response.cookies.set(DROP_SPACE_SESSION_COOKIE, "", {
