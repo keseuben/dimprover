@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getPartnerRuntimeIsolationStatus } from "./partner-runtime";
 
 export const PARTNER_PLANE_SCHEMA_VERSION = "0.1.0";
 export const PARTNER_PLANE_BOOTSTRAP_ID = "BENJADMIN-B3.2-P1-20260811";
@@ -231,8 +232,9 @@ function projectHealth(status: PartnerProjectStatus, envs: PartnerProjectSummary
 
 export async function listPartnerProjects() {
   const health = await getPartnerDevelopmentPlaneHealth();
+  const runtimeIsolation = await getPartnerRuntimeIsolationStatus();
   if (!health.ready) {
-    return { health, projects: [] as PartnerProjectSummary[], checkedAt: health.checkedAt };
+    return { health, runtimeIsolation, projects: [] as PartnerProjectSummary[], checkedAt: health.checkedAt };
   }
 
   const db = getDatabaseClient();
@@ -244,7 +246,7 @@ export async function listPartnerProjects() {
   if (partnerRows.error) databaseError("A partnerprojekt-registry betöltése sikertelen.", partnerRows.error);
 
   const rows = (partnerRows.data || []) as JsonRecord[];
-  if (!rows.length) return { health, projects: [] as PartnerProjectSummary[], checkedAt: new Date().toISOString() };
+  if (!rows.length) return { health, runtimeIsolation, projects: [] as PartnerProjectSummary[], checkedAt: new Date().toISOString() };
 
   const projectIds = rows.map((row) => text(row.project_id)).filter(Boolean);
   const workerIds = Array.from(new Set(rows.map((row) => text(row.default_worker_id)).filter(Boolean)));
@@ -324,7 +326,7 @@ export async function listPartnerProjects() {
     };
   });
 
-  return { health, projects, checkedAt: new Date().toISOString() };
+  return { health, runtimeIsolation, projects, checkedAt: new Date().toISOString() };
 }
 
 export async function getPartnerProjectById(projectId: string) {

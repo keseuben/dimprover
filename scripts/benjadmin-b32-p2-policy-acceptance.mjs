@@ -4,6 +4,7 @@ const adminKey = fs.readFileSync(".dimprover/license/admin-key.txt", "utf8").tri
 const base = process.env.BENJADMIN_API_BASE || "http://127.0.0.1:3100";
 const host = process.env.BENJADMIN_HOST || "admin.dev.dimpro.hu";
 const reporterKey = process.env.DIMPRO_DEV_REPORTER_KEY?.trim() || "";
+const workerToken = process.env.OUTMINAI_WORKER_TOKEN?.trim() || "";
 const checks = [];
 
 function check(name, ok, details = "") {
@@ -21,6 +22,10 @@ async function call(path, { body, auth = "admin" } = {}) {
     headers["x-dimpro-worker-id"] = "worker_outminai";
     headers["x-dimpro-worker-token"] = "invalid-b32-p2-worker-token";
   }
+  if (auth === "worker" && workerToken) {
+    headers["x-dimpro-worker-id"] = "worker_outminai";
+    headers["x-dimpro-worker-token"] = workerToken;
+  }
   const response = await fetch(`${base}${path}`, {
     method: body ? "POST" : "GET",
     headers,
@@ -32,6 +37,17 @@ async function call(path, { body, auth = "admin" } = {}) {
 
 let result = await call("/api/dev/engine/health");
 check("DEV engine remains READY", result.status === 200 && result.payload?.health?.ready === true, `status=${result.status}`);
+
+result = await call("/api/dev/engine/partner-projects");
+const runtime = result.payload?.runtimeIsolation;
+check("P2 runtime status is exposed", result.status === 200 && Boolean(runtime?.stage), `status=${result.status} stage=${runtime?.stage}`);
+check("partner runtime root skeleton exists", runtime?.rootReady === true && runtime?.directoriesReady === true, JSON.stringify({ rootReady: runtime?.rootReady, directoriesReady: runtime?.directoriesReady }));
+check("OutminAI worker token hash is staged", runtime?.tokenHashReady === true, `tokenHashReady=${runtime?.tokenHashReady}`);
+if (runtime?.ready === true) {
+  check("READY runtime asserts internal root protection", runtime.internalRootProtected === true && runtime.markerReady === true, JSON.stringify(runtime));
+} else {
+  check("PENDING runtime remains fail-closed", runtime?.stage === "PENDING" && runtime?.markerReady === false, JSON.stringify({ stage: runtime?.stage, blockers: runtime?.blockers }));
+}
 
 result = await call("/api/dev/engine/tasks", {
   body: {
@@ -63,6 +79,20 @@ result = await call("/api/dev/engine/orchestration", {
 });
 check("invalid OutminAI worker token fails closed", result.status === 401, `status=${result.status}`);
 
+if (workerToken) {
+  result = await call("/api/dev/engine/orchestration", {
+    auth: "worker",
+    body: { action: "claim_task", sessionId: "nonexistent-positive-auth", taskId: "nonexistent-positive-auth" },
+  });
+  check(
+    "valid OutminAI worker token authenticates without widening scope",
+    result.status === 404 && result.payload?.code === "DEV_CENTER_TASK_NOT_FOUND",
+    `status=${result.status} code=${result.payload?.code}`,
+  );
+} else {
+  console.log("SKIP positive worker-token check :: OUTMINAI_WORKER_TOKEN not provided");
+}
+
 result = await call("/api/dev/engine/tasks", {
   auth: "none",
   body: { projectId: "project_dimprover", title: "unauthorized-negative-acceptance" },
@@ -91,4 +121,4 @@ if (reporterKey) {
   console.log("SKIP reporter mutation checks :: DIMPRO_DEV_REPORTER_KEY not available in process environment");
 }
 
-console.log(JSON.stringify({ ok: true, passed: checks.length, failed: 0, reporterChecks: Boolean(reporterKey), checks }, null, 2));
+console.log(JSON.stringify({ ok: true, passed: checks.length, failed: 0, reporterChecks: Boolean(reporterKey), workerTokenCheck: Boolean(workerToken), runtimeStage: runtime?.stage || null, checks }, null, 2));

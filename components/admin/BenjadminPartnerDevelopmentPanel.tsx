@@ -41,8 +41,23 @@ type PartnerProject = {
   health: "DRAFT" | "READY" | "DEGRADED" | "PENDING" | "CLOSED";
 };
 
+type PartnerRuntimeIsolation = {
+  ready: boolean;
+  stage: "READY" | "PENDING";
+  rootReady: boolean;
+  directoriesReady: boolean;
+  tokenHashReady: boolean;
+  markerReady: boolean;
+  internalRootProtected: boolean;
+  workerTokenReady: boolean;
+  sshIdentityReady: boolean;
+  blockers: string[];
+  checkedAt: string;
+};
+
 type PartnerSnapshot = {
   health: PartnerHealth;
+  runtimeIsolation: PartnerRuntimeIsolation;
   projects: PartnerProject[];
   checkedAt: string;
 };
@@ -207,7 +222,10 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
             {health?.ready ? <CheckCircle2 size={13} /> : <CircleAlert size={13} />}
             SCHEMA {health?.ready ? "READY" : "PENDING"}
           </span>
-          <span className="operator-status-badge is-partner"><ShieldCheck size={13} /> OUTMINAI · DEFAULT DENY · P2 POLICY ACTIVE</span>
+          <span className={`operator-status-badge ${snapshot?.runtimeIsolation?.ready ? "is-ok" : "is-partner"}`} data-testid="partner-runtime-status">
+            <ShieldCheck size={13} />
+            {snapshot?.runtimeIsolation?.ready ? "P2 RUNTIME READY" : "P2 POLICY ACTIVE · RUNTIME PENDING"}
+          </span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Partner állapot frissítése">
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} />
           </button>
@@ -219,7 +237,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
         <div><span>Registry schema</span><strong>{health?.actualSchemaVersion || "STAGED"}</strong></div>
         <div><span>Hiányzó táblák</span><strong>{pendingTables}</strong></div>
         <div><span>Default worker</span><strong>OUTMINAI</strong></div>
-        <div><span>Internal engine</span><strong>NONE / ALLOWLIST</strong></div>
+        <div><span>P2 runtime</span><strong>{snapshot?.runtimeIsolation?.stage || "PENDING"}</strong></div>
         <div><span>PROD</span><strong>APPROVAL GATE</strong></div>
       </div>
 
@@ -339,7 +357,11 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
             <ShieldCheck size={16} />
             <div>
               <strong>Internal / Partner határ</strong>
-              <span>P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás még külön runtime gate; repo/DB/storage provisioning P3.</span>
+              <span>
+                {snapshot?.runtimeIsolation?.ready
+                  ? "P2 runtime izoláció READY: partner root, worker credential és belső DIMPRO védelem igazolt. Repo/DB/storage provisioning P3."
+                  : "P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás külön runtime gate; repo/DB/storage provisioning P3."}
+              </span>
             </div>
           </div>
         </aside>
