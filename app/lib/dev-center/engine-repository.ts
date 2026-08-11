@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { DevWorktreeValidationError, validateDevGitWorktree } from "./worktree-validation";
+import { DevWorktreeValidationError, validateGitWorktreeForPlane } from "./worktree-validation";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEV_CENTER_ENGINE_BOOTSTRAP_ID, DEV_CENTER_ENGINE_REQUIRED_WORKERS, DEV_CENTER_ENGINE_SCHEMA_VERSION, DEV_CENTER_ENGINE_TABLES } from "./engine-schema";
 import type { DevEngineGateStatus, DevEngineHandshakeStage, DevEngineOperation, DevEngineScope, DevEngineTask, DevEngineTaskStatus, DevEngineWorker, DevEngineWorkerSession } from "./engine-types";
+import {
+  assertPartnerEngineOperationIsolation,
+  assertRepositoryIsolation,
+  assertScopeIsolation,
+  assertWorkerProjectIsolation,
+  PartnerIsolationPolicyError,
+  resolveDevelopmentPlane,
+} from "./partner-isolation";
 
 type DbError = { code?: string; message?: string; details?: string; hint?: string } | null;
 type JsonRecord = Record<string, unknown>;
@@ -145,10 +153,25 @@ export async function createDevEngineTask(input: Record<string, unknown>) {
   if (!projectId || !title) return { ok: false as const, error: "A projectId és a feladat címe kötelező." };
   const id = text(input.id) || `dev-task-${randomUUID().slice(0, 12)}`;
   const scope = normalizeScope(input.scope);
+  const requestedWorkerId = text(input.requestedWorkerId) || null;
+  const repositoryId = text(input.repositoryId) || null;
+  const planeInfo = await resolveDevelopmentPlane(client, projectId);
+  if (planeInfo.plane === "PARTNER" && !requestedWorkerId) {
+    throw new DevCenterEngineError("Partner task kizárólag explicit OutminAI workerrel hozható létre.", "PARTNER_TASK_WORKER_REQUIRED", 403, { projectId });
+  }
+  if (requestedWorkerId) {
+    try {
+      await assertWorkerProjectIsolation(client, { workerId: requestedWorkerId, projectId });
+      if (repositoryId) await assertRepositoryIsolation(client, { workerId: requestedWorkerId, projectId, repositoryId, required: "WRITE" });
+    } catch (error) {
+      if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+      throw error;
+    }
+  }
   const taskRow = {
-    id, project_id: projectId, version_id: text(input.versionId) || null, repository_id: text(input.repositoryId) || null,
+    id, project_id: projectId, version_id: text(input.versionId) || null, repository_id: repositoryId,
     title, description: text(input.description), status: "queued", priority: clampPriority(input.priority),
-    requested_worker_id: text(input.requestedWorkerId) || null, assigned_worker_id: null, branch_name: null, worktree_path: null,
+    requested_worker_id: requestedWorkerId, assigned_worker_id: null, branch_name: null, worktree_path: null,
     scope, acceptance: stringArray(input.acceptance), created_by: text(input.createdBy, "BenAI"), metadata: jsonRecord(input.metadata),
   };
   const { data, error } = await client.from("dev_center_tasks").insert(taskRow).select("*").single();
@@ -236,6 +259,16 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
     if (["completed", "cancelled"].includes(task.status)) return { ok: false as const, error: "Lezárt feladat nem rendelhető sessionhöz." };
     if (task.requestedWorkerId && task.requestedWorkerId !== current.workerId) throw new DevCenterEngineError("A feladat másik workerhez van előirányozva.", "DEV_CENTER_TASK_WORKER_MISMATCH", 409);
     await ensureTaskDependenciesComplete(client, taskId);
+    try {
+      const isolation = await assertWorkerProjectIsolation(client, { workerId: current.workerId, projectId: task.projectId });
+      if (isolation.plane === "PARTNER" && !task.repositoryId) {
+        throw new PartnerIsolationPolicyError("Partner task repository nélkül nem léphet tovább a handshake-ben.", "PARTNER_REPOSITORY_REQUIRED", 403, { taskId, projectId: task.projectId });
+      }
+      if (task.repositoryId) await assertRepositoryIsolation(client, { workerId: current.workerId, projectId: task.projectId, repositoryId: task.repositoryId, required: "WRITE" });
+    } catch (error) {
+      if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+      throw error;
+    }
     const session = await updateSessionStage(client, sessionId, "WORKER_BOUND", "TASK_BOUND", {
       task_id: taskId, project_id: task.projectId, version_id: task.versionId, repository_id: task.repositoryId,
     }, "TASK_BOUND", `Feladat hozzárendelve: ${task.title}`);
@@ -251,14 +284,16 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
   }
   if (action === "bind_worktree") {
     const worktreePath = text(input.worktreePath);
-    if (!worktreePath || !worktreePath.startsWith("/srv/dimpro-dev/worktrees/")) return { ok: false as const, error: "Érvényes DEV worktreePath kötelező." };
+    if (!worktreePath) return { ok: false as const, error: "Érvényes worktreePath kötelező." };
     const current = mapSession(await getSessionRow(client, sessionId));
     if (current.handshakeStage !== "BRANCH_BOUND" || !current.branchName) throw new DevCenterEngineError("A worktree előtt érvényes branch binding szükséges.", "DEV_CENTER_HANDSHAKE_ORDER", 409);
+    if (!current.projectId || !current.workerId || !current.repositoryId) throw new DevCenterEngineError("A worktree plane-policy előtt worker, project és repository binding szükséges.", "DEV_CENTER_HANDSHAKE_ORDER", 409);
     let verifiedWorktree;
     try {
-      verifiedWorktree = await validateDevGitWorktree(worktreePath, current.branchName);
+      const isolation = await assertRepositoryIsolation(client, { workerId: current.workerId, projectId: current.projectId, repositoryId: current.repositoryId, required: "WRITE" });
+      verifiedWorktree = await validateGitWorktreeForPlane(worktreePath, current.branchName, isolation.plane);
     } catch (error) {
-      if (error instanceof DevWorktreeValidationError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+      if (error instanceof DevWorktreeValidationError || error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
       throw error;
     }
     const session = await updateSessionStage(client, sessionId, "BRANCH_BOUND", "WORKTREE_BOUND", { worktree_path: verifiedWorktree.worktreePath }, "WORKTREE_BOUND", "Worktree hozzárendelve: " + verifiedWorktree.worktreePath);
@@ -271,6 +306,13 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
     }
     const scopes = normalizeScope(input.scope);
     if (!scopes.length) return { ok: false as const, error: "Legalább egy scope kötelező." };
+    try {
+      await assertRepositoryIsolation(client, { workerId: current.workerId, projectId: current.projectId || "", repositoryId: current.repositoryId, required: "WRITE" });
+      await assertScopeIsolation(client, { workerId: current.workerId, projectId: current.projectId || "", scopes });
+    } catch (error) {
+      if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+      throw error;
+    }
     const lockRows = scopes.map((scope) => ({
       id: `dev-lock-${randomUUID().slice(0, 12)}`, repository_id: current.repositoryId, session_id: sessionId,
       task_id: current.taskId, scope_type: scope.type, scope_key: scope.key, mode: "exclusive", status: "active",
@@ -318,6 +360,22 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
   return { ok: false as const, error: "Ismeretlen session művelet." };
 }
 
+export async function assertDevEngineWorkerSession(sessionId: string, workerId: string) {
+  const client = await requireClient();
+  const session = mapSession(await getSessionRow(client, sessionId));
+  if (!session.workerId || session.workerId !== workerId) {
+    throw new DevCenterEngineError("A worker token nem ehhez a sessionhöz tartozik.", "DEV_CENTER_WORKER_SESSION_MISMATCH", 403, { sessionId, workerId });
+  }
+  if (!session.projectId) throw new DevCenterEngineError("A session project bindingje hiányzik.", "DEV_CENTER_SESSION_POLICY_CONTEXT_MISSING", 403);
+  try {
+    await assertWorkerProjectIsolation(client, { workerId, projectId: session.projectId });
+  } catch (error) {
+    if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+    throw error;
+  }
+  return { ok: true as const, session };
+}
+
 export async function assertDevEngineOperation(sessionId: string, operation: DevEngineOperation) {
   const client = await requireClient();
   const session = mapSession(await getSessionRow(client, sessionId));
@@ -328,6 +386,13 @@ export async function assertDevEngineOperation(sessionId: string, operation: Dev
   if (error) databaseError("A környezet ellenőrzése sikertelen.", error);
   if (!environment || environment.status !== "online") throw new DevCenterEngineError("A célkörnyezet nem online.", "DEV_CENTER_ENVIRONMENT_OFFLINE", 403);
   if (environment.read_only && ["write", "migration", "restart", "deploy"].includes(operation)) throw new DevCenterEngineError("A célkörnyezet read-only; a művelet tiltott.", "DEV_CENTER_ENVIRONMENT_READ_ONLY", 403, { environment: environment.code, operation });
+  if (!session.workerId || !session.projectId) throw new DevCenterEngineError("A session worker/project bindingje hiányzik.", "DEV_CENTER_SESSION_POLICY_CONTEXT_MISSING", 403);
+  try {
+    await assertPartnerEngineOperationIsolation(client, { workerId: session.workerId, projectId: session.projectId, environmentId: session.environmentId, operation });
+  } catch (error) {
+    if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+    throw error;
+  }
   const [locksResult, worktreeResult] = await Promise.all([
     client.from("dev_center_scope_locks").select("id,expires_at").eq("session_id", sessionId).eq("status", "active"),
     client.from("dev_center_worktree_leases").select("id,lease_expires_at").eq("session_id", sessionId).eq("status", "active"),

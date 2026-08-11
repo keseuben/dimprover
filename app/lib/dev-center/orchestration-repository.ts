@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { DevEngineScope } from "./engine-types";
+import {
+  assertRepositoryIsolation,
+  assertScopeIsolation,
+  assertWorkerProjectIsolation,
+  OUTMINAI_WORKER_ID,
+  PartnerIsolationPolicyError,
+} from "./partner-isolation";
 
 export const DEV_ENGINE_DEFAULT_LEASE_SECONDS = 900;
 export const DEV_ENGINE_MIN_LEASE_SECONDS = 60;
@@ -62,6 +69,14 @@ function rpcCode(error: RpcError) {
   return known.find((code) => message.includes(code)) || error?.code || "DEV_CENTER_ORCHESTRATION_ERROR";
 }
 
+
+function throwPolicy(error: unknown): never {
+  if (error instanceof PartnerIsolationPolicyError) {
+    throw new DevCenterOrchestrationError(error.message, error.code, error.status, error.details);
+  }
+  throw error;
+}
+
 function statusFor(code: string) {
   if (code === "DEV_CENTER_SESSION_NOT_FOUND" || code === "DEV_CENTER_TASK_NOT_FOUND") return 404;
   if (code.includes("CONFLICT") || code.includes("ALREADY") || code.includes("BLOCKED") || code.includes("MISMATCH") || code === "DEV_CENTER_HANDSHAKE_ORDER") return 409;
@@ -111,6 +126,27 @@ async function throwRpc(db: SupabaseClient, error: RpcError, context: JsonRecord
 export async function claimTaskAtomic(input: { sessionId: string; workerId: string; taskId?: string | null; leaseSeconds?: number }) {
   const db = client();
   const seconds = leaseSeconds(input.leaseSeconds);
+  if (!input.taskId && input.workerId === OUTMINAI_WORKER_ID) {
+    throw new DevCenterOrchestrationError(
+      "OutminAI csak explicit kiosztott partner taskot claimelhet; automatikus next-task claim tiltott.",
+      "PARTNER_OUTMIN_EXPLICIT_TASK_REQUIRED",
+      403,
+    );
+  }
+  if (input.taskId) {
+    const { data: task, error: taskError } = await db.from("dev_center_tasks").select("id,project_id,repository_id").eq("id", input.taskId).maybeSingle();
+    if (taskError) throw new DevCenterOrchestrationError(taskError.message, taskError.code || "DEV_CENTER_TASK_POLICY_READ_ERROR", 500);
+    if (!task) throw new DevCenterOrchestrationError("A task nem található.", "DEV_CENTER_TASK_NOT_FOUND", 404);
+    try {
+      const isolation = await assertWorkerProjectIsolation(db, { workerId: input.workerId, projectId: String(task.project_id || "") });
+      if (isolation.plane === "PARTNER" && !task.repository_id) {
+        throw new PartnerIsolationPolicyError("Partner task repository nélkül nem claimelhető fejlesztésre.", "PARTNER_REPOSITORY_REQUIRED", 403, { taskId: input.taskId });
+      }
+      if (task.repository_id) await assertRepositoryIsolation(db, { workerId: input.workerId, projectId: String(task.project_id || ""), repositoryId: String(task.repository_id), required: "WRITE" });
+    } catch (error) {
+      throwPolicy(error);
+    }
+  }
   const rpc = input.taskId ? "dev_center_claim_task_atomic" : "dev_center_claim_next_task_atomic";
   const params = input.taskId
     ? { p_session_id: input.sessionId, p_worker_id: input.workerId, p_task_id: input.taskId, p_lease_seconds: seconds }
@@ -124,6 +160,22 @@ export async function acquireScopeBundleAtomic(input: { sessionId: string; scope
   const db = client();
   const scopes = scopeList(input.scope);
   if (!scopes.length) throw new DevCenterOrchestrationError("Legalább egy érvényes scope kötelező.", "DEV_CENTER_SCOPE_REQUIRED", 400);
+  const { data: session, error: sessionError } = await db
+    .from("dev_center_worker_sessions")
+    .select("id,worker_id,project_id,repository_id")
+    .eq("id", input.sessionId)
+    .maybeSingle();
+  if (sessionError) throw new DevCenterOrchestrationError(sessionError.message, sessionError.code || "DEV_CENTER_SESSION_POLICY_READ_ERROR", 500);
+  if (!session) throw new DevCenterOrchestrationError("A worker session nem található.", "DEV_CENTER_SESSION_NOT_FOUND", 404);
+  if (!session.worker_id || !session.project_id || !session.repository_id) {
+    throw new DevCenterOrchestrationError("Scope claim előtt worker/project/repository policy context szükséges.", "DEV_CENTER_SESSION_POLICY_CONTEXT_MISSING", 403);
+  }
+  try {
+    await assertRepositoryIsolation(db, { workerId: String(session.worker_id), projectId: String(session.project_id), repositoryId: String(session.repository_id), required: "WRITE" });
+    await assertScopeIsolation(db, { workerId: String(session.worker_id), projectId: String(session.project_id), scopes });
+  } catch (error) {
+    throwPolicy(error);
+  }
   const seconds = leaseSeconds(input.leaseSeconds);
   const { data, error } = await db.rpc("dev_center_acquire_scope_bundle_atomic", {
     p_session_id: input.sessionId,

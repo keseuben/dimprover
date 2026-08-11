@@ -109,7 +109,7 @@ try {
   await page.waitForFunction(() => document.querySelector(".operator-partner-create-button")?.disabled === false, { timeout: 5000 });
   check("Operator UI draft button enables after required fields", await page.$eval(".operator-partner-create-button", (button) => button.disabled === false));
   check("Operator UI renders created project", state.rowCount >= 1 && state.hasFixture, `rows=${state.rowCount}`);
-  check("Operator UI keeps OutminAI default-deny P2 gate", state.panelText.includes("OUTMINAI") && state.panelText.includes("DEFAULT DENY") && state.panelText.includes("P2 GATE"));
+  check("Operator UI keeps OutminAI default-deny P2 policy", state.panelText.includes("OUTMINAI") && state.panelText.includes("DEFAULT DENY") && state.panelText.includes("P2 POLICY ACTIVE"));
   check("desktop partner READY view fits one viewport", state.scrollWidth <= state.clientWidth + 1 && state.scrollHeight <= state.innerHeight + 1, JSON.stringify(state));
 } finally {
   await browser.close();

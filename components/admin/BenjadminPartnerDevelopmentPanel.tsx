@@ -207,7 +207,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
             {health?.ready ? <CheckCircle2 size={13} /> : <CircleAlert size={13} />}
             SCHEMA {health?.ready ? "READY" : "PENDING"}
           </span>
-          <span className="operator-status-badge is-partner"><ShieldCheck size={13} /> OUTMINAI · DEFAULT DENY · P2 GATE</span>
+          <span className="operator-status-badge is-partner"><ShieldCheck size={13} /> OUTMINAI · DEFAULT DENY · P2 POLICY ACTIVE</span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Partner állapot frissítése">
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} />
           </button>
@@ -339,7 +339,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
             <ShieldCheck size={16} />
             <div>
               <strong>Internal / Partner határ</strong>
-              <span>P1 registry only. Repo/DB/storage provisioning és OutminAI OS/MCP izoláció P2/P3 előtt nem indul.</span>
+              <span>P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás még külön runtime gate; repo/DB/storage provisioning P3.</span>
             </div>
           </div>
         </aside>

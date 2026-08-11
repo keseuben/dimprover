@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { getDevCenterMutationSubject, isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import {
   acquireScopeBundleAtomic,
   claimTaskAtomic,
@@ -9,6 +9,7 @@ import {
   recoverStaleSessionsAtomic,
   releaseSessionAtomic,
 } from "@/app/lib/dev-center/orchestration-repository";
+import { assertDevEngineWorkerSession } from "@/app/lib/dev-center/engine-repository";
 import { engineErrorResponse, engineUnauthorized } from "../_shared";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) return engineUnauthorized();
+  const subject = await getDevCenterMutationSubject(request.headers, true);
+  if (!subject) return engineUnauthorized();
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const action = typeof body.action === "string" ? body.action : "";
@@ -33,9 +35,20 @@ export async function POST(request: NextRequest) {
     const taskId = typeof body.taskId === "string" ? body.taskId : null;
     const leaseSeconds = typeof body.leaseSeconds === "number" ? body.leaseSeconds : undefined;
 
+    if (subject.kind === "worker") {
+      const workerActions = new Set(["claim_task", "acquire_scope", "heartbeat", "release", "complete_task"]);
+      if (!workerActions.has(action)) return NextResponse.json({ ok: false, error: "A worker identity ehhez az orchestration művelethez nem jogosult.", code: "DEV_CENTER_WORKER_ACTION_DENIED" }, { status: 403 });
+      if (workerId && workerId !== subject.workerId) return NextResponse.json({ ok: false, error: "A workerId nem egyezik a hitelesített worker identityvel.", code: "DEV_CENTER_WORKER_IDENTITY_MISMATCH" }, { status: 403 });
+      if (action !== "claim_task") {
+        if (!sessionId) return NextResponse.json({ ok: false, error: "A sessionId kötelező." }, { status: 400 });
+        await assertDevEngineWorkerSession(sessionId, subject.workerId);
+      }
+    }
+
     if (action === "claim_task" || action === "claim_next_task") {
-      if (!sessionId || !workerId) return NextResponse.json({ ok: false, error: "A sessionId és workerId kötelező." }, { status: 400 });
-      const result = await claimTaskAtomic({ sessionId, workerId, taskId: action === "claim_task" ? taskId : null, leaseSeconds });
+      const effectiveWorkerId = subject.kind === "worker" ? subject.workerId : workerId;
+      if (!sessionId || !effectiveWorkerId) return NextResponse.json({ ok: false, error: "A sessionId és workerId kötelező." }, { status: 400 });
+      const result = await claimTaskAtomic({ sessionId, workerId: effectiveWorkerId, taskId: action === "claim_task" ? taskId : null, leaseSeconds });
       return NextResponse.json({ ok: true, ...result }, { headers: { "cache-control": "no-store" } });
     }
     if (action === "acquire_scope") {

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
+import { getDevWorkerSubject, type DevWorkerSubject } from "./worker-auth";
 
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
@@ -19,4 +20,12 @@ export async function isDevCenterAuthorized(headers: Headers, allowReporter = fa
   const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
   const supplied = direct || bearer;
   return Boolean(supplied && safeEqual(supplied, configured));
+}
+
+export type DevCenterMutationSubject = { kind: "admin"; workerId: null } | DevWorkerSubject;
+
+export async function getDevCenterMutationSubject(headers: Headers, allowWorker = false): Promise<DevCenterMutationSubject | null> {
+  if (await isLicenseAdminAuthorized(headers)) return { kind: "admin", workerId: null };
+  if (!allowWorker) return null;
+  return getDevWorkerSubject(headers);
 }

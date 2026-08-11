@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import {
   ControlPlaneCommandError,
   queueControlCommand,
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) return engineUnauthorized();
+  if (!(await getDevCenterMutationSubject(request.headers, false))) return engineUnauthorized();
 
   try {
     const body = await request.json().catch(() => null);

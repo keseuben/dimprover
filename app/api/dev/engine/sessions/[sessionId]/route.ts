@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import { advanceDevEngineSession } from "@/app/lib/dev-center/engine-repository";
 import { engineErrorResponse, engineUnauthorized } from "../../_shared";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ sessionId: string }> }) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) return engineUnauthorized();
+  if (!(await getDevCenterMutationSubject(request.headers, false))) return engineUnauthorized();
   try {
     const { sessionId } = await context.params;
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
