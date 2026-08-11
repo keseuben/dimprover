@@ -7,7 +7,6 @@ import {
   Cpu,
   Database,
   HardDrive,
-  MemoryStick,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -121,6 +120,9 @@ type InfrastructureStorage = {
   bucket?: string | null;
   online: boolean;
   usedBytes?: number | null;
+  capacityBytes?: number | null;
+  freeBytes?: number | null;
+  usagePercent?: number | null;
   objectCount?: number | null;
   truncated?: boolean;
   note: string;
@@ -290,11 +292,12 @@ function MiniLineChart({ title, subtitle, labels, series, emptyText }: { title: 
   );
 }
 
-function UsageBar({ label, value, detail }: { label: string; value: number; detail: string }) {
-  const safe = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+function UsageBar({ label, value, detail }: { label: string; value?: number | null; detail: string }) {
+  const known = typeof value === "number" && Number.isFinite(value);
+  const safe = known ? Math.max(0, Math.min(100, value)) : 0;
   return (
-    <div className="benjadmin-team-screen__usage">
-      <div><span>{label}</span><strong>{Math.round(safe)}%</strong></div>
+    <div className={`benjadmin-team-screen__usage${known ? "" : " is-unknown"}`}>
+      <div><span>{label}</span><strong>{known ? `${Math.round(safe)}%` : "—"}</strong></div>
       <div className="benjadmin-team-screen__usage-track"><span style={{ width: `${safe}%` }} /></div>
       <small>{detail}</small>
     </div>
@@ -307,6 +310,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
   const [control, setControl] = useState<ControlSnapshot | null>(null);
   const [partner, setPartner] = useState<PartnerSnapshot | null>(null);
   const [infrastructure, setInfrastructure] = useState<InfrastructureSummary | null>(null);
+  const [latencyHistory, setLatencyHistory] = useState<Array<{ label: string; production: number; database: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
@@ -336,7 +340,18 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
       if (serverResponse.ok) setServerStatus(serverPayload as ServerStatus);
       if (controlResponse.ok) setControl(controlPayload as ControlSnapshot);
       if (partnerResponse.ok) setPartner(partnerPayload as PartnerSnapshot);
-      if (infrastructureResponse.ok) setInfrastructure(infrastructurePayload as InfrastructureSummary);
+      if (infrastructureResponse.ok) {
+        const nextInfrastructure = infrastructurePayload as InfrastructureSummary;
+        setInfrastructure(nextInfrastructure);
+        const production = nextInfrastructure.servers?.find((item) => item.code === "PRODUCTION");
+        const database = nextInfrastructure.servers?.find((item) => item.code === "DATABASE");
+        const stamp = new Date();
+        setLatencyHistory((current) => [...current, {
+          label: stamp.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          production: Number(production?.latencyMs || 0),
+          database: Number(database?.latencyMs || 0),
+        }].slice(-12));
+      }
       setRefreshedAt(new Date());
       setError("");
     } catch (loadError) {
@@ -407,6 +422,11 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
   const productionServer = infrastructure?.servers.find((item) => item.code === "PRODUCTION");
   const databaseServer = infrastructure?.servers.find((item) => item.code === "DATABASE");
   const infrastructureStorages = infrastructure?.storages || [];
+  const latencyTrend = {
+    labels: latencyHistory.map((item) => item.label),
+    production: latencyHistory.map((item) => item.production),
+    database: latencyHistory.map((item) => item.database),
+  };
 
   return (
     <main className="benjadmin-team-screen" data-testid="benjadmin-team-screen">
@@ -438,39 +458,51 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             </div>
           </article>
 
-          <article className="benjadmin-team-screen__remote-card" data-testid="infra-production">
-            <header><div><Server size={15} /><strong>PRODUCTION / ÉLES VPS</strong></div><span className={productionServer?.online ? "is-ok" : "is-pending"}>{productionServer?.online ? "ONLINE" : "NINCS KAPCSOLAT"}</span></header>
-            <div className="benjadmin-team-screen__remote-grid">
-              <div><span>Elérhetőség</span><b>{productionServer?.latencyMs != null ? `${productionServer.latencyMs} ms` : "—"}</b></div>
-              <div><span>HTTPS</span><b>{productionServer?.statusCode || "—"}</b></div>
-              <div><span>Memóriaterhelés</span><b>{productionServer?.memory?.usagePercent != null ? `${Math.round(productionServer.memory.usagePercent)}% · ${formatBytes(productionServer.memory.usedBytes)} / ${formatBytes(productionServer.memory.totalBytes)}` : "Telemetria vár"}</b></div>
-              <div><span>Lemezfoglaltság</span><b>{productionServer?.disk?.usePercent != null ? `${Math.round(productionServer.disk.usePercent)}% · ${formatBytes(productionServer.disk.usedBytes)} / ${formatBytes(productionServer.disk.totalBytes)}` : "Telemetria vár"}</b></div>
+          <article className="benjadmin-team-screen__infra-card" data-testid="infra-production">
+            <header><div><Server size={16} /><strong>PRODUCTION / ÉLES VPS</strong></div><span className={productionServer?.online ? "is-ok" : "is-pending"}>{productionServer?.online ? "ÉLŐ" : "NINCS KAPCSOLAT"}</span></header>
+            <p>{productionServer?.host || "213.160.68.24"}</p>
+            <UsageBar label="Memóriaterhelés" value={productionServer?.memory?.usagePercent} detail={productionServer?.memory?.totalBytes ? `${formatBytes(productionServer.memory.usedBytes)} / ${formatBytes(productionServer.memory.totalBytes)} · szabad: ${formatBytes(productionServer.memory.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <UsageBar label="Lemezfoglaltság" value={productionServer?.disk?.usePercent} detail={productionServer?.disk?.totalBytes ? `${formatBytes(productionServer.disk.usedBytes)} / ${formatBytes(productionServer.disk.totalBytes)} · szabad: ${formatBytes(productionServer.disk.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <div className="benjadmin-team-screen__infra-facts">
+              <span><Cpu size={13} /> 1 perces terhelés: <b>{productionServer?.load1m != null ? productionServer.load1m.toFixed(2) : "—"}</b></span>
+              <span><Activity size={13} /> HTTPS: <b>{productionServer?.statusCode || "—"}</b></span>
+              <span><ShieldCheck size={13} /> Elérhetőség: <b>{productionServer?.online ? "rendben" : "hiba"}</b></span>
+              <span><Server size={13} /> Válaszidő: <b>{productionServer?.latencyMs != null ? `${productionServer.latencyMs} ms` : "—"}</b></span>
             </div>
-            <small>{productionServer?.sampledAt ? `Erőforrásminta: ${new Date(productionServer.sampledAt).toLocaleString("hu-HU")} · ` : ""}{productionServer?.note || "Élő PROD ellenőrzés betöltése..."}</small>
           </article>
 
-          <article className="benjadmin-team-screen__remote-card" data-testid="infra-database">
-            <header><div><Database size={15} /><strong>DB VPS</strong></div><span className={databaseServer?.online ? "is-ok" : "is-pending"}>{databaseServer?.online ? "POSTGRES ELÉRHETŐ" : "NINCS KAPCSOLAT"}</span></header>
-            <div className="benjadmin-team-screen__remote-grid">
-              <div><span>Host</span><b>{databaseServer?.host || "213.160.68.33"}</b></div>
-              <div><span>Port / késleltetés</span><b>{databaseServer?.latencyMs != null ? `5432 · ${databaseServer.latencyMs} ms` : "5432 · —"}</b></div>
-              <div><span>Memóriaterhelés</span><b>{databaseServer?.memory?.usagePercent != null ? `${Math.round(databaseServer.memory.usagePercent)}% · ${formatBytes(databaseServer.memory.usedBytes)} / ${formatBytes(databaseServer.memory.totalBytes)}` : "Telemetria vár"}</b></div>
-              <div><span>Lemezfoglaltság</span><b>{databaseServer?.disk?.usePercent != null ? `${Math.round(databaseServer.disk.usePercent)}% · ${formatBytes(databaseServer.disk.usedBytes)} / ${formatBytes(databaseServer.disk.totalBytes)}` : "Telemetria vár"}</b></div>
+          <article className="benjadmin-team-screen__infra-card" data-testid="infra-database">
+            <header><div><Database size={16} /><strong>DB VPS</strong></div><span className={databaseServer?.online ? "is-ok" : "is-pending"}>{databaseServer?.online ? "ÉLŐ" : "NINCS KAPCSOLAT"}</span></header>
+            <p>{databaseServer?.host || "213.160.68.33"}</p>
+            <UsageBar label="Memóriaterhelés" value={databaseServer?.memory?.usagePercent} detail={databaseServer?.memory?.totalBytes ? `${formatBytes(databaseServer.memory.usedBytes)} / ${formatBytes(databaseServer.memory.totalBytes)} · szabad: ${formatBytes(databaseServer.memory.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <UsageBar label="Lemezfoglaltság" value={databaseServer?.disk?.usePercent} detail={databaseServer?.disk?.totalBytes ? `${formatBytes(databaseServer.disk.usedBytes)} / ${formatBytes(databaseServer.disk.totalBytes)} · szabad: ${formatBytes(databaseServer.disk.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <div className="benjadmin-team-screen__infra-facts">
+              <span><Cpu size={13} /> 1 perces terhelés: <b>{databaseServer?.load1m != null ? databaseServer.load1m.toFixed(2) : "—"}</b></span>
+              <span><Database size={13} /> PostgreSQL: <b>{databaseServer?.online ? "elérhető" : "hiba"}</b></span>
+              <span><ShieldCheck size={13} /> Port: <b>5432</b></span>
+              <span><Server size={13} /> Válaszidő: <b>{databaseServer?.latencyMs != null ? `${databaseServer.latencyMs} ms` : "—"}</b></span>
             </div>
-            <small>{databaseServer?.sampledAt ? `Erőforrásminta: ${new Date(databaseServer.sampledAt).toLocaleString("hu-HU")} · ` : ""}{databaseServer?.note || "DB hálózati ellenőrzés betöltése..."}</small>
           </article>
 
-          <div className="benjadmin-team-screen__storage-stack" aria-label="Külső tárhelyek">
-            {infrastructureStorages.map((storage) => (
-              <article className="benjadmin-team-screen__storage-card is-external" key={storage.code} data-testid={`infra-storage-${storage.code.toLowerCase()}`}>
-                <header><HardDrive size={15} /><strong>{storage.label}</strong><span className={storage.online ? "is-ok" : "is-pending"}>{storage.online ? "ONLINE" : "ELLENŐRIZENDŐ"}</span></header>
-                <div><span>Bucket</span><b title={storage.bucket || ""}>{storage.bucket || "—"}</b></div>
-                <div><span>Aktuális foglaltság</span><b>{storage.usedBytes != null ? formatBytes(storage.usedBytes) : "Nincs adat"}</b></div>
-                <div><span>Objektumok</span><b>{storage.objectCount != null ? `${storage.objectCount} db${storage.truncated ? "+" : ""}` : "—"}</b></div>
-                <div><span>Memória</span><b>Nem publikus · managed S3</b></div>
+          {infrastructureStorages.map((storage) => {
+            const capacityKnown = typeof storage.capacityBytes === "number" && storage.capacityBytes > 0;
+            const usageDetail = capacityKnown
+              ? `${formatBytes(storage.usedBytes)} / ${formatBytes(storage.capacityBytes)} · szabad: ${formatBytes(storage.freeBytes)}`
+              : `${formatBytes(storage.usedBytes)} foglalt · a DIMPRO tárhelykeret még nincs konfigurálva`;
+            return (
+              <article className="benjadmin-team-screen__infra-card is-storage" key={storage.code} data-testid={`infra-storage-${storage.code.toLowerCase()}`}>
+                <header><div><HardDrive size={16} /><strong>{storage.label}</strong></div><span className={storage.online ? "is-ok" : "is-pending"}>{storage.online ? "ÉLŐ" : "ELLENŐRIZENDŐ"}</span></header>
+                <p title={storage.bucket || ""}>{storage.bucket || "Hetzner Object Storage"}</p>
+                <UsageBar label="Tárhelyfoglaltság" value={storage.usagePercent} detail={usageDetail} />
+                <div className="benjadmin-team-screen__infra-facts">
+                  <span><Database size={13} /> Foglalt: <b>{storage.usedBytes != null ? formatBytes(storage.usedBytes) : "—"}</b></span>
+                  <span><HardDrive size={13} /> Teljes keret: <b>{capacityKnown ? formatBytes(storage.capacityBytes) : "nincs beállítva"}</b></span>
+                  <span><Activity size={13} /> Objektumok: <b>{storage.objectCount != null ? `${storage.objectCount}${storage.truncated ? "+" : ""} db` : "—"}</b></span>
+                  <span><ShieldCheck size={13} /> S3 kapcsolat: <b>{storage.online ? "rendben" : "hiba"}</b></span>
+                </div>
               </article>
-            ))}
-          </div>
+            );
+          })}
         </aside>
 
         <section className="benjadmin-team-screen__center" aria-label="BENJADMIN csapat">
@@ -487,7 +519,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
               const active = workerId ? (engine?.sessions || []).filter((session) => session.workerId === workerId && ["open", "active"].includes(session.status)).length : null;
               return (
                 <article key={member.id} className={`benjadmin-team-screen__member is-${member.tone}`} data-testid={`team-member-${member.id}`}>
-                  <div className="benjadmin-team-screen__avatar"><Image src={member.image} alt={`${member.name} hexagon embléma`} width={96} height={64} priority /></div>
+                  <div className="benjadmin-team-screen__avatar"><Image src={member.image} alt={`${member.name} hexagon embléma`} width={512} height={512} priority /></div>
                   <div className="benjadmin-team-screen__member-copy">
                     <div className="benjadmin-team-screen__member-title">
                       <div><h2>{member.name}</h2><p>{member.position}</p></div>
@@ -513,17 +545,6 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
           <div className="benjadmin-team-screen__section-title"><Activity size={17} /><div><span>MŰKÖDÉSI DIAGRAMOK</span><strong>Trendek és rendszerpulzus</strong></div></div>
 
           <MiniLineChart
-            title="Fejlesztési aktivitás"
-            subtitle="utolsó 7 nap"
-            labels={activity.labels}
-            series={[
-              { label: "Feladatmozgás (task)", values: activity.tasks, tone: "cyan" },
-              { label: "Munkamenetek (session)", values: activity.sessions, tone: "lime" },
-            ]}
-            emptyText="Az utolsó 7 napban nincs rögzített fejlesztési aktivitás."
-          />
-
-          <MiniLineChart
             title="Rendszerterhelési trend"
             subtitle="valós monitoring minták"
             labels={monitorTrend.labels}
@@ -543,10 +564,27 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             <div><span>Tárhely-minta</span><b>{control?.summary?.storageSamples ?? 0}</b></div>
           </article>
 
-          <article className="benjadmin-team-screen__pulse-card">
-            <header><MemoryStick size={16} /><strong>Javasolt jobb oldali fókusz</strong></header>
-            <p>A jobb oldali sáv hosszú távon a valós idejű CPU-, memória-, lemez-, hálózati és válaszidő-trendeket mutatja. A grafikon csak tényleges monitoring adatokból rajzol.</p>
-          </article>
+          <MiniLineChart
+            title="Elérési válaszidő"
+            subtitle="aktuális munkamenet · 30 mp mintavétel"
+            labels={latencyTrend.labels}
+            series={[
+              { label: "ÉLES VPS", values: latencyTrend.production, tone: "cyan" },
+              { label: "DB VPS", values: latencyTrend.database, tone: "lime" },
+            ]}
+            emptyText="A válaszidő-trendhez legalább egy élő infrastruktúra-minta szükséges."
+          />
+
+          <MiniLineChart
+            title="Fejlesztési aktivitás"
+            subtitle="utolsó 7 nap"
+            labels={activity.labels}
+            series={[
+              { label: "Feladatmozgás (task)", values: activity.tasks, tone: "cyan" },
+              { label: "Munkamenetek (session)", values: activity.sessions, tone: "lime" },
+            ]}
+            emptyText="Az utolsó 7 napban nincs rögzített fejlesztési aktivitás."
+          />
         </aside>
       </section>
 

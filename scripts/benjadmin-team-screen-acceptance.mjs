@@ -36,6 +36,7 @@ check("Infrastruktúra összesítő API elérhető", infrastructureResponse.stat
 check("PRODUCTION és DB szerver külön jelen van", ["PRODUCTION", "DATABASE"].every((code) => infrastructurePayload?.servers?.some((item) => item.code === code)), JSON.stringify(infrastructurePayload?.servers?.map((item) => item.code)));
 check("PRODUCTION és DB RAM/lemez minta elérhető", infrastructurePayload?.servers?.filter((item) => ["PRODUCTION", "DATABASE"].includes(item.code)).every((item) => item.memory?.usagePercent != null && item.disk?.usePercent != null && item.sampledAt), JSON.stringify(infrastructurePayload?.servers?.map((item) => ({ code: item.code, memory: item.memory?.usagePercent, disk: item.disk?.usePercent, sampledAt: item.sampledAt }))));
 check("Drive és Drop külső tárhely külön jelen van", ["DRIVE", "DROP"].every((code) => infrastructurePayload?.storages?.some((item) => item.code === code)), JSON.stringify(infrastructurePayload?.storages?.map((item) => item.code)));
+check("Drive és Drop élő foglaltságot és kapacitásmezőt ad", infrastructurePayload?.storages?.every((item) => typeof item.usedBytes === "number" && Object.prototype.hasOwnProperty.call(item, "capacityBytes")), JSON.stringify(infrastructurePayload?.storages?.map((item) => ({ code: item.code, usedBytes: item.usedBytes, capacityBytes: item.capacityBytes }))));
 
 const browser = await puppeteer.launch({
   headless: true,
@@ -77,9 +78,17 @@ try {
       names,
       wordmark: document.querySelector(".benjadmin-team-screen__brand .benjadmin-protective__wordmark")?.textContent || "",
       images: Array.from(root?.querySelectorAll(".benjadmin-team-screen__avatar img") || []).map((img) => ({ complete: img.complete, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, objectFit: getComputedStyle(img).objectFit, alt: img.alt, renderedWidth: img.getBoundingClientRect().width, renderedHeight: img.getBoundingClientRect().height })) ,
+      memberImageShares: Array.from(root?.querySelectorAll(".benjadmin-team-screen__member") || []).map((card) => {
+        const avatar = card.querySelector(".benjadmin-team-screen__avatar");
+        const cardRect = card.getBoundingClientRect();
+        const avatarRect = avatar?.getBoundingClientRect();
+        return { widthShare: avatarRect ? avatarRect.width / cardRect.width : 0, heightShare: avatarRect ? avatarRect.height / cardRect.height : 0 };
+      }),
+      infraCards: document.querySelectorAll(".benjadmin-team-screen__side--left .benjadmin-team-screen__infra-card").length,
+      chartTitles: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card h3")).map((node) => node.textContent || ""),
       leftTitle: document.querySelector(".benjadmin-team-screen__side--left")?.textContent || "",
       rightTitle: document.querySelector(".benjadmin-team-screen__side--right")?.textContent || "",
-      activityLines: document.querySelectorAll(".benjadmin-team-screen__chart-card:first-of-type .benjadmin-team-screen__chart-line").length,
+      activityLines: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card")).find((card) => (card.textContent || "").includes("Fejlesztési aktivitás"))?.querySelectorAll(".benjadmin-team-screen__chart-line").length || 0,
       systemChartFallback: (document.querySelector(".benjadmin-team-screen__side--right")?.textContent || "").includes("CPU / memória / lemez trend"),
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
@@ -93,11 +102,14 @@ try {
   check("Csapatnevek kanonikus formában jelennek meg", JSON.stringify(desktop.names) === JSON.stringify(expectedNames), JSON.stringify(desktop.names));
   check("DIMPRO BENJADMIN márkafelirat felül megmaradt", desktop.wordmark.includes("DIMPRO BENJADMIN"), desktop.wordmark.trim());
   check("Bal oldali szerver- és tárhelypanel látható", desktop.leftTitle.includes("Szerverek és tárhelyek") && desktop.leftTitle.includes("BENJADMIN DEV VPS") && desktop.leftTitle.includes("PRODUCTION / ÉLES VPS") && desktop.leftTitle.includes("DB VPS") && desktop.leftTitle.includes("DIMPRO Drive tárhely") && desktop.leftTitle.includes("DIMPRO Drop tárhely"));
+  check("DEV / ÉLES / DB és a két S3 azonos infrastruktúra-kártyát használ", desktop.infraCards === 5, `infraCards=${desktop.infraCards}`);
   check("Bal oldalon RAM és lemezterhelés látható DEV/PROD/DB célokra", (desktop.leftTitle.match(/Memóriaterhelés/g) || []).length >= 3 && (desktop.leftTitle.match(/Lemezfoglaltság/g) || []).length >= 3, desktop.leftTitle.slice(0, 800));
-  check("Jobb oldali vonaldiagramok láthatók", desktop.rightTitle.includes("Fejlesztési aktivitás") && desktop.rightTitle.includes("Rendszerterhelési trend"));
+  check("S3 tárhelyméret és foglaltság mezők láthatók", (desktop.leftTitle.match(/Tárhelyfoglaltság/g) || []).length === 2 && (desktop.leftTitle.match(/Teljes keret/g) || []).length === 2 && (desktop.leftTitle.match(/Foglalt:/g) || []).length === 2, desktop.leftTitle.slice(-900));
+  check("Jobb oldali működési diagramok a három fő trendet mutatják", ["Rendszerterhelési trend", "Elérési válaszidő", "Fejlesztési aktivitás"].every((title) => desktop.chartTitles.includes(title)), JSON.stringify(desktop.chartTitles));
   check("Fejlesztési aktivitás valós adatsorból rajzol vonalat", desktop.activityLines >= 1, `lineCount=${desktop.activityLines}`);
   check("Valós monitoring hiányánál nincs kitalált rendszertrend", desktop.rightTitle.includes("valós monitoring minták") && (desktop.systemChartFallback || desktop.rightTitle.includes("Monitoring minta")));
-  check("Mind az öt kész hexagon csapatembléma nagy méretben betöltött", desktop.images.length === 5 && desktop.images.every((item) => item.complete && item.naturalWidth === 96 && item.naturalHeight === 64 && item.objectFit === "contain" && item.alt.includes("hexagon embléma") && item.renderedWidth >= 100), JSON.stringify(desktop.images));
+  check("Mind az öt hexagon csapatembléma háttérdoboz nélkül betöltött", desktop.images.length === 5 && desktop.images.every((item) => item.complete && item.naturalWidth > 0 && item.naturalHeight > 0 && item.objectFit === "contain" && item.alt.includes("hexagon embléma")), JSON.stringify(desktop.images));
+  check("A személyi kártyák kb. fele képi terület", desktop.memberImageShares.length === 5 && desktop.memberImageShares.slice(0, 2).every((item) => item.widthShare >= 0.40) && desktop.memberImageShares.slice(2).every((item) => item.heightShare >= 0.40), JSON.stringify(desktop.memberImageShares));
   check("Csapatképernyő működési szöveg minimum 12 px", desktop.tooSmall.length === 0, JSON.stringify(desktop.tooSmall));
   check("Desktop nincs vízszintes túlcsordulás", desktop.scrollWidth <= desktop.clientWidth + 1, JSON.stringify({ scrollWidth: desktop.scrollWidth, clientWidth: desktop.clientWidth }));
   check("Desktop csapatképernyő egy viewportban marad", desktop.scrollHeight <= desktop.innerHeight + 1, JSON.stringify({ scrollHeight: desktop.scrollHeight, innerHeight: desktop.innerHeight }));

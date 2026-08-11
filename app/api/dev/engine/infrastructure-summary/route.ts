@@ -16,6 +16,20 @@ const PROD_URL = "https://license.dimpro.hu/admin/szerver";
 const DB_HOST = "213.160.68.33";
 const DB_PORT = 5432;
 
+function configuredQuotaBytes(name: "DIMPRO_DRIVE_S3_QUOTA_BYTES" | "DIMPRO_DROP_S3_QUOTA_BYTES") {
+  const parsed = Number(process.env[name]?.trim() || "");
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
+function storageCapacity(usedBytes: number | null, quotaBytes: number | null) {
+  if (usedBytes == null || quotaBytes == null) return { capacityBytes: quotaBytes, freeBytes: null, usagePercent: null };
+  return {
+    capacityBytes: quotaBytes,
+    freeBytes: Math.max(0, quotaBytes - usedBytes),
+    usagePercent: Math.max(0, Math.min(100, (usedBytes / quotaBytes) * 100)),
+  };
+}
+
 type RuntimeResourceSnapshot = {
   memoryTotalBytes: number;
   memoryUsedBytes: number;
@@ -113,7 +127,7 @@ async function inspectDriveStorage() {
   const config = getDriveObjectStorageConfig();
   const safe = getDriveObjectStorageSafeStatus(config);
   if (!safe.storageConfigured) {
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, note: safe.warning };
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: safe.warning };
   }
   try {
     let continuationToken: string | null = null;
@@ -128,9 +142,10 @@ async function inspectDriveStorage() {
       truncated = result.truncated;
       if (!result.truncated || !continuationToken) break;
     }
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : "S3 kapcsolat rendben." };
+    const quota = configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES");
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a teljes méret a DIMPRO-ban konfigurált tárhelykeret." : "S3 kapcsolat rendben; a szolgáltatói S3 API nem ad fix bucket-kapacitást, DIMPRO tárhelykeret még nincs konfigurálva." };
   } catch (error) {
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
   }
 }
 
@@ -138,14 +153,25 @@ async function inspectDropStorage() {
   const config = getDropStorageConfig();
   const safe = getDropStorageSafeStatus(config);
   if (!safe.storageConfigured || config.provider !== "s3-compatible") {
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, note: "A Drop S3 tárhely nincs teljesen konfigurálva." };
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: "A Drop S3 tárhely nincs teljesen konfigurálva." };
   }
   try {
-    const result = await listDropS3Objects({ maxKeys: 1000, bucket: config.bucket });
-    const usedBytes = result.objects.reduce((sum, item) => sum + item.sizeBytes, 0);
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount: result.objects.length, truncated: result.truncated, note: result.truncated ? "A kijelzett foglaltság az első 1000 objektum összegzése." : "S3 kapcsolat rendben." };
+    let continuationToken: string | null = null;
+    let usedBytes = 0;
+    let objectCount = 0;
+    let truncated = false;
+    for (let page = 0; page < 10; page += 1) {
+      const result = await listDropS3Objects({ maxKeys: 1000, bucket: config.bucket, continuationToken });
+      usedBytes += result.objects.reduce((sum, item) => sum + item.sizeBytes, 0);
+      objectCount += result.objects.length;
+      continuationToken = result.nextContinuationToken;
+      truncated = result.truncated;
+      if (!result.truncated || !continuationToken) break;
+    }
+    const quota = configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES");
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a teljes méret a DIMPRO-ban konfigurált tárhelykeret." : "S3 kapcsolat rendben; a szolgáltatói S3 API nem ad fix bucket-kapacitást, DIMPRO tárhelykeret még nincs konfigurálva." };
   } catch (error) {
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
   }
 }
 

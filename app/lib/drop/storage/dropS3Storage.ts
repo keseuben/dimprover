@@ -188,13 +188,14 @@ export async function createDropS3InlineUrl(input: {
 }
 
 
-export async function listDropS3Objects(input: { prefix?: string; maxKeys?: number; bucket?: string | null } = {}) {
+export async function listDropS3Objects(input: { prefix?: string; maxKeys?: number; bucket?: string | null; continuationToken?: string | null } = {}) {
   const { client, config } = getClient();
   const maxKeys = Math.max(1, Math.min(1000, Math.floor(input.maxKeys || 1000)));
   const result = await client.send(new ListObjectsV2Command({
     Bucket: input.bucket || config.bucket,
     Prefix: input.prefix || undefined,
     MaxKeys: maxKeys,
+    ContinuationToken: input.continuationToken || undefined,
   }));
   return {
     objects: (result.Contents || []).map((item) => ({
@@ -204,6 +205,7 @@ export async function listDropS3Objects(input: { prefix?: string; maxKeys?: numb
       lastModified: item.LastModified?.toISOString() || null,
     })).filter((item) => Boolean(item.key)),
     truncated: Boolean(result.IsTruncated),
+    nextContinuationToken: result.NextContinuationToken || null,
     keyCount: Number(result.KeyCount || result.Contents?.length || 0),
   };
 }
