@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bot,
+  Boxes,
   CheckCircle2,
   CircleAlert,
   Clock3,
@@ -29,8 +30,9 @@ import type { DevEngineGateStatus, DevEngineTask, DevEngineWorker, DevEngineWork
 import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-center/types";
 import BenjadminEntitlementsPanel from "./BenjadminEntitlementsPanel";
 import BenjadminControlPlanePanel from "./BenjadminControlPlanePanel";
+import BenjadminPartnerDevelopmentPanel from "./BenjadminPartnerDevelopmentPanel";
 
-type OperatorView = "overview" | "control" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
+type OperatorView = "overview" | "control" | "partners" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
 
 type RawEnvironment = { id?: string; code?: string; name?: string; kind?: string; status?: string; read_only?: boolean; updated_at?: string };
 type RawLease = { id?: string; session_id?: string; task_id?: string; branch_name?: string; worktree_path?: string; status?: string; lease_expires_at?: string };
@@ -71,6 +73,7 @@ const PAGE_SIZE = 8;
 const views: Array<{ id: OperatorView; label: string; icon: typeof Activity }> = [
   { id: "overview", label: "Áttekintés", icon: Activity },
   { id: "control", label: "Control", icon: TerminalSquare },
+  { id: "partners", label: "Partner fejlesztések", icon: Boxes },
   { id: "tasks", label: "Taskok", icon: ListTodo },
   { id: "team", label: "Csapat", icon: Bot },
   { id: "workers", label: "Worker-ek", icon: Bot },
@@ -384,6 +387,8 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         ) : null}
 
         {view === "control" ? <BenjadminControlPlanePanel query={query} /> : null}
+
+        {view === "partners" ? <BenjadminPartnerDevelopmentPanel query={query} /> : null}
 
         {view === "entitlements" ? <BenjadminEntitlementsPanel query={query} /> : null}
 
