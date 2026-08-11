@@ -72,8 +72,9 @@ A runtime csak akkor `READY`, ha minden fizikai izolációs feltétel teljesül.
 
 A korábbi általános P2 jelzés helyett a felület valós runtime státuszt mutat:
 
-- `P2 POLICY ACTIVE · RUNTIME PENDING`, vagy
-- `P2 RUNTIME READY`.
+- `OUTMINAI · DEFAULT DENY · P2 RUNTIME PENDING`,
+- `OUTMINAI · DEFAULT DENY · P2 PREFLIGHT READY`, vagy
+- `OUTMINAI · DEFAULT DENY · P2 RUNTIME READY`.
 
 A P2 runtime státusz külön metrikában is megjelenik.
 
@@ -94,8 +95,8 @@ A teljes P2 lezárásához továbbra is szükséges:
 
 1. külön `outmin` Linux service identity és külön partner csoport;
 2. partner skeleton tulajdonjogának átadása a service identity számára;
-3. `/srv/dimpro-dev` OS-szintű hozzáférésének tiltása OutminAI számára;
-4. külön OutminAI SSH public identity aktiválása a DEV VPS-en;
+3. a már 0750-re szigorított `/srv/dimpro-dev` tényleges negatív hozzáférési acceptance-e az új Outmin identityvel;
+4. a már DEV-re stagingelt OutminAI SSH public identity tényleges bekötése az új service userhez;
 5. pozitív partner write és negatív internal read/traverse OS acceptance;
 6. csak ezek után runtime READY marker létrehozása.
 
@@ -110,16 +111,19 @@ A következő kézi/infrastruktúra gate a külön Outmin Linux identity szabál
 
 Aktív DEV build:
 
-`4c1WmAmy41L7sokNMd_-t`
+`Qh5rJM0_a8fBUBHw1DM5J`
 
 Eredmények:
 
-- P2 runtime/policy acceptance: **10/10 PASS**;
-- pozitív OutminAI worker-token acceptance: PASS;
+- P2 runtime/policy acceptance: **12/12 PASS**;
+- pozitív OutminAI worker-token acceptance: korábban külön PASS, a worker-auth kód azóta nem változott;
 - P2 runtime state: **PENDING**, fail-closed;
+- P2 runtime preflight: **READY**;
 - runtime skeleton: READY;
 - worker token hash: READY;
-- még aktív blocker: internal root OS protection, SSH identity activation, worker runtime marker;
+- `/srv/dimpro-dev` mód: **0750 root:root**;
+- OutminAI SSH public key staging: READY;
+- még aktív blocker: Linux service identity + tényleges OS/SSH acceptance + runtime marker;
 - B3.2 P1 state-aware regression: **14/14 PASS**;
 - B3.1 Control regression: **13/13 PASS**;
 - Operator UI regression: **30/30 PASS**;
@@ -129,7 +133,7 @@ Eredmények:
 
 A runtime readiness API jelenleg a következő blokkolókat jelenti:
 
-- `OUTMIN_INTERNAL_ROOT_NOT_PROTECTED`;
+- `OUTMIN_INTERNAL_ACCOUNT_ACCEPTANCE_PENDING`;
 - `OUTMIN_SSH_IDENTITY_NOT_READY`;
 - `OUTMIN_WORKER_IDENTITY_NOT_ACTIVATED`;
 - `OUTMIN_RUNTIME_READY_MARKER_MISSING`.

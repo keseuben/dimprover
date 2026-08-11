@@ -43,6 +43,9 @@ const runtime = result.payload?.runtimeIsolation;
 check("P2 runtime status is exposed", result.status === 200 && Boolean(runtime?.stage), `status=${result.status} stage=${runtime?.stage}`);
 check("partner runtime root skeleton exists", runtime?.rootReady === true && runtime?.directoriesReady === true, JSON.stringify({ rootReady: runtime?.rootReady, directoriesReady: runtime?.directoriesReady }));
 check("OutminAI worker token hash is staged", runtime?.tokenHashReady === true, `tokenHashReady=${runtime?.tokenHashReady}`);
+check("internal DEV root mode is pre-hardened", runtime?.internalRootModeProtected === true, `internalRootModeProtected=${runtime?.internalRootModeProtected}`);
+check("OutminAI SSH public identity is staged", runtime?.sshPublicKeyStaged === true, `sshPublicKeyStaged=${runtime?.sshPublicKeyStaged}`);
+check("P2 runtime preflight is READY", runtime?.preflightReady === true, `preflightReady=${runtime?.preflightReady}`);
 if (runtime?.ready === true) {
   check("READY runtime asserts internal root protection", runtime.internalRootProtected === true && runtime.markerReady === true, JSON.stringify(runtime));
 } else {

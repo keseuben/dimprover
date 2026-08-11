@@ -47,6 +47,9 @@ type PartnerRuntimeIsolation = {
   rootReady: boolean;
   directoriesReady: boolean;
   tokenHashReady: boolean;
+  internalRootModeProtected: boolean;
+  sshPublicKeyStaged: boolean;
+  preflightReady: boolean;
   markerReady: boolean;
   internalRootProtected: boolean;
   workerTokenReady: boolean;
@@ -224,7 +227,11 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
           </span>
           <span className={`operator-status-badge ${snapshot?.runtimeIsolation?.ready ? "is-ok" : "is-partner"}`} data-testid="partner-runtime-status">
             <ShieldCheck size={13} />
-            {snapshot?.runtimeIsolation?.ready ? "P2 RUNTIME READY" : "P2 POLICY ACTIVE · RUNTIME PENDING"}
+            {snapshot?.runtimeIsolation?.ready
+              ? "OUTMINAI · DEFAULT DENY · P2 RUNTIME READY"
+              : snapshot?.runtimeIsolation?.preflightReady
+                ? "OUTMINAI · DEFAULT DENY · P2 PREFLIGHT READY"
+                : "OUTMINAI · DEFAULT DENY · P2 RUNTIME PENDING"}
           </span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Partner állapot frissítése">
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} />
@@ -360,7 +367,9 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
               <span>
                 {snapshot?.runtimeIsolation?.ready
                   ? "P2 runtime izoláció READY: partner root, worker credential és belső DIMPRO védelem igazolt. Repo/DB/storage provisioning P3."
-                  : "P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás külön runtime gate; repo/DB/storage provisioning P3."}
+                  : snapshot?.runtimeIsolation?.preflightReady
+                    ? "P2 runtime preflight READY: partner root, worker token, SSH public identity és belső DEV root mód előkészítve. A külön Outmin Linux identity acceptance még hiányzik."
+                    : "P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás külön runtime gate; repo/DB/storage provisioning P3."}
               </span>
             </div>
           </div>
