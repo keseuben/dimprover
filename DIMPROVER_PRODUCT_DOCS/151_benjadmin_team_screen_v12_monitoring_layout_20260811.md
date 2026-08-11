@@ -123,3 +123,49 @@ A vizsgálat külön ellenőrzi, hogy:
 - desktop, tablet és mobil nézeten nincs teljes oldali vízszintes túlcsordulás.
 
 PROD módosítás: **nem történt**.
+
+
+## v1.3 – AI finanszírozás és tokenkeret
+
+A középső munkatér alsó része külön AI-finanszírozási státuszpanelt kap. Emiatt a BENJADMIN csapat kártyáinak magassága csökken, a csapat továbbra is elsődleges vizuális elem marad.
+
+A panel kizárólag valós, szerveroldali BENJADMIN entitlement/AI usage adatokból dolgozik:
+
+- havi AI költség;
+- összes havi finanszírozási keret;
+- havi AI kérések száma;
+- input token;
+- output token;
+- összes tokenforgalom;
+- finanszírozási keret kihasználtság;
+- opcionális belső havi tokenkeret és kihasználtság.
+
+Az opcionális belső tokenkeret konfigurációja:
+
+`DIMPRO_BENJADMIN_AI_MONTHLY_TOKEN_BUDGET`
+
+Ha nincs konfigurálva, a felület nem talál ki keretet: `Nincs beállítva` állapotot mutat.
+
+A központi AI-költség és tokenforgalom forrása a meglévő, auditált AI usage napló. A panel nem jelenít meg API-kulcsot vagy nyers secretet.
+
+## Képfájl-minőség megállapítás
+
+A jelenlegi DEV csapatemblémák technikailag hibás köztes assetek: mind az öt fájl csak **96×64 px**, VP8 WebP, alfa csatorna nélkül. A pixelek kb. 54–56%-a közel fekete, ezért a hexagon körül a fekete téglalap a fájlba van sütve. Nagy kártyán ez szükségszerűen homályos és nem javítható valódi részletvesztés nélkül.
+
+Átmeneti javításként a fekete külső terület alfa csatornával eltávolítható, de a végleges megoldás az eredeti nagy felbontású, transzparens forrásképek közvetlen telepítése. A végleges csapatképekből tilos 96×64 px-es master assetet készíteni.
+
+### v1.3 DEV ellenőrzési eredmény
+
+Aktív DEV build: `OOeh4vrwaaZfQk5W0Tefd`.
+
+- csapatképernyő v1.3: **32/32 PASS**;
+- Operator UI regresszió: **30/30 PASS**;
+- B3.2 P5 regresszió: **53/53 PASS**;
+- `npx tsc --noEmit`: PASS;
+- `npm run lint`: 0 hiba / 108 meglévő warning;
+- `git diff --check`: PASS;
+- DEV PM2: online.
+
+Az átmeneti csapatassetek technikai javítása megtörtént: a peremről elérhető közel fekete háttérpixelek transzparens alfaértéket kaptak, majd a 96×64 px köztes kép 384×256 px lossless WebP-re került. Ez a fekete téglalapot megszünteti, de **nem helyettesíti az eredeti nagy felbontású forrásképet**, ezért végleges minőségi assetként nem tekinthető.
+
+PROD módosítás: **nem történt**.

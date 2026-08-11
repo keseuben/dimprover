@@ -145,6 +145,16 @@ export async function getBenjadminEntitlementSnapshot() {
     });
   }
 
+  const aiMonthlyBudgetHuf = localAiLicenses.reduce((sum, item) => sum + numberValue(item.aiMonthlyBudgetHuf), 0);
+  const aiCostHufThisMonth = numberValue(aiUsage.totals.costHuf);
+  const aiInputTokensThisMonth = numberValue(aiUsage.totals.inputTokens);
+  const aiOutputTokensThisMonth = numberValue(aiUsage.totals.outputTokens);
+  const aiTotalTokensThisMonth = aiInputTokensThisMonth + aiOutputTokensThisMonth;
+  const configuredTokenBudget = Number(process.env.DIMPRO_BENJADMIN_AI_MONTHLY_TOKEN_BUDGET || 0);
+  const aiMonthlyTokenBudget = Number.isFinite(configuredTokenBudget) && configuredTokenBudget > 0
+    ? Math.floor(configuredTokenBudget)
+    : 0;
+
   return {
     generatedAt: new Date().toISOString(),
     sources: {
@@ -160,7 +170,14 @@ export async function getBenjadminEntitlementSnapshot() {
       activeSendEntitlements: central.sendEntitlements.filter((item) => text(item.status) === "active").length,
       aiEnabledLicenses: localAiLicenses.filter((item) => item.aiEnabled).length,
       aiRequestsThisMonth: aiUsage.totals.requests,
-      aiCostHufThisMonth: aiUsage.totals.costHuf,
+      aiCostHufThisMonth,
+      aiMonthlyBudgetHuf,
+      aiBudgetPercent: aiMonthlyBudgetHuf > 0 ? (aiCostHufThisMonth / aiMonthlyBudgetHuf) * 100 : 0,
+      aiInputTokensThisMonth,
+      aiOutputTokensThisMonth,
+      aiTotalTokensThisMonth,
+      aiMonthlyTokenBudget,
+      aiTokenBudgetPercent: aiMonthlyTokenBudget > 0 ? (aiTotalTokensThisMonth / aiMonthlyTokenBudget) * 100 : 0,
     },
     centralLicenses,
     localAiLicenses,

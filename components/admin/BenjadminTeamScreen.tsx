@@ -7,6 +7,8 @@ import {
   Cpu,
   Database,
   HardDrive,
+  Coins,
+  Gauge,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -94,6 +96,21 @@ type PartnerSnapshot = {
     ready?: boolean;
     stage?: string;
     root?: string;
+  };
+};
+
+type EntitlementSnapshot = {
+  summary?: {
+    aiEnabledLicenses?: number;
+    aiRequestsThisMonth?: number;
+    aiCostHufThisMonth?: number;
+    aiMonthlyBudgetHuf?: number;
+    aiBudgetPercent?: number;
+    aiInputTokensThisMonth?: number;
+    aiOutputTokensThisMonth?: number;
+    aiTotalTokensThisMonth?: number;
+    aiMonthlyTokenBudget?: number;
+    aiTokenBudgetPercent?: number;
   };
 };
 
@@ -219,6 +236,16 @@ function formatBytes(bytes?: number | null) {
   return `${scaled >= 100 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`;
 }
 
+function formatCompactNumber(value?: number | null) {
+  const amount = Math.max(0, Number(value || 0));
+  return new Intl.NumberFormat("hu-HU", { notation: "compact", maximumFractionDigits: 1 }).format(amount);
+}
+
+function formatHuf(value?: number | null) {
+  const amount = Math.max(0, Number(value || 0));
+  return `${new Intl.NumberFormat("hu-HU", { maximumFractionDigits: amount < 100 ? 1 : 0 }).format(amount)} Ft`;
+}
+
 function formatUptime(seconds?: number | null) {
   const value = Math.max(0, Number(seconds || 0));
   const days = Math.floor(value / 86400);
@@ -309,6 +336,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [control, setControl] = useState<ControlSnapshot | null>(null);
   const [partner, setPartner] = useState<PartnerSnapshot | null>(null);
+  const [entitlements, setEntitlements] = useState<EntitlementSnapshot | null>(null);
   const [infrastructure, setInfrastructure] = useState<InfrastructureSummary | null>(null);
   const [latencyHistory, setLatencyHistory] = useState<Array<{ label: string; production: number; database: number }>>([]);
   const [loading, setLoading] = useState(true);
@@ -325,21 +353,23 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
     if (!silent) setLoading(true);
     try {
       const headers = { "x-dimpro-license-admin-key": key };
-      const [engineResponse, serverResponse, controlResponse, partnerResponse, infrastructureResponse] = await Promise.all([
+      const [engineResponse, serverResponse, controlResponse, partnerResponse, infrastructureResponse, entitlementResponse] = await Promise.all([
         fetch("/api/dev/engine/state", { headers, cache: "no-store" }),
         fetch("/api/license/server-status", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/control-plane", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/partner-projects", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/infrastructure-summary", { headers, cache: "no-store" }),
+        fetch("/api/dev/engine/entitlements", { headers, cache: "no-store" }),
       ]);
-      const [enginePayload, serverPayload, controlPayload, partnerPayload, infrastructurePayload] = await Promise.all([
-        engineResponse.json(), serverResponse.json(), controlResponse.json(), partnerResponse.json(), infrastructureResponse.json(),
+      const [enginePayload, serverPayload, controlPayload, partnerPayload, infrastructurePayload, entitlementPayload] = await Promise.all([
+        engineResponse.json(), serverResponse.json(), controlResponse.json(), partnerResponse.json(), infrastructureResponse.json(), entitlementResponse.json(),
       ]);
       if (!engineResponse.ok || !enginePayload?.state) throw new Error(enginePayload?.error || "A fejlesztési állapot nem tölthető be.");
       setEngine(enginePayload.state as EngineState);
       if (serverResponse.ok) setServerStatus(serverPayload as ServerStatus);
       if (controlResponse.ok) setControl(controlPayload as ControlSnapshot);
       if (partnerResponse.ok) setPartner(partnerPayload as PartnerSnapshot);
+      if (entitlementResponse.ok && entitlementPayload?.entitlements) setEntitlements(entitlementPayload.entitlements as EntitlementSnapshot);
       if (infrastructureResponse.ok) {
         const nextInfrastructure = infrastructurePayload as InfrastructureSummary;
         setInfrastructure(nextInfrastructure);
@@ -427,6 +457,13 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
     production: latencyHistory.map((item) => item.production),
     database: latencyHistory.map((item) => item.database),
   };
+  const aiSummary = entitlements?.summary || {};
+  const aiMonthlyCost = Number(aiSummary.aiCostHufThisMonth || 0);
+  const aiMonthlyBudget = Number(aiSummary.aiMonthlyBudgetHuf || 0);
+  const aiBudgetPercent = aiMonthlyBudget > 0 ? Math.min(100, Math.max(0, Number(aiSummary.aiBudgetPercent || 0))) : null;
+  const aiTotalTokens = Number(aiSummary.aiTotalTokensThisMonth || 0);
+  const aiTokenBudget = Number(aiSummary.aiMonthlyTokenBudget || 0);
+  const aiTokenPercent = aiTokenBudget > 0 ? Math.min(100, Math.max(0, Number(aiSummary.aiTokenBudgetPercent || 0))) : null;
 
   return (
     <main className="benjadmin-team-screen" data-testid="benjadmin-team-screen">
@@ -533,12 +570,34 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             })}
           </div>
 
-          <div className="benjadmin-team-screen__pulse-row">
-            <div><span>Nyitott feladatok</span><strong>{openTasks}</strong></div>
-            <div><span>Aktív munkamenetek</span><strong>{activeSessions}</strong></div>
-            <div><span>Partner futási tér</span><strong>{partner?.runtimeIsolation?.ready ? "READY" : partner?.runtimeIsolation?.stage || "Nincs adat"}</strong></div>
-            <div><span>Függő jóváhagyás</span><strong>{control?.summary?.pendingApprovals ?? 0}</strong></div>
-          </div>
+          <section className="benjadmin-team-screen__ai-finance" data-testid="benjadmin-ai-finance">
+            <header>
+              <div><Coins size={17} /><div><span>AI FINANSZÍROZÁS ÉS TOKENKERET</span><strong>Költség, felhasználás és belső keretek</strong></div></div>
+              <small>{aiSummary.aiEnabledLicenses ?? 0} aktív AI licenc · {aiSummary.aiRequestsThisMonth ?? 0} kérés / hó</small>
+            </header>
+            <div className="benjadmin-team-screen__ai-finance-grid">
+              <article><span>AI költség / hó</span><strong>{formatHuf(aiMonthlyCost)}</strong><small>központi, naplózott felhasználás</small></article>
+              <article><span>Finanszírozási keret / hó</span><strong>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</strong><small>{aiBudgetPercent == null ? "belső keret szükséges" : `${aiBudgetPercent.toFixed(1)}% felhasználva`}</small></article>
+              <article><span>Tokenforgalom / hó</span><strong>{formatCompactNumber(aiTotalTokens)}</strong><small>{formatCompactNumber(aiSummary.aiInputTokensThisMonth)} be · {formatCompactNumber(aiSummary.aiOutputTokensThisMonth)} ki</small></article>
+              <article><span>Tokenkeret / hó</span><strong>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</strong><small>{aiTokenPercent == null ? "opcionális belső limit" : `${aiTokenPercent.toFixed(1)}% felhasználva`}</small></article>
+            </div>
+            <div className="benjadmin-team-screen__ai-budget-lines">
+              <div>
+                <div><span><Gauge size={13} /> Finanszírozási kihasználtság</span><b>{aiBudgetPercent == null ? "—" : `${aiBudgetPercent.toFixed(1)}%`}</b></div>
+                <div className="benjadmin-team-screen__ai-track"><span style={{ width: `${aiBudgetPercent || 0}%` }} /></div>
+              </div>
+              <div>
+                <div><span><Gauge size={13} /> Tokenkeret kihasználtság</span><b>{aiTokenPercent == null ? "—" : `${aiTokenPercent.toFixed(1)}%`}</b></div>
+                <div className={`benjadmin-team-screen__ai-track${aiTokenPercent == null ? " is-unset" : ""}`}><span style={{ width: `${aiTokenPercent || 0}%` }} /></div>
+              </div>
+            </div>
+            <footer>
+              <span>Nyitott feladat: <b>{openTasks}</b></span>
+              <span>Aktív munkamenet: <b>{activeSessions}</b></span>
+              <span>Partner futási tér: <b>{partner?.runtimeIsolation?.ready ? "READY" : partner?.runtimeIsolation?.stage || "Nincs adat"}</b></span>
+              <span>Függő jóváhagyás: <b>{control?.summary?.pendingApprovals ?? 0}</b></span>
+            </footer>
+          </section>
         </section>
 
         <aside className="benjadmin-team-screen__side benjadmin-team-screen__side--right" aria-label="Működési diagramok">
