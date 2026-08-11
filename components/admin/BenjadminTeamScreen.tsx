@@ -9,7 +9,9 @@ import {
   HardDrive,
   Coins,
   Gauge,
+  Moon,
   RefreshCw,
+  Sun,
   Server,
   ShieldCheck,
   UsersRound,
@@ -63,6 +65,10 @@ type ServerStatus = {
     totalBytes?: number;
     availableBytes?: number;
     usagePercent?: number;
+    swapTotalBytes?: number;
+    swapUsedBytes?: number;
+    swapFreeBytes?: number;
+    swapUsagePercent?: number;
   };
   disk?: {
     sizeKb?: number;
@@ -123,6 +129,7 @@ type InfrastructureServer = {
   latencyMs?: number | null;
   statusCode?: number | null;
   memory?: { usagePercent?: number; totalBytes?: number; usedBytes?: number; availableBytes?: number } | null;
+  swap?: { usagePercent?: number; totalBytes?: number; usedBytes?: number; availableBytes?: number } | null;
   disk?: { usePercent?: number; totalBytes?: number; usedBytes?: number; availableBytes?: number } | null;
   telemetry: string;
   sampledAt?: string | null;
@@ -290,6 +297,9 @@ function chartPath(values: number[], width = 320, height = 94) {
 
 function MiniLineChart({ title, subtitle, labels, series, emptyText }: { title: string; subtitle: string; labels: string[]; series: LineSeries[]; emptyText?: string }) {
   const hasData = series.some((item) => item.values.some((value) => value > 0));
+  const displayLabels = labels.length <= 4
+    ? labels
+    : [labels[0], labels[Math.floor((labels.length - 1) / 2)], labels[labels.length - 1]];
   return (
     <section className="benjadmin-team-screen__chart-card">
       <header>
@@ -310,7 +320,7 @@ function MiniLineChart({ title, subtitle, labels, series, emptyText }: { title: 
         )}
       </div>
       <div className="benjadmin-team-screen__chart-labels">
-        {labels.map((label) => <span key={label}>{label}</span>)}
+        {displayLabels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}
       </div>
       <div className="benjadmin-team-screen__legend">
         {series.map((item) => <span key={item.label} className={`is-${item.tone}`}><i />{item.label}</span>)}
@@ -331,7 +341,7 @@ function UsageBar({ label, value, detail }: { label: string; value?: number | nu
   );
 }
 
-export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }) {
+export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: { theme: "light" | "dark"; onThemeToggle: () => void; onClose: () => void }) {
   const [engine, setEngine] = useState<EngineState | null>(null);
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [control, setControl] = useState<ControlSnapshot | null>(null);
@@ -445,6 +455,9 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
   const memoryTotal = Number(serverStatus?.memory?.totalBytes || 0);
   const memoryAvailable = Number(serverStatus?.memory?.availableBytes || 0);
   const memoryUsed = Math.max(0, memoryTotal - memoryAvailable);
+  const swapTotal = Number(serverStatus?.memory?.swapTotalBytes || 0);
+  const swapUsed = Number(serverStatus?.memory?.swapUsedBytes || 0);
+  const swapFree = Number(serverStatus?.memory?.swapFreeBytes || Math.max(0, swapTotal - swapUsed));
   const pm2Processes = serverStatus?.services?.pm2?.processes || [];
   const pm2Online = pm2Processes.filter((item) => item.status === "online").length;
   const openTasks = (engine?.tasks || []).filter((task) => isOpenTask(task.status)).length;
@@ -466,7 +479,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
   const aiTokenPercent = aiTokenBudget > 0 ? Math.min(100, Math.max(0, Number(aiSummary.aiTokenBudgetPercent || 0))) : null;
 
   return (
-    <main className="benjadmin-team-screen" data-testid="benjadmin-team-screen">
+    <main className={`benjadmin-team-screen admin-theme-${theme}`} data-theme={theme} data-testid="benjadmin-team-screen">
       <div className="benjadmin-protective__grid" aria-hidden="true" />
       <div className="benjadmin-protective__glow benjadmin-protective__glow--a" aria-hidden="true" />
       <div className="benjadmin-protective__glow benjadmin-protective__glow--b" aria-hidden="true" />
@@ -486,6 +499,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             <header><div><Server size={16} /><strong>BENJADMIN DEV VPS</strong></div><span className={serverStatus?.ok ? "is-ok" : "is-pending"}>{serverStatus?.ok ? "ÉLŐ" : "NINCS ADAT"}</span></header>
             <p>{serverStatus?.server?.hostname || "Telemetria betöltése..."}</p>
             <UsageBar label="Memóriaterhelés" value={Number(serverStatus?.memory?.usagePercent || 0)} detail={`${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)} · szabad: ${formatBytes(memoryAvailable)}`} />
+            <UsageBar label="Swap használat" value={swapTotal > 0 ? Number(serverStatus?.memory?.swapUsagePercent || 0) : null} detail={swapTotal > 0 ? `${formatBytes(swapUsed)} / ${formatBytes(swapTotal)} · szabad: ${formatBytes(swapFree)}` : "Swap nincs konfigurálva ezen a szerveren."} />
             <UsageBar label="Lemezfoglaltság" value={Number(serverStatus?.disk?.usePercent || 0)} detail={`${formatBytes(diskUsed)} / ${formatBytes(diskTotal)} · szabad: ${formatBytes(diskFree)}`} />
             <div className="benjadmin-team-screen__infra-facts">
               <span><Cpu size={13} /> 1 perces terhelés: <b>{Number(serverStatus?.server?.loadAverage?.[0] || 0).toFixed(2)}</b></span>
@@ -499,6 +513,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             <header><div><Server size={16} /><strong>PRODUCTION / ÉLES VPS</strong></div><span className={productionServer?.online ? "is-ok" : "is-pending"}>{productionServer?.online ? "ÉLŐ" : "NINCS KAPCSOLAT"}</span></header>
             <p>{productionServer?.host || "213.160.68.24"}</p>
             <UsageBar label="Memóriaterhelés" value={productionServer?.memory?.usagePercent} detail={productionServer?.memory?.totalBytes ? `${formatBytes(productionServer.memory.usedBytes)} / ${formatBytes(productionServer.memory.totalBytes)} · szabad: ${formatBytes(productionServer.memory.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <UsageBar label="Swap használat" value={productionServer?.swap?.totalBytes ? productionServer.swap.usagePercent : null} detail={productionServer?.swap?.totalBytes ? `${formatBytes(productionServer.swap.usedBytes)} / ${formatBytes(productionServer.swap.totalBytes)} · szabad: ${formatBytes(productionServer.swap.availableBytes)}` : "Read-only swap minta még nem érhető el."} />
             <UsageBar label="Lemezfoglaltság" value={productionServer?.disk?.usePercent} detail={productionServer?.disk?.totalBytes ? `${formatBytes(productionServer.disk.usedBytes)} / ${formatBytes(productionServer.disk.totalBytes)} · szabad: ${formatBytes(productionServer.disk.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
             <div className="benjadmin-team-screen__infra-facts">
               <span><Cpu size={13} /> 1 perces terhelés: <b>{productionServer?.load1m != null ? productionServer.load1m.toFixed(2) : "—"}</b></span>
@@ -512,6 +527,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             <header><div><Database size={16} /><strong>DB VPS</strong></div><span className={databaseServer?.online ? "is-ok" : "is-pending"}>{databaseServer?.online ? "ÉLŐ" : "NINCS KAPCSOLAT"}</span></header>
             <p>{databaseServer?.host || "213.160.68.33"}</p>
             <UsageBar label="Memóriaterhelés" value={databaseServer?.memory?.usagePercent} detail={databaseServer?.memory?.totalBytes ? `${formatBytes(databaseServer.memory.usedBytes)} / ${formatBytes(databaseServer.memory.totalBytes)} · szabad: ${formatBytes(databaseServer.memory.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
+            <UsageBar label="Swap használat" value={databaseServer?.swap?.totalBytes ? databaseServer.swap.usagePercent : null} detail={databaseServer?.swap?.totalBytes ? `${formatBytes(databaseServer.swap.usedBytes)} / ${formatBytes(databaseServer.swap.totalBytes)} · szabad: ${formatBytes(databaseServer.swap.availableBytes)}` : "Read-only swap minta még nem érhető el."} />
             <UsageBar label="Lemezfoglaltság" value={databaseServer?.disk?.usePercent} detail={databaseServer?.disk?.totalBytes ? `${formatBytes(databaseServer.disk.usedBytes)} / ${formatBytes(databaseServer.disk.totalBytes)} · szabad: ${formatBytes(databaseServer.disk.availableBytes)}` : "Read-only erőforrásminta még nem érhető el."} />
             <div className="benjadmin-team-screen__infra-facts">
               <span><Cpu size={13} /> 1 perces terhelés: <b>{databaseServer?.load1m != null ? databaseServer.load1m.toFixed(2) : "—"}</b></span>
@@ -601,7 +617,7 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
         </section>
 
         <aside className="benjadmin-team-screen__side benjadmin-team-screen__side--right" aria-label="Működési diagramok">
-          <div className="benjadmin-team-screen__section-title"><Activity size={17} /><div><span>MŰKÖDÉSI DIAGRAMOK</span><strong>Trendek és rendszerpulzus</strong></div></div>
+          <div className="benjadmin-team-screen__section-title"><Activity size={17} /><div><span>MŰKÖDÉSI DIAGRAMOK</span><strong>Trendek és rendszerállapot</strong></div></div>
 
           <MiniLineChart
             title="Rendszerterhelési trend"
@@ -615,13 +631,6 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
             emptyText="A B3.1 valós idejű monitoring még nem gyűjt elegendő mintát. Itt CPU / memória / lemez trend jelenik meg, amint az adatgyűjtés aktív."
           />
 
-          <article className="benjadmin-team-screen__pulse-card">
-            <header><Activity size={16} /><strong>Vezérlési pulzus</strong></header>
-            <div><span>Aktív vezérlési parancs</span><b>{control?.summary?.activeCommands ?? 0}</b></div>
-            <div><span>Függő jóváhagyás</span><b>{control?.summary?.pendingApprovals ?? 0}</b></div>
-            <div><span>Monitoring minta</span><b>{control?.summary?.monitorSamples ?? 0}</b></div>
-            <div><span>Tárhely-minta</span><b>{control?.summary?.storageSamples ?? 0}</b></div>
-          </article>
 
           <MiniLineChart
             title="Elérési válaszidő"
@@ -648,6 +657,9 @@ export default function BenjadminTeamScreen({ onClose }: { onClose: () => void }
       </section>
 
       {error ? <div className="benjadmin-team-screen__error">{error}</div> : null}
+      <button type="button" className="benjadmin-team-screen__theme-toggle" data-testid="benjadmin-team-theme-toggle" onClick={onThemeToggle} aria-label={theme === "light" ? "Sötét mód" : "Világos mód"} title={theme === "light" ? "Sötét mód" : "Világos mód"}>
+        {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+      </button>
       <button type="button" className="benjadmin-team-screen__refresh" onClick={() => void load()} disabled={loading} aria-label="Csapatképernyő frissítése" title="Frissítés">
         <RefreshCw size={17} className={loading ? "is-spinning" : ""} />
       </button>

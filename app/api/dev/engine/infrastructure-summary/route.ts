@@ -35,6 +35,10 @@ type RuntimeResourceSnapshot = {
   memoryUsedBytes: number;
   memoryAvailableBytes: number;
   memoryPercent: number;
+  swapTotalBytes?: number;
+  swapUsedBytes?: number;
+  swapFreeBytes?: number;
+  swapPercent?: number;
   diskTotalBytes: number;
   diskUsedBytes: number;
   diskAvailableBytes: number;
@@ -62,7 +66,7 @@ async function loadRuntimeInfrastructureSnapshot(): Promise<RuntimeInfrastructur
 }
 
 function sampleResource(sample: RuntimeResourceSnapshot | undefined, sampledAt: string | null) {
-  if (!sample) return { memory: null, disk: null, sampledAt: null, load1m: null };
+  if (!sample) return { memory: null, swap: null, disk: null, sampledAt: null, load1m: null };
   return {
     memory: {
       usagePercent: sample.memoryPercent,
@@ -70,6 +74,12 @@ function sampleResource(sample: RuntimeResourceSnapshot | undefined, sampledAt: 
       usedBytes: sample.memoryUsedBytes,
       availableBytes: sample.memoryAvailableBytes,
     },
+    swap: typeof sample.swapTotalBytes === "number" ? {
+      usagePercent: Number(sample.swapPercent || 0),
+      totalBytes: Number(sample.swapTotalBytes || 0),
+      usedBytes: Number(sample.swapUsedBytes || 0),
+      availableBytes: Number(sample.swapFreeBytes ?? Math.max(0, Number(sample.swapTotalBytes || 0) - Number(sample.swapUsedBytes || 0))),
+    } : null,
     disk: {
       usePercent: sample.diskPercent,
       totalBytes: sample.diskTotalBytes,
@@ -200,6 +210,7 @@ export async function GET(request: NextRequest) {
         latencyMs: production.latencyMs,
         statusCode: production.statusCode,
         memory: productionSample.memory,
+        swap: productionSample.swap,
         disk: productionSample.disk,
         load1m: productionSample.load1m,
         sampledAt: productionSample.sampledAt,
@@ -216,6 +227,7 @@ export async function GET(request: NextRequest) {
         latencyMs: database.latencyMs,
         port: DB_PORT,
         memory: databaseSample.memory,
+        swap: databaseSample.swap,
         disk: databaseSample.disk,
         load1m: databaseSample.load1m,
         sampledAt: databaseSample.sampledAt,

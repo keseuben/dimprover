@@ -7162,3 +7162,161 @@
   .benjadmin-team-screen__ai-budget-lines { grid-template-columns: 1fr; }
   .benjadmin-team-screen__ai-finance { min-height: 0; overflow: visible; }
 }
+
+
+/* BENJADMIN csapatképernyő v1.4 – laptop-reszponzív, témaöröklés, swap és tiszta diagramok */
+.benjadmin-team-screen__side { overflow-x: hidden; }
+.benjadmin-team-screen__chart-wrap > svg { width: 100%; height: 100%; overflow: visible; }
+.benjadmin-team-screen__chart-empty svg { width: 22px !important; height: 22px !important; flex: 0 0 22px; }
+.benjadmin-team-screen__chart-labels span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.benjadmin-team-screen__side--right { overflow-x: hidden; }
+.benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card { min-width: 0; }
+.benjadmin-team-screen__side--right .benjadmin-team-screen__pulse-card { display: none !important; }
+
+.benjadmin-team-screen__theme-toggle,
+.benjadmin-team-screen__refresh {
+  position: fixed;
+  top: 12px;
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #88dff0;
+  background: rgba(7, 24, 38, 0.78);
+  cursor: pointer;
+}
+.benjadmin-team-screen__refresh { right: 14px; }
+.benjadmin-team-screen__theme-toggle { right: 56px; }
+.benjadmin-team-screen__theme-toggle:hover,
+.benjadmin-team-screen__refresh:hover { border-color: rgba(34, 211, 238, 0.42); }
+
+/* Alacsony laptop-kijelző: a tartalom ne fusson egymásra. */
+@media (min-width: 1181px) and (max-height: 860px) {
+  .benjadmin-team-screen { padding-top: 5px; }
+  .benjadmin-team-screen__brand { height: 66px; }
+  .benjadmin-team-screen__brand .benjadmin-protective__wordmark { font-size: clamp(28px, 2.7vw, 42px); }
+  .benjadmin-team-screen__brand p { margin-top: 5px; }
+  .benjadmin-team-screen__layout { height: calc(100dvh - 101px); }
+  .benjadmin-team-screen__side,
+  .benjadmin-team-screen__center { padding: 9px; }
+  .benjadmin-team-screen__section-title { top: -9px; min-height: 32px; margin-bottom: 6px; padding-top: 5px; }
+  .benjadmin-team-screen__center { grid-template-rows: 31px minmax(0, 1fr) 170px; gap: 6px; }
+  .benjadmin-team-screen__team-grid { gap: 6px; grid-template-rows: minmax(0, .82fr) minmax(0, 1.18fr); }
+  .benjadmin-team-screen__member { padding: 6px; gap: 6px; }
+  .benjadmin-team-screen__member:nth-child(1),
+  .benjadmin-team-screen__member:nth-child(2) { grid-template-columns: minmax(0, 40%) minmax(0, 60%); }
+  .benjadmin-team-screen__member:nth-child(n+3) { grid-template-rows: minmax(0, 42%) minmax(0, 58%); }
+  .benjadmin-team-screen__member-title h2 { font-size: 13px; }
+  .benjadmin-team-screen__member-title p { margin-top: 2px; }
+  .benjadmin-team-screen__member ul { margin-top: 3px; gap: 1px; }
+  .benjadmin-team-screen__member li { line-height: 1.12; }
+  .benjadmin-team-screen__member footer { padding-top: 3px; gap: 3px 7px; }
+  .benjadmin-team-screen__ai-finance { padding: 7px 8px 6px; }
+  .benjadmin-team-screen__ai-finance > header { min-height: 23px; }
+  .benjadmin-team-screen__ai-finance-grid { margin-top: 4px; gap: 5px; }
+  .benjadmin-team-screen__ai-finance-grid article { padding: 4px 6px; }
+  .benjadmin-team-screen__ai-budget-lines { margin-top: 4px; }
+  .benjadmin-team-screen__ai-finance footer { margin-top: 4px; padding-top: 4px; }
+  .benjadmin-team-screen__infra-card { padding: 9px; }
+  .benjadmin-team-screen__infra-card > p { margin: 4px 0 6px; }
+  .benjadmin-team-screen__usage + .benjadmin-team-screen__usage { margin-top: 6px; }
+  .benjadmin-team-screen__infra-facts { margin-top: 7px; padding-top: 6px; gap: 4px; }
+  .benjadmin-team-screen__chart-wrap { height: 88px; }
+  .benjadmin-team-screen__chart-card { padding: 7px; }
+}
+
+/* Keskenyebb desktop/laptop: középső tartalom kapjon elsőbbséget. */
+@media (min-width: 1181px) and (max-width: 1560px) {
+  .benjadmin-team-screen__layout {
+    grid-template-columns: minmax(280px, .86fr) minmax(650px, 1.95fr) minmax(292px, .9fr);
+  }
+  .benjadmin-team-screen__member:nth-child(1),
+  .benjadmin-team-screen__member:nth-child(2) { grid-template-columns: minmax(0, 43%) minmax(0, 57%); }
+  .benjadmin-team-screen__member:nth-child(n+3) { grid-template-rows: minmax(0, 45%) minmax(0, 55%); }
+}
+
+/* Világos mód – ugyanaz a funkcionális szerkezet, világos enterprise felülettel. */
+.benjadmin-team-screen.admin-theme-light {
+  color: #13233a;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(14, 165, 233, 0.10), transparent 32rem),
+    linear-gradient(145deg, #eef5f9 0%, #f8fbfd 52%, #e9f1f6 100%);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-protective__grid { opacity: 0.11; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-protective__wordmark span { color: #10263d; -webkit-text-fill-color: #10263d; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__brand p,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__shortcut { color: #607d91; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__side,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center {
+  border-color: #d4e2ea;
+  background: rgba(248, 251, 253, 0.96);
+  box-shadow: 0 12px 36px rgba(28, 61, 82, 0.07);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title {
+  background: linear-gradient(180deg, rgba(248, 251, 253, 1) 72%, rgba(248, 251, 253, 0));
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center-head small { color: #617f92; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center-head span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member-title h2,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card header strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-card header h3 { color: #12283d; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance {
+  border-color: #d8e6ed;
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: none;
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card.is-primary,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card.is-storage,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member.is-owner {
+  border-color: rgba(8, 145, 178, 0.28);
+  background: linear-gradient(155deg, rgba(224, 247, 250, 0.72), rgba(255,255,255,.94));
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member.is-partner { border-color: rgba(180, 122, 0, 0.28); }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member-title p,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member li,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card > p,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage > div:first-child,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__legend span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-card header small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-labels,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance footer,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance-grid span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance-grid small { color: #587487; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts b,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage > div:first-child strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member footer b,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance-grid strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance footer b,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-budget-lines b { color: #15344b; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member footer,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance footer { border-color: #e2ebf0; color: #658093; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-wrap { background: #f2f7fa; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-axis { stroke: rgba(54, 91, 113, 0.26); }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-gridline { stroke: rgba(54, 91, 113, 0.13); }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage-track,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-track { background: #dce8ee; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__ai-finance-grid article { border-color: #dce8ee; background: #f6fafc; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__theme-toggle,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__refresh {
+  color: #087f9b;
+  border-color: #c8dce6;
+  background: rgba(255,255,255,.92);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member-title > span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card header > span {
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, .28);
+  background: rgba(204, 251, 241, .55);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__avatar img { filter: drop-shadow(0 5px 8px rgba(31, 61, 79, 0.14)); }

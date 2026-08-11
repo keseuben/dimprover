@@ -187,7 +187,13 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   }
 
   if (teamScreen) {
-    return <BenjadminTeamScreen onClose={() => setTeamScreen(false)} />;
+    return (
+      <BenjadminTeamScreen
+        theme={theme}
+        onThemeToggle={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
+        onClose={() => setTeamScreen(false)}
+      />
+    );
   }
 
   return (
@@ -280,6 +286,15 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
           <div className="benjadmin-shell-topbar__actions">
             <span className="benjadmin-canonical-badge">CANONICAL</span>
             <span className="benjadmin-environment-badge">DEV</span>
+            <button
+              type="button"
+              data-testid="benjadmin-topbar-theme-toggle"
+              onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
+              title={theme === "light" ? "Sötét mód" : "Világos mód"}
+              aria-label={theme === "light" ? "Sötét mód" : "Világos mód"}
+            >
+              {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
             <button type="button" data-testid="benjadmin-team-screen-button" onClick={() => setTeamScreen(true)} title="BENJADMIN csapat: D vagy Ctrl+Alt+0" aria-label="BENJADMIN csapatképernyő">
               <UsersRound size={18} />
             </button>

@@ -35,6 +35,7 @@ const infrastructurePayload = await infrastructureResponse.json().catch(() => ({
 check("Infrastruktúra összesítő API elérhető", infrastructureResponse.status === 200 && infrastructurePayload?.ok === true, `status=${infrastructureResponse.status}`);
 check("PRODUCTION és DB szerver külön jelen van", ["PRODUCTION", "DATABASE"].every((code) => infrastructurePayload?.servers?.some((item) => item.code === code)), JSON.stringify(infrastructurePayload?.servers?.map((item) => item.code)));
 check("PRODUCTION és DB RAM/lemez minta elérhető", infrastructurePayload?.servers?.filter((item) => ["PRODUCTION", "DATABASE"].includes(item.code)).every((item) => item.memory?.usagePercent != null && item.disk?.usePercent != null && item.sampledAt), JSON.stringify(infrastructurePayload?.servers?.map((item) => ({ code: item.code, memory: item.memory?.usagePercent, disk: item.disk?.usePercent, sampledAt: item.sampledAt }))));
+check("PRODUCTION és DB swap mező biztonságosan rendelkezésre áll", infrastructurePayload?.servers?.filter((item) => ["PRODUCTION", "DATABASE"].includes(item.code)).every((item) => Object.prototype.hasOwnProperty.call(item, "swap")), JSON.stringify(infrastructurePayload?.servers?.filter((item) => ["PRODUCTION", "DATABASE"].includes(item.code)).map((item) => ({ code: item.code, swap: item.swap }))));
 check("Drive és Drop külső tárhely külön jelen van", ["DRIVE", "DROP"].every((code) => infrastructurePayload?.storages?.some((item) => item.code === code)), JSON.stringify(infrastructurePayload?.storages?.map((item) => item.code)));
 check("Drive és Drop élő foglaltságot és kapacitásmezőt ad", infrastructurePayload?.storages?.every((item) => typeof item.usedBytes === "number" && Object.prototype.hasOwnProperty.call(item, "capacityBytes")), JSON.stringify(infrastructurePayload?.storages?.map((item) => ({ code: item.code, usedBytes: item.usedBytes, capacityBytes: item.capacityBytes }))));
 const entitlementResponse = await fetch(`${apiBase}/api/dev/engine/entitlements`, { headers: { host, "x-dimpro-license-admin-key": adminKey } });
@@ -90,6 +91,9 @@ try {
       infraCards: document.querySelectorAll(".benjadmin-team-screen__side--left .benjadmin-team-screen__infra-card").length,
       chartTitles: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card h3")).map((node) => node.textContent || ""),
       aiFinanceText: document.querySelector('[data-testid="benjadmin-ai-finance"]')?.textContent || "",
+      swapLabels: Array.from(root?.querySelectorAll(".benjadmin-team-screen__usage > div:first-child span") || []).filter((node) => (node.textContent || "").includes("Swap")).length,
+      giantChartIcons: Array.from(root?.querySelectorAll(".benjadmin-team-screen__chart-empty svg") || []).filter((node) => node.getBoundingClientRect().width > 40 || node.getBoundingClientRect().height > 40).length,
+      theme: root?.getAttribute("data-theme") || "",
       teamCardHeights: Array.from(root?.querySelectorAll(".benjadmin-team-screen__member") || []).map((node) => node.getBoundingClientRect().height),
       financeHeight: document.querySelector('[data-testid="benjadmin-ai-finance"]')?.getBoundingClientRect().height || 0,
       leftTitle: document.querySelector(".benjadmin-team-screen__side--left")?.textContent || "",
@@ -110,6 +114,9 @@ try {
   check("Bal oldali szerver- és tárhelypanel látható", desktop.leftTitle.includes("Szerverek és tárhelyek") && desktop.leftTitle.includes("BENJADMIN DEV VPS") && desktop.leftTitle.includes("PRODUCTION / ÉLES VPS") && desktop.leftTitle.includes("DB VPS") && desktop.leftTitle.includes("DIMPRO Drive tárhely") && desktop.leftTitle.includes("DIMPRO Drop tárhely"));
   check("DEV / ÉLES / DB és a két S3 azonos infrastruktúra-kártyát használ", desktop.infraCards === 5, `infraCards=${desktop.infraCards}`);
   check("Bal oldalon RAM és lemezterhelés látható DEV/PROD/DB célokra", (desktop.leftTitle.match(/Memóriaterhelés/g) || []).length >= 3 && (desktop.leftTitle.match(/Lemezfoglaltság/g) || []).length >= 3, desktop.leftTitle.slice(0, 800));
+  check("Bal oldalon DEV/PROD/DB swap állapot is látható", desktop.swapLabels >= 3 && (desktop.leftTitle.match(/Swap használat/g) || []).length >= 3, `swapLabels=${desktop.swapLabels}`);
+  check("Üres vonaldiagram nem rajzol óriás pulzus ikont", desktop.giantChartIcons === 0, `giantIcons=${desktop.giantChartIcons}`);
+  check("Csapatképernyő örökli a fő admin sötét témáját", desktop.theme === "dark", `theme=${desktop.theme}`);
   check("S3 tárhelyméret és foglaltság mezők láthatók", (desktop.leftTitle.match(/Tárhelyfoglaltság/g) || []).length === 2 && (desktop.leftTitle.match(/Teljes keret/g) || []).length === 2 && (desktop.leftTitle.match(/Foglalt:/g) || []).length === 2, desktop.leftTitle.slice(-900));
   check("Jobb oldali működési diagramok a három fő trendet mutatják", ["Rendszerterhelési trend", "Elérési válaszidő", "Fejlesztési aktivitás"].every((title) => desktop.chartTitles.includes(title)), JSON.stringify(desktop.chartTitles));
   check("Fejlesztési aktivitás valós adatsorból rajzol vonalat", desktop.activityLines >= 1, `lineCount=${desktop.activityLines}`);
@@ -141,6 +148,50 @@ try {
   await page.click('[data-testid="benjadmin-team-screen-d"]', { clickCount: 2, delay: 60 });
   await waitClosed(page);
   check("Dupla kattintás bezárja a csapatképernyőt", true);
+
+  await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+  await ctrlAltZero(page);
+  await waitOpen(page);
+  const laptop = await page.evaluate(() => {
+    const root = document.querySelector('[data-testid="benjadmin-team-screen"]');
+    const cards = Array.from(root?.querySelectorAll(".benjadmin-team-screen__member") || []);
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      innerHeight: window.innerHeight,
+      clipped: cards.map((card) => {
+        const copy = card.querySelector(".benjadmin-team-screen__member-copy");
+        return {
+          name: card.querySelector("h2")?.textContent || "",
+          cardH: card.clientHeight,
+          cardScrollH: card.scrollHeight,
+          copyH: copy?.clientHeight || 0,
+          copyScrollH: copy?.scrollHeight || 0,
+        };
+      }).filter((item) => item.cardScrollH > item.cardH + 2 || item.copyScrollH > item.copyH + 2),
+    };
+  });
+  check("Laptop 1366×768 csapatkártya-szövegek nem csúsznak egymásra", laptop.clipped.length === 0, JSON.stringify(laptop));
+  check("Laptop 1366×768 nincs teljes oldali vízszintes túlcsordulás", laptop.scrollWidth <= laptop.clientWidth + 1, JSON.stringify(laptop));
+  await ctrlAltZero(page);
+  await waitClosed(page);
+
+  check("Fő admin felső világos/sötét mód gomb elérhető", Boolean(await page.$('[data-testid="benjadmin-topbar-theme-toggle"]')));
+  await page.click('[data-testid="benjadmin-topbar-theme-toggle"]');
+  await page.waitForFunction(() => document.documentElement.dataset.adminTheme === "light", { timeout: 10000 });
+  await ctrlAltZero(page);
+  await waitOpen(page);
+  const lightTheme = await page.evaluate(() => ({
+    theme: document.querySelector('[data-testid="benjadmin-team-screen"]')?.getAttribute("data-theme") || "",
+    toggle: Boolean(document.querySelector('[data-testid="benjadmin-team-theme-toggle"]')),
+  }));
+  check("Ctrl+Alt+0 csapatképernyő a fő admin világos módjában nyílik", lightTheme.theme === "light" && lightTheme.toggle, JSON.stringify(lightTheme));
+  await page.click('[data-testid="benjadmin-team-theme-toggle"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="benjadmin-team-screen"]')?.getAttribute("data-theme") === "dark", { timeout: 10000 });
+  check("Csapatképernyő saját témagombja szinkronban sötét módra vált", true);
+  await ctrlAltZero(page);
+  await waitClosed(page);
 
   for (const viewport of [
     { name: "tablet", width: 768, height: 1024 },
