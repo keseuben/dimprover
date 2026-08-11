@@ -5967,3 +5967,115 @@
 .operator-console.operator-compact .operator-entitlement-panel :is(p,span,small,strong,td,th,code,label,button,a) {
   font-size: 12px !important;
 }
+
+/* BENJADMIN B3.2 P4 – Partnerátadás (handoff) */
+.operator-partner-side {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+.operator-partner-handoff {
+  min-height: 0;
+  padding-bottom: 8px;
+  overflow: auto;
+}
+.operator-partner-handoff .operator-table-title > div > span,
+.operator-partner-handoff .operator-table-title > span,
+.operator-partner-handoff .operator-table-title h2 {
+  font-size: 12px !important;
+}
+.operator-partner-handoff > label {
+  margin: 7px 9px 0;
+  display: grid;
+  gap: 4px;
+}
+.operator-partner-handoff label > span {
+  color: var(--admin-text-soft);
+  font-size: 12px !important;
+  font-weight: 850;
+}
+.operator-partner-handoff input,
+.operator-partner-handoff select,
+.operator-partner-handoff textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--admin-text);
+  background: var(--admin-surface-soft);
+  font: inherit;
+  font-size: 12px !important;
+}
+.operator-partner-handoff input,
+.operator-partner-handoff select { height: 32px; }
+.operator-partner-handoff textarea {
+  min-height: 52px;
+  padding-block: 7px;
+  resize: vertical;
+}
+.operator-partner-handoff input:focus,
+.operator-partner-handoff select:focus,
+.operator-partner-handoff textarea:focus {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--admin-border));
+}
+.operator-partner-handoff :disabled { opacity: 0.58; cursor: not-allowed; }
+.operator-partner-handoff-list {
+  margin: 8px 9px 0;
+  display: grid;
+  gap: 6px;
+}
+.operator-partner-handoff-list > div {
+  padding: 7px 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-soft);
+}
+.operator-partner-handoff-list > div > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.operator-partner-handoff-list strong,
+.operator-partner-handoff-list small,
+.operator-partner-handoff-list .operator-status-badge {
+  font-size: 12px !important;
+}
+.operator-partner-handoff-list small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--admin-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operator-partner-handoff-actions {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.operator-partner-handoff-actions button {
+  min-height: 27px;
+  padding: 3px 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  color: var(--admin-text-soft);
+  background: var(--admin-surface);
+  font-size: 12px !important;
+  font-weight: 850;
+  cursor: pointer;
+}
+.operator-partner-handoff-actions button:hover {
+  color: var(--admin-accent-strong);
+  border-color: color-mix(in srgb, var(--admin-accent) 35%, var(--admin-border));
+}
+@media (max-width: 900px) {
+  .operator-partner-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto;
+  }
+}
+@media (max-width: 700px) {
+  .operator-partner-side { grid-template-columns: 1fr; }
+}

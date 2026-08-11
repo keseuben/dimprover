@@ -44,10 +44,10 @@ try {
 
   await open(1440, 900);
   const expected = [
-    ["Taskok", ["Task státusz", "Prioritási megoszlás", "Worker terhelés"]],
-    ["Csapat", ["Worker terhelés", "Session readiness", "Fejlesztési aktivitás"]],
-    ["Worker-ek", ["Aktív terhelés", "Session readiness", "Task státusz"]],
-    ["Környezetek", ["Environment health", "Írási policy", "Backup health"]],
+    ["Feladatok (taskok)", ["Feladatállapot (task status)", "Prioritási megoszlás", "Fejlesztői terhelés (worker load)"]],
+    ["Csapat", ["Fejlesztői terhelés (worker load)", "Munkamenet-készenlét (session readiness)", "Fejlesztési aktivitás"]],
+    ["Fejlesztők (worker-ek)", ["Aktív fejlesztői terhelés", "Munkamenet-készenlét (session readiness)", "Feladatállapot (task status)"]],
+    ["Környezetek", ["Környezetállapot (environment health)", "Írási házirend (policy)", "Mentési állapot (backup health)"]],
   ];
 
   for (const [view, titles] of expected) {

@@ -93,14 +93,14 @@ try {
     await page.waitForSelector("[data-testid=partner-development-panel]", { timeout: 30000 });
     await page.waitForFunction((ready) => {
       const text = document.querySelector("[data-testid=partner-schema-status]")?.textContent || "";
-      return ready ? text.includes("SCHEMA READY") : text.includes("SCHEMA PENDING");
+      return ready ? text.includes("SÉMA READY") : text.includes("SÉMA PENDING");
     }, { timeout: 30000 }, schemaReady);
   }
 
   await openAt(1440, 900);
   check("Partner fejlesztések tab visible", await page.$$eval(".operator-view-tabs button", (buttons) => buttons.some((item) => (item.textContent || "").trim() === "Partner fejlesztések")));
   const panelText = await page.$eval("[data-testid=partner-development-panel]", (el) => el.textContent || "");
-  check("partner plane title visible", panelText.toUpperCase().includes("PARTNER DEVELOPMENT PLANE"));
+  check("partner plane title visible", panelText.toUpperCase().includes("PARTNER FEJLESZTÉSI SÍK"));
   check("OutminAI default deny P2 policy visible", panelText.includes("OUTMINAI") && panelText.includes("DEFAULT DENY") && panelText.includes("P2"));
 
   const formState = await page.evaluate(() => ({
@@ -110,10 +110,10 @@ try {
     emptyText: document.querySelector("[data-testid=partner-empty-state]")?.textContent || "",
   }));
   if (schemaReady) {
-    check("source-of-truth schema READY visible", formState.schemaText.includes("SCHEMA READY"), formState.schemaText);
+    check("source-of-truth schema READY visible", formState.schemaText.includes("SÉMA READY"), formState.schemaText);
     check("partner form controls enabled when schema READY", formState.controlsEnabled === true, JSON.stringify(formState));
   } else {
-    check("source-of-truth schema pending visible", formState.schemaText.includes("SCHEMA PENDING"), formState.schemaText);
+    check("source-of-truth schema pending visible", formState.schemaText.includes("SÉMA PENDING"), formState.schemaText);
     check("partner form controls disabled until schema ready", formState.controlsDisabled === true, JSON.stringify(formState));
     check("pending empty state explains staged migration", /migráció|schema/i.test(formState.emptyText), formState.emptyText);
   }

@@ -31,7 +31,7 @@ try {
     await page.goto(base, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector(".operator-console.operator-compact", { timeout: 30000 });
     await page.$$eval(".operator-view-tabs button", (buttons) => {
-      const button = buttons.find((item) => (item.textContent || "").trim() === "Control");
+      const button = buttons.find((item) => (item.textContent || "").trim() === "Vezérlés (Control)");
       if (!button) throw new Error("Control tab missing");
       button.click();
     });
@@ -40,12 +40,12 @@ try {
   }
 
   await openAt(1440, 900);
-  check("Control tab visible", await page.$$eval(".operator-view-tabs button", (buttons) => buttons.some((item) => (item.textContent || "").trim() === "Control")));
+  check("Control tab visible", await page.$$eval(".operator-view-tabs button", (buttons) => buttons.some((item) => (item.textContent || "").trim() === "Vezérlés (Control)")));
   check("three START context cards visible", await page.$$eval(".operator-start-card", (items) => items.length) === 3);
   const controlText = await page.$eval(".operator-control-plane-panel", (el) => el.textContent || "");
   check("START DEV START PROD START visible", ["START", "DEV START", "PROD START"].every((value) => controlText.includes(value)));
   check("PROD START is read only", controlText.includes("READ ONLY") && controlText.includes("PROD START"));
-  check("target Control VPS visible", controlText.includes("CONTROL_VPS"));
+  check("target Control VPS visible", controlText.includes("Vezérlő VPS (Control VPS)"));
   check("staged schema shown as pending", controlText.includes("PGRST205") || controlText.includes("PENDING"));
   check("live worklog rendered", await page.$$eval(".operator-control-plane-grid .operator-data-table tbody tr", (rows) => rows.length) > 0);
 

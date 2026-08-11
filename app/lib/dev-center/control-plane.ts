@@ -124,14 +124,14 @@ export async function getBenjadminControlPlaneSnapshot() {
         target: "DEV",
         writeAllowed: Boolean(devEnvironment && devEnvironment.read_only === false),
         approvalRequired: false,
-        description: "DEV fejlesztés; write/build/test csak READY session, scope és worktree védelem mellett.",
+        description: "DEV fejlesztés; írás (write), összeállítás (build) és teszt csak READY munkamenet (session), hatókör (scope) és munkafa (worktree) védelem mellett.",
       },
       {
         mode: "PROD_START" as BenjadminStartMode,
         target: "PRODUCTION",
         writeAllowed: false,
         approvalRequired: true,
-        description: "PROD állapotfelmérés read-only. Éles írás/restart/deploy csak külön, explicit jóváhagyott műveletként indulhat.",
+        description: "PROD állapotfelmérés csak olvasható (read-only). Éles írás, újraindítás (restart) vagy élesítés (deploy) csak külön, explicit jóváhagyott műveletként indulhat.",
       },
     ],
     environments: {

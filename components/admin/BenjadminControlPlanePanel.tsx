@@ -146,16 +146,16 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
     <div className="operator-control-plane-panel">
       <section className="operator-control-plane-head">
         <div>
-          <span>B3.1 · CONTROL PLANE</span>
+          <span>B3.1 · VEZÉRLÉSI SÍK (Control Plane)</span>
           <h2>Központi fejlesztésirányítás</h2>
           <p>{snapshot?.architecture.currentHostRole || "Állapot betöltése..."}</p>
         </div>
         <div className="operator-control-plane-badges">
           <span className={`operator-status-badge ${snapshot?.schema.controlPlaneReady ? "is-ok" : "is-warning"}`}>
             {snapshot?.schema.controlPlaneReady ? <CheckCircle2 size={13} /> : <CircleAlert size={13} />}
-            Schema {readyProbes}/{totalProbes}
+            Séma {readyProbes}/{totalProbes}
           </span>
-          <span className="operator-status-badge is-muted"><ServerCog size={13} /> cél: {snapshot?.architecture.targetMode || "CONTROL_VPS"}</span>
+          <span className="operator-status-badge is-muted"><ServerCog size={13} /> cél: Vezérlő VPS (Control VPS)</span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Frissítés"><RefreshCw size={14} className={busy ? "is-spinning" : ""} /></button>
         </div>
       </section>
@@ -168,31 +168,31 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
             <div><TerminalSquare size={15} /><strong>{item.mode.replace("_", " ")}</strong></div>
             <span>{item.target}</span>
             <p>{item.description}</p>
-            <small>{item.writeAllowed ? "DEV write engedélyezhető védett sessionben" : item.approvalRequired ? "READ ONLY · külön jóváhagyás szükséges" : "READ FIRST"}</small>
+            <small>{item.writeAllowed ? "DEV írás (write) engedélyezhető védett munkamenetben (session)" : item.approvalRequired ? "CSAK OLVASHATÓ (READ ONLY) · külön jóváhagyás szükséges" : "ELŐSZÖR OLVASÁS (READ FIRST)"}</small>
           </article>
         ))}
       </section>
 
       <section className="operator-control-plane-metrics" aria-label="Control Plane állapotösszesítő">
-        <div><span>START context</span><strong>{snapshot?.summary.activeStartContexts ?? 0}</strong></div>
-        <div><span>Aktív command</span><strong>{snapshot?.summary.activeCommands ?? 0}</strong></div>
-        <div className={(snapshot?.summary.pendingApprovals || 0) > 0 ? "is-warning" : ""}><span>Approval</span><strong>{snapshot?.summary.pendingApprovals ?? 0}</strong></div>
+        <div><span>Indítási környezet (START context)</span><strong>{snapshot?.summary.activeStartContexts ?? 0}</strong></div>
+        <div><span>Aktív parancs (command)</span><strong>{snapshot?.summary.activeCommands ?? 0}</strong></div>
+        <div className={(snapshot?.summary.pendingApprovals || 0) > 0 ? "is-warning" : ""}><span>Jóváhagyás (approval)</span><strong>{snapshot?.summary.pendingApprovals ?? 0}</strong></div>
         <div><span>Döntési memória</span><strong>{snapshot?.summary.activeDecisions ?? 0}</strong></div>
-        <div><span>Monitor minta</span><strong>{snapshot?.summary.monitorSamples ?? 0}</strong></div>
-        <div><span>Storage minta</span><strong>{snapshot?.summary.storageSamples ?? 0}</strong></div>
+        <div><span>Felügyeleti minta (monitor)</span><strong>{snapshot?.summary.monitorSamples ?? 0}</strong></div>
+        <div><span>Tárhelyminta (storage)</span><strong>{snapshot?.summary.storageSamples ?? 0}</strong></div>
       </section>
 
       <div className="benj-v3-analytics-grid is-compact operator-control-analytics" aria-label="Control Plane realtime analitika">
-        <BenjadminBarChart title="Command queue" subtitle={`${snapshot?.commandQueue.length || 0} parancs`} items={commandAnalytics} />
-        <BenjadminBarChart title="Approval lifecycle" subtitle={`${snapshot?.approvals.length || 0} approval`} items={approvalAnalytics} />
-        <BenjadminBarChart title="Monitoring health" subtitle={`${snapshot?.monitoring.length || 0} monitor minta`} items={monitorAnalytics} />
+        <BenjadminBarChart title="Parancsvárólista (command queue)" subtitle={`${snapshot?.commandQueue.length || 0} parancs`} items={commandAnalytics} />
+        <BenjadminBarChart title="Jóváhagyási életciklus (approval lifecycle)" subtitle={`${snapshot?.approvals.length || 0} jóváhagyás (approval)`} items={approvalAnalytics} />
+        <BenjadminBarChart title="Felügyeleti állapot (monitoring health)" subtitle={`${snapshot?.monitoring.length || 0} monitor minta`} items={monitorAnalytics} />
       </div>
 
       <div className="operator-control-plane-grid">
         <section className="operator-table-card">
           <div className="operator-table-title">
-            <div><span>ÉLŐ MUNKANAPLÓ</span><h2>Audit / fejlesztési események</h2></div>
-            <span><Activity size={13} /> 5 mp silent refresh</span>
+            <div><span>ÉLŐ MUNKANAPLÓ</span><h2>Napló / audit – fejlesztési események</h2></div>
+            <span><Activity size={13} /> 5 mp csendes frissítés (silent refresh)</span>
           </div>
           <div className="operator-table-wrap">
             <table className="operator-data-table">
@@ -201,7 +201,7 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
                 {worklog.map((row, index) => (
                   <tr key={text(row.id) || `${text(row.created_at)}-${index}`}>
                     <td>{formatDate(row.created_at)}</td>
-                    <td><strong>{text(row.action) || "EVENT"}</strong></td>
+                    <td><strong>{text(row.action) || "ESEMÉNY (EVENT)"}</strong></td>
                     <td><small>{text(row.summary) || "—"}</small></td>
                     <td className="hide-small"><code>{text(row.entity_type) || "—"}</code></td>
                   </tr>
@@ -214,7 +214,7 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
 
         <aside className="operator-control-plane-side">
           <section className="operator-mini-table-card">
-            <div className="operator-table-title"><div><span>B3.1 SÉMA</span><h2>Control / telemetry readiness</h2></div></div>
+            <div className="operator-table-title"><div><span>B3.1 SÉMA</span><h2>Vezérlés / telemetria készenlét (readiness)</h2></div></div>
             <div className="operator-probe-list">
               {(snapshot?.schema.probes || []).map((probe) => (
                 <div key={probe.table}><span className={`operator-status-dot ${probe.ready ? "is-ok" : "is-warning"}`} /><strong>{probe.table.replace(/^dev_center_/, "")}</strong><small>{probe.ready ? "READY" : probe.errorCode || "PENDING"}</small></div>
@@ -223,7 +223,7 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
           </section>
           <section className={`operator-compact-warning ${snapshot?.architecture.productionDefault === "READ_ONLY" ? "is-ok" : "is-warning"}`}>
             <ShieldCheck size={16} />
-            <div><strong>PRODUCTION: {snapshot?.architecture.productionDefault || "READ_ONLY"}</strong><span>PROD START önmagában nem ad írási, migration, restart vagy deploy jogot.</span></div>
+            <div><strong>PRODUCTION: CSAK OLVASHATÓ ({snapshot?.architecture.productionDefault || "READ_ONLY"})</strong><span>PROD START önmagában nem ad írási, adatbázis-migrációs (migration), újraindítási (restart) vagy élesítési (deploy) jogot.</span></div>
           </section>
         </aside>
       </div>

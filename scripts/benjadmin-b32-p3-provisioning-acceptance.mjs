@@ -148,7 +148,7 @@ try {
       return size > 0 && size < 12 && node.textContent?.trim();
     }).slice(0, 10).map((node) => ({ tag: node.tagName, text: node.textContent?.trim().slice(0, 40), size: getComputedStyle(node).fontSize })),
   }), projectCode);
-  check("Operator UI shows P3 READY project", ui.text.includes(projectCode) && ui.text.includes("READY") && ui.text.includes("P2 RUNTIME READY"), `projectCode=${projectCode}`);
+  check("Operator UI shows P3 READY project", ui.text.includes(projectCode) && ui.text.includes("READY") && ui.text.includes("P2 FUTÁSI KÖRNYEZET READY"), `projectCode=${projectCode}`);
   check("READY provision action is disabled", ui.provisionDisabled === true);
   check("Partner UI body typography stays >=12px", ui.tooSmall.length === 0, JSON.stringify(ui.tooSmall));
   check("desktop Partner UI has no horizontal overflow", ui.scrollWidth <= ui.clientWidth + 1, JSON.stringify(ui));

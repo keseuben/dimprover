@@ -53,12 +53,12 @@ try {
   }
 
   await open(1440, 900);
-  await select("Control", ".operator-control-plane-panel");
+  await select("Vezérlés (Control)", ".operator-control-plane-panel");
   const control = await page.evaluate(() => ({
     titles: Array.from(document.querySelectorAll(".operator-control-analytics h3")).map((node) => node.textContent || ""),
     cards: document.querySelectorAll(".operator-control-analytics .benj-v3-chart-card").length,
     worklog: Boolean(document.querySelector(".operator-control-plane-grid .operator-data-table")),
-    prodReadOnly: (document.querySelector(".operator-control-plane-panel")?.textContent || "").includes("PRODUCTION: READ_ONLY") && (document.querySelector(".operator-control-plane-panel")?.textContent || "").includes("PROD START"),
+    prodReadOnly: (document.querySelector(".operator-control-plane-panel")?.textContent || "").includes("PRODUCTION: CSAK OLVASHATÓ (READ_ONLY)") && (document.querySelector(".operator-control-plane-panel")?.textContent || "").includes("PROD START"),
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
     scrollHeight: document.documentElement.scrollHeight,
@@ -68,7 +68,7 @@ try {
       .slice(0, 10)
       .map((node) => ({ text: node.textContent?.trim().slice(0, 40), size: getComputedStyle(node).fontSize })),
   }));
-  check("Control V3 analytics present", control.cards === 3 && ["Command queue", "Approval lifecycle", "Monitoring health"].every((title) => control.titles.includes(title)), JSON.stringify(control.titles));
+  check("Control V3 analytics present", control.cards === 3 && ["Parancsvárólista (command queue)", "Jóváhagyási életciklus (approval lifecycle)", "Felügyeleti állapot (monitoring health)"].every((title) => control.titles.includes(title)), JSON.stringify(control.titles));
   check("Control live worklog table preserved", control.worklog === true);
   check("Control PROD READ_ONLY contract preserved", control.prodReadOnly === true);
   check("Control body typography >=12px", control.tooSmall.length === 0, JSON.stringify(control.tooSmall));
@@ -89,16 +89,16 @@ try {
       .slice(0, 10)
       .map((node) => ({ text: node.textContent?.trim().slice(0, 40), size: getComputedStyle(node).fontSize })),
   }));
-  check("Partner V3 analytics present", partner.cards === 3 && ["Provision lifecycle", "Delivery model", "Partner environment health"].every((title) => partner.titles.includes(title)), JSON.stringify(partner.titles));
+  check("Partner V3 analytics present", partner.cards === 3 && ["Kiépítési életciklus (provision lifecycle)", "Átadási modell (delivery model)", "Partnerkörnyezet állapota (environment health)"].every((title) => partner.titles.includes(title)), JSON.stringify(partner.titles));
   check("Partner registry table preserved", partner.table === true);
-  check("Partner P2 runtime READY visible", partner.runtime.includes("P2 RUNTIME READY"), partner.runtime.trim());
+  check("Partner P2 runtime READY visible", partner.runtime.includes("P2 FUTÁSI KÖRNYEZET READY"), partner.runtime.trim());
   check("Partner body typography >=12px", partner.tooSmall.length === 0, JSON.stringify(partner.tooSmall));
   check("Partner desktop one viewport", partner.scrollWidth <= partner.clientWidth + 1 && partner.scrollHeight <= partner.innerHeight + 1, JSON.stringify(partner));
 
   for (const viewport of [{ name: "tablet", width: 768, height: 1024 }, { name: "phone", width: 390, height: 844 }]) {
     await open(viewport.width, viewport.height);
     for (const [label, selector, analyticsClass] of [
-      ["Control", ".operator-control-plane-panel", ".operator-control-analytics"],
+      ["Vezérlés (Control)", ".operator-control-plane-panel", ".operator-control-analytics"],
       ["Partner fejlesztések", "[data-testid=partner-development-panel]", ".operator-partner-analytics"],
     ]) {
       await select(label, selector);

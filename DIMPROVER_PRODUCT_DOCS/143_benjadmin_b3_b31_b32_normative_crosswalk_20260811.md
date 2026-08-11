@@ -111,8 +111,8 @@ B3.2:
 - P1 registry kész;
 - P2 OutminAI runtime isolation READY;
 - P3 HANDOFF provisioning kész;
-- P4 release/handoff következik;
-- P5 végleges UI/acceptance későbbi záró fázis.
+- P4 partner kiadás / átadás (release / handoff) elkészült;
+- P5 végleges UI/biztonsági acceptance következik.
 
 ## BENJADMIN UI V3 fejlesztési szabály
 
@@ -128,8 +128,10 @@ Minden főnézetben az alábbi hierarchia az alap:
 
 A grafikonok csak meglévő source-of-truth / live read model adatból készülhetnek. Ha egy telemetry adat még nem létezik, a UI nem generálhat hamis adatot; `PENDING`, `NINCS ADAT` vagy readiness állapotot kell mutatnia.
 
-## Tipográfia és responsive szabály
+## Nyelvi, tipográfiai és responsive szabály
 
+- látható UI elnevezésnél a magyar kifejezés az elsődleges; az angol szakmai kifejezés legfeljebb utána, zárójelben szerepelhet;
+- technikai enum/API/azonosító kód maradhat angol, de az emberi címke magyar elsődleges;
 - munkafelület törzsszöveg minimum 12 px;
 - navigáció lehet kompaktabb csak a korábban elfogadott shell-szabály szerint;
 - desktopon a fő Operator munkatér lehetőség szerint egy viewport;
@@ -159,12 +161,13 @@ PROD változtatás csak külön, explicit jóváhagyással történhet.
 
 ## Következő összehangolt fejlesztési sorrend
 
-1. UI V3: Taskok / Csapat / Worker-ek / Környezetek analitikai réteg;
-2. UI V3: Partner fejlesztések lifecycle és provisioning vizualizáció;
-3. UI V3 + B3.1: Control realtime napló / monitoring / telemetry grafikonok;
-4. UI V3: Release és Audit trendek;
-5. B3.2 P4: partner release / handoff workflow, már UI V3 komponensekkel;
-6. Licenc / AI és entitlement nézet V3;
-7. B3.2 P5: teljes UI / responsive / security acceptance.
+Az UI V3 analitikai réteg, a B3.1 Vezérlés (Control), a B3.2 Partner fejlesztések, valamint a P4 Partnerátadás elkészült.
+
+Következő sorrend:
+
+1. B3.2 P5: teljes UI / responsive / security acceptance;
+2. P4 adatbázis-tranzakciós hardening RPC;
+3. B3.1 realtime munkanapló / monitoring további adatgyűjtő rétege;
+4. dedikált BENJADMIN Control VPS célarchitektúra előkészítése.
 
 Ez a sorrend megőrzi a B3 alapmotor, a B3.1 Control Plane és a B3.2 Partner Plane közötti architekturális határokat.

@@ -45,9 +45,9 @@ try {
   }
 
   const views = [
-    { label: "Release", selector: ".operator-v3-view-stack", titles: ["Release státusz", "Modul aktivitás", "Release aktivitás"], table: ".operator-data-table" },
-    { label: "Audit", selector: ".operator-v3-view-stack", titles: ["Idő kategóriánként", "Munkamenet forrás", "Munkaidő trend"], table: ".operator-data-table" },
-    { label: "Licenc / AI", selector: ".operator-entitlement-panel", titles: ["Licenc health", "Send entitlement", "AI budget health"], table: ".operator-data-table" },
+    { label: "Kiadások (release)", selector: ".operator-v3-view-stack", titles: ["Kiadási állapot (release status)", "Modul aktivitás", "Kiadási aktivitás (release activity)"], table: ".operator-data-table" },
+    { label: "Napló / audit", selector: ".operator-v3-view-stack", titles: ["Idő kategóriánként", "Munkamenet forrás", "Munkaidő trend"], table: ".operator-data-table" },
+    { label: "Licenc / AI", selector: ".operator-entitlement-panel", titles: ["Licencállapot (license health)", "Send-jogosultság (entitlement)", "AI-keret állapota (budget health)"], table: ".operator-data-table" },
   ];
 
   await open(1440, 900);

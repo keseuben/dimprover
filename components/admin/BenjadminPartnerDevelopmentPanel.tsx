@@ -72,6 +72,24 @@ type PartnerSnapshot = {
   checkedAt: string;
 };
 
+type PartnerHandoff = {
+  id: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  releaseId: string;
+  status: "draft" | "prepared" | "handed_over" | "accepted" | "rejected" | "cancelled";
+  checksum: string;
+  gitCommit: string;
+  buildId: string;
+  handedOverAt: string | null;
+  handedOverBy: string | null;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type Props = { query: string };
 
 function formatDate(value?: string | null) {
@@ -105,8 +123,63 @@ function healthTone(value: string) {
 }
 
 function environmentLabel(value: string) {
-  if (value === "NOT_BOUND") return "NINCS BIND";
-  return value.toUpperCase();
+  const labels: Record<string, string> = {
+    NOT_BOUND: "Nincs kapcsolva (NOT_BOUND)",
+    ready: "Kész (READY)",
+    online: "Online",
+    pending: "Függő (PENDING)",
+    unknown: "Ismeretlen (UNKNOWN)",
+    degraded: "Gyengült (DEGRADED)",
+    offline: "Kapcsolat nélkül (OFFLINE)",
+  };
+  return labels[value] || labels[value.toLowerCase()] || value.toUpperCase();
+}
+
+function deliveryModelLabel(value: PartnerProject["deliveryModel"]) {
+  if (value === "HANDOFF") return "Átadás (HANDOFF)";
+  if (value === "DIMPRO_HOSTED") return "DIMPRO hosztolt (DIMPRO_HOSTED)";
+  return "Partner hosztolt (PARTNER_HOSTED)";
+}
+
+function classificationLabel(value: PartnerProject["dataClassification"]) {
+  if (value === "NORMAL") return "Normál (NORMAL)";
+  if (value === "CONFIDENTIAL") return "Bizalmas (CONFIDENTIAL)";
+  return "Korlátozott (RESTRICTED)";
+}
+
+function engineAccessLabel(value: PartnerProject["internalEngineAccess"]) {
+  return value === "ALLOWLIST" ? "Engedélylista (ALLOWLIST)" : "Nincs (NONE)";
+}
+
+function deliveryTargetLabel(value: string) {
+  if (!value || value === "NOT_CONFIGURED") return "Nincs beállítva (NOT_CONFIGURED)";
+  const [target, status] = value.split(":");
+  const targetLabel = target === "HANDOFF" ? "Átadás (HANDOFF)" : target === "DIMPRO_HOSTED" ? "DIMPRO hosztolt" : target === "PARTNER_HOSTED" ? "Partner hosztolt" : target;
+  const statusLabel = status === "ready" ? "Kész (READY)" : status === "draft" ? "Vázlat (DRAFT)" : status === "pending" ? "Függő (PENDING)" : status || "—";
+  return `${targetLabel}: ${statusLabel}`;
+}
+
+function provisionLabel(value: PartnerProject["provisionState"]) {
+  const labels: Record<PartnerProject["provisionState"], string> = {
+    DRAFT: "Vázlat (DRAFT)",
+    VALIDATING: "Ellenőrzés (VALIDATING)",
+    PROVISIONING: "Kiépítés (PROVISIONING)",
+    BASELINE_TEST: "Alapteszt (BASELINE_TEST)",
+    READY: "Kész (READY)",
+  };
+  return labels[value];
+}
+
+function handoffStatusLabel(value: PartnerHandoff["status"]) {
+  const labels: Record<PartnerHandoff["status"], string> = {
+    draft: "Vázlat (draft)",
+    prepared: "Előkészítve (prepared)",
+    handed_over: "Átadva (handed over)",
+    accepted: "Elfogadva (accepted)",
+    rejected: "Elutasítva (rejected)",
+    cancelled: "Visszavonva (cancelled)",
+  };
+  return labels[value];
 }
 
 export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
@@ -125,6 +198,13 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
   const [deliveryModel, setDeliveryModel] = useState<PartnerProject["deliveryModel"]>("HANDOFF");
   const [classification, setClassification] = useState<PartnerProject["dataClassification"]>("NORMAL");
 
+  const [handoffs, setHandoffs] = useState<PartnerHandoff[]>([]);
+  const [handoffBusy, setHandoffBusy] = useState("");
+  const [handoffProjectId, setHandoffProjectId] = useState("");
+  const [handoffGitCommit, setHandoffGitCommit] = useState("");
+  const [handoffBuildId, setHandoffBuildId] = useState("");
+  const [handoffNotes, setHandoffNotes] = useState("");
+
   const load = useCallback(async (silent = false) => {
     if (refreshRef.current) return;
     const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
@@ -132,13 +212,17 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     refreshRef.current = true;
     if (!silent) setBusy(true);
     try {
-      const response = await fetch("/api/dev/engine/partner-projects", {
-        headers: { "x-dimpro-license-admin-key": key },
-        cache: "no-store",
-      });
-      const payload = await response.json().catch(() => null) as (PartnerSnapshot & { ok?: boolean; error?: string }) | null;
-      if (!response.ok || !payload?.health) throw new Error(payload?.error || "A Partner Development Plane állapot nem tölthető be.");
+      const headers = { "x-dimpro-license-admin-key": key };
+      const [projectsResponse, handoffsResponse] = await Promise.all([
+        fetch("/api/dev/engine/partner-projects", { headers, cache: "no-store" }),
+        fetch("/api/dev/engine/partner-handoffs", { headers, cache: "no-store" }),
+      ]);
+      const payload = await projectsResponse.json().catch(() => null) as (PartnerSnapshot & { ok?: boolean; error?: string }) | null;
+      const handoffPayload = await handoffsResponse.json().catch(() => null) as { ok?: boolean; handoffs?: PartnerHandoff[]; error?: string } | null;
+      if (!projectsResponse.ok || !payload?.health) throw new Error(payload?.error || "A partnerfejlesztési sík (Partner Development Plane) állapota nem tölthető be.");
+      if (!handoffsResponse.ok || !handoffPayload?.ok) throw new Error(handoffPayload?.error || "A partnerátadások nem tölthetők be.");
       setSnapshot(payload);
+      setHandoffs(handoffPayload.handoffs || []);
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "A Partner Development Plane állapot nem tölthető be.");
@@ -181,15 +265,23 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
   }), [snapshot?.projects, normalizedQuery]);
 
 
+  const eligibleHandoffProjects = useMemo(() => (snapshot?.projects || []).filter((project) =>
+    project.deliveryModel === "HANDOFF" && project.provisionState === "READY" && project.status === "ready"
+  ), [snapshot?.projects]);
+
+  useEffect(() => {
+    if (!handoffProjectId && eligibleHandoffProjects[0]?.projectId) setHandoffProjectId(eligibleHandoffProjects[0].projectId);
+  }, [eligibleHandoffProjects, handoffProjectId]);
+
   const provisionAnalytics = useMemo(() => {
     const source = snapshot?.projects || [];
     const total = Math.max(1, source.length);
     return [
-      { label: "DRAFT", value: source.filter((item) => item.provisionState === "DRAFT").length, total, tone: "default" as const },
-      { label: "VALIDATING", value: source.filter((item) => item.provisionState === "VALIDATING").length, total, tone: "info" as const },
-      { label: "PROVISIONING", value: source.filter((item) => item.provisionState === "PROVISIONING").length, total, tone: "warning" as const },
-      { label: "BASELINE", value: source.filter((item) => item.provisionState === "BASELINE_TEST").length, total, tone: "warning" as const },
-      { label: "READY", value: source.filter((item) => item.provisionState === "READY").length, total, tone: "ok" as const },
+      { label: "Vázlat (DRAFT)", value: source.filter((item) => item.provisionState === "DRAFT").length, total, tone: "default" as const },
+      { label: "Ellenőrzés (VALIDATING)", value: source.filter((item) => item.provisionState === "VALIDATING").length, total, tone: "info" as const },
+      { label: "Kiépítés (PROVISIONING)", value: source.filter((item) => item.provisionState === "PROVISIONING").length, total, tone: "warning" as const },
+      { label: "Alapteszt (BASELINE_TEST)", value: source.filter((item) => item.provisionState === "BASELINE_TEST").length, total, tone: "warning" as const },
+      { label: "Kész (READY)", value: source.filter((item) => item.provisionState === "READY").length, total, tone: "ok" as const },
     ];
   }, [snapshot?.projects]);
 
@@ -197,9 +289,9 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     const source = snapshot?.projects || [];
     const total = Math.max(1, source.length);
     return [
-      { label: "HANDOFF", value: source.filter((item) => item.deliveryModel === "HANDOFF").length, total, tone: "info" as const },
-      { label: "DIMPRO HOSTED", value: source.filter((item) => item.deliveryModel === "DIMPRO_HOSTED").length, total, tone: "ok" as const },
-      { label: "PARTNER HOSTED", value: source.filter((item) => item.deliveryModel === "PARTNER_HOSTED").length, total, tone: "warning" as const },
+      { label: "Átadás (HANDOFF)", value: source.filter((item) => item.deliveryModel === "HANDOFF").length, total, tone: "info" as const },
+      { label: "DIMPRO hosztolt (DIMPRO_HOSTED)", value: source.filter((item) => item.deliveryModel === "DIMPRO_HOSTED").length, total, tone: "ok" as const },
+      { label: "Partner hosztolt (PARTNER_HOSTED)", value: source.filter((item) => item.deliveryModel === "PARTNER_HOSTED").length, total, tone: "warning" as const },
     ];
   }, [snapshot?.projects]);
 
@@ -209,9 +301,9 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     const total = Math.max(1, statuses.length);
     const normalized = statuses.map((item) => item.toLowerCase());
     return [
-      { label: "Ready / online", value: normalized.filter((item) => ["ready", "online"].includes(item)).length, total, tone: "ok" as const },
-      { label: "Pending / unknown", value: normalized.filter((item) => ["pending", "unknown", "not_bound"].includes(item)).length, total, tone: "warning" as const },
-      { label: "Degraded / offline", value: normalized.filter((item) => ["degraded", "offline"].includes(item)).length, total, tone: "danger" as const },
+      { label: "Kész / online (ready/online)", value: normalized.filter((item) => ["ready", "online"].includes(item)).length, total, tone: "ok" as const },
+      { label: "Függő / ismeretlen (pending/unknown)", value: normalized.filter((item) => ["pending", "unknown", "not_bound"].includes(item)).length, total, tone: "warning" as const },
+      { label: "Gyengült / offline (degraded/offline)", value: normalized.filter((item) => ["degraded", "offline"].includes(item)).length, total, tone: "danger" as const },
     ];
   }, [snapshot?.projects]);
 
@@ -291,6 +383,63 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     }
   }
 
+  async function prepareHandoff() {
+    if (!handoffProjectId || handoffBusy) return;
+    const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    if (!key) return;
+    setHandoffBusy("prepare");
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/dev/engine/partner-handoffs", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-dimpro-license-admin-key": key },
+        body: JSON.stringify({
+          projectId: handoffProjectId,
+          gitCommit: handoffGitCommit,
+          buildId: handoffBuildId,
+          notes: handoffNotes,
+          actor: "BenjAdmin",
+        }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string; handoff?: PartnerHandoff } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A partnerátadás előkészítése sikertelen.");
+      setMessage(`${payload.handoff?.projectCode || "Partnerprojekt"} átadása előkészítve.`);
+      setHandoffGitCommit("");
+      setHandoffBuildId("");
+      setHandoffNotes("");
+      await load(true);
+    } catch (handoffError) {
+      setError(handoffError instanceof Error ? handoffError.message : "A partnerátadás előkészítése sikertelen.");
+    } finally {
+      setHandoffBusy("");
+    }
+  }
+
+  async function transitionHandoff(handoff: PartnerHandoff, action: "HAND_OVER" | "ACCEPT" | "REJECT" | "CANCEL") {
+    if (handoffBusy) return;
+    const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    if (!key) return;
+    setHandoffBusy(`${handoff.id}:${action}`);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/dev/engine/partner-handoffs/${encodeURIComponent(handoff.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-dimpro-license-admin-key": key },
+        body: JSON.stringify({ action, actor: "BenjAdmin" }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string; handoff?: PartnerHandoff } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A partnerátadás állapotváltása sikertelen.");
+      setMessage(`${handoff.projectCode} átadási állapota frissítve.`);
+      await load(true);
+    } catch (handoffError) {
+      setError(handoffError instanceof Error ? handoffError.message : "A partnerátadás állapotváltása sikertelen.");
+    } finally {
+      setHandoffBusy("");
+    }
+  }
+
   const health = snapshot?.health;
   const pendingTables = health?.checks.filter((item) => !item.ready).length || 0;
 
@@ -298,22 +447,22 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     <section className="operator-partner-panel" data-testid="partner-development-panel">
       <header className="operator-partner-head">
         <div>
-          <span>PARTNER DEVELOPMENT PLANE · B3.2</span>
+          <span>PARTNER FEJLESZTÉSI SÍK (Partner Development Plane) · B3.2</span>
           <h2><Boxes size={17} /> Partner fejlesztések</h2>
-          <p>Belső DIMPRO síktól elkülönített partnerprojektek, OutminAI worker és delivery életciklus.</p>
+          <p>Belső DIMPRO síktól elkülönített partnerprojektek, OutminAI fejlesztő (worker) és átadási életciklus (delivery lifecycle).</p>
         </div>
         <div className="operator-partner-head__badges">
           <span className={`operator-status-badge ${health?.ready ? "is-ok" : "is-warning"}`} data-testid="partner-schema-status">
             {health?.ready ? <CheckCircle2 size={13} /> : <CircleAlert size={13} />}
-            SCHEMA {health?.ready ? "READY" : "PENDING"}
+            SÉMA {health?.ready ? "READY" : "PENDING"}
           </span>
           <span className={`operator-status-badge ${snapshot?.runtimeIsolation?.ready ? "is-ok" : "is-partner"}`} data-testid="partner-runtime-status">
             <ShieldCheck size={13} />
             {snapshot?.runtimeIsolation?.ready
-              ? "OUTMINAI · DEFAULT DENY · P2 RUNTIME READY"
+              ? "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET READY"
               : snapshot?.runtimeIsolation?.preflightReady
-                ? "OUTMINAI · DEFAULT DENY · P2 PREFLIGHT READY"
-                : "OUTMINAI · DEFAULT DENY · P2 RUNTIME PENDING"}
+                ? "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 ELŐELLENŐRZÉS READY"
+                : "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET PENDING"}
           </span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Partner állapot frissítése">
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} />
@@ -322,24 +471,24 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
       </header>
 
       <div className="operator-partner-metrics">
-        <div><span>Partner projektek</span><strong>{snapshot?.projects.length || 0}</strong></div>
-        <div><span>Registry schema</span><strong>{health?.actualSchemaVersion || "STAGED"}</strong></div>
-        <div><span>Hiányzó táblák</span><strong>{pendingTables}</strong></div>
-        <div><span>Default worker</span><strong>OUTMINAI</strong></div>
-        <div><span>P2 runtime</span><strong>{snapshot?.runtimeIsolation?.stage || "PENDING"}</strong></div>
-        <div><span>PROD</span><strong>APPROVAL GATE</strong></div>
+        <div><span>Partnerprojektek</span><strong>{snapshot?.projects.length || 0}</strong></div>
+        <div><span>Nyilvántartási séma (registry schema)</span><strong>{health?.actualSchemaVersion || "STAGED"}</strong></div>
+        <div><span>Hiányzó adattáblák</span><strong>{pendingTables}</strong></div>
+        <div><span>Alapértelmezett fejlesztő (worker)</span><strong>OutminAI</strong></div>
+        <div><span>P2 futási környezet (runtime)</span><strong>{snapshot?.runtimeIsolation?.stage || "PENDING"}</strong></div>
+        <div><span>PROD</span><strong>JÓVÁHAGYÁSI KAPU (approval gate)</strong></div>
       </div>
 
       <div className="benj-v3-analytics-grid is-compact operator-partner-analytics" aria-label="Partner Development Plane analitika">
-        <BenjadminBarChart title="Provision lifecycle" subtitle={`${snapshot?.projects.length || 0} partnerprojekt`} items={provisionAnalytics} />
-        <BenjadminBarChart title="Delivery model" subtitle="B3.2 delivery" items={deliveryAnalytics} />
-        <BenjadminBarChart title="Partner environment health" subtitle="DEV / STAG / PROD-Handoff" items={partnerEnvironmentAnalytics} />
+        <BenjadminBarChart title="Kiépítési életciklus (provision lifecycle)" subtitle={`${snapshot?.projects.length || 0} partnerprojekt`} items={provisionAnalytics} />
+        <BenjadminBarChart title="Átadási modell (delivery model)" subtitle="B3.2 delivery" items={deliveryAnalytics} />
+        <BenjadminBarChart title="Partnerkörnyezet állapota (environment health)" subtitle="DEV / STAG / PROD / átadás (handoff)" items={partnerEnvironmentAnalytics} />
       </div>
 
       <div className="operator-partner-grid">
         <div className="operator-table-card operator-partner-table-card">
           <div className="operator-table-title">
-            <div><span>PARTNER REGISTRY</span><h2>Projekt- és környezet-összkép</h2></div>
+            <div><span>PARTNERNYILVÁNTARTÁS (registry)</span><h2>Projekt- és környezet-összkép</h2></div>
             <span>{projects.length} rekord</span>
           </div>
           <div className="operator-table-wrap">
@@ -348,28 +497,28 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
                 <tr>
                   <th>Kód</th>
                   <th>Partner / termék</th>
-                  <th>Worker</th>
+                  <th>Fejlesztő (worker)</th>
                   <th>DEV</th>
                   <th>STAG</th>
-                  <th>PROD / Handoff</th>
-                  <th>Delivery</th>
-                  <th>Provision</th>
-                  <th>Health</th>
+                  <th>PROD / Átadás (handoff)</th>
+                  <th>Átadás (delivery)</th>
+                  <th>Kiépítés (provision)</th>
+                  <th>Állapot (health)</th>
                   <th>Aktivitás</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.map((project) => (
                   <tr key={project.projectId}>
-                    <td><strong>{project.projectCode}</strong><small>{project.dataClassification}</small></td>
+                    <td><strong>{project.projectCode}</strong><small>{classificationLabel(project.dataClassification)}</small></td>
                     <td><strong>{project.name}</strong><small>{project.partnerOrgId || project.slug}</small></td>
-                    <td><span className="operator-partner-worker">{project.defaultWorkerCode}</span><small>{project.internalEngineAccess}</small></td>
+                    <td><span className="operator-partner-worker">{project.defaultWorkerCode}</span><small>{engineAccessLabel(project.internalEngineAccess)}</small></td>
                     <td><span className={`operator-status-badge ${healthTone(project.environments.DEV)}`}>{environmentLabel(project.environments.DEV)}</span></td>
                     <td><span className={`operator-status-badge ${healthTone(project.environments.STAG)}`}>{environmentLabel(project.environments.STAG)}</span></td>
-                    <td><span className={`operator-status-badge ${healthTone(project.environments.PROD)}`}>{project.deliveryTargetStatus}</span></td>
-                    <td><strong>{project.deliveryModel}</strong><small>{project.repositoryCount} repo</small></td>
+                    <td><span className={`operator-status-badge ${healthTone(project.environments.PROD)}`}>{deliveryTargetLabel(project.deliveryTargetStatus)}</span></td>
+                    <td><strong>{deliveryModelLabel(project.deliveryModel)}</strong><small>{project.repositoryCount} repository (repo)</small></td>
                     <td>
-                      <span className={`operator-status-badge ${healthTone(project.provisionState)}`}>{project.provisionState}</span>
+                      <span className={`operator-status-badge ${healthTone(project.provisionState)}`}>{provisionLabel(project.provisionState)}</span>
                       <button
                         type="button"
                         className="operator-partner-provision-button"
@@ -396,7 +545,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
                     <td colSpan={10} className="operator-table-empty" data-testid="partner-empty-state">
                       {health?.ready
                         ? "Még nincs partnerprojekt. Az első projekt draftként hozható létre."
-                        : "A P1 Partner Registry kódja előkészítve; a source-of-truth DEV sémamigráció még nincs alkalmazva."}
+                        : "A P1 partnernyilvántartás (Partner Registry) kódja előkészítve; az elsődleges DEV adatforrás (source-of-truth) sémamigrációja még nincs alkalmazva."}
                     </td>
                   </tr>
                 ) : null}
@@ -407,7 +556,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
 
         <aside className="operator-partner-side">
           <div className="operator-mini-table-card operator-partner-create">
-            <div className="operator-table-title"><div><span>ÚJ PARTNERPROJEKT</span><h2>Draft registry</h2></div></div>
+            <div className="operator-table-title"><div><span>ÚJ PARTNERPROJEKT</span><h2>Vázlatnyilvántartás (draft registry)</h2></div></div>
             <label>
               <span>Partner / termék neve</span>
               <input
@@ -422,7 +571,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
               />
             </label>
             <label>
-              <span>Slug</span>
+              <span>Technikai név (slug)</span>
               <input
                 value={slug}
                 disabled={!health?.ready || creating}
@@ -439,19 +588,19 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
             </label>
             <div className="operator-partner-form-row">
               <label>
-                <span>Delivery</span>
+                <span>Átadási modell (delivery)</span>
                 <select value={deliveryModel} disabled={!health?.ready || creating} onChange={(event) => setDeliveryModel(event.target.value as PartnerProject["deliveryModel"])}>
-                  <option value="HANDOFF">HANDOFF</option>
-                  <option value="DIMPRO_HOSTED">DIMPRO_HOSTED</option>
-                  <option value="PARTNER_HOSTED">PARTNER_HOSTED</option>
+                  <option value="HANDOFF">Átadás (HANDOFF)</option>
+                  <option value="DIMPRO_HOSTED">DIMPRO hosztolt (DIMPRO_HOSTED)</option>
+                  <option value="PARTNER_HOSTED">Partner hosztolt (PARTNER_HOSTED)</option>
                 </select>
               </label>
               <label>
                 <span>Adatminősítés</span>
                 <select value={classification} disabled={!health?.ready || creating} onChange={(event) => setClassification(event.target.value as PartnerProject["dataClassification"])}>
-                  <option value="NORMAL">NORMAL</option>
-                  <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-                  <option value="RESTRICTED">RESTRICTED</option>
+                  <option value="NORMAL">Normál (NORMAL)</option>
+                  <option value="CONFIDENTIAL">Bizalmas (CONFIDENTIAL)</option>
+                  <option value="RESTRICTED">Korlátozott (RESTRICTED)</option>
                 </select>
               </label>
             </div>
@@ -461,23 +610,70 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
               disabled={!health?.ready || creating || !name.trim() || !slug.trim()}
               onClick={() => void createDraft()}
             >
-              <Plus size={15} /> {creating ? "Létrehozás..." : "Draft létrehozása"}
+              <Plus size={15} /> {creating ? "Létrehozás..." : "Vázlat létrehozása (draft)"}
             </button>
             {!health?.ready ? <small className="operator-partner-schema-note"><Database size={13} /> Aktiválás csak DEV DB backup + migráció után.</small> : null}
             {message ? <small className="operator-partner-message is-ok">{message}</small> : null}
             {error ? <small className="operator-partner-message is-danger">{error}</small> : null}
           </div>
 
+          <div className="operator-mini-table-card operator-partner-handoff" data-testid="partner-handoff-panel">
+            <div className="operator-table-title"><div><span>P4 · PARTNERÁTADÁS</span><h2>Átadási életciklus (handoff)</h2></div><span>{handoffs.length} átadás</span></div>
+            <label>
+              <span>Partnerprojekt</span>
+              <select value={handoffProjectId} disabled={!eligibleHandoffProjects.length || Boolean(handoffBusy)} onChange={(event) => setHandoffProjectId(event.target.value)}>
+                {!eligibleHandoffProjects.length ? <option value="">Nincs átadásra kész projekt</option> : null}
+                {eligibleHandoffProjects.map((project) => <option key={project.projectId} value={project.projectId}>{project.projectCode} · {project.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Git commit</span>
+              <input value={handoffGitCommit} disabled={Boolean(handoffBusy)} onChange={(event) => setHandoffGitCommit(event.target.value)} placeholder="abcdef1" />
+            </label>
+            <label>
+              <span>Build azonosító (build ID)</span>
+              <input value={handoffBuildId} disabled={Boolean(handoffBusy)} onChange={(event) => setHandoffBuildId(event.target.value)} placeholder="build-azonosító" />
+            </label>
+            <label>
+              <span>Átadási megjegyzés</span>
+              <textarea value={handoffNotes} disabled={Boolean(handoffBusy)} onChange={(event) => setHandoffNotes(event.target.value)} placeholder="Rövid átadási összefoglaló..." />
+            </label>
+            <button
+              type="button"
+              className="operator-partner-create-button"
+              disabled={!handoffProjectId || !handoffGitCommit.trim() || !handoffBuildId.trim() || Boolean(handoffBusy)}
+              onClick={() => void prepareHandoff()}
+            >
+              <Plus size={15} /> {handoffBusy === "prepare" ? "Előkészítés..." : "Átadás előkészítése"}
+            </button>
+            <div className="operator-partner-handoff-list">
+              {handoffs.slice(0, 6).map((handoff) => (
+                <div key={handoff.id} data-testid={`partner-handoff-${handoff.id}`}>
+                  <div><strong>{handoff.projectCode || handoff.projectName}</strong><span className={`operator-status-badge ${healthTone(handoff.status)}`}>{handoffStatusLabel(handoff.status)}</span></div>
+                  <small>{handoff.buildId || "—"} · {handoff.gitCommit ? handoff.gitCommit.slice(0, 12) : "—"}</small>
+                  <small>{handoff.checksum ? `${handoff.checksum.slice(0, 22)}…` : "—"}</small>
+                  <div className="operator-partner-handoff-actions">
+                    {handoff.status === "prepared" ? <button type="button" disabled={Boolean(handoffBusy)} onClick={() => void transitionHandoff(handoff, "HAND_OVER")}>Átadás rögzítése</button> : null}
+                    {handoff.status === "handed_over" ? <button type="button" disabled={Boolean(handoffBusy)} onClick={() => void transitionHandoff(handoff, "ACCEPT")}>Elfogadás</button> : null}
+                    {handoff.status === "handed_over" ? <button type="button" disabled={Boolean(handoffBusy)} onClick={() => void transitionHandoff(handoff, "REJECT")}>Elutasítás</button> : null}
+                    {["draft", "prepared"].includes(handoff.status) ? <button type="button" disabled={Boolean(handoffBusy)} onClick={() => void transitionHandoff(handoff, "CANCEL")}>Visszavonás</button> : null}
+                  </div>
+                </div>
+              ))}
+              {!handoffs.length ? <small className="operator-partner-schema-note">Még nincs partnerátadás.</small> : null}
+            </div>
+          </div>
+
           <div className="operator-compact-warning is-warning">
             <ShieldCheck size={16} />
             <div>
-              <strong>Internal / Partner határ</strong>
+              <strong>Belső / partner határ (Internal / Partner)</strong>
               <span>
                 {snapshot?.runtimeIsolation?.ready
-                  ? "P2 runtime izoláció READY. P3 provisioning HANDOFF módban repo/worktree + DEV/STAG registry + baseline teszttel automatizált; hosted mód külön DB/storage provider gate-et kér."
+                  ? "P2 futási izoláció (runtime isolation) READY. A P3 kiépítés (provisioning) átadási módban (HANDOFF) repository/munkafa (worktree) + DEV/STAG nyilvántartás + alapteszt (baseline) segítségével automatizált; hosztolt mód külön adatbázis-/tárhelyszolgáltatói kaput (provider gate) kér."
                   : snapshot?.runtimeIsolation?.preflightReady
-                    ? "P2 runtime preflight READY: partner root, worker token, SSH public identity és belső DEV root mód előkészítve. A külön Outmin Linux identity acceptance még hiányzik."
-                    : "P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás külön runtime gate; repo/DB/storage provisioning P3."}
+                    ? "P2 futási előellenőrzés (runtime preflight) READY: partner gyökér, fejlesztői token (worker token), SSH publikus azonosító és belső DEV gyökérmód előkészítve. A külön Outmin Linux azonosító elfogadása még hiányzik."
+                    : "A P2 házirendmag (policy core) aktív: belső repository/munkafa/hatókör (repo/worktree/scope) ALAPÉRTELMEZETTEN TILTOTT (DEFAULT DENY). Az OutminAI OS/MCP azonosító aktiválása külön futási kapu (runtime gate); repository/adatbázis/tárhely kiépítés a P3 része."}
               </span>
             </div>
           </div>

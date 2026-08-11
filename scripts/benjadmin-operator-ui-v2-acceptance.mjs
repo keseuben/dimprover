@@ -104,7 +104,7 @@ try {
   check("OutminAI external role visible", teamText.includes("KÜLSŐ KÓDMÉRNÖK"));
   check("team portraits loaded", await page.$$eval(".operator-worker-identity .operator-worker-avatar", (items) => items.length >= 5 && items.every((item) => item instanceof HTMLImageElement && item.complete && item.naturalWidth > 0)));
 
-  await clickTab("Taskok");
+  await clickTab("Feladatok (taskok)");
   const firstTaskPage = await page.$eval(".operator-pagination", (el) => el.textContent || "");
   check("task table is paginated", firstTaskPage.includes("15 rekord") && firstTaskPage.includes("1/2. oldal"), firstTaskPage.trim());
   await page.$$eval(".operator-pagination button", (buttons) => buttons.find((item) => (item.textContent || "").includes("Következő"))?.click());

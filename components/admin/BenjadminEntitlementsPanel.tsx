@@ -186,9 +186,9 @@ export default function BenjadminEntitlementsPanel({ query }: Props) {
       </div>
 
       <div className="benj-v3-analytics-grid is-compact operator-entitlement-analytics" aria-label="Licenc és AI entitlement analitika">
-        <BenjadminBarChart title="Licenc health" subtitle={`${snapshot?.centralLicenses.length || 0} központi licenc`} items={centralStatusAnalytics} />
-        <BenjadminBarChart title="Send entitlement" subtitle="aktuális havi használat" items={sendAnalytics} />
-        <BenjadminBarChart title="AI budget health" subtitle={`${snapshot?.localAiLicenses.length || 0} AI licenc`} items={aiBudgetAnalytics} />
+        <BenjadminBarChart title="Licencállapot (license health)" subtitle={`${snapshot?.centralLicenses.length || 0} központi licenc`} items={centralStatusAnalytics} />
+        <BenjadminBarChart title="Send-jogosultság (entitlement)" subtitle="aktuális havi használat" items={sendAnalytics} />
+        <BenjadminBarChart title="AI-keret állapota (budget health)" subtitle={`${snapshot?.localAiLicenses.length || 0} AI licenc`} items={aiBudgetAnalytics} />
       </div>
 
       <div className="operator-table-card is-full">

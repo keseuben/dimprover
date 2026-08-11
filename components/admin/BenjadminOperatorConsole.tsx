@@ -73,15 +73,15 @@ const PAGE_SIZE = 8;
 
 const views: Array<{ id: OperatorView; label: string; icon: typeof Activity }> = [
   { id: "overview", label: "Áttekintés", icon: Activity },
-  { id: "control", label: "Control", icon: TerminalSquare },
+  { id: "control", label: "Vezérlés (Control)", icon: TerminalSquare },
   { id: "partners", label: "Partner fejlesztések", icon: Boxes },
-  { id: "tasks", label: "Taskok", icon: ListTodo },
+  { id: "tasks", label: "Feladatok (taskok)", icon: ListTodo },
   { id: "team", label: "Csapat", icon: Bot },
-  { id: "workers", label: "Worker-ek", icon: Bot },
+  { id: "workers", label: "Fejlesztők (worker-ek)", icon: Bot },
   { id: "environments", label: "Környezetek", icon: ServerCog },
   { id: "entitlements", label: "Licenc / AI", icon: KeyRound },
-  { id: "release", label: "Release", icon: GitBranch },
-  { id: "audit", label: "Audit", icon: ShieldCheck },
+  { id: "release", label: "Kiadások (release)", icon: GitBranch },
+  { id: "audit", label: "Napló / audit", icon: ShieldCheck },
 ];
 
 function formatDateTime(value?: string | null) {
@@ -372,9 +372,9 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
     const total = Math.max(1, devWorkSessions.length);
     return [
       { label: "ChatGPT", value: devWorkSessions.filter((item) => item.source === "chatgpt").length, total, tone: "info" as const },
-      { label: "Automatic", value: devWorkSessions.filter((item) => item.source === "automatic").length, total, tone: "ok" as const },
-      { label: "Manual", value: devWorkSessions.filter((item) => item.source === "manual").length, total, tone: "warning" as const },
-      { label: "System", value: devWorkSessions.filter((item) => item.source === "system").length, total, tone: "default" as const },
+      { label: "Automatikus (automatic)", value: devWorkSessions.filter((item) => item.source === "automatic").length, total, tone: "ok" as const },
+      { label: "Kézi (manual)", value: devWorkSessions.filter((item) => item.source === "manual").length, total, tone: "warning" as const },
+      { label: "Rendszer (system)", value: devWorkSessions.filter((item) => item.source === "system").length, total, tone: "default" as const },
     ];
   }, [devWorkSessions]);
 
@@ -427,7 +427,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
           <p>Táblázatos, lapozható munkatér a párhuzamos fejlesztések, worker-ek és környezetek áttekintéséhez.</p>
         </div>
         <div className="operator-compact-header__right">
-          <span className={`operator-live-pill ${gate?.ready ? "is-ok" : "is-danger"}`}><span /> Engine {gate?.ready ? "READY" : "CHECK"}</span>
+          <span className={`operator-live-pill ${gate?.ready ? "is-ok" : "is-danger"}`}><span /> Motor (engine) {gate?.ready ? "READY" : "ELLENŐRZÉS (CHECK)"}</span>
           <span className="operator-live-pill is-ok"><span /> ÉLŐ · 5 MP</span>
           <span className="operator-live-pill is-ok"><span /> DEV CANONICAL</span>
           <button type="button" className="operator-icon-action" onClick={() => void load(false)} disabled={busy} title="Frissítés"><RefreshCw size={18} className={busy ? "is-spinning" : ""} /></button>
@@ -437,12 +437,12 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
       {error ? <div className="operator-alert is-danger"><CircleAlert size={16} /> {error}</div> : null}
 
       <section className="operator-compact-stats" aria-label="Rendszerösszesítő">
-        <div><Bot size={18} /><span>READY worker</span><strong>{readySessions.length}/3</strong></div>
-        <div><ListTodo size={18} /><span>Aktív task</span><strong>{activeTasks.length}</strong></div>
-        <div><LockKeyhole size={18} /><span>Scope / lease</span><strong>{state?.locks.length || state?.worktreeLeases.length || 0}</strong></div>
+        <div><Bot size={18} /><span>Kész fejlesztő (READY worker)</span><strong>{readySessions.length}/3</strong></div>
+        <div><ListTodo size={18} /><span>Aktív feladat (task)</span><strong>{activeTasks.length}</strong></div>
+        <div><LockKeyhole size={18} /><span>Hatókör / foglalás (scope / lease)</span><strong>{state?.locks.length || state?.worktreeLeases.length || 0}</strong></div>
         <div className={openConflicts.length ? "is-warning" : ""}><CircleAlert size={18} /><span>Konfliktus</span><strong>{openConflicts.length}</strong></div>
         <div><Database size={18} /><span>Környezet</span><strong>{state?.environments.length || 0}</strong></div>
-        <div className={staleCount ? "is-warning" : ""}><Clock3 size={18} /><span>Stale session</span><strong>{staleCount}</strong></div>
+        <div className={staleCount ? "is-warning" : ""}><Clock3 size={18} /><span>Elavult munkamenet (stale session)</span><strong>{staleCount}</strong></div>
       </section>
 
       <div className="operator-compact-toolbar">
@@ -461,12 +461,12 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
             <div className="benj-v3-analytics-grid" aria-label="BENJADMIN analitikai összkép">
               <BenjadminBarChart
                 title="Task állapot"
-                subtitle={`${tasks.length} összes task`}
+                subtitle={`${tasks.length} összes feladat (task)`}
                 items={taskAnalytics}
               />
               <BenjadminBarChart
-                title="Worker terhelés"
-                subtitle={`${readySessions.length}/3 READY session`}
+                title="Fejlesztői terhelés (worker load)"
+                subtitle={`${readySessions.length}/3 kész munkamenet (READY session)`}
                 items={workerAnalytics}
               />
               <BenjadminSparklineCard
@@ -479,10 +479,10 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
             </div>
             <div className="operator-overview-grid">
             <div className="operator-table-card">
-              <div className="operator-table-title"><div><span>AKTÍV FEJLESZTÉSEK</span><h2>Task queue</h2></div><Link href="/admin/dev"><TerminalSquare size={14} /> Fejlesztési Központ</Link></div>
+              <div className="operator-table-title"><div><span>AKTÍV FEJLESZTÉSEK</span><h2>Feladatvárólista (task queue)</h2></div><Link href="/admin/dev"><TerminalSquare size={14} /> Fejlesztési Központ</Link></div>
               <div className="operator-table-wrap">
                 <table className="operator-data-table">
-                  <thead><tr><th>Prioritás</th><th>Feladat</th><th>Worker</th><th>Állapot</th><th className="hide-small">Branch</th><th className="hide-medium">Frissítve</th></tr></thead>
+                  <thead><tr><th>Prioritás</th><th>Feladat</th><th>Fejlesztő (worker)</th><th>Állapot</th><th className="hide-small">Ág (branch)</th><th className="hide-medium">Frissítve</th></tr></thead>
                   <tbody>
                     {(pageData.items as DevEngineTask[]).map((task) => <tr key={task.id}><td><span className={`operator-priority-pill ${task.priority >= 80 ? "is-high" : task.priority >= 50 ? "is-medium" : ""}`}>{task.priority}</span></td><td><strong>{task.title}</strong><small>{projectName(task.projectId)}</small></td><td>{workerName(task.assignedWorkerId)}</td><td><span className={`operator-status-badge ${statusTone(task.status)}`}>{statusLabel(task.status)}</span></td><td className="hide-small"><code>{task.branchName || "—"}</code></td><td className="hide-medium">{formatDateTime(task.updatedAt)}</td></tr>)}
                     {!pageData.items.length ? <tr><td colSpan={6} className="operator-table-empty">Nincs aktív task.</td></tr> : null}
@@ -494,17 +494,17 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
 
             <aside className="operator-overview-side">
               <div className="operator-mini-table-card">
-                <div className="operator-table-title"><div><span>WORKER-EK</span><h2>BenAI kiosztás</h2></div></div>
+                <div className="operator-table-title"><div><span>FEJLESZTŐK (worker-ek)</span><h2>BenAI kiosztás</h2></div></div>
                 {workers.map((worker) => {
                   const session = sessionForWorker(worker.id);
-                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív task" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
+                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív feladat (task)" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
                 })}
               </div>
               <div className="operator-mini-table-card">
-                <div className="operator-table-title"><div><span>KÖRNYEZETEK</span><h2>Release útvonal</h2></div></div>
-                {(state?.environments || []).map((environment) => <div className="operator-environment-line" key={environment.id || environment.code}><span className={`operator-status-dot ${statusTone(environment.status)}`} /><strong>{environment.code}</strong><span>{statusLabel(environment.status)}</span><small>{environment.read_only ? "READ ONLY" : "WRITE"}</small></div>)}
+                <div className="operator-table-title"><div><span>KÖRNYEZETEK</span><h2>Kiadási útvonal (release)</h2></div></div>
+                {(state?.environments || []).map((environment) => <div className="operator-environment-line" key={environment.id || environment.code}><span className={`operator-status-dot ${statusTone(environment.status)}`} /><strong>{environment.code}</strong><span>{statusLabel(environment.status)}</span><small>{environment.read_only ? "CSAK OLVASHATÓ (READ ONLY)" : "ÍRÁS (WRITE)"}</small></div>)}
               </div>
-              <div className={`operator-compact-warning ${openConflicts.length ? "is-warning" : "is-ok"}`}>{openConflicts.length ? <CircleAlert size={16} /> : <CheckCircle2 size={16} />}<div><strong>{openConflicts.length ? `${openConflicts.length} nyitott konfliktus` : "Nincs nyitott konfliktus"}</strong><span>{openConflicts[0]?.summary || "Scope és worktree állapot tiszta."}</span></div></div>
+              <div className={`operator-compact-warning ${openConflicts.length ? "is-warning" : "is-ok"}`}>{openConflicts.length ? <CircleAlert size={16} /> : <CheckCircle2 size={16} />}<div><strong>{openConflicts.length ? `${openConflicts.length} nyitott konfliktus` : "Nincs nyitott konfliktus"}</strong><span>{openConflicts[0]?.summary || "A hatókör (scope) és a munkafa (worktree) állapota tiszta."}</span></div></div>
             </aside>
             </div>
           </div>
@@ -513,13 +513,13 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "tasks" ? (
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Task analitika">
-              <BenjadminBarChart title="Task státusz" subtitle={`${tasks.length} összes`} items={taskAnalytics} />
-              <BenjadminBarChart title="Prioritási megoszlás" subtitle="queue súly" items={priorityAnalytics} />
-              <BenjadminBarChart title="Worker terhelés" subtitle="aktív task / worker" items={workerAnalytics} />
+              <BenjadminBarChart title="Feladatállapot (task status)" subtitle={`${tasks.length} összes`} items={taskAnalytics} />
+              <BenjadminBarChart title="Prioritási megoszlás" subtitle="várólista súlya (queue)" items={priorityAnalytics} />
+              <BenjadminBarChart title="Fejlesztői terhelés (worker load)" subtitle="aktív feladat / fejlesztő (task / worker)" items={workerAnalytics} />
             </div>
             <div className="operator-table-card is-full">
-              <div className="operator-table-title"><div><span>TASK QUEUE</span><h2>Fejlesztési feladatok</h2></div><span>{taskRows.length} rekord</span></div>
-              <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>#</th><th>Feladat</th><th>Projekt</th><th>Worker</th><th>Állapot</th><th className="hide-small">Branch / worktree</th><th className="hide-medium">Scope</th><th>Frissítve</th></tr></thead><tbody>
+              <div className="operator-table-title"><div><span>FELADATVÁRÓLISTA (task queue)</span><h2>Fejlesztési feladatok</h2></div><span>{taskRows.length} rekord</span></div>
+              <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>#</th><th>Feladat</th><th>Projekt</th><th>Fejlesztő (worker)</th><th>Állapot</th><th className="hide-small">Ág / munkafa (branch / worktree)</th><th className="hide-medium">Hatókör (scope)</th><th>Frissítve</th></tr></thead><tbody>
                 {(pageData.items as DevEngineTask[]).map((task) => <tr key={task.id}><td><span className={`operator-priority-pill ${task.priority >= 80 ? "is-high" : task.priority >= 50 ? "is-medium" : ""}`}>{task.priority}</span></td><td><strong>{task.title}</strong><small>{task.description || task.blockedReason || "—"}</small></td><td>{projectName(task.projectId)}</td><td>{workerName(task.assignedWorkerId)}</td><td><span className={`operator-status-badge ${statusTone(task.status)}`}>{statusLabel(task.status)}</span></td><td className="hide-small"><code>{task.branchName || "—"}</code><small>{compactPath(task.worktreePath)}</small></td><td className="hide-medium">{task.scope.map((scope) => `${scope.type}:${scope.key}`).join(", ") || "—"}</td><td>{formatDateTime(task.updatedAt)}</td></tr>)}
               </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={taskRows.length} onPage={setPage} />
             </div>
@@ -529,13 +529,13 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "team" ? (
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Csapat analitika">
-              <BenjadminBarChart title="Worker terhelés" subtitle="3 kódolói slot" items={workerAnalytics} />
-              <BenjadminBarChart title="Session readiness" subtitle={`${sessions.length} session`} items={sessionAnalytics} />
+              <BenjadminBarChart title="Fejlesztői terhelés (worker load)" subtitle="3 kódolói hely (slot)" items={workerAnalytics} />
+              <BenjadminBarChart title="Munkamenet-készenlét (session readiness)" subtitle={`${sessions.length} session`} items={sessionAnalytics} />
               <BenjadminSparklineCard title="Fejlesztési aktivitás" subtitle="utolsó 7 nap" value={activityTrend.reduce((sum, value) => sum + value, 0)} valueLabel="perc" points={activityTrend} />
             </div>
             <div className="operator-table-card is-full">
             <div className="operator-table-title"><div><span>BENJADMIN CSAPAT</span><h2>Irányítók és aktív kódolói slotok</h2></div><span>5 tag · 3 kódolói slot</span></div>
-            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Tag</th><th>Típus</th><th>Szerepkör</th><th>Slot</th><th>Állapot</th><th className="hide-small">Aktív feladat</th><th className="hide-medium">Session / handshake</th></tr></thead><tbody>
+            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Tag</th><th>Típus</th><th>Szerepkör</th><th>Slot</th><th>Állapot</th><th className="hide-small">Aktív feladat</th><th className="hide-medium">Munkamenet / kézfogás (session / handshake)</th></tr></thead><tbody>
               {(pageData.items as Array<{ id: string; code: string; name: string; type: string; role: string; slot: string; status: string }>).map((member) => {
                 const worker = workers.find((item) => item.id === member.id);
                 const session = worker ? sessionForWorker(worker.id) : undefined;
@@ -559,14 +559,14 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "workers" ? (
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Worker analitika">
-              <BenjadminBarChart title="Aktív terhelés" subtitle="task / worker" items={workerAnalytics} />
-              <BenjadminBarChart title="Session readiness" subtitle="handshake / stale" items={sessionAnalytics} />
-              <BenjadminBarChart title="Task státusz" subtitle="teljes task állomány" items={taskAnalytics} />
+              <BenjadminBarChart title="Aktív fejlesztői terhelés" subtitle="feladat / fejlesztő (task / worker)" items={workerAnalytics} />
+              <BenjadminBarChart title="Munkamenet-készenlét (session readiness)" subtitle="kézfogás / elavult (handshake / stale)" items={sessionAnalytics} />
+              <BenjadminBarChart title="Feladatállapot (task status)" subtitle="teljes feladatállomány (task)" items={taskAnalytics} />
             </div>
             <div className="operator-table-card is-full">
-            <div className="operator-table-title"><div><span>BENAI WORKER-EK</span><h2>Session és worktree állapot</h2></div><span>{workerRows.length} worker</span></div>
-            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Worker</th><th>Szerep</th><th>Státusz</th><th>Session</th><th>Task</th><th className="hide-small">Branch</th><th className="hide-medium">Worktree</th><th>Heartbeat</th></tr></thead><tbody>
-              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{worker.code}</small></div></div></td><td>{worker.role}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív session"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
+            <div className="operator-table-title"><div><span>BENAI FEJLESZTŐK (worker-ek)</span><h2>Munkamenet (session) és munkafa (worktree) állapot</h2></div><span>{workerRows.length} fejlesztő (worker)</span></div>
+            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Fejlesztő (worker)</th><th>Szerep</th><th>Státusz</th><th>Munkamenet (session)</th><th>Feladat (task)</th><th className="hide-small">Ág (branch)</th><th className="hide-medium">Munkafa (worktree)</th><th>Életjel (heartbeat)</th></tr></thead><tbody>
+              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{worker.code}</small></div></div></td><td>{worker.role}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív munkamenet (session)"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={workerRows.length} onPage={setPage} />
             </div>
           </div>
@@ -575,14 +575,14 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "environments" ? (
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Környezet analitika">
-              <BenjadminBarChart title="Environment health" subtitle={`${state?.environments.length || 0} környezet`} items={environmentAnalytics} />
-              <BenjadminBarChart title="Írási policy" subtitle="DEV / STAGING / PROD" items={environmentPolicyAnalytics} />
-              <BenjadminBarChart title="Backup health" subtitle={`${state?.backups.length || 0} minta`} items={backupAnalytics} />
+              <BenjadminBarChart title="Környezetállapot (environment health)" subtitle={`${state?.environments.length || 0} környezet`} items={environmentAnalytics} />
+              <BenjadminBarChart title="Írási házirend (policy)" subtitle="DEV / STAGING / PROD" items={environmentPolicyAnalytics} />
+              <BenjadminBarChart title="Mentési állapot (backup health)" subtitle={`${state?.backups.length || 0} minta`} items={backupAnalytics} />
             </div>
             <div className="operator-table-card is-full">
             <div className="operator-table-title"><div><span>KÖRNYEZETEK</span><h2>DEV / STAGING / PROD</h2></div><Link href="/admin/szerver"><ServerCog size={14} /> Infrastruktúra</Link></div>
             <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Kód</th><th>Név</th><th>Státusz</th><th>Írás</th><th className="hide-small">Szerep</th><th>Frissítve</th></tr></thead><tbody>
-              {(pageData.items as RawEnvironment[]).map((environment) => <tr key={environment.id || environment.code}><td><strong>{environment.code}</strong></td><td>{environment.name}</td><td><span className={`operator-status-badge ${statusTone(environment.status)}`}>{statusLabel(environment.status)}</span></td><td><span className={`operator-status-badge ${environment.read_only ? "is-warning" : "is-ok"}`}>{environment.read_only ? "READ ONLY" : "WRITE ENABLED"}</span></td><td className="hide-small">{environment.kind || "—"}</td><td>{formatDateTime(environment.updated_at)}</td></tr>)}
+              {(pageData.items as RawEnvironment[]).map((environment) => <tr key={environment.id || environment.code}><td><strong>{environment.code}</strong></td><td>{environment.name}</td><td><span className={`operator-status-badge ${statusTone(environment.status)}`}>{statusLabel(environment.status)}</span></td><td><span className={`operator-status-badge ${environment.read_only ? "is-warning" : "is-ok"}`}>{environment.read_only ? "CSAK OLVASHATÓ (READ ONLY)" : "ÍRÁS ENGEDÉLYEZVE (WRITE ENABLED)"}</span></td><td className="hide-small">{environment.kind || "—"}</td><td>{formatDateTime(environment.updated_at)}</td></tr>)}
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={environmentRows.length} onPage={setPage} />
             </div>
           </div>
@@ -597,12 +597,12 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "release" ? (
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Release analitika">
-              <BenjadminBarChart title="Release státusz" subtitle={`${devVersions.length} verzió`} items={releaseStatusAnalytics} />
+              <BenjadminBarChart title="Kiadási állapot (release status)" subtitle={`${devVersions.length} verzió`} items={releaseStatusAnalytics} />
               <BenjadminBarChart title="Modul aktivitás" subtitle="verziók modulonként" items={releaseModuleAnalytics} />
-              <BenjadminSparklineCard title="Release aktivitás" subtitle="utolsó 7 nap" value={releaseTrend.reduce((sum, value) => sum + value, 0)} valueLabel="változás" points={releaseTrend} />
+              <BenjadminSparklineCard title="Kiadási aktivitás (release activity)" subtitle="utolsó 7 nap" value={releaseTrend.reduce((sum, value) => sum + value, 0)} valueLabel="változás" points={releaseTrend} />
             </div>
             <div className="operator-table-card is-full">
-              <div className="operator-table-title"><div><span>RELEASE / VERZIÓK</span><h2>Kiadási és fejlesztési állapot</h2></div><Link href="/admin/release-kozpont"><GitBranch size={14} /> Release Központ</Link></div>
+              <div className="operator-table-title"><div><span>KIADÁSOK (release) / VERZIÓK</span><h2>Kiadási és fejlesztési állapot</h2></div><Link href="/admin/release-kozpont"><GitBranch size={14} /> Kiadási Központ (release)</Link></div>
               <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Projekt</th><th>Modul</th><th>Verzió</th><th>Állapot</th><th>Leírás</th><th className="hide-small">Teszt</th><th>Frissítve</th></tr></thead><tbody>
                 {(pageData.items as DevVersion[]).map((item) => <tr key={item.id}><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td><code>{item.version}</code></td><td><span className={`operator-status-badge ${statusTone(item.status)}`}>{statusLabel(item.status)}</span></td><td><strong>{item.title}</strong><small>{item.summary || "—"}</small></td><td className="hide-small"><small>{item.testSummary || "—"}</small></td><td>{formatDateTime(item.completedAt || item.updatedAt)}</td></tr>)}
               </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={releaseRows.length} onPage={setPage} />
@@ -614,11 +614,11 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
           <div className="operator-v3-view-stack">
             <div className="benj-v3-analytics-grid is-compact" aria-label="Audit és munkaidő analitika">
               <BenjadminBarChart title="Idő kategóriánként" subtitle="összes rögzített perc" items={auditCategoryAnalytics} />
-              <BenjadminBarChart title="Munkamenet forrás" subtitle={`${devWorkSessions.length} session`} items={auditSourceAnalytics} />
+              <BenjadminBarChart title="Munkamenet forrás" subtitle={`${devWorkSessions.length} munkamenet (session)`} items={auditSourceAnalytics} />
               <BenjadminSparklineCard title="Munkaidő trend" subtitle="utolsó 7 nap" value={activityTrend.reduce((sum, value) => sum + value, 0)} valueLabel="perc" points={activityTrend} />
             </div>
             <div className="operator-table-card is-full">
-              <div className="operator-table-title"><div><span>AUDIT / MUNKAMENET</span><h2>Fejlesztési idő és aktivitás</h2></div><Link href="/admin/dimpro-belepesek"><ShieldCheck size={14} /> Belépési audit</Link></div>
+              <div className="operator-table-title"><div><span>NAPLÓ / AUDIT · MUNKAMENET</span><h2>Fejlesztési idő és aktivitás</h2></div><Link href="/admin/dimpro-belepesek"><ShieldCheck size={14} /> Belépési audit</Link></div>
               <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Indulás</th><th>Projekt</th><th>Modul</th><th>Forrás</th><th>Időkategória</th><th>Időtartam</th><th className="hide-small">Megjegyzés</th><th>Állapot</th></tr></thead><tbody>
                 {(pageData.items as DevWorkSession[]).map((item) => <tr key={item.id}><td>{formatDateTime(item.startedAt)}</td><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td>{item.source}</td><td>{item.currentCategory || "—"}</td><td>{formatDuration(item.durationMinutes)}</td><td className="hide-small"><small>{item.note || "—"}</small></td><td><span className={`operator-status-badge ${item.endedAt ? "is-muted" : "is-active"}`}>{item.endedAt ? "Lezárt" : "Fut"}</span></td></tr>)}
               </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={auditRows.length} onPage={setPage} />

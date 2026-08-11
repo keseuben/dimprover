@@ -90,7 +90,7 @@ try {
     button.click();
   });
   await page.waitForSelector("[data-testid=partner-development-panel]", { timeout: 30000 });
-  await page.waitForFunction(() => (document.querySelector("[data-testid=partner-schema-status]")?.textContent || "").includes("SCHEMA READY"), { timeout: 30000 });
+  await page.waitForFunction(() => (document.querySelector("[data-testid=partner-schema-status]")?.textContent || "").includes("SÉMA READY"), { timeout: 30000 });
   await page.waitForFunction((name) => (document.querySelector("[data-testid=partner-development-panel]")?.textContent || "").includes(name), { timeout: 30000 }, fixture.name);
 
   const state = await page.evaluate((name) => ({
@@ -103,7 +103,7 @@ try {
     scrollHeight: document.documentElement.scrollHeight,
     innerHeight: window.innerHeight,
   }), fixture.name);
-  check("Operator UI shows SCHEMA READY", state.panelText.includes("SCHEMA READY"));
+  check("Operator UI shows SÉMA READY", state.panelText.includes("SÉMA READY"));
   check("Operator UI form controls enabled after schema READY", state.inputsEnabled === true, `inputsEnabled=${state.inputsEnabled}`);
   await page.type(".operator-partner-create input", "UI Enable Probe");
   await page.waitForFunction(() => document.querySelector(".operator-partner-create-button")?.disabled === false, { timeout: 5000 });
