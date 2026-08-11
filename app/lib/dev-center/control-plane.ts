@@ -25,7 +25,9 @@ function text(value: unknown) {
 }
 
 function rows(value: unknown): DbRow[] {
-  return Array.isArray(value) ? value.filter((item): item is DbRow => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is DbRow => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
 }
 
 async function probeTable(client: SupabaseClient, table: string): Promise<OptionalTableProbe> {
@@ -33,9 +35,36 @@ async function probeTable(client: SupabaseClient, table: string): Promise<Option
   return { table, ready: !error, errorCode: error?.code || null };
 }
 
+async function readOptionalRows(
+  client: SupabaseClient,
+  probe: OptionalTableProbe,
+  orderBy: string,
+  limit = 100,
+) {
+  if (!probe.ready) return [] as DbRow[];
+  const result = await client.from(probe.table).select("*").order(orderBy, { ascending: false }).limit(limit);
+  if (result.error) return [] as DbRow[];
+  return rows(result.data);
+}
+
 export async function getBenjadminControlPlaneSnapshot() {
   const client = getClient();
-  const [audit, workSessions, builds, releases, backups, environments, controlMeta, startContexts, commandQueue, approvals, decisions, monitoring, storageTelemetry, storagePolicies] = await Promise.all([
+  const [
+    audit,
+    workSessions,
+    builds,
+    releases,
+    backups,
+    environments,
+    controlMeta,
+    startContexts,
+    commandQueue,
+    approvals,
+    decisions,
+    monitoring,
+    storageTelemetry,
+    storagePolicies,
+  ] = await Promise.all([
     client.from("dev_center_audit_events").select("*").order("created_at", { ascending: false }).limit(120),
     client.from("dev_center_work_sessions").select("*").order("started_at", { ascending: false }).limit(60),
     client.from("dev_center_build_runs").select("*").order("created_at", { ascending: false }).limit(50),
@@ -56,10 +85,22 @@ export async function getBenjadminControlPlaneSnapshot() {
     if (result.error) throw new Error(result.error.message || "A BENJADMIN Control Plane állapota nem tölthető be.");
   }
 
+  const optional = [controlMeta, startContexts, commandQueue, approvals, decisions, monitoring, storageTelemetry, storagePolicies];
+  const [startContextRows, commandRows, approvalRows, decisionRows, monitorRows, storageRows] = await Promise.all([
+    readOptionalRows(client, startContexts, "created_at", 50),
+    readOptionalRows(client, commandQueue, "created_at", 100),
+    readOptionalRows(client, approvals, "requested_at", 100),
+    readOptionalRows(client, decisions, "decided_at", 100),
+    readOptionalRows(client, monitoring, "sampled_at", 120),
+    readOptionalRows(client, storageTelemetry, "sampled_at", 120),
+  ]);
+
   const environmentRows = rows(environments.data);
   const devEnvironment = environmentRows.find((item) => text(item.code) === "DEV");
   const prodEnvironment = environmentRows.find((item) => text(item.code) === "PRODUCTION");
-  const optional = [controlMeta, startContexts, commandQueue, approvals, decisions, monitoring, storageTelemetry, storagePolicies];
+  const pendingApprovals = approvalRows.filter((item) => text(item.status) === "pending");
+  const activeCommands = commandRows.filter((item) => ["queued", "approved", "running"].includes(text(item.status)));
+  const activeDecisions = decisionRows.filter((item) => text(item.status) === "active");
 
   return {
     generatedAt: new Date().toISOString(),
@@ -103,6 +144,20 @@ export async function getBenjadminControlPlaneSnapshot() {
       storageTelemetryReady: storageTelemetry.ready && storagePolicies.ready,
       probes: optional,
     },
+    summary: {
+      activeStartContexts: startContextRows.filter((item) => text(item.status) === "active").length,
+      activeCommands: activeCommands.length,
+      pendingApprovals: pendingApprovals.length,
+      activeDecisions: activeDecisions.length,
+      monitorSamples: monitorRows.length,
+      storageSamples: storageRows.length,
+    },
+    startContexts: startContextRows,
+    commandQueue: commandRows,
+    approvals: approvalRows,
+    decisions: decisionRows,
+    monitoring: monitorRows,
+    storageTelemetry: storageRows,
     liveWorklog: rows(audit.data).slice(0, 80),
     workSessions: rows(workSessions.data),
     builds: rows(builds.data),

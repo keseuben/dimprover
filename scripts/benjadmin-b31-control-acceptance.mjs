@@ -68,6 +68,7 @@ try {
     navSize: getComputedStyle(document.querySelector(".operator-view-tabs button")).fontSize,
   }));
   check("desktop Control no horizontal overflow", desktop.scrollWidth <= desktop.clientWidth + 1, JSON.stringify(desktop));
+  check("desktop Control fits one viewport", desktop.scrollHeight <= desktop.innerHeight + 1, JSON.stringify(desktop));
   check("compact nav remains 11px", desktop.navSize === "11px", desktop.navSize);
 
   await openAt(768, 1024);

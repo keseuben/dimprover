@@ -5345,7 +5345,7 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 8px;
 }
 .operator-control-plane-head {
@@ -5453,3 +5453,26 @@
   .operator-start-grid { grid-template-columns: 1fr; }
   .operator-control-plane-side { grid-template-columns: 1fr; }
 }
+
+.operator-control-plane-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.operator-control-plane-metrics > div {
+  min-width: 0;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--admin-surface);
+}
+.operator-control-plane-metrics > div.is-warning { border-color: color-mix(in srgb, #f59e0b 36%, var(--admin-border)); }
+.operator-control-plane-metrics span { overflow: hidden; color: var(--admin-text-muted); font-size: 9.5px !important; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.operator-control-plane-metrics strong { color: var(--admin-text); font-size: 12px !important; }
+@media (max-width: 1180px) { .operator-control-plane-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .operator-control-plane-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -29,6 +29,14 @@ type Snapshot = {
     storageTelemetryReady: boolean;
     probes: Probe[];
   };
+  summary: {
+    activeStartContexts: number;
+    activeCommands: number;
+    pendingApprovals: number;
+    activeDecisions: number;
+    monitorSamples: number;
+    storageSamples: number;
+  };
   liveWorklog: Row[];
   workSessions: Row[];
   builds: Row[];
@@ -124,6 +132,15 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
             <small>{item.writeAllowed ? "DEV write engedélyezhető védett sessionben" : item.approvalRequired ? "READ ONLY · külön jóváhagyás szükséges" : "READ FIRST"}</small>
           </article>
         ))}
+      </section>
+
+      <section className="operator-control-plane-metrics" aria-label="Control Plane állapotösszesítő">
+        <div><span>START context</span><strong>{snapshot?.summary.activeStartContexts ?? 0}</strong></div>
+        <div><span>Aktív command</span><strong>{snapshot?.summary.activeCommands ?? 0}</strong></div>
+        <div className={(snapshot?.summary.pendingApprovals || 0) > 0 ? "is-warning" : ""}><span>Approval</span><strong>{snapshot?.summary.pendingApprovals ?? 0}</strong></div>
+        <div><span>Döntési memória</span><strong>{snapshot?.summary.activeDecisions ?? 0}</strong></div>
+        <div><span>Monitor minta</span><strong>{snapshot?.summary.monitorSamples ?? 0}</strong></div>
+        <div><span>Storage minta</span><strong>{snapshot?.summary.storageSamples ?? 0}</strong></div>
       </section>
 
       <div className="operator-control-plane-grid">
