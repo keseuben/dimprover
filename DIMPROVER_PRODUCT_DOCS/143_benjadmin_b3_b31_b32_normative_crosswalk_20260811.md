@@ -112,7 +112,8 @@ B3.2:
 - P2 OutminAI runtime isolation READY;
 - P3 HANDOFF provisioning kész;
 - P4 partner kiadás / átadás (release / handoff) elkészült;
-- P5 végleges UI/biztonsági acceptance következik.
+- P5 végleges UI / responsive / biztonsági acceptance elkészült;
+- B3.2 DEV checkpoint lezárva.
 
 ## BENJADMIN UI V3 fejlesztési szabály
 
@@ -163,11 +164,13 @@ PROD változtatás csak külön, explicit jóváhagyással történhet.
 
 Az UI V3 analitikai réteg, a B3.1 Vezérlés (Control), a B3.2 Partner fejlesztések, valamint a P4 Partnerátadás elkészült.
 
-Következő sorrend:
+A B3.2 P5 végleges UI / responsive / biztonsági acceptance elkészült.
 
-1. B3.2 P5: teljes UI / responsive / security acceptance;
-2. P4 adatbázis-tranzakciós hardening RPC;
-3. B3.1 realtime munkanapló / monitoring további adatgyűjtő rétege;
-4. dedikált BENJADMIN Control VPS célarchitektúra előkészítése.
+Következő hardening sorrend:
+
+1. P4 adatbázis-tranzakciós hardening RPC;
+2. B3.1 valós idejű (realtime) munkanapló / monitoring további adatgyűjtő rétege;
+3. dedikált BENJADMIN Vezérlő VPS (Control VPS) célarchitektúra előkészítése;
+4. külön, explicit jóváhagyott későbbi PROD release-gate folyamat.
 
 Ez a sorrend megőrzi a B3 alapmotor, a B3.1 Control Plane és a B3.2 Partner Plane közötti architekturális határokat.

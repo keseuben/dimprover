@@ -82,13 +82,19 @@ async function cleanup() {
     if (result.error) console.error(`CLEANUP WARN ${table}: ${result.error.code || result.error.message}`);
   }
 
+  if (projectCode) {
+    const environmentCodes = [`${projectCode}-DEV`, `${projectCode}-STAG`];
+    const environmentCleanup = await db.from("dev_center_environments").delete().in("code", environmentCodes);
+    if (environmentCleanup.error) console.error(`CLEANUP WARN dev_center_environments: ${environmentCleanup.error.code || environmentCleanup.error.message}`);
+  }
+
   const allowedRepoPrefix = "/srv/partner-dev/repositories/";
   const allowedWorktreePrefix = "/srv/partner-dev/worktrees/outmin/";
-  if (repositoryPath.startsWith(allowedRepoPrefix) && projectCode && repositoryPath.endsWith(`/${projectCode}.git`)) {
-    fs.rmSync(repositoryPath, { recursive: true, force: true });
-  }
   if (worktreePath.startsWith(allowedWorktreePrefix) && projectCode && worktreePath.endsWith(`/${projectCode}`)) {
     fs.rmSync(worktreePath, { recursive: true, force: true });
+  }
+  if (repositoryPath.startsWith(allowedRepoPrefix) && projectCode && repositoryPath.endsWith(`/${projectCode}.git`)) {
+    fs.rmSync(repositoryPath, { recursive: true, force: true });
   }
 }
 
