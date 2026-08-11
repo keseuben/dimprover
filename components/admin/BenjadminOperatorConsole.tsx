@@ -31,6 +31,7 @@ import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-cente
 import BenjadminEntitlementsPanel from "./BenjadminEntitlementsPanel";
 import BenjadminControlPlanePanel from "./BenjadminControlPlanePanel";
 import BenjadminPartnerDevelopmentPanel from "./BenjadminPartnerDevelopmentPanel";
+import { BenjadminBarChart, BenjadminSparklineCard } from "./BenjadminDashboardKit";
 
 type OperatorView = "overview" | "control" | "partners" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
 
@@ -225,6 +226,45 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
   const openConflicts = orchestration?.openConflicts || state?.conflicts.filter((item) => item.status === "open") || [];
   const staleCount = orchestration?.staleSessions.length || 0;
 
+  const taskAnalytics = useMemo(() => {
+    const total = Math.max(1, tasks.length);
+    const count = (...statuses: DevEngineTask["status"][]) => tasks.filter((task) => statuses.includes(task.status)).length;
+    return [
+      { label: "Fut / teszt", value: count("claimed", "in_progress", "testing"), total, tone: "info" as const, hint: "aktív végrehajtás" },
+      { label: "Várakozik", value: count("queued", "ready"), total, tone: "warning" as const, hint: "queue / indítható" },
+      { label: "Blokkolt", value: count("blocked"), total, tone: "danger" as const, hint: "beavatkozást kér" },
+      { label: "Kész", value: count("completed"), total, tone: "ok" as const, hint: "lezárt fejlesztés" },
+    ];
+  }, [tasks]);
+
+  const workerAnalytics = useMemo(() => {
+    const activeByWorker = new Map<string, number>();
+    for (const task of activeTasks) {
+      const workerId = task.assignedWorkerId || task.requestedWorkerId;
+      if (workerId) activeByWorker.set(workerId, (activeByWorker.get(workerId) || 0) + 1);
+    }
+    const max = Math.max(1, ...Array.from(activeByWorker.values()));
+    return workers.map((worker) => ({
+      label: worker.code,
+      value: activeByWorker.get(worker.id) || 0,
+      total: max,
+      tone: (worker.code === "OUTMINAI" ? "warning" : "info") as "warning" | "info",
+      hint: sessions.find((session) => session.workerId === worker.id && session.status !== "closed")?.handshakeStage || worker.status.toUpperCase(),
+    }));
+  }, [activeTasks, workers, sessions]);
+
+  const activityTrend = useMemo(() => {
+    const now = new Date();
+    const buckets = Array.from({ length: 7 }, () => 0);
+    for (const session of devWorkSessions) {
+      const started = new Date(session.startedAt);
+      if (Number.isNaN(started.getTime())) continue;
+      const diffDays = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(started.getFullYear(), started.getMonth(), started.getDate()).getTime()) / 86400000);
+      if (diffDays >= 0 && diffDays < 7) buckets[6 - diffDays] += session.durationMinutes || 0;
+    }
+    return buckets;
+  }, [devWorkSessions]);
+
   const taskRows = useMemo(() => tasks.filter((task) => !normalizedQuery || [task.title, task.status, task.branchName, task.description].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [tasks, normalizedQuery]);
   const workerRows = useMemo(() => workers.filter((worker) => !normalizedQuery || [worker.name, worker.code, worker.role, worker.status].join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [workers, normalizedQuery]);
   const releaseRows = useMemo(() => [...devVersions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).filter((item) => !normalizedQuery || [item.version, item.moduleName, item.title, item.summary, item.status].join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [devVersions, normalizedQuery]);
@@ -304,7 +344,27 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
 
       <section className="operator-table-stage">
         {view === "overview" ? (
-          <div className="operator-overview-grid">
+          <div className="operator-v3-overview">
+            <div className="benj-v3-analytics-grid" aria-label="BENJADMIN analitikai összkép">
+              <BenjadminBarChart
+                title="Task állapot"
+                subtitle={`${tasks.length} összes task`}
+                items={taskAnalytics}
+              />
+              <BenjadminBarChart
+                title="Worker terhelés"
+                subtitle={`${readySessions.length}/3 READY session`}
+                items={workerAnalytics}
+              />
+              <BenjadminSparklineCard
+                title="Fejlesztési aktivitás"
+                subtitle="utolsó 7 nap"
+                value={activityTrend.reduce((sum, value) => sum + value, 0)}
+                valueLabel="perc"
+                points={activityTrend}
+              />
+            </div>
+            <div className="operator-overview-grid">
             <div className="operator-table-card">
               <div className="operator-table-title"><div><span>AKTÍV FEJLESZTÉSEK</span><h2>Task queue</h2></div><Link href="/admin/dev"><TerminalSquare size={14} /> Fejlesztési Központ</Link></div>
               <div className="operator-table-wrap">
@@ -333,6 +393,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
               </div>
               <div className={`operator-compact-warning ${openConflicts.length ? "is-warning" : "is-ok"}`}>{openConflicts.length ? <CircleAlert size={16} /> : <CheckCircle2 size={16} />}<div><strong>{openConflicts.length ? `${openConflicts.length} nyitott konfliktus` : "Nincs nyitott konfliktus"}</strong><span>{openConflicts[0]?.summary || "Scope és worktree állapot tiszta."}</span></div></div>
             </aside>
+            </div>
           </div>
         ) : null}
 
