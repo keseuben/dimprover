@@ -5951,3 +5951,19 @@
 .operator-console.operator-compact .operator-partner-panel :is(p,span,small,strong,td,th,code,label) {
   font-size: 12px !important;
 }
+
+/* BENJADMIN UI V3 – Licenc / AI analytics */
+.operator-entitlement-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.operator-entitlement-analytics .benj-v3-chart-card {
+  min-height: 110px;
+}
+.operator-entitlement-analytics .benj-v3-bars {
+  margin-top: 5px;
+  gap: 3px;
+}
+.operator-entitlement-analytics .benj-v3-bar-row > small { display: none; }
+.operator-console.operator-compact .operator-entitlement-panel :is(p,span,small,strong,td,th,code,label,button,a) {
+  font-size: 12px !important;
+}

@@ -314,6 +314,70 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
     ];
   }, [state?.backups]);
 
+
+  const releaseStatusAnalytics = useMemo(() => {
+    const total = Math.max(1, devVersions.length);
+    return [
+      { label: "Tervezett", value: devVersions.filter((item) => item.status === "planned").length, total, tone: "default" as const },
+      { label: "Fejlesztés / teszt", value: devVersions.filter((item) => ["in_progress", "testing"].includes(item.status)).length, total, tone: "info" as const },
+      { label: "Blokkolt", value: devVersions.filter((item) => item.status === "blocked").length, total, tone: "danger" as const },
+      { label: "Kész / kiadva", value: devVersions.filter((item) => ["completed", "released"].includes(item.status)).length, total, tone: "ok" as const },
+    ];
+  }, [devVersions]);
+
+  const releaseModuleAnalytics = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of devVersions) counts.set(item.moduleName || "Egyéb", (counts.get(item.moduleName || "Egyéb") || 0) + 1);
+    const ranked = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const max = Math.max(1, ...ranked.map(([, value]) => value));
+    return ranked.length
+      ? ranked.map(([label, value]) => ({ label, value, total: max, tone: "info" as const }))
+      : [{ label: "Nincs verzióadat", value: 0, total: 1, tone: "default" as const }];
+  }, [devVersions]);
+
+  const releaseTrend = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const buckets = Array.from({ length: 7 }, () => 0);
+    for (const item of devVersions) {
+      const stamp = new Date(item.completedAt || item.updatedAt);
+      if (Number.isNaN(stamp.getTime())) continue;
+      const day = new Date(stamp.getFullYear(), stamp.getMonth(), stamp.getDate()).getTime();
+      const diffDays = Math.floor((today - day) / 86400000);
+      if (diffDays >= 0 && diffDays < 7) buckets[6 - diffDays] += 1;
+    }
+    return buckets;
+  }, [devVersions]);
+
+  const auditCategoryAnalytics = useMemo(() => {
+    const minutes = new Map<string, number>();
+    for (const item of devWorkSessions) {
+      const category = item.currentCategory || "nincs_kategoria";
+      minutes.set(category, (minutes.get(category) || 0) + (item.durationMinutes || 0));
+    }
+    const labels: Array<[string, string, "info" | "warning" | "danger" | "ok" | "default"]> = [
+      ["active_development", "Aktív fejlesztés", "info"],
+      ["build_test", "Build / teszt", "ok"],
+      ["waiting_blocked", "Várakozás / blokk", "danger"],
+      ["documentation_release", "Dok. / release", "warning"],
+      ["nincs_kategoria", "Nincs kategória", "default"],
+    ];
+    const max = Math.max(1, ...Array.from(minutes.values()));
+    return labels
+      .map(([key, label, tone]) => ({ label, value: minutes.get(key) || 0, total: max, tone, hint: "perc" }))
+      .filter((item) => item.value > 0 || devWorkSessions.length === 0 || item.label !== "Nincs kategória");
+  }, [devWorkSessions]);
+
+  const auditSourceAnalytics = useMemo(() => {
+    const total = Math.max(1, devWorkSessions.length);
+    return [
+      { label: "ChatGPT", value: devWorkSessions.filter((item) => item.source === "chatgpt").length, total, tone: "info" as const },
+      { label: "Automatic", value: devWorkSessions.filter((item) => item.source === "automatic").length, total, tone: "ok" as const },
+      { label: "Manual", value: devWorkSessions.filter((item) => item.source === "manual").length, total, tone: "warning" as const },
+      { label: "System", value: devWorkSessions.filter((item) => item.source === "system").length, total, tone: "default" as const },
+    ];
+  }, [devWorkSessions]);
+
   const taskRows = useMemo(() => tasks.filter((task) => !normalizedQuery || [task.title, task.status, task.branchName, task.description].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [tasks, normalizedQuery]);
   const workerRows = useMemo(() => workers.filter((worker) => !normalizedQuery || [worker.name, worker.code, worker.role, worker.status].join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [workers, normalizedQuery]);
   const releaseRows = useMemo(() => [...devVersions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).filter((item) => !normalizedQuery || [item.version, item.moduleName, item.title, item.summary, item.status].join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [devVersions, normalizedQuery]);
@@ -531,20 +595,34 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
         {view === "entitlements" ? <BenjadminEntitlementsPanel query={query} /> : null}
 
         {view === "release" ? (
-          <div className="operator-table-card is-full">
-            <div className="operator-table-title"><div><span>RELEASE / VERZIÓK</span><h2>Kiadási és fejlesztési állapot</h2></div><Link href="/admin/release-kozpont"><GitBranch size={14} /> Release Központ</Link></div>
-            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Projekt</th><th>Modul</th><th>Verzió</th><th>Állapot</th><th>Leírás</th><th className="hide-small">Teszt</th><th>Frissítve</th></tr></thead><tbody>
-              {(pageData.items as DevVersion[]).map((item) => <tr key={item.id}><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td><code>{item.version}</code></td><td><span className={`operator-status-badge ${statusTone(item.status)}`}>{statusLabel(item.status)}</span></td><td><strong>{item.title}</strong><small>{item.summary || "—"}</small></td><td className="hide-small"><small>{item.testSummary || "—"}</small></td><td>{formatDateTime(item.completedAt || item.updatedAt)}</td></tr>)}
-            </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={releaseRows.length} onPage={setPage} />
+          <div className="operator-v3-view-stack">
+            <div className="benj-v3-analytics-grid is-compact" aria-label="Release analitika">
+              <BenjadminBarChart title="Release státusz" subtitle={`${devVersions.length} verzió`} items={releaseStatusAnalytics} />
+              <BenjadminBarChart title="Modul aktivitás" subtitle="verziók modulonként" items={releaseModuleAnalytics} />
+              <BenjadminSparklineCard title="Release aktivitás" subtitle="utolsó 7 nap" value={releaseTrend.reduce((sum, value) => sum + value, 0)} valueLabel="változás" points={releaseTrend} />
+            </div>
+            <div className="operator-table-card is-full">
+              <div className="operator-table-title"><div><span>RELEASE / VERZIÓK</span><h2>Kiadási és fejlesztési állapot</h2></div><Link href="/admin/release-kozpont"><GitBranch size={14} /> Release Központ</Link></div>
+              <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Projekt</th><th>Modul</th><th>Verzió</th><th>Állapot</th><th>Leírás</th><th className="hide-small">Teszt</th><th>Frissítve</th></tr></thead><tbody>
+                {(pageData.items as DevVersion[]).map((item) => <tr key={item.id}><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td><code>{item.version}</code></td><td><span className={`operator-status-badge ${statusTone(item.status)}`}>{statusLabel(item.status)}</span></td><td><strong>{item.title}</strong><small>{item.summary || "—"}</small></td><td className="hide-small"><small>{item.testSummary || "—"}</small></td><td>{formatDateTime(item.completedAt || item.updatedAt)}</td></tr>)}
+              </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={releaseRows.length} onPage={setPage} />
+            </div>
           </div>
         ) : null}
 
         {view === "audit" ? (
-          <div className="operator-table-card is-full">
-            <div className="operator-table-title"><div><span>AUDIT / MUNKAMENET</span><h2>Fejlesztési idő és aktivitás</h2></div><Link href="/admin/dimpro-belepesek"><ShieldCheck size={14} /> Belépési audit</Link></div>
-            <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Indulás</th><th>Projekt</th><th>Modul</th><th>Forrás</th><th>Időkategória</th><th>Időtartam</th><th className="hide-small">Megjegyzés</th><th>Állapot</th></tr></thead><tbody>
-              {(pageData.items as DevWorkSession[]).map((item) => <tr key={item.id}><td>{formatDateTime(item.startedAt)}</td><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td>{item.source}</td><td>{item.currentCategory || "—"}</td><td>{formatDuration(item.durationMinutes)}</td><td className="hide-small"><small>{item.note || "—"}</small></td><td><span className={`operator-status-badge ${item.endedAt ? "is-muted" : "is-active"}`}>{item.endedAt ? "Lezárt" : "Fut"}</span></td></tr>)}
-            </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={auditRows.length} onPage={setPage} />
+          <div className="operator-v3-view-stack">
+            <div className="benj-v3-analytics-grid is-compact" aria-label="Audit és munkaidő analitika">
+              <BenjadminBarChart title="Idő kategóriánként" subtitle="összes rögzített perc" items={auditCategoryAnalytics} />
+              <BenjadminBarChart title="Munkamenet forrás" subtitle={`${devWorkSessions.length} session`} items={auditSourceAnalytics} />
+              <BenjadminSparklineCard title="Munkaidő trend" subtitle="utolsó 7 nap" value={activityTrend.reduce((sum, value) => sum + value, 0)} valueLabel="perc" points={activityTrend} />
+            </div>
+            <div className="operator-table-card is-full">
+              <div className="operator-table-title"><div><span>AUDIT / MUNKAMENET</span><h2>Fejlesztési idő és aktivitás</h2></div><Link href="/admin/dimpro-belepesek"><ShieldCheck size={14} /> Belépési audit</Link></div>
+              <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Indulás</th><th>Projekt</th><th>Modul</th><th>Forrás</th><th>Időkategória</th><th>Időtartam</th><th className="hide-small">Megjegyzés</th><th>Állapot</th></tr></thead><tbody>
+                {(pageData.items as DevWorkSession[]).map((item) => <tr key={item.id}><td>{formatDateTime(item.startedAt)}</td><td>{projectName(item.projectId)}</td><td><strong>{item.moduleName}</strong></td><td>{item.source}</td><td>{item.currentCategory || "—"}</td><td>{formatDuration(item.durationMinutes)}</td><td className="hide-small"><small>{item.note || "—"}</small></td><td><span className={`operator-status-badge ${item.endedAt ? "is-muted" : "is-active"}`}>{item.endedAt ? "Lezárt" : "Fut"}</span></td></tr>)}
+              </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={auditRows.length} onPage={setPage} />
+            </div>
           </div>
         ) : null}
       </section>

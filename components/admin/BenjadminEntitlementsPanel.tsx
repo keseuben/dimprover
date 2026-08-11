@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, KeyRound, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
+import { BenjadminBarChart } from "./BenjadminDashboardKit";
 
 type CentralLicense = {
   id: string;
@@ -133,6 +134,41 @@ export default function BenjadminEntitlementsPanel({ query }: Props) {
     ].join(" ").toLocaleLowerCase("hu-HU").includes(normalized)
   ), [snapshot?.localAiLicenses, normalized]);
 
+  const centralStatusAnalytics = useMemo(() => {
+    const source = snapshot?.centralLicenses || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "Aktív / trial", value: source.filter((item) => ["active", "trial"].includes(item.status.toLowerCase())).length, total, tone: "ok" as const },
+      { label: "Lejárt", value: source.filter((item) => item.status.toLowerCase() === "expired").length, total, tone: "warning" as const },
+      { label: "Blokkolt / revoked", value: source.filter((item) => ["blocked", "revoked"].includes(item.status.toLowerCase())).length, total, tone: "danger" as const },
+      { label: "Egyéb", value: source.filter((item) => !["active", "trial", "expired", "blocked", "revoked"].includes(item.status.toLowerCase())).length, total, tone: "default" as const },
+    ];
+  }, [snapshot?.centralLicenses]);
+
+  const sendAnalytics = useMemo(() => {
+    const source = snapshot?.centralLicenses || [];
+    const totalEntitlements = source.reduce((sum, item) => sum + item.sendEntitlements.total, 0);
+    const active = source.reduce((sum, item) => sum + item.sendEntitlements.active, 0);
+    const used = source.reduce((sum, item) => sum + item.sendEntitlements.usedThisMonth, 0);
+    const limit = source.reduce((sum, item) => sum + item.sendEntitlements.limitThisMonth, 0);
+    return [
+      { label: "Aktív Send", value: active, total: Math.max(1, totalEntitlements), tone: "ok" as const },
+      { label: "Használat / hó", value: used, total: Math.max(1, limit || used), tone: used > limit && limit > 0 ? "danger" as const : "info" as const },
+      { label: "Havi keret", value: limit, total: Math.max(1, limit), tone: "default" as const },
+    ];
+  }, [snapshot?.centralLicenses]);
+
+  const aiBudgetAnalytics = useMemo(() => {
+    const source = snapshot?.localAiLicenses || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "< 80%", value: source.filter((item) => item.aiEnabled && item.aiBudgetPercent < 80).length, total, tone: "ok" as const },
+      { label: "80–99%", value: source.filter((item) => item.aiEnabled && item.aiBudgetPercent >= 80 && item.aiBudgetPercent < 100).length, total, tone: "warning" as const },
+      { label: ">= 100%", value: source.filter((item) => item.aiEnabled && item.aiBudgetPercent >= 100).length, total, tone: "danger" as const },
+      { label: "AI kikapcsolva", value: source.filter((item) => !item.aiEnabled).length, total, tone: "default" as const },
+    ];
+  }, [snapshot?.localAiLicenses]);
+
   const rows = mode === "central" ? centralRows : aiRows;
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -147,6 +183,12 @@ export default function BenjadminEntitlementsPanel({ query }: Props) {
         <div><Bot size={16} /><span>AI licencek</span><strong>{snapshot?.summary.aiEnabledLicenses ?? "—"}</strong></div>
         <div><Bot size={16} /><span>AI kérés / hó</span><strong>{snapshot?.summary.aiRequestsThisMonth ?? "—"}</strong></div>
         <div><WalletCards size={16} /><span>AI költség / hó</span><strong>{snapshot ? formatHuf(snapshot.summary.aiCostHufThisMonth) : "—"}</strong></div>
+      </div>
+
+      <div className="benj-v3-analytics-grid is-compact operator-entitlement-analytics" aria-label="Licenc és AI entitlement analitika">
+        <BenjadminBarChart title="Licenc health" subtitle={`${snapshot?.centralLicenses.length || 0} központi licenc`} items={centralStatusAnalytics} />
+        <BenjadminBarChart title="Send entitlement" subtitle="aktuális havi használat" items={sendAnalytics} />
+        <BenjadminBarChart title="AI budget health" subtitle={`${snapshot?.localAiLicenses.length || 0} AI licenc`} items={aiBudgetAnalytics} />
       </div>
 
       <div className="operator-table-card is-full">
