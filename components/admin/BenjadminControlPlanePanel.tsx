@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, CheckCircle2, CircleAlert, RefreshCw, ServerCog, ShieldCheck, TerminalSquare } from "lucide-react";
+import { BenjadminBarChart } from "./BenjadminDashboardKit";
 
 type StartMode = {
   mode: "START" | "DEV_START" | "PROD_START";
@@ -37,6 +38,10 @@ type Snapshot = {
     monitorSamples: number;
     storageSamples: number;
   };
+  commandQueue: Row[];
+  approvals: Row[];
+  monitoring: Row[];
+  storageTelemetry: Row[];
   liveWorklog: Row[];
   workSessions: Row[];
   builds: Row[];
@@ -103,6 +108,40 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
   const readyProbes = snapshot?.schema.probes.filter((item) => item.ready).length || 0;
   const totalProbes = snapshot?.schema.probes.length || 0;
 
+
+  const commandAnalytics = useMemo(() => {
+    const source = snapshot?.commandQueue || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "Queued / approved", value: source.filter((row) => ["queued", "approved"].includes(text(row.status))).length, total, tone: "warning" as const },
+      { label: "Running", value: source.filter((row) => text(row.status) === "running").length, total, tone: "info" as const },
+      { label: "Passed", value: source.filter((row) => text(row.status) === "passed").length, total, tone: "ok" as const },
+      { label: "Failed / rejected", value: source.filter((row) => ["failed", "rejected", "cancelled"].includes(text(row.status))).length, total, tone: "danger" as const },
+    ];
+  }, [snapshot?.commandQueue]);
+
+  const approvalAnalytics = useMemo(() => {
+    const source = snapshot?.approvals || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "Pending", value: source.filter((row) => text(row.status) === "pending").length, total, tone: "warning" as const },
+      { label: "Approved", value: source.filter((row) => text(row.status) === "approved").length, total, tone: "ok" as const },
+      { label: "Consumed", value: source.filter((row) => text(row.status) === "consumed").length, total, tone: "info" as const },
+      { label: "Rejected / expired", value: source.filter((row) => ["rejected", "expired"].includes(text(row.status))).length, total, tone: "danger" as const },
+    ];
+  }, [snapshot?.approvals]);
+
+  const monitorAnalytics = useMemo(() => {
+    const source = snapshot?.monitoring || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "OK", value: source.filter((row) => text(row.status) === "ok").length, total, tone: "ok" as const },
+      { label: "Warning", value: source.filter((row) => text(row.status) === "warning").length, total, tone: "warning" as const },
+      { label: "Error", value: source.filter((row) => text(row.status) === "error").length, total, tone: "danger" as const },
+      { label: "Unknown", value: source.filter((row) => text(row.status) === "unknown").length, total, tone: "default" as const },
+    ];
+  }, [snapshot?.monitoring]);
+
   return (
     <div className="operator-control-plane-panel">
       <section className="operator-control-plane-head">
@@ -142,6 +181,12 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
         <div><span>Monitor minta</span><strong>{snapshot?.summary.monitorSamples ?? 0}</strong></div>
         <div><span>Storage minta</span><strong>{snapshot?.summary.storageSamples ?? 0}</strong></div>
       </section>
+
+      <div className="benj-v3-analytics-grid is-compact operator-control-analytics" aria-label="Control Plane realtime analitika">
+        <BenjadminBarChart title="Command queue" subtitle={`${snapshot?.commandQueue.length || 0} parancs`} items={commandAnalytics} />
+        <BenjadminBarChart title="Approval lifecycle" subtitle={`${snapshot?.approvals.length || 0} approval`} items={approvalAnalytics} />
+        <BenjadminBarChart title="Monitoring health" subtitle={`${snapshot?.monitoring.length || 0} monitor minta`} items={monitorAnalytics} />
+      </div>
 
       <div className="operator-control-plane-grid">
         <section className="operator-table-card">

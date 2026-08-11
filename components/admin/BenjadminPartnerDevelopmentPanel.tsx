@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { BenjadminBarChart } from "./BenjadminDashboardKit";
 
 type PartnerHealth = {
   configured: boolean;
@@ -179,6 +180,41 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
     ].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery);
   }), [snapshot?.projects, normalizedQuery]);
 
+
+  const provisionAnalytics = useMemo(() => {
+    const source = snapshot?.projects || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "DRAFT", value: source.filter((item) => item.provisionState === "DRAFT").length, total, tone: "default" as const },
+      { label: "VALIDATING", value: source.filter((item) => item.provisionState === "VALIDATING").length, total, tone: "info" as const },
+      { label: "PROVISIONING", value: source.filter((item) => item.provisionState === "PROVISIONING").length, total, tone: "warning" as const },
+      { label: "BASELINE", value: source.filter((item) => item.provisionState === "BASELINE_TEST").length, total, tone: "warning" as const },
+      { label: "READY", value: source.filter((item) => item.provisionState === "READY").length, total, tone: "ok" as const },
+    ];
+  }, [snapshot?.projects]);
+
+  const deliveryAnalytics = useMemo(() => {
+    const source = snapshot?.projects || [];
+    const total = Math.max(1, source.length);
+    return [
+      { label: "HANDOFF", value: source.filter((item) => item.deliveryModel === "HANDOFF").length, total, tone: "info" as const },
+      { label: "DIMPRO HOSTED", value: source.filter((item) => item.deliveryModel === "DIMPRO_HOSTED").length, total, tone: "ok" as const },
+      { label: "PARTNER HOSTED", value: source.filter((item) => item.deliveryModel === "PARTNER_HOSTED").length, total, tone: "warning" as const },
+    ];
+  }, [snapshot?.projects]);
+
+  const partnerEnvironmentAnalytics = useMemo(() => {
+    const source = snapshot?.projects || [];
+    const statuses = source.flatMap((item) => [item.environments.DEV, item.environments.STAG, item.environments.PROD]);
+    const total = Math.max(1, statuses.length);
+    const normalized = statuses.map((item) => item.toLowerCase());
+    return [
+      { label: "Ready / online", value: normalized.filter((item) => ["ready", "online"].includes(item)).length, total, tone: "ok" as const },
+      { label: "Pending / unknown", value: normalized.filter((item) => ["pending", "unknown", "not_bound"].includes(item)).length, total, tone: "warning" as const },
+      { label: "Degraded / offline", value: normalized.filter((item) => ["degraded", "offline"].includes(item)).length, total, tone: "danger" as const },
+    ];
+  }, [snapshot?.projects]);
+
   async function createDraft() {
     if (!snapshot?.health.ready || creating) return;
     const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
@@ -292,6 +328,12 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
         <div><span>Default worker</span><strong>OUTMINAI</strong></div>
         <div><span>P2 runtime</span><strong>{snapshot?.runtimeIsolation?.stage || "PENDING"}</strong></div>
         <div><span>PROD</span><strong>APPROVAL GATE</strong></div>
+      </div>
+
+      <div className="benj-v3-analytics-grid is-compact operator-partner-analytics" aria-label="Partner Development Plane analitika">
+        <BenjadminBarChart title="Provision lifecycle" subtitle={`${snapshot?.projects.length || 0} partnerprojekt`} items={provisionAnalytics} />
+        <BenjadminBarChart title="Delivery model" subtitle="B3.2 delivery" items={deliveryAnalytics} />
+        <BenjadminBarChart title="Partner environment health" subtitle="DEV / STAG / PROD-Handoff" items={partnerEnvironmentAnalytics} />
       </div>
 
       <div className="operator-partner-grid">

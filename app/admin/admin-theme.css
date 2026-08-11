@@ -5915,3 +5915,39 @@
 @media (max-width: 900px) {
   .operator-v3-view-stack { height: auto; }
 }
+
+/* BENJADMIN UI V3 – B3.1 Control + B3.2 Partner analytics */
+.operator-control-plane-panel {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+}
+.operator-partner-panel {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+.operator-control-analytics .benj-v3-chart-card,
+.operator-partner-analytics .benj-v3-chart-card {
+  min-height: 102px;
+}
+.operator-control-analytics .benj-v3-bars,
+.operator-partner-analytics .benj-v3-bars {
+  margin-top: 5px;
+  gap: 3px;
+}
+.operator-control-analytics .benj-v3-bar-row > small,
+.operator-partner-analytics .benj-v3-bar-row > small {
+  display: none;
+}
+/* A B3/B3.1/B3.2 munkafelület törzsszövegének 12 px-es alsó korlátja. */
+.operator-control-plane-panel :is(p,span,small,strong,td,th,code,label),
+.operator-partner-panel :is(p,span,small,strong,td,th,code,label) {
+  font-size: 12px !important;
+}
+@media (max-width: 900px) {
+  .operator-control-plane-panel,
+  .operator-partner-panel { height: auto; }
+}
+
+/* UI V3 typography hard override after legacy compact selectors. */
+.operator-console.operator-compact .operator-control-plane-panel :is(p,span,small,strong,td,th,code,label),
+.operator-console.operator-compact .operator-partner-panel :is(p,span,small,strong,td,th,code,label) {
+  font-size: 12px !important;
+}
