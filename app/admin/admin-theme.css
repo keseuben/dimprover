@@ -5720,3 +5720,32 @@
   .operator-partner-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operator-partner-side { grid-template-columns: 1fr; }
 }
+
+/* BENJADMIN B3.2 P3 partner provisioning */
+.operator-partner-provision-button {
+  min-height: 25px;
+  margin-top: 4px;
+  padding: 3px 7px;
+  border: 1px solid rgba(245, 158, 11, 0.30);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.07);
+  font-size: 12px !important;
+  font-weight: 850;
+  cursor: pointer;
+}
+.admin-theme-dark .operator-partner-provision-button { color: #fbbf24; }
+.operator-partner-provision-button:disabled { opacity: 0.48; cursor: not-allowed; }
+.operator-partner-table td small.is-danger { color: #be123c; }
+
+/* B3.2 P3 typography floor: table wrappers must not inherit legacy 9.5px compact sizing. */
+.operator-console.operator-compact .operator-partner-table,
+.operator-console.operator-compact .operator-partner-table thead,
+.operator-console.operator-compact .operator-partner-table tbody,
+.operator-console.operator-compact .operator-partner-table tr {
+  font-size: 12px !important;
+}

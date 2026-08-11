@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getPartnerRuntimeIsolationStatus } from "./partner-runtime";
 
-export const PARTNER_PLANE_SCHEMA_VERSION = "0.1.0";
-export const PARTNER_PLANE_BOOTSTRAP_ID = "BENJADMIN-B3.2-P1-20260811";
+export const PARTNER_PLANE_SCHEMA_VERSION = "0.2.0";
+export const PARTNER_PLANE_BOOTSTRAP_ID = "BENJADMIN-B3.2-P3-20260811";
 export const PARTNER_PLANE_TABLES = [
   "dev_center_partner_projects",
   "dev_center_partner_environments",
@@ -16,6 +16,7 @@ export const PARTNER_PLANE_TABLES = [
 export type PartnerDeliveryModel = "DIMPRO_HOSTED" | "PARTNER_HOSTED" | "HANDOFF";
 export type PartnerDataClassification = "NORMAL" | "CONFIDENTIAL" | "RESTRICTED";
 export type PartnerProjectStatus = "draft" | "provisioning" | "ready" | "paused" | "closed";
+export type PartnerProvisionState = "DRAFT" | "VALIDATING" | "PROVISIONING" | "BASELINE_TEST" | "READY";
 
 type DbError = { code?: string; message?: string; details?: string; hint?: string } | null;
 type JsonRecord = Record<string, unknown>;
@@ -41,6 +42,11 @@ export type PartnerProjectSummary = {
   deliveryModel: PartnerDeliveryModel;
   dataClassification: PartnerDataClassification;
   status: PartnerProjectStatus;
+  provisionState: PartnerProvisionState;
+  provisionAttempt: number;
+  provisionStartedAt: string | null;
+  provisionedAt: string | null;
+  lastProvisionError: string | null;
   internalEngineAccess: "NONE" | "ALLOWLIST";
   defaultWorkerId: string;
   defaultWorkerCode: string;
@@ -71,7 +77,7 @@ function jsonRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
-function getDatabaseClient(): SupabaseClient {
+export function getPartnerDevelopmentDatabaseClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceKey || serviceKey.includes("<") || serviceKey.includes(">")) {
@@ -119,7 +125,7 @@ function rpcStatus(code: string) {
 export async function getPartnerDevelopmentPlaneHealth(): Promise<PartnerPlaneHealth> {
   const checkedAt = new Date().toISOString();
   try {
-    const db = getDatabaseClient();
+    const db = getPartnerDevelopmentDatabaseClient();
     const checks = await Promise.all(PARTNER_PLANE_TABLES.map(async (table) => {
       const { error } = await db.from(table).select("*").limit(0);
       return {
@@ -182,7 +188,7 @@ async function requireReadyClient() {
       health,
     );
   }
-  return { db: getDatabaseClient(), health };
+  return { db: getPartnerDevelopmentDatabaseClient(), health };
 }
 
 function normalizeDelivery(value: unknown): PartnerDeliveryModel {
@@ -237,7 +243,7 @@ export async function listPartnerProjects() {
     return { health, runtimeIsolation, projects: [] as PartnerProjectSummary[], checkedAt: health.checkedAt };
   }
 
-  const db = getDatabaseClient();
+  const db = getPartnerDevelopmentDatabaseClient();
   const partnerRows = await db
     .from("dev_center_partner_projects")
     .select("*")
@@ -313,6 +319,11 @@ export async function listPartnerProjects() {
       deliveryModel: text(row.delivery_model, "HANDOFF") as PartnerDeliveryModel,
       dataClassification: text(row.data_classification, "NORMAL") as PartnerDataClassification,
       status,
+      provisionState: text(row.provision_state, status === "ready" ? "READY" : "DRAFT") as PartnerProvisionState,
+      provisionAttempt: Number(row.provision_attempt || 0),
+      provisionStartedAt: text(row.provision_started_at) || null,
+      provisionedAt: text(row.provisioned_at) || null,
+      lastProvisionError: text(row.last_provision_error) || null,
       internalEngineAccess: text(row.internal_engine_access, "NONE") as "NONE" | "ALLOWLIST",
       defaultWorkerId: text(row.default_worker_id),
       defaultWorkerCode: text(worker?.code, "OUTMINAI"),

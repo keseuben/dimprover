@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Database,
   Plus,
+  Play,
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
@@ -31,6 +32,11 @@ type PartnerProject = {
   deliveryModel: "DIMPRO_HOSTED" | "PARTNER_HOSTED" | "HANDOFF";
   dataClassification: "NORMAL" | "CONFIDENTIAL" | "RESTRICTED";
   status: string;
+  provisionState: "DRAFT" | "VALIDATING" | "PROVISIONING" | "BASELINE_TEST" | "READY";
+  provisionAttempt: number;
+  provisionStartedAt: string | null;
+  provisionedAt: string | null;
+  lastProvisionError: string | null;
   internalEngineAccess: "NONE" | "ALLOWLIST";
   defaultWorkerCode: string;
   defaultWorkerName: string;
@@ -93,7 +99,7 @@ function healthTone(value: string) {
   const normalized = value.toLowerCase();
   if (["ready", "online", "active"].includes(normalized)) return "is-ok";
   if (["degraded", "offline"].includes(normalized)) return "is-danger";
-  if (["draft", "pending", "not_bound", "unknown"].includes(normalized)) return "is-warning";
+  if (["draft", "pending", "not_bound", "unknown", "validating", "provisioning", "baseline_test"].includes(normalized)) return "is-warning";
   return "is-muted";
 }
 
@@ -106,6 +112,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
   const [snapshot, setSnapshot] = useState<PartnerSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [provisioningProjectId, setProvisioningProjectId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const refreshRef = useRef(false);
@@ -167,6 +174,8 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
       project.dataClassification,
       project.defaultWorkerCode,
       project.health,
+      project.provisionState,
+      project.lastProvisionError,
     ].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery);
   }), [snapshot?.projects, normalizedQuery]);
 
@@ -206,6 +215,43 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
       setError(createError instanceof Error ? createError.message : "A partnerprojekt draft nem hozható létre.");
     } finally {
       setCreating(false);
+    }
+  }
+
+
+  async function provisionProject(project: PartnerProject) {
+    if (!snapshot?.health.ready || !snapshot?.runtimeIsolation?.ready || provisioningProjectId) return;
+    const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    if (!key) return;
+    setProvisioningProjectId(project.projectId);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/dev/engine/partner-projects/${encodeURIComponent(project.projectId)}/provision`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-dimpro-license-admin-key": key,
+        },
+        body: JSON.stringify({ createdBy: "BenjAdmin" }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean;
+        ready?: boolean;
+        code?: string;
+        error?: string;
+        project?: PartnerProject | null;
+      } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A partnerprojekt provisioning sikertelen.");
+      setMessage(payload.ready
+        ? `${project.projectCode} provisioning READY.`
+        : `${project.projectCode} provisioning előkészítve; ${payload.code || "külső resource provider szükséges"}.`);
+      await load(true);
+    } catch (provisionError) {
+      setError(provisionError instanceof Error ? provisionError.message : "A partnerprojekt provisioning sikertelen.");
+      await load(true);
+    } finally {
+      setProvisioningProjectId("");
     }
   }
 
@@ -265,6 +311,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
                   <th>STAG</th>
                   <th>PROD / Handoff</th>
                   <th>Delivery</th>
+                  <th>Provision</th>
                   <th>Health</th>
                   <th>Aktivitás</th>
                 </tr>
@@ -279,13 +326,32 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
                     <td><span className={`operator-status-badge ${healthTone(project.environments.STAG)}`}>{environmentLabel(project.environments.STAG)}</span></td>
                     <td><span className={`operator-status-badge ${healthTone(project.environments.PROD)}`}>{project.deliveryTargetStatus}</span></td>
                     <td><strong>{project.deliveryModel}</strong><small>{project.repositoryCount} repo</small></td>
+                    <td>
+                      <span className={`operator-status-badge ${healthTone(project.provisionState)}`}>{project.provisionState}</span>
+                      <button
+                        type="button"
+                        className="operator-partner-provision-button"
+                        data-testid={`partner-provision-${project.projectCode}`}
+                        disabled={
+                          !health?.ready
+                          || !snapshot?.runtimeIsolation?.ready
+                          || project.provisionState === "READY"
+                          || Boolean(provisioningProjectId)
+                        }
+                        onClick={() => void provisionProject(project)}
+                      >
+                        <Play size={12} />
+                        {provisioningProjectId === project.projectId ? "Fut..." : project.provisionState === "READY" ? "Kész" : "Indítás"}
+                      </button>
+                      {project.lastProvisionError ? <small className="is-danger">{project.lastProvisionError}</small> : null}
+                    </td>
                     <td><span className={`operator-status-badge ${healthTone(project.health)}`}>{project.health}</span></td>
                     <td>{formatDate(project.lastActivityAt)}</td>
                   </tr>
                 ))}
                 {!projects.length ? (
                   <tr>
-                    <td colSpan={9} className="operator-table-empty" data-testid="partner-empty-state">
+                    <td colSpan={10} className="operator-table-empty" data-testid="partner-empty-state">
                       {health?.ready
                         ? "Még nincs partnerprojekt. Az első projekt draftként hozható létre."
                         : "A P1 Partner Registry kódja előkészítve; a source-of-truth DEV sémamigráció még nincs alkalmazva."}
@@ -366,7 +432,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
               <strong>Internal / Partner határ</strong>
               <span>
                 {snapshot?.runtimeIsolation?.ready
-                  ? "P2 runtime izoláció READY: partner root, worker credential és belső DIMPRO védelem igazolt. Repo/DB/storage provisioning P3."
+                  ? "P2 runtime izoláció READY. P3 provisioning HANDOFF módban repo/worktree + DEV/STAG registry + baseline teszttel automatizált; hosted mód külön DB/storage provider gate-et kér."
                   : snapshot?.runtimeIsolation?.preflightReady
                     ? "P2 runtime preflight READY: partner root, worker token, SSH public identity és belső DEV root mód előkészítve. A külön Outmin Linux identity acceptance még hiányzik."
                     : "P2 policy core aktív: internal repo/worktree/scope DEFAULT DENY. OutminAI OS/MCP identity aktiválás külön runtime gate; repo/DB/storage provisioning P3."}

@@ -31,7 +31,7 @@ let result = await api("/api/dev/engine/partner-projects");
 check("partner registry GET available", result.status === 200 && result.payload?.ok === true, `status=${result.status}`);
 const schemaReady = result.payload?.health?.ready === true;
 if (schemaReady) {
-  check("source-of-truth partner schema READY", result.payload?.health?.actualSchemaVersion === "0.1.0", `version=${result.payload?.health?.actualSchemaVersion}`);
+  check("source-of-truth partner schema READY", ["0.1.0", "0.2.0"].includes(result.payload?.health?.actualSchemaVersion), `version=${result.payload?.health?.actualSchemaVersion}`);
   check("partner list is real source-of-truth data", Array.isArray(result.payload?.projects), `count=${result.payload?.projects?.length ?? "n/a"}`);
 } else {
   check(
