@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -110,6 +111,29 @@ export async function putDriveObjectStream(input: {
     storageKey: input.storageKey,
     etag: result.ETag || null,
     versionId: result.VersionId || null,
+  };
+}
+
+
+export async function listDriveS3Objects(input: { prefix?: string; maxKeys?: number; continuationToken?: string | null } = {}) {
+  const { client, config } = getStorageClient();
+  const maxKeys = Math.max(1, Math.min(1000, Math.floor(input.maxKeys || 1000)));
+  const result = await client.send(new ListObjectsV2Command({
+    Bucket: config.bucket,
+    Prefix: input.prefix || undefined,
+    MaxKeys: maxKeys,
+    ContinuationToken: input.continuationToken || undefined,
+  }));
+  return {
+    objects: (result.Contents || []).map((item) => ({
+      key: item.Key || "",
+      sizeBytes: Number(item.Size || 0),
+      lastModified: item.LastModified?.toISOString() || null,
+    })).filter((item) => Boolean(item.key)),
+    truncated: Boolean(result.IsTruncated),
+    nextContinuationToken: result.NextContinuationToken || null,
+    keyCount: Number(result.KeyCount || result.Contents?.length || 0),
+    bucket: config.bucket,
   };
 }
 

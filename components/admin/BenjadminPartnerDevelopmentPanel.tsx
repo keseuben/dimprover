@@ -449,7 +449,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
         <div>
           <span>PARTNER FEJLESZTÉSI SÍK (Partner Development Plane) · B3.2</span>
           <h2><Boxes size={17} /> Partner fejlesztések</h2>
-          <p>Belső DIMPRO síktól elkülönített partnerprojektek, OutminAI fejlesztő (worker) és átadási életciklus (delivery lifecycle).</p>
+          <p>Belső DIMPRO síktól elkülönített partnerprojektek, Outmin-AI fejlesztő (worker) és átadási életciklus (delivery lifecycle).</p>
         </div>
         <div className="operator-partner-head__badges">
           <span className={`operator-status-badge ${health?.ready ? "is-ok" : "is-warning"}`} data-testid="partner-schema-status">
@@ -459,10 +459,10 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
           <span className={`operator-status-badge ${snapshot?.runtimeIsolation?.ready ? "is-ok" : "is-partner"}`} data-testid="partner-runtime-status">
             <ShieldCheck size={13} />
             {snapshot?.runtimeIsolation?.ready
-              ? "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET READY"
+              ? "Outmin-AI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET READY"
               : snapshot?.runtimeIsolation?.preflightReady
-                ? "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 ELŐELLENŐRZÉS READY"
-                : "OUTMINAI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET PENDING"}
+                ? "Outmin-AI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 ELŐELLENŐRZÉS READY"
+                : "Outmin-AI · ALAPÉRTELMEZETT TILTÁS (DEFAULT DENY) · P2 FUTÁSI KÖRNYEZET PENDING"}
           </span>
           <button type="button" onClick={() => void load(false)} disabled={busy} title="Partner állapot frissítése">
             <RefreshCw size={15} className={busy ? "is-spinning" : ""} />
@@ -474,7 +474,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
         <div><span>Partnerprojektek</span><strong>{snapshot?.projects.length || 0}</strong></div>
         <div><span>Nyilvántartási séma (registry schema)</span><strong>{health?.actualSchemaVersion || "STAGED"}</strong></div>
         <div><span>Hiányzó adattáblák</span><strong>{pendingTables}</strong></div>
-        <div><span>Alapértelmezett fejlesztő (worker)</span><strong>OutminAI</strong></div>
+        <div><span>Alapértelmezett fejlesztő (worker)</span><strong>Outmin-AI</strong></div>
         <div><span>P2 futási környezet (runtime)</span><strong>{snapshot?.runtimeIsolation?.stage || "PENDING"}</strong></div>
         <div><span>PROD</span><strong>JÓVÁHAGYÁSI KAPU (approval gate)</strong></div>
       </div>
@@ -673,7 +673,7 @@ export default function BenjadminPartnerDevelopmentPanel({ query }: Props) {
                   ? "P2 futási izoláció (runtime isolation) READY. A P3 kiépítés (provisioning) átadási módban (HANDOFF) repository/munkafa (worktree) + DEV/STAG nyilvántartás + alapteszt (baseline) segítségével automatizált; hosztolt mód külön adatbázis-/tárhelyszolgáltatói kaput (provider gate) kér."
                   : snapshot?.runtimeIsolation?.preflightReady
                     ? "P2 futási előellenőrzés (runtime preflight) READY: partner gyökér, fejlesztői token (worker token), SSH publikus azonosító és belső DEV gyökérmód előkészítve. A külön Outmin Linux azonosító elfogadása még hiányzik."
-                    : "A P2 házirendmag (policy core) aktív: belső repository/munkafa/hatókör (repo/worktree/scope) ALAPÉRTELMEZETTEN TILTOTT (DEFAULT DENY). Az OutminAI OS/MCP azonosító aktiválása külön futási kapu (runtime gate); repository/adatbázis/tárhely kiépítés a P3 része."}
+                    : "A P2 házirendmag (policy core) aktív: belső repository/munkafa/hatókör (repo/worktree/scope) ALAPÉRTELMEZETTEN TILTOTT (DEFAULT DENY). Az Outmin-AI OS/MCP azonosító aktiválása külön futási kapu (runtime gate); repository/adatbázis/tárhely kiépítés a P3 része."}
               </span>
             </div>
           </div>

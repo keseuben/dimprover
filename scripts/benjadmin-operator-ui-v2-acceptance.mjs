@@ -99,7 +99,7 @@ try {
   await clickTab("Csapat");
   await page.waitForFunction(() => (document.querySelector(".operator-table-title")?.textContent || "").includes("BENJADMIN CSAPAT"));
   const teamText = await page.$eval(".operator-table-card", (el) => el.textContent || "");
-  check("B3 five-member team visible", ["BenjAdmin", "BenAI", "ÁrminAI", "JázminAI", "OutminAI"].every((name) => teamText.includes(name)));
+  check("B3 five-member team visible", ["Benjadmin", "Ben-AI", "Ármin-AI", "Jázmin-AI", "Outmin-AI"].every((name) => teamText.includes(name)));
   check("three coding slots stated", teamText.includes("3 kódolói slot"));
   check("OutminAI external role visible", teamText.includes("KÜLSŐ KÓDMÉRNÖK"));
   check("team portraits loaded", await page.$$eval(".operator-worker-identity .operator-worker-avatar", (items) => items.length >= 5 && items.every((item) => item instanceof HTMLImageElement && item.complete && item.naturalWidth > 0)));

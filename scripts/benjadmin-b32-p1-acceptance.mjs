@@ -101,7 +101,7 @@ try {
   check("Partner fejlesztések tab visible", await page.$$eval(".operator-view-tabs button", (buttons) => buttons.some((item) => (item.textContent || "").trim() === "Partner fejlesztések")));
   const panelText = await page.$eval("[data-testid=partner-development-panel]", (el) => el.textContent || "");
   check("partner plane title visible", panelText.toUpperCase().includes("PARTNER FEJLESZTÉSI SÍK"));
-  check("OutminAI default deny P2 policy visible", panelText.includes("OUTMINAI") && panelText.includes("DEFAULT DENY") && panelText.includes("P2"));
+  check("OutminAI default deny P2 policy visible", panelText.includes("Outmin-AI") && panelText.includes("DEFAULT DENY") && panelText.includes("P2"));
 
   const formState = await page.evaluate(() => ({
     schemaText: document.querySelector("[data-testid=partner-schema-status]")?.textContent || "",

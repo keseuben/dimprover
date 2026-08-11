@@ -15,10 +15,12 @@ import {
   ServerCog,
   ShieldCheck,
   Sun,
+  UsersRound,
 } from "lucide-react";
 import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
 import BenjadminBrandScreen from "./BenjadminBrandScreen";
 import BenjadminExplorerPanel from "./BenjadminExplorerPanel";
+import BenjadminTeamScreen from "./BenjadminTeamScreen";
 
 type AdminTheme = "light" | "dark";
 type AccessState = "checking" | "guest" | "authorized";
@@ -51,6 +53,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   const [boardOpen, setBoardOpen] = useState(false);
   const [boardPinned, setBoardPinned] = useState(false);
   const [privacyCover, setPrivacyCover] = useState(false);
+  const [teamScreen, setTeamScreen] = useState(false);
 
   const activeItem = useMemo(
     () => navigationItems.find((item) => matchesPath(pathname, item.href)) || navigationItems[0],
@@ -142,12 +145,29 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       if (privacyCover) void restoreFromPrivacyCover();
       else {
         if (!boardPinned) setBoardOpen(false);
+        setTeamScreen(false);
         setPrivacyCover(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [accessState, boardPinned, privacyCover, restoreFromPrivacyCover]);
+
+  useEffect(() => {
+    const onTeamShortcut = (event: KeyboardEvent) => {
+      if (accessState !== "authorized" || privacyCover) return;
+      const target = event.target as HTMLElement | null;
+      const typing = Boolean(target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable));
+      const ctrlAltZero = event.ctrlKey && event.altKey && !event.metaKey && (event.code === "Digit0" || event.code === "Numpad0");
+      const plainD = !typing && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === "d";
+      if (!ctrlAltZero && !plainD) return;
+      event.preventDefault();
+      if (!boardPinned) setBoardOpen(false);
+      setTeamScreen((current) => !current);
+    };
+    window.addEventListener("keydown", onTeamShortcut);
+    return () => window.removeEventListener("keydown", onTeamShortcut);
+  }, [accessState, boardPinned, privacyCover]);
 
   useEffect(() => {
     if (accessState === "guest" && pathname !== "/admin") router.replace("/admin");
@@ -164,6 +184,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
 
   if (privacyCover) {
     return <BenjadminBrandScreen mode="privacy" onActivate={restoreFromPrivacyCover} />;
+  }
+
+  if (teamScreen) {
+    return <BenjadminTeamScreen onClose={() => setTeamScreen(false)} />;
   }
 
   return (
@@ -256,7 +280,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
           <div className="benjadmin-shell-topbar__actions">
             <span className="benjadmin-canonical-badge">CANONICAL</span>
             <span className="benjadmin-environment-badge">DEV</span>
-            <button type="button" onClick={() => setPrivacyCover(true)} title="Takaróképernyő: Ctrl+Alt+Space" aria-label="Takaróképernyő">
+            <button type="button" data-testid="benjadmin-team-screen-button" onClick={() => setTeamScreen(true)} title="BENJADMIN csapat: D vagy Ctrl+Alt+0" aria-label="BENJADMIN csapatképernyő">
+              <UsersRound size={18} />
+            </button>
+            <button type="button" onClick={() => { setTeamScreen(false); setPrivacyCover(true); }} title="Takaróképernyő: Ctrl+Alt+Space" aria-label="Takaróképernyő">
               <ShieldCheck size={18} />
             </button>
           </div>

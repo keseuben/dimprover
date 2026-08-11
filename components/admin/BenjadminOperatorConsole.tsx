@@ -166,6 +166,11 @@ function workerRoleLabel(role?: string) {
   return role;
 }
 
+function workerDisplayName(code?: string, fallback?: string) {
+  const names: Record<string, string> = { ARMINAI: "Ármin-AI", JAZMINAI: "Jázmin-AI", OUTMINAI: "Outmin-AI" };
+  return names[(code || "").toUpperCase()] || fallback || "—";
+}
+
 function paginate<T>(items: T[], page: number) {
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 1), pageCount);
@@ -413,12 +418,12 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
   const environmentRows = useMemo(() => (state?.environments || []).filter((item) => !normalizedQuery || [item.code, item.name, item.status].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [state?.environments, normalizedQuery]);
 
   const teamRows = useMemo(() => [
-    { id: "benjadmin", code: "BENJADMIN", name: "BenjAdmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
-    { id: "benai", code: "BENAI", name: "BenAI", type: "FEJLESZTÉSIRÁNYÍTÓ AI", role: "Feladat-, fejlesztő-, ág-, munkafa- és hatókör-kiosztás (task / worker / branch / worktree / scope)", slot: "Koordinátor", status: gate?.ready ? "ready" : "active" },
+    { id: "benjadmin", code: "BENJADMIN", name: "Benjadmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
+    { id: "benai", code: "BENAI", name: "Ben-AI", type: "FEJLESZTÉSIRÁNYÍTÓ AI", role: "Feladat-, fejlesztő-, ág-, munkafa- és hatókör-kiosztás (task / worker / branch / worktree / scope)", slot: "Koordinátor", status: gate?.ready ? "ready" : "active" },
     ...workers.map((worker) => ({
       id: worker.id,
       code: worker.code,
-      name: worker.name,
+      name: workerDisplayName(worker.code, worker.name),
       type: worker.code === "OUTMINAI" ? "KÜLSŐ KÓDMÉRNÖK" : "KÓDMÉRNÖK",
       role: worker.code === "OUTMINAI" ? "Partner- és külső projektek, alapból korlátozott hatókör (scope)" : workerRoleLabel(worker.role),
       slot: worker.code,
@@ -439,7 +444,8 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
   }
 
   function workerName(workerId?: string | null) {
-    return workers.find((worker) => worker.id === workerId)?.name || "—";
+    const worker = workers.find((item) => item.id === workerId);
+    return worker ? workerDisplayName(worker.code, worker.name) : "—";
   }
 
   function sessionForWorker(workerId: string) {
@@ -522,10 +528,10 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
 
             <aside className="operator-overview-side">
               <div className="operator-mini-table-card">
-                <div className="operator-table-title"><div><span>FEJLESZTŐK (worker-ek)</span><h2>BenAI kiosztás</h2></div></div>
+                <div className="operator-table-title"><div><span>FEJLESZTŐK (worker-ek)</span><h2>Ben-AI kiosztás</h2></div></div>
                 {workers.map((worker) => {
                   const session = sessionForWorker(worker.id);
-                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív feladat (task)" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
+                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív feladat (task)" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
                 })}
               </div>
               <div className="operator-mini-table-card">
@@ -592,9 +598,9 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
               <BenjadminBarChart title="Feladatállapot (task status)" subtitle="teljes feladatállomány (task)" items={taskAnalytics} />
             </div>
             <div className="operator-table-card is-full">
-            <div className="operator-table-title"><div><span>BENAI FEJLESZTŐK (worker-ek)</span><h2>Munkamenet (session) és munkafa (worktree) állapot</h2></div><span>{workerRows.length} fejlesztő (worker)</span></div>
+            <div className="operator-table-title"><div><span>BEN-AI FEJLESZTŐK (worker-ek)</span><h2>Munkamenet (session) és munkafa (worktree) állapot</h2></div><span>{workerRows.length} fejlesztő (worker)</span></div>
             <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Fejlesztő (worker)</th><th>Szerep</th><th>Státusz</th><th>Munkamenet (session)</th><th>Feladat (task)</th><th className="hide-small">Ág (branch)</th><th className="hide-medium">Munkafa (worktree)</th><th>Életjel (heartbeat)</th></tr></thead><tbody>
-              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{worker.name}</strong><small>{worker.code}</small></div></div></td><td>{workerRoleLabel(worker.role)}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív munkamenet (session)"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
+              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{worker.code}</small></div></div></td><td>{workerRoleLabel(worker.role)}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív munkamenet (session)"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={workerRows.length} onPage={setPage} />
             </div>
           </div>

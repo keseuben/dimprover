@@ -13,6 +13,11 @@ type EngineState = {
   conflicts: Array<{ id: string; conflict_type?: string; status?: string; summary?: string; created_at?: string }>;
 };
 
+function workerDisplayName(code?: string, fallback?: string) {
+  const names: Record<string, string> = { ARMINAI: "Ármin-AI", JAZMINAI: "Jázmin-AI", OUTMINAI: "Outmin-AI" };
+  return names[(code || "").toUpperCase()] || fallback || "—";
+}
+
 export default function DevEnginePanel() {
   const [gate, setGate] = useState<DevEngineGateStatus | null>(null);
   const [state, setState] = useState<EngineState | null>(null);
@@ -68,7 +73,7 @@ export default function DevEnginePanel() {
       {error ? <div className="dev-data-warning">{error}</div> : null}
 
       <div className="dev-engine-metrics">
-        <article><Bot size={19} /><span>Worker-ek</span><strong>{state?.workers.length ?? 0}/3</strong><small>ÁrminAI · JázminAI · OutminAI</small></article>
+        <article><Bot size={19} /><span>Worker-ek</span><strong>{state?.workers.length ?? 0}/3</strong><small>Ármin-AI · Jázmin-AI · Outmin-AI</small></article>
         <article><Activity size={19} /><span>READY session</span><strong>{readySessions.length}/3</strong><small>teljes handshake + scope lock</small></article>
         <article><ListTodo size={19} /><span>Task queue</span><strong>{queue.length}</strong><small>aktív / végrehajtható feladat</small></article>
         <article><LockKeyhole size={19} /><span>Worktree lease</span><strong>{state?.worktreeLeases.length ?? 0}</strong><small>branch + worktree foglalás</small></article>
@@ -77,11 +82,11 @@ export default function DevEnginePanel() {
 
       <div className="dev-engine-grid">
         <article className="dev-panel">
-          <div className="dev-panel-heading"><div className="dev-panel-icon"><Bot size={20} /></div><div><p className="dev-section-label">AI worker-ek</p><h3>BenAI kiosztási állapot</h3></div></div>
+          <div className="dev-panel-heading"><div className="dev-panel-icon"><Bot size={20} /></div><div><p className="dev-section-label">AI worker-ek</p><h3>Ben-AI kiosztási állapot</h3></div></div>
           <div className="dev-engine-list">
             {(state?.workers || []).map((worker) => {
               const session = readySessions.find((item) => item.workerId === worker.id);
-              return <div key={worker.id} className="dev-engine-row"><div><strong>{worker.name}</strong><small>{worker.role}</small></div><span className={session ? "is-ready" : worker.status === "busy" ? "is-busy" : ""}>{session ? "READY" : worker.status.toUpperCase()}</span></div>;
+              return <div key={worker.id} className="dev-engine-row"><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{worker.role}</small></div><span className={session ? "is-ready" : worker.status === "busy" ? "is-busy" : ""}>{session ? "READY" : worker.status.toUpperCase()}</span></div>;
             })}
           </div>
         </article>
