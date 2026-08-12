@@ -227,6 +227,66 @@ export async function getLicenseAdminStore() {
   return toAdminStore(await readLicenseStore(), await readAuditEntries());
 }
 
+function publicContactSummary(license: LicenseRecord) {
+  return {
+    legacyLicenseId: license.id,
+    companyName: license.companyName,
+    contactName: license.contactName ?? "",
+    contactEmail: license.contactEmail ?? "",
+    contactPhone: license.contactPhone ?? "",
+    secondaryContactName: license.secondaryContactName ?? "",
+    secondaryContactEmail: license.secondaryContactEmail ?? "",
+    secondaryContactPhone: license.secondaryContactPhone ?? "",
+    additionalContacts: (license.additionalContacts ?? []).map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      role: contact.role ?? "",
+      email: contact.email,
+      phone: contact.phone ?? "",
+      receiveEmail: contact.receiveEmail,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    })),
+    updatedAt: license.updatedAt,
+  };
+}
+
+export async function getLicenseContactSummaries() {
+  const store = await readLicenseStore();
+  return store.licenses.map(publicContactSummary);
+}
+
+export async function updateLicenseContactsAdmin(legacyLicenseId: string, payload: Record<string, unknown>) {
+  const store = await readLicenseStore();
+  const index = store.licenses.findIndex((license) => license.id === legacyLicenseId);
+  if (index === -1) return { ok: false as const, error: "A legacy licencrekord nem található." };
+
+  const previous = store.licenses[index];
+  const nowIso = new Date().toISOString();
+  const next: LicenseRecord = {
+    ...previous,
+    contactName: optionalString(payload.contactName) ?? previous.contactName ?? "",
+    contactEmail: optionalString(payload.contactEmail) ?? previous.contactEmail ?? "",
+    contactPhone: optionalString(payload.contactPhone) ?? previous.contactPhone ?? "",
+    secondaryContactName: optionalString(payload.secondaryContactName) ?? previous.secondaryContactName ?? "",
+    secondaryContactEmail: optionalString(payload.secondaryContactEmail) ?? previous.secondaryContactEmail ?? "",
+    secondaryContactPhone: optionalString(payload.secondaryContactPhone) ?? previous.secondaryContactPhone ?? "",
+    additionalContacts: hasOwn(payload, "additionalContacts")
+      ? additionalContactsValue(payload.additionalContacts, previous.additionalContacts ?? [])
+      : previous.additionalContacts ?? [],
+    updatedAt: nowIso,
+  };
+  store.licenses[index] = next;
+  await writeLicenseStore(store);
+  await appendAudit({
+    action: "updateLicenseContacts",
+    licenseId: next.id,
+    companyName: next.companyName,
+    message: `Kapcsolattartók módosítva: ${next.companyName}`,
+  });
+  return { ok: true as const, contact: publicContactSummary(next) };
+}
+
 function activeDeviceCount(store: LicenseStore, licenseId: string) {
   return store.devices.filter(
     (device) => device.licenseId === licenseId && device.status === "active",

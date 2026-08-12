@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, Bot, Check, Coins, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
+import { BellRing, Bot, Check, Coins, ContactRound, KeyRound, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -61,6 +61,29 @@ type SendDraft = {
   canUseFileComments: boolean;
   canUseProjectDrop: boolean;
 };
+type LegacyAdditionalContact = {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  receiveEmail: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+type LegacyLicenseContacts = {
+  legacyLicenseId: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  secondaryContactName: string;
+  secondaryContactEmail: string;
+  secondaryContactPhone: string;
+  additionalContacts: LegacyAdditionalContact[];
+  updatedAt?: string;
+};
+
 type DrawerMode = "closed" | "new" | "edit";
 
 type ExpiryReminderRun = {
@@ -265,6 +288,8 @@ export default function DimproLicenseCenterPage() {
   const [membershipModules, setMembershipModules] = useState<MembershipModule[]>([]);
   const [organizationInvitations, setOrganizationInvitations] = useState<OrganizationInvitation[]>([]);
   const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
+  const [legacyContacts, setLegacyContacts] = useState<LegacyLicenseContacts[]>([]);
+  const [contactDrafts, setContactDrafts] = useState<Record<string, LegacyLicenseContacts>>({});
   const [drafts, setDrafts] = useState<Record<string, LicenseDraft>>({});
   const [createDraft, setCreateDraft] = useState<CreateDraft>(initialCreate);
   const [sendDrafts, setSendDrafts] = useState<Record<string, SendDraft>>({});
@@ -284,15 +309,19 @@ export default function DimproLicenseCenterPage() {
   const headers = useMemo(() => ({ "content-type": "application/json", "x-dimpro-license-admin-key": adminKey }), [adminKey]);
 
   const load = useCallback(async (key: string) => {
-    const [licenseResponse, sendResponse] = await Promise.all([
+    const [licenseResponse, sendResponse, contactResponse] = await Promise.all([
       fetch("/api/dimpro-identity/admin/licenses", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/dimpro-identity/admin/send-entitlements", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
+      fetch("/api/license/admin-contacts", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
     ]);
-    const [licensePayload, sendPayload] = await Promise.all([licenseResponse.json(), sendResponse.json()]);
+    const [licensePayload, sendPayload, contactPayload] = await Promise.all([licenseResponse.json(), sendResponse.json(), contactResponse.json()]);
     if (!licenseResponse.ok) throw new Error(licensePayload.error || "A Licencközpont nem tölthető be.");
     if (!sendResponse.ok) throw new Error(sendPayload.error || "A Send-jogosultságok nem tölthetők be.");
     const nextLicenses = licensePayload.licenses || [];
     const nextModules = licensePayload.licenseModules || [];
+    const nextContacts: LegacyLicenseContacts[] = contactResponse.ok && contactPayload?.ok && Array.isArray(contactPayload.contacts)
+      ? contactPayload.contacts
+      : [];
     setUsers(licensePayload.users || []);
     setOrganizations(licensePayload.organizations || []);
     setMemberships(licensePayload.organizationMemberships || []);
@@ -301,9 +330,11 @@ export default function DimproLicenseCenterPage() {
     setMembershipModules(licensePayload.membershipModules || []);
     setOrganizationInvitations(licensePayload.organizationInvitations || []);
     setEntitlements(sendPayload.entitlements || []);
+    setLegacyContacts(nextContacts);
+    setContactDrafts(Object.fromEntries(nextContacts.map((contact) => [contact.legacyLicenseId, { ...contact, additionalContacts: contact.additionalContacts.map((item) => ({ ...item })) }])));
     setDrafts(Object.fromEntries(nextLicenses.map((license: License) => [license.id, licenseDraft(license, nextModules)])));
     setAuthorized("yes");
-    setMessage("Identity Core adatok frissítve.");
+    setMessage(contactResponse.ok ? "Identity Core adatok és kapcsolattartók frissítve." : "Identity Core adatok frissítve; a legacy kapcsolattartó bridge jelenleg nem elérhető.");
   }, []);
 
   useEffect(() => {
@@ -440,6 +471,78 @@ export default function DimproLicenseCenterPage() {
       await load(adminKey);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A licenc mentése sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function legacyContactForLicense(license: License) {
+    if (!license.legacy_license_ref) return null;
+    return legacyContacts.find((contact) => contact.legacyLicenseId === license.legacy_license_ref) || null;
+  }
+
+  function updateContactDraft(legacyLicenseId: string, patch: Partial<LegacyLicenseContacts>) {
+    setContactDrafts((current) => {
+      const base = current[legacyLicenseId] || legacyContacts.find((contact) => contact.legacyLicenseId === legacyLicenseId);
+      if (!base) return current;
+      return { ...current, [legacyLicenseId]: { ...base, ...patch } };
+    });
+  }
+
+  function updateAdditionalContact(legacyLicenseId: string, contactId: string, patch: Partial<LegacyAdditionalContact>) {
+    const base = contactDrafts[legacyLicenseId] || legacyContacts.find((contact) => contact.legacyLicenseId === legacyLicenseId);
+    if (!base) return;
+    updateContactDraft(legacyLicenseId, {
+      additionalContacts: base.additionalContacts.map((contact) => contact.id === contactId ? { ...contact, ...patch } : contact),
+    });
+  }
+
+  function addAdditionalContact(legacyLicenseId: string) {
+    const base = contactDrafts[legacyLicenseId] || legacyContacts.find((contact) => contact.legacyLicenseId === legacyLicenseId);
+    if (!base) return;
+    updateContactDraft(legacyLicenseId, {
+      additionalContacts: [
+        ...base.additionalContacts,
+        { id: `contact-${crypto.randomUUID()}`, name: "", role: "", email: "", phone: "", receiveEmail: true },
+      ],
+    });
+  }
+
+  function removeAdditionalContact(legacyLicenseId: string, contactId: string) {
+    const base = contactDrafts[legacyLicenseId] || legacyContacts.find((contact) => contact.legacyLicenseId === legacyLicenseId);
+    if (!base) return;
+    updateContactDraft(legacyLicenseId, { additionalContacts: base.additionalContacts.filter((contact) => contact.id !== contactId) });
+  }
+
+  async function saveLegacyContacts(license: License) {
+    const source = legacyContactForLicense(license);
+    if (!source || busy) {
+      setMessage("A kapcsolattartók csak pontos legacy licenckapcsolat mellett módosíthatók.");
+      return;
+    }
+    const draft = contactDrafts[source.legacyLicenseId] || source;
+    setBusy(`contacts:${license.id}`);
+    try {
+      const response = await fetch("/api/license/admin-contacts", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          legacyLicenseId: source.legacyLicenseId,
+          contactName: draft.contactName,
+          contactEmail: draft.contactEmail,
+          contactPhone: draft.contactPhone,
+          secondaryContactName: draft.secondaryContactName,
+          secondaryContactEmail: draft.secondaryContactEmail,
+          secondaryContactPhone: draft.secondaryContactPhone,
+          additionalContacts: draft.additionalContacts,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A kapcsolattartók nem menthetők.");
+      setMessage("A legacy kapcsolattartók biztonságosan mentve. A központi licencadatok nem változtak.");
+      await load(adminKey);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A kapcsolattartók mentése sikertelen.");
     } finally {
       setBusy("");
     }
@@ -691,6 +794,8 @@ export default function DimproLicenseCenterPage() {
               const send = sendDrafts[selectedLicense.id] || initialSend();
               const allowedUsers = eligibleUsers(selectedLicense);
               const licenseEntitlements = entitlements.filter((entitlement) => entitlement.license_id === selectedLicense.id);
+              const contactSource = legacyContactForLicense(selectedLicense);
+              const contactDraft = contactSource ? (contactDrafts[contactSource.legacyLicenseId] || contactSource) : null;
               const organization = organizations.find((item) => item.id === selectedLicense.owner_organization_id);
               return (
                 <>
@@ -706,6 +811,53 @@ export default function DimproLicenseCenterPage() {
                   <ModuleEditor value={draft.modules} onChange={(next) => setDrafts((current) => ({ ...current, [selectedLicense.id]: { ...draft, modules: next } }))} />
                   <AiPolicyEditor value={draft.modules} onChange={(next) => setDrafts((current) => ({ ...current, [selectedLicense.id]: { ...draft, modules: next } }))} />
                   <button type="button" className="benjadmin-data-primary-action is-full" onClick={() => void saveLicense(selectedLicense.id)} disabled={busy !== ""}>{busy === `license:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Licenc mentése</button>
+
+                  <section className="benjadmin-data-form-section benjadmin-license-contacts" data-testid="benjadmin-license-contacts">
+                    <header><strong><ContactRound size={16} /> Kapcsolattartók</strong><span>Átmeneti legacy bridge</span></header>
+                    <div className="benjadmin-data-security-note">
+                      <ContactRound size={17} />
+                      <div>
+                        <strong>Biztonságos kompatibilitási nézet</strong>
+                        <span>A modern Licencközpont csak a kapcsolattartói mezőket olvassa a legacy rekordból. Nyers licenckulcs, gépazonosító vagy számlázási titok nem kerül ebbe a nézetbe. A kapcsolattartói adatok központi Identity Core sémába migrálása külön fejlesztési lépés.</span>
+                      </div>
+                    </div>
+                    {!contactDraft ? (
+                      <div className="benjadmin-data-security-note is-warning">
+                        <ContactRound size={17} />
+                        <div><strong>Nincs pontos legacy licenckapcsolat</strong><span>A kapcsolattartók csak akkor szerkeszthetők, ha a központi licenc <code>legacy_license_ref</code> mezője egy létező legacy licencrekordra mutat. A rendszer nem hoz létre automatikus vagy név alapú kapcsolatot.</span></div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="benjadmin-data-form-grid">
+                          <Field label="Elsődleges kapcsolattartó neve"><input value={contactDraft.contactName} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { contactName: event.target.value })} /></Field>
+                          <Field label="Elsődleges e-mail"><input type="email" value={contactDraft.contactEmail} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { contactEmail: event.target.value })} /></Field>
+                          <Field label="Elsődleges telefon"><input value={contactDraft.contactPhone} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { contactPhone: event.target.value })} /></Field>
+                          <Field label="Másodlagos kapcsolattartó neve"><input value={contactDraft.secondaryContactName} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { secondaryContactName: event.target.value })} /></Field>
+                          <Field label="Másodlagos e-mail"><input type="email" value={contactDraft.secondaryContactEmail} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { secondaryContactEmail: event.target.value })} /></Field>
+                          <Field label="Másodlagos telefon"><input value={contactDraft.secondaryContactPhone} onChange={(event) => updateContactDraft(contactDraft.legacyLicenseId, { secondaryContactPhone: event.target.value })} /></Field>
+                        </div>
+                        <div className="benjadmin-license-contacts__toolbar"><strong>További értesítési kapcsolattartók</strong><button type="button" className="benjadmin-data-secondary-action" onClick={() => addAdditionalContact(contactDraft.legacyLicenseId)}><Plus size={15} /> Új kapcsolattartó</button></div>
+                        <div className="benjadmin-data-mini-table-scroll">
+                          <table className="benjadmin-data-mini-table">
+                            <thead><tr><th>Név</th><th>Szerepkör</th><th>E-mail</th><th>Telefon</th><th>Értesítés</th><th /></tr></thead>
+                            <tbody>
+                              {contactDraft.additionalContacts.length ? contactDraft.additionalContacts.map((contact) => (
+                                <tr key={contact.id}>
+                                  <td><input value={contact.name} onChange={(event) => updateAdditionalContact(contactDraft.legacyLicenseId, contact.id, { name: event.target.value })} /></td>
+                                  <td><input value={contact.role} onChange={(event) => updateAdditionalContact(contactDraft.legacyLicenseId, contact.id, { role: event.target.value })} /></td>
+                                  <td><input type="email" value={contact.email} onChange={(event) => updateAdditionalContact(contactDraft.legacyLicenseId, contact.id, { email: event.target.value })} /></td>
+                                  <td><input value={contact.phone} onChange={(event) => updateAdditionalContact(contactDraft.legacyLicenseId, contact.id, { phone: event.target.value })} /></td>
+                                  <td><input type="checkbox" checked={contact.receiveEmail} onChange={(event) => updateAdditionalContact(contactDraft.legacyLicenseId, contact.id, { receiveEmail: event.target.checked })} aria-label={`${contact.name || "Kapcsolattartó"} e-mail értesítése`} /></td>
+                                  <td><button type="button" className="benjadmin-data-row-action" onClick={() => removeAdditionalContact(contactDraft.legacyLicenseId, contact.id)} aria-label="Kapcsolattartó eltávolítása"><Trash2 size={15} /></button></td>
+                                </tr>
+                              )) : <tr><td colSpan={6}>Nincs további kapcsolattartó.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                        <button type="button" className="benjadmin-data-secondary-action is-full" onClick={() => void saveLegacyContacts(selectedLicense)} disabled={busy !== ""}>{busy === `contacts:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Kapcsolattartók mentése</button>
+                      </>
+                    )}
+                  </section>
 
                   {selectedLicense.owner_type === "organization" && selectedLicense.owner_organization_id && organization ? (
                     <section className="benjadmin-data-form-section is-embedded">

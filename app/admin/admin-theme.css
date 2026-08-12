@@ -8736,3 +8736,59 @@
   .benjadmin-member-ai-policy footer { align-items: flex-start; flex-direction: column; }
   .benjadmin-member-ai-policy footer > button { width: 100%; }
 }
+
+/* BENJADMIN Licencközpont – legacy kapcsolattartók biztonságos bridge */
+.benjadmin-license-contacts > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.benjadmin-license-contacts > header span,
+.benjadmin-license-contacts .benjadmin-data-security-note strong,
+.benjadmin-license-contacts .benjadmin-data-security-note span,
+.benjadmin-license-contacts .benjadmin-data-security-note code,
+.benjadmin-license-contacts .benjadmin-data-mini-table,
+.benjadmin-license-contacts .benjadmin-data-mini-table th,
+.benjadmin-license-contacts .benjadmin-data-mini-table td {
+  font-size: 12px !important;
+}
+.benjadmin-license-contacts .benjadmin-data-security-note code {
+  color: var(--admin-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.benjadmin-license-contacts__toolbar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.benjadmin-license-contacts__toolbar strong { color: var(--admin-text); font-size: 12px; }
+.benjadmin-license-contacts .benjadmin-data-mini-table input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 120px;
+  min-height: 32px;
+  padding: 0 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  font-size: 12px;
+}
+.benjadmin-license-contacts .benjadmin-data-mini-table input[type="checkbox"] { width: 16px; height: 16px; }
+.benjadmin-license-contacts .benjadmin-data-mini-table .benjadmin-data-row-action { min-width: 32px; min-height: 32px; display: inline-grid; place-items: center; }
+.benjadmin-license-contacts .benjadmin-data-security-note.is-warning {
+  border-color: color-mix(in srgb, #f59e0b 36%, var(--admin-border));
+}
+@media (max-width: 560px) {
+  .benjadmin-license-contacts__toolbar { align-items: stretch; flex-direction: column; }
+  .benjadmin-license-contacts__toolbar .benjadmin-data-secondary-action { justify-content: center; }
+}
+.benjadmin-license-contacts .benjadmin-data-field,
+.benjadmin-license-contacts .benjadmin-data-field > span,
+.benjadmin-license-contacts .benjadmin-data-field small,
+.benjadmin-license-contacts .benjadmin-data-secondary-action,
+.benjadmin-license-contacts .benjadmin-data-row-action {
+  font-size: 12px !important;
+}
