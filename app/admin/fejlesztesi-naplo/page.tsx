@@ -3,18 +3,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DevNotesAiAssistant from "@/components/admin/DevNotesAiAssistant";
+import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 import {
   Archive,
-  ArrowLeft,
   ClipboardCopy,
   FileText,
-  Filter,
   Loader2,
   Plus,
   RefreshCcw,
   Save,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 
 type DevNoteType =
@@ -263,20 +263,20 @@ function optionLabel<T extends string>(options: Option<T>[], id: string) {
   return options.find((item) => item.id === id)?.label ?? id;
 }
 
-function priorityClass(priority: DevNotePriority) {
-  if (priority === "critical") return "border-red-300/35 bg-red-400/10 text-red-100";
-  if (priority === "high") return "border-amber-300/35 bg-amber-400/10 text-amber-100";
-  if (priority === "low") return "border-slate-500/35 bg-slate-400/10 text-slate-200";
-  return "border-cyan-300/30 bg-cyan-400/10 text-cyan-100";
+function noteStatusTone(status: DevNoteStatus): "default" | "ok" | "warning" | "danger" | "info" {
+  if (status === "done") return "ok";
+  if (status === "in_progress" || status === "testing") return "info";
+  if (status === "ready_for_coding") return "ok";
+  if (status === "deferred") return "warning";
+  if (status === "withdrawn") return "danger";
+  return "default";
 }
 
-function statusClass(status: DevNoteStatus) {
-  if (status === "done") return "border-emerald-300/35 bg-emerald-400/10 text-emerald-100";
-  if (status === "in_progress" || status === "testing") return "border-cyan-300/35 bg-cyan-400/10 text-cyan-100";
-  if (status === "ready_for_coding") return "border-lime-300/35 bg-lime-400/10 text-lime-100";
-  if (status === "archived" || status === "withdrawn") return "border-slate-500/35 bg-slate-500/10 text-slate-300";
-  if (status === "deferred") return "border-amber-300/35 bg-amber-400/10 text-amber-100";
-  return "border-white/10 bg-white/[0.05] text-slate-200";
+function notePriorityTone(priority: DevNotePriority): "default" | "ok" | "warning" | "danger" | "info" {
+  if (priority === "critical") return "danger";
+  if (priority === "high") return "warning";
+  if (priority === "low") return "default";
+  return "info";
 }
 
 function textInputClass() {
@@ -294,16 +294,6 @@ function Field({ label, helper, children }: { label: string; helper?: string; ch
       <div className="mt-2">{children}</div>
       {helper && <span className="mt-2 block text-xs font-semibold leading-5 text-slate-500">{helper}</span>}
     </label>
-  );
-}
-
-function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.16)]">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{value}</p>
-      <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">{helper}</p>
-    </div>
   );
 }
 
@@ -439,10 +429,16 @@ export default function DevelopmentNotesPage() {
   const [isNew, setIsNew] = useState(true);
   const [storageFile, setStorageFile] = useState("");
   const [counts, setCounts] = useState({ all: 0, filtered: 0, active: 0, archived: 0 });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const selectedNote = useMemo(() => notes.find((note) => note.id === selectedId) ?? null, [notes, selectedId]);
 
   const tagText = useMemo(() => draft.tags.join(", "), [draft.tags]);
+  const pageCount = Math.max(1, Math.ceil(notes.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedNotes = notes.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   async function loadNotes(nextFilters = filters, keyOverride = adminKey) {
     const key = keyOverride.trim();
@@ -567,6 +563,7 @@ export default function DevelopmentNotesPage() {
         setIsNew(false);
       }
       if (action === "remove") {
+        setDrawerOpen(false);
         const first = data.store.notes[0];
         setSelectedId(first?.id ?? null);
         setDraft(first ? draftFromNote(first) : emptyDraft);
@@ -598,6 +595,7 @@ export default function DevelopmentNotesPage() {
     setSelectedId(note.id);
     setDraft(draftFromNote(note));
     setIsNew(false);
+    setDrawerOpen(true);
     setMessage("");
   }
 
@@ -610,6 +608,7 @@ export default function DevelopmentNotesPage() {
       surfaces: filters.surface !== "all" ? [filters.surface] : [],
     });
     setIsNew(true);
+    setDrawerOpen(true);
     setMessage("");
   }
 
@@ -624,374 +623,147 @@ export default function DevelopmentNotesPage() {
 
   function applyFilters(nextFilters: Filters) {
     setFilters(nextFilters);
+    setPage(1);
     void loadNotes(nextFilters);
   }
 
   if (!authorized && !loading) {
     return (
-      <main className="min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8">
-        <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center">
-          <div className="w-full rounded-[2rem] border border-amber-300/25 bg-slate-950/85 p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-300/75">Védett fejlesztési napló</p>
-            <h1 className="mt-4 text-3xl font-black text-white">Licencadmin belépés szükséges</h1>
-            <p className="mt-4 text-sm leading-7 text-slate-300">A Fejlesztési Napló / AI Kontextustár csak a licencadmin belépés után érhető el. A napló fejlesztési döntéseket, ötleteket és más AI-nak átadható kontextust tárol.</p>
-            {message && <p className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-100">{message}</p>}
-            <Link href="/admin" className="mt-6 inline-flex rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950">Licencadmin belépés →</Link>
-          </div>
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <FileText size={22} />
+          <h1>Licencadmin belépés szükséges</h1>
+          <p>{message || "A Fejlesztési Napló / AI Kontextustár csak aktív BENJADMIN munkamenettel érhető el."}</p>
+          <Link href="/admin" className="benjadmin-data-primary-action">Licencadmin megnyitása</Link>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#06111f] text-white">
-      <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(34,211,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.16)_1px,transparent_1px)] [background-size:54px_54px]" />
-      <div className="relative mx-auto max-w-[1780px] px-5 py-6 sm:px-8 lg:px-10">
-        <header className="mb-7 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <Link href="/admin/dev" className="mb-4 inline-flex items-center gap-2 text-sm font-black text-cyan-200 hover:text-white">
-                <ArrowLeft size={18} /> Vissza a fejlesztői kezdőlapra
-              </Link>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300/80">DIMPRO belső fejlesztési tudástár</p>
-              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] text-white md:text-5xl">Fejlesztési Napló / AI Kontextustár</h1>
-              <p className="mt-3 max-w-4xl text-sm font-semibold leading-7 text-slate-300">
-                Ötletek, döntések, feladatok, hibák, kódolási utasítások és más AI-nak átadható fejlesztési kontextus egy helyen. A tárolás szerveroldali JSON fájlban történik, később adatbázisba vihető.
-              </p>
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · FEJLESZTÉSI TUDÁSTÁR"
+        title="Fejlesztési Napló / AI Kontextustár"
+        description="Ötletek, döntések, feladatok, hibák, kódolási utasítások és AI-átadók kereshető, szűrhető fejlesztési nyilvántartása."
+        actions={(
+          <>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadNotes()} disabled={loading}>{loading ? <Loader2 className="is-spinning" size={16} /> : <RefreshCcw size={16} />} Frissítés</button>
+            <button type="button" className="benjadmin-data-primary-action" onClick={createNewDraft}><Plus size={16} /> Új bejegyzés</button>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Összes bejegyzés" value={counts.all} />
+            <BenjadminMetric label="Aktív" value={counts.active} tone="ok" />
+            <BenjadminMetric label="Szűrt találat" value={counts.filtered} />
+            <BenjadminMetric label="Archivált" value={counts.archived} />
+            <BenjadminMetric label="Kapcsolt rekord" value={allNotes.filter((note) => note.epic || note.surfaces.length).length} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={filters.search} onChange={(event) => applyFilters({ ...filters, search: event.target.value })} placeholder="Keresés cím, modul, leírás, AI kontextus vagy címke alapján" /></label>
+            <div className="benjadmin-data-toolbar-selects">
+              <select aria-label="Modul" value={filters.module} onChange={(event) => applyFilters({ ...filters, module: event.target.value })}><option value="all">Minden modul</option>{options.modules.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+              <select aria-label="Epic" value={filters.epic} onChange={(event) => applyFilters({ ...filters, epic: event.target.value })}><option value="all">Minden fejlesztési csomag</option>{options.epics.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+              <select aria-label="Típus" value={filters.type} onChange={(event) => applyFilters({ ...filters, type: event.target.value })}><option value="all">Minden típus</option>{options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+              <select aria-label="Státusz" value={filters.status} onChange={(event) => applyFilters({ ...filters, status: event.target.value })}><option value="all">Minden státusz</option>{options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+              <select aria-label="Prioritás" value={filters.priority} onChange={(event) => applyFilters({ ...filters, priority: event.target.value })}><option value="all">Minden prioritás</option>{options.priorities.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+              <select aria-label="Felület" value={filters.surface} onChange={(event) => applyFilters({ ...filters, surface: event.target.value })}><option value="all">Minden felület</option>{options.surfaces.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+              <label className="benjadmin-data-archive-toggle"><input type="checkbox" checked={filters.includeArchived} onChange={(event) => applyFilters({ ...filters, includeArchived: event.target.checked })} /> Archiváltak</label>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
-              <button type="button" onClick={createNewDraft} className="inline-flex items-center justify-center gap-3 rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-lime-200">
-                <Plus size={18} /> Új bejegyzés
-              </button>
-              <button type="button" onClick={() => void loadNotes()} disabled={loading} className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-black text-slate-200 transition hover:border-cyan-300/30 hover:text-white disabled:opacity-50">
-                {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />} Frissítés
-              </button>
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{message || `Tárolás: ${storageFile || ".dimprover/dev-notes/dev-notes.json"}`}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={notes.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table benjadmin-dev-notes-table" data-testid="benjadmin-dev-notes-table">
+            <thead><tr><th>Cím</th><th>Modul</th><th>Fejlesztési csomag</th><th>Típus</th><th>Státusz</th><th>Prioritás</th><th>Felületek</th><th>Kapcsolatok</th><th>Frissítve</th><th>Művelet</th></tr></thead>
+            <tbody>
+              {pagedNotes.length ? pagedNotes.map((note) => (
+                <tr key={note.id}>
+                  <td className="is-wide"><strong>{note.title}</strong><br /><small>{note.summary || note.description || note.aiContext || "Nincs rövid leírás."}</small></td>
+                  <td>{note.module}</td>
+                  <td>{note.epic || "—"}</td>
+                  <td>{optionLabel(options.types, note.type)}</td>
+                  <td><BenjadminStatusPill tone={noteStatusTone(note.status)}>{optionLabel(options.statuses, note.status)}</BenjadminStatusPill></td>
+                  <td><BenjadminStatusPill tone={notePriorityTone(note.priority)}>{optionLabel(options.priorities, note.priority)}</BenjadminStatusPill></td>
+                  <td>{note.surfaces?.length || 0}</td>
+                  <td>{note.relatedNoteIds?.length || 0}</td>
+                  <td className="is-nowrap">{formatDateTime(note.updatedAt)}</td>
+                  <td><button type="button" className="benjadmin-data-row-action" onClick={() => selectNote(note)}>Részletek</button></td>
+                </tr>
+              )) : <tr><td colSpan={10} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő fejlesztési bejegyzés.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </BenjadminDataWorkspace>
+
+      {drawerOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Fejlesztési bejegyzés bezárása" onClick={() => setDrawerOpen(false)} /> : null}
+      {drawerOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-dev-note-drawer" data-testid="benjadmin-dev-note-drawer">
+          <header><div><span>{isNew ? "ÚJ FEJLESZTÉSI BEJEGYZÉS" : "FEJLESZTÉSI BEJEGYZÉS"}</span><strong>{draft.title || "Cím nélküli bejegyzés"}</strong></div><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Bezárás"><X size={18} /></button></header>
+          <form onSubmit={saveNote} className="benjadmin-data-drawer__body benjadmin-dev-note-form">
+            {!isNew && selectedNote ? <div className="benjadmin-dev-note-meta">Létrehozva: {formatDateTime(selectedNote.createdAt)} · Frissítve: {formatDateTime(selectedNote.updatedAt)}</div> : null}
+
+            <div className="benjadmin-data-form-grid">
+              <Field label="Cím"><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className={textInputClass()} /></Field>
+              <Field label="Modul"><select value={draft.module} onChange={(event) => setDraft((current) => ({ ...current, module: event.target.value }))} className={textInputClass()}>{options.modules.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
+              <Field label="Fejlesztési csomag / Epic"><input value={draft.epic} onChange={(event) => setDraft((current) => ({ ...current, epic: event.target.value }))} className={textInputClass()} list="dev-note-epics" /><datalist id="dev-note-epics">{options.epics.map((item) => <option key={item} value={item} />)}</datalist></Field>
+              <Field label="Prioritás"><select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as DevNotePriority }))} className={textInputClass()}>{options.priorities.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+              <Field label="Típus"><select value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as DevNoteType }))} className={textInputClass()}>{options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+              <Field label="Státusz"><select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as DevNoteStatus }))} className={textInputClass()}>{options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
             </div>
-          </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <StatCard label="Összes bejegyzés" value={counts.all} helper="Minden fejlesztési naplóelem a szerveren." />
-            <StatCard label="Aktív" value={counts.active} helper="Nem archivált bejegyzések." />
-            <StatCard label="Szűrt találat" value={counts.filtered} helper="A jelenlegi keresésnek megfelelő lista." />
-            <StatCard label="Archivált" value={counts.archived} helper="Lezárt vagy régi kontextusok." />
-          </div>
+            <section className="benjadmin-data-form-section"><header><strong>Érintett felületek</strong><span>{draft.surfaces.length} kiválasztva</span></header><div className="benjadmin-data-chip-grid">{options.surfaces.map((item) => <button key={item} type="button" className={draft.surfaces.includes(item) ? "is-active" : ""} onClick={() => setDraft((current) => ({ ...current, surfaces: toggleArrayValue(current.surfaces, item) }))}>{draft.surfaces.includes(item) ? "✓ " : "+ "}{item}</button>)}</div></section>
 
-          {message && <p className="mt-4 rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">{message}</p>}
-        </header>
+            <Field label="Címkék"><input value={tagText} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} className={textInputClass()} placeholder="Drive, szerver, AI, MVP" /></Field>
+            <Field label="Rövid összefoglaló"><textarea value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} className={textAreaClass("min-h-20")} /></Field>
 
-        <section className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-          <aside className="space-y-5">
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
-              <div className="mb-4 flex items-center gap-2">
-                <Filter size={20} className="text-cyan-200" />
-                <h2 className="text-xl font-black text-white">Keresés és szűrés</h2>
-              </div>
-              <div className="space-y-4">
-                <Field label="Keresés">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-3.5 text-slate-500" size={18} />
-                    <input value={filters.search} onChange={(event) => applyFilters({ ...filters, search: event.target.value })} className={`${textInputClass()} pl-11`} placeholder="cím, modul, leírás, AI kontextus..." />
-                  </div>
-                </Field>
-                <Field label="Modul">
-                  <select value={filters.module} onChange={(event) => applyFilters({ ...filters, module: event.target.value })} className={textInputClass()}>
-                    <option value="all">Minden modul</option>
-                    {options.modules.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </Field>
-                <Field label="Fejlesztési csomag / Epic">
-                  <select value={filters.epic} onChange={(event) => applyFilters({ ...filters, epic: event.target.value })} className={textInputClass()}>
-                    <option value="all">Minden fejlesztési csomag</option>
-                    {options.epics.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </Field>
-                <Field label="Érintett felület">
-                  <select value={filters.surface} onChange={(event) => applyFilters({ ...filters, surface: event.target.value })} className={textInputClass()}>
-                    <option value="all">Minden felület</option>
-                    {options.surfaces.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <Field label="Típus">
-                    <select value={filters.type} onChange={(event) => applyFilters({ ...filters, type: event.target.value })} className={textInputClass()}>
-                      <option value="all">Minden típus</option>
-                      {options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Státusz">
-                    <select value={filters.status} onChange={(event) => applyFilters({ ...filters, status: event.target.value })} className={textInputClass()}>
-                      <option value="all">Minden státusz</option>
-                      {options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Prioritás">
-                    <select value={filters.priority} onChange={(event) => applyFilters({ ...filters, priority: event.target.value })} className={textInputClass()}>
-                      <option value="all">Minden prioritás</option>
-                      {options.priorities.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </Field>
-                </div>
-                <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm font-bold text-slate-200">
-                  <input type="checkbox" checked={filters.includeArchived} onChange={(event) => applyFilters({ ...filters, includeArchived: event.target.checked })} className="h-4 w-4 accent-cyan-300" />
-                  Archivált bejegyzések mutatása
-                </label>
-              </div>
+            <div className="benjadmin-dev-note-form__two">
+              <Field label="Részletes leírás"><textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className={textAreaClass("min-h-48")} /></Field>
+              <Field label="Kódolási utasítás"><textarea value={draft.codingInstruction} onChange={(event) => setDraft((current) => ({ ...current, codingInstruction: event.target.value }))} className={textAreaClass("min-h-48")} /></Field>
+            </div>
+
+            <Field label="AI kontextus / új csevegőbe másolható szöveg"><textarea value={draft.aiContext} onChange={(event) => setDraft((current) => ({ ...current, aiContext: event.target.value }))} className={textAreaClass("min-h-52")} /></Field>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Kapcsolódó fejlesztések</strong><span>{draft.relatedNoteIds.length} kapcsolat</span></header>
+              <select value="" onChange={(event) => { const value = event.target.value; if (!value) return; setDraft((current) => ({ ...current, relatedNoteIds: current.relatedNoteIds.includes(value) ? current.relatedNoteIds : [...current.relatedNoteIds, value] })); }} className={textInputClass()}><option value="">Kapcsolódó bejegyzés hozzáadása...</option>{allNotes.filter((item) => item.id !== selectedId && !draft.relatedNoteIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.module} · {item.status}</option>)}</select>
+              <div className="benjadmin-dev-note-links">{draft.relatedNoteIds.length ? draft.relatedNoteIds.map((id) => { const item = allNotes.find((note) => note.id === id); return <button key={id} type="button" onClick={() => setDraft((current) => ({ ...current, relatedNoteIds: current.relatedNoteIds.filter((noteId) => noteId !== id) }))}>{item?.title ?? id} ×</button>; }) : <span>Nincs kapcsolódó bejegyzés.</span>}</div>
             </section>
 
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-xl font-black text-white">Bejegyzések</h2>
-                <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">{notes.length} db</span>
-              </div>
-              <div className="max-h-[920px] space-y-3 overflow-auto pr-1">
-                {loading ? (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm font-bold text-slate-400">Betöltés...</div>
-                ) : notes.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm font-bold text-slate-400">Nincs bejegyzés. Hozz létre egy új fejlesztési naplóelemet.</div>
-                ) : notes.map((note) => (
-                  <button key={note.id} type="button" onClick={() => selectNote(note)} className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === note.id ? "border-cyan-300/45 bg-cyan-300/10" : "border-white/10 bg-slate-950/35 hover:border-cyan-300/30 hover:bg-white/[0.07]"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-black text-white">{note.title}</p>
-                        <p className="mt-1 truncate text-xs font-bold text-cyan-100/80">{note.module}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${priorityClass(note.priority)}`}>{optionLabel(options.priorities, note.priority)}</span>
-                    </div>
-                    <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 text-slate-400">{note.summary || note.description || note.aiContext || "Nincs rövid leírás."}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusClass(note.status)}`}>{optionLabel(options.statuses, note.status)}</span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] font-black text-slate-300">{optionLabel(options.types, note.type)}</span>
-                    </div>
-                    <p className="mt-3 text-[11px] font-bold text-slate-500">Frissítve: {formatDateTime(note.updatedAt)}</p>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </aside>
+            <div className="benjadmin-dev-note-form__two">
+              <Field label="Forrás / előzmény"><textarea value={draft.source} onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Kapcsolódó fájlok / route-ok"><textarea value={draft.relatedFiles} onChange={(event) => setDraft((current) => ({ ...current, relatedFiles: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Következő lépés"><textarea value={draft.nextStep} onChange={(event) => setDraft((current) => ({ ...current, nextStep: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Függőségek"><textarea value={draft.dependencies} onChange={(event) => setDraft((current) => ({ ...current, dependencies: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Blokkoló tényezők"><textarea value={draft.blockers} onChange={(event) => setDraft((current) => ({ ...current, blockers: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Párhuzamos fejlesztés állapota"><textarea value={draft.crossChatStatus} onChange={(event) => setDraft((current) => ({ ...current, crossChatStatus: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Külső AI / reviewer megjegyzés"><textarea value={draft.externalAiNote} onChange={(event) => setDraft((current) => ({ ...current, externalAiNote: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Utolsó átadó összefoglaló"><textarea value={draft.handoffSummary} onChange={(event) => setDraft((current) => ({ ...current, handoffSummary: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+            </div>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
-            <form onSubmit={saveNote} className="grid gap-5">
-              <div className="flex flex-col gap-4 border-b border-white/10 pb-5 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300/80">{isNew ? "Új fejlesztési bejegyzés" : "Bejegyzés szerkesztése"}</p>
-                  <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{draft.title || "Cím nélküli bejegyzés"}</h2>
-                  {!isNew && selectedNote && <p className="mt-2 text-xs font-semibold text-slate-500">Létrehozva: {formatDateTime(selectedNote.createdAt)} · Frissítve: {formatDateTime(selectedNote.updatedAt)}</p>}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => void copyText(buildAiContext(draft, allNotes), "AI kontextus vágólapra másolva.")} className="inline-flex items-center gap-2 rounded-2xl border border-lime-300/35 bg-lime-300/10 px-4 py-3 text-sm font-black text-lime-100 hover:bg-lime-300/15">
-                    <ClipboardCopy size={17} /> AI átadó másolása
-                  </button>
-                  <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />} Mentés
-                  </button>
-                </div>
-              </div>
+            <DevNotesAiAssistant adminKey={adminKey} note={draft} noteId={selectedId} allNotes={allNotes} onApplyToField={(field, value) => setDraft((current) => ({ ...current, [field]: value }))} />
 
-              <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                <Field label="Cím">
-                  <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className={textInputClass()} placeholder="pl. Fejlesztési Napló / AI Kontextustár MVP" />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Modul">
-                    <select value={draft.module} onChange={(event) => setDraft((current) => ({ ...current, module: event.target.value }))} className={textInputClass()}>
-                      {options.modules.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Prioritás">
-                    <select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as DevNotePriority }))} className={textInputClass()}>
-                      {options.priorities.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                  </Field>
-                </div>
-              </div>
+            <section className="benjadmin-data-form-section benjadmin-dev-note-handoff"><header><strong>Másolható AI átadó blokk</strong><button type="button" onClick={() => void copyText(buildAiContext(draft, allNotes), "Teljes AI átadó blokk vágólapra másolva.")}><ClipboardCopy size={14} /> Másolás</button></header><pre>{buildAiContext(draft, allNotes)}</pre></section>
 
-              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-                <Field label="Fejlesztési csomag / Epic" helper="Közös fejlesztéseknél ez fogja össze a webes, desktopos és szerveroldali részfeladatokat.">
-                  <input
-                    value={draft.epic}
-                    onChange={(event) => setDraft((current) => ({ ...current, epic: event.target.value }))}
-                    className={textInputClass()}
-                    list="dev-note-epics"
-                    placeholder="pl. DIMPRO közös értesítési rendszer"
-                  />
-                  <datalist id="dev-note-epics">
-                    {options.epics.map((item) => <option key={item} value={item} />)}
-                  </datalist>
-                </Field>
-                <Field label="Érintett felületek" helper="Több is választható. Így látszik, hogy a bejegyzés webet, desktopot, szerver API-t vagy közös logikát érint.">
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {options.surfaces.map((item) => (
-                      <label key={item} className="flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-2 text-xs font-bold text-slate-200 hover:border-cyan-300/30">
-                        <input
-                          type="checkbox"
-                          checked={draft.surfaces.includes(item)}
-                          onChange={() => setDraft((current) => ({ ...current, surfaces: toggleArrayValue(current.surfaces, item) }))}
-                          className="h-4 w-4 accent-cyan-300"
-                        />
-                        {item}
-                      </label>
-                    ))}
-                  </div>
-                </Field>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Típus">
-                  <select value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as DevNoteType }))} className={textInputClass()}>
-                    {options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Státusz">
-                  <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as DevNoteStatus }))} className={textInputClass()}>
-                    {options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Címkék" helper="Vesszővel elválasztva. Keresésnél is működik.">
-                  <input value={tagText} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} className={textInputClass()} placeholder="Drive, szerver, AI, MVP" />
-                </Field>
-              </div>
-
-              <Field label="Rövid összefoglaló">
-                <textarea value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} className={textAreaClass("min-h-20")} placeholder="1-3 mondatos rövid tartalom, hogy később gyorsan áttekinthető legyen." />
-              </Field>
-
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Részletes leírás">
-                  <textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className={textAreaClass("min-h-56")} placeholder="Ide jöhet a kiinduló ötlet, üzleti logika, működési elv, fejlesztési döntés vagy probléma részletes leírása." />
-                </Field>
-                <Field label="Kódolási utasítás">
-                  <textarea value={draft.codingInstruction} onChange={(event) => setDraft((current) => ({ ...current, codingInstruction: event.target.value }))} className={textAreaClass("min-h-56")} placeholder="Ide jöhet pontos fejlesztői utasítás: fájlok, módosítási sorrend, elvárt működés, tesztelési szabály." />
-                </Field>
-              </div>
-
-              <Field label="AI kontextus / új csevegőbe másolható szöveg" helper="Ez a legfontosabb mező: másik ChatGPT, Codex Cloud, Claude vagy fejlesztő részére közvetlenül átadható kontextus.">
-                <textarea value={draft.aiContext} onChange={(event) => setDraft((current) => ({ ...current, aiContext: event.target.value }))} className={textAreaClass("min-h-64 border-lime-300/25 bg-lime-300/5 focus:border-lime-300 focus:ring-lime-300/10")} placeholder="Írd ide úgy, mintha egy új AI-csevegőnek adnád át a teljes szükséges előzményt." />
-              </Field>
-
-              <section className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-300/5 p-4">
-                <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-                  <Field label="Kapcsolódó bejegyzés hozzáadása" helper="Ezzel lehet összekötni például a webes értesítési központot és az asztali Drive értesítéseket.">
-                    <select
-                      value=""
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        if (!value) return;
-                        setDraft((current) => ({ ...current, relatedNoteIds: current.relatedNoteIds.includes(value) ? current.relatedNoteIds : [...current.relatedNoteIds, value] }));
-                      }}
-                      className={textInputClass()}
-                    >
-                      <option value="">Válassz kapcsolódó bejegyzést...</option>
-                      {allNotes.filter((item) => item.id !== selectedId && !draft.relatedNoteIds.includes(item.id)).map((item) => (
-                        <option key={item.id} value={item.id}>{item.title} · {item.module} · {item.status}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.17em] text-cyan-200/75">Kapcsolódó fejlesztések</p>
-                    <div className="mt-2 flex min-h-[52px] flex-wrap gap-2 rounded-2xl border border-white/10 bg-slate-950/45 p-3">
-                      {draft.relatedNoteIds.length === 0 ? (
-                        <span className="text-xs font-semibold text-slate-500">Nincs kapcsolódó bejegyzés.</span>
-                      ) : draft.relatedNoteIds.map((id) => {
-                        const item = allNotes.find((note) => note.id === id);
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => setDraft((current) => ({ ...current, relatedNoteIds: current.relatedNoteIds.filter((noteId) => noteId !== id) }))}
-                            className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100 hover:bg-red-300/15 hover:text-red-100"
-                            title="Eltávolítás a kapcsolatokból"
-                          >
-                            {item?.title ?? id} ×
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <div className="grid gap-5 xl:grid-cols-3">
-                <Field label="Forrás / előzmény">
-                  <textarea value={draft.source} onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Pl. melyik csevegő, PDF, döntés, ügyfélkérés vagy szerveres fejlesztési kör alapján készült." />
-                </Field>
-                <Field label="Kapcsolódó fájlok / route-ok">
-                  <textarea value={draft.relatedFiles} onChange={(event) => setDraft((current) => ({ ...current, relatedFiles: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Pl. app/admin/..., components/..., DIMPROVER_PRODUCT_DOCS/..." />
-                </Field>
-                <Field label="Következő lépés">
-                  <textarea value={draft.nextStep} onChange={(event) => setDraft((current) => ({ ...current, nextStep: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Mi legyen a következő konkrét fejlesztési vagy ellenőrzési lépés?" />
-                </Field>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Függőségek">
-                  <textarea value={draft.dependencies} onChange={(event) => setDraft((current) => ({ ...current, dependencies: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Pl. webes API elkészülése, desktop kliens módosítása, SMTP adat, adatmodell döntés." />
-                </Field>
-                <Field label="Blokkoló tényezők">
-                  <textarea value={draft.blockers} onChange={(event) => setDraft((current) => ({ ...current, blockers: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Mi akadályozza a folytatást? Pl. kézi adat, teszt, külső hozzáférés, döntés hiánya." />
-                </Field>
-                <Field label="Másik csevegő / párhuzamos fejlesztés állapota">
-                  <textarea value={draft.crossChatStatus} onChange={(event) => setDraft((current) => ({ ...current, crossChatStatus: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Például: webes rész másik csevegőben készül, desktop rész itt; közös API MVP kész, e-mail bekötés hátra van." />
-                </Field>
-                <Field label="Külső AI / Codex / reviewer megjegyzés">
-                  <textarea value={draft.externalAiNote} onChange={(event) => setDraft((current) => ({ ...current, externalAiNote: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Ide jöhet később Codex Cloud, Claude vagy más AI review összefoglalója." />
-                </Field>
-              </div>
-
-              <Field label="Utolsó átadó összefoglaló" helper="Rövid, naprakész állapot arról, hogy másik csevegő vagy AI innen tudja folytatni.">
-                <textarea value={draft.handoffSummary} onChange={(event) => setDraft((current) => ({ ...current, handoffSummary: event.target.value }))} className={textAreaClass("min-h-36 border-cyan-300/25 bg-cyan-300/5")} placeholder="Például: Webes értesítési központ MVP kész. Desktop értesítések v5.12-ig tartanak. Következő: közös SMTP és státusz-szinkron teszt." />
-              </Field>
-
-              <DevNotesAiAssistant
-                adminKey={adminKey}
-                note={draft}
-                noteId={selectedId}
-                allNotes={allNotes}
-                onApplyToField={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
-              />
-
-              <section className="rounded-[1.5rem] border border-lime-300/20 bg-lime-300/5 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-lime-200/80">Másolható AI átadó blokk</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-400">Ezt tudod új csevegőbe vagy másik AI-nak beilleszteni.</p>
-                  </div>
-                  <button type="button" onClick={() => void copyText(buildAiContext(draft, allNotes), "Teljes AI átadó blokk vágólapra másolva.")} className="rounded-2xl border border-lime-300/35 bg-lime-300/10 px-4 py-3 text-sm font-black text-lime-100 hover:bg-lime-300/15">
-                    Másolás
-                  </button>
-                </div>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-xs font-semibold leading-6 text-slate-300">{buildAiContext(draft, allNotes)}</pre>
-              </section>
-
-              <div className="flex flex-col gap-3 border-t border-white/10 pt-5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-3">
-                  <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />} {isNew ? "Új bejegyzés mentése" : "Módosítás mentése"}
-                  </button>
-                  {!isNew && selectedId && draft.status !== "archived" && (
-                    <button type="button" onClick={() => void runAction("archive", { noteId: selectedId })} className="inline-flex items-center gap-2 rounded-2xl border border-amber-300/35 bg-amber-300/10 px-5 py-3 text-sm font-black text-amber-100 hover:bg-amber-300/15">
-                      <Archive size={17} /> Archiválás
-                    </button>
-                  )}
-                  {!isNew && selectedId && draft.status === "archived" && (
-                    <button type="button" onClick={() => void runAction("restore", { noteId: selectedId })} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-300/10 px-5 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-300/15">
-                      <Archive size={17} /> Visszaállítás
-                    </button>
-                  )}
-                  {!isNew && selectedId && (
-                    <button type="button" onClick={() => { if (window.confirm("Biztosan végleg törlöd ezt a fejlesztési naplóbejegyzést? Biztonságosabb az archiválás.")) void runAction("remove", { noteId: selectedId }); }} className="inline-flex items-center gap-2 rounded-2xl border border-red-300/35 bg-red-300/10 px-5 py-3 text-sm font-black text-red-100 hover:bg-red-300/15">
-                      <Trash2 size={17} /> Törlés
-                    </button>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-xs font-semibold leading-5 text-slate-500">
-                  <FileText className="mr-2 inline text-cyan-200" size={15} />
-                  Tárolás: <span className="font-mono text-slate-300">{storageFile || ".dimprover/dev-notes/dev-notes.json"}</span>
-                </div>
-              </div>
-            </form>
-          </section>
-        </section>
-      </div>
-    </main>
+            <div className="benjadmin-dev-note-actions">
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void copyText(buildAiContext(draft, allNotes), "AI kontextus vágólapra másolva.")}><ClipboardCopy size={15} /> AI átadó másolása</button>
+              {!isNew && selectedId && draft.status !== "archived" ? <button type="button" className="benjadmin-data-warning-action" onClick={() => void runAction("archive", { noteId: selectedId })}><Archive size={15} /> Archiválás</button> : null}
+              {!isNew && selectedId && draft.status === "archived" ? <button type="button" className="benjadmin-data-secondary-action" onClick={() => void runAction("restore", { noteId: selectedId })}><Archive size={15} /> Visszaállítás</button> : null}
+              {!isNew && selectedId ? <button type="button" className="benjadmin-data-danger-action" onClick={() => { if (window.confirm("Biztosan végleg törlöd ezt a fejlesztési naplóbejegyzést? Biztonságosabb az archiválás.")) void runAction("remove", { noteId: selectedId }); }}><Trash2 size={15} /> Törlés</button> : null}
+              <button type="submit" className="benjadmin-data-primary-action" disabled={saving}>{saving ? <Loader2 className="is-spinning" size={15} /> : <Save size={15} />}{isNew ? "Új bejegyzés mentése" : "Módosítás mentése"}</button>
+            </div>
+          </form>
+        </aside>
+      ) : null}
+    </>
   );
 }
