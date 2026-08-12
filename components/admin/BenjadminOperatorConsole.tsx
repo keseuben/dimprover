@@ -31,6 +31,7 @@ import type { DevProject, DevVersion, DevWorkSession } from "@/app/lib/dev-cente
 import BenjadminEntitlementsPanel from "./BenjadminEntitlementsPanel";
 import BenjadminControlPlanePanel from "./BenjadminControlPlanePanel";
 import BenjadminPartnerDevelopmentPanel from "./BenjadminPartnerDevelopmentPanel";
+import FounderFocusReminder from "./FounderFocusReminder";
 import { BenjadminBarChart, BenjadminSparklineCard } from "./BenjadminDashboardKit";
 
 type OperatorView = "overview" | "control" | "partners" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
@@ -466,6 +467,8 @@ export default function BenjadminOperatorConsole({ onLogout, devProjects, devVer
           <button type="button" className="operator-icon-action" onClick={() => void load(false)} disabled={busy} title="Frissítés"><RefreshCw size={18} className={busy ? "is-spinning" : ""} /></button>
         </div>
       </header>
+
+      <FounderFocusReminder />
 
       {error ? <div className="operator-alert is-danger"><CircleAlert size={16} /> {error}</div> : null}
 

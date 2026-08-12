@@ -498,3 +498,33 @@ Működés:
 - vizuális teszt eredménye és képei: `/srv/dimpro-dev/logs/founder-focus-2026-08-12T18-24-27-921Z`;
 - rollback backup: `/srv/dimpro-dev/artifacts/backups/founder-focus-20260812-201156`;
 - a build egy korábban ismert Turbopack NFT trace warningot jelez az infrastruktúra-summary route környezetében; a build ettől sikeres.
+
+### 2026-08-12 – Alapítói fókusz kezdőlap + olvashatóság
+
+- Az óránként váltó Alapítói fókusz közös `FounderFocusReminder` komponenssé alakult.
+- Ugyanaz a fókuszsáv most már a BENJADMIN fő `Fejlesztési és üzemeltetési vezérlőpult` fejléc alatt és a `/admin/dev` Fejlesztési Központban is megjelenik.
+- A fókuszsáv fő címe 14 px, az alatta lévő magyarázó szöveg 12 px méretre nőtt.
+- A teljes üzenettár szélesebb (max. 900 px), a fejléc, alapelv-kártyák, üzenetcímek és magyarázatok nagyobb, olvashatóbb tipográfiát kaptak.
+- A közös komponens miatt a 15 üzenet tartalma, az óránkénti váltás és az aktuális kiemelés mindkét felületen azonos marad.
+
+Érintett fájlok:
+- `components/admin/FounderFocusReminder.tsx`
+- `components/admin/BenjadminOperatorConsole.tsx`
+- `app/admin/dev/page.tsx`
+- `app/admin/admin-theme.css`
+- `DIMPROVER_PRODUCT_DOCS/123_dimpro_benjadmin_b3_m0_prod_dev_migration_20260809.md`
+
+#### Ellenőrzés – kezdőlap + olvashatóság
+
+- célzott ESLint (`app/admin/dev/page.tsx`, `BenjadminOperatorConsole.tsx`, `FounderFocusReminder.tsx`): PASS;
+- teljes `npx tsc --noEmit`: PASS;
+- teljes `npm run lint`: PASS, 0 error, 104 meglévő warning;
+- teljes koordinált `npm run build`: PASS;
+- végső build ID: `suG3U-nz0VkDhP-_TFt5Z`;
+- standalone asset check: 142 statikus chunk PASS;
+- PM2 `dimpro-benjadmin-operator-ui-v2-dev`: újraindítva, online;
+- browser smoke / tipográfiai ellenőrzés: 42/42 PASS;
+- ellenőrzött nézetek: `/admin` és `/admin/dev`, desktop 1600×900 és mobil 390×844;
+- ellenőrzött számított méretek: fókuszcím ≥14 px, fókuszleírás ≥12 px, üzenettár fejléc ≥18 px, üzenetcím ≥13 px, üzenetleírás ≥12 px;
+- tesztképek és eredmény: `/srv/dimpro-dev/logs/founder-focus-home-2026-08-12`;
+- rollback backup: `/srv/dimpro-dev/artifacts/backups/founder-focus-home-20260812-203015`.
