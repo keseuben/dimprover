@@ -1,12 +1,14 @@
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DevEngineOperation, DevEngineScope } from "./engine-types";
+import { internalRepositoryProjectAllowed } from "./internal-repository-binding";
 
 export type DevelopmentPlane = "INTERNAL" | "PARTNER";
 export type PartnerAccessLevel = "DENY" | "READ" | "WRITE" | "EXECUTE";
 export type PartnerResourceType = "repository" | "path" | "secret" | "database" | "storage" | "engine" | "environment" | "deploy_target";
 
 export const INTERNAL_WORKTREE_ROOT = "/srv/dimpro-dev/worktrees";
+export const INTERNAL_REPOSITORY_ROOT = "/srv/dimpro-dev/repositories";
 export const PARTNER_WORKTREE_ROOT = "/srv/partner-dev/worktrees";
 export const PARTNER_REPOSITORY_ROOT = "/srv/partner-dev/repositories";
 export const OUTMINAI_WORKER_ID = "worker_outminai";
@@ -28,7 +30,7 @@ type PartnerProjectRow = {
 
 type WorkerRow = { id: string; code: string; status?: string | null };
 
-type RepositoryRow = { id: string; project_id: string; dev_path?: string | null; status?: string | null };
+type RepositoryRow = { id: string; project_id: string; dev_path?: string | null; status?: string | null; metadata?: JsonRecord | null };
 
 function dbFailure(message: string, error: { code?: string; message?: string; details?: string; hint?: string } | null): never {
   const schemaMissing = error?.code === "PGRST205" || error?.code === "42P01";
@@ -108,7 +110,7 @@ export async function assertWorkerProjectIsolation(db: SupabaseClient, input: { 
 
 async function repositoryRow(db: SupabaseClient, repositoryId: string) {
   if (!repositoryId) throw new PartnerIsolationPolicyError("Partner művelethez repository kötelező.", "PARTNER_REPOSITORY_REQUIRED", 403);
-  const { data, error } = await db.from("dev_center_repositories").select("id,project_id,dev_path,status").eq("id", repositoryId).maybeSingle();
+  const { data, error } = await db.from("dev_center_repositories").select("id,project_id,dev_path,status,metadata").eq("id", repositoryId).maybeSingle();
   if (error) dbFailure("A repository policy ellenőrzése sikertelen.", error);
   if (!data) throw new PartnerIsolationPolicyError("A repository nem található.", "PARTNER_REPOSITORY_NOT_FOUND", 404);
   return data as RepositoryRow;
@@ -158,8 +160,43 @@ export async function assertPartnerResourceAccess(db: SupabaseClient, input: {
   return { ...isolation, access: strongest };
 }
 
+export async function resolveProjectRepositoryId(db: SupabaseClient, projectId: string) {
+  const planeInfo = await resolveDevelopmentPlane(db, projectId);
+  if (planeInfo.plane === "PARTNER") {
+    const { data, error } = await db.from("dev_center_repositories").select("id,project_id,dev_path,status,metadata").eq("project_id", projectId).eq("status", "active").order("created_at", { ascending: true }).limit(2);
+    if (error) dbFailure("A partner repository-kötés nem olvasható.", error);
+    const rows = (data || []) as RepositoryRow[];
+    if (!rows.length) return null;
+    if (rows.length > 1) throw new PartnerIsolationPolicyError("A partnerprojekthez több aktív repository tartozik; explicit repository választás szükséges.", "PARTNER_REPOSITORY_AMBIGUOUS", 409, { projectId, repositoryIds: rows.map((row) => row.id) });
+    return rows[0].id;
+  }
+
+  const { data, error } = await db.from("dev_center_repositories").select("id,project_id,dev_path,status,metadata").eq("status", "active");
+  if (error) dbFailure("A belső repository-kötés nem olvasható.", error);
+  const matches = ((data || []) as RepositoryRow[]).filter((repository) => internalRepositoryProjectAllowed(repository, projectId));
+  if (!matches.length) return null;
+  if (matches.length > 1) throw new PartnerIsolationPolicyError("A belső projekthez több aktív repository-kötés tartozik; a végrehajtás fail-closed.", "INTERNAL_REPOSITORY_AMBIGUOUS", 409, { projectId, repositoryIds: matches.map((row) => row.id) });
+  return matches[0].id;
+}
+
 export async function assertRepositoryIsolation(db: SupabaseClient, input: { workerId: string; projectId: string; repositoryId: string; required?: PartnerAccessLevel }) {
   const repository = await repositoryRow(db, input.repositoryId);
+  const isolation = await assertWorkerProjectIsolation(db, { workerId: input.workerId, projectId: input.projectId });
+
+  if (isolation.plane === "INTERNAL") {
+    if (!internalRepositoryProjectAllowed(repository, input.projectId)) {
+      throw new PartnerIsolationPolicyError("A repository nincs az adott belső DIMPRO projekthez allowlistelve.", "INTERNAL_REPOSITORY_PROJECT_NOT_BOUND", 403, {
+        projectId: input.projectId, repositoryId: input.repositoryId, repositoryProjectId: repository.project_id,
+      });
+    }
+    const root = path.resolve(INTERNAL_REPOSITORY_ROOT);
+    const devPath = repository.dev_path ? path.resolve(repository.dev_path) : "";
+    if (!devPath || (devPath !== root && !devPath.startsWith(`${root}${path.sep}`))) {
+      throw new PartnerIsolationPolicyError("A belső repository dev_path kívül esik a DIMPRO DEV repository gyökéren.", "INTERNAL_REPOSITORY_PATH_DENIED", 403, { repositoryId: input.repositoryId, devPath: repository.dev_path || null, root });
+    }
+    return { ...isolation, access: "EXECUTE" as const, repository };
+  }
+
   if (repository.project_id !== input.projectId) {
     throw new PartnerIsolationPolicyError("A repository nem a session partnerprojektjéhez tartozik.", "PARTNER_REPOSITORY_PROJECT_MISMATCH", 403, {
       projectId: input.projectId,
@@ -174,17 +211,15 @@ export async function assertRepositoryIsolation(db: SupabaseClient, input: { wor
     resourceRef: input.repositoryId,
     required: input.required || "WRITE",
   });
-  if (access.plane === "PARTNER") {
-    const root = path.resolve(PARTNER_REPOSITORY_ROOT);
-    const devPath = repository.dev_path ? path.resolve(repository.dev_path) : "";
-    if (!devPath || (devPath !== root && !devPath.startsWith(`${root}${path.sep}`))) {
-      throw new PartnerIsolationPolicyError(
-        "A partner repository dev_path kívül esik a Partner Development Plane repository gyökéren.",
-        "PARTNER_REPOSITORY_PATH_DENIED",
-        403,
-        { repositoryId: input.repositoryId, devPath: repository.dev_path || null, root },
-      );
-    }
+  const root = path.resolve(PARTNER_REPOSITORY_ROOT);
+  const devPath = repository.dev_path ? path.resolve(repository.dev_path) : "";
+  if (!devPath || (devPath !== root && !devPath.startsWith(`${root}${path.sep}`))) {
+    throw new PartnerIsolationPolicyError(
+      "A partner repository dev_path kívül esik a Partner Development Plane repository gyökéren.",
+      "PARTNER_REPOSITORY_PATH_DENIED",
+      403,
+      { repositoryId: input.repositoryId, devPath: repository.dev_path || null, root },
+    );
   }
   return { ...access, repository };
 }

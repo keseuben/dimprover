@@ -30,7 +30,7 @@ try {
   const response = await fetch(`${apiBase}/api/dev/console/messages`, {
     method: "POST",
     headers: { host, "x-dimpro-license-admin-key": adminKey, "content-type": "application/json" },
-    body: JSON.stringify({ text: `${marker} Ármin-AI teszt task`, target: "ARMINAI", projectId: "project_dimprover", createTask: true, kind: "INSTRUCTION" }),
+    body: JSON.stringify({ text: `${marker} Ármin-AI teszt task`, target: "ARMINAI", projectId: "project_drive_drop", createTask: true, kind: "INSTRUCTION" }),
   });
   const payload = await response.json().catch(() => ({}));
   taskId = payload?.task?.id || "";
@@ -40,8 +40,8 @@ try {
   check("Natív executor hiányát őszintén jelenti", payload?.dispatch?.stage === "EXECUTOR_NOT_CONFIGURED" && payload?.dispatch?.executorConfigured === false, JSON.stringify(payload?.dispatch || {}));
   check("Ben-AI koordinátor válasz azonnal létrejött", payload?.coordinatorMessage?.author === "BENAI" && payload?.coordinatorMessage?.kind === "TASK_ASSIGNMENT", JSON.stringify(payload?.coordinatorMessage || {}));
   check("ChatGPT/MCP átadó prompt DEV-only és taskhoz kötött", typeof payload?.dispatch?.handoffPrompt === "string" && payload.dispatch.handoffPrompt.includes(taskId) && /DEV-only/.test(payload.dispatch.handoffPrompt) && /PROD módosítás nincs/.test(payload.dispatch.handoffPrompt), payload?.dispatch?.handoffPrompt || "");
-  const taskRead = await db.from("dev_center_tasks").select("id,project_id,requested_worker_id,status,metadata").eq("id", taskId).single();
-  check("DB task forrása BENJADMIN_DEVELOPER_CONSOLE", !taskRead.error && taskRead.data?.project_id === "project_dimprover" && taskRead.data?.requested_worker_id === "worker_arminai" && taskRead.data?.status === "queued" && taskRead.data?.metadata?.origin === "BENJADMIN_DEVELOPER_CONSOLE", JSON.stringify(taskRead.data || {}));
+  const taskRead = await db.from("dev_center_tasks").select("id,project_id,repository_id,requested_worker_id,status,metadata").eq("id", taskId).single();
+  check("DB task a Drive/Drop logikai projekthez ugyanazon repo_dimprover monorepo ID-val kötődik", !taskRead.error && taskRead.data?.project_id === "project_drive_drop" && taskRead.data?.repository_id === "repo_dimprover" && taskRead.data?.requested_worker_id === "worker_arminai" && taskRead.data?.status === "queued" && taskRead.data?.metadata?.origin === "BENJADMIN_DEVELOPER_CONSOLE", JSON.stringify(taskRead.data || {}));
   const worklogRead = await db.from("dev_center_live_worklog").select("source,worker_code,summary,metadata").eq("task_id", taskId);
   check("BENJADMIN és Ben-AI ugyanahhoz a taskhoz auditálhatóan kapcsolódik", !worklogRead.error && (worklogRead.data || []).some((row) => row.source === "benjadmin") && (worklogRead.data || []).some((row) => row.source === "benai" && row.worker_code === "BENAI"), JSON.stringify(worklogRead.data || []));
   console.log(JSON.stringify({ ok: true, passed, failed: 0 }, null, 2));

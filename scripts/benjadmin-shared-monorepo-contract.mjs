@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+const mod = await import(`../app/lib/dev-center/internal-repository-binding.ts?contract=${Date.now()}`);
+let passed=0; const check=(name,fn)=>{fn();passed+=1;console.log(`PASS ${name}`)};
+const shared={project_id:"project_dimprover",metadata:{sharedInternalMonorepo:true,internalProjectIds:["project_dimprover","project_drive_drop","project_fajlmuhely"]}};
+check("Repository saját projektje mindig engedett",()=>assert.equal(mod.internalRepositoryProjectAllowed(shared,"project_dimprover"),true));
+check("Allowlistelt Drive/Drop projekt engedett",()=>assert.equal(mod.internalRepositoryProjectAllowed(shared,"project_drive_drop"),true));
+check("Allowlistelt Fájlműhely projekt engedett",()=>assert.equal(mod.internalRepositoryProjectAllowed(shared,"project_fajlmuhely"),true));
+check("Ismeretlen belső projekt tiltott",()=>assert.equal(mod.internalRepositoryProjectAllowed(shared,"project_unknown"),false));
+check("Shared flag nélkül idegen projekt tiltott",()=>assert.equal(mod.internalRepositoryProjectAllowed({project_id:"project_dimprover",metadata:{internalProjectIds:["project_drive_drop"]}},"project_drive_drop"),false));
+check("Üres metadata fail-closed",()=>assert.equal(mod.internalRepositoryProjectAllowed({project_id:"project_dimprover",metadata:{}},"project_drive_drop"),false));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

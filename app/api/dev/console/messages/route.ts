@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
-import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages } from "@/app/lib/dev-center/developer-console";
+import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { buildBenAiDispatch } from "@/app/lib/dev-center/benai-dispatch";
 
 export const dynamic = "force-dynamic";
@@ -39,8 +39,11 @@ export async function POST(request: NextRequest) {
     if (body.createTask && body.projectId) {
       const requestedWorkerId = Object.prototype.hasOwnProperty.call(workerMap, target) ? workerMap[target] : null;
       const title = instruction.split(/\r?\n/)[0].slice(0, 180);
+      const repositoryId = await resolveDeveloperConsoleRepositoryId(body.projectId);
+      if (!repositoryId) return json({ ok: false, error: "A kiválasztott fejlesztési projekthez nincs aktív repository-kötés. A task biztonságosan nem indítható.", code: "DEV_CONSOLE_REPOSITORY_BINDING_REQUIRED" }, 409);
       const created = await createDevEngineTask({
         projectId: body.projectId,
+        repositoryId,
         title,
         description: instruction,
         priority: 70,

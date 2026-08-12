@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBenAiBridgeStatus } from "./benai-dispatch";
+import { resolveProjectRepositoryId } from "./partner-isolation";
 
 const execFileAsync = promisify(execFile);
 
@@ -196,6 +197,10 @@ export async function createBenjadminConsoleMessage(input: { text: string; targe
   return mapWorklogRow(result.data as Row);
 }
 
+
+export async function resolveDeveloperConsoleRepositoryId(projectId: string) {
+  return resolveProjectRepositoryId(getClient(), projectId);
+}
 
 export async function createBenAiConsoleMessage(input: { summary: string; detail?: string; taskId?: string | null; projectId?: string | null; metadata?: Record<string, unknown> }) {
   const summary = text(input.summary).slice(0, 4000);

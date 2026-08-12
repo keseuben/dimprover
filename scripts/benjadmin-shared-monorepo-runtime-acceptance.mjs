@@ -1,0 +1,20 @@
+import fs from "node:fs";
+import { createClient } from "@supabase/supabase-js";
+try { process.loadEnvFile?.(".env.local"); } catch {}
+const key=fs.readFileSync(".dimprover/license/admin-key.txt","utf8").trim();
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.trim(); const service=process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+if(!url||!service) throw new Error("DEV Supabase env missing");
+const db=createClient(url,service,{auth:{autoRefreshToken:false,persistSession:false}});
+const api=process.env.BENJADMIN_API_BASE||"http://127.0.0.1:3100"; const host=process.env.BENJADMIN_HOST||"admin.dev.dimpro.hu";
+let passed=0; const check=(name,ok,details="")=>{if(!ok) throw new Error(`${name}: ${details}`);passed+=1;console.log(`PASS ${name}${details?` :: ${details}`:""}`)};
+const repo=await db.from("dev_center_repositories").select("id,project_id,status,dev_path,metadata").eq("id","repo_dimprover").single();
+check("repo_dimprover aktív DEV monorepo",!repo.error&&repo.data?.status==="active"&&repo.data?.dev_path==="/srv/dimpro-dev/repositories/dimprover.git",JSON.stringify(repo.data||{}));
+const ids=repo.data?.metadata?.internalProjectIds||[];
+check("Öt belső logikai projekt ugyanarra a repository ID-ra allowlistelt",repo.data?.metadata?.sharedInternalMonorepo===true&&["project_dimprover","project_dimpro","project_drive_drop","project_fajlmuhely","project_infrastructure"].every(id=>ids.includes(id)),JSON.stringify(ids));
+check("Scope-lock repository ID explicit és közös",repo.data?.metadata?.scopeLockRepositoryId==="repo_dimprover",String(repo.data?.metadata?.scopeLockRepositoryId||""));
+const denied=await fetch(`${api}/api/dev/console/messages`,{method:"POST",headers:{host,"x-dimpro-license-admin-key":key,"content-type":"application/json"},body:JSON.stringify({text:"OUTMIN-INTERNAL-DENY acceptance",target:"OUTMINAI",projectId:"project_drive_drop",createTask:true,kind:"INSTRUCTION"})});
+const deniedPayload=await denied.json().catch(()=>({}));
+check("Outmin-AI belső Drive/Drop task továbbra is tiltott",denied.status===403&&deniedPayload?.code==="PARTNER_OUTMIN_INTERNAL_DENIED",JSON.stringify({status:denied.status,code:deniedPayload?.code}));
+const stray=await db.from("dev_center_tasks").select("id").eq("title","OUTMIN-INTERNAL-DENY acceptance");
+check("Tiltott Outmin task nem jött létre",!stray.error&&(stray.data||[]).length===0,JSON.stringify(stray.data||[]));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));
