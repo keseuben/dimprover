@@ -131,6 +131,8 @@
 .envBadge { color: var(--green); border-color: color-mix(in srgb, var(--green) 42%, var(--border)); }
 .readOnlyBadge { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 42%, var(--border)); }
 .bridgeBadge { min-height: 28px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--violet) 55%, var(--border)); border-radius: 8px; display: inline-flex; align-items: center; color: var(--violet); background: color-mix(in srgb, var(--violet) 8%, var(--surface)); font-size: 10px; font-weight: 900; letter-spacing: .035em; white-space: nowrap; }
+.baselineBadge, .baselineBadgeReady { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; display: inline-flex; align-items: center; color: var(--muted); background: var(--surface); font-size: 10px; font-weight: 900; letter-spacing: .035em; white-space: nowrap; }
+.baselineBadgeReady { border-color: color-mix(in srgb, var(--green) 50%, var(--border)); color: var(--green); background: color-mix(in srgb, var(--green) 7%, var(--surface)); }
 .connectionOk { color: var(--green); }
 .connectionWarn { color: var(--amber); }
 .connectionDanger { color: var(--red); }
@@ -261,6 +263,11 @@
 .workerCard p { margin: 7px 0; color: var(--text-soft); font-size: 11px; line-height: 1.45; }
 .workerFacts { display: grid; gap: 3px; }
 .workerFacts span { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.executorReadinessBox { margin-top: 7px; padding: 8px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 8px; display: grid; gap: 3px; background: color-mix(in srgb, var(--amber) 6%, var(--surface)); }
+.executorReadinessBox[data-ready="true"] { border-color: color-mix(in srgb, var(--green) 50%, var(--border)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); }
+.executorReadinessBox strong { color: var(--text); font-size: 10px; letter-spacing: .06em; }
+.executorReadinessBox span { color: var(--text-soft); font-size: 10px; font-weight: 850; }
+.executorReadinessBox small { color: var(--muted); font-size: 10px; line-height: 1.35; }
 .approvalBox { margin-top: 7px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 7px; background: var(--surface); color: var(--green); }
 .approvalWaiting { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, var(--border)); background: var(--amber-soft); }
 .approvalBox > div { display: grid; gap: 2px; }

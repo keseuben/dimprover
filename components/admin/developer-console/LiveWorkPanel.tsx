@@ -67,6 +67,11 @@ export default function LiveWorkPanel({ live, now, context }: { live: ConsoleLiv
           );
         })}
       </div>
+      <section className={styles.executorReadinessBox} data-ready={context?.executorReadiness?.ready ? "true" : "false"}>
+        <strong>VÉGREHAJTÓ KAPU</strong>
+        <span>{context?.executorReadiness?.repositoryReady ? "Repo ✓" : "Repo ✕"} · {context?.executorReadiness?.baselineReady ? "Baseline ✓" : "Baseline ✕"} · {context?.executorReadiness?.providerConfigured ? "AI provider ✓" : "AI provider —"} · {context?.executorReadiness?.executorConfigured ? "Executor ✓" : "Executor —"}</span>
+        <small>{context?.executorReadiness?.ready ? "Natív worker indításra kész." : context?.executorReadiness?.blockers?.[0] || "Végrehajtási állapot ellenőrzése…"}</small>
+      </section>
       <section className={`${styles.approvalBox} ${pendingApprovals.length ? styles.approvalWaiting : ""}`}>
         {pendingApprovals.length ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}
         <div><strong>{pendingApprovals.length ? `${pendingApprovals.length} döntés / jóváhagyás vár` : "Nincs függő jóváhagyás"}</strong><span>{pendingApprovals.length ? "BENJADMIN beavatkozás szükséges." : "A Control Plane approval queue tiszta."}</span></div>

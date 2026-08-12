@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBenAiBridgeStatus } from "./benai-dispatch";
 import { resolveProjectRepositoryId } from "./partner-isolation";
+import { getInternalExecutorReadiness } from "./internal-executor-readiness";
 
 const execFileAsync = promisify(execFile);
 
@@ -269,6 +270,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     latestProductDoc = docs.filter((name) => /^\d+_.*\.md$/i.test(name)).sort((a, b) => a.localeCompare(b, "hu", { numeric: true })).at(-1) || "";
   } catch { /* dokumentumtár nem elérhető */ }
   const bridge = getBenAiBridgeStatus();
+  const executorReadiness = await getInternalExecutorReadiness(getClient());
   return {
     environment: "DEV",
     productionDefault: "READ_ONLY",
@@ -279,6 +281,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     worktree: root,
     latestProductDoc,
     aiBridge: { mode: bridge.mode, label: bridge.label, providerConfigured: bridge.providerConfigured, executorConfigured: bridge.executorConfigured },
+    executorReadiness,
     generatedAt: new Date().toISOString(),
   };
 }

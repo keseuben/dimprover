@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+const mod = await import(`../app/lib/dev-center/internal-executor-readiness.ts?contract=${Date.now()}`);
+let passed=0; const check=(name,fn)=>{fn();passed+=1;console.log(`PASS ${name}`)};
+const branch=mod.safeWorkerBranchName({workerCode:"ARMINAI",taskId:"dev-task-ABC_123"});
+check("Worker branch deterministic",()=>assert.equal(branch,"worker/arminai/dev-task-abc-123"));
+check("Worker branch nem tartalmaz veszélyes karaktert",()=>assert.match(branch,/^worker\/[a-z0-9-]+\/[a-z0-9-]+$/));
+const path=mod.safeWorkerWorktreePath({workerCode:"JAZMINAI",taskId:"dev-task-XYZ"});
+check("Worktree a belső DEV gyökér alatt marad",()=>assert.equal(path,"/srv/dimpro-dev/worktrees/worker-jazminai-dev-task-xyz"));
+check("Task traversal normalizálva",()=>assert.equal(mod.safeWorkerBranchName({workerCode:"../ARMINAI",taskId:"../../danger"}),"worker/arminai/danger"));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

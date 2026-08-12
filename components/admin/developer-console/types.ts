@@ -105,6 +105,19 @@ export type RuntimeContext = {
   worktree: string;
   latestProductDoc: string;
   aiBridge?: { mode: "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES"; label: string; providerConfigured: boolean; executorConfigured: boolean };
+  executorReadiness?: {
+    ready: boolean;
+    repositoryReady: boolean;
+    repositoryId: string;
+    repositoryPath: string | null;
+    baselineReady: boolean;
+    baselineRef: string;
+    baselineCommit: string | null;
+    providerConfigured: boolean;
+    executorConfigured: boolean;
+    worktreeRoot: string;
+    blockers: string[];
+  };
   generatedAt: string;
 };
 
