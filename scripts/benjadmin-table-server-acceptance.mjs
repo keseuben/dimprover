@@ -81,7 +81,7 @@ try {
     await buttons[driveRowIndex].click();
     await page.waitForSelector('[data-testid="benjadmin-infrastructure-drawer"]', { timeout: 10000 });
     const storageText = await page.$eval('[data-testid="benjadmin-infrastructure-drawer"]', (drawer) => drawer.textContent || "");
-    check("Drive S3 részletező bucket, objektumszám és DIMPRO keret adatot mutat", storageText.includes("Objektumtárhely") && storageText.includes("Bucket") && storageText.includes("Objektumok") && storageText.includes("DIMPRO tárhelykeret"), storageText.slice(0, 500));
+    check("Drive S3 részletező bucket, objektumszám, DIMPRO hard keret és Hetzner báziskeret adatot mutat", storageText.includes("Objektumtárhely") && storageText.includes("Bucket") && storageText.includes("Objektumok") && storageText.includes("DIMPRO hard keret") && storageText.includes("Hetzner báziskeret") && storageText.includes("Bucket technikai limit"), storageText.slice(0, 800));
     await page.click('[data-testid="benjadmin-infrastructure-drawer"] header button');
   } else {
     check("Drive S3 részletező ellenőrizhető", false, "Drive sor hiányzik");
@@ -105,6 +105,7 @@ try {
 
   for (const viewport of [{ name: "tablet", width: 768, height: 1024 }, { name: "mobil", width: 390, height: 844 }]) {
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
     const state = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth, table: Boolean(document.querySelector('[data-testid="benjadmin-infrastructure-table"]')) }));
     check(`${viewport.name} nincs teljes oldali vízszintes túlcsordulás`, state.scrollWidth <= state.clientWidth + 1, JSON.stringify(state));
     check(`${viewport.name} infrastruktúra tábla megmarad`, state.table, JSON.stringify(state));

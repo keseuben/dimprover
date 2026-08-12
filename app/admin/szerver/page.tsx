@@ -69,6 +69,11 @@ type InfrastructureStorage = {
   freeBytes?: number | null;
   usagePercent?: number | null;
   truncated?: boolean;
+  provider?: string | null;
+  includedStorageBytes?: number | null;
+  bucketHardLimitBytes?: number | null;
+  includedScope?: string | null;
+  billingModel?: string | null;
   note?: string;
 };
 
@@ -77,6 +82,16 @@ type InfrastructureSummary = {
   collectedAt?: string;
   servers?: InfrastructureServer[];
   storages?: InfrastructureStorage[];
+  storageBilling?: {
+    provider?: string | null;
+    scope?: string | null;
+    includedStorageBytes?: number | null;
+    bucketHardLimitBytes?: number | null;
+    observedUsedBytes?: number | null;
+    observedIncludedRemainingBytes?: number | null;
+    note?: string | null;
+    sourceCheckedAt?: string | null;
+  } | null;
 };
 
 type MonitorRow = {
@@ -453,7 +468,8 @@ export default function ServerMonitorPage() {
 
             {selected.kind === "storage" ? (() => {
               const storage = infrastructure?.storages?.find((item) => `STORAGE_${item.code}` === selected.id);
-              return <section className="benjadmin-data-form-section"><header><strong>Objektumtárhely</strong><span>{storage?.online ? "S3 kapcsolat rendben" : "Ellenőrizendő"}</span></header><div className="benjadmin-infra-service-lines"><span>Bucket <b>{storage?.bucket || "—"}</b></span><span>Endpoint <b>{storage?.endpoint || "—"}</b></span><span>Objektumok <b>{storage?.objectCount != null ? `${storage.objectCount}${storage.truncated ? "+" : ""} db` : "—"}</b></span><span>DIMPRO tárhelykeret <b>{storage?.capacityBytes ? formatBytes(storage.capacityBytes) : "Nincs beállítva"}</b></span></div></section>;
+              const hetzner = storage?.provider === "HETZNER_OBJECT_STORAGE";
+              return <section className="benjadmin-data-form-section"><header><strong>Objektumtárhely</strong><span>{storage?.online ? "S3 kapcsolat rendben" : "Ellenőrizendő"}</span></header><div className="benjadmin-infra-service-lines"><span>Bucket <b>{storage?.bucket || "—"}</b></span><span>Endpoint <b>{storage?.endpoint || "—"}</b></span><span>Objektumok <b>{storage?.objectCount != null ? `${storage.objectCount}${storage.truncated ? "+" : ""} db` : "—"}</b></span><span>Foglalt <b>{storage?.usedBytes != null ? formatBytes(storage.usedBytes) : "—"}</b></span><span>DIMPRO hard keret <b>{storage?.capacityBytes ? formatBytes(storage.capacityBytes) : "Nincs beállítva"}</b></span>{hetzner && storage?.includedStorageBytes ? <span>Hetzner báziskeret <b>{formatBytes(storage.includedStorageBytes)} · account-szinten közös</b></span> : null}{hetzner && storage?.bucketHardLimitBytes ? <span>Bucket technikai limit <b>{formatBytes(storage.bucketHardLimitBytes)}</b></span> : null}</div>{hetzner ? <p className="benjadmin-data-inline-note">Az 1 TB báziskeret nem hard bucket-kapacitás: a Hetzner a tárolást account-szinten, TB-óra alapon számolja; a többlet pay-as-you-go.</p> : null}</section>;
             })() : null}
           </div>
         </aside>

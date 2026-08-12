@@ -160,6 +160,11 @@ type InfrastructureStorage = {
   usagePercent?: number | null;
   objectCount?: number | null;
   truncated?: boolean;
+  provider?: string | null;
+  includedStorageBytes?: number | null;
+  bucketHardLimitBytes?: number | null;
+  includedScope?: string | null;
+  billingModel?: string | null;
   note: string;
 };
 
@@ -168,6 +173,16 @@ type InfrastructureSummary = {
   collectedAt?: string;
   servers: InfrastructureServer[];
   storages: InfrastructureStorage[];
+  storageBilling?: {
+    provider?: string | null;
+    scope?: string | null;
+    includedStorageBytes?: number | null;
+    bucketHardLimitBytes?: number | null;
+    observedUsedBytes?: number | null;
+    observedIncludedRemainingBytes?: number | null;
+    note?: string | null;
+    sourceCheckedAt?: string | null;
+  } | null;
 };
 
 type TeamMember = {
@@ -595,9 +610,12 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
 
           {infrastructureStorages.map((storage) => {
             const capacityKnown = typeof storage.capacityBytes === "number" && storage.capacityBytes > 0;
+            const hetznerIncluded = storage.provider === "HETZNER_OBJECT_STORAGE" && typeof storage.includedStorageBytes === "number";
             const usageDetail = capacityKnown
               ? `${formatBytes(storage.usedBytes)} / ${formatBytes(storage.capacityBytes)} · szabad: ${formatBytes(storage.freeBytes)}`
-              : `${formatBytes(storage.usedBytes)} foglalt · a DIMPRO tárhelykeret még nincs konfigurálva`;
+              : hetznerIncluded
+                ? `${formatBytes(storage.usedBytes)} foglalt · ${formatBytes(storage.includedStorageBytes)} közös account-báziskeret`
+                : `${formatBytes(storage.usedBytes)} foglalt · DIMPRO hard keret nincs beállítva`;
             return (
               <article className="benjadmin-team-screen__infra-card is-storage" key={storage.code} data-testid={`infra-storage-${storage.code.toLowerCase()}`}>
                 <header><div><HardDrive size={16} /><strong>{storage.label}</strong></div><span className={storage.online ? "is-ok" : "is-pending"}>{storage.online ? "ÉLŐ" : "ELLENŐRIZENDŐ"}</span></header>
@@ -605,7 +623,9 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
                 <UsageBar label="Tárhelyfoglaltság" value={storage.usagePercent} detail={usageDetail} />
                 <div className="benjadmin-team-screen__infra-facts">
                   <span><Database size={13} /> Foglalt: <b>{storage.usedBytes != null ? formatBytes(storage.usedBytes) : "—"}</b></span>
-                  <span><HardDrive size={13} /> Teljes keret: <b>{capacityKnown ? formatBytes(storage.capacityBytes) : "nincs beállítva"}</b></span>
+                  <span><HardDrive size={13} /> DIMPRO hard keret: <b>{capacityKnown ? formatBytes(storage.capacityBytes) : "nincs beállítva"}</b></span>
+                  {hetznerIncluded ? <span><Database size={13} /> Hetzner báziskeret: <b>{formatBytes(storage.includedStorageBytes)} közös</b></span> : null}
+                  {storage.bucketHardLimitBytes ? <span><HardDrive size={13} /> Bucket technikai limit: <b>{formatBytes(storage.bucketHardLimitBytes)}</b></span> : null}
                   <span><Activity size={13} /> Objektumok: <b>{storage.objectCount != null ? `${storage.objectCount}${storage.truncated ? "+" : ""} db` : "—"}</b></span>
                   <span><ShieldCheck size={13} /> S3 kapcsolat: <b>{storage.online ? "rendben" : "hiba"}</b></span>
                 </div>

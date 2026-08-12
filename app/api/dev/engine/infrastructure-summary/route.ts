@@ -15,6 +15,25 @@ export const runtime = "nodejs";
 const PROD_URL = "https://license.dimpro.hu/admin/szerver";
 const DB_HOST = "213.160.68.33";
 const DB_PORT = 5432;
+const HETZNER_INCLUDED_STORAGE_BYTES = 1_000_000_000_000;
+const HETZNER_BUCKET_HARD_LIMIT_BYTES = 100_000_000_000_000;
+
+function storageProviderFacts(endpoint: string | null | undefined) {
+  const host = (() => {
+    try { return new URL(endpoint || "").hostname.toLowerCase(); }
+    catch { return ""; }
+  })();
+  if (!host.endsWith(".your-objectstorage.com")) {
+    return { provider: "S3_COMPATIBLE", includedStorageBytes: null, bucketHardLimitBytes: null, includedScope: null, billingModel: null };
+  }
+  return {
+    provider: "HETZNER_OBJECT_STORAGE",
+    includedStorageBytes: HETZNER_INCLUDED_STORAGE_BYTES,
+    bucketHardLimitBytes: HETZNER_BUCKET_HARD_LIMIT_BYTES,
+    includedScope: "ACCOUNT_SHARED",
+    billingModel: "BASE_PLUS_PAY_AS_YOU_GO",
+  };
+}
 
 function configuredQuotaBytes(name: "DIMPRO_DRIVE_S3_QUOTA_BYTES" | "DIMPRO_DROP_S3_QUOTA_BYTES") {
   const parsed = Number(process.env[name]?.trim() || "");
@@ -137,7 +156,7 @@ async function inspectDriveStorage() {
   const config = getDriveObjectStorageConfig();
   const safe = getDriveObjectStorageSafeStatus(config);
   if (!safe.storageConfigured) {
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: safe.warning };
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, ...storageProviderFacts(config.s3?.endpoint || null), note: safe.warning };
   }
   try {
     let continuationToken: string | null = null;
@@ -153,9 +172,10 @@ async function inspectDriveStorage() {
       if (!result.truncated || !continuationToken) break;
     }
     const quota = configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES");
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a teljes méret a DIMPRO-ban konfigurált tárhelykeret." : "S3 kapcsolat rendben; a szolgáltatói S3 API nem ad fix bucket-kapacitást, DIMPRO tárhelykeret még nincs konfigurálva." };
+    const providerFacts = storageProviderFacts(config.s3?.endpoint || null);
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), ...providerFacts, note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a DIMPRO belső bucket-keret konfigurálva van." : providerFacts.provider === "HETZNER_OBJECT_STORAGE" ? "Hetzner Object Storage: a bázisdíj 1 TB közös account-szintű tárolási kvótát tartalmaz; ez nem bucket hard limit. A bucket technikai felső korlátja 100 TB, a többlet pay-as-you-go." : "S3 kapcsolat rendben; fix DIMPRO bucket-keret nincs konfigurálva." };
   } catch (error) {
-    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
+    return { code: "DRIVE", label: "DIMPRO Drive tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DRIVE_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, ...storageProviderFacts(config.s3?.endpoint || null), note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
   }
 }
 
@@ -163,7 +183,7 @@ async function inspectDropStorage() {
   const config = getDropStorageConfig();
   const safe = getDropStorageSafeStatus(config);
   if (!safe.storageConfigured || config.provider !== "s3-compatible") {
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: "A Drop S3 tárhely nincs teljesen konfigurálva." };
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, ...storageProviderFacts(config.s3?.endpoint || null), note: "A Drop S3 tárhely nincs teljesen konfigurálva." };
   }
   try {
     let continuationToken: string | null = null;
@@ -179,9 +199,10 @@ async function inspectDropStorage() {
       if (!result.truncated || !continuationToken) break;
     }
     const quota = configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES");
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a teljes méret a DIMPRO-ban konfigurált tárhelykeret." : "S3 kapcsolat rendben; a szolgáltatói S3 API nem ad fix bucket-kapacitást, DIMPRO tárhelykeret még nincs konfigurálva." };
+    const providerFacts = storageProviderFacts(config.s3?.endpoint || null);
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: true, usedBytes, objectCount, truncated, ...storageCapacity(usedBytes, quota), ...providerFacts, note: truncated ? "A kijelzett foglaltság legfeljebb 10 000 objektum összegzése." : quota ? "S3 kapcsolat rendben; a DIMPRO belső bucket-keret konfigurálva van." : providerFacts.provider === "HETZNER_OBJECT_STORAGE" ? "Hetzner Object Storage: a bázisdíj 1 TB közös account-szintű tárolási kvótát tartalmaz; ez nem bucket hard limit. A bucket technikai felső korlátja 100 TB, a többlet pay-as-you-go." : "S3 kapcsolat rendben; fix DIMPRO bucket-keret nincs konfigurálva." };
   } catch (error) {
-    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
+    return { code: "DROP", label: "DIMPRO Drop tárhely", endpoint: config.s3?.endpoint || null, bucket: config.bucket, online: false, usedBytes: null, objectCount: null, truncated: false, capacityBytes: configuredQuotaBytes("DIMPRO_DROP_S3_QUOTA_BYTES"), freeBytes: null, usagePercent: null, ...storageProviderFacts(config.s3?.endpoint || null), note: error instanceof Error ? error.message.slice(0, 180) : "S3 ellenőrzési hiba" };
   }
 }
 
@@ -198,9 +219,22 @@ export async function GET(request: NextRequest) {
   const productionSample = sampleResource(snapshot?.production, snapshot?.sampledAt || null);
   const databaseSample = sampleResource(snapshot?.database, snapshot?.sampledAt || null);
 
+  const storageUsedBytes = [driveStorage, dropStorage].reduce((sum, item) => sum + (typeof item.usedBytes === "number" ? item.usedBytes : 0), 0);
+  const hetznerDetected = [driveStorage, dropStorage].some((item) => item.provider === "HETZNER_OBJECT_STORAGE");
+
   return NextResponse.json({
     ok: true,
     collectedAt: new Date().toISOString(),
+    storageBilling: hetznerDetected ? {
+      provider: "HETZNER_OBJECT_STORAGE",
+      scope: "ACCOUNT_SHARED",
+      includedStorageBytes: HETZNER_INCLUDED_STORAGE_BYTES,
+      bucketHardLimitBytes: HETZNER_BUCKET_HARD_LIMIT_BYTES,
+      observedUsedBytes: storageUsedBytes,
+      observedIncludedRemainingBytes: Math.max(0, HETZNER_INCLUDED_STORAGE_BYTES - storageUsedBytes),
+      note: "A 1 TB a Hetzner Object Storage account közös bázisdíjas tárolási kvótája, nem bucket kapacitás. A használat TB-óra alapon számolódik; többlet pay-as-you-go. Bucket technikai limit: 100 TB.",
+      sourceCheckedAt: "2026-08-12",
+    } : null,
     servers: [
       {
         code: "PRODUCTION",
