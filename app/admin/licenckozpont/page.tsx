@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, Bot, Check, Coins, ContactRound, KeyRound, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Ban, BellRing, Bot, Check, Coins, ContactRound, KeyRound, Laptop, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -82,6 +82,21 @@ type LegacyLicenseContacts = {
   secondaryContactPhone: string;
   additionalContacts: LegacyAdditionalContact[];
   updatedAt?: string;
+};
+type LegacyDeviceSummary = {
+  deviceId: string;
+  legacyLicenseId: string;
+  machineHint: string;
+  appId: string;
+  firstActivatedAt: string;
+  lastOnlineCheckAt: string;
+  offlineGraceUntil: string;
+  status: "active" | "blocked";
+  userName: string;
+  organizationUnit: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type DrawerMode = "closed" | "new" | "edit";
@@ -290,6 +305,8 @@ export default function DimproLicenseCenterPage() {
   const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
   const [legacyContacts, setLegacyContacts] = useState<LegacyLicenseContacts[]>([]);
   const [contactDrafts, setContactDrafts] = useState<Record<string, LegacyLicenseContacts>>({});
+  const [legacyDevices, setLegacyDevices] = useState<LegacyDeviceSummary[]>([]);
+  const [deviceDrafts, setDeviceDrafts] = useState<Record<string, LegacyDeviceSummary>>({});
   const [drafts, setDrafts] = useState<Record<string, LicenseDraft>>({});
   const [createDraft, setCreateDraft] = useState<CreateDraft>(initialCreate);
   const [sendDrafts, setSendDrafts] = useState<Record<string, SendDraft>>({});
@@ -309,18 +326,22 @@ export default function DimproLicenseCenterPage() {
   const headers = useMemo(() => ({ "content-type": "application/json", "x-dimpro-license-admin-key": adminKey }), [adminKey]);
 
   const load = useCallback(async (key: string) => {
-    const [licenseResponse, sendResponse, contactResponse] = await Promise.all([
+    const [licenseResponse, sendResponse, contactResponse, deviceResponse] = await Promise.all([
       fetch("/api/dimpro-identity/admin/licenses", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/dimpro-identity/admin/send-entitlements", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/license/admin-contacts", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
+      fetch("/api/license/admin-devices", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
     ]);
-    const [licensePayload, sendPayload, contactPayload] = await Promise.all([licenseResponse.json(), sendResponse.json(), contactResponse.json()]);
+    const [licensePayload, sendPayload, contactPayload, devicePayload] = await Promise.all([licenseResponse.json(), sendResponse.json(), contactResponse.json(), deviceResponse.json()]);
     if (!licenseResponse.ok) throw new Error(licensePayload.error || "A Licencközpont nem tölthető be.");
     if (!sendResponse.ok) throw new Error(sendPayload.error || "A Send-jogosultságok nem tölthetők be.");
     const nextLicenses = licensePayload.licenses || [];
     const nextModules = licensePayload.licenseModules || [];
     const nextContacts: LegacyLicenseContacts[] = contactResponse.ok && contactPayload?.ok && Array.isArray(contactPayload.contacts)
       ? contactPayload.contacts
+      : [];
+    const nextDevices: LegacyDeviceSummary[] = deviceResponse.ok && devicePayload?.ok && Array.isArray(devicePayload.devices)
+      ? devicePayload.devices
       : [];
     setUsers(licensePayload.users || []);
     setOrganizations(licensePayload.organizations || []);
@@ -332,9 +353,12 @@ export default function DimproLicenseCenterPage() {
     setEntitlements(sendPayload.entitlements || []);
     setLegacyContacts(nextContacts);
     setContactDrafts(Object.fromEntries(nextContacts.map((contact) => [contact.legacyLicenseId, { ...contact, additionalContacts: contact.additionalContacts.map((item) => ({ ...item })) }])));
+    setLegacyDevices(nextDevices);
+    setDeviceDrafts(Object.fromEntries(nextDevices.map((device) => [device.deviceId, { ...device }])));
     setDrafts(Object.fromEntries(nextLicenses.map((license: License) => [license.id, licenseDraft(license, nextModules)])));
     setAuthorized("yes");
-    setMessage(contactResponse.ok ? "Identity Core adatok és kapcsolattartók frissítve." : "Identity Core adatok frissítve; a legacy kapcsolattartó bridge jelenleg nem elérhető.");
+    const unavailable = [!contactResponse.ok ? "kapcsolattartók" : "", !deviceResponse.ok ? "gépkötések" : ""].filter(Boolean);
+    setMessage(unavailable.length ? `Identity Core adatok frissítve; nem elérhető legacy bridge: ${unavailable.join(", ")}.` : "Identity Core adatok, kapcsolattartók és gépkötések frissítve.");
   }, []);
 
   useEffect(() => {
@@ -543,6 +567,49 @@ export default function DimproLicenseCenterPage() {
       await load(adminKey);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A kapcsolattartók mentése sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function devicesForLicense(license: License) {
+    if (!license.legacy_license_ref) return [];
+    return legacyDevices.filter((device) => device.legacyLicenseId === license.legacy_license_ref);
+  }
+
+  function updateDeviceDraft(deviceId: string, patch: Partial<LegacyDeviceSummary>) {
+    setDeviceDrafts((current) => {
+      const base = current[deviceId] || legacyDevices.find((device) => device.deviceId === deviceId);
+      if (!base) return current;
+      return { ...current, [deviceId]: { ...base, ...patch } };
+    });
+  }
+
+  async function runDeviceAction(license: License, device: LegacyDeviceSummary, action: "updateMeta" | "setStatus" | "remove", status?: "active" | "blocked") {
+    if (!license.legacy_license_ref || device.legacyLicenseId !== license.legacy_license_ref || busy) {
+      setMessage("A gépkötés csak pontos legacy licenckapcsolat mellett módosítható.");
+      return;
+    }
+    const draft = deviceDrafts[device.deviceId] || device;
+    setBusy(`device:${device.deviceId}:${action}`);
+    try {
+      const response = await fetch("/api/license/admin-devices", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          action,
+          legacyLicenseId: license.legacy_license_ref,
+          deviceId: device.deviceId,
+          ...(action === "updateMeta" ? { userName: draft.userName, organizationUnit: draft.organizationUnit, note: draft.note } : {}),
+          ...(action === "setStatus" ? { status } : {}),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A gépkötés nem módosítható.");
+      setMessage(action === "remove" ? "A gépkötés felszabadítva." : action === "setStatus" ? "A gépkötés státusza mentve." : "A gépkötés leíró adatai mentve.");
+      await load(adminKey);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A gépkötés módosítása sikertelen.");
     } finally {
       setBusy("");
     }
@@ -796,6 +863,7 @@ export default function DimproLicenseCenterPage() {
               const licenseEntitlements = entitlements.filter((entitlement) => entitlement.license_id === selectedLicense.id);
               const contactSource = legacyContactForLicense(selectedLicense);
               const contactDraft = contactSource ? (contactDrafts[contactSource.legacyLicenseId] || contactSource) : null;
+              const licenseDevices = devicesForLicense(selectedLicense);
               const organization = organizations.find((item) => item.id === selectedLicense.owner_organization_id);
               return (
                 <>
@@ -856,6 +924,48 @@ export default function DimproLicenseCenterPage() {
                         </div>
                         <button type="button" className="benjadmin-data-secondary-action is-full" onClick={() => void saveLegacyContacts(selectedLicense)} disabled={busy !== ""}>{busy === `contacts:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Kapcsolattartók mentése</button>
                       </>
+                    )}
+                  </section>
+
+                  <section className="benjadmin-data-form-section benjadmin-license-devices" data-testid="benjadmin-license-devices">
+                    <header><strong><Laptop size={16} /> Gépkötések és aktivált eszközök</strong><span>{licenseDevices.length} / {selectedLicense.max_devices}</span></header>
+                    <div className="benjadmin-data-security-note benjadmin-license-devices__notice">
+                      <Laptop size={17} />
+                      <div>
+                        <strong>Biztonságos gépkötési nézet</strong>
+                        <span>A teljes <code>machineIdHash</code> nem kerül a böngészőbe; csak rövid, maszkolt gépazonosító látható. A metaadat, tiltás/aktiválás és felszabadítás a meglévő legacy licencmotoron keresztül történik, auditálva. A státuszváltás és felszabadítás a meglévő licencváltozás-értesítési szabályokat is követheti.</span>
+                      </div>
+                    </div>
+                    {!selectedLicense.legacy_license_ref ? (
+                      <div className="benjadmin-data-security-note is-warning"><Ban size={17} /><div><strong>Nincs legacy licenckapcsolat</strong><span>Gépkötés csak pontos <code>legacy_license_ref</code> kapcsolat mellett kezelhető.</span></div></div>
+                    ) : licenseDevices.length === 0 ? (
+                      <div className="benjadmin-license-devices__empty">Ehhez a licenchez jelenleg nincs aktivált legacy gép.</div>
+                    ) : (
+                      <div className="benjadmin-data-mini-table-scroll">
+                        <table className="benjadmin-data-mini-table">
+                          <thead><tr><th>Gép</th><th>Használó</th><th>Szervezeti egység</th><th>Megjegyzés</th><th>Alkalmazás</th><th>Aktiválva</th><th>Utolsó ellenőrzés</th><th>Státusz</th><th>Művelet</th></tr></thead>
+                          <tbody>{licenseDevices.map((device) => {
+                            const deviceDraft = deviceDrafts[device.deviceId] || device;
+                            return (
+                              <tr key={device.deviceId}>
+                                <td className="is-mono">{device.machineHint}</td>
+                                <td><input value={deviceDraft.userName} onChange={(event) => updateDeviceDraft(device.deviceId, { userName: event.target.value })} placeholder="Felhasználó" /></td>
+                                <td><input value={deviceDraft.organizationUnit} onChange={(event) => updateDeviceDraft(device.deviceId, { organizationUnit: event.target.value })} placeholder="Szervezeti egység" /></td>
+                                <td><input value={deviceDraft.note} onChange={(event) => updateDeviceDraft(device.deviceId, { note: event.target.value })} placeholder="Megjegyzés" /></td>
+                                <td className="is-mono">{device.appId}</td>
+                                <td>{displayDate(device.firstActivatedAt)}</td>
+                                <td>{displayDate(device.lastOnlineCheckAt)}</td>
+                                <td><BenjadminStatusPill tone={device.status === "active" ? "ok" : "danger"}>{device.status === "active" ? "Aktív" : "Tiltott"}</BenjadminStatusPill></td>
+                                <td><div className="benjadmin-license-devices__actions">
+                                  <button type="button" className="benjadmin-data-row-action" disabled={busy !== ""} onClick={() => void runDeviceAction(selectedLicense, device, "updateMeta")} title="Gépadatok mentése"><Check size={15} /></button>
+                                  <button type="button" className="benjadmin-data-row-action" disabled={busy !== ""} onClick={() => { const next = device.status === "active" ? "blocked" : "active"; if (window.confirm(`Biztosan ${next === "blocked" ? "letiltod" : "aktiválod"} ezt a gépkötést?`)) void runDeviceAction(selectedLicense, device, "setStatus", next); }} title={device.status === "active" ? "Gép tiltása" : "Gép aktiválása"}><Ban size={15} /></button>
+                                  <button type="button" className="benjadmin-data-row-action is-danger" disabled={busy !== ""} onClick={() => { if (window.confirm("Biztosan felszabadítod ezt a gépkötést? A művelet eltávolítja a legacy aktiválást.")) void runDeviceAction(selectedLicense, device, "remove"); }} title="Gépkötés felszabadítása"><Trash2 size={15} /></button>
+                                </div></td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      </div>
                     )}
                   </section>
 

@@ -8792,3 +8792,49 @@
 .benjadmin-license-contacts .benjadmin-data-row-action {
   font-size: 12px !important;
 }
+
+/* BENJADMIN Licencközpont – legacy gépkötések biztonságos bridge */
+.benjadmin-license-devices > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.benjadmin-license-devices > header span,
+.benjadmin-license-devices .benjadmin-data-security-note strong,
+.benjadmin-license-devices .benjadmin-data-security-note span,
+.benjadmin-license-devices .benjadmin-data-security-note code,
+.benjadmin-license-devices .benjadmin-data-mini-table,
+.benjadmin-license-devices .benjadmin-data-mini-table th,
+.benjadmin-license-devices .benjadmin-data-mini-table td,
+.benjadmin-license-devices__empty,
+.benjadmin-license-devices .benjadmin-data-status {
+  font-size: 12px !important;
+}
+.benjadmin-license-devices .benjadmin-data-security-note code {
+  color: var(--admin-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.benjadmin-license-devices__empty {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px dashed var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text-muted);
+  background: var(--admin-surface);
+}
+.benjadmin-license-devices .benjadmin-data-mini-table { min-width: 1080px; }
+.benjadmin-license-devices .benjadmin-data-mini-table input {
+  width: 100%;
+  min-width: 135px;
+  min-height: 32px;
+  padding: 0 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  font-size: 12px;
+}
+.benjadmin-license-devices__actions { display: flex; align-items: center; gap: 5px; }
+.benjadmin-license-devices__actions .benjadmin-data-row-action { min-width: 32px; min-height: 32px; display: inline-grid; place-items: center; }
+.benjadmin-license-devices__actions .benjadmin-data-row-action.is-danger { color: #ef4444; border-color: color-mix(in srgb, #ef4444 34%, var(--admin-border)); }

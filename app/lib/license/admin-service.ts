@@ -256,6 +256,30 @@ export async function getLicenseContactSummaries() {
   return store.licenses.map(publicContactSummary);
 }
 
+function publicDeviceSummary(device: LicenseStore["devices"][number]) {
+  const hash = device.machineIdHash || "";
+  return {
+    deviceId: device.id,
+    legacyLicenseId: device.licenseId,
+    machineHint: hash ? `••••${hash.slice(-8)}` : "••••",
+    appId: device.appId,
+    firstActivatedAt: device.firstActivatedAt,
+    lastOnlineCheckAt: device.lastOnlineCheckAt,
+    offlineGraceUntil: device.offlineGraceUntil,
+    status: device.status,
+    userName: device.userName ?? "",
+    organizationUnit: device.organizationUnit ?? "",
+    note: device.note ?? "",
+    createdAt: device.createdAt,
+    updatedAt: device.updatedAt,
+  };
+}
+
+export async function getLicenseDeviceSummaries() {
+  const store = await readLicenseStore();
+  return store.devices.map(publicDeviceSummary);
+}
+
 export async function updateLicenseContactsAdmin(legacyLicenseId: string, payload: Record<string, unknown>) {
   const store = await readLicenseStore();
   const index = store.licenses.findIndex((license) => license.id === legacyLicenseId);
@@ -605,4 +629,47 @@ export async function applyLicenseAdminAction(payload: unknown) {
   }
 
   return { ok: false, error: "Ismeretlen admin művelet." };
+}
+
+
+export async function applyLicenseDeviceAdminAction(payload: unknown) {
+  if (!isRecord(payload)) return { ok: false as const, error: "Érvénytelen gépkezelési kérés." };
+  const action = requiredString(payload.action);
+  const legacyLicenseId = requiredString(payload.legacyLicenseId);
+  const deviceId = requiredString(payload.deviceId);
+  if (!legacyLicenseId || !deviceId) return { ok: false as const, error: "Hiányzó licenc- vagy gépazonosító." };
+
+  const beforeStore = await readLicenseStore();
+  const device = beforeStore.devices.find((item) => item.id === deviceId && item.licenseId === legacyLicenseId);
+  if (!device) return { ok: false as const, error: "A gépkötés nem található ennél a licencnél." };
+
+  let result;
+  if (action === "updateMeta") {
+    result = await applyLicenseAdminAction({
+      action: "updateDeviceMeta",
+      deviceId,
+      userName: optionalString(payload.userName) ?? "",
+      organizationUnit: optionalString(payload.organizationUnit) ?? "",
+      note: optionalString(payload.note) ?? "",
+    });
+  } else if (action === "setStatus") {
+    result = await applyLicenseAdminAction({
+      action: "setDeviceStatus",
+      deviceId,
+      status: payload.status === "blocked" ? "blocked" : "active",
+    });
+  } else if (action === "remove") {
+    result = await applyLicenseAdminAction({ action: "removeDevice", deviceId });
+  } else {
+    return { ok: false as const, error: "Ismeretlen gépkezelési művelet." };
+  }
+
+  if (!result.ok) return { ok: false as const, error: result.error };
+  const afterStore = await readLicenseStore();
+  const updated = afterStore.devices.find((item) => item.id === deviceId && item.licenseId === legacyLicenseId);
+  return {
+    ok: true as const,
+    removed: action === "remove",
+    device: updated ? publicDeviceSummary(updated) : null,
+  };
 }
