@@ -1,11 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
   ClipboardCopy,
   GitBranch,
   History,
@@ -14,8 +11,11 @@ import {
   RefreshCcw,
   Rocket,
   Save,
+  Search,
   ShieldCheck,
+  X,
 } from "lucide-react";
+import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 
 type ReleaseStage = "dev" | "staging" | "production";
 type ReleaseStatus =
@@ -242,21 +242,6 @@ function draftFromRelease(release: ReleaseRecord): Draft {
   };
 }
 
-function statusClass(status: ReleaseStatus) {
-  if (status === "production_deployed") return "border-emerald-300/35 bg-emerald-400/10 text-emerald-100";
-  if (status === "ready_for_production" || status === "approved") return "border-lime-300/35 bg-lime-400/10 text-lime-100";
-  if (status === "staging_candidate" || status === "dev_testing") return "border-cyan-300/35 bg-cyan-400/10 text-cyan-100";
-  if (status === "blocked" || status === "rolled_back") return "border-red-300/35 bg-red-400/10 text-red-100";
-  if (status === "rollback_ready") return "border-amber-300/35 bg-amber-400/10 text-amber-100";
-  return "border-white/10 bg-white/[0.05] text-slate-200";
-}
-
-function stageStatusClass(status: RuntimeStage["status"]) {
-  if (status === "online") return "border-emerald-300/35 bg-emerald-400/10 text-emerald-100";
-  if (status === "offline") return "border-red-300/35 bg-red-400/10 text-red-100";
-  return "border-amber-300/35 bg-amber-400/10 text-amber-100";
-}
-
 function toggleArray(values: string[], value: string) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
@@ -267,6 +252,15 @@ function requiredChecklistState(release?: ReleaseRecord | null) {
   return { completed, total: required.length, ready: required.length > 0 && completed === required.length };
 }
 
+function releaseStatusTone(status: ReleaseStatus): "default" | "ok" | "warning" | "danger" | "info" {
+  if (status === "production_deployed") return "ok";
+  if (status === "approved" || status === "ready_for_production") return "ok";
+  if (status === "dev_testing" || status === "staging_candidate") return "info";
+  if (status === "rollback_ready") return "warning";
+  if (status === "blocked" || status === "rolled_back") return "danger";
+  return "default";
+}
+
 function Field({ label, helper, children }: { label: string; helper?: string; children: React.ReactNode }) {
   return (
     <label className="block">
@@ -274,16 +268,6 @@ function Field({ label, helper, children }: { label: string; helper?: string; ch
       <div className="mt-2">{children}</div>
       {helper && <span className="mt-2 block text-xs font-semibold leading-5 text-slate-500">{helper}</span>}
     </label>
-  );
-}
-
-function StatCard({ label, value, helper }: { label: string; value: string | number; helper: string }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.16)]">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{value}</p>
-      <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">{helper}</p>
-    </div>
   );
 }
 
@@ -301,9 +285,39 @@ export default function ReleaseCenterPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [isNew, setIsNew] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const selectedRelease = useMemo(() => releases.find((item) => item.id === selectedId) ?? null, [releases, selectedId]);
   const readiness = requiredChecklistState(selectedRelease);
+  const visibleReleases = useMemo(() => {
+    const clean = query.trim().toLowerCase();
+    return releases.filter((release) => {
+      if (statusFilter !== "all" && release.status !== statusFilter) return false;
+      if (!clean) return true;
+      return [release.version, release.title, release.type, release.status, release.sourceStage, release.targetStage, release.summary, ...(release.modules || [])]
+        .some((value) => String(value || "").toLowerCase().includes(clean));
+    });
+  }, [query, releases, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(visibleReleases.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedReleases = visibleReleases.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const stageOverview: RuntimeStage[] = stages.length ? stages : options.stages.map((stage) => ({
+    id: stage.id as ReleaseStage,
+    label: stage.label,
+    processName: "—",
+    status: "unknown",
+    uptime: "—",
+    pid: "—",
+    memory: "—",
+    cpu: "—",
+    buildTime: "—",
+    staticStatus: "unknown",
+    note: "Valós futási adat jelenleg nem érhető el.",
+  }));
 
   async function loadCenter(keyOverride = adminKey) {
     const key = keyOverride.trim();
@@ -415,6 +429,7 @@ export default function ReleaseCenterPage() {
     setSelectedId(release.id);
     setDraft(draftFromRelease(release));
     setIsNew(false);
+    setDrawerOpen(true);
     setMessage("");
   }
 
@@ -422,6 +437,7 @@ export default function ReleaseCenterPage() {
     setSelectedId(null);
     setDraft({ ...emptyDraft, version: createVersionSuggestion() });
     setIsNew(true);
+    setDrawerOpen(true);
     setMessage("");
   }
 
@@ -436,284 +452,171 @@ export default function ReleaseCenterPage() {
 
   if (!authorized && !loading) {
     return (
-      <main className="min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8">
-        <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center">
-          <div className="w-full rounded-[2rem] border border-amber-300/25 bg-slate-950/85 p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-300/75">Védett Release Központ</p>
-            <h1 className="mt-4 text-3xl font-black text-white">Licencadmin belépés szükséges</h1>
-            <p className="mt-4 text-sm leading-7 text-slate-300">A Release Központ csak licencadmin belépés után érhető el.</p>
-            {message && <p className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-100">{message}</p>}
-            <Link href="/admin" className="mt-6 inline-flex rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950">Licencadmin belépés →</Link>
-          </div>
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <ShieldCheck size={22} />
+          <h1>Licencadmin belépés szükséges</h1>
+          <p>{message || "A Release Központ csak aktív BENJADMIN munkamenettel érhető el."}</p>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#06111f] text-white">
-      <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(34,211,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.16)_1px,transparent_1px)] [background-size:54px_54px]" />
-      <div className="relative mx-auto max-w-[1780px] px-5 py-6 sm:px-8 lg:px-10">
-        <header className="mb-7 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <Link href="/admin/dev" className="mb-4 inline-flex items-center gap-2 text-sm font-black text-cyan-200 hover:text-white">
-                <ArrowLeft size={18} /> Vissza a fejlesztői kezdőlapra
-              </Link>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300/80">DIMPROVER belső verziókövetés</p>
-              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] text-white md:text-5xl">Release Központ / Élesítési napló</h1>
-              <p className="mt-3 max-w-4xl text-sm font-semibold leading-7 text-slate-300">
-                DEV → STAGING → PRODUCTION állapotkövetés, release candidate nyilvántartás, checklist, changelog, rollback pont és kézi jóváhagyási folyamat. Az MVP nem végez automatikus élesítést.
-              </p>
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · KIADÁSOK (RELEASE)"
+        title="Release Központ / élesítési napló"
+        description="DEV → STAGING → PRODUCTION nyilvántartás, checklist, changelog és rollback kontroll. A felület nem végez automatikus élesítést."
+        actions={(
+          <>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadCenter()} disabled={loading}>
+              {loading ? <Loader2 className="is-spinning" size={16} /> : <RefreshCcw size={16} />} Frissítés
+            </button>
+            <button type="button" className="benjadmin-data-primary-action" onClick={createNewDraft}><Rocket size={16} /> Új release jelölt</button>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Release bejegyzés" value={stats.total} />
+            <BenjadminMetric label="Aktív" value={stats.active} tone="ok" />
+            <BenjadminMetric label="Élesített" value={stats.production} tone="ok" />
+            <BenjadminMetric label="Blokkolt" value={stats.blocked} tone={stats.blocked ? "danger" : "default"} />
+            <BenjadminMetric label="Legutóbbi verzió" value={stats.latestVersion} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <div className="benjadmin-data-filter-group" aria-label="Release státusz szűrő">
+              {["all", "dev_testing", "staging_candidate", "ready_for_production", "production_deployed", "blocked"].map((status) => (
+                <button key={status} type="button" className={statusFilter === status ? "is-active" : ""} onClick={() => { setStatusFilter(status); setPage(1); }}>
+                  {status === "all" ? "Mind" : optionLabel(options.statuses, status)}
+                </button>
+              ))}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:w-[440px]">
-              <button type="button" onClick={createNewDraft} className="inline-flex items-center justify-center gap-3 rounded-2xl bg-lime-300 px-5 py-4 text-sm font-black text-slate-950 transition hover:bg-lime-200">
-                <Rocket size={18} /> Új release jelölt
-              </button>
-              <button type="button" onClick={() => void loadCenter()} disabled={loading} className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-black text-slate-200 transition hover:border-cyan-300/30 hover:text-white disabled:opacity-50">
-                {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />} Frissítés
-              </button>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Keresés verzió, cím, modul, státusz vagy célkörnyezet alapján" /></label>
+            <div className="benjadmin-data-stage-strip" aria-label="Környezetek állapota">
+              {stageOverview.map((stage) => <span key={stage.id} className={`is-${stage.status}`}>{stage.label}: <b>{stage.status === "online" ? "ONLINE" : stage.status.toUpperCase()}</b></span>)}
             </div>
-          </div>
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{message || `Tárolás: ${storageFile || ".dimprover/release-center/release-center.json"}`}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={visibleReleases.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table" data-testid="benjadmin-release-table">
+            <thead>
+              <tr>
+                <th>Verzió</th>
+                <th>Release cím</th>
+                <th>Típus</th>
+                <th>Státusz</th>
+                <th>Útvonal</th>
+                <th>Modulok</th>
+                <th>Checklist</th>
+                <th>Build / smoke</th>
+                <th>Frissítve</th>
+                <th>Művelet</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedReleases.length === 0 ? (
+                <tr><td colSpan={10} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő release bejegyzés.</td></tr>
+              ) : pagedReleases.map((release) => {
+                const state = requiredChecklistState(release);
+                return (
+                  <tr key={release.id}>
+                    <td className="is-mono"><strong>{release.version}</strong></td>
+                    <td className="is-wide"><strong>{release.title}</strong><br /><small>{release.summary || "Nincs összefoglaló."}</small></td>
+                    <td>{optionLabel(options.types, release.type)}</td>
+                    <td><BenjadminStatusPill tone={releaseStatusTone(release.status)}>{optionLabel(options.statuses, release.status)}</BenjadminStatusPill></td>
+                    <td className="is-nowrap">{release.sourceStage.toUpperCase()} → {release.targetStage.toUpperCase()}</td>
+                    <td>{release.modules.length ? release.modules.length : 0}</td>
+                    <td><BenjadminStatusPill tone={state.ready ? "ok" : "warning"}>{state.completed}/{state.total}</BenjadminStatusPill></td>
+                    <td><span className="benjadmin-data-compact-result">B: {release.buildResult ? "rögzítve" : "—"} · S: {release.smokeResult ? "rögzítve" : "—"}</span></td>
+                    <td className="is-nowrap">{formatDateTime(release.updatedAt)}</td>
+                    <td><button type="button" className="benjadmin-data-row-action" onClick={() => selectRelease(release)}>Részletek</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </BenjadminDataWorkspace>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <StatCard label="Release bejegyzés" value={stats.total} helper="Belső release nyilvántartás." />
-            <StatCard label="Aktív" value={stats.active} helper="Nem archivált release jelöltek." />
-            <StatCard label="Élesített" value={stats.production} helper="Production deployed státuszú verziók." />
-            <StatCard label="Legutóbbi verzió" value={stats.latestVersion} helper="A legutóbb frissített release verziója." />
-          </div>
+      {drawerOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Release szerkesztő bezárása" onClick={() => setDrawerOpen(false)} /> : null}
+      {drawerOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-release-drawer" data-testid="benjadmin-release-drawer">
+          <header>
+            <div><span>{isNew ? "ÚJ RELEASE JELÖLT" : "RELEASE RÉSZLETEK"}</span><strong>{draft.version || "—"}</strong></div>
+            <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Bezárás"><X size={18} /></button>
+          </header>
+          <form onSubmit={saveRelease} className="benjadmin-data-drawer__body benjadmin-release-form">
+            <div className="benjadmin-data-security-note">
+              <AlertTriangle size={17} /><div><strong>Biztonsági szabály</strong><span>Ez a felület nyilvántart és jóváhagyási állapotot kezel. Automatikus PRODUCTION deploy nincs bekötve.</span></div>
+            </div>
 
-          {message && <p className="mt-4 rounded-2xl border border-cyan-300/25 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">{message}</p>}
-        </header>
+            <div className="benjadmin-data-form-grid">
+              <Field label="Release cím"><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className={textInputClass()} /></Field>
+              <Field label="Verzió"><input value={draft.version} onChange={(event) => setDraft((current) => ({ ...current, version: event.target.value }))} className={textInputClass()} /></Field>
+              <Field label="Státusz"><select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as ReleaseStatus }))} className={textInputClass()}>{options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+              <Field label="Release típus"><select value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as ReleaseType }))} className={textInputClass()}>{options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+              <Field label="Forrás környezet"><select value={draft.sourceStage} onChange={(event) => setDraft((current) => ({ ...current, sourceStage: event.target.value as ReleaseStage }))} className={textInputClass()}>{options.stages.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+              <Field label="Cél környezet"><select value={draft.targetStage} onChange={(event) => setDraft((current) => ({ ...current, targetStage: event.target.value as ReleaseStage }))} className={textInputClass()}>{options.stages.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+            </div>
 
-        <section className="mb-6 grid gap-4 xl:grid-cols-3">
-          {stages.map((stage) => (
-            <article key={stage.id} className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.16)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{stage.id}</p>
-                  <h2 className="mt-2 text-2xl font-black text-white">{stage.label}</h2>
-                </div>
-                <span className={`rounded-full border px-3 py-1 text-xs font-black ${stageStatusClass(stage.status)}`}>{stage.status}</span>
-              </div>
-              <div className="mt-5 grid gap-2 text-sm font-semibold text-slate-300 sm:grid-cols-2">
-                <p>PM2: <span className="font-mono text-cyan-100">{stage.processName}</span></p>
-                <p>PID: <span className="font-mono text-cyan-100">{stage.pid}</span></p>
-                <p>Uptime: <span className="text-cyan-100">{stage.uptime}</span></p>
-                <p>Memória: <span className="text-cyan-100">{stage.memory}</span></p>
-                <p>CPU: <span className="text-cyan-100">{stage.cpu}</span></p>
-                <p>Static: <span className={stage.staticStatus === "ok" ? "text-emerald-200" : "text-red-200"}>{stage.staticStatus}</span></p>
-              </div>
-              <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">Build idő: {formatDateTime(stage.buildTime)}</p>
-              <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">{stage.note}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-          <aside className="space-y-5">
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-xl font-black text-white">Release lista</h2>
-                <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">{releases.length} db</span>
-              </div>
-              <div className="max-h-[920px] space-y-3 overflow-auto pr-1">
-                {loading ? (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm font-bold text-slate-400">Betöltés...</div>
-                ) : releases.map((release) => {
-                  const state = requiredChecklistState(release);
-                  return (
-                    <button key={release.id} type="button" onClick={() => selectRelease(release)} className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === release.id ? "border-cyan-300/45 bg-cyan-300/10" : "border-white/10 bg-slate-950/35 hover:border-cyan-300/30 hover:bg-white/[0.07]"}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-black text-white">{release.title}</p>
-                          <p className="mt-1 truncate text-xs font-bold text-cyan-100/80">{release.version}</p>
-                        </div>
-                        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${statusClass(release.status)}`}>{optionLabel(options.statuses, release.status)}</span>
-                      </div>
-                      <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 text-slate-400">{release.summary || release.technicalChangelog || "Nincs összefoglaló."}</p>
-                      <p className="mt-3 text-[11px] font-bold text-slate-500">Checklist: {state.completed}/{state.total} kötelező · Frissítve: {formatDateTime(release.updatedAt)}</p>
-                    </button>
-                  );
-                })}
+            <section className="benjadmin-data-form-section">
+              <header><strong>Érintett modulok</strong><span>{draft.modules.length} kiválasztva</span></header>
+              <div className="benjadmin-data-chip-grid">
+                {options.modules.map((item) => <button key={item} type="button" className={draft.modules.includes(item) ? "is-active" : ""} onClick={() => setDraft((current) => ({ ...current, modules: toggleArray(current.modules, item) }))}>{draft.modules.includes(item) ? "✓ " : "+ "}{item}</button>)}
               </div>
             </section>
-          </aside>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.18)]">
-            <form onSubmit={saveRelease} className="grid gap-5">
-              <div className="flex flex-col gap-4 border-b border-white/10 pb-5 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-lime-300/80">{isNew ? "Új release jelölt" : "Release szerkesztése"}</p>
-                  <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">{draft.title || "Cím nélküli release"}</h2>
-                  {!isNew && selectedRelease && <p className="mt-2 text-xs font-semibold text-slate-500">Létrehozva: {formatDateTime(selectedRelease.createdAt)} · Frissítve: {formatDateTime(selectedRelease.updatedAt)}</p>}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => void copyText(draft.aiHandoff, "Release AI átadó blokk vágólapra másolva.")} className="inline-flex items-center gap-2 rounded-2xl border border-lime-300/35 bg-lime-300/10 px-4 py-3 text-sm font-black text-lime-100 hover:bg-lime-300/15">
-                    <ClipboardCopy size={17} /> AI átadó másolása
-                  </button>
-                  <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />} Mentés
-                  </button>
-                </div>
-              </div>
+            <Field label="Rövid összefoglaló"><textarea value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} className={textAreaClass("min-h-20")} /></Field>
+            <div className="benjadmin-release-form__two">
+              <Field label="Technikai változásnapló (changelog)"><textarea value={draft.technicalChangelog} onChange={(event) => setDraft((current) => ({ ...current, technicalChangelog: event.target.value }))} className={textAreaClass("min-h-28")} /></Field>
+              <Field label="Publikus változásnapló (changelog)"><textarea value={draft.publicChangelog} onChange={(event) => setDraft((current) => ({ ...current, publicChangelog: event.target.value }))} className={textAreaClass("min-h-28")} /></Field>
+              <Field label="Belső fejlesztői változásnapló"><textarea value={draft.internalChangelog} onChange={(event) => setDraft((current) => ({ ...current, internalChangelog: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Ismert hibák / kockázatok"><textarea value={draft.knownIssues} onChange={(event) => setDraft((current) => ({ ...current, knownIssues: event.target.value }))} className={textAreaClass("min-h-24")} /></Field>
+              <Field label="Build eredmény"><textarea value={draft.buildResult} onChange={(event) => setDraft((current) => ({ ...current, buildResult: event.target.value }))} className={textAreaClass("min-h-20")} /></Field>
+              <Field label="Smoke / felületteszt"><textarea value={draft.smokeResult} onChange={(event) => setDraft((current) => ({ ...current, smokeResult: event.target.value }))} className={textAreaClass("min-h-20")} /></Field>
+              <Field label="Rollback terv"><textarea value={draft.rollbackPlan} onChange={(event) => setDraft((current) => ({ ...current, rollbackPlan: event.target.value }))} className={textAreaClass("min-h-20")} /></Field>
+              <Field label="Rollback / backup útvonal"><textarea value={draft.rollbackPath} onChange={(event) => setDraft((current) => ({ ...current, rollbackPath: event.target.value }))} className={textAreaClass("min-h-20 font-mono")} /></Field>
+            </div>
 
-              <div className="rounded-[1.5rem] border border-amber-300/25 bg-amber-300/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 shrink-0 text-amber-200" size={20} />
-                  <div>
-                    <p className="text-sm font-black text-amber-100">Biztonsági szabály</p>
-                    <p className="mt-1 text-sm font-semibold leading-6 text-amber-50/80">Ez a Release Központ MVP nyilvántart, ellenőriz és jóváhagyási állapotot kezel. Nem másolja automatikusan a DEV állapotot a publikus éles felületre.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-[1fr_0.7fr_0.7fr]">
-                <Field label="Release cím">
-                  <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className={textInputClass()} placeholder="pl. Fejlesztési Napló AI Kontextussegéd élesítés" />
-                </Field>
-                <Field label="Verziószám">
-                  <input value={draft.version} onChange={(event) => setDraft((current) => ({ ...current, version: event.target.value }))} className={textInputClass()} placeholder="web-2026.07.13-1850" />
-                </Field>
-                <Field label="Státusz">
-                  <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as ReleaseStatus }))} className={textInputClass()}>
-                    {options.statuses.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-4">
-                <Field label="Release típus">
-                  <select value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as ReleaseType }))} className={textInputClass()}>
-                    {options.types.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Forrás állapot">
-                  <select value={draft.sourceStage} onChange={(event) => setDraft((current) => ({ ...current, sourceStage: event.target.value as ReleaseStage }))} className={textInputClass()}>
-                    {options.stages.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Cél állapot">
-                  <select value={draft.targetStage} onChange={(event) => setDraft((current) => ({ ...current, targetStage: event.target.value as ReleaseStage }))} className={textInputClass()}>
-                    {options.stages.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Kötelező checklist">
-                  <div className={`rounded-2xl border px-4 py-3 text-sm font-black ${readiness.ready ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-amber-300/35 bg-amber-300/10 text-amber-100"}`}>
-                    {selectedRelease ? `${readiness.completed}/${readiness.total} kész` : "Mentés után aktív"}
-                  </div>
-                </Field>
-              </div>
-
-              <Field label="Érintett modulok" helper="Több modul is választható. Ezek alapján később szűrhető lesz, hogy mely release mit érintett.">
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  {options.modules.map((item) => (
-                    <label key={item} className="flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-2 text-xs font-bold text-slate-200 hover:border-cyan-300/30">
-                      <input type="checkbox" checked={draft.modules.includes(item)} onChange={() => setDraft((current) => ({ ...current, modules: toggleArray(current.modules, item) }))} className="h-4 w-4 accent-cyan-300" />
-                      {item}
-                    </label>
+            {!isNew && selectedRelease ? (
+              <section className="benjadmin-data-form-section">
+                <header><strong>Élesítési ellenőrzőlista (checklist)</strong><span>{readiness.completed}/{readiness.total} kötelező</span></header>
+                <div className="benjadmin-release-checklist">
+                  {selectedRelease.checklist.map((item) => (
+                    <label key={item.id}><input type="checkbox" checked={item.checked} onChange={(event) => void runAction("toggleChecklist", { releaseId: selectedRelease.id, itemId: item.id, checked: event.target.checked })} /><span><strong>{item.label}{item.required ? " *" : ""}</strong><small>{item.checked ? `Kész: ${formatDateTime(item.checkedAt ?? undefined)}` : "Nincs bepipálva"}</small></span></label>
                   ))}
                 </div>
-              </Field>
+              </section>
+            ) : null}
 
-              <Field label="Rövid összefoglaló">
-                <textarea value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} className={textAreaClass("min-h-24")} placeholder="Mi kerülne át a dev/staging állapotból az éles rendszerbe?" />
-              </Field>
+            <Field label="AI release átadó blokk"><textarea value={draft.aiHandoff} onChange={(event) => setDraft((current) => ({ ...current, aiHandoff: event.target.value }))} className={textAreaClass("min-h-32")} /></Field>
 
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Technikai changelog">
-                  <textarea value={draft.technicalChangelog} onChange={(event) => setDraft((current) => ({ ...current, technicalChangelog: event.target.value }))} className={textAreaClass("min-h-44")} placeholder="Fájlok, API route-ok, adatmodell, build, konfiguráció, PM2, static asset változások." />
-                </Field>
-                <Field label="Publikus changelog">
-                  <textarea value={draft.publicChangelog} onChange={(event) => setDraft((current) => ({ ...current, publicChangelog: event.target.value }))} className={textAreaClass("min-h-44")} placeholder="Felhasználóbarát szöveg: új funkciók, javítások, fontos változások technikai részletek nélkül." />
-                </Field>
-              </div>
+            <div className="benjadmin-release-form__actions">
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void copyText(draft.aiHandoff, "Release AI átadó blokk vágólapra másolva.")}><ClipboardCopy size={16} /> AI átadó másolása</button>
+              <button type="submit" className="benjadmin-data-primary-action" disabled={saving}>{saving ? <Loader2 className="is-spinning" size={16} /> : <Save size={16} />}{isNew ? "Release jelölt mentése" : "Módosítás mentése"}</button>
+            </div>
 
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Belső fejlesztői changelog">
-                  <textarea value={draft.internalChangelog} onChange={(event) => setDraft((current) => ({ ...current, internalChangelog: event.target.value }))} className={textAreaClass("min-h-36")} placeholder="Belső döntések, kockázatok, fejlesztési előzmények." />
-                </Field>
-                <Field label="Ismert hibák / kockázatok">
-                  <textarea value={draft.knownIssues} onChange={(event) => setDraft((current) => ({ ...current, knownIssues: event.target.value }))} className={textAreaClass("min-h-36 border-amber-300/25 bg-amber-300/5")} placeholder="Mi az, amit még tudni kell élesítés előtt?" />
-                </Field>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Build eredmény">
-                  <textarea value={draft.buildResult} onChange={(event) => setDraft((current) => ({ ...current, buildResult: event.target.value }))} className={textAreaClass("min-h-28")} placeholder="Pl. npm run build OK, BUILD_EXIT=0, figyelmeztetések..." />
-                </Field>
-                <Field label="Smoke / felületteszt eredmény">
-                  <textarea value={draft.smokeResult} onChange={(event) => setDraft((current) => ({ ...current, smokeResult: event.target.value }))} className={textAreaClass("min-h-28")} placeholder="HTTP 200, CSS/static 200, API OK, alap route-ok tesztelve..." />
-                </Field>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-2">
-                <Field label="Rollback terv">
-                  <textarea value={draft.rollbackPlan} onChange={(event) => setDraft((current) => ({ ...current, rollbackPlan: event.target.value }))} className={textAreaClass("min-h-32")} placeholder="Mit kell visszaállítani, ha élesítés után hiba van?" />
-                </Field>
-                <Field label="Rollback / backup útvonal">
-                  <textarea value={draft.rollbackPath} onChange={(event) => setDraft((current) => ({ ...current, rollbackPath: event.target.value }))} className={textAreaClass("min-h-32 font-mono")} placeholder="pl. backups/release_before_..." />
-                </Field>
-              </div>
-
-              {selectedRelease && (
-                <section className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-300/5 p-4">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200/80">Élesítési checklist</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">Csak nyilvántartás és jóváhagyási kontroll. A tényleges deploy gomb nincs bekötve.</p>
-                    </div>
-                    <div className={`rounded-full border px-4 py-2 text-xs font-black ${readiness.ready ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-amber-300/35 bg-amber-300/10 text-amber-100"}`}>{readiness.completed}/{readiness.total} kötelező</div>
-                  </div>
-                  <div className="grid gap-2 xl:grid-cols-2">
-                    {selectedRelease.checklist.map((item) => (
-                      <label key={item.id} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm font-semibold text-slate-200 hover:border-cyan-300/30">
-                        <input type="checkbox" checked={item.checked} onChange={(event) => void runAction("toggleChecklist", { releaseId: selectedRelease.id, itemId: item.id, checked: event.target.checked })} className="mt-1 h-4 w-4 accent-cyan-300" />
-                        <span>
-                          <span className="block font-black text-white">{item.label} {item.required && <span className="text-amber-200">*</span>}</span>
-                          <span className="mt-1 block text-xs text-slate-500">{item.checked ? `Kész: ${formatDateTime(item.checkedAt ?? undefined)}` : "Nincs bepipálva"}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <Field label="AI release átadó blokk" helper="Ezt lehet másik csevegőbe, Codex review-ba vagy későbbi release auditba másolni.">
-                <textarea value={draft.aiHandoff} onChange={(event) => setDraft((current) => ({ ...current, aiHandoff: event.target.value }))} className={textAreaClass("min-h-56 border-lime-300/25 bg-lime-300/5 focus:border-lime-300 focus:ring-lime-300/10")} />
-              </Field>
-
-              <div className="flex flex-col gap-3 border-t border-white/10 pt-5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-3">
-                  <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50">
-                    {saving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />} {isNew ? "Release jelölt mentése" : "Módosítás mentése"}
-                  </button>
-                  {!isNew && selectedId && (
-                    <>
-                      <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "staging_candidate" })} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/35 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-300/15">
-                        <GitBranch size={17} /> RC jelölés
-                      </button>
-                      <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "ready_for_production" })} className="inline-flex items-center gap-2 rounded-2xl border border-lime-300/35 bg-lime-300/10 px-4 py-3 text-sm font-black text-lime-100 hover:bg-lime-300/15">
-                        <ShieldCheck size={17} /> Élesítésre kész
-                      </button>
-                      <button type="button" onClick={() => { if (!readiness.ready && !window.confirm("A kötelező checklist még nem teljes. Biztosan élesítettként jelölöd?")) return; void runAction("setStatus", { releaseId: selectedId, status: "production_deployed" }); }} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-300/10 px-4 py-3 text-sm font-black text-emerald-100 hover:bg-emerald-300/15">
-                        <PackageCheck size={17} /> Élesítettként rögzítés
-                      </button>
-                      <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "rollback_ready" })} className="inline-flex items-center gap-2 rounded-2xl border border-amber-300/35 bg-amber-300/10 px-4 py-3 text-sm font-black text-amber-100 hover:bg-amber-300/15">
-                        <History size={17} /> Rollback pont kész
-                      </button>
-                    </>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-xs font-semibold leading-5 text-slate-500">
-                  <CheckCircle2 className="mr-2 inline text-cyan-200" size={15} />
-                  Tárolás: <span className="font-mono text-slate-300">{storageFile || ".dimprover/release-center/release-center.json"}</span>
-                </div>
-              </div>
-            </form>
-          </section>
-        </section>
-      </div>
-    </main>
+            {!isNew && selectedId ? (
+              <section className="benjadmin-release-status-actions">
+                <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "staging_candidate" })}><GitBranch size={15} /> RC jelölés</button>
+                <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "ready_for_production" })}><ShieldCheck size={15} /> Élesítésre kész</button>
+                <button type="button" onClick={() => { if (!readiness.ready && !window.confirm("A kötelező checklist még nem teljes. Biztosan élesítettként jelölöd?")) return; void runAction("setStatus", { releaseId: selectedId, status: "production_deployed" }); }}><PackageCheck size={15} /> Élesítettként rögzítés</button>
+                <button type="button" onClick={() => void runAction("setStatus", { releaseId: selectedId, status: "rollback_ready" })}><History size={15} /> Rollback pont kész</button>
+              </section>
+            ) : null}
+          </form>
+        </aside>
+      ) : null}
+    </>
   );
 }
