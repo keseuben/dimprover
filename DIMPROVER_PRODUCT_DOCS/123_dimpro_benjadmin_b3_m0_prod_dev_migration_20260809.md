@@ -467,3 +467,34 @@ PROD-on a magas lemezhasználat ellenére régi build-, backup- és work-állom�
 - Mindkét storage mód: `quarantine`; írás engedélyezett, letöltés nem aktív.
 - DEV CORS: DRIVE origin `https://projektkapu.dev.dimpro.hu`, DROP origin `https://drop.dev.dimpro.hu`.
 - DRIVE OPTIONS preflight: PASS. DROP esetén a Hetzner S3 OPTIONS preflight 403 ismert utómunka, miközben a presigned PUT PASS és CORS response header jelen van. Ez nem blokkolja az M0 szerveroldali storage izoláció acceptance-et, de a DROP közvetlen böngészős feltöltés release-e előtt kötelező külön lezárni.
+
+## 2026-08-12 – Alapítói fókusz / információfegyelem – operator UI
+
+A BENJADMIN Fejlesztési Központ (`/admin/dev`) operator-ui-v2 felülete óránként változó alapítói fókuszsávot kapott. A cél a tudatos üzleti információkezelés, a saját terméklogika megőrzése és a fejlesztési fókusz fenntartása anélkül, hogy más fejlesztőcsapatok képességeit alábecsülnénk.
+
+Működés:
+- 15 rövid fókuszüzenetből óránként más jelenik meg, `Europe/Budapest` időzóna szerint;
+- az aktuális üzenet a Fejlesztési Központ táblázatos munkaterének szűrősora felett, keskeny fókuszsávban látható;
+- `Összes üzenet` gomb jobb oldali olvasópanelben megnyitja mind a 15 alapelvet;
+- az aktuális órához tartozó üzenet a teljes listában külön kiemelést kap;
+- mobilon a fókuszsáv tördelődik, az olvasópanel teljes mobil szélességre vált;
+- az üzenetek között szerepel az információfegyelem, a roadmap és architektúra üzleti értéke, a másik IT-csapat tudatos nem-lebecsülése, az AI-agentek szerepe, a saját/céges infrastruktúra elkülönítése, valamint az az elv, hogy a működő prototípus után a további fenntartás és fejlesztés már tisztázott megállapodást igényel.
+
+Érintett fájlok:
+- `app/admin/dev/page.tsx`
+- `app/admin/admin-theme.css`
+- `DIMPROVER_PRODUCT_DOCS/123_dimpro_benjadmin_b3_m0_prod_dev_migration_20260809.md`
+
+### Ellenőrzési eredmény – 2026-08-12
+
+- célzott `app/admin/dev/page.tsx` ESLint: PASS;
+- teljes `npx tsc --noEmit` DEV-en: PASS;
+- teljes `npm run lint`: PASS, 0 error, 104 meglévő warning;
+- teljes koordinált `npm run build`: PASS;
+- Next.js build ID: `9X5_62Y3xKDFOmV5DmzQL`;
+- standalone asset check: 143 statikus chunk PASS;
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev` újraindítva, online;
+- desktop/tablet/mobil browser smoke: 31/31 PASS;
+- vizuális teszt eredménye és képei: `/srv/dimpro-dev/logs/founder-focus-2026-08-12T18-24-27-921Z`;
+- rollback backup: `/srv/dimpro-dev/artifacts/backups/founder-focus-20260812-201156`;
+- a build egy korábban ismert Turbopack NFT trace warningot jelez az infrastruktúra-summary route környezetében; a build ettől sikeres.
