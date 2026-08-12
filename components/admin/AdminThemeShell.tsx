@@ -10,6 +10,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
+  MessagesSquare,
   Moon,
   PanelLeftClose,
   ServerCog,
@@ -173,6 +174,24 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     if (accessState === "guest" && pathname !== "/admin") router.replace("/admin");
   }, [accessState, pathname, router]);
 
+  useEffect(() => {
+    const onPrivacyRequest = () => {
+      if (accessState !== "authorized") return;
+      if (!boardPinned) setBoardOpen(false);
+      setTeamScreen(false);
+      setPrivacyCover(true);
+    };
+    window.addEventListener("benjadmin:privacy-cover", onPrivacyRequest);
+    return () => window.removeEventListener("benjadmin:privacy-cover", onPrivacyRequest);
+  }, [accessState, boardPinned]);
+
+  const openDeveloperConsole = useCallback(() => {
+    const target = "/admin/dev-console";
+    const popup = window.open(target, "benjadmin-developer-console", "popup=yes,resizable=yes,scrollbars=no");
+    if (!popup) router.push(target);
+    else popup.focus();
+  }, [router]);
+
 
   if (accessState === "checking") {
     return <BenjadminBrandScreen mode="entry" />;
@@ -194,6 +213,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
         onClose={() => setTeamScreen(false)}
       />
     );
+  }
+
+  if (pathname === "/admin/dev-console") {
+    return <div className="benjadmin-developer-console-host">{children}</div>;
   }
 
   return (
@@ -286,6 +309,15 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
           <div className="benjadmin-shell-topbar__actions">
             <span className="benjadmin-canonical-badge">CANONICAL</span>
             <span className="benjadmin-environment-badge">DEV</span>
+            <button
+              type="button"
+              data-testid="benjadmin-developer-console-button"
+              onClick={openDeveloperConsole}
+              title="BENJADMIN Fejlesztői Konzol megnyitása külön ablakban"
+              aria-label="Fejlesztői Konzol megnyitása"
+            >
+              <MessagesSquare size={18} />
+            </button>
             <button
               type="button"
               data-testid="benjadmin-topbar-theme-toggle"

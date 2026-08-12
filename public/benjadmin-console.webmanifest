@@ -1,0 +1,16 @@
+{
+  "name": "DIMPRO BENJADMIN Fejlesztői Konzol",
+  "short_name": "BENJADMIN",
+  "description": "Napi ember-AI fejlesztési együttműködés, feladatkiosztás és élő fejlesztési állapot.",
+  "start_url": "/admin/dev-console",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "lang": "hu-HU",
+  "orientation": "any",
+  "icons": [
+    { "src": "/pwa/dimpro-dev-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/pwa/dimpro-dev-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
