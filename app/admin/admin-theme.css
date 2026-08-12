@@ -8838,3 +8838,74 @@
 .benjadmin-license-devices__actions { display: flex; align-items: center; gap: 5px; }
 .benjadmin-license-devices__actions .benjadmin-data-row-action { min-width: 32px; min-height: 32px; display: inline-grid; place-items: center; }
 .benjadmin-license-devices__actions .benjadmin-data-row-action.is-danger { color: #ef4444; border-color: color-mix(in srgb, #ef4444 34%, var(--admin-border)); }
+
+/* BENJADMIN Licencközpont – legacy előfizetés/számlázás biztonságos bridge */
+.benjadmin-license-billing > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.benjadmin-license-billing > header span,
+.benjadmin-license-billing .benjadmin-data-security-note strong,
+.benjadmin-license-billing .benjadmin-data-security-note span,
+.benjadmin-license-billing .benjadmin-data-security-note code,
+.benjadmin-license-billing .benjadmin-data-status,
+.benjadmin-license-billing__alignment,
+.benjadmin-license-billing__alignment span {
+  font-size: 12px !important;
+}
+.benjadmin-license-billing .benjadmin-data-security-note code {
+  color: var(--admin-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.benjadmin-license-billing__summary {
+  margin: 9px 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.benjadmin-license-billing__summary > span {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  display: block;
+  color: var(--admin-text-muted);
+  background: var(--admin-surface);
+  font-size: 12px;
+}
+.benjadmin-license-billing__summary b {
+  margin-top: 3px;
+  display: block;
+  overflow: hidden;
+  color: var(--admin-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.benjadmin-license-billing__alignment {
+  margin-bottom: 9px;
+  padding: 7px 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--admin-text-muted);
+  background: var(--admin-surface);
+  line-height: 1.4;
+}
+.benjadmin-license-billing__alignment .benjadmin-data-status { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .benjadmin-license-billing__summary { grid-template-columns: 1fr 1fr; }
+  .benjadmin-license-billing__alignment { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 440px) {
+  .benjadmin-license-billing__summary { grid-template-columns: 1fr; }
+}
+.benjadmin-license-billing .benjadmin-data-field,
+.benjadmin-license-billing .benjadmin-data-field > span,
+.benjadmin-license-billing .benjadmin-data-field small {
+  font-size: 12px !important;
+}

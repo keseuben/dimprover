@@ -256,6 +256,99 @@ export async function getLicenseContactSummaries() {
   return store.licenses.map(publicContactSummary);
 }
 
+function publicBillingSummary(license: LicenseRecord) {
+  return {
+    legacyLicenseId: license.id,
+    companyName: license.companyName,
+    legacyStatus: license.status,
+    startsAt: license.startsAt,
+    expiresAt: license.expiresAt,
+    maxDevices: license.maxDevices,
+    planCode: license.planCode ?? "manual",
+    billingInterval: license.billingInterval ?? "manual",
+    billingStatus: license.billingStatus ?? "manual",
+    subscriptionQuantity: license.subscriptionQuantity ?? license.maxDevices,
+    currentPeriodEnd: license.currentPeriodEnd ?? "",
+    autoReleaseInactiveDevices: license.autoReleaseInactiveDevices ?? false,
+    inactiveReleaseDays: license.inactiveReleaseDays ?? 90,
+    providerCustomerLinked: Boolean(license.stripeCustomerId),
+    providerSubscriptionLinked: Boolean(license.stripeSubscriptionId),
+    updatedAt: license.updatedAt,
+  };
+}
+
+export async function getLicenseBillingSummaries() {
+  const store = await readLicenseStore();
+  return store.licenses.map(publicBillingSummary);
+}
+
+export async function updateLicenseBillingAdmin(legacyLicenseId: string, payload: Record<string, unknown>) {
+  const store = await readLicenseStore();
+  const index = store.licenses.findIndex((license) => license.id === legacyLicenseId);
+  if (index === -1) return { ok: false as const, error: "A legacy licencrekord nem található." };
+
+  const previous = { ...store.licenses[index] };
+  const nextPlanCode = optionalString(payload.planCode) ?? previous.planCode ?? "manual";
+  const nextBillingInterval = billingIntervalValue(payload.billingInterval, previous.billingInterval ?? "manual");
+  const nextBillingStatus = billingStatusValue(payload.billingStatus, previous.billingStatus ?? "manual");
+  const nextSubscriptionQuantity = positiveNumber(payload.subscriptionQuantity, previous.subscriptionQuantity ?? previous.maxDevices);
+  const nextCurrentPeriodEnd = hasOwn(payload, "currentPeriodEnd")
+    ? optionalIsoDateString(payload.currentPeriodEnd)
+    : previous.currentPeriodEnd;
+  const nextAutoReleaseInactiveDevices = hasOwn(payload, "autoReleaseInactiveDevices")
+    ? booleanValue(payload.autoReleaseInactiveDevices, previous.autoReleaseInactiveDevices ?? false)
+    : previous.autoReleaseInactiveDevices ?? false;
+  const nextInactiveReleaseDays = positiveNumber(payload.inactiveReleaseDays, previous.inactiveReleaseDays ?? 90);
+
+  const next: LicenseRecord = {
+    ...previous,
+    planCode: nextPlanCode,
+    billingInterval: nextBillingInterval,
+    billingStatus: nextBillingStatus,
+    subscriptionQuantity: nextSubscriptionQuantity,
+    currentPeriodEnd: nextCurrentPeriodEnd,
+    autoReleaseInactiveDevices: nextAutoReleaseInactiveDevices,
+    inactiveReleaseDays: nextInactiveReleaseDays,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const changes: string[] = [];
+  if ((previous.planCode ?? "manual") !== next.planCode) changes.push(`Csomag: ${previous.planCode || "-"} → ${next.planCode || "-"}`);
+  if ((previous.billingInterval ?? "manual") !== next.billingInterval) changes.push(`Számlázási ciklus: ${previous.billingInterval || "-"} → ${next.billingInterval || "-"}`);
+  if ((previous.billingStatus ?? "manual") !== next.billingStatus) changes.push(`Fizetési állapot: ${previous.billingStatus || "-"} → ${next.billingStatus || "-"}`);
+  if ((previous.subscriptionQuantity ?? previous.maxDevices) !== next.subscriptionQuantity) changes.push(`Előfizetési mennyiség: ${previous.subscriptionQuantity ?? previous.maxDevices} → ${next.subscriptionQuantity}`);
+  if ((previous.currentPeriodEnd ?? "") !== (next.currentPeriodEnd ?? "")) changes.push(`Aktuális időszak vége: ${formatDateForChange(previous.currentPeriodEnd)} → ${formatDateForChange(next.currentPeriodEnd)}`);
+  if ((previous.autoReleaseInactiveDevices ?? false) !== next.autoReleaseInactiveDevices) changes.push(`Inaktív gépek automatikus felszabadítása: ${previous.autoReleaseInactiveDevices ? "igen" : "nem"} → ${next.autoReleaseInactiveDevices ? "igen" : "nem"}`);
+  if ((previous.inactiveReleaseDays ?? 90) !== next.inactiveReleaseDays) changes.push(`Inaktív gép felszabadítási küszöb: ${previous.inactiveReleaseDays ?? 90} → ${next.inactiveReleaseDays} nap`);
+
+  store.licenses[index] = next;
+  await writeLicenseStore(store);
+  await appendAudit({
+    action: "updateLicenseBilling",
+    licenseId: next.id,
+    companyName: next.companyName,
+    message: `Előfizetési és számlázási adatok módosítva: ${next.companyName}`,
+  });
+
+  const emailNotification = changes.length
+    ? await sendLicenseChangeEmail({
+        action: "updateLicense",
+        licenseBefore: previous,
+        licenseAfter: next,
+        activeDeviceCount: activeDeviceCount(store, next.id),
+        changedFields: changes,
+      })
+    : undefined;
+
+  return {
+    ok: true as const,
+    billing: publicBillingSummary(next),
+    changed: changes.length > 0,
+    changes,
+    emailNotification,
+  };
+}
+
 function publicDeviceSummary(device: LicenseStore["devices"][number]) {
   const hash = device.machineIdHash || "";
   return {

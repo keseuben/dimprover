@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BellRing, Bot, Check, Coins, ContactRound, KeyRound, Laptop, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Ban, BellRing, Bot, Check, Coins, ContactRound, CreditCard, KeyRound, Laptop, LoaderCircle, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -98,6 +98,24 @@ type LegacyDeviceSummary = {
   createdAt: string;
   updatedAt: string;
 };
+type LegacyBillingSummary = {
+  legacyLicenseId: string;
+  companyName: string;
+  legacyStatus: string;
+  startsAt: string;
+  expiresAt: string;
+  maxDevices: number;
+  planCode: string;
+  billingInterval: "none" | "monthly" | "yearly" | "manual";
+  billingStatus: "none" | "active" | "past_due" | "canceled" | "trialing" | "manual";
+  subscriptionQuantity: number;
+  currentPeriodEnd: string;
+  autoReleaseInactiveDevices: boolean;
+  inactiveReleaseDays: number;
+  providerCustomerLinked: boolean;
+  providerSubscriptionLinked: boolean;
+  updatedAt: string;
+};
 
 type DrawerMode = "closed" | "new" | "edit";
 
@@ -125,6 +143,8 @@ type ExpiryReminderStatus = {
 
 const statusOptions = ["pending", "trial", "active", "expired", "suspended", "revoked"];
 const statusLabels: Record<string, string> = { pending: "Függő", trial: "Próba", active: "Aktív", expired: "Lejárt", suspended: "Felfüggesztett", revoked: "Visszavont" };
+const billingIntervalLabels: Record<LegacyBillingSummary["billingInterval"], string> = { none: "Nincs", monthly: "Havi", yearly: "Éves", manual: "Kézi" };
+const billingStatusLabels: Record<LegacyBillingSummary["billingStatus"], string> = { none: "Nincs", active: "Aktív", past_due: "Fizetési késedelem", canceled: "Megszűnt", trialing: "Próbaidő", manual: "Kézi" };
 const modulePresets = [
   ["HAGE_WORKSPACE", "HAGE-INVEST ONE / Munkatér"], ["TASKS", "Feladatok"], ["VACATIONS", "Szabadságok"], ["AI_ASSISTANT", "AI Asszisztens"],
   ["DROP_SEND", "DIMPRO Send"], ["DROP_QUICK_IMAGE_SEND", "Gyors KépSend"], ["DROP_PROJECT_INBOX", "Projekt Beérkező Drop"],
@@ -307,6 +327,8 @@ export default function DimproLicenseCenterPage() {
   const [contactDrafts, setContactDrafts] = useState<Record<string, LegacyLicenseContacts>>({});
   const [legacyDevices, setLegacyDevices] = useState<LegacyDeviceSummary[]>([]);
   const [deviceDrafts, setDeviceDrafts] = useState<Record<string, LegacyDeviceSummary>>({});
+  const [legacyBilling, setLegacyBilling] = useState<LegacyBillingSummary[]>([]);
+  const [billingDrafts, setBillingDrafts] = useState<Record<string, LegacyBillingSummary>>({});
   const [drafts, setDrafts] = useState<Record<string, LicenseDraft>>({});
   const [createDraft, setCreateDraft] = useState<CreateDraft>(initialCreate);
   const [sendDrafts, setSendDrafts] = useState<Record<string, SendDraft>>({});
@@ -326,13 +348,14 @@ export default function DimproLicenseCenterPage() {
   const headers = useMemo(() => ({ "content-type": "application/json", "x-dimpro-license-admin-key": adminKey }), [adminKey]);
 
   const load = useCallback(async (key: string) => {
-    const [licenseResponse, sendResponse, contactResponse, deviceResponse] = await Promise.all([
+    const [licenseResponse, sendResponse, contactResponse, deviceResponse, billingResponse] = await Promise.all([
       fetch("/api/dimpro-identity/admin/licenses", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/dimpro-identity/admin/send-entitlements", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/license/admin-contacts", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
       fetch("/api/license/admin-devices", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
+      fetch("/api/license/admin-billing", { headers: { "x-dimpro-license-admin-key": key }, cache: "no-store" }),
     ]);
-    const [licensePayload, sendPayload, contactPayload, devicePayload] = await Promise.all([licenseResponse.json(), sendResponse.json(), contactResponse.json(), deviceResponse.json()]);
+    const [licensePayload, sendPayload, contactPayload, devicePayload, billingPayload] = await Promise.all([licenseResponse.json(), sendResponse.json(), contactResponse.json(), deviceResponse.json(), billingResponse.json()]);
     if (!licenseResponse.ok) throw new Error(licensePayload.error || "A Licencközpont nem tölthető be.");
     if (!sendResponse.ok) throw new Error(sendPayload.error || "A Send-jogosultságok nem tölthetők be.");
     const nextLicenses = licensePayload.licenses || [];
@@ -342,6 +365,9 @@ export default function DimproLicenseCenterPage() {
       : [];
     const nextDevices: LegacyDeviceSummary[] = deviceResponse.ok && devicePayload?.ok && Array.isArray(devicePayload.devices)
       ? devicePayload.devices
+      : [];
+    const nextBilling: LegacyBillingSummary[] = billingResponse.ok && billingPayload?.ok && Array.isArray(billingPayload.billing)
+      ? billingPayload.billing
       : [];
     setUsers(licensePayload.users || []);
     setOrganizations(licensePayload.organizations || []);
@@ -355,10 +381,12 @@ export default function DimproLicenseCenterPage() {
     setContactDrafts(Object.fromEntries(nextContacts.map((contact) => [contact.legacyLicenseId, { ...contact, additionalContacts: contact.additionalContacts.map((item) => ({ ...item })) }])));
     setLegacyDevices(nextDevices);
     setDeviceDrafts(Object.fromEntries(nextDevices.map((device) => [device.deviceId, { ...device }])));
+    setLegacyBilling(nextBilling);
+    setBillingDrafts(Object.fromEntries(nextBilling.map((billing) => [billing.legacyLicenseId, { ...billing }])));
     setDrafts(Object.fromEntries(nextLicenses.map((license: License) => [license.id, licenseDraft(license, nextModules)])));
     setAuthorized("yes");
-    const unavailable = [!contactResponse.ok ? "kapcsolattartók" : "", !deviceResponse.ok ? "gépkötések" : ""].filter(Boolean);
-    setMessage(unavailable.length ? `Identity Core adatok frissítve; nem elérhető legacy bridge: ${unavailable.join(", ")}.` : "Identity Core adatok, kapcsolattartók és gépkötések frissítve.");
+    const unavailable = [!contactResponse.ok ? "kapcsolattartók" : "", !deviceResponse.ok ? "gépkötések" : "", !billingResponse.ok ? "előfizetés/számlázás" : ""].filter(Boolean);
+    setMessage(unavailable.length ? `Identity Core adatok frissítve; nem elérhető legacy bridge: ${unavailable.join(", ")}.` : "Identity Core adatok és legacy kompatibilitási blokkok frissítve.");
   }, []);
 
   useEffect(() => {
@@ -615,6 +643,53 @@ export default function DimproLicenseCenterPage() {
     }
   }
 
+  function billingForLicense(license: License) {
+    if (!license.legacy_license_ref) return null;
+    return legacyBilling.find((billing) => billing.legacyLicenseId === license.legacy_license_ref) || null;
+  }
+
+  function updateBillingDraft(legacyLicenseId: string, patch: Partial<LegacyBillingSummary>) {
+    setBillingDrafts((current) => {
+      const base = current[legacyLicenseId] || legacyBilling.find((billing) => billing.legacyLicenseId === legacyLicenseId);
+      if (!base) return current;
+      return { ...current, [legacyLicenseId]: { ...base, ...patch } };
+    });
+  }
+
+  async function saveLegacyBilling(license: License) {
+    const source = billingForLicense(license);
+    if (!source || !license.legacy_license_ref || busy) {
+      setMessage("Az előfizetési adatok csak pontos legacy licenckapcsolat mellett módosíthatók.");
+      return;
+    }
+    const draft = billingDrafts[source.legacyLicenseId] || source;
+    setBusy(`billing:${license.id}`);
+    try {
+      const response = await fetch("/api/license/admin-billing", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          legacyLicenseId: source.legacyLicenseId,
+          planCode: license.plan_code || "manual",
+          billingInterval: draft.billingInterval,
+          billingStatus: draft.billingStatus,
+          subscriptionQuantity: draft.subscriptionQuantity,
+          currentPeriodEnd: draft.currentPeriodEnd || "",
+          autoReleaseInactiveDevices: draft.autoReleaseInactiveDevices,
+          inactiveReleaseDays: draft.inactiveReleaseDays,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Az előfizetési adatok nem menthetők.");
+      setMessage(payload.changed ? "A legacy előfizetési és számlázási adatok mentve és auditálva." : "Az előfizetési adatok változatlanok.");
+      await load(adminKey);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Az előfizetési adatok mentése sikertelen.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   function eligibleUsers(license: License) {
     if (license.owner_type === "user") return users.filter((user) => user.id === license.owner_user_id);
     const ids = new Set(memberships.filter((membership) => membership.organization_id === license.owner_organization_id && membership.status === "active").map((membership) => membership.user_id));
@@ -864,6 +939,8 @@ export default function DimproLicenseCenterPage() {
               const contactSource = legacyContactForLicense(selectedLicense);
               const contactDraft = contactSource ? (contactDrafts[contactSource.legacyLicenseId] || contactSource) : null;
               const licenseDevices = devicesForLicense(selectedLicense);
+              const billingSource = billingForLicense(selectedLicense);
+              const billingDraft = billingSource ? (billingDrafts[billingSource.legacyLicenseId] || billingSource) : null;
               const organization = organizations.find((item) => item.id === selectedLicense.owner_organization_id);
               return (
                 <>
@@ -923,6 +1000,44 @@ export default function DimproLicenseCenterPage() {
                           </table>
                         </div>
                         <button type="button" className="benjadmin-data-secondary-action is-full" onClick={() => void saveLegacyContacts(selectedLicense)} disabled={busy !== ""}>{busy === `contacts:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Kapcsolattartók mentése</button>
+                      </>
+                    )}
+                  </section>
+
+                  <section className="benjadmin-data-form-section benjadmin-license-billing" data-testid="benjadmin-license-billing">
+                    <header><strong><CreditCard size={16} /> Előfizetés és számlázási állapot</strong><span>Átmeneti legacy bridge</span></header>
+                    <div className="benjadmin-data-security-note benjadmin-license-billing__notice">
+                      <CreditCard size={17} />
+                      <div>
+                        <strong>Adatminimalizált előfizetési nézet</strong>
+                        <span>A fizetési szolgáltatói ügyfél- és előfizetés-azonosítók nem kerülnek a böngészőbe. Csak az látható, hogy létezik-e szolgáltatói kapcsolat. A központi Identity Core licenc marad a termék- és csomagadat elsődleges adminisztratív forrása; mentéskor a legacy csomagkód a már mentett központi csomagkódhoz igazodik.</span>
+                      </div>
+                    </div>
+                    {!billingDraft ? (
+                      <div className="benjadmin-data-security-note is-warning"><CreditCard size={17} /><div><strong>Nincs pontos legacy előfizetési kapcsolat</strong><span>A számlázási blokk csak létező <code>legacy_license_ref</code> rekordnál szerkeszthető. Automatikus cég- vagy név alapú összerendelés nincs.</span></div></div>
+                    ) : (
+                      <>
+                        <div className="benjadmin-license-billing__summary">
+                          <span>Központi csomag<b>{selectedLicense.plan_code || "—"}</b></span>
+                          <span>Legacy csomag<b>{billingDraft.planCode || "—"}</b></span>
+                          <span>Legacy licencállapot<b>{billingDraft.legacyStatus || "—"}</b></span>
+                          <span>Legacy lejárat<b>{displayDate(billingDraft.expiresAt)}</b></span>
+                          <span>Fizetési ügyfélkapcsolat<b>{billingDraft.providerCustomerLinked ? "Kapcsolva" : "Nincs kapcsolat"}</b></span>
+                          <span>Fizetési előfizetéskapcsolat<b>{billingDraft.providerSubscriptionLinked ? "Kapcsolva" : "Nincs kapcsolat"}</b></span>
+                        </div>
+                        <div className="benjadmin-license-billing__alignment">
+                          <BenjadminStatusPill tone={(selectedLicense.plan_code || "manual") === billingDraft.planCode ? "ok" : "warning"}>{(selectedLicense.plan_code || "manual") === billingDraft.planCode ? "Csomag egyezik" : "Csomag eltérés"}</BenjadminStatusPill>
+                          <span>A mentés a legacy csomagkódot a jelenleg mentett központi csomaghoz igazítja; a központi licencet ez a gomb nem módosítja.</span>
+                        </div>
+                        <div className="benjadmin-data-form-grid">
+                          <Field label="Számlázási ciklus"><select value={billingDraft.billingInterval} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { billingInterval: event.target.value as LegacyBillingSummary["billingInterval"] })}>{Object.entries(billingIntervalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+                          <Field label="Fizetési állapot"><select value={billingDraft.billingStatus} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { billingStatus: event.target.value as LegacyBillingSummary["billingStatus"] })}>{Object.entries(billingStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+                          <Field label="Előfizetési mennyiség" hint="A legacy számlázási mennyiség; nem azonos automatikusan a felhasználó- vagy gépkerettel."><input type="number" min={1} value={billingDraft.subscriptionQuantity} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { subscriptionQuantity: Math.max(1, Number(event.target.value) || 1) })} /></Field>
+                          <Field label="Aktuális számlázási időszak vége"><input type="date" value={billingDraft.currentPeriodEnd?.slice(0, 10) || ""} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { currentPeriodEnd: event.target.value ? new Date(`${event.target.value}T23:59:59`).toISOString() : "" })} /></Field>
+                          <Field label="Inaktív gép automatikus felszabadítása"><select value={billingDraft.autoReleaseInactiveDevices ? "yes" : "no"} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { autoReleaseInactiveDevices: event.target.value === "yes" })}><option value="no">Kikapcsolva</option><option value="yes">Bekapcsolva</option></select></Field>
+                          <Field label="Felszabadítási küszöb (nap)" hint="Csak bekapcsolt automatikus felszabadításnál releváns."><input type="number" min={1} value={billingDraft.inactiveReleaseDays} onChange={(event) => updateBillingDraft(billingDraft.legacyLicenseId, { inactiveReleaseDays: Math.max(1, Number(event.target.value) || 1) })} /></Field>
+                        </div>
+                        <button type="button" className="benjadmin-data-secondary-action is-full" onClick={() => void saveLegacyBilling(selectedLicense)} disabled={busy !== ""}>{busy === `billing:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Előfizetési adatok mentése</button>
                       </>
                     )}
                   </section>
