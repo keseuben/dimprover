@@ -3,35 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DevProject, DevVersion, DevWorkCategory, DevWorkSession } from "@/app/lib/dev-center/types";
-import DevPwaControls from "@/components/admin/DevPwaControls";
-import DevChatStarterCard from "@/components/admin/DevChatStarterCard";
-import DevPortfolioOverview from "@/components/admin/DevPortfolioOverview";
 import DevEnginePanel from "@/components/admin/DevEnginePanel";
+import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 import {
-  Activity,
-  BellRing,
-  Boxes,
-  CheckCircle2,
   ChevronRight,
-  CircleEllipsis,
-  Clock3,
-  CloudCog,
   Code2,
-  FileText,
-  FolderKanban,
-  GitBranch,
-  LayoutDashboard,
-  Network,
-  PackageCheck,
-  Search,
-  ServerCog,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
   Play,
+  RefreshCw,
+  Search,
+  ShieldCheck,
   Square,
-  Timer,
   UploadCloud,
+  X,
 } from "lucide-react";
 
 type AuthState = "checking" | "authorized" | "blocked";
@@ -66,40 +49,6 @@ function addTimeBreakdowns(left: DevTimeBreakdown, right: DevTimeBreakdown): Dev
     unclassified: left.unclassified + right.unclassified,
   };
 }
-
-const quickLinkGroups = [
-  {
-    title: "Kiadás és verziók",
-    icon: PackageCheck,
-    items: [
-      { label: "Release Központ", href: "/admin/release-kozpont", note: "DEV → STAGING → PRODUCTION állapotok" },
-      { label: "Release feltöltő", href: "/admin/releases", note: "Kiadási csomagok feltöltése" },
-      { label: "Fájlműhely verziók", href: "/admin/fajlmuhely-verziok", note: "Védett asztali kiadások" },
-      { label: "HAGE verziók", href: "/admin/hage-verziok", note: "DEV és RUN csomagok" },
-    ],
-  },
-  {
-    title: "Rendszer és üzemeltetés",
-    icon: ServerCog,
-    items: [
-      { label: "Szerverállapot", href: "/admin/szerver", note: "VPS, PM2, build és erőforrások" },
-      { label: "Drive API", href: "/admin/drive", note: "Tokenek, upload és storage" },
-      { label: "E-mail beállítások", href: "/admin/email", note: "SMTP profilok és feladók" },
-      { label: "Belépési napló", href: "/admin/dimpro-belepesek", note: "OTP és hozzáférési események" },
-    ],
-  },
-  {
-    title: "Fejlesztési dokumentáció",
-    icon: FileText,
-    items: [
-      { label: "Fejlesztési napló", href: "/admin/fejlesztesi-naplo", note: "Ötletek, döntések és folytatási pontok" },
-      { label: "AI Kontextustár", href: "/admin/fejlesztesi-naplo", note: "Más AI-nak átadható projektkontextus" },
-      { label: "DIMPRO rendszerstruktúra", href: "/admin/dev/rendszerstruktura", note: "Szerverek, belépések, termékek, modulok és e-mail címek" },
-      { label: "Licencadmin", href: "/admin", note: "Licencek, ügyfelek és gépek" },
-      { label: "Admin belépések", href: "/adminlog", note: "Admin hozzáférési események" },
-    ],
-  },
-];
 
 
 function formatHungarianDate(value?: string | null) {
@@ -223,11 +172,17 @@ function versionStatusLabel(status: DevVersion["status"]) {
   return labels[status];
 }
 
-function versionStatusClass(status: DevVersion["status"]) {
-  if (status === "completed" || status === "released") return "is-completed";
-  if (status === "testing") return "is-testing";
-  if (status === "blocked") return "is-waiting";
-  return "is-progress";
+
+function versionStatusTone(status: DevVersion["status"]): "default" | "ok" | "warning" | "danger" | "info" {
+  if (status === "completed" || status === "released") return "ok";
+  if (status === "testing") return "info";
+  if (status === "blocked") return "danger";
+  if (status === "in_progress") return "warning";
+  return "default";
+}
+
+function projectStatusLabel(status: DevProject["status"]) {
+  return ({ active: "Aktív", paused: "Szünetel", completed: "Elkészült", archived: "Archivált", unassigned: "Besorolatlan" } as const)[status] || status;
 }
 
 function formatHungarianDateTime(value?: string | null) {
@@ -254,6 +209,12 @@ export default function DeveloperCenterPage() {
   const [timerBusy, setTimerBusy] = useState("");
   const [timerMessage, setTimerMessage] = useState("");
   const [clockTick, setClockTick] = useState(() => Date.now());
+  const [activeView, setActiveView] = useState<"versions" | "sessions" | "projects">("versions");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [engineDrawerOpen, setEngineDrawerOpen] = useState(false);
 
   useEffect(() => {
     async function verifyStoredAdminKey() {
@@ -344,60 +305,7 @@ export default function DeveloperCenterPage() {
     [devWorkSessions],
   );
 
-  const timeSummaryRows = useMemo(() => {
-    const rows = new Map<string, {
-      projectId: string;
-      projectName: string;
-      projectStartedAt: string;
-      moduleName: string;
-      versionIds: Set<string>;
-      totalMinutes: number;
-      monthMinutes: number;
-      totalBreakdown: DevTimeBreakdown;
-      monthBreakdown: DevTimeBreakdown;
-      activeSessions: number;
-      lastActivity: string;
-    }>();
 
-    devWorkSessions.forEach((session) => {
-      const project = devProjects.find((item) => item.id === session.projectId);
-      const projectName = project?.name || "Egyéb / besorolatlan";
-      const projectStartedAt = project?.startedAt || project?.createdAt || session.startedAt;
-      const key = `${session.projectId}::${session.moduleName}`;
-      const existing = rows.get(key) || {
-        projectId: session.projectId,
-        projectName,
-        projectStartedAt,
-        moduleName: session.moduleName || "Általános fejlesztés",
-        versionIds: new Set<string>(),
-        totalMinutes: 0,
-        monthMinutes: 0,
-        totalBreakdown: createEmptyTimeBreakdown(),
-        monthBreakdown: createEmptyTimeBreakdown(),
-        activeSessions: 0,
-        lastActivity: session.endedAt || session.startedAt,
-      };
-      existing.versionIds.add(session.versionId);
-      const sessionTotalBreakdown = getSessionTimeBreakdown(session, clockTick);
-      const sessionMonthBreakdown = getSessionTimeBreakdown(session, clockTick, currentMonthStart, clockTick);
-      existing.totalMinutes += sessionTotalBreakdown.gross;
-      existing.monthMinutes += sessionMonthBreakdown.gross;
-      existing.totalBreakdown = addTimeBreakdowns(existing.totalBreakdown, sessionTotalBreakdown);
-      existing.monthBreakdown = addTimeBreakdowns(existing.monthBreakdown, sessionMonthBreakdown);
-      if (!session.endedAt) existing.activeSessions += 1;
-      const activity = session.endedAt || session.startedAt;
-      if (new Date(activity).getTime() > new Date(existing.lastActivity).getTime()) existing.lastActivity = activity;
-      rows.set(key, existing);
-    });
-
-    return [...rows.values()].sort((left, right) => right.totalMinutes - left.totalMinutes);
-  }, [clockTick, currentMonthStart, devProjects, devWorkSessions]);
-
-  const latestCompleted = useMemo(() => devVersions
-    .filter((version) => version.status === "completed" || version.status === "released")
-    .sort((left, right) => new Date(right.completedAt || right.updatedAt).getTime() - new Date(left.completedAt || left.updatedAt).getTime())[0], [devVersions]);
-
-  const latestCompletedProject = latestCompleted ? devProjects.find((project) => project.id === latestCompleted.projectId) : undefined;
 
 
 
@@ -406,6 +314,7 @@ export default function DeveloperCenterPage() {
     return [...devVersions]
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
       .filter((version) => {
+        if (statusFilter !== "all" && version.status !== statusFilter) return false;
         if (!normalized) return true;
         const projectName = devProjects.find((project) => project.id === version.projectId)?.name || "";
         return [projectName, version.moduleName, version.version, version.title, version.summary, version.status]
@@ -413,7 +322,35 @@ export default function DeveloperCenterPage() {
           .toLocaleLowerCase("hu-HU")
           .includes(normalized);
       });
-  }, [devProjects, devVersions, query]);
+  }, [devProjects, devVersions, query, statusFilter]);
+
+  const filteredProjects = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("hu-HU");
+    return [...devProjects]
+      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+      .filter((project) => !normalized || [project.name, project.slug, project.category, project.description, project.status].join(" ").toLocaleLowerCase("hu-HU").includes(normalized));
+  }, [devProjects, query]);
+
+  const filteredSessions = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("hu-HU");
+    return [...devWorkSessions]
+      .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime())
+      .filter((session) => {
+        if (!normalized) return true;
+        const project = devProjects.find((item) => item.id === session.projectId);
+        const version = devVersions.find((item) => item.id === session.versionId);
+        return [project?.name || "", session.moduleName, version?.version || "", session.currentCategory || "", session.source, session.note || ""].join(" ").toLocaleLowerCase("hu-HU").includes(normalized);
+      });
+  }, [devProjects, devVersions, devWorkSessions, query]);
+
+  const activeRows = activeView === "versions" ? filteredVersions : activeView === "sessions" ? filteredSessions : filteredProjects;
+  const pageCount = Math.max(1, Math.ceil(activeRows.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pageStart = (safePage - 1) * pageSize;
+  const pagedVersions = filteredVersions.slice(pageStart, pageStart + pageSize);
+  const pagedSessions = filteredSessions.slice(pageStart, pageStart + pageSize);
+  const pagedProjects = filteredProjects.slice(pageStart, pageStart + pageSize);
+  const selectedVersion = selectedVersionId ? devVersions.find((version) => version.id === selectedVersionId) || null : null;
 
   async function toggleVersionTimer(versionId: string, isRunning: boolean) {
     const key = localStorage.getItem("dimproLicenseAdminKey")?.trim();
@@ -472,332 +409,142 @@ export default function DeveloperCenterPage() {
 
   if (authState !== "authorized") {
     return (
-      <main className="dev-center-page dev-auth-page">
-        <section className="dev-auth-card">
-          <ShieldCheck size={34} aria-hidden="true" />
-          <p className="dev-kicker">Védett fejlesztői felület</p>
-          <h1>Licencadmin belépés szükséges</h1>
-          <p>A Fejlesztési Központ csak sikeres licencadmin-belépés után érhető el.</p>
-          {authState === "checking" ? (
-            <span className="dev-muted-button">Jogosultság ellenőrzése…</span>
-          ) : (
-            <Link href="/admin" className="dev-primary-button">Licencadmin megnyitása <ChevronRight size={17} /></Link>
-          )}
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <ShieldCheck size={22} />
+          <h1>{authState === "checking" ? "Jogosultság ellenőrzése" : "Licencadmin belépés szükséges"}</h1>
+          <p>A Fejlesztési Központ csak sikeres BENJADMIN licencadmin-belépés után érhető el.</p>
+          {authState === "blocked" ? <Link href="/admin" className="benjadmin-data-primary-action">Licencadmin megnyitása <ChevronRight size={15} /></Link> : null}
         </section>
       </main>
     );
   }
 
   return (
-    <main className="dev-center-page">
-      <section className="dev-center-container">
-        <header className="dev-hero operator-dev-hero" id="attekintes">
-          <div>
-            <p className="dev-kicker">BENJADMIN · FEJLESZTÉSI VEZÉRLÉS</p>
-            <h1>Fejlesztési Központ</h1>
-            <p className="dev-hero-copy">
-              A részletes projekt-, verzió- és időnyilvántartás az Operator UI mögött: fejlesztési körök, engine állapot, tesztek és kiadási kapuk egy helyen.
-            </p>
-          </div>
-          <div className="dev-hero-actions">
-            <Link href="/admin/szerver" className="dev-primary-button"><ServerCog size={17} /> Szerver állapotfigyelő</Link>
-            <Link href="/admin/dev/rendszerstruktura" className="dev-secondary-button"><Network size={17} /> Rendszerstruktúra</Link>
-            <Link href="/admin/fejlesztesi-naplo" className="dev-secondary-button"><FileText size={17} /> Fejlesztési napló</Link>
-            <Link href="/admin/releases" className="dev-primary-button"><UploadCloud size={17} /> Új release</Link>
-          </div>
-        </header>
-
-        <DevChatStarterCard />
-
-        <section className="dev-alert-setup" id="ertesitesek">
-          <div className="dev-alert-setup__heading">
-            <div className="dev-alert-setup__icon"><BellRing size={24} aria-hidden="true" /></div>
-            <div>
-              <p className="dev-section-label">Egyszeri mobilbeállítás</p>
-              <h2>DIMPRO Dev telepítés és hangos értesítés</h2>
-              <p>Telepítse a mobilalkalmazást, engedélyezze a push értesítést, majd próbálja ki az egyedi, erős DIMPRO jelzőhangot.</p>
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · FEJLESZTÉSI VEZÉRLÉS"
+        title="Fejlesztési Központ"
+        description="Projekt-, verzió- és munkamenet-nyilvántartás táblázatos kezeléssel. A fejlesztési motor részletei külön oldalsó panelen érhetők el."
+        actions={(
+          <>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadDevCenterData()}><RefreshCw size={16} /> Frissítés</button>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => setEngineDrawerOpen(true)}><Code2 size={16} /> Fejlesztési motor</button>
+            <Link href="/admin/release-kozpont" className="benjadmin-data-primary-action"><UploadCloud size={16} /> Release Központ</Link>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Projektek" value={devProjects.length} />
+            <BenjadminMetric label="Folyamatban" value={summaryCounts.inProgress} tone="warning" />
+            <BenjadminMetric label="Tesztelés" value={summaryCounts.testing} />
+            <BenjadminMetric label="Blokkolt" value={summaryCounts.blocked} tone={summaryCounts.blocked ? "danger" : "default"} />
+            <BenjadminMetric label="Fejlesztési idő" value={formatDurationCompact(totalTrackedMinutes)} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <div className="benjadmin-data-filter-group" aria-label="Fejlesztési nézet">
+              <button type="button" className={activeView === "versions" ? "is-active" : ""} onClick={() => { setActiveView("versions"); setPage(1); }}>Verziók</button>
+              <button type="button" className={activeView === "sessions" ? "is-active" : ""} onClick={() => { setActiveView("sessions"); setPage(1); }}>Munkamenetek</button>
+              <button type="button" className={activeView === "projects" ? "is-active" : ""} onClick={() => { setActiveView("projects"); setPage(1); }}>Projektek</button>
+              {activeView === "versions" ? ["all", "in_progress", "testing", "blocked", "completed"].map((status) => <button key={status} type="button" className={statusFilter === status ? "is-active" : ""} onClick={() => { setStatusFilter(status); setPage(1); }}>{status === "all" ? "Minden státusz" : versionStatusLabel(status as DevVersion["status"])}</button>) : null}
             </div>
-          </div>
-          <DevPwaControls />
-        </section>
-
-        <section className="dev-summary-grid" aria-label="Fejlesztési összesítő">
-          <SummaryCard icon={Code2} label="Folyamatban" value={String(summaryCounts.inProgress)} note="aktív fejlesztési kör" tone="cyan" />
-          <SummaryCard icon={Activity} label="Tesztelés alatt" value={String(summaryCounts.testing)} note="ellenőrzésre vár" tone="blue" />
-          <SummaryCard icon={CheckCircle2} label="Elkészült" value={String(summaryCounts.completed)} note="lezárt fejlesztési kör" tone="green" />
-          <SummaryCard icon={CircleEllipsis} label="Kézi beavatkozás" value={String(summaryCounts.blocked)} note={summaryCounts.blocked ? "beavatkozást igényel" : "nincs blokkoló feladat"} tone="amber" />
-          <SummaryCard icon={Timer} label="Bruttó fejlesztési idő" value={formatDurationCompact(totalTrackedMinutes)} note={`${activeSessionCount} aktív munkamenet`} tone="cyan" />
-        </section>
-
-        <DevEnginePanel />
-
-        <section className="dev-section" id="projektek">
-          <div className="dev-section-heading">
-            <div>
-              <p className="dev-section-label">Projektalapú fejlesztési nyilvántartás</p>
-              <h2>Fejlesztési projektek</h2>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Keresés projekt, modul, verzió, leírás vagy státusz alapján" /></label>
+            <div className="benjadmin-data-stage-strip">
+              <span className={activeSessionCount ? "is-online" : "is-unknown"}>Aktív munkamenet: <b>{activeSessionCount}</b></span>
+              <span>Havi idő: <b>{formatDurationCompact(currentMonthMinutes)}</b></span>
             </div>
-            <label className="dev-search">
-              <Search size={18} aria-hidden="true" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Projekt vagy verzió keresése" />
-            </label>
-          </div>
-
-          {dataError ? <div className="dev-data-warning">{dataError} A tartalék projektlista látható.</div> : null}
-          <DevPortfolioOverview
-            projects={devProjects}
-            versions={devVersions}
-            workSessions={devWorkSessions}
-            now={clockTick}
-            query={query}
-            showHeading={false}
-          />
-        </section>
-
-        <section className="dev-section" id="idok">
-          <div className="dev-section-heading">
-            <div>
-              <p className="dev-section-label">Aktív munkamenetek alapján</p>
-              <h2>Ráfordított fejlesztési idő</h2>
-            </div>
-            <div className="dev-time-heading-stats">
-              <span><strong>{formatDuration(totalTrackedMinutes)}</strong> összesen</span>
-              <span><strong>{formatDuration(currentMonthMinutes)}</strong> ebben a hónapban</span>
-              <span className={activeSessionCount ? "is-running" : ""}><strong>{activeSessionCount}</strong> aktív</span>
-            </div>
-          </div>
-
-          {timerMessage ? <div className="dev-timer-message">{timerMessage}</div> : null}
-          <div className="dev-time-overview-grid">
-            <article>
-              <span>Összesített időbontás</span>
-              <TimeBreakdownView breakdown={totalTimeBreakdown} />
-            </article>
-            <article>
-              <span>Aktuális hónap</span>
-              <TimeBreakdownView breakdown={currentMonthTimeBreakdown} />
-            </article>
-          </div>
-          <div className="dev-time-table-shell">
-            <table className="dev-time-table">
-              <thead>
-                <tr>
-                  <th>Projekt</th>
-                  <th>Modul</th>
-                  <th>Projekt indulása</th>
-                  <th>Verziók</th>
-                  <th>Teljes időbontás</th>
-                  <th>Aktuális hónap</th>
-                  <th>Állapot</th>
-                  <th>Utolsó munka</th>
-                </tr>
-              </thead>
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{timerMessage || dataError || `${activeRows.length} megjeleníthető rekord`}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={activeRows.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          {activeView === "versions" ? (
+            <table className="benjadmin-data-table" data-testid="benjadmin-dev-versions-table">
+              <thead><tr><th>Projekt</th><th>Modul</th><th>Verzió</th><th>Fejlesztés</th><th>Státusz</th><th>Ráfordítás</th><th>Aktív időkategória</th><th>Frissítve</th><th>Művelet</th></tr></thead>
               <tbody>
-                {timeSummaryRows.map((row) => (
-                  <tr key={`${row.projectId}-${row.moduleName}`}>
-                    <td data-label="Projekt"><strong>{row.projectName}</strong></td>
-                    <td data-label="Modul"><span className="dev-module-badge">{row.moduleName}</span></td>
-                    <td data-label="Projekt indulása">{formatHungarianDate(row.projectStartedAt)}</td>
-                    <td data-label="Verziók">{row.versionIds.size}</td>
-                    <td data-label="Teljes idő"><TimeBreakdownView breakdown={row.totalBreakdown} compact /></td>
-                    <td data-label="Havi idő"><TimeBreakdownView breakdown={row.monthBreakdown} compact /></td>
-                    <td data-label="Állapot">
-                      {row.activeSessions ? <span className="dev-time-running"><span /> {row.activeSessions} fut</span> : <span className="dev-time-stopped">lezárva</span>}
-                    </td>
-                    <td data-label="Utolsó munka">{formatHungarianDateTime(row.lastActivity)}</td>
-                  </tr>
-                ))}
-                {!timeSummaryRows.length ? (
-                  <tr><td colSpan={8} className="dev-version-empty">Még nincs rögzített fejlesztési munkamenet.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-          <p className="dev-time-disclaimer">A bruttó munkamenet az indítás és leállítás közötti teljes idő. Az új munkameneteken belül a kategóriaváltások külön rögzítik az aktív fejlesztést, a buildet és tesztet, a várakozást, valamint a dokumentációt és kiadást. A korábbi lezárt adatok hitelesen, nem bontott időként maradnak meg.</p>
-        </section>
-
-        <section className="dev-section" id="verziok">
-          <div className="dev-section-heading">
-            <div>
-              <p className="dev-section-label">Projekt- és verziótörténet</p>
-              <h2>Fejlesztési verziók</h2>
-            </div>
-            <span className="dev-version-count">{filteredVersions.length} verzió</span>
-          </div>
-
-          <div className="dev-version-table-shell">
-            <table className="dev-version-table">
-              <thead>
-                <tr>
-                  <th>Projekt</th>
-                  <th>Modul</th>
-                  <th>Verzió</th>
-                  <th>Fejlesztés rövid leírása</th>
-                  <th>Állapot</th>
-                  <th>Ráfordított idő</th>
-                  <th>Frissítve / befejezve</th>
-                  <th>Műveletek</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVersions.map((version) => {
+                {pagedVersions.length ? pagedVersions.map((version) => {
                   const project = devProjects.find((item) => item.id === version.projectId);
-                  const primaryUrl = version.downloadUrl || version.releaseUrl || version.chatUrl;
                   const versionSessions = devWorkSessions.filter((session) => session.versionId === version.id);
-                  const versionBreakdown = getSessionsTimeBreakdown(versionSessions, clockTick);
+                  const breakdown = getSessionsTimeBreakdown(versionSessions, clockTick);
                   const openSession = versionSessions.find((session) => !session.endedAt);
-                  const isRunning = Boolean(openSession);
                   const runningCategory = openSession?.currentCategory || openSession?.timeSegments?.find((segment) => !segment.endedAt)?.category || null;
                   return (
                     <tr key={version.id}>
-                      <td data-label="Projekt">
-                        <strong className="dev-version-project">{project?.name || "Egyéb / besorolatlan"}</strong>
-                      </td>
-                      <td data-label="Modul">
-                        <span className="dev-module-badge">{version.moduleName || "Általános fejlesztés"}</span>
-                      </td>
-                      <td data-label="Verzió">
-                        <span className="dev-version-code">{version.version}</span>
-                      </td>
-                      <td data-label="Fejlesztés">
-                        <strong className="dev-version-title">{version.title}</strong>
-                        <span className="dev-version-summary">{version.summary || "Nincs rövid leírás rögzítve."}</span>
-                      </td>
-                      <td data-label="Állapot">
-                        <span className={`dev-status ${versionStatusClass(version.status)}`}>{versionStatusLabel(version.status)}</span>
-                      </td>
-                      <td data-label="Ráfordítás">
-                        <TimeBreakdownView breakdown={versionBreakdown} runningCategory={runningCategory} compact />
-                      </td>
-                      <td data-label="Időpont">
-                        <span className="dev-version-date">{formatHungarianDateTime(version.completedAt || version.updatedAt)}</span>
-                      </td>
-                      <td data-label="Műveletek">
-                        <div className="dev-version-actions">
-                          {primaryUrl ? <a href={primaryUrl} target="_blank" rel="noreferrer">Megnyitás <ChevronRight size={14} /></a> : null}
-                          <Link href={`/admin/fejlesztesi-naplo?project=${encodeURIComponent(version.projectId)}`}>Napló <ChevronRight size={14} /></Link>
-                          {isRunning ? (
-                            <label className="dev-time-category-control">
-                              <span>Időtípus</span>
-                              <select
-                                value={runningCategory || "active_development"}
-                                disabled={timerBusy === version.id}
-                                onChange={(event) => void switchVersionTimeCategory(version.id, event.target.value as DevWorkCategory)}
-                              >
-                                {devWorkCategoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                              </select>
-                            </label>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={isRunning ? "is-stop" : "is-start"}
-                            disabled={timerBusy === version.id}
-                            onClick={() => void toggleVersionTimer(version.id, isRunning)}
-                            title={isRunning ? "Aktív fejlesztési munkamenet leállítása" : "Új fejlesztési munkamenet indítása"}
-                          >
-                            {isRunning ? <Square size={12} /> : <Play size={12} />}
-                            {timerBusy === version.id ? "Mentés…" : isRunning ? "Leállítás" : "Indítás"}
-                          </button>
-                        </div>
-                      </td>
+                      <td><strong>{project?.name || "Egyéb / besorolatlan"}</strong></td>
+                      <td>{version.moduleName || "Általános fejlesztés"}</td>
+                      <td className="is-mono"><strong>{version.version}</strong></td>
+                      <td className="is-wide"><strong>{version.title}</strong><br /><small>{version.summary || "Nincs rövid leírás."}</small></td>
+                      <td><BenjadminStatusPill tone={versionStatusTone(version.status)}>{versionStatusLabel(version.status)}</BenjadminStatusPill></td>
+                      <td>{formatDurationCompact(breakdown.gross)}</td>
+                      <td>{runningCategory ? devWorkCategoryOptions.find((item) => item.value === runningCategory)?.label || runningCategory : "—"}</td>
+                      <td className="is-nowrap">{formatHungarianDateTime(version.completedAt || version.updatedAt)}</td>
+                      <td><button type="button" className="benjadmin-data-row-action" onClick={() => setSelectedVersionId(version.id)}>Részletek</button></td>
                     </tr>
                   );
-                })}
-                {!filteredVersions.length ? (
-                  <tr>
-                    <td colSpan={8} className="dev-version-empty">Nincs a keresésnek megfelelő fejlesztési verzió.</td>
-                  </tr>
-                ) : null}
+                }) : <tr><td colSpan={9} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő fejlesztési verzió.</td></tr>}
               </tbody>
             </table>
-          </div>
-        </section>
+          ) : activeView === "sessions" ? (
+            <table className="benjadmin-data-table" data-testid="benjadmin-dev-sessions-table">
+              <thead><tr><th>Projekt</th><th>Modul</th><th>Verzió</th><th>Forrás</th><th>Időkategória</th><th>Kezdés</th><th>Befejezés</th><th>Időtartam</th><th>Állapot</th></tr></thead>
+              <tbody>
+                {pagedSessions.length ? pagedSessions.map((session) => {
+                  const project = devProjects.find((item) => item.id === session.projectId);
+                  const version = devVersions.find((item) => item.id === session.versionId);
+                  const minutes = getSessionMinutes(session, clockTick);
+                  const category = session.currentCategory || session.timeSegments?.find((segment) => !segment.endedAt)?.category || null;
+                  return <tr key={session.id}><td><strong>{project?.name || "Egyéb / besorolatlan"}</strong></td><td>{session.moduleName || "Általános fejlesztés"}</td><td className="is-mono">{version?.version || "—"}</td><td>{session.source}</td><td>{category ? devWorkCategoryOptions.find((item) => item.value === category)?.label || category : "—"}</td><td className="is-nowrap">{formatHungarianDateTime(session.startedAt)}</td><td className="is-nowrap">{session.endedAt ? formatHungarianDateTime(session.endedAt) : "Fut"}</td><td>{formatDurationCompact(minutes)}</td><td><BenjadminStatusPill tone={session.endedAt ? "default" : "ok"}>{session.endedAt ? "Lezárt" : "Aktív"}</BenjadminStatusPill></td></tr>;
+                }) : <tr><td colSpan={9} className="benjadmin-data-empty">Még nincs rögzített munkamenet.</td></tr>}
+              </tbody>
+            </table>
+          ) : (
+            <table className="benjadmin-data-table" data-testid="benjadmin-dev-projects-table">
+              <thead><tr><th>Projekt</th><th>Slug</th><th>Kategória</th><th>Státusz</th><th>Verziók</th><th>Munkamenetek</th><th>Indulás</th><th>Frissítve</th><th>Leírás</th></tr></thead>
+              <tbody>
+                {pagedProjects.length ? pagedProjects.map((project) => <tr key={project.id}><td><strong>{project.name}</strong></td><td className="is-mono">{project.slug}</td><td>{project.category}</td><td><BenjadminStatusPill tone={project.status === "active" ? "ok" : project.status === "paused" ? "warning" : "default"}>{projectStatusLabel(project.status)}</BenjadminStatusPill></td><td>{devVersions.filter((version) => version.projectId === project.id).length}</td><td>{devWorkSessions.filter((session) => session.projectId === project.id).length}</td><td className="is-nowrap">{formatHungarianDate(project.startedAt)}</td><td className="is-nowrap">{formatHungarianDateTime(project.updatedAt)}</td><td className="is-wide">{project.description || "—"}</td></tr>) : <tr><td colSpan={9} className="benjadmin-data-empty">Nincs projekt.</td></tr>}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </BenjadminDataWorkspace>
 
-        <section className="dev-two-column">
-          <article className="dev-panel" id="ertesitesek-allapot">
-            <div className="dev-panel-heading">
-              <div className="dev-panel-icon"><BellRing size={21} /></div>
-              <div><p className="dev-section-label">Következő fejlesztési kör</p><h2>Fejlesztési értesítések</h2></div>
-            </div>
-            <div className="dev-notification-preview">
-              <div className="dev-notification-preview__icon"><CheckCircle2 size={20} /></div>
-              <div>
-                <strong>{latestCompleted ? `${latestCompletedProject?.name || "DIMPRO fejlesztés"} – ${latestCompleted.version}` : "DIMPRO fejlesztés elkészült"}</strong>
-                <p>{latestCompleted?.summary || "A projekt, verzió, rövid változásleírás és befejezési idő itt fog megjelenni."}</p>
+      {selectedVersion ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Verzió részletek bezárása" onClick={() => setSelectedVersionId(null)} /> : null}
+      {selectedVersion ? (() => {
+        const project = devProjects.find((item) => item.id === selectedVersion.projectId);
+        const versionSessions = devWorkSessions.filter((session) => session.versionId === selectedVersion.id);
+        const breakdown = getSessionsTimeBreakdown(versionSessions, clockTick);
+        const openSession = versionSessions.find((session) => !session.endedAt);
+        const runningCategory = openSession?.currentCategory || openSession?.timeSegments?.find((segment) => !segment.endedAt)?.category || null;
+        const primaryUrl = selectedVersion.downloadUrl || selectedVersion.releaseUrl || selectedVersion.chatUrl;
+        return (
+          <aside className="benjadmin-data-drawer benjadmin-dev-drawer" data-testid="benjadmin-dev-version-drawer">
+            <header><div><span>FEJLESZTÉSI VERZIÓ</span><strong>{selectedVersion.version}</strong></div><button type="button" onClick={() => setSelectedVersionId(null)} aria-label="Bezárás"><X size={18} /></button></header>
+            <div className="benjadmin-data-drawer__body benjadmin-dev-version-detail">
+              <section className="benjadmin-data-form-section"><header><strong>{selectedVersion.title}</strong><BenjadminStatusPill tone={versionStatusTone(selectedVersion.status)}>{versionStatusLabel(selectedVersion.status)}</BenjadminStatusPill></header><p>{selectedVersion.summary || "Nincs rövid leírás."}</p></section>
+              <div className="benjadmin-dev-detail-grid"><span>Projekt<b>{project?.name || "Egyéb / besorolatlan"}</b></span><span>Modul<b>{selectedVersion.moduleName || "Általános fejlesztés"}</b></span><span>Indulás<b>{formatHungarianDateTime(selectedVersion.startedAt)}</b></span><span>Frissítés<b>{formatHungarianDateTime(selectedVersion.updatedAt)}</b></span></div>
+              <section className="benjadmin-data-form-section"><header><strong>Ráfordított idő</strong><span>{formatDurationCompact(breakdown.gross)}</span></header><TimeBreakdownView breakdown={breakdown} runningCategory={runningCategory} /></section>
+              {selectedVersion.testSummary ? <section className="benjadmin-data-form-section"><header><strong>Tesztösszefoglaló</strong></header><p>{selectedVersion.testSummary}</p></section> : null}
+              {selectedVersion.nextStep ? <section className="benjadmin-data-form-section"><header><strong>Következő lépés</strong></header><p>{selectedVersion.nextStep}</p></section> : null}
+              <div className="benjadmin-dev-drawer-actions">
+                {primaryUrl ? <a href={primaryUrl} target="_blank" rel="noreferrer" className="benjadmin-data-secondary-action">Megnyitás <ChevronRight size={14} /></a> : null}
+                <Link href={`/admin/fejlesztesi-naplo?project=${encodeURIComponent(selectedVersion.projectId)}`} className="benjadmin-data-secondary-action">Fejlesztési napló <ChevronRight size={14} /></Link>
               </div>
-              <span>{latestCompleted ? formatHungarianDate(latestCompleted.completedAt || latestCompleted.updatedAt) : "minta"}</span>
+              {openSession ? <label className="benjadmin-data-field"><span>Aktív időkategória</span><select value={runningCategory || "active_development"} disabled={timerBusy === selectedVersion.id} onChange={(event) => void switchVersionTimeCategory(selectedVersion.id, event.target.value as DevWorkCategory)}>{devWorkCategoryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label> : null}
+              <button type="button" className={openSession ? "benjadmin-data-danger-action" : "benjadmin-data-primary-action is-full"} disabled={timerBusy === selectedVersion.id} onClick={() => void toggleVersionTimer(selectedVersion.id, Boolean(openSession))}>{openSession ? <Square size={14} /> : <Play size={14} />}{timerBusy === selectedVersion.id ? "Mentés…" : openSession ? "Munkamenet leállítása" : "Munkamenet indítása"}</button>
             </div>
-            <div className="dev-feature-list">
-              <FeatureLine icon={Smartphone} title="PWA mobilalkalmazás" note="Kezdőképernyőre telepíthető DIMPRO Dev felület." />
-              <FeatureLine icon={BellRing} title="Hangos push értesítés" note="Rendszerhanggal, rezgéssel és megnyitható verziókártyával." />
-              <FeatureLine icon={CloudCog} title="Dev Reporter API" note="A ChatGPT védett végponton rögzíti a fejlesztési állapotot." />
-            </div>
-            <div className="dev-callout"><Clock3 size={18} /><span>A projekt–verzió API már elkészült; a következő kör a PWA push és a hangos értesítési csatorna.</span></div>
-          </article>
+          </aside>
+        );
+      })() : null}
 
-          <article className="dev-panel">
-            <div className="dev-panel-heading">
-              <div className="dev-panel-icon"><GitBranch size={21} /></div>
-              <div><p className="dev-section-label">Kötelező ellenőrzési lánc</p><h2>Fejlesztési munkafolyamat</h2></div>
-            </div>
-            <ol className="dev-workflow">
-              <WorkflowStep number="01" title="Backup és fejlesztői környezet" note="Módosítás előtt mentés és elkülönített DEV példány." />
-              <WorkflowStep number="02" title="Kódolás és verziórögzítés" note="Projekt, verzió és rövid változásleírás rögzítése." />
-              <WorkflowStep number="03" title="Build, típus- és smoke teszt" note="Automatikus ellenőrzések, majd legalább 10 mintateszt." />
-              <WorkflowStep number="04" title="Release és értesítés" note="Kiadási link, befejezési idő és mobilos értesítés." />
-            </ol>
-          </article>
-        </section>
-
-        <section className="dev-section" id="gyorslinkek">
-          <div className="dev-section-heading">
-            <div><p className="dev-section-label">Átlátható kategóriák</p><h2>Fejlesztési gyorslinkek</h2></div>
-          </div>
-          <div className="dev-link-group-grid">
-            {quickLinkGroups.map((group) => {
-              const Icon = group.icon;
-              return (
-                <article key={group.title} className="dev-link-group">
-                  <div className="dev-link-group__title"><Icon size={20} /><h3>{group.title}</h3></div>
-                  <div className="dev-link-list">
-                    {group.items.map((item) => (
-                      <Link key={item.href + item.label} href={item.href}>
-                        <span><strong>{item.label}</strong><small>{item.note}</small></span>
-                        <ChevronRight size={17} />
-                      </Link>
-                    ))}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <footer className="dev-footer">
-          <span><Sparkles size={16} /> DIMPRO Fejlesztési Központ – első felületi fejlesztési kör</span>
-          <Link href="/admin">Licencadmin megnyitása <ChevronRight size={15} /></Link>
-        </footer>
-      </section>
-
-      <nav className="dev-mobile-nav" aria-label="Mobil alsó navigáció">
-        <a href="#attekintes"><LayoutDashboard size={19} /><span>Áttekintés</span></a>
-        <a href="#ertesitesek"><BellRing size={19} /><span>Értesítés</span></a>
-        <a href="#projektek"><FolderKanban size={19} /><span>Projektek</span></a>
-        <a href="#idok"><Timer size={19} /><span>Idő</span></a>
-        <a href="#verziok"><Boxes size={19} /><span>Verziók</span></a>
-      </nav>
-    </main>
+      {engineDrawerOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Fejlesztési motor bezárása" onClick={() => setEngineDrawerOpen(false)} /> : null}
+      {engineDrawerOpen ? <aside className="benjadmin-data-drawer benjadmin-engine-drawer" data-testid="benjadmin-dev-engine-drawer"><header><div><span>BENJADMIN</span><strong>Fejlesztési motor</strong></div><button type="button" onClick={() => setEngineDrawerOpen(false)} aria-label="Bezárás"><X size={18} /></button></header><div className="benjadmin-data-drawer__body"><DevEnginePanel /></div></aside> : null}
+    </>
   );
-}
-
-function SummaryCard({ icon: Icon, label, value, note, tone }: { icon: typeof Code2; label: string; value: string; note: string; tone: string }) {
-  return <article className={`dev-summary-card tone-${tone}`}><div className="dev-summary-icon"><Icon size={20} /></div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></article>;
-}
-
-function FeatureLine({ icon: Icon, title, note }: { icon: typeof Smartphone; title: string; note: string }) {
-  return <div className="dev-feature-line"><Icon size={19} /><div><strong>{title}</strong><p>{note}</p></div></div>;
-}
-
-function WorkflowStep({ number, title, note }: { number: string; title: string; note: string }) {
-  return <li><span>{number}</span><div><strong>{title}</strong><p>{note}</p></div></li>;
 }
