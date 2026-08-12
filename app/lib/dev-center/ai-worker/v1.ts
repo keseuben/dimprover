@@ -6,6 +6,7 @@ import { resolveProjectRepositoryId } from "../partner-isolation";
 import { EXTERNAL_AI_WORKER_VERSION, EXTERNAL_AI_WORKFLOW, EXTERNAL_AI_DEFAULTS, normalizeExternalAiWorkflowState, canTransitionExternalAiWorkerState, isV10TransitionImplemented, type ExternalAiWorkflowState, type ExternalAiLaunchMode, type ExternalAiModelPreference } from "./workflow";
 import { EXTERNAL_AI_WORKERS } from "./profiles";
 import { mockWorkerAdapter } from "./model-adapter";
+import { analyzeTechnicalScope } from "./scope-analyzer";
 
 export { EXTERNAL_AI_WORKER_VERSION, EXTERNAL_AI_WORKFLOW, EXTERNAL_AI_DEFAULTS, EXTERNAL_AI_WORKERS, mockWorkerAdapter, canTransitionExternalAiWorkerState, isV10TransitionImplemented };
 
@@ -130,6 +131,8 @@ function mapTask(row: TaskRow) {
     maxActiveMinutesPerWorker: positiveInt(metadata.maxActiveMinutesPerWorker, EXTERNAL_AI_DEFAULTS.maxActiveMinutesPerWorker, 1, 480),
     maxFixRounds: positiveInt(metadata.maxFixRounds, EXTERNAL_AI_DEFAULTS.maxFixRounds, 0, 2),
     technicalScopeMode: text(metadata.technicalScopeMode) || "AUTO_BENJADMIN",
+    scopeAnalysisState: text(metadata.scopeAnalysisState) || "PENDING",
+    scopeAnalysis: record(metadata.scopeAnalysis),
     scope: row.scope,
     acceptance: row.acceptance,
     createdAt: row.created_at,
@@ -177,4 +180,34 @@ export async function transitionExternalAiWorkerTask(taskId: string, requestedSt
   });
   if (audit.error) throw new Error(audit.error.message);
   return { ok: true as const, taskId, from: current, to: target, engineStatus };
+}
+
+export async function analyzeExternalAiWorkerTask(taskId: string) {
+  const db = dbClient();
+  const { data, error } = await db.from("dev_center_tasks").select("id,project_id,title,description,status,metadata").eq("id", taskId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return { ok: false as const, error: "Az AI worker task nem található." };
+  const metadata = record(data.metadata);
+  if (metadata.workflowTarget !== EXTERNAL_AI_WORKFLOW || metadata.recordType !== "WORKER_TASK") return { ok: false as const, error: "A task nem Külső AI Worker V1 végrehajtási task." };
+  const analysis = await analyzeTechnicalScope({ title: data.title || "", goal: data.description || "", moduleHint: text(metadata.moduleHint) || null });
+  const blockedByRed = analysis.deniedCount > 0;
+  const nextState: ExternalAiWorkflowState = blockedByRed ? "DRAFT" : "READY";
+  const analysisState = blockedByRed ? "BLOCKED_RED" : analysis.reviewRequired ? "NEEDS_REVIEW" : "AUTO_APPROVED";
+  const nextMetadata = { ...metadata, workflowState: nextState, scopeAnalysisState: analysisState, scopeAnalysis: analysis, scopeAnalyzedAt: analysis.generatedAt };
+  const update = await db.from("dev_center_tasks").update({
+    metadata: nextMetadata,
+    scope: blockedByRed ? [] : analysis.approvedScope,
+    status: blockedByRed ? "blocked" : "ready",
+    blocked_reason: blockedByRed ? "A technikai scope PIROS/tiltott területet érint; külön BENJADMIN döntés szükséges." : null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", taskId).select("id,status,scope,metadata,blocked_reason,updated_at").single();
+  if (update.error) throw new Error(update.error.message);
+  const audit = await db.from("dev_center_audit_events").insert({
+    id: `dev-audit-${randomUUID().slice(0, 12)}`, actor_type: "system", actor_id: "BenAI", action: "AI_WORKER_SCOPE_ANALYZED",
+    entity_type: "task", entity_id: taskId, task_id: taskId, project_id: data.project_id,
+    summary: `Automatikus technikai scope: ${analysis.overallRisk} · ${analysis.candidates.length} jelölt · ${analysis.approvedScope.length} automatikusan engedhető.`,
+    metadata: { analyzerVersion: analysis.analyzerVersion, overallRisk: analysis.overallRisk, reviewCount: analysis.reviewCount, deniedCount: analysis.deniedCount, analysisState },
+  });
+  if (audit.error) throw new Error(audit.error.message);
+  return { ok: true as const, taskId, workflowState: nextState, scopeAnalysisState: analysisState, analysis };
 }

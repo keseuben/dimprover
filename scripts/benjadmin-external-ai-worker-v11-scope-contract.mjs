@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+const policy=await import(`../app/lib/dev-center/ai-worker/scope-policy.ts?contract=${Date.now()}`);
+const secrets=await import(`../app/lib/dev-center/ai-worker/secret-scanner.ts?contract=${Date.now()}`);
+let passed=0;const check=(name,fn)=>{fn();passed+=1;console.log(`PASS ${name}`)};
+check("Modulkomponens GREEN",()=>assert.equal(policy.classifyScopePath("components/drive/DriveWorkspace.tsx").riskLevel,"GREEN"));
+check("Shared UI YELLOW",()=>assert.equal(policy.classifyScopePath("components/ui/Button.tsx").riskLevel,"YELLOW"));
+check("App lib YELLOW",()=>assert.equal(policy.classifyScopePath("app/lib/drive/service.ts").decision,"NEEDS_REVIEW"));
+check(".env RED",()=>assert.equal(policy.classifyScopePath(".env.local").riskLevel,"RED"));
+check("Auth core RED",()=>assert.equal(policy.classifyScopePath("app/lib/license/admin-auth.ts").decision,"DENIED"));
+check("Deploy script RED",()=>assert.equal(policy.classifyScopePath("scripts/dimpro-prod-deploy.mjs").riskLevel,"RED"));
+check("Highest risk RED dominates",()=>assert.equal(policy.highestRisk([{path:"a",score:1,riskLevel:"GREEN",decision:"AUTO_APPROVED",reasons:[],evidence:[]},{path:"b",score:1,riskLevel:"RED",decision:"DENIED",reasons:[],evidence:[]}]),"RED"));
+check("Secret path scanner .pem",()=>assert.equal(secrets.isSensitivePath("keys/prod.pem"),true));
+check("Secret text scanner private key",()=>assert.ok(secrets.scanSensitiveText("-----BEGIN PRIVATE KEY-----\nabc").includes("Private key")));
+check("Normál source text nem secret",()=>assert.equal(secrets.scanSensitiveText("export const value = 42;").length,0));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

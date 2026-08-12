@@ -21,6 +21,14 @@ type ExternalTask = {
   maxActiveMinutesPerWorker: number;
   maxFixRounds: number;
   technicalScopeMode: string;
+  scopeAnalysisState: string;
+  scopeAnalysis: {
+    overallRisk?: "GREEN" | "YELLOW" | "RED";
+    reviewCount?: number;
+    deniedCount?: number;
+    safeToPreflight?: boolean;
+    candidates?: Array<{ path: string; riskLevel: "GREEN" | "YELLOW" | "RED"; decision: string; reasons: string[]; evidence: string[] }>;
+  };
   createdAt: string;
 };
 
@@ -117,6 +125,22 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
     }
   }
 
+  async function analyze(task: ExternalTask) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/dev/ai-worker/tasks/${encodeURIComponent(task.id)}/analyze`, { method: "POST", headers: adminHeaders(true) });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; scopeAnalysisState?: string; analysis?: { candidates?: unknown[]; overallRisk?: string }; error?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A technikai scope nem elemezhető.");
+      setMessage(`Technikai scope elkészült: ${payload.analysis?.overallRisk || "—"} · ${payload.analysis?.candidates?.length || 0} jelölt.`);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A technikai scope nem elemezhető.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function transition(task: ExternalTask, state: "READY" | "PAUSED") {
     setBusy(true);
     setMessage("");
@@ -183,13 +207,14 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
                 <div className={styles.aiWorkerFour}>
                   <div><small>FELADAT</small><strong>{task.goal.slice(0, 115)}</strong><span>{task.technicalScopeMode === "AUTO_BENJADMIN" ? "Scope: automatikus" : task.technicalScopeMode}</span></div>
                   <div><small>WORKER</small><strong>M.Forge-AI → V.Guard-AI</strong><span>Provider: mock V1.0</span></div>
-                  <div><small>ELLENŐRZÉS</small><strong>Scope · Review · Gate</strong><span>Max. javítási kör: {task.maxFixRounds}</span></div>
+                  <div><small>ELLENŐRZÉS</small><strong>Scope {task.scopeAnalysis?.overallRisk ? `· ${task.scopeAnalysis.overallRisk}` : "· elemzésre vár"}</strong><span>{task.scopeAnalysisState || "PENDING"} · review {task.scopeAnalysis?.reviewCount || 0} · tiltott {task.scopeAnalysis?.deniedCount || 0}</span></div>
                   <div><small>EREDMÉNY</small><strong>{task.taskBudgetHuf.toLocaleString("hu-HU")} Ft · {task.maxActiveMinutesPerWorker} perc</strong><span>DEV READY: még nem</span></div>
                 </div>
+                {task.scopeAnalysis?.candidates?.length ? <details className={styles.aiScopeDetails}><summary><Eye size={13} /> Scope megtekintése · {task.scopeAnalysis.candidates.length} jelölt</summary><div>{task.scopeAnalysis.candidates.slice(0, 18).map((candidate) => <article key={candidate.path} data-risk={candidate.riskLevel}><b>{candidate.riskLevel}</b><code>{candidate.path}</code><span>{candidate.decision} · {candidate.reasons[0] || "—"}</span></article>)}</div></details> : null}
                 <footer>
                   <span><CircleDollarSign size={13} /> Forge {task.forgeBudgetHuf.toLocaleString("hu-HU")} Ft · Guard {task.guardBudgetHuf.toLocaleString("hu-HU")} Ft</span>
                   <span><Clock3 size={13} /> {task.maxActiveMinutesPerWorker} perc/worker</span>
-                  <div>{task.workflowState === "DRAFT" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>ELŐKÉSZÍTÉS KÉSZ</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}</div>
+                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}</div>
                 </footer>
               </article>
             ))}
