@@ -533,3 +533,64 @@
   .composerLeaderAvatar > span:first-child { width: 46px; height: 46px; }
   .composerLeaderAvatar > span:last-child { display: none; }
 }
+
+/* Külső AI Worker V1 */
+.aiWorkerTopButton { border-color: color-mix(in srgb, var(--violet) 50%, var(--border)) !important; color: var(--violet) !important; background: color-mix(in srgb, var(--violet) 7%, var(--surface)) !important; }
+.aiWorkerProfiles { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.aiWorkerProfiles article { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 10px; background: var(--surface); }
+.aiWorkerProfiles article > div { min-width: 0; display: grid; gap: 2px; }
+.aiWorkerProfiles strong { color: var(--text); font-size: 13px; }
+.aiWorkerProfiles span { color: var(--accent-strong); font-size: 10px; font-weight: 900; }
+.aiWorkerProfiles p { margin: 2px 0; color: var(--text-soft); font-size: 11px; line-height: 1.4; }
+.aiWorkerProfiles small { color: var(--muted); font-size: 10px; }
+.aiWorkerCreate { margin-top: 9px; padding: 10px; border: 1px solid color-mix(in srgb, var(--violet) 42%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--violet) 5%, var(--surface)); }
+.aiWorkerCreate > header { display: flex; align-items: center; gap: 8px; color: var(--violet); }
+.aiWorkerCreate > header > div { display: grid; gap: 1px; }
+.aiWorkerCreate > header strong { color: var(--text); font-size: 13px; }
+.aiWorkerCreate > header span { color: var(--muted); font-size: 10px; }
+.aiWorkerFormGrid { margin-top: 8px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px; }
+.aiWorkerFormGrid label { min-width: 0; display: grid; gap: 3px; }
+.aiWorkerFormGrid label > span { color: var(--muted); font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.aiWorkerFormGrid input, .aiWorkerFormGrid select, .aiWorkerFormGrid textarea { width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; outline: none; color: var(--text); background: var(--panel); font-size: 12px; }
+.aiWorkerFormGrid textarea { resize: vertical; line-height: 1.45; }
+.aiWorkerFormGrid input:focus, .aiWorkerFormGrid select:focus, .aiWorkerFormGrid textarea:focus { border-color: var(--violet); box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet) 12%, transparent); }
+.aiWorkerWide { grid-column: span 2; }
+.aiScopeHint, .aiWorkerSafety, .aiAdapterNote { margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: flex-start; gap: 7px; background: var(--surface); color: var(--text-soft); }
+.aiScopeHint > div, .aiAdapterNote { min-width: 0; }
+.aiScopeHint strong, .aiAdapterNote strong { display: block; color: var(--text); font-size: 11px; }
+.aiScopeHint span, .aiWorkerSafety span, .aiAdapterNote span { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.aiWorkerSafety { border-color: color-mix(in srgb, var(--green) 42%, var(--border)); color: var(--green); background: var(--green-soft); }
+.aiWorkerCreateButton { width: 100%; min-height: 38px; margin-top: 8px; border: 1px solid var(--violet); border-radius: 8px; color: #fff; background: var(--violet); cursor: pointer; font-size: 11px; font-weight: 950; letter-spacing: .035em; }
+.aiWorkerCreateButton:disabled { opacity: .5; cursor: default; }
+.aiAdapterNote { display: grid; gap: 2px; }
+.aiWorkerTaskList { margin-top: 9px; display: grid; gap: 8px; }
+.aiWorkerTaskList > article { padding: 9px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.aiWorkerTaskList > article > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.aiWorkerTaskList > article > header > div { min-width: 0; display: grid; gap: 2px; }
+.aiWorkerTaskList > article > header strong { color: var(--text); font-size: 13px; }
+.aiWorkerTaskList > article > header span { color: var(--muted); font-size: 10px; }
+.aiWorkerTaskList > article > header b { padding: 3px 7px; border-radius: 999px; color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, var(--surface2)); font-size: 9px; white-space: nowrap; }
+.aiWorkerPipeline { margin: 7px 0; min-height: 30px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 4px; background: var(--panel2); }
+.aiWorkerPipeline span { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 9px; font-weight: 900; }
+.aiWorkerFour { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 5px; }
+.aiWorkerFour > div { min-width: 0; min-height: 74px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; display: grid; align-content: start; gap: 2px; background: var(--panel); }
+.aiWorkerFour small { color: var(--accent-strong); font-size: 9px; font-weight: 950; letter-spacing: .06em; }
+.aiWorkerFour strong { overflow: hidden; color: var(--text); font-size: 10px; line-height: 1.35; }
+.aiWorkerFour span { color: var(--muted); font-size: 9px; }
+.aiWorkerTaskList > article > footer { margin-top: 7px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; color: var(--muted); font-size: 10px; }
+.aiWorkerTaskList > article > footer > span { display: inline-flex; align-items: center; gap: 4px; }
+.aiWorkerTaskList > article > footer > div { margin-left: auto; display: flex; gap: 4px; }
+.aiWorkerTaskList > article > footer button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-soft); background: var(--panel); cursor: pointer; font-size: 9px; font-weight: 900; }
+.aiWorkerTaskList > article > footer button:hover { border-color: var(--violet); color: var(--violet); }
+
+@media (max-width: 900px) {
+  .aiWorkerFormGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .aiWorkerFour { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .aiWorkerProfiles { grid-template-columns: 1fr; }
+  .aiWorkerFormGrid { grid-template-columns: 1fr; }
+  .aiWorkerWide { grid-column: auto; }
+  .aiWorkerFour { grid-template-columns: 1fr; }
+  .aiWorkerPipeline { justify-content: flex-start; overflow-x: auto; }
+}

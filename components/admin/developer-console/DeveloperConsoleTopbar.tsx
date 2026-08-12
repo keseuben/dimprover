@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenText, FolderOpen, MonitorDown, ShieldCheck, UsersRound } from "lucide-react";
+import { BookOpenText, Bot, FolderOpen, MonitorDown, ShieldCheck, UsersRound } from "lucide-react";
 import ConnectionStatus, { type ConnectionMode } from "./ConnectionStatus";
 import ThemeModeMenu from "./ThemeModeMenu";
 import type { ConsoleTheme, RuntimeContext } from "./types";
@@ -10,7 +10,7 @@ function formatClock(now: number) {
   return new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(now));
 }
 
-export default function DeveloperConsoleTopbar({ theme, onThemeChange, connection, lastUpdate, now, context, onCommands, onResources, onInstall, onTeam, onPrivacy }: {
+export default function DeveloperConsoleTopbar({ theme, onThemeChange, connection, lastUpdate, now, context, onCommands, onResources, onAiWorkers, onInstall, onTeam, onPrivacy }: {
   theme: ConsoleTheme;
   onThemeChange: (theme: ConsoleTheme) => void;
   connection: ConnectionMode;
@@ -19,6 +19,7 @@ export default function DeveloperConsoleTopbar({ theme, onThemeChange, connectio
   context: RuntimeContext | null;
   onCommands: () => void;
   onResources: () => void;
+  onAiWorkers: () => void;
   onInstall: () => void;
   onTeam: () => void;
   onPrivacy: () => void;
@@ -30,6 +31,7 @@ export default function DeveloperConsoleTopbar({ theme, onThemeChange, connectio
       <div className={styles.topbarActions}>
         <button type="button" onClick={onCommands}><BookOpenText size={16} /><span>ChatGPT Parancstár</span></button>
         <button type="button" onClick={onResources}><FolderOpen size={16} /><span>Fejlesztési Tár</span></button>
+        <button type="button" onClick={onAiWorkers} className={styles.aiWorkerTopButton}><Bot size={16} /><span>AI Workerek</span></button>
         <ThemeModeMenu theme={theme} onChange={onThemeChange} />
         <button type="button" onClick={onInstall}><MonitorDown size={16} /><span>Telepítés</span></button>
         <button type="button" onClick={onTeam}><UsersRound size={16} /><span>Csapat</span></button>

@@ -10,6 +10,8 @@ const memberData: Record<Exclude<ConsoleAuthor, "SYSTEM">, { name: string; image
   ARMINAI: { name: "Ármin-AI", image: "/benjadmin/team/03_ArminAI.webp" },
   JAZMINAI: { name: "Jázmin-AI", image: "/benjadmin/team/04_JazminAI.webp" },
   OUTMINAI: { name: "Outmin-AI", image: "/benjadmin/team/05_OutminAI.webp" },
+  MFORGE: { name: "M.Forge-AI · Márk", image: "/benjadmin/team/06_M_ForgeAI.webp" },
+  VGUARD: { name: "V.Guard-AI · Viktória", image: "/benjadmin/team/07_V_GuardAI.webp" },
 };
 
 export function memberName(member: ConsoleAuthor) {

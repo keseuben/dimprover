@@ -60,7 +60,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
-  const side = message.author === "ARMINAI" ? "left" : message.author === "JAZMINAI" ? "right" : "center";
+  const side = message.author === "ARMINAI" || message.author === "MFORGE" ? "left" : message.author === "JAZMINAI" || message.author === "VGUARD" ? "right" : "center";
   const isOwner = message.author === "BENJADMIN";
   const isSystem = message.author === "SYSTEM";
   return (

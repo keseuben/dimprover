@@ -11,7 +11,7 @@ import { getInternalExecutorReadiness } from "./internal-executor-readiness";
 const execFileAsync = promisify(execFile);
 
 export type ConsoleTarget = "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "EVERYONE";
-export type ConsoleAuthor = "BENJADMIN" | "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "SYSTEM";
+export type ConsoleAuthor = "BENJADMIN" | "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" | "SYSTEM";
 export type ConsoleMessageKind = "MESSAGE" | "INSTRUCTION" | "TASK_ASSIGNMENT" | "TASK_UPDATE" | "DECISION" | "APPROVAL_REQUEST" | "BUILD_EVENT" | "TEST_RESULT" | "ERROR" | "WARNING" | "COMMIT" | "RELEASE" | "SYSTEM";
 
 export type ConsoleMessage = {
@@ -91,6 +91,8 @@ function authorFromWorklog(row: Row): ConsoleAuthor {
   if (worker === "ARMINAI") return "ARMINAI";
   if (worker === "JAZMINAI") return "JAZMINAI";
   if (worker === "OUTMINAI") return "OUTMINAI";
+  if (worker === "MFORGE") return "MFORGE";
+  if (worker === "VGUARD") return "VGUARD";
   if (worker === "BENAI" || source === "benai") return "BENAI";
   return "SYSTEM";
 }
@@ -120,6 +122,8 @@ function auditAuthor(row: Row): ConsoleAuthor {
   if (actor === "ARMINAI") return "ARMINAI";
   if (actor === "JAZMINAI") return "JAZMINAI";
   if (actor === "OUTMINAI") return "OUTMINAI";
+  if (actor === "MFORGE" || actor === "MFORGEAI") return "MFORGE";
+  if (actor === "VGUARD" || actor === "VGUARDAI") return "VGUARD";
   const action = text(row.action).toUpperCase();
   if (action.includes("PARTNER_") || action.includes("HANDOFF")) return "OUTMINAI";
   if (action.includes("TASK_") || action.includes("SESSION_") || action.includes("SCOPE_") || action.includes("WORKTREE_")) return "BENAI";

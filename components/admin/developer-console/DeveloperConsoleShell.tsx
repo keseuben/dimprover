@@ -9,6 +9,7 @@ import DeveloperConsoleProjectRail from "./DeveloperConsoleProjectRail";
 import DeveloperConsoleTopbar from "./DeveloperConsoleTopbar";
 import DeveloperConversation from "./DeveloperConversation";
 import DevelopmentResourcesDrawer from "./DevelopmentResourcesDrawer";
+import ExternalAiWorkersDrawer from "./ExternalAiWorkersDrawer";
 import LiveWorkPanel from "./LiveWorkPanel";
 import OutminPartnerBar from "./OutminPartnerBar";
 import TeamQuickDrawer from "./TeamQuickDrawer";
@@ -73,6 +74,7 @@ export default function DeveloperConsoleShell() {
   const [now, setNow] = useState(() => Date.now());
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [aiWorkersOpen, setAiWorkersOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const liveRef = useRef<ConsoleLiveState | null>(null);
@@ -258,7 +260,7 @@ export default function DeveloperConsoleShell() {
 
   return (
     <main className={styles.console} data-console-theme={theme} data-testid="benjadmin-developer-console">
-      <DeveloperConsoleTopbar theme={theme} onThemeChange={changeTheme} connection={connection} lastUpdate={lastUpdate} now={now} context={context} onCommands={() => setCommandsOpen(true)} onResources={() => setResourcesOpen(true)} onInstall={() => setInstallOpen(true)} onTeam={() => setTeamOpen(true)} onPrivacy={requestPrivacy} />
+      <DeveloperConsoleTopbar theme={theme} onThemeChange={changeTheme} connection={connection} lastUpdate={lastUpdate} now={now} context={context} onCommands={() => setCommandsOpen(true)} onResources={() => setResourcesOpen(true)} onAiWorkers={() => setAiWorkersOpen(true)} onInstall={() => setInstallOpen(true)} onTeam={() => setTeamOpen(true)} onPrivacy={requestPrivacy} />
       {error ? <div className={styles.alertBar}><AlertTriangle size={15} /><span>{error}</span><button type="button" onClick={() => void silentFetch()}><RefreshCw size={14} /> Újrapróbálás</button></div> : null}
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}
       <div className={styles.workspace}>
@@ -269,6 +271,7 @@ export default function DeveloperConsoleShell() {
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />
       <CommandLibraryDrawer open={commandsOpen} onClose={() => setCommandsOpen(false)} context={context} selectedProjectName={selectedProjectName} resources={resources} />
+      <ExternalAiWorkersDrawer open={aiWorkersOpen} onClose={() => setAiWorkersOpen(false)} projects={live?.projects || []} selectedProjectId={selectedProjectId} />
       <DevelopmentResourcesDrawer open={resourcesOpen} onClose={() => setResourcesOpen(false)} resources={resources} health={resourceHealth} onReload={loadResources} />
       <TeamQuickDrawer open={teamOpen} onClose={() => setTeamOpen(false)} live={live} />
       <AppInstallDrawer open={installOpen} onClose={() => setInstallOpen(false)} />
