@@ -528,3 +528,22 @@ Működés:
 - ellenőrzött számított méretek: fókuszcím ≥14 px, fókuszleírás ≥12 px, üzenettár fejléc ≥18 px, üzenetcím ≥13 px, üzenetleírás ≥12 px;
 - tesztképek és eredmény: `/srv/dimpro-dev/logs/founder-focus-home-2026-08-12`;
 - rollback backup: `/srv/dimpro-dev/artifacts/backups/founder-focus-home-20260812-203015`.
+
+### 2026-08-12 – Alapítói fókusz tipográfia teljes egységesítése
+
+- A `/admin/dev` Fejlesztési Központ és a `/admin` Fejlesztési és üzemeltetési vezérlőpult Alapítói fókusz blokkja azonos számított betűméreteket használ.
+- A fókusz UI-ban 12 px alatti operatív szöveg megszűnt: órasáv/címke, `Összes üzenet` gomb, drawer címke, alapelv-címkék és segédszövegek, valamint az üzenetszámozás is minimum 12 px.
+- A fő fókuszüzenet címe továbbra is 14 px, a magyarázó szöveg 12 px.
+- A teljes üzenettár fejléc 18 px, az üzenetcímek 13 px, a részletes leírások 12 px maradnak.
+
+#### Ellenőrzés – tipográfia egységesítés
+
+- célzott ESLint: PASS;
+- teljes `npx tsc --noEmit`: PASS;
+- teljes `npm run lint`: PASS, 0 error, 104 meglévő warning;
+- friss DEV build artifact ID: `CVcpoL4oqvtOxH2IJfsSi`;
+- standalone asset ellenőrzés: 145 statikus chunk PASS;
+- PM2 `dimpro-benjadmin-operator-ui-v2-dev`: online;
+- `/admin` és `/admin/dev`: HTTP 200;
+- meglévő desktop + mobil founder-focus browser smoke: 42/42 PASS;
+- rollback backup: `/srv/dimpro-dev/artifacts/backups/founder-focus-typography-20260812-210758`.
