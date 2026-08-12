@@ -1,9 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, Mail, RefreshCw, Search, Send, ShieldCheck, X } from "lucide-react";
+import {
+  BenjadminDataWorkspace,
+  BenjadminMetric,
+  BenjadminPagination,
+  BenjadminStatusPill,
+} from "@/components/admin/BenjadminDataWorkspace";
 
-type MailProfileId = "system" | "notifications" | "drive" | "noreply" | "billing" | "admin" | "info";
+type MailProfileId = "system" | "notifications" | "drive" | "drop" | "noreply" | "billing" | "admin" | "info";
 
 type SafeMailProfile = {
   id: MailProfileId;
@@ -74,12 +80,17 @@ type SettingsDraft = {
   profiles: ProfileDraft[];
 };
 
-const profileOrder: MailProfileId[] = ["system", "notifications", "drive", "noreply", "billing", "admin", "info"];
+type WorkspaceView = "profiles" | "tests";
+type ProfileFilter = "all" | "enabled" | "disabled" | "ready" | "incomplete";
+type TestFilter = "all" | "sent" | "failed";
+
+const profileOrder: MailProfileId[] = ["system", "notifications", "drive", "drop", "noreply", "billing", "admin", "info"];
 
 const profileShortLabels: Record<MailProfileId, string> = {
   system: "Rendszer",
   notifications: "Értesítések",
   drive: "Drive",
+  drop: "Drop",
   noreply: "No-reply",
   billing: "Számlázás",
   admin: "Admin",
@@ -87,18 +98,10 @@ const profileShortLabels: Record<MailProfileId, string> = {
 };
 
 function formatDateTime(value?: string) {
-  if (!value) return "-";
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("hu-HU");
-}
-
-function inputClass() {
-  return "mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-200/40";
-}
-
-function darkInputClass() {
-  return "mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300 focus:ring-4 focus:ring-cyan-300/10";
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("hu-HU", { timeZone: "Europe/Budapest" });
 }
 
 function toDraft(data: MailSettingsResponse | null): SettingsDraft {
@@ -125,26 +128,25 @@ function toDraft(data: MailSettingsResponse | null): SettingsDraft {
   };
 }
 
-function statusBadge(ok: boolean, labelOk: string, labelBad: string) {
-  return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-black ${ok ? "border-emerald-300/40 bg-emerald-300/12 text-emerald-200" : "border-amber-300/40 bg-amber-300/12 text-amber-100"}`}>
-      {ok ? labelOk : labelBad}
-    </span>
-  );
+function InfoGrid({ items }: { items: Array<{ label: string; value: string }> }) {
+  return <div className="benjadmin-infra-detail-grid">{items.map((item) => <span key={item.label}>{item.label}<b>{item.value || "—"}</b></span>)}</div>;
 }
 
 export default function MailSettingsPage() {
   const [adminKey, setAdminKey] = useState("");
   const [data, setData] = useState<MailSettingsResponse | null>(null);
   const [draft, setDraft] = useState<SettingsDraft>(() => toDraft(null));
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("E-mail beállítások ellenőrzése…");
   const [loading, setLoading] = useState(false);
   const [testingProfileId, setTestingProfileId] = useState<MailProfileId | "all" | null>(null);
-
-  useEffect(() => {
-    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim();
-    if (storedAdminKey) setAdminKey(storedAdminKey);
-  }, []);
+  const [view, setView] = useState<WorkspaceView>("profiles");
+  const [profileFilter, setProfileFilter] = useState<ProfileFilter>("all");
+  const [testFilter, setTestFilter] = useState<TestFilter>("all");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState<MailProfileId | null>(null);
 
   const latestTestsByProfile = useMemo(() => {
     const map = new Map<MailProfileId, MailProfileTestResult>();
@@ -157,18 +159,14 @@ export default function MailSettingsPage() {
   const loadSettings = useCallback(async (key = adminKey) => {
     const trimmedKey = key.trim();
     if (!trimmedKey) {
-      setMessage("Add meg a DIMPRO licencadmin kulcsot.");
+      setMessage("Licencadmin belépés szükséges.");
       return;
     }
-
     setLoading(true);
     setMessage("");
     try {
       const response = await fetch("/api/license/mail-settings", {
-        headers: {
-          "x-dimpro-license-admin-key": trimmedKey,
-          accept: "application/json",
-        },
+        headers: { "x-dimpro-license-admin-key": trimmedKey, accept: "application/json" },
         cache: "no-store",
       });
       const payload = await response.json() as MailSettingsResponse;
@@ -179,7 +177,8 @@ export default function MailSettingsPage() {
       setData(payload);
       setDraft(toDraft(payload));
       localStorage.setItem("dimproLicenseAdminKey", trimmedKey);
-      setMessage("E-mail profilok betöltve.");
+      setMessage("E-mail profilok és tesztnapló betöltve.");
+      setPage(1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ismeretlen e-mail beállítás lekérési hiba.");
     } finally {
@@ -187,23 +186,28 @@ export default function MailSettingsPage() {
     }
   }, [adminKey]);
 
+  useEffect(() => {
+    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
+    if (storedAdminKey) {
+      setAdminKey(storedAdminKey);
+      void loadSettings(storedAdminKey);
+    } else {
+      setMessage("Licencadmin belépés szükséges.");
+    }
+  }, [loadSettings]);
+
   async function saveSettings() {
     const trimmedKey = adminKey.trim();
     if (!trimmedKey) {
-      setMessage("Add meg a DIMPRO licencadmin kulcsot.");
+      setMessage("Licencadmin belépés szükséges.");
       return;
     }
-
     setLoading(true);
     setMessage("");
     try {
       const response = await fetch("/api/license/mail-settings", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-dimpro-license-admin-key": trimmedKey,
-          accept: "application/json",
-        },
+        headers: { "content-type": "application/json", "x-dimpro-license-admin-key": trimmedKey, accept: "application/json" },
         body: JSON.stringify({
           action: "saveSettings",
           settings: {
@@ -238,20 +242,15 @@ export default function MailSettingsPage() {
   async function testProfile(profileId: MailProfileId | "all") {
     const trimmedKey = adminKey.trim();
     if (!trimmedKey) {
-      setMessage("Add meg a DIMPRO licencadmin kulcsot.");
+      setMessage("Licencadmin belépés szükséges.");
       return;
     }
-
     setTestingProfileId(profileId);
     setMessage("");
     try {
       const response = await fetch("/api/license/mail-settings", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-dimpro-license-admin-key": trimmedKey,
-          accept: "application/json",
-        },
+        headers: { "content-type": "application/json", "x-dimpro-license-admin-key": trimmedKey, accept: "application/json" },
         body: JSON.stringify(profileId === "all" ? { action: "testAll" } : { action: "testProfile", profileId }),
         cache: "no-store",
       });
@@ -282,225 +281,168 @@ export default function MailSettingsPage() {
     }));
   }
 
+  const visibleProfiles = useMemo(() => {
+    const clean = query.trim().toLowerCase();
+    return draft.profiles.filter((profile) => {
+      const saved = data?.profiles?.find((item) => item.id === profile.id);
+      if (profileFilter === "enabled" && !profile.enabled) return false;
+      if (profileFilter === "disabled" && profile.enabled) return false;
+      if (profileFilter === "ready" && !saved?.smtpConfigured) return false;
+      if (profileFilter === "incomplete" && saved?.smtpConfigured) return false;
+      if (!clean) return true;
+      return [profileShortLabels[profile.id], profile.label, profile.address, profile.displayName, profile.purpose]
+        .some((value) => String(value || "").toLowerCase().includes(clean));
+    });
+  }, [data?.profiles, draft.profiles, profileFilter, query]);
+
+  const visibleTests = useMemo(() => {
+    const clean = query.trim().toLowerCase();
+    return (data?.tests ?? []).filter((test) => {
+      if (testFilter === "sent" && !test.sent) return false;
+      if (testFilter === "failed" && test.sent) return false;
+      if (!clean) return true;
+      return [profileShortLabels[test.profileId], test.profileAddress, test.reason, test.friendlyError, test.error, ...test.to]
+        .some((value) => String(value || "").toLowerCase().includes(clean));
+    });
+  }, [data?.tests, query, testFilter]);
+
+  const activeRows = view === "profiles" ? visibleProfiles : visibleTests;
+  const pageCount = Math.max(1, Math.ceil(activeRows.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedProfiles = visibleProfiles.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedTests = visibleTests.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const selectedProfile = selectedProfileId ? draft.profiles.find((profile) => profile.id === selectedProfileId) || null : null;
+  const selectedSavedProfile = selectedProfileId ? data?.profiles?.find((profile) => profile.id === selectedProfileId) || null : null;
+  const selectedLatestTest = selectedProfileId ? latestTestsByProfile.get(selectedProfileId) || null : null;
+  const smtpReadyCount = data?.profiles?.filter((profile) => profile.smtpConfigured).length ?? 0;
+  const sentTestCount = data?.tests?.filter((test) => test.sent).length ?? 0;
+  const failedTestCount = data?.tests?.filter((test) => !test.sent).length ?? 0;
+  const canTestAny = Boolean(data?.profiles?.some((profile) => profile.enabled && profile.smtpConfigured));
+
+  if (!adminKey && !loading) {
+    return (
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <ShieldCheck size={22} />
+          <h1>Licencadmin belépés szükséges</h1>
+          <p>Az e-mail konfiguráció és tesztnapló csak aktív BENJADMIN admin munkamenettel érhető el.</p>
+          <a href="/admin" className="benjadmin-data-primary-action">Licencadmin megnyitása</a>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-[#06111f] px-5 py-7 text-white lg:px-8">
-      <div className="mx-auto max-w-[1500px]">
-        <header className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.22)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <Link href="/admin" className="text-sm font-black text-cyan-200 hover:text-white">← Vissza a licencadmin felületre</Link>
-              <p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-cyan-300/80">DIMPRO belső rendszer</p>
-              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] md:text-5xl">E-mail beállítások</h1>
-              <p className="mt-4 max-w-4xl text-sm font-semibold leading-7 text-slate-300">
-                Központi SMTP és automatikus feladóprofilok: Szerverőr, app értesítések, DIMPRO Drive, no-reply, számlázás és admin üzenetek.
-              </p>
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · E-MAIL KÖZPONT"
+        title="E-mail profilok és tesztnapló"
+        description="Központi SMTP, automatikus DIMPRO feladóprofilok és tesztküldések egy hibrid, táblázat-első admin munkatérben."
+        actions={(
+          <>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => setSettingsOpen(true)}><Mail size={16} /> SMTP beállítások</button>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => void testProfile("all")} disabled={testingProfileId !== null || !canTestAny}>{testingProfileId === "all" ? <Loader2 className="is-spinning" size={16} /> : <Send size={16} />} Összes profil tesztelése</button>
+            <button type="button" className="benjadmin-data-primary-action" onClick={() => void loadSettings()} disabled={loading}>{loading ? <Loader2 className="is-spinning" size={16} /> : <RefreshCw size={16} />} Frissítés</button>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Feladóprofil" value={data?.profileCount ?? draft.profiles.length} />
+            <BenjadminMetric label="Engedélyezett" value={data?.enabledProfileCount ?? draft.profiles.filter((profile) => profile.enabled).length} tone="ok" />
+            <BenjadminMetric label="SMTP kész" value={smtpReadyCount} tone={smtpReadyCount ? "ok" : "warning"} />
+            <BenjadminMetric label="Sikeres teszt" value={sentTestCount} tone="ok" />
+            <BenjadminMetric label="Sikertelen teszt" value={failedTestCount} tone={failedTestCount ? "danger" : "default"} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <div className="benjadmin-data-filter-group" aria-label="E-mail munkatér nézet">
+              <button type="button" className={view === "profiles" ? "is-active" : ""} onClick={() => { setView("profiles"); setPage(1); }}>Feladóprofilok</button>
+              <button type="button" className={view === "tests" ? "is-active" : ""} onClick={() => { setView("tests"); setPage(1); }}>Teszt napló</button>
             </div>
-            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/80">Konfigurált profilok</p>
-              <p className="mt-2 text-3xl font-black">{data?.enabledProfileCount ?? 0}/{data?.profileCount ?? 0}</p>
-              <p className="mt-1 text-xs font-semibold text-cyan-50/80">Automatikus küldésre engedélyezve</p>
-            </div>
-          </div>
-        </header>
-
-        <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5">
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-            <label className="block">
-              <span className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Admin kulcs</span>
-              <input
-                type="password"
-                value={adminKey}
-                onChange={(event) => setAdminKey(event.target.value)}
-                placeholder="DIMPRO-LICENSE-ADMIN-..."
-                className={darkInputClass()}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void loadSettings()}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl bg-cyan-300 px-6 py-4 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Betöltés..." : "Beállítások betöltése"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveSettings()}
-              disabled={loading || !adminKey.trim() || draft.profiles.length === 0}
-              className="rounded-2xl border border-emerald-300/35 bg-emerald-300/10 px-6 py-4 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Mentés
-            </button>
-          </div>
-          {message && <p className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">{message}</p>}
-        </section>
-
-        <section className="mt-6 grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5">
-            <h2 className="text-2xl font-black tracking-[-0.04em]">Közös SMTP alap</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">DotRoll beállítás a dimpro.hu postafiókokhoz. A jelszó mentés után nem jelenik meg újra.</p>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label>
-                <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">SMTP host</span>
-                <input value={draft.smtpHost} onChange={(event) => setDraft((current) => ({ ...current, smtpHost: event.target.value }))} className={inputClass()} />
-              </label>
-              <label>
-                <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">SMTP port</span>
-                <input value={draft.smtpPort} onChange={(event) => setDraft((current) => ({ ...current, smtpPort: event.target.value.replace(/\D/g, "") }))} className={inputClass()} />
-              </label>
-            </div>
-
-            <label className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm font-black text-slate-200">
-              <input type="checkbox" checked={draft.smtpSecure} onChange={(event) => setDraft((current) => ({ ...current, smtpSecure: event.target.checked }))} className="h-4 w-4 accent-cyan-300" />
-              SSL/TLS használata
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Közös SMTP jelszó</span>
-              <input
-                type="password"
-                value={draft.sharedPassword}
-                onChange={(event) => setDraft((current) => ({ ...current, sharedPassword: event.target.value }))}
-                placeholder={data?.profiles?.some((profile) => profile.hasPassword) ? "Mentett jelszó van – üresen hagyva megtartja" : "Add meg a DotRoll postafiók jelszavát"}
-                className={inputClass()}
-              />
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Teszt címzettek</span>
-              <input value={draft.testRecipients} onChange={(event) => setDraft((current) => ({ ...current, testRecipients: event.target.value }))} className={inputClass()} />
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Licencaktiválási rendszerüzenet címzettjei</span>
-              <input
-                value={draft.licenseActivationRecipients}
-                onChange={(event) => setDraft((current) => ({ ...current, licenseActivationRecipients: event.target.value }))}
-                placeholder="admin@dimpro.hu, info@dimpro.hu"
-                className={inputClass()}
-              />
-              <span className="mt-2 block text-xs font-semibold leading-5 text-slate-400">Több DIMPRO e-mail cím vesszővel elválasztva adható meg.</span>
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Licenclevelek válaszcíme</span>
-              <input
-                value={draft.licenseReplyTo}
-                onChange={(event) => setDraft((current) => ({ ...current, licenseReplyTo: event.target.value }))}
-                placeholder="info@dimpro.hu"
-                className={inputClass()}
-              />
-              <span className="mt-2 block text-xs font-semibold leading-5 text-slate-400">Az ügyfél válasza erre a kezelt címre érkezik, miközben a feladó a system@dimpro.hu marad.</span>
-            </label>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {statusBadge(Boolean(data?.storageExists), "Szerverfájl létrehozva", "Még nincs mentett fájl")}
-              {statusBadge(Boolean(data?.profiles?.some((profile) => profile.smtpConfigured)), "Van működésre kész profil", "Jelszó vagy profil hiányzik")}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void testProfile("all")}
-              disabled={testingProfileId !== null || !data?.profiles?.some((profile) => profile.smtpConfigured)}
-              className="mt-5 w-full rounded-2xl border border-cyan-300/35 bg-cyan-300/10 px-5 py-4 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {testingProfileId === "all" ? "Összes teszt küldése..." : "Összes engedélyezett profil tesztelése"}
-            </button>
-          </div>
-
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5">
-            <h2 className="text-2xl font-black tracking-[-0.04em]">Feladóprofilok</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">A rendszer a használati cél alapján választ feladót. Az info cím kézi ügyfélkapcsolati cím, ezért alapból nem automatikus profil.</p>
-
-            <div className="mt-5 grid gap-4">
-              {draft.profiles.length === 0 ? (
-                <p className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-black text-amber-100">Töltsd be az e-mail beállításokat.</p>
-              ) : draft.profiles.map((profile) => {
-                const savedProfile = data?.profiles?.find((item) => item.id === profile.id);
-                const latestTest = latestTestsByProfile.get(profile.id);
-                return (
-                  <article key={profile.id} className="rounded-3xl border border-white/10 bg-slate-950/35 p-4">
-                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">{profileShortLabels[profile.id]}</span>
-                          {statusBadge(Boolean(savedProfile?.smtpConfigured), "SMTP kész", "Beállítás hiányos")}
-                          {statusBadge(profile.enabled, "Aktív", "Kikapcsolva")}
-                        </div>
-                        <h3 className="mt-3 text-xl font-black text-white">{profile.label ?? savedProfile?.label}</h3>
-                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-400">{profile.purpose}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void testProfile(profile.id)}
-                        disabled={testingProfileId !== null || !savedProfile?.smtpConfigured}
-                        className="shrink-0 rounded-2xl border border-cyan-300/35 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {testingProfileId === profile.id ? "Teszt..." : "Teszt e-mail"}
-                      </button>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-                      <label>
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">E-mail cím</span>
-                        <input value={profile.address} onChange={(event) => updateProfile(profile.id, { address: event.target.value })} className={darkInputClass()} />
-                      </label>
-                      <label>
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Megjelenő név</span>
-                        <input value={profile.displayName} onChange={(event) => updateProfile(profile.id, { displayName: event.target.value })} className={darkInputClass()} />
-                      </label>
-                      <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-black text-slate-200 lg:self-end">
-                        <input type="checkbox" checked={profile.enabled} onChange={(event) => updateProfile(profile.id, { enabled: event.target.checked })} className="h-4 w-4 accent-cyan-300" />
-                        Engedélyezve
-                      </label>
-                    </div>
-
-                    {latestTest && (
-                      <div className={`mt-4 rounded-2xl border p-3 ${latestTest.sent ? "border-emerald-300/25 bg-emerald-300/10" : "border-amber-300/25 bg-amber-300/10"}`}>
-                        <p className="text-xs font-black text-white">Utolsó teszt: {latestTest.sent ? "sikeres" : "nem sikerült"}</p>
-                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">{formatDateTime(latestTest.createdAt)} · {latestTest.reason}</p>
-                        {latestTest.friendlyError && <p className="mt-2 rounded-xl border border-red-300/25 bg-red-400/10 px-3 py-2 text-xs font-black leading-5 text-red-50">{latestTest.friendlyError}</p>}
-                        {latestTest.error && <p className="mt-1 text-xs font-semibold leading-5 text-red-100">Technikai hiba: {latestTest.error}</p>}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5">
-          <h2 className="text-2xl font-black tracking-[-0.04em]">Teszt napló</h2>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[900px] border-separate border-spacing-y-2 text-left">
-              <thead>
-                <tr className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                  <th className="px-3">Időpont</th>
-                  <th className="px-3">Profil</th>
-                  <th className="px-3">Feladó</th>
-                  <th className="px-3">Eredmény</th>
-                  <th className="px-3">Címzett</th>
-                </tr>
-              </thead>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder={view === "profiles" ? "Keresés profil, e-mail cím vagy cél alapján" : "Keresés profil, feladó, címzett vagy hiba alapján"} /></label>
+            {view === "profiles" ? <div className="benjadmin-data-filter-group" aria-label="E-mail profil státusz szűrő">{(["all", "enabled", "disabled", "ready", "incomplete"] as ProfileFilter[]).map((value) => <button key={value} type="button" className={profileFilter === value ? "is-active" : ""} onClick={() => { setProfileFilter(value); setPage(1); }}>{value === "all" ? "Mind" : value === "enabled" ? "Aktív" : value === "disabled" ? "Kikapcsolt" : value === "ready" ? "SMTP kész" : "Hiányos"}</button>)}</div> : <div className="benjadmin-data-filter-group" aria-label="Teszt eredmény szűrő">{(["all", "sent", "failed"] as TestFilter[]).map((value) => <button key={value} type="button" className={testFilter === value ? "is-active" : ""} onClick={() => { setTestFilter(value); setPage(1); }}>{value === "all" ? "Mind" : value === "sent" ? "Sikeres" : "Sikertelen"}</button>)}</div>}
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{message}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={activeRows.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          {view === "profiles" ? (
+            <table className="benjadmin-data-table benjadmin-email-profile-table" data-testid="benjadmin-email-profile-table">
+              <thead><tr><th>Profil</th><th>E-mail cím</th><th>Feladat / cél</th><th>Engedélyezve</th><th>SMTP</th><th>Jelszó</th><th>Utolsó teszt</th><th>Teszt eredmény</th><th>Művelet</th></tr></thead>
               <tbody>
-                {(data?.tests ?? []).length === 0 ? (
-                  <tr><td className="rounded-2xl bg-white/[0.04] px-3 py-4 text-sm font-semibold text-slate-400" colSpan={5}>Még nincs teszt napló.</td></tr>
-                ) : (data?.tests ?? []).slice(0, 30).map((test) => (
-                  <tr key={test.id} className="bg-white/[0.04] text-sm font-semibold text-slate-300">
-                    <td className="rounded-l-2xl px-3 py-3 font-black text-white">{formatDateTime(test.createdAt)}</td>
-                    <td className="px-3 py-3">{profileShortLabels[test.profileId]}</td>
-                    <td className="px-3 py-3 font-mono text-xs text-cyan-100">{test.profileAddress ?? "-"}</td>
-                    <td className="px-3 py-3">{test.sent ? "Sikeres" : test.friendlyError ?? test.reason}</td>
-                    <td className="rounded-r-2xl px-3 py-3 font-mono text-xs text-slate-400">{test.to.join(", ") || "-"}</td>
-                  </tr>
-                ))}
+                {pagedProfiles.length ? pagedProfiles.map((profile) => {
+                  const saved = data?.profiles?.find((item) => item.id === profile.id);
+                  const latestTest = latestTestsByProfile.get(profile.id);
+                  return <tr key={profile.id}><td><strong>{profileShortLabels[profile.id]}</strong><br /><small>{profile.label}</small></td><td className="is-mono">{profile.address}</td><td className="is-wide">{profile.purpose}</td><td><BenjadminStatusPill tone={profile.enabled ? "ok" : "default"}>{profile.enabled ? "Aktív" : "Kikapcsolva"}</BenjadminStatusPill></td><td><BenjadminStatusPill tone={saved?.smtpConfigured ? "ok" : "warning"}>{saved?.smtpConfigured ? "SMTP kész" : "Hiányos"}</BenjadminStatusPill></td><td><BenjadminStatusPill tone={saved?.hasPassword ? "ok" : "warning"}>{saved?.hasPassword ? "Mentve" : "Nincs"}</BenjadminStatusPill></td><td className="is-nowrap">{formatDateTime(latestTest?.createdAt)}</td><td>{latestTest ? <BenjadminStatusPill tone={latestTest.sent ? "ok" : "danger"}>{latestTest.sent ? "Sikeres" : "Sikertelen"}</BenjadminStatusPill> : "—"}</td><td><button type="button" className="benjadmin-data-row-action" onClick={() => setSelectedProfileId(profile.id)}>Részletek</button></td></tr>;
+                }) : <tr><td colSpan={9} className="benjadmin-data-empty">Nincs a szűrésnek megfelelő e-mail profil.</td></tr>}
               </tbody>
             </table>
+          ) : (
+            <table className="benjadmin-data-table benjadmin-email-test-table" data-testid="benjadmin-email-test-table">
+              <thead><tr><th>Időpont</th><th>Profil</th><th>Feladó</th><th>Eredmény</th><th>Címzett</th><th>SMTP</th><th>Kísérlet</th><th>Részlet</th></tr></thead>
+              <tbody>
+                {pagedTests.length ? pagedTests.map((test) => <tr key={test.id}><td className="is-nowrap">{formatDateTime(test.createdAt)}</td><td><strong>{profileShortLabels[test.profileId]}</strong></td><td className="is-mono">{test.profileAddress ?? "—"}</td><td><BenjadminStatusPill tone={test.sent ? "ok" : "danger"}>{test.sent ? "Sikeres" : "Sikertelen"}</BenjadminStatusPill></td><td className="is-wide">{test.to.join(", ") || "—"}</td><td><BenjadminStatusPill tone={test.smtpConfigured ? "ok" : "warning"}>{test.smtpConfigured ? "Kész" : "Hiányos"}</BenjadminStatusPill></td><td>{test.attempted ? "Igen" : "Nem"}</td><td className="is-wide">{test.friendlyError || test.error || test.reason || "—"}</td></tr>) : <tr><td colSpan={8} className="benjadmin-data-empty">Még nincs a szűrésnek megfelelő e-mail tesztnapló.</td></tr>}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </BenjadminDataWorkspace>
+
+      {settingsOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="SMTP beállítások bezárása" onClick={() => setSettingsOpen(false)} /> : null}
+      {settingsOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-email-settings-drawer" data-testid="benjadmin-email-settings-drawer">
+          <header><div><span>KÖZÖS SMTP BEÁLLÍTÁSOK</span><strong>DIMPRO e-mail infrastruktúra</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="Bezárás"><X size={18} /></button></header>
+          <div className="benjadmin-data-drawer__body benjadmin-email-settings-form">
+            <div className="benjadmin-data-security-note"><ShieldCheck size={17} /><div><strong>Jelszóvédelem</strong><span>A mentett SMTP jelszó nem jelenik meg újra a felületen. Üres mezővel a meglévő jelszó marad érvényben.</span></div></div>
+            <div className="benjadmin-data-form-grid">
+              <label className="benjadmin-data-field"><span>SMTP host</span><input value={draft.smtpHost} onChange={(event) => setDraft((current) => ({ ...current, smtpHost: event.target.value }))} /></label>
+              <label className="benjadmin-data-field"><span>SMTP port</span><input value={draft.smtpPort} onChange={(event) => setDraft((current) => ({ ...current, smtpPort: event.target.value.replace(/\D/g, "") }))} /></label>
+              <label className="benjadmin-data-field"><span>Közös SMTP jelszó</span><input type="password" value={draft.sharedPassword} onChange={(event) => setDraft((current) => ({ ...current, sharedPassword: event.target.value }))} placeholder={data?.profiles?.some((profile) => profile.hasPassword) ? "Mentett jelszó van – üresen hagyva megtartja" : "Add meg a postafiók jelszavát"} /></label>
+              <label className="benjadmin-email-check-field"><input type="checkbox" checked={draft.smtpSecure} onChange={(event) => setDraft((current) => ({ ...current, smtpSecure: event.target.checked }))} /> SSL/TLS használata</label>
+            </div>
+            <label className="benjadmin-data-field"><span>Teszt címzettek</span><input value={draft.testRecipients} onChange={(event) => setDraft((current) => ({ ...current, testRecipients: event.target.value }))} /></label>
+            <label className="benjadmin-data-field"><span>Licencaktiválási rendszerüzenet címzettjei</span><input value={draft.licenseActivationRecipients} onChange={(event) => setDraft((current) => ({ ...current, licenseActivationRecipients: event.target.value }))} placeholder="admin@dimpro.hu, info@dimpro.hu" /></label>
+            <label className="benjadmin-data-field"><span>Licenclevelek válaszcíme</span><input value={draft.licenseReplyTo} onChange={(event) => setDraft((current) => ({ ...current, licenseReplyTo: event.target.value }))} placeholder="info@dimpro.hu" /></label>
+            <InfoGrid items={[
+              { label: "Konfigurációs fájl", value: data?.storageExists ? "Létezik" : "Még nincs" },
+              { label: "SMTP kész profil", value: `${smtpReadyCount}/${data?.profileCount ?? draft.profiles.length}` },
+              { label: "SMTP secure", value: draft.smtpSecure ? "Igen" : "Nem" },
+              { label: "Teszt napló", value: `${data?.tests?.length ?? 0} bejegyzés` },
+            ]} />
+            <button type="button" className="benjadmin-data-primary-action is-full" onClick={() => void saveSettings()} disabled={loading || draft.profiles.length === 0}>{loading ? <Loader2 className="is-spinning" size={15} /> : <Mail size={15} />} SMTP beállítások mentése</button>
           </div>
-        </section>
-      </div>
-    </main>
+        </aside>
+      ) : null}
+
+      {selectedProfile ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="E-mail profil bezárása" onClick={() => setSelectedProfileId(null)} /> : null}
+      {selectedProfile ? (
+        <aside className="benjadmin-data-drawer benjadmin-email-profile-drawer" data-testid="benjadmin-email-profile-drawer">
+          <header><div><span>FELADÓPROFIL</span><strong>{selectedProfile.label}</strong></div><button type="button" onClick={() => setSelectedProfileId(null)} aria-label="Bezárás"><X size={18} /></button></header>
+          <div className="benjadmin-data-drawer__body benjadmin-email-profile-form">
+            <section className="benjadmin-data-form-section"><header><strong>{profileShortLabels[selectedProfile.id]}</strong><BenjadminStatusPill tone={selectedSavedProfile?.smtpConfigured ? "ok" : "warning"}>{selectedSavedProfile?.smtpConfigured ? "SMTP kész" : "Beállítás hiányos"}</BenjadminStatusPill></header><p>{selectedProfile.purpose}</p></section>
+            <label className="benjadmin-data-field"><span>E-mail cím</span><input value={selectedProfile.address} onChange={(event) => updateProfile(selectedProfile.id, { address: event.target.value })} /></label>
+            <label className="benjadmin-data-field"><span>Megjelenő név</span><input value={selectedProfile.displayName} onChange={(event) => updateProfile(selectedProfile.id, { displayName: event.target.value })} /></label>
+            <label className="benjadmin-email-check-field"><input type="checkbox" checked={selectedProfile.enabled} onChange={(event) => updateProfile(selectedProfile.id, { enabled: event.target.checked })} /> Automatikus küldés engedélyezve</label>
+            <InfoGrid items={[
+              { label: "SMTP host", value: selectedSavedProfile?.smtpHost || data?.smtpHost || "—" },
+              { label: "SMTP port", value: String(selectedSavedProfile?.smtpPort ?? data?.smtpPort ?? "—") },
+              { label: "Jelszó", value: selectedSavedProfile?.hasPassword ? "Mentve" : "Nincs" },
+              { label: "Utolsó teszt", value: formatDateTime(selectedLatestTest?.createdAt) },
+            ]} />
+            {selectedLatestTest ? <section className="benjadmin-data-form-section"><header><strong>Utolsó teszt eredménye</strong><BenjadminStatusPill tone={selectedLatestTest.sent ? "ok" : "danger"}>{selectedLatestTest.sent ? "Sikeres" : "Sikertelen"}</BenjadminStatusPill></header><p>{selectedLatestTest.friendlyError || selectedLatestTest.error || selectedLatestTest.reason}</p></section> : null}
+            <div className="benjadmin-email-profile-actions">
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void testProfile(selectedProfile.id)} disabled={testingProfileId !== null || !selectedSavedProfile?.smtpConfigured}>{testingProfileId === selectedProfile.id ? <Loader2 className="is-spinning" size={15} /> : <Send size={15} />} Teszt e-mail</button>
+              <button type="button" className="benjadmin-data-primary-action" onClick={() => void saveSettings()} disabled={loading}><Mail size={15} /> Profil mentése</button>
+            </div>
+          </div>
+        </aside>
+      ) : null}
+    </>
   );
 }
