@@ -332,8 +332,9 @@ function MiniLineChart({ title, subtitle, labels, series, emptyText }: { title: 
 function UsageBar({ label, value, detail }: { label: string; value?: number | null; detail: string }) {
   const known = typeof value === "number" && Number.isFinite(value);
   const safe = known ? Math.max(0, Math.min(100, value)) : 0;
+  const tone = !known ? " is-unknown" : safe >= 90 ? " is-danger" : safe >= 75 ? " is-warning" : "";
   return (
-    <div className={`benjadmin-team-screen__usage${known ? "" : " is-unknown"}`}>
+    <div className={`benjadmin-team-screen__usage${tone}`}>
       <div><span>{label}</span><strong>{known ? `${Math.round(safe)}%` : "—"}</strong></div>
       <div className="benjadmin-team-screen__usage-track"><span style={{ width: `${safe}%` }} /></div>
       <small>{detail}</small>
@@ -377,7 +378,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
       if (!engineResponse.ok || !enginePayload?.state) throw new Error(enginePayload?.error || "A fejlesztési állapot nem tölthető be.");
       setEngine(enginePayload.state as EngineState);
       if (serverResponse.ok) setServerStatus(serverPayload as ServerStatus);
-      if (controlResponse.ok) setControl(controlPayload as ControlSnapshot);
+      if (controlResponse.ok) setControl((controlPayload?.controlPlane || controlPayload) as ControlSnapshot);
       if (partnerResponse.ok) setPartner(partnerPayload as PartnerSnapshot);
       if (entitlementResponse.ok && entitlementPayload?.entitlements) setEntitlements(entitlementPayload.entitlements as EntitlementSnapshot);
       if (infrastructureResponse.ok) {
@@ -438,15 +439,37 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
 
   const monitorTrend = useMemo(() => {
     const rows = [...(control?.monitoring || [])]
-      .filter((row) => textValue(row.sampled_at))
+      .filter((row) => textValue(row.target_kind) === "DEV" && textValue(row.sampled_at))
       .sort((a, b) => Date.parse(textValue(a.sampled_at)) - Date.parse(textValue(b.sampled_at)))
-      .slice(-12);
+      .slice(-18);
     return {
       labels: rows.map((row) => new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" }).format(new Date(textValue(row.sampled_at)))),
       cpu: rows.map((row) => numberValue(row.cpu_percent)),
       memory: rows.map((row) => numberValue(row.memory_percent)),
       disk: rows.map((row) => numberValue(row.disk_percent)),
     };
+  }, [control?.monitoring]);
+
+  const persistentLatencyTrend = useMemo(() => {
+    const rows = [...(control?.monitoring || [])]
+      .filter((row) => ["PRODUCTION", "DATABASE"].includes(textValue(row.target_kind)) && textValue(row.sampled_at))
+      .sort((a, b) => Date.parse(textValue(a.sampled_at)) - Date.parse(textValue(b.sampled_at)))
+      .slice(-36);
+    const buckets = new Map<string, { label: string; production: number; database: number }>();
+    for (const row of rows) {
+      const stamp = new Date(textValue(row.sampled_at));
+      if (Number.isNaN(stamp.getTime())) continue;
+      const key = stamp.toISOString().slice(0, 16);
+      const current = buckets.get(key) || {
+        label: stamp.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" }),
+        production: 0,
+        database: 0,
+      };
+      if (textValue(row.target_kind) === "PRODUCTION") current.production = numberValue(row.response_ms);
+      if (textValue(row.target_kind) === "DATABASE") current.database = numberValue(row.response_ms);
+      buckets.set(key, current);
+    }
+    return Array.from(buckets.values()).slice(-12);
   }, [control?.monitoring]);
 
   const diskTotal = Number(serverStatus?.disk?.sizeKb || 0) * 1024;
@@ -465,10 +488,12 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   const productionServer = infrastructure?.servers.find((item) => item.code === "PRODUCTION");
   const databaseServer = infrastructure?.servers.find((item) => item.code === "DATABASE");
   const infrastructureStorages = infrastructure?.storages || [];
+  const latencySource = persistentLatencyTrend.length >= 2 ? persistentLatencyTrend : latencyHistory;
   const latencyTrend = {
-    labels: latencyHistory.map((item) => item.label),
-    production: latencyHistory.map((item) => item.production),
-    database: latencyHistory.map((item) => item.database),
+    labels: latencySource.map((item) => item.label),
+    production: latencySource.map((item) => item.production),
+    database: latencySource.map((item) => item.database),
+    persistent: persistentLatencyTrend.length >= 2,
   };
   const aiSummary = entitlements?.summary || {};
   const aiMonthlyCost = Number(aiSummary.aiCostHufThisMonth || 0);
@@ -621,20 +646,20 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
 
           <MiniLineChart
             title="Rendszerterhelési trend"
-            subtitle="valós monitoring minták"
+            subtitle="valós monitorozási minták (monitoring) · 60 mp"
             labels={monitorTrend.labels}
             series={[
               { label: "CPU", values: monitorTrend.cpu, tone: "cyan" },
               { label: "Memória", values: monitorTrend.memory, tone: "lime" },
               { label: "Lemez", values: monitorTrend.disk, tone: "amber" },
             ]}
-            emptyText="A B3.1 valós idejű monitoring még nem gyűjt elegendő mintát. Itt CPU / memória / lemez trend jelenik meg, amint az adatgyűjtés aktív."
+            emptyText="A B3.1 valós idejű monitorozás (monitoring) még nem gyűjt elegendő mintát. Itt CPU / memória / lemez trend jelenik meg, amint az adatgyűjtés aktív."
           />
 
 
           <MiniLineChart
             title="Elérési válaszidő"
-            subtitle="aktuális munkamenet · 30 mp mintavétel"
+            subtitle={latencyTrend.persistent ? "tartós B3.1 minták · 60 mp" : "aktuális munkamenet · 30 mp mintavétel"}
             labels={latencyTrend.labels}
             series={[
               { label: "ÉLES VPS", values: latencyTrend.production, tone: "cyan" },

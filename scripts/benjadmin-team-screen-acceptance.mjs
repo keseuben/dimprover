@@ -99,7 +99,8 @@ try {
       leftTitle: document.querySelector(".benjadmin-team-screen__side--left")?.textContent || "",
       rightTitle: document.querySelector(".benjadmin-team-screen__side--right")?.textContent || "",
       activityLines: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card")).find((card) => (card.textContent || "").includes("Fejlesztési aktivitás"))?.querySelectorAll(".benjadmin-team-screen__chart-line").length || 0,
-      systemChartFallback: (document.querySelector(".benjadmin-team-screen__side--right")?.textContent || "").includes("CPU / memória / lemez trend"),
+      systemLines: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card")).find((card) => (card.textContent || "").includes("Rendszerterhelési trend"))?.querySelectorAll(".benjadmin-team-screen__chart-line").length || 0,
+      latencyLines: Array.from(document.querySelectorAll(".benjadmin-team-screen__side--right .benjadmin-team-screen__chart-card")).find((card) => (card.textContent || "").includes("Elérési válaszidő"))?.querySelectorAll(".benjadmin-team-screen__chart-line").length || 0,
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       scrollHeight: document.documentElement.scrollHeight,
@@ -120,7 +121,8 @@ try {
   check("S3 tárhelyméret és foglaltság mezők láthatók", (desktop.leftTitle.match(/Tárhelyfoglaltság/g) || []).length === 2 && (desktop.leftTitle.match(/Teljes keret/g) || []).length === 2 && (desktop.leftTitle.match(/Foglalt:/g) || []).length === 2, desktop.leftTitle.slice(-900));
   check("Jobb oldali működési diagramok a három fő trendet mutatják", ["Rendszerterhelési trend", "Elérési válaszidő", "Fejlesztési aktivitás"].every((title) => desktop.chartTitles.includes(title)), JSON.stringify(desktop.chartTitles));
   check("Fejlesztési aktivitás valós adatsorból rajzol vonalat", desktop.activityLines >= 1, `lineCount=${desktop.activityLines}`);
-  check("Valós monitoring hiányánál nincs kitalált rendszertrend", desktop.rightTitle.includes("valós monitoring minták") && (desktop.systemChartFallback || desktop.rightTitle.includes("Monitoring minta")));
+  check("Valós B3.1 monitorozási mintákból rajzol rendszertrend", desktop.rightTitle.includes("valós monitorozási minták") && desktop.systemLines >= 1, `systemLines=${desktop.systemLines}`);
+  check("Elérési válaszidő grafikon valós mintákból rajzol vonalat", desktop.latencyLines >= 1, `latencyLines=${desktop.latencyLines}`);
   check("Mind az öt hexagon csapatembléma háttérdoboz nélkül betöltött", desktop.images.length === 5 && desktop.images.every((item) => item.complete && item.naturalWidth > 0 && item.naturalHeight > 0 && item.objectFit === "contain" && item.alt.includes("hexagon embléma")), JSON.stringify(desktop.images));
   check("A személyi kártyák kb. fele képi terület", desktop.memberImageShares.length === 5 && desktop.memberImageShares.slice(0, 2).every((item) => item.widthShare >= 0.40) && desktop.memberImageShares.slice(2).every((item) => item.heightShare >= 0.40), JSON.stringify(desktop.memberImageShares));
   check("AI finanszírozás és tokenkeret panel a középső alsó munkatérben látható", desktop.aiFinanceText.includes("AI FINANSZÍROZÁS ÉS TOKENKERET") && desktop.aiFinanceText.includes("AI költség / hó") && desktop.aiFinanceText.includes("Tokenforgalom / hó") && desktop.financeHeight >= 160, desktop.aiFinanceText.slice(0, 700));

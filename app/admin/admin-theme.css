@@ -7320,3 +7320,16 @@
   background: rgba(204, 251, 241, .55);
 }
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__avatar img { filter: drop-shadow(0 5px 8px rgba(31, 61, 79, 0.14)); }
+
+
+/* BENJADMIN B3.1 – erőforrás-küszöbök és tartós monitorozás */
+.benjadmin-team-screen__usage.is-warning .benjadmin-team-screen__usage-track span {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+.benjadmin-team-screen__usage.is-danger .benjadmin-team-screen__usage-track span {
+  background: linear-gradient(90deg, #ef4444, #fb7185);
+}
+.benjadmin-team-screen__usage.is-warning > div:first-child strong { color: #fbbf24; }
+.benjadmin-team-screen__usage.is-danger > div:first-child strong { color: #fb7185; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage.is-warning > div:first-child strong { color: #b45309; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage.is-danger > div:first-child strong { color: #be123c; }
