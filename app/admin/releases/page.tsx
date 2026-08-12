@@ -4,18 +4,21 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   FileArchive,
-  KeyRound,
   Link2,
   Loader2,
-  RefreshCcw,
+  Plus,
+  RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
   UploadCloud,
+  X,
 } from "lucide-react";
+import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 
 type UploadResult = {
   ok: boolean;
@@ -59,22 +62,35 @@ type ReleaseListResult = {
   releases?: ReleaseItem[];
 };
 
-function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unitIndex = 0;
+type ReleaseFilter = "all" | "active" | "expired" | "deleted" | "current";
 
+const projectOptions = [
+  { value: "DIMPRO_Fajlmuhely", label: "DIMPRO Fájlműhely" },
+  { value: "HAGE_Munkater", label: "HAGE-INVEST Munkatér" },
+  { value: "DIMPRO_Teams", label: "DIMPRO Teams" },
+  { value: "DIMPRO_Drive_Desktop", label: "DIMPRO Drive Desktop" },
+];
+
+function projectLabel(value: string) {
+  return projectOptions.find((item) => item.value === value)?.label || value;
+}
+
+function formatBytes(bytes?: number | null) {
+  if (!Number.isFinite(bytes) || Number(bytes) <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Number(bytes);
+  let unitIndex = 0;
   while (value >= 1024 && unitIndex < units.length - 1) {
     value /= 1024;
     unitIndex += 1;
   }
-
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return "Nincs lejárat";
+function formatDate(value: string | null | undefined, empty = "Nincs lejárat") {
+  if (!value) return empty;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return empty;
   return new Intl.DateTimeFormat("hu-HU", {
     year: "numeric",
     month: "2-digit",
@@ -82,7 +98,14 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Budapest",
-  }).format(new Date(value));
+  }).format(date);
+}
+
+function releaseState(release: ReleaseItem) {
+  if (!release.fileAvailable) return { label: "Fájl törölve", tone: "default" as const };
+  if (release.isCurrent && release.isActive) return { label: "Legfrissebb · aktív", tone: "ok" as const };
+  if (release.isActive) return { label: "Aktív link", tone: "ok" as const };
+  return { label: "Lejárt link", tone: "warning" as const };
 }
 
 function copyToClipboard(value: string, onDone: (message: string) => void) {
@@ -108,6 +131,12 @@ export default function ReleaseUploadAdminPage() {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<UploadResult | null>(null);
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<ReleaseFilter>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
 
   const fileInfo = useMemo(() => {
     if (!file) return "Nincs kiválasztott ZIP / 7Z fájl.";
@@ -116,47 +145,44 @@ export default function ReleaseUploadAdminPage() {
 
   const canUseAdminApi = adminKey.trim().length >= 20;
   const canUpload = canUseAdminApi && !!file && version.trim().length > 0 && project.trim().length > 0 && !loading;
-  const storedSize = releases.reduce((sum, release) => sum + release.sizeBytes, 0);
 
   useEffect(() => {
-    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
+    const requestedProject = new URLSearchParams(window.location.search).get("project")?.trim() || "DIMPRO_Fajlmuhely";
     if (storedAdminKey) setAdminKey(storedAdminKey);
-    const requestedProject = new URLSearchParams(window.location.search).get("project")?.trim();
-    if (requestedProject) {
-      setProject(requestedProject);
-      if (requestedProject === "HAGE_Munkater") {
-        setVersion("v167 DEV");
-        setTitle("HAGE-INVEST Munkatér DEV 167");
-        setExpiresInDays("never");
-      }
+    setProject(requestedProject);
+    if (requestedProject === "HAGE_Munkater") {
+      setVersion("v167 DEV");
+      setTitle("HAGE-INVEST Munkatér DEV 167");
+      setExpiresInDays("never");
     }
+    if (storedAdminKey) void loadReleases(storedAdminKey, requestedProject);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadReleases(key = adminKey) {
-    if (!key.trim()) {
-      setMessage("Add meg az admin kulcsot a release lista betöltéséhez.");
+  async function loadReleases(keyOverride = adminKey, projectOverride = project) {
+    const key = keyOverride.trim();
+    const targetProject = projectOverride.trim() || "DIMPRO_Fajlmuhely";
+    if (!key) {
+      setMessage("Licencadmin belépés szükséges a release lista betöltéséhez.");
       return;
     }
-
     setListLoading(true);
     setMessage("");
-
     try {
-      const response = await fetch(`/api/releases/list?project=${encodeURIComponent(project.trim() || "DIMPRO_Fajlmuhely")}&limit=50`, {
-        headers: {
-          "x-dimpro-license-admin-key": key.trim(),
-        },
+      const response = await fetch(`/api/releases/list?project=${encodeURIComponent(targetProject)}&limit=250`, {
+        headers: { "x-dimpro-license-admin-key": key },
         cache: "no-store",
       });
       const data = (await response.json()) as ReleaseListResult;
-
       if (!response.ok || !data.ok) {
+        setReleases([]);
         setMessage(data.error || "Nem sikerült betölteni a release listát.");
         return;
       }
-
       setReleases(data.releases || []);
-      setMessage("Release lista betöltve.");
+      setMessage(`${projectLabel(targetProject)} release lista betöltve.`);
+      setPage(1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ismeretlen release lista hiba.");
     } finally {
@@ -164,38 +190,43 @@ export default function ReleaseUploadAdminPage() {
     }
   }
 
+  function changeProject(nextProject: string) {
+    setProject(nextProject);
+    setQuery("");
+    setFilter("all");
+    setPage(1);
+    setSelectedToken(null);
+    if (nextProject === "HAGE_Munkater") {
+      setVersion("v167 DEV");
+      setTitle("HAGE-INVEST Munkatér DEV 167");
+      setExpiresInDays("never");
+    }
+    void loadReleases(adminKey, nextProject);
+  }
+
   async function deleteRelease(release: ReleaseItem) {
     if (!adminKey.trim()) {
-      setMessage("Add meg az admin kulcsot a törléshez.");
+      setMessage("Licencadmin belépés szükséges a törléshez.");
       return;
     }
-
     const confirmed = window.confirm(
       `Biztosan törlöd ezt a release csomagot a szerverről?\n\n${release.version}\n${release.fileName}\n\nCsak a fizikai ZIP / 7Z fájl törlődik a VPS privát tárhelyéről. A verzióelőzmény és leírás megmarad.`,
     );
-
     if (!confirmed) return;
-
     setDeleteLoadingToken(release.token);
     setMessage("");
-
     try {
       const response = await fetch("/api/releases/delete", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-dimpro-license-admin-key": adminKey.trim(),
-        },
+        headers: { "content-type": "application/json", "x-dimpro-license-admin-key": adminKey.trim() },
         body: JSON.stringify({ token: release.token }),
       });
       const data = (await response.json()) as { ok: boolean; error?: string; fileDeleted?: boolean };
-
       if (!response.ok || !data.ok) {
         setMessage(data.error || "Nem sikerült törölni a release csomagot.");
         return;
       }
-
-      setReleases((current) => current.map((item) => (item.token === release.token ? { ...item, fileAvailable: false, isActive: false, fileDeletedAt: new Date().toISOString() } : item)));
+      setReleases((current) => current.map((item) => item.token === release.token ? { ...item, fileAvailable: false, isActive: false, fileDeletedAt: new Date().toISOString() } : item));
       setMessage(data.fileDeleted ? "A szerveren tárolt ZIP / 7Z fájl törölve. A verzióelőzmény megmaradt." : "A verzióelőzmény megmaradt. A szerverfájl már korábban sem volt megtalálható.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ismeretlen release törlési hiba.");
@@ -208,17 +239,14 @@ export default function ReleaseUploadAdminPage() {
     event.preventDefault();
     setMessage("");
     setResult(null);
-
     if (!file) {
       setMessage("Válassz ki egy ZIP vagy 7Z release csomagot.");
       return;
     }
-
     if (!adminKey.trim()) {
-      setMessage("Add meg a DIMPRO licencadmin kulcsot.");
+      setMessage("Licencadmin belépés szükséges.");
       return;
     }
-
     const formData = new FormData();
     formData.append("file", file);
     formData.append("project", project.trim());
@@ -228,28 +256,22 @@ export default function ReleaseUploadAdminPage() {
     formData.append("changes", changes.trim());
     formData.append("expiresInDays", expiresInDays.trim());
     formData.append("uploadedBy", uploadedBy.trim());
-
     setLoading(true);
-
     try {
       const response = await fetch("/api/releases/upload", {
         method: "POST",
-        headers: {
-          "x-dimpro-license-admin-key": adminKey.trim(),
-        },
+        headers: { "x-dimpro-license-admin-key": adminKey.trim() },
         body: formData,
       });
       const data = (await response.json()) as UploadResult;
-
       if (!response.ok || !data.ok) {
         setMessage(data.error || "A release feltöltése sikertelen.");
         return;
       }
-
       setResult(data);
       setMessage("Release csomag sikeresen feltöltve és tokenes linkként regisztrálva.");
       setFile(null);
-      await loadReleases(adminKey);
+      await loadReleases(adminKey, project);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ismeretlen feltöltési hiba.");
     } finally {
@@ -257,272 +279,137 @@ export default function ReleaseUploadAdminPage() {
     }
   }
 
-  return (
-    <main className="min-h-screen bg-[#06111f] px-4 py-8 text-white sm:px-6">
-      <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(34,211,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.16)_1px,transparent_1px)] [background-size:54px_54px]" />
-      <section className="relative mx-auto max-w-7xl">
-        <header className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:p-8">
-          <div className="mb-5 flex flex-wrap gap-3">
-            <Link href="/admin" className="inline-flex items-center gap-2 text-sm font-black text-cyan-200 hover:text-white">
-              <ArrowLeft size={18} /> Vissza az admin felületre
-            </Link>
-            <Link href="/admin/hage-verziok" className="inline-flex items-center gap-2 text-sm font-black text-emerald-200 hover:text-white">
-              HAGE verziók →
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-300/80">DIMPRO release admin</p>
-              <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] text-white md:text-5xl">Védett ZIP feltöltő</h1>
-              <p className="mt-4 max-w-3xl text-sm font-semibold leading-7 text-slate-300">
-                Admin kulccsal védett felület a DIMPRO Fájlműhely, a HAGE-INVEST Munkatér, a DIMPRO Teams és más DIMPRO release csomagok feltöltéséhez és törléséhez.
-                A fájl privát VPS tárhelyre kerül, majd lejáró tokenes letöltési link készül hozzá.
-              </p>
-            </div>
-            <div className="rounded-3xl border border-emerald-300/30 bg-emerald-400/10 px-5 py-4 text-emerald-100">
-              <div className="flex items-center gap-3">
-                <ShieldCheck size={30} />
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] opacity-80">Védelem</p>
-                  <p className="text-xl font-black">Admin kulcs + token</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+  const visibleReleases = useMemo(() => {
+    const clean = query.trim().toLowerCase();
+    return releases.filter((release) => {
+      if (filter === "active" && !(release.fileAvailable && release.isActive)) return false;
+      if (filter === "expired" && !(release.fileAvailable && !release.isActive)) return false;
+      if (filter === "deleted" && release.fileAvailable) return false;
+      if (filter === "current" && !release.isCurrent) return false;
+      if (!clean) return true;
+      return [release.version, release.fileName, release.description, release.note, release.sha256].some((value) => String(value || "").toLowerCase().includes(clean));
+    });
+  }, [filter, query, releases]);
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-          <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:p-8">
-            <div className="grid gap-5">
-              <label className="block">
-                <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
-                  <KeyRound size={17} /> Admin kulcs
-                </span>
-                <input
-                  value={adminKey}
-                  onChange={(event) => setAdminKey(event.target.value)}
-                  type="password"
-                  placeholder="DIMPRO-LICENSE-ADMIN-..."
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-5 py-4 text-sm font-bold text-white outline-none placeholder:text-slate-500 focus:border-cyan-300 focus:ring-4 focus:ring-cyan-300/10"
-                />
-              </label>
+  const pageCount = Math.max(1, Math.ceil(visibleReleases.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedReleases = visibleReleases.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const selected = selectedToken ? releases.find((release) => release.token === selectedToken) || null : null;
+  const storedCount = releases.filter((release) => release.fileAvailable).length;
+  const activeCount = releases.filter((release) => release.fileAvailable && release.isActive).length;
+  const deletedCount = releases.filter((release) => !release.fileAvailable).length;
+  const storedSize = releases.filter((release) => release.fileAvailable).reduce((sum, release) => sum + release.sizeBytes, 0);
 
-              <label className="block rounded-3xl border border-dashed border-cyan-300/40 bg-cyan-300/5 p-6 text-center transition hover:border-cyan-200 hover:bg-cyan-300/10">
-                <UploadCloud className="mx-auto text-cyan-200" size={46} />
-                <span className="mt-4 block text-lg font-black text-white">ZIP / 7Z csomag kiválasztása</span>
-                <span className="mt-2 block text-sm font-semibold text-slate-300">Maximum 150 MB. A fájl nem public mappába kerül.</span>
-                <input
-                  type="file"
-                  accept=".zip,.7z"
-                  className="sr-only"
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                />
-                <span className="mt-4 inline-flex rounded-xl bg-slate-950/70 px-4 py-2 text-sm font-black text-cyan-100">{fileInfo}</span>
-              </label>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Projekt</span>
-                  <input list="release-project-options" value={project} onChange={(event) => setProject(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300" />
-                  <datalist id="release-project-options">
-                    <option value="DIMPRO_Fajlmuhely" />
-                    <option value="HAGE_Munkater" />
-                    <option value="DIMPRO_Teams" />
-                    <option value="DIMPRO_Drive_Desktop" />
-                  </datalist>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Verzió</span>
-                  <input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="v3_63" className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300" />
-                </label>
-                <label className="block md:col-span-2">
-                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Cím</span>
-                  <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="DIMPRO Fájlműhely v3.63 – ..." className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300" />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Lejárat napban</span>
-                  <select value={expiresInDays} onChange={(event) => setExpiresInDays(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300">
-                    <option value="1">1 nap</option>
-                    <option value="7">7 nap</option>
-                    <option value="14">14 nap</option>
-                    <option value="30">30 nap</option>
-                    <option value="90">90 nap</option>
-                    <option value="never">Nincs lejárat</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Feltöltő</span>
-                  <input value={uploadedBy} onChange={(event) => setUploadedBy(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300" />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Verzió leírás</span>
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Röviden írd le, mit tartalmaz ez a kiadás."
-                  className="min-h-28 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold leading-6 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Változáslista</span>
-                <textarea
-                  value={changes}
-                  onChange={(event) => setChanges(event.target.value)}
-                  placeholder={"Egy sor = egy változás\nPélda: Drive Desktop fájlnézet javítása"}
-                  className="min-h-36 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-semibold leading-6 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={!canUpload}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-cyan-300 px-6 py-4 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="animate-spin" size={20} /> : <FileArchive size={20} />}
-                Release feltöltése és link generálása
-              </button>
-            </div>
-          </form>
-
-          <aside className="grid h-fit gap-5">
-            {message ? (
-              <div className={`rounded-3xl border p-5 text-sm font-bold leading-6 ${result?.ok ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100" : "border-amber-300/30 bg-amber-400/10 text-amber-100"}`}>
-                <div className="mb-2 flex items-center gap-2">
-                  {result?.ok ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-                  <strong>{result?.ok ? "Sikeres művelet" : "Üzenet"}</strong>
-                </div>
-                {message}
-              </div>
-            ) : null}
-
-            {result?.release ? (
-              <div className="rounded-3xl border border-emerald-300/30 bg-white/[0.07] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)]">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">Elkészült release</p>
-                <h2 className="mt-2 text-2xl font-black text-white">{result.release.version}</h2>
-                <div className="mt-4 grid gap-3 rounded-2xl bg-slate-950/60 p-4 text-sm text-slate-300">
-                  <p><strong className="text-white">Fájl:</strong> {result.release.fileName}</p>
-                  <p><strong className="text-white">Méret:</strong> {formatBytes(result.release.sizeBytes)}</p>
-                  <p><strong className="text-white">Lejárat:</strong> {formatDate(result.release.expiresAt)}</p>
-                  <p className="break-all"><strong className="text-white">SHA256:</strong> {result.release.sha256}</p>
-                </div>
-                <a href={result.release.downloadPageUrl} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-emerald-200">
-                  <Link2 size={18} /> Letöltési oldal megnyitása
-                </a>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(result.release!.downloadPageUrl, setMessage)}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-300/10"
-                >
-                  <Copy size={18} /> Link másolása
-                </button>
-              </div>
-            ) : null}
-
-            <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.2)]">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Előzmények</p>
-              <h2 className="mt-2 text-2xl font-black text-white">Release lista</h2>
-              <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-                A sikeres feltöltés automatikusan bekerül a DIMPRO Fájlműhely verziótörténet oldalára.
-              </p>
-              <div className="mt-4 grid gap-3">
-                <button
-                  type="button"
-                  onClick={() => void loadReleases()}
-                  disabled={!canUseAdminApi || listLoading}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {listLoading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
-                  Feltöltött csomagok betöltése
-                </button>
-                <Link href="/admin/fajlmuhely-verziok" className="inline-flex w-full items-center justify-center rounded-2xl border border-cyan-300/30 px-5 py-3 text-sm font-black text-cyan-100 hover:bg-cyan-300/10">
-                  Verziók megnyitása
-                </Link>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-red-300/30 bg-red-400/10 p-5 text-sm font-semibold leading-6 text-red-100">
-              <strong className="block text-white">Törlési szabály</strong>
-              A törlés csak a ZIP / 7Z fájlt távolítja el a VPS privát release tárhelyéről. A verzió, leírás, dátum és SHA256 előzmény továbbra is megmarad a verziólistában.
-            </div>
-          </aside>
-        </div>
-
-
-        <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Szerveren tárolt release csomagok</p>
-              <h2 className="mt-2 text-3xl font-black text-white">Feltöltött fájlok kezelése</h2>
-              <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-                A régi, felesleges fejlesztési ZIP-ek innen törölhetők, hogy ne terheljék a VPS tárhelyét.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/50 px-4 py-3 text-sm font-black text-cyan-100">
-              {releases.length} csomag · {formatBytes(storedSize)}
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-3">
-            {releases.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-5 text-sm font-semibold text-slate-300">
-                A lista még nincs betöltve, vagy nincs rögzített release csomag. Add meg az admin kulcsot, majd kattints a „Feltöltött csomagok betöltése” gombra.
-              </div>
-            ) : null}
-
-            {releases.map((release) => (
-              <article key={release.token} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-xl font-black text-white">{release.version}</h3>
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${release.isActive ? "bg-emerald-300/15 text-emerald-200" : "bg-slate-500/20 text-slate-300"}`}>
-                        {release.fileAvailable ? (release.isActive ? "Aktív link" : "Lejárt link") : "Fájl törölve"}
-                      </span>
-                      {release.isCurrent ? <span className="rounded-full bg-cyan-300 px-3 py-1 text-xs font-black text-slate-950">Legfrissebb</span> : null}
-                    </div>
-                    <p className="mt-2 break-all text-sm font-semibold text-cyan-100">{release.fileName}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
-                      {release.description || release.note || "Ehhez a release csomaghoz nincs külön leírás rögzítve."}
-                    </p>
-                    <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-400 sm:grid-cols-2 xl:grid-cols-4">
-                      <span>Méret: <strong className="text-white">{formatBytes(release.sizeBytes)}</strong></span>
-                      <span>Kiadás: <strong className="text-white">{formatDate(release.createdAt)}</strong></span>
-                      <span>Lejárat: <strong className="text-white">{formatDate(release.expiresAt)}</strong></span>
-                      <span>Letöltés: <strong className="text-white">{release.downloadCount} db</strong></span>
-                    </div>
-                    <code className="mt-3 block break-all rounded-xl bg-black/30 p-3 text-xs text-cyan-100">{release.sha256}</code>
-                  </div>
-
-                  <div className="flex shrink-0 flex-wrap gap-2 xl:flex-col">
-                    <a href={release.downloadPageUrl} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/30 px-4 py-2 text-sm font-black text-cyan-100 hover:bg-cyan-300/10">
-                      <Link2 size={17} /> Letöltési oldal
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(release.downloadPageUrl, setMessage)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300/30 px-4 py-2 text-sm font-black text-slate-100 hover:bg-white/10"
-                    >
-                      <Copy size={17} /> Link másolása
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteRelease(release)}
-                      disabled={deleteLoadingToken === release.token}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300/40 px-4 py-2 text-sm font-black text-red-100 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {deleteLoadingToken === release.token ? <Loader2 className="animate-spin" size={17} /> : <Trash2 size={17} />}
-                      Szerverfájl törlése
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
+  if (!adminKey && !listLoading) {
+    return (
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <ShieldCheck size={22} />
+          <h1>Licencadmin belépés szükséges</h1>
+          <p>A védett release feltöltő és kiadási lista csak aktív BENJADMIN admin munkamenettel érhető el.</p>
+          <Link href="/admin" className="benjadmin-data-primary-action">Licencadmin megnyitása</Link>
         </section>
-      </section>
-    </main>
+      </main>
+    );
+  }
+
+  return (
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · RELEASE TÁR"
+        title="Védett release feltöltő és kiadási lista"
+        description={`${projectLabel(project)} · privát VPS release tárhely, lejáró tokenes letöltési linkek és történeti kiadási nyilvántartás.`}
+        actions={(
+          <>
+            {project === "DIMPRO_Fajlmuhely" ? <Link href="/admin/fajlmuhely-verziok" className="benjadmin-data-secondary-action">Fájlműhely verziók</Link> : null}
+            {project === "HAGE_Munkater" ? <Link href="/admin/hage-verziok" className="benjadmin-data-secondary-action">HAGE verziók</Link> : null}
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadReleases()} disabled={listLoading}>{listLoading ? <Loader2 className="is-spinning" size={16} /> : <RefreshCw size={16} />} Frissítés</button>
+            <button type="button" className="benjadmin-data-primary-action" onClick={() => { setResult(null); setUploadDrawerOpen(true); }}><Plus size={16} /> Új release feltöltés</button>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Összes release" value={releases.length} />
+            <BenjadminMetric label="Szerveren tárolt" value={storedCount} tone="ok" />
+            <BenjadminMetric label="Aktív link" value={activeCount} tone="ok" />
+            <BenjadminMetric label="Törölt fájl / előzmény" value={deletedCount} />
+            <BenjadminMetric label="Tárolt méret" value={formatBytes(storedSize)} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <select className="benjadmin-data-toolbar-single-select" value={project} onChange={(event) => changeProject(event.target.value)} aria-label="Release projekt">{projectOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+            <div className="benjadmin-data-filter-group" aria-label="Release státusz szűrő">
+              {(["all", "active", "expired", "deleted", "current"] as ReleaseFilter[]).map((value) => <button key={value} type="button" className={filter === value ? "is-active" : ""} onClick={() => { setFilter(value); setPage(1); }}>{value === "all" ? "Mind" : value === "active" ? "Aktív link" : value === "expired" ? "Lejárt link" : value === "deleted" ? "Törölt fájl" : "Legfrissebb"}</button>)}
+            </div>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Keresés verzió, fájlnév, leírás vagy SHA256 alapján" /></label>
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{message || "A fizikai fájl törlése nem törli a történeti release rekordot."}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={visibleReleases.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table benjadmin-release-upload-table" data-testid="benjadmin-release-upload-table">
+            <thead><tr><th>Verzió</th><th>Fájl</th><th>Státusz</th><th>Méret</th><th>Kiadás</th><th>Lejárat</th><th>Letöltések</th><th>Utolsó letöltés</th><th>SHA256</th><th>Művelet</th></tr></thead>
+            <tbody>
+              {pagedReleases.length ? pagedReleases.map((release) => {
+                const state = releaseState(release);
+                return <tr key={release.token}><td className="is-mono"><strong>{release.version}</strong>{release.isCurrent ? <><br /><small>legfrissebb</small></> : null}</td><td className="is-wide"><strong>{release.fileName}</strong><br /><small>{release.description || release.note || "Nincs külön leírás."}</small></td><td><BenjadminStatusPill tone={state.tone}>{state.label}</BenjadminStatusPill></td><td>{formatBytes(release.sizeBytes)}</td><td className="is-nowrap">{formatDate(release.createdAt, "—")}</td><td className="is-nowrap">{formatDate(release.expiresAt)}</td><td>{release.downloadCount} db</td><td className="is-nowrap">{formatDate(release.lastDownloadedAt, "—")}</td><td className="is-mono"><span className="benjadmin-release-sha-short">{release.sha256 ? `${release.sha256.slice(0, 12)}…` : "—"}</span></td><td><button type="button" className="benjadmin-data-row-action" onClick={() => setSelectedToken(release.token)}>Részletek</button></td></tr>;
+              }) : <tr><td colSpan={10} className="benjadmin-data-empty">Nincs betöltött vagy a szűrésnek megfelelő release rekord.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </BenjadminDataWorkspace>
+
+      {uploadDrawerOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Release feltöltő bezárása" onClick={() => setUploadDrawerOpen(false)} /> : null}
+      {uploadDrawerOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-release-upload-drawer" data-testid="benjadmin-release-upload-drawer">
+          <header><div><span>VÉDETT RELEASE FELTÖLTÉS</span><strong>{projectLabel(project)}</strong></div><button type="button" onClick={() => setUploadDrawerOpen(false)} aria-label="Bezárás"><X size={18} /></button></header>
+          <form onSubmit={handleSubmit} className="benjadmin-data-drawer__body benjadmin-release-upload-form">
+            <div className="benjadmin-data-security-note"><ShieldCheck size={17} /><div><strong>Privát release tárhely</strong><span>ZIP / 7Z fájl kerül a privát VPS tárhelyre, majd lejáró tokenes letöltési link készül. Maximum 150 MB.</span></div></div>
+
+            <label className="benjadmin-release-dropzone">
+              <UploadCloud size={32} />
+              <strong>ZIP / 7Z csomag kiválasztása</strong>
+              <span>{fileInfo}</span>
+              <input type="file" accept=".zip,.7z" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+            </label>
+
+            <div className="benjadmin-data-form-grid">
+              <label className="benjadmin-data-field"><span>Projekt</span><select value={project} onChange={(event) => changeProject(event.target.value)}>{projectOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+              <label className="benjadmin-data-field"><span>Verzió</span><input value={version} onChange={(event) => setVersion(event.target.value)} /></label>
+              <label className="benjadmin-data-field"><span>Cím</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+              <label className="benjadmin-data-field"><span>Lejárat</span><select value={expiresInDays} onChange={(event) => setExpiresInDays(event.target.value)}><option value="1">1 nap</option><option value="7">7 nap</option><option value="14">14 nap</option><option value="30">30 nap</option><option value="90">90 nap</option><option value="never">Nincs lejárat</option></select></label>
+              <label className="benjadmin-data-field"><span>Feltöltő</span><input value={uploadedBy} onChange={(event) => setUploadedBy(event.target.value)} /></label>
+            </div>
+            <label className="benjadmin-data-field"><span>Verzió leírás</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Röviden írd le, mit tartalmaz ez a kiadás." /></label>
+            <label className="benjadmin-data-field"><span>Változáslista</span><textarea value={changes} onChange={(event) => setChanges(event.target.value)} placeholder={"Egy sor = egy változás\nPélda: Drive Desktop fájlnézet javítása"} /></label>
+
+            {message ? <div className={`benjadmin-release-upload-message ${result?.ok ? "is-ok" : ""}`}>{result?.ok ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}<span>{message}</span></div> : null}
+            {result?.release ? <section className="benjadmin-data-form-section"><header><strong>Elkészült release</strong><BenjadminStatusPill tone="ok">Sikeres</BenjadminStatusPill></header><div className="benjadmin-infra-detail-grid"><span>Verzió<b>{result.release.version}</b></span><span>Fájl<b>{result.release.fileName}</b></span><span>Méret<b>{formatBytes(result.release.sizeBytes)}</b></span><span>Lejárat<b>{formatDate(result.release.expiresAt)}</b></span></div><code className="benjadmin-fajlmuhely-sha">SHA256: {result.release.sha256}</code><div className="benjadmin-release-upload-result-actions"><a href={result.release.downloadPageUrl} className="benjadmin-data-secondary-action"><Link2 size={14} /> Letöltési oldal</a><button type="button" className="benjadmin-data-secondary-action" onClick={() => copyToClipboard(result.release!.downloadPageUrl, setMessage)}><Copy size={14} /> Link másolása</button></div></section> : null}
+
+            <button type="submit" className="benjadmin-data-primary-action is-full" disabled={!canUpload}>{loading ? <Loader2 className="is-spinning" size={16} /> : <FileArchive size={16} />} Release feltöltése és link generálása</button>
+          </form>
+        </aside>
+      ) : null}
+
+      {selected ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Release részletek bezárása" onClick={() => setSelectedToken(null)} /> : null}
+      {selected ? (
+        <aside className="benjadmin-data-drawer benjadmin-release-detail-drawer" data-testid="benjadmin-release-detail-drawer">
+          <header><div><span>RELEASE RÉSZLETEK</span><strong>{selected.version}</strong></div><button type="button" onClick={() => setSelectedToken(null)} aria-label="Bezárás"><X size={18} /></button></header>
+          <div className="benjadmin-data-drawer__body benjadmin-release-detail">
+            <section className="benjadmin-data-form-section"><header><strong>{selected.fileName}</strong><BenjadminStatusPill tone={releaseState(selected).tone}>{releaseState(selected).label}</BenjadminStatusPill></header><p>{selected.description || selected.note || "Nincs külön leírás."}</p></section>
+            <div className="benjadmin-infra-detail-grid"><span>Projekt<b>{projectLabel(selected.project || project)}</b></span><span>Méret<b>{formatBytes(selected.sizeBytes)}</b></span><span>Kiadás<b>{formatDate(selected.createdAt, "—")}</b></span><span>Lejárat<b>{formatDate(selected.expiresAt)}</b></span><span>Letöltések<b>{selected.downloadCount} db</b></span><span>Utolsó letöltés<b>{formatDate(selected.lastDownloadedAt, "—")}</b></span><span>Fájl a szerveren<b>{selected.fileAvailable ? "Igen" : "Nem"}</b></span><span>Aktív link<b>{selected.isActive ? "Igen" : "Nem"}</b></span></div>
+            <section className="benjadmin-data-form-section"><header><strong>SHA256</strong></header><code className="benjadmin-fajlmuhely-sha">{selected.sha256 || "—"}</code></section>
+            <div className="benjadmin-release-detail-actions"><a href={selected.downloadPageUrl} className="benjadmin-data-secondary-action"><Download size={14} /> Letöltési oldal</a><button type="button" className="benjadmin-data-secondary-action" onClick={() => copyToClipboard(selected.downloadPageUrl, setMessage)}><Copy size={14} /> Link másolása</button>{selected.fileAvailable ? <button type="button" className="benjadmin-data-danger-action" disabled={deleteLoadingToken === selected.token} onClick={() => void deleteRelease(selected)}>{deleteLoadingToken === selected.token ? <Loader2 className="is-spinning" size={14} /> : <Trash2 size={14} />} Szerverfájl törlése</button> : null}</div>
+            <div className="benjadmin-data-security-note"><AlertTriangle size={17} /><div><strong>Törlési szabály</strong><span>Csak a fizikai ZIP / 7Z fájl törlődik. A verzió, leírás, dátum és SHA256 történeti rekord megmarad.</span></div></div>
+          </div>
+        </aside>
+      ) : null}
+    </>
   );
 }
