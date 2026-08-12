@@ -1370,11 +1370,11 @@ export default function ServerStatusPage() {
   const criticalDisk = status?.disk && status.disk.usePercent >= 95;
 
   return (
-    <main className="min-h-screen bg-[#06111f] text-white">
+    <main className="benjadmin-server-detail min-h-screen">
       {loading && <LoadingOverlay label={loadingLabel} progress={loadingProgress} />}
-      <div className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(34,211,238,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.16)_1px,transparent_1px)] [background-size:54px_54px]" />
+      <div className="benjadmin-server-detail__grid" aria-hidden="true" />
       <div className="relative mx-auto max-w-[1680px] px-5 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-8 lg:px-10 lg:pb-6">
-        <header className="mb-7 flex flex-col gap-5 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.22)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
+        <header className="benjadmin-server-detail__header mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Link href="/admin" className="mb-4 inline-flex items-center gap-2 text-sm font-black text-cyan-200 hover:text-white">
               <ArrowLeft size={18} /> Vissza a licencadmin felületre
@@ -1399,7 +1399,7 @@ export default function ServerStatusPage() {
           )}
         </header>
 
-        <section className="mb-7 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+        <section className="benjadmin-server-detail__controls mb-4">
           <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
             <label className="block">
               <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
@@ -1451,7 +1451,7 @@ export default function ServerStatusPage() {
 
         {status ? (
           <>
-            <section className="sticky top-3 z-20 mb-7 hidden rounded-[2rem] border border-white/10 bg-[#071321]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl lg:block">
+            <section className="benjadmin-server-detail__tabs sticky top-3 z-20 mb-4 hidden lg:block">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
                 <TabButton active={activeTab === "overview"} label="Áttekintés" onClick={() => setActiveTab("overview")} />
                 <TabButton active={activeTab === "storage"} label="Tárhely" onClick={() => setActiveTab("storage")} />
@@ -1461,7 +1461,7 @@ export default function ServerStatusPage() {
                 <TabButton active={activeTab === "monitor"} label="Szerverőr" onClick={() => { setActiveTab("monitor"); void loadMonitor(false); }} />
                 <TabButton active={activeTab === "raw"} label="Részletes listák" onClick={() => setActiveTab("raw")} />
               </div>
-              <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-300/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="benjadmin-server-detail__tab-hint mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold leading-6 text-slate-300">
                   Az alap frissítés csak gyors szerveradatokat kér le. Az aktív fül részletes adatai külön gombbal futnak, hogy a felület ne lassuljon be.
                 </p>
@@ -1478,7 +1478,7 @@ export default function ServerStatusPage() {
 
 
             <nav
-              className="fixed inset-x-[10px] bottom-[max(10px,env(safe-area-inset-bottom))] z-50 rounded-[17px] border border-white/10 bg-[#071321]/94 p-[7px] shadow-[0_12px_35px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
+              className="benjadmin-server-detail__mobile-nav fixed inset-x-[10px] bottom-[max(10px,env(safe-area-inset-bottom))] z-50 p-[7px] lg:hidden"
               aria-label="Szerverállapot mobil és tablet navigáció"
             >
               <div className="grid grid-flow-col auto-cols-[minmax(68px,1fr)] gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

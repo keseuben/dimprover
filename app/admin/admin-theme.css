@@ -8415,3 +8415,98 @@
   .benjadmin-email-settings-drawer,
   .benjadmin-email-profile-drawer { width: calc(100vw - 14px); }
 }
+
+/* BENJADMIN részletes DEV szerverdiagnosztika – egységes fejlesztőközpont téma */
+.benjadmin-server-detail {
+  position: relative;
+  min-height: 100%;
+  color: var(--admin-text);
+  background: transparent;
+}
+.benjadmin-server-detail__grid { display: none; }
+.benjadmin-server-detail > .relative { max-width: 1580px !important; padding-top: 12px !important; }
+.benjadmin-server-detail__header,
+.benjadmin-server-detail__controls,
+.benjadmin-server-detail__tabs {
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: color-mix(in srgb, var(--admin-surface) 96%, transparent);
+  box-shadow: var(--admin-shadow);
+  backdrop-filter: blur(16px);
+}
+.benjadmin-server-detail__header { min-height: 112px; padding: 14px 16px; }
+.benjadmin-server-detail__header h1 { margin-top: 4px !important; color: var(--admin-text) !important; font-size: clamp(24px, 2.2vw, 34px) !important; letter-spacing: -.035em !important; }
+.benjadmin-server-detail__header p { color: var(--admin-text-soft) !important; }
+.benjadmin-server-detail__header > div:first-child > a { margin-bottom: 5px !important; color: var(--admin-accent-strong) !important; font-size: 11px !important; }
+.benjadmin-server-detail__header > div:first-child > p:first-of-type { color: var(--admin-accent-strong) !important; font-size: 9px !important; }
+.benjadmin-server-detail__controls { padding: 10px 12px; }
+.benjadmin-server-detail__controls form { gap: 8px !important; }
+.benjadmin-server-detail__controls label > span { margin-bottom: 4px !important; color: var(--admin-accent-strong) !important; font-size: 9px !important; }
+.benjadmin-server-detail__controls input {
+  min-height: 36px;
+  padding: 7px 10px !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 8px !important;
+  color: var(--admin-text) !important;
+  background: var(--admin-surface-soft) !important;
+  font-size: 11px !important;
+}
+.benjadmin-server-detail__controls button { min-height: 36px; padding: 7px 11px !important; border-radius: 8px !important; font-size: 10px !important; }
+.benjadmin-server-detail__tabs { top: 6px !important; padding: 8px; }
+.benjadmin-server-detail__tabs > div:first-child { gap: 5px !important; }
+.benjadmin-server-detail__tabs > div:first-child button {
+  min-height: 34px;
+  padding: 7px 9px !important;
+  border-radius: 7px !important;
+  font-size: 10px !important;
+}
+.benjadmin-server-detail__tab-hint {
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text-soft);
+  background: var(--admin-surface-soft);
+}
+.benjadmin-server-detail__tab-hint p { color: var(--admin-text-soft) !important; font-size: 10px !important; line-height: 1.45 !important; }
+.benjadmin-server-detail__tab-hint button { min-height: 32px; padding: 6px 10px !important; border-radius: 7px !important; font-size: 10px !important; }
+.benjadmin-server-detail__mobile-nav {
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
+  box-shadow: var(--admin-shadow);
+  backdrop-filter: blur(16px);
+}
+.benjadmin-server-detail [class*="rounded-3xl"],
+.benjadmin-server-detail [class*="rounded-[2rem]"] { border-radius: 12px !important; }
+.benjadmin-server-detail [class*="rounded-2xl"],
+.benjadmin-server-detail [class*="rounded-[1.5rem]"],
+.benjadmin-server-detail [class*="rounded-[1.75rem]"] { border-radius: 9px !important; }
+.admin-theme-light .benjadmin-server-detail [class*="bg-white/[0.06]"],
+.admin-theme-light .benjadmin-server-detail [class*="bg-white/[0.04]"],
+.admin-theme-light .benjadmin-server-detail [class*="bg-slate-950/35"],
+.admin-theme-light .benjadmin-server-detail [class*="bg-slate-950/30"],
+.admin-theme-light .benjadmin-server-detail [class*="bg-slate-950/25"],
+.admin-theme-light .benjadmin-server-detail [class*="bg-slate-950/40"] {
+  background: var(--admin-surface-soft) !important;
+}
+.admin-theme-light .benjadmin-server-detail [class*="border-white/10"] { border-color: var(--admin-border) !important; }
+.admin-theme-light .benjadmin-server-detail [class*="text-white"] { color: var(--admin-text) !important; }
+.admin-theme-light .benjadmin-server-detail [class*="text-slate-300"],
+.admin-theme-light .benjadmin-server-detail [class*="text-slate-400"],
+.admin-theme-light .benjadmin-server-detail [class*="text-slate-500"] { color: var(--admin-text-soft) !important; }
+.admin-theme-light .benjadmin-server-detail [class*="text-cyan-100"],
+.admin-theme-light .benjadmin-server-detail [class*="text-cyan-200"],
+.admin-theme-light .benjadmin-server-detail [class*="text-cyan-300"] { color: var(--admin-accent-strong) !important; }
+.admin-theme-light .benjadmin-server-detail table tbody tr[class*="bg-"] { background: var(--admin-surface-soft) !important; }
+.admin-theme-light .benjadmin-server-detail table thead [class*="text-slate-"] { color: var(--admin-text-muted) !important; }
+@media (max-width: 1023px) {
+  .benjadmin-server-detail > .relative { padding-top: 8px !important; }
+  .benjadmin-server-detail__header { min-height: 0; padding: 11px 12px; }
+  .benjadmin-server-detail__controls { padding: 8px; }
+}
+@media (max-width: 640px) {
+  .benjadmin-server-detail__header h1 { font-size: 23px !important; }
+  .benjadmin-server-detail__header p { line-height: 1.45 !important; }
+}
