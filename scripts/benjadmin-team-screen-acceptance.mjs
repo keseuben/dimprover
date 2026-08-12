@@ -41,6 +41,7 @@ check("Drive és Drop élő foglaltságot és kapacitásmezőt ad", infrastructu
 const entitlementResponse = await fetch(`${apiBase}/api/dev/engine/entitlements`, { headers: { host, "x-dimpro-license-admin-key": adminKey } });
 const entitlementPayload = await entitlementResponse.json().catch(() => ({}));
 check("AI finanszírozási összesítő API mezői elérhetők", entitlementResponse.status === 200 && ["aiCostHufThisMonth", "aiMonthlyBudgetHuf", "aiTotalTokensThisMonth", "aiMonthlyTokenBudget"].every((key) => Object.prototype.hasOwnProperty.call(entitlementPayload?.entitlements?.summary || {}, key)), JSON.stringify(entitlementPayload?.entitlements?.summary || {}));
+check("AI strict átállási készenlét biztonságosan jelentett", entitlementResponse.status === 200 && typeof entitlementPayload?.entitlements?.summary?.aiRuntimeStrictReady === "boolean" && Array.isArray(entitlementPayload?.entitlements?.summary?.aiRuntimeStrictBlockers), JSON.stringify({ ready: entitlementPayload?.entitlements?.summary?.aiRuntimeStrictReady, blockers: entitlementPayload?.entitlements?.summary?.aiRuntimeStrictBlockers }));
 
 const browser = await puppeteer.launch({
   headless: true,
@@ -126,6 +127,7 @@ try {
   check("Mind az öt hexagon csapatembléma háttérdoboz nélkül betöltött", desktop.images.length === 5 && desktop.images.every((item) => item.complete && item.naturalWidth > 0 && item.naturalHeight > 0 && item.objectFit === "contain" && item.alt.includes("hexagon embléma")), JSON.stringify(desktop.images));
   check("A személyi kártyák kb. fele képi terület", desktop.memberImageShares.length === 5 && desktop.memberImageShares.slice(0, 2).every((item) => item.widthShare >= 0.40) && desktop.memberImageShares.slice(2).every((item) => item.heightShare >= 0.40), JSON.stringify(desktop.memberImageShares));
   check("AI finanszírozás és tokenkeret panel a középső alsó munkatérben látható", desktop.aiFinanceText.includes("AI FINANSZÍROZÁS ÉS TOKENKERET") && desktop.aiFinanceText.includes("AI költség / hó") && desktop.aiFinanceText.includes("Tokenforgalom / hó") && desktop.financeHeight >= 160, desktop.aiFinanceText.slice(0, 700));
+  check("AI strict átállási állapot a csapatképernyőn látható", desktop.aiFinanceText.includes("strict:") && (desktop.aiFinanceText.includes("NEM KÉSZ") || desktop.aiFinanceText.includes("ELLENŐRZÉSRE KÉSZ")), desktop.aiFinanceText.slice(0, 700));
   check("A csapatkártyák magassága helyet hagy az AI finanszírozási panelnek", desktop.teamCardHeights.length === 5 && Math.max(...desktop.teamCardHeights) < 330, JSON.stringify({ cards: desktop.teamCardHeights, financeHeight: desktop.financeHeight }));
   check("Csapatképernyő működési szöveg minimum 12 px", desktop.tooSmall.length === 0, JSON.stringify(desktop.tooSmall));
   check("Desktop nincs vízszintes túlcsordulás", desktop.scrollWidth <= desktop.clientWidth + 1, JSON.stringify({ scrollWidth: desktop.scrollWidth, clientWidth: desktop.clientWidth }));

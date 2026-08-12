@@ -32,7 +32,13 @@ export async function getBenjadminEntitlementSnapshot() {
   ]);
 
   const users = new Map(
-    central.users.map((row) => [text(row.id), { name: text(row.full_name), email: text(row.email) }]),
+    central.users.map((row) => [text(row.id), {
+      id: text(row.id),
+      publicCode: text(row.public_user_code),
+      name: text(row.full_name),
+      email: text(row.email),
+      status: text(row.status),
+    }]),
   );
   const organizations = new Map(
     central.organizations.map((row) => [text(row.id), { name: text(row.display_name) || text(row.legal_name), email: text(row.email) }]),
@@ -44,6 +50,8 @@ export async function getBenjadminEntitlementSnapshot() {
     monthlyTokenBudget: number;
     maxRequestsPerDay: number;
     maxRequestsPerMonth: number;
+    policyVersion: number;
+    managedBy: string;
     featureFlags: Record<string, unknown>;
   }>();
   for (const row of central.licenseModules) {
@@ -62,9 +70,33 @@ export async function getBenjadminEntitlementSnapshot() {
         monthlyTokenBudget: numberValue(limits.monthlyTokenBudget),
         maxRequestsPerDay: numberValue(limits.maxRequestsPerDay),
         maxRequestsPerMonth: numberValue(limits.maxRequestsPerMonth),
+        policyVersion: numberValue(limits.policyVersion),
+        managedBy: text(limits.managedBy),
         featureFlags: objectValue(row.feature_flags),
       });
     }
+  }
+
+  const membershipAiPolicies = new Map<string, { enabled: boolean; policyVersion: number; managedBy: string }>();
+  for (const row of central.membershipModules) {
+    if (text(row.module_code).toUpperCase() !== "AI_ASSISTANT") continue;
+    const membershipId = text(row.membership_id);
+    if (!membershipId) continue;
+    const limits = objectValue(row.limits);
+    membershipAiPolicies.set(membershipId, {
+      enabled: row.enabled !== false,
+      policyVersion: numberValue(limits.policyVersion),
+      managedBy: text(limits.managedBy),
+    });
+  }
+
+  const membershipsByOrganization = new Map<string, typeof central.organizationMemberships>();
+  for (const membership of central.organizationMemberships) {
+    const organizationId = text(membership.organization_id);
+    if (!organizationId) continue;
+    const current = membershipsByOrganization.get(organizationId) || [];
+    current.push(membership);
+    membershipsByOrganization.set(organizationId, current);
   }
 
   const sendByLicense = new Map<string, { total: number; active: number; usedThisMonth: number; limitThisMonth: number }>();
@@ -90,6 +122,7 @@ export async function getBenjadminEntitlementSnapshot() {
       id: licenseId,
       publicCode: text(row.public_license_code),
       ownerType,
+      ownerId: ownerType === "organization" ? text(row.owner_organization_id) : text(row.owner_user_id),
       ownerName: owner?.name || "—",
       ownerEmail: owner?.email || "",
       productCode: text(row.product_code),
@@ -120,8 +153,8 @@ export async function getBenjadminEntitlementSnapshot() {
   const localAiLicenses = centralLicenses
     .filter((license) => license.modules.some((moduleCode) => moduleCode.toUpperCase() === "AI_ASSISTANT"))
     .map((centralLicense) => {
-      const bridge = localById.get(centralLicense.legacyLicenseRef)
-        || localByCompany.get(normalizeKey(centralLicense.ownerName));
+      const exactBridge = localById.get(centralLicense.legacyLicenseRef);
+      const bridge = exactBridge || localByCompany.get(normalizeKey(centralLicense.ownerName));
       if (bridge) matchedLocalIds.add(bridge.id);
       const usage = bridge ? usageByLicense.get(bridge.id) : undefined;
       const enabledAiUsers = (bridge?.aiUsers || []).filter((user) => user.enabled);
@@ -130,6 +163,46 @@ export async function getBenjadminEntitlementSnapshot() {
       const budget = centralBudget > 0 ? centralBudget : bridgeBudget;
       const centralRequestLimit = numberValue(centralLicense.aiPolicy?.maxSingleRequestHuf);
       const bridgeRequestLimit = numberValue(bridge?.aiMaxSingleRequestHuf);
+      const strictBlockers: string[] = [];
+      const centralPolicyManaged = numberValue(centralLicense.aiPolicy?.policyVersion) >= 1
+        && centralLicense.aiPolicy?.managedBy === "identity-license-center";
+      if (!exactBridge) strictBlockers.push("Nincs pontos Identity Core → legacy licenchivatkozás.");
+      if (!centralPolicyManaged) strictBlockers.push("A központi licenc AI-policy még nincs menedzselt v1 állapotban.");
+      const activeLegacyDevices = (exactBridge?.devices || []).filter((device) => device.status === "active").length;
+      if (activeLegacyDevices === 0) strictBlockers.push("Nincs aktív legacy gépkötés a DEV végponttól végpontig ellenőrzéshez.");
+      const enabledLegacyUsers = (exactBridge?.aiUsers || []).filter((user) => user.enabled);
+      if (enabledLegacyUsers.length === 0) strictBlockers.push("Nincs névre szóló aktív legacy AI-felhasználó a migráció ellenőrzéséhez.");
+
+      let managedMemberMatches = 0;
+      let unresolvedLegacyUsers = 0;
+      if (centralLicense.ownerType === "organization" && enabledLegacyUsers.length > 0) {
+        const memberships = (membershipsByOrganization.get(centralLicense.ownerId) || [])
+          .filter((membership) => text(membership.status) === "active")
+          .map((membership) => ({ membership, user: users.get(text(membership.user_id)) }))
+          .filter((item) => Boolean(item.user));
+        for (const legacyUser of enabledLegacyUsers) {
+          const legacyKeys = new Set([legacyUser.userId, legacyUser.displayName].map((value) => normalizeKey(String(value || ""))).filter(Boolean));
+          const matches = memberships.filter(({ user }) => {
+            if (!user) return false;
+            return [user.id, user.publicCode, user.name, user.email]
+              .map((value) => normalizeKey(value))
+              .filter(Boolean)
+              .some((value) => legacyKeys.has(value));
+          });
+          if (matches.length !== 1) {
+            unresolvedLegacyUsers += 1;
+            continue;
+          }
+          const policy = membershipAiPolicies.get(text(matches[0].membership.id));
+          if (policy?.enabled && policy.policyVersion >= 1 && policy.managedBy === "identity-license-center") managedMemberMatches += 1;
+          else unresolvedLegacyUsers += 1;
+        }
+        if (unresolvedLegacyUsers > 0) strictBlockers.push(`${unresolvedLegacyUsers} legacy AI-felhasználóhoz nincs egyértelmű, menedzselt központi tagsági AI-policy.`);
+      }
+      if (centralLicense.ownerType === "user" && enabledLegacyUsers.length > 1) {
+        strictBlockers.push("A közvetlen felhasználói licenchez több aktív legacy AI-felhasználó tartozik.");
+      }
+      const strictReady = strictBlockers.length === 0;
       return {
         id: centralLicense.id,
         companyId: bridge?.companyId || centralLicense.id,
@@ -160,6 +233,15 @@ export async function getBenjadminEntitlementSnapshot() {
               ? "central_identity_prefer_with_legacy_ceiling"
               : "legacy_license_bridge"
           : "not_configured",
+        strictReadiness: {
+          ready: strictReady,
+          blockers: strictBlockers,
+          centralPolicyManaged,
+          activeLegacyDevices,
+          enabledLegacyUsers: enabledLegacyUsers.length,
+          managedMemberMatches,
+          unresolvedLegacyUsers,
+        },
       };
     });
 
@@ -192,8 +274,21 @@ export async function getBenjadminEntitlementSnapshot() {
       entitlementSource: "legacy_license_store",
       budgetSource: "legacy_license_store",
       runtimePolicySource: "legacy_license_store",
+      strictReadiness: {
+        ready: false,
+        blockers: ["A legacy AI-licenchez nincs központi Identity Core AI-licenckapcsolat."],
+        centralPolicyManaged: false,
+        activeLegacyDevices: (license.devices || []).filter((device) => device.status === "active").length,
+        enabledLegacyUsers: enabledAiUsers.length,
+        managedMemberMatches: 0,
+        unresolvedLegacyUsers: enabledAiUsers.length,
+      },
     });
   }
+
+  const strictReadyLicenses = localAiLicenses.filter((item) => item.strictReadiness.ready).length;
+  const strictBlockedLicenses = localAiLicenses.length - strictReadyLicenses;
+  const strictBlockers = [...new Set(localAiLicenses.flatMap((item) => item.strictReadiness.blockers))];
 
   const aiMonthlyBudgetHuf = localAiLicenses.reduce((sum, item) => sum + numberValue(item.aiMonthlyBudgetHuf), 0);
   const centralAiMonthlyBudgetHuf = localAiLicenses
@@ -242,6 +337,10 @@ export async function getBenjadminEntitlementSnapshot() {
       aiEnabledLicenses: localAiLicenses.filter((item) => item.aiEnabled).length,
       aiRuntimePolicyMode: runtimePolicyMode,
       aiRuntimeCentralPolicyLicenses: localAiLicenses.filter((item) => item.runtimePolicySource.startsWith("central_identity_")).length,
+      aiRuntimeStrictReady: localAiLicenses.length > 0 && strictBlockedLicenses === 0,
+      aiRuntimeStrictReadyLicenses: strictReadyLicenses,
+      aiRuntimeStrictBlockedLicenses: strictBlockedLicenses,
+      aiRuntimeStrictBlockers: strictBlockers,
       aiRequestsThisMonth: aiUsage.totals.requests,
       aiCostHufThisMonth,
       aiMonthlyBudgetHuf,
