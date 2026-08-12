@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { BenjadminDataWorkspace, BenjadminMetric, BenjadminPagination, BenjadminStatusPill } from "@/components/admin/BenjadminDataWorkspace";
 
 type Entry = {
   timestamp: string;
@@ -23,10 +25,12 @@ type Summary = {
   uniqueBlockedIps: number;
 };
 
+type Filter = "all" | "blocked" | "successful";
+
 function formatDateTime(value?: string) {
-  if (!value) return "-";
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("hu-HU");
 }
 
@@ -35,18 +39,28 @@ function resultLabel(result: string) {
     blocked: "Tiltott próbálkozás",
     otp_sent: "Kód elküldve",
     otp_verified: "Sikeres belépés",
-    invalid_code: "Hibás vagy lejárt kód",
+    invalid_code: "Hibás / lejárt kód",
     provider_error: "Szolgáltatási hiba",
     allowed: "Engedélyezett",
   };
   return labels[result] || result;
 }
 
-function resultClass(result: string) {
-  if (result === "otp_verified") return "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
-  if (result === "otp_sent" || result === "allowed") return "border-cyan-400/40 bg-cyan-400/10 text-cyan-100";
-  if (result === "blocked") return "border-red-400/50 bg-red-400/10 text-red-200";
-  return "border-amber-400/40 bg-amber-400/10 text-amber-100";
+function resultTone(result: string): "ok" | "info" | "danger" | "warning" | "default" {
+  if (result === "otp_verified") return "ok";
+  if (result === "otp_sent" || result === "allowed") return "info";
+  if (result === "blocked") return "danger";
+  if (result === "invalid_code" || result === "provider_error") return "warning";
+  return "default";
+}
+
+function actionLabel(action: Entry["action"]) {
+  const labels: Record<Entry["action"], string> = {
+    request_otp: "Kódkérés (request OTP)",
+    verify_otp: "Kódellenőrzés (verify OTP)",
+    session_block: "Munkamenet blokkolás (session block)",
+  };
+  return labels[action];
 }
 
 export default function DimproLoginAttemptsPage() {
@@ -56,16 +70,17 @@ export default function DimproLoginAttemptsPage() {
   const [summary, setSummary] = useState<Summary>({ total: 0, blocked: 0, successful: 0, uniqueBlockedEmails: 0, uniqueBlockedIps: 0 });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<"all" | "blocked" | "successful">("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  async function loadEntries(key = adminKey) {
+  const loadEntries = useCallback(async (key: string) => {
     const cleanKey = key.trim();
     if (!cleanKey) {
-      setMessage("Add meg az admin kulcsot, vagy előbb lépj be a licencadmin dashboardon.");
+      setMessage("Nincs aktív admin kulcs. Előbb jelentkezz be a BENJADMIN felületre.");
       return;
     }
-
     setLoading(true);
     setMessage("");
     try {
@@ -81,21 +96,20 @@ export default function DimproLoginAttemptsPage() {
       setEntries(data.entries || []);
       setAllowedEmails(data.allowedEmails || []);
       setSummary(data.summary || { total: 0, blocked: 0, successful: 0, uniqueBlockedEmails: 0, uniqueBlockedIps: 0 });
-      setMessage("DIMPRO belépési napló betöltve.");
+      setMessage("Belépési audit frissítve.");
+      setPage(1);
     } catch {
       setMessage("Hálózati vagy szerverhiba történt.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     const storedKey = localStorage.getItem("dimproLicenseAdminKey") || "";
-    if (storedKey) {
-      setAdminKey(storedKey);
-      void loadEntries(storedKey);
-    }
-  }, []);
+    setAdminKey(storedKey);
+    if (storedKey) void loadEntries(storedKey);
+  }, [loadEntries]);
 
   const visibleEntries = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
@@ -103,105 +117,106 @@ export default function DimproLoginAttemptsPage() {
       if (filter === "blocked" && entry.result !== "blocked") return false;
       if (filter === "successful" && entry.result !== "otp_verified") return false;
       if (!cleanQuery) return true;
-      return [entry.email, entry.ipAddress, entry.userAgent, entry.host, entry.result, entry.message || ""]
+      return [entry.email, entry.ipAddress, entry.userAgent, entry.host, entry.result, entry.message || "", entry.action]
         .some((value) => value.toLowerCase().includes(cleanQuery));
     });
   }, [entries, filter, query]);
 
+  const pageCount = Math.max(1, Math.ceil(visibleEntries.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedEntries = visibleEntries.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  function updateFilter(next: Filter) {
+    setFilter(next);
+    setPage(1);
+  }
+
+  function updateQuery(value: string) {
+    setQuery(value);
+    setPage(1);
+  }
+
+  function updatePageSize(value: number) {
+    setPageSize(value);
+    setPage(1);
+  }
+
   return (
-    <main className="min-h-screen bg-[#050812] px-5 py-8 text-slate-100 lg:px-8">
-      <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-6">
-        <header className="rounded-[24px] border border-teal-400/20 bg-slate-950/85 p-6 shadow-[0_0_80px_rgba(20,184,166,0.08)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-300/70">DIMPRO licencadmin</p>
-          <div className="mt-3 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-            <div>
-              <h1 className="text-3xl font-black text-white md:text-4xl">DIMPRO belépési próbálkozások</h1>
-              <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-400">
-                Minden e-mail-kódkérés és kódellenőrzés naplózódik. A tiltott címek nem kapnak OTP-kódot, és nem férhetnek hozzá az app.dimpro.hu védett oldalaihoz.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a href="/admin/belepesek" className="rounded-xl border border-cyan-400/30 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/10">Admin belépési napló</a>
-              <a href="/admin" className="rounded-xl border border-teal-400/30 px-4 py-2 text-sm font-semibold text-teal-100 hover:bg-teal-400/10">Vissza a licencadminhoz</a>
-            </div>
+    <BenjadminDataWorkspace
+      eyebrow="BENJADMIN · AUDIT"
+      title="DIMPRO belépési audit"
+      description="E-mail-kódkérések, kódellenőrzések, tiltások és hozzáférési események. A részletes eseménytábla közvetlenül a szűrősáv alatt kezdődik."
+      actions={(
+        <button type="button" className="benjadmin-data-primary-action" onClick={() => void loadEntries(adminKey)} disabled={loading}>
+          <RefreshCw size={16} className={loading ? "is-spinning" : ""} />
+          {loading ? "Frissítés…" : "Frissítés"}
+        </button>
+      )}
+      metrics={(
+        <>
+          <BenjadminMetric label="Összes esemény" value={summary.total} />
+          <BenjadminMetric label="Tiltott" value={summary.blocked} tone={summary.blocked ? "danger" : "default"} />
+          <BenjadminMetric label="Sikeres belépés" value={summary.successful} tone="ok" />
+          <BenjadminMetric label="Tiltott e-mail" value={summary.uniqueBlockedEmails} tone={summary.uniqueBlockedEmails ? "warning" : "default"} />
+          <BenjadminMetric label="Tiltott IP" value={summary.uniqueBlockedIps} tone={summary.uniqueBlockedIps ? "warning" : "default"} />
+        </>
+      )}
+      toolbar={(
+        <>
+          <div className="benjadmin-data-filter-group" aria-label="Audit szűrők">
+            <button type="button" className={filter === "all" ? "is-active" : ""} onClick={() => updateFilter("all")}>Mind</button>
+            <button type="button" className={filter === "blocked" ? "is-active" : ""} onClick={() => updateFilter("blocked")}>Tiltott</button>
+            <button type="button" className={filter === "successful" ? "is-active" : ""} onClick={() => updateFilter("successful")}>Sikeres</button>
           </div>
-        </header>
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {[
-            ["Összes esemény", summary.total],
-            ["Tiltott próbálkozás", summary.blocked],
-            ["Sikeres belépés", summary.successful],
-            ["Tiltott e-mail cím", summary.uniqueBlockedEmails],
-            ["Tiltott IP-cím", summary.uniqueBlockedIps],
-          ].map(([label, value]) => (
-            <article key={String(label)} className="rounded-2xl border border-slate-800 bg-slate-950/75 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-              <p className="mt-3 text-3xl font-black text-white">{value}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="rounded-[24px] border border-teal-400/20 bg-slate-950/75 p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-300/70">Jelenleg engedélyezett DIMPRO e-mail</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {allowedEmails.length === 0 ? <span className="text-sm text-slate-400">Nincs betöltött engedélyezési lista.</span> : allowedEmails.map((email) => (
-              <span key={email} className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-100">{email}</span>
-            ))}
+          <label className="benjadmin-data-search">
+            <Search size={16} />
+            <input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Keresés e-mail, IP, domain, eszköz vagy eredmény alapján" />
+          </label>
+          <div className="benjadmin-data-allowed" title={allowedEmails.join(", ") || "Nincs betöltött engedélyezési lista."}>
+            <ShieldCheck size={15} />
+            <span>Engedélyezett e-mail: <b>{allowedEmails.length}</b></span>
           </div>
-        </section>
-
-        <section className="rounded-[24px] border border-slate-800 bg-slate-950/70 p-5">
-          <div className="grid gap-3 xl:grid-cols-[1fr_auto]">
-            <input value={adminKey} onChange={(event) => setAdminKey(event.target.value)} placeholder="Licencadmin kulcs" className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400" />
-            <button type="button" onClick={() => void loadEntries()} disabled={loading} className="rounded-xl bg-teal-400 px-6 py-3 text-sm font-black text-slate-950 disabled:opacity-60">{loading ? "Betöltés..." : "Napló frissítése"}</button>
-          </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[auto_1fr]">
-            <div className="flex flex-wrap gap-2">
-              {(["all", "blocked", "successful"] as const).map((value) => (
-                <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-xl border px-4 py-2 text-sm font-bold ${filter === value ? "border-teal-300 bg-teal-300/15 text-teal-100" : "border-slate-700 text-slate-400 hover:border-slate-500"}`}>
-                  {value === "all" ? "Mind" : value === "blocked" ? "Csak tiltott" : "Csak sikeres"}
-                </button>
-              ))}
-            </div>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Keresés e-mail, IP, böngésző vagy eredmény alapján" className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-400" />
-          </div>
-          {message ? <div className="mt-4 rounded-xl border border-teal-400/20 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">{message}</div> : null}
-        </section>
-
-        <section className="overflow-x-auto rounded-[24px] border border-slate-800 bg-slate-950/70">
-          <table className="min-w-[1250px] w-full text-left text-sm">
-            <thead className="bg-slate-900 text-xs uppercase tracking-[0.14em] text-slate-400">
-              <tr>
-                <th className="px-4 py-3">Időpont</th>
-                <th className="px-4 py-3">E-mail</th>
-                <th className="px-4 py-3">Eredmény</th>
-                <th className="px-4 py-3">Művelet</th>
-                <th className="px-4 py-3">IP-cím</th>
-                <th className="px-4 py-3">Domain</th>
-                <th className="px-4 py-3">Böngésző / eszköz</th>
-                <th className="px-4 py-3">Részlet</th>
+        </>
+      )}
+      footer={(
+        <>
+          <span className="benjadmin-data-message">{message || "Valós idejű admin auditadatok."}</span>
+          <BenjadminPagination page={safePage} pageSize={pageSize} total={visibleEntries.length} onPageChange={setPage} onPageSizeChange={updatePageSize} />
+        </>
+      )}
+    >
+      <div className="benjadmin-data-table-scroll">
+        <table className="benjadmin-data-table" data-testid="benjadmin-audit-table">
+          <thead>
+            <tr>
+              <th>Időpont</th>
+              <th>E-mail</th>
+              <th>Eredmény</th>
+              <th>Művelet</th>
+              <th>IP-cím</th>
+              <th>Domain</th>
+              <th>Böngésző / eszköz</th>
+              <th>Részlet</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pagedEntries.length === 0 ? (
+              <tr><td colSpan={8} className="benjadmin-data-empty">Nincs megjeleníthető belépési esemény.</td></tr>
+            ) : pagedEntries.map((entry, index) => (
+              <tr key={`${entry.timestamp}-${entry.email}-${index}`}>
+                <td className="is-nowrap">{formatDateTime(entry.timestamp)}</td>
+                <td><strong>{entry.email}</strong></td>
+                <td><BenjadminStatusPill tone={resultTone(entry.result)}>{resultLabel(entry.result)}</BenjadminStatusPill></td>
+                <td>{actionLabel(entry.action)}</td>
+                <td className="is-mono">{entry.ipAddress}</td>
+                <td>{entry.host || "—"}</td>
+                <td className="is-wide">{entry.userAgent || "—"}</td>
+                <td className="is-wide">{entry.message || "—"}</td>
               </tr>
-            </thead>
-            <tbody>
-              {visibleEntries.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Nincs megjeleníthető belépési esemény.</td></tr>
-              ) : visibleEntries.map((entry, index) => (
-                <tr key={`${entry.timestamp}-${entry.email}-${index}`} className="border-t border-slate-800 align-top">
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-300">{formatDateTime(entry.timestamp)}</td>
-                  <td className="px-4 py-3 font-bold text-white">{entry.email}</td>
-                  <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${resultClass(entry.result)}`}>{resultLabel(entry.result)}</span></td>
-                  <td className="px-4 py-3 text-slate-300">{entry.action}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-300">{entry.ipAddress}</td>
-                  <td className="px-4 py-3 text-slate-300">{entry.host}</td>
-                  <td className="max-w-[330px] break-words px-4 py-3 text-xs leading-5 text-slate-400">{entry.userAgent}</td>
-                  <td className="max-w-[300px] break-words px-4 py-3 text-xs leading-5 text-slate-400">{entry.message || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      </section>
-    </main>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </BenjadminDataWorkspace>
   );
 }
