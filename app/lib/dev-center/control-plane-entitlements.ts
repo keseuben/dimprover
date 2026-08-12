@@ -11,6 +11,10 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function objectValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function normalizeKey(value: string) {
   return value
     .toLowerCase()
@@ -33,13 +37,33 @@ export async function getBenjadminEntitlementSnapshot() {
     central.organizations.map((row) => [text(row.id), { name: text(row.display_name) || text(row.legal_name), email: text(row.email) }]),
   );
   const modulesByLicense = new Map<string, string[]>();
+  const aiPolicyByLicense = new Map<string, {
+    monthlyBudgetHuf: number;
+    maxSingleRequestHuf: number;
+    monthlyTokenBudget: number;
+    maxRequestsPerDay: number;
+    maxRequestsPerMonth: number;
+    featureFlags: Record<string, unknown>;
+  }>();
   for (const row of central.licenseModules) {
     if (row.enabled === false) continue;
     const licenseId = text(row.license_id);
     if (!licenseId) continue;
+    const moduleCode = text(row.module_code);
     const items = modulesByLicense.get(licenseId) || [];
-    items.push(text(row.module_code));
+    items.push(moduleCode);
     modulesByLicense.set(licenseId, items.filter(Boolean));
+    if (moduleCode.toUpperCase() === "AI_ASSISTANT") {
+      const limits = objectValue(row.limits);
+      aiPolicyByLicense.set(licenseId, {
+        monthlyBudgetHuf: numberValue(limits.monthlyBudgetHuf),
+        maxSingleRequestHuf: numberValue(limits.maxSingleRequestHuf),
+        monthlyTokenBudget: numberValue(limits.monthlyTokenBudget),
+        maxRequestsPerDay: numberValue(limits.maxRequestsPerDay),
+        maxRequestsPerMonth: numberValue(limits.maxRequestsPerMonth),
+        featureFlags: objectValue(row.feature_flags),
+      });
+    }
   }
 
   const sendByLicense = new Map<string, { total: number; active: number; usedThisMonth: number; limitThisMonth: number }>();
@@ -75,6 +99,7 @@ export async function getBenjadminEntitlementSnapshot() {
       maxUsers: numberValue(row.max_users),
       maxDevices: numberValue(row.max_devices),
       modules: (modulesByLicense.get(licenseId) || []).sort(),
+      aiPolicy: aiPolicyByLicense.get(licenseId) || null,
       sendEntitlements: send,
       updatedAt: text(row.updated_at),
     };
@@ -95,7 +120,11 @@ export async function getBenjadminEntitlementSnapshot() {
       if (bridge) matchedLocalIds.add(bridge.id);
       const usage = bridge ? usageByLicense.get(bridge.id) : undefined;
       const enabledAiUsers = (bridge?.aiUsers || []).filter((user) => user.enabled);
-      const budget = numberValue(bridge?.aiMonthlyBudgetHuf);
+      const centralBudget = numberValue(centralLicense.aiPolicy?.monthlyBudgetHuf);
+      const bridgeBudget = numberValue(bridge?.aiMonthlyBudgetHuf);
+      const budget = centralBudget > 0 ? centralBudget : bridgeBudget;
+      const centralRequestLimit = numberValue(centralLicense.aiPolicy?.maxSingleRequestHuf);
+      const bridgeRequestLimit = numberValue(bridge?.aiMaxSingleRequestHuf);
       return {
         id: centralLicense.id,
         companyId: bridge?.companyId || centralLicense.id,
@@ -105,7 +134,11 @@ export async function getBenjadminEntitlementSnapshot() {
         enabledModules: [...centralLicense.modules],
         aiEnabled: true,
         aiMonthlyBudgetHuf: budget,
-        aiMaxSingleRequestHuf: numberValue(bridge?.aiMaxSingleRequestHuf),
+        aiMaxSingleRequestHuf: centralRequestLimit > 0 ? centralRequestLimit : bridgeRequestLimit,
+        aiMonthlyTokenBudget: numberValue(centralLicense.aiPolicy?.monthlyTokenBudget),
+        aiMaxRequestsPerDay: numberValue(centralLicense.aiPolicy?.maxRequestsPerDay),
+        aiMaxRequestsPerMonth: numberValue(centralLicense.aiPolicy?.maxRequestsPerMonth),
+        aiFeatureFlags: centralLicense.aiPolicy?.featureFlags || {},
         aiUsersTotal: (bridge?.aiUsers || []).length,
         aiUsersEnabled: enabledAiUsers.length,
         aiRequestsThisMonth: usage?.requests || 0,
@@ -114,7 +147,8 @@ export async function getBenjadminEntitlementSnapshot() {
         lastAiUsedAt: usage?.lastUsedAt || "",
         updatedAt: centralLicense.updatedAt,
         entitlementSource: "central_identity",
-        budgetSource: bridge ? "legacy_license_bridge" : "not_configured",
+        budgetSource: centralBudget > 0 ? "central_identity_module_limits" : bridge ? "legacy_license_bridge" : "not_configured",
+        runtimePolicySource: bridge ? "legacy_license_bridge" : "not_configured",
       };
     });
 
@@ -133,6 +167,10 @@ export async function getBenjadminEntitlementSnapshot() {
       aiEnabled: true,
       aiMonthlyBudgetHuf: budget,
       aiMaxSingleRequestHuf: numberValue(license.aiMaxSingleRequestHuf),
+      aiMonthlyTokenBudget: 0,
+      aiMaxRequestsPerDay: 0,
+      aiMaxRequestsPerMonth: 0,
+      aiFeatureFlags: {},
       aiUsersTotal: (license.aiUsers || []).length,
       aiUsersEnabled: enabledAiUsers.length,
       aiRequestsThisMonth: usage?.requests || 0,
@@ -142,18 +180,39 @@ export async function getBenjadminEntitlementSnapshot() {
       updatedAt: license.updatedAt,
       entitlementSource: "legacy_license_store",
       budgetSource: "legacy_license_store",
+      runtimePolicySource: "legacy_license_store",
     });
   }
 
   const aiMonthlyBudgetHuf = localAiLicenses.reduce((sum, item) => sum + numberValue(item.aiMonthlyBudgetHuf), 0);
+  const centralAiMonthlyBudgetHuf = localAiLicenses
+    .filter((item) => item.budgetSource === "central_identity_module_limits")
+    .reduce((sum, item) => sum + numberValue(item.aiMonthlyBudgetHuf), 0);
+  const legacyAiMonthlyBudgetHuf = localAiLicenses
+    .filter((item) => item.budgetSource === "legacy_license_bridge" || item.budgetSource === "legacy_license_store")
+    .reduce((sum, item) => sum + numberValue(item.aiMonthlyBudgetHuf), 0);
+  const centralAiMonthlyTokenBudget = localAiLicenses.reduce((sum, item) => sum + numberValue(item.aiMonthlyTokenBudget), 0);
   const aiCostHufThisMonth = numberValue(aiUsage.totals.costHuf);
   const aiInputTokensThisMonth = numberValue(aiUsage.totals.inputTokens);
   const aiOutputTokensThisMonth = numberValue(aiUsage.totals.outputTokens);
   const aiTotalTokensThisMonth = aiInputTokensThisMonth + aiOutputTokensThisMonth;
   const configuredTokenBudget = Number(process.env.DIMPRO_BENJADMIN_AI_MONTHLY_TOKEN_BUDGET || 0);
-  const aiMonthlyTokenBudget = Number.isFinite(configuredTokenBudget) && configuredTokenBudget > 0
+  const fallbackTokenBudget = Number.isFinite(configuredTokenBudget) && configuredTokenBudget > 0
     ? Math.floor(configuredTokenBudget)
     : 0;
+  const aiMonthlyTokenBudget = centralAiMonthlyTokenBudget > 0 ? centralAiMonthlyTokenBudget : fallbackTokenBudget;
+  const aiBudgetSource = centralAiMonthlyBudgetHuf > 0 && legacyAiMonthlyBudgetHuf > 0
+    ? "mixed"
+    : centralAiMonthlyBudgetHuf > 0
+      ? "central_identity_module_limits"
+      : legacyAiMonthlyBudgetHuf > 0
+        ? "legacy_license_bridge"
+        : "not_configured";
+  const aiTokenBudgetSource = centralAiMonthlyTokenBudget > 0
+    ? "central_identity_module_limits"
+    : fallbackTokenBudget > 0
+      ? "benjadmin_env"
+      : "not_configured";
 
   return {
     generatedAt: new Date().toISOString(),
@@ -172,11 +231,16 @@ export async function getBenjadminEntitlementSnapshot() {
       aiRequestsThisMonth: aiUsage.totals.requests,
       aiCostHufThisMonth,
       aiMonthlyBudgetHuf,
+      centralAiMonthlyBudgetHuf,
+      legacyAiMonthlyBudgetHuf,
+      aiBudgetSource,
       aiBudgetPercent: aiMonthlyBudgetHuf > 0 ? (aiCostHufThisMonth / aiMonthlyBudgetHuf) * 100 : 0,
       aiInputTokensThisMonth,
       aiOutputTokensThisMonth,
       aiTotalTokensThisMonth,
       aiMonthlyTokenBudget,
+      centralAiMonthlyTokenBudget,
+      aiTokenBudgetSource,
       aiTokenBudgetPercent: aiMonthlyTokenBudget > 0 ? (aiTotalTokensThisMonth / aiMonthlyTokenBudget) * 100 : 0,
     },
     centralLicenses,

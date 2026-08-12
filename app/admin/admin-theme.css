@@ -8541,3 +8541,71 @@
 .benjadmin-expiry-reminder-body .benjadmin-data-form-section > header span,
 .benjadmin-expiry-reminder-body .benjadmin-data-mini-table th,
 .benjadmin-expiry-reminder-body .benjadmin-data-mini-table td { font-size: 12px !important; }
+
+/* BENJADMIN Licencközpont – központi AI policy */
+.benjadmin-ai-policy {
+  border-color: color-mix(in srgb, var(--admin-accent) 26%, var(--admin-border));
+  background: color-mix(in srgb, var(--admin-accent) 3%, var(--admin-surface-soft));
+}
+.benjadmin-ai-policy > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.benjadmin-ai-policy > header span {
+  font-size: 12px;
+}
+.benjadmin-ai-policy__notice {
+  margin-bottom: 9px;
+  border-color: color-mix(in srgb, var(--admin-accent) 25%, var(--admin-border));
+  color: var(--admin-accent-strong);
+  background: color-mix(in srgb, var(--admin-accent) 5%, var(--admin-surface));
+}
+.benjadmin-ai-policy__notice strong,
+.benjadmin-ai-policy__notice span,
+.benjadmin-ai-policy__notice code {
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+.benjadmin-ai-policy__notice code {
+  color: var(--admin-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 850;
+}
+.benjadmin-ai-policy .benjadmin-data-field,
+.benjadmin-ai-policy .benjadmin-data-field > span,
+.benjadmin-ai-policy .benjadmin-data-field small,
+.benjadmin-ai-policy .benjadmin-data-check-grid label {
+  font-size: 12px;
+}
+.benjadmin-ai-policy__limits {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.benjadmin-ai-policy__features {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--admin-border);
+}
+.benjadmin-ai-policy__features-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.benjadmin-ai-policy__features-title strong,
+.benjadmin-ai-policy__features-title span {
+  color: var(--admin-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.benjadmin-ai-policy__features-title span {
+  color: var(--admin-text-muted);
+  font-weight: 650;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .benjadmin-ai-policy__limits { grid-template-columns: 1fr; }
+  .benjadmin-ai-policy__features-title { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .benjadmin-ai-policy__features-title span { text-align: left; }
+}

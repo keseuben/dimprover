@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, Check, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
+import { BellRing, Bot, Check, Coins, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -34,7 +34,14 @@ type LicenseModule = { id: string; license_id: string; module_code: string; enab
 type MembershipModule = { id: string; membership_id: string; module_code: string; enabled: boolean; limits: Record<string, unknown> };
 type OrganizationInvitation = { id: string; organization_id: string; license_id: string; membership_id: string; invited_user_id: string; email_normalized: string; full_name: string; role_code: string; role_label: string | null; token_hint: string; status: string; expires_at: string; accepted_at: string | null; revoked_at: string | null; created_at: string };
 type Entitlement = { id: string; user_id: string; license_id: string; status: string; code_hint: string | null; expires_at: string | null; can_use_standard_send: boolean; can_use_quick_image_send: boolean; can_use_project_drop: boolean; monthly_send_limit: number | null; current_month_send_count: number; last_used_at: string | null };
-type ModuleDraft = { moduleCode: string; enabled: boolean };
+type ModuleDraft = {
+  moduleCode: string;
+  enabled: boolean;
+  limits: Record<string, unknown>;
+  featureFlags: Record<string, unknown>;
+  validFrom: string;
+  validUntil: string;
+};
 type LicenseDraft = { productCode: string; planCode: string; status: string; activatedAt: string; expiresAt: string; maxUsers: number; maxDevices: number; legacyLicenseRef: string; modules: ModuleDraft[] };
 type CreateDraft = LicenseDraft & { publicLicenseCode: string; ownerType: "user" | "organization"; ownerUserId: string; ownerOrganizationId: string };
 type SendDraft = {
@@ -86,6 +93,25 @@ const modulePresets = [
   ["ARUTER", "Árutér"], ["DRIVE", "DIMPRO Drive"], ["MEETING_ASSISTANT", "Értekezleti Asszisztens"], ["SCHEDULE", "Ütemterv"], ["MINUTES", "Jegyzőkönyvek"],
 ] as const;
 
+const aiFeatureOptions = [
+  ["daily_plan", "Mai feladatok rangsorolása"],
+  ["next_step", "Következő lépés"],
+  ["task_breakdown", "Feladat bontása"],
+  ["waiting_email", "Visszakérdező levél"],
+  ["meeting_agenda", "Értekezleti napirend"],
+  ["weekly_summary", "Heti összefoglaló"],
+  ["decision_support", "Döntési összefoglaló"],
+  ["document_extract", "Dokumentum-adatkinyerés"],
+] as const;
+
+const aiLimitKeys = {
+  monthlyBudgetHuf: "monthlyBudgetHuf",
+  maxSingleRequestHuf: "maxSingleRequestHuf",
+  monthlyTokenBudget: "monthlyTokenBudget",
+  maxRequestsPerDay: "maxRequestsPerDay",
+  maxRequestsPerMonth: "maxRequestsPerMonth",
+} as const;
+
 function dateValue(days = 180) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
 function isoDate(value: string) { return value ? new Date(`${value}T23:59:59`).toISOString() : null; }
 function displayDate(value: string | null) { return value ? new Date(value).toLocaleDateString("hu-HU") : "Nincs lejárat"; }
@@ -104,7 +130,14 @@ function licenseDraft(license: License, modules: LicenseModule[]): LicenseDraft 
     maxUsers: license.max_users || 1,
     maxDevices: license.max_devices,
     legacyLicenseRef: license.legacy_license_ref || "",
-    modules: modules.filter((item) => item.license_id === license.id).map((item) => ({ moduleCode: item.module_code, enabled: item.enabled })),
+    modules: modules.filter((item) => item.license_id === license.id).map((item) => ({
+      moduleCode: item.module_code,
+      enabled: item.enabled,
+      limits: item.limits && typeof item.limits === "object" ? { ...item.limits } : {},
+      featureFlags: item.feature_flags && typeof item.feature_flags === "object" ? { ...item.feature_flags } : {},
+      validFrom: item.valid_from || "",
+      validUntil: item.valid_until || "",
+    })),
   };
 }
 function initialCreate(): CreateDraft {
@@ -137,12 +170,12 @@ function ModuleEditor({ value, onChange }: { value: ModuleDraft[]; onChange: (ne
   const [custom, setCustom] = useState("");
   function toggle(code: string) {
     if (active.has(code)) onChange(value.filter((item) => item.moduleCode !== code));
-    else onChange([...value.filter((item) => item.moduleCode !== code), { moduleCode: code, enabled: true }]);
+    else onChange([...value.filter((item) => item.moduleCode !== code), { moduleCode: code, enabled: true, limits: {}, featureFlags: {}, validFrom: "", validUntil: "" }]);
   }
   function addCustom() {
     const code = custom.toUpperCase().replace(/[^A-Z0-9_:-]/g, "_").slice(0, 80);
     if (code.length < 2 || active.has(code)) return;
-    onChange([...value, { moduleCode: code, enabled: true }]);
+    onChange([...value, { moduleCode: code, enabled: true, limits: {}, featureFlags: {}, validFrom: "", validUntil: "" }]);
     setCustom("");
   }
   const customItems = value.filter((item) => !modulePresets.some(([code]) => code === item.moduleCode));
@@ -159,6 +192,64 @@ function ModuleEditor({ value, onChange }: { value: ModuleDraft[]; onChange: (ne
         <button type="button" onClick={addCustom}>Hozzáadás</button>
       </div>
       {customItems.length ? <div className="benjadmin-data-chip-grid is-custom">{customItems.map((item) => <button key={item.moduleCode} type="button" className="is-active" onClick={() => toggle(item.moduleCode)}>{item.moduleCode} ×</button>)}</div> : null}
+    </section>
+  );
+}
+
+
+function positiveNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function AiPolicyEditor({ value, onChange }: { value: ModuleDraft[]; onChange: (next: ModuleDraft[]) => void }) {
+  const aiModule = value.find((item) => item.moduleCode === "AI_ASSISTANT" && item.enabled);
+  if (!aiModule) return null;
+  const limits = aiModule.limits || {};
+  const flags = aiModule.featureFlags || {};
+
+  function updateModule(next: Partial<ModuleDraft>) {
+    onChange(value.map((item) => item.moduleCode === "AI_ASSISTANT" ? { ...item, ...next } : item));
+  }
+  function setLimit(key: string, raw: string) {
+    const parsed = Number(raw);
+    updateModule({ limits: { ...limits, [key]: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 } });
+  }
+  function toggleFeature(key: string) {
+    const current = flags[key] !== false;
+    updateModule({ featureFlags: { ...flags, [key]: !current } });
+  }
+  const budget = positiveNumber(limits[aiLimitKeys.monthlyBudgetHuf]);
+  const tokenBudget = positiveNumber(limits[aiLimitKeys.monthlyTokenBudget]);
+
+  return (
+    <section className="benjadmin-data-form-section benjadmin-ai-policy" data-testid="benjadmin-ai-policy">
+      <header>
+        <strong><Coins size={16} /> AI finanszírozás és keretek</strong>
+        <span>Identity Core policy</span>
+      </header>
+      <div className="benjadmin-data-security-note benjadmin-ai-policy__notice">
+        <Bot size={17} />
+        <div>
+          <strong>Központi AI-szabályok</strong>
+          <span>A keretek a központi <code>AI_ASSISTANT</code> modul <code>limits</code> mezőjében tárolódnak. A HAGE AI futási motor még a régi licencbridge-et használja, ezért a tényleges runtime-érvényesítés átvezetése külön következő lépés.</span>
+        </div>
+      </div>
+      <div className="benjadmin-data-form-grid benjadmin-ai-policy__limits">
+        <Field label="Havi AI-keret (Ft)" hint={budget > 0 ? `${budget.toLocaleString("hu-HU")} Ft` : "0 = nincs központi költséglimit"}><input type="number" min={0} step={100} value={positiveNumber(limits[aiLimitKeys.monthlyBudgetHuf]) || 0} onChange={(event) => setLimit(aiLimitKeys.monthlyBudgetHuf, event.target.value)} /></Field>
+        <Field label="Egy AI-kérés maximuma (Ft)" hint="0 = nincs egyedi kéréslimit"><input type="number" min={0} step={1} value={positiveNumber(limits[aiLimitKeys.maxSingleRequestHuf]) || 0} onChange={(event) => setLimit(aiLimitKeys.maxSingleRequestHuf, event.target.value)} /></Field>
+        <Field label="Havi tokenkeret" hint={tokenBudget > 0 ? `${tokenBudget.toLocaleString("hu-HU")} token` : "0 = nincs tokenlimit"}><input type="number" min={0} step={1000} value={positiveNumber(limits[aiLimitKeys.monthlyTokenBudget]) || 0} onChange={(event) => setLimit(aiLimitKeys.monthlyTokenBudget, event.target.value)} /></Field>
+        <Field label="Napi AI-kérések" hint="0 = nincs napi kérésszám-limit"><input type="number" min={0} step={1} value={positiveNumber(limits[aiLimitKeys.maxRequestsPerDay]) || 0} onChange={(event) => setLimit(aiLimitKeys.maxRequestsPerDay, event.target.value)} /></Field>
+        <Field label="Havi AI-kérések" hint="0 = nincs havi kérésszám-limit"><input type="number" min={0} step={1} value={positiveNumber(limits[aiLimitKeys.maxRequestsPerMonth]) || 0} onChange={(event) => setLimit(aiLimitKeys.maxRequestsPerMonth, event.target.value)} /></Field>
+      </div>
+      <div className="benjadmin-ai-policy__features">
+        <div className="benjadmin-ai-policy__features-title"><strong>Engedélyezett AI-funkciók</strong><span>Hiányzó flag = engedélyezett, így a régi üres konfiguráció nem tilt le funkciót.</span></div>
+        <div className="benjadmin-data-check-grid">
+          {aiFeatureOptions.map(([key, label]) => (
+            <label key={key}><input type="checkbox" checked={flags[key] !== false} onChange={() => toggleFeature(key)} />{label}</label>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -592,6 +683,7 @@ export default function DimproLicenseCenterPage() {
                   <Field label="Régi licenc hivatkozás"><input value={createDraft.legacyLicenseRef} onChange={(event) => setCreateDraft((draft) => ({ ...draft, legacyLicenseRef: event.target.value }))} /></Field>
                 </div>
                 <ModuleEditor value={createDraft.modules} onChange={(next) => setCreateDraft((draft) => ({ ...draft, modules: next }))} />
+                <AiPolicyEditor value={createDraft.modules} onChange={(next) => setCreateDraft((draft) => ({ ...draft, modules: next }))} />
                 <button type="button" className="benjadmin-data-primary-action is-full" onClick={() => void createLicense()} disabled={busy !== "" || !isValidDimproLicenseCode(createDraft.publicLicenseCode) || !(createDraft.ownerType === "user" ? createDraft.ownerUserId : createDraft.ownerOrganizationId)}>{busy === "create-license" ? <LoaderCircle size={17} className="is-spinning" /> : <Plus size={17} />} Licenc létrehozása</button>
               </>
             ) : selectedLicense ? (() => {
@@ -612,6 +704,7 @@ export default function DimproLicenseCenterPage() {
                     <Field label="Régi licenc hivatkozás"><input value={draft.legacyLicenseRef} onChange={(event) => setDrafts((current) => ({ ...current, [selectedLicense.id]: { ...draft, legacyLicenseRef: event.target.value } }))} /></Field>
                   </div>
                   <ModuleEditor value={draft.modules} onChange={(next) => setDrafts((current) => ({ ...current, [selectedLicense.id]: { ...draft, modules: next } }))} />
+                  <AiPolicyEditor value={draft.modules} onChange={(next) => setDrafts((current) => ({ ...current, [selectedLicense.id]: { ...draft, modules: next } }))} />
                   <button type="button" className="benjadmin-data-primary-action is-full" onClick={() => void saveLicense(selectedLicense.id)} disabled={busy !== ""}>{busy === `license:${selectedLicense.id}` ? <LoaderCircle size={17} className="is-spinning" /> : <Check size={17} />} Licenc mentése</button>
 
                   {selectedLicense.owner_type === "organization" && selectedLicense.owner_organization_id && organization ? (

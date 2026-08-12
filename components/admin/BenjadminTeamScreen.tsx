@@ -111,11 +111,16 @@ type EntitlementSnapshot = {
     aiRequestsThisMonth?: number;
     aiCostHufThisMonth?: number;
     aiMonthlyBudgetHuf?: number;
+    centralAiMonthlyBudgetHuf?: number;
+    legacyAiMonthlyBudgetHuf?: number;
+    aiBudgetSource?: string;
     aiBudgetPercent?: number;
     aiInputTokensThisMonth?: number;
     aiOutputTokensThisMonth?: number;
     aiTotalTokensThisMonth?: number;
     aiMonthlyTokenBudget?: number;
+    centralAiMonthlyTokenBudget?: number;
+    aiTokenBudgetSource?: string;
     aiTokenBudgetPercent?: number;
   };
 };
@@ -502,6 +507,18 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   const aiTotalTokens = Number(aiSummary.aiTotalTokensThisMonth || 0);
   const aiTokenBudget = Number(aiSummary.aiMonthlyTokenBudget || 0);
   const aiTokenPercent = aiTokenBudget > 0 ? Math.min(100, Math.max(0, Number(aiSummary.aiTokenBudgetPercent || 0))) : null;
+  const aiBudgetSourceLabel = aiSummary.aiBudgetSource === "central_identity_module_limits"
+    ? "Identity Core keret"
+    : aiSummary.aiBudgetSource === "mixed"
+      ? "központi + kompatibilitási keret"
+      : aiSummary.aiBudgetSource === "legacy_license_bridge"
+        ? "kompatibilitási licencbridge"
+        : "belső keret szükséges";
+  const aiTokenBudgetSourceLabel = aiSummary.aiTokenBudgetSource === "central_identity_module_limits"
+    ? "Identity Core tokenkeret"
+    : aiSummary.aiTokenBudgetSource === "benjadmin_env"
+      ? "BENJADMIN belső tokenkeret"
+      : "opcionális belső limit";
 
   return (
     <main className={`benjadmin-team-screen admin-theme-${theme}`} data-theme={theme} data-testid="benjadmin-team-screen">
@@ -618,9 +635,9 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
             </header>
             <div className="benjadmin-team-screen__ai-finance-grid">
               <article><span>AI költség / hó</span><strong>{formatHuf(aiMonthlyCost)}</strong><small>központi, naplózott felhasználás</small></article>
-              <article><span>Finanszírozási keret / hó</span><strong>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</strong><small>{aiBudgetPercent == null ? "belső keret szükséges" : `${aiBudgetPercent.toFixed(1)}% felhasználva`}</small></article>
+              <article><span>Finanszírozási keret / hó</span><strong>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</strong><small>{aiBudgetPercent == null ? aiBudgetSourceLabel : `${aiBudgetSourceLabel} · ${aiBudgetPercent.toFixed(1)}% felhasználva`}</small></article>
               <article><span>Tokenforgalom / hó</span><strong>{formatCompactNumber(aiTotalTokens)}</strong><small>{formatCompactNumber(aiSummary.aiInputTokensThisMonth)} be · {formatCompactNumber(aiSummary.aiOutputTokensThisMonth)} ki</small></article>
-              <article><span>Tokenkeret / hó</span><strong>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</strong><small>{aiTokenPercent == null ? "opcionális belső limit" : `${aiTokenPercent.toFixed(1)}% felhasználva`}</small></article>
+              <article><span>Tokenkeret / hó</span><strong>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</strong><small>{aiTokenPercent == null ? aiTokenBudgetSourceLabel : `${aiTokenBudgetSourceLabel} · ${aiTokenPercent.toFixed(1)}% felhasználva`}</small></article>
             </div>
             <div className="benjadmin-team-screen__ai-budget-lines">
               <div>
