@@ -147,7 +147,7 @@ async function validateAndRender(files) {
     if (!metadata.width || !metadata.height || metadata.width < MIN_WIDTH || metadata.height < MIN_HEIGHT) {
       throw new Error(`${spec.label}: a forráskép túl kicsi (${metadata.width || 0}×${metadata.height || 0}); minimum ${MIN_WIDTH}×${MIN_HEIGHT}.`);
     }
-    const output = await sharp(file.buffer, { failOn: "error" })
+    const renderedBuffer = await sharp(file.buffer, { failOn: "error" })
       .rotate()
       .resize({ width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT, fit: "fill", withoutEnlargement: false })
       .webp({ quality: 94, alphaQuality: 100, smartSubsample: true })
@@ -159,9 +159,9 @@ async function validateAndRender(files) {
       sourceHeight: metadata.height,
       sourceHasAlpha: Boolean(metadata.hasAlpha),
       sourceSha256: sha256(file.buffer),
-      outputSha256: sha256(output),
-      outputBytes: output.length,
-      output,
+      outputSha256: sha256(renderedBuffer),
+      outputBytes: renderedBuffer.length,
+      renderedBuffer,
     });
   }
   const missing = expected.filter((item) => !matched.has(item.key));
@@ -184,13 +184,13 @@ async function applyAssets(items, sourceZipPath, zipHash) {
     sourceZipSha256: zipHash,
     outputWidth: OUTPUT_WIDTH,
     outputHeight: OUTPUT_HEIGHT,
-    items: items.map((item) => { const copy = { ...item }; delete copy.output; return copy; }),
+    items: items.map((item) => { const copy = { ...item }; delete copy.renderedBuffer; return copy; }),
   };
   await writeFile(path.join(backupDir, "import-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
   for (const item of items) {
     const target = path.join(ASSET_DIR, item.output);
     const temp = `${target}.${process.pid}.tmp`;
-    await writeFile(temp, item.output, { mode: 0o644 });
+    await writeFile(temp, item.renderedBuffer, { mode: 0o644 });
     await rename(temp, target);
   }
   return backupDir;
@@ -211,7 +211,7 @@ const report = {
   zipName: path.basename(zipPath),
   zipSha256: zipHash,
   entries: entries.length,
-  avatars: items.map((item) => { const copy = { ...item }; delete copy.output; return copy; }),
+  avatars: items.map((item) => { const copy = { ...item }; delete copy.renderedBuffer; return copy; }),
 };
 if (!apply) {
   console.log(JSON.stringify(report, null, 2));
