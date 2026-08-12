@@ -13,7 +13,7 @@ import LiveWorkPanel from "./LiveWorkPanel";
 import OutminPartnerBar from "./OutminPartnerBar";
 import TeamQuickDrawer from "./TeamQuickDrawer";
 import type { ConnectionMode } from "./ConnectionStatus";
-import type { ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext } from "./types";
+import type { BenAiDispatch, ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 const THEME_KEY = "benjadmin-developer-console-theme";
@@ -234,16 +234,17 @@ export default function DeveloperConsoleShell() {
         headers: adminHeaders(true),
         body: JSON.stringify({ ...input, projectId: selectedProjectId || undefined }),
       });
-      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: ConsoleMessage; task?: { id?: string }; error?: string; code?: string } | null;
+      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: ConsoleMessage; coordinatorMessage?: ConsoleMessage; task?: { id?: string }; dispatch?: BenAiDispatch; error?: string; code?: string } | null;
       if (!response.ok || !payload?.ok || !payload.message) throw new Error(payload?.error || "Az utasítás nem rögzíthető.");
       setMessages((current) => {
         const map = new Map(current.map((item) => [item.id, item]));
         map.set(payload.message!.id, payload.message!);
+        if (payload.coordinatorMessage) map.set(payload.coordinatorMessage.id, payload.coordinatorMessage);
         const next = [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         messagesRef.current = next;
         return next;
       });
-      setNotice(payload.task?.id ? `Utasítás és fejlesztési task rögzítve: ${payload.task.id}` : "Utasítás rögzítve a közös munkanaplóba.");
+      setNotice(payload.dispatch?.summary || (payload.task?.id ? `Utasítás és fejlesztési task rögzítve: ${payload.task.id}` : "Utasítás rögzítve a közös munkanaplóba."));
       return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Az utasítás nem rögzíthető.");
@@ -263,7 +264,7 @@ export default function DeveloperConsoleShell() {
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
         <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} />
-        <LiveWorkPanel live={live} now={now} />
+        <LiveWorkPanel live={live} now={now} context={context} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />

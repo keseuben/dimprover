@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, BadgeCheck, CheckCircle2, GitCommitHorizontal, Hammer, ListChecks, MessageSquareText, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Check, CheckCircle2, ClipboardCopy, GitCommitHorizontal, Hammer, ListChecks, MessageSquareText, ShieldAlert, Sparkles } from "lucide-react";
+import { useState } from "react";
 import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import type { ConsoleMessage } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -51,6 +52,14 @@ function statusFor(message: ConsoleMessage): "working" | "waiting" | "decision" 
 }
 
 export default function DeveloperMessage({ message }: { message: ConsoleMessage }) {
+  const [copied, setCopied] = useState(false);
+  const handoffPrompt = typeof message.metadata?.handoffPrompt === "string" ? message.metadata.handoffPrompt : "";
+  async function copyHandoff() {
+    if (!handoffPrompt) return;
+    await navigator.clipboard.writeText(handoffPrompt);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
   const side = message.author === "ARMINAI" ? "left" : message.author === "JAZMINAI" ? "right" : "center";
   const isOwner = message.author === "BENJADMIN";
   const isSystem = message.author === "SYSTEM";
@@ -73,6 +82,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
         </header>
         <div className={styles.messageBody}>{message.summary || "—"}</div>
         {message.detail ? <p className={styles.messageDetail}>{message.detail}</p> : null}
+        {handoffPrompt ? <button type="button" className={styles.messageHandoffButton} onClick={() => void copyHandoff()} title="A feladat ChatGPT/MCP átadó promptjának másolása">{copied ? <Check size={14} /> : <ClipboardCopy size={14} />}<span>{copied ? "Másolva" : "ChatGPT/MCP átadó másolása"}</span></button> : null}
         {message.progressPercent != null ? (
           <div className={styles.messageProgress} aria-label={`Készültség ${message.progressPercent}%`}>
             <span style={{ width: `${Math.max(0, Math.min(100, message.progressPercent))}%` }} />

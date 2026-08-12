@@ -90,6 +90,7 @@ try {
   check("Messages API valós munkanaplót ad", messages.status === 200 && messages.payload?.ok && Array.isArray(messages.payload?.messages), `status=${messages.status}`);
   check("Fejlesztési Tár API READY", resources.status === 200 && resources.payload?.ok && resources.payload?.health?.ready === true, JSON.stringify(resources.payload?.health || {}));
   check("Runtime context titokmentes DEV kontextust ad", context.status === 200 && context.payload?.ok && context.payload?.context?.environment === "DEV" && context.payload?.context?.productionDefault === "READ_ONLY" && !JSON.stringify(context.payload).match(/service_role|licenseKey|password|private.?key/i), JSON.stringify(context.payload?.context || {}));
+  check("Ben-AI híd állapota valós és nem színlel natív executort", context.payload?.context?.aiBridge?.mode === "MANUAL_CHATGPT_BRIDGE" && context.payload?.context?.aiBridge?.executorConfigured === false, JSON.stringify(context.payload?.context?.aiBridge || {}));
   check("SSE endpoint text/event-stream", stream.status === 200 && stream.contentType.includes("text/event-stream"), `${stream.status} ${stream.contentType}`);
 
   await addFixture("ARMINAI", "worker", "CONSOLE-V1 Ármin-AI bal oldali acceptance", "TASK_UPDATE");
@@ -153,6 +154,7 @@ try {
         theme: root?.getAttribute("data-console-theme") || "",
       };
     });
+    check("AI HÍD · KÉZI állapot a fejlécen látható", desktop.text.includes("AI HÍD · KÉZI"), desktop.text.slice(0, 600));
     check("Desktop 1440×900 one-workspace vízszintes overflow nélkül", desktop.scrollWidth <= desktop.clientWidth + 1, JSON.stringify({ sw: desktop.scrollWidth, cw: desktop.clientWidth }));
     check("Ármin-AI balra igazított", desktop.armin && desktop.armin.x < desktop.centerX - 80, JSON.stringify(desktop.armin));
     check("Jázmin-AI jobbra igazított", desktop.jazmin && desktop.jazmin.right > desktop.centerX + 80, JSON.stringify(desktop.jazmin));

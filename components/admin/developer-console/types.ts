@@ -80,6 +80,21 @@ export type ConsoleLiveState = {
   refreshIntervalMs: number;
 };
 
+export type BenAiDispatch = {
+  stage: "CHAT_ONLY" | "COORDINATOR_ROUTING" | "TASK_ASSIGNED" | "EXECUTOR_NOT_CONFIGURED";
+  bridgeMode: "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES";
+  providerConfigured: boolean;
+  executorConfigured: boolean;
+  selectedWorkerId: string | null;
+  selectedWorkerCode: string | null;
+  selectedWorkerName: string | null;
+  taskId: string | null;
+  projectId: string | null;
+  summary: string;
+  nextStep: string;
+  handoffPrompt: string;
+};
+
 export type RuntimeContext = {
   environment: string;
   productionDefault: string;
@@ -89,6 +104,7 @@ export type RuntimeContext = {
   buildId: string;
   worktree: string;
   latestProductDoc: string;
+  aiBridge?: { mode: "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES"; label: string; providerConfigured: boolean; executorConfigured: boolean };
   generatedAt: string;
 };
 

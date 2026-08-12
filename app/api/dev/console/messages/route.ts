@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
-import { createBenjadminConsoleMessage, listDeveloperConsoleMessages } from "@/app/lib/dev-center/developer-console";
+import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages } from "@/app/lib/dev-center/developer-console";
+import { buildBenAiDispatch } from "@/app/lib/dev-center/benai-dispatch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -58,7 +59,22 @@ export async function POST(request: NextRequest) {
       projectId: body.projectId || null,
       kind: body.kind === "DECISION" ? "DECISION" : "INSTRUCTION",
     });
-    return json({ ok: true, message, task }, 201);
+    const dispatch = buildBenAiDispatch({ text: instruction, target, taskId: task?.id || null, projectId: body.projectId || null });
+    const coordinatorMessage = await createBenAiConsoleMessage({
+      summary: dispatch.summary,
+      detail: dispatch.nextStep,
+      taskId: task?.id || null,
+      projectId: body.projectId || null,
+      metadata: {
+        dispatchStage: dispatch.stage,
+        bridgeMode: dispatch.bridgeMode,
+        selectedWorkerId: dispatch.selectedWorkerId,
+        selectedWorkerCode: dispatch.selectedWorkerCode,
+        executorConfigured: dispatch.executorConfigured,
+        handoffPrompt: dispatch.handoffPrompt,
+      },
+    });
+    return json({ ok: true, message, coordinatorMessage, task, dispatch }, 201);
   } catch (error) {
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 400;
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;

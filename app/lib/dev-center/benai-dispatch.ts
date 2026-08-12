@@ -1,0 +1,107 @@
+export type BenAiBridgeMode = "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES";
+export type BenAiDispatchStage = "CHAT_ONLY" | "COORDINATOR_ROUTING" | "TASK_ASSIGNED" | "EXECUTOR_NOT_CONFIGURED";
+
+export type BenAiDispatch = {
+  stage: BenAiDispatchStage;
+  bridgeMode: BenAiBridgeMode;
+  providerConfigured: boolean;
+  executorConfigured: boolean;
+  selectedWorkerId: string | null;
+  selectedWorkerCode: string | null;
+  selectedWorkerName: string | null;
+  taskId: string | null;
+  projectId: string | null;
+  summary: string;
+  nextStep: string;
+  handoffPrompt: string;
+};
+
+const workerMap: Record<string, { id: string; code: string; name: string } | null> = {
+  BENAI: null,
+  ARMINAI: { id: "worker_arminai", code: "ARMINAI", name: "Ármin-AI" },
+  JAZMINAI: { id: "worker_jazminai", code: "JAZMINAI", name: "Jázmin-AI" },
+  OUTMINAI: { id: "worker_outminai", code: "OUTMINAI", name: "Outmin-AI" },
+  EVERYONE: null,
+};
+
+export function getBenAiBridgeStatus() {
+  const requested = String(process.env.DIMPRO_BENJADMIN_AI_BRIDGE_MODE || "manual_chatgpt_bridge").trim().toLowerCase();
+  const providerConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const mode: BenAiBridgeMode = requested === "openai_responses" && providerConfigured ? "OPENAI_RESPONSES" : "MANUAL_CHATGPT_BRIDGE";
+  const executorConfigured = Boolean(process.env.DIMPRO_BENJADMIN_WORKER_EXECUTOR_URL?.trim());
+  return {
+    mode,
+    providerConfigured,
+    executorConfigured,
+    label: mode === "OPENAI_RESPONSES" ? "OpenAI Responses" : "Kézi ChatGPT híd",
+  };
+}
+
+export function buildBenAiDispatch(input: {
+  text: string;
+  target: string;
+  taskId?: string | null;
+  projectId?: string | null;
+}) : BenAiDispatch {
+  const target = String(input.target || "BENAI").trim().toUpperCase();
+  const worker = Object.prototype.hasOwnProperty.call(workerMap, target) ? workerMap[target] : null;
+  const bridge = getBenAiBridgeStatus();
+  const taskId = input.taskId || null;
+  const projectId = input.projectId || null;
+  const short = input.text.trim().replace(/\s+/g, " ").slice(0, 260);
+
+  if (!taskId) {
+    return {
+      stage: "CHAT_ONLY",
+      bridgeMode: bridge.mode,
+      providerConfigured: bridge.providerConfigured,
+      executorConfigured: bridge.executorConfigured,
+      selectedWorkerId: worker?.id || null,
+      selectedWorkerCode: worker?.code || null,
+      selectedWorkerName: worker?.name || null,
+      taskId: null,
+      projectId,
+      summary: "Az üzenet bekerült a közös fejlesztői beszélgetésbe; fejlesztési task nem készült.",
+      nextStep: "Kapcsold be a Fejlesztési feladat létrehozása jelölést és válassz projektet, ha végrehajtható taskot szeretnél.",
+      handoffPrompt: `BENJADMIN üzenet: ${short}`,
+    };
+  }
+
+  if (!worker) {
+    const providerText = bridge.mode === "OPENAI_RESPONSES"
+      ? "A Ben-AI provider készen áll a koordinációs terv elkészítésére."
+      : "A Ben-AI automatikus provider még nincs bekapcsolva; a feladat a kézi ChatGPT-híd koordinációs sorába került.";
+    return {
+      stage: "COORDINATOR_ROUTING",
+      bridgeMode: bridge.mode,
+      providerConfigured: bridge.providerConfigured,
+      executorConfigured: bridge.executorConfigured,
+      selectedWorkerId: null,
+      selectedWorkerCode: null,
+      selectedWorkerName: null,
+      taskId,
+      projectId,
+      summary: `Ben-AI koordináció szükséges. ${providerText}`,
+      nextStep: bridge.mode === "OPENAI_RESPONSES" ? "Ben-AI feladatbontás és worker-választás." : "A ChatGPT Parancstár aktuális munkamenet-promptjával a koordináció folytatható.",
+      handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nCímzett: Ben-AI\nUtasítás: ${short}\n\nFeladat: bontsd végrehajtható fejlesztési lépésekre, válassz belső workert, tartsd meg a B3/B3.1/B3.2 DEV biztonsági kapukat. PROD maradjon read-only.`,
+    };
+  }
+
+  const executorText = bridge.executorConfigured
+    ? "A worker executor konfigurálva van; a következő kapu a session/worktree előkészítés."
+    : "A worker executor még nincs bekötve, ezért a task előirányozva van, de önálló kódfuttatás még nem indul.";
+  return {
+    stage: bridge.executorConfigured ? "TASK_ASSIGNED" : "EXECUTOR_NOT_CONFIGURED",
+    bridgeMode: bridge.mode,
+    providerConfigured: bridge.providerConfigured,
+    executorConfigured: bridge.executorConfigured,
+    selectedWorkerId: worker.id,
+    selectedWorkerCode: worker.code,
+    selectedWorkerName: worker.name,
+    taskId,
+    projectId,
+    summary: `A task ${worker.name} részére előirányozva. ${executorText}`,
+    nextStep: bridge.executorConfigured ? "Session -> repository -> branch -> worktree -> scope lock -> READY." : "A task ChatGPT/MCP átadással végrehajtható; a natív worker executor külön következő fejlesztési blokk.",
+    handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nFelelős: ${worker.name}\nUtasítás: ${short}\n\nDEV-only végrehajtás. Kötelező lánc: status -> read -> backup -> task/session/worktree/scope -> code -> docs -> tsc -> lint -> targeted acceptance -> build -> DEV restart -> smoke -> commit/handoff. PROD módosítás nincs.`,
+  };
+}

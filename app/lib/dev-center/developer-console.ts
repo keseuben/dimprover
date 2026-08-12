@@ -4,6 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getBenAiBridgeStatus } from "./benai-dispatch";
 
 const execFileAsync = promisify(execFile);
 
@@ -195,6 +196,26 @@ export async function createBenjadminConsoleMessage(input: { text: string; targe
   return mapWorklogRow(result.data as Row);
 }
 
+
+export async function createBenAiConsoleMessage(input: { summary: string; detail?: string; taskId?: string | null; projectId?: string | null; metadata?: Record<string, unknown> }) {
+  const summary = text(input.summary).slice(0, 4000);
+  if (!summary) throw new Error("A Ben-AI üzenet nem lehet üres.");
+  const client = getClient();
+  const result = await client.from("dev_center_live_worklog").insert({
+    worker_code: "BENAI",
+    task_id: input.taskId || null,
+    phase: "coordination",
+    level: "info",
+    summary,
+    detail: text(input.detail).slice(0, 4000),
+    progress_percent: null,
+    source: "benai",
+    metadata: { kind: "TASK_ASSIGNMENT", projectId: input.projectId || null, origin: "BENJADMIN_DEVELOPER_CONSOLE", ...(input.metadata || {}) },
+  }).select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at").single();
+  if (result.error || !result.data) throw new Error(result.error?.message || "A Ben-AI koordinációs üzenet nem rögzíthető.");
+  return mapWorklogRow(result.data as Row);
+}
+
 export async function getDeveloperConsoleLiveStatus() {
   const client = getClient();
   const [projects, workers, tasks, sessions, builds, releases, approvals, audits] = await Promise.all([
@@ -242,6 +263,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     const docs = await readdir(path.join(root, "DIMPROVER_PRODUCT_DOCS"));
     latestProductDoc = docs.filter((name) => /^\d+_.*\.md$/i.test(name)).sort((a, b) => a.localeCompare(b, "hu", { numeric: true })).at(-1) || "";
   } catch { /* dokumentumtár nem elérhető */ }
+  const bridge = getBenAiBridgeStatus();
   return {
     environment: "DEV",
     productionDefault: "READ_ONLY",
@@ -251,6 +273,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     buildId,
     worktree: root,
     latestProductDoc,
+    aiBridge: { mode: bridge.mode, label: bridge.label, providerConfigured: bridge.providerConfigured, executorConfigured: bridge.executorConfigured },
     generatedAt: new Date().toISOString(),
   };
 }

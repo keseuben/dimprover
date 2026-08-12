@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock3, Code2, GitCommitHorizontal, Hammer, ListChecks, ShieldCheck } from "lucide-react";
 import BenjadminAvatar from "./BenjadminAvatar";
-import type { ConsoleAuthor, ConsoleLiveState, LiveTask } from "./types";
+import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 const workers: Array<{ code: string; author: ConsoleAuthor; fallbackName: string }> = [
@@ -33,7 +33,7 @@ function workerStatus(task: LiveTask | null) {
   return { status: "working" as const, label: "DOLGOZIK" };
 }
 
-export default function LiveWorkPanel({ live, now }: { live: ConsoleLiveState | null; now: number }) {
+export default function LiveWorkPanel({ live, now, context }: { live: ConsoleLiveState | null; now: number; context: RuntimeContext | null }) {
   const tasks = live?.tasks || [];
   const sessions = live?.sessions || [];
   const builds = live?.builds || [];
@@ -45,7 +45,7 @@ export default function LiveWorkPanel({ live, now }: { live: ConsoleLiveState | 
       <header><Code2 size={17} /><div><span>ÉLŐ MUNKA</span><strong>Worker / task / build</strong></div></header>
       <section className={styles.benAiCoordinator}>
         <BenjadminAvatar member="BENAI" size="task" status={genericQueue.length ? "waiting" : "idle"} eager />
-        <div><strong>Ben-AI</strong><span>KOORDINÁTOR</span><p>{genericQueue.length ? `${genericQueue.length} kiosztásra váró általános task` : "Nincs kiosztásra váró általános task."}</p></div>
+        <div><strong>Ben-AI</strong><span>KOORDINÁTOR · {context?.aiBridge?.mode === "OPENAI_RESPONSES" ? "API HÍD" : "KÉZI CHATGPT HÍD"}</span><p>{genericQueue.length ? `${genericQueue.length} kiosztásra váró általános task` : context?.aiBridge?.executorConfigured ? "A végrehajtó híd konfigurálva." : "Natív worker executor még nincs bekötve."}</p></div>
       </section>
       <div className={styles.workerCards}>
         {workers.map((item) => {
