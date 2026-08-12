@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Copy, LoaderCircle, Mail, ShieldCheck, UserPlus, Users, XCircle } from "lucide-react";
+import { Bot, CheckCircle2, Copy, LoaderCircle, Mail, ShieldCheck, UserPlus, Users, XCircle } from "lucide-react";
+import MembershipAiPolicyEditor from "@/components/license/MembershipAiPolicyEditor";
 
 type User = { id: string; public_user_code: string; full_name: string; email: string; status: string; email_verified_at: string | null };
 type Membership = { id: string; user_id: string; organization_id: string; role_code: string; role_label?: string | null; status: string; is_primary: boolean; joined_at?: string | null; access_ends_at?: string | null };
-type LicenseModule = { id: string; license_id: string; module_code: string; enabled: boolean };
-type MembershipModule = { id: string; membership_id: string; module_code: string; enabled: boolean };
+type LicenseModule = { id: string; license_id: string; module_code: string; enabled: boolean; limits?: Record<string, unknown>; feature_flags?: Record<string, unknown> };
+type MembershipModule = { id: string; membership_id: string; module_code: string; enabled: boolean; limits?: Record<string, unknown> };
 type Invitation = { id: string; organization_id: string; license_id: string; membership_id: string; invited_user_id: string; email_normalized: string; full_name: string; role_code: string; role_label: string | null; token_hint: string; status: string; expires_at: string; accepted_at: string | null; revoked_at: string | null; created_at: string };
 
 type Props = {
@@ -50,6 +51,7 @@ export default function OrganizationLicenseMembers(props: Props) {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [oneTimeUrl, setOneTimeUrl] = useState("");
+  const [aiMembershipId, setAiMembershipId] = useState("");
 
   const activeLicenseModules = useMemo(
     () => props.licenseModules.filter((item) => item.license_id === props.licenseId && item.enabled).map((item) => item.module_code),
@@ -61,6 +63,14 @@ export default function OrganizationLicenseMembers(props: Props) {
   );
   const usedSeats = organizationMemberships.length;
   const availableSeats = Math.max(0, props.maxUsers - usedSeats);
+  const licenseAiModule = useMemo(
+    () => props.licenseModules.find((item) => item.license_id === props.licenseId && item.module_code === "AI_ASSISTANT" && item.enabled) || null,
+    [props.licenseId, props.licenseModules],
+  );
+  const aiMembership = organizationMemberships.find((item) => item.id === aiMembershipId) || null;
+  const aiUser = aiMembership ? props.users.find((item) => item.id === aiMembership.user_id) : null;
+  const aiInvitation = aiMembership ? props.invitations.find((item) => item.membership_id === aiMembership.id && item.license_id === props.licenseId) : null;
+  const aiMembershipModule = aiMembership ? props.membershipModules.find((item) => item.membership_id === aiMembership.id && item.module_code === "AI_ASSISTANT") || null : null;
 
   function toggleModule(code: string) {
     setSelectedModules((current) => current.includes(code) ? current.filter((item) => item !== code) : [...current, code]);
@@ -162,7 +172,18 @@ export default function OrganizationLicenseMembers(props: Props) {
       const user=props.users.find((item)=>item.id===membership.user_id);
       const invitation=props.invitations.find((item)=>item.membership_id===membership.id && item.license_id===props.licenseId);
       const assigned=props.membershipModules.filter((item)=>item.membership_id===membership.id&&item.enabled).map((item)=>item.module_code);
-      return <tr key={membership.id} className="border-t border-slate-800"><td className="p-2"><strong className="block text-white">{user?.full_name||invitation?.full_name||membership.user_id}</strong><span className="text-slate-400">{user?.email||invitation?.email_normalized||"–"}</span></td><td className="p-2 text-slate-200">{membership.role_label||membership.role_code}</td><td className="p-2"><span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-black ${membership.status==="active"?"bg-emerald-400/15 text-emerald-200":membership.status==="invited"?"bg-cyan-400/15 text-cyan-200":"bg-amber-400/15 text-amber-200"}`}>{membership.status==="active"?<CheckCircle2 size={12}/>:<ShieldCheck size={12}/>} {statusLabel[membership.status]||membership.status}</span></td><td className="p-2"><div className="flex max-w-[380px] flex-wrap gap-1">{(assigned.length?assigned:membership.status==="active"?activeLicenseModules:[]).map((code)=><span key={code} className="rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{code}</span>)}</div></td><td className="p-2 text-slate-400">{invitation ? <><span className="block">{invitation.status}</span><span className="block">Lejár: {formatDate(invitation.expires_at)}</span></> : "–"}</td><td className="p-2">{invitation?.status==="pending"?<button type="button" onClick={()=>void revoke(invitation.id)} disabled={Boolean(busy)} className="inline-flex items-center gap-1 rounded-lg border border-red-400/40 px-3 py-2 font-bold text-red-200 disabled:opacity-40">{busy===`revoke:${invitation.id}`?<LoaderCircle size={13} className="animate-spin"/>:<XCircle size={13}/>} Visszavonás</button>:"–"}</td></tr>;
+      return <tr key={membership.id} className="border-t border-slate-800"><td className="p-2"><strong className="block text-white">{user?.full_name||invitation?.full_name||membership.user_id}</strong><span className="text-slate-400">{user?.email||invitation?.email_normalized||"–"}</span></td><td className="p-2 text-slate-200">{membership.role_label||membership.role_code}</td><td className="p-2"><span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-black ${membership.status==="active"?"bg-emerald-400/15 text-emerald-200":membership.status==="invited"?"bg-cyan-400/15 text-cyan-200":"bg-amber-400/15 text-amber-200"}`}>{membership.status==="active"?<CheckCircle2 size={12}/>:<ShieldCheck size={12}/>} {statusLabel[membership.status]||membership.status}</span></td><td className="p-2"><div className="flex max-w-[380px] flex-wrap gap-1">{(assigned.length?assigned:membership.status==="active"?activeLicenseModules:[]).map((code)=><span key={code} className="rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{code}</span>)}</div></td><td className="p-2 text-slate-400">{invitation ? <><span className="block">{invitation.status}</span><span className="block">Lejár: {formatDate(invitation.expires_at)}</span></> : "–"}</td><td className="p-2"><div className="flex flex-wrap gap-1">{licenseAiModule ? <button type="button" onClick={()=>setAiMembershipId(membership.id)} className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/35 px-3 py-2 font-bold text-cyan-100 hover:bg-cyan-400/10"><Bot size={13}/> AI keret</button> : null}{invitation?.status==="pending"?<button type="button" onClick={()=>void revoke(invitation.id)} disabled={Boolean(busy)} className="inline-flex items-center gap-1 rounded-lg border border-red-400/40 px-3 py-2 font-bold text-red-200 disabled:opacity-40">{busy===`revoke:${invitation.id}`?<LoaderCircle size={13} className="animate-spin"/>:<XCircle size={13}/>} Visszavonás</button>:null}{!licenseAiModule && invitation?.status!=="pending" ? "–" : null}</div></td></tr>;
     }) : <tr><td colSpan={6} className="p-5 text-center text-slate-500">Még nincs felhasználó a szervezeti licencben.</td></tr>}</tbody></table></div>
+
+    {aiMembership && licenseAiModule ? <MembershipAiPolicyEditor
+      adminKey={props.adminKey}
+      licenseId={props.licenseId}
+      membershipId={aiMembership.id}
+      userName={aiUser?.full_name || aiInvitation?.full_name || aiMembership.user_id}
+      currentModule={aiMembershipModule}
+      licenseFeatureFlags={licenseAiModule.feature_flags || {}}
+      onChanged={props.onChanged}
+      onClose={() => setAiMembershipId("")}
+    /> : null}
   </section>;
 }

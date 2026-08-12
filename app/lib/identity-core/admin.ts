@@ -693,6 +693,140 @@ async function replaceDimproLicenseModulesAdmin(licenseId: string, modulesInput:
   return modules;
 }
 
+
+const DIMPRO_AI_MEMBER_FEATURES = [
+  "daily_plan",
+  "next_step",
+  "task_breakdown",
+  "waiting_email",
+  "meeting_agenda",
+  "weekly_summary",
+  "decision_support",
+  "document_extract",
+] as const;
+const DIMPRO_AI_MEMBER_SCOPES = ["personal", "hage"] as const;
+
+function normalizeAiMemberList(value: unknown, allowed: readonly string[]) {
+  if (!Array.isArray(value)) return [];
+  const allow = new Set(allowed);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of value) {
+    const item = text(raw, 80).toLowerCase();
+    if (!item || !allow.has(item) || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
+export async function updateDimproMembershipAiPolicyAdmin(input: Record<string, unknown>) {
+  const membershipId = normalizeUuid(input.membershipId);
+  const licenseId = normalizeUuid(input.licenseId);
+  if (!membershipId || !licenseId) {
+    throw new DimproIdentityError("A tagsági és licencazonosító kötelező.", "DIMPRO_AI_MEMBER_POLICY_ID_REQUIRED", 400);
+  }
+
+  const client = getDimproIdentitySupabaseClient();
+  const [membershipResult, licenseResult, licenseAiResult, currentModuleResult] = await Promise.all([
+    client.from("dimpro_organization_memberships")
+      .select("id,user_id,organization_id,status,access_ends_at")
+      .eq("id", membershipId)
+      .maybeSingle(),
+    client.from("dimpro_licenses")
+      .select("id,owner_type,owner_organization_id,status")
+      .eq("id", licenseId)
+      .maybeSingle(),
+    client.from("dimpro_license_modules")
+      .select("id,enabled,limits,feature_flags,valid_from,valid_until")
+      .eq("license_id", licenseId)
+      .eq("module_code", "AI_ASSISTANT")
+      .maybeSingle(),
+    client.from("dimpro_membership_modules")
+      .select("id,enabled,limits")
+      .eq("membership_id", membershipId)
+      .eq("module_code", "AI_ASSISTANT")
+      .maybeSingle(),
+  ]);
+  for (const result of [membershipResult, licenseResult, licenseAiResult, currentModuleResult]) {
+    if (result.error) dbError("A felhasználói AI-policy alapadatai nem tölthetők be.", result.error);
+  }
+  if (!membershipResult.data) throw new DimproIdentityError("A szervezeti tagság nem található.", "DIMPRO_AI_MEMBER_POLICY_MEMBERSHIP_NOT_FOUND", 404);
+  if (!licenseResult.data) throw new DimproIdentityError("A licenc nem található.", "DIMPRO_AI_MEMBER_POLICY_LICENSE_NOT_FOUND", 404);
+
+  const membership = membershipResult.data as DbRow;
+  const license = licenseResult.data as DbRow;
+  if (String(license.owner_type) !== "organization" || String(license.owner_organization_id || "") !== String(membership.organization_id || "")) {
+    throw new DimproIdentityError("A tagság nem ehhez a szervezeti licenchez tartozik.", "DIMPRO_AI_MEMBER_POLICY_LICENSE_MISMATCH", 403);
+  }
+  if (String(membership.status) === "revoked") {
+    throw new DimproIdentityError("Visszavont tagsághoz AI-policy nem módosítható.", "DIMPRO_AI_MEMBER_POLICY_MEMBERSHIP_REVOKED", 409);
+  }
+  if (!licenseAiResult.data || licenseAiResult.data.enabled === false) {
+    throw new DimproIdentityError("Az AI_ASSISTANT modul nincs engedélyezve a licencen.", "DIMPRO_AI_MEMBER_POLICY_LICENSE_AI_DISABLED", 409);
+  }
+
+  const currentModule = currentModuleResult.data as DbRow | null;
+  const currentLimits = objectValue(currentModule?.limits);
+  const licenseFlags = objectValue(licenseAiResult.data.feature_flags);
+  const licenseEnabledFeatures = DIMPRO_AI_MEMBER_FEATURES.filter((feature) => licenseFlags[feature] !== false);
+
+  const enabled = input.enabled === undefined ? currentModule?.enabled !== false : booleanValue(input.enabled, true);
+  const existingScopes = normalizeAiMemberList(currentLimits.allowedScopes, DIMPRO_AI_MEMBER_SCOPES);
+  const allowedScopes = input.allowedScopes === undefined
+    ? (existingScopes.length ? existingScopes : [...DIMPRO_AI_MEMBER_SCOPES])
+    : normalizeAiMemberList(input.allowedScopes, DIMPRO_AI_MEMBER_SCOPES);
+  const existingFeatures = normalizeAiMemberList(currentLimits.allowedFeatures, licenseEnabledFeatures);
+  const allowedFeatures = input.allowedFeatures === undefined
+    ? (existingFeatures.length ? existingFeatures : [...licenseEnabledFeatures])
+    : normalizeAiMemberList(input.allowedFeatures, licenseEnabledFeatures);
+  if (enabled && allowedScopes.length === 0) {
+    throw new DimproIdentityError("Legalább egy AI munkaterületi scope engedélyezése szükséges.", "DIMPRO_AI_MEMBER_POLICY_SCOPE_REQUIRED", 400);
+  }
+
+  const accessExpiresAt = input.accessExpiresAt === undefined
+    ? (typeof currentLimits.accessExpiresAt === "string" ? currentLimits.accessExpiresAt : null)
+    : optionalIso(input.accessExpiresAt);
+  const limits = {
+    ...currentLimits,
+    monthlyBudgetHuf: integer(input.monthlyBudgetHuf, integer(currentLimits.monthlyBudgetHuf, 0, 0, 1_000_000_000), 0, 1_000_000_000),
+    maxRequestsPerDay: integer(input.maxRequestsPerDay, integer(currentLimits.maxRequestsPerDay, 0, 0, 1_000_000), 0, 1_000_000),
+    maxRequestsPerMonth: integer(input.maxRequestsPerMonth, integer(currentLimits.maxRequestsPerMonth, 0, 0, 10_000_000), 0, 10_000_000),
+    accessExpiresAt,
+    allowedScopes,
+    allowedFeatures,
+  };
+
+  const now = new Date().toISOString();
+  const upserted = await client.from("dimpro_membership_modules").upsert({
+    membership_id: membershipId,
+    module_code: "AI_ASSISTANT",
+    enabled,
+    limits,
+    updated_at: now,
+  }, { onConflict: "membership_id,module_code" }).select("id,membership_id,module_code,enabled,limits,created_at,updated_at").single();
+  if (upserted.error) dbError("A felhasználói AI-policy nem menthető.", upserted.error, 400);
+
+  const audit = await client.from("dimpro_access_audit_logs").insert({
+    user_id: membership.user_id || null,
+    organization_id: membership.organization_id || null,
+    license_id: licenseId,
+    event_type: "membership_ai_policy_updated",
+    success: true,
+    metadata: {
+      source: "identity-license-center",
+      membershipId,
+      enabled,
+      scopes: allowedScopes,
+      features: allowedFeatures,
+      hasMonthlyBudget: Number(limits.monthlyBudgetHuf || 0) > 0,
+      accessExpiresAt,
+    },
+  });
+  if (audit.error) dbError("A felhasználói AI-policy auditnaplója nem írható.", audit.error);
+  return upserted.data as DbRow;
+}
+
 export async function getDimproLicenseCenterOverview() {
   const client = getDimproIdentitySupabaseClient();
   const [users, organizations, memberships, licenses, modules, membershipModules, invitations, entitlements] = await Promise.all([
