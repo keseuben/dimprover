@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
+import { BellRing, Check, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
 import { formatDropSendCode, normalizeDropSendCode } from "@/app/lib/drop/public/dropSendCodeFormat";
 import { formatDimproLicenseCodeInput, isValidDimproLicenseCode, normalizeDimproLicenseCodeInput } from "@/app/lib/identity-core/licenseCode";
@@ -55,6 +55,28 @@ type SendDraft = {
   canUseProjectDrop: boolean;
 };
 type DrawerMode = "closed" | "new" | "edit";
+
+type ExpiryReminderRun = {
+  id?: string;
+  createdAt?: string;
+  source?: string;
+  dryRun?: boolean;
+  scannedLicenses: number;
+  eligibleLicenses?: number;
+  stageCandidates: number;
+  intendedEmails: number;
+  sentEmails: number;
+  alreadySentEmails: number;
+  failedEmails: number;
+};
+
+type ExpiryReminderStatus = {
+  ok: boolean;
+  error?: string;
+  thresholds?: number[];
+  timezone?: string;
+  latestRuns?: ExpiryReminderRun[];
+};
 
 const statusOptions = ["pending", "trial", "active", "expired", "suspended", "revoked"];
 const statusLabels: Record<string, string> = { pending: "Függő", trial: "Próba", active: "Aktív", expired: "Lejárt", suspended: "Felfüggesztett", revoked: "Visszavont" };
@@ -164,6 +186,10 @@ export default function DimproLicenseCenterPage() {
   const [pageSize, setPageSize] = useState(25);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
   const [selectedLicenseId, setSelectedLicenseId] = useState("");
+  const [expiryReminderOpen, setExpiryReminderOpen] = useState(false);
+  const [expiryReminderLoading, setExpiryReminderLoading] = useState(false);
+  const [expiryReminderSummary, setExpiryReminderSummary] = useState("");
+  const [expiryReminderStatus, setExpiryReminderStatus] = useState<ExpiryReminderStatus | null>(null);
   const headers = useMemo(() => ({ "content-type": "application/json", "x-dimpro-license-admin-key": adminKey }), [adminKey]);
 
   const load = useCallback(async (key: string) => {
@@ -225,6 +251,64 @@ export default function DimproLicenseCenterPage() {
   const safePage = Math.min(page, pageCount);
   const pagedLicenses = visibleLicenses.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedLicense = licenses.find((license) => license.id === selectedLicenseId) || null;
+
+  async function loadExpiryReminderStatus(announce = true) {
+    if (!adminKey.trim()) {
+      setExpiryReminderSummary("Licencadmin belépés szükséges.");
+      return;
+    }
+    setExpiryReminderLoading(true);
+    try {
+      const response = await fetch("/api/license/expiry-reminders?limit=10", {
+        headers: { "x-dimpro-license-admin-key": adminKey.trim(), accept: "application/json" },
+        cache: "no-store",
+      });
+      const payload = await response.json() as ExpiryReminderStatus;
+      setExpiryReminderStatus(payload);
+      if (!response.ok || !payload.ok) {
+        setExpiryReminderSummary(payload.error || "A lejárati értesítő állapota nem tölthető be.");
+        return;
+      }
+      if (announce) setExpiryReminderSummary("Lejárati értesítő állapota betöltve.");
+    } catch (error) {
+      setExpiryReminderSummary(error instanceof Error ? error.message : "Ismeretlen lejárati értesítő hiba.");
+    } finally {
+      setExpiryReminderLoading(false);
+    }
+  }
+
+  async function runExpiryReminderCheck(dryRun: boolean) {
+    if (!adminKey.trim()) {
+      setExpiryReminderSummary("Licencadmin belépés szükséges.");
+      return;
+    }
+    setExpiryReminderLoading(true);
+    setExpiryReminderSummary("");
+    try {
+      const response = await fetch("/api/license/expiry-reminders", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-dimpro-license-admin-key": adminKey.trim(),
+        },
+        body: JSON.stringify({ source: "manual", dryRun }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; run?: ExpiryReminderRun };
+      if (!response.ok || !payload.ok || !payload.run) {
+        setExpiryReminderSummary(payload.error || "A lejárati ellenőrzés nem sikerült.");
+        return;
+      }
+      const run = payload.run;
+      setExpiryReminderSummary(
+        `${dryRun ? "Előnézet" : "Futtatás"}: ${run.scannedLicenses} licenc ellenőrizve, ${run.stageCandidates} értesítési fokozat aktív, ${run.intendedEmails} címzett, ${run.sentEmails} ${dryRun ? "küldendő" : "elküldött"}, ${run.alreadySentEmails} korábban elküldött, ${run.failedEmails} hiba.`,
+      );
+      await loadExpiryReminderStatus(false);
+    } catch (error) {
+      setExpiryReminderSummary(error instanceof Error ? error.message : "Hálózati vagy szerverhiba történt a lejárati ellenőrzés során.");
+    } finally {
+      setExpiryReminderLoading(false);
+    }
+  }
 
   async function createLicense() {
     if (busy || !isValidDimproLicenseCode(createDraft.publicLicenseCode)) return;
@@ -348,6 +432,7 @@ export default function DimproLicenseCenterPage() {
         actions={(
           <>
             <Link href="/admin?legacyLicense=1" className="benjadmin-data-secondary-action" title="Régi licencadmin kompatibilitási felület">Régi licencadmin</Link>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => { setExpiryReminderOpen(true); void loadExpiryReminderStatus(); }}><BellRing size={16} /> Lejárati értesítések</button>
             <button type="button" className="benjadmin-data-secondary-action" onClick={() => void load(adminKey)}><RefreshCw size={16} /> Frissítés</button>
             <button type="button" className="benjadmin-data-primary-action" onClick={() => { setCreateDraft(initialCreate()); setDrawerMode("new"); }}><Plus size={16} /> Új licenc</button>
           </>
@@ -423,6 +508,64 @@ export default function DimproLicenseCenterPage() {
           </table>
         </div>
       </BenjadminDataWorkspace>
+
+      {expiryReminderOpen ? <button className="benjadmin-data-drawer-backdrop" type="button" aria-label="Lejárati értesítések bezárása" onClick={() => setExpiryReminderOpen(false)} /> : null}
+      {expiryReminderOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-expiry-reminder-drawer" data-testid="benjadmin-expiry-reminder-drawer">
+          <header>
+            <div><span>LICENC LEJÁRATI ÉRTESÍTÉSEK</span><strong>Átmeneti kompatibilitási szolgáltatás</strong></div>
+            <button type="button" onClick={() => setExpiryReminderOpen(false)} aria-label="Bezárás"><X size={18} /></button>
+          </header>
+          <div className="benjadmin-data-drawer__body benjadmin-expiry-reminder-body">
+            <div className="benjadmin-data-security-note">
+              <BellRing size={17} />
+              <div>
+                <strong>30 / 7 / 1 nap és lejárat napja</strong>
+                <span>Ez a szolgáltatás jelenleg a régi licencállományt ellenőrzi. Az Identity Core migráció befejezéséig kompatibilitási funkcióként marad elérhető.</span>
+              </div>
+            </div>
+            <section className="benjadmin-data-form-section">
+              <header><strong>Állapot</strong><BenjadminStatusPill tone="info">{expiryReminderStatus?.timezone || "Europe/Budapest"}</BenjadminStatusPill></header>
+              <div className="benjadmin-infra-detail-grid">
+                <span>Értesítési küszöbök<b>{(expiryReminderStatus?.thresholds || [30, 7, 1, 0]).map((value) => `${value} nap`).join(" · ")}</b></span>
+                <span>Korábbi futások<b>{expiryReminderStatus?.latestRuns?.length ?? 0}</b></span>
+                <span>Legutóbbi futás<b>{displayDate(expiryReminderStatus?.latestRuns?.[0]?.createdAt || null)}</b></span>
+                <span>Legutóbbi mód<b>{expiryReminderStatus?.latestRuns?.[0]?.dryRun ? "Előnézet" : expiryReminderStatus?.latestRuns?.[0] ? "Éles futás" : "—"}</b></span>
+              </div>
+            </section>
+            <section className="benjadmin-data-form-section">
+              <header><strong>Kézi ellenőrzés</strong><span>e-mail küldés szabályozva</span></header>
+              <p>Az előnézet nem küld levelet. Az éles futtatás csak külön megerősítés után indul, és a korábban már kiküldött aktuális fokozatokat nem küldi újra.</p>
+              <div className="benjadmin-expiry-reminder-actions">
+                <button type="button" className="benjadmin-data-secondary-action" disabled={expiryReminderLoading} onClick={() => void runExpiryReminderCheck(true)}>{expiryReminderLoading ? <LoaderCircle className="is-spinning" size={16} /> : <BellRing size={16} />} Előnézet küldés nélkül</button>
+                <button type="button" className="benjadmin-data-danger-action" disabled={expiryReminderLoading} onClick={() => { if (window.confirm("Elindítod a lejárati értesítések kézi kiküldését? Csak a még nem küldött aktuális fokozatok mennek ki.")) void runExpiryReminderCheck(false); }}><BellRing size={16} /> Értesítések futtatása</button>
+              </div>
+              {expiryReminderSummary ? <p className="benjadmin-expiry-reminder-summary">{expiryReminderSummary}</p> : null}
+            </section>
+            <section className="benjadmin-data-form-section">
+              <header><strong>Legutóbbi futások</strong><span>max. 10 rekord</span></header>
+              <div className="benjadmin-data-mini-table-scroll">
+                <table className="benjadmin-data-mini-table">
+                  <thead><tr><th>Időpont</th><th>Mód</th><th>Licencek</th><th>Fokozat</th><th>Címzett</th><th>Küldött</th><th>Hiba</th></tr></thead>
+                  <tbody>
+                    {(expiryReminderStatus?.latestRuns || []).length ? (expiryReminderStatus?.latestRuns || []).map((run, index) => (
+                      <tr key={`${run.id || run.createdAt || "run"}-${index}`}>
+                        <td>{displayDate(run.createdAt || null)}</td>
+                        <td>{run.dryRun ? "Előnézet" : "Éles"}</td>
+                        <td>{run.scannedLicenses}</td>
+                        <td>{run.stageCandidates}</td>
+                        <td>{run.intendedEmails}</td>
+                        <td>{run.sentEmails}</td>
+                        <td>{run.failedEmails}</td>
+                      </tr>
+                    )) : <tr><td colSpan={7}>Még nincs rögzített futás.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </aside>
+      ) : null}
 
       {drawerMode !== "closed" ? <button className="benjadmin-data-drawer-backdrop" type="button" aria-label="Szerkesztő bezárása" onClick={() => setDrawerMode("closed")} /> : null}
       {drawerMode !== "closed" ? (
