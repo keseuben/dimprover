@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, HardDrive, Loader2, RefreshCw, Search, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  BenjadminDataWorkspace,
+  BenjadminMetric,
+  BenjadminPagination,
+  BenjadminStatusPill,
+} from "@/components/admin/BenjadminDataWorkspace";
 
 type TokenResult = {
   ok?: boolean;
@@ -47,7 +54,6 @@ type CleanupPlan = {
   note?: string;
   error?: string;
 };
-
 
 type DeleteResult = {
   ok?: boolean;
@@ -116,6 +122,48 @@ type SignedUploadPlanResult = {
   error?: string;
 };
 
+type SessionFilter = "all" | "active" | "completed" | "cleanup";
+
+function formatBytes(bytes?: number | null) {
+  if (!Number.isFinite(bytes) || Number(bytes) <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Number(bytes);
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("hu-HU", { timeZone: "Europe/Budapest" });
+}
+
+function percent(received: number, total: number) {
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((received / total) * 100)));
+}
+
+function sessionTone(status: string): "default" | "ok" | "warning" | "danger" | "info" {
+  const value = status.toLowerCase();
+  if (value === "completed") return "ok";
+  if (value.includes("fail") || value.includes("error") || value.includes("abort")) return "danger";
+  if (value.includes("pending") || value.includes("created") || value.includes("open")) return "warning";
+  return "info";
+}
+
+function InfoGrid({ items }: { items: Array<{ label: string; value: string }> }) {
+  return (
+    <div className="benjadmin-infra-detail-grid">
+      {items.map((item) => <span key={item.label}>{item.label}<b>{item.value || "—"}</b></span>)}
+    </div>
+  );
+}
+
 export default function DriveAdminPage() {
   const [adminKey, setAdminKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -131,38 +179,111 @@ export default function DriveAdminPage() {
   const [storageConfig, setStorageConfig] = useState<StorageConfigResult | null>(null);
   const [signedUploadPlan, setSignedUploadPlan] = useState<SignedUploadPlanResult | null>(null);
   const [selectedUploadId, setSelectedUploadId] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("Drive admin adatforrás ellenőrzése…");
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<SessionFilter>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const tokenValue = result?.token || "";
-  const maskedToken = tokenValue.length > 18
-    ? `${tokenValue.slice(0, 18)}...${tokenValue.slice(-8)}`
-    : tokenValue;
-
-  const sessionList = sessionsResult?.sessions || [];
-  const cleanupCandidates = cleanupPlan?.candidates || [];
+  const maskedToken = tokenValue.length > 18 ? `${tokenValue.slice(0, 18)}…${tokenValue.slice(-8)}` : tokenValue;
+  const sessionList = useMemo(() => sessionsResult?.sessions || [], [sessionsResult?.sessions]);
+  const cleanupCandidates = useMemo(() => cleanupPlan?.candidates || [], [cleanupPlan?.candidates]);
+  const cleanupIds = useMemo(() => new Set(cleanupCandidates.map((session) => session.uploadId)), [cleanupCandidates]);
   const activeSessionCount = sessionList.filter((session) => session.status !== "completed").length;
   const completedSessionCount = sessionList.filter((session) => session.status === "completed").length;
   const receivedBytes = sessionList.reduce((sum, session) => sum + Number(session.receivedBytes || 0), 0);
   const storageProviderCount = storagePlan?.providers?.length || 0;
+  const selectedSession = selectedUploadId ? sessionList.find((session) => session.uploadId === selectedUploadId) || cleanupCandidates.find((session) => session.uploadId === selectedUploadId) || null : null;
+
+  const visibleSessions = useMemo(() => {
+    const clean = query.trim().toLowerCase();
+    return sessionList.filter((session) => {
+      if (filter === "active" && session.status === "completed") return false;
+      if (filter === "completed" && session.status !== "completed") return false;
+      if (filter === "cleanup" && !cleanupIds.has(session.uploadId)) return false;
+      if (!clean) return true;
+      return [session.uploadId, session.projectId, session.fileName, session.relativePath, session.status, session.uploadPath]
+        .some((value) => String(value || "").toLowerCase().includes(clean));
+    });
+  }, [cleanupIds, filter, query, sessionList]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleSessions.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedSessions = visibleSessions.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   useEffect(() => {
-    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim();
-    if (storedAdminKey) setAdminKey(storedAdminKey);
+    const storedAdminKey = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
+    if (storedAdminKey) {
+      setAdminKey(storedAdminKey);
+      void refreshMain(storedAdminKey);
+    } else {
+      setMessage("Licencadmin belépés szükséges.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function adminHeaders() {
-    return {
-      "x-dimpro-license-admin-key": adminKey.trim(),
-    };
+  function adminHeaders(keyOverride = adminKey) {
+    return { "x-dimpro-license-admin-key": keyOverride.trim() };
   }
 
   function requireAdminKey() {
     if (!adminKey.trim()) {
-      setMessage("Add meg a licencadmin kulcsot.");
+      setMessage("Licencadmin belépés szükséges.");
       return false;
     }
     setMessage("");
     return true;
+  }
+
+  async function loadSessions(keyOverride = adminKey) {
+    const key = keyOverride.trim();
+    if (!key) return;
+    const params = new URLSearchParams();
+    if (projectFilter.trim()) params.set("projectId", projectFilter.trim());
+    const response = await fetch(`/api/drive/uploads/sessions?${params.toString()}`, {
+      headers: adminHeaders(key),
+      cache: "no-store",
+    });
+    const data = await response.json() as SessionsResult;
+    setSessionsResult(data);
+    if (!response.ok || !data.ok) throw new Error(data.error || "Session lista lekérési hiba.");
+  }
+
+  async function loadCleanupPlan(keyOverride = adminKey) {
+    const key = keyOverride.trim();
+    if (!key) return;
+    const params = new URLSearchParams();
+    if (projectFilter.trim()) params.set("projectId", projectFilter.trim());
+    params.set("olderThanHours", String(Math.max(1, Number(olderThanHours || 24))));
+    const response = await fetch(`/api/drive/uploads/cleanup-plan?${params.toString()}`, {
+      headers: adminHeaders(key),
+      cache: "no-store",
+    });
+    const data = await response.json() as CleanupPlan;
+    setCleanupPlan(data);
+    if (!response.ok || !data.ok) throw new Error(data.error || "Cleanup terv lekérési hiba.");
+  }
+
+  async function refreshMain(keyOverride = adminKey) {
+    const key = keyOverride.trim();
+    if (!key) {
+      setMessage("Licencadmin belépés szükséges.");
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    try {
+      await Promise.all([loadSessions(key), loadCleanupPlan(key)]);
+      setMessage("Drive upload sessionök és cleanup terv frissítve.");
+      setPage(1);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Ismeretlen Drive admin lekérési hiba.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadToken() {
@@ -170,69 +291,13 @@ export default function DriveAdminPage() {
     setLoading(true);
     setCopyState("");
     try {
-      const response = await fetch("/api/drive/dev-token", {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
+      const response = await fetch("/api/drive/dev-token", { headers: adminHeaders(), cache: "no-store" });
+      const data = await response.json() as TokenResult;
       setResult(data);
-      setMessage(response.ok ? "Drive token adatok betöltve." : data.error || "Token lekérési hiba.");
+      setMessage(response.ok ? "Drive dev token adatok betöltve." : data.error || "Token lekérési hiba.");
     } catch (error) {
-      setResult({
-        ok: false,
-        error: error instanceof Error ? error.message : "Ismeretlen lekérdezési hiba.",
-      });
+      setResult({ ok: false, error: error instanceof Error ? error.message : "Ismeretlen token hiba." });
       setMessage("Hálózati hiba a token lekérésekor.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadSessions() {
-    if (!requireAdminKey()) return;
-    setLoading(true);
-    setDeleteResult(null);
-    try {
-      const params = new URLSearchParams();
-      if (projectFilter.trim()) params.set("projectId", projectFilter.trim());
-      const response = await fetch(`/api/drive/uploads/sessions?${params.toString()}`, {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
-      setSessionsResult(data);
-      setMessage(response.ok ? "Upload session lista frissítve." : data.error || "Session lista lekérési hiba.");
-    } catch (error) {
-      setSessionsResult({
-        ok: false,
-        error: error instanceof Error ? error.message : "Ismeretlen session lista hiba.",
-      });
-      setMessage("Hálózati hiba a session lista lekérésekor.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadCleanupPlan() {
-    if (!requireAdminKey()) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (projectFilter.trim()) params.set("projectId", projectFilter.trim());
-      params.set("olderThanHours", String(Math.max(1, Number(olderThanHours || 24))));
-      const response = await fetch(`/api/drive/uploads/cleanup-plan?${params.toString()}`, {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
-      setCleanupPlan(data);
-      setMessage(response.ok ? "Cleanup terv elkészült." : data.error || "Cleanup terv hiba.");
-    } catch (error) {
-      setCleanupPlan({
-        ok: false,
-        error: error instanceof Error ? error.message : "Ismeretlen cleanup hiba.",
-      });
-      setMessage("Hálózati hiba a cleanup terv lekérésekor.");
     } finally {
       setLoading(false);
     }
@@ -242,18 +307,12 @@ export default function DriveAdminPage() {
     if (!requireAdminKey()) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/drive/storage-plan", {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
+      const response = await fetch("/api/drive/storage-plan", { headers: adminHeaders(), cache: "no-store" });
+      const data = await response.json() as StoragePlan;
       setStoragePlan(data);
-      setMessage(response.ok ? "Object Storage terv betöltve." : data.error || "Object Storage terv lekérési hiba.");
+      setMessage(response.ok ? "Object Storage terv betöltve." : data.error || "Storage terv hiba.");
     } catch (error) {
-      setStoragePlan({
-        ok: false,
-        error: error instanceof Error ? error.message : "Ismeretlen storage terv hiba.",
-      });
+      setStoragePlan({ ok: false, error: error instanceof Error ? error.message : "Ismeretlen storage terv hiba." });
       setMessage("Hálózati hiba az Object Storage terv lekérésekor.");
     } finally {
       setLoading(false);
@@ -264,11 +323,8 @@ export default function DriveAdminPage() {
     if (!requireAdminKey()) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/drive/storage-env", {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
+      const response = await fetch("/api/drive/storage-env", { headers: adminHeaders(), cache: "no-store" });
+      const data = await response.json() as StorageEnvResult;
       setStorageEnv(data);
       setMessage(response.ok ? "Storage env ellenőrzés betöltve." : data.error || "Storage env hiba.");
     } catch (error) {
@@ -283,13 +339,10 @@ export default function DriveAdminPage() {
     if (!requireAdminKey()) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/drive/storage-config", {
-        headers: adminHeaders(),
-        cache: "no-store",
-      });
-      const data = await response.json();
+      const response = await fetch("/api/drive/storage-config", { headers: adminHeaders(), cache: "no-store" });
+      const data = await response.json() as StorageConfigResult;
       setStorageConfig(data);
-      setMessage(response.ok ? "Storage provider konfigurációs terv betöltve." : data.error || "Storage config hiba.");
+      setMessage(response.ok ? "Storage provider konfiguráció betöltve." : data.error || "Storage config hiba.");
     } catch (error) {
       setStorageConfig({ ok: false, error: error instanceof Error ? error.message : "Ismeretlen config hiba." });
       setMessage("Hálózati hiba a storage config lekérésekor.");
@@ -300,7 +353,7 @@ export default function DriveAdminPage() {
 
   async function loadSignedUploadPlan() {
     if (!result?.token) {
-      setMessage("Előbb kérd le a Drive dev tokent, mert a signed upload szerződés dev-tokennel tesztelhető.");
+      setMessage("Előbb kérd le a Drive dev tokent; a signed upload terv dev-tokennel ellenőrizhető.");
       return;
     }
     setLoading(true);
@@ -321,7 +374,7 @@ export default function DriveAdminPage() {
         }),
         cache: "no-store",
       });
-      const data = await response.json();
+      const data = await response.json() as SignedUploadPlanResult;
       setSignedUploadPlan(data);
       setMessage(response.ok ? "Signed upload előkészítő szerződés betöltve." : data.error || "Signed upload terv hiba.");
     } catch (error) {
@@ -343,7 +396,6 @@ export default function DriveAdminPage() {
       `Biztosan törlöd az ideiglenes upload session mappát?\n\n${cleanUploadId}\n\nA projekt receipt / fájllista rekord nem törlődik automatikusan.`,
     );
     if (!confirmed) return;
-
     setLoading(true);
     try {
       const response = await fetch(`/api/drive/uploads/${encodeURIComponent(cleanUploadId)}`, {
@@ -351,19 +403,16 @@ export default function DriveAdminPage() {
         headers: adminHeaders(),
         cache: "no-store",
       });
-      const data = await response.json();
+      const data = await response.json() as DeleteResult;
       setDeleteResult(data);
       setMessage(response.ok ? "Upload session törölve." : data.error || "Session törlési hiba.");
       if (response.ok) {
         setSelectedUploadId("");
-        await loadSessions();
-        await loadCleanupPlan();
+        setSessionDrawerOpen(false);
+        await refreshMain(adminKey);
       }
     } catch (error) {
-      setDeleteResult({
-        ok: false,
-        error: error instanceof Error ? error.message : "Ismeretlen törlési hiba.",
-      });
+      setDeleteResult({ ok: false, error: error instanceof Error ? error.message : "Ismeretlen törlési hiba." });
       setMessage("Hálózati hiba a session törlésekor.");
     } finally {
       setLoading(false);
@@ -376,508 +425,179 @@ export default function DriveAdminPage() {
     setCopyState("Token másolva.");
   }
 
-  return (
-    <main className="min-h-screen bg-slate-950 px-6 py-8 text-slate-100">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-cyan-400/25 bg-slate-900/80 p-6 shadow-2xl shadow-cyan-950/30">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyan-300">
-            DIMPRO Drive Admin
-          </p>
-          <h1 className="mt-3 text-3xl font-bold text-white">
-            Drive fejlesztői token, upload session lista és cleanup terv
-          </h1>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
-            Ez az oldal a Drive API MVP fejlesztési teszteléséhez készült. A token, session lista,
-            cleanup terv és kézi session törlés csak licencadmin kulccsal érhető el.
-          </p>
+  function openSession(session: UploadSession) {
+    setSelectedUploadId(session.uploadId);
+    setSessionDrawerOpen(true);
+  }
+
+  if (!adminKey && !loading) {
+    return (
+      <main className="benjadmin-data-page">
+        <section className="benjadmin-data-auth-card">
+          <ShieldCheck size={22} />
+          <h1>Licencadmin belépés szükséges</h1>
+          <p>A DIMPRO Drive admin diagnosztika csak aktív BENJADMIN admin munkamenettel érhető el.</p>
+          <a href="/admin" className="benjadmin-data-primary-action">Licencadmin megnyitása</a>
         </section>
-
-        <section className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-          <label className="block text-sm font-semibold text-slate-200" htmlFor="adminKey">
-            Licencadmin kulcs
-          </label>
-          <div className="mt-3 flex flex-col gap-3 lg:flex-row">
-            <input
-              id="adminKey"
-              type="password"
-              value={adminKey}
-              onChange={(event) => setAdminKey(event.target.value)}
-              placeholder="DIMPRO-LICENSE-ADMIN-..."
-              className="min-h-12 flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 text-sm text-slate-100 outline-none ring-cyan-400/30 focus:ring-4"
-            />
-            <button
-              type="button"
-              onClick={loadToken}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {loading ? "Folyamatban..." : "Drive token"}
-            </button>
-            <button
-              type="button"
-              onClick={loadSessions}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl border border-cyan-300/50 px-5 py-3 text-sm font-bold text-cyan-100 hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Session lista
-            </button>
-            <button
-              type="button"
-              onClick={loadCleanupPlan}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl border border-amber-300/50 px-5 py-3 text-sm font-bold text-amber-100 hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Cleanup terv
-            </button>
-            <button
-              type="button"
-              onClick={loadStoragePlan}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl border border-blue-300/50 px-5 py-3 text-sm font-bold text-blue-100 hover:bg-blue-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Storage terv
-            </button>
-            <button
-              type="button"
-              onClick={loadStorageEnv}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl border border-indigo-300/50 px-5 py-3 text-sm font-bold text-indigo-100 hover:bg-indigo-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Env check
-            </button>
-            <button
-              type="button"
-              onClick={loadStorageConfig}
-              disabled={loading || !adminKey.trim()}
-              className="rounded-2xl border border-violet-300/50 px-5 py-3 text-sm font-bold text-violet-100 hover:bg-violet-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Provider terv
-            </button>
-            <button
-              type="button"
-              onClick={loadSignedUploadPlan}
-              disabled={loading || !result?.token}
-              className="rounded-2xl border border-emerald-300/50 px-5 py-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Signed upload terv
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]">
-            <Field label="Projekt szűrő">
-              <input
-                value={projectFilter}
-                onChange={(event) => setProjectFilter(event.target.value)}
-                placeholder="DIMPRO_DEMO vagy üres = összes"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-400"
-              />
-            </Field>
-            <Field label="Cleanup életkor óra">
-              <input
-                value={olderThanHours}
-                onChange={(event) => setOlderThanHours(event.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="24"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-400"
-              />
-            </Field>
-          </div>
-          {message && (
-            <p className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-sm text-cyan-100">
-              {message}
-            </p>
-          )}
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <StatusCard label="Session összesen" value={String(sessionList.length)} tone="cyan" />
-          <StatusCard label="Aktív session" value={String(activeSessionCount)} tone="amber" />
-          <StatusCard label="Completed" value={String(completedSessionCount)} tone="emerald" />
-          <StatusCard label="Fogadott byte" value={String(receivedBytes)} tone="cyan" />
-          <StatusCard label="Cleanup jelölt" value={String(cleanupCandidates.length)} tone="red" />
-          <StatusCard label="Storage provider" value={String(storageProviderCount)} tone="blue" />
-        </section>
-
-        {result && (
-          <section className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-            <SectionTitle title="Dev token" subtitle="Csak fejlesztési teszthez. Desktop configba nem menthető." />
-            {result.ok ? (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100">
-                  Token lekérve. A teljes token csak másoláskor használandó; a felületen maszkolva jelenik meg.
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Info label="API root" value={result.apiRoot || ""} />
-                  <Info label="Header neve" value={result.headerName || ""} />
-                  <Info label="Token fájl" value={result.tokenFile || ""} />
-                  <Info label="Token" value={maskedToken} />
-                </div>
-                <button
-                  type="button"
-                  onClick={copyToken}
-                  className="rounded-2xl border border-cyan-300/50 px-5 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/10"
-                >
-                  Teljes token másolása
-                </button>
-                {copyState && <p className="text-sm text-cyan-200">{copyState}</p>}
-                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-                  {result.warning}
-                </p>
-              </div>
-            ) : (
-              <ErrorBox text={result.error || "A token lekérése nem sikerült."} />
-            )}
-          </section>
-        )}
-
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-            <SectionTitle
-              title="Upload session lista"
-              subtitle="Admin debug lista az ideiglenes upload session mappákról."
-            />
-            {sessionsResult?.ok ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Info label="Projekt" value={sessionsResult.projectId || "all"} />
-                  <Info label="Session darab" value={String(sessionsResult.count ?? 0)} />
-                  <Info label="Mód" value={sessionsResult.mode || "-"} />
-                </div>
-                <SessionTable
-                  sessions={sessionList}
-                  selectedUploadId={selectedUploadId}
-                  onSelect={setSelectedUploadId}
-                  onDelete={deleteUploadSession}
-                  loading={loading}
-                />
-              </div>
-            ) : sessionsResult ? (
-              <ErrorBox text={sessionsResult.error || "A session lista lekérése nem sikerült."} />
-            ) : (
-              <EmptyBox text="Még nincs lekérve session lista." />
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-            <SectionTitle
-              title="Cleanup terv"
-              subtitle="Csak javaslatot készít, automatikus törlést nem végez."
-            />
-            {cleanupPlan?.ok ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Info label="Összes session" value={String(cleanupPlan.totalSessions ?? 0)} />
-                  <Info label="Törlésre jelölt" value={String(cleanupPlan.candidateCount ?? 0)} />
-                  <Info label="Életkor limit" value={`${cleanupPlan.olderThanHours ?? "-"} óra`} />
-                  <Info label="Mód" value={cleanupPlan.mode || "-"} />
-                </div>
-                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-                  {cleanupPlan.note || "Ez csak tisztítási terv."}
-                </p>
-                <div className="space-y-2">
-                  {cleanupCandidates.length === 0 ? (
-                    <EmptyBox text="Nincs cleanup jelölt session." />
-                  ) : (
-                    cleanupCandidates.map((session) => (
-                      <button
-                        key={session.uploadId}
-                        type="button"
-                        onClick={() => setSelectedUploadId(session.uploadId)}
-                        className="w-full rounded-2xl border border-slate-700 bg-slate-950 p-3 text-left text-sm hover:border-amber-300/60"
-                      >
-                        <span className="block font-semibold text-white">{session.fileName}</span>
-                        <span className="mt-1 block break-all text-xs text-slate-400">
-                          {session.uploadId} · {session.status} · {session.ageHours ?? "-"} óra
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : cleanupPlan ? (
-              <ErrorBox text={cleanupPlan.error || "A cleanup terv lekérése nem sikerült."} />
-            ) : (
-              <EmptyBox text="Még nincs cleanup terv." />
-            )}
-          </div>
-        </section>
-
-        {storagePlan && (
-          <section className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-            <SectionTitle
-              title="Object Storage előkészítő szerződés"
-              subtitle="Hetzner Object Storage / Backblaze / Storage Box irány. Ez még plan-only, valós tárhelyírás nélkül."
-            />
-            {storagePlan.ok ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Info label="Verzió" value={storagePlan.version || "-"} />
-                  <Info label="Mód" value={storagePlan.activeMode || "-"} />
-                  <Info label="Objektum kulcs" value={storagePlan.objectKeyTemplate || "-"} />
-                </div>
-                <div className="grid gap-3 xl:grid-cols-3">
-                  {(storagePlan.providers || []).map((provider) => (
-                    <div key={provider.id} className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-blue-300/70">{provider.role}</p>
-                      <h3 className="mt-2 text-lg font-bold text-white">{provider.label}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">{provider.recommendedFor}</p>
-                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{provider.status}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <ListBox title="Szerver env előkészítés" items={storagePlan.requiredServerEnv || []} />
-                  <ListBox title="Későbbi endpointok" items={storagePlan.futureEndpoints || []} />
-                </div>
-              </div>
-            ) : (
-              <ErrorBox text={storagePlan.error || "A storage terv lekérése nem sikerült."} />
-            )}
-          </section>
-        )}
-
-        {(storageEnv || storageConfig || signedUploadPlan) && (
-          <section className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-            <SectionTitle
-              title="Storage env / provider / signed upload előkészítés"
-              subtitle="Admin és dev-token alapú előkészítő ellenőrzések. Valós tárhelyírás nincs."
-            />
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              {storageEnv && (
-                <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-                  <h3 className="font-bold text-white">Env check</h3>
-                  {storageEnv.ok ? (
-                    <div className="mt-3 space-y-2 text-sm text-slate-300">
-                      <p>Storage mód: {storageEnv.storageMode || "plan"}</p>
-                      <p>S3 kész: {storageEnv.s3Ready ? "igen" : "nem"}</p>
-                      <p>Beállított: {storageEnv.presentCount ?? 0} · Hiányzó: {storageEnv.missingCount ?? 0}</p>
-                    </div>
-                  ) : <ErrorBox text={storageEnv.error || "Env check hiba."} />}
-                </div>
-              )}
-              {storageConfig && (
-                <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-                  <h3 className="font-bold text-white">Provider terv</h3>
-                  {storageConfig.ok ? (
-                    <div className="mt-3 space-y-2 text-sm text-slate-300">
-                      <p>Provider: {storageConfig.selectedProvider}</p>
-                      <p>Mód: {storageConfig.storageMode}</p>
-                      <p>Max upload: {storageConfig.maxUploadMb} MB</p>
-                    </div>
-                  ) : <ErrorBox text={storageConfig.error || "Provider terv hiba."} />}
-                </div>
-              )}
-              {signedUploadPlan && (
-                <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-                  <h3 className="font-bold text-white">Signed upload terv</h3>
-                  {signedUploadPlan.ok ? (
-                    <div className="mt-3 space-y-2 text-sm text-slate-300">
-                      <p>Upload ID: {signedUploadPlan.uploadId}</p>
-                      <p>Fájl: {signedUploadPlan.fileName}</p>
-                      <p className="text-amber-100">{signedUploadPlan.blockedReason}</p>
-                    </div>
-                  ) : <ErrorBox text={signedUploadPlan.error || "Signed upload terv hiba."} />}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        <section className="rounded-3xl border border-slate-700 bg-slate-900 p-6">
-          <SectionTitle
-            title="Manuális session törlés"
-            subtitle="Csak ideiglenes upload session mappát töröl; receipt/fájllista rekordot nem töröl automatikusan."
-          />
-          <div className="mt-4 flex flex-col gap-3 md:flex-row">
-            <input
-              value={selectedUploadId}
-              onChange={(event) => setSelectedUploadId(event.target.value)}
-              placeholder="uploadId"
-              className="min-h-12 flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 text-sm text-slate-100 outline-none focus:border-red-300"
-            />
-            <button
-              type="button"
-              onClick={() => deleteUploadSession(selectedUploadId)}
-              disabled={loading || !selectedUploadId.trim() || !adminKey.trim()}
-              className="rounded-2xl border border-red-400/60 px-5 py-3 text-sm font-bold text-red-100 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Kézi session törlés
-            </button>
-          </div>
-          {deleteResult && (
-            <div className="mt-4">
-              {deleteResult.ok ? (
-                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100">
-                  Session törölve: {deleteResult.uploadId}. {deleteResult.note}
-                </div>
-              ) : (
-                <ErrorBox text={deleteResult.error || "A törlés nem sikerült."} />
-              )}
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-      {label}
-      <div className="mt-2">{children}</div>
-    </label>
-  );
-}
-
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div>
-      <h2 className="text-xl font-bold text-white">{title}</h2>
-      <p className="mt-1 text-sm leading-6 text-slate-400">{subtitle}</p>
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{label}</p>
-      <p className="mt-2 break-all text-sm text-slate-100">{value || "-"}</p>
-    </div>
-  );
-}
-
-function ErrorBox({ text }: { text: string }) {
-  return (
-    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">
-      {text}
-    </div>
-  );
-}
-
-function EmptyBox({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-sm text-slate-400">
-      {text}
-    </div>
-  );
-}
-
-function StatusCard({ label, value, tone }: { label: string; value: string; tone: "cyan" | "amber" | "emerald" | "red" | "blue" }) {
-  const toneClass = {
-    cyan: "border-cyan-400/30 bg-cyan-400/10 text-cyan-100",
-    amber: "border-amber-400/30 bg-amber-400/10 text-amber-100",
-    emerald: "border-emerald-400/30 bg-emerald-400/10 text-emerald-100",
-    red: "border-red-400/30 bg-red-400/10 text-red-100",
-    blue: "border-blue-400/30 bg-blue-400/10 text-blue-100",
-  }[tone];
-
-  return (
-    <div className={`rounded-3xl border p-5 ${toneClass}`}>
-      <p className="text-xs uppercase tracking-[0.25em] opacity-70">{label}</p>
-      <p className="mt-2 text-3xl font-black text-white">{value}</p>
-    </div>
-  );
-}
-
-function ListBox({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4">
-      <p className="text-xs uppercase tracking-[0.25em] text-slate-500">{title}</p>
-      <div className="mt-3 space-y-2">
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-500">-</p>
-        ) : (
-          items.map((item) => (
-            <p key={item} className="break-all rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200">
-              {item}
-            </p>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function formatDate(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("hu-HU");
-}
-
-function SessionTable({
-  sessions,
-  selectedUploadId,
-  onSelect,
-  onDelete,
-  loading,
-}: {
-  sessions: UploadSession[];
-  selectedUploadId: string;
-  onSelect: (uploadId: string) => void;
-  onDelete: (uploadId: string) => void;
-  loading: boolean;
-}) {
-  if (sessions.length === 0) {
-    return <EmptyBox text="Nincs megjeleníthető upload session." />;
+      </main>
+    );
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-700">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-950 text-xs uppercase tracking-[0.2em] text-slate-500">
-          <tr>
-            <th className="px-4 py-3">Session</th>
-            <th className="px-4 py-3">Fájl</th>
-            <th className="px-4 py-3">Projekt</th>
-            <th className="px-4 py-3">Státusz</th>
-            <th className="px-4 py-3">Chunk</th>
-            <th className="px-4 py-3">Méret</th>
-            <th className="px-4 py-3">Frissítve</th>
-            <th className="px-4 py-3">Művelet</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sessions.map((session) => (
-            <tr
-              key={session.uploadId}
-              className={`border-t border-slate-800 ${selectedUploadId === session.uploadId ? "bg-cyan-400/10" : ""}`}
-            >
-              <td className="max-w-[220px] break-all px-4 py-3 font-mono text-xs text-cyan-100">
-                {session.uploadId}
-              </td>
-              <td className="px-4 py-3">
-                <div className="font-semibold text-white">{session.fileName}</div>
-                <div className="mt-1 max-w-[260px] break-all text-xs text-slate-500">{session.relativePath}</div>
-              </td>
-              <td className="px-4 py-3 text-slate-300">{session.projectId}</td>
-              <td className="px-4 py-3 text-slate-300">{session.status}</td>
-              <td className="px-4 py-3 text-slate-300">{session.chunkCount}</td>
-              <td className="px-4 py-3 text-slate-300">{session.receivedBytes} / {session.fileSizeBytes} B</td>
-              <td className="px-4 py-3 text-slate-400">{formatDate(session.updatedAt)}</td>
-              <td className="px-4 py-3">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(session.uploadId)}
-                    className="rounded-xl border border-cyan-300/50 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/10"
-                  >
-                    Kijelölés
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(session.uploadId)}
-                    disabled={loading}
-                    className="rounded-xl border border-red-300/50 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-400/10 disabled:opacity-40"
-                  >
-                    Törlés
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <BenjadminDataWorkspace
+        eyebrow="BENJADMIN · DRIVE ADMIN"
+        title="DIMPRO Drive upload sessionök"
+        description="Fejlesztői upload sessionök, cleanup jelöltek és Object Storage előkészítő diagnosztika egy táblázat-első admin munkatérben."
+        actions={(
+          <>
+            <button type="button" className="benjadmin-data-secondary-action" onClick={() => setDiagnosticsOpen(true)}><HardDrive size={16} /> Drive diagnosztika</button>
+            <button type="button" className="benjadmin-data-primary-action" onClick={() => void refreshMain()} disabled={loading}>{loading ? <Loader2 className="is-spinning" size={16} /> : <RefreshCw size={16} />} Frissítés</button>
+          </>
+        )}
+        metrics={(
+          <>
+            <BenjadminMetric label="Session összesen" value={sessionList.length} />
+            <BenjadminMetric label="Aktív session" value={activeSessionCount} tone={activeSessionCount ? "warning" : "default"} />
+            <BenjadminMetric label="Completed" value={completedSessionCount} tone="ok" />
+            <BenjadminMetric label="Cleanup jelölt" value={cleanupCandidates.length} tone={cleanupCandidates.length ? "danger" : "default"} />
+            <BenjadminMetric label="Fogadott adat" value={formatBytes(receivedBytes)} />
+          </>
+        )}
+        toolbar={(
+          <>
+            <label className="benjadmin-data-search"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Keresés session, projekt, fájl vagy útvonal alapján" /></label>
+            <div className="benjadmin-data-filter-group" aria-label="Drive session státusz szűrő">
+              {(["all", "active", "completed", "cleanup"] as SessionFilter[]).map((value) => <button key={value} type="button" className={filter === value ? "is-active" : ""} onClick={() => { setFilter(value); setPage(1); }}>{value === "all" ? "Mind" : value === "active" ? "Aktív" : value === "completed" ? "Completed" : "Cleanup jelölt"}</button>)}
+            </div>
+            <label className="benjadmin-drive-toolbar-field">Projekt<input value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} placeholder="DIMPRO_DEMO vagy üres" /></label>
+            <label className="benjadmin-drive-toolbar-field is-small">Cleanup életkor<input value={olderThanHours} onChange={(event) => setOlderThanHours(event.target.value.replace(/[^0-9]/g, ""))} placeholder="24" /><span>óra</span></label>
+          </>
+        )}
+        footer={(
+          <>
+            <span className="benjadmin-data-message">{message}</span>
+            <BenjadminPagination page={safePage} pageSize={pageSize} total={visibleSessions.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </>
+        )}
+      >
+        <div className="benjadmin-data-table-scroll">
+          <table className="benjadmin-data-table benjadmin-drive-session-table" data-testid="benjadmin-drive-session-table">
+            <thead><tr><th>Session</th><th>Fájl / útvonal</th><th>Projekt</th><th>Státusz</th><th>Chunk</th><th>Fogadott / méret</th><th>Készültség</th><th>Életkor</th><th>Frissítve</th><th>Művelet</th></tr></thead>
+            <tbody>
+              {pagedSessions.length ? pagedSessions.map((session) => {
+                const progress = percent(session.receivedBytes, session.fileSizeBytes);
+                return <tr key={session.uploadId}><td className="is-mono"><strong>{session.uploadId}</strong>{cleanupIds.has(session.uploadId) ? <><br /><small>cleanup jelölt</small></> : null}</td><td className="is-wide"><strong>{session.fileName}</strong><br /><small>{session.relativePath || session.uploadPath || "—"}</small></td><td>{session.projectId}</td><td><BenjadminStatusPill tone={sessionTone(session.status)}>{session.status}</BenjadminStatusPill></td><td>{session.chunkCount}</td><td className="is-nowrap">{formatBytes(session.receivedBytes)} / {formatBytes(session.fileSizeBytes)}</td><td><div className="benjadmin-drive-progress"><span style={{ width: `${progress}%` }} /><b>{progress}%</b></div></td><td>{session.ageHours == null ? "—" : `${session.ageHours.toFixed(1)} óra`}</td><td className="is-nowrap">{formatDateTime(session.updatedAt)}</td><td><button type="button" className="benjadmin-data-row-action" onClick={() => openSession(session)}>Részletek</button></td></tr>;
+              }) : <tr><td colSpan={10} className="benjadmin-data-empty">Nincs betöltött vagy a szűrésnek megfelelő Drive upload session.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </BenjadminDataWorkspace>
+
+      {sessionDrawerOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Drive session bezárása" onClick={() => setSessionDrawerOpen(false)} /> : null}
+      {sessionDrawerOpen && selectedSession ? (
+        <aside className="benjadmin-data-drawer benjadmin-drive-session-drawer" data-testid="benjadmin-drive-session-drawer">
+          <header><div><span>DRIVE UPLOAD SESSION</span><strong>{selectedSession.fileName}</strong></div><button type="button" onClick={() => setSessionDrawerOpen(false)} aria-label="Bezárás"><X size={18} /></button></header>
+          <div className="benjadmin-data-drawer__body benjadmin-drive-session-detail">
+            <section className="benjadmin-data-form-section"><header><strong>{selectedSession.uploadId}</strong><BenjadminStatusPill tone={sessionTone(selectedSession.status)}>{selectedSession.status}</BenjadminStatusPill></header><p>{selectedSession.relativePath || selectedSession.uploadPath || "Nincs relatív útvonal."}</p></section>
+            <InfoGrid items={[
+              { label: "Projekt", value: selectedSession.projectId },
+              { label: "Chunk", value: String(selectedSession.chunkCount) },
+              { label: "Fogadott", value: formatBytes(selectedSession.receivedBytes) },
+              { label: "Fájlméret", value: formatBytes(selectedSession.fileSizeBytes) },
+              { label: "Készültség", value: `${percent(selectedSession.receivedBytes, selectedSession.fileSizeBytes)}%` },
+              { label: "Életkor", value: selectedSession.ageHours == null ? "—" : `${selectedSession.ageHours.toFixed(1)} óra` },
+              { label: "Létrehozva", value: formatDateTime(selectedSession.createdAt) },
+              { label: "Frissítve", value: formatDateTime(selectedSession.updatedAt) },
+            ]} />
+            <section className="benjadmin-data-form-section"><header><strong>Ideiglenes upload útvonal</strong></header><code className="benjadmin-fajlmuhely-sha">{selectedSession.uploadPath || "—"}</code></section>
+            {cleanupIds.has(selectedSession.uploadId) ? <div className="benjadmin-data-security-note"><Trash2 size={17} /><div><strong>Cleanup jelölt</strong><span>A jelenlegi cleanup terv ezt a sessiont törlésre jelöli. Automatikus törlés nincs.</span></div></div> : null}
+            <button type="button" className="benjadmin-data-danger-action is-full" disabled={loading} onClick={() => void deleteUploadSession(selectedSession.uploadId)}>{loading ? <Loader2 className="is-spinning" size={15} /> : <Trash2 size={15} />} Ideiglenes session törlése</button>
+          </div>
+        </aside>
+      ) : null}
+
+      {diagnosticsOpen ? <button type="button" className="benjadmin-data-drawer-backdrop" aria-label="Drive diagnosztika bezárása" onClick={() => setDiagnosticsOpen(false)} /> : null}
+      {diagnosticsOpen ? (
+        <aside className="benjadmin-data-drawer benjadmin-drive-diagnostics-drawer" data-testid="benjadmin-drive-diagnostics-drawer">
+          <header><div><span>DRIVE ADMIN DIAGNOSZTIKA</span><strong>Token · cleanup · storage</strong></div><button type="button" onClick={() => setDiagnosticsOpen(false)} aria-label="Bezárás"><X size={18} /></button></header>
+          <div className="benjadmin-data-drawer__body benjadmin-drive-diagnostics">
+            <div className="benjadmin-drive-diagnostic-actions">
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadToken()} disabled={loading}>Dev token</button>
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadStoragePlan()} disabled={loading}>Storage terv</button>
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadStorageEnv()} disabled={loading}>Env check</button>
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadStorageConfig()} disabled={loading}>Provider config</button>
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void loadSignedUploadPlan()} disabled={loading || !result?.token}>Signed upload terv</button>
+              <button type="button" className="benjadmin-data-secondary-action" onClick={() => void refreshMain()} disabled={loading}>Session + cleanup</button>
+            </div>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Fejlesztői token</strong><span>{result?.ok ? "betöltve" : "nincs betöltve"}</span></header>
+              {result?.ok ? <><InfoGrid items={[
+                { label: "API root", value: result.apiRoot || "—" },
+                { label: "Header", value: result.headerName || "—" },
+                { label: "Token fájl", value: result.tokenFile || "—" },
+                { label: "Token", value: maskedToken || "—" },
+              ]} /><button type="button" className="benjadmin-data-secondary-action" onClick={() => void copyToken()}><Copy size={14} /> Teljes token másolása</button>{copyState ? <p className="benjadmin-drive-note">{copyState}</p> : null}{result.warning ? <div className="benjadmin-data-security-note"><ShieldCheck size={17} /><div><strong>Fejlesztői figyelmeztetés</strong><span>{result.warning}</span></div></div> : null}</> : <p>Token csak külön admin műveletre töltődik be és maszkolva jelenik meg.</p>}
+            </section>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Cleanup terv</strong><span>{cleanupCandidates.length} jelölt</span></header>
+              <InfoGrid items={[
+                { label: "Összes session", value: String(cleanupPlan?.totalSessions ?? sessionList.length) },
+                { label: "Jelölt", value: String(cleanupPlan?.candidateCount ?? cleanupCandidates.length) },
+                { label: "Életkor limit", value: `${cleanupPlan?.olderThanHours ?? olderThanHours} óra` },
+                { label: "Generálva", value: formatDateTime(cleanupPlan?.generatedAt) },
+              ]} />
+              <p>{cleanupPlan?.note || "A cleanup terv csak javaslat; automatikus törlést nem végez."}</p>
+              <div className="benjadmin-drive-cleanup-list">
+                {cleanupCandidates.length ? cleanupCandidates.map((session) => <button key={session.uploadId} type="button" onClick={() => { setSelectedUploadId(session.uploadId); setDiagnosticsOpen(false); setSessionDrawerOpen(true); }}><strong>{session.fileName}</strong><span>{session.uploadId} · {session.ageHours ?? "—"} óra</span></button>) : <span>Nincs cleanup jelölt.</span>}
+              </div>
+            </section>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Object Storage</strong><span>{storageProviderCount} provider</span></header>
+              {storagePlan?.ok ? <><InfoGrid items={[
+                { label: "Verzió", value: storagePlan.version || "—" },
+                { label: "Aktív mód", value: storagePlan.activeMode || "—" },
+                { label: "Objektum kulcs", value: storagePlan.objectKeyTemplate || "—" },
+                { label: "Generálva", value: formatDateTime(storagePlan.generatedAt) },
+              ]} /><div className="benjadmin-drive-provider-list">{(storagePlan.providers || []).map((provider) => <span key={provider.id}><b>{provider.label}</b>{provider.role} · {provider.status}<small>{provider.recommendedFor}</small></span>)}</div></> : <p>A storage terv külön gombbal tölthető be.</p>}
+            </section>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Storage env / provider</strong><span>{storageEnv?.s3Ready ? "S3 kész" : "ellenőrzés"}</span></header>
+              <InfoGrid items={[
+                { label: "Storage mód", value: storageEnv?.storageMode || storageConfig?.storageMode || "—" },
+                { label: "S3 kész", value: storageEnv ? (storageEnv.s3Ready ? "Igen" : "Nem") : "—" },
+                { label: "Beállított env", value: storageEnv ? String(storageEnv.presentCount ?? 0) : "—" },
+                { label: "Hiányzó env", value: storageEnv ? String(storageEnv.missingCount ?? 0) : "—" },
+                { label: "Provider", value: storageConfig?.selectedProvider || "—" },
+                { label: "Max upload", value: storageConfig?.maxUploadMb ? `${storageConfig.maxUploadMb} MB` : "—" },
+              ]} />
+              {storageEnv?.entries?.length ? <div className="benjadmin-drive-env-list">{storageEnv.entries.map((entry) => <span key={entry.key}><b>{entry.key}</b><BenjadminStatusPill tone={entry.present ? "ok" : "warning"}>{entry.present ? "Beállítva" : "Hiányzik"}</BenjadminStatusPill><small>{entry.requiredFor}{entry.safePreview ? ` · ${entry.safePreview}` : ""}</small></span>)}</div> : null}
+            </section>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Signed upload előkészítés</strong><span>{signedUploadPlan?.mode || "plan"}</span></header>
+              {signedUploadPlan ? <InfoGrid items={[
+                { label: "Upload ID", value: signedUploadPlan.uploadId || "—" },
+                { label: "Projekt", value: signedUploadPlan.projectId || "—" },
+                { label: "Fájl", value: signedUploadPlan.fileName || "—" },
+                { label: "Lejárat", value: formatDateTime(signedUploadPlan.expiresAt) },
+              ]} /> : <p>A signed upload szerződés csak külön admin műveletre fut.</p>}
+              {signedUploadPlan?.blockedReason ? <div className="benjadmin-data-security-note"><ShieldCheck size={17} /><div><strong>Blokkolási ok</strong><span>{signedUploadPlan.blockedReason}</span></div></div> : null}
+            </section>
+
+            <section className="benjadmin-data-form-section">
+              <header><strong>Kézi session törlés</strong><span>veszélyes művelet</span></header>
+              <label className="benjadmin-data-field"><span>Upload ID</span><input value={selectedUploadId} onChange={(event) => setSelectedUploadId(event.target.value)} placeholder="uploadId" /></label>
+              <button type="button" className="benjadmin-data-danger-action is-full" disabled={loading || !selectedUploadId.trim()} onClick={() => void deleteUploadSession(selectedUploadId)}><Trash2 size={15} /> Kézi session törlés</button>
+              {deleteResult?.ok ? <p className="benjadmin-drive-note">Session törölve: {deleteResult.uploadId}. {deleteResult.note}</p> : deleteResult?.error ? <p className="benjadmin-drive-note is-error">{deleteResult.error}</p> : null}
+            </section>
+          </div>
+        </aside>
+      ) : null}
+    </>
   );
 }
