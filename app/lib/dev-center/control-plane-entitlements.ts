@@ -1,4 +1,5 @@
 import { getDimproLicenseCenterOverview } from "@/app/lib/identity-core/admin";
+import { getHageAiIdentityPolicyMode } from "@/app/lib/identity-core/hage-ai-policy";
 import { getLicenseAdminStore } from "@/app/lib/license/admin-service";
 import { getHageAiAdminUsageSnapshot } from "@/app/lib/license/hage-ai-gateway";
 
@@ -98,6 +99,7 @@ export async function getBenjadminEntitlementSnapshot() {
       expiresAt: text(row.expires_at),
       maxUsers: numberValue(row.max_users),
       maxDevices: numberValue(row.max_devices),
+      legacyLicenseRef: text(row.legacy_license_ref),
       modules: (modulesByLicense.get(licenseId) || []).sort(),
       aiPolicy: aiPolicyByLicense.get(licenseId) || null,
       sendEntitlements: send,
@@ -106,7 +108,9 @@ export async function getBenjadminEntitlementSnapshot() {
   });
 
   const usageByLicense = new Map(aiUsage.byLicense.map((row) => [row.licenseId, row]));
+  const localById = new Map(localLicense.licenses.map((license) => [license.id, license]));
   const localByCompany = new Map<string, (typeof localLicense.licenses)[number]>();
+  const runtimePolicyMode = getHageAiIdentityPolicyMode();
   for (const license of localLicense.licenses) {
     localByCompany.set(normalizeKey(license.companyName), license);
     localByCompany.set(normalizeKey(license.companyId), license);
@@ -116,7 +120,8 @@ export async function getBenjadminEntitlementSnapshot() {
   const localAiLicenses = centralLicenses
     .filter((license) => license.modules.some((moduleCode) => moduleCode.toUpperCase() === "AI_ASSISTANT"))
     .map((centralLicense) => {
-      const bridge = localByCompany.get(normalizeKey(centralLicense.ownerName));
+      const bridge = localById.get(centralLicense.legacyLicenseRef)
+        || localByCompany.get(normalizeKey(centralLicense.ownerName));
       if (bridge) matchedLocalIds.add(bridge.id);
       const usage = bridge ? usageByLicense.get(bridge.id) : undefined;
       const enabledAiUsers = (bridge?.aiUsers || []).filter((user) => user.enabled);
@@ -148,7 +153,13 @@ export async function getBenjadminEntitlementSnapshot() {
         updatedAt: centralLicense.updatedAt,
         entitlementSource: "central_identity",
         budgetSource: centralBudget > 0 ? "central_identity_module_limits" : bridge ? "legacy_license_bridge" : "not_configured",
-        runtimePolicySource: bridge ? "legacy_license_bridge" : "not_configured",
+        runtimePolicySource: bridge
+          ? runtimePolicyMode === "strict"
+            ? "central_identity_strict"
+            : runtimePolicyMode === "prefer"
+              ? "central_identity_prefer_with_legacy_ceiling"
+              : "legacy_license_bridge"
+          : "not_configured",
       };
     });
 
@@ -219,6 +230,7 @@ export async function getBenjadminEntitlementSnapshot() {
     sources: {
       centralIdentity: "dimpro_identity_core",
       aiLicenseBridge: "legacy_license_store",
+      aiRuntimePolicy: runtimePolicyMode,
       aiUsage: "hage_ai_usage",
     },
     summary: {
@@ -228,6 +240,8 @@ export async function getBenjadminEntitlementSnapshot() {
       centralUsers: central.users.length,
       activeSendEntitlements: central.sendEntitlements.filter((item) => text(item.status) === "active").length,
       aiEnabledLicenses: localAiLicenses.filter((item) => item.aiEnabled).length,
+      aiRuntimePolicyMode: runtimePolicyMode,
+      aiRuntimeCentralPolicyLicenses: localAiLicenses.filter((item) => item.runtimePolicySource.startsWith("central_identity_")).length,
       aiRequestsThisMonth: aiUsage.totals.requests,
       aiCostHufThisMonth,
       aiMonthlyBudgetHuf,

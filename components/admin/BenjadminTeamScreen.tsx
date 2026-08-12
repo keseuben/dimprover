@@ -122,6 +122,8 @@ type EntitlementSnapshot = {
     centralAiMonthlyTokenBudget?: number;
     aiTokenBudgetSource?: string;
     aiTokenBudgetPercent?: number;
+    aiRuntimePolicyMode?: string;
+    aiRuntimeCentralPolicyLicenses?: number;
   };
 };
 
@@ -519,6 +521,11 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
     : aiSummary.aiTokenBudgetSource === "benjadmin_env"
       ? "BENJADMIN belső tokenkeret"
       : "opcionális belső limit";
+  const aiRuntimePolicyLabel = aiSummary.aiRuntimePolicyMode === "strict"
+    ? "központi AI-policy"
+    : aiSummary.aiRuntimePolicyMode === "prefer"
+      ? "központi policy + legacy biztonsági korlát"
+      : "legacy AI-policy";
 
   return (
     <main className={`benjadmin-team-screen admin-theme-${theme}`} data-theme={theme} data-testid="benjadmin-team-screen">
@@ -631,7 +638,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
           <section className="benjadmin-team-screen__ai-finance" data-testid="benjadmin-ai-finance">
             <header>
               <div><Coins size={17} /><div><span>AI FINANSZÍROZÁS ÉS TOKENKERET</span><strong>Költség, felhasználás és belső keretek</strong></div></div>
-              <small>{aiSummary.aiEnabledLicenses ?? 0} aktív AI licenc · {aiSummary.aiRequestsThisMonth ?? 0} kérés / hó</small>
+              <small>{aiSummary.aiEnabledLicenses ?? 0} aktív AI licenc · {aiSummary.aiRequestsThisMonth ?? 0} kérés / hó · {aiRuntimePolicyLabel}</small>
             </header>
             <div className="benjadmin-team-screen__ai-finance-grid">
               <article><span>AI költség / hó</span><strong>{formatHuf(aiMonthlyCost)}</strong><small>központi, naplózott felhasználás</small></article>

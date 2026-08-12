@@ -681,7 +681,9 @@ async function replaceDimproLicenseModulesAdmin(licenseId: string, modulesInput:
       license_id: licenseId,
       module_code: module.moduleCode,
       enabled: module.enabled,
-      limits: module.limits,
+      limits: module.moduleCode === "AI_ASSISTANT"
+        ? { ...module.limits, policyVersion: 1, managedBy: "identity-license-center" }
+        : module.limits,
       feature_flags: module.featureFlags,
       valid_from: module.validFrom,
       valid_until: module.validUntil,
@@ -789,6 +791,8 @@ export async function updateDimproMembershipAiPolicyAdmin(input: Record<string, 
     : optionalIso(input.accessExpiresAt);
   const limits = {
     ...currentLimits,
+    policyVersion: 1,
+    managedBy: "identity-license-center",
     monthlyBudgetHuf: integer(input.monthlyBudgetHuf, integer(currentLimits.monthlyBudgetHuf, 0, 0, 1_000_000_000), 0, 1_000_000_000),
     maxRequestsPerDay: integer(input.maxRequestsPerDay, integer(currentLimits.maxRequestsPerDay, 0, 0, 1_000_000), 0, 1_000_000),
     maxRequestsPerMonth: integer(input.maxRequestsPerMonth, integer(currentLimits.maxRequestsPerMonth, 0, 0, 10_000_000), 0, 10_000_000),

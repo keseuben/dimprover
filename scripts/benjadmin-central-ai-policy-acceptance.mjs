@@ -131,7 +131,7 @@ try {
   check("Központi AI kérésszám-keretek betöltődnek", policy.dailyRequests === "40" && policy.monthlyRequests === "700", JSON.stringify(policy));
   check("Nyolc AI funkciókapcsoló megmarad", policy.featureCount === 8, `count=${policy.featureCount}`);
   check("Meglévő feature flag állapot betöltődik", policy.decisionChecked === false, `decisionChecked=${policy.decisionChecked}`);
-  check("Runtime bridge átmeneti állapota egyértelmű", policy.text.includes("HAGE AI futási motor még a régi licencbridge-et használja"));
+  check("Runtime bridge átmeneti állapota egyértelmű", policy.text.includes("Identity Core policy-t is olvassa") && policy.text.includes("prefer") && policy.text.includes("biztonsági felső korlát"));
   check("AI policy működési szövege legalább 12px", policy.minTextPx >= 12, `min=${policy.minTextPx}`);
 
   await page.evaluate(() => {

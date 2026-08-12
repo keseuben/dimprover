@@ -223,7 +223,7 @@ export default function BenjadminControlPlanePanel({ query }: { query: string })
           </section>
           <section className={`operator-compact-warning ${snapshot?.architecture.productionDefault === "READ_ONLY" ? "is-ok" : "is-warning"}`}>
             <ShieldCheck size={16} />
-            <div><strong>PRODUCTION: CSAK OLVASHATÓ ({snapshot?.architecture.productionDefault || "READ_ONLY"})</strong><span>PROD START önmagában nem ad írási, adatbázis-migrációs (migration), újraindítási (restart) vagy élesítési (deploy) jogot.</span></div>
+            <div><strong>PRODUCTION: CSAK OLVASHATÓ ({snapshot?.architecture.productionDefault === "READ_ONLY" ? "READ ONLY" : snapshot?.architecture.productionDefault || "READ ONLY"})</strong><span>PROD START önmagában nem ad írási, adatbázis-migrációs (migration), újraindítási (restart) vagy élesítési (deploy) jogot.</span></div>
           </section>
         </aside>
       </div>

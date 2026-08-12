@@ -1,0 +1,34 @@
+import fs from "node:fs";
+import ts from "typescript";
+
+const source = fs.readFileSync("app/lib/identity-core/hage-ai-policy-pure.ts", "utf8");
+const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { resolveCentralHageAiPolicy } = await import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
+const checks=[];
+function check(name, ok, detail="") { checks.push({name,ok:Boolean(ok),detail}); console.log(`${ok?"PASS":"FAIL"} ${name}${detail?` :: ${detail}`:""}`); if(!ok) throw new Error(name); }
+const now="2026-08-12T12:00:00.000Z";
+const user={id:"u1",publicUserCode:"USR-001",fullName:"Teszt Elek",email:"teszt@example.invalid",status:"active"};
+const base={id:"lic-central",status:"active",ownerType:"organization",activatedAt:"2026-01-01T00:00:00.000Z",expiresAt:"2027-01-01T00:00:00.000Z",aiModule:{enabled:true,limits:{monthlyBudgetHuf:25000,maxSingleRequestHuf:200,monthlyTokenBudget:1200000,maxRequestsPerDay:60,maxRequestsPerMonth:1000},featureFlags:{decision_support:false},validFrom:null,validUntil:null},memberships:[{id:"m1",userId:"u1",status:"active",accessEndsAt:null,user,aiModule:{enabled:true,limits:{policyVersion:1,monthlyBudgetHuf:5000,maxRequestsPerDay:20,maxRequestsPerMonth:300,allowedScopes:["personal","hage"],allowedFeatures:["daily_plan","weekly_summary","decision_support"]}}}]};
+const req={userId:"USR-001",userName:"Teszt Elek",scope:"personal",action:"daily_plan",requireAction:true,nowIso:now};
+let d=resolveCentralHageAiPolicy(null,req); check("nincs központi mapping -> legacy fallback",d.mode==="fallback"&&d.reason==="central_license_not_mapped",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],aiModule:{enabled:true,limits:{}}}]},req); check("nem menedzselt tagsági AI sor -> fallback",d.mode==="fallback"&&d.reason==="central_member_policy_not_managed",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],aiModule:{enabled:false,limits:{policyVersion:1,allowedScopes:["personal"],allowedFeatures:["daily_plan"]}}}]},req); check("explicit központi felhasználói tiltás -> deny",d.mode==="deny"&&d.errorCode==="AI_USER_DISABLED",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],status:"suspended"}]},req); check("felfüggesztett tagság -> deny",d.mode==="deny"&&d.errorCode==="AI_IDENTITY_MEMBERSHIP_INACTIVE",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],accessEndsAt:"2026-08-11T00:00:00.000Z"}]},req); check("lejárt tagság -> deny",d.mode==="deny"&&d.errorCode==="AI_IDENTITY_MEMBERSHIP_EXPIRED",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],accessEndsAt:"nem-datum"}]},req); check("érvénytelen tagsági lejárat -> fail closed",d.mode==="deny"&&d.errorCode==="AI_IDENTITY_MEMBERSHIP_EXPIRY_INVALID",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],aiModule:{...base.memberships[0].aiModule,limits:{...base.memberships[0].aiModule.limits,accessExpiresAt:"nem-datum"}}}]},req); check("érvénytelen AI-hozzáférési lejárat -> fail closed",d.mode==="deny"&&d.errorCode==="AI_USER_ACCESS_EXPIRY_INVALID",JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,{...req,scope:"hage"}); check("központi engedélyezett scope -> allow",d.mode==="allow",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[{...base.memberships[0],aiModule:{enabled:true,limits:{...base.memberships[0].aiModule.limits,allowedScopes:["personal"]}}}]},{...req,scope:"hage"}); check("scope szűkítés -> deny",d.mode==="deny"&&d.errorCode==="AI_SCOPE_DISABLED",JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,{...req,action:"decision_support"}); check("licencszinten tiltott feature -> deny",d.mode==="deny"&&d.errorCode==="AI_FEATURE_DISABLED",JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,{...req,action:"weekly_summary"}); check("tagsági feature a licenc engedélyein belül -> allow",d.mode==="allow"&&d.policy.aiUser.allowedFeatures.includes("weekly_summary")&&!d.policy.aiUser.allowedFeatures.includes("decision_support"),JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,req); check("felhasználói és licencszintű keretek átadódnak",d.mode==="allow"&&d.policy.aiUser.monthlyBudgetHuf===5000&&d.policy.aiUser.maxRequestsPerDay===20&&d.policy.aiUser.maxRequestsPerMonth===300&&d.policy.organizationMonthlyBudgetHuf===25000&&d.policy.organizationMonthlyTokenBudget===1200000&&d.policy.organizationMaxRequestsPerDay===60&&d.policy.organizationMaxRequestsPerMonth===1000&&d.policy.maxSingleRequestHuf===200,JSON.stringify(d));
+
+const direct={id:"lic-direct",status:"active",ownerType:"user",ownerUserId:"u1",activatedAt:"2026-01-01T00:00:00.000Z",expiresAt:"2027-01-01T00:00:00.000Z",ownerUser:user,aiModule:{enabled:true,limits:{policyVersion:1,monthlyBudgetHuf:9000,userMonthlyBudgetHuf:3000,maxSingleRequestHuf:90,monthlyTokenBudget:250000,maxRequestsPerDay:12,maxRequestsPerMonth:180,allowedScopes:["personal"],allowedFeatures:["daily_plan"]},featureFlags:{daily_plan:true,weekly_summary:false},validFrom:null,validUntil:null}};
+d=resolveCentralHageAiPolicy(direct,req); check("közvetlen felhasználói központi policy működik",d.mode==="allow"&&d.policy.aiUser.monthlyBudgetHuf===3000&&d.policy.organizationMonthlyTokenBudget===250000,JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...direct,aiModule:{...direct.aiModule,limits:{...direct.aiModule.limits,policyVersion:0}}},req); check("nem menedzselt közvetlen policy -> fallback",d.mode==="fallback"&&d.reason==="central_direct_policy_not_managed",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...direct,aiModule:{...direct.aiModule,limits:{...direct.aiModule.limits,accessExpiresAt:"nem-datum"}}},req); check("érvénytelen közvetlen AI-lejárat -> fail closed",d.mode==="deny"&&d.errorCode==="AI_USER_ACCESS_EXPIRY_INVALID",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,status:"suspended"},req); check("mapped központi licenc felfüggesztve -> deny",d.mode==="deny"&&d.errorCode==="AI_IDENTITY_LICENSE_INACTIVE",JSON.stringify(d));
+d=resolveCentralHageAiPolicy({...base,memberships:[base.memberships[0],{...base.memberships[0],id:"m2"}]},req); check("kétértelmű központi user match -> fail closed",d.mode==="deny"&&d.errorCode==="AI_IDENTITY_USER_AMBIGUOUS",JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,{...req,userId:"teszt@example.invalid",userName:"más név"}); check("e-mail userId erős azonosítóként működik",d.mode==="allow",JSON.stringify(d));
+d=resolveCentralHageAiPolicy(base,{...req,userId:"",userName:"Teszt Élek"}); check("név normalizálása ékezetbiztos",d.mode==="allow",JSON.stringify(d));
+console.log(JSON.stringify({ok:true,passed:checks.length,failed:0},null,2));

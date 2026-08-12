@@ -232,7 +232,7 @@ function AiPolicyEditor({ value, onChange }: { value: ModuleDraft[]; onChange: (
         <Bot size={17} />
         <div>
           <strong>Központi AI-szabályok</strong>
-          <span>A keretek a központi <code>AI_ASSISTANT</code> modul <code>limits</code> mezőjében tárolódnak. A HAGE AI futási motor még a régi licencbridge-et használja, ezért a tényleges runtime-érvényesítés átvezetése külön következő lépés.</span>
+          <span>A keretek a központi <code>AI_ASSISTANT</code> modul <code>limits</code> mezőjében tárolódnak. DEV-en a HAGE AI futási motor már az Identity Core policy-t is olvassa átmeneti <code>prefer</code> módban: az aláírt licenctoken, a gépkötés és a meglévő legacy felhasználói jogosultság továbbra is biztonsági felső korlát, így a központi policy a migráció alatt csak szűkíthet.</span>
         </div>
       </div>
       <div className="benjadmin-data-form-grid benjadmin-ai-policy__limits">

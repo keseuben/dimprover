@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getServerPublicKeyBase64, verifyLicenseToken } from "./crypto";
 import { readLicenseStore } from "./store";
+import { getHageAiIdentityPolicyMode, readCentralHageAiPolicyDecision } from "@/app/lib/identity-core/hage-ai-policy";
 import type { HageAiFeatureId, LicenseAiUserAccess, LicenseRecord, LicenseTokenPayload } from "./types";
 
 export type HageAiScope = "personal" | "hage";
@@ -55,6 +56,7 @@ type AiUsageRecord = {
   durationMs: number;
   responseId?: string;
   errorMessage?: string;
+  policySource?: "central_identity" | "legacy_license_store";
 };
 
 type AiUsageStore = {
@@ -157,6 +159,31 @@ function normalizeIdentity(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function restrictivePositive(primary: number, safetyCeiling: number) {
+  if (primary > 0 && safetyCeiling > 0) return Math.min(primary, safetyCeiling);
+  return primary > 0 ? primary : safetyCeiling > 0 ? safetyCeiling : 0;
+}
+
+function earlierExpiry(primary?: string, safetyCeiling?: string) {
+  const values = [primary, safetyCeiling].filter((value): value is string => Boolean(value && !Number.isNaN(new Date(value).getTime())));
+  if (!values.length) return undefined;
+  return values.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+}
+
+function applyLegacySafetyCeiling(central: LicenseAiUserAccess, legacy: LicenseAiUserAccess) {
+  const legacyFeatures = new Set(legacy.allowedFeatures);
+  const legacyScopes = new Set(legacy.allowedScopes);
+  return {
+    ...central,
+    allowedFeatures: central.allowedFeatures.filter((feature) => legacyFeatures.has(feature)),
+    allowedScopes: central.allowedScopes.filter((scope) => legacyScopes.has(scope)),
+    maxRequestsPerDay: restrictivePositive(central.maxRequestsPerDay, legacy.maxRequestsPerDay),
+    maxRequestsPerMonth: restrictivePositive(central.maxRequestsPerMonth, legacy.maxRequestsPerMonth),
+    monthlyBudgetHuf: restrictivePositive(central.monthlyBudgetHuf, legacy.monthlyBudgetHuf),
+    accessExpiresAt: earlierExpiry(central.accessExpiresAt, legacy.accessExpiresAt),
+  } satisfies LicenseAiUserAccess;
+}
+
 function licenseIsActive(license: LicenseRecord, now = new Date()) {
   if (license.status !== "active" && license.status !== "trial") return false;
   const startsAt = new Date(license.startsAt);
@@ -205,6 +232,12 @@ function currentPeriodRecords(records: AiUsageRecord[], licenseId: string, aiUse
 
 function successfulCost(records: AiUsageRecord[]) {
   return records.filter((record) => record.status === "success").reduce((sum, record) => sum + Number(record.costHuf || 0), 0);
+}
+
+function successfulTokens(records: AiUsageRecord[]) {
+  return records
+    .filter((record) => record.status === "success")
+    .reduce((sum, record) => sum + Number(record.inputTokens || 0) + Number(record.outputTokens || 0), 0);
 }
 
 export async function getHageAiAdminUsageSnapshot() {
@@ -407,39 +440,113 @@ async function authorize(input: HageAiGatewayRequest, requireAction = false) {
 
   const normalizedUserId = normalizeIdentity(input.userId || "");
   const normalizedUserName = normalizeIdentity(input.userName);
-  const aiUser = (license.aiUsers ?? []).find((item) => {
+  const legacyAiUser = (license.aiUsers ?? []).find((item) => {
     const storedId = normalizeIdentity(item.userId);
     const storedName = normalizeIdentity(item.displayName);
     return (normalizedUserId && storedId === normalizedUserId) || storedName === normalizedUserName || storedId === normalizedUserName;
   });
+
+  let aiUser: LicenseAiUserAccess | undefined;
+  let policySource: "central_identity" | "legacy_license_store" = "legacy_license_store";
+  let policyReason = "identity_policy_off";
+  let organizationMonthlyBudgetHuf = Number(license.aiMonthlyBudgetHuf ?? 0);
+  let organizationMonthlyTokenBudget = 0;
+  let organizationMaxRequestsPerDay = 0;
+  let organizationMaxRequestsPerMonth = 0;
+  let maxSingleRequestHuf = Number(license.aiMaxSingleRequestHuf ?? 0);
+  const identityPolicyMode = getHageAiIdentityPolicyMode();
+
+  if (identityPolicyMode !== "off") {
+    try {
+      const decision = await readCentralHageAiPolicyDecision(license.id, {
+        userId: input.userId,
+        userName: input.userName,
+        scope: input.scope,
+        action: input.action,
+        requireAction,
+      });
+      policyReason = decision.reason;
+      if (decision.mode === "deny") throw new HageAiGatewayError(403, decision.errorCode, decision.message);
+      if (decision.mode === "fallback" && identityPolicyMode === "strict") {
+        throw new HageAiGatewayError(403, "AI_IDENTITY_POLICY_REQUIRED", "Ehhez a felhasználóhoz még nincs véglegesített központi AI-jogosultság.");
+      }
+      if (decision.mode === "allow") {
+        if (identityPolicyMode === "prefer" && !legacyAiUser) {
+          policyReason = "central_policy_requires_legacy_user_during_migration";
+        } else {
+          aiUser = identityPolicyMode === "prefer" && legacyAiUser
+            ? applyLegacySafetyCeiling(decision.policy.aiUser, legacyAiUser)
+            : decision.policy.aiUser;
+          policySource = "central_identity";
+          organizationMonthlyBudgetHuf = identityPolicyMode === "prefer"
+            ? restrictivePositive(decision.policy.organizationMonthlyBudgetHuf, Number(license.aiMonthlyBudgetHuf ?? 0))
+            : decision.policy.organizationMonthlyBudgetHuf;
+          maxSingleRequestHuf = identityPolicyMode === "prefer"
+            ? restrictivePositive(decision.policy.maxSingleRequestHuf, Number(license.aiMaxSingleRequestHuf ?? 0))
+            : decision.policy.maxSingleRequestHuf;
+          organizationMonthlyTokenBudget = decision.policy.organizationMonthlyTokenBudget;
+          organizationMaxRequestsPerDay = decision.policy.organizationMaxRequestsPerDay;
+          organizationMaxRequestsPerMonth = decision.policy.organizationMaxRequestsPerMonth;
+          if (identityPolicyMode === "prefer" && legacyAiUser) policyReason = `${decision.reason}_with_legacy_safety_ceiling`;
+        }
+      }
+    } catch (error) {
+      if (error instanceof HageAiGatewayError) throw error;
+      if (identityPolicyMode === "strict") {
+        throw new HageAiGatewayError(503, "AI_IDENTITY_POLICY_UNAVAILABLE", "A központi AI-jogosultság ellenőrzése jelenleg nem érhető el.");
+      }
+      policyReason = "identity_policy_unavailable_fallback";
+    }
+  }
+
+  if (!aiUser) aiUser = legacyAiUser;
   if (!aiUser) throw new HageAiGatewayError(403, "AI_USER_NOT_LICENSED", `Az AI-hozzáférés nincs név szerint engedélyezve: ${input.userName}.`);
   if (!aiUser.enabled) throw new HageAiGatewayError(403, "AI_USER_DISABLED", "Az AI-hozzáférés ennél a felhasználónál ki van kapcsolva.");
   if (aiUser.accessExpiresAt && new Date(aiUser.accessExpiresAt) <= new Date()) throw new HageAiGatewayError(403, "AI_USER_ACCESS_EXPIRED", "A felhasználó AI-hozzáférése lejárt.");
   if (!aiUser.allowedScopes.includes(input.scope)) throw new HageAiGatewayError(403, "AI_SCOPE_DISABLED", "Az AI ezen a munkaterületen nincs engedélyezve a felhasználónak.");
   if (requireAction && (!input.action || !aiUser.allowedFeatures.includes(input.action))) throw new HageAiGatewayError(403, "AI_FEATURE_DISABLED", "Ez az AI-funkció nincs engedélyezve a felhasználónak.");
 
+  const usageAiUserId = legacyAiUser?.id || aiUser.id;
   const usageStore = await readUsageStore();
   const organizationPeriods = currentPeriodRecords(usageStore.records, license.id);
-  const userPeriods = currentPeriodRecords(usageStore.records, license.id, aiUser.id);
+  const userPeriods = currentPeriodRecords(usageStore.records, license.id, usageAiUserId);
   const dayRequests = userPeriods.today.length;
   const monthRequests = userPeriods.month.length;
+  const organizationDayRequests = organizationPeriods.today.length;
+  const organizationMonthRequests = organizationPeriods.month.length;
   const userMonthCostHuf = successfulCost(userPeriods.month);
   const organizationMonthCostHuf = successfulCost(organizationPeriods.month);
+  const organizationMonthTokens = successfulTokens(organizationPeriods.month);
 
   if (aiUser.maxRequestsPerDay > 0 && dayRequests >= aiUser.maxRequestsPerDay) throw new HageAiGatewayError(429, "AI_DAILY_LIMIT", "A felhasználó napi AI-kérési kerete elfogyott.");
   if (aiUser.maxRequestsPerMonth > 0 && monthRequests >= aiUser.maxRequestsPerMonth) throw new HageAiGatewayError(429, "AI_MONTHLY_LIMIT", "A felhasználó havi AI-kérési kerete elfogyott.");
+  if (organizationMaxRequestsPerDay > 0 && organizationDayRequests >= organizationMaxRequestsPerDay) throw new HageAiGatewayError(429, "AI_LICENSE_DAILY_LIMIT", "A licenc napi AI-kérési kerete elfogyott.");
+  if (organizationMaxRequestsPerMonth > 0 && organizationMonthRequests >= organizationMaxRequestsPerMonth) throw new HageAiGatewayError(429, "AI_LICENSE_MONTHLY_LIMIT", "A licenc havi AI-kérési kerete elfogyott.");
   if (aiUser.monthlyBudgetHuf > 0 && userMonthCostHuf >= aiUser.monthlyBudgetHuf) throw new HageAiGatewayError(429, "AI_USER_BUDGET", "A felhasználó havi AI-költségkerete elfogyott.");
-  if ((license.aiMonthlyBudgetHuf ?? 0) > 0 && organizationMonthCostHuf >= Number(license.aiMonthlyBudgetHuf)) throw new HageAiGatewayError(429, "AI_LICENSE_BUDGET", "A licenc havi AI-költségkerete elfogyott.");
+  if (organizationMonthlyBudgetHuf > 0 && organizationMonthCostHuf >= organizationMonthlyBudgetHuf) throw new HageAiGatewayError(429, "AI_LICENSE_BUDGET", "A licenc havi AI-költségkerete elfogyott.");
+  if (organizationMonthlyTokenBudget > 0 && organizationMonthTokens >= organizationMonthlyTokenBudget) throw new HageAiGatewayError(429, "AI_LICENSE_TOKEN_BUDGET", "A licenc havi AI-tokenkerete elfogyott.");
 
   return {
     token,
     license,
     aiUser,
+    usageAiUserId,
     usageStore,
     dayRequests,
     monthRequests,
     userMonthCostHuf,
     organizationMonthCostHuf,
+    organizationMonthlyBudgetHuf,
+    organizationMonthTokens,
+    organizationMonthlyTokenBudget,
+    organizationDayRequests,
+    organizationMonthRequests,
+    organizationMaxRequestsPerDay,
+    organizationMaxRequestsPerMonth,
+    maxSingleRequestHuf,
+    policySource,
+    policyReason,
+    identityPolicyMode,
   };
 }
 
@@ -472,6 +579,11 @@ export async function getHageAiStatus(input: HageAiGatewayRequest) {
     modelLabel: modelPricing().label,
     usdHufRate: USD_HUF_RATE,
     user: publicUserAccess(auth.aiUser),
+    authorization: {
+      policySource: auth.policySource,
+      policyReason: auth.policyReason,
+      identityPolicyMode: auth.identityPolicyMode,
+    },
     actions,
     usage: {
       dayRequests: auth.dayRequests,
@@ -479,7 +591,13 @@ export async function getHageAiStatus(input: HageAiGatewayRequest) {
       monthCostHuf: auth.userMonthCostHuf,
       monthlyBudgetHuf: auth.aiUser.monthlyBudgetHuf,
       organizationMonthCostHuf: auth.organizationMonthCostHuf,
-      organizationMonthlyBudgetHuf: auth.license.aiMonthlyBudgetHuf ?? 0,
+      organizationMonthlyBudgetHuf: auth.organizationMonthlyBudgetHuf,
+      organizationMonthTokens: auth.organizationMonthTokens,
+      organizationMonthlyTokenBudget: auth.organizationMonthlyTokenBudget,
+      organizationDayRequests: auth.organizationDayRequests,
+      organizationMonthRequests: auth.organizationMonthRequests,
+      organizationMaxRequestsPerDay: auth.organizationMaxRequestsPerDay,
+      organizationMaxRequestsPerMonth: auth.organizationMaxRequestsPerMonth,
     },
   };
 }
@@ -488,8 +606,11 @@ export async function estimateHageAi(input: HageAiGatewayRequest) {
   if (!input.action || !HAGE_AI_ACTIONS[input.action]) throw new HageAiGatewayError(400, "INVALID_ACTION", "Ismeretlen AI-művelet.");
   const auth = await authorize(input, true);
   const estimate = estimateRequest(input.action, sanitizeContext(input.context));
-  if ((auth.license.aiMaxSingleRequestHuf ?? 0) > 0 && estimate.costHuf > Number(auth.license.aiMaxSingleRequestHuf)) {
+  if (auth.maxSingleRequestHuf > 0 && estimate.costHuf > auth.maxSingleRequestHuf) {
     throw new HageAiGatewayError(413, "AI_REQUEST_COST_LIMIT", `A becsült költség (${estimate.costHuf.toFixed(2)} Ft) meghaladja az egy kérésre engedélyezett keretet.`);
+  }
+  if (auth.organizationMonthlyTokenBudget > 0 && auth.organizationMonthTokens + estimate.inputTokens + estimate.outputTokens > auth.organizationMonthlyTokenBudget) {
+    throw new HageAiGatewayError(429, "AI_LICENSE_TOKEN_BUDGET", "A becsült kérés már túllépné a licenc havi AI-tokenkeretét.");
   }
   return { ok: true, model: DEFAULT_MODEL, ...estimate };
 }
@@ -499,8 +620,11 @@ export async function runHageAi(input: HageAiGatewayRequest) {
   const auth = await authorize(input, true);
   const context = sanitizeContext(input.context);
   const estimate = estimateRequest(input.action, context);
-  if ((auth.license.aiMaxSingleRequestHuf ?? 0) > 0 && estimate.costHuf > Number(auth.license.aiMaxSingleRequestHuf)) {
+  if (auth.maxSingleRequestHuf > 0 && estimate.costHuf > auth.maxSingleRequestHuf) {
     throw new HageAiGatewayError(413, "AI_REQUEST_COST_LIMIT", `A becsült költség (${estimate.costHuf.toFixed(2)} Ft) meghaladja az egy kérésre engedélyezett keretet.`);
+  }
+  if (auth.organizationMonthlyTokenBudget > 0 && auth.organizationMonthTokens + estimate.inputTokens + estimate.outputTokens > auth.organizationMonthlyTokenBudget) {
+    throw new HageAiGatewayError(429, "AI_LICENSE_TOKEN_BUDGET", "A becsült kérés már túllépné a licenc havi AI-tokenkeretét.");
   }
   const startedAt = Date.now();
   const actionDefinition = HAGE_AI_ACTIONS[input.action];
@@ -519,7 +643,7 @@ export async function runHageAi(input: HageAiGatewayRequest) {
       licenseId: auth.license.id,
       companyId: auth.license.companyId,
       companyName: auth.license.companyName,
-      aiUserId: auth.aiUser.id,
+      aiUserId: auth.usageAiUserId,
       userId: auth.aiUser.userId,
       userName: auth.aiUser.displayName,
       scope: input.scope,
@@ -535,6 +659,7 @@ export async function runHageAi(input: HageAiGatewayRequest) {
       costHuf: cost.costHuf,
       durationMs: Date.now() - startedAt,
       responseId: result.responseId,
+      policySource: auth.policySource,
     });
     return {
       ok: true,
@@ -550,7 +675,7 @@ export async function runHageAi(input: HageAiGatewayRequest) {
       licenseId: auth.license.id,
       companyId: auth.license.companyId,
       companyName: auth.license.companyName,
-      aiUserId: auth.aiUser.id,
+      aiUserId: auth.usageAiUserId,
       userId: auth.aiUser.userId,
       userName: auth.aiUser.displayName,
       scope: input.scope,
@@ -566,6 +691,7 @@ export async function runHageAi(input: HageAiGatewayRequest) {
       costHuf: 0,
       durationMs: Date.now() - startedAt,
       errorMessage: error instanceof Error ? error.message.slice(0, 1000) : "Ismeretlen AI hiba",
+      policySource: auth.policySource,
     });
     throw error;
   }
@@ -592,7 +718,7 @@ export async function getHageAiUsageSummary(input: HageAiGatewayRequest) {
   const totalHuf = successful.reduce((sum, record) => sum + record.costHuf, 0);
   const totalUsd = successful.reduce((sum, record) => sum + record.costUsd, 0);
   const todayHuf = successful.filter((record) => record.createdAt.startsWith(today)).reduce((sum, record) => sum + record.costHuf, 0);
-  const budgetHuf = auth.license.aiMonthlyBudgetHuf ?? 0;
+  const budgetHuf = auth.organizationMonthlyBudgetHuf;
   return {
     ok: true,
     config: {
@@ -602,7 +728,13 @@ export async function getHageAiUsageSummary(input: HageAiGatewayRequest) {
       modelLabel: modelPricing().label,
       usdHufRate: USD_HUF_RATE,
       monthlyBudgetHuf: budgetHuf,
-      maxSingleRequestHuf: auth.license.aiMaxSingleRequestHuf ?? 0,
+      maxSingleRequestHuf: auth.maxSingleRequestHuf,
+      monthlyTokenBudget: auth.organizationMonthlyTokenBudget,
+      organizationMaxRequestsPerDay: auth.organizationMaxRequestsPerDay,
+      organizationMaxRequestsPerMonth: auth.organizationMaxRequestsPerMonth,
+      policySource: auth.policySource,
+      policyReason: auth.policyReason,
+      identityPolicyMode: auth.identityPolicyMode,
     },
     summary: {
       month,
@@ -614,6 +746,9 @@ export async function getHageAiUsageSummary(input: HageAiGatewayRequest) {
       todayHuf,
       budgetHuf,
       budgetPercent: budgetHuf > 0 ? totalHuf / budgetHuf * 100 : 0,
+      totalTokens: successfulTokens(successful),
+      tokenBudget: auth.organizationMonthlyTokenBudget,
+      tokenBudgetPercent: auth.organizationMonthlyTokenBudget > 0 ? successfulTokens(successful) / auth.organizationMonthlyTokenBudget * 100 : 0,
       byUser: group("userName"),
       byAction: group("actionLabel"),
       recent: records.slice().reverse().slice(0, 100),
