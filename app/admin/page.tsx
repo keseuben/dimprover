@@ -561,13 +561,11 @@ function AiUserAccessEditor({ value, onChange }: { value: AiUserAccess[]; onChan
 }
 
 function AdminEntrySelector({
-  onOpenLicense,
   onLogout,
   devProjects,
   devVersions,
   devWorkSessions,
 }: {
-  onOpenLicense: () => void;
   onLogout: () => void;
   devProjects: DevProject[];
   devVersions: DevVersion[];
@@ -575,7 +573,6 @@ function AdminEntrySelector({
 }) {
   return (
     <BenjadminOperatorConsole
-      onOpenLicense={onOpenLicense}
       onLogout={onLogout}
       devProjects={devProjects}
       devVersions={devVersions}
@@ -601,7 +598,7 @@ export default function LicenseAdminPage() {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [machineMetaSaveStatus, setMachineMetaSaveStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const [, setMachineMetaSaveStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
   const [expandedLicenseIds, setExpandedLicenseIds] = useState<string[]>([]);
   const [adminEntryView, setAdminEntryView] = useState<AdminEntryView>("launcher");
   const [expiryReminderLoading, setExpiryReminderLoading] = useState(false);
@@ -766,7 +763,7 @@ export default function LicenseAdminPage() {
       sessionStorage.setItem("dimproBenjadminSession", "active");
       window.dispatchEvent(new Event("dimpro-admin-auth-changed"));
       void loadDevCenterOverview(key.trim());
-      setAdminEntryView("launcher");
+      setAdminEntryView(new URLSearchParams(window.location.search).get("legacyLicense") === "1" ? "license" : "launcher");
       setMessage("Licencadatok betöltve. Válaszd ki, melyik admin felületet nyitod meg.");
       window.setTimeout(() => document.getElementById("admin-entry-selector")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     } catch {
@@ -1029,6 +1026,13 @@ export default function LicenseAdminPage() {
     if (otpSent) codeInputRef.current?.focus();
   }, [otpSent]);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("legacyLicense") === "1") {
+      setAdminEntryView("license");
+    }
+  }, []);
+
+
   if (!store && !entryUnlocked) {
     return <BenjadminBrandScreen mode="entry" onActivate={() => setEntryUnlocked(true)} />;
   }
@@ -1069,7 +1073,6 @@ export default function LicenseAdminPage() {
         </section>
       ) : adminEntryView === "launcher" ? (
         <AdminEntrySelector
-          onOpenLicense={() => setAdminEntryView("license")}
           onLogout={logoutAdmin}
           devProjects={devProjects}
           devVersions={devVersions}

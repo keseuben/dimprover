@@ -60,7 +60,6 @@ type OrchestrationSnapshot = {
 };
 
 type Props = {
-  onOpenLicense: () => void;
   onLogout: () => void;
   devProjects: DevProject[];
   devVersions: DevVersion[];
@@ -189,7 +188,7 @@ function Pagination({ page, pageCount, total, onPage }: PaginationProps) {
   );
 }
 
-export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devProjects, devVersions, devWorkSessions }: Props) {
+export default function BenjadminOperatorConsole({ onLogout, devProjects, devVersions, devWorkSessions }: Props) {
   const [state, setState] = useState<EngineState | null>(null);
   const [gate, setGate] = useState<DevEngineGateStatus | null>(null);
   const [orchestration, setOrchestration] = useState<OrchestrationSnapshot | null>(null);
@@ -664,7 +663,7 @@ export default function BenjadminOperatorConsole({ onOpenLicense, onLogout, devP
       <footer className="operator-compact-footer">
         <div><HardDrive size={14} /> canonical DEV · `integration/prod-v1212-benjadmin-m35`</div>
         <div><Clock3 size={14} /> élő: {formatDateTime(lastLiveAt || state?.updatedAt || orchestration?.checkedAt)}</div>
-        <button type="button" onClick={onOpenLicense}><KeyRound size={14} /> Licencadmin</button>
+        <Link href="/admin/licenckozpont"><KeyRound size={14} /> Licencközpont</Link>
         <button type="button" onClick={onLogout}><LogOut size={14} /> Kijelentkezés</button>
       </footer>
     </section>

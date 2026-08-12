@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, KeyRound, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { DropSendRecipientMode } from "@/app/lib/drop/public/dropPublicTypes";
@@ -346,6 +347,7 @@ export default function DimproLicenseCenterPage() {
         description="Szervezeti és felhasználói licencek, modulok, eszközkeretek és Send-jogosultságok (entitlement) táblázatos kezelése."
         actions={(
           <>
+            <Link href="/admin?legacyLicense=1" className="benjadmin-data-secondary-action" title="Régi licencadmin kompatibilitási felület">Régi licencadmin</Link>
             <button type="button" className="benjadmin-data-secondary-action" onClick={() => void load(adminKey)}><RefreshCw size={16} /> Frissítés</button>
             <button type="button" className="benjadmin-data-primary-action" onClick={() => { setCreateDraft(initialCreate()); setDrawerMode("new"); }}><Plus size={16} /> Új licenc</button>
           </>
