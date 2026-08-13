@@ -7278,6 +7278,7 @@
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__tree-node footer { color: #59798a; }
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card,
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member,
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-panel {
   border-color: rgba(52, 126, 153, .16);
   background: rgba(255,255,255,.90);
@@ -7331,6 +7332,7 @@
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__tree-node footer { color: #625f50; }
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__infra-card,
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__chart-card,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__member,
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__executive-panel,
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__metric-grid article,
 .benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__cost-card,
@@ -7357,3 +7359,8 @@
   .benjadmin-team-screen__theme-modes button span { display: none; }
   .benjadmin-team-screen__theme-modes button { width: 30px; padding: 0; justify-content: center; }
 }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage > div:first-child { color:#355d70; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage > div:first-child strong { color:#14384a; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts b { color:#214b5f; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member footer b { color:#214b5f; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card header > span { color:#0f766e; background:#ecfdf5; }

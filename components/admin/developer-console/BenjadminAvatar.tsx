@@ -6,7 +6,7 @@ import styles from "./DeveloperConsole.module.css";
 import { openBenjadminPersonProfile } from "../BenjadminPersonProfileHost";
 
 const memberData: Record<Exclude<ConsoleAuthor, "SYSTEM">, { name: string; image: string }> = {
-  BENJADMIN: { name: "BenjAdmin", image: "/benjadmin/team/01_BenjAdmin.webp" },
+  BENJADMIN: { name: "BenjAdmin", image: "/benjadmin/team/01_BenjAdmin_mod1.png" },
   BENAI: { name: "Ben-AI", image: "/benjadmin/team/02_BenAI.webp" },
   ARMINAI: { name: "Ármin-AI", image: "/benjadmin/team/03_ArminAI.webp" },
   JAZMINAI: { name: "Jázmin-AI", image: "/benjadmin/team/04_JazminAI.webp" },
@@ -25,7 +25,7 @@ export default function BenjadminAvatar({ member, size = "chat", status = "idle"
   return (
     <span className={`${styles.avatarOuter} ${styles[`avatar_${size}`]} ${styles[`status_${status}`]}`} title={`${item.name} · ${status} · profil megnyitása`} role="button" tabIndex={0} onClick={() => openBenjadminPersonProfile(member)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openBenjadminPersonProfile(member); } }}>
       <span className={styles.avatarInner}>
-        <Image src={item.image} alt={`${item.name} avatar`} fill sizes={size === "head" ? "72px" : "48px"} priority={eager || member === "BENJADMIN" || member === "BENAI"} />
+        <Image src={item.image} alt={`${item.name} avatar`} fill sizes={size === "head" ? "280px" : size === "task" ? "52px" : "44px"} priority={eager || member === "BENJADMIN" || member === "BENAI"} />
       </span>
     </span>
   );

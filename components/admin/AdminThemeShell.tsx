@@ -22,6 +22,7 @@ import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
 import BenjadminBrandScreen from "./BenjadminBrandScreen";
 import BenjadminExplorerPanel from "./BenjadminExplorerPanel";
 import BenjadminTeamScreen from "./BenjadminTeamScreen";
+import BenjadminTeamShowcaseScreen from "./BenjadminTeamShowcaseScreen";
 import BenjadminPersonProfileHost from "./BenjadminPersonProfileHost";
 
 type AdminTheme = "light" | "dark";
@@ -56,6 +57,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   const [boardPinned, setBoardPinned] = useState(false);
   const [privacyCover, setPrivacyCover] = useState(false);
   const [teamScreen, setTeamScreen] = useState(false);
+  const [showcaseScreen, setShowcaseScreen] = useState(false);
   const developerConsoleWindowRef = useRef<Window | null>(null);
 
   const activeItem = useMemo(
@@ -149,6 +151,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       else {
         if (!boardPinned) setBoardOpen(false);
         setTeamScreen(false);
+        setShowcaseScreen(false);
         setPrivacyCover(true);
       }
     };
@@ -166,10 +169,24 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       if (!ctrlAltZero && !plainD) return;
       event.preventDefault();
       if (!boardPinned) setBoardOpen(false);
+      setShowcaseScreen(false);
       setTeamScreen((current) => !current);
     };
     window.addEventListener("keydown", onTeamShortcut);
     return () => window.removeEventListener("keydown", onTeamShortcut);
+  }, [accessState, boardPinned, privacyCover]);
+
+  useEffect(() => {
+    const onShowcaseShortcut = (event: KeyboardEvent) => {
+      const ctrlAltNine = event.ctrlKey && event.altKey && !event.metaKey && (event.code === "Digit9" || event.code === "Numpad9");
+      if (!ctrlAltNine || accessState !== "authorized" || privacyCover) return;
+      event.preventDefault();
+      if (!boardPinned) setBoardOpen(false);
+      setTeamScreen(false);
+      setShowcaseScreen((current) => !current);
+    };
+    window.addEventListener("keydown", onShowcaseShortcut);
+    return () => window.removeEventListener("keydown", onShowcaseShortcut);
   }, [accessState, boardPinned, privacyCover]);
 
   useEffect(() => {
@@ -181,6 +198,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       if (accessState !== "authorized") return;
       if (!boardPinned) setBoardOpen(false);
       setTeamScreen(false);
+      setShowcaseScreen(false);
       setPrivacyCover(true);
     };
     window.addEventListener("benjadmin:privacy-cover", onPrivacyRequest);
@@ -245,6 +263,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
 
   if (privacyCover) {
     return <BenjadminBrandScreen mode="privacy" onActivate={restoreFromPrivacyCover} />;
+  }
+
+  if (showcaseScreen) {
+    return <BenjadminTeamShowcaseScreen onClose={() => setShowcaseScreen(false)} />;
   }
 
   if (teamScreen) {

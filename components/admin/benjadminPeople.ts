@@ -18,7 +18,7 @@ export const BENJADMIN_PEOPLE: Record<BenjadminPersonCode, BenjadminPersonProfil
     name: "BenjAdmin",
     title: "Rendszergazda · fejlesztési vezető · rendszertulajdonos",
     category: "Emberi főirányító",
-    image: "/benjadmin/team/01_BenjAdmin.webp",
+    image: "/benjadmin/team/01_BenjAdmin_mod1.png",
     shortDescription: "A DIMPRO BENJADMIN fejlesztési és üzemeltetési rendszer végső emberi döntéshozója.",
     detailedDescription: "Meghatározza a fejlesztési prioritásokat, jóváhagyja a műszaki irányokat és az érzékeny műveleteket. A PROD környezetet érintő módosításokhoz kizárólag az ő explicit engedélye adhat felhatalmazást. A csapat és az AI workerek működését termék- és műszaki nyelven vezérli.",
     responsibilities: ["Fejlesztési prioritások és végső döntések", "BENJADMIN Gate és érzékeny műveletek jóváhagyása", "PROD módosítások explicit engedélyezése"],
