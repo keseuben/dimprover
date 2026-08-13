@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+const mod=await import(`../app/lib/dev-center/ai-worker/jit-workspace-plan.ts?contract=${Date.now()}`);
+let passed=0;const check=(name,fn)=>{fn();passed+=1;console.log(`PASS ${name}`)};
+const valid={taskId:"dev-task-abc-123",workerId:"worker_mforge",workerCode:"MFORGE",environmentId:"env_dev",repositoryId:"repo_dimprover",baselineCommit:"a".repeat(40),branchName:"worker/mforge/dev-task-abc-123",worktreePath:"/srv/dimpro-dev/worktrees/worker-mforge-dev-task-abc-123",scope:[{type:"path",key:"app/projektkapu/page.tsx"}]};
+check("Valid M.Forge JIT plan elfogadott",()=>assert.equal(mod.validateMForgeJitWorkspacePlan(valid).workerId,"worker_mforge"));
+check("PROD environment tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,environmentId:"env_prod"}),/kizárólag env_dev/));
+check("Más repository tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,repositoryId:"repo_other"}),/repo_dimprover/));
+check("Más worker tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,workerId:"worker_vguard",workerCode:"VGUARD"}),/kizárólag M.Forge/));
+check("Nem determinisztikus worktree path tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,worktreePath:"/tmp/x"}),/eltér a branchből/));
+check("Traversal scope tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,scope:[{type:"path",key:"../.env"}]}),/relatív GREEN path/));
+check("Nem path scope tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,scope:[{type:"migration",key:"x"}]}),/relatív GREEN path/));
+check("Üres scope tiltott",()=>assert.throws(()=>mod.validateMForgeJitWorkspacePlan({...valid,scope:[]}),/relatív GREEN path/));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));
