@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevCenterMutationSubject, isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { createExternalAiWorkerTask, EXTERNAL_AI_DEFAULTS, EXTERNAL_AI_WORKERS, listExternalAiWorkerTasks, mockWorkerAdapter } from "@/app/lib/dev-center/ai-worker/v1";
+import { probeWorkerModelAdapters } from "@/app/lib/dev-center/ai-worker/model-adapter";
+import { externalAiBudgetConfiguration } from "@/app/lib/dev-center/ai-worker/budget-policy";
+import { summarizeExternalAiUsage } from "@/app/lib/dev-center/ai-worker/run-ledger";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   if (!(await isDevCenterAuthorized(request.headers, true))) return NextResponse.json({ ok: false, error: "Nincs jogosultság." }, { status: 401 });
   try {
-    return NextResponse.json({ ok: true, tasks: await listExternalAiWorkerTasks(), workers: EXTERNAL_AI_WORKERS, defaults: EXTERNAL_AI_DEFAULTS, adapter: await mockWorkerAdapter.probe() }, { headers: { "cache-control": "no-store" } });
+    const [tasks, adapter, adapters, usage] = await Promise.all([listExternalAiWorkerTasks(), mockWorkerAdapter.probe(), probeWorkerModelAdapters(), summarizeExternalAiUsage()]);
+    return NextResponse.json({ ok: true, tasks, workers: EXTERNAL_AI_WORKERS, defaults: EXTERNAL_AI_DEFAULTS, adapter, adapters, budget: externalAiBudgetConfiguration(), usage }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "AI worker taskok nem tölthetők." }, { status: 500 });
   }
