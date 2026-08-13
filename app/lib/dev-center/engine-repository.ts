@@ -229,11 +229,82 @@ async function ensureTaskDependenciesComplete(client: SupabaseClient, taskId: st
   }
 }
 
+export async function bindDevEngineReviewTaskSession(sessionId: string, taskId: string, workerId = "worker_vguard") {
+  const client = await requireClient();
+  const current = mapSession(await getSessionRow(client, sessionId));
+  if (current.status === "closed" || current.handshakeStage !== "WORKER_BOUND" || current.workerId !== workerId) {
+    throw new DevCenterEngineError("Review task bindinghez WORKER_BOUND V.Guard session szükséges.", "DEV_CENTER_REVIEW_SESSION_NOT_READY", 409, { sessionId, workerId, stage: current.handshakeStage });
+  }
+  const [{ data: worker, error: workerError }, { data: taskRow, error: taskError }] = await Promise.all([
+    client.from("dev_center_workers").select("id,code,status,metadata").eq("id", workerId).maybeSingle(),
+    client.from("dev_center_tasks").select("*").eq("id", taskId).maybeSingle(),
+  ]);
+  if (workerError) databaseError("A review worker policy nem olvasható.", workerError);
+  if (taskError) databaseError("A review task nem olvasható.", taskError);
+  if (!worker || worker.code !== "VGUARD" || worker.status !== "ready") {
+    throw new DevCenterEngineError("Csak READY V.Guard worker kaphat review sessiont.", "DEV_CENTER_REVIEW_WORKER_NOT_READY", 403);
+  }
+  const workerMeta = jsonRecord(worker.metadata);
+  const allowedOperations = stringArray(workerMeta.allowedOperations);
+  if (workerMeta.reviewOnly !== true || workerMeta.productionAccess !== "DENY" || allowedOperations.includes("write")) {
+    throw new DevCenterEngineError("A V.Guard review-only / PROD-DENY / no-write policy hiányos; fail-closed.", "DEV_CENTER_REVIEW_WORKER_POLICY_DENIED", 403);
+  }
+  if (!taskRow) throw new DevCenterEngineError("A review task nem található.", "DEV_CENTER_TASK_NOT_FOUND", 404);
+  const task = mapTask(taskRow as JsonRecord);
+  const taskMeta = task.metadata;
+  if (taskMeta.workflowTarget !== "EXTERNAL_AI_WORKER_V1" || taskMeta.recordType !== "WORKER_TASK" || taskMeta.workflowState !== "WORKER_DONE") {
+    throw new DevCenterEngineError("V.Guard csak WORKER_DONE Külső AI Worker taskot review-zhat.", "DEV_CENTER_REVIEW_TASK_STATE_DENIED", 409);
+  }
+  if (task.status !== "ready" || task.requestedWorkerId !== workerId || task.claimedBySessionId || task.assignedWorkerId) {
+    throw new DevCenterEngineError("A review task már foglalt vagy nincs V.Guard részére előirányozva.", "DEV_CENTER_REVIEW_TASK_CLAIM_DENIED", 409);
+  }
+  if (!task.repositoryId) throw new DevCenterEngineError("A review task repository bindingje hiányzik.", "DEV_CENTER_REVIEW_REPOSITORY_REQUIRED", 403);
+  try {
+    await assertWorkerProjectIsolation(client, { workerId, projectId: task.projectId });
+    await assertRepositoryIsolation(client, { workerId, projectId: task.projectId, repositoryId: task.repositoryId, required: "READ" });
+  } catch (error) {
+    if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+    throw error;
+  }
+  const session = await updateSessionStage(client, sessionId, "WORKER_BOUND", "TASK_BOUND", {
+    task_id: taskId,
+    project_id: task.projectId,
+    version_id: task.versionId,
+    repository_id: task.repositoryId,
+    status: "active",
+    metadata: { ...current.metadata, reviewOnly: true, productionAccess: "DENY", writeAccess: "DENY", taskId },
+  }, "REVIEW_TASK_BOUND", `V.Guard review task hozzárendelve: ${task.title}`);
+  const now = nowIso();
+  const claim = await client.from("dev_center_tasks").update({
+    status: "in_progress",
+    assigned_worker_id: workerId,
+    claimed_by_session_id: sessionId,
+    claim_expires_at: leaseIso(900),
+    last_claimed_at: now,
+    updated_at: now,
+  }).eq("id", taskId).eq("status", "ready").eq("requested_worker_id", workerId).is("assigned_worker_id", null).is("claimed_by_session_id", null).select("id").maybeSingle();
+  if (claim.error) databaseError("A V.Guard review task foglalása sikertelen.", claim.error, 409);
+  if (!claim.data) {
+    await advanceDevEngineSession(sessionId, "close", { reason: "V.Guard review task claim race; session lezárva." });
+    throw new DevCenterEngineError("A V.Guard review taskot időközben más session foglalta.", "DEV_CENTER_REVIEW_TASK_CLAIM_CONFLICT", 409);
+  }
+  const workerUpdate = await client.from("dev_center_workers").update({ status: "busy", updated_at: now }).eq("id", workerId);
+  if (workerUpdate.error) databaseError("A V.Guard worker foglalása sikertelen.", workerUpdate.error);
+  await addAudit(client, { action: "REVIEW_SESSION_TASK_BOUND", entityType: "worker_session", entityId: sessionId, sessionId, taskId, projectId: task.projectId, summary: "V.Guard review-only session taskhoz kötve worktree/scope/write jog nélkül.", metadata: { workerId, repositoryId: task.repositoryId, reviewOnly: true, writeAccess: "DENY", productionAccess: "DENY" } });
+  return { ok: true as const, session, task };
+}
+
 export async function advanceDevEngineSession(sessionId: string, action: string, input: Record<string, unknown>) {
   const client = await requireClient();
   if (action === "assign_benai") {
     const session = await updateSessionStage(client, sessionId, "SESSION_OPEN", "BENAI_ASSIGNED", { coordinator: "BenAI" }, "BENAI_ASSIGNED", "BenAI koordinátor hozzárendelve.");
     return { ok: true as const, session };
+  }
+  if (action === "bind_review_task") {
+    const taskId = text(input.taskId);
+    const workerId = text(input.workerId, "worker_vguard");
+    if (!taskId) return { ok: false as const, error: "A taskId kötelező." };
+    return bindDevEngineReviewTaskSession(sessionId, taskId, workerId);
   }
   if (action === "bind_worker") {
     const workerId = text(input.workerId);
@@ -252,6 +323,11 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
     if (!taskId) return { ok: false as const, error: "A taskId kötelező." };
     const current = mapSession(await getSessionRow(client, sessionId));
     if (current.handshakeStage !== "WORKER_BOUND" || !current.workerId) throw new DevCenterEngineError("Előbb workert kell rendelni a sessionhöz.", "DEV_CENTER_HANDSHAKE_ORDER", 409);
+    const { data: boundWorker, error: boundWorkerError } = await client.from("dev_center_workers").select("code,metadata").eq("id", current.workerId).maybeSingle();
+    if (boundWorkerError) databaseError("A session worker policy nem olvasható.", boundWorkerError);
+    if (boundWorker?.code === "VGUARD" || jsonRecord(boundWorker?.metadata).reviewOnly === true) {
+      throw new DevCenterEngineError("V.Guard review-only workerhez kizárólag bind_review_task használható; normál fejlesztési task binding tiltott.", "DEV_CENTER_REVIEW_BINDING_REQUIRED", 403);
+    }
     const { data: taskRow, error } = await client.from("dev_center_tasks").select("*").eq("id", taskId).maybeSingle();
     if (error) databaseError("A feladat ellenőrzése sikertelen.", error);
     if (!taskRow) return { ok: false as const, error: "A feladat nem található." };
@@ -277,12 +353,16 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
     return { ok: true as const, session, task };
   }
   if (action === "bind_branch") {
+    const reviewCheck = mapSession(await getSessionRow(client, sessionId));
+    if (reviewCheck.metadata.reviewOnly === true) throw new DevCenterEngineError("Review-only session nem kaphat branchet.", "DEV_CENTER_REVIEW_WORKTREE_DENIED", 403);
     const branchName = text(input.branchName);
     if (!branchName) return { ok: false as const, error: "A branchName kötelező." };
     const session = await updateSessionStage(client, sessionId, "TASK_BOUND", "BRANCH_BOUND", { branch_name: branchName }, "BRANCH_BOUND", `Branch hozzárendelve: ${branchName}`);
     return { ok: true as const, session };
   }
   if (action === "bind_worktree") {
+    const reviewCheck = mapSession(await getSessionRow(client, sessionId));
+    if (reviewCheck.metadata.reviewOnly === true) throw new DevCenterEngineError("Review-only session nem kaphat worktree-t.", "DEV_CENTER_REVIEW_WORKTREE_DENIED", 403);
     const worktreePath = text(input.worktreePath);
     if (!worktreePath) return { ok: false as const, error: "Érvényes worktreePath kötelező." };
     const current = mapSession(await getSessionRow(client, sessionId));
@@ -301,6 +381,7 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
   }
   if (action === "lock_scope") {
     const current = mapSession(await getSessionRow(client, sessionId));
+    if (current.metadata.reviewOnly === true) throw new DevCenterEngineError("Review-only session nem kaphat scope lockot.", "DEV_CENTER_REVIEW_SCOPE_DENIED", 403);
     if (current.handshakeStage !== "WORKTREE_BOUND" || !current.repositoryId || !current.taskId || !current.workerId) {
       throw new DevCenterEngineError("A scope lock előtt repository, task, worker, branch és worktree szükséges.", "DEV_CENTER_HANDSHAKE_ORDER", 409);
     }

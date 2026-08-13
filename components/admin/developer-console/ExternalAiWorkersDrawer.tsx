@@ -38,6 +38,10 @@ type ExternalTask = {
   providerOutputArtifact: { id?: string; sha256?: string; changedFileCount?: number; provider?: string; modelId?: string };
   runCoordinator: { state?: string; checkedAt?: string; code?: string; blockers?: string[]; sideEffectsCreated?: boolean };
   workspacePlan: { branchName?: string; worktreePath?: string; baselineCommit?: string; workerCode?: string };
+  patchApplication: { state?: string; changedFileCount?: number; committed?: boolean; integrated?: boolean };
+  mforgeResult: { state?: string; commit?: string; baselineCommit?: string; changedFileCount?: number; changedPaths?: string[]; productionAccess?: string };
+  vguardReviewPrompt: { id?: string; sha256?: string; bytes?: number; resultCommit?: string; changedFileCount?: number; productionAccess?: string };
+  vguardReview: { result?: string; summary?: string; findings?: Array<{ severity?: string; category?: string; message?: string; path?: string | null }> };
   createdAt: string;
 };
 
@@ -58,6 +62,17 @@ type RunReadiness = {
   provider?: { provider?: string; label?: string; modelId?: string | null } | null;
   context?: { valid?: boolean; reason?: string; fileCount?: number; totalBytes?: number; baselineCommit?: string | null };
   prompt?: { valid?: boolean; reason?: string; bytes?: number; sha256?: string | null };
+  budget?: { state?: string; hardStop?: boolean; reasons?: string[] };
+  blockers?: string[];
+  warnings?: string[];
+};
+
+type ReviewReadiness = {
+  ready: boolean;
+  state: "READY" | "BLOCKED";
+  provider?: { provider?: string; label?: string; modelId?: string | null } | null;
+  prompt?: { valid?: boolean; reason?: string; sha256?: string | null };
+  mforgeResult?: { baselineCommit?: string; resultCommit?: string; changedFileCount?: number };
   budget?: { state?: string; hardStop?: boolean; reasons?: string[] };
   blockers?: string[];
   warnings?: string[];
@@ -99,6 +114,7 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
   const [systemBudget, setSystemBudget] = useState<Payload["budget"] | null>(null);
   const [usage, setUsage] = useState<Payload["usage"] | null>(null);
   const [readinessByTask, setReadinessByTask] = useState<Record<string, RunReadiness>>({});
+  const [reviewReadinessByTask, setReviewReadinessByTask] = useState<Record<string, ReviewReadiness>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [title, setTitle] = useState("");
@@ -243,6 +259,42 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
     } catch(error){setMessage(error instanceof Error?error.message:"Az M.Forge futás nem indítható."); await load().catch(()=>undefined)} finally{setBusy(false)}
   }
 
+  async function buildReviewPrompt(task: ExternalTask) {
+    setBusy(true); setMessage("");
+    try {
+      const response=await fetch("/api/dev/ai-worker/tasks/"+encodeURIComponent(task.id)+"/review-prompt",{method:"POST",headers:adminHeaders(true)});
+      const payload=await response.json().catch(()=>null) as {ok?:boolean;vguardReviewPrompt?:{id?:string;bytes?:number;changedFileCount?:number};error?:string}|null;
+      if(!response.ok||!payload?.ok)throw new Error(payload?.error||"A V.Guard review prompt nem készíthető.");
+      setMessage("V.Guard review prompt kész · "+(payload.vguardReviewPrompt?.changedFileCount||0)+" fájl · "+(payload.vguardReviewPrompt?.bytes||0)+" byte.");
+      await load();
+    } catch(error){setMessage(error instanceof Error?error.message:"A V.Guard review prompt nem készíthető.")} finally{setBusy(false)}
+  }
+  async function checkReviewReadiness(task: ExternalTask) {
+    setBusy(true); setMessage("");
+    try {
+      const response=await fetch("/api/dev/ai-worker/tasks/"+encodeURIComponent(task.id)+"/review-readiness",{headers:adminHeaders(),cache:"no-store"});
+      const payload=await response.json().catch(()=>null) as ({ok?:boolean;error?:string}&ReviewReadiness)|null;
+      if(!response.ok||!payload?.ok)throw new Error(payload?.error||"A V.Guard review readiness nem ellenőrizhető.");
+      setReviewReadinessByTask((current)=>({...current,[task.id]:payload}));
+      setMessage(payload.ready?"V.Guard review kapu READY.":"V.Guard review kapu BLOCKED · "+(payload.blockers?.length||0)+" blokkoló ok.");
+    } catch(error){setMessage(error instanceof Error?error.message:"A V.Guard review readiness nem ellenőrizhető.")} finally{setBusy(false)}
+  }
+
+  async function requestReviewRun(task: ExternalTask) {
+    setBusy(true); setMessage("");
+    try {
+      const response=await fetch("/api/dev/ai-worker/tasks/"+encodeURIComponent(task.id)+"/review-run",{method:"POST",headers:adminHeaders(true)});
+      const payload=await response.json().catch(()=>null) as {ok?:boolean;workflowState?:string;review?:{result?:string;summary?:string};code?:string;error?:string;readiness?:ReviewReadiness}|null;
+      if(!response.ok||!payload?.ok){
+        if(payload?.readiness)setReviewReadinessByTask((current)=>({...current,[task.id]:payload.readiness!}));
+        throw new Error(payload?.error||"A V.Guard review nem indítható.");
+      }
+      setMessage("V.Guard review elkészült · "+(payload.review?.result||payload.workflowState||"—"));
+      await load();
+    } catch(error){setMessage(error instanceof Error?error.message:"A V.Guard review nem indítható."); await load().catch(()=>undefined)} finally{setBusy(false)}
+  }
+
+
   async function transition(task: ExternalTask, state: "READY" | "PAUSED") {
     setBusy(true);
     setMessage("");
@@ -294,7 +346,7 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
               <label><span>Max. aktív futás · perc/worker</span><input type="number" min={5} max={480} value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} /></label>
             </div>
             <div className={styles.aiScopeHint}><Eye size={16} /><div><strong>Scope megtekintése</strong><span>V1.1-ben a BENJADMIN automatikusan felderíti a route-okat, komponenseket, API-kat, service-eket, type-okat, teszteket és dokumentációt. Kézi fájl/mappa-választás nem lesz kötelező.</span></div></div>
-            <div className={styles.aiWorkerSafety}><ShieldCheck size={16} /><span>PROD SSH · PROD DB write · PROD secret · PROD restart/deploy: technikailag tiltandó. V1.0-ban külső provider még nem indul.</span></div>
+            <div className={styles.aiWorkerSafety}><ShieldCheck size={16} /><span>PROD SSH · PROD DB write · PROD secret · PROD restart/deploy: technikailag tiltott. Külső provider csak readiness + explicit global gate mellett indulhat.</span></div>
             <button type="button" className={styles.aiWorkerCreateButton} onClick={() => void createTask()} disabled={busy}>{busy ? "FOLYAMATBAN…" : "AI WORKER TASK LÉTREHOZÁSA"}</button>
           </section>
 
@@ -309,21 +361,26 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
           <section className={styles.aiWorkerTaskList}>
             {tasks.map((task) => {
               const runReadiness=readinessByTask[task.id];
+              const reviewReadiness=reviewReadinessByTask[task.id];
               return <article key={task.id}>
                 <header><div><strong>{task.title}</strong><span>{task.moduleHint || "Automatikus modulazonosítás"} · {task.launchMode} · {task.modelPreference}</span></div><b>{task.workflowState}</b></header>
                 <div className={styles.aiWorkerPipeline}>{pipeline.map((step, index) => <span key={step}>{step}{index < pipeline.length - 1 ? <ChevronRight size={12} /> : null}</span>)}</div>
                 <div className={styles.aiWorkerFour}>
                   <div><small>FELADAT</small><strong>{task.goal.slice(0, 115)}</strong><span>{task.technicalScopeMode === "AUTO_BENJADMIN" ? "Scope: automatikus" : task.technicalScopeMode}</span></div>
-                  <div><small>WORKER</small><strong>M.Forge-AI → V.Guard-AI</strong><span>Provider: mock V1.0</span></div>
+                  <div><small>WORKER</small><strong>M.Forge-AI → V.Guard-AI</strong><span>M.Forge → V.Guard · provider gate</span></div>
                   <div><small>ELLENŐRZÉS</small><strong>Scope {task.scopeAnalysis?.overallRisk ? `· ${task.scopeAnalysis.overallRisk}` : "· elemzésre vár"}</strong><span>{task.scopeAnalysisState || "PENDING"} · review {task.scopeAnalysis?.reviewCount || 0} · tiltott {task.scopeAnalysis?.deniedCount || 0}</span></div>
                   <div><small>EREDMÉNY</small><strong>{task.preflight?.state === "PASS" ? `PREFLIGHT PASS · ${task.contextPack?.fileCount || 0} context fájl` : `${task.taskBudgetHuf.toLocaleString("hu-HU")} Ft · ${task.maxActiveMinutesPerWorker} perc`}</strong><span>{task.workspacePlan?.branchName ? `M.Forge terv: ${task.workspacePlan.branchName}` : "DEV READY: még nem"}</span></div>
                 </div>
                 {task.scopeAnalysis?.candidates?.length ? <details className={styles.aiScopeDetails}><summary><Eye size={13} /> Scope megtekintése · {task.scopeAnalysis.candidates.length} jelölt</summary><div>{task.scopeAnalysis.candidates.slice(0, 18).map((candidate) => <article key={candidate.path} data-risk={candidate.riskLevel}><b>{candidate.riskLevel}</b><code>{candidate.path}</code><span>{candidate.decision} · {candidate.reasons[0] || "—"}</span></article>)}</div></details> : null}
                 {runReadiness ? <section className={styles.aiRunReadiness} data-ready={runReadiness.ready ? "true" : "false"}><header><strong>M.FORGE FUTÁSI KAPU</strong><b>{runReadiness.state}</b></header><div><span>Context <b>{runReadiness.context?.valid ? `OK · ${runReadiness.context.fileCount || 0} fájl` : "HIBA"}</b></span><span>Prompt <b>{runReadiness.prompt?.valid ? "OK" : "HIBA"}</b></span><span>Budget <b>{runReadiness.budget?.state || "—"}</b></span><span>Provider <b>{runReadiness.provider?.label || "nincs READY provider"}</b></span></div>{runReadiness.blockers?.length ? <ul>{runReadiness.blockers.slice(0, 6).map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p>Minden futási előfeltétel teljesült.</p>}</section> : null}
+                {task.mforgeResult?.state === "WORKER_DONE" ? <section className={styles.aiRunReadiness} data-ready="true"><header><strong>M.FORGE EREDMÉNY</strong><b>WORKER_DONE</b></header><div><span>Commit <b>{task.mforgeResult.commit ? task.mforgeResult.commit.slice(0,12) : "—"}</b></span><span>Módosított fájl <b>{task.mforgeResult.changedFileCount || 0}</b></span><span>Integráció <b>review előtt nincs</b></span></div></section> : null}
+                {reviewReadiness ? <section className={styles.aiRunReadiness} data-ready={reviewReadiness.ready ? "true" : "false"}><header><strong>V.GUARD REVIEW KAPU</strong><b>{reviewReadiness.state}</b></header><div><span>Prompt <b>{reviewReadiness.prompt?.valid ? "OK" : "HIBA"}</b></span><span>Diff fájl <b>{reviewReadiness.mforgeResult?.changedFileCount || 0}</b></span><span>Budget <b>{reviewReadiness.budget?.state || "—"}</b></span><span>Provider <b>{reviewReadiness.provider?.label || "nincs READY provider"}</b></span></div>{reviewReadiness.blockers?.length ? <ul>{reviewReadiness.blockers.slice(0,6).map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p>A független review minden előfeltétele teljesült.</p>}</section> : null}
+                {task.vguardReview?.result ? <section className={styles.aiRunReadiness} data-ready={task.vguardReview.result === "FAIL" ? "false" : "true"}><header><strong>V.GUARD EREDMÉNY</strong><b>{task.vguardReview.result}</b></header><p>{task.vguardReview.summary || "Review összefoglaló nem érkezett."}</p>{task.vguardReview.findings?.length ? <ul>{task.vguardReview.findings.slice(0,6).map((finding,index) => <li key={(finding.path || "finding")+index}>{finding.severity || "INFO"} · {finding.category || "OTHER"} · {finding.path || "általános"} · {finding.message || "—"}</li>)}</ul> : null}</section> : null}
                 <footer>
                   <span><CircleDollarSign size={13} /> Forge {task.forgeBudgetHuf.toLocaleString("hu-HU")} Ft · Guard {task.guardBudgetHuf.toLocaleString("hu-HU")} Ft</span>
                   <span><Clock3 size={13} /> {task.maxActiveMinutesPerWorker} perc/worker</span>
                   <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" && !task.contextPackContent?.id ? <button type="button" onClick={() => void buildContextPack(task)} disabled={busy}>CONTEXT PACK</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id && !task.providerPrompt?.id ? <button type="button" onClick={() => void buildProviderPrompt(task)} disabled={busy}>PROVIDER PROMPT</button> : null}{task.workflowState === "PREFLIGHT" && task.providerPrompt?.id ? <button type="button" onClick={() => void checkRunReadiness(task)} disabled={busy}>FUTÁSI ELLENŐRZÉS</button> : null}{task.workflowState === "PREFLIGHT" && task.providerPrompt?.id && runReadiness?.ready ? <button type="button" className={styles.aiRunStartButton} onClick={() => void requestRun(task)} disabled={busy}>M.FORGE INDÍTÁS</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id ? <span className={styles.aiWorkerReadyTag}>CONTEXT {task.contextPackContent.fileCount || 0}{task.providerPrompt?.id ? " · PROMPT KÉSZ" : " · PROMPTRA VÁR"} · WORKSPACE TERV KÉSZ</span> : null}</div>
+                  <div>{task.workflowState === "WORKER_DONE" && !task.vguardReviewPrompt?.id ? <button type="button" onClick={() => void buildReviewPrompt(task)} disabled={busy}>V.GUARD PROMPT</button> : null}{task.workflowState === "WORKER_DONE" && task.vguardReviewPrompt?.id ? <button type="button" onClick={() => void checkReviewReadiness(task)} disabled={busy}>REVIEW ELLENŐRZÉS</button> : null}{task.workflowState === "WORKER_DONE" && task.vguardReviewPrompt?.id && reviewReadiness?.ready ? <button type="button" className={styles.aiRunStartButton} onClick={() => void requestReviewRun(task)} disabled={busy}>V.GUARD INDÍTÁS</button> : null}{task.workflowState === "WORKER_DONE" && task.vguardReviewPrompt?.id ? <span className={styles.aiWorkerReadyTag}>M.FORGE COMMIT · V.GUARD PROMPT KÉSZ</span> : null}{task.workflowState === "APPROVED" ? <span className={styles.aiWorkerReadyTag}>V.GUARD JÓVÁHAGYTA · BENJADMIN GATE KÖVETKEZIK</span> : null}{task.workflowState === "HUMAN_DECISION_REQUIRED" ? <span className={styles.aiWorkerReadyTag}>V.GUARD FAIL · BENJADMIN DÖNTÉS SZÜKSÉGES</span> : null}</div>
                 </footer>
               </article>;
             })}

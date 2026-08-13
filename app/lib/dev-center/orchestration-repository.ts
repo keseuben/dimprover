@@ -126,6 +126,11 @@ async function throwRpc(db: SupabaseClient, error: RpcError, context: JsonRecord
 export async function claimTaskAtomic(input: { sessionId: string; workerId: string; taskId?: string | null; leaseSeconds?: number }) {
   const db = client();
   const seconds = leaseSeconds(input.leaseSeconds);
+  const workerPolicy = await db.from("dev_center_workers").select("id,code,metadata").eq("id", input.workerId).maybeSingle();
+  if (workerPolicy.error) throw new DevCenterOrchestrationError(workerPolicy.error.message, workerPolicy.error.code || "DEV_CENTER_WORKER_POLICY_READ_ERROR", 500);
+  if (workerPolicy.data?.code === "VGUARD") {
+    throw new DevCenterOrchestrationError("V.Guard review-only worker nem claimelhet normál fejlesztési taskot.", "EXTERNAL_AI_VGUARD_DIRECT_CLAIM_DENIED", 403, { workerId: input.workerId, taskId: input.taskId || null });
+  }
   if (!input.taskId && input.workerId === OUTMINAI_WORKER_ID) {
     throw new DevCenterOrchestrationError(
       "OutminAI csak explicit kiosztott partner taskot claimelhet; automatikus next-task claim tiltott.",
@@ -139,6 +144,9 @@ export async function claimTaskAtomic(input: { sessionId: string; workerId: stri
     if (!task) throw new DevCenterOrchestrationError("A task nem található.", "DEV_CENTER_TASK_NOT_FOUND", 404);
     try {
       const isolation = await assertWorkerProjectIsolation(db, { workerId: input.workerId, projectId: String(task.project_id || "") });
+      if (isolation.worker.code === "VGUARD") {
+        throw new DevCenterOrchestrationError("V.Guard review-only worker nem használhat normál task claimet; review binding szükséges.", "EXTERNAL_AI_VGUARD_DIRECT_CLAIM_DENIED", 403, { taskId: input.taskId, workerId: input.workerId });
+      }
       if (isolation.plane === "PARTNER" && !task.repository_id) {
         throw new PartnerIsolationPolicyError("Partner task repository nélkül nem claimelhető fejlesztésre.", "PARTNER_REPOSITORY_REQUIRED", 403, { taskId: input.taskId });
       }
@@ -171,6 +179,10 @@ export async function acquireScopeBundleAtomic(input: { sessionId: string; scope
     throw new DevCenterOrchestrationError("Scope claim előtt worker/project/repository policy context szükséges.", "DEV_CENTER_SESSION_POLICY_CONTEXT_MISSING", 403);
   }
   try {
+    const isolation = await assertWorkerProjectIsolation(db, { workerId: String(session.worker_id), projectId: String(session.project_id) });
+    if (isolation.worker.code === "VGUARD") {
+      throw new DevCenterOrchestrationError("V.Guard review-only worker nem szerezhet scope lockot.", "EXTERNAL_AI_VGUARD_SCOPE_DENIED", 403, { sessionId: input.sessionId });
+    }
     await assertRepositoryIsolation(db, { workerId: String(session.worker_id), projectId: String(session.project_id), repositoryId: String(session.repository_id), required: "WRITE" });
     await assertScopeIsolation(db, { workerId: String(session.worker_id), projectId: String(session.project_id), scopes });
   } catch (error) {

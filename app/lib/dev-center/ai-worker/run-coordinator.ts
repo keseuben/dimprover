@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getExternalAiRunReadiness } from "./run-readiness";
 import { EXTERNAL_AI_RUN_COORDINATOR_VERSION, getExternalAiRunLaunchPlan } from "./run-launch-plan";
+import { executeMForgeRun } from "./mforge-run-executor";
 
 type Row = Record<string, unknown>;
 
@@ -125,22 +126,6 @@ export async function requestExternalAiWorkerRun(taskId: string) {
     };
   }
 
-  const coordinatorBlocker = "A provider-run executor JIT workspace handoffja még nincs aktiválva; biztonsági okból a coordinator nem nyit sessiont vagy worktree-t.";
-  const coordinator = await recordBlockedRunRequest(db, {
-    taskId,
-    projectId: taskResult.data.project_id || null,
-    metadata,
-    blockers: [coordinatorBlocker],
-    warnings: readiness.warnings,
-    code: "AI_WORKER_RUN_COORDINATOR_EXECUTOR_NOT_BOUND",
-  });
-  return {
-    ok: false as const,
-    state: "BLOCKED" as const,
-    code: "AI_WORKER_RUN_COORDINATOR_EXECUTOR_NOT_BOUND",
-    error: coordinatorBlocker,
-    readiness,
-    coordinator,
-    plan,
-  };
+  const executed = await executeMForgeRun(taskId);
+  return { ...executed, plan };
 }

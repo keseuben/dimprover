@@ -19,7 +19,7 @@ export async function getVGuardReviewReadiness(taskId: string) {
   const db = client();
   const taskResult = await db.from("dev_center_tasks").select("id,status,repository_id,requested_worker_id,metadata").eq("id", taskId).maybeSingle();
   if (taskResult.error) throw new Error(taskResult.error.message);
-  if (!taskResult.data) return { ok: false as const, error: "A V.Guard review task nem található." };
+  if (!taskResult.data) return { ok: false as const, code: "AI_WORKER_VGUARD_TASK_NOT_FOUND", error: "A V.Guard review task nem található." };
   const task = taskResult.data;
   const meta = record(task.metadata), forge = record(meta.mforgeResult), prompt = record(meta.vguardReviewPrompt);
   const blockers: string[] = [], warnings: string[] = [];
