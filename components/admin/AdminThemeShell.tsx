@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Code2,
   GitBranch,
@@ -56,6 +56,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   const [boardPinned, setBoardPinned] = useState(false);
   const [privacyCover, setPrivacyCover] = useState(false);
   const [teamScreen, setTeamScreen] = useState(false);
+  const developerConsoleWindowRef = useRef<Window | null>(null);
 
   const activeItem = useMemo(
     () => navigationItems.find((item) => matchesPath(pathname, item.href)) || navigationItems[0],
@@ -186,12 +187,52 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     return () => window.removeEventListener("benjadmin:privacy-cover", onPrivacyRequest);
   }, [accessState, boardPinned]);
 
+  const maximizeDeveloperConsoleWindow = useCallback((popup: Window) => {
+    try {
+      popup.moveTo(0, 0);
+      popup.resizeTo(window.screen.availWidth, window.screen.availHeight);
+    } catch {}
+  }, []);
+
   const openDeveloperConsole = useCallback(() => {
     const target = "/admin/dev-console";
-    const popup = window.open(target, "benjadmin-developer-console", "popup=yes,resizable=yes,scrollbars=no");
-    if (!popup) router.push(target);
-    else popup.focus();
-  }, [router]);
+    const current = developerConsoleWindowRef.current;
+    if (current && !current.closed) {
+      maximizeDeveloperConsoleWindow(current);
+      current.focus();
+      return;
+    }
+    const width = Math.max(960, window.screen.availWidth || window.innerWidth);
+    const height = Math.max(680, window.screen.availHeight || window.innerHeight);
+    const features = `popup=yes,resizable=yes,scrollbars=no,left=0,top=0,width=${width},height=${height}`;
+    const popup = window.open(target, "benjadmin-developer-console", features);
+    if (!popup) {
+      router.push(target);
+      return;
+    }
+    developerConsoleWindowRef.current = popup;
+    maximizeDeveloperConsoleWindow(popup);
+    window.setTimeout(() => maximizeDeveloperConsoleWindow(popup), 120);
+    popup.focus();
+  }, [maximizeDeveloperConsoleWindow, router]);
+
+  useEffect(() => {
+    const onDeveloperConsoleShortcut = (event: KeyboardEvent) => {
+      const ctrlAltOne = event.ctrlKey && event.altKey && !event.metaKey && (event.code === "Digit1" || event.code === "Numpad1");
+      if (!ctrlAltOne || accessState !== "authorized" || privacyCover) return;
+      event.preventDefault();
+      if (pathname === "/admin/dev-console") {
+        try {
+          window.blur();
+          if (window.opener && !window.opener.closed) window.opener.focus();
+        } catch {}
+        return;
+      }
+      openDeveloperConsole();
+    };
+    window.addEventListener("keydown", onDeveloperConsoleShortcut);
+    return () => window.removeEventListener("keydown", onDeveloperConsoleShortcut);
+  }, [accessState, openDeveloperConsole, pathname, privacyCover]);
 
 
   if (accessState === "checking") {
@@ -210,7 +251,6 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     return (
       <BenjadminTeamScreen
         theme={theme}
-        onThemeToggle={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
         onClose={() => setTeamScreen(false)}
       />
     );
@@ -314,7 +354,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
               type="button"
               data-testid="benjadmin-developer-console-button"
               onClick={openDeveloperConsole}
-              title="BENJADMIN Fejlesztői Konzol megnyitása külön ablakban"
+              title="BENJADMIN Fejlesztői Konzol · Ctrl+Alt+1 · külön, teljes méretű ablak"
               aria-label="Fejlesztői Konzol megnyitása"
             >
               <MessagesSquare size={18} />

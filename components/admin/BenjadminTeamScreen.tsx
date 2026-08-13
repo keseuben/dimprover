@@ -222,6 +222,8 @@ type TeamDashboardMetrics = {
 };
 
 type ExecutivePanelKey = "team" | "costs" | "time";
+type TeamDisplayTheme = "light" | "dark" | "sunlight";
+const TEAM_DISPLAY_THEME_KEY = "benjadmin-team-display-theme";
 
 type TeamMember = {
   id: string;
@@ -391,7 +393,7 @@ function UsageBar({ label, value, detail }: { label: string; value?: number | nu
   );
 }
 
-export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: { theme: "light" | "dark"; onThemeToggle: () => void; onClose: () => void }) {
+export default function BenjadminTeamScreen({ theme, onClose }: { theme: "light" | "dark"; onClose: () => void }) {
   const [engine, setEngine] = useState<EngineState | null>(null);
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [control, setControl] = useState<ControlSnapshot | null>(null);
@@ -404,6 +406,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<BenjadminPersonCode | null>(null);
   const [financePopoverOpen, setFinancePopoverOpen] = useState(false);
+  const [displayTheme, setDisplayTheme] = useState<TeamDisplayTheme>(theme);
   const [metrics, setMetrics] = useState<TeamDashboardMetrics | null>(null);
   const [timeBusy, setTimeBusy] = useState(false);
   const [panels, setPanels] = useState<Record<ExecutivePanelKey, boolean>>({ team: true, costs: true, time: true });
@@ -463,6 +466,28 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
     const timer = window.setInterval(() => void load(true), 30_000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(TEAM_DISPLAY_THEME_KEY);
+    const next: TeamDisplayTheme = stored === "light" || stored === "dark" || stored === "sunlight" ? stored : theme;
+    setDisplayTheme(next);
+  }, [theme]);
+
+  const changeDisplayTheme = useCallback((next: TeamDisplayTheme) => {
+    setDisplayTheme(next);
+    try { window.localStorage.setItem(TEAM_DISPLAY_THEME_KEY, next); } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!financePopoverOpen) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setFinancePopoverOpen(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [financePopoverOpen]);
 
   useEffect(() => {
     try {
@@ -652,7 +677,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   };
 
   return (
-    <main className={`benjadmin-team-screen admin-theme-${theme}`} data-theme={theme} data-testid="benjadmin-team-screen">
+    <main className={`benjadmin-team-screen admin-theme-${displayTheme}`} data-theme={displayTheme} data-testid="benjadmin-team-screen">
       <div className="benjadmin-protective__grid" aria-hidden="true" />
       <div className="benjadmin-protective__glow benjadmin-protective__glow--a" aria-hidden="true" />
       <div className="benjadmin-protective__glow benjadmin-protective__glow--b" aria-hidden="true" />
@@ -885,9 +910,11 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
 
       {selectedProfile && <BenjadminPersonProfileCard code={selectedProfile} onClose={setSelectedProfile.bind(null, null)} />}
       {error ? <div className="benjadmin-team-screen__error">{error}</div> : null}
-      <button type="button" className="benjadmin-team-screen__theme-toggle" data-testid="benjadmin-team-theme-toggle" onClick={onThemeToggle} aria-label={theme === "light" ? "Sötét mód" : "Világos mód"} title={theme === "light" ? "Sötét mód" : "Világos mód"}>
-        {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
-      </button>
+      <div className="benjadmin-team-screen__theme-modes" data-testid="benjadmin-team-theme-modes" aria-label="BENJADMIN nézet témája">
+        <button type="button" className={displayTheme === "light" ? "is-active" : ""} onClick={() => changeDisplayTheme("light")} aria-label="Világos mód"><Sun size={15} /><span>Világos</span></button>
+        <button type="button" className={displayTheme === "dark" ? "is-active" : ""} onClick={() => changeDisplayTheme("dark")} aria-label="Sötét mód"><Moon size={15} /><span>Sötét</span></button>
+        <button type="button" className={displayTheme === "sunlight" ? "is-active" : ""} onClick={() => changeDisplayTheme("sunlight")} aria-label="Sunlight mód"><Sun size={15} /><span>Sunlight</span></button>
+      </div>
       <button type="button" className="benjadmin-team-screen__refresh" onClick={() => void load()} disabled={loading} aria-label="Csapatképernyő frissítése" title="Frissítés">
         <RefreshCw size={17} className={loading ? "is-spinning" : ""} />
       </button>

@@ -97,6 +97,22 @@ export default function DeveloperConsoleShell() {
     setSelectedProjectId(id);
   }, []);
 
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const hasOpenLayer = commandsOpen || resourcesOpen || aiWorkersOpen || teamOpen || installOpen;
+      if (!hasOpenLayer) return;
+      event.preventDefault();
+      setCommandsOpen(false);
+      setResourcesOpen(false);
+      setAiWorkersOpen(false);
+      setTeamOpen(false);
+      setInstallOpen(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [aiWorkersOpen, commandsOpen, installOpen, resourcesOpen, teamOpen]);
+
   const applySnapshot = useCallback((incomingLive: ConsoleLiveState, incomingMessages: ConsoleMessage[]) => {
     setLive((current) => {
       const next = mergeLive(current, incomingLive);

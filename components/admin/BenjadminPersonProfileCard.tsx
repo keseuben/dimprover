@@ -2,11 +2,23 @@
 
 import Image from "next/image";
 import { X } from "lucide-react";
+import { useEffect } from "react";
 import { getBenjadminPerson, type BenjadminPersonCode } from "./benjadminPeople";
 import styles from "./BenjadminPersonProfileCard.module.css";
 
 export default function BenjadminPersonProfileCard({ code, onClose }: { code: BenjadminPersonCode; onClose: () => void }) {
   const person = getBenjadminPerson(code);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
     <div className={styles.layer} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className={styles.card} role="dialog" aria-modal="true" aria-label={`${person.name} munkaköri profil`} data-testid="benjadmin-person-profile-card" data-person-code={person.code}>

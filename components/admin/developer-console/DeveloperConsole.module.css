@@ -626,3 +626,79 @@
 .aiRunReadiness ul { margin: 0; padding-left: 16px; display: grid; gap: 2px; color: var(--amber); font-size: 9px; line-height: 1.35; }
 .aiRunReadiness p { margin: 0; color: var(--green); font-size: 9px; font-weight: 850; }
 .aiRunStartButton { border-color: color-mix(in srgb, var(--green) 60%, var(--border)) !important; background: color-mix(in srgb, var(--green) 12%, var(--surface)) !important; color: var(--green) !important; font-weight: 950 !important; }
+
+/* BENJADMIN Fejlesztői Konzol V1.4 UX — eredeti hexagon artwork keret nélkül + nagy vezetői composer-kártya. */
+.avatarOuter {
+  clip-path: none;
+  overflow: visible;
+  background: transparent !important;
+  outline: 0 !important;
+  filter: none;
+}
+.avatarInner {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  clip-path: none;
+  background: transparent;
+}
+.avatarInner img {
+  object-fit: contain;
+  filter: drop-shadow(0 5px 8px rgba(2, 8, 23, .16));
+}
+.avatarOuter::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--muted2);
+  box-sizing: border-box;
+}
+.status_working::after { background: var(--green); }
+.status_waiting::after { background: var(--blue); }
+.status_decision::after { background: var(--amber); }
+.status_blocked::after { background: var(--red); }
+.status_idle::after { background: var(--muted2); }
+.status_working { animation: avatarPulse 2.2s ease-in-out infinite; }
+
+.composer {
+  grid-template-columns: 166px minmax(0, 1fr);
+  min-height: 170px;
+  column-gap: 10px;
+  padding-top: 8px;
+}
+.composerLeaderAvatar {
+  min-height: 150px;
+  margin: 0;
+  padding: 8px 8px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  box-shadow: inset 0 1px color-mix(in srgb, #fff 18%, transparent);
+}
+.composerLeaderAvatar > span:first-child { width: 140px; height: 140px; }
+.composerLeaderAvatar > span:last-child { margin-top: -2px; font-size: 11px; }
+.composerInputRow textarea { min-height: 82px; }
+
+@media (max-width: 1050px) {
+  .composer { grid-template-columns: 134px minmax(0, 1fr); min-height: 142px; }
+  .composerLeaderAvatar { min-height: 124px; }
+  .composerLeaderAvatar > span:first-child { width: 116px; height: 116px; }
+  .composerInputRow textarea { min-height: 70px; }
+}
+@media (max-width: 700px) {
+  .composer { grid-template-columns: 84px minmax(0, 1fr); min-height: 104px; }
+  .composerLeaderAvatar { min-height: 92px; padding: 5px; }
+  .composerLeaderAvatar > span:first-child { width: 72px; height: 72px; }
+  .composerLeaderAvatar > span:last-child { display: block; font-size: 8px; }
+  .composerInputRow textarea { min-height: 62px; }
+}
+@media (max-width: 420px) {
+  .composer { grid-template-columns: 68px minmax(0, 1fr); }
+  .composerLeaderAvatar > span:first-child { width: 58px; height: 58px; }
+  .composerLeaderAvatar > span:last-child { display: none; }
+}

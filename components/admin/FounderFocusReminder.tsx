@@ -30,6 +30,17 @@ export default function FounderFocusReminder() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!libraryOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setLibraryOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [libraryOpen]);
+
   const budapestParts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Budapest",
     year: "numeric",

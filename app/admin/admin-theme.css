@@ -7211,3 +7211,149 @@
 .benjadmin-team-screen__team-tree .benjadmin-team-screen__tree-level > .benjadmin-team-screen__tree-node {
   grid-column: auto;
 }
+
+/* BENJADMIN működési/infrastruktúra nézet V1.3 — önálló Világos / Sötét / Sunlight témák. */
+.benjadmin-team-screen__theme-modes {
+  position: fixed;
+  right: 58px;
+  top: 12px;
+  z-index: 8;
+  min-height: 36px;
+  padding: 3px;
+  border: 1px solid rgba(103, 232, 249, .18);
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(7, 24, 38, .84);
+  box-shadow: 0 8px 22px rgba(0,0,0,.12);
+}
+.benjadmin-team-screen__theme-modes button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #7fa4b8;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.benjadmin-team-screen__theme-modes button:hover,
+.benjadmin-team-screen__theme-modes button.is-active {
+  border-color: rgba(103, 232, 249, .28);
+  color: #e8fbff;
+  background: rgba(34, 211, 238, .10);
+}
+
+.benjadmin-team-screen.admin-theme-light {
+  color: #183447;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(34, 211, 238, .12), transparent 31rem),
+    linear-gradient(150deg, #f7fbfd 0%, #eef7fa 54%, #eaf4f8 100%);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__side,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center {
+  border-color: rgba(56, 130, 158, .16);
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(245,250,252,.96));
+  box-shadow: 0 16px 34px rgba(46, 87, 105, .09), inset 0 1px #fff;
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title {
+  background: linear-gradient(180deg, rgba(252,254,255,1) 72%, rgba(252,254,255,0));
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center-head span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card header strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title h2 { color: #16384a; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__section-title span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__center-head small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card > p,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__usage small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title p,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__tree-node li,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__tree-node footer { color: #59798a; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-panel {
+  border-color: rgba(52, 126, 153, .16);
+  background: rgba(255,255,255,.90);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table-wrap {
+  border-color: rgba(52, 126, 153, .14);
+  background: #f8fcfd;
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-toggle strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-card > header strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-line b,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__operations-strip b { color: #24495b; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__chart-wrap { background: linear-gradient(180deg,#f5fbfd,#eef7fa); }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__theme-modes {
+  border-color: #c7dce5;
+  background: rgba(255,255,255,.94);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__theme-modes button { color: #527486; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__theme-modes button:hover,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__theme-modes button.is-active { border-color: #7ccdda; color: #0e7490; background: #ecfeff; }
+
+.benjadmin-team-screen.admin-theme-sunlight {
+  color: #253142;
+  background:
+    radial-gradient(circle at 50% 16%, rgba(250, 204, 21, .20), transparent 28rem),
+    linear-gradient(150deg, #fff9df 0%, #fff6ce 48%, #f7ebbd 100%);
+}
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__side,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__center {
+  border-color: rgba(133, 112, 43, .24);
+  background: linear-gradient(180deg, rgba(255,253,242,.97), rgba(255,248,218,.97));
+  box-shadow: 0 12px 28px rgba(93,75,24,.10), inset 0 1px rgba(255,255,255,.9);
+}
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__section-title {
+  background: linear-gradient(180deg, rgba(255,253,242,1) 72%, rgba(255,253,242,0));
+}
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__section-title strong,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__center-head span,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__infra-card header strong,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title h2 { color: #263444; }
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__section-title span,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__center-head small,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__infra-card > p,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__usage small,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__infra-facts span,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title p,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__tree-node li,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__tree-node footer { color: #625f50; }
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__infra-card,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__chart-card,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__executive-panel,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__metric-grid article,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__cost-card,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__time-table-wrap {
+  border-color: rgba(133, 112, 43, .20);
+  background: rgba(255,253,242,.90);
+}
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__executive-toggle strong,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__metric-grid article strong,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__cost-card > header strong,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__cost-line b,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__operations-strip b { color: #293748; }
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__chart-wrap { background: linear-gradient(180deg,#fff9df,#f9efc7); }
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__theme-modes {
+  border-color: #c6b96f;
+  background: rgba(255,253,242,.96);
+}
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__theme-modes button { color: #6e6541; }
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__theme-modes button:hover,
+.benjadmin-team-screen.admin-theme-sunlight .benjadmin-team-screen__theme-modes button.is-active { border-color: #9a8437; color: #5b4610; background: #fff1a8; }
+
+@media (max-width: 760px) {
+  .benjadmin-team-screen__theme-modes { right: 52px; top: 9px; }
+  .benjadmin-team-screen__theme-modes button span { display: none; }
+  .benjadmin-team-screen__theme-modes button { width: 30px; padding: 0; justify-content: center; }
+}

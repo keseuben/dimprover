@@ -40,7 +40,7 @@ try{
     check(`${viewport.name}: mind a 7 profil a tablóhatáron belül van`,Boolean(layout.panel&&layout.members.length===7&&layout.members.every((item)=>item.top>=layout.panel.top-1&&item.bottom<=layout.panel.bottom+1)),JSON.stringify(layout.members));
     check(`${viewport.name}: tabló kompakt, egy képernyőnyi blokk`,Boolean(layout.panel&&layout.panel.height<viewport.height-120),`panelHeight=${layout.panel?.height}`);
     check(`${viewport.name}: nincs vízszintes overflow`,layout.docWidth<=layout.clientWidth+1,JSON.stringify({sw:layout.docWidth,cw:layout.clientWidth}));
-    check(`${viewport.name}: költségkártya sötét navy marad világos admin témánál is`,layout.costBackground.includes("linear-gradient")&&layout.metricBackground!=="rgba(255, 255, 255, 0.72)",JSON.stringify({panel:layout.costBackground,metric:layout.metricBackground}));
+    check(`${viewport.name}: világos téma tiszta fehér/kék kártyákat használ`,!layout.costBackground.includes("rgba(7, 25, 39")&&layout.metricBackground!=="rgba(255, 255, 255, 0.72)",JSON.stringify({panel:layout.costBackground,metric:layout.metricBackground}));
     if(viewport.name==="desktop"){
       await page.click('[data-testid="team-member-benai"] .benjadmin-team-screen__avatar-button');
       await page.waitForSelector('[data-testid="benjadmin-person-profile-card"][data-person-code="BENAI"]',{timeout:10000});
