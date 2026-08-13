@@ -5,7 +5,7 @@ function check(name,ok,detail=""){if(!ok)throw new Error(`${name}: ${detail}`);p
 const response=await fetch(`${api}/api/dev/ai-worker/tasks`,{headers:{host,"x-dimpro-license-admin-key":key}});const payload=await response.json().catch(()=>({}));
 check("AI Worker status API 200",response.status===200&&payload?.ok===true,`status=${response.status}`);
 check("Provider registry mock/openai/anthropic",Array.isArray(payload.adapters)&&["mock","openai","anthropic"].every(code=>payload.adapters.some(x=>x.provider===code)),JSON.stringify(payload.adapters||[]));
-check("Valódi provider executor még fail-closed",payload.adapters.filter(x=>x.provider!=="mock").every(x=>x.executionImplemented===false&&x.ready===false),JSON.stringify(payload.adapters||[]));
+check("Valódi provider transport implementált, de konfiguráció nélkül fail-closed",payload.adapters.filter(x=>x.provider!=="mock").every(x=>x.executionImplemented===true&&x.ready===false),JSON.stringify(payload.adapters||[]));
 check("Provider status titokmentes",!JSON.stringify(payload.adapters).match(/sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|private[_-]?key/i),JSON.stringify(payload.adapters||[]));
 check("75/90/100 budget threshold aktív",JSON.stringify(payload.budget?.thresholds)==="[75,90,100]",JSON.stringify(payload.budget||{}));
 check("Napi/havi limit konfiguráció nélkül nem kitalált érték",payload.budget?.dailyLimitHuf==null&&payload.budget?.monthlyLimitHuf==null,JSON.stringify(payload.budget||{}));

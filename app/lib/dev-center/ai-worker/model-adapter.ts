@@ -5,6 +5,9 @@ export type WorkerAdapterProbe = {
   provider: WorkerProviderId;
   label: string;
   configured: boolean;
+  secretConfigured: boolean;
+  modelConfigured: boolean;
+  pricingConfigured: boolean;
   executionGateEnabled: boolean;
   executionImplemented: boolean;
   ready: boolean;
@@ -24,6 +27,14 @@ export interface WorkerModelAdapter {
 function gateEnabled() {
   return process.env.DIMPRO_EXTERNAL_AI_PROVIDER_EXECUTION_ENABLED?.trim().toLowerCase() === "true";
 }
+function positive(name: string) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+function pricingConfigured(provider: "openai" | "anthropic") {
+  const prefix = provider === "openai" ? "OPENAI" : "CLAUDE";
+  return positive(`DIMPRO_EXTERNAL_AI_${prefix}_INPUT_HUF_PER_MTOKEN`) && positive(`DIMPRO_EXTERNAL_AI_${prefix}_OUTPUT_HUF_PER_MTOKEN`);
+}
 
 export const mockWorkerAdapter: WorkerModelAdapter & { modelId: string } = {
   provider: "mock",
@@ -36,6 +47,9 @@ export const mockWorkerAdapter: WorkerModelAdapter & { modelId: string } = {
       provider: "mock",
       label: "BENJADMIN Mock",
       configured: true,
+      secretConfigured: false,
+      modelConfigured: true,
+      pricingConfigured: false,
       executionGateEnabled: false,
       executionImplemented: true,
       ready: true,
@@ -50,21 +64,28 @@ export const openAiWorkerAdapter: WorkerModelAdapter = {
   provider: "openai",
   label: "OpenAI / Codex",
   roles: ["MFORGE", "VGUARD"],
-  executionImplemented: false,
+  executionImplemented: true,
   async probe() {
-    const configured = Boolean(process.env.OPENAI_API_KEY?.trim());
+    const secretConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
     const modelId = process.env.DIMPRO_EXTERNAL_AI_OPENAI_MODEL?.trim() || null;
+    const modelConfigured = Boolean(modelId);
+    const pricing = pricingConfigured("openai");
     const executionGateEnabled = gateEnabled();
+    const configured = secretConfigured && modelConfigured && pricing;
+    const ready = configured && executionGateEnabled;
     return {
       provider: "openai",
       label: "OpenAI / Codex",
-      configured: configured && Boolean(modelId),
+      configured,
+      secretConfigured,
+      modelConfigured,
+      pricingConfigured: pricing,
       executionGateEnabled,
-      executionImplemented: false,
-      ready: false,
+      executionImplemented: true,
+      ready,
       modelId,
       roles: ["MFORGE", "VGUARD"],
-      detail: !configured ? "Szerveroldali OpenAI secret nincs konfigurálva." : !modelId ? "OpenAI modell nincs kijelölve." : "Adapter contract előkészítve; tényleges provider executor V1.2 következő gate.",
+      detail: !secretConfigured ? "Szerveroldali OpenAI secret nincs konfigurálva." : !modelConfigured ? "OpenAI modell nincs kijelölve." : !pricing ? "OpenAI HUF token-díjszabás nincs konfigurálva." : !executionGateEnabled ? "OpenAI executor kész; a global execution gate ki van kapcsolva." : "OpenAI Responses API executor READY.",
     };
   },
 };
@@ -73,21 +94,28 @@ export const anthropicWorkerAdapter: WorkerModelAdapter = {
   provider: "anthropic",
   label: "Anthropic / Claude",
   roles: ["MFORGE", "VGUARD"],
-  executionImplemented: false,
+  executionImplemented: true,
   async probe() {
-    const configured = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+    const secretConfigured = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
     const modelId = process.env.DIMPRO_EXTERNAL_AI_CLAUDE_MODEL?.trim() || null;
+    const modelConfigured = Boolean(modelId);
+    const pricing = pricingConfigured("anthropic");
     const executionGateEnabled = gateEnabled();
+    const configured = secretConfigured && modelConfigured && pricing;
+    const ready = configured && executionGateEnabled;
     return {
       provider: "anthropic",
       label: "Anthropic / Claude",
-      configured: configured && Boolean(modelId),
+      configured,
+      secretConfigured,
+      modelConfigured,
+      pricingConfigured: pricing,
       executionGateEnabled,
-      executionImplemented: false,
-      ready: false,
+      executionImplemented: true,
+      ready,
       modelId,
       roles: ["MFORGE", "VGUARD"],
-      detail: !configured ? "Szerveroldali Anthropic secret nincs konfigurálva." : !modelId ? "Claude modell nincs kijelölve." : "Adapter contract előkészítve; tényleges provider executor V1.2 következő gate.",
+      detail: !secretConfigured ? "Szerveroldali Anthropic secret nincs konfigurálva." : !modelConfigured ? "Claude modell nincs kijelölve." : !pricing ? "Claude HUF token-díjszabás nincs konfigurálva." : !executionGateEnabled ? "Anthropic executor kész; a global execution gate ki van kapcsolva." : "Anthropic Messages API executor READY.",
     };
   },
 };

@@ -70,7 +70,7 @@ type Payload = {
     maxFixRounds?: number;
   };
   adapter?: { ready?: boolean; detail?: string };
-  adapters?: Array<{ provider: string; label: string; configured: boolean; executionGateEnabled: boolean; executionImplemented: boolean; ready: boolean; modelId: string | null; detail: string }>;
+  adapters?: Array<{ provider: string; label: string; configured: boolean; secretConfigured?: boolean; modelConfigured?: boolean; pricingConfigured?: boolean; executionGateEnabled: boolean; executionImplemented: boolean; ready: boolean; modelId: string | null; detail: string }>;
   budget?: { dailyLimitHuf?: number | null; monthlyLimitHuf?: number | null; thresholds?: number[] };
   usage?: { runCount?: number; dailyCostHuf?: number; monthlyCostHuf?: number; totalTokens?: number; workers?: Record<string, { costHuf?: number; runs?: number; tokens?: number }> };
   error?: string;
@@ -287,7 +287,7 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
           {message ? <div className={styles.drawerNotice}>{message}</div> : null}
           <section className={styles.aiWorkerProviderPanel}>
             <header><b>PROVIDER / KÖLTSÉG KAPU</b><span>{adapterStates.some((item) => item.ready && item.provider !== "mock") ? "KÜLSŐ PROVIDER READY" : "KÜLSŐ FUTÁS ZÁRVA"}</span></header>
-            <div className={styles.aiWorkerProviderGrid}>{adapterStates.filter((item) => item.provider !== "mock").map((item) => <article key={item.provider} data-ready={item.ready ? "true" : "false"}><strong>{item.label}</strong><span>{item.configured ? "Konfigurálva" : "Nincs konfigurálva"} · {item.executionImplemented ? "executor kész" : "executor előkészítés"}</span><small>{item.modelId || "modell nincs kijelölve"}</small></article>)}</div>
+            <div className={styles.aiWorkerProviderGrid}>{adapterStates.filter((item) => item.provider !== "mock").map((item) => <article key={item.provider} data-ready={item.ready ? "true" : "false"}><strong>{item.label}</strong><span>{item.configured ? "Konfigurálva" : "Nincs konfigurálva"} · {item.executionImplemented ? "executor kész" : "executor előkészítés"} · {item.modelId || "modell nincs kijelölve"}</span><small>{item.detail}</small></article>)}</div>
             <div className={styles.aiWorkerUsageLine}><span>Mai költség <b>{Math.round(usage?.dailyCostHuf || 0).toLocaleString("hu-HU")} Ft</b>{systemBudget?.dailyLimitHuf ? ` / ${systemBudget.dailyLimitHuf.toLocaleString("hu-HU")} Ft` : " · napi limit nincs beállítva"}</span><span>Havi költség <b>{Math.round(usage?.monthlyCostHuf || 0).toLocaleString("hu-HU")} Ft</b>{systemBudget?.monthlyLimitHuf ? ` / ${systemBudget.monthlyLimitHuf.toLocaleString("hu-HU")} Ft` : " · havi limit nincs beállítva"}</span><span>Run <b>{usage?.runCount || 0}</b> · token <b>{(usage?.totalTokens || 0).toLocaleString("hu-HU")}</b></span></div>
           </section>
           {adapterDetail ? <div className={styles.aiAdapterNote}><strong>Worker Model Adapter</strong><span>{adapterDetail}</span></div> : null}
