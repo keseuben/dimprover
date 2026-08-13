@@ -138,6 +138,8 @@ function mapTask(row: TaskRow) {
     checkpoint: record(metadata.checkpoint),
     contextPack: record(metadata.contextPack),
     contextPackContent: record(metadata.contextPackContent),
+    providerPrompt: record(metadata.providerPrompt),
+    providerOutputArtifact: record(metadata.providerOutputArtifact),
     runCoordinator: record(metadata.runCoordinator),
     workspacePlan: record(metadata.workspacePlan),
     scope: row.scope,

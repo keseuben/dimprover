@@ -6,6 +6,7 @@ import { getInternalExecutorReadiness } from "../internal-executor-readiness";
 import { externalAiBudgetConfiguration, evaluateExternalAiBudget } from "./budget-policy";
 import { probeWorkerModelAdapters, resolveWorkerModelAdapter, type WorkerProviderRole } from "./model-adapter";
 import { summarizeExternalAiTaskUsage, summarizeExternalAiUsage } from "./run-ledger";
+import { verifyMForgeProviderPrompt } from "./provider-prompt";
 
 const CONTEXT_ROOT=path.resolve(process.env.DIMPRO_AI_WORKER_CONTEXT_ROOT?.trim()||"/srv/dimpro-dev/data/benjadmin-ai-worker-context");
 type Row=Record<string,unknown>;
@@ -34,7 +35,7 @@ export async function getExternalAiRunReadiness(taskId:string,role:WorkerProvide
  const taskResult=await db.from("dev_center_tasks").select("id,project_id,repository_id,status,requested_worker_id,metadata,scope").eq("id",taskId).maybeSingle();
  if(taskResult.error)throw new Error(taskResult.error.message);
  if(!taskResult.data)return{ok:false as const,error:"Az AI worker task nem található."};
- const task=taskResult.data as Row,meta=record(task.metadata),contextSummary=record(meta.contextPackContent),workspace=record(meta.workspacePlan),preflight=record(meta.preflight);
+ const task=taskResult.data as Row,meta=record(task.metadata),contextSummary=record(meta.contextPackContent),promptSummary=record(meta.providerPrompt),workspace=record(meta.workspacePlan),preflight=record(meta.preflight);
  if(meta.workflowTarget!=="EXTERNAL_AI_WORKER_V1"||meta.recordType!=="WORKER_TASK")return{ok:false as const,error:"A task nem Külső AI Worker V1 task."};
  const blockers:string[]=[];
  const warnings:string[]=[];
@@ -43,6 +44,11 @@ export async function getExternalAiRunReadiness(taskId:string,role:WorkerProvide
  if(!text(contextSummary.id))blockers.push("Safe Context Pack még nincs elkészítve.");
  const contextVerification=text(contextSummary.id)?await verifyContextPack(contextSummary):{valid:false,reason:"Context Pack hiányzik.",filePath:null};
  if(!contextVerification.valid)blockers.push(contextVerification.reason);
+ if(!text(promptSummary.id))blockers.push("M.Forge provider prompt még nincs elkészítve.");
+ const promptVerification=text(promptSummary.id)?await verifyMForgeProviderPrompt(promptSummary):{valid:false,reason:"Provider prompt hiányzik."};
+ if(!promptVerification.valid)blockers.push(promptVerification.reason);
+ if(text(promptSummary.baselineCommit)&&text(promptSummary.baselineCommit)!==text(contextSummary.baselineCommit))blockers.push("A provider prompt baseline eltér a Context Pack baseline-tól.");
+ if(text(promptSummary.contextPackSha256)&&text(promptSummary.contextPackSha256)!==text(contextSummary.sha256))blockers.push("A provider prompt másik Context Pack SHA-ra épül; új prompt szükséges.");
  const engineReadiness=await getInternalExecutorReadiness(db);
  if(!engineReadiness.repositoryReady||!engineReadiness.baselineReady)blockers.push("A DEV repository/trusted baseline nem READY.");
  if(text(workspace.repositoryId)!==engineReadiness.repositoryId||text(task.repository_id)!==engineReadiness.repositoryId)blockers.push("A task/workspace repository-kötés eltér a trusted baseline repositorytól.");
@@ -73,5 +79,5 @@ export async function getExternalAiRunReadiness(taskId:string,role:WorkerProvide
   }
  }
  const ready=blockers.length===0&&Boolean(provider);
- return{ok:true as const,taskId,role,ready,state:ready?"READY":"BLOCKED",checkedAt:new Date().toISOString(),provider:provider?{provider:provider.provider,label:provider.label,modelId:provider.modelId}:null,providerProbes:probes.map((item)=>({provider:item.provider,label:item.label,configured:item.configured,executionGateEnabled:item.executionGateEnabled,executionImplemented:item.executionImplemented,ready:item.ready,modelId:item.modelId,detail:item.detail})),context:{valid:contextVerification.valid,reason:contextVerification.reason,fileCount:"fileCount" in contextVerification?contextVerification.fileCount:0,totalBytes:"totalBytes" in contextVerification?contextVerification.totalBytes:0,baselineCommit:"baselineCommit" in contextVerification?contextVerification.baselineCommit:null},workspace:{repositoryId:text(workspace.repositoryId),baselineCommit:text(workspace.baselineCommit),branchName:text(workspace.branchName),worktreePath:text(workspace.worktreePath),workerId:text(workspace.workerId)},budget,usage:{task:taskUsage,system:{dailyCostHuf:systemUsage.dailyCostHuf,monthlyCostHuf:systemUsage.monthlyCostHuf}},blockers,warnings};
+ return{ok:true as const,taskId,role,ready,state:ready?"READY":"BLOCKED",checkedAt:new Date().toISOString(),provider:provider?{provider:provider.provider,label:provider.label,modelId:provider.modelId}:null,providerProbes:probes.map((item)=>({provider:item.provider,label:item.label,configured:item.configured,executionGateEnabled:item.executionGateEnabled,executionImplemented:item.executionImplemented,ready:item.ready,modelId:item.modelId,detail:item.detail})),context:{valid:contextVerification.valid,reason:contextVerification.reason,fileCount:"fileCount" in contextVerification?contextVerification.fileCount:0,totalBytes:"totalBytes" in contextVerification?contextVerification.totalBytes:0,baselineCommit:"baselineCommit" in contextVerification?contextVerification.baselineCommit:null},prompt:{valid:promptVerification.valid,reason:promptVerification.reason,bytes:"bytes" in promptVerification?promptVerification.bytes:0,sha256:"sha256" in promptVerification?promptVerification.sha256:null},workspace:{repositoryId:text(workspace.repositoryId),baselineCommit:text(workspace.baselineCommit),branchName:text(workspace.branchName),worktreePath:text(workspace.worktreePath),workerId:text(workspace.workerId)},budget,usage:{task:taskUsage,system:{dailyCostHuf:systemUsage.dailyCostHuf,monthlyCostHuf:systemUsage.monthlyCostHuf}},blockers,warnings};
 }
