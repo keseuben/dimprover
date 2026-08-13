@@ -6,7 +6,7 @@ import { classifyScopePath, highestRisk, type ScopeCandidate } from "./scope-pol
 import { isSensitivePath, scanSensitiveText } from "./secret-scanner";
 
 const execFileAsync = promisify(execFile);
-const ANALYZER_VERSION = "1.1.0";
+const ANALYZER_VERSION = "1.1.1";
 const MAX_CANDIDATES = 24;
 const MAX_CONTENT_BYTES = 256 * 1024;
 const stopWords = new Set(["hogy","legyen","lehessen","kell","egy","az","es","vagy","ami","amit","mellett","feladat","modul","dimpro","dimprover","benjadmin","szeretnem","szeretne","with","from","this","that","the","and","for"]);
@@ -39,6 +39,18 @@ function moduleHints(value: string) {
   return [...new Set(hints)];
 }
 function escapeRegex(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+const genericScopeHints = new Set(["versions", "documents", "review"]);
+function pathHintHits(filePath: string, hints: string[]) {
+  const normalizedPath = normalize(filePath);
+  return hints.filter((hint) => normalizedPath.includes(normalize(hint)));
+}
+function scopeConfidence(filePath: string, hints: string[], evidence: string[]) {
+  const hits = pathHintHits(filePath, hints);
+  const strongHit = hits.some((hint) => hint.includes("/") || !genericScopeHints.has(hint));
+  const directImport = evidence.some((item) => item.startsWith("Közvetlen importfüggőség:"));
+  return { hits, strongHit, directImport, highConfidence: strongHit || hits.length >= 2 || directImport };
+}
 
 async function trackedFiles(root: string) {
   const { stdout } = await execFileAsync("/usr/bin/git", ["-C", root, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 8000 });
@@ -151,8 +163,17 @@ export async function analyzeTechnicalScope(input: { title: string; goal: string
   const candidates: ScopeCandidate[] = [];
   for (const [filePath, info] of ranked) {
     const policy = classifyScopePath(filePath);
+    const confidence = scopeConfidence(filePath, hints, info.evidence);
+    const lowConfidenceGreen = policy.riskLevel === "GREEN" && !confidence.highConfidence;
     const detailEvidence = await evidenceFor(root, filePath, [...searchTokens, ...hints]);
-    candidates.push({ path: filePath, score: info.score, riskLevel: policy.riskLevel, decision: policy.decision, reasons: policy.reasons, evidence: [...info.evidence.slice(0, 3), ...detailEvidence].slice(0, 5) });
+    candidates.push({
+      path: filePath,
+      score: info.score,
+      riskLevel: lowConfidenceGreen ? "YELLOW" : policy.riskLevel,
+      decision: lowConfidenceGreen ? "NEEDS_REVIEW" : policy.decision,
+      reasons: lowConfidenceGreen ? ["Alacsony scope-bizonyosság: nincs erős modulútvonal vagy közvetlen importkapcsolat; automatikus write helyett BENJADMIN review szükséges."] : policy.reasons,
+      evidence: [...info.evidence.slice(0, 3), ...(confidence.hits.length ? [`Scope hint egyezés: ${confidence.hits.join(", ")}`] : []), ...detailEvidence].slice(0, 5),
+    });
   }
 
   const approved = candidates.filter((item) => item.decision === "AUTO_APPROVED").map((item) => ({ type: "path" as const, key: item.path }));
