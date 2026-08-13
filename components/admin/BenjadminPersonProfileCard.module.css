@@ -1,8 +1,8 @@
 .layer { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 22px; background: rgba(2,9,18,.62); backdrop-filter: blur(8px); }
-.card { position: relative; width: min(760px, calc(100vw - 32px)); min-height: 340px; overflow: hidden; border: 1px solid rgba(103,232,249,.28); border-radius: 20px; display: grid; grid-template-columns: minmax(250px, 42%) minmax(0,58%); gap: 0; color: #eafaff; background: linear-gradient(145deg, rgba(7,31,48,.99), rgba(3,14,26,.99)); box-shadow: 0 34px 90px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.04); }
+.card { position: relative; width: min(1160px, calc(100vw - 40px)); min-height: 520px; overflow: hidden; border: 1px solid rgba(103,232,249,.28); border-radius: 20px; display: grid; grid-template-columns: minmax(500px, 52%) minmax(0,48%); gap: 0; color: #eafaff; background: linear-gradient(145deg, rgba(7,31,48,.99), rgba(3,14,26,.99)); box-shadow: 0 34px 90px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.04); }
 .close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border: 1px solid rgba(122,184,209,.22); border-radius: 10px; display: grid; place-items: center; color: #b7d8e7; background: rgba(4,18,30,.78); cursor: pointer; }
-.visual { min-height: 340px; padding: 30px 22px 20px; display: grid; place-items: center; align-content: center; gap: 10px; background: radial-gradient(circle at 50% 42%, rgba(34,211,238,.10), transparent 58%); }
-.visual img { width: min(250px, 100%); height: auto; object-fit: contain; filter: drop-shadow(0 18px 30px rgba(0,0,0,.32)); }
+.visual { min-height: 520px; padding: 34px 26px 24px; display: grid; place-items: center; align-content: center; gap: 10px; background: radial-gradient(circle at 50% 42%, rgba(34,211,238,.10), transparent 58%); }
+.visual img { width: min(500px, 100%); height: auto; object-fit: contain; filter: drop-shadow(0 18px 30px rgba(0,0,0,.32)); }
 .visual span { padding: 5px 10px; border: 1px solid rgba(103,232,249,.23); border-radius: 999px; color: #8deafb; font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .copy { padding: 34px 34px 28px 26px; display: flex; flex-direction: column; justify-content: center; }
 .copy header > span { color: #5b849d; font-size: 10px; font-weight: 950; letter-spacing: .16em; }
@@ -14,6 +14,7 @@
 .responsibilities { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(114,166,190,.14); }
 .responsibilities > span { color: #5f8ba0; font-size: 10px; font-weight: 950; letter-spacing: .13em; }
 .responsibilities ul { margin: 8px 0 0; padding-left: 18px; color: #b5cfda; font-size: 12px; line-height: 1.55; }
+@media (max-width: 900px) { .card { grid-template-columns: minmax(320px, 44%) minmax(0,56%); min-height: 420px; } .visual { min-height: 420px; padding: 26px 20px 18px; } .visual img { width: min(350px, 96%); } .copy { padding: 28px 26px 24px 20px; } }
 @media (max-width: 640px) { .card { grid-template-columns: 1fr; max-height: calc(100dvh - 28px); overflow: auto; } .visual { min-height: 220px; padding: 24px 20px 12px; } .visual img { width: 180px; } .copy { padding: 18px 22px 24px; } .copy h2 { font-size: 25px; } }
 :global(.admin-theme-light) .card { color:#17283a; border-color:#cfe2ea; background:linear-gradient(145deg,#fff,#f3f8fb); box-shadow:0 28px 70px rgba(32,62,78,.22); }
 :global(.admin-theme-light) .close { color:#36576a; border-color:#d3e2e9; background:#fff; }
@@ -22,3 +23,5 @@
 :global(.admin-theme-light) .copy header p, :global(.admin-theme-light) .copy > p { color:#587789; }
 :global(.admin-theme-light) .copy > strong { color:#21465a; }
 :global(.admin-theme-light) .responsibilities ul { color:#456778; }
+
+:global(.admin-theme-light) .visual span { color:#0f766e; border-color:#5ccfc4; background:#ecfdfb; box-shadow:0 0 0 1px rgba(15,118,110,.05); }

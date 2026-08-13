@@ -7096,3 +7096,118 @@
 .operator-worker-avatar-button { appearance: none; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 9px; display: inline-grid; place-items: center; background: transparent; cursor: pointer; }
 .operator-worker-avatar-button:hover { background: rgba(34,211,238,.08); }
 .operator-worker-avatar-button:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+
+/* BENJADMIN csapatképernyő v1.2.1 — kompakt, egyablakos tabló + panelkontraszt javítás */
+.benjadmin-team-screen__center {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.benjadmin-team-screen__center-head,
+.benjadmin-team-screen__executive-panel { flex: 0 0 auto; }
+.benjadmin-team-screen__executive-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(155deg, rgba(7, 25, 39, .92), rgba(4, 15, 27, .94));
+  border-color: rgba(92, 170, 194, .20);
+}
+.benjadmin-team-screen__executive-panel.is-team { isolation: isolate; }
+.benjadmin-team-screen__executive-panel.is-team .benjadmin-team-screen__team-tree { overflow: hidden; }
+.benjadmin-team-screen__team-tree { padding: 7px 9px 10px; gap: 0; }
+.benjadmin-team-screen__tree-level.is-owner-level { grid-template-columns: minmax(300px, 360px); }
+.benjadmin-team-screen__tree-level.is-lead-level { grid-template-columns: minmax(285px, 340px); }
+.benjadmin-team-screen__tree-level.is-external-level { width: min(76%, 590px); }
+.benjadmin-team-screen__tree-connector { height: 11px; }
+.benjadmin-team-screen__tree-branch { height: 16px; }
+.benjadmin-team-screen__tree-branch::before { top: -11px; height: 11px; }
+.benjadmin-team-screen__tree-branch.is-external-branch { margin-top: 3px; }
+.benjadmin-team-screen__tree-level.is-engineer-level .benjadmin-team-screen__tree-node::before,
+.benjadmin-team-screen__tree-level.is-external-level .benjadmin-team-screen__tree-node::before { top: -17px; height: 17px; }
+.benjadmin-team-screen__tree-node.benjadmin-team-screen__member {
+  min-height: 76px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.benjadmin-team-screen__tree-node.is-owner-node {
+  min-height: 96px;
+  padding: 8px 12px;
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.benjadmin-team-screen__tree-node.is-lead-node {
+  min-height: 88px;
+  padding: 8px 11px;
+  grid-template-columns: 74px minmax(0, 1fr);
+}
+.benjadmin-team-screen__tree-node.is-worker-node { padding: 7px 8px; }
+.benjadmin-team-screen__tree-node.is-owner-node .benjadmin-team-screen__avatar { width: 80px; height: 80px; }
+.benjadmin-team-screen__tree-node.is-lead-node .benjadmin-team-screen__avatar { width: 70px; height: 70px; }
+.benjadmin-team-screen__tree-node.is-worker-node .benjadmin-team-screen__avatar,
+.benjadmin-team-screen__tree-node.is-external-worker-node .benjadmin-team-screen__avatar { width: 58px; height: 58px; }
+.benjadmin-team-screen__tree-node .benjadmin-team-screen__member-copy {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+}
+.benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title { align-items: flex-start; text-align: left; gap: 3px; }
+.benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title p { max-width: 100%; margin: 2px 0 0; }
+.benjadmin-team-screen__tree-node .benjadmin-team-screen__member-title > span { min-height: 20px; padding: 2px 6px; }
+.benjadmin-team-screen__tree-node ul { display: none; }
+.benjadmin-team-screen__tree-node footer { margin-top: 4px; padding-top: 4px; justify-content: flex-start; }
+.benjadmin-team-screen__tree-external-head { margin: -2px 0 5px; min-height: 26px; }
+
+/* A vezetői kártyák a sötét BENJADMIN vásznon maradnak akkor is, ha az admin alaptéma világos. */
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-panel {
+  background: linear-gradient(155deg, rgba(7, 25, 39, .94), rgba(4, 15, 27, .96));
+  border-color: rgba(92, 170, 194, .22);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-card,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table-wrap {
+  background: rgba(8, 26, 39, .76);
+  border-color: rgba(92, 170, 194, .18);
+}
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-toggle strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-card > header strong,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-line b,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__operations-strip b { color: #dff6fb; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__executive-toggle small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__metric-grid article span,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-line,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__cost-card > small,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__operations-strip,
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__measurement-note { color: #7899a9; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table th { color: #7d9aa9; background: rgba(10, 32, 46, .92); }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table td { color: #9db7c3; }
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table td:nth-child(2),
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table td:nth-child(3),
+.benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__time-table td:nth-child(4) { color: #d8eef3; }
+
+@media (max-width: 1250px) {
+  .benjadmin-team-screen__tree-node.is-owner-node .benjadmin-team-screen__avatar { width: 74px; height: 74px; }
+  .benjadmin-team-screen__tree-node.is-lead-node .benjadmin-team-screen__avatar { width: 64px; height: 64px; }
+  .benjadmin-team-screen__tree-node.is-worker-node .benjadmin-team-screen__avatar,
+  .benjadmin-team-screen__tree-node.is-external-worker-node .benjadmin-team-screen__avatar { width: 52px; height: 52px; }
+}
+@media (max-width: 900px) {
+  .benjadmin-team-screen__tree-node.benjadmin-team-screen__member,
+  .benjadmin-team-screen__tree-node.is-owner-node,
+  .benjadmin-team-screen__tree-node.is-lead-node { grid-template-columns: 70px minmax(0, 1fr); }
+  .benjadmin-team-screen__tree-node .benjadmin-team-screen__avatar,
+  .benjadmin-team-screen__tree-node.is-owner-node .benjadmin-team-screen__avatar,
+  .benjadmin-team-screen__tree-node.is-lead-node .benjadmin-team-screen__avatar,
+  .benjadmin-team-screen__tree-node.is-worker-node .benjadmin-team-screen__avatar,
+  .benjadmin-team-screen__tree-node.is-external-worker-node .benjadmin-team-screen__avatar { width: 62px; height: 62px; }
+}
+/* A korábbi általános team-grid nth-child span szabályai a családfa sorain belül nem érvényesülhetnek. */
+.benjadmin-team-screen__team-tree .benjadmin-team-screen__tree-level > .benjadmin-team-screen__tree-node {
+  grid-column: auto;
+}
