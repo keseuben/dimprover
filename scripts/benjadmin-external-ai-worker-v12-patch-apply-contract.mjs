@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+const mod=await import(`../app/lib/dev-center/ai-worker/patch-apply-plan.ts?contract=${Date.now()}`);
+let passed=0;const check=(name,fn)=>{fn();passed+=1;console.log(`PASS ${name}`)};
+const valid={taskId:"dev-task-abc-123",sessionId:"dev-session-abc-123",worktreePath:"/srv/dimpro-dev/worktrees/worker-mforge-dev-task-abc-123",branchName:"worker/mforge/dev-task-abc-123",baselineCommit:"a".repeat(40),allowedPaths:["app/projektkapu/page.tsx"],changedPaths:["app/projektkapu/page.tsx"]};
+check("Valid patch apply plan elfogadott",()=>assert.equal(mod.validateMForgePatchApplyPlan(valid).changedPaths.length,1));
+check("Scope-on kívüli changed path tiltott",()=>assert.throws(()=>mod.validateMForgePatchApplyPlan({...valid,changedPaths:["app/other.ts"]}),/scope-on kívüli/));
+check("Más worker branch tiltott",()=>assert.throws(()=>mod.validateMForgePatchApplyPlan({...valid,branchName:"worker/vguard/dev-task-abc-123",worktreePath:"/srv/dimpro-dev/worktrees/worker-vguard-dev-task-abc-123"}),/nem M.Forge branch/));
+check("PROD vagy idegen worktree path tiltott",()=>assert.throws(()=>mod.validateMForgePatchApplyPlan({...valid,worktreePath:"/srv/prod/worktree"}),/nem determinisztikus/));
+check("Traversal changed path tiltott",()=>assert.throws(()=>mod.validateMForgePatchApplyPlan({...valid,allowedPaths:["../x"],changedPaths:["../x"]}),/Érvénytelen patch path/));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

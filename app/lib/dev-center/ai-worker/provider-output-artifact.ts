@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isSensitivePath, scanSensitiveText } from "./secret-scanner";
@@ -19,6 +19,25 @@ function client(): SupabaseClient {
 }
 export function parseAndValidateMForgeProviderOutput(raw: string, allowedPaths: string[]): MForgePatchArtifact {
   return parseMForgeProviderOutputCore(raw, allowedPaths, { isSensitivePath, scanSensitiveText }, { maxOutputBytes: MAX_PROVIDER_OUTPUT_BYTES, maxDiffBytes: MAX_DIFF_BYTES });
+}
+
+
+export async function readVerifiedMForgeOutputArtifact(summaryValue: unknown) {
+  const summary = record(summaryValue);
+  const artifactPath = path.resolve(typeof summary.path === "string" ? summary.path.trim() : "");
+  if (!artifactPath || artifactPath === OUTPUT_ROOT || !artifactPath.startsWith(`${OUTPUT_ROOT}${path.sep}`)) throw new Error("A provider output artifact path kívül esik a BENJADMIN DEV output gyökéren.");
+  const [bytes, fileStat] = await Promise.all([readFile(artifactPath), stat(artifactPath)]);
+  if ((fileStat.mode & 0o777) !== 0o600) throw new Error("A provider output artifact fájljogosultsága nem 0600.");
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (digest !== (typeof summary.sha256 === "string" ? summary.sha256 : "")) throw new Error("A provider output artifact SHA-256 eltér a task metaértéktől.");
+  const payload = record(JSON.parse(bytes.toString("utf8")));
+  if (payload.version !== "1.2-output" || payload.role !== "MFORGE" || payload.productionAccess !== "DENY") throw new Error("A provider output artifact worker/PROD policy meta hibás.");
+  if (payload.id !== summary.id || payload.providerRunId !== summary.providerRunId) throw new Error("A provider output artifact identity eltér a task metaértéktől.");
+  const changedPaths = Array.isArray(payload.changedPaths) ? payload.changedPaths.filter((value): value is string => typeof value === "string") : [];
+  if (!changedPaths.length) throw new Error("A provider output artifact changedPaths mezője üres.");
+  const unifiedDiff = typeof payload.unifiedDiff === "string" ? payload.unifiedDiff : "";
+  if (!unifiedDiff) throw new Error("A provider output artifact unifiedDiff mezője üres.");
+  return { valid: true as const, artifactPath, sha256: digest, payload, changedPaths, unifiedDiff };
 }
 
 export async function persistValidatedMForgeOutputArtifact(input: {
