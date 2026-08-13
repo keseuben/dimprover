@@ -603,3 +603,4 @@
 .aiScopeDetails article[data-risk="RED"] b { color: var(--red); background: var(--red-soft); }
 .aiScopeDetails code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 10px; }
 .aiScopeDetails article span { color: var(--muted); font-size: 9px; }
+.aiWorkerReadyTag { min-height: 28px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--green) 55%, var(--border)); border-radius: 7px; display: inline-flex; align-items: center; color: var(--green); background: var(--green-soft); font-size: 9px; font-weight: 950; letter-spacing: .035em; }

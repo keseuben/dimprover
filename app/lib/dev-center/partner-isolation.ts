@@ -2,6 +2,7 @@ import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DevEngineOperation, DevEngineScope } from "./engine-types";
 import { internalRepositoryProjectAllowed } from "./internal-repository-binding";
+import { externalAiWorkerOperationAllowed, isExternalAiWorkerCode } from "./ai-worker/external-worker-policy";
 
 export type DevelopmentPlane = "INTERNAL" | "PARTNER";
 export type PartnerAccessLevel = "DENY" | "READ" | "WRITE" | "EXECUTE";
@@ -28,7 +29,7 @@ type PartnerProjectRow = {
   status: "draft" | "provisioning" | "ready" | "paused" | "closed";
 };
 
-type WorkerRow = { id: string; code: string; status?: string | null };
+type WorkerRow = { id: string; code: string; status?: string | null; metadata?: JsonRecord | null };
 
 type RepositoryRow = { id: string; project_id: string; dev_path?: string | null; status?: string | null; metadata?: JsonRecord | null };
 
@@ -72,7 +73,7 @@ export async function resolveDevelopmentPlane(db: SupabaseClient, projectId: str
 
 async function workerRow(db: SupabaseClient, workerId: string) {
   if (!workerId) throw new PartnerIsolationPolicyError("A workerId kötelező.", "PARTNER_WORKER_REQUIRED", 400);
-  const { data, error } = await db.from("dev_center_workers").select("id,code,status").eq("id", workerId).maybeSingle();
+  const { data, error } = await db.from("dev_center_workers").select("id,code,status,metadata").eq("id", workerId).maybeSingle();
   if (error) dbFailure("A worker policy ellenőrzése sikertelen.", error);
   if (!data) throw new PartnerIsolationPolicyError("A worker nem található.", "PARTNER_WORKER_NOT_FOUND", 404);
   return data as WorkerRow;
@@ -89,6 +90,12 @@ export async function assertWorkerProjectIsolation(db: SupabaseClient, input: { 
         403,
         { workerId: worker.id, projectId: input.projectId, plane: planeInfo.plane },
       );
+    }
+    if (isExternalAiWorkerCode(worker.code)) {
+      const metadata = worker.metadata && typeof worker.metadata === "object" ? worker.metadata : {};
+      if (metadata.layer !== "EXTERNAL_AI" || metadata.productionAccess !== "DENY") {
+        throw new PartnerIsolationPolicyError("A külső AI worker policy metadata hiányos; fail-closed.", "EXTERNAL_AI_WORKER_POLICY_NOT_READY", 403, { workerId: worker.id, workerCode: worker.code });
+      }
     }
     return { allowed: true as const, worker, plane: planeInfo.plane, partner: null };
   }
@@ -247,7 +254,22 @@ export async function assertPartnerEngineOperationIsolation(db: SupabaseClient, 
   operation: DevEngineOperation;
 }) {
   const isolation = await assertWorkerProjectIsolation(db, { workerId: input.workerId, projectId: input.projectId });
-  if (isolation.plane === "INTERNAL") return isolation;
+  if (isolation.plane === "INTERNAL") {
+    if (isExternalAiWorkerCode(isolation.worker.code)) {
+      const { data: environment, error: environmentError } = await db.from("dev_center_environments").select("id,code,kind,status,read_only").eq("id", input.environmentId).maybeSingle();
+      if (environmentError) dbFailure("A külső AI worker DEV környezete nem olvasható.", environmentError);
+      if (!environment || environment.kind !== "DEV" || environment.status !== "online") {
+        throw new PartnerIsolationPolicyError("Külső AI worker kizárólag online DEV környezetben futtatható.", "EXTERNAL_AI_WORKER_DEV_ONLY", 403, { workerId: isolation.worker.id, environmentId: input.environmentId, environmentKind: environment?.kind || null });
+      }
+      if (environment.read_only && input.operation === "write") {
+        throw new PartnerIsolationPolicyError("A DEV környezet read-only; külső AI worker írás tiltott.", "EXTERNAL_AI_WORKER_ENV_READ_ONLY", 403, { workerId: isolation.worker.id, environmentId: input.environmentId });
+      }
+      if (!externalAiWorkerOperationAllowed(isolation.worker.code, input.operation)) {
+        throw new PartnerIsolationPolicyError("A külső AI worker számára a kért engine művelet technikailag tiltott.", "EXTERNAL_AI_WORKER_OPERATION_DENIED", 403, { workerId: isolation.worker.id, workerCode: isolation.worker.code, operation: input.operation });
+      }
+    }
+    return isolation;
+  }
 
   const { data: environmentBinding, error: environmentError } = await db
     .from("dev_center_partner_environments")

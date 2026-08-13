@@ -133,6 +133,11 @@ function mapTask(row: TaskRow) {
     technicalScopeMode: text(metadata.technicalScopeMode) || "AUTO_BENJADMIN",
     scopeAnalysisState: text(metadata.scopeAnalysisState) || "PENDING",
     scopeAnalysis: record(metadata.scopeAnalysis),
+    scopeExpansionRequest: record(metadata.scopeExpansionRequest),
+    preflight: record(metadata.preflight),
+    checkpoint: record(metadata.checkpoint),
+    contextPack: record(metadata.contextPack),
+    workspacePlan: record(metadata.workspacePlan),
     scope: row.scope,
     acceptance: row.acceptance,
     createdAt: row.created_at,
@@ -193,7 +198,12 @@ export async function analyzeExternalAiWorkerTask(taskId: string) {
   const blockedByRed = analysis.deniedCount > 0;
   const nextState: ExternalAiWorkflowState = blockedByRed ? "DRAFT" : "READY";
   const analysisState = blockedByRed ? "BLOCKED_RED" : analysis.reviewRequired ? "NEEDS_REVIEW" : "AUTO_APPROVED";
-  const nextMetadata = { ...metadata, workflowState: nextState, scopeAnalysisState: analysisState, scopeAnalysis: analysis, scopeAnalyzedAt: analysis.generatedAt };
+  const scopeExpansionRequest = analysis.reviewCount > 0 ? {
+    id: `scope-exp-${randomUUID().slice(0, 12)}`, status: "PENDING", requestedAt: new Date().toISOString(), requestedBy: "BenAI",
+    candidatePaths: analysis.candidates.filter((candidate) => candidate.riskLevel === "YELLOW").map((candidate) => candidate.path),
+    reason: "YELLOW technikai scope külön felülvizsgálatot igényel; a felhasználónak nem kell fájlonként döntenie.",
+  } : null;
+  const nextMetadata = { ...metadata, workflowState: nextState, scopeAnalysisState: analysisState, scopeAnalysis: analysis, scopeExpansionRequest, scopeAnalyzedAt: analysis.generatedAt };
   const update = await db.from("dev_center_tasks").update({
     metadata: nextMetadata,
     scope: blockedByRed ? [] : analysis.approvedScope,
@@ -210,4 +220,23 @@ export async function analyzeExternalAiWorkerTask(taskId: string) {
   });
   if (audit.error) throw new Error(audit.error.message);
   return { ok: true as const, taskId, workflowState: nextState, scopeAnalysisState: analysisState, analysis };
+}
+
+export async function resolveExternalAiScopeReview(taskId: string, action: string) {
+  const db=dbClient();
+  const task=await db.from("dev_center_tasks").select("id,project_id,status,scope,metadata").eq("id",taskId).maybeSingle();
+  if(task.error)throw new Error(task.error.message);
+  if(!task.data)return{ok:false as const,error:"Az AI worker task nem található."};
+  const metadata=record(task.data.metadata),analysis=record(metadata.scopeAnalysis);
+  if(metadata.workflowTarget!==EXTERNAL_AI_WORKFLOW||metadata.recordType!=="WORKER_TASK")return{ok:false as const,error:"A task nem Külső AI Worker V1 task."};
+  if(metadata.scopeAnalysisState!=="NEEDS_REVIEW")return{ok:false as const,error:"A scope jelenleg nem YELLOW review állapotú."};
+  if(action!=="EXCLUDE_YELLOW")return{ok:false as const,error:"V1.1-ben csak a biztonságos YELLOW-kizárás aktív; YELLOW write-jóváhagyás provider/gate nélkül tiltott."};
+  const request=record(metadata.scopeExpansionRequest);
+  const nextRequest={...request,status:"RESOLVED_EXCLUDED",resolvedAt:new Date().toISOString(),resolvedBy:"BENJADMIN_SAFE_POLICY",decision:"EXCLUDE_YELLOW"};
+  const nextMetadata={...metadata,scopeAnalysisState:"REVIEW_RESOLVED_SAFE",scopeExpansionRequest:nextRequest,scopeReviewResolvedAt:new Date().toISOString()};
+  const update=await db.from("dev_center_tasks").update({metadata:nextMetadata,status:"ready",blocked_reason:null,updated_at:new Date().toISOString()}).eq("id",taskId).select("id,status,scope,metadata,updated_at").single();
+  if(update.error)throw new Error(update.error.message);
+  const audit=await db.from("dev_center_audit_events").insert({id:`dev-audit-${randomUUID().slice(0,12)}`,actor_type:"system",actor_id:"BenAI",action:"AI_WORKER_SCOPE_REVIEW_RESOLVED_SAFE",entity_type:"task",entity_id:taskId,task_id:taskId,project_id:task.data.project_id,summary:"YELLOW scope biztonságosan kizárva; csak a GREEN scope marad végrehajtható.",metadata:{scopeExpansionRequestId:request.id||null,yellowCount:Array.isArray(analysis.candidates)?analysis.candidates.filter((candidate)=>record(candidate).riskLevel==="YELLOW").length:0}});
+  if(audit.error)throw new Error(audit.error.message);
+  return{ok:true as const,taskId,scopeAnalysisState:"REVIEW_RESOLVED_SAFE" as const,scopeExpansionRequest:nextRequest,scope:update.data.scope};
 }

@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+const p=await import(`../app/lib/dev-center/ai-worker/external-worker-policy.ts?contract=${Date.now()}`);
+let passed=0;const check=(n,f)=>{f();passed+=1;console.log(`PASS ${n}`)};
+check("MFORGE worker ID stabil",()=>assert.equal(p.EXTERNAL_AI_WORKER_IDS.MFORGE,"worker_mforge"));
+check("VGUARD worker ID stabil",()=>assert.equal(p.EXTERNAL_AI_WORKER_IDS.VGUARD,"worker_vguard"));
+check("MFORGE write engedett",()=>assert.equal(p.externalAiWorkerOperationAllowed("MFORGE","write"),true));
+check("MFORGE deploy tiltott",()=>assert.equal(p.externalAiWorkerOperationAllowed("MFORGE","deploy"),false));
+check("VGUARD write tiltott",()=>assert.equal(p.externalAiWorkerOperationAllowed("VGUARD","write"),false));
+check("VGUARD build/test engedett",()=>assert.equal(p.externalAiWorkerOperationAllowed("VGUARD","build")&&p.externalAiWorkerOperationAllowed("VGUARD","test"),true));
+check("Külső worker kód felismerés fail-closed",()=>assert.equal(p.isExternalAiWorkerCode("OUTMINAI"),false));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

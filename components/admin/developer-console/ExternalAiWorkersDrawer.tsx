@@ -29,6 +29,11 @@ type ExternalTask = {
     safeToPreflight?: boolean;
     candidates?: Array<{ path: string; riskLevel: "GREEN" | "YELLOW" | "RED"; decision: string; reasons: string[]; evidence: string[] }>;
   };
+  scopeExpansionRequest: { id?: string; status?: string; candidatePaths?: string[]; decision?: string };
+  preflight: { state?: string; checkedAt?: string; scopeConflictCount?: number };
+  checkpoint: { id?: string; sha256?: string };
+  contextPack: { version?: string; fileCount?: number; scopeCount?: number; yellowExcluded?: boolean };
+  workspacePlan: { branchName?: string; worktreePath?: string; baselineCommit?: string; workerCode?: string };
   createdAt: string;
 };
 
@@ -141,6 +146,32 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
     }
   }
 
+  async function safeScope(task: ExternalTask) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/dev/ai-worker/tasks/${encodeURIComponent(task.id)}/scope-review`, { method: "POST", headers: adminHeaders(true), body: JSON.stringify({ action: "EXCLUDE_YELLOW" }) });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; scopeAnalysisState?: string; error?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A biztonságos scope döntés sikertelen.");
+      setMessage("YELLOW elemek kizárva; csak GREEN scope maradt végrehajtható.");
+      await load();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "A biztonságos scope döntés sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  async function preflight(task: ExternalTask) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/dev/ai-worker/tasks/${encodeURIComponent(task.id)}/preflight`, { method: "POST", headers: adminHeaders(true) });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; checkpoint?: { id?: string }; contextPack?: { fileCount?: number }; error?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A preflight sikertelen.");
+      setMessage(`Preflight PASS · checkpoint ${payload.checkpoint?.id || "—"} · context ${payload.contextPack?.fileCount || 0} fájl.`);
+      await load();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "A preflight sikertelen."); }
+    finally { setBusy(false); }
+  }
+
   async function transition(task: ExternalTask, state: "READY" | "PAUSED") {
     setBusy(true);
     setMessage("");
@@ -208,13 +239,13 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
                   <div><small>FELADAT</small><strong>{task.goal.slice(0, 115)}</strong><span>{task.technicalScopeMode === "AUTO_BENJADMIN" ? "Scope: automatikus" : task.technicalScopeMode}</span></div>
                   <div><small>WORKER</small><strong>M.Forge-AI → V.Guard-AI</strong><span>Provider: mock V1.0</span></div>
                   <div><small>ELLENŐRZÉS</small><strong>Scope {task.scopeAnalysis?.overallRisk ? `· ${task.scopeAnalysis.overallRisk}` : "· elemzésre vár"}</strong><span>{task.scopeAnalysisState || "PENDING"} · review {task.scopeAnalysis?.reviewCount || 0} · tiltott {task.scopeAnalysis?.deniedCount || 0}</span></div>
-                  <div><small>EREDMÉNY</small><strong>{task.taskBudgetHuf.toLocaleString("hu-HU")} Ft · {task.maxActiveMinutesPerWorker} perc</strong><span>DEV READY: még nem</span></div>
+                  <div><small>EREDMÉNY</small><strong>{task.preflight?.state === "PASS" ? `PREFLIGHT PASS · ${task.contextPack?.fileCount || 0} context fájl` : `${task.taskBudgetHuf.toLocaleString("hu-HU")} Ft · ${task.maxActiveMinutesPerWorker} perc`}</strong><span>{task.workspacePlan?.branchName ? `M.Forge terv: ${task.workspacePlan.branchName}` : "DEV READY: még nem"}</span></div>
                 </div>
                 {task.scopeAnalysis?.candidates?.length ? <details className={styles.aiScopeDetails}><summary><Eye size={13} /> Scope megtekintése · {task.scopeAnalysis.candidates.length} jelölt</summary><div>{task.scopeAnalysis.candidates.slice(0, 18).map((candidate) => <article key={candidate.path} data-risk={candidate.riskLevel}><b>{candidate.riskLevel}</b><code>{candidate.path}</code><span>{candidate.decision} · {candidate.reasons[0] || "—"}</span></article>)}</div></details> : null}
                 <footer>
                   <span><CircleDollarSign size={13} /> Forge {task.forgeBudgetHuf.toLocaleString("hu-HU")} Ft · Guard {task.guardBudgetHuf.toLocaleString("hu-HU")} Ft</span>
                   <span><Clock3 size={13} /> {task.maxActiveMinutesPerWorker} perc/worker</span>
-                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}</div>
+                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" ? <span className={styles.aiWorkerReadyTag}>WORKSPACE TERV KÉSZ</span> : null}</div>
                 </footer>
               </article>
             ))}
