@@ -127,7 +127,7 @@ try {
     await page.waitForSelector('[data-testid="benjadmin-developer-console"]', { timeout: 30000 });
     await page.waitForFunction(() => document.body.textContent?.includes("CONSOLE-V1 Ármin-AI bal oldali acceptance"), { timeout: 30000 });
     await page.waitForFunction(() => {
-      const expected = ["Benjadmin avatar", "Ben-AI avatar", "Ármin-AI avatar", "Jázmin-AI avatar", "Outmin-AI avatar"];
+      const expected = ["BenjAdmin avatar", "Ben-AI avatar", "Ármin-AI avatar", "Jázmin-AI avatar", "Outmin-AI avatar"];
       const images = Array.from(document.querySelectorAll("[data-testid=\"benjadmin-developer-console\"] img"));
       return expected.every((alt) => images.some((img) => img.alt === alt && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0));
     }, { timeout: 15000 });
@@ -163,13 +163,13 @@ try {
     check("Ben-AI középre igazított", desktop.ben && Math.abs((desktop.ben.x + desktop.ben.width / 2) - desktop.centerX) < 130, JSON.stringify(desktop.ben));
     check("BENJADMIN · VEZETŐ középen megjelenik", desktop.owner && Math.abs((desktop.owner.x + desktop.owner.width / 2) - desktop.centerX) < 130 && desktop.text.includes("VEZETŐ"), JSON.stringify(desktop.owner));
     check("Outmin-AI külön partner sávban látható", desktop.text.includes("PARTNER FEJLESZTÉSI SÍK") && desktop.text.includes("CONSOLE-V1 Outmin-AI partner acceptance"), "");
-    const requiredAvatarAlts = ["Benjadmin avatar", "Ben-AI avatar", "Ármin-AI avatar", "Jázmin-AI avatar", "Outmin-AI avatar"];
+    const requiredAvatarAlts = ["BenjAdmin avatar", "Ben-AI avatar", "Ármin-AI avatar", "Jázmin-AI avatar", "Outmin-AI avatar"];
     check("Hexagon csapatképek betöltődnek", requiredAvatarAlts.every((alt) => desktop.images.some((item) => item.alt === alt && item.complete && item.w > 0 && item.h > 0)), JSON.stringify(desktop.images.filter((item) => requiredAvatarAlts.includes(item.alt))));
 
     const composerState = await page.evaluate(() => {
       const composer = document.querySelector('[data-testid="benjadmin-developer-composer"]');
       const leader = composer?.querySelector('[aria-label="BENJADMIN · VEZETŐ"]');
-      const avatar = leader?.querySelector('img[alt="Benjadmin avatar"]');
+      const avatar = leader?.querySelector('img[alt="BenjAdmin avatar"]');
       const targetButtons = composer?.querySelector('div[class*=targetButtons]');
       const textarea = composer?.querySelector('textarea');
       const messageBody = document.querySelector('[data-message-id] div[class*=messageBody]');

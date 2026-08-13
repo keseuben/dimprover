@@ -2,14 +2,20 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import BenjadminPersonProfileCard from "./BenjadminPersonProfileCard";
+import { getBenjadminPerson, type BenjadminPersonCode } from "./benjadminPeople";
 import {
   Activity,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
   Cpu,
   Database,
   HardDrive,
   Coins,
-  Gauge,
   Moon,
+  Play,
+  Square,
   RefreshCw,
   Sun,
   Server,
@@ -185,14 +191,47 @@ type InfrastructureSummary = {
   } | null;
 };
 
+type TeamDashboardMetrics = {
+  ok: boolean;
+  generatedAt: string;
+  period: { day: string; month: string; weekStart: string };
+  time: {
+    people: Array<{
+      code: string;
+      name: string;
+      todayMinutes: number;
+      weekMinutes: number;
+      monthMinutes: number;
+      source: string;
+      measurement: string;
+    }>;
+    benjadminTimer: { running: boolean; timerId: string | null; startedAt: string | null };
+    notes: string[];
+  };
+  costs: {
+    infrastructure: {
+      monthlyHuf: number;
+      configuredCount: number;
+      totalCount: number;
+      complete: boolean;
+      items: Array<{ label: string; env: string; monthlyHuf: number | null }>;
+      source: string;
+    };
+    projection: { infrastructureDailyHuf: number; infrastructureAnnualHuf: number };
+  };
+};
+
+type ExecutivePanelKey = "team" | "costs" | "time";
+
 type TeamMember = {
   id: string;
+  profileCode: BenjadminPersonCode;
   code?: string;
   name: string;
   position: string;
   responsibilities: string[];
   image: string;
-  tone: "owner" | "lead" | "internal" | "partner";
+  tone: "owner" | "lead" | "internal" | "partner" | "external";
 };
 
 type LineSeries = {
@@ -202,49 +241,13 @@ type LineSeries = {
 };
 
 const TEAM: TeamMember[] = [
-  {
-    id: "benjadmin",
-    name: "Benjadmin",
-    position: "Emberi főirányító · rendszertulajdonos",
-    responsibilities: ["Végső döntések és prioritások", "Jóváhagyások és fejlesztési irány", "PROD műveletek explicit engedélyezése"],
-    image: "/benjadmin/team/01_BenjAdmin.webp",
-    tone: "owner",
-  },
-  {
-    id: "benai",
-    name: "Ben-AI",
-    position: "Fejlesztésirányító AI · koordinátor",
-    responsibilities: ["Feladat- és fejlesztőkiosztás", "Munkafa, ág és hatókör koordináció", "Acceptance, build és fejlesztési sorrend"],
-    image: "/benjadmin/team/02_BenAI.webp",
-    tone: "lead",
-  },
-  {
-    id: "armin",
-    code: "ARMINAI",
-    name: "Ármin-AI",
-    position: "Belső kódmérnök · frontend / alkalmazás",
-    responsibilities: ["Felületek és alkalmazáslogika", "Komponensek és reszponzív működés", "Frontend teszt és acceptance"],
-    image: "/benjadmin/team/03_ArminAI.webp",
-    tone: "internal",
-  },
-  {
-    id: "jazmin",
-    code: "JAZMINAI",
-    name: "Jázmin-AI",
-    position: "Belső kódmérnök · backend / adatbázis",
-    responsibilities: ["API és szerveroldali logika", "Adatbázis és migráció", "Backend teszt és adatbiztonság"],
-    image: "/benjadmin/team/04_JazminAI.webp",
-    tone: "internal",
-  },
-  {
-    id: "outmin",
-    code: "OUTMINAI",
-    name: "Outmin-AI",
-    position: "Külső kódmérnök · partner fejlesztési sík",
-    responsibilities: ["Partner- és külső projektek", "Elkülönített partner munkafa", "Belső DIMPRO hozzáférés: alapértelmezett tiltás"],
-    image: "/benjadmin/team/05_OutminAI.webp",
-    tone: "partner",
-  },
+  { id: "benjadmin", profileCode: "BENJADMIN", name: "BenjAdmin", position: "Rendszergazda · fejlesztési vezető · rendszertulajdonos", responsibilities: getBenjadminPerson("BENJADMIN").responsibilities, image: getBenjadminPerson("BENJADMIN").image, tone: "owner" },
+  { id: "benai", profileCode: "BENAI", name: "Ben-AI", position: "Fejlesztésirányító AI · koordinátor", responsibilities: getBenjadminPerson("BENAI").responsibilities, image: getBenjadminPerson("BENAI").image, tone: "lead" },
+  { id: "armin", profileCode: "ARMINAI", code: "ARMINAI", name: "Ármin-AI", position: "Belső kódmérnök · frontend / alkalmazás", responsibilities: getBenjadminPerson("ARMINAI").responsibilities, image: getBenjadminPerson("ARMINAI").image, tone: "internal" },
+  { id: "jazmin", profileCode: "JAZMINAI", code: "JAZMINAI", name: "Jázmin-AI", position: "Belső kódmérnök · backend / adatbázis", responsibilities: getBenjadminPerson("JAZMINAI").responsibilities, image: getBenjadminPerson("JAZMINAI").image, tone: "internal" },
+  { id: "outmin", profileCode: "OUTMINAI", code: "OUTMINAI", name: "Outmin-AI", position: "Külső kódmérnök · partner fejlesztési sík", responsibilities: getBenjadminPerson("OUTMINAI").responsibilities, image: getBenjadminPerson("OUTMINAI").image, tone: "partner" },
+  { id: "mforge", profileCode: "MFORGE", code: "MFORGE", name: "M.Forge-AI", position: "Coding Worker · külső AI fejlesztő", responsibilities: getBenjadminPerson("MFORGE").responsibilities, image: getBenjadminPerson("MFORGE").image, tone: "external" },
+  { id: "vguard", profileCode: "VGUARD", code: "VGUARD", name: "V.Guard-AI", position: "Review & Quality Worker · külső AI ellenőr", responsibilities: getBenjadminPerson("VGUARD").responsibilities, image: getBenjadminPerson("VGUARD").image, tone: "external" },
 ];
 
 function numberValue(value: unknown) {
@@ -355,6 +358,26 @@ function MiniLineChart({ title, subtitle, labels, series, emptyText }: { title: 
   );
 }
 
+function formatMinutes(value: number | null | undefined) {
+  const minutes = Math.max(0, Math.round(Number(value || 0)));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} p`;
+  return `${hours} ó ${rest.toString().padStart(2, "0")} p`;
+}
+
+function ExecutivePanelHeader({ title, subtitle, open, onToggle, actions }: { title: string; subtitle: string; open: boolean; onToggle: () => void; actions?: React.ReactNode }) {
+  return (
+    <header className="benjadmin-team-screen__executive-head">
+      <button type="button" onClick={onToggle} className="benjadmin-team-screen__executive-toggle" aria-expanded={open}>
+        {open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+        <span><strong>{title}</strong><small>{subtitle}</small></span>
+      </button>
+      {actions ? <div className="benjadmin-team-screen__executive-actions">{actions}</div> : null}
+    </header>
+  );
+}
+
 function UsageBar({ label, value, detail }: { label: string; value?: number | null; detail: string }) {
   const known = typeof value === "number" && Number.isFinite(value);
   const safe = known ? Math.max(0, Math.min(100, value)) : 0;
@@ -379,6 +402,11 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<BenjadminPersonCode | null>(null);
+  const [financePopoverOpen, setFinancePopoverOpen] = useState(false);
+  const [metrics, setMetrics] = useState<TeamDashboardMetrics | null>(null);
+  const [timeBusy, setTimeBusy] = useState(false);
+  const [panels, setPanels] = useState<Record<ExecutivePanelKey, boolean>>({ team: true, costs: true, time: true });
 
   const load = useCallback(async (silent = false) => {
     const key = window.localStorage.getItem("dimproLicenseAdminKey")?.trim();
@@ -390,16 +418,17 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
     if (!silent) setLoading(true);
     try {
       const headers = { "x-dimpro-license-admin-key": key };
-      const [engineResponse, serverResponse, controlResponse, partnerResponse, infrastructureResponse, entitlementResponse] = await Promise.all([
+      const [engineResponse, serverResponse, controlResponse, partnerResponse, infrastructureResponse, entitlementResponse, metricsResponse] = await Promise.all([
         fetch("/api/dev/engine/state", { headers, cache: "no-store" }),
         fetch("/api/license/server-status", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/control-plane", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/partner-projects", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/infrastructure-summary", { headers, cache: "no-store" }),
         fetch("/api/dev/engine/entitlements", { headers, cache: "no-store" }),
+        fetch("/api/dev/engine/team-dashboard-summary", { headers, cache: "no-store" }),
       ]);
-      const [enginePayload, serverPayload, controlPayload, partnerPayload, infrastructurePayload, entitlementPayload] = await Promise.all([
-        engineResponse.json(), serverResponse.json(), controlResponse.json(), partnerResponse.json(), infrastructureResponse.json(), entitlementResponse.json(),
+      const [enginePayload, serverPayload, controlPayload, partnerPayload, infrastructurePayload, entitlementPayload, metricsPayload] = await Promise.all([
+        engineResponse.json(), serverResponse.json(), controlResponse.json(), partnerResponse.json(), infrastructureResponse.json(), entitlementResponse.json(), metricsResponse.json(),
       ]);
       if (!engineResponse.ok || !enginePayload?.state) throw new Error(enginePayload?.error || "A fejlesztési állapot nem tölthető be.");
       setEngine(enginePayload.state as EngineState);
@@ -407,6 +436,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
       if (controlResponse.ok) setControl((controlPayload?.controlPlane || controlPayload) as ControlSnapshot);
       if (partnerResponse.ok) setPartner(partnerPayload as PartnerSnapshot);
       if (entitlementResponse.ok && entitlementPayload?.entitlements) setEntitlements(entitlementPayload.entitlements as EntitlementSnapshot);
+      if (metricsResponse.ok && metricsPayload?.ok) setMetrics(metricsPayload as TeamDashboardMetrics);
       if (infrastructureResponse.ok) {
         const nextInfrastructure = infrastructurePayload as InfrastructureSummary;
         setInfrastructure(nextInfrastructure);
@@ -433,6 +463,44 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
     const timer = window.setInterval(() => void load(true), 30_000);
     return () => window.clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("benjadminTeamExecutivePanels");
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<Record<ExecutivePanelKey, boolean>>;
+        setPanels((current) => ({ ...current, ...parsed }));
+      }
+    } catch {}
+  }, []);
+
+  const togglePanel = useCallback((key: ExecutivePanelKey) => {
+    setPanels((current) => {
+      const next = { ...current, [key]: !current[key] };
+      try { window.localStorage.setItem("benjadminTeamExecutivePanels", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  async function toggleBenjadminTime() {
+    const key = window.localStorage.getItem("dimproLicenseAdminKey")?.trim();
+    if (!key || timeBusy) return;
+    setTimeBusy(true);
+    try {
+      const response = await fetch("/api/dev/engine/benjadmin-time", {
+        method: "POST",
+        headers: { "x-dimpro-license-admin-key": key, "content-type": "application/json" },
+        body: JSON.stringify({ action: metrics?.time.benjadminTimer.running ? "stop" : "start", note: "BENJADMIN csapatnézet saját fejlesztési ráfordítás" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Az időmérés nem módosítható.");
+      await load(true);
+    } catch (timerError) {
+      setError(timerError instanceof Error ? timerError.message : "Az időmérés művelete sikertelen.");
+    } finally {
+      setTimeBusy(false);
+    }
+  }
 
   const workerByCode = useMemo(() => new Map((engine?.workers || []).map((worker) => [worker.code, worker])), [engine?.workers]);
 
@@ -548,6 +616,40 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
   const aiStrictReady = aiSummary.aiRuntimeStrictReady === true;
   const aiStrictReadinessLabel = aiStrictReady ? "ELLENŐRZÉSRE KÉSZ" : "NEM KÉSZ";
   const aiStrictReadinessTitle = (aiSummary.aiRuntimeStrictBlockers || []).join(" · ") || "Nincs azonosított blokkoló tényező.";
+  const elapsedMonthDays = Math.max(1, new Date().getDate());
+  const projectedAiMonthlyHuf = aiMonthlyCost > 0 ? (aiMonthlyCost / elapsedMonthDays) * 30.4375 : 0;
+  const infrastructureMonthlyHuf = Number(metrics?.costs.infrastructure.monthlyHuf || 0);
+  const projectedMonthlyHuf = infrastructureMonthlyHuf + projectedAiMonthlyHuf;
+  const projectedDailyHuf = projectedMonthlyHuf / 30.4375;
+  const projectedAnnualHuf = projectedMonthlyHuf * 12;
+  const infrastructureCostComplete = metrics?.costs.infrastructure.complete === true;
+  const knownMonthHuf = infrastructureMonthlyHuf + aiMonthlyCost;
+  const timePeople = metrics?.time.people || [];
+  const totalTodayMinutes = timePeople.reduce((sum, item) => sum + item.todayMinutes, 0);
+  const totalWeekMinutes = timePeople.reduce((sum, item) => sum + item.weekMinutes, 0);
+  const totalMonthMinutes = timePeople.reduce((sum, item) => sum + item.monthMinutes, 0);
+  const renderTeamMember = (member: TeamMember, nodeClass: string) => {
+    const worker = member.code ? workerByCode.get(member.code) : null;
+    const workerId = worker?.id;
+    const assigned = workerId ? (engine?.tasks || []).filter((task) => task.assignedWorkerId === workerId && isOpenTask(task.status)).length : null;
+    const active = workerId ? (engine?.sessions || []).filter((session) => session.workerId === workerId && ["open", "active"].includes(session.status)).length : null;
+    const fallbackStatus = member.profileCode === "BENJADMIN" ? "Főirányító" : member.profileCode === "BENAI" ? "Koordinátor" : "Készenlét";
+    return (
+      <article key={member.id} className={"benjadmin-team-screen__member benjadmin-team-screen__tree-node " + nodeClass + " is-" + member.tone} data-testid={"team-member-" + member.id}>
+        <button type="button" className="benjadmin-team-screen__avatar-button" onClick={() => setSelectedProfile(member.profileCode)} aria-label={member.name + " részletes munkaköri profil"}>
+          <span className="benjadmin-team-screen__avatar"><Image src={member.image} alt={member.name + " hexagon avatár"} width={512} height={512} priority /></span>
+        </button>
+        <div className="benjadmin-team-screen__member-copy">
+          <div className="benjadmin-team-screen__member-title">
+            <div><h2>{member.name}</h2><p>{member.position}</p></div>
+            <span className={worker ? "is-" + worker.status : "is-active"}>{worker ? statusLabel(worker.status) : fallbackStatus}</span>
+          </div>
+          <ul>{member.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul>
+          {worker ? <footer><span>Nyitott feladat: <b>{assigned}</b></span><span>Aktív munkamenet: <b>{active}</b></span></footer> : null}
+        </div>
+      </article>
+    );
+  };
 
   return (
     <main className={`benjadmin-team-screen admin-theme-${theme}`} data-theme={theme} data-testid="benjadmin-team-screen">
@@ -632,63 +734,112 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
               </article>
             );
           })}
+          <div className="benjadmin-team-screen__ai-finance is-sidebar" data-testid="benjadmin-ai-finance"><header><div><Coins size={17} /><div><span>AI FINANSZÍROZÁS ÉS TOKENKERET</span><strong>Költség, felhasználás és belső keretek</strong></div></div></header><div className="benjadmin-team-screen__infra-facts"><span>Havi költség: <b>{formatHuf(aiMonthlyCost)}</b></span><span>Havi keret: <b>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</b></span><span>Tokenforgalom: <b>{formatCompactNumber(aiTotalTokens)}</b></span><span>Tokenkeret: <b>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</b></span></div></div>
         </aside>
 
-        <section className="benjadmin-team-screen__center" aria-label="BENJADMIN csapat">
+        <section className="benjadmin-team-screen__center" aria-label="BENJADMIN vezetői nézet">
           <div className="benjadmin-team-screen__center-head">
-            <div><UsersRound size={18} /><span>BENJADMIN CSAPAT</span></div>
+            <div><UsersRound size={18} /><span>BENJADMIN VEZETŐI NÉZET</span></div>
             <small>{loading ? "Adatok frissítése..." : refreshedAt ? `Frissítve: ${refreshedAt.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "—"}</small>
           </div>
 
-          <div className="benjadmin-team-screen__team-grid">
-            {TEAM.map((member) => {
-              const worker = member.code ? workerByCode.get(member.code) : null;
-              const workerId = worker?.id;
-              const assigned = workerId ? (engine?.tasks || []).filter((task) => task.assignedWorkerId === workerId && isOpenTask(task.status)).length : null;
-              const active = workerId ? (engine?.sessions || []).filter((session) => session.workerId === workerId && ["open", "active"].includes(session.status)).length : null;
-              return (
-                <article key={member.id} className={`benjadmin-team-screen__member is-${member.tone}`} data-testid={`team-member-${member.id}`}>
-                  <div className="benjadmin-team-screen__avatar"><Image src={member.image} alt={`${member.name} hexagon embléma`} width={512} height={512} priority /></div>
-                  <div className="benjadmin-team-screen__member-copy">
-                    <div className="benjadmin-team-screen__member-title">
-                      <div><h2>{member.name}</h2><p>{member.position}</p></div>
-                      <span className={worker ? `is-${worker.status}` : "is-active"}>{worker ? statusLabel(worker.status) : member.id === "benjadmin" ? "Főirányító" : "Koordinátor"}</span>
-                    </div>
-                    <ul>{member.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul>
-                    {worker ? <footer><span>Nyitott feladat: <b>{assigned}</b></span><span>Aktív munkamenet: <b>{active}</b></span></footer> : null}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+          <section className="benjadmin-team-screen__executive-panel is-team" data-panel="team">
+            <ExecutivePanelHeader
+              title="BENJADMIN CSAPATTABLÓ"
+              subtitle={panels.team ? "Családfa / szervezeti fa · avatárra kattintva részletes profil" : `7 tag · ${activeSessions} aktív munkamenet · ${openTasks} nyitott feladat`}
+              open={panels.team}
+              onToggle={() => togglePanel("team")}
+            />
+            {panels.team ? (
+              <div className="benjadmin-team-screen__team-tree">
+                <div className="benjadmin-team-screen__tree-level is-owner-level">{renderTeamMember(TEAM[0], "is-owner-node")}</div>
+                <div className="benjadmin-team-screen__tree-connector is-short" aria-hidden="true" />
+                <div className="benjadmin-team-screen__tree-level is-lead-level">{renderTeamMember(TEAM[1], "is-lead-node")}</div>
+                <div className="benjadmin-team-screen__tree-branch is-engineer-branch" aria-hidden="true" />
+                <div className="benjadmin-team-screen__tree-level is-engineer-level">{TEAM.slice(2, 5).map((member) => renderTeamMember(member, "is-worker-node"))}</div>
+                <div className="benjadmin-team-screen__tree-branch is-external-branch" aria-hidden="true" />
+                <div className="benjadmin-team-screen__tree-external-head">
+                  <span>KÜLSŐ AI WORKEREK</span>
+                  <button type="button" className="benjadmin-team-screen__finance-hex" onClick={() => setFinancePopoverOpen((current) => !current)} aria-label="AI finanszírozás és tokenkeret"><Coins size={16} /></button>
+                  {financePopoverOpen ? <div className="benjadmin-team-screen__finance-popover"><strong>AI finanszírozás</strong><span>Havi költség: <b>{formatHuf(aiMonthlyCost)}</b></span><span>Havi keret: <b>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</b></span><span>Tokenforgalom: <b>{formatCompactNumber(aiTotalTokens)}</b></span><span>Tokenkeret: <b>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</b></span></div> : null}
+                </div>
+                <div className="benjadmin-team-screen__tree-level is-external-level">{TEAM.slice(5, 7).map((member) => renderTeamMember(member, "is-worker-node is-external-worker-node"))}</div>
+              </div>
+            ) : null}
+          </section>
 
-          <section className="benjadmin-team-screen__ai-finance" data-testid="benjadmin-ai-finance">
-            <header>
-              <div><Coins size={17} /><div><span>AI FINANSZÍROZÁS ÉS TOKENKERET</span><strong>Költség, felhasználás és belső keretek</strong></div></div>
-              <small title={aiStrictReadinessTitle}>{aiSummary.aiEnabledLicenses ?? 0} aktív AI licenc · {aiSummary.aiRequestsThisMonth ?? 0} kérés / hó · {aiRuntimePolicyLabel} · strict: {aiStrictReadinessLabel}</small>
-            </header>
-            <div className="benjadmin-team-screen__ai-finance-grid">
-              <article><span>AI költség / hó</span><strong>{formatHuf(aiMonthlyCost)}</strong><small>központi, naplózott felhasználás</small></article>
-              <article><span>Finanszírozási keret / hó</span><strong>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</strong><small>{aiBudgetPercent == null ? aiBudgetSourceLabel : `${aiBudgetSourceLabel} · ${aiBudgetPercent.toFixed(1)}% felhasználva`}</small></article>
-              <article><span>Tokenforgalom / hó</span><strong>{formatCompactNumber(aiTotalTokens)}</strong><small>{formatCompactNumber(aiSummary.aiInputTokensThisMonth)} be · {formatCompactNumber(aiSummary.aiOutputTokensThisMonth)} ki</small></article>
-              <article><span>Tokenkeret / hó</span><strong>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</strong><small>{aiTokenPercent == null ? aiTokenBudgetSourceLabel : `${aiTokenBudgetSourceLabel} · ${aiTokenPercent.toFixed(1)}% felhasználva`}</small></article>
-            </div>
-            <div className="benjadmin-team-screen__ai-budget-lines">
-              <div>
-                <div><span><Gauge size={13} /> Finanszírozási kihasználtság</span><b>{aiBudgetPercent == null ? "—" : `${aiBudgetPercent.toFixed(1)}%`}</b></div>
-                <div className="benjadmin-team-screen__ai-track"><span style={{ width: `${aiBudgetPercent || 0}%` }} /></div>
+          <section className="benjadmin-team-screen__executive-panel is-costs" data-panel="costs">
+            <ExecutivePanelHeader
+              title="KÖLTSÉGEK ÉS FINANSZÍROZÁS"
+              subtitle={panels.costs ? "TÉNY és BECSLÉS külön jelölve · AI + infrastruktúra" : `Havi ismert: ${formatHuf(knownMonthHuf)} · éves ${infrastructureCostComplete ? `becslés: ${formatHuf(projectedAnnualHuf)}` : projectedAnnualHuf > 0 ? `részbecslés: ≥ ${formatHuf(projectedAnnualHuf)}` : "becslés: nincs teljes költségadat"}`}
+              open={panels.costs}
+              onToggle={() => togglePanel("costs")}
+            />
+            {panels.costs ? <div className="benjadmin-team-screen__executive-body">
+              <div className="benjadmin-team-screen__metric-grid is-cost-grid">
+                <article><small>TÉNY · AI KÖLTSÉG / HÓ</small><strong>{formatHuf(aiMonthlyCost)}</strong><span>naplózott aktuális havi felhasználás</span></article>
+                <article><small>TÉNY / KONFIG · HAVI ISMERT</small><strong>{formatHuf(knownMonthHuf)}</strong><span>AI aktuális + beállított fix infrastruktúra</span></article>
+                <article><small>BECSLÉS · NAPI ÁTLAG</small><strong>{infrastructureCostComplete ? formatHuf(projectedDailyHuf) : projectedDailyHuf > 0 ? `≥ ${formatHuf(projectedDailyHuf)}` : "Nincs teljes adat"}</strong><span>{infrastructureCostComplete ? "aktuális AI ütem + fix infrastruktúra" : "részbecslés · hiányzó fix díjak nélkül"}</span></article>
+                <article><small>BECSLÉS · ÉVES</small><strong>{infrastructureCostComplete ? formatHuf(projectedAnnualHuf) : projectedAnnualHuf > 0 ? `≥ ${formatHuf(projectedAnnualHuf)}` : "Nincs teljes adat"}</strong><span>{infrastructureCostComplete ? "12 havi évesített becslés" : "részbecslés · a teljes éves költség csak a fix díjak rögzítése után számolható"}</span></article>
               </div>
-              <div>
-                <div><span><Gauge size={13} /> Tokenkeret kihasználtság</span><b>{aiTokenPercent == null ? "—" : `${aiTokenPercent.toFixed(1)}%`}</b></div>
-                <div className={`benjadmin-team-screen__ai-track${aiTokenPercent == null ? " is-unset" : ""}`}><span style={{ width: `${aiTokenPercent || 0}%` }} /></div>
+
+              <div className="benjadmin-team-screen__cost-columns">
+                <div className="benjadmin-team-screen__cost-card">
+                  <header><Coins size={15} /><strong>AI finanszírozás</strong><span className={aiStrictReady ? "is-ok" : "is-pending"}>{aiStrictReadinessLabel}</span></header>
+                  <div className="benjadmin-team-screen__cost-line"><span>Havi AI költség</span><b>{formatHuf(aiMonthlyCost)}</b></div>
+                  <div className="benjadmin-team-screen__cost-line"><span>Finanszírozási keret</span><b>{aiMonthlyBudget > 0 ? formatHuf(aiMonthlyBudget) : "Nincs beállítva"}</b></div>
+                  <UsageBar label="Finanszírozási kihasználtság" value={aiBudgetPercent} detail={aiBudgetPercent == null ? aiBudgetSourceLabel : `${aiBudgetSourceLabel} · ${aiBudgetPercent.toFixed(1)}%`} />
+                  <div className="benjadmin-team-screen__cost-line"><span>Tokenforgalom / hó</span><b>{formatCompactNumber(aiTotalTokens)}</b></div>
+                  <div className="benjadmin-team-screen__cost-line"><span>Tokenkeret / hó</span><b>{aiTokenBudget > 0 ? formatCompactNumber(aiTokenBudget) : "Nincs beállítva"}</b></div>
+                  <UsageBar label="Tokenkeret kihasználtság" value={aiTokenPercent} detail={aiTokenPercent == null ? aiTokenBudgetSourceLabel : `${aiTokenBudgetSourceLabel} · ${aiTokenPercent.toFixed(1)}%`} />
+                  <small title={aiStrictReadinessTitle}>{aiRuntimePolicyLabel}</small>
+                </div>
+                <div className="benjadmin-team-screen__cost-card">
+                  <header><Server size={15} /><strong>Szerver / infrastruktúra költség</strong><span className={metrics?.costs.infrastructure.complete ? "is-ok" : "is-pending"}>{metrics?.costs.infrastructure.complete ? "TELJES" : "RÉSZLEGES"}</span></header>
+                  {(metrics?.costs.infrastructure.items || []).map((item) => <div className="benjadmin-team-screen__cost-line" key={item.env}><span>{item.label}</span><b>{item.monthlyHuf == null ? "Nincs beállítva" : formatHuf(item.monthlyHuf)}</b></div>)}
+                  <div className="benjadmin-team-screen__cost-line is-total"><span>Beállított infrastruktúra / hó</span><b>{formatHuf(infrastructureMonthlyHuf)}</b></div>
+                  <small>{metrics ? `${metrics.costs.infrastructure.configuredCount}/${metrics.costs.infrastructure.totalCount} költségelem konfigurálva.` : "Költségadatok betöltése..."}</small>
+                </div>
               </div>
-            </div>
-            <footer>
-              <span>Nyitott feladat: <b>{openTasks}</b></span>
-              <span>Aktív munkamenet: <b>{activeSessions}</b></span>
-              <span>Partner futási tér: <b>{partner?.runtimeIsolation?.ready ? "READY" : partner?.runtimeIsolation?.stage || "Nincs adat"}</b></span>
-              <span>Függő jóváhagyás: <b>{control?.summary?.pendingApprovals ?? 0}</b></span>
-            </footer>
+              <div className="benjadmin-team-screen__operations-strip">
+                <span>Nyitott feladat <b>{openTasks}</b></span>
+                <span>Aktív session <b>{activeSessions}</b></span>
+                <span>Partner futási tér <b>{partner?.runtimeIsolation?.ready ? "READY" : partner?.runtimeIsolation?.stage || "—"}</b></span>
+                <span>Függő jóváhagyás <b>{control?.summary?.pendingApprovals ?? 0}</b></span>
+              </div>
+            </div> : null}
+          </section>
+
+          <section className="benjadmin-team-screen__executive-panel is-time" data-panel="time">
+            <ExecutivePanelHeader
+              title="FEJLESZTÉSI IDŐ ÉS RÁFORDÍTÁS"
+              subtitle={panels.time ? "BenjAdmin + ChatGPT/VPS-MCP + AI személyek · mérési forrás szerint" : `Ma ${formatMinutes(totalTodayMinutes)} · hét ${formatMinutes(totalWeekMinutes)} · hónap ${formatMinutes(totalMonthMinutes)}`}
+              open={panels.time}
+              onToggle={() => togglePanel("time")}
+              actions={<button type="button" className={`benjadmin-team-screen__timer-button${metrics?.time.benjadminTimer.running ? " is-running" : ""}`} onClick={() => void toggleBenjadminTime()} disabled={timeBusy}>{metrics?.time.benjadminTimer.running ? <Square size={13} /> : <Play size={13} />}<span>{metrics?.time.benjadminTimer.running ? "Saját idő leállítása" : "Saját idő indítása"}</span></button>}
+            />
+            {panels.time ? <div className="benjadmin-team-screen__executive-body">
+              <div className="benjadmin-team-screen__metric-grid is-time-grid">
+                <article><small>MAI ÖSSZES NAPLÓZOTT</small><strong>{formatMinutes(totalTodayMinutes)}</strong><span>különböző mérési források összege</span></article>
+                <article><small>EZEN A HÉTEN</small><strong>{formatMinutes(totalWeekMinutes)}</strong><span>{metrics?.period.weekStart || "—"} óta</span></article>
+                <article><small>EBBEN A HÓNAPBAN</small><strong>{formatMinutes(totalMonthMinutes)}</strong><span>{metrics?.period.month || "—"}</span></article>
+                <article><small>BENJADMIN SAJÁT / HÓ</small><strong>{formatMinutes(timePeople.find((item) => item.code === "BENJADMIN")?.monthMinutes)}</strong><span>{metrics?.time.benjadminTimer.running ? "időmérés jelenleg fut" : "kézi, explicit időnapló"}</span></article>
+              </div>
+              <div className="benjadmin-team-screen__time-table-wrap">
+                <table className="benjadmin-team-screen__time-table">
+                  <thead><tr><th>Résztvevő</th><th>Mai idő</th><th>Heti idő</th><th>Havi idő</th><th>Mérés</th></tr></thead>
+                  <tbody>{timePeople.map((item) => {
+                    const profileCode = (["BENJADMIN", "BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"] as string[]).includes(item.code) ? item.code as BenjadminPersonCode : null;
+                    const measurement = item.measurement === "MANUAL" ? "kézi idő" : item.measurement === "PROVIDER_ACTIVE" ? "provider aktív" : item.measurement === "SESSION_WALL" ? "session falióra" : item.measurement === "DEV_WORKLOG" ? "dev napló / falióra" : "nincs adat";
+                    return <tr key={item.code}>
+                      <td>{profileCode ? <button type="button" className="benjadmin-team-screen__time-person" onClick={() => setSelectedProfile(profileCode)}>{item.name}</button> : <strong>{item.name}</strong>}</td>
+                      <td>{formatMinutes(item.todayMinutes)}</td><td>{formatMinutes(item.weekMinutes)}</td><td>{formatMinutes(item.monthMinutes)}</td><td><span className="benjadmin-team-screen__measurement-badge">{measurement}</span></td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+              <div className="benjadmin-team-screen__measurement-note"><Clock3 size={14} /><span>Az idők eltérő mérési módszerű adatok: kézi idő, session falióra, provider aktív idő vagy fejlesztési munkamenet-napló. A ChatGPT + VPS-MCP érték munkamenet-falióra, ezért szüneteket is tartalmazhat; ez nem AI „gondolkodási idő”.</span></div>
+            </div> : null}
           </section>
         </section>
 
@@ -732,6 +883,7 @@ export default function BenjadminTeamScreen({ theme, onThemeToggle, onClose }: {
         </aside>
       </section>
 
+      {selectedProfile && <BenjadminPersonProfileCard code={selectedProfile} onClose={setSelectedProfile.bind(null, null)} />}
       {error ? <div className="benjadmin-team-screen__error">{error}</div> : null}
       <button type="button" className="benjadmin-team-screen__theme-toggle" data-testid="benjadmin-team-theme-toggle" onClick={onThemeToggle} aria-label={theme === "light" ? "Sötét mód" : "Világos mód"} title={theme === "light" ? "Sötét mód" : "Világos mód"}>
         {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}

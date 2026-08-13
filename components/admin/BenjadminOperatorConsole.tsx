@@ -33,6 +33,8 @@ import BenjadminControlPlanePanel from "./BenjadminControlPlanePanel";
 import BenjadminPartnerDevelopmentPanel from "./BenjadminPartnerDevelopmentPanel";
 import FounderFocusReminder from "./FounderFocusReminder";
 import { BenjadminBarChart, BenjadminSparklineCard } from "./BenjadminDashboardKit";
+import { openBenjadminPersonProfile } from "./BenjadminPersonProfileHost";
+import type { BenjadminPersonCode } from "./benjadminPeople";
 
 type OperatorView = "overview" | "control" | "partners" | "tasks" | "team" | "workers" | "environments" | "entitlements" | "release" | "audit";
 
@@ -119,6 +121,8 @@ function workerAvatarSrc(code?: string) {
     ARMINAI: "/benjadmin/team/03_ArminAI.webp",
     JAZMINAI: "/benjadmin/team/04_JazminAI.webp",
     OUTMINAI: "/benjadmin/team/05_OutminAI.webp",
+    MFORGE: "/benjadmin/team/06_M_ForgeAI.webp",
+    VGUARD: "/benjadmin/team/07_V_GuardAI.webp",
   };
   return avatars[(code || "").toUpperCase()] || "/benjadmin/team/02_BenAI.webp";
 }
@@ -127,6 +131,18 @@ function teamAvatarSrc(id?: string, code?: string) {
   if (id === "benjadmin") return "/benjadmin/team/01_BenjAdmin.webp";
   if (id === "benai") return "/benjadmin/team/02_BenAI.webp";
   return workerAvatarSrc(code);
+}
+
+function profileCodeFor(id?: string, code?: string): BenjadminPersonCode | null {
+  if (id === "benjadmin") return "BENJADMIN";
+  if (id === "benai") return "BENAI";
+  const normalized = String(code || "").toUpperCase();
+  return (["ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"] as BenjadminPersonCode[]).includes(normalized as BenjadminPersonCode) ? normalized as BenjadminPersonCode : null;
+}
+
+function ProfileAvatar({ src, code, alt }: { src: string; code: BenjadminPersonCode | null; alt: string }) {
+  if (!code) return <Image className="operator-worker-avatar" src={src} alt="" aria-hidden="true" width={32} height={32} />;
+  return <button type="button" className="operator-worker-avatar-button" onClick={() => openBenjadminPersonProfile(code)} aria-label={`${alt} részletes munkaköri profil`}><Image className="operator-worker-avatar" src={src} alt={`${alt} avatar`} width={32} height={32} /></button>;
 }
 
 function statusLabel(status?: string) {
@@ -418,7 +434,7 @@ export default function BenjadminOperatorConsole({ onLogout, devProjects, devVer
   const environmentRows = useMemo(() => (state?.environments || []).filter((item) => !normalizedQuery || [item.code, item.name, item.status].filter(Boolean).join(" ").toLocaleLowerCase("hu-HU").includes(normalizedQuery)), [state?.environments, normalizedQuery]);
 
   const teamRows = useMemo(() => [
-    { id: "benjadmin", code: "BENJADMIN", name: "Benjadmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
+    { id: "benjadmin", code: "BENJADMIN", name: "BenjAdmin", type: "EMBERI FŐIRÁNYÍTÓ", role: "Rendszertulajdonos / végső döntés", slot: "Irányító", status: "active" },
     { id: "benai", code: "BENAI", name: "Ben-AI", type: "FEJLESZTÉSIRÁNYÍTÓ AI", role: "Feladat-, fejlesztő-, ág-, munkafa- és hatókör-kiosztás (task / worker / branch / worktree / scope)", slot: "Koordinátor", status: gate?.ready ? "ready" : "active" },
     ...workers.map((worker) => ({
       id: worker.id,
@@ -533,7 +549,7 @@ export default function BenjadminOperatorConsole({ onLogout, devProjects, devVer
                 <div className="operator-table-title"><div><span>FEJLESZTŐK (worker-ek)</span><h2>Ben-AI kiosztás</h2></div></div>
                 {workers.map((worker) => {
                   const session = sessionForWorker(worker.id);
-                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív feladat (task)" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
+                  return <div className="operator-worker-line" key={worker.id}><span className={`operator-status-dot ${statusTone(session?.status || worker.status)}`} /><ProfileAvatar src={workerAvatarSrc(worker.code)} code={profileCodeFor(undefined, worker.code)} alt={workerDisplayName(worker.code, worker.name)} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{session?.taskId ? tasks.find((task) => task.id === session.taskId)?.title || "Aktív feladat (task)" : "Szabad"}</small></div><span>{session?.handshakeStage || worker.status.toUpperCase()}</span></div>;
                 })}
               </div>
               <div className="operator-mini-table-card">
@@ -577,7 +593,7 @@ export default function BenjadminOperatorConsole({ onLogout, devProjects, devVer
                 const session = worker ? sessionForWorker(worker.id) : undefined;
                 const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined;
                 return <tr key={member.id}>
-                  <td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={teamAvatarSrc(member.id, member.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{member.name}</strong><small>{member.id === "benjadmin" ? "emberi vezérlés" : member.id === "benai" ? "AI koordináció" : "AI végrehajtás"}</small></div></div></td>
+                  <td><div className="operator-worker-identity"><ProfileAvatar src={teamAvatarSrc(member.id, member.code)} code={profileCodeFor(member.id, member.code)} alt={member.name} /><div><strong>{member.name}</strong><small>{member.id === "benjadmin" ? "emberi vezérlés" : member.id === "benai" ? "AI koordináció" : "AI végrehajtás"}</small></div></div></td>
                   <td>{member.type}</td>
                   <td><strong>{member.role}</strong></td>
                   <td><code>{member.slot}</code></td>
@@ -602,7 +618,7 @@ export default function BenjadminOperatorConsole({ onLogout, devProjects, devVer
             <div className="operator-table-card is-full">
             <div className="operator-table-title"><div><span>BEN-AI FEJLESZTŐK (worker-ek)</span><h2>Munkamenet (session) és munkafa (worktree) állapot</h2></div><span>{workerRows.length} fejlesztő (worker)</span></div>
             <div className="operator-table-wrap"><table className="operator-data-table"><thead><tr><th>Fejlesztő (worker)</th><th>Szerep</th><th>Státusz</th><th>Munkamenet (session)</th><th>Feladat (task)</th><th className="hide-small">Ág (branch)</th><th className="hide-medium">Munkafa (worktree)</th><th>Életjel (heartbeat)</th></tr></thead><tbody>
-              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><Image className="operator-worker-avatar" src={workerAvatarSrc(worker.code)} alt="" aria-hidden="true" width={32} height={32} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{worker.code}</small></div></div></td><td>{workerRoleLabel(worker.role)}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív munkamenet (session)"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
+              {(pageData.items as DevEngineWorker[]).map((worker) => { const session = sessionForWorker(worker.id); const task = session?.taskId ? tasks.find((item) => item.id === session.taskId) : undefined; return <tr key={worker.id}><td><div className="operator-worker-identity"><ProfileAvatar src={workerAvatarSrc(worker.code)} code={profileCodeFor(undefined, worker.code)} alt={workerDisplayName(worker.code, worker.name)} /><div><strong>{workerDisplayName(worker.code, worker.name)}</strong><small>{worker.code}</small></div></div></td><td>{workerRoleLabel(worker.role)}</td><td><span className={`operator-status-badge ${statusTone(session?.status || worker.status)}`}>{statusLabel(session?.status || worker.status)}</span></td><td><strong>{session?.handshakeStage || "—"}</strong><small>{session?.id || "nincs aktív munkamenet (session)"}</small></td><td>{task?.title || "Szabad"}</td><td className="hide-small"><code>{session?.branchName || "—"}</code></td><td className="hide-medium"><code>{compactPath(session?.worktreePath)}</code></td><td>{formatDateTime(session?.lastHeartbeatAt)}</td></tr>; })}
             </tbody></table></div><Pagination page={pageData.safePage} pageCount={pageData.pageCount} total={workerRows.length} onPage={setPage} />
             </div>
           </div>

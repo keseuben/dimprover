@@ -22,6 +22,7 @@ import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
 import BenjadminBrandScreen from "./BenjadminBrandScreen";
 import BenjadminExplorerPanel from "./BenjadminExplorerPanel";
 import BenjadminTeamScreen from "./BenjadminTeamScreen";
+import BenjadminPersonProfileHost from "./BenjadminPersonProfileHost";
 
 type AdminTheme = "light" | "dark";
 type AccessState = "checking" | "guest" | "authorized";
@@ -216,7 +217,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   }
 
   if (pathname === "/admin/dev-console") {
-    return <div className="benjadmin-developer-console-host">{children}</div>;
+    return <div className="benjadmin-developer-console-host">{children}<BenjadminPersonProfileHost /></div>;
   }
 
   return (
@@ -337,6 +338,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
         </header>
         <div className="dimpro-admin-content benjadmin-shell-content">{children}</div>
       </div>
+      <BenjadminPersonProfileHost />
     </div>
   );
 }
