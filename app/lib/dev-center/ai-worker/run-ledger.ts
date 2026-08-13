@@ -24,3 +24,14 @@ export async function summarizeExternalAiUsage(){
  for(const row of rows){const meta=record(row.metadata);const cost=n(meta.costHuf),input=n(meta.inputTokens),output=n(meta.outputTokens),total=n(meta.totalTokens)||input+output;monthlyCostHuf+=cost;inputTokens+=input;outputTokens+=output;totalTokens+=total;runCount+=1;if(row.created_at>=dayStart)dailyCostHuf+=cost;const code=String(row.worker_code||"");if(workers[code]){workers[code].costHuf+=cost;workers[code].runs+=1;workers[code].tokens+=total}}
  return{monthStart,dayStart,runCount,dailyCostHuf,monthlyCostHuf,inputTokens,outputTokens,totalTokens,workers,source:"dev_center_live_worklog"};
 }
+
+export async function summarizeExternalAiTaskUsage(taskId:string){
+ const db=client();
+ const result=await db.from("dev_center_live_worklog").select("worker_code,metadata,created_at").eq("source","external-ai-worker").eq("task_id",taskId).order("created_at",{ascending:true}).limit(500);
+ if(result.error)throw new Error(result.error.message);
+ const rows=(result.data||[]).filter((row)=>record(row.metadata).recordType==="EXTERNAL_AI_RUN_USAGE");
+ let costHuf=0,inputTokens=0,outputTokens=0,totalTokens=0,wallTimeMs=0,activeTimeMs=0,maxRetryIndex=0;
+ const workers:Record<string,{costHuf:number;runs:number;tokens:number;activeTimeMs:number}>={MFORGE:{costHuf:0,runs:0,tokens:0,activeTimeMs:0},VGUARD:{costHuf:0,runs:0,tokens:0,activeTimeMs:0}};
+ for(const row of rows){const meta=record(row.metadata);const cost=n(meta.costHuf),input=n(meta.inputTokens),output=n(meta.outputTokens),total=n(meta.totalTokens)||input+output,wall=n(meta.wallTimeMs),active=n(meta.activeTimeMs),retry=n(meta.retryIndex);costHuf+=cost;inputTokens+=input;outputTokens+=output;totalTokens+=total;wallTimeMs+=wall;activeTimeMs+=active;maxRetryIndex=Math.max(maxRetryIndex,retry);const code=String(row.worker_code||"");if(workers[code]){workers[code].costHuf+=cost;workers[code].runs+=1;workers[code].tokens+=total;workers[code].activeTimeMs+=active}}
+ return{taskId,runCount:rows.length,costHuf,inputTokens,outputTokens,totalTokens,wallTimeMs,activeTimeMs,maxRetryIndex,workers};
+}

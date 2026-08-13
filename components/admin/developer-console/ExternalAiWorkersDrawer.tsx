@@ -48,6 +48,17 @@ type ExternalWorker = {
   capabilities: string[];
 };
 
+type RunReadiness = {
+  ready: boolean;
+  state: "READY" | "BLOCKED";
+  checkedAt?: string;
+  provider?: { provider?: string; label?: string; modelId?: string | null } | null;
+  context?: { valid?: boolean; reason?: string; fileCount?: number; totalBytes?: number; baselineCommit?: string | null };
+  budget?: { state?: string; hardStop?: boolean; reasons?: string[] };
+  blockers?: string[];
+  warnings?: string[];
+};
+
 type Payload = {
   ok?: boolean;
   tasks?: ExternalTask[];
@@ -83,6 +94,7 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
   const [adapterStates, setAdapterStates] = useState<NonNullable<Payload["adapters"]>>([]);
   const [systemBudget, setSystemBudget] = useState<Payload["budget"] | null>(null);
   const [usage, setUsage] = useState<Payload["usage"] | null>(null);
+  const [readinessByTask, setReadinessByTask] = useState<Record<string, RunReadiness>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [title, setTitle] = useState("");
@@ -192,6 +204,17 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
     } catch(error){setMessage(error instanceof Error?error.message:"A Safe Context Pack nem készíthető.")} finally{setBusy(false)}
   }
 
+  async function checkRunReadiness(task: ExternalTask) {
+    setBusy(true); setMessage("");
+    try {
+      const response=await fetch(`/api/dev/ai-worker/tasks/${encodeURIComponent(task.id)}/run-readiness?role=MFORGE`,{headers:adminHeaders(),cache:"no-store"});
+      const payload=await response.json().catch(()=>null) as ({ok?:boolean;error?:string}&RunReadiness)|null;
+      if(!response.ok||!payload?.ok)throw new Error(payload?.error||"A futási readiness nem ellenőrizhető.");
+      setReadinessByTask((current)=>({...current,[task.id]:payload}));
+      setMessage(payload.ready?"M.Forge futási kapu READY.":`M.Forge futási kapu BLOCKED · ${payload.blockers?.length||0} blokkoló ok.`);
+    } catch(error){setMessage(error instanceof Error?error.message:"A futási readiness nem ellenőrizhető.")} finally{setBusy(false)}
+  }
+
   async function transition(task: ExternalTask, state: "READY" | "PAUSED") {
     setBusy(true);
     setMessage("");
@@ -256,8 +279,9 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
           {adapterDetail ? <div className={styles.aiAdapterNote}><strong>Worker Model Adapter</strong><span>{adapterDetail}</span></div> : null}
 
           <section className={styles.aiWorkerTaskList}>
-            {tasks.map((task) => (
-              <article key={task.id}>
+            {tasks.map((task) => {
+              const runReadiness=readinessByTask[task.id];
+              return <article key={task.id}>
                 <header><div><strong>{task.title}</strong><span>{task.moduleHint || "Automatikus modulazonosítás"} · {task.launchMode} · {task.modelPreference}</span></div><b>{task.workflowState}</b></header>
                 <div className={styles.aiWorkerPipeline}>{pipeline.map((step, index) => <span key={step}>{step}{index < pipeline.length - 1 ? <ChevronRight size={12} /> : null}</span>)}</div>
                 <div className={styles.aiWorkerFour}>
@@ -267,13 +291,14 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
                   <div><small>EREDMÉNY</small><strong>{task.preflight?.state === "PASS" ? `PREFLIGHT PASS · ${task.contextPack?.fileCount || 0} context fájl` : `${task.taskBudgetHuf.toLocaleString("hu-HU")} Ft · ${task.maxActiveMinutesPerWorker} perc`}</strong><span>{task.workspacePlan?.branchName ? `M.Forge terv: ${task.workspacePlan.branchName}` : "DEV READY: még nem"}</span></div>
                 </div>
                 {task.scopeAnalysis?.candidates?.length ? <details className={styles.aiScopeDetails}><summary><Eye size={13} /> Scope megtekintése · {task.scopeAnalysis.candidates.length} jelölt</summary><div>{task.scopeAnalysis.candidates.slice(0, 18).map((candidate) => <article key={candidate.path} data-risk={candidate.riskLevel}><b>{candidate.riskLevel}</b><code>{candidate.path}</code><span>{candidate.decision} · {candidate.reasons[0] || "—"}</span></article>)}</div></details> : null}
+                {runReadiness ? <section className={styles.aiRunReadiness} data-ready={runReadiness.ready ? "true" : "false"}><header><strong>M.FORGE FUTÁSI KAPU</strong><b>{runReadiness.state}</b></header><div><span>Context <b>{runReadiness.context?.valid ? `OK · ${runReadiness.context.fileCount || 0} fájl` : "HIBA"}</b></span><span>Budget <b>{runReadiness.budget?.state || "—"}</b></span><span>Provider <b>{runReadiness.provider?.label || "nincs READY provider"}</b></span></div>{runReadiness.blockers?.length ? <ul>{runReadiness.blockers.slice(0, 6).map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p>Minden futási előfeltétel teljesült.</p>}</section> : null}
                 <footer>
                   <span><CircleDollarSign size={13} /> Forge {task.forgeBudgetHuf.toLocaleString("hu-HU")} Ft · Guard {task.guardBudgetHuf.toLocaleString("hu-HU")} Ft</span>
                   <span><Clock3 size={13} /> {task.maxActiveMinutesPerWorker} perc/worker</span>
-                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" && !task.contextPackContent?.id ? <button type="button" onClick={() => void buildContextPack(task)} disabled={busy}>CONTEXT PACK</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id ? <span className={styles.aiWorkerReadyTag}>CONTEXT {task.contextPackContent.fileCount || 0} · WORKSPACE TERV KÉSZ</span> : null}</div>
+                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" && !task.contextPackContent?.id ? <button type="button" onClick={() => void buildContextPack(task)} disabled={busy}>CONTEXT PACK</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id ? <button type="button" onClick={() => void checkRunReadiness(task)} disabled={busy}>FUTÁSI ELLENŐRZÉS</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id ? <span className={styles.aiWorkerReadyTag}>CONTEXT {task.contextPackContent.fileCount || 0} · WORKSPACE TERV KÉSZ</span> : null}</div>
                 </footer>
-              </article>
-            ))}
+              </article>;
+            })}
             {!tasks.length ? <div className={styles.railEmpty}>Még nincs Külső AI Worker V1 task.</div> : null}
           </section>
         </div>
