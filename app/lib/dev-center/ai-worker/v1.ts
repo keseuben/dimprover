@@ -137,6 +137,7 @@ function mapTask(row: TaskRow) {
     preflight: record(metadata.preflight),
     checkpoint: record(metadata.checkpoint),
     contextPack: record(metadata.contextPack),
+    contextPackContent: record(metadata.contextPackContent),
     workspacePlan: record(metadata.workspacePlan),
     scope: row.scope,
     acceptance: row.acceptance,

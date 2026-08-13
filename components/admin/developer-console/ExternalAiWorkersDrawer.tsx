@@ -33,6 +33,7 @@ type ExternalTask = {
   preflight: { state?: string; checkedAt?: string; scopeConflictCount?: number };
   checkpoint: { id?: string; sha256?: string };
   contextPack: { version?: string; fileCount?: number; scopeCount?: number; yellowExcluded?: boolean };
+  contextPackContent: { id?: string; sha256?: string; fileCount?: number; totalBytes?: number; excludedCount?: number; secretContentIncluded?: boolean };
   workspacePlan: { branchName?: string; worktreePath?: string; baselineCommit?: string; workerCode?: string };
   createdAt: string;
 };
@@ -181,6 +182,16 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
     finally { setBusy(false); }
   }
 
+  async function buildContextPack(task: ExternalTask) {
+    setBusy(true); setMessage("");
+    try {
+      const response=await fetch(`/api/dev/ai-worker/tasks/${encodeURIComponent(task.id)}/context-pack`,{method:"POST",headers:adminHeaders(true)});
+      const payload=await response.json().catch(()=>null) as {ok?:boolean;contextPack?:{fileCount?:number;totalBytes?:number;excludedCount?:number};error?:string}|null;
+      if(!response.ok||!payload?.ok)throw new Error(payload?.error||"A Safe Context Pack nem készíthető.");
+      setMessage(`Safe Context Pack kész · ${payload.contextPack?.fileCount||0} fájl · ${payload.contextPack?.excludedCount||0} kizárva.`); await load();
+    } catch(error){setMessage(error instanceof Error?error.message:"A Safe Context Pack nem készíthető.")} finally{setBusy(false)}
+  }
+
   async function transition(task: ExternalTask, state: "READY" | "PAUSED") {
     setBusy(true);
     setMessage("");
@@ -259,7 +270,7 @@ export default function ExternalAiWorkersDrawer({ open, onClose, projects, selec
                 <footer>
                   <span><CircleDollarSign size={13} /> Forge {task.forgeBudgetHuf.toLocaleString("hu-HU")} Ft · Guard {task.guardBudgetHuf.toLocaleString("hu-HU")} Ft</span>
                   <span><Clock3 size={13} /> {task.maxActiveMinutesPerWorker} perc/worker</span>
-                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" ? <span className={styles.aiWorkerReadyTag}>WORKSPACE TERV KÉSZ</span> : null}</div>
+                  <div>{task.workflowState === "DRAFT" || task.scopeAnalysisState === "PENDING" ? <button type="button" onClick={() => void analyze(task)} disabled={busy}>SCOPE ELEMZÉS</button> : null}{task.scopeAnalysisState === "NEEDS_REVIEW" ? <button type="button" onClick={() => void safeScope(task)} disabled={busy} title="A YELLOW elemeket nem engedi írni; csak a GREEN scope marad">BIZTONSÁGOS SCOPE</button> : null}{task.workflowState === "READY" && ["AUTO_APPROVED","REVIEW_RESOLVED_SAFE"].includes(task.scopeAnalysisState) ? <button type="button" onClick={() => void preflight(task)} disabled={busy}>PREFLIGHT</button> : null}{task.workflowState === "READY" ? <button type="button" onClick={() => void transition(task, "PAUSED")} disabled={busy}>SZÜNET</button> : null}{task.workflowState === "PAUSED" ? <button type="button" onClick={() => void transition(task, "READY")} disabled={busy}>FOLYTATÁS</button> : null}{task.workflowState === "PREFLIGHT" && !task.contextPackContent?.id ? <button type="button" onClick={() => void buildContextPack(task)} disabled={busy}>CONTEXT PACK</button> : null}{task.workflowState === "PREFLIGHT" && task.contextPackContent?.id ? <span className={styles.aiWorkerReadyTag}>CONTEXT {task.contextPackContent.fileCount || 0} · WORKSPACE TERV KÉSZ</span> : null}</div>
                 </footer>
               </article>
             ))}
