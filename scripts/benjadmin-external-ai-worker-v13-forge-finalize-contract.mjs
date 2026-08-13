@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+const mod=await import("../app/lib/dev-center/ai-worker/mforge-finalize-plan.ts");
+let passed=0;const check=(name,fn)=>{fn();passed+=1;console.log("PASS "+name)};
+const valid={taskId:"dev-task-abc-123",sessionId:"dev-session-abc-123",branchName:"worker/mforge/dev-task-abc-123",worktreePath:"/srv/dimpro-dev/worktrees/worker-mforge-dev-task-abc-123",baselineCommit:"a".repeat(40),changedPaths:["app/projektkapu/page.tsx"]};
+check("Valid finalize terv elfogadott",()=>assert.equal(mod.validateMForgeFinalizePlan(valid).changedPaths.length,1));
+check("V.Guard branch tiltott",()=>assert.throws(()=>mod.validateMForgeFinalizePlan({...valid,branchName:"worker/vguard/dev-task-abc-123"}),/nem M.Forge/));
+check("Idegen worktree tiltott",()=>assert.throws(()=>mod.validateMForgeFinalizePlan({...valid,worktreePath:"/tmp/x"}),/nem determinisztikus/));
+check("Traversal path tiltott",()=>assert.throws(()=>mod.validateMForgeFinalizePlan({...valid,changedPaths:["../.env"]}),/Érvénytelen finalize path/));
+check("Üres changedPaths tiltott",()=>assert.throws(()=>mod.validateMForgeFinalizePlan({...valid,changedPaths:[]}),/nem lehet üres/));
+check("Duplikált path deduplikálódik",()=>assert.deepEqual(mod.validateMForgeFinalizePlan({...valid,changedPaths:[valid.changedPaths[0],valid.changedPaths[0]]}).changedPaths,valid.changedPaths));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));
