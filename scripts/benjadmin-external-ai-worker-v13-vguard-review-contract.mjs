@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+const mod=await import("../app/lib/dev-center/ai-worker/vguard-review-core.ts");
+let passed=0;const check=(name,fn)=>{fn();passed+=1;console.log("PASS "+name)};
+const allowed=["app/projektkapu/page.tsx"];
+const good=JSON.stringify({schemaVersion:"benjadmin.vguard.review.v1",result:"PASS_WITH_NOTES",summary:"Rendben, kisebb észrevétellel.",findings:[{severity:"WARNING",category:"QUALITY",message:"Olvashatóság javítható.",path:allowed[0]}],tests:["tsc"],notes:[]});
+check("Valid review elfogadott",()=>assert.equal(mod.parseVGuardReviewOutput(good,allowed).result,"PASS_WITH_NOTES"));
+check("Scope-on kívüli finding tiltott",()=>assert.throws(()=>mod.parseVGuardReviewOutput(JSON.stringify({schemaVersion:"benjadmin.vguard.review.v1",result:"PASS_WITH_NOTES",summary:"x",findings:[{severity:"WARNING",category:"SCOPE",message:"x",path:"other.ts"}]}),allowed),/scope-on kívüli/));
+check("PASS blockerrel tiltott",()=>assert.throws(()=>mod.parseVGuardReviewOutput(JSON.stringify({schemaVersion:"benjadmin.vguard.review.v1",result:"PASS",summary:"x",findings:[{severity:"BLOCKER",category:"SECURITY",message:"x",path:allowed[0]}]}),allowed),/PASS eredmény/));
+check("FAIL súlyos finding nélkül tiltott",()=>assert.throws(()=>mod.parseVGuardReviewOutput(JSON.stringify({schemaVersion:"benjadmin.vguard.review.v1",result:"FAIL",summary:"x",findings:[{severity:"WARNING",category:"QUALITY",message:"x",path:allowed[0]}]}),allowed),/HIGH vagy BLOCKER/));
+check("Érvénytelen schema tiltott",()=>assert.throws(()=>mod.parseVGuardReviewOutput(JSON.stringify({schemaVersion:"bad",result:"PASS",summary:"x",findings:[]}),allowed),/schemaVersion/));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));
