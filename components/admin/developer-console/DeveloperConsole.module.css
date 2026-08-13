@@ -235,7 +235,7 @@
 .avatarOuter { position: relative; flex: 0 0 auto; display: grid; place-items: center; clip-path: polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%); background: var(--border-strong); }
 .avatarInner { position: relative; width: calc(100% - 4px); height: calc(100% - 4px); overflow: hidden; clip-path: inherit; background: var(--surface2); }
 .avatarInner img { object-fit: cover; }
-.avatar_chat { width: 44px; height: 44px; }
+.avatar_chat { width: 58px; height: 58px; }
 .avatar_task { width: 52px; height: 52px; }
 .avatar_head { width: 68px; height: 68px; }
 .status_working { background: var(--green); animation: avatarPulse 2.2s ease-in-out infinite; }
@@ -426,7 +426,7 @@
   .taskItem { min-width: 220px; }
   .livePanel { min-height: 210px; max-height: 290px; border-left: 0; border-top: 1px solid var(--border); }
   .workerCards { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .outminBar { grid-template-columns: minmax(210px, 280px) minmax(0,1fr); }
+  .outminBar { grid-template-columns: minmax(210px, 52px) minmax(0,1fr); }
   .outminBar > a { grid-column: 1 / -1; justify-self: end; }
   .composerOptions { align-items: flex-start; flex-direction: column; }
   .composerControls { width: 100%; flex-wrap: wrap; }
@@ -705,13 +705,13 @@
 
 /* BENJADMIN Fejlesztői Konzol V1.5 — nagy, keret nélküli vezetői avatar. */
 .composer {
-  grid-template-columns: 304px minmax(0, 1fr);
-  min-height: 292px;
+  grid-template-columns: 84px minmax(0, 1fr);
+  min-height: 90px;
   column-gap: 12px;
   padding-top: 8px;
 }
 .composerLeaderAvatar {
-  min-height: 282px;
+  min-height: 78px;
   margin: 0;
   padding: 0;
   border: 0 !important;
@@ -719,9 +719,9 @@
   background: transparent !important;
   box-shadow: none !important;
 }
-.composerLeaderAvatar > span:first-child { width: 280px; height: 280px; }
+.composerLeaderAvatar > span:first-child { width: 52px; height: 52px; }
 .composerLeaderAvatar > span:last-child { margin-top: -6px; font-size: 11px; }
-.composerInputRow textarea { min-height: 110px; }
+.composerInputRow textarea { min-height: 72px; }
 
 @media (max-width: 1050px) {
   .composer { grid-template-columns: 188px minmax(0, 1fr); min-height: 184px; }
@@ -741,3 +741,10 @@
   .composerLeaderAvatar > span:first-child { width: 76px; height: 76px; }
   .composerLeaderAvatar > span:last-child { display: none; }
 }
+.composerEntryCard { grid-column: 2; grid-row: 1; min-width: 0; padding: 8px; border: 1px solid #d8e0eb; border-radius: 10px; background: white; }
+.composerEntryCard { border-color: var(--border); background: var(--surface); }
+.composerLeaderAvatar { padding: 8px 5px 7px; border: 1px solid var(--border) !important; border-radius: 10px; background: var(--surface) !important; box-shadow: none !important; align-self: start; }
+.composerLeaderAvatar > span:first-child { width: 52px !important; height: 52px !important; }
+.composer { grid-template-columns: 84px minmax(0, 1fr); min-height: 90px; }
+.composerLeaderAvatar { min-height: 78px !important; }
+.composerInputRow textarea { min-height: 72px; }

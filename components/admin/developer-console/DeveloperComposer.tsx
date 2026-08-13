@@ -36,9 +36,10 @@ export default function DeveloperComposer({ projects, selectedProjectId, onProje
   return (
     <section data-testid="benjadmin-developer-composer" className={styles.composer} aria-label="Fejlesztői utasítás beviteli sáv">
       <div className={styles.composerLeaderAvatar} aria-label="BENJADMIN · VEZETŐ">
-        <BenjadminAvatar member="BENJADMIN" size="head" status={busy ? "working" : "idle"} eager />
+        <BenjadminAvatar member="BENJADMIN" size="task" status={busy ? "working" : "idle"} eager />
         <span>BENJADMIN</span>
       </div>
+      <div className={styles.composerEntryCard}>
       <div className={styles.composerOptions}>
         <div className={styles.targetButtons}>
           {targets.map((item) => <button type="button" key={item.value} className={target === item.value ? styles.activeTarget : ""} onClick={() => setTarget(item.value)}>{item.label}</button>)}
@@ -55,6 +56,7 @@ export default function DeveloperComposer({ projects, selectedProjectId, onProje
       <div className={styles.composerInputRow}>
         <textarea value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.ctrlKey && event.key === "Enter") { event.preventDefault(); void submit(); } }} placeholder="Írj a fejlesztői csapatnak… (Ctrl+Enter: küldés)" rows={2} />
         <button type="button" className={styles.sendButton} onClick={() => void submit()} disabled={busy || !text.trim()}>{busy ? <span className={styles.dotPulse}>•••</span> : <Send size={17} />}<span>KÜLDÉS</span></button>
+      </div>
       </div>
     </section>
   );
