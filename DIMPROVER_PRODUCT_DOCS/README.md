@@ -129,3 +129,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `222_benjadmin_windows_bridge_p81_dev_activation_20260814.md` – P8.1 secure pairing kódréteg DEV aktiválás: 329/329 PASS; DB migration pending, Bridge/Pairing/Execution OFF.
 
 - `223_benjadmin_windows_bridge_p81_migration_gate_20260814.md` – P8.1 DB migration gate: explicit DEV approval + target preflight + backup/listing/SHA + schema verify, 352/352 PASS; valós preflight credential hiány miatt fail-closed.
+
+- `224_benjadmin_windows_bridge_p81_hardening_candidate_20260815.md` – P8.1 hardening: pairing crypto core/state machine, DB migration readiness UI, Windows agent manager; 407/407 PASS, Bridge/Pairing/Execution OFF.

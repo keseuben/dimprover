@@ -1222,3 +1222,21 @@
 .windowsBridgeDeviceArea article b { width: max-content; padding: 3px 5px; border-radius: 5px; color: var(--amber); background: var(--amber-soft); }
 .windowsBridgeDeviceArea article[data-status="active"] b { color: var(--green); background: var(--green-soft); }.windowsBridgeDeviceArea article[data-status="revoked"] b { color: var(--red); background: var(--red-soft); }
 @media (max-width: 900px) { .windowsBridgePairingCode, .windowsBridgeDeviceArea > article { grid-template-columns: 1fr; }.windowsBridgeDeviceArea article > div:last-child { justify-content: flex-start; } }
+
+/* BENJADMIN Windows Bridge P8.1 · DB migration readiness */
+.windowsBridgeMigrationArea { margin: 0 7px 7px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.windowsBridgeMigrationArea > header { min-height: 38px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 7px; background: var(--surface2); }
+.windowsBridgeMigrationArea > header > div { display: flex; align-items: center; gap: 5px; }
+.windowsBridgeMigrationArea > header strong, .windowsBridgeMigrationArea > header b { font-size: 12px; }
+.windowsBridgeMigrationArea > header b { padding: 3px 6px; border-radius: 5px; color: var(--amber); background: var(--amber-soft); }
+.windowsBridgeMigrationArea[data-ready="true"] > header b { color: var(--green); background: var(--green-soft); }
+.windowsBridgeMigrationGrid { padding: 7px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+.windowsBridgeMigrationGrid > span { min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 2px; background: var(--panel); }
+.windowsBridgeMigrationGrid b, .windowsBridgeMigrationGrid small { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.windowsBridgeMigrationGrid b { color: var(--text); }.windowsBridgeMigrationGrid small { color: var(--red); }
+.windowsBridgeMigrationGrid > span[data-ok="true"] small { color: var(--green); }
+.windowsBridgeMigrationArea > ul { margin: 0; padding: 7px 10px 8px 26px; border-top: 1px solid var(--border); color: var(--amber); background: color-mix(in srgb,var(--amber-soft) 38%,var(--surface)); }
+.windowsBridgeMigrationArea > ul li, .windowsBridgeMigrationArea > p { font-size: 12px; }
+.windowsBridgeMigrationArea > p { margin: 0; padding: 8px; border-top: 1px solid var(--border); color: var(--green); }
+@media (max-width: 1100px) { .windowsBridgeMigrationGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 650px) { .windowsBridgeMigrationGrid { grid-template-columns: 1fr; } }

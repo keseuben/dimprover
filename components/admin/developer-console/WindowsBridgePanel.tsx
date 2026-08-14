@@ -4,6 +4,7 @@ import { Ban, Check, KeyRound, Laptop, LockKeyhole, RefreshCw, ShieldCheck, Time
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WindowsBridgeReadiness } from "@/app/lib/dev-center/terminal-hub/windows-bridge";
 import type { WindowsBridgeDeviceSummary } from "@/app/lib/dev-center/terminal-hub/windows-bridge-pairing";
+import type { WindowsBridgeMigrationReadiness } from "@/app/lib/dev-center/terminal-hub/windows-bridge-migration-readiness";
 import styles from "./DeveloperConsole.module.css";
 
 function adminHeaders(json=false) {
@@ -16,6 +17,7 @@ type PairingView={pairingId:string;code:string;expiresAt:string;maxAttempts:numb
 export default function WindowsBridgePanel() {
   const [readiness, setReadiness] = useState<WindowsBridgeReadiness | null>(null);
   const [devices,setDevices]=useState<WindowsBridgeDeviceSummary[]>([]);
+  const [migration,setMigration]=useState<WindowsBridgeMigrationReadiness|null>(null);
   const [pairing,setPairing]=useState<PairingView|null>(null);
   const [error, setError] = useState("");
   const [notice,setNotice]=useState("");
@@ -32,10 +34,16 @@ export default function WindowsBridgePanel() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const response = await fetch("/api/dev/terminal-hub/windows-bridge/readiness", { headers: adminHeaders(), cache: "no-store" });
+      const [response,migrationResponse] = await Promise.all([
+        fetch("/api/dev/terminal-hub/windows-bridge/readiness", { headers: adminHeaders(), cache: "no-store" }),
+        fetch("/api/dev/terminal-hub/windows-bridge/migration-readiness", { headers: adminHeaders(), cache: "no-store" }),
+      ]);
       const payload = await response.json().catch(() => null) as { ok?: boolean; readiness?: WindowsBridgeReadiness; error?: string } | null;
+      const migrationPayload = await migrationResponse.json().catch(() => null) as { ok?: boolean; migration?: WindowsBridgeMigrationReadiness; error?: string } | null;
       if (!response.ok || !payload?.ok || !payload.readiness) throw new Error(payload?.error || "A Windows Bridge readiness nem tölthető be.");
+      if (!migrationResponse.ok || !migrationPayload?.ok || !migrationPayload.migration) throw new Error(migrationPayload?.error || "A Windows Bridge migration readiness nem tölthető be.");
       setReadiness(payload.readiness);
+      setMigration(migrationPayload.migration);
       if(payload.readiness.bridgeEnabled) await loadDevices(); else setDevices([]);
       setError("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "A Windows Bridge readiness nem tölthető be."); }
@@ -59,6 +67,7 @@ export default function WindowsBridgePanel() {
   }
 
   const canPair=Boolean(readiness?.bridgeEnabled&&readiness?.pairingEnabled&&readiness?.security.pairingSecretConfigured);
+  const migrationSafetyOk=Boolean(migration&&Object.values(migration.safety).every(Boolean));
   return (
     <section className={styles.windowsBridgePanel} data-enabled={readiness?.bridgeEnabled ? "true" : "false"}>
       <header>
@@ -73,6 +82,21 @@ export default function WindowsBridgePanel() {
         <article><WifiOff size={16} /><span>PowerShell execution</span><strong>{readiness?.executionEnabled ? "GATE ON" : "OFF"}</strong><small>P8.1 heartbeat parancslistája kötelezően üres.</small></article>
       </div>
       <div className={styles.windowsBridgeSecurityRow}><span>RAW: jogosult emberi UI</span><span>SANITIZED: AI szűrt</span><span>AUDIT: maszkolt meta</span><span>PROD: TILTVA</span></div>
+
+      <section className={styles.windowsBridgeMigrationArea} data-ready={migration?.readyForApplyAttempt ? "true" : "false"}>
+        <header><div><ShieldCheck size={15}/><strong>DB MIGRATION READINESS</strong></div><b>{migration?.readyForApplyAttempt?"APPLY GATE READY":"BLOKKOLT"}</b></header>
+        <div className={styles.windowsBridgeMigrationGrid}>
+          <span data-ok={migration?.configuration.expectedDevTargetConfigured?"true":"false"}><b>DEV target</b><small>{migration?.configuration.expectedDevTargetConfigured?"rendben":"hiányzik"}</small></span>
+          <span data-ok={migration?.configuration.databaseUrlConfigured?"true":"false"}><b>DB URL</b><small>{migration?.configuration.databaseUrlConfigured?"secure env-ben":"hiányzik"}</small></span>
+          <span data-ok={migration?.configuration.databasePasswordConfigured?"true":"false"}><b>DB jelszó</b><small>{migration?.configuration.databasePasswordConfigured?"secure env-ben":"hiányzik"}</small></span>
+          <span data-ok={migration?.configuration.productionTargetConfigured?"true":"false"}><b>PROD target</b><small>{migration?.configuration.productionTargetConfigured?"elkülönítés ellenőrizhető":"hiányzik"}</small></span>
+          <span data-ok={migration?.configuration.pairingSecretConfigured?"true":"false"}><b>Pairing secret</b><small>{migration?.configuration.pairingSecretConfigured?"provisionálva":"nincs provisionálva"}</small></span>
+          <span data-ok={migration?.artifact.sha256Valid?"true":"false"}><b>Migration SHA</b><small>{migration?.artifact.sha256Valid?"érvényes":"hibás / hiányzik"}</small></span>
+          <span data-ok={migration?.readyForPreflight?"true":"false"}><b>DB preflight</b><small>{migration?.readyForPreflight?"indítható":"nem indítható"}</small></span>
+          <span data-ok={migrationSafetyOk?"true":"false"}><b>Apply safety</b><small>{migrationSafetyOk?"minden kapcsoló OFF":"kapcsoló nem biztonságos"}</small></span>
+        </div>
+        {migration?.blockers.length?<ul>{migration.blockers.map(item=><li key={item}>{item}</li>)}</ul>:<p>A readiness zöld; SQL apply továbbra is csak explicit DEV-only approval mellett engedélyezett.</p>}
+      </section>
 
       <section className={styles.windowsBridgePairingArea}>
         <header><div><KeyRound size={15}/><strong>ONE-TIME PAIRING</strong></div><button type="button" onClick={()=>void createPairing()} disabled={!canPair||busy}><KeyRound size={14}/> Új pairing</button></header>

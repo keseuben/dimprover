@@ -1,6 +1,6 @@
 import fs from "node:fs"; import path from "node:path";
 const root=process.cwd(),read=f=>fs.readFileSync(path.join(root,f),"utf8");
-const repo=read("app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts"),bridge=read("app/lib/dev-center/terminal-hub/windows-bridge.ts"),ui=read("components/admin/developer-console/WindowsBridgePanel.tsx"),agent=read("scripts/benjadmin-windows-bridge-agent-p81.ps1"),sql=read("supabase/migrations/20260814230000_benjadmin_windows_bridge_p81.sql"),rollback=read("supabase/rollback/20260814230000_benjadmin_windows_bridge_p81_rollback.sql");
+const repo=read("app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts"),core=read("app/lib/dev-center/terminal-hub/windows-bridge-pairing-core.ts"),bridge=read("app/lib/dev-center/terminal-hub/windows-bridge.ts"),ui=read("components/admin/developer-console/WindowsBridgePanel.tsx"),agent=read("scripts/benjadmin-windows-bridge-agent-p81.ps1"),sql=read("supabase/migrations/20260814230000_benjadmin_windows_bridge_p81.sql"),rollback=read("supabase/rollback/20260814230000_benjadmin_windows_bridge_p81_rollback.sql");
 const routes=["devices/route.ts","pairings/route.ts","claim/route.ts","claim/status/route.ts","heartbeat/route.ts","devices/[deviceId]/approve/route.ts","devices/[deviceId]/revoke/route.ts"].map(f=>read(`app/api/dev/terminal-hub/windows-bridge/${f}`)).join("\n");
 let pass=0,fail=0;function check(n,o){if(o){pass+=1;console.log(`PASS ${n}`)}else{fail+=1;console.error(`FAIL ${n}`)}}
 check("P8.1 három külön DB tábla",["dev_center_windows_bridge_devices","dev_center_windows_bridge_pairings","dev_center_windows_bridge_sessions"].every(x=>sql.includes(x)));
@@ -10,13 +10,13 @@ check("Service role grant",["devices","pairings","sessions"].every(x=>sql.includ
 check("Pairing kód hash constraint",sql.includes("code_hash ~ '^[0-9a-f]{64}$'"));
 check("Device token hash constraint",sql.includes("token_hash is null or token_hash ~ '^[0-9a-f]{64}$'"));
 check("Claim token hash constraint",sql.includes("claim_token_hash is null or claim_token_hash ~ '^[0-9a-f]{64}$'"));
-check("Pairing max próbálkozás DB limitált",sql.includes("max_attempts between 1 and 10")&&repo.includes("PAIRING_ATTEMPT_LIMIT = 5"));
+check("Pairing max próbálkozás DB limitált",sql.includes("max_attempts between 1 and 10")&&core.includes("WINDOWS_BRIDGE_PAIRING_ATTEMPT_LIMIT = 5")&&repo.includes("WINDOWS_BRIDGE_PAIRING_ATTEMPT_LIMIT"));
 check("Pairing 600 másodperc",repo.includes("WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS * 1000")&&bridge.includes("WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS = 600"));
-check("Pairing kód HMAC",repo.includes('createHmac("sha256", pairingSecret())'));
+check("Pairing kód HMAC",core.includes('createHmac("sha256"')&&repo.includes('hashWindowsBridgePairingCode(pairingSecret(), pairingId, code)'));
 check("Pairing secret minimum 32",repo.includes("secret.length < 32"));
-check("Nyers pairing kód nincs DB insertben",repo.includes("code_hash: pairingHash")&&!/\bcode\s*:/.test(repo.slice(repo.indexOf("dev_center_windows_bridge_pairings"),repo.indexOf("return { pairingId, code"))));
-check("Claim token csak SHA256 DB-ben",repo.includes("claim_token_hash: claimHash")&&repo.includes("const claimToken = randomToken()"));
-check("Device token csak SHA256 DB-ben",repo.includes("const tokenHash = sha256(deviceToken)")&&sql.includes("token_hash text null unique"));
+check("Nyers pairing kód nincs DB insertben",repo.includes("code_hash: hashWindowsBridgePairingCode(pairingSecret(), pairingId, code)")&&!/\bcode\s*:/.test(repo.slice(repo.indexOf("dev_center_windows_bridge_pairings"),repo.indexOf("return { pairingId, code"))));
+check("Claim token csak SHA256 DB-ben",repo.includes("claim_token_hash: claimHash")&&repo.includes("const claimToken = createWindowsBridgeToken()")&&repo.includes("const claimHash = hashWindowsBridgeToken(claimToken)"));
+check("Device token csak SHA256 DB-ben",repo.includes("const tokenHash = hashWindowsBridgeToken(deviceToken)")&&core.includes("hashWindowsBridgeToken")&&sql.includes("token_hash text null unique"));
 check("Device token egyszeri RPC aktiválás",repo.includes('rpc("dev_center_windows_bridge_activate_device"')&&sql.includes("claim_token_hash = null"));
 check("Aktiválás DB tranzakciós function",sql.includes("for update")&&sql.includes("return true")&&sql.includes("security definer"));
 check("Egy aktív session/device",sql.includes("dev_center_windows_bridge_one_active_session_idx")&&sql.includes("where status = 'active'"));
