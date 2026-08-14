@@ -183,6 +183,7 @@ export async function createDriveSignedGetUrl(input: {
   bucket?: string | null;
   fileName: string;
   mimeType?: string | null;
+  disposition?: "attachment" | "inline";
 }) {
   const { client, config } = getStorageClient();
   const bucket = input.bucket || config.bucket;
@@ -190,11 +191,12 @@ export async function createDriveSignedGetUrl(input: {
     throw new DriveCoreRepositoryError("A dokumentum tárhelye eltér az aktív DRIVE buckettől.", "DRIVE_OBJECT_BUCKET_MISMATCH", 409);
   }
   const safeName = input.fileName.replace(/[\r\n"\\/]/g, "_").slice(0, 240) || "dimpro-drive-file";
+  const disposition = input.disposition === "inline" ? "inline" : "attachment";
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: input.storageKey,
     ResponseContentType: input.mimeType || "application/octet-stream",
-    ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+    ResponseContentDisposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(safeName)}`,
   });
   const url = await getSignedUrl(client, command, { expiresIn: config.signedUrlTtlSeconds });
   return {

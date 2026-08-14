@@ -583,6 +583,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               boxColorsByDocument={boxColorsByDocument}
             />
             <DetailsPanel
+              projectId={projectId}
               document={selectedDocument}
               details={details}
               loading={detailsLoading}

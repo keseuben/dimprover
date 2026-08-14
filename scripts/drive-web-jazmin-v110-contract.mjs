@@ -10,6 +10,8 @@ const files = {
   shelf: "components/drive/BoxShelf.tsx",
   commander: "components/drive/CommanderPanel.tsx",
   compare: "components/drive/CompareWorkspace.tsx",
+  viewer: "components/drive/DriveDocumentViewer.tsx",
+  details: "components/drive/DetailsPanel.tsx",
   grid: "components/drive/FileGridPanel.tsx",
   toolbar: "components/drive/DriveToolbar.tsx",
   switcher: "components/drive/ViewLayoutSwitcher.tsx",
@@ -24,6 +26,9 @@ const files = {
   boxItemsRoute: "app/api/projects/[projectId]/drive/boxes/[boxId]/items/route.ts",
   boxItemRoute: "app/api/projects/[projectId]/drive/boxes/[boxId]/items/[itemId]/route.ts",
   moveRoute: "app/api/projects/[projectId]/drive/documents/[documentId]/move/route.ts",
+  previewRoute: "app/api/projects/[projectId]/drive/documents/[documentId]/preview/route.ts",
+  storageService: "app/lib/drive-core/storageService.ts",
+  s3Storage: "app/lib/drive-core/s3ObjectStorage.ts",
 };
 
 for (const file of Object.values(files)) {
@@ -63,7 +68,17 @@ check("24 Metaadat eltérésmátrix", source.compare.includes("metadataRows") &&
 check("25 Compare CsomagBOX workflow", source.shelf.includes("onOpenCompareBox") && source.shelf.includes('box.purpose === "COMPARE"') && source.workspace.includes("openCompare(box.items.map"), "Az Összehasonlítás CsomagBOX közvetlenül betölthető a Compare Workspace-be.");
 check("26 Compare oldalcsere", source.compare.includes("swapSides") && source.compare.includes("Oldalak cseréje"), "A két összehasonlítási oldal felcserélhető.");
 check("27 Compare megnyitás/letöltés", source.compare.includes("/download") && source.compare.includes("Megnyitás / letöltés"), "A kijelölt aktuális dokumentumverzió a meglévő signed-download workflow-val megnyitható.");
-check("28 Compare viewer extension point", source.compare.includes("DocumentViewer csatlakozási pont") && source.compare.includes("következő Viewer-szeletben"), "A vizuális PDF/kép Viewer következő vertikális szelete explicit csatlakozási pontot kapott.");
+check("28 Compare DocumentViewer bekötés", source.compare.includes("DriveDocumentViewer") && source.compare.includes("compact"), "A Compare mindkét oldalán valódi Drive DocumentViewer jelenik meg.");
+check("29 DocumentViewer a részletpanelen", source.details.includes("DriveDocumentViewer") && source.details.includes("projectId={projectId}"), "A kiválasztott dokumentum részletpanelje inline Viewerrel működik.");
+check("30 Projektjogosultság-védett preview API", source.previewRoute.includes('requireProjectPermission(request, projectId, "document.read")') && source.previewRoute.includes("initDriveObjectPreview"), "Az előnézeti URL csak project read jogosultsággal kérhető.");
+check("31 Rövid életű inline signed URL", source.s3Storage.includes('disposition?: "attachment" | "inline"') && source.s3Storage.includes("ResponseContentDisposition: `${disposition}") && source.storageService.includes('disposition: "inline"'), "A Viewer ugyanazt a privát S3 signed URL motort használja inline dispositionnel.");
+check("32 Letöltés attachment marad", source.s3Storage.includes('input.disposition === "inline" ? "inline" : "attachment"'), "A meglévő letöltési workflow alapértelmezett attachment viselkedése megmarad.");
+check("33 Biztonságos preview MIME whitelist", source.storageService.includes("DRIVE_INLINE_IMAGE_MIME_TYPES") && source.storageService.includes('normalizedMime === "application/pdf"') && source.storageService.includes("DRIVE_PREVIEW_UNSUPPORTED_TYPE"), "Csak PDF és explicit raster kép MIME-ok kapnak inline előnézetet; SVG/aktív tartalom nem.");
+check("34 Közös PDF engine újrahasználat", source.viewer.includes("loadSharedPdfDocument") && source.viewer.includes("renderSharedPdfPage") && source.viewer.includes("@/components/viewers/pdfDocumentEngine"), "A Drive nem duplikál PDF motort, a meglévő közös PDF.js engine-t használja.");
+check("35 PDF oldallapozás és zoom", source.viewer.includes("pageNumber") && source.viewer.includes("pageCount") && source.viewer.includes("changeZoom") && source.viewer.includes("fitWidth"), "A Viewer lapozást, zoomot és szélességre illesztést támogat.");
+check("36 Forgatás és teljes képernyő", source.viewer.includes("requestFullscreen") && source.viewer.includes("setRotation") && source.viewer.includes("Forgatás 90°"), "A Viewer forgatható és teljes képernyőre váltható.");
+check("37 Képnéző támogatás", source.viewer.includes('kind === "IMAGE"') && source.viewer.includes("driveViewerImage") && source.storageService.includes('"image/webp"'), "A PDF mellett biztonságos raster képek is inline megjelennek.");
+check("38 Compare két vizuális viewer", (source.compare.match(/DriveDocumentViewer/g) || []).length >= 1 && source.viewer.includes("compact"), "A Compare ugyanazt a Viewer komponenst használja kompakt kétoldalas módhoz.");
 
 const failed = checks.filter((item) => !item.ok);
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);

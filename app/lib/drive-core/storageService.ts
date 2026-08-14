@@ -414,3 +414,83 @@ export async function initDriveObjectDownload(input: {
     },
   };
 }
+
+
+const DRIVE_INLINE_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/avif",
+]);
+
+export async function initDriveObjectPreview(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+}) {
+  const config = getDriveObjectStorageConfig();
+  const status = getDriveObjectStorageSafeStatus(config);
+  const database = await getDriveObjectStorageDatabaseHealth();
+  if (!database.ready) {
+    throw new DriveCoreRepositoryError("A DRIVE Object Storage adatbázissémája még nincs aktiválva.", "DRIVE_OBJECT_SCHEMA_NOT_READY", 503);
+  }
+  const record = await getDriveDownloadVersionRecord({
+    projectId: input.projectId,
+    documentId: input.documentId,
+    versionId: input.versionId,
+  });
+  if (!record) throw new DriveCoreRepositoryError("A dokumentumverzió nem található.", "DRIVE_PREVIEW_NOT_FOUND", 404);
+  const trustedDropArchive = record.documentSource === "DROP"
+    && record.version.status === "AVAILABLE"
+    && record.version.storageProvider === "S3"
+    && Boolean(record.version.storageKey);
+  if (!status.objectDownloadEnabled && !trustedDropArchive) {
+    throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_PREVIEW_DISABLED", 503);
+  }
+  if (record.version.status !== "AVAILABLE" || record.version.storageProvider !== "S3" || !record.version.storageKey) {
+    throw new DriveCoreRepositoryError(
+      "Ez a dokumentumverzió még nem jeleníthető meg a privát DRIVE tárhelyről.",
+      "DRIVE_PREVIEW_NOT_AVAILABLE",
+      409,
+    );
+  }
+  const normalizedMime = (record.version.mimeType || "").toLowerCase();
+  const kind = normalizedMime === "application/pdf"
+    ? "PDF" as const
+    : DRIVE_INLINE_IMAGE_MIME_TYPES.has(normalizedMime)
+      ? "IMAGE" as const
+      : null;
+  if (!kind) {
+    throw new DriveCoreRepositoryError(
+      "Ehhez a fájltípushoz nincs biztonságos inline DRIVE előnézet.",
+      "DRIVE_PREVIEW_UNSUPPORTED_TYPE",
+      415,
+    );
+  }
+  const signed = await createDriveSignedGetUrl({
+    storageKey: record.version.storageKey,
+    bucket: record.version.storageBucket,
+    fileName: record.version.originalName || record.documentName,
+    mimeType: record.version.mimeType,
+    disposition: "inline",
+  });
+  return {
+    ok: true as const,
+    preview: {
+      documentId: input.documentId,
+      versionId: record.version.id,
+      versionNumber: record.version.versionNumber,
+      fileName: record.version.originalName || record.documentName,
+      mimeType: record.version.mimeType,
+      sizeBytes: record.version.sizeBytes,
+      kind,
+      method: signed.method,
+      url: signed.url,
+      expiresAt: signed.expiresAt,
+      source: record.documentSource,
+      trustedDropArchive,
+    },
+  };
+}

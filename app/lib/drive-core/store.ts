@@ -14,6 +14,7 @@ export {
   completeDriveObjectUpload,
   getDriveObjectStorageHealth,
   initDriveObjectDownload,
+  initDriveObjectPreview,
   initDriveObjectUpload,
 } from "./storageService";
 

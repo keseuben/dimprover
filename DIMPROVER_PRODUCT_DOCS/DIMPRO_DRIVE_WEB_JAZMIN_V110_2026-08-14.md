@@ -89,44 +89,54 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A Compare fejlécből a már meglévő signed-download workflow-val megnyitható/letölthető az aktuális fájlverzió.
 - A két oldali `DocumentViewer` csatlakozási pont bekerült; a következő Drive Viewer vertikális szelet ide tudja bekötni a PDF/kép vizuális oldalnézetet és később az overlay-t.
 
+
+### 7. Drive DocumentViewer V1 – inline PDF és kép előnézet
+
+- A Drive részletpaneljének korábbi Viewer-helyőrzője valódi `DriveDocumentViewer` komponensre cserélődött.
+- Ugyanez a Viewer komponens a Compare Workspace két oldalán kompakt módban is megjelenik, így a két revízió valódi vizuális PDF/kép nézete párhuzamosan használható.
+- A PDF megjelenítés nem új, párhuzamos motort kapott: a meglévő közös `components/viewers/pdfDocumentEngine.ts` PDF.js motorát használja.
+- PDF funkciók: oldallapozás, nagyítás/kicsinyítés, szélességre illesztés, 90°-os forgatás, teljes képernyő, előnézeti URL frissítés és új lapon történő megnyitás.
+- `Ctrl + egérgörgő` használható zoomra; a nagyított tervlap görgethető/pásztázható a Viewer területén.
+- Raster kép előnézet támogatott JPG/JPEG, PNG, WEBP, GIF, BMP és AVIF formátumokra.
+- SVG és más aktív tartalmat hordozó fájltípus nem kap inline preview URL-t.
+- Új `POST /api/projects/[projectId]/drive/documents/[documentId]/preview` végpont készült; kizárólag `document.read` projektjogosultsággal használható.
+- A preview a meglévő privát S3 signed-URL motort használja rövid élettartamú `inline` Content-Disposition beállítással.
+- A normál letöltési útvonal alapértelmezett `attachment` viselkedése változatlan maradt.
+- Nem támogatott fájltípus vagy nem `AVAILABLE` verzió esetén a Viewer biztonságos fallback állapotot mutat.
+- A következő fejlesztési szelet számára a két renderelt Compare Viewer már alkalmas overlay/difference megjelenítés alapjául; az automatikus vizuális diff még nem része a V1-nek.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` 28 ellenőrzést tartalmaz:
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **38** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board és Compare követelményeken túl külön ellenőrzi a Viewer bekötését, a `document.read` preview jogosultságot, az inline signed URL-t, az attachment letöltés változatlanságát, a MIME whitelistet, a közös PDF.js engine újrahasználatát, az oldallapozást/zoomot, forgatást/teljes képernyőt és a raster kép támogatást.
 
-1. CsomagBOX repository lista
-2. CsomagBOX létrehozás
-3. file/version referencia-alap
-4. BOX item idempotencia
-5. projektizoláció
-6. BOX audit
-7. BOX change feed
-8. fájlsor BOX színjelölés
-9. fájl → BOX drag payload
-10. ugyanaz a fájl több BOX-ban
-11. aktív toolbar CsomagBOX
-12. Commander nézet
-13. két Commander panel
-14. Commander drag/move
-15. move audit + change event
-16. szerveroldali írási permission
-17. SQL-hiány fail-safe
-18. SmartSync kizárás
-19. lebegő Drive board, munkaterület-szélesség megtartás
-20. hover nyitás + board rögzítés
-21. aktív Compare toolbar
-22. két dokumentumválasztó
-23. Compare details API
-24. metaadat eltérésmátrix
-25. CsomagBOX → Compare workflow
-26. oldalcsere
-27. signed megnyitás/letöltés
-28. DocumentViewer csatlakozási pont
+Végső statikus DEV VPS futás: **38/38 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
-Végső DEV VPS futás: **28/28 PASS**. A meglévő Drive V1.00 contract 22/22 PASS, a Drive Core V0.30 contract 24/24 PASS.
+A külön Viewer böngészős acceptance **18/18 PASS**. Ellenőrizve:
+
+1. Viewer canvas megjelenik
+2. PDF.js első oldal render
+3. 1 / 2 oldalszám
+4. zoom vezérlők
+5. szélességre illesztés
+6. forgatás
+7. teljes képernyő gomb
+8. új lapos megnyitás
+9. lapozás 2 / 2 oldalra
+10. 115%-os zoom
+11. forgatás utáni újrarender
+12. Compare gomb
+13. Compare Workspace
+14. két párhuzamos Viewer canvas
+15. mindkét Compare PDF render
+16. régi Viewer-placeholder eltűnése
+17. 1366 px vízszintes overflow-mentesség
+18. browser pageerror-mentes futás
+
+Viewer/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-viewer-only-2026-08-14T16-21-42-075Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -172,3 +182,16 @@ Az izolált candidate a teszt után leállítandó. Az `app.dev.dimpro.hu` aktí
 - Forrás-backup a kör előtt: `/srv/dimpro-dev/backups/jazmin_drive_compare_20260814_171230`
 
 Az `app.dev.dimpro.hu` aktív 3100-as runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut. A Compare candidate külön `127.0.0.1:3210` porton futott, így az aktív DEV példányt és BENJADMIN fájlokat ez a kör sem módosította.
+
+## DocumentViewer V1 build és candidate ellenőrzés
+
+- Next.js production build: **PASS**
+- Build ID: `24FxLI9Y49CMK1P6csUMJ`
+- Új preview route a build route-listában: **PASS**
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Preview API session nélküli kérés: **401**, tehát az előnézet nem nyilvános
+- Viewer-focused browser acceptance: **18/18 PASS**
+- Viewer artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-viewer-only-2026-08-14T16-21-42-075Z`
+- Forrás-backup a Viewer kör előtt: `/srv/dimpro-dev/backups/jazmin_drive_viewer_20260814_180406`
+
+A Viewer candidate kizárólag az izolált `127.0.0.1:3210` tesztporton futott. Az `app.dev.dimpro.hu` aktív DEV runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut, így a Jázmin-AI Viewer fejlesztés nem módosította a párhuzamos BENJADMIN fejlesztést.

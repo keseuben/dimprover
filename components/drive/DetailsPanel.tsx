@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSearch2, QrCode, Save, StickyNote } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails } from "./driveTypes";
+import DriveDocumentViewer from "./DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
 
 type MetadataForm = {
@@ -18,6 +19,7 @@ type MetadataForm = {
 };
 
 type Props = {
+  projectId: string;
   document: DriveDocument | null;
   details: DriveDocumentDetails | null;
   loading: boolean;
@@ -43,6 +45,7 @@ const emptyMetadata: MetadataForm = {
 };
 
 export default function DetailsPanel({
+  projectId,
   document,
   details,
   loading,
@@ -107,13 +110,7 @@ export default function DetailsPanel({
           <div className={styles.previewPlaceholder}><div><FileSearch2 size={24} /><strong>Részletek betöltése…</strong></div></div>
         ) : tab === "details" ? (
           <>
-            <div className={styles.previewPlaceholder}>
-              <div>
-                <FileSearch2 size={28} />
-                <strong>DocumentViewer helye előkészítve</strong>
-                <span>A közös PDF/kép inline előnézet a 4. napi Viewer + Compare fejlesztésben aktiválódik.</span>
-              </div>
-            </div>
+            <DriveDocumentViewer projectId={projectId} document={document} />
 
             <div className={styles.metaGrid}>
               {([
