@@ -258,19 +258,32 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - Oldal/zoom/fit/forgatás váltáskor a score-lista törlődik. Kézi referencia-pár csere esetén csak az érintett candidate score-ja érvénytelenedik, majd a friss thumbnailből újraszámolódik.
 - A score ugyanabból a kliensoldali preview bitmapból készül, ezért nincs új PDF letöltés, backend kérés, adatbázis-módosítás vagy külön PDF.js render.
 
+### 19. Vizuális eltérés-hőtérkép és zónanagyító V1
+
+- A vizuális vonalfedési score most már nem csak egyetlen százalékot ad, hanem a legerősebb lokális eltéréseket is külön `VisualDifferenceZone` rekordokként azonosítja.
+- A 228×132 px összehasonlító bitmap 8×5 elemzési rácsra oszlik. Minden cellában külön számolódik a kétirányú, 1 px toleranciával vizsgált eltérő rajzi vonalpontok aránya.
+- Üres/feature-szegény cella (`inkPixels < 5`) és 8% alatti lokális eltérés nem kerül hőtérképre. A legerősebb legfeljebb öt zóna marad meg.
+- A thumbnail koordináták visszaalakításra kerülnek a renderelt terv koordinátarendszerére, ezért ugyanaz a zóna a nagy Compare terven is megjeleníthető.
+- A candidate thumbnailen a zónák áttetsző eltérés-overlayként látszanak. Az aktív Auto Align review külön `Eltérés hőtérkép` panelt, zónalistát és be/ki kapcsolót kapott.
+- Bekapcsoláskor a nagy terven `Δ1…Δ5` overlay-k jelölik a legerősebb eltérési területeket. Egy zónára kattintva a munkaterület az adott részhez görget.
+- A kiválasztott zónához külön 360×200 px `DifferenceZoneInspector` nagyító készül, amely az A tervet és a candidate saját X/Y + skála + forgatás transzformációjával számolt B tervet mutatja.
+- A zónanagyító és a hőtérkép **csak ellenőrző vizualizáció**. Nem írja a fő `alignmentOffsetX/Y`, `alignmentScale` vagy `alignmentRotation` state-et; a tényleges B-réteg továbbra is csak az `Alkalmazás` gomb után igazodik.
+- Új elemzés, oldal/zoom/fit/forgatás változás vagy elvetés után a hőtérkép és a kiválasztott zóna resetelődik, így elavult pixelkoordináta nem marad a felületen.
+- A zónalista és inspector külön responsive Drive UI-t kapott 1180/760/520 px töréspontokkal.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **159** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **173** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
 
 A 125–137. ellenőrzések külön vizsgálják a több automatikus proposal API-t, a három felismerési forrást, jelöltenkénti similarity/biztonsági ellenőrzést, rangsort, kiválasztást, kézi párjavítás megőrzését, invalidálást és responsive alternatíva UI-t.
 
-A 138–146. ellenőrzések a candidate vizuális thumbnail réteget, a 147–159. ellenőrzések pedig a vonalmaszkot, toleranciát, kétirányú harmonikus fedési score-t, fail-safe működést, `Legjobb fedés` badge-et, életciklus-resetet és responsive vizuális score UI-t vizsgálják.
+A 138–146. ellenőrzések a candidate vizuális thumbnail réteget, a 147–159. ellenőrzések a vonalmaszkot, toleranciát, kétirányú harmonikus fedési score-t, fail-safe működést, `Legjobb fedés` badge-et, életciklus-resetet és responsive vizuális score UI-t vizsgálják. A 160–173. ellenőrzések a lokális mismatch zónákat, 8×5 rácsos aggregációt, feature-szegény cellaszűrést, tervkoordináta-visszamappelést, hőtérkép overlayt, zónafókuszt, nagyítót, transzformáció-független ellenőrzést és responsive életciklust vizsgálják.
 
-Végső statikus DEV VPS futás: **159/159 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **173/173 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -687,3 +700,31 @@ Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztport
 - Adatbázis-, backend-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A score kizárólag Drive kliensoldali Compare/thumbnail bitmap feldolgozás.
 
 Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult a standalone mappából; az aktív `app.dev.dimpro.hu` Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.
+## Difference Heatmap V1 final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_difference_heatmap_20260815_005258`
+- Next.js production build: **PASS**
+- Build ID: `aVlgjxGZOwecdZ391RyJC`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **173/173 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Új Difference Heatmap browser acceptance: **58/58 PASS**
+- Visual Quality Score regresszió: **47/47 PASS**
+- Auto Pair Review regresszió: **38/38 PASS**
+- Geometriai csomópont regresszió: **22/22 PASS**
+- Auto Align regresszió: **21/21 PASS**
+- 2/3 pontos regresszió: **25/25 PASS**
+- Vizuális Compare regresszió: **34/34 PASS**
+- Historikus revízió regresszió: **20/20 PASS**
+- Heatmap artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-difference-heatmap-2026-08-14T23-04-17-381Z`
+- Visual Quality regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-quality-score-2026-08-14T23-04-38-872Z`
+- Pair Review regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-auto-pair-review-2026-08-14T23-04-49-168Z`
+- Geometriai regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-geometric-nodes-2026-08-14T23-04-58-792Z`
+- Auto Align regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T23-05-07-232Z`
+- 2/3 pontos regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T23-05-16-564Z`
+- Vizuális regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T23-05-27-905Z`
+- Historikus regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T23-05-40-322Z`
+- Adatbázis-, backend-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A hőtérkép kizárólag Drive kliensoldali Compare bitmap/overlay réteg.
+
+Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult a standalone mappából. Az aktív `app.dev.dimpro.hu` Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.

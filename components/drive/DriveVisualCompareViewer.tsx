@@ -58,12 +58,23 @@ type AutoAlignmentSuggestion = SimilarityAlignment & {
   summary: string;
 };
 
+type VisualDifferenceZone = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  score: number;
+  mismatchPixels: number;
+  inkPixels: number;
+};
+
 type AutoCandidateVisualQuality = {
   score: number;
   matchedA: number;
   matchedB: number;
   inkPixelsA: number;
   inkPixelsB: number;
+  zones: VisualDifferenceZone[];
 };
 
 type AutoPairReplacement = {
@@ -276,12 +287,41 @@ function computeVisualAlignmentQuality(leftImage: ImageData, rightImage: ImageDa
   const recallA = matchedA / left.count;
   const recallB = matchedB / right.count;
   const harmonic = recallA + recallB > 0 ? (2 * recallA * recallB) / (recallA + recallB) : 0;
+  const gridColumns = 8;
+  const gridRows = 5;
+  const zones: VisualDifferenceZone[] = [];
+  for (let row = 0; row < gridRows; row += 1) {
+    for (let column = 0; column < gridColumns; column += 1) {
+      const x0 = Math.floor(column * leftImage.width / gridColumns);
+      const x1 = Math.floor((column + 1) * leftImage.width / gridColumns);
+      const y0 = Math.floor(row * leftImage.height / gridRows);
+      const y1 = Math.floor((row + 1) * leftImage.height / gridRows);
+      let inkPixels = 0;
+      let mismatchPixels = 0;
+      for (let y = y0; y < y1; y += 1) {
+        for (let x = x0; x < x1; x += 1) {
+          const index = y * leftImage.width + x;
+          const hasA = Boolean(left.mask[index]);
+          const hasB = Boolean(right.mask[index]);
+          if (!hasA && !hasB) continue;
+          inkPixels += 1;
+          if ((hasA && !rightDilated[index]) || (hasB && !leftDilated[index])) mismatchPixels += 1;
+        }
+      }
+      if (inkPixels < 5) continue;
+      const zoneScore = Math.round((mismatchPixels / inkPixels) * 100);
+      if (zoneScore < 8) continue;
+      zones.push({ x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0), score: zoneScore, mismatchPixels, inkPixels });
+    }
+  }
+  zones.sort((a, b) => b.score - a.score || b.mismatchPixels - a.mismatchPixels || b.inkPixels - a.inkPixels);
   return {
     score: Math.max(0, Math.min(100, Math.round(harmonic * 100))),
     matchedA: Number((recallA * 100).toFixed(1)),
     matchedB: Number((recallB * 100).toFixed(1)),
     inkPixelsA: left.count,
     inkPixelsB: right.count,
+    zones: zones.slice(0, 5),
   };
 }
 
@@ -347,10 +387,21 @@ function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanv
     rightLayerContext.drawImage(rightCanvas, 0, 0);
     rightLayerContext.restore();
 
-    onQuality(index, computeVisualAlignmentQuality(
+    const rawQuality = computeVisualAlignmentQuality(
       leftLayerContext.getImageData(0, 0, width, height),
       rightLayerContext.getImageData(0, 0, width, height),
-    ));
+    );
+    const mappedQuality = rawQuality ? {
+      ...rawQuality,
+      zones: rawQuality.zones.map((zone) => {
+        const x = Math.max(0, Math.min(sourceWidth, (zone.x - originX) / Math.max(0.0001, fitScale)));
+        const y = Math.max(0, Math.min(sourceHeight, (zone.y - originY) / Math.max(0.0001, fitScale)));
+        const zoneWidth = Math.max(1, Math.min(sourceWidth - x, zone.width / Math.max(0.0001, fitScale)));
+        const zoneHeight = Math.max(1, Math.min(sourceHeight - y, zone.height / Math.max(0.0001, fitScale)));
+        return { ...zone, x, y, width: zoneWidth, height: zoneHeight };
+      }),
+    } : null;
+    onQuality(index, mappedQuality);
 
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#f5f8fa";
@@ -363,6 +414,16 @@ function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanv
     context.drawImage(rightLayer, 0, 0);
     context.globalCompositeOperation = "source-over";
     context.globalAlpha = 1;
+    if (rawQuality?.zones.length) {
+      rawQuality.zones.forEach((zone, zoneIndex) => {
+        const alpha = Math.min(0.36, 0.10 + zone.score / 420);
+        context.fillStyle = `rgba(220,76,55,${alpha.toFixed(3)})`;
+        context.fillRect(zone.x, zone.y, zone.width, zone.height);
+        context.strokeStyle = zoneIndex === 0 ? "rgba(178,50,35,.88)" : "rgba(199,74,56,.58)";
+        context.lineWidth = zoneIndex === 0 ? 1.6 : 1;
+        context.strokeRect(zone.x + 0.5, zone.y + 0.5, Math.max(0, zone.width - 1), Math.max(0, zone.height - 1));
+      });
+    }
 
     context.save();
     context.strokeStyle = "rgba(57,91,120,.28)";
@@ -385,6 +446,68 @@ function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanv
       data-preview-rotation={candidate.rotationDegrees}
     />
   );
+}
+
+type DifferenceZoneInspectorProps = {
+  candidate: AutoAlignmentSuggestion;
+  zone: VisualDifferenceZone;
+  zoneIndex: number;
+  leftCanvasRef: RefObject<HTMLCanvasElement | null>;
+  rightCanvasRef: RefObject<HTMLCanvasElement | null>;
+};
+
+function DifferenceZoneInspector({ candidate, zone, zoneIndex, leftCanvasRef, rightCanvasRef }: DifferenceZoneInspectorProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const target = canvasRef.current;
+    const leftCanvas = leftCanvasRef.current;
+    const rightCanvas = rightCanvasRef.current;
+    if (!target || !leftCanvas?.width || !rightCanvas?.width) return;
+    const context = target.getContext("2d");
+    if (!context) return;
+    const paddingX = Math.max(zone.width * 1.4, leftCanvas.width * 0.04);
+    const paddingY = Math.max(zone.height * 1.4, leftCanvas.height * 0.04);
+    const cropX = Math.max(0, zone.x - paddingX);
+    const cropY = Math.max(0, zone.y - paddingY);
+    const cropRight = Math.min(Math.max(leftCanvas.width, rightCanvas.width), zone.x + zone.width + paddingX);
+    const cropBottom = Math.min(Math.max(leftCanvas.height, rightCanvas.height), zone.y + zone.height + paddingY);
+    const cropWidth = Math.max(1, cropRight - cropX);
+    const cropHeight = Math.max(1, cropBottom - cropY);
+    const scale = Math.min(target.width / cropWidth, target.height / cropHeight);
+    const offsetX = (target.width - cropWidth * scale) / 2;
+    const offsetY = (target.height - cropHeight * scale) / 2;
+    context.clearRect(0, 0, target.width, target.height);
+    context.fillStyle = "#f4f7f9";
+    context.fillRect(0, 0, target.width, target.height);
+    context.save();
+    context.beginPath();
+    context.rect(offsetX, offsetY, cropWidth * scale, cropHeight * scale);
+    context.clip();
+    context.setTransform(scale, 0, 0, scale, offsetX - cropX * scale, offsetY - cropY * scale);
+    context.globalAlpha = 0.94;
+    context.globalCompositeOperation = "source-over";
+    context.drawImage(leftCanvas, 0, 0);
+    context.translate(candidate.offsetX, candidate.offsetY);
+    context.rotate(candidate.rotationDegrees * Math.PI / 180);
+    const candidateScale = candidate.scalePercent / 100;
+    context.scale(candidateScale, candidateScale);
+    context.globalAlpha = 0.48;
+    context.globalCompositeOperation = "multiply";
+    context.drawImage(rightCanvas, 0, 0);
+    context.restore();
+    context.save();
+    const zx = offsetX + (zone.x - cropX) * scale;
+    const zy = offsetY + (zone.y - cropY) * scale;
+    const zw = zone.width * scale;
+    const zh = zone.height * scale;
+    context.fillStyle = "rgba(220,76,55,.18)";
+    context.strokeStyle = "rgba(184,54,38,.92)";
+    context.lineWidth = 2;
+    context.fillRect(zx, zy, zw, zh);
+    context.strokeRect(zx + 1, zy + 1, Math.max(0, zw - 2), Math.max(0, zh - 2));
+    context.restore();
+  }, [candidate.offsetX, candidate.offsetY, candidate.rotationDegrees, candidate.scalePercent, leftCanvasRef, rightCanvasRef, zone.height, zone.width, zone.x, zone.y]);
+  return <canvas ref={canvasRef} width={360} height={200} className={styles.visualCompareDifferenceInspectorCanvas} data-difference-inspector={zoneIndex + 1} aria-label={`Eltérési zóna ${zoneIndex + 1} nagyított előnézete`} />;
 }
 
 export default function DriveVisualCompareViewer({ projectId, leftDocument, rightDocument }: Props) {
@@ -428,6 +551,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [autoAlignmentCandidates, setAutoAlignmentCandidates] = useState<AutoAlignmentSuggestion[]>([]);
   const [autoAlignmentCandidateIndex, setAutoAlignmentCandidateIndex] = useState(0);
   const [autoCandidateVisualQuality, setAutoCandidateVisualQuality] = useState<Record<number, AutoCandidateVisualQuality | null>>({});
+  const [differenceHeatmapEnabled, setDifferenceHeatmapEnabled] = useState(false);
+  const [selectedDifferenceZoneIndex, setSelectedDifferenceZoneIndex] = useState(0);
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
@@ -505,6 +630,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
     setAutoCandidateVisualQuality({});
+    setDifferenceHeatmapEnabled(false);
+    setSelectedDifferenceZoneIndex(0);
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
     setShowBase(true);
@@ -519,6 +646,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
     setAutoCandidateVisualQuality({});
+    setDifferenceHeatmapEnabled(false);
+    setSelectedDifferenceZoneIndex(0);
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
   }, [fitWidth, pageNumber, rotation, zoom]);
@@ -750,8 +879,25 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     if (!candidate) return;
     setAutoAlignmentCandidateIndex(index);
     setAutoAlignmentSuggestion(candidate);
+    setSelectedDifferenceZoneIndex(0);
     setAutoPairReplacement(null);
     setAlignmentMessage(`Automatikus alternatíva ${index + 1}/${autoAlignmentCandidates.length} kiválasztva · ${Math.round(candidate.confidenceScore * 100)}% bizalom · RMS ${candidate.rmsError.toFixed(2)} px.`);
+  }
+
+  function focusDifferenceZone(zoneIndex: number) {
+    const quality = autoCandidateVisualQuality[autoAlignmentCandidateIndex];
+    const zone = quality?.zones[zoneIndex];
+    if (!zone) return;
+    setDifferenceHeatmapEnabled(true);
+    setSelectedDifferenceZoneIndex(zoneIndex);
+    const stage = stageRef.current;
+    if (stage) {
+      stage.scrollTo({
+        left: Math.max(0, zone.x + zone.width / 2 - stage.clientWidth / 2),
+        top: Math.max(0, zone.y + zone.height / 2 - stage.clientHeight / 2),
+        behavior: "smooth",
+      });
+    }
   }
 
   function startAutoPairReplacement(pairIndex: number) {
@@ -827,6 +973,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
     setAutoCandidateVisualQuality({});
+    setDifferenceHeatmapEnabled(false);
+    setSelectedDifferenceZoneIndex(0);
     setAutoAlignmentError("");
   }
 
@@ -987,6 +1135,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     .filter((entry): entry is [string, AutoCandidateVisualQuality] => Boolean(entry[1]))
     .sort((left, right) => right[1].score - left[1].score || Number(left[0]) - Number(right[0]))[0];
   const bestVisualCandidateIndex = bestVisualCandidateEntry ? Number(bestVisualCandidateEntry[0]) : null;
+  const activeVisualQuality = autoCandidateVisualQuality[autoAlignmentCandidateIndex] || null;
+  const activeDifferenceZones = activeVisualQuality?.zones || [];
+  const activeDifferenceZone = activeDifferenceZones[Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1))] || null;
   const effectiveShowBase = pointAlignmentCollecting
     ? pointAlignmentExpectedSide === "A"
     : autoPairReplacementCollecting
@@ -1169,7 +1320,29 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 <span><small>Skála</small><strong>{autoAlignmentSuggestion.scalePercent.toFixed(2)}%</strong></span>
                 <span><small>Szög</small><strong>{autoAlignmentSuggestion.rotationDegrees.toFixed(2)}°</strong></span>
                 <span><small>Vizuális</small><strong>{autoCandidateVisualQuality[autoAlignmentCandidateIndex]?.score ?? "–"}%</strong></span>
+                <span><small>Δ zóna</small><strong>{activeDifferenceZones.length}</strong></span>
               </div>
+              {activeVisualQuality && activeDifferenceZones.length > 0 && (
+                <div className={styles.visualCompareDifferenceHeatmapPanel}>
+                  <div className={styles.visualCompareDifferenceHeatmapHeader}>
+                    <div><strong>Eltérés hőtérkép</strong><span>A nagyobb százalék több eltérő rajzi vonalat jelez az adott zónában.</span></div>
+                    <button type="button" onClick={() => setDifferenceHeatmapEnabled((current) => !current)} className={differenceHeatmapEnabled ? styles.visualCompareToolActive : ""} data-difference-heatmap-toggle aria-pressed={differenceHeatmapEnabled}>{differenceHeatmapEnabled ? "Hőtérkép ki" : "Hőtérkép be"}</button>
+                  </div>
+                  <div className={styles.visualCompareDifferenceZoneList}>
+                    {activeDifferenceZones.map((zone, zoneIndex) => (
+                      <button key={zoneIndex} type="button" onClick={() => focusDifferenceZone(zoneIndex)} className={zoneIndex === selectedDifferenceZoneIndex ? styles.visualCompareDifferenceZoneActive : ""} data-difference-zone={zoneIndex + 1}>
+                        <strong>Δ{zoneIndex + 1}</strong><span>{zone.score}% eltérés</span><small>{zone.mismatchPixels}/{zone.inkPixels} vonalpont</small>
+                      </button>
+                    ))}
+                  </div>
+                  {differenceHeatmapEnabled && activeDifferenceZone && autoAlignmentSuggestion && (
+                    <div className={styles.visualCompareDifferenceInspector}>
+                      <div><strong>Δ{Math.min(selectedDifferenceZoneIndex, activeDifferenceZones.length - 1) + 1} nagyítás</strong><span>{activeDifferenceZone.score}% helyi eltérés · a nagyítás csak ellenőrző előnézet.</span></div>
+                      <DifferenceZoneInspector candidate={autoAlignmentSuggestion} zone={activeDifferenceZone} zoneIndex={Math.min(selectedDifferenceZoneIndex, activeDifferenceZones.length - 1)} leftCanvasRef={leftCanvasRef} rightCanvasRef={rightCanvasRef} />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className={styles.visualCompareAutoPairReview}>
                 <div className={styles.visualCompareAutoPairReviewHeader}><strong>Referencia-párok ellenőrzése</strong><span>A/B jelölők a terven láthatók · hibás pár kézzel lecserélhető</span></div>
                 <div className={styles.visualCompareAutoPairList}>
@@ -1196,7 +1369,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
               </div>
               <div className={styles.visualCompareAutoActions}>
                 <button type="button" className={styles.visualCompareAutoApply} onClick={applyAutoAlignmentSuggestion}><Check size={12} /> Alkalmazás</button>
-                <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoCandidateVisualQuality({}); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
+                <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoCandidateVisualQuality({}); setDifferenceHeatmapEnabled(false); setSelectedDifferenceZoneIndex(0); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
               </div>
             </>
           )}
@@ -1304,6 +1477,18 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 )}
               </>
             )}
+            {differenceHeatmapEnabled && autoAlignmentSuggestion && activeDifferenceZones.map((zone, zoneIndex) => (
+              <button
+                key={`difference-zone-${zoneIndex}`}
+                type="button"
+                className={`${styles.visualCompareDifferenceZoneOverlay} ${zoneIndex === selectedDifferenceZoneIndex ? styles.visualCompareDifferenceZoneOverlayActive : ""}`}
+                style={{ left: zone.x, top: zone.y, width: zone.width, height: zone.height, ['--difference-intensity' as string]: Math.max(0.12, Math.min(0.42, zone.score / 220)) }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => focusDifferenceZone(zoneIndex)}
+                data-difference-zone-overlay={zoneIndex + 1}
+                title={`Δ${zoneIndex + 1}: ${zone.score}% helyi eltérés`}
+              ><span>Δ{zoneIndex + 1}</span></button>
+            ))}
             {autoAlignmentSuggestion && autoReviewPairLines.length > 0 && (
               <svg className={styles.visualCompareAutoPairLines} width="100%" height="100%" aria-hidden="true">
                 {autoReviewPairLines.map((pair) => <line key={`auto-line-${pair.pairIndex}`} x1={pair.a.x} y1={pair.a.y} x2={pair.b.x} y2={pair.b.y} data-auto-review-line={pair.pairIndex + 1} />)}
