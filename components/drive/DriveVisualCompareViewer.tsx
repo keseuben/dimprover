@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Columns2,
   Contrast,
+  Crosshair,
   Eye,
   EyeOff,
   Layers3,
@@ -30,6 +31,11 @@ import styles from "./DriveWorkspace.module.css";
 type CompareMode = "SIDE_BY_SIDE" | "OVERLAY" | "DIFFERENCE";
 type PreviewKind = "PDF" | "IMAGE" | "UNSUPPORTED";
 type Side = "left" | "right";
+type PointAlignmentMode = 2 | 3 | null;
+type PointSide = "A" | "B";
+type AlignmentPoint = { x: number; y: number };
+type AlignmentPick = { side: PointSide; pairIndex: number; point: AlignmentPoint };
+type SimilarityAlignment = { offsetX: number; offsetY: number; scalePercent: number; rotationDegrees: number; rmsError: number };
 
 type PreviewPayload = {
   url: string;
@@ -64,6 +70,102 @@ function clampAlignmentOffset(value: number) {
 
 function clampAlignmentScale(value: number) {
   return Math.max(70, Math.min(130, Number(value.toFixed(1))));
+}
+
+function normalizeAlignmentRotation(value: number) {
+  let normalized = value % 360;
+  if (normalized > 180) normalized -= 360;
+  if (normalized <= -180) normalized += 360;
+  return Number(normalized.toFixed(3));
+}
+
+function rotatePoint(point: AlignmentPoint, degrees: number) {
+  const radians = degrees * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return {
+    x: point.x * cosine - point.y * sine,
+    y: point.x * sine + point.y * cosine,
+  };
+}
+
+function applySimilarityAlignment(
+  point: AlignmentPoint,
+  offsetX: number,
+  offsetY: number,
+  scalePercent: number,
+  rotationDegrees: number,
+) {
+  const scale = scalePercent / 100;
+  const rotated = rotatePoint({ x: point.x * scale, y: point.y * scale }, rotationDegrees);
+  return { x: rotated.x + offsetX, y: rotated.y + offsetY };
+}
+
+function invertSimilarityAlignment(
+  point: AlignmentPoint,
+  offsetX: number,
+  offsetY: number,
+  scalePercent: number,
+  rotationDegrees: number,
+) {
+  const scale = Math.max(0.0001, scalePercent / 100);
+  const translated = { x: point.x - offsetX, y: point.y - offsetY };
+  const unrotated = rotatePoint(translated, -rotationDegrees);
+  return { x: unrotated.x / scale, y: unrotated.y / scale };
+}
+
+function solveSimilarityAlignment(picks: AlignmentPick[], pairCount: 2 | 3): SimilarityAlignment | null {
+  const pairs = Array.from({ length: pairCount }, (_, pairIndex) => {
+    const a = picks.find((pick) => pick.pairIndex === pairIndex && pick.side === "A")?.point;
+    const b = picks.find((pick) => pick.pairIndex === pairIndex && pick.side === "B")?.point;
+    return a && b ? { a, b } : null;
+  }).filter((pair): pair is { a: AlignmentPoint; b: AlignmentPoint } => Boolean(pair));
+  if (pairs.length !== pairCount) return null;
+
+  const centroidA = {
+    x: pairs.reduce((sum, pair) => sum + pair.a.x, 0) / pairs.length,
+    y: pairs.reduce((sum, pair) => sum + pair.a.y, 0) / pairs.length,
+  };
+  const centroidB = {
+    x: pairs.reduce((sum, pair) => sum + pair.b.x, 0) / pairs.length,
+    y: pairs.reduce((sum, pair) => sum + pair.b.y, 0) / pairs.length,
+  };
+
+  let dot = 0;
+  let cross = 0;
+  let denominator = 0;
+  for (const pair of pairs) {
+    const bx = pair.b.x - centroidB.x;
+    const by = pair.b.y - centroidB.y;
+    const ax = pair.a.x - centroidA.x;
+    const ay = pair.a.y - centroidA.y;
+    dot += bx * ax + by * ay;
+    cross += bx * ay - by * ax;
+    denominator += bx * bx + by * by;
+  }
+  if (denominator < 25) return null;
+
+  const scale = Math.hypot(dot, cross) / denominator;
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  const rotationDegrees = normalizeAlignmentRotation(Math.atan2(cross, dot) * 180 / Math.PI);
+  const rotatedCentroidB = rotatePoint({ x: centroidB.x * scale, y: centroidB.y * scale }, rotationDegrees);
+  const offsetX = centroidA.x - rotatedCentroidB.x;
+  const offsetY = centroidA.y - rotatedCentroidB.y;
+
+  const squaredError = pairs.reduce((sum, pair) => {
+    const mapped = applySimilarityAlignment(pair.b, offsetX, offsetY, scale * 100, rotationDegrees);
+    const dx = mapped.x - pair.a.x;
+    const dy = mapped.y - pair.a.y;
+    return sum + dx * dx + dy * dy;
+  }, 0);
+
+  return {
+    offsetX: Number(offsetX.toFixed(2)),
+    offsetY: Number(offsetY.toFixed(2)),
+    scalePercent: Number((scale * 100).toFixed(3)),
+    rotationDegrees,
+    rmsError: Number(Math.sqrt(squaredError / pairs.length).toFixed(2)),
+  };
 }
 
 function shortRevision(document: DriveDocument) {
@@ -101,6 +203,11 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [alignmentOffsetX, setAlignmentOffsetX] = useState(0);
   const [alignmentOffsetY, setAlignmentOffsetY] = useState(0);
   const [alignmentScale, setAlignmentScale] = useState(100);
+  const [alignmentRotation, setAlignmentRotation] = useState(0);
+  const [pointAlignmentMode, setPointAlignmentMode] = useState<PointAlignmentMode>(null);
+  const [alignmentPicks, setAlignmentPicks] = useState<AlignmentPick[]>([]);
+  const [alignmentRmsError, setAlignmentRmsError] = useState<number | null>(null);
+  const [alignmentMessage, setAlignmentMessage] = useState("");
   const [showBase, setShowBase] = useState(true);
   const [showRevision, setShowRevision] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -166,6 +273,11 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentOffsetX(0);
     setAlignmentOffsetY(0);
     setAlignmentScale(100);
+    setAlignmentRotation(0);
+    setPointAlignmentMode(null);
+    setAlignmentPicks([]);
+    setAlignmentRmsError(null);
+    setAlignmentMessage("");
     setShowBase(true);
     setShowRevision(true);
     setLeftPageCount(0);
@@ -301,11 +413,80 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentOffsetX(0);
     setAlignmentOffsetY(0);
     setAlignmentScale(100);
+    setAlignmentRotation(0);
+    setAlignmentRmsError(null);
+    setAlignmentMessage("Igazítás nullázva.");
+  }
+
+  function startPointAlignment(pairCount: 2 | 3) {
+    if (!isPdf || mode === "SIDE_BY_SIDE") return;
+    setPointAlignmentMode(pairCount);
+    setAlignmentPicks([]);
+    setAlignmentRmsError(null);
+    setAlignmentMessage(`${pairCount} pontos illesztés: jelöld ki az A1 referencia-pontot.`);
+    setAlignmentEnabled(false);
+    requestAnimationFrame(() => rootRef.current?.focus());
+  }
+
+  function cancelPointAlignment() {
+    setPointAlignmentMode(null);
+    setAlignmentPicks([]);
+    setAlignmentMessage("");
+  }
+
+  function applySolvedPointAlignment(picks: AlignmentPick[], pairCount: 2 | 3) {
+    const solved = solveSimilarityAlignment(picks, pairCount);
+    if (!solved) {
+      setAlignmentMessage("A kijelölt pontok túl közel vannak egymáshoz vagy nem alkotnak érvényes illesztést.");
+      return;
+    }
+    if (solved.scalePercent < 70 || solved.scalePercent > 130) {
+      setAlignmentMessage(`A számított méretarány ${solved.scalePercent.toFixed(2)}%, ami kívül esik a biztonságos 70–130% tartományon. Válassz távolabbi referencia-pontokat.`);
+      return;
+    }
+    if (Math.abs(solved.offsetX) > 500 || Math.abs(solved.offsetY) > 500) {
+      setAlignmentMessage("A számított eltolás meghaladja az ±500 px biztonsági tartományt. Ellenőrizd a pontpárokat.");
+      return;
+    }
+    setAlignmentOffsetX(clampAlignmentOffset(solved.offsetX));
+    setAlignmentOffsetY(clampAlignmentOffset(solved.offsetY));
+    setAlignmentScale(clampAlignmentScale(solved.scalePercent));
+    setAlignmentRotation(solved.rotationDegrees);
+    setAlignmentRmsError(solved.rmsError);
+    setAlignmentMessage(`${pairCount} pontos illesztés kész · RMS ${solved.rmsError.toFixed(2)} px · szög ${solved.rotationDegrees.toFixed(3)}°`);
+  }
+
+  function capturePointAlignment(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!pointAlignmentMode) return false;
+    const targetCount = pointAlignmentMode * 2;
+    if (alignmentPicks.length >= targetCount) return true;
+    const expectedSide: PointSide = alignmentPicks.length % 2 === 0 ? "A" : "B";
+    const pairIndex = Math.floor(alignmentPicks.length / 2);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const displayPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const nativePoint = expectedSide === "B"
+      ? invertSimilarityAlignment(displayPoint, alignmentOffsetX, alignmentOffsetY, alignmentScale, alignmentRotation)
+      : displayPoint;
+    const nextPicks = [...alignmentPicks, { side: expectedSide, pairIndex, point: nativePoint }];
+    setAlignmentPicks(nextPicks);
+    const nextIndex = nextPicks.length;
+    if (nextIndex >= targetCount) {
+      applySolvedPointAlignment(nextPicks, pointAlignmentMode);
+    } else {
+      const nextSide: PointSide = nextIndex % 2 === 0 ? "A" : "B";
+      const nextPair = Math.floor(nextIndex / 2) + 1;
+      setAlignmentMessage(`Jelöld ki a ${nextSide}${nextPair} referencia-pontot.`);
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
   }
 
   function nudgeAlignment(deltaX: number, deltaY: number) {
     setAlignmentOffsetX((current) => clampAlignmentOffset(current + deltaX));
     setAlignmentOffsetY((current) => clampAlignmentOffset(current + deltaY));
+    setAlignmentRmsError(null);
+    if (pointAlignmentMode) setAlignmentMessage("Kézi finomkorrekció alkalmazva · RMS érték új pontmérés után számítható.");
   }
 
   function alignByPageBounds() {
@@ -319,10 +500,13 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentScale(nextScale);
     setAlignmentOffsetX(clampAlignmentOffset((leftCanvas.width - rightCanvas.width * factor) / 2));
     setAlignmentOffsetY(clampAlignmentOffset((leftCanvas.height - rightCanvas.height * factor) / 2));
+    setAlignmentRotation(0);
+    setAlignmentRmsError(null);
+    if (pointAlignmentMode) setAlignmentMessage("Lapméret-illesztés alkalmazva · RMS érték új pontmérés után számítható.");
   }
 
   function beginAlignmentDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!alignmentEnabled || mode === "SIDE_BY_SIDE") return;
+    if (pointAlignmentMode || !alignmentEnabled || mode === "SIDE_BY_SIDE") return;
     alignmentDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -339,6 +523,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     if (!drag || drag.pointerId !== event.pointerId || !alignmentEnabled || mode === "SIDE_BY_SIDE") return;
     setAlignmentOffsetX(clampAlignmentOffset(drag.originX + event.clientX - drag.startX));
     setAlignmentOffsetY(clampAlignmentOffset(drag.originY + event.clientY - drag.startY));
+    setAlignmentRmsError(null);
     event.preventDefault();
   }
 
@@ -346,6 +531,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     const drag = alignmentDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     alignmentDragRef.current = null;
+    if (pointAlignmentMode) setAlignmentMessage("Kézi húzásos korrekció alkalmazva · RMS érték új pontmérés után számítható.");
     try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* pointer may already be released */ }
   }
 
@@ -379,7 +565,18 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const topOpacity = mode === "DIFFERENCE" ? 1 : overlayOpacity / 100;
   const topBlend = mode === "DIFFERENCE" ? "difference" : "normal";
   const alignmentFactor = alignmentScale / 100;
-  const revisionAlignmentTransform = `translate(${alignmentOffsetX}px, ${alignmentOffsetY}px) scale(${alignmentFactor})`;
+  const revisionAlignmentTransform = `translate(${alignmentOffsetX}px, ${alignmentOffsetY}px) rotate(${alignmentRotation}deg) scale(${alignmentFactor})`;
+  const pointAlignmentTargetCount = pointAlignmentMode ? pointAlignmentMode * 2 : 0;
+  const pointAlignmentCollecting = Boolean(pointAlignmentMode && alignmentPicks.length < pointAlignmentTargetCount);
+  const pointAlignmentExpectedSide: PointSide | null = pointAlignmentCollecting ? (alignmentPicks.length % 2 === 0 ? "A" : "B") : null;
+  const effectiveShowBase = pointAlignmentCollecting ? pointAlignmentExpectedSide === "A" : showBase;
+  const effectiveShowRevision = pointAlignmentCollecting ? pointAlignmentExpectedSide === "B" : showRevision;
+  const alignmentMarkerPoints = alignmentPicks.map((pick) => ({
+    ...pick,
+    displayPoint: pick.side === "A"
+      ? pick.point
+      : applySimilarityAlignment(pick.point, alignmentOffsetX, alignmentOffsetY, alignmentScale, alignmentRotation),
+  }));
 
   return (
     <section ref={rootRef} className={styles.visualCompare} aria-label="Vizuális tervösszehasonlítás" tabIndex={0} onKeyDown={handleAlignmentKeys}>
@@ -430,7 +627,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
               title="B réteg kézi geometriai igazítása"
               aria-pressed={alignmentEnabled}
             ><Move size={13} /> Igazítás</button>
-            <span>X {alignmentOffsetX} · Y {alignmentOffsetY} · {alignmentScale.toFixed(1)}%</span>
+            <span>X {alignmentOffsetX} · Y {alignmentOffsetY} · {alignmentScale.toFixed(1)}% · {alignmentRotation.toFixed(2)}°{alignmentRmsError !== null ? ` · RMS ${alignmentRmsError.toFixed(1)}` : ""}</span>
           </div>
         )}
         <div className={styles.visualCompareToolbarSpacer} />
@@ -458,12 +655,42 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
           </div>
           <label className={styles.visualCompareAlignmentScale}>
             <span>B méret</span>
-            <input type="range" min="70" max="130" step="0.1" value={alignmentScale} onChange={(event) => setAlignmentScale(clampAlignmentScale(Number(event.target.value)))} />
+            <input type="range" min="70" max="130" step="0.1" value={alignmentScale} onChange={(event) => { setAlignmentScale(clampAlignmentScale(Number(event.target.value))); setAlignmentRmsError(null); if (pointAlignmentMode) setAlignmentMessage("Kézi méretkorrekció alkalmazva · RMS érték új pontmérés után számítható."); }} />
             <strong>{alignmentScale.toFixed(1)}%</strong>
           </label>
+          <label className={styles.visualCompareAlignmentAngle}>
+            <span>Szög</span>
+            <input type="number" min="-180" max="180" step="0.01" value={alignmentRotation} onChange={(event) => { setAlignmentRotation(normalizeAlignmentRotation(Number(event.target.value))); setAlignmentRmsError(null); if (pointAlignmentMode) setAlignmentMessage("Kézi szögkorrekció alkalmazva · RMS érték új pontmérés után számítható."); }} />
+            <strong>°</strong>
+          </label>
           <div className={styles.visualCompareAlignmentActions}>
+            <button type="button" onClick={() => startPointAlignment(2)} disabled={!isPdf || !ready} className={pointAlignmentMode === 2 ? styles.visualCompareToolActive : ""} title="Két azonos referencia-pontpárból eltolás, méretarány és szög számítása"><Crosshair size={12} /> 2 pont</button>
+            <button type="button" onClick={() => startPointAlignment(3)} disabled={!isPdf || !ready} className={pointAlignmentMode === 3 ? styles.visualCompareToolActive : ""} title="Három referencia-pontpár legkisebb négyzetes hasonlósági illesztése"><Crosshair size={12} /> 3 pont</button>
             <button type="button" onClick={alignByPageBounds} disabled={!isPdf || !ready} title="A két renderelt lap külső mérete alapján a B réteg középre és méretre igazítása"><Scan size={12} /> Lapméret</button>
             <button type="button" onClick={resetAlignment} title="B réteg geometriai igazításának nullázása"><RotateCcw size={12} /> Nullázás</button>
+          </div>
+        </div>
+      )}
+
+      {mode !== "SIDE_BY_SIDE" && pointAlignmentMode && (
+        <div className={`${styles.visualComparePointWizard} ${alignmentPicks.length >= pointAlignmentTargetCount ? styles.visualComparePointWizardComplete : ""}`}>
+          <div className={styles.visualComparePointWizardLead}>
+            <Crosshair size={14} />
+            <div>
+              <strong>{pointAlignmentMode} pontos referencia-illesztés</strong>
+              <span>{alignmentMessage || "Az A és B terven azonos sarkokat, tengelymetszéseket vagy egyéb biztos referencia-pontokat jelölj ki."}</span>
+            </div>
+          </div>
+          <div className={styles.visualComparePointPairs}>
+            {Array.from({ length: pointAlignmentMode }, (_, pairIndex) => {
+              const a = alignmentPicks.find((pick) => pick.pairIndex === pairIndex && pick.side === "A");
+              const b = alignmentPicks.find((pick) => pick.pairIndex === pairIndex && pick.side === "B");
+              return <span key={pairIndex} className={a && b ? styles.visualComparePointPairComplete : ""}>{pairIndex + 1}. {a ? "A✓" : "A·"} {b ? "B✓" : "B·"}</span>;
+            })}
+          </div>
+          <div className={styles.visualComparePointWizardActions}>
+            <button type="button" onClick={() => startPointAlignment(pointAlignmentMode)}>Újramérés</button>
+            <button type="button" onClick={cancelPointAlignment}>Bezárás</button>
           </div>
         </div>
       )}
@@ -520,9 +747,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
           </>
         ) : (
           <div
-            className={`${styles.visualCompareOverlayViewport} ${alignmentEnabled ? styles.visualCompareOverlayViewportAligning : ""}`}
+            className={`${styles.visualCompareOverlayViewport} ${alignmentEnabled && !pointAlignmentMode ? styles.visualCompareOverlayViewportAligning : ""} ${pointAlignmentCollecting ? styles.visualCompareOverlayViewportPicking : ""}`}
             style={isPdf && overlaySize.width ? { width: overlaySize.width, height: overlaySize.height } : undefined}
-            onPointerDown={beginAlignmentDrag}
+            onPointerDown={(event) => { if (!capturePointAlignment(event)) beginAlignmentDrag(event); }}
             onPointerMove={moveAlignmentDrag}
             onPointerUp={endAlignmentDrag}
             onPointerCancel={endAlignmentDrag}
@@ -531,20 +758,34 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             <div className={`${styles.visualCompareOverlayTag} ${styles.visualCompareOverlayTagB}`}>B · {shortRevision(rightDocument)}</div>
             {isPdf ? (
               <>
-                <canvas ref={leftCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: showBase ? 1 : 0 }} aria-label={`${leftDocument.name} overlay PDF A`} />
-                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend, transform: revisionAlignmentTransform, transformOrigin: "top left" }} aria-label={`${rightDocument.name} overlay PDF B`} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} />
+                <canvas ref={leftCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: effectiveShowBase ? 1 : 0 }} aria-label={`${leftDocument.name} overlay PDF A`} />
+                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: effectiveShowRevision ? (pointAlignmentCollecting ? 1 : topOpacity) : 0, mixBlendMode: pointAlignmentCollecting ? "normal" : topBlend, transform: revisionAlignmentTransform, transformOrigin: "top left" }} aria-label={`${rightDocument.name} overlay PDF B`} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
               </>
             ) : (
               <>
                 {leftPreview?.url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={leftPreview.url} alt={`${leftDocument.name} overlay kép A`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `rotate(${rotation}deg)`, opacity: showBase ? 1 : 0 }} />
+                  <img src={leftPreview.url} alt={`${leftDocument.name} overlay kép A`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `rotate(${rotation}deg)`, opacity: effectiveShowBase ? 1 : 0 }} />
                 )}
                 {rightPreview?.url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `${revisionAlignmentTransform} rotate(${rotation}deg)`, transformOrigin: "top left", opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend }} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} />
+                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `${revisionAlignmentTransform} rotate(${rotation}deg)`, transformOrigin: "top left", opacity: effectiveShowRevision ? (pointAlignmentCollecting ? 1 : topOpacity) : 0, mixBlendMode: pointAlignmentCollecting ? "normal" : topBlend }} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
                 )}
               </>
+            )}
+            {alignmentMarkerPoints.map((pick, index) => (
+              <span
+                key={`${pick.side}-${pick.pairIndex}-${index}`}
+                className={`${styles.visualCompareAlignmentMarker} ${pick.side === "A" ? styles.visualCompareAlignmentMarkerA : styles.visualCompareAlignmentMarkerB}`}
+                style={{ left: pick.displayPoint.x, top: pick.displayPoint.y }}
+                data-point-side={pick.side}
+                data-point-pair={pick.pairIndex + 1}
+              >{pick.side}{pick.pairIndex + 1}</span>
+            ))}
+            {pointAlignmentCollecting && (
+              <div className={styles.visualComparePointPickHint}>
+                <Crosshair size={13} /> Jelöld ki: <strong>{pointAlignmentExpectedSide}{Math.floor(alignmentPicks.length / 2) + 1}</strong>
+              </div>
             )}
           </div>
         )}
@@ -553,7 +794,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       <footer className={styles.visualCompareFooter}>
         <span><strong>Szinkron:</strong> oldal · zoom · illesztés · forgatás · pásztázás</span>
         <span><strong>Átfedés:</strong> B réteg átlátszóság állítható</span>
-        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y finommozgatás · 70–130% méretkorrekció · lapméret-illesztés</span>
+        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y · méret · szög · 2/3 pontos referencia-illesztés</span>
         <span><strong>Különbség:</strong> CSS difference blend – az eltérő vonalak világosan kiemelkednek</span>
         <span>Ctrl + egérgörgő: szinkron zoom</span>
       </footer>

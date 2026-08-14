@@ -655,3 +655,52 @@
   .visualCompareNudgeGrid button { width: 22px; height: 22px; }
   .visualCompareAlignmentActions button { padding: 0 5px; }
 }
+
+/* Drive Visual Compare Point Alignment V1 */
+.visualCompareAlignmentBar { grid-template-columns: minmax(180px,1fr) auto minmax(170px,260px) 116px auto; }
+.visualCompareAlignmentAngle { min-width: 0; display: grid; grid-template-columns: auto minmax(62px,1fr) 12px; align-items: center; gap: 5px; color: #64798d; font-size: 7px; font-weight: 900; }
+.visualCompareAlignmentAngle input { width: 100%; min-width: 0; height: 25px; border: 1px solid #d1dee9; border-radius: 6px; background: #fff; color: #36546f; padding: 0 5px; font-size: 7px; font-weight: 900; text-align: right; outline: none; }
+.visualCompareAlignmentAngle input:focus { border-color: #8db7e5; box-shadow: 0 0 0 2px rgba(45,127,214,.06); }
+.visualCompareAlignmentAngle strong { color: #2d6da9; font-size: 7px; }
+.visualCompareAlignmentActions .visualCompareToolActive { background: #eaf3ff; border-color: #8eb7e7; color: #1765c7; }
+.visualComparePointWizard { min-height: 48px; border-bottom: 1px solid #d8e4ed; background: #fffaf0; padding: 6px 9px; display: grid; grid-template-columns: minmax(260px,1fr) auto auto; align-items: center; gap: 10px; box-shadow: inset 3px 0 0 #e0a12f; }
+.visualComparePointWizardComplete { background: #effaf4; box-shadow: inset 3px 0 0 #2b9a67; }
+.visualComparePointWizardLead { min-width: 0; display: flex; align-items: center; gap: 7px; color: #ba7a16; }
+.visualComparePointWizardComplete .visualComparePointWizardLead { color: #278358; }
+.visualComparePointWizardLead > svg { flex: 0 0 auto; }
+.visualComparePointWizardLead strong { display: block; color: #4b5e70; font-size: 8px; }
+.visualComparePointWizardLead span { display: block; margin-top: 2px; color: #7b8793; font-size: 6px; line-height: 1.4; }
+.visualComparePointPairs { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.visualComparePointPairs > span { min-height: 24px; border: 1px solid #dfd7c7; border-radius: 6px; background: #fff; color: #866d43; padding: 0 7px; display: inline-flex; align-items: center; font-size: 7px; font-weight: 900; white-space: nowrap; }
+.visualComparePointPairs .visualComparePointPairComplete { border-color: #a9d8c1; background: #f4fcf7; color: #277750; }
+.visualComparePointWizardActions { display: inline-flex; gap: 4px; }
+.visualComparePointWizardActions button { min-height: 25px; border: 1px solid #d1dee9; border-radius: 6px; background: #fff; color: #536b81; padding: 0 7px; font-size: 7px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+.visualComparePointWizardActions button:hover { background: #eef5ff; border-color: #9dbde1; color: #1765c7; }
+.visualCompareOverlayViewportPicking { cursor: crosshair; touch-action: none; outline: 2px solid rgba(223,157,42,.34); outline-offset: 3px; }
+.visualCompareOverlayViewportPicking::after { content: "Referencia-pont kijelölés"; position: absolute; z-index: 7; left: 50%; bottom: 8px; transform: translateX(-50%); border: 1px solid rgba(214,145,30,.28); border-radius: 999px; background: rgba(255,249,235,.94); color: #a76e10; padding: 4px 8px; font-size: 6px; font-weight: 900; pointer-events: none; box-shadow: 0 2px 8px rgba(95,66,17,.08); }
+.visualCompareAlignmentMarker { position: absolute; z-index: 12; width: 24px; height: 24px; margin-left: -12px; margin-top: -12px; border: 2px solid #fff; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 7px; font-weight: 950; line-height: 1; pointer-events: none; box-shadow: 0 2px 7px rgba(20,39,58,.3); }
+.visualCompareAlignmentMarkerA { background: #176ad0; }
+.visualCompareAlignmentMarkerB { background: #854cc8; }
+.visualCompareAlignmentMarkerA::after,.visualCompareAlignmentMarkerB::after { content: ""; position: absolute; left: 50%; top: 50%; width: 34px; height: 1px; transform: translate(-50%,-50%); background: currentColor; opacity: .45; }
+.visualCompareAlignmentMarkerA::before,.visualCompareAlignmentMarkerB::before { content: ""; position: absolute; left: 50%; top: 50%; width: 1px; height: 34px; transform: translate(-50%,-50%); background: currentColor; opacity: .45; }
+.visualComparePointPickHint { position: sticky; z-index: 13; left: 50%; top: 42px; width: max-content; margin: 0 auto; transform: translateX(-50%); min-height: 30px; border: 1px solid #e0b55e; border-radius: 999px; background: rgba(255,250,238,.96); color: #8b651d; padding: 0 10px; display: flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 800; pointer-events: none; box-shadow: 0 5px 14px rgba(68,50,16,.12); }
+.visualComparePointPickHint strong { color: #af6f08; font-size: 9px; }
+
+@media (max-width: 1450px) {
+  .visualCompareAlignmentBar { grid-template-columns: minmax(170px,1fr) auto minmax(160px,230px) 105px; }
+  .visualCompareAlignmentActions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (max-width: 900px) {
+  .visualCompareAlignmentBar { grid-template-columns: 1fr auto; }
+  .visualCompareAlignmentScale,.visualCompareAlignmentAngle { grid-column: 1 / -1; }
+  .visualCompareAlignmentActions { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
+  .visualComparePointWizard { grid-template-columns: 1fr auto; }
+  .visualComparePointPairs { grid-column: 1 / -1; }
+}
+
+@media (max-width: 620px) {
+  .visualComparePointWizard { grid-template-columns: 1fr; }
+  .visualComparePointWizardActions { justify-content: flex-start; }
+  .visualComparePointPickHint { top: 34px; }
+}

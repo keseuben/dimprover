@@ -162,15 +162,29 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A geometriai transzformáció csak a B overlay/difference rétegre kerül; az A alapréteg és a forrásfájlok nem módosulnak.
 - Az igazítás jelenleg munkamenet-állapot: nem ír vissza fájlt, metaadatot vagy adatbázis-rekordot. A későbbi automatikus regisztráció/illesztési profil külön fejlesztési szelet lehet.
 
+
+### 12. 2/3 pontos referencia-illesztés V1 – similarity regisztráció
+
+- Az Átfedés/Különbség munkatér új `2 pont` és `3 pont` illesztési módot kapott, kizárólag renderelt PDF tervlapokra.
+- A kijelölési wizard sorrendje: `A1 → B1 → A2 → B2`, hárompontos módban folytatva `A3 → B3` párral. Kijelölés közben csak az aktuálisan célzott A vagy B réteg látható, így csökken a félrekattintás esélye.
+- A felvett referencia-pontok A/B színkódolt céljelölőként megmaradnak az overlayen; a wizard külön mutatja a kész pontpárokat.
+- A kétpontos mód egzakt 2D hasonlósági transzformációt számol: X/Y eltolás + egységes skála + szögelfordulás. Nyírás vagy nem-egységes torzítás nem kerül a mérnöki tervre.
+- A hárompontos mód centroid-alapú least-squares similarity best-fit illesztést használ. Az illesztés minőségét RMS pixelhiba mutatja, így a harmadik pont ellenőrző/minőségjelző szerepet is kap.
+- A B pont kijelölésekor a rendszer a már aktív geometriai transzformáció inverzét használja, ezért újramérés meglévő kézi igazítás után is natív B-koordinátákkal dolgozik.
+- A B-réteg külön szögértéke kézzel is finomítható `-180° … +180°`, 0,01° lépéssel. A `Nullázás` a szöget is 0°-ra állítja.
+- Biztonsági korlát: a pontillesztés csak 70–130% skálán és ±500 px eltolási tartományon belül alkalmaz automatikus eredményt; extrém eredménynél figyelmeztet és nem kényszeríti rá a transzformációt a tervre.
+- A transzformáció továbbra is kizárólag kliensoldali Compare-state. A forrás PDF, verzió, metaadat és adatbázis nem módosul.
+- Ez **nem affine/deformáló illesztés**: a rendszer szándékosan megőrzi a terv geometriájának alakhelyességét, csak eltolás + egységes méretarány + forgatás engedélyezett.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **76** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **87** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések pedig a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják.
 
-Végső statikus DEV VPS futás: **76/76 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **87/87 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -211,6 +225,22 @@ Historikus revízió/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-r
 A Geometriai Igazítás böngészős acceptance **34/34 PASS**. A meglévő vizuális Compare regressziók mellett ellenőrizve: igazítás kapcsoló, aktív overlay állapot, 1 px gombos finommozgatás, `Shift+nyíl` 10 px korrekció, 102,5%-os B skála, pointer-event alapú húzás, lapméret-illesztés, nullázás, Difference blend, B réteg elrejtés és 1366 px overflow-mentes render.
 
 Geometriai igazítás/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T18-43-56-462Z`.
+
+
+A külön 2/3 pontos referencia-illesztés böngészős acceptance **25/25 PASS**. Ellenőrizve:
+
+- 2 pontos wizard és A1/B1/A2/B2 szekvencia;
+- kijelölés közbeni A/B rétegizoláció;
+- négy 2 pontos és hat 3 pontos céljelölő;
+- kétpontos automatikus skála- és szögkalkuláció;
+- kétpontos közel 0 px RMS;
+- hárompontos least-squares best-fit és nem nulla RMS minőségjelzés;
+- X/Y/skála/szög transzformáció érvényessége;
+- kézi 1,25° szögkorrekció;
+- három kész A/B pontpár badge;
+- 1366 px overflow-mentesség és browser pageerror-mentes futás.
+
+2/3 pontos illesztés browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T19-51-32-429Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -319,3 +349,22 @@ Az izolált candidate továbbra is kizárólag `127.0.0.1:3210` tesztportra indu
 - Adatbázis- vagy infrastruktúra-módosítás: **nem szükséges**. Az igazítás kizárólag Drive kliensoldali Compare state és nem módosítja a forrásdokumentumot.
 
 Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.
+
+## 2/3 pontos Referencia-illesztés V1 final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_point_alignment_20260814_213124`
+- Next.js production build: **PASS**
+- Build ID: `m9Cg7Dz7g-Rp5nYGVTozU`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **87/87 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Új 2/3 pontos browser acceptance: **25/25 PASS**
+- Meglévő Geometriai/Vizuális Compare regresszió: **34/34 PASS**
+- Historikus revízió regresszió: **20/20 PASS**
+- Point-alignment artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T19-51-32-429Z`
+- Vizuális regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T19-51-43-442Z`
+- Historikus regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T19-52-05-837Z`
+- Adatbázis- vagy infrastruktúra-módosítás: **nem szükséges**. A referencia-illesztés kizárólag kliensoldali Drive Compare state.
+
+Az izolált `jazmin-drive-v110-candidate` csak `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.
