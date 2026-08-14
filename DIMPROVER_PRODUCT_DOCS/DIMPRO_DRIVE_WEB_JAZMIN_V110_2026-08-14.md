@@ -67,13 +67,22 @@ A `DIMPRO_DRIVE_WORKSPACE_V100_BOOTSTRAP.sql` bővült:
 
 Minden RPC `security definer`, explicit projektellenőrzést végez, audit/change eseményt ír és csak `service_role` számára futtatható. A bootstrap SHA-256 fájl frissítve lett.
 
+
+### 5. Lebegő Drive navigációs board + laptop szélesség javítás
+
+- A Drive széles bal oldali boardja már nem külön grid-oszlop: overlay-ként lebeg a munkaterület fölött, ezért megnyitáskor nem szűkíti össze a fájllistát vagy a részletpanelt.
+- Desktopon a keskeny sín fölé húzva 220 ms késleltetéssel nyílik, elhagyás után 280 ms késleltetéssel záródik.
+- Külön rögzítőgombbal nyitva tartható; a rögzítés sem vesz el munkaterület-szélességet.
+- A board alapállapotban csukott, így a Drive napi munkafelület maximális helyet kap.
+- A 1101–1500 px közötti laptop/desktop tartományhoz új panelméret-szabály készült; 1366 px szélességen a böngészőteszt szerint nincs vízszintes oldaltúlfutás.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` 18 ellenőrzést tartalmaz:
+A `scripts/drive-web-jazmin-v110-contract.mjs` 20 ellenőrzést tartalmaz:
 
 1. CsomagBOX repository lista
 2. CsomagBOX létrehozás
@@ -93,8 +102,10 @@ A `scripts/drive-web-jazmin-v110-contract.mjs` 18 ellenőrzést tartalmaz:
 16. szerveroldali írási permission
 17. SQL-hiány fail-safe
 18. SmartSync kizárás
+19. lebegő Drive board, munkaterület-szélesség megtartás
+20. hover nyitás + board rögzítés
 
-Első és DEV VPS futás: **18/18 PASS**. A meglévő Drive V1.00 contract 22/22 PASS, a Drive Core V0.30 contract 24/24 PASS.
+Végső DEV VPS futás: **20/20 PASS**. A meglévő Drive V1.00 contract 22/22 PASS, a Drive Core V0.30 contract 24/24 PASS.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -117,3 +128,15 @@ Tranzakciós, `ROLLBACK`-kal végződő DB acceptance teszt sikeresen ellenőriz
 DB backup/migráció artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-v110-db-20260814T141231Z`.
 
 Megjegyzés: a normál UI továbbra is fail-safe marad arra az esetre, ha egy másik környezetben a Workspace séma nincs telepítve.
+## Végső build és vizuális candidate ellenőrzés
+
+- Next.js production build: **PASS**
+- Build ID: `5oX01Ke_yrOgsIT9YBMiq`
+- Standalone asset sync: **PASS**, 141 statikus chunk ellenőrizve
+- Izolált candidate port: `127.0.0.1:3210` (csak teszt idejére)
+- Mockolt, böngészős Drive acceptance: **20/20 PASS**
+- Ellenőrizve: CsomagBOX polc, BOX színpontok, új BOX UI, Commander kétpaneles mód, fájl-áthelyezés visszajelzés, 1366 px responsive render, lebegő board hovernyitás, board rögzítés/feloldás és a munkaterület szélességének változatlansága.
+- Vizuális artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-v110-visual-2026-08-14T15-02-41-520Z`
+- Feature commitok: `de443ed` (CsomagBOX + Commander), `c71bdbb` (laptop overflow javítás), `eb57522` (lebegő/rögzíthető board).
+
+Az izolált candidate a teszt után leállítandó. Az `app.dev.dimpro.hu` aktív 3100-as runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut; a Jázmin-AI feature-t nem másoltuk bele és BENJADMIN-specifikus fájl nem módosult. A következő aktiválás csak koordinált integrációs merge/cutover lehet.
