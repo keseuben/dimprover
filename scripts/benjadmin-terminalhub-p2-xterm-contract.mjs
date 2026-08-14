@@ -1,0 +1,27 @@
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd();
+const read=(f)=>fs.readFileSync(path.join(root,f),"utf8");
+const checks=[];
+function check(name,ok){checks.push(Boolean(ok));console.log(`${ok?"PASS":"FAIL"} ${name}`);if(!ok)throw new Error(name);}
+const panel=read("components/admin/developer-console/TerminalCorePanel.tsx");
+const hub=read("components/admin/developer-console/TerminalHubWorkspace.tsx");
+const page=read("app/admin/dev-console/page.tsx");
+const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+check("XTerm komponens használva",panel.includes("@xterm/xterm")&&panel.includes("new Terminal("));
+check("FitAddon használva",panel.includes("@xterm/addon-fit")&&panel.includes("new FitAddon()"));
+check("XTerm stylesheet oldalhoz kötve",page.includes("@xterm/xterm/css/xterm.css"));
+check("P2 panel a Terminal Hub TERMINAL nézet része",hub.includes("<TerminalCorePanel readiness={terminalReadiness}"));
+check("Admin header minden session kérésen",panel.includes("x-dimpro-license-admin-key"));
+check("Session start readiness gate mögött",panel.includes("!readiness?.ready")&&panel.includes("startSession"));
+check("Reconnect sequence query használva",panel.includes("stream?after=${sequenceRef.current}"));
+check("Output sequence folytatódik",panel.includes("sequenceRef.current = Math.max"));
+check("Fetch stream olvasás támogatott",panel.includes("response.body.getReader()")&&panel.includes("TextDecoder"));
+check("SSE output/session/terminal-end kezelve",["output","session","terminal-end"].every((x)=>panel.includes(`\"${x}\"`)));
+check("Automatikus reconnect késleltetett",panel.includes("RECONNECTING")&&panel.includes("setTimeout(() => void stream(sessionId)"));
+check("ResizeObserver + FitAddon resize",panel.includes("new ResizeObserver")&&panel.includes("fit.fit()")&&panel.includes("/resize"));
+check("Terminál input session API-ra megy",panel.includes("terminal.onData")&&panel.includes("/input"));
+check("Unmount cleanup lezárja streamet és XTermet",panel.includes("streamAbortRef.current?.abort()")&&panel.includes("terminal.dispose()"));
+check("BLOCKED felület explicit látható",panel.includes("A terminál végrehajtás jelenleg BLOCKED"));
+check("Terminal Core CSS minimum 12px",!css.slice(css.indexOf("BENJADMIN Terminal Core P2 client")).match(/font-size:\s*(?:10|11)px/));
+console.log(`SUMMARY ${checks.filter(Boolean).length}/${checks.length} PASS`);

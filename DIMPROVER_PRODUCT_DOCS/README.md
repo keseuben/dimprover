@@ -87,3 +87,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `201_benjadmin_terminalhub_p2_session_protocol_20260814.md` – P2 session registry, create/list/close/input/resize API és sequence-alapú SSE reconnect; process adapter fail-closed.
 
 - `202_benjadmin_developer_console_module_naming_20260814.md` – Normatív BENJADMIN Fejlesztői Konzol névstruktúra: AI Fejlesztői Tér, Terminal Hub, Live Workspace, Terminál Parancstár, Fejlesztési Tár, ChatGPT Parancstár, Git / Diff / History.
+
+- `203_benjadmin_terminalhub_p2_xterm_client_20260814.md` – Terminal Hub P2 XTerm/FitAddon kliens, admin-autholt SSE reconnect és resize UI; process adapter továbbra is fail-closed.
