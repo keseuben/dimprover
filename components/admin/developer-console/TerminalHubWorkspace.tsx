@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TerminalCoreReadiness } from "@/app/lib/dev-center/terminal-hub/readiness";
 import type { TerminalHubStatus } from "@/app/lib/dev-center/terminal-hub/types";
 import TerminalCorePanel from "./TerminalCorePanel";
+import TerminalManagedCommands from "./TerminalManagedCommands";
 import type { ConsoleLiveState } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
@@ -101,6 +102,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
                 {terminalReadiness?.blockers?.length ? <ul>{terminalReadiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p>A P2 végrehajtási előfeltételei teljesülnek; külön candidate acceptance szükséges a PTY aktiválása előtt.</p>}
               </section>
               <TerminalCorePanel readiness={terminalReadiness} />
+              <TerminalManagedCommands sessions={live?.sessions || []} />
               <div className={styles.terminalEndpointGrid}>
                 {(status?.endpoints || []).map((endpoint) => (
                   <article key={endpoint.kind} data-state={endpoint.state}>

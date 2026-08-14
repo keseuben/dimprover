@@ -903,3 +903,20 @@
 .terminalCoreSessionList button { min-height: 28px; padding: 0 7px; border: 1px solid var(--border); border-radius: 7px; display: inline-flex; align-items: center; gap: 4px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 12px; white-space: nowrap; }
 .terminalCoreSessionList button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 850px) { .terminalCoreToolbar, .terminalCoreSessionBar { align-items: stretch; flex-direction: column; } .terminalCoreActions { flex-wrap: wrap; } .terminalCoreCanvas { min-height: 220px; } }
+
+/* BENJADMIN Terminal Hub P2 managed Control Plane commands. */
+.terminalManagedCommands { padding: 10px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 8px; background: var(--panel); }
+.terminalManagedCommands > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.terminalManagedCommands > header > div { min-width: 0; display: grid; gap: 1px; }
+.terminalManagedCommands > header strong { color: var(--text); font-size: 13px; }
+.terminalManagedCommands > header span { color: var(--muted); font-size: 12px; }
+.terminalManagedCommands > header b { padding: 4px 7px; border-radius: 7px; color: var(--accent-strong); background: var(--accent-soft); font-size: 12px; white-space: nowrap; }
+.terminalManagedSession label { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 7px; align-items: center; }
+.terminalManagedSession span { color: var(--muted); font-size: 12px; font-weight: 850; }
+.terminalManagedSession select { min-width: 0; min-height: 32px; padding: 0 7px; border: 1px solid var(--border); border-radius: 7px; color: var(--text); background: var(--surface); font-size: 12px; }
+.terminalManagedActions { display: flex; flex-wrap: wrap; gap: 5px; }
+.terminalManagedActions button { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 850; }
+.terminalManagedActions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-strong); }
+.terminalManagedActions button:disabled { opacity: .46; cursor: not-allowed; }
+.terminalManagedCommands > p, .terminalManagedCommands > small { margin: 0; color: var(--text-soft); font-size: 12px; line-height: 1.5; }
+@media (max-width: 700px) { .terminalManagedSession label { grid-template-columns: 1fr; } .terminalManagedActions button { flex: 1; justify-content: center; } }

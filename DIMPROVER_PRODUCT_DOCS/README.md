@@ -91,3 +91,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `203_benjadmin_terminalhub_p2_xterm_client_20260814.md` – Terminal Hub P2 XTerm/FitAddon kliens, admin-autholt SSE reconnect és resize UI; process adapter továbbra is fail-closed.
 
 - `204_benjadmin_terminalhub_p2_output_security_20260814.md` – P2 output security: 30 perc idle, 4 óra max lifetime, külön RAW/SANITIZED/AUDIT adatút és 11/11 contract.
+
+- `205_benjadmin_terminalhub_p2_managed_commands_20260814.md` – P2 Managed Commands a meglévő B3.1 Control Plane queue-val, READY session gate-tel; nincs nyers shell vagy saját build motor.

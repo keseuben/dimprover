@@ -26,7 +26,7 @@ export default function DeveloperConsoleTopbar({ theme, onThemeChange, connectio
 }) {
   return (
     <header className={styles.topbar}>
-      <div className={styles.brand}><span>D</span><div><strong>DIMPRO BENJADMIN</strong><small>FEJLESZTŐI KONZOL V1</small></div></div>
+      <div className={styles.brand}><span>D</span><div><strong>DIMPRO BENJADMIN</strong><small>FEJLESZTŐI KONZOL</small></div></div>
       <div className={styles.topbarCenter}><ConnectionStatus mode={connection} lastUpdate={lastUpdate} /><span className={styles.envBadge}>DEV</span><span className={styles.readOnlyBadge}>PROD · READ ONLY</span><span className={styles.bridgeBadge} title={context?.aiBridge?.executorConfigured ? "Natív worker executor konfigurálva" : "A Konzol jelenleg kézi ChatGPT/MCP végrehajtó híddal működik"}>AI HÍD · {context?.aiBridge?.mode === "OPENAI_RESPONSES" ? "API" : "KÉZI"}</span><span className={context?.executorReadiness?.baselineReady ? styles.baselineBadgeReady : styles.baselineBadge} title={context?.executorReadiness?.baselineCommit ? `Trusted baseline: ${context.executorReadiness.baselineCommit.slice(0, 12)}` : "Trusted baseline még nincs kész"}>BASELINE · {context?.executorReadiness?.baselineReady ? "KÉSZ" : "NINCS"}</span><time>{formatClock(now)}</time><small>{context?.branch || "ág…"} · {context?.commit || "HEAD…"}</small></div>
       <div className={styles.topbarActions}>
         <button type="button" onClick={onCommands}><BookOpenText size={16} /><span>ChatGPT Parancstár</span></button>

@@ -110,7 +110,7 @@ export const COMMAND_LIBRARY: CommandTemplate[] = [
     category: "Modul sablonok",
     title: "BENJADMIN Fejlesztői Konzol",
     description: "A napi ember-AI együttműködési felület fejlesztési szabálya.",
-    text: "Folytasd a BENJADMIN Fejlesztői Konzol V1 fejlesztését a jóváhagyott specifikáció szerint. BENJADMIN az emberi vezető, Ben-AI a koordinátor, Ármin-AI bal, Jázmin-AI jobb, Outmin-AI külön partner sáv. Kötelező a hexagon avatar, villogásmentes másodperc-pontos frissítés, ChatGPT Parancstár, Fejlesztési Tár, Világos/Sötét/Sunlight mód, PWA és Ctrl+Alt+Space privacy cover. A B3/B3.1/B3.2 motorokat használd, új párhuzamos engine ne készüljön.",
+    text: "Folytasd a BENJADMIN Fejlesztői Konzol fejlesztését a jóváhagyott specifikáció szerint. BENJADMIN az emberi vezető, Ben-AI a koordinátor, Ármin-AI bal, Jázmin-AI jobb, Outmin-AI külön partner sáv. Kötelező a hexagon avatar, villogásmentes másodperc-pontos frissítés, ChatGPT Parancstár, Fejlesztési Tár, Világos/Sötét/Sunlight mód, PWA és Ctrl+Alt+Space privacy cover. A B3/B3.1/B3.2 motorokat használd, új párhuzamos engine ne készüljön.",
     tags: ["benjadmin", "console"],
   },
   {
