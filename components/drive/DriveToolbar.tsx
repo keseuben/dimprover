@@ -22,6 +22,10 @@ type Props = {
   canWrite: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
+  boxCount: number;
+  boxShelfOpen: boolean;
+  boxReady: boolean;
+  onToggleBoxShelf: () => void;
 };
 
 export default function DriveToolbar({
@@ -32,6 +36,10 @@ export default function DriveToolbar({
   canWrite,
   onCreateFolder,
   onUpload,
+  boxCount,
+  boxShelfOpen,
+  boxReady,
+  onToggleBoxShelf,
 }: Props) {
   return (
     <div className={styles.toolbar}>
@@ -53,8 +61,13 @@ export default function DriveToolbar({
       >
         <UploadCloud size={14} /> <span>Feltöltés</span>
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolDisabled}`} disabled title="A CsomagBOX motor a 3. napi fejlesztésben aktiválódik">
-        <PackageCheck size={14} /> <span>CsomagBOX</span>
+      <button
+        type="button"
+        className={`${styles.toolButton} ${boxShelfOpen ? styles.toolActive : ""}`}
+        onClick={onToggleBoxShelf}
+        title={boxReady ? "CsomagBOX polc megnyitása / elrejtése" : "A CsomagBOX felület megnyitható; az adatmotor a Workspace SQL után aktiválódik"}
+      >
+        <PackageCheck size={14} /> <span>CsomagBOX</span>{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}
       </button>
       <DropActionButton />
       <button type="button" className={`${styles.toolButton} ${styles.toolDisabled}`} disabled title="Az összehasonlító motor a 4. napi fejlesztésben aktiválódik">

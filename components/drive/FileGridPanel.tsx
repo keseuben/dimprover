@@ -13,6 +13,7 @@ type Props = {
   onViewModeChange: (value: DriveViewMode) => void;
   onSelectDocument: (document: DriveDocument) => void;
   onRefresh: () => void;
+  boxColorsByDocument?: Record<string, string[]>;
 };
 
 function formatBytes(value: number) {
@@ -42,6 +43,17 @@ function FileKindIcon({ extension }: { extension: string }) {
   return <File size={13} />;
 }
 
+function boxDotClass(token: string) {
+  switch (token) {
+    case "orange": return `${styles.boxDot} ${styles.boxDotOrange}`;
+    case "purple": return `${styles.boxDot} ${styles.boxDotPurple}`;
+    case "green": return `${styles.boxDot} ${styles.boxDotGreen}`;
+    case "cyan": return `${styles.boxDot} ${styles.boxDotCyan}`;
+    case "slate": return `${styles.boxDot} ${styles.boxDotSlate}`;
+    default: return `${styles.boxDot} ${styles.boxDotBlue}`;
+  }
+}
+
 function fileIconClass(extension: string) {
   const ext = extension.toLowerCase();
   if (["xlsx", "xls", "csv"].includes(ext)) return `${styles.fileIcon} ${styles.fileIconSheet}`;
@@ -58,6 +70,7 @@ export default function FileGridPanel({
   onViewModeChange,
   onSelectDocument,
   onRefresh,
+  boxColorsByDocument = {},
 }: Props) {
   return (
     <section className={styles.filePanel}>
@@ -89,15 +102,16 @@ export default function FileGridPanel({
         {viewMode === "simple" ? (
           <table className={styles.fileTable}>
             <colgroup>
-              <col style={{ width: "38%" }} />
-              <col style={{ width: "9%" }} />
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
               <col style={{ width: "9%" }} />
               <col style={{ width: "10%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "9%" }} />
               <col style={{ width: "8%" }} />
             </colgroup>
-            <thead><tr><th>Név</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>Állapot</th></tr></thead>
+            <thead><tr><th>Név</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
             <tbody>
               {documents.map((document) => {
                 const version = document.currentVersion;
@@ -108,6 +122,12 @@ export default function FileGridPanel({
                     key={document.id}
                     className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`}
                     onClick={() => onSelectDocument(document)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "copy";
+                      event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null }));
+                    }}
+                    title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra."
                   >
                     <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong>{document.name}</strong></div></td>
                     <td>{document.extension?.toUpperCase() || "FILE"}</td>
@@ -115,6 +135,7 @@ export default function FileGridPanel({
                     <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
                     <td>{formatBytes(version?.sizeBytes || 0)}</td>
                     <td>{formatDate(document.updatedAt)}</td>
+                    <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
                     <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{version?.status || "–"}</span></td>
                   </tr>
                 );
@@ -124,22 +145,33 @@ export default function FileGridPanel({
         ) : (
           <table className={styles.fileTable}>
             <colgroup>
-              <col style={{ width: "31%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "10%" }} />
+              <col style={{ width: "28%" }} />
+              <col style={{ width: "8%" }} />
               <col style={{ width: "11%" }} />
               <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
             </colgroup>
-            <thead><tr><th>Név</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>Állapot</th></tr></thead>
+            <thead><tr><th>Név</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
             <tbody>
               {documents.map((document) => {
                 const version = document.currentVersion;
                 const selected = selectedDocumentId === document.id;
                 return (
-                  <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`} onClick={() => onSelectDocument(document)}>
+                  <tr
+                    key={document.id}
+                    className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`}
+                    onClick={() => onSelectDocument(document)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "copy";
+                      event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null }));
+                    }}
+                    title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra."
+                  >
                     <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong>{document.name}</strong></div></td>
                     <td>{document.extension?.toUpperCase() || "FILE"}</td>
                     <td title={document.mimeType}>{document.mimeType || "–"}</td>
@@ -147,6 +179,7 @@ export default function FileGridPanel({
                     <td>V{document.currentVersionNumber}</td>
                     <td>{document.source}</td>
                     <td>{formatBytes(version?.sizeBytes || 0)}</td>
+                    <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
                     <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{version?.status || "–"}</span></td>
                   </tr>
                 );

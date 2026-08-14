@@ -24,9 +24,14 @@ export {
 } from "./reviewService";
 
 export {
+  addDriveBoxItem,
+  createDriveBox,
   ensureDriveQrCode,
   getDriveDocumentWorkspaceDetails,
   getDriveWorkspaceDatabaseHealth,
+  listDriveBoxes,
+  moveDriveDocument,
+  removeDriveBoxItem,
   upsertDriveEngineeringMetadata,
   upsertDriveFileNote,
 } from "./workspaceRepository";

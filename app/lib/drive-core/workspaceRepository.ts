@@ -52,6 +52,35 @@ export type DriveQrCode = {
   revokedAt: string | null;
 };
 
+export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
+
+export type DriveBoxItem = {
+  id: string;
+  projectId: string;
+  boxId: string;
+  documentId: string;
+  versionId: string | null;
+  sortOrder: number;
+  addedBy: string;
+  addedAt: string;
+};
+
+export type DriveBox = {
+  id: string;
+  projectId: string;
+  name: string;
+  purpose: DriveBoxPurpose;
+  colorToken: string;
+  iconKey: string;
+  note: string;
+  sortOrder: number;
+  status: "ACTIVE" | "ARCHIVED";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  items: DriveBoxItem[];
+};
+
 type DbMetadata = {
   id: string;
   project_id: string;
@@ -93,6 +122,32 @@ type DbQr = {
   created_at: string;
   revoked_by: string | null;
   revoked_at: string | null;
+};
+
+type DbBox = {
+  id: string;
+  project_id: string;
+  name: string;
+  purpose: DriveBoxPurpose;
+  color_token: string;
+  icon_key: string;
+  note: string;
+  sort_order: number | string;
+  status: "ACTIVE" | "ARCHIVED";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type DbBoxItem = {
+  id: string;
+  project_id: string;
+  box_id: string;
+  document_id: string;
+  version_id: string | null;
+  sort_order: number | string;
+  added_by: string;
+  added_at: string;
 };
 
 type DbVersion = {
@@ -209,6 +264,37 @@ function mapQr(row: DbQr): DriveQrCode {
     createdAt: row.created_at,
     revokedBy: row.revoked_by,
     revokedAt: row.revoked_at,
+  };
+}
+
+function mapBoxItem(row: DbBoxItem): DriveBoxItem {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    boxId: row.box_id,
+    documentId: row.document_id,
+    versionId: row.version_id,
+    sortOrder: Number(row.sort_order || 0),
+    addedBy: row.added_by,
+    addedAt: row.added_at,
+  };
+}
+
+function mapBox(row: DbBox, items: DriveBoxItem[] = []): DriveBox {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    purpose: row.purpose,
+    colorToken: row.color_token,
+    iconKey: row.icon_key,
+    note: row.note || "",
+    sortOrder: Number(row.sort_order || 0),
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    items,
   };
 }
 
@@ -407,4 +493,132 @@ export async function ensureDriveQrCode(
   if (error) databaseError("A DRIVE QR azonosító létrehozása sikertelen.", error);
   const result = data as { qr: DbQr; idempotent: boolean };
   return { ok: true as const, qr: mapQr(result.qr), idempotent: Boolean(result.idempotent) };
+}
+
+
+export async function listDriveBoxes(projectId: string) {
+  const client = await requireReadyClient();
+  const [boxResult, itemResult] = await Promise.all([
+    client.from("drive_core_boxes").select("*").eq("project_id", projectId).eq("status", "ACTIVE").order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
+    client.from("drive_core_box_items").select("*").eq("project_id", projectId).order("sort_order", { ascending: true }).order("added_at", { ascending: true }),
+  ]);
+  if (boxResult.error) databaseError("A CsomagBOX lista nem tölthető be.", boxResult.error);
+  if (itemResult.error) databaseError("A CsomagBOX elemek nem tölthetők be.", itemResult.error);
+  const items = (itemResult.data || []).map((row) => mapBoxItem(row as DbBoxItem));
+  const byBox = new Map<string, DriveBoxItem[]>();
+  for (const item of items) {
+    const bucket = byBox.get(item.boxId) || [];
+    bucket.push(item);
+    byBox.set(item.boxId, bucket);
+  }
+  return {
+    ok: true as const,
+    boxes: (boxResult.data || []).map((row) => mapBox(row as DbBox, byBox.get((row as DbBox).id) || [])),
+  };
+}
+
+export async function createDriveBox(
+  projectId: string,
+  input: Record<string, unknown>,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
+  if (!name) throw new DriveCoreRepositoryError("A CsomagBOX neve kötelező.", "DRIVE_BOX_NAME_REQUIRED", 400);
+  const allowedPurposes: DriveBoxPurpose[] = ["GENERAL", "DROP", "COMPARE", "AI_ANALYSIS", "ISSUE", "MEETING"];
+  const requestedPurpose = typeof input.purpose === "string" ? input.purpose.toUpperCase() : "GENERAL";
+  const purpose = allowedPurposes.includes(requestedPurpose as DriveBoxPurpose) ? requestedPurpose as DriveBoxPurpose : "GENERAL";
+  const colorToken = typeof input.colorToken === "string" && input.colorToken.trim() ? input.colorToken.trim().slice(0, 40) : "blue";
+  const iconKey = typeof input.iconKey === "string" && input.iconKey.trim() ? input.iconKey.trim().slice(0, 80) : "box";
+  const note = typeof input.note === "string" ? input.note.slice(0, 2000) : "";
+  const { data, error } = await client.rpc("drive_workspace_create_box_atomic", {
+    p_project_id: projectId,
+    p_name: name,
+    p_purpose: purpose,
+    p_color_token: colorToken,
+    p_icon_key: iconKey,
+    p_note: note,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A CsomagBOX létrehozása sikertelen.", error);
+  return { ok: true as const, box: mapBox(data as DbBox) };
+}
+
+export async function addDriveBoxItem(
+  projectId: string,
+  boxId: string,
+  input: Record<string, unknown>,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const documentId = typeof input.documentId === "string" ? input.documentId.trim() : "";
+  const versionId = typeof input.versionId === "string" && input.versionId.trim() ? input.versionId.trim() : null;
+  if (!documentId) throw new DriveCoreRepositoryError("A dokumentum azonosító kötelező.", "DRIVE_BOX_DOCUMENT_REQUIRED", 400);
+  const { data, error } = await client.rpc("drive_workspace_add_box_item_atomic", {
+    p_project_id: projectId,
+    p_box_id: boxId,
+    p_document_id: documentId,
+    p_version_id: versionId,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A fájl CsomagBOX-hoz adása sikertelen.", error);
+  const result = data as { item: DbBoxItem; idempotent?: boolean };
+  return { ok: true as const, item: mapBoxItem(result.item), idempotent: Boolean(result.idempotent) };
+}
+
+export async function removeDriveBoxItem(
+  projectId: string,
+  boxId: string,
+  itemId: string,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const { data, error } = await client.rpc("drive_workspace_remove_box_item_atomic", {
+    p_project_id: projectId,
+    p_box_id: boxId,
+    p_item_id: itemId,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A fájl eltávolítása a CsomagBOX-ból sikertelen.", error);
+  return { ok: true as const, removed: data as DbBoxItem };
+}
+
+
+export async function moveDriveDocument(
+  projectId: string,
+  documentId: string,
+  targetFolderId: string,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const normalizedTarget = targetFolderId.trim();
+  if (!normalizedTarget) throw new DriveCoreRepositoryError("A célmappa azonosító kötelező.", "DRIVE_MOVE_TARGET_REQUIRED", 400);
+  const { data, error } = await client.rpc("drive_workspace_move_document_atomic", {
+    p_project_id: projectId,
+    p_document_id: documentId,
+    p_target_folder_id: normalizedTarget,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A dokumentum áthelyezése sikertelen.", error);
+  const result = data as { document: DbDocument; idempotent?: boolean; previousFolderId?: string };
+  return {
+    ok: true as const,
+    document: {
+      id: result.document.id,
+      projectId: result.document.project_id,
+      folderId: result.document.folder_id,
+      name: result.document.name,
+      extension: result.document.extension || "",
+      mimeType: result.document.mime_type,
+      description: result.document.description || "",
+      status: result.document.status,
+      source: result.document.source,
+      currentVersionNumber: Number(result.document.current_version_number || 0),
+      createdBy: result.document.created_by,
+      createdAt: result.document.created_at,
+      updatedAt: result.document.updated_at,
+    },
+    idempotent: Boolean(result.idempotent),
+    previousFolderId: result.previousFolderId || null,
+  };
 }
