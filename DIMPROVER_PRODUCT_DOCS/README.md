@@ -101,3 +101,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `208_benjadmin_terminal_command_library_p3_candidate_20260814.md` – Terminál Parancstár P3 pre-DB candidate: deduplikált sanitizált command catalog + events, 108/108 contract, source-DB preflight PASS; DB még nem módosult.
 
 - `209_benjadmin_terminal_command_library_p3_db_activation_20260814.md` – P3 DEV DB aktiválás: source preflight, lokális + Restic backup, rollback-próba, migration apply és deduplikációs DB acceptance PASS.
+
+- `210_benjadmin_terminal_command_library_p3_dev_activation_20260814.md` – Terminál Parancstár P3 DEV-en aktív: DB+UI/API, 108/108 PASS, Command Library flag ON; execution/Live Workspace/PROD továbbra is OFF.
