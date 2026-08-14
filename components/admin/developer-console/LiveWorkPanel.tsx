@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Clock3, Code2, GitCommitHorizontal, Hammer, ListChecks, ShieldCheck } from "lucide-react";
 import BenjadminAvatar from "./BenjadminAvatar";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
+import TerminalHubCard from "./TerminalHubCard";
 import styles from "./DeveloperConsole.module.css";
 
 const workers: Array<{ code: string; author: ConsoleAuthor; fallbackName: string }> = [
@@ -33,7 +34,7 @@ function workerStatus(task: LiveTask | null) {
   return { status: "working" as const, label: "DOLGOZIK" };
 }
 
-export default function LiveWorkPanel({ live, now, context }: { live: ConsoleLiveState | null; now: number; context: RuntimeContext | null }) {
+export default function LiveWorkPanel({ live, now, context, onOpenTerminalHub }: { live: ConsoleLiveState | null; now: number; context: RuntimeContext | null; onOpenTerminalHub: () => void }) {
   const tasks = live?.tasks || [];
   const sessions = live?.sessions || [];
   const builds = live?.builds || [];
@@ -72,6 +73,7 @@ export default function LiveWorkPanel({ live, now, context }: { live: ConsoleLiv
         <span>{context?.executorReadiness?.repositoryReady ? "Repo ✓" : "Repo ✕"} · {context?.executorReadiness?.baselineReady ? "Baseline ✓" : "Baseline ✕"} · {context?.executorReadiness?.providerConfigured ? "AI provider ✓" : "AI provider —"} · {context?.executorReadiness?.executorConfigured ? "Executor ✓" : "Executor —"}</span>
         <small>{context?.executorReadiness?.ready ? "Natív worker indításra kész." : context?.executorReadiness?.blockers?.[0] || "Végrehajtási állapot ellenőrzése…"}</small>
       </section>
+      <TerminalHubCard onOpen={onOpenTerminalHub} />
       <section className={`${styles.approvalBox} ${pendingApprovals.length ? styles.approvalWaiting : ""}`}>
         {pendingApprovals.length ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}
         <div><strong>{pendingApprovals.length ? `${pendingApprovals.length} döntés / jóváhagyás vár` : "Nincs függő jóváhagyás"}</strong><span>{pendingApprovals.length ? "BENJADMIN beavatkozás szükséges." : "A Control Plane approval queue tiszta."}</span></div>

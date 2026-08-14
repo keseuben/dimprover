@@ -13,6 +13,7 @@ import ExternalAiWorkersDrawer from "./ExternalAiWorkersDrawer";
 import LiveWorkPanel from "./LiveWorkPanel";
 import OutminPartnerBar from "./OutminPartnerBar";
 import TeamQuickDrawer from "./TeamQuickDrawer";
+import TerminalHubWorkspace from "./TerminalHubWorkspace";
 import type { ConnectionMode } from "./ConnectionStatus";
 import type { BenAiDispatch, ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -77,6 +78,7 @@ export default function DeveloperConsoleShell() {
   const [aiWorkersOpen, setAiWorkersOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [terminalHubOpen, setTerminalHubOpen] = useState(false);
   const liveRef = useRef<ConsoleLiveState | null>(null);
   const messagesRef = useRef<ConsoleMessage[]>([]);
 
@@ -100,7 +102,7 @@ export default function DeveloperConsoleShell() {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      const hasOpenLayer = commandsOpen || resourcesOpen || aiWorkersOpen || teamOpen || installOpen;
+      const hasOpenLayer = commandsOpen || resourcesOpen || aiWorkersOpen || teamOpen || installOpen || terminalHubOpen;
       if (!hasOpenLayer) return;
       event.preventDefault();
       setCommandsOpen(false);
@@ -108,10 +110,11 @@ export default function DeveloperConsoleShell() {
       setAiWorkersOpen(false);
       setTeamOpen(false);
       setInstallOpen(false);
+      setTerminalHubOpen(false);
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [aiWorkersOpen, commandsOpen, installOpen, resourcesOpen, teamOpen]);
+  }, [aiWorkersOpen, commandsOpen, installOpen, resourcesOpen, teamOpen, terminalHubOpen]);
 
   const applySnapshot = useCallback((incomingLive: ConsoleLiveState, incomingMessages: ConsoleMessage[]) => {
     setLive((current) => {
@@ -282,7 +285,7 @@ export default function DeveloperConsoleShell() {
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
         <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} />
-        <LiveWorkPanel live={live} now={now} context={context} />
+        <LiveWorkPanel live={live} now={now} context={context} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />
@@ -291,6 +294,7 @@ export default function DeveloperConsoleShell() {
       <DevelopmentResourcesDrawer open={resourcesOpen} onClose={() => setResourcesOpen(false)} resources={resources} health={resourceHealth} onReload={loadResources} />
       <TeamQuickDrawer open={teamOpen} onClose={() => setTeamOpen(false)} live={live} />
       <AppInstallDrawer open={installOpen} onClose={() => setInstallOpen(false)} />
+      <TerminalHubWorkspace open={terminalHubOpen} onClose={() => setTerminalHubOpen(false)} live={live} />
     </main>
   );
 }

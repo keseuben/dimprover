@@ -748,3 +748,118 @@
 .composer { grid-template-columns: 84px minmax(0, 1fr); min-height: 90px; }
 .composerLeaderAvatar { min-height: 78px !important; }
 .composerInputRow textarea { min-height: 72px; }
+
+/* BENJADMIN Terminal Hub P0/P1 — UI shell only, no terminal execution. */
+.terminalHubCard {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  display: grid;
+  gap: 8px;
+}
+.terminalHubCard[data-enabled="false"] { border-color: var(--border); background: var(--surface2); }
+.terminalHubCardHead { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 7px; align-items: center; }
+.terminalHubCardHead > span { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent-strong); background: var(--accent-soft); }
+.terminalHubCardHead > div { min-width: 0; display: grid; gap: 1px; }
+.terminalHubCardHead strong { color: var(--text); font-size: 12px; font-weight: 950; letter-spacing: .05em; }
+.terminalHubCardHead small { color: var(--muted); font-size: 12px; }
+.terminalHubCardHead > b { padding: 3px 5px; border-radius: 6px; color: var(--green); background: var(--green-soft); font-size: 12px; white-space: nowrap; }
+.terminalHubCard[data-enabled="false"] .terminalHubCardHead > b { color: var(--muted); background: var(--surface); }
+.terminalHubQuickGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
+.terminalHubQuickGrid > span { min-width: 0; padding: 5px 6px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 5px; color: var(--text-soft); background: var(--surface); font-size: 12px; }
+.terminalHubQuickGrid > span b { margin-left: auto; color: var(--text); font-size: 12px; }
+.terminalHubCard > button { min-height: 30px; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent-strong); background: var(--accent-soft); cursor: pointer; font-size: 12px; font-weight: 950; letter-spacing: .04em; }
+.terminalHubCard > button:disabled { border-color: var(--border); color: var(--muted); background: var(--surface2); cursor: not-allowed; }
+.terminalHubError { margin: 0; color: var(--red); font-size: 12px; }
+
+.terminalHubLayer { position: fixed; inset: 0; z-index: 95; display: flex; justify-content: flex-end; padding: 10px; }
+.terminalHubBackdrop { position: absolute; inset: 0; border: 0; background: rgba(2, 6, 23, .56); }
+.terminalHubWorkspace {
+  position: relative;
+  width: min(1080px, calc(100vw - 28px));
+  height: calc(100dvh - 20px);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0,1fr) auto;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(0,0,0,.34);
+  animation: drawerIn .18s ease-out both;
+}
+.terminalHubLayerDocked { justify-content: center; padding: 54px 12px 108px; }
+.terminalHubLayerDocked .terminalHubWorkspace { width: min(1500px, calc(100vw - 24px)); height: 100%; border-radius: 10px; }
+.terminalHubWorkspaceHeader { min-height: 58px; padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel); }
+.terminalHubTitle { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.terminalHubTitle > svg { color: var(--accent-strong); flex: 0 0 auto; }
+.terminalHubTitle > div { min-width: 0; display: grid; gap: 1px; }
+.terminalHubTitle span { color: var(--accent-strong); font-size: 12px; font-weight: 950; letter-spacing: .08em; }
+.terminalHubTitle strong { overflow: hidden; color: var(--text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.terminalHubHeaderActions { display: flex; gap: 5px; }
+.terminalHubHeaderActions button { width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.terminalHubHeaderActions button:hover { border-color: var(--accent); color: var(--accent-strong); }
+.terminalHubSecurityStrip { min-height: 38px; padding: 5px 9px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 7px; overflow-x: auto; background: var(--surface2); }
+.terminalHubSecurityStrip span, .terminalHubSecurityStrip > b { min-height: 25px; padding: 0 7px; border: 1px solid var(--border); border-radius: 7px; display: inline-flex; align-items: center; gap: 4px; color: var(--text-soft); background: var(--surface); font-size: 12px; white-space: nowrap; }
+.terminalHubSecurityStrip > b { margin-left: auto; color: var(--accent-strong); }
+.terminalHubSecurityStrip .terminalHubProdLock { border-color: color-mix(in srgb, var(--red) 42%, var(--border)); color: var(--red); background: var(--red-soft); }
+.terminalHubTabs { min-height: 40px; padding: 5px 8px; border-bottom: 1px solid var(--border); display: flex; gap: 5px; overflow-x: auto; background: var(--panel); }
+.terminalHubTabs button { min-height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 900; white-space: nowrap; }
+.terminalHubTabs button:hover, .terminalHubTabs .terminalHubTabActive { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.terminalHubBody { min-width: 0; min-height: 0; overflow: auto; padding: 10px; background: var(--bg); }
+.terminalHubNotice { margin-bottom: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--red) 36%, var(--border)); border-radius: 8px; color: var(--red); background: var(--red-soft); font-size: 12px; }
+.terminalHubTerminalView { display: grid; gap: 10px; }
+.terminalHubIntro { padding: 12px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: flex-start; gap: 10px; background: var(--panel); }
+.terminalHubIntro > svg { color: var(--accent-strong); flex: 0 0 auto; }
+.terminalHubIntro > div { display: grid; gap: 4px; }
+.terminalHubIntro strong { color: var(--text); font-size: 13px; }
+.terminalHubIntro p { margin: 0; color: var(--text-soft); font-size: 12px; line-height: 1.55; }
+.terminalEndpointGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.terminalEndpointGrid article { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 5px; background: var(--panel); }
+.terminalEndpointGrid article[data-state="LOCKED"] { border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
+.terminalEndpointGrid article[data-state="READY"] { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+.terminalEndpointGrid article header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.terminalEndpointGrid article header strong { color: var(--text); font-size: 13px; }
+.terminalEndpointGrid article header b { color: var(--accent-strong); font-size: 12px; }
+.terminalEndpointGrid article > span { color: var(--muted); font-size: 12px; }
+.terminalEndpointGrid article p { margin: 0; color: var(--text-soft); font-size: 12px; line-height: 1.5; }
+.terminalHubReadinessGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.terminalHubReadinessGrid > div { padding: 9px; border: 1px solid var(--border); border-radius: 9px; display: grid; gap: 2px; background: var(--panel); }
+.terminalHubReadinessGrid span { color: var(--muted); font-size: 12px; }
+.terminalHubReadinessGrid strong { color: var(--text); font-size: 13px; }
+.terminalHubReadinessGrid small { color: var(--text-soft); font-size: 12px; }
+.terminalHubPlaceholder { min-height: 260px; padding: 24px; border: 1px dashed var(--border-strong); border-radius: 12px; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; color: var(--text-soft); background: var(--panel); }
+.terminalHubPlaceholder > svg { color: var(--accent-strong); }
+.terminalHubPlaceholder strong { color: var(--text); font-size: 14px; }
+.terminalHubPlaceholder p { max-width: 760px; margin: 0; font-size: 13px; line-height: 1.55; }
+.terminalHubPlaceholder small { max-width: 760px; color: var(--muted); font-size: 12px; }
+.terminalHubPolicyFacts { margin-top: 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.terminalHubPolicyFacts span { padding: 5px 7px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-soft); background: var(--surface); font-size: 12px; }
+.terminalHubPolicyFacts b { color: var(--text); }
+.terminalHubListView { display: grid; gap: 6px; }
+.terminalHubSectionTitle { min-height: 34px; display: flex; align-items: center; gap: 6px; color: var(--accent-strong); font-size: 12px; font-weight: 950; letter-spacing: .04em; }
+.terminalHubListView article { min-width: 0; padding: 8px 9px; border: 1px solid var(--border); border-radius: 8px; display: grid; grid-template-columns: minmax(140px, .7fr) auto minmax(220px, 1fr); gap: 8px; align-items: center; background: var(--panel); }
+.terminalHubListView article strong { color: var(--text); font-size: 12px; }
+.terminalHubListView article span, .terminalHubListView article small { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.terminalHubListView > p { color: var(--muted); font-size: 12px; }
+.terminalHubFooter { min-height: 38px; padding: 6px 9px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
+
+@media (max-width: 1050px) {
+  .terminalEndpointGrid { grid-template-columns: 1fr; }
+  .terminalHubReadinessGrid { grid-template-columns: 1fr; }
+  .terminalHubLayerDocked { padding: 40px 8px 94px; }
+}
+@media (max-width: 700px) {
+  .terminalHubQuickGrid { grid-template-columns: 1fr; }
+  .terminalHubLayer, .terminalHubLayerDocked { padding: 0; }
+  .terminalHubWorkspace, .terminalHubLayerDocked .terminalHubWorkspace { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .terminalHubSecurityStrip { align-items: flex-start; }
+  .terminalHubTabs { padding-inline: 6px; }
+  .terminalHubBody { padding: 7px; }
+  .terminalHubListView article { grid-template-columns: 1fr; gap: 3px; }
+  .terminalHubListView article span, .terminalHubListView article small { white-space: normal; }
+}
