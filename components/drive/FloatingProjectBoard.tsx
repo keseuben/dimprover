@@ -11,6 +11,7 @@ import {
   FolderOpen,
   MessageSquareText,
   PackageCheck,
+  Pin,
   Settings,
   UploadCloud,
 } from "lucide-react";
@@ -20,22 +21,51 @@ import styles from "./DriveWorkspace.module.css";
 type Props = {
   projects: DriveProject[];
   selectedProjectId: string;
+  pinned: boolean;
   onProjectChange: (projectId: string) => void;
   onClose: () => void;
+  onTogglePinned: () => void;
+  onHoverEnter: () => void;
+  onHoverLeave: () => void;
 };
 
-export default function FloatingProjectBoard({ projects, selectedProjectId, onProjectChange, onClose }: Props) {
+export default function FloatingProjectBoard({
+  projects,
+  selectedProjectId,
+  pinned,
+  onProjectChange,
+  onClose,
+  onTogglePinned,
+  onHoverEnter,
+  onHoverLeave,
+}: Props) {
   return (
-    <aside className={styles.board} aria-label="DIMPRO Drive navigációs board">
+    <aside
+      className={styles.board}
+      aria-label="DIMPRO Drive navigációs board"
+      onMouseEnter={onHoverEnter}
+      onMouseLeave={onHoverLeave}
+    >
       <div className={styles.boardInner}>
         <header className={styles.boardHeader}>
           <div className={styles.boardTitle}>
             <FolderKanban size={17} />
             <strong>DIMPRO Drive</strong>
           </div>
-          <button className={styles.boardClose} type="button" onClick={onClose} title="Board bezárása">
-            <ChevronsLeft size={17} />
-          </button>
+          <div className={styles.boardHeaderActions}>
+            <button
+              className={`${styles.boardPin} ${pinned ? styles.boardPinActive : ""}`}
+              type="button"
+              onClick={onTogglePinned}
+              title={pinned ? "Board rögzítésének feloldása" : "Board rögzítése"}
+              aria-pressed={pinned}
+            >
+              <Pin size={15} />
+            </button>
+            <button className={styles.boardClose} type="button" onClick={onClose} title="Board bezárása">
+              <ChevronsLeft size={17} />
+            </button>
+          </div>
         </header>
 
         <span className={styles.boardSectionLabel}>Projekt</span>

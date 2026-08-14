@@ -12,6 +12,10 @@ const files = {
   grid: "components/drive/FileGridPanel.tsx",
   toolbar: "components/drive/DriveToolbar.tsx",
   switcher: "components/drive/ViewLayoutSwitcher.tsx",
+  shell: "components/drive/DriveShell.tsx",
+  rail: "components/drive/DriveNavigationRail.tsx",
+  floatingBoard: "components/drive/FloatingProjectBoard.tsx",
+  css: "components/drive/DriveWorkspace.module.css",
   repo: "app/lib/drive-core/workspaceRepository.ts",
   store: "app/lib/drive-core/store.ts",
   sql: "supabase/DIMPRO_DRIVE_WORKSPACE_V100_BOOTSTRAP.sql",
@@ -49,6 +53,8 @@ check("15 Move audit + change event", source.sql.includes("DRIVE_DOCUMENT_MOVED"
 check("16 Írási műveletek permission", source.boxesRoute.includes('"document.write"') && source.boxItemsRoute.includes('"document.write"') && source.boxItemRoute.includes('"document.write"') && source.moveRoute.includes('"document.write"'), "Minden új mutáció szerveroldali írási permissiont kér.");
 check("17 SQL hiány esetén fail-safe UI", source.workspace.includes("response.status === 503") && source.shelf.includes("databaseReady"), "A Drive használható marad, a bővített mutációk nem aktiválódnak idő előtt.");
 check("18 SmartSync érintetlen ebben a szeletben", !Object.values(source).some((text) => /Cloud Files|SmartSync|placeholder cache|CfConnectSyncRoot/i.test(text)), "A webes fejlesztési szelet nem indít Desktop SmartSync implementációt.");
+check("19 Lebegő Drive board", source.css.includes("position: fixed") && source.css.includes("left: var(--rail-width)") && source.css.includes("grid-template-columns: var(--rail-width) minmax(0, 1fr)"), "A széles board overlay-ként nyílik, nem vesz el oszlopot a munkaterülettől.");
+check("20 Hover + rögzítés", source.shell.includes("openBoardSoon") && source.shell.includes("220") && source.shell.includes("boardPinned") && source.floatingBoard.includes("onTogglePinned") && source.rail.includes("onMouseEnter={onHoverOpen}"), "A board hoverre késleltetve nyílik és külön rögzíthető.");
 
 const failed = checks.filter((item) => !item.ok);
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);
