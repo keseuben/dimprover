@@ -42,13 +42,26 @@ type PointSide = "A" | "B";
 type AlignmentPoint = { x: number; y: number };
 type AlignmentPick = { side: PointSide; pairIndex: number; point: AlignmentPoint };
 type SimilarityAlignment = { offsetX: number; offsetY: number; scalePercent: number; rotationDegrees: number; rmsError: number };
+type AutoAlignmentPairMeta = {
+  key: string;
+  weight: number;
+  manual: boolean;
+};
+
 type AutoAlignmentSuggestion = SimilarityAlignment & {
   pairCount: 2 | 3;
   picks: AlignmentPick[];
+  pairMeta: AutoAlignmentPairMeta[];
   source: DriveAutoAlignmentSource;
   evidenceCount: number;
   confidenceScore: number;
   summary: string;
+};
+
+type AutoPairReplacement = {
+  pairIndex: number;
+  side: PointSide;
+  aPoint?: AlignmentPoint;
 };
 
 type PreviewPayload = {
@@ -188,6 +201,14 @@ function autoAlignmentSourceLabel(source: DriveAutoAlignmentSource) {
   return "vektoros kontúrok";
 }
 
+function autoPairFeatureLabel(key: string) {
+  const normalized = key.toLocaleLowerCase("hu-HU");
+  if (normalized.includes("metszes") || normalized.includes("intersection")) return "Metszéspont";
+  if (normalized.includes("sarok") || normalized.includes("corner")) return "Sarok";
+  if (normalized.includes("kontur") || normalized.includes("contour")) return "Kontúr";
+  return "Felirat";
+}
+
 function shortRevision(document: DriveDocument) {
   return document.currentVersion?.revisionCode || `V${document.currentVersionNumber || 0}`;
 }
@@ -231,6 +252,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [autoAlignmentAnalyzing, setAutoAlignmentAnalyzing] = useState(false);
   const [autoAlignmentSuggestion, setAutoAlignmentSuggestion] = useState<AutoAlignmentSuggestion | null>(null);
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
+  const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
   const [showRevision, setShowRevision] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -304,6 +326,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentAnalyzing(false);
     setAutoAlignmentSuggestion(null);
     setAutoAlignmentError("");
+    setAutoPairReplacement(null);
     setShowBase(true);
     setShowRevision(true);
     setLeftPageCount(0);
@@ -314,6 +337,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   useEffect(() => {
     setAutoAlignmentSuggestion(null);
     setAutoAlignmentError("");
+    setAutoPairReplacement(null);
   }, [fitWidth, pageNumber, rotation, zoom]);
 
   useEffect(() => {
@@ -463,6 +487,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentAnalyzing(true);
     setAutoAlignmentError("");
     setAutoAlignmentSuggestion(null);
+    setAutoPairReplacement(null);
     try {
       const [pdfJs, leftPage, rightPage] = await Promise.all([
         loadSharedPdfJs(),
@@ -507,6 +532,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
         ...solved,
         pairCount,
         picks,
+        pairMeta: selectedPairs.map((pair) => ({ key: pair.key, weight: pair.weight, manual: false })),
         source: proposal.source,
         evidenceCount: proposal.evidenceCount,
         confidenceScore: Number(confidence.toFixed(3)),
@@ -519,6 +545,59 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     }
   }
 
+  function startAutoPairReplacement(pairIndex: number) {
+    if (!autoAlignmentSuggestion) return;
+    setAutoPairReplacement({ pairIndex, side: "A" });
+    setAlignmentEnabled(false);
+    setAlignmentMessage(`Referencia ${pairIndex + 1}: jelöld ki az új A pontot.`);
+    requestAnimationFrame(() => rootRef.current?.focus());
+  }
+
+  function replaceAutoSuggestionPair(pairIndex: number, aPoint: AlignmentPoint, bPoint: AlignmentPoint) {
+    const suggestion = autoAlignmentSuggestion;
+    if (!suggestion) return;
+    const nextPicks = suggestion.picks.filter((pick) => pick.pairIndex !== pairIndex);
+    nextPicks.push(
+      { side: "A", pairIndex, point: aPoint },
+      { side: "B", pairIndex, point: bPoint },
+    );
+    nextPicks.sort((left, right) => left.pairIndex - right.pairIndex || left.side.localeCompare(right.side));
+    const solved = solveSimilarityAlignment(nextPicks, suggestion.pairCount);
+    if (!solved) {
+      setAlignmentMessage(`Referencia ${pairIndex + 1}: a kézi cserepontokkal nem számítható stabil illesztés.`);
+      return;
+    }
+    if (solved.scalePercent < 70 || solved.scalePercent > 130 || Math.abs(solved.offsetX) > 500 || Math.abs(solved.offsetY) > 500) {
+      setAlignmentMessage(`Referencia ${pairIndex + 1}: a kézi csere biztonsági tartományon kívüli transzformációt adna, ezért nem alkalmaztam.`);
+      return;
+    }
+    setAutoAlignmentSuggestion({
+      ...suggestion,
+      ...solved,
+      picks: nextPicks,
+      pairMeta: suggestion.pairMeta.map((meta, index) => index === pairIndex ? { ...meta, manual: true } : meta),
+    });
+    setAutoPairReplacement(null);
+    setAlignmentMessage(`Referencia ${pairIndex + 1} kézzel felülvizsgálva · új RMS ${solved.rmsError.toFixed(2)} px.`);
+  }
+
+  function captureAutoPairReplacement(event: ReactPointerEvent<HTMLDivElement>) {
+    const replacement = autoPairReplacement;
+    if (!replacement || !autoAlignmentSuggestion) return false;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const displayPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    if (replacement.side === "A") {
+      setAutoPairReplacement({ pairIndex: replacement.pairIndex, side: "B", aPoint: displayPoint });
+      setAlignmentMessage(`Referencia ${replacement.pairIndex + 1}: jelöld ki az új B pontot.`);
+    } else {
+      const bPoint = invertSimilarityAlignment(displayPoint, alignmentOffsetX, alignmentOffsetY, alignmentScale, alignmentRotation);
+      if (replacement.aPoint) replaceAutoSuggestionPair(replacement.pairIndex, replacement.aPoint, bPoint);
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   function applyAutoAlignmentSuggestion() {
     const suggestion = autoAlignmentSuggestion;
     if (!suggestion) return;
@@ -528,6 +607,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentRotation(suggestion.rotationDegrees);
     setAlignmentRmsError(suggestion.rmsError);
     setAlignmentPicks(suggestion.picks);
+    setAutoPairReplacement(null);
     setPointAlignmentMode(null);
     setAlignmentEnabled(false);
     setAlignmentMessage(`Automatikus javaslat jóváhagyva · ${Math.round(suggestion.confidenceScore * 100)}% bizalom · RMS ${suggestion.rmsError.toFixed(2)} px.`);
@@ -537,6 +617,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
 
   function startPointAlignment(pairCount: 2 | 3) {
     if (!isPdf || mode === "SIDE_BY_SIDE") return;
+    setAutoPairReplacement(null);
     setPointAlignmentMode(pairCount);
     setAlignmentPicks([]);
     setAlignmentRmsError(null);
@@ -623,7 +704,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }
 
   function beginAlignmentDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointAlignmentMode || !alignmentEnabled || mode === "SIDE_BY_SIDE") return;
+    if (autoPairReplacement || pointAlignmentMode || !alignmentEnabled || mode === "SIDE_BY_SIDE") return;
     alignmentDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -686,14 +767,36 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const pointAlignmentTargetCount = pointAlignmentMode ? pointAlignmentMode * 2 : 0;
   const pointAlignmentCollecting = Boolean(pointAlignmentMode && alignmentPicks.length < pointAlignmentTargetCount);
   const pointAlignmentExpectedSide: PointSide | null = pointAlignmentCollecting ? (alignmentPicks.length % 2 === 0 ? "A" : "B") : null;
-  const effectiveShowBase = pointAlignmentCollecting ? pointAlignmentExpectedSide === "A" : showBase;
-  const effectiveShowRevision = pointAlignmentCollecting ? pointAlignmentExpectedSide === "B" : showRevision;
+  const autoPairReplacementCollecting = Boolean(autoAlignmentSuggestion && autoPairReplacement);
+  const effectiveShowBase = pointAlignmentCollecting
+    ? pointAlignmentExpectedSide === "A"
+    : autoPairReplacementCollecting
+      ? autoPairReplacement?.side === "A"
+      : showBase;
+  const effectiveShowRevision = pointAlignmentCollecting
+    ? pointAlignmentExpectedSide === "B"
+    : autoPairReplacementCollecting
+      ? autoPairReplacement?.side === "B"
+      : showRevision;
   const alignmentMarkerPoints = alignmentPicks.map((pick) => ({
     ...pick,
     displayPoint: pick.side === "A"
       ? pick.point
       : applySimilarityAlignment(pick.point, alignmentOffsetX, alignmentOffsetY, alignmentScale, alignmentRotation),
   }));
+  const autoReviewMarkerPoints = (autoAlignmentSuggestion?.picks || []).map((pick) => ({
+    ...pick,
+    displayPoint: pick.side === "A"
+      ? pick.point
+      : applySimilarityAlignment(pick.point, alignmentOffsetX, alignmentOffsetY, alignmentScale, alignmentRotation),
+  }));
+  const autoReviewPairLines = autoAlignmentSuggestion
+    ? Array.from({ length: autoAlignmentSuggestion.pairCount }, (_, pairIndex) => {
+      const a = autoReviewMarkerPoints.find((pick) => pick.pairIndex === pairIndex && pick.side === "A");
+      const b = autoReviewMarkerPoints.find((pick) => pick.pairIndex === pairIndex && pick.side === "B");
+      return a && b ? { pairIndex, a: a.displayPoint, b: b.displayPoint } : null;
+    }).filter((pair): pair is { pairIndex: number; a: AlignmentPoint; b: AlignmentPoint } => Boolean(pair))
+    : [];
 
   return (
     <section ref={rootRef} className={styles.visualCompare} aria-label="Vizuális tervösszehasonlítás" tabIndex={0} onKeyDown={handleAlignmentKeys}>
@@ -814,6 +917,30 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 <span><small>Skála</small><strong>{autoAlignmentSuggestion.scalePercent.toFixed(2)}%</strong></span>
                 <span><small>Szög</small><strong>{autoAlignmentSuggestion.rotationDegrees.toFixed(2)}°</strong></span>
               </div>
+              <div className={styles.visualCompareAutoPairReview}>
+                <div className={styles.visualCompareAutoPairReviewHeader}><strong>Referencia-párok ellenőrzése</strong><span>A/B jelölők a terven láthatók · hibás pár kézzel lecserélhető</span></div>
+                <div className={styles.visualCompareAutoPairList}>
+                  {autoAlignmentSuggestion.pairMeta
+                    .map((meta, pairIndex) => ({ meta, pairIndex, rank: [...autoAlignmentSuggestion.pairMeta].sort((a, b) => b.weight - a.weight).findIndex((item) => item.key === meta.key) + 1 }))
+                    .map(({ meta, pairIndex, rank }) => {
+                      const a = autoAlignmentSuggestion.picks.find((pick) => pick.pairIndex === pairIndex && pick.side === "A");
+                      const b = autoAlignmentSuggestion.picks.find((pick) => pick.pairIndex === pairIndex && pick.side === "B");
+                      const replacing = autoPairReplacement?.pairIndex === pairIndex;
+                      return (
+                        <div key={`${meta.key}-${pairIndex}`} className={`${styles.visualCompareAutoPairCard} ${meta.manual ? styles.visualCompareAutoPairCardManual : ""} ${replacing ? styles.visualCompareAutoPairCardReplacing : ""}`} data-auto-pair-card={pairIndex + 1}>
+                          <span className={styles.visualCompareAutoPairRank}>#{rank}</span>
+                          <div className={styles.visualCompareAutoPairInfo}>
+                            <strong>P{pairIndex + 1} · {autoPairFeatureLabel(meta.key)} {meta.manual ? "· Kézi" : "· Auto"}</strong>
+                            <small>Erősség {meta.weight.toFixed(2)} · A {a ? `${Math.round(a.point.x)},${Math.round(a.point.y)}` : "–"} · B {b ? `${Math.round(b.point.x)},${Math.round(b.point.y)}` : "–"}</small>
+                          </div>
+                          <button type="button" onClick={() => startAutoPairReplacement(pairIndex)} disabled={Boolean(autoPairReplacement && !replacing)}>{replacing ? `Jelöld: ${autoPairReplacement?.side || "A"}${pairIndex + 1}` : "Kézi csere"}</button>
+                        </div>
+                      );
+                    })}
+                </div>
+                {autoPairReplacement && <div className={styles.visualCompareAutoPairHint}><Crosshair size={12} /> {alignmentMessage}</div>}
+                {!autoPairReplacement && autoAlignmentSuggestion.pairMeta.some((meta) => meta.manual) && alignmentMessage && <div className={styles.visualCompareAutoPairHint}><Check size={12} /> {alignmentMessage}</div>}
+              </div>
               <div className={styles.visualCompareAutoActions}>
                 <button type="button" className={styles.visualCompareAutoApply} onClick={applyAutoAlignmentSuggestion}><Check size={12} /> Alkalmazás</button>
                 <button type="button" onClick={() => setAutoAlignmentSuggestion(null)}><X size={12} /> Elvetés</button>
@@ -898,9 +1025,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
           </>
         ) : (
           <div
-            className={`${styles.visualCompareOverlayViewport} ${alignmentEnabled && !pointAlignmentMode ? styles.visualCompareOverlayViewportAligning : ""} ${pointAlignmentCollecting ? styles.visualCompareOverlayViewportPicking : ""}`}
+            className={`${styles.visualCompareOverlayViewport} ${alignmentEnabled && !pointAlignmentMode && !autoPairReplacement ? styles.visualCompareOverlayViewportAligning : ""} ${(pointAlignmentCollecting || autoPairReplacementCollecting) ? styles.visualCompareOverlayViewportPicking : ""}`}
             style={isPdf && overlaySize.width ? { width: overlaySize.width, height: overlaySize.height } : undefined}
-            onPointerDown={(event) => { if (!capturePointAlignment(event)) beginAlignmentDrag(event); }}
+            onPointerDown={(event) => { if (!captureAutoPairReplacement(event) && !capturePointAlignment(event)) beginAlignmentDrag(event); }}
             onPointerMove={moveAlignmentDrag}
             onPointerUp={endAlignmentDrag}
             onPointerCancel={endAlignmentDrag}
@@ -910,7 +1037,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             {isPdf ? (
               <>
                 <canvas ref={leftCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: effectiveShowBase ? 1 : 0 }} aria-label={`${leftDocument.name} overlay PDF A`} />
-                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: effectiveShowRevision ? (pointAlignmentCollecting ? 1 : topOpacity) : 0, mixBlendMode: pointAlignmentCollecting ? "normal" : topBlend, transform: revisionAlignmentTransform, transformOrigin: "top left" }} aria-label={`${rightDocument.name} overlay PDF B`} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
+                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: effectiveShowRevision ? ((pointAlignmentCollecting || autoPairReplacementCollecting) ? 1 : topOpacity) : 0, mixBlendMode: (pointAlignmentCollecting || autoPairReplacementCollecting) ? "normal" : topBlend, transform: revisionAlignmentTransform, transformOrigin: "top left" }} aria-label={`${rightDocument.name} overlay PDF B`} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
               </>
             ) : (
               <>
@@ -920,10 +1047,24 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 )}
                 {rightPreview?.url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `${revisionAlignmentTransform} rotate(${rotation}deg)`, transformOrigin: "top left", opacity: effectiveShowRevision ? (pointAlignmentCollecting ? 1 : topOpacity) : 0, mixBlendMode: pointAlignmentCollecting ? "normal" : topBlend }} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
+                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `${revisionAlignmentTransform} rotate(${rotation}deg)`, transformOrigin: "top left", opacity: effectiveShowRevision ? ((pointAlignmentCollecting || autoPairReplacementCollecting) ? 1 : topOpacity) : 0, mixBlendMode: (pointAlignmentCollecting || autoPairReplacementCollecting) ? "normal" : topBlend }} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} data-alignment-rotation={alignmentRotation} />
                 )}
               </>
             )}
+            {autoAlignmentSuggestion && autoReviewPairLines.length > 0 && (
+              <svg className={styles.visualCompareAutoPairLines} width="100%" height="100%" aria-hidden="true">
+                {autoReviewPairLines.map((pair) => <line key={`auto-line-${pair.pairIndex}`} x1={pair.a.x} y1={pair.a.y} x2={pair.b.x} y2={pair.b.y} data-auto-review-line={pair.pairIndex + 1} />)}
+              </svg>
+            )}
+            {autoReviewMarkerPoints.map((pick, index) => (
+              <span
+                key={`auto-${pick.side}-${pick.pairIndex}-${index}`}
+                className={`${styles.visualCompareAlignmentMarker} ${styles.visualCompareAutoReviewMarker} ${pick.side === "A" ? styles.visualCompareAlignmentMarkerA : styles.visualCompareAlignmentMarkerB}`}
+                style={{ left: pick.displayPoint.x, top: pick.displayPoint.y }}
+                data-auto-review-side={pick.side}
+                data-auto-review-pair={pick.pairIndex + 1}
+              >{pick.side}{pick.pairIndex + 1}</span>
+            ))}
             {alignmentMarkerPoints.map((pick, index) => (
               <span
                 key={`${pick.side}-${pick.pairIndex}-${index}`}
@@ -933,9 +1074,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 data-point-pair={pick.pairIndex + 1}
               >{pick.side}{pick.pairIndex + 1}</span>
             ))}
-            {pointAlignmentCollecting && (
+            {(pointAlignmentCollecting || autoPairReplacementCollecting) && (
               <div className={styles.visualComparePointPickHint}>
-                <Crosshair size={13} /> Jelöld ki: <strong>{pointAlignmentExpectedSide}{Math.floor(alignmentPicks.length / 2) + 1}</strong>
+                <Crosshair size={13} /> Jelöld ki: <strong>{pointAlignmentCollecting ? `${pointAlignmentExpectedSide}${Math.floor(alignmentPicks.length / 2) + 1}` : `${autoPairReplacement?.side}${(autoPairReplacement?.pairIndex || 0) + 1}`}</strong>
               </div>
             )}
           </div>
@@ -945,7 +1086,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       <footer className={styles.visualCompareFooter}>
         <span><strong>Szinkron:</strong> oldal · zoom · illesztés · forgatás · pásztázás</span>
         <span><strong>Átfedés:</strong> B réteg átlátszóság állítható</span>
-        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y · méret · szög · 2/3 pont · vektoros Auto javaslat jóváhagyással</span>
+        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y · méret · szög · 2/3 pont · Auto javaslat · vizuális A/B pár-ellenőrzés</span>
         <span><strong>Különbség:</strong> CSS difference blend – az eltérő vonalak világosan kiemelkednek</span>
         <span>Ctrl + egérgörgő: szinkron zoom</span>
       </footer>

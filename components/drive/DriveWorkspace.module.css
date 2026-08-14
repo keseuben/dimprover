@@ -736,3 +736,38 @@
 }
 .visualCompareAlignmentStatus { min-height: 32px; border-bottom: 1px solid #d8e7df; background: #f1faf5; color: #2c7451; padding: 6px 10px; display: flex; align-items: center; gap: 6px; font-size: 7px; font-weight: 800; }
 .visualCompareAlignmentStatus svg { flex: 0 0 auto; color: #24815a; }
+
+/* Drive Visual Compare Auto Pair Review V1 */
+.visualCompareAutoSuggestionReady { grid-template-columns: minmax(230px,.9fr) auto minmax(430px,1.3fr) auto; }
+.visualCompareAutoPairReview { min-width: 0; display: grid; gap: 4px; }
+.visualCompareAutoPairReviewHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.visualCompareAutoPairReviewHeader strong { color: #38556f; font-size: 7px; }
+.visualCompareAutoPairReviewHeader span { color: #80909e; font-size: 5px; white-space: nowrap; }
+.visualCompareAutoPairList { min-width: 0; display: grid; grid-template-columns: repeat(3,minmax(122px,1fr)); gap: 4px; }
+.visualCompareAutoPairCard { min-width: 0; min-height: 39px; border: 1px solid #d5e1ea; border-radius: 7px; background: rgba(255,255,255,.78); padding: 4px; display: grid; grid-template-columns: 22px minmax(0,1fr) auto; align-items: center; gap: 5px; }
+.visualCompareAutoPairCardManual { border-color: #9bc9b1; background: #f3fbf7; box-shadow: inset 2px 0 0 #329467; }
+.visualCompareAutoPairCardReplacing { border-color: #e2b865; background: #fffaf0; box-shadow: inset 2px 0 0 #d49320; }
+.visualCompareAutoPairRank { width: 22px; height: 22px; border-radius: 999px; background: #edf4fb; color: #3c6f9e; display: grid; place-items: center; font-size: 6px; font-weight: 950; }
+.visualCompareAutoPairCardManual .visualCompareAutoPairRank { background: #e4f5ec; color: #287a52; }
+.visualCompareAutoPairInfo { min-width: 0; }
+.visualCompareAutoPairInfo strong { display: block; color: #38546e; font-size: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visualCompareAutoPairInfo small { display: block; margin-top: 2px; color: #81909e; font-size: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visualCompareAutoPairCard button { min-height: 22px; border: 1px solid #ccd9e4; border-radius: 5px; background: #fff; color: #52708b; padding: 0 5px; font-size: 5px; font-weight: 900; white-space: nowrap; cursor: pointer; }
+.visualCompareAutoPairCard button:hover:not(:disabled) { border-color: #9ab9d8; background: #eef6ff; color: #1765c7; }
+.visualCompareAutoPairCard button:disabled { opacity: .5; cursor: not-allowed; }
+.visualCompareAutoPairHint { min-height: 24px; border: 1px solid #ead09b; border-radius: 6px; background: #fff9ec; color: #946a21; padding: 4px 7px; display: flex; align-items: center; gap: 5px; font-size: 6px; font-weight: 800; }
+.visualCompareAutoPairLines { position: absolute; inset: 0; z-index: 10; overflow: visible; pointer-events: none; }
+.visualCompareAutoPairLines line { stroke: rgba(68,106,143,.62); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.visualCompareAutoReviewMarker { z-index: 14; border-style: dashed; box-shadow: 0 0 0 3px rgba(255,255,255,.58), 0 2px 8px rgba(20,39,58,.28); }
+
+@media (max-width: 1500px) {
+  .visualCompareAutoSuggestionReady { grid-template-columns: minmax(220px,1fr) auto; }
+  .visualCompareAutoPairReview { grid-column: 1 / -1; }
+  .visualCompareAutoActions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (max-width: 900px) {
+  .visualCompareAutoPairList { grid-template-columns: 1fr; }
+  .visualCompareAutoPairReviewHeader { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .visualCompareAutoPairReviewHeader span { white-space: normal; }
+}
