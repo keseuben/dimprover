@@ -1,0 +1,26 @@
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd(); const read=(f)=>fs.readFileSync(path.join(root,f),"utf8"); const checks=[];
+function check(name,ok){checks.push(Boolean(ok)); console.log(`${ok?"PASS":"FAIL"} ${name}`); if(!ok) throw new Error(name);}
+const registry=read("app/lib/dev-center/terminal-hub/session-registry.ts");
+const sessions=read("app/api/dev/terminal-hub/sessions/route.ts");
+const detail=read("app/api/dev/terminal-hub/sessions/[sessionId]/route.ts");
+const input=read("app/api/dev/terminal-hub/sessions/[sessionId]/input/route.ts");
+const resize=read("app/api/dev/terminal-hub/sessions/[sessionId]/resize/route.ts");
+const stream=read("app/api/dev/terminal-hub/sessions/[sessionId]/stream/route.ts");
+check("Session registry globális singleton",registry.includes("__benjadminTerminalSessions"));
+check("Process adapter fail-closed",registry.includes("return null")&&registry.includes("TERMINAL_PROCESS_ADAPTER_INACTIVE"));
+check("Readiness kötelező session create előtt",registry.includes("getTerminalCoreReadiness")&&registry.includes("TERMINAL_CORE_BLOCKED"));
+check("Workspace allowlist kötelező",registry.includes("resolveAllowedWorkspacePath"));
+check("Session limit létezik",registry.includes("MAX_SESSION_COUNT = 8"));
+check("Input méretlimit létezik",registry.includes("MAX_INPUT_BYTES = 16 * 1024"));
+check("Resize korlátok léteznek",registry.includes("MAX_COLS = 300")&&registry.includes("MAX_ROWS = 120"));
+check("Reconnect sequence buffer létezik",registry.includes("MAX_OUTPUT_CHUNKS")&&registry.includes("afterSequence"));
+check("Session lista/create API admin-only",sessions.includes("isDevCenterAuthorized(request.headers, false)")&&sessions.includes("export async function POST"));
+check("Session detail/close API admin-only",detail.includes("export async function GET")&&detail.includes("export async function DELETE"));
+check("Input API admin-only",input.includes("writeTerminalSession")&&input.includes("status: 401"));
+check("Resize API admin-only",resize.includes("resizeTerminalSession")&&resize.includes("status: 401"));
+check("SSE stream admin-only",stream.includes("text/event-stream")&&stream.includes("status: 401"));
+check("SSE sequence reconnect",stream.includes("searchParams.get(\"after\")")&&stream.includes("sequence"));
+check("SSE terminal-end lifecycle",stream.includes("terminal-end")&&stream.includes("EXITED")&&stream.includes("CLOSED"));
+console.log(`SUMMARY ${checks.filter(Boolean).length}/${checks.length} PASS`);

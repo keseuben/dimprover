@@ -83,3 +83,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `200_benjadmin_terminalhub_p2_foundation_20260814.md` – Terminal Hub P2 DEV Terminal Core foundation: nem-root identity gate, readiness API, session protocol és 12/12 contract; valódi PTY még nem aktív.
 
 - 130_dimpro_benjadmin_operator_ui_v2_20260810.md – Operator UI 2.0: egyképernyős, lapozható táblázatos BENJADMIN, dokkolható Explorer, light/dark mód és öt tagos B3 csapat.
+
+- `201_benjadmin_terminalhub_p2_session_protocol_20260814.md` – P2 session registry, create/list/close/input/resize API és sequence-alapú SSE reconnect; process adapter fail-closed.
