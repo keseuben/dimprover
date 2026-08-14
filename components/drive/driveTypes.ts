@@ -132,9 +132,25 @@ export type DriveBoxItem = {
   boxId: string;
   documentId: string;
   versionId: string | null;
+  version?: {
+    id: string;
+    versionNumber: number;
+    revisionCode: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+  } | null;
   sortOrder: number;
   addedBy: string;
   addedAt: string;
+};
+
+export type DriveCompareSeed = {
+  documentId: string;
+  versionId: string | null;
 };
 
 export type DriveBox = {

@@ -171,7 +171,7 @@ export default function BoxShelf({
             const config = purposeConfig[box.purpose] || purposeConfig.GENERAL;
             const Icon = config.icon;
             const itemDocuments = box.items.map((item) => ({ item, document: documentMap.get(item.documentId) })).filter((entry) => entry.document);
-            const totalBytes = itemDocuments.reduce((sum, entry) => sum + (entry.document?.currentVersion?.sizeBytes || 0), 0);
+            const totalBytes = itemDocuments.reduce((sum, entry) => sum + (entry.item.version?.sizeBytes || entry.document?.currentVersion?.sizeBytes || 0), 0);
             const selectedIncluded = Boolean(selectedDocument && box.items.some((item) => item.documentId === selectedDocument.id));
             const expanded = expandedBoxId === box.id;
             return (
@@ -200,12 +200,16 @@ export default function BoxShelf({
                 {expanded && (
                   <div className={styles.boxItemList}>
                     {!itemDocuments.length && <span className={styles.boxItemEmpty}>Húzz ide fájlt, vagy jelölj ki egyet a listában.</span>}
-                    {itemDocuments.map(({ item, document }) => (
-                      <div key={item.id} className={styles.boxItemRow} title={document?.name}>
-                        <FileText size={11} /><span>{document?.name}</span>
-                        {canWrite && <button type="button" onClick={() => void onRemoveItem(box.id, item.id)} disabled={busy} title="Eltávolítás a BOX-ból"><Trash2 size={10} /></button>}
-                      </div>
-                    ))}
+                    {itemDocuments.map(({ item, document }) => {
+                      const versionLabel = item.version?.revisionCode || (item.version ? `V${item.version.versionNumber}` : document?.currentVersion?.revisionCode || "Aktuális");
+                      return (
+                        <div key={item.id} className={styles.boxItemRow} title={`${document?.name || ""} · ${versionLabel}`}>
+                          <FileText size={11} /><span>{document?.name}</span>
+                          <small className={styles.boxItemRevision}>{versionLabel}</small>
+                          {canWrite && <button type="button" onClick={() => void onRemoveItem(box.id, item.id)} disabled={busy} title="Eltávolítás a BOX-ból"><Trash2 size={10} /></button>}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </article>

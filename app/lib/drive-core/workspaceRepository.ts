@@ -60,6 +60,17 @@ export type DriveBoxItem = {
   boxId: string;
   documentId: string;
   versionId: string | null;
+  version: {
+    id: string;
+    versionNumber: number;
+    revisionCode: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+  } | null;
   sortOrder: number;
   addedBy: string;
   addedAt: string;
@@ -267,13 +278,24 @@ function mapQr(row: DbQr): DriveQrCode {
   };
 }
 
-function mapBoxItem(row: DbBoxItem): DriveBoxItem {
+function mapBoxItem(row: DbBoxItem, version: DbVersion | null = null): DriveBoxItem {
   return {
     id: row.id,
     projectId: row.project_id,
     boxId: row.box_id,
     documentId: row.document_id,
     versionId: row.version_id,
+    version: version ? {
+      id: version.id,
+      versionNumber: Number(version.version_number || 0),
+      revisionCode: version.revision_code || "",
+      originalName: version.original_name,
+      mimeType: version.mime_type,
+      sizeBytes: Number(version.size_bytes || 0),
+      status: version.status,
+      createdBy: version.created_by,
+      createdAt: version.created_at,
+    } : null,
     sortOrder: Number(row.sort_order || 0),
     addedBy: row.added_by,
     addedAt: row.added_at,
@@ -504,7 +526,19 @@ export async function listDriveBoxes(projectId: string) {
   ]);
   if (boxResult.error) databaseError("A CsomagBOX lista nem tölthető be.", boxResult.error);
   if (itemResult.error) databaseError("A CsomagBOX elemek nem tölthetők be.", itemResult.error);
-  const items = (itemResult.data || []).map((row) => mapBoxItem(row as DbBoxItem));
+  const rawItems = (itemResult.data || []) as DbBoxItem[];
+  const versionIds = [...new Set(rawItems.map((item) => item.version_id).filter((value): value is string => Boolean(value)))];
+  const versionMap = new Map<string, DbVersion>();
+  if (versionIds.length) {
+    const versionResult = await client
+      .from("drive_core_document_versions")
+      .select("id,project_id,document_id,version_number,revision_code,original_name,mime_type,size_bytes,sha256,storage_provider,storage_bucket,storage_key,status,change_note,created_by,created_at")
+      .eq("project_id", projectId)
+      .in("id", versionIds);
+    if (versionResult.error) databaseError("A CsomagBOX dokumentumverziók nem tölthetők be.", versionResult.error);
+    for (const row of (versionResult.data || []) as DbVersion[]) versionMap.set(row.id, row);
+  }
+  const items = rawItems.map((row) => mapBoxItem(row, row.version_id ? versionMap.get(row.version_id) || null : null));
   const byBox = new Map<string, DriveBoxItem[]>();
   for (const item of items) {
     const bucket = byBox.get(item.boxId) || [];

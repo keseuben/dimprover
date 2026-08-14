@@ -17,6 +17,7 @@ import FolderTreePanel from "./FolderTreePanel";
 import type {
   DriveBox,
   DriveBoxPurpose,
+  DriveCompareSeed,
   DriveDocument,
   DriveDocumentDetails,
   DriveHealth,
@@ -76,7 +77,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [boxShelfOpen, setBoxShelfOpen] = useState(true);
   const [compareActive, setCompareActive] = useState(false);
-  const [compareSeedDocumentIds, setCompareSeedDocumentIds] = useState<string[]>([]);
+  const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
@@ -457,14 +458,24 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
-  function openCompare(documentIds?: string[]) {
-    const unique = (documentIds || []).filter((id, index, all) => Boolean(id) && all.indexOf(id) === index);
-    if (unique.length >= 2) {
-      setCompareSeedDocumentIds(unique.slice(0, 2));
+  function openCompare(seedItems?: DriveCompareSeed[]) {
+    const validSeeds: DriveCompareSeed[] = [];
+    for (const seed of seedItems || []) {
+      if (!seed.documentId || !(tree?.documents || []).some((document) => document.id === seed.documentId)) continue;
+      const key = `${seed.documentId}::${seed.versionId || "current"}`;
+      if (validSeeds.some((item) => `${item.documentId}::${item.versionId || "current"}` === key)) continue;
+      validSeeds.push({ documentId: seed.documentId, versionId: seed.versionId || null });
+      if (validSeeds.length >= 2) break;
+    }
+    if (validSeeds.length >= 2) {
+      setCompareSeedItems(validSeeds);
     } else {
-      const selected = selectedDocumentId;
-      const fallback = (tree?.documents || []).find((document) => document.id !== selected)?.id || "";
-      setCompareSeedDocumentIds([selected, fallback].filter(Boolean));
+      const selected = (tree?.documents || []).find((document) => document.id === selectedDocumentId) || null;
+      const fallback = (tree?.documents || []).find((document) => document.id !== selected?.id) || null;
+      setCompareSeedItems([
+        selected ? { documentId: selected.id, versionId: selected.currentVersion?.id || null } : null,
+        fallback ? { documentId: fallback.id, versionId: fallback.currentVersion?.id || null } : null,
+      ].filter((item): item is DriveCompareSeed => Boolean(item)));
     }
     setCompareActive(true);
   }
@@ -547,7 +558,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             projectId={projectId}
             documents={tree?.documents || []}
             boxes={boxes}
-            seedDocumentIds={compareSeedDocumentIds}
+            seedItems={compareSeedItems}
             onClose={() => setCompareActive(false)}
           />
         ) : layoutMode === "commander" ? (
@@ -611,7 +622,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onCreateBox={createBox}
         onAddDocument={addDocumentToBox}
         onRemoveItem={removeBoxItem}
-        onOpenCompareBox={(box) => openCompare(box.items.map((item) => item.documentId))}
+        onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
       />
     </div>
   );

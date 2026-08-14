@@ -133,15 +133,31 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - Biztonsági headerek: `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`.
 - A normál dokumentumletöltés továbbra is az eredeti `attachment` signed-download workflow-t használja.
 
+
+### 10. Historikus revízióválasztó és verzióhű CsomagBOX
+
+- A Compare Workspace A és B oldalán a dokumentumválasztó alatt külön `Revízió / verzió` választó működik.
+- A választó a meglévő `details` API `versions` listáját használja; új párhuzamos verzió-adattár nem készült.
+- Ugyanazon dokumentum két külön történeti verziója közvetlenül összehasonlítható, például `A-101 Rev.02 ↔ A-101 Rev.03`.
+- A Compare seed modell `documentId + versionId` párt őriz. Emiatt a CsomagBOX-ból indított összehasonlítás nem veszíti el a BOX-ban rögzített konkrét revíziót.
+- A vizuális Compare a kiválasztott historikus `DriveVersion` objektumból képzett effektív dokumentumot kapja, ezért a preview API a valódi választott `versionId` tartalmát kéri le.
+- A `Kiválasztott verzió megnyitása` művelet szintén a választott historikus `versionId` értéket adja a signed-download workflow-nak.
+- Dokumentumváltáskor az adott dokumentum aktuális verziója az alapértelmezett; hiányzó vagy már nem létező seed esetén kontrollált current/latest fallback működik.
+- Az A/B oldal felcserélése a dokumentumazonosító mellett a kiválasztott `versionId` és a betöltött details állapotot is felcseréli.
+- A metaadat diff külön kezeli a ténylegesen kiválasztott revíziót. A többi mérnöki metaadat jelenleg dokumentumszintű, ezért a UI ezt explicit jelzi és nem állítja, hogy történeti verziómetaadat lenne.
+- A CsomagBOX lista a hivatkozott `versionId` értékekhez célzottan betölti a verzió rövid összefoglalóját; az expandált BOX sorban `Rev.xx` / `Vn` badge jelenik meg.
+- A CsomagBOX összesített fájlmérete historikus item esetén a rögzített verzió méretét használja, nem automatikusan a dokumentum jelenlegi verzióját.
+- Adatbázis-migráció nem szükséges: a `drive_core_box_items.version_id` és `drive_core_document_versions` meglévő kapcsolata kerül felhasználásra.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **54** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **67** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik.
 
-Végső statikus DEV VPS futás: **54/54 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **67/67 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -163,6 +179,21 @@ A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két
 16. same-origin `/preview/content` kliensútvonal és mockolt Range-válasz kezelése
 
 Vizuális Compare/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T17-01-58-563Z`.
+
+
+A külön Historikus Revízióválasztó böngészős acceptance **20/20 PASS**. A teszt egyetlen A-101 dokumentum két történeti verzióját (`Rev.02`, `Rev.03`) ugyanabba az Összehasonlítás CsomagBOX-ba helyezte, majd ellenőrizte többek között:
+
+- ugyanazon `documentId` két külön `versionId` értékének megőrzését;
+- Rev.02 / Rev.03 CsomagBOX badge-eket;
+- két historikus PDF tényleges PDF.js renderelését;
+- kézi revízióváltást és a Viewer új `versionId` kérését;
+- revízióeltérés 1 → 0 változását;
+- historikus verzió megnyitásakor a megfelelő `versionId` download payloadot;
+- A/B oldalcserekor a verzióazonosítók felcserélését;
+- másik dokumentum választásakor current-version fallbackot;
+- 1366 px overflow-mentességet és browser pageerror-mentes futást.
+
+Historikus revízió/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T17-39-21-434Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -239,3 +270,20 @@ A Viewer candidate kizárólag az izolált `127.0.0.1:3210` tesztporton futott. 
 - Vizuális artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T17-01-58-563Z`
 
 Az izolált `jazmin-drive-v110-candidate` továbbra is csak `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív runtime és az Ármin-AI/BENJADMIN worktree ebben a körben sem módosult.
+
+
+## Historikus Revízióválasztó + verzióhű CsomagBOX final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_revision_selector_20260814_190826`
+- Next.js production build: **PASS**
+- Build ID: `ilEI3TD0nISM_LoQd22y2`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **67/67 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Historikus revízió browser acceptance: **20/20 PASS**
+- Browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T17-39-21-434Z`
+- Ellenőrizve: ugyanazon dokumentum Rev.02 ↔ Rev.03 összevetése, BOX `versionId` seed, revízióválasztó, historikus preview, historikus download, A/B swap, current fallback, revízióbadge, verzióhű BOX méret és 1366 px responsive működés.
+- Adatbázis-migráció: **nem szükséges**; a meglévő `drive_core_box_items.version_id` → `drive_core_document_versions.id` kapcsolat kerül felhasználásra.
+
+Az izolált candidate továbbra is kizárólag `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime ebben a körben sem került módosításra vagy restartra.
