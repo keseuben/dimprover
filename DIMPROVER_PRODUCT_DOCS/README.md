@@ -93,3 +93,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `204_benjadmin_terminalhub_p2_output_security_20260814.md` – P2 output security: 30 perc idle, 4 óra max lifetime, külön RAW/SANITIZED/AUDIT adatút és 11/11 contract.
 
 - `205_benjadmin_terminalhub_p2_managed_commands_20260814.md` – P2 Managed Commands a meglévő B3.1 Control Plane queue-val, READY session gate-tel; nincs nyers shell vagy saját build motor.
+
+- `206_benjadmin_terminalhub_p2_candidate_20260814.md` – P2 DEV candidate: session/reconnect/XTerm/output security/Managed Commands, 64/64 contract, execution továbbra is fail-closed.
