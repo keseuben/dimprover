@@ -37,6 +37,7 @@ type Props = {
   onCreateBox: (input: NewBoxInput) => Promise<void>;
   onAddDocument: (boxId: string, document: DriveDocument) => Promise<void>;
   onRemoveItem: (boxId: string, itemId: string) => Promise<void>;
+  onOpenCompareBox: (box: DriveBox) => void;
 };
 
 const purposeConfig: Record<DriveBoxPurpose, {
@@ -85,6 +86,7 @@ export default function BoxShelf({
   onCreateBox,
   onAddDocument,
   onRemoveItem,
+  onOpenCompareBox,
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [expandedBoxId, setExpandedBoxId] = useState("");
@@ -187,6 +189,9 @@ export default function BoxShelf({
                 <div className={styles.boxCardStats}>{box.items.length} fájl · {formatBytes(totalBytes)}</div>
                 <div className={styles.boxCardActions}>
                   <button type="button" onClick={() => setExpandedBoxId(expanded ? "" : box.id)}>{expanded ? "Bezárás" : "Megnyitás"}</button>
+                  {box.purpose === "COMPARE" && box.items.length >= 2 && (
+                    <button type="button" onClick={() => onOpenCompareBox(box)}>Összevetés</button>
+                  )}
                   {selectedDocument && canWrite && databaseReady && !selectedIncluded && (
                     <button type="button" onClick={() => void onAddDocument(box.id, selectedDocument)} disabled={busy}>+ Kijelölt fájl</button>
                   )}

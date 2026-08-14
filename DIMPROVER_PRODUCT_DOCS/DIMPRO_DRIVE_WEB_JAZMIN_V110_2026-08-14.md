@@ -76,13 +76,26 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A board alapállapotban csukott, így a Drive napi munkafelület maximális helyet kap.
 - A 1101–1500 px közötti laptop/desktop tartományhoz új panelméret-szabály készült; 1366 px szélességen a böngészőteszt szerint nincs vízszintes oldaltúlfutás.
 
+
+### 6. Dokumentum-összehasonlítás / Compare Workspace V1
+
+- A felső `Összehasonlítás` gomb már aktív és külön Compare Workspace-et nyit.
+- Két dokumentum egymástól függetlenül kiválasztható; az oldalak egy gombbal felcserélhetők.
+- A Compare a meglévő, `document.read` jogosultsággal védett Drive `details` API-t használja, új, párhuzamos adatforrás nem készült.
+- Párhuzamos gyorsadat-kártyák jelennek meg: aktuális revízió/verzió, méret, állapot, verziószám.
+- A mérnöki metaadatok soronként összevethetők: tervszám, szakág, dokumentumtípus, revízió, kiadási állapot, jóváhagyás, épület, szint és zóna.
+- Az eltérő mezők vizuálisan kiemelve jelennek meg, a fejléc összesített eltérésszámot mutat.
+- Az `Összehasonlítás` célú CsomagBOX legalább két fájllal közvetlenül megnyitható a Compare Workspace-ben az `Összevetés` gombbal.
+- A Compare fejlécből a már meglévő signed-download workflow-val megnyitható/letölthető az aktuális fájlverzió.
+- A két oldali `DocumentViewer` csatlakozási pont bekerült; a következő Drive Viewer vertikális szelet ide tudja bekötni a PDF/kép vizuális oldalnézetet és később az overlay-t.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` 20 ellenőrzést tartalmaz:
+A `scripts/drive-web-jazmin-v110-contract.mjs` 28 ellenőrzést tartalmaz:
 
 1. CsomagBOX repository lista
 2. CsomagBOX létrehozás
@@ -104,8 +117,16 @@ A `scripts/drive-web-jazmin-v110-contract.mjs` 20 ellenőrzést tartalmaz:
 18. SmartSync kizárás
 19. lebegő Drive board, munkaterület-szélesség megtartás
 20. hover nyitás + board rögzítés
+21. aktív Compare toolbar
+22. két dokumentumválasztó
+23. Compare details API
+24. metaadat eltérésmátrix
+25. CsomagBOX → Compare workflow
+26. oldalcsere
+27. signed megnyitás/letöltés
+28. DocumentViewer csatlakozási pont
 
-Végső DEV VPS futás: **20/20 PASS**. A meglévő Drive V1.00 contract 22/22 PASS, a Drive Core V0.30 contract 24/24 PASS.
+Végső DEV VPS futás: **28/28 PASS**. A meglévő Drive V1.00 contract 22/22 PASS, a Drive Core V0.30 contract 24/24 PASS.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -140,3 +161,14 @@ Megjegyzés: a normál UI továbbra is fail-safe marad arra az esetre, ha egy m�
 - Feature commitok: `de443ed` (CsomagBOX + Commander), `c71bdbb` (laptop overflow javítás), `eb57522` (lebegő/rögzíthető board).
 
 Az izolált candidate a teszt után leállítandó. Az `app.dev.dimpro.hu` aktív 3100-as runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut; a Jázmin-AI feature-t nem másoltuk bele és BENJADMIN-specifikus fájl nem módosult. A következő aktiválás csak koordinált integrációs merge/cutover lehet.
+## Compare V1 build és böngészős candidate ellenőrzés
+
+- Next.js production build: **PASS**
+- Build ID: `A4F6-r5kpwd29ALiC8c22`
+- Standalone asset sync: **PASS**, 141 statikus chunk ellenőrizve
+- Compare/CsomagBOX/Commander/floating-board mockolt browser acceptance: **29/29 PASS**
+- Ellenőrizve: Compare toolbar megnyitás, két dokumentum, metaadat-mátrix, eltérésszámítás, oldalcsere, Compare BOX betöltés, közvetlen CsomagBOX → Compare workflow és Compare bezárás.
+- Vizuális/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-v110-visual-2026-08-14T15-23-06-956Z`
+- Forrás-backup a kör előtt: `/srv/dimpro-dev/backups/jazmin_drive_compare_20260814_171230`
+
+Az `app.dev.dimpro.hu` aktív 3100-as runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut. A Compare candidate külön `127.0.0.1:3210` porton futott, így az aktív DEV példányt és BENJADMIN fájlokat ez a kör sem módosította.

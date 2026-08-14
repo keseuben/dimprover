@@ -9,6 +9,7 @@ const files = {
   workspace: "components/drive/DriveWorkspace.tsx",
   shelf: "components/drive/BoxShelf.tsx",
   commander: "components/drive/CommanderPanel.tsx",
+  compare: "components/drive/CompareWorkspace.tsx",
   grid: "components/drive/FileGridPanel.tsx",
   toolbar: "components/drive/DriveToolbar.tsx",
   switcher: "components/drive/ViewLayoutSwitcher.tsx",
@@ -55,6 +56,14 @@ check("17 SQL hiány esetén fail-safe UI", source.workspace.includes("response.
 check("18 SmartSync érintetlen ebben a szeletben", !Object.values(source).some((text) => /Cloud Files|SmartSync|placeholder cache|CfConnectSyncRoot/i.test(text)), "A webes fejlesztési szelet nem indít Desktop SmartSync implementációt.");
 check("19 Lebegő Drive board", source.css.includes("position: fixed") && source.css.includes("left: var(--rail-width)") && source.css.includes("grid-template-columns: var(--rail-width) minmax(0, 1fr)"), "A széles board overlay-ként nyílik, nem vesz el oszlopot a munkaterülettől.");
 check("20 Hover + rögzítés", source.shell.includes("openBoardSoon") && source.shell.includes("220") && source.shell.includes("boardPinned") && source.floatingBoard.includes("onTogglePinned") && source.rail.includes("onMouseEnter={onHoverOpen}"), "A board hoverre késleltetve nyílik és külön rögzíthető.");
+check("21 Compare toolbar aktiválva", source.toolbar.includes("onToggleCompare") && source.toolbar.includes("compareActive") && !source.toolbar.includes("Az összehasonlító motor a 4. napi fejlesztésben aktiválódik"), "Az Összehasonlítás gomb már valódi Compare Workspace-et kapcsol.");
+check("22 Compare két dokumentumválasztó", source.compare.includes("A dokumentum") && source.compare.includes("B dokumentum") && source.compare.includes("setLeftId") && source.compare.includes("setRightId"), "Két külön dokumentum/revízió választható.");
+check("23 Compare részlet API használat", source.compare.includes("/details") && source.compare.includes("DriveDocumentDetails"), "A Compare a meglévő projektjogosultság-védett details API-ból tölti a mérnöki adatokat.");
+check("24 Metaadat eltérésmátrix", source.compare.includes("metadataRows") && source.compare.includes("compareDiffDifferent") && source.compare.includes("differences"), "A mérnöki metaadatok soronként eltérésként értékelhetők.");
+check("25 Compare CsomagBOX workflow", source.shelf.includes("onOpenCompareBox") && source.shelf.includes('box.purpose === "COMPARE"') && source.workspace.includes("openCompare(box.items.map"), "Az Összehasonlítás CsomagBOX közvetlenül betölthető a Compare Workspace-be.");
+check("26 Compare oldalcsere", source.compare.includes("swapSides") && source.compare.includes("Oldalak cseréje"), "A két összehasonlítási oldal felcserélhető.");
+check("27 Compare megnyitás/letöltés", source.compare.includes("/download") && source.compare.includes("Megnyitás / letöltés"), "A kijelölt aktuális dokumentumverzió a meglévő signed-download workflow-val megnyitható.");
+check("28 Compare viewer extension point", source.compare.includes("DocumentViewer csatlakozási pont") && source.compare.includes("következő Viewer-szeletben"), "A vizuális PDF/kép Viewer következő vertikális szelete explicit csatlakozási pontot kapott.");
 
 const failed = checks.filter((item) => !item.ok);
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);

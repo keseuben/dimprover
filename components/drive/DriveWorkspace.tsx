@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import BoxShelf from "./BoxShelf";
 import CommanderPanel from "./CommanderPanel";
+import CompareWorkspace from "./CompareWorkspace";
 import DetailsPanel from "./DetailsPanel";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
@@ -74,6 +75,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("three");
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [boxShelfOpen, setBoxShelfOpen] = useState(true);
+  const [compareActive, setCompareActive] = useState(false);
+  const [compareSeedDocumentIds, setCompareSeedDocumentIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
@@ -454,6 +457,26 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  function openCompare(documentIds?: string[]) {
+    const unique = (documentIds || []).filter((id, index, all) => Boolean(id) && all.indexOf(id) === index);
+    if (unique.length >= 2) {
+      setCompareSeedDocumentIds(unique.slice(0, 2));
+    } else {
+      const selected = selectedDocumentId;
+      const fallback = (tree?.documents || []).find((document) => document.id !== selected)?.id || "";
+      setCompareSeedDocumentIds([selected, fallback].filter(Boolean));
+    }
+    setCompareActive(true);
+  }
+
+  function toggleCompare() {
+    if (compareActive) {
+      setCompareActive(false);
+      return;
+    }
+    openCompare();
+  }
+
   if (loading && !tree) {
     return <div className={styles.loadingState}><div><Loader2 className={styles.spin} size={28} /><strong>DIMPRO Drive betöltése</strong><span>Projektmappák, jogosultságok és Workspace 1.0 ellenőrzése…</span></div></div>;
   }
@@ -504,6 +527,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         boxShelfOpen={boxShelfOpen}
         boxReady={Boolean(health?.workspace?.databaseReady)}
         onToggleBoxShelf={() => setBoxShelfOpen((current) => !current)}
+        compareActive={compareActive}
+        onToggleCompare={toggleCompare}
       />
       <input ref={fileInputRef} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file); }} />
 
@@ -516,8 +541,16 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       {!error && notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
       {!error && !notice && health?.workspace && !health.workspace.databaseReady && <div className={`${styles.notice} ${styles.noticeInfo}`}>{health.workspace.nextStep}</div>}
 
-      <div className={browserClass}>
-        {layoutMode === "commander" ? (
+      <div className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}>
+        {compareActive ? (
+          <CompareWorkspace
+            projectId={projectId}
+            documents={tree?.documents || []}
+            boxes={boxes}
+            seedDocumentIds={compareSeedDocumentIds}
+            onClose={() => setCompareActive(false)}
+          />
+        ) : layoutMode === "commander" ? (
           <CommanderPanel
             folders={tree?.folders || []}
             documents={tree?.documents || []}
@@ -577,6 +610,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onCreateBox={createBox}
         onAddDocument={addDocumentToBox}
         onRemoveItem={removeBoxItem}
+        onOpenCompareBox={(box) => openCompare(box.items.map((item) => item.documentId))}
       />
     </div>
   );

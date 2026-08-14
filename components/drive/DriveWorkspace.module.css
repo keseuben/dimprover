@@ -397,3 +397,76 @@
   .commanderDivider { border: 0; border-top: 1px solid #d7e0e8; border-bottom: 1px solid #d7e0e8; }
   .commanderHeader span { display: none; }
 }
+
+
+/* Drive Compare workspace */
+.browserCompareActive { display: block; min-height: 520px; background: #f6f9fc; }
+.compareWorkspace { min-height: 520px; display: flex; flex-direction: column; background: #f6f9fc; }
+.compareHeader { min-height: 58px; padding: 10px 14px; border-bottom: 1px solid #dce6ef; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.compareHeading { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.compareHeadingIcon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: #eef5ff; color: #1765d7; border: 1px solid #d6e6fb; flex: 0 0 auto; }
+.compareHeading strong { display: block; font-size: 11px; color: #243950; }
+.compareHeading span { display: block; margin-top: 2px; font-size: 8px; color: #718397; }
+.compareHeaderActions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.compareSecondaryButton,.compareCloseButton { min-height: 29px; border: 1px solid #d2deea; background: #fff; color: #36506a; border-radius: 7px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 8px; font-weight: 800; cursor: pointer; }
+.compareSecondaryButton:hover,.compareCloseButton:hover { background: #f2f7fb; border-color: #a9c3dc; }
+.compareSecondaryButton:disabled { opacity: .45; cursor: not-allowed; }
+.compareCloseButton { width: 29px; padding: 0; }
+.compareSelectors { display: grid; grid-template-columns: minmax(0,1fr) 118px minmax(0,1fr); gap: 9px; align-items: end; padding: 10px 14px; border-bottom: 1px solid #e3ebf2; background: #fbfdff; }
+.compareSelectors label span { display: block; margin-bottom: 4px; color: #667b90; font-size: 8px; font-weight: 800; }
+.compareSelectors select { width: 100%; height: 32px; border: 1px solid #d3dfE9; border-radius: 7px; background: #fff; color: #2b435a; padding: 0 8px; font-size: 9px; outline: none; }
+.compareSelectors select:focus { border-color: #8eb8ec; box-shadow: 0 0 0 2px rgba(17,103,238,.06); }
+.compareSelectorBadge { height: 32px; border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 5px; background: #eef5ff; color: #1765d7; border: 1px solid #d8e7fb; font-size: 8px; }
+.compareDocumentGrid { padding: 12px 14px 8px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.compareDocumentCard { min-width: 0; border: 1px solid #dbe5ee; border-radius: 10px; background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 9px; box-shadow: 0 4px 12px rgba(31,52,73,.035); }
+.compareDocumentTop { min-width: 0; display: grid; grid-template-columns: 38px minmax(0,1fr) auto; align-items: center; gap: 8px; }
+.compareFileBadge { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px; background: #edf5ff; color: #1b65c8; border: 1px solid #d4e4f8; font-size: 8px; font-weight: 900; }
+.compareDocumentTop strong { display: block; color: #243950; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compareDocumentTop div span { display: block; margin-top: 3px; color: #75889b; font-size: 8px; }
+.compareQuickFacts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.compareQuickFacts span { min-width: 0; border: 1px solid #e5ecf2; border-radius: 7px; background: #fafcfd; padding: 6px 7px; }
+.compareQuickFacts small { display: block; color: #8292a2; font-size: 7px; }
+.compareQuickFacts strong { display: block; margin-top: 2px; color: #304960; font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comparePreviewPlaceholder { min-height: 88px; border: 1px dashed #c4d5e4; border-radius: 8px; background: linear-gradient(145deg,#fbfdff,#f3f8fc); display: flex; align-items: center; justify-content: center; gap: 9px; color: #56718c; padding: 12px; text-align: left; }
+.comparePreviewPlaceholder svg { flex: 0 0 auto; color: #2a75c9; }
+.comparePreviewPlaceholder strong { display: block; font-size: 9px; color: #36516b; }
+.comparePreviewPlaceholder span { display: block; margin-top: 3px; max-width: 410px; color: #7a8da0; font-size: 7px; line-height: 1.45; }
+.compareDownloadButton { align-self: flex-start; min-height: 28px; border: 1px solid #c9d9e7; background: #f8fbfe; color: #1765c7; border-radius: 7px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 800; cursor: pointer; }
+.compareDownloadButton:hover { background: #edf5ff; border-color: #9ebfe6; }
+.compareDownloadButton:disabled { opacity: .45; cursor: not-allowed; }
+.compareDiffPanel { margin: 0 14px 14px; border: 1px solid #dbe5ee; border-radius: 10px; background: #fff; overflow: hidden; }
+.compareDiffHeader { min-height: 44px; padding: 8px 10px; border-bottom: 1px solid #e7edf3; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.compareDiffHeader strong { display: block; color: #2d455d; font-size: 9px; }
+.compareDiffHeader span { display: block; margin-top: 2px; color: #7e90a1; font-size: 7px; }
+.compareDiffTable { display: grid; }
+.compareDiffRow { min-height: 34px; display: grid; grid-template-columns: 150px minmax(0,1fr) minmax(0,1fr); align-items: stretch; border-bottom: 1px solid #edf2f6; }
+.compareDiffRow:last-child { border-bottom: 0; }
+.compareDiffRow > * { min-width: 0; display: flex; align-items: center; padding: 7px 9px; border-right: 1px solid #edf2f6; font-size: 8px; }
+.compareDiffRow > *:last-child { border-right: 0; }
+.compareDiffRow > strong { color: #536b81; background: #fafcfd; font-weight: 800; }
+.compareDiffRow > span { color: #344c63; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compareDiffTableHead { background: #f5f8fb; min-height: 30px; }
+.compareDiffTableHead > * { color: #60778e !important; font-size: 7px; text-transform: uppercase; letter-spacing: .04em; }
+.compareDiffDifferent > span { background: #fff8eb; color: #805614; font-weight: 800; }
+.compareDiffSame > span { background: #fbfdfc; }
+.compareEmpty { min-height: 360px; display: grid; place-items: center; align-content: center; gap: 7px; padding: 30px; text-align: center; color: #718599; }
+.compareEmpty svg { color: #2a75c9; }
+.compareEmpty strong { font-size: 10px; color: #385069; }
+.compareEmpty span { max-width: 480px; font-size: 8px; line-height: 1.45; }
+
+@media (max-width: 900px) {
+  .compareSelectors { grid-template-columns: 1fr; }
+  .compareSelectorBadge { order: 3; justify-self: start; padding: 0 10px; }
+  .compareDocumentGrid { grid-template-columns: 1fr; }
+  .compareQuickFacts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .compareDiffRow { grid-template-columns: 105px minmax(0,1fr) minmax(0,1fr); }
+  .compareHeader { align-items: flex-start; }
+  .compareHeaderActions { flex-wrap: wrap; justify-content: flex-end; }
+}
+
+@media (max-width: 620px) {
+  .compareDiffPanel { overflow-x: auto; }
+  .compareDiffTable { min-width: 620px; }
+  .compareHeading span { display: none; }
+  .compareSecondaryButton { padding: 0 6px; }
+}
