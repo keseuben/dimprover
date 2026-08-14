@@ -182,6 +182,12 @@ function solveSimilarityAlignment(picks: AlignmentPick[], pairCount: 2 | 3): Sim
   };
 }
 
+function autoAlignmentSourceLabel(source: DriveAutoAlignmentSource) {
+  if (source === "TEXT_LABELS") return "azonos tervfeliratok";
+  if (source === "GEOMETRIC_NODES") return "geometriai csomópontok";
+  return "vektoros kontúrok";
+}
+
 function shortRevision(document: DriveDocument) {
   return document.currentVersion?.revisionCode || `V${document.currentVersionNumber || 0}`;
 }
@@ -795,7 +801,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             <div>
               <strong>{autoAlignmentSuggestion ? "Automatikus illesztési javaslat" : "Automatikus illesztés nem javasolható"}</strong>
               {autoAlignmentSuggestion ? (
-                <span>{autoAlignmentSuggestion.summary} · forrás: {autoAlignmentSuggestion.source === "TEXT_LABELS" ? "azonos tervfeliratok" : "vektoros kontúrok"} · bizonyíték: {autoAlignmentSuggestion.evidenceCount}</span>
+                <span>{autoAlignmentSuggestion.summary} · forrás: {autoAlignmentSourceLabel(autoAlignmentSuggestion.source)} · bizonyíték: {autoAlignmentSuggestion.evidenceCount}</span>
               ) : <span>{autoAlignmentError}</span>}
             </div>
           </div>
