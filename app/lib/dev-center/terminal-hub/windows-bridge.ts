@@ -5,7 +5,7 @@ export const WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS = 600 as const;
 
 export type WindowsBridgeTransport = "OUTBOUND_HTTPS_ONLY";
 export type WindowsBridgeCredentialStore = "WINDOWS_CREDENTIAL_MANAGER_OR_DPAPI";
-export type WindowsBridgeConnectionState = "DISABLED" | "FOUNDATION_READY" | "PAIRING_DISABLED" | "EXECUTION_DISABLED" | "PLANNED_AGENT";
+export type WindowsBridgeConnectionState = "DISABLED" | "FOUNDATION_READY" | "PAIRING_DISABLED" | "PAIRING_SECRET_MISSING" | "EXECUTION_DISABLED" | "PLANNED_AGENT";
 export type WindowsBridgeCapability = "powershell" | "terminal-resize" | "terminal-reconnect" | "raw-sanitized-audit";
 
 export type WindowsBridgeReadiness = {
@@ -24,6 +24,7 @@ export type WindowsBridgeReadiness = {
     inboundPortRequired: false;
     localAgentRequired: true;
     credentialStore: WindowsBridgeCredentialStore;
+    pairingSecretConfigured: boolean;
     oneTimePairingMaxAgeSeconds: 600;
     prodExecutionAllowed: false;
     rawPolicy: "AUTHORIZED_UI_ONLY";
@@ -57,7 +58,9 @@ export function getWindowsBridgeReadiness(): WindowsBridgeReadiness {
   const blockers: string[] = [];
   if (!flags.terminalHubEnabled) blockers.push("Terminal Hub UI flag OFF.");
   if (!flags.windowsBridgeEnabled) blockers.push("Windows Bridge feature flag OFF.");
+  const pairingSecretConfigured = Boolean(process.env.BENJADMIN_WINDOWS_BRIDGE_PAIRING_SECRET?.trim() && process.env.BENJADMIN_WINDOWS_BRIDGE_PAIRING_SECRET!.trim().length >= 32);
   if (!flags.windowsBridgePairingEnabled) blockers.push("Windows Bridge pairing kill switch OFF.");
+  if (flags.windowsBridgePairingEnabled && !pairingSecretConfigured) blockers.push("Windows Bridge pairing secret nincs konfigurálva.");
   if (!flags.windowsBridgeExecutionEnabled) blockers.push("Windows Bridge execution kill switch OFF.");
   if (flags.prodTerminalEnabled) blockers.push("PROD terminal nem kapcsolható össze a P8 Windows Bridge-dzsel.");
 
@@ -65,7 +68,9 @@ export function getWindowsBridgeReadiness(): WindowsBridgeReadiness {
     ? "DISABLED"
     : !flags.windowsBridgePairingEnabled
       ? "PAIRING_DISABLED"
-      : !flags.windowsBridgeExecutionEnabled
+      : !pairingSecretConfigured
+        ? "PAIRING_SECRET_MISSING"
+        : !flags.windowsBridgeExecutionEnabled
         ? "EXECUTION_DISABLED"
         : "PLANNED_AGENT";
 
@@ -85,6 +90,7 @@ export function getWindowsBridgeReadiness(): WindowsBridgeReadiness {
       inboundPortRequired: false,
       localAgentRequired: true,
       credentialStore: "WINDOWS_CREDENTIAL_MANAGER_OR_DPAPI",
+      pairingSecretConfigured,
       oneTimePairingMaxAgeSeconds: WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS,
       prodExecutionAllowed: false,
       rawPolicy: "AUTHORIZED_UI_ONLY",

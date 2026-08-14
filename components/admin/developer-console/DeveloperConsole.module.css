@@ -1195,3 +1195,30 @@
 .windowsBridgePanel > footer { min-height: 31px; padding: 5px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; }
 .windowsBridgeError { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); color: var(--red); background: var(--red-soft); font-size: 12px; }
 @media (max-width: 900px) { .windowsBridgeGrid { grid-template-columns: 1fr; } }
+
+/* BENJADMIN Windows Bridge P8.1 · pairing/device workflow */
+.windowsBridgeNotice { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--green); background: var(--green-soft); font-size: 12px; }
+.windowsBridgePairingArea, .windowsBridgeDeviceArea { margin: 0 7px 7px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.windowsBridgePairingArea > header, .windowsBridgeDeviceArea > header { min-height: 38px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--surface2); }
+.windowsBridgePairingArea > header > div { display: flex; align-items: center; gap: 5px; }
+.windowsBridgePairingArea header strong, .windowsBridgeDeviceArea header strong, .windowsBridgeDeviceArea header span { font-size: 12px; }
+.windowsBridgePairingArea header button, .windowsBridgeDeviceArea article button { min-height: 29px; padding: 0 7px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-soft); background: var(--panel); cursor: pointer; font-size: 12px; font-weight: 800; }
+.windowsBridgePairingArea header button:disabled, .windowsBridgeDeviceArea article button:disabled { cursor: not-allowed; opacity: .48; }
+.windowsBridgePairingArea > p, .windowsBridgeDeviceArea > p { margin: 0; padding: 9px; color: var(--muted); font-size: 12px; }
+.windowsBridgePairingCode { padding: 8px; display: grid; grid-template-columns: minmax(0,1.5fr) minmax(150px,.7fr) auto; gap: 7px; }
+.windowsBridgePairingCode > div { min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 6px; display: grid; align-content: center; gap: 3px; background: var(--panel); }
+.windowsBridgePairingCode span, .windowsBridgePairingCode code, .windowsBridgePairingCode small, .windowsBridgePairingCode b { min-width: 0; font-size: 12px; }
+.windowsBridgePairingCode span, .windowsBridgePairingCode small { color: var(--muted); }
+.windowsBridgePairingCode code { overflow: hidden; color: var(--text-soft); text-overflow: ellipsis; white-space: nowrap; }
+.windowsBridgePairingCode strong { color: var(--accent-strong); font-family: "Cascadia Code",Consolas,monospace; font-size: 19px; letter-spacing: .08em; }
+.windowsBridgePairingCode > div:last-child { grid-template-columns: auto auto; align-items: center; }
+.windowsBridgePairingCode > div:last-child small { grid-column: 1 / -1; }
+.windowsBridgeDeviceArea > article { min-width: 0; padding: 7px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: minmax(0,1.5fr) minmax(170px,.7fr) auto; align-items: center; gap: 8px; }
+.windowsBridgeDeviceArea > article:last-child { border-bottom: 0; }
+.windowsBridgeDeviceArea article > div { min-width: 0; display: grid; gap: 2px; }
+.windowsBridgeDeviceArea article > div:last-child { display: flex; justify-content: flex-end; gap: 4px; }
+.windowsBridgeDeviceArea article strong, .windowsBridgeDeviceArea article span, .windowsBridgeDeviceArea article small, .windowsBridgeDeviceArea article b { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.windowsBridgeDeviceArea article strong { color: var(--text); }.windowsBridgeDeviceArea article span, .windowsBridgeDeviceArea article small { color: var(--muted); }
+.windowsBridgeDeviceArea article b { width: max-content; padding: 3px 5px; border-radius: 5px; color: var(--amber); background: var(--amber-soft); }
+.windowsBridgeDeviceArea article[data-status="active"] b { color: var(--green); background: var(--green-soft); }.windowsBridgeDeviceArea article[data-status="revoked"] b { color: var(--red); background: var(--red-soft); }
+@media (max-width: 900px) { .windowsBridgePairingCode, .windowsBridgeDeviceArea > article { grid-template-columns: 1fr; }.windowsBridgeDeviceArea article > div:last-child { justify-content: flex-start; } }

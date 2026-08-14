@@ -123,3 +123,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `219_benjadmin_windows_bridge_p8_foundation_candidate_20260814.md` – P8 Windows Desktop Bridge foundation: outbound-only agent/readiness security contract, 285/285 PASS; live Bridge/pairing/execution OFF.
 
 - `220_benjadmin_windows_bridge_p8_foundation_dev_activation_20260814.md` – P8 Windows Desktop Bridge foundation DEV aktiválás: 285/285 PASS; Bridge/pairing/execution továbbra is OFF.
+
+- `221_benjadmin_windows_bridge_p81_candidate_20260814.md` – P8.1 secure pairing candidate: agent identity, one-time pairing, approval/revoke/heartbeat, 329/329 PASS; DB migration pending, Bridge/Pairing/Execution OFF.
