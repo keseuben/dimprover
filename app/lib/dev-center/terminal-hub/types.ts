@@ -8,6 +8,7 @@ export type TerminalHubFeatureFlags = {
   terminalHubEnabled: boolean;
   commandLibraryEnabled: boolean;
   liveWorkspaceEnabled: boolean;
+  workspaceActivityEnabled: boolean;
   multiPanelEnabled: boolean;
   windowsBridgeEnabled: boolean;
   prodTerminalEnabled: boolean;

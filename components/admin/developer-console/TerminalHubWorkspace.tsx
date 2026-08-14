@@ -127,7 +127,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
           ) : null}
 
           {tab === "workspace" ? (
-            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} />
+            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} activityEnabled={Boolean(status?.features.workspaceActivityEnabled)} />
           ) : null}
 
           {tab === "sessions" ? (

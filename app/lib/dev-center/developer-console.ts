@@ -289,3 +289,34 @@ export async function getDeveloperConsoleRuntimeContext() {
     generatedAt: new Date().toISOString(),
   };
 }
+
+export async function getDeveloperConsoleWorkspaceActivitySource() {
+  const client = getClient();
+  const [workers, tasks, sessions, audits] = await Promise.all([
+    client.from("dev_center_workers")
+      .select("id,code,name,role,status,updated_at")
+      .order("code"),
+    client.from("dev_center_tasks")
+      .select("id,project_id,title,status,priority,assigned_worker_id,branch_name,worktree_path,updated_at,created_at")
+      .order("updated_at", { ascending: false })
+      .limit(120),
+    client.from("dev_center_worker_sessions")
+      .select("id,worker_id,task_id,status,handshake_stage,branch_name,worktree_path,opened_at,updated_at,last_heartbeat_at,closed_at")
+      .order("updated_at", { ascending: false })
+      .limit(100),
+    client.from("dev_center_audit_events")
+      .select("id,actor_type,actor_id,action,entity_type,entity_id,task_id,project_id,summary,created_at")
+      .order("created_at", { ascending: false })
+      .limit(120),
+  ]);
+  for (const result of [workers, tasks, sessions, audits]) {
+    if (result.error) throw new Error(result.error.message || "A Live Workspace worker activity adatforrás nem tölthető be.");
+  }
+  return {
+    workers: workers.data || [],
+    tasks: tasks.data || [],
+    sessions: sessions.data || [],
+    audits: audits.data || [],
+    generatedAt: new Date().toISOString(),
+  };
+}

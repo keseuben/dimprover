@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowUp, FileCode2, Folder, GitBranch, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, ArrowUp, FileCode2, Folder, GitBranch, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LiveWorkspaceFilePreview, LiveWorkspaceSummary, LiveWorkspaceTreeEntry } from "@/app/lib/dev-center/terminal-hub/live-workspace";
+import type { LiveWorkspaceActivitySnapshot } from "@/app/lib/dev-center/terminal-hub/live-workspace-activity";
 import styles from "./DeveloperConsole.module.css";
 
 type TreePayload = {
@@ -25,15 +26,26 @@ function bytes(value: number) {
   return `${value} B`;
 }
 
-export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean }) {
+function timeLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { enabled: boolean; activityEnabled: boolean }) {
   const [workspaces, setWorkspaces] = useState<LiveWorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [tree, setTree] = useState<TreePayload | null>(null);
   const [file, setFile] = useState<LiveWorkspaceFilePreview | null>(null);
+  const [activity, setActivity] = useState<LiveWorkspaceActivitySnapshot | null>(null);
   const [busy, setBusy] = useState("");
+  const [activityBusy, setActivityBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [activityMessage, setActivityMessage] = useState("");
 
   const selectedWorkspace = useMemo(() => workspaces.find((item) => item.id === workspaceId) || null, [workspaceId, workspaces]);
+  const activityWorkers = useMemo(() => [...(activity?.workers || [])].sort((a, b) => Number(b.selectedWorkspace) - Number(a.selectedWorkspace) || Number(b.freshness === "LIVE") - Number(a.freshness === "LIVE") || a.code.localeCompare(b.code, "hu")), [activity]);
 
   const loadTree = useCallback(async (id: string, relativePath = "") => {
     if (!id) return;
@@ -50,6 +62,21 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
     } finally { setBusy(""); }
   }, []);
 
+  const loadActivity = useCallback(async (id: string, silent = false) => {
+    if (!activityEnabled || !id) return;
+    if (!silent) setActivityBusy(true);
+    setActivityMessage("");
+    try {
+      const params = new URLSearchParams({ workspaceId: id });
+      const response = await fetch(`/api/dev/terminal-hub/live-workspace/activity?${params}`, { headers: adminHeaders(), cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; activity?: LiveWorkspaceActivitySnapshot; code?: string; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.activity) throw new Error(`${payload?.code ? `${payload.code}: ` : ""}${payload?.error || "A worker activity nem tölthető be."}`);
+      setActivity(payload.activity);
+    } catch (error) {
+      setActivityMessage(error instanceof Error ? error.message : "A worker activity nem tölthető be.");
+    } finally { if (!silent) setActivityBusy(false); }
+  }, [activityEnabled]);
+
   const loadWorkspaces = useCallback(async () => {
     if (!enabled) return;
     setBusy("workspaces"); setMessage("");
@@ -62,7 +89,7 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
       const nextId = next.some((item) => item.id === workspaceId) ? workspaceId : next[0]?.id || "";
       setWorkspaceId(nextId);
       if (nextId) await loadTree(nextId, "");
-      else { setTree(null); setFile(null); }
+      else { setTree(null); setFile(null); setActivity(null); }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A Live Workspace lista nem tölthető be.");
     } finally { setBusy(""); }
@@ -73,9 +100,20 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
     void loadWorkspaces();
   }, [enabled, loadWorkspaces]);
 
+  useEffect(() => {
+    if (!enabled || !activityEnabled || !workspaceId) {
+      setActivity(null);
+      return;
+    }
+    void loadActivity(workspaceId);
+    const timer = window.setInterval(() => void loadActivity(workspaceId, true), 4000);
+    return () => window.clearInterval(timer);
+  }, [activityEnabled, enabled, loadActivity, workspaceId]);
+
   async function selectWorkspace(id: string) {
     setWorkspaceId(id);
     await loadTree(id, "");
+    if (activityEnabled) await loadActivity(id);
   }
 
   async function openFile(entry: LiveWorkspaceTreeEntry) {
@@ -105,7 +143,7 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
       <section className={styles.liveWorkspaceDisabled}>
         <LockKeyhole size={30} />
         <strong>LIVE WORKSPACE · P4</strong>
-        <p>A read-only workspace motor elkészítés alatt áll. A feature flag jelenleg OFF, ezért fájlfa és előnézet nem kérhető le.</p>
+        <p>A read-only workspace motor feature flagje jelenleg OFF, ezért fájlfa és előnézet nem kérhető le.</p>
         <small>Watcher, Monaco, 1/2/4 panel és fájlírás külön későbbi gate mögött marad.</small>
       </section>
     );
@@ -115,9 +153,34 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
     <section className={styles.liveWorkspaceReadOnly}>
       <header className={styles.liveWorkspaceHeader}>
         <div><ShieldCheck size={18} /><div><span>LIVE WORKSPACE · READ ONLY</span><strong>Allowlistelt DEV worktree-k · biztonságos fájlfa</strong></div></div>
-        <div><b>WATCHER OFF</b><b>WRITE OFF</b><button type="button" onClick={() => void loadWorkspaces()} disabled={Boolean(busy)} title="Frissítés"><RefreshCw size={14} /></button></div>
+        <div><b>WATCHER OFF</b><b>WRITE OFF</b><button type="button" onClick={() => { void loadWorkspaces(); if (activityEnabled && workspaceId) void loadActivity(workspaceId); }} disabled={Boolean(busy) || activityBusy} title="Frissítés"><RefreshCw size={14} /></button></div>
       </header>
       {message ? <div className={styles.terminalHubNotice}>{message}</div> : null}
+
+      {activityEnabled ? (
+        <section className={styles.liveWorkspaceActivity}>
+          <header>
+            <div><Activity size={15} /><strong>WORKER ACTIVITY · P5</strong><span>{selectedWorkspace?.name || "Nincs worktree"}</span></div>
+            <div><b>{activity?.summary.liveWorkers ?? 0} LIVE</b><b>{activity?.summary.selectedWorkspaceWorkers ?? 0} ITT DOLGOZIK</b><b>{activity?.summary.dirtyFiles ?? 0} FÁJLÁLLAPOT</b><span>POLL 4s</span></div>
+          </header>
+          {activityMessage ? <div className={styles.liveWorkspaceActivityMessage}>{activityMessage}</div> : null}
+          <div className={styles.liveWorkspaceWorkers}>
+            {activityWorkers.map((worker) => (
+              <article key={worker.workerId} data-selected={worker.selectedWorkspace ? "true" : "false"} data-freshness={worker.freshness.toLowerCase()}>
+                <div><strong>{worker.name}</strong><b>{worker.freshness}</b></div>
+                <span>{worker.workspaceLabel || "nincs aktív worktree"}{worker.branch ? ` · ${worker.branch}` : ""}</span>
+                <small>{worker.taskTitle || worker.role || worker.workerStatus}</small>
+                <small>{worker.handshakeStage || worker.sessionStatus || worker.workerStatus} · HB {timeLabel(worker.lastHeartbeatAt)}</small>
+              </article>
+            ))}
+            {!activityWorkers.length && !activityBusy ? <p>Nincs worker activity adat.</p> : null}
+            {activityBusy ? <p>Worker activity betöltése…</p> : null}
+          </div>
+        </section>
+      ) : (
+        <div className={styles.liveWorkspaceActivityOff}><Activity size={14} /><span>Worker Activity P5 OFF · a P4 fájlfa továbbra is működik.</span></div>
+      )}
+
       <div className={styles.liveWorkspaceGrid}>
         <aside className={styles.liveWorkspaceList}>
           <header><span>WORKTREE-K</span><b>{workspaces.length}</b></header>
@@ -156,7 +219,26 @@ export default function LiveWorkspaceReadOnly({ enabled }: { enabled: boolean })
           {busy === "file" ? <div className={styles.liveWorkspacePreviewLoading}>Fájl betöltése…</div> : null}
         </section>
       </div>
-      <footer className={styles.liveWorkspaceFooter}><ShieldCheck size={14} /><span>.git · .dimprover · .env · secret/credential · node_modules · .next · build/dist/cache/coverage automatikusan kizárva. Symlink és worktree-escape fail-closed.</span></footer>
+
+      {activityEnabled ? (
+        <section className={styles.liveWorkspaceEvents}>
+          <header><div><Activity size={14} /><strong>FEJLESZTÉSI ESEMÉNYEK</strong></div><div><span>AUDIT + COMMIT + FILE STATE</span><b>{activity?.events.length ?? 0}</b></div></header>
+          <div>
+            {(activity?.events || []).slice(0, 24).map((event) => (
+              <article key={event.id} data-level={event.level}>
+                <time>{timeLabel(event.createdAt)}</time>
+                <b>{event.kind}</b>
+                <span>{event.actor}</span>
+                <strong>{event.summary}</strong>
+                {event.gitStatus ? <code>{event.gitStatus}</code> : null}
+              </article>
+            ))}
+            {activity && !activity.events.length ? <p>Nincs megjeleníthető esemény ehhez a worktree-hez.</p> : null}
+          </div>
+        </section>
+      ) : null}
+
+      <footer className={styles.liveWorkspaceFooter}><ShieldCheck size={14} /><span>.git · .dimprover · .env · secret/credential · node_modules · .next · build/dist/cache/coverage automatikusan kizárva. Symlink és worktree-escape fail-closed. P5 worker/file/Git activity csak read-only polling.</span></footer>
     </section>
   );
 }

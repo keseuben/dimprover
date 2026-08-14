@@ -33,9 +33,13 @@ function isInside(root: string, candidate: string) {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
+export function isWorkspacePathDenied(candidatePath: string) {
+  const normalized = candidatePath.replaceAll("\\", "/");
+  return isSensitivePath(normalized) || blockedWorkspacePathPatterns.some((pattern) => pattern.test(normalized));
+}
+
 function assertNoBlockedSegment(candidateReal: string) {
-  const normalized = candidateReal.replaceAll("\\", "/");
-  if (isSensitivePath(normalized) || blockedWorkspacePathPatterns.some((pattern) => pattern.test(normalized))) {
+  if (isWorkspacePathDenied(candidateReal)) {
     throw new TerminalWorkspacePolicyError("A fájl vagy könyvtár a BENJADMIN Live Workspace deny policy alá esik.");
   }
 }

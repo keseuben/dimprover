@@ -107,3 +107,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `211_benjadmin_live_workspace_p4_candidate_20260814.md` – Live Workspace P4 read-only candidate: allowlistelt worktree/fájlfa/text-preview, 24/24 contract és synthetic-key API acceptance PASS; feature flag még OFF.
 
 - `212_benjadmin_live_workspace_p4_dev_activation_20260814.md` – Live Workspace P4 read-only DEV aktiválva: 132/132 contract PASS, HTTPS/API smoke PASS, watcher/write/execution/PROD továbbra is OFF.
+
+- `213_benjadmin_live_workspace_p5_candidate_20260814.md` – Live Workspace P5 candidate: worker/session/task activity + sanitizált AUDIT/COMMIT/FILE_STATE feed, 161/161 contract és synthetic-key runtime acceptance PASS; live P5 flag még OFF.

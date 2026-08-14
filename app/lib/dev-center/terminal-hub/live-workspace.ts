@@ -134,7 +134,7 @@ async function discoverWorkspaceRoots(): Promise<WorkspaceRoot[]> {
   return found.sort((a, b) => a.plane.localeCompare(b.plane) || a.name.localeCompare(b.name, "hu"));
 }
 
-async function resolveWorkspace(workspaceIdValue: string) {
+export async function resolveLiveWorkspaceRoot(workspaceIdValue: string) {
   if (!/^[0-9a-f]{24}$/.test(workspaceIdValue)) {
     throw new LiveWorkspaceError("Érvénytelen Live Workspace azonosító.", "LIVE_WORKSPACE_ID_INVALID");
   }
@@ -191,7 +191,7 @@ export async function listLiveWorkspaces(): Promise<LiveWorkspaceSummary[]> {
 
 export async function listLiveWorkspaceTree(workspaceIdValue: string, relativePath = "") {
   assertLiveWorkspaceEnabled();
-  const workspace = await resolveWorkspace(workspaceIdValue);
+  const workspace = await resolveLiveWorkspaceRoot(workspaceIdValue);
   const resolved = await resolveWithinWorkspace(workspace, relativePath);
   const stat = await lstat(resolved.path);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -235,7 +235,7 @@ export async function listLiveWorkspaceTree(workspaceIdValue: string, relativePa
 
 export async function readLiveWorkspaceFile(workspaceIdValue: string, relativePath: string): Promise<LiveWorkspaceFilePreview> {
   assertLiveWorkspaceEnabled();
-  const workspace = await resolveWorkspace(workspaceIdValue);
+  const workspace = await resolveLiveWorkspaceRoot(workspaceIdValue);
   const resolved = await resolveWithinWorkspace(workspace, relativePath);
   const stat = await lstat(resolved.path);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new LiveWorkspaceError("Csak normál fájl nyitható meg.", "LIVE_WORKSPACE_FILE_INVALID", 400);
