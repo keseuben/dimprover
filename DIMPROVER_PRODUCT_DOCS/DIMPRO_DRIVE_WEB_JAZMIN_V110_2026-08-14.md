@@ -244,17 +244,33 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A thumbnail canvas tesztelhető `data-preview-offset-x`, `data-preview-offset-y`, `data-preview-scale`, `data-preview-rotation` attribútumokat is kapott.
 - A kártyák responsive tördelése laptopon három/két oszlopos, keskeny nézeten egyoszlopos vagy kép+adat kétsávos megjelenésre vált.
 
+### 18. Automatikus vizuális vonalfedési minőségpontszám V1
+
+- A candidate thumbnail réteg most már minden automatikus illesztési alternatívához külön **vizuális vonalfedési score-t** számít 0–100% tartományban.
+- A pontszám nem a teljes fehér lap hasonlóságát méri: a 228×132 px preview bitmapból luminancia-alapú rajzi tinta/vonal maszk készül, így a fehér háttér nem dominálja az eredményt.
+- Az antialiasing és a minimális pixelcsúszás miatt a két maszk 1 px toleranciájú dilatációt kap. Ezután a rendszer külön számolja az A-vonalak B-ben megtalált arányát és a B-vonalak A-ban megtalált arányát.
+- A végső score a két irány harmonikus kombinációja, ezért az egyik terven megjelenő többlet vagy hiányzó vonal is csökkenti a fedési minőséget.
+- Túl kevés detektált rajzi pixel esetén nincs mesterséges score: a számítás `null` eredménnyel fail-safe módon leáll.
+- A kártyán a százalék mellett egyszerű kategória látható: `Erős fedés`, `Jó fedés`, `Közepes`, `Gyenge fedés`.
+- A legmagasabb vizuális score-ral rendelkező candidate külön **`Legjobb fedés`** badge-et kap. Ez szándékosan elkülönül a korábbi `Ajánlott` badge-től: az `Ajánlott` a bizalom/RMS/bizonyíték geometriai rangot, a `Legjobb fedés` a bitmap-vonalfedést jelzi.
+- Az aktív Auto Align metrikablokkban külön `Vizuális` érték is megjelenik.
+- A vizuális score **nem szakmai tervminősítés**, nem dönti el, hogy a revízió tartalmilag helyes-e, és nem alkalmaz automatikus transzformációt. A tényleges B-réteg igazítás továbbra is külön emberi `Alkalmazás` jóváhagyást igényel.
+- Oldal/zoom/fit/forgatás váltáskor a score-lista törlődik. Kézi referencia-pár csere esetén csak az érintett candidate score-ja érvénytelenedik, majd a friss thumbnailből újraszámolódik.
+- A score ugyanabból a kliensoldali preview bitmapból készül, ezért nincs új PDF letöltés, backend kérés, adatbázis-módosítás vagy külön PDF.js render.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **146** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **159** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
 
 A 125–137. ellenőrzések külön vizsgálják a több automatikus proposal API-t, a három felismerési forrást, jelöltenkénti similarity/biztonsági ellenőrzést, rangsort, kiválasztást, kézi párjavítás megőrzését, invalidálást és responsive alternatíva UI-t.
 
-Végső statikus DEV VPS futás: **146/146 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+A 138–146. ellenőrzések a candidate vizuális thumbnail réteget, a 147–159. ellenőrzések pedig a vonalmaszkot, toleranciát, kétirányú harmonikus fedési score-t, fail-safe működést, `Legjobb fedés` badge-et, életciklus-resetet és responsive vizuális score UI-t vizsgálják.
+
+Végső statikus DEV VPS futás: **159/159 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -643,3 +659,31 @@ Az izolált browser candidate kizárólag `127.0.0.1:3210` tesztportra indult. A
 - Adatbázis-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A thumbnail réteg kizárólag Drive kliensoldali Compare UI.
 
 Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult, a standalone mappából, majd a tesztek után leállításra kerül. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem kerül módosításra vagy restartra.
+
+## Visual Alignment Quality Score V1 final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_visual_quality_score_20260815_003223`
+- Next.js production build: **PASS**
+- Build ID: `a32Zlt5t7RawNnZ-SvfG9`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **159/159 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Új Visual Quality Score browser acceptance: **47/47 PASS**
+- Auto Pair Review regresszió: **38/38 PASS**
+- Geometriai csomópont regresszió: **22/22 PASS**
+- Auto Align regresszió: **21/21 PASS**
+- 2/3 pontos regresszió: **25/25 PASS**
+- Vizuális Compare regresszió: **34/34 PASS**
+- Historikus revízió regresszió: **20/20 PASS**
+- Visual Quality artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-quality-score-2026-08-14T22-48-18-504Z`
+- Pair Review regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-auto-pair-review-2026-08-14T22-45-35-787Z`
+- Geometriai regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-geometric-nodes-2026-08-14T22-45-47-340Z`
+- Auto Align regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-45-57-954Z`
+- 2/3 pontos regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-46-09-674Z`
+- Vizuális regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-46-22-080Z`
+- Historikus regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T22-46-34-404Z`
+- A böngészős minőségtesztben a hibátlan szintetikus illesztés 100% vizuális fedést adott. Egy referencia-pár szándékos kézi eltolása után ugyanazon candidate score-ja 9%-ra esett, és a `Legjobb fedés` badge a változatlan, jobb alternatívára került át.
+- Adatbázis-, backend-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A score kizárólag Drive kliensoldali Compare/thumbnail bitmap feldolgozás.
+
+Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult a standalone mappából; az aktív `app.dev.dimpro.hu` Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.

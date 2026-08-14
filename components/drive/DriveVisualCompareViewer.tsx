@@ -58,6 +58,14 @@ type AutoAlignmentSuggestion = SimilarityAlignment & {
   summary: string;
 };
 
+type AutoCandidateVisualQuality = {
+  score: number;
+  matchedA: number;
+  matchedB: number;
+  inkPixelsA: number;
+  inkPixelsB: number;
+};
+
 type AutoPairReplacement = {
   pairIndex: number;
   side: PointSide;
@@ -209,6 +217,74 @@ function autoPairFeatureLabel(key: string) {
   return "Felirat";
 }
 
+function visualQualityLabel(score: number) {
+  if (score >= 85) return "Erős fedés";
+  if (score >= 70) return "Jó fedés";
+  if (score >= 50) return "Közepes";
+  return "Gyenge fedés";
+}
+
+function makeInkMask(image: ImageData, threshold = 218) {
+  const mask = new Uint8Array(image.width * image.height);
+  let count = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    const offset = index * 4;
+    const alpha = image.data[offset + 3];
+    if (alpha < 24) continue;
+    const luminance = image.data[offset] * 0.2126 + image.data[offset + 1] * 0.7152 + image.data[offset + 2] * 0.0722;
+    if (luminance <= threshold) {
+      mask[index] = 1;
+      count += 1;
+    }
+  }
+  return { mask, count };
+}
+
+function dilateInkMask(mask: Uint8Array, width: number, height: number, radius = 1) {
+  const output = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!mask[index]) continue;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= height) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= width) continue;
+          output[yy * width + xx] = 1;
+        }
+      }
+    }
+  }
+  return output;
+}
+
+function computeVisualAlignmentQuality(leftImage: ImageData, rightImage: ImageData): AutoCandidateVisualQuality | null {
+  if (leftImage.width !== rightImage.width || leftImage.height !== rightImage.height) return null;
+  const left = makeInkMask(leftImage);
+  const right = makeInkMask(rightImage);
+  if (left.count < 24 || right.count < 24) return null;
+  const leftDilated = dilateInkMask(left.mask, leftImage.width, leftImage.height, 1);
+  const rightDilated = dilateInkMask(right.mask, rightImage.width, rightImage.height, 1);
+  let matchedA = 0;
+  let matchedB = 0;
+  for (let index = 0; index < left.mask.length; index += 1) {
+    if (left.mask[index] && rightDilated[index]) matchedA += 1;
+    if (right.mask[index] && leftDilated[index]) matchedB += 1;
+  }
+  const recallA = matchedA / left.count;
+  const recallB = matchedB / right.count;
+  const harmonic = recallA + recallB > 0 ? (2 * recallA * recallB) / (recallA + recallB) : 0;
+  return {
+    score: Math.max(0, Math.min(100, Math.round(harmonic * 100))),
+    matchedA: Number((recallA * 100).toFixed(1)),
+    matchedB: Number((recallB * 100).toFixed(1)),
+    inkPixelsA: left.count,
+    inkPixelsB: right.count,
+  };
+}
+
 function shortRevision(document: DriveDocument) {
   return document.currentVersion?.revisionCode || `V${document.currentVersionNumber || 0}`;
 }
@@ -218,9 +294,10 @@ type AutoCandidateVisualPreviewProps = {
   index: number;
   leftCanvasRef: RefObject<HTMLCanvasElement | null>;
   rightCanvasRef: RefObject<HTMLCanvasElement | null>;
+  onQuality: (index: number, quality: AutoCandidateVisualQuality | null) => void;
 };
 
-function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanvasRef }: AutoCandidateVisualPreviewProps) {
+function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanvasRef, onQuality }: AutoCandidateVisualPreviewProps) {
   const previewRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -239,34 +316,60 @@ function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanv
     const originX = (width - sourceWidth * fitScale) / 2;
     const originY = (height - sourceHeight * fitScale) / 2;
 
+    const leftLayer = document.createElement("canvas");
+    const rightLayer = document.createElement("canvas");
+    leftLayer.width = width;
+    leftLayer.height = height;
+    rightLayer.width = width;
+    rightLayer.height = height;
+    const leftLayerContext = leftLayer.getContext("2d", { willReadFrequently: true });
+    const rightLayerContext = rightLayer.getContext("2d", { willReadFrequently: true });
+    if (!leftLayerContext || !rightLayerContext) return;
+
+    const clipAndTransform = (layerContext: CanvasRenderingContext2D) => {
+      layerContext.clearRect(0, 0, width, height);
+      layerContext.save();
+      layerContext.beginPath();
+      layerContext.rect(originX, originY, sourceWidth * fitScale, sourceHeight * fitScale);
+      layerContext.clip();
+      layerContext.setTransform(fitScale, 0, 0, fitScale, originX, originY);
+    };
+
+    clipAndTransform(leftLayerContext);
+    leftLayerContext.drawImage(leftCanvas, 0, 0);
+    leftLayerContext.restore();
+
+    clipAndTransform(rightLayerContext);
+    rightLayerContext.translate(candidate.offsetX, candidate.offsetY);
+    rightLayerContext.rotate(candidate.rotationDegrees * Math.PI / 180);
+    const candidateScale = candidate.scalePercent / 100;
+    rightLayerContext.scale(candidateScale, candidateScale);
+    rightLayerContext.drawImage(rightCanvas, 0, 0);
+    rightLayerContext.restore();
+
+    onQuality(index, computeVisualAlignmentQuality(
+      leftLayerContext.getImageData(0, 0, width, height),
+      rightLayerContext.getImageData(0, 0, width, height),
+    ));
+
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#f5f8fa";
     context.fillRect(0, 0, width, height);
-    context.save();
-    context.beginPath();
-    context.rect(originX, originY, sourceWidth * fitScale, sourceHeight * fitScale);
-    context.clip();
-
-    context.setTransform(fitScale, 0, 0, fitScale, originX, originY);
-    context.globalAlpha = 0.92;
     context.globalCompositeOperation = "source-over";
-    context.drawImage(leftCanvas, 0, 0);
-
-    context.translate(candidate.offsetX, candidate.offsetY);
-    context.rotate(candidate.rotationDegrees * Math.PI / 180);
-    const candidateScale = candidate.scalePercent / 100;
-    context.scale(candidateScale, candidateScale);
-    context.globalAlpha = 0.46;
+    context.globalAlpha = 0.92;
+    context.drawImage(leftLayer, 0, 0);
     context.globalCompositeOperation = "multiply";
-    context.drawImage(rightCanvas, 0, 0);
-    context.restore();
+    context.globalAlpha = 0.46;
+    context.drawImage(rightLayer, 0, 0);
+    context.globalCompositeOperation = "source-over";
+    context.globalAlpha = 1;
 
     context.save();
     context.strokeStyle = "rgba(57,91,120,.28)";
     context.lineWidth = 1;
     context.strokeRect(originX + 0.5, originY + 0.5, Math.max(0, sourceWidth * fitScale - 1), Math.max(0, sourceHeight * fitScale - 1));
     context.restore();
-  }, [candidate.offsetX, candidate.offsetY, candidate.rotationDegrees, candidate.scalePercent, leftCanvasRef, rightCanvasRef]);
+  }, [candidate.offsetX, candidate.offsetY, candidate.rotationDegrees, candidate.scalePercent, index, leftCanvasRef, onQuality, rightCanvasRef]);
 
   return (
     <canvas
@@ -324,6 +427,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [autoAlignmentSuggestion, setAutoAlignmentSuggestion] = useState<AutoAlignmentSuggestion | null>(null);
   const [autoAlignmentCandidates, setAutoAlignmentCandidates] = useState<AutoAlignmentSuggestion[]>([]);
   const [autoAlignmentCandidateIndex, setAutoAlignmentCandidateIndex] = useState(0);
+  const [autoCandidateVisualQuality, setAutoCandidateVisualQuality] = useState<Record<number, AutoCandidateVisualQuality | null>>({});
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
@@ -400,6 +504,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentSuggestion(null);
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
+    setAutoCandidateVisualQuality({});
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
     setShowBase(true);
@@ -413,6 +518,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentSuggestion(null);
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
+    setAutoCandidateVisualQuality({});
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
   }, [fitWidth, pageNumber, rotation, zoom]);
@@ -550,6 +656,14 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentMessage("Igazítás nullázva.");
   }
 
+  const recordAutoCandidateVisualQuality = useCallback((index: number, quality: AutoCandidateVisualQuality | null) => {
+    setAutoCandidateVisualQuality((current) => {
+      const previous = current[index];
+      if (previous?.score === quality?.score && previous?.matchedA === quality?.matchedA && previous?.matchedB === quality?.matchedB) return current;
+      return { ...current, [index]: quality };
+    });
+  }, []);
+
   async function requestAutoAlignmentSuggestion() {
     if (!isPdf || mode === "SIDE_BY_SIDE" || rotation !== 0) {
       setAutoAlignmentError(rotation !== 0 ? "Az automatikus V1 illesztéshez állítsd vissza a közös forgatást 0°-ra." : "Automatikus illesztési javaslat PDF Átfedés/Különbség módban érhető el.");
@@ -674,6 +788,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     };
     setAutoAlignmentSuggestion(nextSuggestion);
     setAutoAlignmentCandidates((current) => current.map((candidate, index) => index === autoAlignmentCandidateIndex ? nextSuggestion : candidate));
+    setAutoCandidateVisualQuality((current) => ({ ...current, [autoAlignmentCandidateIndex]: null }));
     setAutoPairReplacement(null);
     setAlignmentMessage(`Referencia ${pairIndex + 1} kézzel felülvizsgálva · új RMS ${solved.rmsError.toFixed(2)} px.`);
   }
@@ -711,6 +826,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentSuggestion(null);
     setAutoAlignmentCandidates([]);
     setAutoAlignmentCandidateIndex(0);
+    setAutoCandidateVisualQuality({});
     setAutoAlignmentError("");
   }
 
@@ -867,6 +983,10 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const pointAlignmentCollecting = Boolean(pointAlignmentMode && alignmentPicks.length < pointAlignmentTargetCount);
   const pointAlignmentExpectedSide: PointSide | null = pointAlignmentCollecting ? (alignmentPicks.length % 2 === 0 ? "A" : "B") : null;
   const autoPairReplacementCollecting = Boolean(autoAlignmentSuggestion && autoPairReplacement);
+  const bestVisualCandidateEntry = Object.entries(autoCandidateVisualQuality)
+    .filter((entry): entry is [string, AutoCandidateVisualQuality] => Boolean(entry[1]))
+    .sort((left, right) => right[1].score - left[1].score || Number(left[0]) - Number(right[0]))[0];
+  const bestVisualCandidateIndex = bestVisualCandidateEntry ? Number(bestVisualCandidateEntry[0]) : null;
   const effectiveShowBase = pointAlignmentCollecting
     ? pointAlignmentExpectedSide === "A"
     : autoPairReplacementCollecting
@@ -1011,7 +1131,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             <>
               {autoAlignmentCandidates.length > 1 && (
                 <div className={styles.visualCompareAutoCandidates} data-auto-candidate-count={autoAlignmentCandidates.length}>
-                  <div className={styles.visualCompareAutoCandidatesHeader}><strong>Illesztési alternatívák</strong><span>A javaslatok nem alkalmazódnak automatikusan</span></div>
+                  <div className={styles.visualCompareAutoCandidatesHeader}><strong>Illesztési alternatívák</strong><span>Geometriai rang + vizuális vonalfedés · nem szakmai tervminősítés</span></div>
                   <div className={styles.visualCompareAutoCandidateList}>
                     {autoAlignmentCandidates.map((candidate, index) => (
                       <button
@@ -1023,13 +1143,17 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                         aria-pressed={index === autoAlignmentCandidateIndex}
                       >
                         <span className={styles.visualCompareAutoCandidatePreview}>
-                          <AutoCandidateVisualPreview candidate={candidate} index={index} leftCanvasRef={leftCanvasRef} rightCanvasRef={rightCanvasRef} />
+                          <AutoCandidateVisualPreview candidate={candidate} index={index} leftCanvasRef={leftCanvasRef} rightCanvasRef={rightCanvasRef} onQuality={recordAutoCandidateVisualQuality} />
                           <span className={styles.visualCompareAutoCandidatePreviewBadge}>#{index + 1}</span>
                           {index === 0 && <span className={styles.visualCompareAutoCandidateRecommended}>Ajánlott</span>}
+                          {bestVisualCandidateIndex === index && <span className={styles.visualCompareAutoCandidateBestVisual}>Legjobb fedés</span>}
                         </span>
                         <span className={styles.visualCompareAutoCandidateInfo}>
                           <strong>{autoAlignmentSourceLabel(candidate.source)}</strong>
                           <span>{Math.round(candidate.confidenceScore * 100)}% · RMS {candidate.rmsError.toFixed(2)} px · {candidate.pairCount} pont</span>
+                          {autoCandidateVisualQuality[index] ? (
+                            <span className={styles.visualCompareAutoCandidateQuality} data-visual-quality={autoCandidateVisualQuality[index]?.score}>Vizuális {autoCandidateVisualQuality[index]?.score}% · {visualQualityLabel(autoCandidateVisualQuality[index]?.score || 0)}</span>
+                          ) : <span className={styles.visualCompareAutoCandidateQualityPending}>Vizuális pontszám számítása…</span>}
                           <small>X {candidate.offsetX.toFixed(1)} · Y {candidate.offsetY.toFixed(1)} · {candidate.scalePercent.toFixed(2)}% · {candidate.rotationDegrees.toFixed(2)}°</small>
                         </span>
                       </button>
@@ -1044,6 +1168,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 <span><small>RMS</small><strong>{autoAlignmentSuggestion.rmsError.toFixed(2)} px</strong></span>
                 <span><small>Skála</small><strong>{autoAlignmentSuggestion.scalePercent.toFixed(2)}%</strong></span>
                 <span><small>Szög</small><strong>{autoAlignmentSuggestion.rotationDegrees.toFixed(2)}°</strong></span>
+                <span><small>Vizuális</small><strong>{autoCandidateVisualQuality[autoAlignmentCandidateIndex]?.score ?? "–"}%</strong></span>
               </div>
               <div className={styles.visualCompareAutoPairReview}>
                 <div className={styles.visualCompareAutoPairReviewHeader}><strong>Referencia-párok ellenőrzése</strong><span>A/B jelölők a terven láthatók · hibás pár kézzel lecserélhető</span></div>
@@ -1071,7 +1196,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
               </div>
               <div className={styles.visualCompareAutoActions}>
                 <button type="button" className={styles.visualCompareAutoApply} onClick={applyAutoAlignmentSuggestion}><Check size={12} /> Alkalmazás</button>
-                <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
+                <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoCandidateVisualQuality({}); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
               </div>
             </>
           )}

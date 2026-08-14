@@ -826,3 +826,13 @@
 @media (max-width: 520px) {
   .visualCompareAutoCandidateList button { grid-template-columns: 1fr; }
 }
+
+/* Drive Visual Compare Visual Quality Score V1 */
+.visualCompareAutoCandidateBestVisual { position: absolute; right: 5px; bottom: 5px; min-height: 18px; border: 1px solid rgba(44,113,177,.30); border-radius: 999px; background: rgba(236,246,255,.94); color: #286da9 !important; display: inline-flex; align-items: center; padding: 0 6px; font-size: 5px !important; font-weight: 950; box-shadow: 0 1px 4px rgba(32,79,119,.10); }
+.visualCompareAutoCandidateInfo > .visualCompareAutoCandidateQuality { color: #2f779f; font-weight: 900; }
+.visualCompareAutoCandidateInfo > .visualCompareAutoCandidateQualityPending { color: #8b98a4; font-style: italic; }
+.visualCompareAutoCandidateActive .visualCompareAutoCandidateInfo > .visualCompareAutoCandidateQuality { color: #287a56; }
+
+@media (max-width: 760px) {
+  .visualCompareAutoCandidateBestVisual { right: 4px; bottom: 4px; }
+}
