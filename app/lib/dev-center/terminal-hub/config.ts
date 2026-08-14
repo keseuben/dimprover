@@ -15,7 +15,7 @@ export function getTerminalHubFeatureFlags(): TerminalHubFeatureFlags {
     liveWorkspaceEnabled,
     workspaceActivityEnabled: liveWorkspaceEnabled && flag("BENJADMIN_WORKSPACE_ACTIVITY_ENABLED", false),
     workspaceMonacoEnabled: liveWorkspaceEnabled && flag("BENJADMIN_WORKSPACE_MONACO_ENABLED", false),
-    multiPanelEnabled: terminalHubEnabled && flag("BENJADMIN_MULTI_PANEL_ENABLED", false),
+    multiPanelEnabled: liveWorkspaceEnabled && flag("BENJADMIN_WORKSPACE_MONACO_ENABLED", false) && flag("BENJADMIN_MULTI_PANEL_ENABLED", false),
     windowsBridgeEnabled: terminalHubEnabled && flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false),
     prodTerminalEnabled: terminalHubEnabled && flag("BENJADMIN_PROD_TERMINAL_ENABLED", false),
     secretVaultEnabled: terminalHubEnabled && flag("BENJADMIN_SECRET_VAULT_ENABLED", false),

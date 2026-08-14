@@ -41,5 +41,5 @@ check("Terminal Hub P5 flaget átadja",hub.includes("activityEnabled={Boolean(st
 const p5css=css.slice(css.indexOf("BENJADMIN Live Workspace P5"));
 check("P5 CSS saját blokk létezik",p5css.includes(".liveWorkspaceActivity")&&p5css.includes(".liveWorkspaceEvents"));
 check("P5 saját tipográfia minimum 12 px",!p5css.match(/font-size:\s*(?:10|11)px/));
-check("P5 nem hoz Monaco/1-2-4 panelt",!activity.includes("monaco")&&!ui.includes("monaco-editor")&&!ui.includes("multiPanel"));
+check("P5 activity réteg nem implementál Monaco/1-2-4 panelt",!activity.toLowerCase().includes("monaco")&&!activity.includes("multiPanel")&&!api.toLowerCase().includes("monaco")&&!api.includes("multiPanel"));
 console.log(`SUMMARY ${checks.filter(Boolean).length}/${checks.length} PASS`);

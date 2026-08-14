@@ -43,7 +43,7 @@ check("Live/Diff/History közös Monaco motor",monaco.includes('type MonacoMode 
 check("Editor és Diff read-only",monaco.includes("readOnly: true")&&monaco.includes("domReadOnly: true")&&monaco.includes("originalEditable: false"));
 check("Diff HEAD vs WORKTREE",monaco.includes("original={context.head.content}")&&monaco.includes("modified={currentContent}"));
 check("Diff model disposal race védett",monaco.includes("keepCurrentOriginalModel")&&monaco.includes("keepCurrentModifiedModel"));
-check("P6 Monaco model cleanup bezáráskor",monaco.includes("editor.getModels()")&&monaco.includes('model.uri.scheme === "inmemory"')&&monaco.includes('model.uri.authority === "dimpro"')&&monaco.includes("model.dispose()"));
+check("P6 Monaco model cleanup bezáráskor",monaco.includes("editor.getModels()")&&monaco.includes('model.uri.scheme === "inmemory"')&&monaco.includes("model.uri.authority === modelAuthority")&&monaco.includes("model.dispose()"));
 check("History csak API-selected content",monaco.includes("context?.selectedHistory?.available")&&monaco.includes("loadContext(revision.commit)"));
 check("Dark/Light/Sunlight Monaco theme",monaco.includes('theme === "dark"')&&monaco.includes('theme === "sunlight"')&&monaco.includes("dimpro-sunlight")&&monaco.includes('return "vs"'));
 check("Sunlight saját Monaco theme definíció",monaco.includes('defineTheme("dimpro-sunlight"')&&monaco.includes('base: "vs"'));
@@ -52,7 +52,7 @@ check("Workspace selection stabil refet használ",preview.includes('const worksp
 check("Workspace lista refresh nem függ workspaceId state-től",preview.includes("}, [enabled, loadTree]);")&&!preview.includes("}, [enabled, loadTree, workspaceId]);"));
 check("Érvényes aktív workspace refreshnél nem nulláz fájlt",preview.includes("if (nextId !== currentId)")&&preview.includes("const currentId = workspaceIdRef.current"));
 check("Preview P6 OFF esetén P4 fallback",preview.includes('monacoEnabled ? <LiveWorkspaceMonaco')&&preview.includes(': <pre><code>{file.content}</code></pre>'));
-check("Konzol theme átadódik P6-nak",shell.includes("live={live} theme={theme}")&&hub.includes("monacoEnabled={Boolean(status?.features.workspaceMonacoEnabled)} theme={theme}"));
+check("Konzol theme átadódik P6-nak",shell.includes("live={live} theme={theme}")&&hub.includes("monacoEnabled={Boolean(status?.features.workspaceMonacoEnabled)}")&&hub.includes("theme={theme}"));
 check("P7 multi-panel nincs P6 komponensben",!monaco.includes("multiPanel")&&!monaco.includes("detached"));
 const p6css=css.slice(css.indexOf("BENJADMIN Live Workspace P6"));
 check("P6 CSS Live/Diff/History blokk létezik",p6css.includes(".liveWorkspaceMonaco")&&p6css.includes(".liveWorkspaceHistory"));

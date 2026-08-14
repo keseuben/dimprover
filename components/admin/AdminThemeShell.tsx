@@ -278,7 +278,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     );
   }
 
-  if (pathname === "/admin/dev-console") {
+  if (pathname.startsWith("/admin/dev-console")) {
     return <div className="benjadmin-developer-console-host">{children}<BenjadminPersonProfileHost /></div>;
   }
 

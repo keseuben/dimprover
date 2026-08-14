@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveWorkspaceFilePreview, LiveWorkspaceSummary, LiveWorkspaceTreeEntry } from "@/app/lib/dev-center/terminal-hub/live-workspace";
 import type { LiveWorkspaceActivitySnapshot } from "@/app/lib/dev-center/terminal-hub/live-workspace-activity";
 import LiveWorkspaceMonaco from "./LiveWorkspaceMonaco";
+import LiveWorkspaceMultiPanel from "./LiveWorkspaceMultiPanel";
 import type { ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
@@ -35,7 +36,7 @@ function timeLabel(value: string | null | undefined) {
   return date.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monacoEnabled, theme }: { enabled: boolean; activityEnabled: boolean; monacoEnabled: boolean; theme: ConsoleTheme }) {
+export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monacoEnabled, multiPanelEnabled, theme }: { enabled: boolean; activityEnabled: boolean; monacoEnabled: boolean; multiPanelEnabled: boolean; theme: ConsoleTheme }) {
   const [workspaces, setWorkspaces] = useState<LiveWorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [tree, setTree] = useState<TreePayload | null>(null);
@@ -45,6 +46,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monaco
   const [activityBusy, setActivityBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [activityMessage, setActivityMessage] = useState("");
+  const [assignmentSerial, setAssignmentSerial] = useState(0);
   const workspaceIdRef = useRef("");
 
   const selectedWorkspace = useMemo(() => workspaces.find((item) => item.id === workspaceId) || null, [workspaceId, workspaces]);
@@ -143,6 +145,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monaco
       const payload = await response.json().catch(() => null) as { ok?: boolean; file?: LiveWorkspaceFilePreview; code?: string; error?: string } | null;
       if (!response.ok || !payload?.ok || !payload.file) throw new Error(`${payload?.code ? `${payload.code}: ` : ""}${payload?.error || "A fájl nem nyitható meg."}`);
       setFile(payload.file);
+      setAssignmentSerial((value) => value + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A fájl nem nyitható meg.");
     } finally { setBusy(""); }
@@ -222,7 +225,13 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monaco
 
         <section className={styles.liveWorkspacePreview}>
           <header>{file ? <><div><strong>{file.name}</strong><span>{file.relativePath}</span></div><div><b data-ai={file.aiVisibility}>AI: {file.aiVisibility === "blocked" ? "TILTVA" : "SZŰRT"}</b><span>{file.gitStatus || "Git: tiszta"}</span></div></> : <><div><strong>FÁJL ELŐNÉZET</strong><span>P4 · egyszerű read-only renderer</span></div></>}</header>
-          {file ? <>
+          {multiPanelEnabled ? (
+            <LiveWorkspaceMultiPanel
+              enabled
+              theme={theme}
+              assignment={file && selectedWorkspace ? { serial: assignmentSerial, workspaceId, workspaceName: selectedWorkspace.name, file } : null}
+            />
+          ) : file ? <>
             <div className={styles.liveWorkspaceFileMeta}><span>{file.language}</span><span>{bytes(file.sizeBytes)}</span><span>{file.lineCount} sor</span><span>SHA {file.sha256.slice(0, 12)}…</span><span>{monacoEnabled ? "MONACO P6" : "P4 PREVIEW"}</span>{file.sensitiveFindings.length ? <span>{file.sensitiveFindings.length} érzékeny találat</span> : null}</div>
             {monacoEnabled ? <LiveWorkspaceMonaco enabled workspaceId={workspaceId} file={file} theme={theme} /> : <pre><code>{file.content}</code></pre>}
           </> : <div className={styles.liveWorkspacePreviewEmpty}><FileCode2 size={28} /><p>Válassz előnézhető szöveges forrásfájlt.</p><small>{monacoEnabled ? "P6 Monaco Live / Diff / History készen áll a kiválasztott fájlhoz." : "P4 egyszerű read-only preview aktív; P6 Monaco flag OFF."}</small></div>}
@@ -248,7 +257,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monaco
         </section>
       ) : null}
 
-      <footer className={styles.liveWorkspaceFooter}><ShieldCheck size={14} /><span>.git · .dimprover · .env · secret/credential · node_modules · .next · build/dist/cache/coverage automatikusan kizárva. Symlink és worktree-escape fail-closed. P5 worker/file/Git activity csak read-only polling.</span></footer>
+      <footer className={styles.liveWorkspaceFooter}><ShieldCheck size={14} /><span>.git · .dimprover · .env · secret/credential · node_modules · .next · build/dist/cache/coverage automatikusan kizárva. Symlink és worktree-escape fail-closed. P7 multi-panel csak azonosító/UI állapotot perzisztál, fájltartalmat nem.</span></footer>
     </section>
   );
 }

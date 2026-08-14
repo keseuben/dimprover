@@ -127,7 +127,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
           ) : null}
 
           {tab === "workspace" ? (
-            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} activityEnabled={Boolean(status?.features.workspaceActivityEnabled)} monacoEnabled={Boolean(status?.features.workspaceMonacoEnabled)} theme={theme} />
+            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} activityEnabled={Boolean(status?.features.workspaceActivityEnabled)} monacoEnabled={Boolean(status?.features.workspaceMonacoEnabled)} multiPanelEnabled={Boolean(status?.features.multiPanelEnabled)} theme={theme} />
           ) : null}
 
           {tab === "sessions" ? (

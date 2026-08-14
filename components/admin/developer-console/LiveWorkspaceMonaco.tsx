@@ -8,7 +8,7 @@ import type { LiveWorkspaceGitContext } from "@/app/lib/dev-center/terminal-hub/
 import type { ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
-type MonacoMode = "live" | "diff" | "history";
+export type MonacoMode = "live" | "diff" | "history";
 
 type MonacoWorkerEnvironment = {
   getWorker: (_moduleId: string, label: string) => Worker;
@@ -82,14 +82,21 @@ const editorOptions = {
   overviewRulerBorder: false,
 };
 
-export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme }: { enabled: boolean; workspaceId: string; file: LiveWorkspaceFilePreview; theme: ConsoleTheme }) {
+export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme, instanceId = "primary", mode: controlledMode, onModeChange }: { enabled: boolean; workspaceId: string; file: LiveWorkspaceFilePreview; theme: ConsoleTheme; instanceId?: string; mode?: MonacoMode; onModeChange?: (mode: MonacoMode) => void }) {
   const [engineReady, setEngineReady] = useState(false);
-  const [mode, setMode] = useState<MonacoMode>("live");
+  const [internalMode, setInternalMode] = useState<MonacoMode>("live");
   const [context, setContext] = useState<LiveWorkspaceGitContext | null>(null);
   const [selectedCommit, setSelectedCommit] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const monacoRef = useRef<Monaco | null>(null);
+  const mode = controlledMode ?? internalMode;
+  const modelAuthority = useMemo(() => `dimpro-${instanceId.replace(/[^a-z0-9-]/gi, "-").toLowerCase() || "panel"}`, [instanceId]);
+
+  const changeMode = useCallback((next: MonacoMode) => {
+    if (controlledMode === undefined) setInternalMode(next);
+    onModeChange?.(next);
+  }, [controlledMode, onModeChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,10 +141,10 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
     const instance = monacoRef.current;
     window.setTimeout(() => {
       for (const model of instance?.editor.getModels() || []) {
-        if (model.uri.scheme === "inmemory" && model.uri.authority === "dimpro") model.dispose();
+        if (model.uri.scheme === "inmemory" && model.uri.authority === modelAuthority) model.dispose();
       }
     }, 0);
-  }, []);
+  }, [modelAuthority]);
 
   const loadContext = useCallback(async (commit = "") => {
     if (!enabled || !workspaceId || !file.relativePath) return;
@@ -156,11 +163,11 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
   }, [enabled, file.relativePath, workspaceId]);
 
   useEffect(() => {
-    setMode("live");
+    if (controlledMode === undefined) setInternalMode("live");
     setSelectedCommit("");
     setContext(null);
     if (enabled) void loadContext();
-  }, [enabled, file.relativePath, loadContext]);
+  }, [controlledMode, enabled, file.relativePath, loadContext]);
 
   const language = editorLanguage(context?.language || file.language);
   const themeName = monacoTheme(theme);
@@ -180,9 +187,9 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
     <div className={styles.liveWorkspaceMonaco}>
       <header className={styles.liveWorkspaceMonacoToolbar}>
         <div className={styles.liveWorkspaceMonacoTabs}>
-          <button type="button" data-active={mode === "live" ? "true" : "false"} onClick={() => setMode("live")}><Code2 size={13} /> LIVE</button>
-          <button type="button" data-active={mode === "diff" ? "true" : "false"} onClick={() => setMode("diff")}><GitCompareArrows size={13} /> DIFF</button>
-          <button type="button" data-active={mode === "history" ? "true" : "false"} onClick={() => setMode("history")}><History size={13} /> HISTORY</button>
+          <button type="button" data-active={mode === "live" ? "true" : "false"} onClick={() => changeMode("live")}><Code2 size={13} /> LIVE</button>
+          <button type="button" data-active={mode === "diff" ? "true" : "false"} onClick={() => changeMode("diff")}><GitCompareArrows size={13} /> DIFF</button>
+          <button type="button" data-active={mode === "history" ? "true" : "false"} onClick={() => changeMode("history")}><History size={13} /> HISTORY</button>
         </div>
         <div className={styles.liveWorkspaceMonacoState}>
           <b>READ ONLY</b>
@@ -199,7 +206,7 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
           height="100%"
           language={language}
           value={currentContent}
-          path={`inmemory://dimpro/live/${workspaceId}/${encodeURIComponent(file.relativePath)}`}
+          path={`inmemory://${modelAuthority}/live/${workspaceId}/${encodeURIComponent(file.relativePath)}`}
           theme={themeName}
           beforeMount={configureMonaco}
           options={editorOptions}
@@ -214,8 +221,8 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
             language={language}
             original={context.head.content}
             modified={currentContent}
-            originalModelPath={`inmemory://dimpro/head/${context.headCommit}/${encodeURIComponent(file.relativePath)}`}
-            modifiedModelPath={`inmemory://dimpro/worktree/${workspaceId}/${encodeURIComponent(file.relativePath)}`}
+            originalModelPath={`inmemory://${modelAuthority}/head/${context.headCommit}/${encodeURIComponent(file.relativePath)}`}
+            modifiedModelPath={`inmemory://${modelAuthority}/worktree/${workspaceId}/${encodeURIComponent(file.relativePath)}`}
             theme={themeName}
             beforeMount={configureMonaco}
             keepCurrentOriginalModel
@@ -244,7 +251,7 @@ export default function LiveWorkspaceMonaco({ enabled, workspaceId, file, theme 
                 height="100%"
                 language={language}
                 value={context.selectedHistory.content}
-                path={`inmemory://dimpro/history/${selectedCommit}/${encodeURIComponent(file.relativePath)}`}
+                path={`inmemory://${modelAuthority}/history/${selectedCommit}/${encodeURIComponent(file.relativePath)}`}
                 theme={themeName}
                 beforeMount={configureMonaco}
                 options={editorOptions}

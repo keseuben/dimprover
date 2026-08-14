@@ -115,3 +115,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `215_benjadmin_live_workspace_p6_candidate_20260814.md` – Live Workspace P6 candidate: local Monaco Live/Diff/History, read-only Git context, local editor+JSON workers, 205/205 contract és headless browser acceptance 0 error; live P6 flag még OFF.
 
 - `216_benjadmin_live_workspace_p6_dev_activation_20260814.md` – Live Workspace P6 DEV aktiválás: Monaco Live/Diff/History aktív, 205/205 PASS, browser 0 error; execution/PROD/P7 továbbra is OFF.
+
+- `217_benjadmin_live_workspace_p7_candidate_20260814.md` – Live Workspace P7 candidate: 1/2/4 read-only Monaco panel, detached multi-monitor state sync, 248/248 PASS, browser 0 error; live P7 flag még OFF.
