@@ -8,7 +8,7 @@ import TerminalCorePanel from "./TerminalCorePanel";
 import TerminalCommandLibrary from "./TerminalCommandLibrary";
 import LiveWorkspaceReadOnly from "./LiveWorkspaceReadOnly";
 import TerminalManagedCommands from "./TerminalManagedCommands";
-import type { ConsoleLiveState } from "./types";
+import type { ConsoleLiveState, ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 type HubTab = "terminal" | "commands" | "workspace" | "sessions" | "audit";
@@ -27,7 +27,7 @@ const tabs: Array<{ id: HubTab; label: string }> = [
   { id: "audit", label: "AUDIT" },
 ];
 
-export default function TerminalHubWorkspace({ open, onClose, live }: { open: boolean; onClose: () => void; live: ConsoleLiveState | null }) {
+export default function TerminalHubWorkspace({ open, onClose, live, theme }: { open: boolean; onClose: () => void; live: ConsoleLiveState | null; theme: ConsoleTheme }) {
   const [tab, setTab] = useState<HubTab>("terminal");
   const [mode, setMode] = useState<HubMode>("floating");
   const [status, setStatus] = useState<TerminalHubStatus | null>(null);
@@ -127,7 +127,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
           ) : null}
 
           {tab === "workspace" ? (
-            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} activityEnabled={Boolean(status?.features.workspaceActivityEnabled)} />
+            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} activityEnabled={Boolean(status?.features.workspaceActivityEnabled)} monacoEnabled={Boolean(status?.features.workspaceMonacoEnabled)} theme={theme} />
           ) : null}
 
           {tab === "sessions" ? (

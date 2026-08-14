@@ -1,9 +1,11 @@
 "use client";
 
 import { Activity, ArrowUp, FileCode2, Folder, GitBranch, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveWorkspaceFilePreview, LiveWorkspaceSummary, LiveWorkspaceTreeEntry } from "@/app/lib/dev-center/terminal-hub/live-workspace";
 import type { LiveWorkspaceActivitySnapshot } from "@/app/lib/dev-center/terminal-hub/live-workspace-activity";
+import LiveWorkspaceMonaco from "./LiveWorkspaceMonaco";
+import type { ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 type TreePayload = {
@@ -33,7 +35,7 @@ function timeLabel(value: string | null | undefined) {
   return date.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { enabled: boolean; activityEnabled: boolean }) {
+export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monacoEnabled, theme }: { enabled: boolean; activityEnabled: boolean; monacoEnabled: boolean; theme: ConsoleTheme }) {
   const [workspaces, setWorkspaces] = useState<LiveWorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [tree, setTree] = useState<TreePayload | null>(null);
@@ -43,6 +45,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { en
   const [activityBusy, setActivityBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [activityMessage, setActivityMessage] = useState("");
+  const workspaceIdRef = useRef("");
 
   const selectedWorkspace = useMemo(() => workspaces.find((item) => item.id === workspaceId) || null, [workspaceId, workspaces]);
   const activityWorkers = useMemo(() => [...(activity?.workers || [])].sort((a, b) => Number(b.selectedWorkspace) - Number(a.selectedWorkspace) || Number(b.freshness === "LIVE") - Number(a.freshness === "LIVE") || a.code.localeCompare(b.code, "hu")), [activity]);
@@ -86,14 +89,20 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { en
       if (!response.ok || !payload?.ok) throw new Error(`${payload?.code ? `${payload.code}: ` : ""}${payload?.error || "A Live Workspace lista nem tölthető be."}`);
       const next = payload.workspaces || [];
       setWorkspaces(next);
-      const nextId = next.some((item) => item.id === workspaceId) ? workspaceId : next[0]?.id || "";
-      setWorkspaceId(nextId);
-      if (nextId) await loadTree(nextId, "");
-      else { setTree(null); setFile(null); setActivity(null); }
+      const currentId = workspaceIdRef.current;
+      const nextId = next.some((item) => item.id === currentId) ? currentId : next[0]?.id || "";
+      if (nextId !== currentId) {
+        workspaceIdRef.current = nextId;
+        setWorkspaceId(nextId);
+        if (nextId) await loadTree(nextId, "");
+        else { setTree(null); setFile(null); setActivity(null); }
+      } else if (!nextId) {
+        setTree(null); setFile(null); setActivity(null);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A Live Workspace lista nem tölthető be.");
     } finally { setBusy(""); }
-  }, [enabled, loadTree, workspaceId]);
+  }, [enabled, loadTree]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -111,6 +120,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { en
   }, [activityEnabled, enabled, loadActivity, workspaceId]);
 
   async function selectWorkspace(id: string) {
+    workspaceIdRef.current = id;
     setWorkspaceId(id);
     await loadTree(id, "");
     if (activityEnabled) await loadActivity(id);
@@ -213,9 +223,9 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled }: { en
         <section className={styles.liveWorkspacePreview}>
           <header>{file ? <><div><strong>{file.name}</strong><span>{file.relativePath}</span></div><div><b data-ai={file.aiVisibility}>AI: {file.aiVisibility === "blocked" ? "TILTVA" : "SZŰRT"}</b><span>{file.gitStatus || "Git: tiszta"}</span></div></> : <><div><strong>FÁJL ELŐNÉZET</strong><span>P4 · egyszerű read-only renderer</span></div></>}</header>
           {file ? <>
-            <div className={styles.liveWorkspaceFileMeta}><span>{file.language}</span><span>{bytes(file.sizeBytes)}</span><span>{file.lineCount} sor</span><span>SHA {file.sha256.slice(0, 12)}…</span>{file.sensitiveFindings.length ? <span>{file.sensitiveFindings.length} érzékeny találat</span> : null}</div>
-            <pre><code>{file.content}</code></pre>
-          </> : <div className={styles.liveWorkspacePreviewEmpty}><FileCode2 size={28} /><p>Válassz előnézhető szöveges forrásfájlt.</p><small>Monaco, Diff és History a későbbi P6 rétegben érkezik.</small></div>}
+            <div className={styles.liveWorkspaceFileMeta}><span>{file.language}</span><span>{bytes(file.sizeBytes)}</span><span>{file.lineCount} sor</span><span>SHA {file.sha256.slice(0, 12)}…</span><span>{monacoEnabled ? "MONACO P6" : "P4 PREVIEW"}</span>{file.sensitiveFindings.length ? <span>{file.sensitiveFindings.length} érzékeny találat</span> : null}</div>
+            {monacoEnabled ? <LiveWorkspaceMonaco enabled workspaceId={workspaceId} file={file} theme={theme} /> : <pre><code>{file.content}</code></pre>}
+          </> : <div className={styles.liveWorkspacePreviewEmpty}><FileCode2 size={28} /><p>Válassz előnézhető szöveges forrásfájlt.</p><small>{monacoEnabled ? "P6 Monaco Live / Diff / History készen áll a kiválasztott fájlhoz." : "P4 egyszerű read-only preview aktív; P6 Monaco flag OFF."}</small></div>}
           {busy === "file" ? <div className={styles.liveWorkspacePreviewLoading}>Fájl betöltése…</div> : null}
         </section>
       </div>

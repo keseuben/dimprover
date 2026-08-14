@@ -1,0 +1,9 @@
+declare module "monaco-editor/language/json/monaco.contribution";
+declare module "monaco-editor/editor/contrib/documentSymbols/browser/outlineModel";
+declare module "monaco-editor/editor/contrib/codelens/browser/codeLensCache";
+declare module "monaco-editor/editor/contrib/inlayHints/browser/inlayHintsController";
+declare module "monaco-editor/editor/common/services/treeViewsDndService";
+declare module "monaco-editor/editor/contrib/suggest/browser/suggestMemory";
+declare module "monaco-editor/platform/actionWidget/browser/actionWidget";
+declare module "monaco-editor/editor/editor.worker";
+declare module "monaco-editor/language/json/json.worker";

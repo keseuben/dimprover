@@ -294,7 +294,7 @@ export default function DeveloperConsoleShell() {
       <DevelopmentResourcesDrawer open={resourcesOpen} onClose={() => setResourcesOpen(false)} resources={resources} health={resourceHealth} onReload={loadResources} />
       <TeamQuickDrawer open={teamOpen} onClose={() => setTeamOpen(false)} live={live} />
       <AppInstallDrawer open={installOpen} onClose={() => setInstallOpen(false)} />
-      <TerminalHubWorkspace open={terminalHubOpen} onClose={() => setTerminalHubOpen(false)} live={live} />
+      <TerminalHubWorkspace open={terminalHubOpen} onClose={() => setTerminalHubOpen(false)} live={live} theme={theme} />
     </main>
   );
 }

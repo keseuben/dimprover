@@ -1070,3 +1070,46 @@
 .liveWorkspaceEvents p { margin: 8px; color: var(--muted); font-size: 12px; }
 @media (max-width: 1100px) { .liveWorkspaceActivity > header { align-items: flex-start; flex-direction: column; } .liveWorkspaceEvents article { grid-template-columns: 58px 68px minmax(80px,.4fr) minmax(0,1fr); } .liveWorkspaceEvents article code { grid-column: 4; } }
 @media (max-width: 800px) { .liveWorkspaceWorkers { grid-template-columns: 1fr; } .liveWorkspaceEvents > header { align-items: flex-start; flex-direction: column; } .liveWorkspaceEvents article { grid-template-columns: 56px 66px minmax(0,1fr); } .liveWorkspaceEvents article strong { grid-column: 1 / -1; } .liveWorkspaceEvents article code { grid-column: 3; } }
+
+/* BENJADMIN Live Workspace P6 — local Monaco Live / Diff / History. */
+.liveWorkspaceMonaco { min-width: 0; min-height: 0; height: 100%; position: relative; display: grid; grid-template-rows: auto minmax(0,1fr); overflow: hidden; background: var(--surface); }
+.liveWorkspaceMonacoOff { min-height: 140px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); background: var(--surface); }
+.liveWorkspaceMonacoOff > svg { color: var(--accent-strong); }
+.liveWorkspaceMonacoOff > div { display: grid; gap: 2px; }
+.liveWorkspaceMonacoOff strong { color: var(--text); font-size: 12px; }
+.liveWorkspaceMonacoOff span { font-size: 12px; }
+.liveWorkspaceMonacoToolbar { min-width: 0; min-height: 39px; padding: 4px 6px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 7px; background: var(--surface2); }
+.liveWorkspaceMonacoTabs, .liveWorkspaceMonacoState { min-width: 0; display: flex; align-items: center; gap: 4px; }
+.liveWorkspaceMonacoTabs button, .liveWorkspaceMonacoState button { min-height: 29px; padding: 0 7px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 800; }
+.liveWorkspaceMonacoTabs button[data-active="true"] { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.liveWorkspaceMonacoState > b, .liveWorkspaceMonacoState > span { padding: 3px 6px; border-radius: 5px; font-size: 12px; white-space: nowrap; }
+.liveWorkspaceMonacoState > b { color: var(--green); background: var(--green-soft); }
+.liveWorkspaceMonacoState > span { color: var(--text-soft); background: var(--surface); }
+.liveWorkspaceMonacoState > span[data-ai="blocked"] { color: var(--red); background: var(--red-soft); }
+.liveWorkspaceMonacoState button { width: 30px; padding: 0; }
+.liveWorkspaceMonacoLoading, .liveWorkspaceMonacoEmpty { min-height: 0; display: grid; place-items: center; align-content: center; gap: 6px; color: var(--muted); text-align: center; background: var(--surface); font-size: 12px; }
+.liveWorkspaceMonacoLoading { display: flex; }
+.liveWorkspaceMonacoLoading svg, .liveWorkspaceMonacoBusy svg { animation: benjadminMonacoSpin 1s linear infinite; }
+.liveWorkspaceMonacoEmpty svg { color: var(--accent-strong); }
+.liveWorkspaceMonacoEmpty strong { color: var(--text); font-size: 12px; }
+.liveWorkspaceMonacoEmpty span { max-width: 440px; font-size: 12px; line-height: 1.45; }
+.liveWorkspaceMonacoError { position: absolute; z-index: 6; top: 43px; left: 7px; right: 7px; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border)); border-radius: 7px; color: var(--red); background: var(--red-soft); font-size: 12px; }
+.liveWorkspaceMonacoBusy { position: absolute; z-index: 7; right: 8px; bottom: 8px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; gap: 5px; color: var(--text-soft); background: color-mix(in srgb, var(--panel) 94%, transparent); font-size: 12px; }
+.liveWorkspaceHistory { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(190px,.42fr) minmax(0,1.58fr); overflow: hidden; }
+.liveWorkspaceHistory > aside { min-width: 0; min-height: 0; border-right: 1px solid var(--border); display: grid; grid-template-rows: auto minmax(0,1fr); background: var(--panel); }
+.liveWorkspaceHistory > aside > header { min-height: 38px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 5px; color: var(--text-soft); background: var(--surface2); }
+.liveWorkspaceHistory > aside > header svg { color: var(--accent-strong); }
+.liveWorkspaceHistory > aside > header strong { font-size: 12px; }
+.liveWorkspaceHistory > aside > header b { margin-left: auto; padding: 2px 5px; border-radius: 999px; color: var(--accent-strong); background: var(--accent-soft); font-size: 12px; }
+.liveWorkspaceHistory > aside > div { min-width: 0; min-height: 0; overflow: auto; padding: 4px; display: grid; align-content: start; gap: 3px; }
+.liveWorkspaceHistory > aside button { min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 2px; text-align: left; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.liveWorkspaceHistory > aside button[data-active="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.liveWorkspaceHistory > aside button strong, .liveWorkspaceHistory > aside button span, .liveWorkspaceHistory > aside button small { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceHistory > aside button strong { color: var(--text); }
+.liveWorkspaceHistory > aside button span, .liveWorkspaceHistory > aside button small { color: var(--muted); }
+.liveWorkspaceHistory > aside p { margin: 7px; color: var(--muted); font-size: 12px; }
+.liveWorkspaceHistory > section { min-width: 0; min-height: 0; overflow: hidden; background: var(--surface); }
+.liveWorkspaceMonaco :global(.monaco-editor), .liveWorkspaceMonaco :global(.monaco-diff-editor) { font-variant-ligatures: none; }
+@keyframes benjadminMonacoSpin { to { transform: rotate(360deg); } }
+@media (max-width: 950px) { .liveWorkspaceMonacoToolbar { align-items: stretch; flex-direction: column; } .liveWorkspaceMonacoTabs, .liveWorkspaceMonacoState { flex-wrap: wrap; } .liveWorkspaceHistory { grid-template-columns: minmax(165px,.5fr) minmax(0,1.5fr); } }
+@media (max-width: 700px) { .liveWorkspaceHistory { grid-template-columns: 1fr; grid-template-rows: 180px minmax(300px,1fr); } .liveWorkspaceHistory > aside { border-right: 0; border-bottom: 1px solid var(--border); } .liveWorkspaceMonacoTabs button { flex: 1; } }
