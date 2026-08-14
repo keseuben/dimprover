@@ -863,3 +863,17 @@
   .terminalHubListView article { grid-template-columns: 1fr; gap: 3px; }
   .terminalHubListView article span, .terminalHubListView article small { white-space: normal; }
 }
+
+/* BENJADMIN Terminal Hub P2 candidate readiness. */
+.terminalCoreGate { padding: 10px; border: 1px solid color-mix(in srgb, var(--amber) 42%, var(--border)); border-radius: 10px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; background: var(--amber-soft); }
+.terminalCoreGate[data-ready="true"] { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); background: var(--green-soft); }
+.terminalCoreGate > header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.terminalCoreGate > header strong { color: var(--text); font-size: 13px; }
+.terminalCoreGate > header b { color: var(--amber); font-size: 12px; }
+.terminalCoreGate[data-ready="true"] > header b { color: var(--green); }
+.terminalCoreGate > div { min-width: 0; padding: 6px 7px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); }
+.terminalCoreGate > div span { color: var(--muted); font-size: 12px; }
+.terminalCoreGate > div strong { min-width: 0; overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.terminalCoreGate > ul, .terminalCoreGate > p { grid-column: 1 / -1; margin: 0; padding: 7px 9px; border-radius: 7px; color: var(--text-soft); background: var(--surface); font-size: 12px; line-height: 1.5; }
+.terminalCoreGate > ul { padding-left: 26px; }
+@media (max-width: 700px) { .terminalCoreGate { grid-template-columns: 1fr; } .terminalCoreGate > header, .terminalCoreGate > ul, .terminalCoreGate > p { grid-column: 1; } }

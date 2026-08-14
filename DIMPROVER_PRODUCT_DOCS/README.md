@@ -80,5 +80,6 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `197_benjadmin_terminalhub_normative_checkpoint_20260814.md` – 01–06 BENJADMIN normatív forráslánc, aktuális 666a651 baseline és Terminal Hub / Live Workspace P0+P1 indulási checkpoint.
 - `198_benjadmin_terminalhub_p0p1_20260814.md` – Terminal Hub P0 security foundation + P1 UI shell, execution nélkül, 21/21 contract és koordinált build checkpoint.
 - `199_benjadmin_terminalhub_p0p1_dev_activation_20260814.md` – P0/P1 DEV aktiválás, 21/21 security contract, feature flag állapot, smoke és P2 előtti rollback checkpoint.
+- `200_benjadmin_terminalhub_p2_foundation_20260814.md` – Terminal Hub P2 DEV Terminal Core foundation: nem-root identity gate, readiness API, session protocol és 12/12 contract; valódi PTY még nem aktív.
 
 - 130_dimpro_benjadmin_operator_ui_v2_20260810.md – Operator UI 2.0: egyképernyős, lapozható táblázatos BENJADMIN, dokkolható Explorer, light/dark mód és öt tagos B3 csapat.
