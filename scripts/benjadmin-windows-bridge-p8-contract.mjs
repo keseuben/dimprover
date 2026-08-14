@@ -1,0 +1,58 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root=process.cwd();
+const read=(file)=>fs.readFileSync(path.join(root,file),"utf8");
+const config=read("app/lib/dev-center/terminal-hub/config.ts");
+const types=read("app/lib/dev-center/terminal-hub/types.ts");
+const bridge=read("app/lib/dev-center/terminal-hub/windows-bridge.ts");
+const route=read("app/api/dev/terminal-hub/windows-bridge/readiness/route.ts");
+const readiness=read("app/lib/dev-center/terminal-hub/readiness.ts");
+const status=read("app/lib/dev-center/terminal-hub/status.ts");
+const ui=read("components/admin/developer-console/WindowsBridgePanel.tsx");
+const hub=read("components/admin/developer-console/TerminalHubWorkspace.tsx");
+const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+let pass=0,fail=0;
+function check(name,ok){if(ok){pass++;console.log(`PASS ${name}`)}else{fail++;console.error(`FAIL ${name}`)}}
+
+check("P8 normatív Windows Bridge flag megmarad",config.includes('BENJADMIN_WINDOWS_BRIDGE_ENABLED'));
+check("P8 pairing külön kill switch",config.includes('BENJADMIN_WINDOWS_BRIDGE_PAIRING_ENABLED')&&types.includes('windowsBridgePairingEnabled: boolean'));
+check("P8 execution külön kill switch",config.includes('BENJADMIN_WINDOWS_BRIDGE_EXECUTION_ENABLED')&&types.includes('windowsBridgeExecutionEnabled: boolean'));
+check("Pairing csak Bridge főflag mögött",config.includes('flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false) && flag("BENJADMIN_WINDOWS_BRIDGE_PAIRING_ENABLED", false)'));
+check("Execution csak Bridge főflag mögött",config.includes('flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false) && flag("BENJADMIN_WINDOWS_BRIDGE_EXECUTION_ENABLED", false)'));
+check("Mindhárom P8 flag default false",["BENJADMIN_WINDOWS_BRIDGE_ENABLED","BENJADMIN_WINDOWS_BRIDGE_PAIRING_ENABLED","BENJADMIN_WINDOWS_BRIDGE_EXECUTION_ENABLED"].every((n)=>config.includes(`flag("${n}", false)`)));
+check("P8 protocol verzió explicit",bridge.includes("WINDOWS_BRIDGE_PROTOCOL_VERSION = 1"));
+check("P8 outbound-only transport",bridge.includes('OUTBOUND_HTTPS_ONLY'));
+check("Böngésző közvetlen processz-hozzáférés false",bridge.includes('browserDirectProcessAccess: false'));
+check("Böngésző localhost Bridge false",bridge.includes('browserLocalhostBridgeAccess: false'));
+check("Windows agenthez nincs inbound port",bridge.includes('inboundPortRequired: false'));
+check("Külön helyi agent kötelező",bridge.includes('localAgentRequired: true'));
+check("Bridge credential Windows védett store",bridge.includes('WINDOWS_CREDENTIAL_MANAGER_OR_DPAPI'));
+check("Pairing maximum 10 perc",bridge.includes('WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS = 600')&&bridge.includes('oneTimePairingMaxAgeSeconds: 600'));
+check("P8 PROD execution tiltott",bridge.includes('prodExecutionAllowed: false')&&bridge.includes('PROD terminal nem kapcsolható össze'));
+check("P8 RAW policy jogosult UI",bridge.includes('rawPolicy: "AUTHORIZED_UI_ONLY"'));
+check("P8 SANITIZED policy AI filtered",bridge.includes('sanitizedPolicy: "AI_FILTERED_ONLY"'));
+check("P8 AUDIT policy maszkolt meta",bridge.includes('auditPolicy: "MASKED_METADATA_ONLY"'));
+check("Agent hello nem tartalmaz raw commandot",bridge.includes('export type WindowsBridgeAgentHello')&&!/rawCommand|commandText|scriptText|powershellScript/.test(bridge));
+check("Heartbeat nem tartalmaz secretet",bridge.includes('export type WindowsBridgeHeartbeat')&&!/password|secret|tokenValue|apiKey/.test(bridge));
+check("P8 readiness admin-only GET",route.includes('isDevCenterAuthorized(request.headers, false)')&&route.includes('export async function GET')&&!/export async function (POST|PUT|PATCH|DELETE)/.test(route));
+check("P8 foundation nem hoz pairing API-t",!fs.existsSync(path.join(root,"app/api/dev/terminal-hub/windows-bridge/pair")));
+check("P8 foundation nem hoz command API-t",!fs.existsSync(path.join(root,"app/api/dev/terminal-hub/windows-bridge/command")));
+check("P8 foundation nem indít PowerShell/processzt",!/powershell\.exe|pwsh\.exe|spawn\(|exec\(|execFile\(|node-pty/i.test(bridge+route+ui));
+check("P8 UI nincs Pair/Connect/Run gomb",!/>\s*(?:Pair|Connect|Run PowerShell|Futtatás)\s*</i.test(ui));
+check("P8 UI explicit foundation",ui.includes('fail-closed foundation')&&ui.includes('A foundation nem indít PowerShell processzt'));
+check("P8 UI security hármas látható",ui.includes('RAW: jogosult emberi UI')&&ui.includes('SANITIZED: AI szűrt')&&ui.includes('AUDIT: maszkolt meta'));
+check("P8 UI PROD tiltás látható",ui.includes('PROD: TILTVA'));
+check("P8 panel readiness API-t olvas",ui.includes('/api/dev/terminal-hub/windows-bridge/readiness'));
+check("Terminal Hub megjeleníti P8 panelt",hub.includes('import WindowsBridgePanel')&&hub.includes('<WindowsBridgePanel />'));
+check("Terminal Hub nem jelzi többé P4/P8-at korai flagnak",!hub.includes('KORAI FLAG ON')&&hub.includes('P4 Live Workspace / P8 Bridge'));
+check("P2 execution readiness P4/P8-tól független",!readiness.includes('Live Workspace P4 előtt nem lehet ON')&&!readiness.includes('Windows Bridge P8 előtt nem lehet ON'));
+check("P2 execution továbbra is kill-switch gated",readiness.includes('Terminal execution kill switch OFF')&&readiness.includes('Root UID/GID')===false);
+check("PowerShell endpoint P8 foundation státuszt tükröz",status.includes('P8 foundation:')&&status.includes('features.windowsBridgeEnabled ? "PLANNED" : "DISABLED"'));
+check("P8 CSS blokk létezik",css.includes('BENJADMIN Terminal Hub P8')&&css.includes('.windowsBridgePanel'));
+const p8css=css.slice(css.indexOf('BENJADMIN Terminal Hub P8'));
+check("P8 tipográfia minimum 12 px",!/font-size:\s*(?:[0-9]|1[01])px/.test(p8css));
+check("P8 foundation nem változtat PROD flaget",!bridge.includes('BENJADMIN_PROD_TERMINAL_ENABLED=1')&&!ui.includes('PROD terminal ON'));
+
+console.log(`SUMMARY ${pass}/${pass+fail} PASS`);
+if(fail)process.exit(1);

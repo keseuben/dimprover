@@ -8,6 +8,7 @@ import TerminalCorePanel from "./TerminalCorePanel";
 import TerminalCommandLibrary from "./TerminalCommandLibrary";
 import LiveWorkspaceReadOnly from "./LiveWorkspaceReadOnly";
 import TerminalManagedCommands from "./TerminalManagedCommands";
+import WindowsBridgePanel from "./WindowsBridgePanel";
 import type { ConsoleLiveState, ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
@@ -100,11 +101,12 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
                 <div><span>Execution kill switch</span><strong>{terminalReadiness?.executionEnabled ? "ON" : "OFF"}</strong></div>
                 <div><span>Nem-root OS-identitás</span><strong>{terminalReadiness?.osIdentity ? `${terminalReadiness.osIdentity.label} · ${terminalReadiness.osIdentity.uid}:${terminalReadiness.osIdentity.gid}` : "NINCS"}</strong></div>
                 <div><span>PROD terminal</span><strong>{terminalReadiness?.prodTerminalEnabled ? "ON · TILTOTT" : "OFF"}</strong></div>
-                <div><span>Live Workspace / Windows Bridge</span><strong>{terminalReadiness?.liveWorkspaceEnabled || terminalReadiness?.windowsBridgeEnabled ? "KORAI FLAG ON" : "OFF"}</strong></div>
+                <div><span>P4 Live Workspace / P8 Bridge</span><strong>{`${terminalReadiness?.liveWorkspaceEnabled ? "P4 ON" : "P4 OFF"} · ${terminalReadiness?.windowsBridgeEnabled ? "P8 FLAG ON" : "P8 OFF"}`}</strong></div>
                 {terminalReadiness?.blockers?.length ? <ul>{terminalReadiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p>A P2 végrehajtási előfeltételei teljesülnek; külön candidate acceptance szükséges a PTY aktiválása előtt.</p>}
               </section>
               <TerminalCorePanel readiness={terminalReadiness} />
               <TerminalManagedCommands sessions={live?.sessions || []} />
+              <WindowsBridgePanel />
               <div className={styles.terminalEndpointGrid}>
                 {(status?.endpoints || []).map((endpoint) => (
                   <article key={endpoint.kind} data-state={endpoint.state}>
@@ -117,7 +119,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
               <section className={styles.terminalHubReadinessGrid}>
                 <div><span>Central lock</span><strong>{status?.coordination.exclusiveOperationBusy ? "FOGLALT" : "SZABAD"}</strong><small>Managed build/restart később sem kerülheti meg.</small></div>
                 <div><span>Execution</span><strong>{terminalReadiness?.executionEnabled ? "ENABLED" : "KIKAPCSOLVA"}</strong><small>P2 candidate gate szabályozza.</small></div>
-                <div><span>Windows Bridge</span><strong>{terminalReadiness?.windowsBridgeEnabled ? "ENABLED" : "KIKAPCSOLVA"}</strong><small>PowerShell csak P8-ban.</small></div>
+                <div><span>Windows Bridge</span><strong>{terminalReadiness?.windowsBridgeEnabled ? "FOUNDATION FLAG ON" : "KIKAPCSOLVA"}</strong><small>P8 agent/pairing/execution külön gate.</small></div>
               </section>
             </div>
           ) : null}
@@ -139,7 +141,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
           ) : null}
         </div>
 
-        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P2 candidate: a DEV Terminal Core csak nem-root identitással aktiválható. PROD, Live Workspace és Windows Bridge továbbra is zárt.</span></footer>
+        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P8 foundation: Live Workspace P4–P7 aktív. Terminal execution, Windows Bridge pairing/execution, PROD és Secret Vault továbbra is fail-closed.</span></footer>
       </section>
     </div>
   );

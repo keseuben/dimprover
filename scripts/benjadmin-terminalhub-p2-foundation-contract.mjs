@@ -22,8 +22,8 @@ check("P2 XTerm dependency rögzítve", Boolean(pkg.dependencies?.["@xterm/xterm
 check("Nem-root UID/GID readiness kötelező", identity.includes("BENJADMIN_TERMINAL_UID") && identity.includes("BENJADMIN_TERMINAL_GID") && identity.includes("Root UID/GID nem engedélyezett"));
 check("P2 execution kill switch kötelező", readiness.includes("terminalExecutionEnabled") && readiness.includes("Terminal execution kill switch OFF"));
 check("PROD terminal P2-ben tiltott", readiness.includes("prodTerminalEnabled") && readiness.includes("PROD terminal flag P2-ben nem lehet ON"));
-check("Live Workspace P4 előtt tiltott", readiness.includes("Live Workspace P4 előtt nem lehet ON"));
-check("Windows Bridge P8 előtt tiltott", readiness.includes("Windows Bridge P8 előtt nem lehet ON"));
+check("P2 execution readiness későbbi read-only moduloktól független", !readiness.includes("Live Workspace P4 előtt nem lehet ON") && !readiness.includes("Windows Bridge P8 előtt nem lehet ON"));
+check("P2 readiness továbbra is megjeleníti P4/P8 flagállapotot", readiness.includes("liveWorkspaceEnabled: flags.liveWorkspaceEnabled") && readiness.includes("windowsBridgeEnabled: flags.windowsBridgeEnabled"));
 check("Readiness API admin-only", route.includes("isDevCenterAuthorized(request.headers, false)") && route.includes("status: 401"));
 check("Session lifecycle típusok léteznek", ["STARTING", "RUNNING", "DISCONNECTED", "EXITED", "CLOSED", "FAILED"].every((state) => sessionTypes.includes(state)));
 check("Resize és input szerződés létezik", sessionTypes.includes("TerminalSessionResizeRequest") && sessionTypes.includes("TerminalSessionInputRequest"));

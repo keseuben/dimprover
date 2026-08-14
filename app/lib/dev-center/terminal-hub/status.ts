@@ -54,8 +54,8 @@ export async function getTerminalHubStatus(): Promise<TerminalHubStatus> {
       aiVisibility: "filtered",
       executionEnabled: false,
       risk: "controlled",
-      state: "PLANNED",
-      note: "Desktop Bridge csak P8-ban készül; a webes UI nem indíthat helyi PowerShell processzt.",
+      state: features.windowsBridgeEnabled ? "PLANNED" : "DISABLED",
+      note: "P8 foundation: a webes UI nem indíthat helyi PowerShell processzt. Külön outbound-only Windows agent, pairing és execution gate szükséges.",
     },
     {
       kind: "git",

@@ -1168,3 +1168,30 @@
   .liveWorkspaceMultiPanelGrid[data-layout="4"] { grid-template-rows: repeat(4,minmax(300px,1fr)); }
   .liveWorkspaceDetachedHeader { align-items: flex-start; flex-direction: column; }
 }
+
+/* BENJADMIN Terminal Hub P8 · Windows Desktop Bridge foundation */
+.windowsBridgePanel { min-width: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--panel); }
+.windowsBridgePanel > header { min-height: 48px; padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface2); }
+.windowsBridgePanel > header > div { display: flex; align-items: center; gap: 7px; }
+.windowsBridgePanel > header > div:first-child > div { min-width: 0; display: grid; gap: 1px; }
+.windowsBridgePanel > header span, .windowsBridgePanel > header strong, .windowsBridgePanel > header b { font-size: 12px; }
+.windowsBridgePanel > header span { color: var(--muted); }
+.windowsBridgePanel > header strong { color: var(--text); }
+.windowsBridgePanel > header b { padding: 3px 6px; border-radius: 5px; color: var(--red); background: var(--red-soft); }
+.windowsBridgePanel[data-enabled="true"] > header b { color: var(--amber); background: var(--amber-soft); }
+.windowsBridgePanel > header button { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; display: grid; place-items: center; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.windowsBridgeGrid { padding: 7px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.windowsBridgeGrid article { min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 3px 6px; background: var(--surface); }
+.windowsBridgeGrid article > svg { grid-row: 1 / span 2; color: var(--accent-strong); }
+.windowsBridgeGrid article span, .windowsBridgeGrid article strong, .windowsBridgeGrid article small { min-width: 0; font-size: 12px; }
+.windowsBridgeGrid article span { color: var(--muted); }
+.windowsBridgeGrid article strong { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.windowsBridgeGrid article small { grid-column: 1 / -1; color: var(--text-soft); line-height: 1.4; }
+.windowsBridgeSecurityRow { padding: 0 7px 7px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.windowsBridgeSecurityRow span { padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
+.windowsBridgeSecurityRow span:last-child { color: var(--red); background: var(--red-soft); }
+.windowsBridgePanel > ul { margin: 0; padding: 6px 10px 7px 25px; border-top: 1px solid var(--border); color: var(--amber); background: color-mix(in srgb, var(--amber-soft) 45%, var(--panel)); }
+.windowsBridgePanel > ul li { padding: 2px 0; font-size: 12px; }
+.windowsBridgePanel > footer { min-height: 31px; padding: 5px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; }
+.windowsBridgeError { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); color: var(--red); background: var(--red-soft); font-size: 12px; }
+@media (max-width: 900px) { .windowsBridgeGrid { grid-template-columns: 1fr; } }

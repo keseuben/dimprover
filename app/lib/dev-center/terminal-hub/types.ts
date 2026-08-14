@@ -12,6 +12,8 @@ export type TerminalHubFeatureFlags = {
   workspaceMonacoEnabled: boolean;
   multiPanelEnabled: boolean;
   windowsBridgeEnabled: boolean;
+  windowsBridgePairingEnabled: boolean;
+  windowsBridgeExecutionEnabled: boolean;
   prodTerminalEnabled: boolean;
   secretVaultEnabled: boolean;
   terminalExecutionEnabled: boolean;
