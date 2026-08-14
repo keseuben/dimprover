@@ -972,3 +972,55 @@
 .terminalCommandLibraryFooter { min-height: 38px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 9px; display: flex; align-items: center; gap: 6px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
 @media (max-width: 1050px) { .terminalCommandLibraryToolbar { grid-template-columns: minmax(180px,1fr) repeat(2,minmax(120px,.45fr)); } .terminalCommandLibraryToolbar > button { grid-column: span 1; } .terminalCommandManualForm { grid-template-columns: repeat(2,minmax(0,1fr)); } .terminalCommandManualForm > button { grid-column: 2; } }
 @media (max-width: 700px) { .terminalCommandLibraryHeader { align-items: flex-start; flex-direction: column; } .terminalCommandLibraryToolbar { grid-template-columns: 1fr; } .terminalCommandManualForm { grid-template-columns: 1fr; } .terminalCommandManualWide, .terminalCommandManualForm > button { grid-column: 1; } .terminalCommandList > article { grid-template-columns: 1fr; } .terminalCommandCardActions { justify-content: flex-end; } .terminalCommandEvents > div { grid-template-columns: 1fr 1fr; } }
+
+/* BENJADMIN Live Workspace P4 — read-only file tree and preview. */
+.liveWorkspaceDisabled { min-height: 260px; padding: 24px; border: 1px dashed var(--border-strong); border-radius: 12px; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; color: var(--text-soft); background: var(--panel); }
+.liveWorkspaceDisabled > svg { color: var(--accent-strong); }
+.liveWorkspaceDisabled strong { color: var(--text); font-size: 14px; }
+.liveWorkspaceDisabled p { max-width: 760px; margin: 0; font-size: 13px; line-height: 1.55; }
+.liveWorkspaceDisabled small { color: var(--muted); font-size: 12px; }
+.liveWorkspaceReadOnly { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0,1fr) auto; gap: 7px; }
+.liveWorkspaceHeader { min-height: 50px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel); }
+.liveWorkspaceHeader > div { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.liveWorkspaceHeader > div:first-child > svg { color: var(--accent-strong); }
+.liveWorkspaceHeader > div:first-child > div { min-width: 0; display: grid; gap: 1px; }
+.liveWorkspaceHeader span { color: var(--muted); font-size: 12px; }
+.liveWorkspaceHeader strong { color: var(--text); font-size: 13px; }
+.liveWorkspaceHeader b { padding: 3px 6px; border-radius: 6px; color: var(--green); background: var(--green-soft); font-size: 12px; }
+.liveWorkspaceHeader button { width: 31px; height: 31px; border: 1px solid var(--border); border-radius: 7px; display: grid; place-items: center; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.liveWorkspaceGrid { min-width: 0; min-height: 430px; height: min(610px, 62dvh); display: grid; grid-template-columns: minmax(190px,.55fr) minmax(250px,.75fr) minmax(360px,1.7fr); border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--panel); }
+.liveWorkspaceList, .liveWorkspaceTree, .liveWorkspacePreview { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0,1fr); }
+.liveWorkspaceList, .liveWorkspaceTree { border-right: 1px solid var(--border); }
+.liveWorkspaceList > header, .liveWorkspaceTree > header, .liveWorkspacePreview > header { min-height: 44px; padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 7px; background: var(--surface2); }
+.liveWorkspaceList > header span, .liveWorkspaceTree > header span, .liveWorkspacePreview > header span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceList > header b, .liveWorkspaceTree > header b, .liveWorkspacePreview > header b { color: var(--accent-strong); font-size: 12px; }
+.liveWorkspaceList > div, .liveWorkspaceTreeRows { min-width: 0; min-height: 0; overflow: auto; padding: 5px; display: grid; align-content: start; gap: 4px; }
+.liveWorkspaceList button { width: 100%; min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 7px; display: grid; gap: 2px; text-align: left; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.liveWorkspaceList button[data-active="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.liveWorkspaceList button strong { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceList button span, .liveWorkspaceList button small { min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceList button small { display: flex; align-items: center; gap: 4px; }
+.liveWorkspaceList p, .liveWorkspaceTreeRows p { margin: 8px; color: var(--muted); font-size: 12px; }
+.liveWorkspaceTree > header > div:first-child, .liveWorkspacePreview > header > div:first-child { min-width: 0; display: grid; gap: 1px; }
+.liveWorkspaceTree > header strong, .liveWorkspacePreview > header strong { min-width: 0; overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceTree > header > div:last-child, .liveWorkspacePreview > header > div:last-child { display: flex; align-items: center; gap: 4px; }
+.liveWorkspaceTreeRows button { min-width: 0; min-height: 32px; padding: 0 7px; border: 0; border-radius: 6px; display: grid; grid-template-columns: 18px minmax(0,1fr) auto; gap: 5px; align-items: center; text-align: left; color: var(--text-soft); background: transparent; cursor: pointer; }
+.liveWorkspaceTreeRows button:hover { background: var(--accent-soft); }
+.liveWorkspaceTreeRows button svg { color: var(--accent-strong); }
+.liveWorkspaceTreeRows button span { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.liveWorkspaceTreeRows button small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.liveWorkspaceTreeRows .liveWorkspaceParent { border: 1px solid var(--border); background: var(--surface); }
+.liveWorkspacePreview { grid-template-rows: auto auto minmax(0,1fr); position: relative; }
+.liveWorkspacePreview > header b[data-ai="blocked"] { color: var(--red); }
+.liveWorkspacePreview > header b[data-ai="filtered"] { color: var(--green); }
+.liveWorkspaceFileMeta { min-height: 34px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 5px; background: var(--panel); }
+.liveWorkspaceFileMeta span { padding: 2px 5px; border-radius: 5px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
+.liveWorkspacePreview pre { min-width: 0; min-height: 0; margin: 0; overflow: auto; padding: 11px; color: var(--text); background: var(--surface); font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.5; tab-size: 2; white-space: pre; }
+.liveWorkspacePreview code { font: inherit; }
+.liveWorkspacePreviewEmpty { min-height: 0; display: grid; place-items: center; align-content: center; gap: 6px; color: var(--muted); text-align: center; background: var(--surface); }
+.liveWorkspacePreviewEmpty p { margin: 0; color: var(--text-soft); font-size: 13px; }
+.liveWorkspacePreviewEmpty small { font-size: 12px; }
+.liveWorkspacePreviewLoading { position: absolute; inset: 44px 0 0; display: grid; place-items: center; color: var(--text-soft); background: color-mix(in srgb, var(--panel) 82%, transparent); font-size: 12px; }
+.liveWorkspaceFooter { min-height: 38px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 9px; display: flex; align-items: center; gap: 6px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
+@media (max-width: 1100px) { .liveWorkspaceGrid { grid-template-columns: minmax(180px,.55fr) minmax(220px,.75fr) minmax(320px,1.4fr); } }
+@media (max-width: 800px) { .liveWorkspaceGrid { height: auto; grid-template-columns: 1fr; grid-template-rows: 210px 270px minmax(340px,1fr); } .liveWorkspaceList, .liveWorkspaceTree { border-right: 0; border-bottom: 1px solid var(--border); } .liveWorkspaceHeader { align-items: flex-start; flex-direction: column; } }

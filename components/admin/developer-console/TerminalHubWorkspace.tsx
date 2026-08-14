@@ -1,11 +1,12 @@
 "use client";
 
-import { Boxes, Columns3, History, LayoutPanelTop, LockKeyhole, Maximize2, Minimize2, RefreshCw, ShieldCheck, SquareTerminal, X } from "lucide-react";
+import { Boxes, History, LayoutPanelTop, LockKeyhole, Maximize2, Minimize2, RefreshCw, ShieldCheck, SquareTerminal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TerminalCoreReadiness } from "@/app/lib/dev-center/terminal-hub/readiness";
 import type { TerminalHubStatus } from "@/app/lib/dev-center/terminal-hub/types";
 import TerminalCorePanel from "./TerminalCorePanel";
 import TerminalCommandLibrary from "./TerminalCommandLibrary";
+import LiveWorkspaceReadOnly from "./LiveWorkspaceReadOnly";
 import TerminalManagedCommands from "./TerminalManagedCommands";
 import type { ConsoleLiveState } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -126,7 +127,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
           ) : null}
 
           {tab === "workspace" ? (
-            <section className={styles.terminalHubPlaceholder}><Columns3 size={30} /><strong>LIVE WORKSPACE · P4–P7</strong><p>Allowlist-first fájlfa, worker aktivitás, Git/Diff/History és később Monaco 1/2/4 paneles nézet.</p><div className={styles.terminalHubPolicyFacts}><span>Policy <b>{status?.workspace.policy || "ALLOWLIST_FIRST"}</b></span><span>Rootok <b>{status?.workspace.configuredRootCount ?? 0}</b></span><span>Watcher <b>{status?.workspace.watcherEnabled ? "ON" : "OFF"}</b></span><span>Symlink <b>{status?.workspace.symlinkPolicy || "FAIL_CLOSED"}</b></span></div></section>
+            <LiveWorkspaceReadOnly enabled={Boolean(status?.features.liveWorkspaceEnabled)} />
           ) : null}
 
           {tab === "sessions" ? (
