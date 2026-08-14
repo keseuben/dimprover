@@ -167,7 +167,6 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
   }, [compact, containerWidth, fitWidth, kind, pageCount, pageNumber, rotation, zoom]);
 
   function changeZoom(delta: number) {
-    setFitWidth(false);
     setZoom((current) => clampZoom(current + delta));
   }
 

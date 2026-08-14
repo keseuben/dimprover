@@ -16,6 +16,7 @@ export {
   initDriveObjectDownload,
   initDriveObjectPreview,
   initDriveObjectUpload,
+  openDriveObjectPreviewContent,
 } from "./storageService";
 
 export {

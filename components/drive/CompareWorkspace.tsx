@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { DriveBox, DriveDocument, DriveDocumentDetails } from "./driveTypes";
-import DriveDocumentViewer from "./DriveDocumentViewer";
+import DriveVisualCompareViewer from "./DriveVisualCompareViewer";
 import styles from "./DriveWorkspace.module.css";
 
 type Props = {
@@ -219,6 +219,8 @@ export default function CompareWorkspace({
         </div>
       ) : (
         <>
+          <DriveVisualCompareViewer projectId={projectId} leftDocument={leftDocument!} rightDocument={rightDocument!} />
+
           <div className={styles.compareDocumentGrid}>
             {([
               ["left", leftDocument, leftDetails],
@@ -238,14 +240,11 @@ export default function CompareWorkspace({
                     <span><small>Állapot</small><strong>{document?.currentVersion?.status || "–"}</strong></span>
                     <span><small>Verziók</small><strong>{details?.versions.length || 0}</strong></span>
                   </div>
-                  {document ? (
-                    <DriveDocumentViewer projectId={projectId} document={document} compact />
-                  ) : (
-                    <div className={styles.comparePreviewPlaceholder}>
-                      <FileSearch2 size={24} />
-                      <div><strong>Nincs előnézeti dokumentum</strong><span>Válassz érvényes dokumentumot az összehasonlításhoz.</span></div>
-                    </div>
-                  )}
+                  <div className={styles.compareDocumentSummary}>
+                    <span><small>Dokumentum</small><strong>{document?.name || "–"}</strong></span>
+                    <span><small>Szakág</small><strong>{details?.metadata?.discipline || "–"}</strong></span>
+                    <span><small>Tervszám</small><strong>{details?.metadata?.planNo || "–"}</strong></span>
+                  </div>
                   <button type="button" className={styles.compareDownloadButton} onClick={() => void download(side)} disabled={downloadBusy === side || document?.currentVersion?.status !== "AVAILABLE"}>
                     {downloadBusy === side ? <Loader2 size={12} className={styles.spin} /> : <Download size={12} />} Megnyitás / letöltés
                   </button>

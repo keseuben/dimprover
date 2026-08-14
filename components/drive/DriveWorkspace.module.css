@@ -513,3 +513,87 @@
   .driveViewerStage { height: 340px; }
   .driveViewerCompact .driveViewerStage { height: 300px; }
 }
+
+/* Drive Visual Compare V1 */
+.compareDocumentSummary { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(90px,.7fr) minmax(80px,.6fr); gap: 6px; }
+.compareDocumentSummary span { min-width: 0; border: 1px solid #e4ebf1; border-radius: 7px; background: #fbfcfd; padding: 6px 7px; }
+.compareDocumentSummary small { display: block; color: #8393a3; font-size: 7px; }
+.compareDocumentSummary strong { display: block; margin-top: 2px; color: #344d65; font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.visualCompare { margin: 12px 14px 6px; min-width: 0; border: 1px solid #d8e4ee; border-radius: 10px; background: #fff; overflow: hidden; box-shadow: 0 6px 18px rgba(31,52,73,.04); }
+.visualCompare:fullscreen { width: 100vw; height: 100vh; margin: 0; border: 0; border-radius: 0; display: flex; flex-direction: column; background: #edf2f6; }
+.visualCompare:fullscreen .visualCompareStage { min-height: 0; flex: 1; height: auto; }
+.visualCompareHeader { min-height: 54px; padding: 8px 10px; border-bottom: 1px solid #dfe8f0; background: #fbfdff; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.visualCompareTitle { min-width: 0; display: flex; align-items: center; gap: 8px; color: #2868aa; }
+.visualCompareTitle > svg { flex: 0 0 auto; }
+.visualCompareTitle strong { display: block; color: #2c455d; font-size: 10px; }
+.visualCompareTitle span { display: block; margin-top: 2px; color: #7a8c9e; font-size: 7px; }
+.visualCompareModeSwitch { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid #d7e2eb; border-radius: 8px; background: #f3f7fa; flex: 0 0 auto; }
+.visualCompareModeSwitch button { min-height: 28px; border: 0; border-radius: 6px; background: transparent; color: #61778c; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 7px; font-weight: 900; cursor: pointer; }
+.visualCompareModeSwitch button:hover { color: #1765c7; background: #fff; }
+.visualCompareModeSwitch .visualCompareModeActive { color: #1765c7; background: #fff; box-shadow: 0 1px 3px rgba(30,64,100,.12); }
+.visualCompareToolbar { min-height: 42px; padding: 5px 8px; border-bottom: 1px solid #dce6ee; background: #fff; display: flex; align-items: center; gap: 7px; overflow-x: auto; }
+.visualCompareToolGroup { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; color: #536a80; }
+.visualCompareToolGroup button { min-width: 27px; height: 27px; border: 1px solid #d2dfe9; border-radius: 6px; background: #fff; color: #536b81; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 7px; font-weight: 900; cursor: pointer; }
+.visualCompareToolGroup button:hover { background: #eef5ff; border-color: #a7c5e7; color: #1765c7; }
+.visualCompareToolGroup button:disabled { opacity: .38; cursor: not-allowed; }
+.visualCompareToolGroup .visualCompareToolActive { background: #eaf3ff; border-color: #90b8e7; color: #1765c7; }
+.visualCompareToolGroup > span { min-width: 42px; text-align: center; color: #50667b; font-size: 7px; font-weight: 900; }
+.visualCompareToolGroup > small { color: #8a99a8; font-size: 6px; font-weight: 800; white-space: nowrap; margin-left: 2px; }
+.visualCompareToolbarSpacer { min-width: 10px; flex: 1 1 auto; }
+.visualCompareOpacity { min-width: 190px; display: grid; grid-template-columns: auto minmax(90px,1fr) 34px; align-items: center; gap: 6px; color: #687d91; font-size: 7px; font-weight: 800; }
+.visualCompareOpacity input { width: 100%; accent-color: #7d4de8; cursor: pointer; }
+.visualCompareOpacity input:disabled { opacity: .55; }
+.visualCompareOpacity strong { text-align: right; color: #6f50a8; font-size: 7px; }
+.visualCompareStage { position: relative; min-height: 420px; height: 520px; overflow: auto; padding: 10px; background-color: #dfe6ec; background-image: linear-gradient(45deg,rgba(255,255,255,.25) 25%,transparent 25%),linear-gradient(-45deg,rgba(255,255,255,.25) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,rgba(255,255,255,.25) 75%),linear-gradient(-45deg,transparent 75%,rgba(255,255,255,.25) 75%); background-size: 20px 20px; background-position: 0 0,0 10px,10px -10px,-10px 0; }
+.visualCompareStageSplit { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; align-items: start; }
+.visualCompareStageOverlay { display: flex; align-items: flex-start; justify-content: center; }
+.visualComparePane { min-width: 0; min-height: 390px; position: relative; overflow: auto; padding: 34px 8px 8px; border: 1px solid rgba(125,146,166,.45); border-radius: 8px; background: rgba(236,242,247,.72); }
+.visualComparePaneLabel { position: absolute; z-index: 4; left: 8px; right: 8px; top: 6px; height: 24px; border: 1px solid #d7e1e9; border-radius: 6px; background: rgba(255,255,255,.94); display: flex; align-items: center; gap: 6px; padding: 0 7px; overflow: hidden; box-shadow: 0 2px 5px rgba(30,52,73,.07); }
+.visualComparePaneLabel strong { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; background: #eaf3ff; color: #1765c7; font-size: 8px; flex: 0 0 auto; }
+.visualComparePane[data-side="B"] .visualComparePaneLabel strong { background: #f2eafd; color: #7947bc; }
+.visualComparePaneLabel span { color: #3e5870; font-size: 7px; font-weight: 900; flex: 0 0 auto; }
+.visualComparePaneLabel small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7d8d9c; font-size: 6px; }
+.visualCompareCanvas { display: block; max-width: none; margin: 0 auto; background: #fff; box-shadow: 0 6px 18px rgba(30,49,68,.18); }
+.visualCompareImage { display: block; max-width: none; height: auto; margin: 0 auto; transform-origin: center center; background: #fff; box-shadow: 0 6px 18px rgba(30,49,68,.18); }
+.visualCompareOverlayViewport { position: relative; flex: 0 0 auto; min-width: 320px; min-height: 390px; background: #fff; box-shadow: 0 7px 22px rgba(27,46,65,.2); }
+.visualCompareOverlayViewport .visualCompareCanvas { margin: 0; }
+.visualCompareLayer { position: absolute; left: 0; top: 0; margin: 0; transition: opacity 120ms ease; }
+.visualCompareOverlayTag { position: absolute; z-index: 5; top: 8px; min-height: 22px; border: 1px solid rgba(255,255,255,.5); border-radius: 999px; background: rgba(23,63,103,.86); color: #fff; display: inline-flex; align-items: center; padding: 0 8px; font-size: 7px; font-weight: 900; box-shadow: 0 2px 8px rgba(14,37,58,.2); pointer-events: none; }
+.visualCompareOverlayTagA { left: 8px; }
+.visualCompareOverlayTagB { right: 8px; background: rgba(111,70,166,.88); }
+.visualCompareLoading { position: sticky; z-index: 10; top: 8px; left: 50%; width: max-content; margin: 0 auto; border: 1px solid #c9d8e5; border-radius: 999px; background: rgba(255,255,255,.95); color: #4d657c; padding: 6px 9px; display: flex; align-items: center; gap: 6px; font-size: 7px; font-weight: 900; box-shadow: 0 5px 16px rgba(31,52,73,.12); }
+.visualCompareError { padding: 7px 9px; border-bottom: 1px solid #efcccc; background: #fff1f1; color: #9f3838; font-size: 8px; font-weight: 700; }
+.visualCompareEmpty { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 7px; color: #74889a; text-align: center; }
+.visualCompareEmpty strong { font-size: 9px; }
+.visualCompareFooter { min-height: 34px; padding: 6px 9px; border-top: 1px solid #dce6ee; background: #f9fbfc; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; color: #7c8d9d; font-size: 6px; }
+.visualCompareFooter strong { color: #536b82; }
+.visualCompareUnsupported { margin: 12px 14px 6px; min-height: 180px; border: 1px dashed #c8d7e4; border-radius: 10px; background: #f8fbfd; color: #71879a; display: grid; place-items: center; align-content: center; gap: 6px; padding: 20px; text-align: center; }
+.visualCompareUnsupported svg { color: #4079b3; }
+.visualCompareUnsupported strong { color: #3a536b; font-size: 10px; }
+.visualCompareUnsupported span { max-width: 520px; font-size: 8px; line-height: 1.45; }
+
+@media (max-width: 1220px) {
+  .visualCompareStage { height: 450px; }
+  .visualCompareModeSwitch button { padding: 0 6px; }
+  .visualCompareTitle span { display: none; }
+}
+
+@media (max-width: 900px) {
+  .compareDocumentSummary { grid-template-columns: 1fr; }
+  .visualCompareHeader { align-items: flex-start; flex-direction: column; }
+  .visualCompareModeSwitch { width: 100%; }
+  .visualCompareModeSwitch button { flex: 1 1 0; }
+  .visualCompareStageSplit { grid-template-columns: 1fr; }
+  .visualComparePane { min-height: 330px; }
+  .visualCompareStage { height: 620px; }
+  .visualCompareOpacity { min-width: 150px; }
+}
+
+@media (max-width: 620px) {
+  .visualCompare { margin-left: 8px; margin-right: 8px; }
+  .visualCompareToolbar { gap: 4px; }
+  .visualCompareToolGroup > small { display: none; }
+  .visualCompareOpacity { min-width: 130px; grid-template-columns: auto minmax(60px,1fr) 30px; }
+  .visualCompareFooter { display: none; }
+}

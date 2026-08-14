@@ -87,23 +87,51 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - Az eltérő mezők vizuálisan kiemelve jelennek meg, a fejléc összesített eltérésszámot mutat.
 - Az `Összehasonlítás` célú CsomagBOX legalább két fájllal közvetlenül megnyitható a Compare Workspace-ben az `Összevetés` gombbal.
 - A Compare fejlécből a már meglévő signed-download workflow-val megnyitható/letölthető az aktuális fájlverzió.
-- A két oldali `DocumentViewer` csatlakozási pont bekerült; a következő Drive Viewer vertikális szelet ide tudja bekötni a PDF/kép vizuális oldalnézetet és később az overlay-t.
+- A Compare Workspace a DocumentViewer V1 után dedikált `DriveVisualCompareViewer` motort kapott; a vizuális összehasonlítás részleteit a következő fejezetek rögzítik.
 
 
 ### 7. Drive DocumentViewer V1 – inline PDF és kép előnézet
 
 - A Drive részletpaneljének korábbi Viewer-helyőrzője valódi `DriveDocumentViewer` komponensre cserélődött.
-- Ugyanez a Viewer komponens a Compare Workspace két oldalán kompakt módban is megjelenik, így a két revízió valódi vizuális PDF/kép nézete párhuzamosan használható.
+- A részletpanel továbbra is ezt az önálló Viewert használja; a Compare Workspace a Vizuális Compare fejlesztési körben külön, két forrást egyszerre kezelő szinkronizált nézőmotort kapott.
 - A PDF megjelenítés nem új, párhuzamos motort kapott: a meglévő közös `components/viewers/pdfDocumentEngine.ts` PDF.js motorát használja.
 - PDF funkciók: oldallapozás, nagyítás/kicsinyítés, szélességre illesztés, 90°-os forgatás, teljes képernyő, előnézeti URL frissítés és új lapon történő megnyitás.
 - `Ctrl + egérgörgő` használható zoomra; a nagyított tervlap görgethető/pásztázható a Viewer területén.
 - Raster kép előnézet támogatott JPG/JPEG, PNG, WEBP, GIF, BMP és AVIF formátumokra.
 - SVG és más aktív tartalmat hordozó fájltípus nem kap inline preview URL-t.
 - Új `POST /api/projects/[projectId]/drive/documents/[documentId]/preview` végpont készült; kizárólag `document.read` projektjogosultsággal használható.
-- A preview a meglévő privát S3 signed-URL motort használja rövid élettartamú `inline` Content-Disposition beállítással.
+- A preview böngészőoldalon nem kap közvetlen S3 URL-t: projektjogosultság-védett, same-origin streaming proxy szolgálja ki a PDF/kép tartalmat. Ez megszünteti a böngésző és a privát S3 bucket közötti CORS-függést.
 - A normál letöltési útvonal alapértelmezett `attachment` viselkedése változatlan maradt.
 - Nem támogatott fájltípus vagy nem `AVAILABLE` verzió esetén a Viewer biztonságos fallback állapotot mutat.
-- A következő fejlesztési szelet számára a két renderelt Compare Viewer már alkalmas overlay/difference megjelenítés alapjául; az automatikus vizuális diff még nem része a V1-nek.
+- A preview proxy támogatja a HTTP `Range` kéréseket, így a PDF.js nagyobb műszaki PDF-eknél byte-tartományokat is kérhet; a tartalom streamelve halad át a szerveren, nem teljes fájlbufferként.
+
+
+### 8. Vizuális revízió-összehasonlítás V1 – szinkron, overlay és difference
+
+- A Compare Workspace új `DriveVisualCompareViewer` komponenst kapott; a két részletkártya már nem indít két további, egymástól független Viewer példányt.
+- Három működési mód érhető el: `Párhuzamos`, `Átfedés`, `Különbség`.
+- A PDF párok közös oldalszámmal lapozhatók. Ha eltérő az oldalszám, a közös tartomány a kisebb oldalszámig használható, miközben az A/B teljes oldalszám külön látható.
+- A zoom, szélességre illesztés és 90°-os forgatás közös state-ből vezérli mindkét tervlapot.
+- A párhuzamos nézet két panelje arányosan szinkronizálja a vízszintes és függőleges görgetést/pásztázást.
+- Az `Átfedés` módban az A terv az alapréteg, a B terv átlátszósága 0–100% között állítható.
+- A `Különbség` mód CSS `mix-blend-mode: difference` réteget használ: az egyező területek sötétednek, az eltérő rajzi vonalak világosan kiemelkednek.
+- Az A és B réteg külön ki-/bekapcsolható, ami gyors vizuális ellenőrzést tesz lehetővé.
+- A teljes vizuális összehasonlítás külön teljes képernyős nézetre váltható.
+- `Ctrl + egérgörgő` közös zoomot ad.
+- PDF–PDF és támogatott raster kép–kép párok kezelhetők. Eltérő vagy nem támogatott fájltípus-pár biztonságos fallback állapotot kap.
+- A zoom logika javítva lett: nagyításkor a terv a szélességre illesztett alaphoz képest nő/csökken, nem ugrik vissza nyers 100%-os PDF scale-re.
+- A V1 vizuális difference nézet nem geometriai regisztrációs algoritmus: eltérő lapméret, eltérő rajzorigó vagy eltolódott terv esetén a következő fejlesztési körben automatikus/kézi igazítás szükséges.
+
+### 9. Same-origin preview proxy és S3 CORS audit
+
+- A DEV Drive bucket CORS konfigurációjának read-only auditja szerint jelenleg egy engedélyezett origin szerepel: `https://projektkapu.dev.dimpro.hu`, `GET/PUT/HEAD` metódusokkal.
+- A Jázmin Drive fejlesztési scope szerint szerver-infrastruktúra módosítás nem történhetett, ezért a bucket CORS szabályt nem módosítottuk.
+- Ehelyett a Viewer új same-origin preview proxyt használ: `GET /api/projects/[projectId]/drive/documents/[documentId]/preview/content`.
+- A byte-stream minden kérésnél `document.read` projektjogosultságot ellenőriz.
+- HTTP `Range` továbbítás történik az S3 felé; részleges válasznál a proxy `206` státuszt és `Content-Range` fejlécet ad vissza.
+- A tartalom Node stream → Web Stream átalakítással kerül a böngészőhöz, teljes fájl szervermemóriába töltése nélkül.
+- Biztonsági headerek: `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`.
+- A normál dokumentumletöltés továbbra is az eredeti `attachment` signed-download workflow-t használja.
 
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
@@ -111,32 +139,30 @@ A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`,
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **38** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board és Compare követelményeken túl külön ellenőrzi a Viewer bekötését, a `document.read` preview jogosultságot, az inline signed URL-t, az attachment letöltés változatlanságát, a MIME whitelistet, a közös PDF.js engine újrahasználatát, az oldallapozást/zoomot, forgatást/teljes képernyőt és a raster kép támogatást.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **54** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket.
 
-Végső statikus DEV VPS futás: **38/38 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **54/54 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
-A külön Viewer böngészős acceptance **18/18 PASS**. Ellenőrizve:
+A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
-1. Viewer canvas megjelenik
-2. PDF.js első oldal render
-3. 1 / 2 oldalszám
-4. zoom vezérlők
-5. szélességre illesztés
-6. forgatás
-7. teljes képernyő gomb
-8. új lapos megnyitás
-9. lapozás 2 / 2 oldalra
-10. 115%-os zoom
-11. forgatás utáni újrarender
-12. Compare gomb
-13. Compare Workspace
-14. két párhuzamos Viewer canvas
-15. mindkét Compare PDF render
-16. régi Viewer-placeholder eltűnése
-17. 1366 px vízszintes overflow-mentesség
-18. browser pageerror-mentes futás
+1. Compare toolbar és Vizuális Compare megnyitás
+2. Párhuzamos / Átfedés / Különbség mód
+3. két PDF.js canvas render
+4. közös 1/2 → 2/2 lapozás
+5. 115%-os szinkron zoom mindkét canvasra
+6. közös forgatás és újrarender
+7. arányos szinkron pásztázás
+8. overlay B réteg 35%-os opacity
+9. két abszolút overlay réteg
+10. `difference` blend aktiválás
+11. B réteg elrejtés
+12. teljes képernyős vezérlő
+13. A/B revíziócímkék
+14. 1366 px overflow-mentes render
+15. browser pageerror-mentes futás
+16. same-origin `/preview/content` kliensútvonal és mockolt Range-válasz kezelése
 
-Viewer/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-viewer-only-2026-08-14T16-21-42-075Z`.
+Vizuális Compare/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T17-01-58-563Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -195,3 +221,21 @@ Az `app.dev.dimpro.hu` aktív 3100-as runtime továbbra is az Ármin-AI/BENJADMI
 - Forrás-backup a Viewer kör előtt: `/srv/dimpro-dev/backups/jazmin_drive_viewer_20260814_180406`
 
 A Viewer candidate kizárólag az izolált `127.0.0.1:3210` tesztporton futott. Az `app.dev.dimpro.hu` aktív DEV runtime továbbra is az Ármin-AI/BENJADMIN worktree-ből fut, így a Jázmin-AI Viewer fejlesztés nem módosította a párhuzamos BENJADMIN fejlesztést.
+
+
+## Vizuális Compare + preview proxy final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_visual_compare_20260814_183404`
+- Next.js production build: **PASS**
+- Build ID: `VeA4JIUHU7MNg_YYyD7oQ`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Új route a buildben: `/api/projects/[projectId]/drive/documents/[documentId]/preview/content` – **PASS**
+- Statikus/architekturális acceptance: **54/54 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Vizuális Compare browser acceptance: **23/23 PASS**
+- Preview content route session nélkül: **401**, tehát a byte stream nem nyilvános
+- S3 bucket CORS audit: egyetlen DEV origin `https://projektkapu.dev.dimpro.hu`; infrastruktúra-szabály nem módosult, a Viewer same-origin proxyval kerüli el a CORS-függést
+- Vizuális artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T17-01-58-563Z`
+
+Az izolált `jazmin-drive-v110-candidate` továbbra is csak `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív runtime és az Ármin-AI/BENJADMIN worktree ebben a körben sem módosult.

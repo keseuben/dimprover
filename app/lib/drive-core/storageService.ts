@@ -6,6 +6,7 @@ import {
   createDriveSignedGetUrl,
   createDriveSignedPutUrl,
   deleteDriveObject,
+  getDriveObjectStream,
   headDriveObject,
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
@@ -425,7 +426,7 @@ const DRIVE_INLINE_IMAGE_MIME_TYPES = new Set([
   "image/avif",
 ]);
 
-export async function initDriveObjectPreview(input: {
+async function resolveDrivePreviewRecord(input: {
   projectId: string;
   documentId: string;
   versionId?: string | null;
@@ -469,28 +470,54 @@ export async function initDriveObjectPreview(input: {
       415,
     );
   }
-  const signed = await createDriveSignedGetUrl({
-    storageKey: record.version.storageKey,
-    bucket: record.version.storageBucket,
-    fileName: record.version.originalName || record.documentName,
-    mimeType: record.version.mimeType,
-    disposition: "inline",
-  });
+  return { config, record, kind, trustedDropArchive };
+}
+
+export async function initDriveObjectPreview(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+}) {
+  const resolved = await resolveDrivePreviewRecord(input);
+  const versionId = resolved.record.version.id;
+  const url = `/api/projects/${encodeURIComponent(input.projectId)}/drive/documents/${encodeURIComponent(input.documentId)}/preview/content?versionId=${encodeURIComponent(versionId)}`;
   return {
     ok: true as const,
     preview: {
       documentId: input.documentId,
-      versionId: record.version.id,
-      versionNumber: record.version.versionNumber,
-      fileName: record.version.originalName || record.documentName,
-      mimeType: record.version.mimeType,
-      sizeBytes: record.version.sizeBytes,
-      kind,
-      method: signed.method,
-      url: signed.url,
-      expiresAt: signed.expiresAt,
-      source: record.documentSource,
-      trustedDropArchive,
+      versionId,
+      versionNumber: resolved.record.version.versionNumber,
+      fileName: resolved.record.version.originalName || resolved.record.documentName,
+      mimeType: resolved.record.version.mimeType,
+      sizeBytes: resolved.record.version.sizeBytes,
+      kind: resolved.kind,
+      method: "GET" as const,
+      url,
+      expiresAt: new Date(Date.now() + resolved.config.signedUrlTtlSeconds * 1000).toISOString(),
+      source: resolved.record.documentSource,
+      trustedDropArchive: resolved.trustedDropArchive,
+      transport: "same-origin-proxy" as const,
     },
+  };
+}
+
+export async function openDriveObjectPreviewContent(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+  range?: string | null;
+}) {
+  const resolved = await resolveDrivePreviewRecord(input);
+  const object = await getDriveObjectStream({
+    storageKey: resolved.record.version.storageKey!,
+    bucket: resolved.record.version.storageBucket,
+    range: input.range,
+  });
+  return {
+    ok: true as const,
+    kind: resolved.kind,
+    fileName: resolved.record.version.originalName || resolved.record.documentName,
+    mimeType: resolved.record.version.mimeType,
+    object,
   };
 }

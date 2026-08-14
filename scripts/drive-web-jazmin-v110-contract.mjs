@@ -10,6 +10,7 @@ const files = {
   shelf: "components/drive/BoxShelf.tsx",
   commander: "components/drive/CommanderPanel.tsx",
   compare: "components/drive/CompareWorkspace.tsx",
+  visualCompare: "components/drive/DriveVisualCompareViewer.tsx",
   viewer: "components/drive/DriveDocumentViewer.tsx",
   details: "components/drive/DetailsPanel.tsx",
   grid: "components/drive/FileGridPanel.tsx",
@@ -27,6 +28,7 @@ const files = {
   boxItemRoute: "app/api/projects/[projectId]/drive/boxes/[boxId]/items/[itemId]/route.ts",
   moveRoute: "app/api/projects/[projectId]/drive/documents/[documentId]/move/route.ts",
   previewRoute: "app/api/projects/[projectId]/drive/documents/[documentId]/preview/route.ts",
+  previewContentRoute: "app/api/projects/[projectId]/drive/documents/[documentId]/preview/content/route.ts",
   storageService: "app/lib/drive-core/storageService.ts",
   s3Storage: "app/lib/drive-core/s3ObjectStorage.ts",
 };
@@ -68,17 +70,33 @@ check("24 Metaadat eltérésmátrix", source.compare.includes("metadataRows") &&
 check("25 Compare CsomagBOX workflow", source.shelf.includes("onOpenCompareBox") && source.shelf.includes('box.purpose === "COMPARE"') && source.workspace.includes("openCompare(box.items.map"), "Az Összehasonlítás CsomagBOX közvetlenül betölthető a Compare Workspace-be.");
 check("26 Compare oldalcsere", source.compare.includes("swapSides") && source.compare.includes("Oldalak cseréje"), "A két összehasonlítási oldal felcserélhető.");
 check("27 Compare megnyitás/letöltés", source.compare.includes("/download") && source.compare.includes("Megnyitás / letöltés"), "A kijelölt aktuális dokumentumverzió a meglévő signed-download workflow-val megnyitható.");
-check("28 Compare DocumentViewer bekötés", source.compare.includes("DriveDocumentViewer") && source.compare.includes("compact"), "A Compare mindkét oldalán valódi Drive DocumentViewer jelenik meg.");
+check("28 Compare VisualViewer bekötés", source.compare.includes("DriveVisualCompareViewer") && source.compare.includes("leftDocument={leftDocument!}") && source.compare.includes("rightDocument={rightDocument!}"), "A Compare dedikált, szinkronizált vizuális összehasonlító Viewert használ.");
 check("29 DocumentViewer a részletpanelen", source.details.includes("DriveDocumentViewer") && source.details.includes("projectId={projectId}"), "A kiválasztott dokumentum részletpanelje inline Viewerrel működik.");
 check("30 Projektjogosultság-védett preview API", source.previewRoute.includes('requireProjectPermission(request, projectId, "document.read")') && source.previewRoute.includes("initDriveObjectPreview"), "Az előnézeti URL csak project read jogosultsággal kérhető.");
-check("31 Rövid életű inline signed URL", source.s3Storage.includes('disposition?: "attachment" | "inline"') && source.s3Storage.includes("ResponseContentDisposition: `${disposition}") && source.storageService.includes('disposition: "inline"'), "A Viewer ugyanazt a privát S3 signed URL motort használja inline dispositionnel.");
+check("31 Same-origin preview proxy", source.storageService.includes("/preview/content?versionId=") && source.storageService.includes('transport: "same-origin-proxy"'), "A böngésző nem közvetlen S3 URL-t kap, hanem projektjogosultság-védett same-origin preview proxyt.");
 check("32 Letöltés attachment marad", source.s3Storage.includes('input.disposition === "inline" ? "inline" : "attachment"'), "A meglévő letöltési workflow alapértelmezett attachment viselkedése megmarad.");
 check("33 Biztonságos preview MIME whitelist", source.storageService.includes("DRIVE_INLINE_IMAGE_MIME_TYPES") && source.storageService.includes('normalizedMime === "application/pdf"') && source.storageService.includes("DRIVE_PREVIEW_UNSUPPORTED_TYPE"), "Csak PDF és explicit raster kép MIME-ok kapnak inline előnézetet; SVG/aktív tartalom nem.");
 check("34 Közös PDF engine újrahasználat", source.viewer.includes("loadSharedPdfDocument") && source.viewer.includes("renderSharedPdfPage") && source.viewer.includes("@/components/viewers/pdfDocumentEngine"), "A Drive nem duplikál PDF motort, a meglévő közös PDF.js engine-t használja.");
 check("35 PDF oldallapozás és zoom", source.viewer.includes("pageNumber") && source.viewer.includes("pageCount") && source.viewer.includes("changeZoom") && source.viewer.includes("fitWidth"), "A Viewer lapozást, zoomot és szélességre illesztést támogat.");
 check("36 Forgatás és teljes képernyő", source.viewer.includes("requestFullscreen") && source.viewer.includes("setRotation") && source.viewer.includes("Forgatás 90°"), "A Viewer forgatható és teljes képernyőre váltható.");
 check("37 Képnéző támogatás", source.viewer.includes('kind === "IMAGE"') && source.viewer.includes("driveViewerImage") && source.storageService.includes('"image/webp"'), "A PDF mellett biztonságos raster képek is inline megjelennek.");
-check("38 Compare két vizuális viewer", (source.compare.match(/DriveDocumentViewer/g) || []).length >= 1 && source.viewer.includes("compact"), "A Compare ugyanazt a Viewer komponenst használja kompakt kétoldalas módhoz.");
+check("38 Vizuális Compare közös PDF engine", source.visualCompare.includes("loadSharedPdfDocument") && source.visualCompare.includes("renderSharedPdfPage") && source.visualCompare.includes("@/components/viewers/pdfDocumentEngine"), "A vizuális Compare a közös PDF.js engine-t használja.");
+check("39 Három vizuális Compare mód", source.visualCompare.includes('"SIDE_BY_SIDE"') && source.visualCompare.includes('"OVERLAY"') && source.visualCompare.includes('"DIFFERENCE"') && source.visualCompare.includes("Párhuzamos") && source.visualCompare.includes("Átfedés") && source.visualCompare.includes("Különbség"), "Párhuzamos, átfedéses és különbség nézet választható.");
+check("40 Szinkron oldallapozás", source.visualCompare.includes("sharedPageCount") && source.visualCompare.includes("setPageNumber") && source.visualCompare.includes("Előző közös oldal") && source.visualCompare.includes("Következő közös oldal"), "A két PDF közös oldalszámmal szinkronban lapozható.");
+check("41 Szinkron zoom és illesztés", source.visualCompare.includes("changeZoom") && source.visualCompare.includes("fitWidth") && source.visualCompare.includes("Szinkron nagyítás") && source.visualCompare.includes("Mindkét nézet szélességre illesztése"), "A zoom és fit mindkét revízióra azonos állapotot használ.");
+check("42 Szinkron forgatás", source.visualCompare.includes("setRotation") && source.visualCompare.includes("Mindkét nézet forgatása 90°"), "A forgatás közös state-ből vezérli a két tervlapot.");
+check("43 Overlay átlátszóság", source.visualCompare.includes("overlayOpacity") && source.visualCompare.includes('type="range"') && source.visualCompare.includes("B réteg"), "Az átfedéses B réteg átlátszósága állítható.");
+check("44 Difference blend", source.visualCompare.includes('mode === "DIFFERENCE" ? "difference" : "normal"') && source.visualCompare.includes("mixBlendMode: topBlend"), "A különbségnézet CSS difference blenddel emeli ki az eltérést.");
+check("45 A/B réteg kapcsolhatóság", source.visualCompare.includes("showBase") && source.visualCompare.includes("showRevision") && source.visualCompare.includes("A réteg ki-/bekapcsolása") && source.visualCompare.includes("B réteg ki-/bekapcsolása"), "Az alap és vizsgált revízió rétege külön kapcsolható.");
+check("46 Teljes képernyős Compare", source.visualCompare.includes("requestFullscreen") && source.visualCompare.includes("Vizuális összehasonlítás teljes képernyőn"), "A vizuális Compare teljes képernyőre váltható.");
+check("47 PDF és raster Compare", source.visualCompare.includes('leftKind === "PDF"') && source.visualCompare.includes('leftPreview?.url') && source.visualCompare.includes("visualCompareImage"), "A vizuális Compare PDF-PDF és támogatott kép-kép párokat kezel.");
+check("48 Nincs duplikált per-card Viewer", !source.compare.includes("DriveDocumentViewer") && source.compare.includes("compareDocumentSummary"), "A két részletkártya nem indít további PDF renderelőt; a vizuális Compare egyetlen dedikált motorban fut.");
+check("49 Szinkron pásztázás", source.visualCompare.includes("syncPaneScroll") && source.visualCompare.includes("scrollLeft") && source.visualCompare.includes("scrollTop") && source.visualCompare.includes("pásztázás"), "A párhuzamos A/B nézet görgetési pozíciója arányosan együtt mozog.");
+check("50 Zoom fit-alapú marad", !source.visualCompare.includes("setFitWidth(false)") && !source.viewer.includes("setFitWidth(false)"), "A nagyítás a szélességre illesztett alaphoz képest növeli/csökkenti a tervet, nem ugrik vissza nyers 100%-ra.");
+check("51 Preview content jogosultság", source.previewContentRoute.includes('requireProjectPermission(request, projectId, "document.read")') && source.previewContentRoute.includes("openDriveObjectPreviewContent"), "A tényleges PDF/kép byte stream ugyanúgy document.read jogosultsággal védett.");
+check("52 HTTP Range támogatás", source.previewContentRoute.includes('request.headers.get("range")') && source.s3Storage.includes("Range: input.range?.trim() || undefined") && source.previewContentRoute.includes("content-range") && source.previewContentRoute.includes("206"), "A PDF.js nagy fájlokhoz byte-range kérést használhat a same-origin proxyn keresztül.");
+check("53 Streamelt proxy nem bufferel", source.s3Storage.includes("getDriveObjectStream") && source.previewContentRoute.includes("Readable.toWeb") && source.previewContentRoute.includes("webStream"), "A preview proxy streameli az S3 objektumot, nem tölti teljes egészében szervermemóriába.");
+check("54 Preview biztonsági headerek", source.previewContentRoute.includes('"cache-control": "private, no-store, max-age=0"') && source.previewContentRoute.includes('"x-content-type-options": "nosniff"') && source.previewContentRoute.includes("content-disposition"), "A proxy privát/no-store, nosniff és inline Content-Disposition headereket ad.");
 
 const failed = checks.filter((item) => !item.ok);
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);
