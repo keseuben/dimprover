@@ -141,13 +141,13 @@ A P1 felületen a Terminál Parancstár csak tervezett állapotot mutat, futtat�
 - célzott ESLint: PASS.
 - teljes `npm run lint`: PASS, 0 error / 104 meglévő warning.
 - `git diff --check`: PASS.
-- P0/P1 contract: **19/19 PASS**.
+- P0/P1 contract: **21/21 PASS**.
 - koordinált Next build central lockon keresztül: PASS.
 - feature build ID: `scJ2uL5sg-uFplMApOoht`.
 - izolált 3199 candidate `/admin/dev-console`: HTTP 200.
 - izolált 3199 candidate `/api/dev/terminal-hub/status` jogosultság nélkül: HTTP 401, fail-closed.
 
-A 19 pontos contract ellenőrzi többek között:
+A 21 pontos contract ellenőrzi többek között:
 - öt TerminalKind típust;
 - AI visibility módokat;
 - RAW/SANITIZED/AUDIT osztályokat;
@@ -157,7 +157,9 @@ A 19 pontos contract ellenőrzi többek között:
 - DEV státusz és execution szétválasztását;
 - central lock követelményt;
 - allowlist + realpath workspace policy-t;
+- érzékeny és build könyvtárak explicit deny policy-ját;
 - meglévő secret scanner újrahasznosítását;
+- közös security metaadatot hordozó event-envelope szerződést;
 - admin-only API-t;
 - UI bekötést és ESC bezárást;
 - öt fő fület;
