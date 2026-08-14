@@ -105,3 +105,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `210_benjadmin_terminal_command_library_p3_dev_activation_20260814.md` – Terminál Parancstár P3 DEV-en aktív: DB+UI/API, 108/108 PASS, Command Library flag ON; execution/Live Workspace/PROD továbbra is OFF.
 
 - `211_benjadmin_live_workspace_p4_candidate_20260814.md` – Live Workspace P4 read-only candidate: allowlistelt worktree/fájlfa/text-preview, 24/24 contract és synthetic-key API acceptance PASS; feature flag még OFF.
+
+- `212_benjadmin_live_workspace_p4_dev_activation_20260814.md` – Live Workspace P4 read-only DEV aktiválva: 132/132 contract PASS, HTTPS/API smoke PASS, watcher/write/execution/PROD továbbra is OFF.
