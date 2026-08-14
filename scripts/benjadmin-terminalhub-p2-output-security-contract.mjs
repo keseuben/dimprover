@@ -1,0 +1,21 @@
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd(); const read=(f)=>fs.readFileSync(path.join(root,f),"utf8"); const checks=[];
+function check(name,ok){checks.push(Boolean(ok));console.log(`${ok?"PASS":"FAIL"} ${name}`);if(!ok)throw new Error(name);}
+const registry=read("app/lib/dev-center/terminal-hub/session-registry.ts");
+const views=read("app/lib/dev-center/terminal-hub/output-views.ts");
+const data=read("app/lib/dev-center/terminal-hub/data-policy.ts");
+const sanitized=read("app/api/dev/terminal-hub/sessions/[sessionId]/sanitized/route.ts");
+const audit=read("app/api/dev/terminal-hub/sessions/[sessionId]/audit-view/route.ts");
+check("Idle timeout 30 perc",registry.includes("30 * 60 * 1000"));
+check("Maximum lifetime 4 óra",registry.includes("4 * 60 * 60 * 1000"));
+check("Timeout sessiont CLOSED-ra állít",registry.includes('session.summary.state = "CLOSED"')&&registry.includes("expireSession"));
+check("Session list/get prune-t futtat",(registry.match(/pruneTerminalSessions\(\);/g)||[]).length>=2);
+check("SANITIZED nézet buildTerminalDataViews-t használ",views.includes("buildTerminalDataViews")&&views.includes("views.sanitized"));
+check("AUDIT nézet nem ad raw data mezőt",views.includes("sha256")&&views.includes("byteLength")&&!/TerminalAuditChunk[\s\S]*?data:\s*string/.test(views));
+check("AUDIT hash maszkolt audit stringből készül",views.includes("update(views.audit)"));
+check("Secret scanner közös data-policy mögött marad",data.includes("scanSensitiveText"));
+check("Sanitized API admin-only",sanitized.includes("isDevCenterAuthorized(request.headers, false)")&&sanitized.includes("status:401"));
+check("Audit API admin-only",audit.includes("isDevCenterAuthorized(request.headers, false)")&&audit.includes("status:401"));
+check("Mindkét output nézet sequence filtert használ",sanitized.includes("readTerminalOutput")&&audit.includes("readTerminalOutput")&&sanitized.includes("after")&&audit.includes("after"));
+console.log(`SUMMARY ${checks.filter(Boolean).length}/${checks.length} PASS`);

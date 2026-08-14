@@ -36,6 +36,8 @@ type RuntimeSession = {
 const MAX_OUTPUT_CHUNKS = 800;
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_SESSION_COUNT = 8;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const MAX_LIFETIME_MS = 4 * 60 * 60 * 1000;
 const MIN_COLS = 20;
 const MAX_COLS = 300;
 const MIN_ROWS = 8;
@@ -55,6 +57,22 @@ function publicSummary(session: RuntimeSession): TerminalSessionSummary {
   return { ...session.summary };
 }
 
+function expireSession(session: RuntimeSession) {
+  if (!["STARTING", "RUNNING", "DISCONNECTED"].includes(session.summary.state)) return;
+  const createdAt = Date.parse(session.summary.createdAt);
+  const idleExpired = Date.now() - session.touchedAt >= IDLE_TIMEOUT_MS;
+  const lifetimeExpired = Number.isFinite(createdAt) && Date.now() - createdAt >= MAX_LIFETIME_MS;
+  if (!idleExpired && !lifetimeExpired) return;
+  try { session.handle?.close(); } catch { /* timeout cleanup best effort */ }
+  session.handle = null;
+  session.summary.state = "CLOSED";
+  session.summary.exitedAt = nowIso();
+}
+
+function pruneTerminalSessions() {
+  for (const session of sessions.values()) expireSession(session);
+}
+
 function appendOutput(session: RuntimeSession, data: string) {
   const next = session.summary.sequence + 1;
   session.summary.sequence = next;
@@ -69,10 +87,12 @@ export function getTerminalProcessAdapter(): TerminalProcessAdapter | null {
 }
 
 export function listTerminalSessions(owner: string) {
+  pruneTerminalSessions();
   return [...sessions.values()].filter((item) => item.summary.owner === owner).map(publicSummary).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function getTerminalSession(owner: string, id: string) {
+  pruneTerminalSessions();
   const session = sessions.get(id);
   if (!session || session.summary.owner !== owner) throw new TerminalSessionError("A terminál session nem található.", "TERMINAL_SESSION_NOT_FOUND", 404);
   return session;
