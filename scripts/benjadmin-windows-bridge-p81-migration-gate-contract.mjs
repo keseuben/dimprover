@@ -1,0 +1,26 @@
+import fs from "node:fs"; import path from "node:path";
+const root=process.cwd();const runner=fs.readFileSync(path.join(root,"scripts/benjadmin-windows-bridge-p81-migration-gate.mjs"),"utf8");let pass=0,fail=0;function check(n,o){if(o){pass++;console.log(`PASS ${n}`)}else{fail++;console.error(`FAIL ${n}`)}}
+check("Default preflight",runner.includes('process.argv[2] || "preflight"'));
+check("Csak preflight/apply/verify",runner.includes('["preflight", "apply", "verify"]'));
+check("Explicit DEV-only approval",runner.includes('DEV_ONLY_P81_APPLY_APPROVED')&&runner.includes('MIGRATION_APPROVAL_REQUIRED'));
+check("Bridge/Pairing/Execution/PROD OFF kötelező",["BENJADMIN_WINDOWS_BRIDGE_ENABLED","BENJADMIN_WINDOWS_BRIDGE_PAIRING_ENABLED","BENJADMIN_WINDOWS_BRIDGE_EXECUTION_ENABLED","BENJADMIN_TERMINAL_EXECUTION_ENABLED","BENJADMIN_PROD_TERMINAL_ENABLED"].every(x=>runner.includes(x)));
+check("Migration SHA ellenőrzés",runner.includes('MIGRATION_SHA256_MISMATCH')&&runner.includes('sha256File(migration)'));
+check("Meglévő source DB preflight újrahasznosított",runner.includes('scripts/benjadmin-b32-source-db-preflight.mjs'));
+check("DEV target match + PROD separation kötelező",runner.includes('targetMatches !== true')&&runner.includes('sharedWithProduction !== false'));
+check("psql/pg_dump/pg_restore kötelező",["psql","pg_dump","pg_restore"].every(x=>runner.includes(`requireCommand("${x}")`)));
+check("Backup dev_center_* célzott",runner.includes('--table=public.dev_center_*'));
+check("Backup custom format",runner.includes('--format=custom'));
+check("pg_dump nem kap psql-specifikus -X kapcsolót",!runner.includes('safeRun("pg_dump", [dbUrl, "-X"'));
+check("Backup listing verify",runner.includes('pg_restore')&&runner.includes('--list')&&runner.includes('P81_BACKUP_VERIFY_FAILED'));
+check("Backup SHA",runner.includes('backup.sha256')&&runner.includes('backupSha256'));
+check("Apply ON_ERROR_STOP",runner.includes('"ON_ERROR_STOP=1", "-f", migration'));
+check("Schema acceptance 3 tábla",["dev_center_windows_bridge_devices","dev_center_windows_bridge_pairings","dev_center_windows_bridge_sessions"].every(x=>runner.includes(x)));
+check("Aktiváló function acceptance",runner.includes('dev_center_windows_bridge_activate_device(uuid,uuid,text,text,uuid)'));
+check("Schema marker acceptance",runner.includes("component='benjadmin-windows-bridge'")&&runner.includes("schema_version='0.1.0'"));
+check("Verify mód nem ír",runner.indexOf('if (mode === "verify")') < runner.indexOf('const backupDir'));
+check("Preflight mód nem ír",runner.indexOf('if (mode === "preflight")') < runner.indexOf('const backupDir'));
+check("Already applied idempotens exit",runner.includes('alreadyApplied: true'));
+check("Migrációs report 0600",runner.includes('migration-report.json')&&runner.includes('mode: 0o600'));
+check("DB jelszó nem logolva",!runner.includes('console.log(dbPassword)')&&!runner.includes('console.error(dbPassword)'));
+check("Backup root DEV szerveren",runner.includes('/srv/dimpro-dev/backups/benjadmin-windows-bridge-p81-db'));
+console.log(`SUMMARY ${pass}/${pass+fail} PASS`);if(fail)process.exit(1);
