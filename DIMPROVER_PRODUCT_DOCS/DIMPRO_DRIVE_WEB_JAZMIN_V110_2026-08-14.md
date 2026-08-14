@@ -232,17 +232,29 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A tényleges B-réteg transzformáció továbbra is kizárólag az `Alkalmazás` gomb után történik. Az `Elvetés` a teljes automatikus jelöltlistát törli.
 - Oldal-, zoom-, fit- vagy közös forgatásváltozáskor az összes korábbi automatikus alternatíva érvényét veszti, mert a pixelkoordináta-alapú review állapot már nem tekinthető aktuálisnak.
 
+
+### 17. Automatikus illesztési alternatívák vizuális előnézete V1
+
+- A többjelöltes Auto Align alternatíva-választó minden biztonságos jelölthöz külön, kisméretű **A/B átfedési terv-előnézetet** jelenít meg még az `Alkalmazás` előtt.
+- A thumbnail nem indít új PDF letöltést és nem futtat külön PDF.js renderelést: a már elkészült A/B összehasonlító canvas bitmapokat használja újra. Ez a 2–3 alternatívás review-t gyorsan és kis erőforrásigénnyel tartja.
+- A mini preview a jelölt saját similarity transzformációját használja: X/Y eltolás, egységes skála és forgatás. Az A bitmap a referencia, a B bitmap áttetsző `multiply` rétegként kerül rá, így szemmel ellenőrizhető, melyik javaslat illeszti jobban a tervvonalakat.
+- A preview **csak vizualizáció**: nem írja a fő Compare `alignmentOffsetX/Y`, `alignmentScale` vagy `alignmentRotation` state-et. A fő B tervréteg továbbra is csak a külön `Alkalmazás` jóváhagyás után mozdul el.
+- A rangsor első jelöltje `Ajánlott` badge-et kap, de ez kizárólag a már meglévő bizalom/RMS/bizonyíték rangsor vizuális megjelölése; automatikus jóváhagyást nem jelent.
+- Minden thumbnail alatt megmarad a forrás, bizalom, RMS, pontszám, valamint az X/Y/skála/szög összefoglaló. Az aktív alternatíva külön keretet kap.
+- A thumbnail canvas tesztelhető `data-preview-offset-x`, `data-preview-offset-y`, `data-preview-scale`, `data-preview-rotation` attribútumokat is kapott.
+- A kártyák responsive tördelése laptopon három/két oszlopos, keskeny nézeten egyoszlopos vagy kép+adat kétsávos megjelenésre vált.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **137** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **146** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik. A 68–76. ellenőrzések a kézi geometriai regisztrációt, a 77–87. ellenőrzések a 2/3 pontos referencia-illesztést, szögszámítást, RMS hibát, pontjelölőket, inverz B-koordinátát és biztonsági transzformációs korlátokat vizsgálják. A 88–101. ellenőrzések az automatikus feature-felismerést, a közös PDF elemző újrahasználatát, az egyedi szöveg- és kontúranchorokat, az emberi jóváhagyási kaput, bizalom/RMS kijelzést, 0°-os biztonsági korlátot, raster fallbacket és a jóváhagyási státuszt ellenőrzik.
 
 A 125–137. ellenőrzések külön vizsgálják a több automatikus proposal API-t, a három felismerési forrást, jelöltenkénti similarity/biztonsági ellenőrzést, rangsort, kiválasztást, kézi párjavítás megőrzését, invalidálást és responsive alternatíva UI-t.
 
-Végső statikus DEV VPS futás: **137/137 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **146/146 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -366,6 +378,21 @@ A külön Több Auto Align Alternatíva böngészős acceptance **26/26 PASS**. 
 - 1366 px szélességen nincs horizontális overflow és nincs browser pageerror.
 
 Többjelöltes browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-multi-auto-candidates-2026-08-14T21-54-06-695Z`.
+
+
+A külön Candidate Visual Preview böngészős acceptance **33/33 PASS**. A több automatikus alternatívás szintetikus PDF-páron ellenőrizve:
+
+- minden jelölthöz külön `228 × 132` backing canvas készül;
+- a thumbnail ténylegesen tartalmaz tervpixeleket, nem üres placeholder;
+- a preview X/Y/skála/szög attribútumai a jelölt számított transzformációját hordozzák;
+- eltérő transzformáció esetén eltérő preview bitmap készül;
+- az első jelölt `Ajánlott` badge-et kap, a továbbiak nem;
+- az alternatívák között váltás továbbra sem módosítja a fő B terv transzformációját;
+- a marker/review panel a kiválasztott jelöltre vált;
+- tényleges transzformáció csak `Alkalmazás` után történik;
+- 1366 px nézetben nincs vízszintes overflow és nincs browser pageerror.
+
+Candidate Visual Preview artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-candidate-visual-preview-2026-08-14T22-11-28-125Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -589,3 +616,30 @@ Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztport
 - Adatbázis-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A többjelöltes logika Drive-specifikus kliensoldali Compare réteg.
 
 Az izolált browser candidate kizárólag `127.0.0.1:3210` tesztportra indult. A final standalone smoke-nál minimális candidate process-env került használatra, mert az aktív PM2 runtime teljes env-snapshotjának átmásolása a candidate statikus chunk kiszolgálását 404-re állította; ez a tesztkörnyezet indítási sajátossága volt, nem Drive termékkód-hiba. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.
+
+## Auto Candidate Visual Preview V1 final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_candidate_visual_preview_20260814_235933`
+- Next.js production build: **PASS**
+- Build ID: `pu--AV7dDlJ3pNg99jsGt`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **146/146 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Új Candidate Visual Preview browser acceptance: **33/33 PASS**
+- Auto Pair Review regresszió: **38/38 PASS**
+- Geometriai csomópont regresszió: **22/22 PASS**
+- Auto Align regresszió: **21/21 PASS**
+- 2/3 pontos regresszió: **25/25 PASS**
+- Vizuális Compare regresszió: **34/34 PASS**
+- Historikus revízió regresszió: **20/20 PASS**
+- Candidate Preview artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-candidate-visual-preview-2026-08-14T22-11-28-125Z`
+- Pair Review regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-auto-pair-review-2026-08-14T22-13-25-394Z`
+- Geometriai regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-geometric-nodes-2026-08-14T22-13-34-537Z`
+- Auto Align regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-12-02-311Z`
+- 2/3 pontos regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-12-10-665Z`
+- Vizuális regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T22-12-21-558Z`
+- Historikus regresszió artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T22-12-33-469Z`
+- Adatbázis-, infrastruktúra- vagy közös PDF-engine módosítás: **nem történt**. A thumbnail réteg kizárólag Drive kliensoldali Compare UI.
+
+Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult, a standalone mappából, majd a tesztek után leállításra kerül. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem kerül módosításra vagy restartra.

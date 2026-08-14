@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -211,6 +211,77 @@ function autoPairFeatureLabel(key: string) {
 
 function shortRevision(document: DriveDocument) {
   return document.currentVersion?.revisionCode || `V${document.currentVersionNumber || 0}`;
+}
+
+type AutoCandidateVisualPreviewProps = {
+  candidate: AutoAlignmentSuggestion;
+  index: number;
+  leftCanvasRef: RefObject<HTMLCanvasElement | null>;
+  rightCanvasRef: RefObject<HTMLCanvasElement | null>;
+};
+
+function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanvasRef }: AutoCandidateVisualPreviewProps) {
+  const previewRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const target = previewRef.current;
+    const leftCanvas = leftCanvasRef.current;
+    const rightCanvas = rightCanvasRef.current;
+    if (!target || !leftCanvas?.width || !leftCanvas?.height || !rightCanvas?.width || !rightCanvas?.height) return;
+    const context = target.getContext("2d");
+    if (!context) return;
+
+    const width = target.width;
+    const height = target.height;
+    const sourceWidth = Math.max(leftCanvas.width, rightCanvas.width);
+    const sourceHeight = Math.max(leftCanvas.height, rightCanvas.height);
+    const fitScale = Math.min(width / Math.max(1, sourceWidth), height / Math.max(1, sourceHeight));
+    const originX = (width - sourceWidth * fitScale) / 2;
+    const originY = (height - sourceHeight * fitScale) / 2;
+
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#f5f8fa";
+    context.fillRect(0, 0, width, height);
+    context.save();
+    context.beginPath();
+    context.rect(originX, originY, sourceWidth * fitScale, sourceHeight * fitScale);
+    context.clip();
+
+    context.setTransform(fitScale, 0, 0, fitScale, originX, originY);
+    context.globalAlpha = 0.92;
+    context.globalCompositeOperation = "source-over";
+    context.drawImage(leftCanvas, 0, 0);
+
+    context.translate(candidate.offsetX, candidate.offsetY);
+    context.rotate(candidate.rotationDegrees * Math.PI / 180);
+    const candidateScale = candidate.scalePercent / 100;
+    context.scale(candidateScale, candidateScale);
+    context.globalAlpha = 0.46;
+    context.globalCompositeOperation = "multiply";
+    context.drawImage(rightCanvas, 0, 0);
+    context.restore();
+
+    context.save();
+    context.strokeStyle = "rgba(57,91,120,.28)";
+    context.lineWidth = 1;
+    context.strokeRect(originX + 0.5, originY + 0.5, Math.max(0, sourceWidth * fitScale - 1), Math.max(0, sourceHeight * fitScale - 1));
+    context.restore();
+  }, [candidate.offsetX, candidate.offsetY, candidate.rotationDegrees, candidate.scalePercent, leftCanvasRef, rightCanvasRef]);
+
+  return (
+    <canvas
+      ref={previewRef}
+      width={228}
+      height={132}
+      className={styles.visualCompareAutoCandidatePreviewCanvas}
+      aria-label={`Illesztési alternatíva ${index + 1} vizuális előnézete`}
+      data-auto-candidate-preview={index + 1}
+      data-preview-offset-x={candidate.offsetX}
+      data-preview-offset-y={candidate.offsetY}
+      data-preview-scale={candidate.scalePercent}
+      data-preview-rotation={candidate.rotationDegrees}
+    />
+  );
 }
 
 export default function DriveVisualCompareViewer({ projectId, leftDocument, rightDocument }: Props) {
@@ -951,8 +1022,16 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                         data-auto-candidate={index + 1}
                         aria-pressed={index === autoAlignmentCandidateIndex}
                       >
-                        <strong>#{index + 1} · {autoAlignmentSourceLabel(candidate.source)}</strong>
-                        <span>{Math.round(candidate.confidenceScore * 100)}% · RMS {candidate.rmsError.toFixed(2)} px · {candidate.pairCount} pont</span>
+                        <span className={styles.visualCompareAutoCandidatePreview}>
+                          <AutoCandidateVisualPreview candidate={candidate} index={index} leftCanvasRef={leftCanvasRef} rightCanvasRef={rightCanvasRef} />
+                          <span className={styles.visualCompareAutoCandidatePreviewBadge}>#{index + 1}</span>
+                          {index === 0 && <span className={styles.visualCompareAutoCandidateRecommended}>Ajánlott</span>}
+                        </span>
+                        <span className={styles.visualCompareAutoCandidateInfo}>
+                          <strong>{autoAlignmentSourceLabel(candidate.source)}</strong>
+                          <span>{Math.round(candidate.confidenceScore * 100)}% · RMS {candidate.rmsError.toFixed(2)} px · {candidate.pairCount} pont</span>
+                          <small>X {candidate.offsetX.toFixed(1)} · Y {candidate.offsetY.toFixed(1)} · {candidate.scalePercent.toFixed(2)}% · {candidate.rotationDegrees.toFixed(2)}°</small>
+                        </span>
                       </button>
                     ))}
                   </div>
