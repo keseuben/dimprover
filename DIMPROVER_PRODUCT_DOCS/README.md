@@ -121,3 +121,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `218_benjadmin_live_workspace_p7_dev_activation_20260814.md` – Live Workspace P7 DEV aktiválás: 1/2/4 panel + detached multi-monitor aktív, 248/248 PASS; P8 Windows Bridge továbbra is OFF.
 
 - `219_benjadmin_windows_bridge_p8_foundation_candidate_20260814.md` – P8 Windows Desktop Bridge foundation: outbound-only agent/readiness security contract, 285/285 PASS; live Bridge/pairing/execution OFF.
+
+- `220_benjadmin_windows_bridge_p8_foundation_dev_activation_20260814.md` – P8 Windows Desktop Bridge foundation DEV aktiválás: 285/285 PASS; Bridge/pairing/execution továbbra is OFF.
