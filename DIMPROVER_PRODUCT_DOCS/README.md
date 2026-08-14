@@ -95,3 +95,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `205_benjadmin_terminalhub_p2_managed_commands_20260814.md` – P2 Managed Commands a meglévő B3.1 Control Plane queue-val, READY session gate-tel; nincs nyers shell vagy saját build motor.
 
 - `206_benjadmin_terminalhub_p2_candidate_20260814.md` – P2 DEV candidate: session/reconnect/XTerm/output security/Managed Commands, 64/64 contract, execution továbbra is fail-closed.
+
+- `207_benjadmin_terminalhub_p2_dev_activation_20260814.md` – P2 candidate UI/session protokoll DEV-en aktív, 64/64 PASS, execution továbbra is OFF/fail-closed.
