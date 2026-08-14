@@ -1,10 +1,11 @@
 "use client";
 
-import { BookOpenCheck, Boxes, Columns3, History, LayoutPanelTop, LockKeyhole, Maximize2, Minimize2, RefreshCw, ShieldCheck, SquareTerminal, X } from "lucide-react";
+import { Boxes, Columns3, History, LayoutPanelTop, LockKeyhole, Maximize2, Minimize2, RefreshCw, ShieldCheck, SquareTerminal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TerminalCoreReadiness } from "@/app/lib/dev-center/terminal-hub/readiness";
 import type { TerminalHubStatus } from "@/app/lib/dev-center/terminal-hub/types";
 import TerminalCorePanel from "./TerminalCorePanel";
+import TerminalCommandLibrary from "./TerminalCommandLibrary";
 import TerminalManagedCommands from "./TerminalManagedCommands";
 import type { ConsoleLiveState } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -121,7 +122,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
           ) : null}
 
           {tab === "commands" ? (
-            <section className={styles.terminalHubPlaceholder}><BookOpenCheck size={30} /><strong>TERMINÁL PARANCSTÁR · P3</strong><p>A ChatGPT Parancstártól különálló, deduplikált shell/Git/PowerShell tudástár. A P2-ben még nincs automatikus parancsrögzítés vagy végrehajtási katalógus.</p><small>Tervezett lánc: redaction → normalizálás → shell family → SHA-256 → catalog upsert → execution audit insert.</small></section>
+            <TerminalCommandLibrary enabled={Boolean(status?.features.commandLibraryEnabled)} projects={live?.projects || []} />
           ) : null}
 
           {tab === "workspace" ? (

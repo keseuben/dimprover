@@ -97,3 +97,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `206_benjadmin_terminalhub_p2_candidate_20260814.md` – P2 DEV candidate: session/reconnect/XTerm/output security/Managed Commands, 64/64 contract, execution továbbra is fail-closed.
 
 - `207_benjadmin_terminalhub_p2_dev_activation_20260814.md` – P2 candidate UI/session protokoll DEV-en aktív, 64/64 PASS, execution továbbra is OFF/fail-closed.
+
+- `208_benjadmin_terminal_command_library_p3_candidate_20260814.md` – Terminál Parancstár P3 pre-DB candidate: deduplikált sanitizált command catalog + events, 108/108 contract, source-DB preflight PASS; DB még nem módosult.

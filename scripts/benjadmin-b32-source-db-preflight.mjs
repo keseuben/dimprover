@@ -18,7 +18,12 @@ const REQUIRED_TABLES = [
 function projectRef(value) {
   if (!value) return "";
   try {
-    const host = new URL(value).hostname.toLowerCase();
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    if (host.endsWith(".pooler.supabase.com")) {
+      const username = decodeURIComponent(parsed.username || "");
+      return username.startsWith("postgres.") ? username.slice("postgres.".length) : "";
+    }
     if (!host.endsWith(".supabase.co")) return "";
     const parts = host.split(".");
     return parts[0] === "db" ? parts[1] || "" : parts[0] || "";
