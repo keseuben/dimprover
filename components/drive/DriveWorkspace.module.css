@@ -704,3 +704,35 @@
   .visualComparePointWizardActions { justify-content: flex-start; }
   .visualComparePointPickHint { top: 34px; }
 }
+
+/* Drive Visual Compare Automatic Alignment Suggestion V1 */
+.visualCompareAutoSuggestion { min-height: 52px; border-bottom: 1px solid #d7e4ed; padding: 7px 9px; display: grid; grid-template-columns: minmax(280px,1fr) auto auto; align-items: center; gap: 10px; }
+.visualCompareAutoSuggestionReady { background: #eef9f4; box-shadow: inset 3px 0 0 #2b9a67; }
+.visualCompareAutoSuggestionWarning { background: #fff8eb; box-shadow: inset 3px 0 0 #d99a27; grid-template-columns: minmax(0,1fr); }
+.visualCompareAutoSuggestionLead { min-width: 0; display: flex; align-items: center; gap: 8px; color: #2b9163; }
+.visualCompareAutoSuggestionWarning .visualCompareAutoSuggestionLead { color: #b77a18; }
+.visualCompareAutoSuggestionLead > svg { flex: 0 0 auto; }
+.visualCompareAutoSuggestionLead strong { display: block; color: #3a536b; font-size: 8px; }
+.visualCompareAutoSuggestionLead span { display: block; margin-top: 2px; color: #728597; font-size: 6px; line-height: 1.45; }
+.visualCompareAutoMetrics { display: inline-flex; align-items: stretch; gap: 3px; }
+.visualCompareAutoMetrics > span { min-width: 58px; border: 1px solid #cfe2d9; border-radius: 6px; background: rgba(255,255,255,.72); padding: 4px 6px; display: grid; gap: 1px; }
+.visualCompareAutoMetrics small { color: #789083; font-size: 5px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.visualCompareAutoMetrics strong { color: #287750; font-size: 7px; white-space: nowrap; }
+.visualCompareAutoActions { display: inline-flex; align-items: center; gap: 4px; }
+.visualCompareAutoActions button { min-height: 27px; border: 1px solid #cddbe6; border-radius: 6px; background: #fff; color: #536b81; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px; font-size: 7px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+.visualCompareAutoActions button:hover { background: #eef5ff; border-color: #9ebee0; color: #1765c7; }
+.visualCompareAutoActions .visualCompareAutoApply { border-color: #8fcbae; background: #eaf8f1; color: #21734c; }
+.visualCompareAutoActions .visualCompareAutoApply:hover { background: #ddf4e8; border-color: #6ebd97; color: #17663f; }
+
+@media (max-width: 1180px) {
+  .visualCompareAutoSuggestion { grid-template-columns: minmax(240px,1fr) auto; }
+  .visualCompareAutoActions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (max-width: 760px) {
+  .visualCompareAutoSuggestion { grid-template-columns: 1fr; }
+  .visualCompareAutoMetrics { overflow-x: auto; padding-bottom: 2px; }
+  .visualCompareAutoActions { grid-column: auto; justify-content: flex-start; }
+}
+.visualCompareAlignmentStatus { min-height: 32px; border-bottom: 1px solid #d8e7df; background: #f1faf5; color: #2c7451; padding: 6px 10px; display: flex; align-items: center; gap: 6px; font-size: 7px; font-weight: 800; }
+.visualCompareAlignmentStatus svg { flex: 0 0 auto; color: #24815a; }

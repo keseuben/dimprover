@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Columns2,
   Contrast,
+  Check,
   Crosshair,
   Eye,
   EyeOff,
@@ -17,14 +18,19 @@ import {
   RotateCcw,
   RotateCw,
   Scan,
+  Sparkles,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import {
+  analyzeSharedPdfPage,
   loadSharedPdfDocument,
+  loadSharedPdfJs,
   renderSharedPdfPage,
   type SharedPdfDocument,
 } from "@/components/viewers/pdfDocumentEngine";
+import { buildDriveAutoAlignmentPairProposal, type DriveAutoAlignmentSource } from "./driveAutoAlignment";
 import type { DriveDocument } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -36,6 +42,14 @@ type PointSide = "A" | "B";
 type AlignmentPoint = { x: number; y: number };
 type AlignmentPick = { side: PointSide; pairIndex: number; point: AlignmentPoint };
 type SimilarityAlignment = { offsetX: number; offsetY: number; scalePercent: number; rotationDegrees: number; rmsError: number };
+type AutoAlignmentSuggestion = SimilarityAlignment & {
+  pairCount: 2 | 3;
+  picks: AlignmentPick[];
+  source: DriveAutoAlignmentSource;
+  evidenceCount: number;
+  confidenceScore: number;
+  summary: string;
+};
 
 type PreviewPayload = {
   url: string;
@@ -208,6 +222,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [alignmentPicks, setAlignmentPicks] = useState<AlignmentPick[]>([]);
   const [alignmentRmsError, setAlignmentRmsError] = useState<number | null>(null);
   const [alignmentMessage, setAlignmentMessage] = useState("");
+  const [autoAlignmentAnalyzing, setAutoAlignmentAnalyzing] = useState(false);
+  const [autoAlignmentSuggestion, setAutoAlignmentSuggestion] = useState<AutoAlignmentSuggestion | null>(null);
+  const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [showBase, setShowBase] = useState(true);
   const [showRevision, setShowRevision] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -278,12 +295,20 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentPicks([]);
     setAlignmentRmsError(null);
     setAlignmentMessage("");
+    setAutoAlignmentAnalyzing(false);
+    setAutoAlignmentSuggestion(null);
+    setAutoAlignmentError("");
     setShowBase(true);
     setShowRevision(true);
     setLeftPageCount(0);
     setRightPageCount(0);
     void reload();
   }, [leftDocument.id, reload, rightDocument.id]);
+
+  useEffect(() => {
+    setAutoAlignmentSuggestion(null);
+    setAutoAlignmentError("");
+  }, [fitWidth, pageNumber, rotation, zoom]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -416,6 +441,92 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentRotation(0);
     setAlignmentRmsError(null);
     setAlignmentMessage("Igazítás nullázva.");
+  }
+
+  async function requestAutoAlignmentSuggestion() {
+    if (!isPdf || mode === "SIDE_BY_SIDE" || rotation !== 0) {
+      setAutoAlignmentError(rotation !== 0 ? "Az automatikus V1 illesztéshez állítsd vissza a közös forgatást 0°-ra." : "Automatikus illesztési javaslat PDF Átfedés/Különbség módban érhető el.");
+      return;
+    }
+    const leftPdf = leftPdfRef.current;
+    const rightPdf = rightPdfRef.current;
+    const leftCanvas = leftCanvasRef.current;
+    const rightCanvas = rightCanvasRef.current;
+    if (!leftPdf || !rightPdf || !leftCanvas?.width || !rightCanvas?.width) return;
+
+    setAutoAlignmentAnalyzing(true);
+    setAutoAlignmentError("");
+    setAutoAlignmentSuggestion(null);
+    try {
+      const [pdfJs, leftPage, rightPage] = await Promise.all([
+        loadSharedPdfJs(),
+        leftPdf.getPage(pageNumber),
+        rightPdf.getPage(pageNumber),
+      ]);
+      const [leftAnalysis, rightAnalysis] = await Promise.all([
+        analyzeSharedPdfPage(pdfJs, leftPage),
+        analyzeSharedPdfPage(pdfJs, rightPage),
+      ]);
+      const proposal = buildDriveAutoAlignmentPairProposal(leftAnalysis, rightAnalysis);
+      if (!proposal || proposal.pairs.length < 2) {
+        const diagnostics = `A: ${leftAnalysis.contentKind}, ${leftAnalysis.textItemCount} szöveg, ${leftAnalysis.closedContourCount} kontúr · B: ${rightAnalysis.contentKind}, ${rightAnalysis.textItemCount} szöveg, ${rightAnalysis.closedContourCount} kontúr`;
+        setAutoAlignmentError(`Nem találtam elég egyértelmű, egymástól távoli közös referencia-feature-t. ${diagnostics}. Használd a 2/3 pontos kézi illesztést.`);
+        return;
+      }
+      const pairCount = proposal.pairs.length >= 3 ? 3 : 2;
+      const selectedPairs = proposal.pairs.slice(0, pairCount);
+      const picks: AlignmentPick[] = selectedPairs.flatMap((pair, pairIndex) => ([
+        { side: "A" as const, pairIndex, point: { x: pair.a.x * leftCanvas.width, y: pair.a.y * leftCanvas.height } },
+        { side: "B" as const, pairIndex, point: { x: pair.b.x * rightCanvas.width, y: pair.b.y * rightCanvas.height } },
+      ]));
+      const solved = solveSimilarityAlignment(picks, pairCount);
+      if (!solved) {
+        setAutoAlignmentError("A felismert feature-párokból nem számítható stabil hasonlósági transzformáció.");
+        return;
+      }
+      if (solved.scalePercent < 70 || solved.scalePercent > 130 || Math.abs(solved.offsetX) > 500 || Math.abs(solved.offsetY) > 500) {
+        setAutoAlignmentError(`Az automatikus javaslat kívül esik a biztonságos tartományon: X ${solved.offsetX.toFixed(1)} px · Y ${solved.offsetY.toFixed(1)} px · ${solved.scalePercent.toFixed(2)}%. Nem alkalmaztam.`);
+        return;
+      }
+      const diagonal = Math.max(1, Math.hypot(leftCanvas.width, leftCanvas.height));
+      const normalizedRms = solved.rmsError / diagonal;
+      let confidence = proposal.confidenceBase;
+      if (pairCount === 3) confidence += 0.035;
+      if (proposal.evidenceCount >= 4) confidence += 0.025;
+      if (proposal.spreadScore >= 0.45) confidence += 0.025;
+      if (normalizedRms <= 0.002) confidence += 0.035;
+      else if (normalizedRms >= 0.012) confidence -= 0.12;
+      confidence = Math.max(0.4, Math.min(0.98, confidence));
+      setAutoAlignmentSuggestion({
+        ...solved,
+        pairCount,
+        picks,
+        source: proposal.source,
+        evidenceCount: proposal.evidenceCount,
+        confidenceScore: Number(confidence.toFixed(3)),
+        summary: proposal.summary,
+      });
+    } catch (caught) {
+      setAutoAlignmentError(caught instanceof Error ? `Automatikus illesztési elemzés: ${caught.message}` : "Az automatikus illesztési elemzés sikertelen.");
+    } finally {
+      setAutoAlignmentAnalyzing(false);
+    }
+  }
+
+  function applyAutoAlignmentSuggestion() {
+    const suggestion = autoAlignmentSuggestion;
+    if (!suggestion) return;
+    setAlignmentOffsetX(clampAlignmentOffset(suggestion.offsetX));
+    setAlignmentOffsetY(clampAlignmentOffset(suggestion.offsetY));
+    setAlignmentScale(clampAlignmentScale(suggestion.scalePercent));
+    setAlignmentRotation(suggestion.rotationDegrees);
+    setAlignmentRmsError(suggestion.rmsError);
+    setAlignmentPicks(suggestion.picks);
+    setPointAlignmentMode(null);
+    setAlignmentEnabled(false);
+    setAlignmentMessage(`Automatikus javaslat jóváhagyva · ${Math.round(suggestion.confidenceScore * 100)}% bizalom · RMS ${suggestion.rmsError.toFixed(2)} px.`);
+    setAutoAlignmentSuggestion(null);
+    setAutoAlignmentError("");
   }
 
   function startPointAlignment(pairCount: 2 | 3) {
@@ -664,11 +775,45 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             <strong>°</strong>
           </label>
           <div className={styles.visualCompareAlignmentActions}>
+            <button type="button" onClick={() => void requestAutoAlignmentSuggestion()} disabled={!isPdf || !ready || autoAlignmentAnalyzing || rotation !== 0} className={autoAlignmentSuggestion ? styles.visualCompareToolActive : ""} title="Vektoros PDF feature-ek alapján automatikus illesztési javaslat készítése; csak jóváhagyás után alkalmazható">{autoAlignmentAnalyzing ? <Loader2 size={12} className={styles.spin} /> : <Sparkles size={12} />} Auto javaslat</button>
             <button type="button" onClick={() => startPointAlignment(2)} disabled={!isPdf || !ready} className={pointAlignmentMode === 2 ? styles.visualCompareToolActive : ""} title="Két azonos referencia-pontpárból eltolás, méretarány és szög számítása"><Crosshair size={12} /> 2 pont</button>
             <button type="button" onClick={() => startPointAlignment(3)} disabled={!isPdf || !ready} className={pointAlignmentMode === 3 ? styles.visualCompareToolActive : ""} title="Három referencia-pontpár legkisebb négyzetes hasonlósági illesztése"><Crosshair size={12} /> 3 pont</button>
             <button type="button" onClick={alignByPageBounds} disabled={!isPdf || !ready} title="A két renderelt lap külső mérete alapján a B réteg középre és méretre igazítása"><Scan size={12} /> Lapméret</button>
             <button type="button" onClick={resetAlignment} title="B réteg geometriai igazításának nullázása"><RotateCcw size={12} /> Nullázás</button>
           </div>
+        </div>
+      )}
+
+      {mode !== "SIDE_BY_SIDE" && alignmentMessage && !pointAlignmentMode && !autoAlignmentSuggestion && !autoAlignmentError && (
+        <div className={styles.visualCompareAlignmentStatus}><Check size={12} /><span>{alignmentMessage}</span></div>
+      )}
+
+      {mode !== "SIDE_BY_SIDE" && (autoAlignmentSuggestion || autoAlignmentError) && (
+        <div className={`${styles.visualCompareAutoSuggestion} ${autoAlignmentSuggestion ? styles.visualCompareAutoSuggestionReady : styles.visualCompareAutoSuggestionWarning}`}>
+          <div className={styles.visualCompareAutoSuggestionLead}>
+            <Sparkles size={14} />
+            <div>
+              <strong>{autoAlignmentSuggestion ? "Automatikus illesztési javaslat" : "Automatikus illesztés nem javasolható"}</strong>
+              {autoAlignmentSuggestion ? (
+                <span>{autoAlignmentSuggestion.summary} · forrás: {autoAlignmentSuggestion.source === "TEXT_LABELS" ? "azonos tervfeliratok" : "vektoros kontúrok"} · bizonyíték: {autoAlignmentSuggestion.evidenceCount}</span>
+              ) : <span>{autoAlignmentError}</span>}
+            </div>
+          </div>
+          {autoAlignmentSuggestion && (
+            <>
+              <div className={styles.visualCompareAutoMetrics}>
+                <span><small>Bizalom</small><strong>{Math.round(autoAlignmentSuggestion.confidenceScore * 100)}%</strong></span>
+                <span><small>Pontpár</small><strong>{autoAlignmentSuggestion.pairCount}</strong></span>
+                <span><small>RMS</small><strong>{autoAlignmentSuggestion.rmsError.toFixed(2)} px</strong></span>
+                <span><small>Skála</small><strong>{autoAlignmentSuggestion.scalePercent.toFixed(2)}%</strong></span>
+                <span><small>Szög</small><strong>{autoAlignmentSuggestion.rotationDegrees.toFixed(2)}°</strong></span>
+              </div>
+              <div className={styles.visualCompareAutoActions}>
+                <button type="button" className={styles.visualCompareAutoApply} onClick={applyAutoAlignmentSuggestion}><Check size={12} /> Alkalmazás</button>
+                <button type="button" onClick={() => setAutoAlignmentSuggestion(null)}><X size={12} /> Elvetés</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -794,7 +939,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       <footer className={styles.visualCompareFooter}>
         <span><strong>Szinkron:</strong> oldal · zoom · illesztés · forgatás · pásztázás</span>
         <span><strong>Átfedés:</strong> B réteg átlátszóság állítható</span>
-        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y · méret · szög · 2/3 pontos referencia-illesztés</span>
+        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y · méret · szög · 2/3 pont · vektoros Auto javaslat jóváhagyással</span>
         <span><strong>Különbség:</strong> CSS difference blend – az eltérő vonalak világosan kiemelkednek</span>
         <span>Ctrl + egérgörgő: szinkron zoom</span>
       </footer>
