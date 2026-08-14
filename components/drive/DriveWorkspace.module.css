@@ -771,3 +771,30 @@
   .visualCompareAutoPairReviewHeader { align-items: flex-start; flex-direction: column; gap: 2px; }
   .visualCompareAutoPairReviewHeader span { white-space: normal; }
 }
+
+/* Drive Visual Compare Multiple Auto Candidates V1 */
+.visualCompareAutoCandidates { min-width: 0; display: grid; gap: 4px; }
+.visualCompareAutoCandidatesHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.visualCompareAutoCandidatesHeader strong { color: #37546f; font-size: 7px; }
+.visualCompareAutoCandidatesHeader span { color: #82919e; font-size: 5px; white-space: nowrap; }
+.visualCompareAutoCandidateList { min-width: 0; display: grid; grid-template-columns: repeat(3,minmax(132px,1fr)); gap: 4px; }
+.visualCompareAutoCandidateList button { min-width: 0; min-height: 36px; border: 1px solid #d4e0e9; border-radius: 7px; background: rgba(255,255,255,.8); color: #587086; padding: 5px 7px; text-align: left; display: grid; gap: 2px; cursor: pointer; }
+.visualCompareAutoCandidateList button:hover { border-color: #9cbad8; background: #f2f7fc; color: #2b679e; }
+.visualCompareAutoCandidateList button strong { min-width: 0; color: #3b5872; font-size: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visualCompareAutoCandidateList button span { color: #81909d; font-size: 5px; white-space: nowrap; }
+.visualCompareAutoCandidateList .visualCompareAutoCandidateActive { border-color: #72b28f; background: #eaf8f1; box-shadow: inset 3px 0 0 #2e9867; }
+.visualCompareAutoCandidateList .visualCompareAutoCandidateActive strong { color: #24764f; }
+.visualCompareAutoCandidateList .visualCompareAutoCandidateActive span { color: #5d7e6c; }
+
+@media (max-width: 1180px) {
+  .visualCompareAutoCandidateList { grid-template-columns: repeat(2,minmax(128px,1fr)); }
+}
+
+@media (max-width: 760px) {
+  .visualCompareAutoCandidatesHeader { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .visualCompareAutoCandidatesHeader span { white-space: normal; }
+  .visualCompareAutoCandidateList { grid-template-columns: 1fr; }
+}
+
+.visualCompareAutoCandidateHint { min-height: 22px; border: 1px solid #cfe1d8; border-radius: 6px; background: #f5fbf8; color: #4d7862; padding: 3px 6px; display: flex; align-items: center; gap: 5px; font-size: 5px; font-weight: 800; }
+.visualCompareAutoCandidateHint svg { flex: 0 0 auto; color: #2d8a5e; }

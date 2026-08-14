@@ -30,7 +30,7 @@ import {
   renderSharedPdfPage,
   type SharedPdfDocument,
 } from "@/components/viewers/pdfDocumentEngine";
-import { buildDriveAutoAlignmentPairProposal, type DriveAutoAlignmentSource } from "./driveAutoAlignment";
+import { buildDriveAutoAlignmentPairProposals, type DriveAutoAlignmentSource } from "./driveAutoAlignment";
 import type { DriveDocument } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -251,6 +251,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [alignmentMessage, setAlignmentMessage] = useState("");
   const [autoAlignmentAnalyzing, setAutoAlignmentAnalyzing] = useState(false);
   const [autoAlignmentSuggestion, setAutoAlignmentSuggestion] = useState<AutoAlignmentSuggestion | null>(null);
+  const [autoAlignmentCandidates, setAutoAlignmentCandidates] = useState<AutoAlignmentSuggestion[]>([]);
+  const [autoAlignmentCandidateIndex, setAutoAlignmentCandidateIndex] = useState(0);
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
@@ -325,6 +327,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentMessage("");
     setAutoAlignmentAnalyzing(false);
     setAutoAlignmentSuggestion(null);
+    setAutoAlignmentCandidates([]);
+    setAutoAlignmentCandidateIndex(0);
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
     setShowBase(true);
@@ -336,6 +340,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
 
   useEffect(() => {
     setAutoAlignmentSuggestion(null);
+    setAutoAlignmentCandidates([]);
+    setAutoAlignmentCandidateIndex(0);
     setAutoAlignmentError("");
     setAutoPairReplacement(null);
   }, [fitWidth, pageNumber, rotation, zoom]);
@@ -487,6 +493,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAutoAlignmentAnalyzing(true);
     setAutoAlignmentError("");
     setAutoAlignmentSuggestion(null);
+    setAutoAlignmentCandidates([]);
+    setAutoAlignmentCandidateIndex(0);
     setAutoPairReplacement(null);
     try {
       const [pdfJs, leftPage, rightPage] = await Promise.all([
@@ -498,51 +506,67 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
         analyzeSharedPdfPage(pdfJs, leftPage),
         analyzeSharedPdfPage(pdfJs, rightPage),
       ]);
-      const proposal = buildDriveAutoAlignmentPairProposal(leftAnalysis, rightAnalysis);
-      if (!proposal || proposal.pairs.length < 2) {
+      const proposals = buildDriveAutoAlignmentPairProposals(leftAnalysis, rightAnalysis);
+      if (!proposals.length) {
         const diagnostics = `A: ${leftAnalysis.contentKind}, ${leftAnalysis.textItemCount} szöveg, ${leftAnalysis.closedContourCount} kontúr · B: ${rightAnalysis.contentKind}, ${rightAnalysis.textItemCount} szöveg, ${rightAnalysis.closedContourCount} kontúr`;
         setAutoAlignmentError(`Nem találtam elég egyértelmű, egymástól távoli közös referencia-feature-t. ${diagnostics}. Használd a 2/3 pontos kézi illesztést.`);
         return;
       }
-      const pairCount = proposal.pairs.length >= 3 ? 3 : 2;
-      const selectedPairs = proposal.pairs.slice(0, pairCount);
-      const picks: AlignmentPick[] = selectedPairs.flatMap((pair, pairIndex) => ([
-        { side: "A" as const, pairIndex, point: { x: pair.a.x * leftCanvas.width, y: pair.a.y * leftCanvas.height } },
-        { side: "B" as const, pairIndex, point: { x: pair.b.x * rightCanvas.width, y: pair.b.y * rightCanvas.height } },
-      ]));
-      const solved = solveSimilarityAlignment(picks, pairCount);
-      if (!solved) {
-        setAutoAlignmentError("A felismert feature-párokból nem számítható stabil hasonlósági transzformáció.");
-        return;
-      }
-      if (solved.scalePercent < 70 || solved.scalePercent > 130 || Math.abs(solved.offsetX) > 500 || Math.abs(solved.offsetY) > 500) {
-        setAutoAlignmentError(`Az automatikus javaslat kívül esik a biztonságos tartományon: X ${solved.offsetX.toFixed(1)} px · Y ${solved.offsetY.toFixed(1)} px · ${solved.scalePercent.toFixed(2)}%. Nem alkalmaztam.`);
-        return;
-      }
+
       const diagonal = Math.max(1, Math.hypot(leftCanvas.width, leftCanvas.height));
-      const normalizedRms = solved.rmsError / diagonal;
-      let confidence = proposal.confidenceBase;
-      if (pairCount === 3) confidence += 0.035;
-      if (proposal.evidenceCount >= 4) confidence += 0.025;
-      if (proposal.spreadScore >= 0.45) confidence += 0.025;
-      if (normalizedRms <= 0.002) confidence += 0.035;
-      else if (normalizedRms >= 0.012) confidence -= 0.12;
-      confidence = Math.max(0.4, Math.min(0.98, confidence));
-      setAutoAlignmentSuggestion({
-        ...solved,
-        pairCount,
-        picks,
-        pairMeta: selectedPairs.map((pair) => ({ key: pair.key, weight: pair.weight, manual: false })),
-        source: proposal.source,
-        evidenceCount: proposal.evidenceCount,
-        confidenceScore: Number(confidence.toFixed(3)),
-        summary: proposal.summary,
-      });
+      const evaluated = proposals.flatMap((proposal) => {
+        const pairCount = proposal.pairs.length >= 3 ? 3 : 2;
+        const selectedPairs = proposal.pairs.slice(0, pairCount);
+        if (selectedPairs.length < 2) return [];
+        const picks: AlignmentPick[] = selectedPairs.flatMap((pair, pairIndex) => ([
+          { side: "A" as const, pairIndex, point: { x: pair.a.x * leftCanvas.width, y: pair.a.y * leftCanvas.height } },
+          { side: "B" as const, pairIndex, point: { x: pair.b.x * rightCanvas.width, y: pair.b.y * rightCanvas.height } },
+        ]));
+        const solved = solveSimilarityAlignment(picks, pairCount);
+        if (!solved) return [];
+        if (solved.scalePercent < 70 || solved.scalePercent > 130 || Math.abs(solved.offsetX) > 500 || Math.abs(solved.offsetY) > 500) return [];
+        const normalizedRms = solved.rmsError / diagonal;
+        let confidence = proposal.confidenceBase;
+        if (pairCount === 3) confidence += 0.035;
+        if (proposal.evidenceCount >= 4) confidence += 0.025;
+        if (proposal.spreadScore >= 0.45) confidence += 0.025;
+        if (normalizedRms <= 0.002) confidence += 0.035;
+        else if (normalizedRms >= 0.012) confidence -= 0.12;
+        confidence = Math.max(0.4, Math.min(0.98, confidence));
+        return [{
+          ...solved,
+          pairCount,
+          picks,
+          pairMeta: selectedPairs.map((pair) => ({ key: pair.key, weight: pair.weight, manual: false })),
+          source: proposal.source,
+          evidenceCount: proposal.evidenceCount,
+          confidenceScore: Number(confidence.toFixed(3)),
+          summary: proposal.summary,
+        } satisfies AutoAlignmentSuggestion];
+      }).sort((left, right) => right.confidenceScore - left.confidenceScore || left.rmsError - right.rmsError || right.evidenceCount - left.evidenceCount);
+
+      if (!evaluated.length) {
+        setAutoAlignmentError("A felismert automatikus jelöltek mindegyike kiesett a biztonságos skála/eltolás vagy stabilitási feltételeken. Használd a 2/3 pontos kézi illesztést.");
+        return;
+      }
+      setAutoAlignmentCandidates(evaluated);
+      setAutoAlignmentCandidateIndex(0);
+      setAutoAlignmentSuggestion(evaluated[0]);
+      setAlignmentMessage(evaluated.length > 1 ? `${evaluated.length} biztonságos automatikus illesztési alternatíva készült. Ellenőrizd és válaszd ki a megfelelőt.` : "1 biztonságos automatikus illesztési javaslat készült.");
     } catch (caught) {
       setAutoAlignmentError(caught instanceof Error ? `Automatikus illesztési elemzés: ${caught.message}` : "Az automatikus illesztési elemzés sikertelen.");
     } finally {
       setAutoAlignmentAnalyzing(false);
     }
+  }
+
+  function selectAutoAlignmentCandidate(index: number) {
+    const candidate = autoAlignmentCandidates[index];
+    if (!candidate) return;
+    setAutoAlignmentCandidateIndex(index);
+    setAutoAlignmentSuggestion(candidate);
+    setAutoPairReplacement(null);
+    setAlignmentMessage(`Automatikus alternatíva ${index + 1}/${autoAlignmentCandidates.length} kiválasztva · ${Math.round(candidate.confidenceScore * 100)}% bizalom · RMS ${candidate.rmsError.toFixed(2)} px.`);
   }
 
   function startAutoPairReplacement(pairIndex: number) {
@@ -571,12 +595,14 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       setAlignmentMessage(`Referencia ${pairIndex + 1}: a kézi csere biztonsági tartományon kívüli transzformációt adna, ezért nem alkalmaztam.`);
       return;
     }
-    setAutoAlignmentSuggestion({
+    const nextSuggestion: AutoAlignmentSuggestion = {
       ...suggestion,
       ...solved,
       picks: nextPicks,
       pairMeta: suggestion.pairMeta.map((meta, index) => index === pairIndex ? { ...meta, manual: true } : meta),
-    });
+    };
+    setAutoAlignmentSuggestion(nextSuggestion);
+    setAutoAlignmentCandidates((current) => current.map((candidate, index) => index === autoAlignmentCandidateIndex ? nextSuggestion : candidate));
     setAutoPairReplacement(null);
     setAlignmentMessage(`Referencia ${pairIndex + 1} kézzel felülvizsgálva · új RMS ${solved.rmsError.toFixed(2)} px.`);
   }
@@ -612,6 +638,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setAlignmentEnabled(false);
     setAlignmentMessage(`Automatikus javaslat jóváhagyva · ${Math.round(suggestion.confidenceScore * 100)}% bizalom · RMS ${suggestion.rmsError.toFixed(2)} px.`);
     setAutoAlignmentSuggestion(null);
+    setAutoAlignmentCandidates([]);
+    setAutoAlignmentCandidateIndex(0);
     setAutoAlignmentError("");
   }
 
@@ -902,7 +930,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
           <div className={styles.visualCompareAutoSuggestionLead}>
             <Sparkles size={14} />
             <div>
-              <strong>{autoAlignmentSuggestion ? "Automatikus illesztési javaslat" : "Automatikus illesztés nem javasolható"}</strong>
+              <strong>{autoAlignmentSuggestion ? `Automatikus illesztési javaslat${autoAlignmentCandidates.length > 1 ? ` · ${autoAlignmentCandidates.length} alternatíva` : ""}` : "Automatikus illesztés nem javasolható"}</strong>
               {autoAlignmentSuggestion ? (
                 <span>{autoAlignmentSuggestion.summary} · forrás: {autoAlignmentSourceLabel(autoAlignmentSuggestion.source)} · bizonyíték: {autoAlignmentSuggestion.evidenceCount}</span>
               ) : <span>{autoAlignmentError}</span>}
@@ -910,6 +938,27 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
           </div>
           {autoAlignmentSuggestion && (
             <>
+              {autoAlignmentCandidates.length > 1 && (
+                <div className={styles.visualCompareAutoCandidates} data-auto-candidate-count={autoAlignmentCandidates.length}>
+                  <div className={styles.visualCompareAutoCandidatesHeader}><strong>Illesztési alternatívák</strong><span>A javaslatok nem alkalmazódnak automatikusan</span></div>
+                  <div className={styles.visualCompareAutoCandidateList}>
+                    {autoAlignmentCandidates.map((candidate, index) => (
+                      <button
+                        key={`${candidate.source}-${index}`}
+                        type="button"
+                        className={index === autoAlignmentCandidateIndex ? styles.visualCompareAutoCandidateActive : ""}
+                        onClick={() => selectAutoAlignmentCandidate(index)}
+                        data-auto-candidate={index + 1}
+                        aria-pressed={index === autoAlignmentCandidateIndex}
+                      >
+                        <strong>#{index + 1} · {autoAlignmentSourceLabel(candidate.source)}</strong>
+                        <span>{Math.round(candidate.confidenceScore * 100)}% · RMS {candidate.rmsError.toFixed(2)} px · {candidate.pairCount} pont</span>
+                      </button>
+                    ))}
+                  </div>
+                  {!autoPairReplacement && alignmentMessage && <div className={styles.visualCompareAutoCandidateHint}><Check size={11} /> {alignmentMessage}</div>}
+                </div>
+              )}
               <div className={styles.visualCompareAutoMetrics}>
                 <span><small>Bizalom</small><strong>{Math.round(autoAlignmentSuggestion.confidenceScore * 100)}%</strong></span>
                 <span><small>Pontpár</small><strong>{autoAlignmentSuggestion.pairCount}</strong></span>
@@ -943,7 +992,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
               </div>
               <div className={styles.visualCompareAutoActions}>
                 <button type="button" className={styles.visualCompareAutoApply} onClick={applyAutoAlignmentSuggestion}><Check size={12} /> Alkalmazás</button>
-                <button type="button" onClick={() => setAutoAlignmentSuggestion(null)}><X size={12} /> Elvetés</button>
+                <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
               </div>
             </>
           )}

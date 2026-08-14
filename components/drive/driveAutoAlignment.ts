@@ -545,14 +545,31 @@ function contourProposal(left: SharedPdfPageAnalysis, right: SharedPdfPageAnalys
   };
 }
 
+export function buildDriveAutoAlignmentPairProposals(
+  left: SharedPdfPageAnalysis,
+  right: SharedPdfPageAnalysis,
+): DriveAutoAlignmentPairProposal[] {
+  const candidates: DriveAutoAlignmentPairProposal[] = [];
+  const text = textProposal(left, right);
+  if (text) candidates.push(text);
+  if (left.contentKind !== "raster" && right.contentKind !== "raster") {
+    const geometry = geometricNodeProposal(left, right);
+    if (geometry) candidates.push(geometry);
+    const contour = contourProposal(left, right);
+    if (contour) candidates.push(contour);
+  }
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const signature = `${candidate.source}:${candidate.pairs.map((pair) => pair.key).join("|")}`;
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  }).slice(0, 3);
+}
+
 export function buildDriveAutoAlignmentPairProposal(
   left: SharedPdfPageAnalysis,
   right: SharedPdfPageAnalysis,
 ): DriveAutoAlignmentPairProposal | null {
-  const text = textProposal(left, right);
-  if (text) return text;
-  if (left.contentKind === "raster" || right.contentKind === "raster") return null;
-  const geometry = geometricNodeProposal(left, right);
-  if (geometry) return geometry;
-  return contourProposal(left, right);
+  return buildDriveAutoAlignmentPairProposals(left, right)[0] || null;
 }
