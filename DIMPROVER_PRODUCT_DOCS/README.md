@@ -78,6 +78,7 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `124_dimpro_benjadmin_b3_m0_release_gate_status_20260809.md` – M0 13/13 release-gate lezárás, auth és storage acceptance.
 - `125_dimpro_benjadmin_b3_m1_shell_login_navigation_20260810.md` – M1 protective screen, rejtett admin login, BENJADMIN shell és reszponzív navigáció.
 - `197_benjadmin_terminalhub_normative_checkpoint_20260814.md` – 01–06 BENJADMIN normatív forráslánc, aktuális 666a651 baseline és Terminal Hub / Live Workspace P0+P1 indulási checkpoint.
-- `198_benjadmin_terminalhub_p0p1_20260814.md` – Terminal Hub P0 security foundation + P1 UI shell, execution nélkül, 19/19 contract és koordinált build checkpoint.
+- `198_benjadmin_terminalhub_p0p1_20260814.md` – Terminal Hub P0 security foundation + P1 UI shell, execution nélkül, 21/21 contract és koordinált build checkpoint.
+- `199_benjadmin_terminalhub_p0p1_dev_activation_20260814.md` – P0/P1 DEV aktiválás, 21/21 security contract, feature flag állapot, smoke és P2 előtti rollback checkpoint.
 
 - 130_dimpro_benjadmin_operator_ui_v2_20260810.md – Operator UI 2.0: egyképernyős, lapozható táblázatos BENJADMIN, dokkolható Explorer, light/dark mód és öt tagos B3 csapat.
