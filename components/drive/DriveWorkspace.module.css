@@ -609,3 +609,49 @@
 @media (max-width: 900px) {
   .compareRevisionSelect { max-width: none; }
 }
+
+/* Drive Visual Compare Geometric Alignment V1 */
+.visualCompareAlignmentCompact { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+.visualCompareAlignmentCompact button { min-width: 66px; height: 27px; border: 1px solid #d2dfe9; border-radius: 6px; background: #fff; color: #536b81; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 7px; font-weight: 900; cursor: pointer; }
+.visualCompareAlignmentCompact button:hover { background: #eef5ff; border-color: #a7c5e7; color: #1765c7; }
+.visualCompareAlignmentCompact .visualCompareToolActive { background: #eaf3ff; border-color: #8eb7e7; color: #1765c7; }
+.visualCompareAlignmentCompact > span { min-width: 104px; color: #61778d; font-size: 6px; font-weight: 900; white-space: nowrap; }
+.visualCompareAlignmentBar { min-height: 46px; padding: 5px 9px; border-bottom: 1px solid #dbe6ee; background: #f8fbfd; display: grid; grid-template-columns: minmax(190px,1fr) auto minmax(210px,310px) auto; align-items: center; gap: 8px; transition: background 120ms ease, box-shadow 120ms ease; }
+.visualCompareAlignmentBarActive { background: #eef6ff; box-shadow: inset 3px 0 0 #2d7fd6; }
+.visualCompareAlignmentLead { min-width: 0; display: flex; align-items: center; gap: 7px; color: #3475b5; }
+.visualCompareAlignmentLead > svg { flex: 0 0 auto; }
+.visualCompareAlignmentLead strong { display: block; color: #36546f; font-size: 8px; }
+.visualCompareAlignmentLead span { display: block; margin-top: 2px; color: #7a8d9f; font-size: 6px; line-height: 1.35; }
+.visualCompareNudgeGrid { display: grid; grid-template-columns: repeat(4,24px); gap: 2px; }
+.visualCompareNudgeGrid button { width: 24px; height: 24px; border: 1px solid #d1dee9; border-radius: 5px; background: #fff; color: #4f6c86; display: grid; place-items: center; padding: 0; font-size: 11px; font-weight: 900; cursor: pointer; }
+.visualCompareNudgeGrid button:hover:not(:disabled) { background: #eaf3ff; border-color: #9bbde2; color: #1765c7; }
+.visualCompareNudgeGrid button:disabled { opacity: .35; cursor: not-allowed; }
+.visualCompareAlignmentScale { min-width: 0; display: grid; grid-template-columns: auto minmax(90px,1fr) 48px; align-items: center; gap: 6px; color: #64798d; font-size: 7px; font-weight: 900; }
+.visualCompareAlignmentScale input { min-width: 0; width: 100%; accent-color: #2b78cb; }
+.visualCompareAlignmentScale strong { color: #2d6da9; text-align: right; font-size: 7px; }
+.visualCompareAlignmentActions { display: inline-flex; align-items: center; gap: 4px; }
+.visualCompareAlignmentActions button { min-height: 25px; border: 1px solid #d2dfe9; border-radius: 6px; background: #fff; color: #536b81; padding: 0 7px; display: inline-flex; align-items: center; gap: 4px; font-size: 7px; font-weight: 900; cursor: pointer; white-space: nowrap; }
+.visualCompareAlignmentActions button:hover:not(:disabled) { background: #edf5ff; border-color: #9ebfe6; color: #1765c7; }
+.visualCompareAlignmentActions button:disabled { opacity: .4; cursor: not-allowed; }
+.visualCompareOverlayViewportAligning { cursor: move; touch-action: none; outline: 2px solid rgba(45,127,214,.24); outline-offset: 3px; }
+.visualCompareOverlayViewportAligning::after { content: "B réteg igazítás"; position: absolute; z-index: 6; left: 50%; bottom: 8px; transform: translateX(-50%); border: 1px solid rgba(45,127,214,.28); border-radius: 999px; background: rgba(239,247,255,.92); color: #286cae; padding: 4px 8px; font-size: 6px; font-weight: 900; pointer-events: none; box-shadow: 0 2px 8px rgba(28,68,105,.08); }
+
+@media (max-width: 1220px) {
+  .visualCompareAlignmentBar { grid-template-columns: minmax(170px,1fr) auto minmax(170px,230px); }
+  .visualCompareAlignmentActions { grid-column: 1 / -1; justify-content: flex-end; }
+  .visualCompareAlignmentCompact > span { display: none; }
+}
+
+@media (max-width: 900px) {
+  .visualCompareAlignmentBar { grid-template-columns: 1fr auto; }
+  .visualCompareAlignmentScale { grid-column: 1 / -1; }
+  .visualCompareAlignmentActions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .visualCompareAlignmentLead span { display: none; }
+  .visualCompareAlignmentBar { padding: 6px 7px; }
+  .visualCompareNudgeGrid { grid-template-columns: repeat(4,22px); }
+  .visualCompareNudgeGrid button { width: 22px; height: 22px; }
+  .visualCompareAlignmentActions button { padding: 0 5px; }
+}

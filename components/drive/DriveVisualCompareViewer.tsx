@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,7 +11,9 @@ import {
   Layers3,
   Loader2,
   Maximize2,
+  Move,
   RefreshCcw,
+  RotateCcw,
   RotateCw,
   Scan,
   ZoomIn,
@@ -56,6 +58,14 @@ function clampZoom(value: number) {
   return Math.max(0.25, Math.min(5, Number(value.toFixed(2))));
 }
 
+function clampAlignmentOffset(value: number) {
+  return Math.max(-500, Math.min(500, Math.round(value)));
+}
+
+function clampAlignmentScale(value: number) {
+  return Math.max(70, Math.min(130, Number(value.toFixed(1))));
+}
+
 function shortRevision(document: DriveDocument) {
   return document.currentVersion?.revisionCode || `V${document.currentVersionNumber || 0}`;
 }
@@ -68,6 +78,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const leftPaneRef = useRef<HTMLDivElement | null>(null);
   const rightPaneRef = useRef<HTMLDivElement | null>(null);
   const syncingScrollRef = useRef(false);
+  const alignmentDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const leftPdfRef = useRef<SharedPdfDocument | null>(null);
   const rightPdfRef = useRef<SharedPdfDocument | null>(null);
   const renderRunRef = useRef(0);
@@ -86,6 +97,10 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [fitWidth, setFitWidth] = useState(true);
   const [rotation, setRotation] = useState(0);
   const [overlayOpacity, setOverlayOpacity] = useState(50);
+  const [alignmentEnabled, setAlignmentEnabled] = useState(false);
+  const [alignmentOffsetX, setAlignmentOffsetX] = useState(0);
+  const [alignmentOffsetY, setAlignmentOffsetY] = useState(0);
+  const [alignmentScale, setAlignmentScale] = useState(100);
   const [showBase, setShowBase] = useState(true);
   const [showRevision, setShowRevision] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -147,6 +162,10 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setFitWidth(true);
     setRotation(0);
     setOverlayOpacity(50);
+    setAlignmentEnabled(false);
+    setAlignmentOffsetX(0);
+    setAlignmentOffsetY(0);
+    setAlignmentScale(100);
     setShowBase(true);
     setShowRevision(true);
     setLeftPageCount(0);
@@ -278,6 +297,69 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     setRotation((current) => (current + 90) % 360);
   }
 
+  function resetAlignment() {
+    setAlignmentOffsetX(0);
+    setAlignmentOffsetY(0);
+    setAlignmentScale(100);
+  }
+
+  function nudgeAlignment(deltaX: number, deltaY: number) {
+    setAlignmentOffsetX((current) => clampAlignmentOffset(current + deltaX));
+    setAlignmentOffsetY((current) => clampAlignmentOffset(current + deltaY));
+  }
+
+  function alignByPageBounds() {
+    if (!isPdf) return;
+    const leftCanvas = leftCanvasRef.current;
+    const rightCanvas = rightCanvasRef.current;
+    if (!leftCanvas?.width || !leftCanvas?.height || !rightCanvas?.width || !rightCanvas?.height) return;
+    const scale = Math.min(leftCanvas.width / rightCanvas.width, leftCanvas.height / rightCanvas.height);
+    const nextScale = clampAlignmentScale(scale * 100);
+    const factor = nextScale / 100;
+    setAlignmentScale(nextScale);
+    setAlignmentOffsetX(clampAlignmentOffset((leftCanvas.width - rightCanvas.width * factor) / 2));
+    setAlignmentOffsetY(clampAlignmentOffset((leftCanvas.height - rightCanvas.height * factor) / 2));
+  }
+
+  function beginAlignmentDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!alignmentEnabled || mode === "SIDE_BY_SIDE") return;
+    alignmentDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: alignmentOffsetX,
+      originY: alignmentOffsetY,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveAlignmentDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = alignmentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !alignmentEnabled || mode === "SIDE_BY_SIDE") return;
+    setAlignmentOffsetX(clampAlignmentOffset(drag.originX + event.clientX - drag.startX));
+    setAlignmentOffsetY(clampAlignmentOffset(drag.originY + event.clientY - drag.startY));
+    event.preventDefault();
+  }
+
+  function endAlignmentDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = alignmentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    alignmentDragRef.current = null;
+    try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* pointer may already be released */ }
+  }
+
+  function handleAlignmentKeys(event: ReactKeyboardEvent<HTMLElement>) {
+    if (!alignmentEnabled || mode === "SIDE_BY_SIDE") return;
+    const step = event.shiftKey ? 10 : 1;
+    if (event.key === "ArrowLeft") nudgeAlignment(-step, 0);
+    else if (event.key === "ArrowRight") nudgeAlignment(step, 0);
+    else if (event.key === "ArrowUp") nudgeAlignment(0, -step);
+    else if (event.key === "ArrowDown") nudgeAlignment(0, step);
+    else return;
+    event.preventDefault();
+  }
+
   async function fullscreen() {
     try { await rootRef.current?.requestFullscreen?.(); } catch { /* browser may reject */ }
   }
@@ -296,9 +378,11 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const ready = Boolean(leftPreview && rightPreview) && (!isPdf || sharedPageCount > 0);
   const topOpacity = mode === "DIFFERENCE" ? 1 : overlayOpacity / 100;
   const topBlend = mode === "DIFFERENCE" ? "difference" : "normal";
+  const alignmentFactor = alignmentScale / 100;
+  const revisionAlignmentTransform = `translate(${alignmentOffsetX}px, ${alignmentOffsetY}px) scale(${alignmentFactor})`;
 
   return (
-    <section ref={rootRef} className={styles.visualCompare} aria-label="Vizuális tervösszehasonlítás">
+    <section ref={rootRef} className={styles.visualCompare} aria-label="Vizuális tervösszehasonlítás" tabIndex={0} onKeyDown={handleAlignmentKeys}>
       <header className={styles.visualCompareHeader}>
         <div className={styles.visualCompareTitle}>
           <Contrast size={15} />
@@ -337,6 +421,18 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             <strong>{mode === "DIFFERENCE" ? "DIFF" : `${overlayOpacity}%`}</strong>
           </label>
         )}
+        {mode !== "SIDE_BY_SIDE" && (
+          <div className={styles.visualCompareAlignmentCompact}>
+            <button
+              type="button"
+              className={alignmentEnabled ? styles.visualCompareToolActive : ""}
+              onClick={() => { setAlignmentEnabled((current) => !current); requestAnimationFrame(() => rootRef.current?.focus()); }}
+              title="B réteg kézi geometriai igazítása"
+              aria-pressed={alignmentEnabled}
+            ><Move size={13} /> Igazítás</button>
+            <span>X {alignmentOffsetX} · Y {alignmentOffsetY} · {alignmentScale.toFixed(1)}%</span>
+          </div>
+        )}
         <div className={styles.visualCompareToolbarSpacer} />
         <div className={styles.visualCompareToolGroup}>
           <button type="button" className={showBase ? styles.visualCompareToolActive : ""} onClick={() => setShowBase((current) => !current)} title="A réteg ki-/bekapcsolása">{showBase ? <Eye size={13} /> : <EyeOff size={13} />} A</button>
@@ -347,6 +443,30 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       </div>
 
       {error && <div className={styles.visualCompareError}>{error}</div>}
+
+      {mode !== "SIDE_BY_SIDE" && (
+        <div className={`${styles.visualCompareAlignmentBar} ${alignmentEnabled ? styles.visualCompareAlignmentBarActive : ""}`}>
+          <div className={styles.visualCompareAlignmentLead}>
+            <Move size={13} />
+            <div><strong>B réteg geometriai igazítása</strong><span>Kapcsold be, majd húzd a B réteget. Nyílbillentyű: 1 px · Shift + nyíl: 10 px.</span></div>
+          </div>
+          <div className={styles.visualCompareNudgeGrid} aria-label="B réteg finom mozgatása">
+            <button type="button" onClick={() => nudgeAlignment(0, -1)} title="B réteg fel 1 px" disabled={!alignmentEnabled}>↑</button>
+            <button type="button" onClick={() => nudgeAlignment(-1, 0)} title="B réteg balra 1 px" disabled={!alignmentEnabled}>←</button>
+            <button type="button" onClick={() => nudgeAlignment(1, 0)} title="B réteg jobbra 1 px" disabled={!alignmentEnabled}>→</button>
+            <button type="button" onClick={() => nudgeAlignment(0, 1)} title="B réteg le 1 px" disabled={!alignmentEnabled}>↓</button>
+          </div>
+          <label className={styles.visualCompareAlignmentScale}>
+            <span>B méret</span>
+            <input type="range" min="70" max="130" step="0.1" value={alignmentScale} onChange={(event) => setAlignmentScale(clampAlignmentScale(Number(event.target.value)))} />
+            <strong>{alignmentScale.toFixed(1)}%</strong>
+          </label>
+          <div className={styles.visualCompareAlignmentActions}>
+            <button type="button" onClick={alignByPageBounds} disabled={!isPdf || !ready} title="A két renderelt lap külső mérete alapján a B réteg középre és méretre igazítása"><Scan size={12} /> Lapméret</button>
+            <button type="button" onClick={resetAlignment} title="B réteg geometriai igazításának nullázása"><RotateCcw size={12} /> Nullázás</button>
+          </div>
+        </div>
+      )}
 
       <div
         ref={stageRef}
@@ -399,13 +519,20 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
             </div>
           </>
         ) : (
-          <div className={styles.visualCompareOverlayViewport} style={isPdf && overlaySize.width ? { width: overlaySize.width, height: overlaySize.height } : undefined}>
+          <div
+            className={`${styles.visualCompareOverlayViewport} ${alignmentEnabled ? styles.visualCompareOverlayViewportAligning : ""}`}
+            style={isPdf && overlaySize.width ? { width: overlaySize.width, height: overlaySize.height } : undefined}
+            onPointerDown={beginAlignmentDrag}
+            onPointerMove={moveAlignmentDrag}
+            onPointerUp={endAlignmentDrag}
+            onPointerCancel={endAlignmentDrag}
+          >
             <div className={`${styles.visualCompareOverlayTag} ${styles.visualCompareOverlayTagA}`}>A · {shortRevision(leftDocument)}</div>
             <div className={`${styles.visualCompareOverlayTag} ${styles.visualCompareOverlayTagB}`}>B · {shortRevision(rightDocument)}</div>
             {isPdf ? (
               <>
                 <canvas ref={leftCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: showBase ? 1 : 0 }} aria-label={`${leftDocument.name} overlay PDF A`} />
-                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend }} aria-label={`${rightDocument.name} overlay PDF B`} />
+                <canvas ref={rightCanvasRef} className={`${styles.visualCompareCanvas} ${styles.visualCompareLayer}`} style={{ opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend, transform: revisionAlignmentTransform, transformOrigin: "top left" }} aria-label={`${rightDocument.name} overlay PDF B`} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} />
               </>
             ) : (
               <>
@@ -415,7 +542,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 )}
                 {rightPreview?.url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `rotate(${rotation}deg)`, opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend }} />
+                  <img src={rightPreview.url} alt={`${rightDocument.name} overlay kép B`} className={`${styles.visualCompareImage} ${styles.visualCompareLayer}`} style={{ width: `${Math.max(25, zoom * 100)}%`, transform: `${revisionAlignmentTransform} rotate(${rotation}deg)`, transformOrigin: "top left", opacity: showRevision ? topOpacity : 0, mixBlendMode: topBlend }} data-alignment-x={alignmentOffsetX} data-alignment-y={alignmentOffsetY} data-alignment-scale={alignmentScale} />
                 )}
               </>
             )}
@@ -426,6 +553,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       <footer className={styles.visualCompareFooter}>
         <span><strong>Szinkron:</strong> oldal · zoom · illesztés · forgatás · pásztázás</span>
         <span><strong>Átfedés:</strong> B réteg átlátszóság állítható</span>
+        <span><strong>Geometriai igazítás:</strong> B réteg húzás · X/Y finommozgatás · 70–130% méretkorrekció · lapméret-illesztés</span>
         <span><strong>Különbség:</strong> CSS difference blend – az eltérő vonalak világosan kiemelkednek</span>
         <span>Ctrl + egérgörgő: szinkron zoom</span>
       </footer>

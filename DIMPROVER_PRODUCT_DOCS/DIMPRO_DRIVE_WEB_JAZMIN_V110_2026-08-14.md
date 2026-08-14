@@ -149,15 +149,28 @@ Minden RPC `security definer`, explicit projektellenőrzést végez, audit/chang
 - A CsomagBOX összesített fájlmérete historikus item esetén a rögzített verzió méretét használja, nem automatikusan a dokumentum jelenlegi verzióját.
 - Adatbázis-migráció nem szükséges: a `drive_core_box_items.version_id` és `drive_core_document_versions` meglévő kapcsolata kerül felhasználásra.
 
+
+### 11. Geometriai revízió-igazítás V1 – kézi B-réteg regisztráció
+
+- Az Átfedés és Különbség nézet külön `Igazítás` módot kapott; a párhuzamos A/B nézet változatlanul a szinkron pásztázást használja.
+- A vizsgált B réteg egérrel/pointerrel közvetlenül húzható az A réteg fölött.
+- Pixelpontos finommozgatás: nyílbillentyű = 1 px; `Shift + nyíl` = 10 px.
+- Külön B-réteg méretkorrekció állítható 70–130% tartományban, 0,1%-os lépésközzel.
+- A B réteg aktuális X/Y eltolása és geometriai skálája folyamatosan látható a toolbaron.
+- `Lapméret` művelet a két renderelt lap külső pixelmérete alapján a B réteget középre és méretre igazítja. Ez **nem automatikus rajzi feature-felismerés**, hanem biztonságos, determinisztikus page-bounds segéd.
+- `Nullázás` visszaállítja a B réteget `X=0`, `Y=0`, `100%` állapotba.
+- A geometriai transzformáció csak a B overlay/difference rétegre kerül; az A alapréteg és a forrásfájlok nem módosulnak.
+- Az igazítás jelenleg munkamenet-állapot: nem ír vissza fájlt, metaadatot vagy adatbázis-rekordot. A későbbi automatikus regisztráció/illesztési profil külön fejlesztési szelet lehet.
+
 ## PRIVATE_VAULT / HEALTH_PRIVATE kompatibilitási audit
 
 A jelenlegi Drive Core-ban nem található még `workspaceType`, `storageScope`, `vaultCategory`, `dataClass` vagy `ownerSubjectId` extension point. Ezt a jelen fejlesztési körben nem alakítottuk át, mert a webes Drive UI/UX sprint elsőbbséget élvez, és a teljes project-only repository általánosítása nagyobb architekturális változás lenne. Technikai adósságként rögzítve: következő Core-architektúra körben külön, regressziótesztekkel kell bevezetni. Private Vault vagy Egészségmegőrzés végfelhasználói UI ebben a körben nem készült.
 
 ## Acceptance / contract ellenőrzés
 
-A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **67** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik.
+A `scripts/drive-web-jazmin-v110-contract.mjs` jelenleg **76** statikus/architekturális ellenőrzést tartalmaz. A korábbi CsomagBOX, Commander, lebegő board, Compare és DocumentViewer ellenőrzéseken túl külön vizsgálja a dedikált Vizuális Compare motort, a három megjelenítési módot, a szinkron oldalt/zoomot/forgatást/pásztázást, az overlay opacity vezérlést, a difference blendet, az A/B rétegkapcsolást, a same-origin preview proxyt, a `document.read` jogosultságot, a HTTP Range továbbítást, a streamelt kiszolgálást és a preview biztonsági headereket. A 55–67. ellenőrzések a historikus revízióválasztót, a `documentId + versionId` seedet, az effektív historikus Viewer-dokumentumot, a kiválasztott verzió letöltését, a dokumentumszintű metaadat-disclaimert, valamint a verzióhű CsomagBOX badge/méret működését ellenőrzik.
 
-Végső statikus DEV VPS futás: **67/67 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
+Végső statikus DEV VPS futás: **76/76 PASS**. A meglévő Drive V1.00 contract **22/22 PASS**, a Drive Core V0.30 contract **24/24 PASS**.
 
 A külön Vizuális Compare böngészős acceptance **23/23 PASS**. A teszt két eltérő, kétoldalas PDF-et generált, majd ellenőrizte többek között:
 
@@ -194,6 +207,10 @@ A külön Historikus Revízióválasztó böngészős acceptance **20/20 PASS**.
 - 1366 px overflow-mentességet és browser pageerror-mentes futást.
 
 Historikus revízió/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-14T17-39-21-434Z`.
+
+A Geometriai Igazítás böngészős acceptance **34/34 PASS**. A meglévő vizuális Compare regressziók mellett ellenőrizve: igazítás kapcsoló, aktív overlay állapot, 1 px gombos finommozgatás, `Shift+nyíl` 10 px korrekció, 102,5%-os B skála, pointer-event alapú húzás, lapméret-illesztés, nullázás, Difference blend, B réteg elrejtés és 1366 px overflow-mentes render.
+
+Geometriai igazítás/browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T18-43-56-462Z`.
 
 ## Kötelező ellenőrzési sorrend
 
@@ -287,3 +304,18 @@ Az izolált `jazmin-drive-v110-candidate` továbbra is csak `127.0.0.1:3210` tes
 - Adatbázis-migráció: **nem szükséges**; a meglévő `drive_core_box_items.version_id` → `drive_core_document_versions.id` kapcsolat kerül felhasználásra.
 
 Az izolált candidate továbbra is kizárólag `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime ebben a körben sem került módosításra vagy restartra.
+## Geometriai Revízió-igazítás V1 final build
+
+- Forrás-backup: `/srv/dimpro-dev/backups/jazmin_drive_geometric_align_20260814_203059`
+- Next.js production build: **PASS**
+- Build ID: `LIcifMlu9jpFEtbXvbkeg`
+- Standalone asset sync: **PASS**, 140 statikus chunk ellenőrizve
+- Statikus/architekturális acceptance: **76/76 PASS**
+- Drive V1.00 regression: **22/22 PASS**
+- Drive Core V0.30 regression: **24/24 PASS**
+- Geometriai/Vizuális Compare browser acceptance: **34/34 PASS**
+- Browser artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-visual-compare-2026-08-14T18-43-56-462Z`
+- Ellenőrizve: B-réteg drag, X/Y nudge, Shift+nyíl 10 px, 70–130% skála, lapméret-illesztés, nullázás, overlay/difference kompatibilitás, 1366 px responsive működés és browser pageerror-mentes futás.
+- Adatbázis- vagy infrastruktúra-módosítás: **nem szükséges**. Az igazítás kizárólag Drive kliensoldali Compare state és nem módosítja a forrásdokumentumot.
+
+Az izolált `jazmin-drive-v110-candidate` kizárólag `127.0.0.1:3210` tesztportra indult. Az `app.dev.dimpro.hu` aktív Ármin-AI/BENJADMIN runtime nem került módosításra vagy restartra.
