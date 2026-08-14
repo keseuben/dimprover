@@ -91,6 +91,7 @@ export async function getTerminalHubStatus(): Promise<TerminalHubStatus> {
       configuredRootCount: TERMINAL_HUB_WORKSPACE_ROOTS.length,
       pathTraversalPolicy: "FAIL_CLOSED",
       symlinkPolicy: "FAIL_CLOSED",
+      denyPolicy: "SENSITIVE_AND_BUILD_ARTIFACTS",
     },
     generatedAt: new Date().toISOString(),
   };

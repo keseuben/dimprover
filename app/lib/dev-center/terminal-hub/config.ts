@@ -10,9 +10,14 @@ export function getTerminalHubFeatureFlags(): TerminalHubFeatureFlags {
   const terminalHubEnabled = flag("BENJADMIN_TERMINAL_HUB_ENABLED", false);
   return {
     terminalHubEnabled,
+    commandLibraryEnabled: terminalHubEnabled && flag("BENJADMIN_COMMAND_LIBRARY_ENABLED", false),
     liveWorkspaceEnabled: terminalHubEnabled && flag("BENJADMIN_LIVE_WORKSPACE_ENABLED", false),
+    multiPanelEnabled: terminalHubEnabled && flag("BENJADMIN_MULTI_PANEL_ENABLED", false),
+    windowsBridgeEnabled: terminalHubEnabled && flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false),
+    prodTerminalEnabled: terminalHubEnabled && flag("BENJADMIN_PROD_TERMINAL_ENABLED", false),
+    secretVaultEnabled: terminalHubEnabled && flag("BENJADMIN_SECRET_VAULT_ENABLED", false),
+    // Implementation-only extra kill switch: the 06 plan flags stay authoritative.
     terminalExecutionEnabled: terminalHubEnabled && flag("BENJADMIN_TERMINAL_EXECUTION_ENABLED", false),
-    desktopBridgeEnabled: terminalHubEnabled && flag("BENJADMIN_DESKTOP_BRIDGE_ENABLED", false),
   };
 }
 

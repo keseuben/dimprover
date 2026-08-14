@@ -176,14 +176,21 @@ Kötelező típusok/policy-k:
 - symlink/path traversal elleni fail-closed path resolution.
 - central exclusive operation lock megkerülése tilos.
 
-P0 feature flagek:
+P0 feature flagek a 06-os normatív terv szerint:
 
 - `BENJADMIN_TERMINAL_HUB_ENABLED`
+- `BENJADMIN_COMMAND_LIBRARY_ENABLED`
 - `BENJADMIN_LIVE_WORKSPACE_ENABLED`
-- `BENJADMIN_TERMINAL_EXECUTION_ENABLED`
-- `BENJADMIN_DESKTOP_BRIDGE_ENABLED`
+- `BENJADMIN_MULTI_PANEL_ENABLED`
+- `BENJADMIN_WINDOWS_BRIDGE_ENABLED`
+- `BENJADMIN_PROD_TERMINAL_ENABLED`
+- `BENJADMIN_SECRET_VAULT_ENABLED`
 
-Alapérték: a P0/P1 végén csak a Terminal Hub UI shell lehet bekapcsolható; valódi terminal execution, Live Workspace watcher és Desktop Bridge maradjon kikapcsolva.
+Implementációs extra fail-closed kill switch:
+
+- `BENJADMIN_TERMINAL_EXECUTION_ENABLED`
+
+Alapérték: a P0/P1 végén csak a Terminal Hub UI shell lehet bekapcsolható; Parancstár, Live Workspace, multi-panel, Windows Bridge, PROD terminal, Secret Vault és valódi terminal execution maradjon kikapcsolva.
 
 ## 11. P1 UI shell elfogadott szerkezete
 

@@ -95,7 +95,7 @@ export default function TerminalHubWorkspace({ open, onClose, live }: { open: bo
               <section className={styles.terminalHubReadinessGrid}>
                 <div><span>Central lock</span><strong>{status?.coordination.exclusiveOperationBusy ? "FOGLALT" : "SZABAD"}</strong><small>Managed build/restart később sem kerülheti meg.</small></div>
                 <div><span>Execution</span><strong>{status?.features.terminalExecutionEnabled ? "ENABLED" : "KIKAPCSOLVA"}</strong><small>P2 előtt kötelezően OFF.</small></div>
-                <div><span>Desktop Bridge</span><strong>{status?.features.desktopBridgeEnabled ? "ENABLED" : "KIKAPCSOLVA"}</strong><small>PowerShell csak P8-ban.</small></div>
+                <div><span>Desktop Bridge</span><strong>{status?.features.windowsBridgeEnabled ? "ENABLED" : "KIKAPCSOLVA"}</strong><small>PowerShell csak P8-ban.</small></div>
               </section>
             </div>
           ) : null}

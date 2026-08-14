@@ -6,9 +6,13 @@ export type TerminalEnvironment = "DEV" | "STAG" | "PROD" | "LOCAL";
 
 export type TerminalHubFeatureFlags = {
   terminalHubEnabled: boolean;
+  commandLibraryEnabled: boolean;
   liveWorkspaceEnabled: boolean;
+  multiPanelEnabled: boolean;
+  windowsBridgeEnabled: boolean;
+  prodTerminalEnabled: boolean;
+  secretVaultEnabled: boolean;
   terminalExecutionEnabled: boolean;
-  desktopBridgeEnabled: boolean;
 };
 
 export type TerminalEndpointSummary = {
@@ -45,6 +49,7 @@ export type TerminalHubStatus = {
     configuredRootCount: number;
     pathTraversalPolicy: "FAIL_CLOSED";
     symlinkPolicy: "FAIL_CLOSED";
+    denyPolicy: "SENSITIVE_AND_BUILD_ARTIFACTS";
   };
   generatedAt: string;
 };

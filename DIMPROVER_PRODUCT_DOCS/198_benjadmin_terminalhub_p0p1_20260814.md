@@ -99,11 +99,17 @@ P0/P1-ben NINCS:
 - PROD write;
 - command execution API.
 
-Feature flag alapállapot:
+Feature flag alapállapot a 06-os terv szerint:
 - Terminal Hub UI: alapból OFF, DEV aktiváláskor külön bekapcsolható;
+- Terminál Parancstár: OFF;
 - Live Workspace: OFF;
-- Terminal execution: OFF;
-- Desktop Bridge: OFF.
+- Multi-panel: OFF;
+- Windows Bridge: OFF;
+- PROD terminal: OFF;
+- Secret Vault: OFF.
+
+Implementációs extra kill switch:
+- Terminal execution: OFF.
 
 PROD:
 - endpoint read model `LOCKED`;
@@ -170,9 +176,13 @@ DEV aktiváláskor kizárólag:
 kapcsolható be.
 
 A következők maradjanak OFF / hiányzó értéken:
+- `BENJADMIN_COMMAND_LIBRARY_ENABLED`;
 - `BENJADMIN_LIVE_WORKSPACE_ENABLED`;
-- `BENJADMIN_TERMINAL_EXECUTION_ENABLED`;
-- `BENJADMIN_DESKTOP_BRIDGE_ENABLED`.
+- `BENJADMIN_MULTI_PANEL_ENABLED`;
+- `BENJADMIN_WINDOWS_BRIDGE_ENABLED`;
+- `BENJADMIN_PROD_TERMINAL_ENABLED`;
+- `BENJADMIN_SECRET_VAULT_ENABLED`;
+- `BENJADMIN_TERMINAL_EXECUTION_ENABLED` (implementációs extra kill switch).
 
 A P1 aktiválás után a felhasználó már láthatja és megnyithatja a Terminal Hub felületet, de parancsot nem tud végrehajtani.
 
