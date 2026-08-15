@@ -217,6 +217,7 @@ function solveSimilarityAlignment(picks: AlignmentPick[], pairCount: 2 | 3): Sim
 function autoAlignmentSourceLabel(source: DriveAutoAlignmentSource) {
   if (source === "TEXT_LABELS") return "azonos tervfeliratok";
   if (source === "GEOMETRIC_NODES") return "geometriai csomópontok";
+  if (source === "VECTOR_SEGMENTS") return "nyitott CAD/PDF vektorvonalak";
   return "vektoros kontúrok";
 }
 
@@ -225,6 +226,7 @@ function autoPairFeatureLabel(key: string) {
   if (normalized.includes("metszes") || normalized.includes("intersection")) return "Metszéspont";
   if (normalized.includes("sarok") || normalized.includes("corner")) return "Sarok";
   if (normalized.includes("kontur") || normalized.includes("contour")) return "Kontúr";
+  if (normalized.includes("szegmens") || normalized.includes("segment")) return "Vektorvonal";
   return "Felirat";
 }
 
@@ -822,7 +824,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       ]);
       const proposals = buildDriveAutoAlignmentPairProposals(leftAnalysis, rightAnalysis);
       if (!proposals.length) {
-        const diagnostics = `A: ${leftAnalysis.contentKind}, ${leftAnalysis.textItemCount} szöveg, ${leftAnalysis.closedContourCount} kontúr · B: ${rightAnalysis.contentKind}, ${rightAnalysis.textItemCount} szöveg, ${rightAnalysis.closedContourCount} kontúr`;
+        const diagnostics = `A: ${leftAnalysis.contentKind}, ${leftAnalysis.textItemCount} szöveg, ${leftAnalysis.closedContourCount} kontúr, ${leftAnalysis.vectorSegments?.filter((segment) => segment.source === "openPath").length || 0} nyitott vektorvonal · B: ${rightAnalysis.contentKind}, ${rightAnalysis.textItemCount} szöveg, ${rightAnalysis.closedContourCount} kontúr, ${rightAnalysis.vectorSegments?.filter((segment) => segment.source === "openPath").length || 0} nyitott vektorvonal`;
         setAutoAlignmentError(`Nem találtam elég egyértelmű, egymástól távoli közös referencia-feature-t. ${diagnostics}. Használd a 2/3 pontos kézi illesztést.`);
         return;
       }

@@ -1,6 +1,6 @@
 import type { SharedPdfPageAnalysis, SharedPdfNormalizedPoint } from "@/components/viewers/pdfDocumentEngine";
 
-export type DriveAutoAlignmentSource = "TEXT_LABELS" | "GEOMETRIC_NODES" | "VECTOR_CONTOURS";
+export type DriveAutoAlignmentSource = "TEXT_LABELS" | "GEOMETRIC_NODES" | "VECTOR_SEGMENTS" | "VECTOR_CONTOURS";
 export type DriveAutoAlignmentNodeKind = "CORNER" | "INTERSECTION";
 
 export type DriveAutoAlignmentPair = {
@@ -27,6 +27,7 @@ type Feature = {
 };
 
 type VectorContour = SharedPdfPageAnalysis["vectorContours"][number];
+type VectorSegmentFeature = SharedPdfPageAnalysis["vectorSegments"][number];
 
 type ContourMatch = {
   key: string;
@@ -338,6 +339,19 @@ function applyNormalizedSimilarity(point: SharedPdfNormalizedPoint, transform: N
 }
 
 function contourSegments(analysis: SharedPdfPageAnalysis) {
+  if (analysis.vectorSegments?.length) {
+    return analysis.vectorSegments
+      .filter((segment) => segment.length >= 0.008 && segment.length <= 0.5)
+      .map((segment) => ({
+        a: segment.a,
+        b: segment.b,
+        length: segment.length,
+        contourIndex: segment.pathIndex,
+        edgeIndex: segment.segmentIndex,
+      }))
+      .sort((left, right) => right.length - left.length)
+      .slice(0, 700);
+  }
   const segments: GeometrySegment[] = [];
   usableContours(analysis).forEach((contour, contourIndex) => {
     for (let edgeIndex = 0; edgeIndex < contour.points.length; edgeIndex += 1) {
@@ -545,6 +559,136 @@ function contourProposal(left: SharedPdfPageAnalysis, right: SharedPdfPageAnalys
   };
 }
 
+function segmentMidpoint(segment: VectorSegmentFeature) {
+  return { x: (segment.a.x + segment.b.x) / 2, y: (segment.a.y + segment.b.y) / 2 };
+}
+
+function signedUndirectedRotationDegrees(left: number, right: number) {
+  let difference = left - right;
+  while (difference <= -90) difference += 180;
+  while (difference > 90) difference -= 180;
+  return difference;
+}
+
+function usableOpenSegments(analysis: SharedPdfPageAnalysis) {
+  return (analysis.vectorSegments || [])
+    .filter((segment) => segment.source === "openPath" && segment.length >= 0.018 && segment.length <= 0.58)
+    .sort((left, right) => right.length - left.length)
+    .slice(0, 140);
+}
+
+function seedSegmentTransform(left: VectorSegmentFeature, right: VectorSegmentFeature): NormalizedSimilarity | null {
+  const scale = left.length / Math.max(1e-8, right.length);
+  if (!Number.isFinite(scale) || scale < 0.72 || scale > 1.35) return null;
+  const rotationDegrees = signedUndirectedRotationDegrees(left.angleDegrees, right.angleDegrees);
+  const rotationRadians = rotationDegrees * Math.PI / 180;
+  const rightCenter = segmentMidpoint(right);
+  const leftCenter = segmentMidpoint(left);
+  const cosine = Math.cos(rotationRadians);
+  const sine = Math.sin(rotationRadians);
+  const mappedRight = {
+    x: (rightCenter.x * cosine - rightCenter.y * sine) * scale,
+    y: (rightCenter.x * sine + rightCenter.y * cosine) * scale,
+  };
+  return {
+    offsetX: leftCenter.x - mappedRight.x,
+    offsetY: leftCenter.y - mappedRight.y,
+    scale,
+    rotationRadians,
+  };
+}
+
+function matchOpenSegmentsUnderTransform(
+  leftSegments: VectorSegmentFeature[],
+  rightSegments: VectorSegmentFeature[],
+  transform: NormalizedSimilarity,
+) {
+  const rotationDegrees = transform.rotationRadians * 180 / Math.PI;
+  const candidates: Array<{ leftIndex: number; rightIndex: number; score: number; pair: DriveAutoAlignmentPair }> = [];
+  const leftPool = leftSegments.slice(0, 110);
+  const rightPool = rightSegments.slice(0, 90);
+
+  rightPool.forEach((rightSegment, rightIndex) => {
+    const mappedCenter = applyNormalizedSimilarity(segmentMidpoint(rightSegment), transform);
+    const mappedLength = rightSegment.length * transform.scale;
+    const mappedAngle = rightSegment.angleDegrees + rotationDegrees;
+    const ranked = leftPool.flatMap((leftSegment, leftIndex) => {
+      const positionError = distance(segmentMidpoint(leftSegment), mappedCenter);
+      if (positionError > 0.032) return [];
+      const angleError = angleDifferenceDegrees(leftSegment.angleDegrees, mappedAngle);
+      if (angleError > 7.5) return [];
+      const lengthError = Math.abs(leftSegment.length - mappedLength) / Math.max(0.008, leftSegment.length);
+      if (lengthError > 0.12) return [];
+      const score = positionError * 8 + angleError / 45 + lengthError * 0.9;
+      return [{ leftSegment, leftIndex, positionError, angleError, lengthError, score }];
+    }).sort((a, b) => a.score - b.score);
+    const best = ranked[0];
+    const second = ranked[1];
+    if (!best) return;
+    if (second && second.score < best.score * 1.22 + 0.025) return;
+    candidates.push({
+      leftIndex: best.leftIndex,
+      rightIndex,
+      score: best.score,
+      pair: {
+        key: `szegmens-${best.leftSegment.pathIndex}-${best.leftSegment.segmentIndex}-${rightSegment.pathIndex}-${rightSegment.segmentIndex}`,
+        source: "VECTOR_SEGMENTS",
+        a: segmentMidpoint(best.leftSegment),
+        b: segmentMidpoint(rightSegment),
+        weight: Math.max(0.7, Math.min(2.5, 0.8 + Math.min(best.leftSegment.length, mappedLength) * 5 - best.score * 0.35)),
+      },
+    });
+  });
+
+  const usedLeft = new Set<number>();
+  const usedRight = new Set<number>();
+  return candidates
+    .sort((a, b) => a.score - b.score || b.pair.weight - a.pair.weight)
+    .filter((candidate) => {
+      if (usedLeft.has(candidate.leftIndex) || usedRight.has(candidate.rightIndex)) return false;
+      usedLeft.add(candidate.leftIndex);
+      usedRight.add(candidate.rightIndex);
+      return true;
+    })
+    .map((candidate) => candidate.pair);
+}
+
+function openSegmentProposal(left: SharedPdfPageAnalysis, right: SharedPdfPageAnalysis): DriveAutoAlignmentPairProposal | null {
+  const leftSegments = usableOpenSegments(left);
+  const rightSegments = usableOpenSegments(right);
+  if (leftSegments.length < 3 || rightSegments.length < 3) return null;
+
+  const seedLeft = leftSegments.slice(0, 24);
+  const seedRight = rightSegments.slice(0, 24);
+  let best: { pairs: DriveAutoAlignmentPair[]; selected: DriveAutoAlignmentPair[]; score: number } | null = null;
+
+  for (const leftSeed of seedLeft) {
+    for (const rightSeed of seedRight) {
+      const transform = seedSegmentTransform(leftSeed, rightSeed);
+      if (!transform) continue;
+      const pairs = matchOpenSegmentsUnderTransform(leftSegments, rightSegments, transform);
+      if (pairs.length < 3) continue;
+      const selected = selectSpreadPairs(pairs);
+      if (selected.length < 2) continue;
+      const spread = proposalSpreadScore(selected);
+      if (spread < 0.14) continue;
+      const evidenceWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0);
+      const score = pairs.length * 1.8 + evidenceWeight * 0.25 + spread * 5;
+      if (!best || score > best.score) best = { pairs, selected, score };
+    }
+  }
+  if (!best) return null;
+
+  return {
+    source: "VECTOR_SEGMENTS",
+    pairs: best.selected,
+    evidenceCount: best.pairs.length,
+    spreadScore: proposalSpreadScore(best.selected),
+    confidenceBase: best.pairs.length >= 5 ? 0.82 : best.selected.length === 3 ? 0.77 : 0.7,
+    summary: `${best.selected.length} nyitott CAD/PDF vektorvonal ${best.pairs.length} konzisztens szegmensegyezése alapján`,
+  };
+}
+
 export function buildDriveAutoAlignmentPairProposals(
   left: SharedPdfPageAnalysis,
   right: SharedPdfPageAnalysis,
@@ -555,6 +699,8 @@ export function buildDriveAutoAlignmentPairProposals(
   if (left.contentKind !== "raster" && right.contentKind !== "raster") {
     const geometry = geometricNodeProposal(left, right);
     if (geometry) candidates.push(geometry);
+    const segments = openSegmentProposal(left, right);
+    if (segments) candidates.push(segments);
     const contour = contourProposal(left, right);
     if (contour) candidates.push(contour);
   }

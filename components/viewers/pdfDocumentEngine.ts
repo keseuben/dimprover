@@ -49,6 +49,16 @@ export type SharedPdfVectorContour = {
   };
 };
 
+export type SharedPdfVectorSegment = {
+  a: SharedPdfNormalizedPoint;
+  b: SharedPdfNormalizedPoint;
+  length: number;
+  angleDegrees: number;
+  source: "openPath" | "closedPath";
+  pathIndex: number;
+  segmentIndex: number;
+};
+
 let sharedPdfModulePromise: Promise<SharedPdfJsModule> | null = null;
 
 export async function loadSharedPdfJs(): Promise<SharedPdfJsModule> {
@@ -108,6 +118,7 @@ export type SharedPdfPageAnalysis = {
   stitchedContourCount: number;
   parallelWallPairCount: number;
   vectorContours: SharedPdfVectorContour[];
+  vectorSegments: SharedPdfVectorSegment[];
   textItems: Array<{
     text: string;
     x: number;
@@ -122,11 +133,7 @@ type RawVectorPath = {
   points: SharedPdfNormalizedPoint[];
   closed: boolean;
 };
-type VectorSegment = {
-  a: SharedPdfNormalizedPoint;
-  b: SharedPdfNormalizedPoint;
-  length: number;
-};
+type VectorSegment = SharedPdfVectorSegment;
 
 const IDENTITY_MATRIX: PdfMatrix = [1, 0, 0, 1, 0, 0];
 const DRAW_MOVE_TO = 0;
@@ -359,23 +366,66 @@ function extractVectorPaths(
   return paths;
 }
 
+function vectorSegmentAngleDegrees(a: SharedPdfNormalizedPoint, b: SharedPdfNormalizedPoint) {
+  let angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  while (angle < 0) angle += 180;
+  while (angle >= 180) angle -= 180;
+  return angle;
+}
+
 function pathsToSegments(paths: RawVectorPath[]) {
   const segments: VectorSegment[] = [];
-  for (const path of paths) {
-    for (let index = 1; index < path.points.length; index += 1) {
-      const a = path.points[index - 1];
-      const b = path.points[index];
+  paths.forEach((path, pathIndex) => {
+    let segmentIndex = 0;
+    const pushSegment = (a: SharedPdfNormalizedPoint, b: SharedPdfNormalizedPoint) => {
       const length = pointDistance(a, b);
-      if (length >= 0.0004 && length <= 0.75) segments.push({ a, b, length });
+      if (length < 0.0004 || length > 0.75) return;
+      segments.push({
+        a,
+        b,
+        length,
+        angleDegrees: vectorSegmentAngleDegrees(a, b),
+        source: path.closed ? "closedPath" : "openPath",
+        pathIndex,
+        segmentIndex,
+      });
+      segmentIndex += 1;
+    };
+    for (let index = 1; index < path.points.length; index += 1) {
+      pushSegment(path.points[index - 1], path.points[index]);
     }
     if (path.closed && path.points.length > 2 && !nearlySamePoint(path.points[0], path.points[path.points.length - 1])) {
-      const a = path.points[path.points.length - 1];
-      const b = path.points[0];
-      const length = pointDistance(a, b);
-      if (length >= 0.0004 && length <= 0.75) segments.push({ a, b, length });
+      pushSegment(path.points[path.points.length - 1], path.points[0]);
     }
-  }
+  });
   return segments;
+}
+
+function segmentPointSignature(point: SharedPdfNormalizedPoint, precision = 10000) {
+  return `${Math.round(point.x * precision)}:${Math.round(point.y * precision)}`;
+}
+
+function vectorSegmentSignature(segment: VectorSegment) {
+  const first = segmentPointSignature(segment.a);
+  const second = segmentPointSignature(segment.b);
+  return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
+function deduplicateVectorSegments(segments: VectorSegment[]) {
+  const result: VectorSegment[] = [];
+  const seen = new Set<string>();
+  const ordered = [...segments].sort((left, right) => {
+    if (left.source !== right.source) return left.source === "openPath" ? -1 : 1;
+    return right.length - left.length;
+  });
+  for (const segment of ordered) {
+    const signature = vectorSegmentSignature(segment);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    result.push(segment);
+    if (result.length >= 12000) break;
+  }
+  return result;
 }
 
 function stitchSegmentsIntoContours(segments: VectorSegment[], tolerance = 0.0016) {
@@ -527,7 +577,7 @@ function extractVectorGeometry(
   viewport: SharedPdfViewport,
 ) {
   const rawPaths = extractVectorPaths(operatorList, ops, viewport);
-  const segments = pathsToSegments(rawPaths);
+  const segments = deduplicateVectorSegments(pathsToSegments(rawPaths));
   const directContours = rawPaths.flatMap((path) => {
     if (!path.closed && !(path.points.length > 2 && nearlySamePoint(path.points[0], path.points[path.points.length - 1], 0.0012))) return [];
     const contour = createContour(path.points, true, "directPath");
@@ -571,7 +621,7 @@ export async function analyzeSharedPdfPage(pdfJs: SharedPdfJsModule, page: Share
       height: viewport.height ? height / viewport.height : 0,
     }];
   });
-  const hasVector = vectorPathCount >= 12 || geometry.segments.length >= 12;
+  const hasVector = vectorPathCount > 0 || geometry.segments.length > 0;
   const hasRaster = rasterImageCount > 0;
   const contentKind = hasVector && hasRaster ? "mixed" : hasVector ? "vector" : "raster";
   return {
@@ -585,6 +635,7 @@ export async function analyzeSharedPdfPage(pdfJs: SharedPdfJsModule, page: Share
     stitchedContourCount: geometry.stitchedContourCount,
     parallelWallPairCount: geometry.parallelWallPairCount,
     vectorContours: geometry.vectorContours,
+    vectorSegments: geometry.segments,
     textItems,
   };
 }
