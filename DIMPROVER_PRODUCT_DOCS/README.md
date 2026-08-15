@@ -168,3 +168,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `241_dimpro_drive_compare_findings_v210_issue_conversion_candidate_20260815.md` – Compare Findings V2.1 finding → hibajegy candidate: közös Project Issue Core V0.1, csak emberi JAVÍTANDÓ döntés után, idempotens CREATED_FROM kapcsolat; 45/45 contract PASS, migration/E2E pending.
 
 - `242_dimpro_drive_compare_findings_v210_issue_conversion_dev_activation_20260815.md` – Compare Findings V2.1 DEV aktiválás: Project Issue Core V0.1 + emberi JAVÍTANDÓ gate + idempotens HJ konverzió + valós audit E2E; 45/45 + 206/206 PASS, build UDBbz0Ivi6fM29BN2s_wK.
+
+- `243_dimpro_central_issue_register_v220_dev_activation_20260815.md` – Központi Hibajegyzék V2.2 DEV aktiválás: Project Issue Core V0.2, valós projektlista/HJ kezelés, optimistic update + 409, audit E2E, 46/46 + 16/16 live acceptance; build WmSckw0g-juU3zh5b3tGX.
