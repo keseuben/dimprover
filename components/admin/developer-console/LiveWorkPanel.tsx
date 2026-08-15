@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock3, Code2, GitCommitHorizontal, Hammer, ListChecks, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BellRing, CheckCircle2, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, ListChecks, Play, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
 import BenjadminAvatar from "./BenjadminAvatar";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
 import TerminalHubCard from "./TerminalHubCard";
@@ -9,6 +9,7 @@ import styles from "./DeveloperConsole.module.css";
 const workers: Array<{ code: string; author: ConsoleAuthor; fallbackName: string }> = [
   { code: "ARMINAI", author: "ARMINAI", fallbackName: "Ármin-AI" },
   { code: "JAZMINAI", author: "JAZMINAI", fallbackName: "Jázmin-AI" },
+  { code: "OUTMINAI", author: "OUTMINAI", fallbackName: "Outmin-AI" },
 ];
 
 function elapsed(now: number, value?: string | null) {
@@ -22,10 +23,6 @@ function elapsed(now: number, value?: string | null) {
   return h > 0 ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function activeTaskFor(workerId: string | undefined, tasks: LiveTask[]) {
-  if (!workerId) return null;
-  return tasks.find((task) => (task.assigned_worker_id === workerId || task.requested_worker_id === workerId) && ["claimed", "in_progress", "testing", "blocked", "ready", "queued"].includes(task.status)) || null;
-}
 
 function workerStatus(task: LiveTask | null) {
   if (!task) return { status: "idle" as const, label: "INAKTÍV" };
@@ -34,12 +31,56 @@ function workerStatus(task: LiveTask | null) {
   return { status: "working" as const, label: "DOLGOZIK" };
 }
 
-export default function LiveWorkPanel({ live, now, context, onOpenTerminalHub }: { live: ConsoleLiveState | null; now: number; context: RuntimeContext | null; onOpenTerminalHub: () => void }) {
+function taskOwner(task: LiveTask, live: ConsoleLiveState | null) {
+  const id = task.assigned_worker_id || task.requested_worker_id;
+  return live?.workers.find((worker) => worker.id === id)?.name || "Nincs felelős";
+}
+
+function metadataNumber(task: LiveTask, key: string) {
+  const value = Number(task.metadata?.[key]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function metadataText(task: LiveTask, key: string) {
+  const value = task.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function durationLabel(minutes: number | null) {
+  if (!minutes) return "—";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} p`;
+  return rest ? `${hours} ó ${rest} p` : `${hours} ó`;
+}
+
+function finishLabel(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+export default function LiveWorkPanel({ live, now, context, selectedProjectId, busyTaskId, onTaskAction, onOpenTerminalHub }: {
+  live: ConsoleLiveState | null;
+  now: number;
+  context: RuntimeContext | null;
+  selectedProjectId: string;
+  busyTaskId: string | null;
+  onTaskAction: (taskId: string, action: "ROUTE" | "ESTIMATE" | "START" | "TESTING" | "COMPLETE" | "FAIL", payload?: { workerCode?: string; estimateMinutes?: number; note?: string }) => Promise<void>;
+  onOpenTerminalHub: () => void;
+}) {
   const tasks = live?.tasks || [];
   const sessions = live?.sessions || [];
   const builds = live?.builds || [];
   const pendingApprovals = (live?.approvals || []).filter((item) => item.status === "pending");
   const genericQueue = tasks.filter((task) => !task.requested_worker_id && !task.assigned_worker_id && ["queued", "ready"].includes(task.status));
+  const activeSessionTaskIds = new Set(sessions.filter((session) => session.status !== "closed" && session.task_id).map((session) => session.task_id as string));
+  const projectTasks = tasks
+    .filter((task) => (!selectedProjectId || task.project_id === selectedProjectId)
+      && (["queued", "ready", "blocked"].includes(task.status) || activeSessionTaskIds.has(task.id)))
+    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+    .slice(0, 8);
 
   return (
     <aside className={styles.livePanel} aria-label="Élő fejlesztési munka">
@@ -51,8 +92,10 @@ export default function LiveWorkPanel({ live, now, context, onOpenTerminalHub }:
       <div className={styles.workerCards}>
         {workers.map((item) => {
           const worker = live?.workers.find((candidate) => candidate.code === item.code);
-          const task = activeTaskFor(worker?.id, tasks);
           const session = sessions.find((candidate) => candidate.worker_id === worker?.id && candidate.status !== "closed");
+          const task = session?.task_id
+            ? tasks.find((candidate) => candidate.id === session.task_id) || null
+            : tasks.find((candidate) => (candidate.assigned_worker_id === worker?.id || candidate.requested_worker_id === worker?.id) && ["queued", "ready", "blocked"].includes(candidate.status)) || null;
           const build = builds.find((candidate) => candidate.task_id === task?.id || (session?.id && candidate.session_id === session.id));
           const state = workerStatus(task);
           return (
@@ -68,6 +111,47 @@ export default function LiveWorkPanel({ live, now, context, onOpenTerminalHub }:
           );
         })}
       </div>
+      <section className={styles.aiDeveloperSpace}>
+        <div className={styles.railSectionTitle}><UserRoundCog size={14} /> AI FEJLESZTŐI TÉR</div>
+        <div className={styles.aiDeveloperSpaceLegend}><span>ownership</span><span>routing</span><span>indítás</span><span>ETA</span><span><BellRing size={11} /> értesítés</span></div>
+        <div className={styles.aiDeveloperTaskList}>
+          {projectTasks.map((task) => {
+            const estimate = metadataNumber(task, "estimateMinutes");
+            const expectedFinishAt = metadataText(task, "expectedFinishAt");
+            const started = ["claimed", "in_progress", "testing"].includes(task.status);
+            const routed = Boolean(task.requested_worker_id || task.assigned_worker_id);
+            const busy = busyTaskId === task.id;
+            return (
+              <article key={task.id} data-status={task.status}>
+                <header><div><strong>{task.title}</strong><span>{taskOwner(task, live)} · {task.status.toUpperCase()}</span></div><b>{durationLabel(estimate)}</b></header>
+                <div className={styles.aiDeveloperTaskFacts}>
+                  <span><Clock3 size={11} /> ETA {expectedFinishAt ? finishLabel(expectedFinishAt) : "indítás után"}</span>
+                  <span>{metadataText(task, "executionGate") || metadataText(task, "workflowState") || "QUEUE"}</span>
+                </div>
+                {task.blocked_reason ? <p className={styles.aiDeveloperTaskError}>{task.blocked_reason}</p> : null}
+                <div className={styles.aiDeveloperTaskActions}>
+                  {!routed ? <>
+                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "ARMINAI", estimateMinutes: estimate || 90 })}>Ármin</button>
+                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "JAZMINAI", estimateMinutes: estimate || 90 })}>Jázmin</button>
+                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "OUTMINAI", estimateMinutes: estimate || 90 })}>Outmin</button>
+                  </> : null}
+                  {routed && ["queued", "ready"].includes(task.status) ? <button type="button" className={styles.aiDeveloperStartButton} disabled={busy} onClick={() => void onTaskAction(task.id, "START")}><Play size={11} /> Indítás</button> : null}
+                  {started && task.status !== "testing" ? <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "TESTING")}><FlaskConical size={11} /> Teszt</button> : null}
+                  {routed && !["completed", "cancelled"].includes(task.status) ? <>
+                    <button type="button" disabled={busy || !estimate} title="Becslés -30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: Math.max(15, (estimate || 60) - 30) })}>−30p</button>
+                    <button type="button" disabled={busy} title="Becslés +30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: (estimate || 60) + 30 })}>+30p</button>
+                  </> : null}
+                  {started || task.status === "testing" ? <>
+                    <button type="button" className={styles.aiDeveloperDoneButton} disabled={busy} onClick={() => void onTaskAction(task.id, "COMPLETE")}><CheckCircle2 size={11} /> Kész</button>
+                    <button type="button" className={styles.aiDeveloperFailButton} disabled={busy} onClick={() => { const note = window.prompt("Mi a blokkoló hiba / ok?") || ""; if (note.trim()) void onTaskAction(task.id, "FAIL", { note }); }}><XCircle size={11} /> Hiba</button>
+                  </> : null}
+                </div>
+              </article>
+            );
+          })}
+          {!projectTasks.length ? <p className={styles.railEmpty}>A kiválasztott projektben nincs nyitott fejlesztési task.</p> : null}
+        </div>
+      </section>
       <section className={styles.executorReadinessBox} data-ready={context?.executorReadiness?.ready ? "true" : "false"}>
         <strong>VÉGREHAJTÓ KAPU</strong>
         <span>{context?.executorReadiness?.repositoryReady ? "Repo ✓" : "Repo ✕"} · {context?.executorReadiness?.baselineReady ? "Baseline ✓" : "Baseline ✕"} · {context?.executorReadiness?.providerConfigured ? "AI provider ✓" : "AI provider —"} · {context?.executorReadiness?.executorConfigured ? "Executor ✓" : "Executor —"}</span>

@@ -1,6 +1,13 @@
 export type BenAiBridgeMode = "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES";
 export type BenAiDispatchStage = "CHAT_ONLY" | "COORDINATOR_ROUTING" | "TASK_ASSIGNED" | "EXECUTOR_NOT_CONFIGURED";
 
+export type BenAiEstimate = {
+  minutes: number;
+  minMinutes: number;
+  maxMinutes: number;
+  source: "BENAI_RULE_V1";
+};
+
 export type BenAiDispatch = {
   stage: BenAiDispatchStage;
   bridgeMode: BenAiBridgeMode;
@@ -14,7 +21,34 @@ export type BenAiDispatch = {
   summary: string;
   nextStep: string;
   handoffPrompt: string;
+  estimate: BenAiEstimate;
 };
+
+export function estimateDevelopmentMinutes(instruction: string): BenAiEstimate {
+  const value = String(instruction || "").toLocaleLowerCase("hu-HU");
+  let minutes = 45;
+  if (value.length > 280) minutes += 20;
+  if (value.length > 700) minutes += 25;
+  const mediumSignals = [
+    "api", "backend", "adatbaz", "database", "postgres", "supabase", "migr", "auth",
+    "jogosults", "responsive", "e2e", "integr", "teszt",
+  ];
+  const highSignals = [
+    "security", "biztons", "release", "build", "worktree", "scope", "infrastrukt",
+    "terminal", "worker", "parhuzamos", "compare", "osszehasonl",
+  ];
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  minutes += Math.min(60, mediumSignals.filter((token) => normalized.includes(token)).length * 15);
+  minutes += Math.min(90, highSignals.filter((token) => normalized.includes(token)).length * 18);
+  if (/\b(teljes|komplex|end[- ]?to[- ]?end|e2e|minden)\b/.test(normalized)) minutes += 30;
+  minutes = Math.max(30, Math.min(360, Math.round(minutes / 15) * 15));
+  return {
+    minutes,
+    minMinutes: Math.max(20, Math.round((minutes * 0.75) / 5) * 5),
+    maxMinutes: Math.min(480, Math.round((minutes * 1.45) / 5) * 5),
+    source: "BENAI_RULE_V1",
+  };
+}
 
 const workerMap: Record<string, { id: string; code: string; name: string } | null> = {
   BENAI: null,
@@ -49,6 +83,7 @@ export function buildBenAiDispatch(input: {
   const taskId = input.taskId || null;
   const projectId = input.projectId || null;
   const short = input.text.trim().replace(/\s+/g, " ").slice(0, 260);
+  const estimate = estimateDevelopmentMinutes(input.text);
 
   if (!taskId) {
     return {
@@ -64,6 +99,7 @@ export function buildBenAiDispatch(input: {
       summary: "Az üzenet bekerült a közös fejlesztői beszélgetésbe; fejlesztési task nem készült.",
       nextStep: "Kapcsold be a Fejlesztési feladat létrehozása jelölést és válassz projektet, ha végrehajtható taskot szeretnél.",
       handoffPrompt: `BENJADMIN üzenet: ${short}`,
+      estimate,
     };
   }
 
@@ -84,6 +120,7 @@ export function buildBenAiDispatch(input: {
       summary: `Ben-AI koordináció szükséges. ${providerText}`,
       nextStep: bridge.mode === "OPENAI_RESPONSES" ? "Ben-AI feladatbontás és worker-választás." : "A ChatGPT Parancstár aktuális munkamenet-promptjával a koordináció folytatható.",
       handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nCímzett: Ben-AI\nUtasítás: ${short}\n\nFeladat: bontsd végrehajtható fejlesztési lépésekre, válassz belső workert, tartsd meg a B3/B3.1/B3.2 DEV biztonsági kapukat. PROD maradjon read-only.`,
+      estimate,
     };
   }
 
@@ -103,5 +140,6 @@ export function buildBenAiDispatch(input: {
     summary: `A task ${worker.name} részére előirányozva. ${executorText}`,
     nextStep: bridge.executorConfigured ? "Session -> repository -> branch -> worktree -> scope lock -> READY." : "A task ChatGPT/MCP átadással végrehajtható; a natív worker executor külön következő fejlesztési blokk.",
     handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nFelelős: ${worker.name}\nUtasítás: ${short}\n\nDEV-only végrehajtás. Kötelező lánc: status -> read -> backup -> task/session/worktree/scope -> code -> docs -> tsc -> lint -> targeted acceptance -> build -> DEV restart -> smoke -> commit/handoff. PROD módosítás nincs.`,
+    estimate,
   };
 }

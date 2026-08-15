@@ -1347,3 +1347,28 @@
 .prodProbePlanner > p { margin: 0; padding: 7px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.45; }
 @media (max-width: 1050px) { .prodProbePlannerControls { grid-template-columns: 1fr auto; }.prodProbePlannerControls span { grid-column: 1 / -1; }.prodProbePlanResult { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 650px) { .prodProbePlannerControls, .prodProbePlanResult { grid-template-columns: 1fr; } }
+
+/* AI Fejlesztői Tér V1 — worker ownership, routing, start, ETA, outcome. */
+.aiDeveloperSpace { margin-top: 9px; padding-top: 4px; border-top: 1px solid var(--border); }
+.aiDeveloperSpaceLegend { display: flex; flex-wrap: wrap; gap: 4px; margin: 1px 0 6px; }
+.aiDeveloperSpaceLegend span { min-height: 20px; padding: 0 5px; border: 1px solid var(--border); border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); background: var(--surface2); font-size: 12px; font-weight: 850; }
+.aiDeveloperTaskList { display: grid; gap: 6px; }
+.aiDeveloperTaskList > article { padding: 7px; border: 1px solid var(--border); border-left: 3px solid var(--blue); border-radius: 8px; background: var(--surface); }
+.aiDeveloperTaskList > article[data-status="claimed"], .aiDeveloperTaskList > article[data-status="in_progress"] { border-left-color: var(--green); }
+.aiDeveloperTaskList > article[data-status="testing"] { border-left-color: var(--violet); }
+.aiDeveloperTaskList > article[data-status="blocked"] { border-left-color: var(--red); background: var(--red-soft); }
+.aiDeveloperTaskList header { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.aiDeveloperTaskList header > div { min-width: 0; display: grid; gap: 2px; }
+.aiDeveloperTaskList header strong { overflow: hidden; color: var(--text); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; }
+.aiDeveloperTaskList header span { color: var(--muted); font-size: 12px; }
+.aiDeveloperTaskList header b { flex: 0 0 auto; padding: 2px 5px; border-radius: 999px; color: var(--accent-strong); background: var(--accent-soft); font-size: 12px; }
+.aiDeveloperTaskFacts { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px 9px; color: var(--muted); font-size: 12px; }
+.aiDeveloperTaskFacts span { display: inline-flex; align-items: center; gap: 3px; }
+.aiDeveloperTaskError { margin: 5px 0; color: var(--red); font-size: 12px; line-height: 1.4; }
+.aiDeveloperTaskActions { display: flex; flex-wrap: wrap; gap: 4px; }
+.aiDeveloperTaskActions button { min-height: 26px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; gap: 3px; color: var(--text-soft); background: var(--panel); cursor: pointer; font-size: 12px; font-weight: 900; }
+.aiDeveloperTaskActions button:hover { border-color: var(--accent); color: var(--accent-strong); }
+.aiDeveloperTaskActions button:disabled { opacity: .45; cursor: default; }
+.aiDeveloperTaskActions .aiDeveloperStartButton { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); color: var(--green); background: var(--green-soft); }
+.aiDeveloperTaskActions .aiDeveloperDoneButton { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); color: var(--green); }
+.aiDeveloperTaskActions .aiDeveloperFailButton { border-color: color-mix(in srgb, var(--red) 50%, var(--border)); color: var(--red); }

@@ -507,3 +507,185 @@ export async function getDevCenterEngineGate(): Promise<DevEngineGateStatus> {
   const expiringSessions = state.sessions.filter((session) => session.status !== "closed" && session.leaseExpiresAt && Date.parse(session.leaseExpiresAt) <= now + 120000).length;
   return { ready: blockers.length === 0, schemaReady: true, workers: { total: requiredWorkers.length, required: 3, readyCodes: requiredWorkers.map((worker) => worker.code) }, sessions: { ready: readySessions.length, required: 3, readyWorkerCodes }, queue: { total: state.tasks.length, actionable, required: 1 }, locks: { active: state.locks.length }, orchestration: { activeWorktreeLeases, openConflicts, expiringSessions }, blockers };
 }
+
+
+const CONSOLE_ROUTABLE_WORKERS: Record<string, string> = {
+  ARMINAI: "worker_arminai",
+  JAZMINAI: "worker_jazminai",
+  OUTMINAI: "worker_outminai",
+};
+
+function clampEstimateMinutes(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(15, Math.min(24 * 60, Math.round(n / 5) * 5));
+}
+
+async function getTaskForConsoleControl(client: SupabaseClient, taskId: string) {
+  const { data, error } = await client.from("dev_center_tasks").select("*").eq("id", taskId).maybeSingle();
+  if (error) databaseError("A fejlesztési task nem olvasható.", error);
+  if (!data) throw new DevCenterEngineError("A fejlesztési task nem található.", "DEV_CENTER_TASK_NOT_FOUND", 404);
+  return mapTask(data as JsonRecord);
+}
+
+export async function routeDevEngineTask(input: { taskId: string; workerCode: string; estimateMinutes?: number | null; note?: string | null }) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (["claimed", "in_progress", "testing", "completed", "cancelled"].includes(task.status) || task.assignedWorkerId || task.claimedBySessionId) {
+    throw new DevCenterEngineError("Aktív vagy lezárt task felelőse nem cserélhető közvetlenül.", "DEV_CENTER_TASK_ROUTE_STATE_DENIED", 409, { taskId: task.id, status: task.status });
+  }
+  const workerCode = text(input.workerCode).toUpperCase();
+  const workerId = CONSOLE_ROUTABLE_WORKERS[workerCode];
+  if (!workerId) throw new DevCenterEngineError("Ismeretlen vagy nem routolható worker.", "DEV_CENTER_TASK_WORKER_INVALID", 400, { workerCode });
+  const { data: worker, error: workerError } = await client.from("dev_center_workers").select("id,code,name,status").eq("id", workerId).maybeSingle();
+  if (workerError) databaseError("A worker nem olvasható.", workerError);
+  if (!worker || worker.status === "offline" || worker.status === "paused") {
+    throw new DevCenterEngineError("A kiválasztott worker jelenleg nem fogadhat feladatot.", "DEV_CENTER_WORKER_NOT_AVAILABLE", 409, { workerId, workerCode });
+  }
+  try {
+    await assertWorkerProjectIsolation(client, { workerId, projectId: task.projectId });
+    if (task.repositoryId) await assertRepositoryIsolation(client, { workerId, projectId: task.projectId, repositoryId: task.repositoryId, required: "WRITE" });
+  } catch (error) {
+    if (error instanceof PartnerIsolationPolicyError) throw new DevCenterEngineError(error.message, error.code, error.status, error.details);
+    throw error;
+  }
+  const now = nowIso();
+  const estimateMinutes = clampEstimateMinutes(input.estimateMinutes) ?? clampEstimateMinutes(jsonRecord(task.metadata).estimateMinutes);
+  const nextMetadata = {
+    ...task.metadata,
+    ownerCode: workerCode,
+    routedAt: now,
+    routedBy: "BenjAdmin",
+    routingNote: text(input.note).slice(0, 500) || null,
+    ...(estimateMinutes ? { estimateMinutes } : {}),
+    workflowState: "ROUTED",
+    bridgeMode: "MANUAL_CHATGPT_BRIDGE",
+  };
+  const { data, error } = await client.from("dev_center_tasks").update({
+    requested_worker_id: workerId,
+    status: "ready",
+    blocked_reason: null,
+    metadata: nextMetadata,
+    updated_at: now,
+  }).eq("id", task.id).select("*").single();
+  if (error) databaseError("A task routing sikertelen.", error, 409);
+  await addAudit(client, {
+    action: "TASK_ROUTED",
+    entityType: "task",
+    entityId: task.id,
+    taskId: task.id,
+    projectId: task.projectId,
+    summary: `${task.title} -> ${worker.name}`,
+    metadata: { workerId, workerCode, estimateMinutes, routingNote: text(input.note).slice(0, 500) || null },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), worker: mapWorker(worker as JsonRecord) };
+}
+
+export async function updateDevEngineTaskEstimate(input: { taskId: string; estimateMinutes: number; note?: string | null }) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (["completed", "cancelled"].includes(task.status)) throw new DevCenterEngineError("Lezárt task becslése nem módosítható.", "DEV_CENTER_TASK_ESTIMATE_STATE_DENIED", 409);
+  const estimateMinutes = clampEstimateMinutes(input.estimateMinutes);
+  if (!estimateMinutes) throw new DevCenterEngineError("A becsült fejlesztési idő 15 és 1440 perc között adható meg.", "DEV_CENTER_TASK_ESTIMATE_INVALID", 400);
+  const now = nowIso();
+  const metadata = {
+    ...task.metadata,
+    estimateMinutes,
+    estimateUpdatedAt: now,
+    estimateUpdatedBy: "BenjAdmin",
+    estimateNote: text(input.note).slice(0, 500) || null,
+  };
+  const { data, error } = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
+  if (error) databaseError("A fejlesztési időbecslés mentése sikertelen.", error, 400);
+  await addAudit(client, { action: "TASK_ESTIMATE_UPDATED", entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId, summary: `Becsült fejlesztési idő: ${estimateMinutes} perc.`, metadata: { estimateMinutes } });
+  return { ok: true as const, task: mapTask(data as JsonRecord), estimateMinutes };
+}
+
+export async function startDevEngineTaskManualBridge(taskId: string) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, taskId);
+  if (!["queued", "ready"].includes(task.status)) {
+    throw new DevCenterEngineError("Csak várakozó vagy READY task indítható új munkamenetben.", "DEV_CENTER_TASK_START_STATE_DENIED", 409, { taskId, status: task.status });
+  }
+  if (!task.requestedWorkerId) throw new DevCenterEngineError("A task indítása előtt felelős workert kell kijelölni.", "DEV_CENTER_TASK_OWNER_REQUIRED", 409, { taskId });
+  const workerResult = await client.from("dev_center_workers").select("id,code,name,status").eq("id", task.requestedWorkerId).maybeSingle();
+  if (workerResult.error) databaseError("A task worker nem olvasható.", workerResult.error);
+  if (!workerResult.data) throw new DevCenterEngineError("A taskhoz rendelt worker nem található.", "DEV_CENTER_WORKER_NOT_FOUND", 404);
+  let sessionId = "";
+  try {
+    const opened = await openDevEngineSession({ openedBy: "BenjAdmin", environmentId: "env_dev", note: `AI Fejlesztői Tér indítás: ${task.title}`, metadata: { origin: "BENJADMIN_AI_DEVELOPER_SPACE", bridgeMode: "MANUAL_CHATGPT_BRIDGE" } });
+    sessionId = opened.session.id;
+    await advanceDevEngineSession(sessionId, "assign_benai", {});
+    await advanceDevEngineSession(sessionId, "bind_worker", { workerId: task.requestedWorkerId });
+    const bound = await advanceDevEngineSession(sessionId, "bind_task", { taskId });
+    if (!bound.ok || !bound.session) throw new DevCenterEngineError("A task session binding nem zárult le.", "DEV_CENTER_TASK_BIND_FAILED", 409, { taskId, sessionId });
+    const now = nowIso();
+    const estimateMinutes = clampEstimateMinutes(jsonRecord(task.metadata).estimateMinutes);
+    const expectedFinishAt = estimateMinutes ? new Date(Date.now() + estimateMinutes * 60_000).toISOString() : null;
+    const nextMetadata = {
+      ...task.metadata,
+      workflowState: "STARTED_MANUAL_BRIDGE",
+      operatorStartedAt: now,
+      expectedFinishAt,
+      activeSessionId: sessionId,
+      bridgeMode: "MANUAL_CHATGPT_BRIDGE",
+      executionGate: "TASK_BOUND",
+    };
+    const updated = await client.from("dev_center_tasks").update({ metadata: nextMetadata, updated_at: now }).eq("id", taskId).select("*").single();
+    if (updated.error) databaseError("A task indítási metaadata nem menthető.", updated.error);
+    await addAudit(client, { action: "TASK_MANUAL_BRIDGE_STARTED", entityType: "task", entityId: taskId, sessionId, taskId, projectId: task.projectId, summary: `${task.title} munkamenet elindítva ${workerResult.data.name} részére.`, metadata: { workerId: task.requestedWorkerId, workerCode: workerResult.data.code, expectedFinishAt, executionGate: "TASK_BOUND", productionAccess: "DENY" } });
+    return { ok: true as const, task: mapTask(updated.data as JsonRecord), session: bound.session, worker: mapWorker(workerResult.data as JsonRecord), expectedFinishAt };
+  } catch (error) {
+    if (sessionId) {
+      try { await advanceDevEngineSession(sessionId, "close", { reason: "AI Fejlesztői Tér indítási rollback." }); } catch {}
+    }
+    throw error;
+  }
+}
+
+export async function setDevEngineTaskTesting(taskId: string) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, taskId);
+  if (!["claimed", "in_progress", "testing"].includes(task.status)) throw new DevCenterEngineError("Tesztelési állapot csak elindított tasknál állítható.", "DEV_CENTER_TASK_TESTING_STATE_DENIED", 409, { taskId, status: task.status });
+  const now = nowIso();
+  const metadata = { ...task.metadata, workflowState: "TESTING", testingStartedAt: now };
+  const { data, error } = await client.from("dev_center_tasks").update({ status: "testing", metadata, updated_at: now }).eq("id", taskId).select("*").single();
+  if (error) databaseError("A tesztelési állapot mentése sikertelen.", error, 409);
+  await addAudit(client, { action: "TASK_TESTING", entityType: "task", entityId: taskId, taskId, projectId: task.projectId, summary: `${task.title} tesztelési fázisba lépett.` });
+  return { ok: true as const, task: mapTask(data as JsonRecord) };
+}
+
+export async function finalizeDevEngineTask(input: { taskId: string; outcome: "completed" | "failed"; note?: string | null }) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (task.status === "cancelled") throw new DevCenterEngineError("Törölt task nem zárható le eredménnyel.", "DEV_CENTER_TASK_FINALIZE_STATE_DENIED", 409);
+  if (task.status === "completed" && input.outcome === "completed") return { ok: true as const, task, alreadyFinalized: true };
+  const now = nowIso();
+  const note = text(input.note).slice(0, 1000);
+  const sessions = await client.from("dev_center_worker_sessions").select("id").eq("task_id", task.id).neq("status", "closed");
+  if (sessions.error) databaseError("Az aktív task sessionök nem olvashatók.", sessions.error);
+  for (const session of sessions.data || []) {
+    await advanceDevEngineSession(String(session.id), "close", { reason: input.outcome === "completed" ? "Task befejezve az AI Fejlesztői Térben." : `Task hibával lezárva: ${note || "nincs részletezés"}` });
+  }
+  const metadata = {
+    ...task.metadata,
+    workflowState: input.outcome === "completed" ? "COMPLETED" : "FAILED",
+    finishedAt: now,
+    outcomeNote: note || null,
+  };
+  const patch = input.outcome === "completed"
+    ? { status: "completed", completed_at: now, blocked_reason: null, metadata, updated_at: now }
+    : { status: "blocked", completed_at: null, blocked_reason: note || "A fejlesztési task hibával vagy blokkoló okkal állt le.", assigned_worker_id: null, claimed_by_session_id: null, claim_expires_at: null, metadata, updated_at: now };
+  const { data, error } = await client.from("dev_center_tasks").update(patch).eq("id", task.id).select("*").single();
+  if (error) databaseError("A task lezárása sikertelen.", error, 409);
+  await addAudit(client, {
+    action: input.outcome === "completed" ? "TASK_COMPLETED" : "TASK_FAILED",
+    entityType: "task",
+    entityId: task.id,
+    taskId: task.id,
+    projectId: task.projectId,
+    summary: input.outcome === "completed" ? `${task.title} elkészült.` : `${task.title} hibával / blokkolással leállt.`,
+    metadata: { note: note || null, notificationRequested: true },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false };
+}

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
-import { createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
+import { createDevEngineTask, routeDevEngineTask } from "@/app/lib/dev-center/engine-repository";
 import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
-import { buildBenAiDispatch } from "@/app/lib/dev-center/benai-dispatch";
+import { buildBenAiDispatch, estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       const title = instruction.split(/\r?\n/)[0].slice(0, 180);
       const repositoryId = await resolveDeveloperConsoleRepositoryId(body.projectId);
       if (!repositoryId) return json({ ok: false, error: "A kiválasztott fejlesztési projekthez nincs aktív repository-kötés. A task biztonságosan nem indítható.", code: "DEV_CONSOLE_REPOSITORY_BINDING_REQUIRED" }, 409);
+      const estimate = estimateDevelopmentMinutes(instruction);
       const created = await createDevEngineTask({
         projectId: body.projectId,
         repositoryId,
@@ -49,10 +50,21 @@ export async function POST(request: NextRequest) {
         priority: 70,
         requestedWorkerId,
         createdBy: "BenjAdmin",
-        metadata: { origin: "BENJADMIN_DEVELOPER_CONSOLE", target },
+        metadata: {
+          origin: "BENJADMIN_DEVELOPER_CONSOLE",
+          target,
+          estimateMinutes: estimate.minutes,
+          estimateMinMinutes: estimate.minMinutes,
+          estimateMaxMinutes: estimate.maxMinutes,
+          estimateSource: estimate.source,
+        },
       });
       if (!created.ok) return json({ ok: false, error: created.error || "A fejlesztési feladat nem hozható létre." }, 400);
       task = created.task;
+      if (requestedWorkerId && ["ARMINAI", "JAZMINAI", "OUTMINAI"].includes(target)) {
+        const routed = await routeDevEngineTask({ taskId: String(created.task.id), workerCode: target, estimateMinutes: estimate.minutes, note: "Közvetlen BENJADMIN címzés" });
+        task = routed.task;
+      }
     }
     const message = await createBenjadminConsoleMessage({
       text: instruction,

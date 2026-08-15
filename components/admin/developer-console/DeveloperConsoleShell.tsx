@@ -72,6 +72,7 @@ export default function DeveloperConsoleShell() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
@@ -273,6 +274,27 @@ export default function DeveloperConsoleShell() {
     } finally { setSending(false); }
   }
 
+  async function runTaskAction(taskId: string, action: "ROUTE" | "ESTIMATE" | "START" | "TESTING" | "COMPLETE" | "FAIL", payload: { workerCode?: string; estimateMinutes?: number; note?: string } = {}) {
+    setBusyTaskId(taskId);
+    setNotice("");
+    setError("");
+    try {
+      const response = await fetch(`/api/dev/console/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PATCH",
+        headers: adminHeaders(true),
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const result = await response.json().catch(() => null) as { ok?: boolean; notice?: string; error?: string; code?: string } | null;
+      if (!response.ok || !result?.ok) throw new Error(result?.error || "A task művelet nem hajtható végre.");
+      setNotice(result.notice || "A task állapota frissült.");
+      await silentFetch();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A task művelet sikertelen.");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
   function requestPrivacy() {
     window.dispatchEvent(new CustomEvent("benjadmin:privacy-cover"));
   }
@@ -285,7 +307,7 @@ export default function DeveloperConsoleShell() {
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
         <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} />
-        <LiveWorkPanel live={live} now={now} context={context} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
+        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />

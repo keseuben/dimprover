@@ -24,14 +24,20 @@ export type LiveTask = {
   id: string;
   project_id?: string | null;
   title: string;
+  description?: string;
   status: string;
   priority?: number;
   requested_worker_id?: string | null;
   assigned_worker_id?: string | null;
+  claimed_by_session_id?: string | null;
   branch_name?: string | null;
   worktree_path?: string | null;
   scope?: unknown;
   acceptance?: unknown;
+  blocked_reason?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  metadata?: Record<string, unknown>;
   updated_at?: string;
   created_at?: string;
 };
@@ -93,6 +99,7 @@ export type BenAiDispatch = {
   summary: string;
   nextStep: string;
   handoffPrompt: string;
+  estimate: { minutes: number; minMinutes: number; maxMinutes: number; source: "BENAI_RULE_V1" };
 };
 
 export type RuntimeContext = {

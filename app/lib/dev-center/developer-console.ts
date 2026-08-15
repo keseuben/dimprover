@@ -207,20 +207,20 @@ export async function resolveDeveloperConsoleRepositoryId(projectId: string) {
   return resolveProjectRepositoryId(getClient(), projectId);
 }
 
-export async function createBenAiConsoleMessage(input: { summary: string; detail?: string; taskId?: string | null; projectId?: string | null; metadata?: Record<string, unknown> }) {
+export async function createBenAiConsoleMessage(input: { summary: string; detail?: string; taskId?: string | null; projectId?: string | null; metadata?: Record<string, unknown>; kind?: ConsoleMessageKind; level?: ConsoleMessage["level"]; progressPercent?: number | null }) {
   const summary = text(input.summary).slice(0, 4000);
   if (!summary) throw new Error("A Ben-AI üzenet nem lehet üres.");
   const client = getClient();
   const result = await client.from("dev_center_live_worklog").insert({
     worker_code: "BENAI",
     task_id: input.taskId || null,
-    phase: "coordination",
-    level: "info",
+    phase: input.kind === "ERROR" ? "error" : input.kind === "TEST_RESULT" ? "test" : input.kind === "TASK_UPDATE" ? "task-update" : "coordination",
+    level: input.level || (input.kind === "ERROR" ? "error" : "info"),
     summary,
     detail: text(input.detail).slice(0, 4000),
-    progress_percent: null,
+    progress_percent: input.progressPercent ?? null,
     source: "benai",
-    metadata: { kind: "TASK_ASSIGNMENT", projectId: input.projectId || null, origin: "BENJADMIN_DEVELOPER_CONSOLE", ...(input.metadata || {}) },
+    metadata: { kind: input.kind || "TASK_ASSIGNMENT", projectId: input.projectId || null, origin: "BENJADMIN_DEVELOPER_CONSOLE", ...(input.metadata || {}) },
   }).select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at").single();
   if (result.error || !result.data) throw new Error(result.error?.message || "A Ben-AI koordinációs üzenet nem rögzíthető.");
   return mapWorklogRow(result.data as Row);
@@ -231,7 +231,7 @@ export async function getDeveloperConsoleLiveStatus() {
   const [projects, workers, tasks, sessions, builds, releases, approvals, audits] = await Promise.all([
     client.from("dev_center_projects").select("id,name,slug,status,updated_at").order("name"),
     client.from("dev_center_workers").select("id,code,name,role,status,updated_at").order("code"),
-    client.from("dev_center_tasks").select("id,project_id,title,status,priority,requested_worker_id,assigned_worker_id,branch_name,worktree_path,scope,acceptance,updated_at,created_at").order("updated_at", { ascending: false }).limit(80),
+    client.from("dev_center_tasks").select("id,project_id,title,description,status,priority,requested_worker_id,assigned_worker_id,claimed_by_session_id,branch_name,worktree_path,scope,acceptance,blocked_reason,started_at,completed_at,metadata,updated_at,created_at").order("updated_at", { ascending: false }).limit(80),
     client.from("dev_center_worker_sessions").select("id,worker_id,task_id,status,handshake_stage,branch_name,worktree_path,opened_at,updated_at,last_heartbeat_at").order("updated_at", { ascending: false }).limit(50),
     client.from("dev_center_build_runs").select("id,session_id,task_id,environment_id,run_type,status,command_name,git_commit,build_id,started_at,finished_at,duration_seconds,summary,created_at").order("created_at", { ascending: false }).limit(50),
     client.from("dev_center_releases").select("id,project_id,status,git_commit,build_id,approved_by,approved_at,released_at,created_at,updated_at").order("created_at", { ascending: false }).limit(30),
