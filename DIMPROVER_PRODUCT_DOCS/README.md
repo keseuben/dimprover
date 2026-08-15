@@ -139,3 +139,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `227_benjadmin_windows_bridge_p81_db_and_server_e2e_20260815.md` – P8.1 DEV DB migration + server-side Pair/Approve/Heartbeat/Revoke E2E PASS; pairing secret provisioned, live Bridge/Pairing/Execution OFF.
 
 - `228_benjadmin_terminalhub_p9_security_candidate_20260815.md` – P9 security candidate: Private Input, session AI visibility, redaction audit, strengthened secret scanner, Secret Vault skeleton; 475/475 PASS.
+
+- `229_benjadmin_terminalhub_p9_security_dev_activation_20260815.md` – P9 security DEV aktiválás: 475/475 PASS, build OUKeDkvfIFbA152AN2VWQ; PM2 cross-worktree cwd incidens feltárva és helyes operator cwd-ra javítva.
