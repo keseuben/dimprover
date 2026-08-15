@@ -88,6 +88,7 @@ type CompareFindingLink = {
   id: string;
   targetType: string;
   targetId: string;
+  targetLabel?: string;
   relationType: string;
   createdAt: string;
   createdBy: string;
@@ -1217,6 +1218,39 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     }
   }
 
+  async function convertCompareFindingToIssue(finding: CompareFinding) {
+    const existingIssue = finding.links.find((link) => link.targetType === "issue");
+    if (existingIssue) {
+      setCompareFindingsMessage(`${finding.zoneLabel} már kapcsolódik hibajegyhez: ${existingIssue.targetLabel || existingIssue.targetId}.`);
+      return;
+    }
+    if (finding.status !== "FIX_REQUIRED") {
+      setCompareFindingsMessage("Hibajegy csak emberi döntéssel JAVÍTANDÓ státuszú eltérésből hozható létre.");
+      return;
+    }
+    if (compareFindingsSavingId) return;
+    setCompareFindingsSavingId(finding.id);
+    setCompareFindingsMessage(`${finding.zoneLabel} hibajegy létrehozása…`);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/compare-findings/${encodeURIComponent(finding.id)}/convert-to-issue`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; created?: boolean; issue?: { id: string; serial: string } };
+      if (!response.ok || !payload.ok || !payload.issue) throw new Error(payload.error || "A hibajegy létrehozása sikertelen.");
+      await loadCompareFindings();
+      setFocusedCompareFindingId(finding.id);
+      setCompareFindingsMessage(payload.created
+        ? `${payload.issue.serial} létrehozva és az eredeti ${finding.zoneLabel} findinghez kapcsolva.`
+        : `${payload.issue.serial} már létezett; a kapcsolat változatlanul megmaradt.`);
+    } catch (caught) {
+      setCompareFindingsMessage(caught instanceof Error ? caught.message : "A hibajegy létrehozása sikertelen.");
+      await loadCompareFindings();
+    } finally {
+      setCompareFindingsSavingId(null);
+    }
+  }
+
   async function removeCompareFinding(id: string) {
     const finding = compareFindings.find((item) => item.id === id);
     if (!finding || compareFindingsSavingId) return;
@@ -1779,7 +1813,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       {(compareFindings.length > 0 || autoAlignmentSuggestion) && (
         <div className={styles.visualCompareFindingsPanel} data-compare-findings-count={compareFindings.length}>
           <div className={styles.visualCompareFindingsHeader}>
-            <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V2</strong><small>Tartós, projektizolált és auditált review-lista · nincs automatikus hibaminősítés.</small></span></div>
+            <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V2.1</strong><small>Tartós, projektizolált review-lista · nincs automatikus hibaminősítés; hibajegy csak emberi JAVÍTANDÓ döntés után készül.</small></span></div>
             <div className={styles.visualCompareFindingsExport}>
               <button type="button" onClick={() => exportCompareFindings("json")} disabled={!compareFindings.length} data-export-compare-findings="json"><Download size={11} /> JSON</button>
               <button type="button" onClick={() => exportCompareFindings("csv")} disabled={!compareFindings.length} data-export-compare-findings="csv"><Download size={11} /> CSV</button>
@@ -1807,7 +1841,20 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                       <label><span>Prioritás</span><select value={finding.priority} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { priority: event.target.value as CompareFindingPriority })}>{Object.entries(compareFindingPriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                       <label><span>Felelős</span><select value={finding.assigneeUserId || ""} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { assigneeUserId: event.target.value || null })}><option value="">Nincs kijelölve</option>{projectMembers.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.userId}</option>)}</select></label>
                       <label><span>Határidő</span><input type="datetime-local" value={toLocalDateTimeInput(finding.dueAt)} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { dueAt: fromLocalDateTimeInput(event.target.value) || null })} /></label>
-                      <div className={styles.visualCompareFindingLinks}><span>Kapcsolatok</span><strong>{finding.links.length}</strong><small>hibajegy / jegyzőkönyv / DokuBOX kapcsolat előkészítve</small></div>
+                      <div className={styles.visualCompareFindingLinks}>
+                        <span>Kapcsolatok</span><strong>{finding.links.length}</strong>
+                        <small>{finding.links.find((link) => link.targetType === "issue")?.targetLabel || "hibajegy / jegyzőkönyv / DokuBOX"}</small>
+                        <button
+                          type="button"
+                          className={styles.visualCompareFindingIssueAction}
+                          disabled={compareFindingsSavingId === finding.id || finding.status !== "FIX_REQUIRED" || Boolean(finding.links.find((link) => link.targetType === "issue"))}
+                          onClick={() => void convertCompareFindingToIssue(finding)}
+                          title={finding.status !== "FIX_REQUIRED" ? "Előbb állítsd a finding státuszát JAVÍTANDÓ értékre." : "Tartós projekt-hibajegy létrehozása az eredeti finding megtartásával."}
+                          data-convert-finding-to-issue={findingIndex + 1}
+                        >
+                          {finding.links.find((link) => link.targetType === "issue")?.targetLabel || (finding.status === "FIX_REQUIRED" ? "Hibajegy létrehozása" : "Előbb: JAVÍTANDÓ")}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

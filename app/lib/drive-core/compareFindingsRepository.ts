@@ -41,7 +41,7 @@ export type DriveCompareFinding = {
   updatedByName: string;
   createdAt: string;
   updatedAt: string;
-  links: Array<{ id: string; targetType: string; targetId: string; relationType: string; createdAt: string; createdBy: string }>;
+  links: Array<{ id: string; targetType: string; targetId: string; targetLabel?: string; relationType: string; createdAt: string; createdBy: string }>;
 };
 
 type DbFinding = {
@@ -53,7 +53,7 @@ type DbFinding = {
   version: number; created_by: string; created_by_name: string; updated_by: string; updated_by_name: string; created_at: string; updated_at: string;
 };
 
-type DbLink = { id: string; source_id: string; target_type: string; target_id: string; relation_type: string; created_at: string; created_by: string };
+type DbLink = { id: string; source_type: string; source_id: string; target_type: string; target_id: string; target_label?: string; relation_type: string; created_at: string; created_by: string };
 
 const STATUSES: DriveCompareFindingStatus[] = ["REVIEW", "ACCEPTED_DIFFERENCE", "FIX_REQUIRED"];
 const PRIORITIES: DriveCompareFindingPriority[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -112,7 +112,7 @@ function mapFinding(row: DbFinding, links: DbLink[] = []): DriveCompareFinding {
     alignment: { offsetX: Number(row.alignment_offset_x), offsetY: Number(row.alignment_offset_y), scalePercent: Number(row.alignment_scale_percent), rotationDegrees: Number(row.alignment_rotation_degrees), source: row.alignment_source, confidenceScore: Number(row.alignment_confidence_score) },
     status: row.status, priority: row.priority, note: row.note || "", assigneeUserId: row.assignee_user_id, assigneeName: row.assignee_name || "", dueAt: row.due_at,
     version: Number(row.version), createdBy: row.created_by, createdByName: row.created_by_name || "", updatedBy: row.updated_by, updatedByName: row.updated_by_name || "", createdAt: row.created_at, updatedAt: row.updated_at,
-    links: links.map((link) => ({ id: link.id, targetType: link.target_type, targetId: link.target_id, relationType: link.relation_type, createdAt: link.created_at, createdBy: link.created_by })),
+    links: links.map((link) => ({ id: link.id, targetType: link.target_type, targetId: link.target_id, targetLabel: link.target_label, relationType: link.relation_type, createdAt: link.created_at, createdBy: link.created_by })),
   };
 }
 
@@ -132,10 +132,34 @@ export async function getDriveCompareFindingsHealth() {
 
 async function linksFor(client: SupabaseClient, projectId: string, findingIds: string[]) {
   if (!findingIds.length) return new Map<string, DbLink[]>();
-  const result = await client.from("project_core_entity_links").select("id,source_id,target_type,target_id,relation_type,created_at,created_by").eq("project_id", projectId).eq("source_type", "compare_finding").in("source_id", findingIds);
-  if (result.error) dbError("A Compare Finding kapcsolatok nem tölthetők be.", result.error);
+  const [outbound, inbound] = await Promise.all([
+    client.from("project_core_entity_links").select("id,source_type,source_id,target_type,target_id,relation_type,created_at,created_by").eq("project_id", projectId).eq("source_type", "compare_finding").in("source_id", findingIds),
+    client.from("project_core_entity_links").select("id,source_type,source_id,target_type,target_id,relation_type,created_at,created_by").eq("project_id", projectId).eq("target_type", "compare_finding").in("target_id", findingIds),
+  ]);
+  if (outbound.error) dbError("A Compare Finding kimenő kapcsolatai nem tölthetők be.", outbound.error);
+  if (inbound.error) dbError("A Compare Finding bejövő kapcsolatai nem tölthetők be.", inbound.error);
+
+  const normalized: Array<{ findingId: string; link: DbLink }> = [];
+  for (const row of (outbound.data || []) as DbLink[]) normalized.push({ findingId: row.source_id, link: row });
+  for (const row of (inbound.data || []) as DbLink[]) normalized.push({
+    findingId: row.target_id,
+    link: { ...row, target_type: row.source_type, target_id: row.source_id },
+  });
+
+  const issueIds = Array.from(new Set(normalized.filter((item) => item.link.target_type === "issue").map((item) => item.link.target_id)));
+  const issueLabels = new Map<string, string>();
+  if (issueIds.length) {
+    const issueResult = await client.from("project_core_issues").select("id,serial").eq("project_id", projectId).in("id", issueIds);
+    if (issueResult.error) dbError("A kapcsolt hibajegyek azonosítói nem tölthetők be.", issueResult.error);
+    for (const row of (issueResult.data || []) as Array<{ id: string; serial: string }>) issueLabels.set(row.id, row.serial);
+  }
+
   const map = new Map<string, DbLink[]>();
-  for (const row of (result.data || []) as DbLink[]) { const bucket = map.get(row.source_id) || []; bucket.push(row); map.set(row.source_id, bucket); }
+  for (const item of normalized) {
+    const bucket = map.get(item.findingId) || [];
+    bucket.push({ ...item.link, target_label: item.link.target_type === "issue" ? issueLabels.get(item.link.target_id) : undefined });
+    map.set(item.findingId, bucket);
+  }
   return map;
 }
 

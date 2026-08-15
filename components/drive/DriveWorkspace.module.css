@@ -938,3 +938,8 @@
   .visualCompareFindingDelete { grid-column: 2; grid-row: 2; }
   .visualCompareFindingsExport { width: 100%; }
 }
+
+/* Compare Findings V2.1 – finding -> project issue */
+.visualCompareFindingIssueAction { grid-column: 1 / -1; min-height: 24px; border: 1px solid #8fc4d2; border-radius: 5px; background: #eefafd; color: #166174; padding: 3px 6px; font: inherit; font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .035em; cursor: pointer; }
+.visualCompareFindingIssueAction:hover:not(:disabled) { background: #dff5fa; border-color: #65aebf; }
+.visualCompareFindingIssueAction:disabled { cursor: default; opacity: .62; background: #f4f7f8; border-color: #d6e0e4; color: #70858e; }

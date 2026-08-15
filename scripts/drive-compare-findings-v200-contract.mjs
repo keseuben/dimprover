@@ -39,6 +39,6 @@ check("UI server create",ui.includes('method: "POST"')&&ui.includes("alignmentCo
 check("UI server patch/delete",ui.includes('method: "PATCH"')&&ui.includes('method: "DELETE"')&&ui.includes("expectedVersion"));
 check("UI workflow fields",ui.includes("Prioritás")&&ui.includes("Felelős")&&ui.includes("Határidő")&&ui.includes("projectMembers"));
 check("UI human review disclaimer",ui.includes("nincs automatikus hibaminősítés")&&ui.includes("emberi döntés"));
-check("future links surfaced",repo.includes("project_core_entity_links")&&ui.includes("hibajegy / jegyzőkönyv / DokuBOX kapcsolat előkészítve"));
+check("future links surfaced",repo.includes("project_core_entity_links")&&ui.includes("hibajegy / jegyzőkönyv / DokuBOX"));
 check("responsive V2 CSS",css.includes("Eltérési jegyzék V2")&&css.includes("visualCompareFindingWorkflow")&&css.includes("@media (max-width: 560px)"));
 console.log(`\nCompare Findings V2 contract: ${pass}/${checks.length} PASS`);

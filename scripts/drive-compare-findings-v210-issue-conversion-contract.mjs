@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const read = (path) => fs.readFileSync(path, "utf8");
+const sql = read("supabase/DIMPRO_PROJECT_ISSUE_CORE_V010_BOOTSTRAP.sql");
+const migration = read("supabase/migrations/20260815161000_project_issue_core_v010.sql");
+const issueRepo = read("app/lib/project-core/issueRepository.ts");
+const issueApi = read("app/api/projects/[projectId]/issues/route.ts");
+const issueHealth = read("app/api/projects/[projectId]/issues/health/route.ts");
+const convertApi = read("app/api/projects/[projectId]/drive/compare-findings/[findingId]/convert-to-issue/route.ts");
+const compareRepo = read("app/lib/drive-core/compareFindingsRepository.ts");
+const projectTypes = read("app/lib/project-core/types.ts");
+const permissions = read("app/lib/project-core/permissions.ts");
+const ui = read("components/drive/DriveVisualCompareViewer.tsx");
+const css = read("components/drive/DriveWorkspace.module.css");
+const order = read("supabase/DIMPRO_MIGRATION_ORDER_V1.txt");
+
+let pass = 0;
+const checks = [];
+function check(name, condition) {
+  assert.ok(condition, name);
+  pass += 1;
+  checks.push(name);
+  console.log(`PASS ${String(pass).padStart(2, "0")} ${name}`);
+}
+
+check("bootstrap equals migration", sql === migration);
+check("issue schema marker 0.1.0", sql.includes("project-issue-core-v010-20260815") && sql.includes("'0.1.0'"));
+check("persistent issue table", sql.includes("create table if not exists public.project_core_issues"));
+check("project issue serial sequence", sql.includes("project_core_issue_sequences") && sql.includes("next_value-1"));
+check("HJ serial generation", sql.includes("'HJ-'||lpad(v_number::text,5,'0')"));
+check("source model", ["COMPARE_FINDING","FIELD_CAPTURE","MANUAL","MEETING","IMPORT"].every((value) => sql.includes(`'${value}'`)));
+check("issue lifecycle statuses", ["NEW","IN_PROGRESS","FIXED","VERIFIED","CLOSED","REOPENED"].every((value) => sql.includes(`'${value}'`)));
+check("issue severity model", ["LOW","MEDIUM","HIGH","URGENT"].every((value) => sql.includes(`'${value}'`)));
+check("one active issue per source", sql.includes("project_core_issues_active_source_unique"));
+check("project serial unique", sql.includes("project_core_issues_project_serial_unique"));
+check("service role only issue tables", sql.includes("revoke all on table public.project_core_issues from public,anon,authenticated") && sql.includes("to service_role"));
+check("issue audit entity enabled", sql.includes("'compare_finding','issue','ai_job'"));
+check("atomic conversion RPC", sql.includes("project_issue_create_from_compare_finding_atomic"));
+check("human FIX_REQUIRED gate", sql.includes("v_finding.status <> 'FIX_REQUIRED'") && sql.includes("PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED"));
+check("idempotent existing issue return", sql.includes("source_type='COMPARE_FINDING' and source_id=p_finding_id") && sql.includes("'created',false"));
+check("priority maps to severity", sql.includes("when 'CRITICAL' then 'URGENT'") && sql.includes("when 'HIGH' then 'HIGH'"));
+check("assignee and due date inherited", sql.includes("v_finding.assignee_user_id") && sql.includes("v_finding.due_at"));
+check("finding snapshot metadata", ["leftDocumentId","rightDocumentId","pageNumber","zoneLabel","humanClassification"].every((value) => sql.includes(`'${value}'`)));
+check("CREATED_FROM entity link", sql.includes("'issue',v_issue.id,'compare_finding',v_finding.id,'CREATED_FROM'"));
+check("conversion link unique", sql.includes("project_core_entity_links_issue_compare_created_from_unique"));
+check("issue audit event", sql.includes("PROJECT_ISSUE_CREATED_FROM_COMPARE_FINDING"));
+check("finding conversion audit event", sql.includes("DRIVE_COMPARE_FINDING_CONVERTED_TO_ISSUE"));
+check("drive change feed event", sql.includes("COMPARE_FINDING_ISSUE_CREATED"));
+check("RPC service role only", sql.includes("revoke all on function public.project_issue_create_from_compare_finding_atomic") && sql.includes("grant execute on function public.project_issue_create_from_compare_finding_atomic"));
+check("issue repository health", issueRepo.includes("getProjectIssueHealth") && issueRepo.includes('schema_version === "0.1.0"'));
+check("issue repository list", issueRepo.includes("listProjectIssues") && issueRepo.includes("project_core_issues"));
+check("issue repository conversion", issueRepo.includes("convertCompareFindingToIssue") && issueRepo.includes("project_issue_create_from_compare_finding_atomic"));
+check("human-gate error maps 409", issueRepo.includes("PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED") && issueRepo.includes(", 409)"));
+check("issue permission types", projectTypes.includes('"issue.read"') && projectTypes.includes('"issue.write"'));
+check("issue audit TypeScript entity", projectTypes.includes('| "issue"'));
+check("owner and manager issue write", (permissions.match(/"issue\.write"/g) || []).length >= 3);
+check("reviewer and viewer issue read", (permissions.match(/"issue\.read"/g) || []).length >= 5);
+check("issue list API read permission", issueApi.includes('requireProjectPermission(request, projectId, "issue.read")'));
+check("issue health API read permission", issueHealth.includes('requireProjectPermission(request, projectId, "issue.read")'));
+check("conversion API write permission", convertApi.includes('requireProjectPermission(request, projectId, "issue.write")'));
+check("conversion API idempotent status", convertApi.includes("result.created ? 201 : 200"));
+check("Compare repository reads inbound links", compareRepo.includes('eq("target_type", "compare_finding")') && compareRepo.includes("inbound"));
+check("Compare repository resolves issue serial", compareRepo.includes('from("project_core_issues")') && compareRepo.includes("target_label"));
+check("UI conversion action", ui.includes("convertCompareFindingToIssue") && ui.includes("data-convert-finding-to-issue"));
+check("UI human gate", ui.includes('finding.status !== "FIX_REQUIRED"') && ui.includes("Előbb: JAVÍTANDÓ"));
+check("UI does not auto-classify", ui.includes("nincs automatikus hibaminősítés") && ui.includes("emberi JAVÍTANDÓ döntés"));
+check("UI preserves source finding", ui.includes("az eredeti") && ui.includes("findinghez kapcsolva"));
+check("UI shows linked issue serial", ui.includes("targetLabel") && ui.includes("Hibajegy létrehozása"));
+check("V2.1 action CSS", css.includes("visualCompareFindingIssueAction"));
+check("migration order ends with issue core", order.trim().endsWith("supabase/migrations/20260815161000_project_issue_core_v010.sql"));
+
+console.log(`\nCompare Findings V2.1 issue conversion contract: ${pass}/${checks.length} PASS`);

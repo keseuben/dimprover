@@ -164,3 +164,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 
 
 - `240_dimpro_drive_compare_findings_v200_dev_activation_20260815.md` – DIMPRO Drive Compare Findings V2.0 DEV aktiválás: DB migration + valós create/reload/update/409/soft-delete/audit E2E, 30/30 + 206/206 PASS, pointer-alapú 3100 cutover; PROD érintetlen.
+
+- `241_dimpro_drive_compare_findings_v210_issue_conversion_candidate_20260815.md` – Compare Findings V2.1 finding → hibajegy candidate: közös Project Issue Core V0.1, csak emberi JAVÍTANDÓ döntés után, idempotens CREATED_FROM kapcsolat; 45/45 contract PASS, migration/E2E pending.

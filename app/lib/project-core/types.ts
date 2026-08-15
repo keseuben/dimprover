@@ -24,6 +24,8 @@ export type ProjectPermission =
   | "document.read"
   | "document.write"
   | "document.approve"
+  | "issue.read"
+  | "issue.write"
   | "calendar.read"
   | "calendar.write"
   | "dialog.read"
@@ -91,6 +93,7 @@ export type ProjectAuditEntityType =
   | "saved_view"
   | "compare_job"
   | "compare_finding"
+  | "issue"
   | "ai_job";
 
 export type ProjectAuditEvent = {
