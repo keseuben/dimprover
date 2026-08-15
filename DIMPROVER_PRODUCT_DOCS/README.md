@@ -159,3 +159,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `237_benjadmin_terminalhub_p101_prod_readonly_connector_dev_activation_20260815.md` – P10.1 read-only PROD connector foundation DEV aktiválás: reference-only/no-network, 42/42 security contract, live execution flagek OFF; PROD érintetlen.
 
 - `238_benjadmin_terminalhub_p102_probe_plan_compiler_candidate_20260815.md` – P10.2 networkless PROD probe-plan compiler: allowlist probe ID → immutable AUDIT_ONLY plan; 405/405 PASS, no-network E2E.
+
+- `239_benjadmin_terminalhub_p102_probe_plan_compiler_dev_activation_20260815.md` – P10.2 networkless PROD probe-plan compiler DEV aktiválás: 405/405 + Drive 206/206 PASS; live PROD/P10 flagek OFF.
