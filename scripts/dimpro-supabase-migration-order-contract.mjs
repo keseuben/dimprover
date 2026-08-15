@@ -46,13 +46,14 @@ before('supabase/migrations/20260807083000_dimpro_identity_core_security_hardeni
 before('supabase/migrations/20260807110000_drop_identity_core_consumer_bridge_v110.sql', 'supabase/migrations/20260807111500_dimpro_identity_send_admin_bridge_v110.sql');
 before('supabase/migrations/20260807111500_dimpro_identity_send_admin_bridge_v110.sql', 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql');
 before('supabase/migrations/20260809214500_service_role_backend_grants_v010.sql', 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql');
-assert.equal(order.at(-1), 'supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql', 'Az Identity 0.2.0 szervezeti licenc migrációnak a lista végén kell lennie.');
+before('supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql', 'supabase/migrations/20260815133000_drive_compare_findings_v200.sql');
+assert.equal(order.at(-1), 'supabase/migrations/20260815133000_drive_compare_findings_v200.sql', 'A Drive Compare Findings V2 migrációnak a jelenlegi sorrendlista végén kell lennie.');
 
 console.log(JSON.stringify({
   ok: true,
   contract: 'DIMPRO Supabase migration order V1',
   migrationCount: order.length,
-  dependencyChecks: 15,
+  dependencyChecks: 16,
   first: order[0],
   last: order.at(-1),
 }, null, 2));

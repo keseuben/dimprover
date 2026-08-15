@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import {
   getDriveCoreDatabaseHealth,
+  getDriveCompareFindingsHealth,
   getDriveObjectStorageHealth,
   getDriveQuarantineReviewHealth,
   getDriveSecurityScannerHealth,
@@ -16,12 +17,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const [database, objectStorage, review, security, workspace] = await Promise.all([
+  const [database, objectStorage, review, security, workspace, compareFindings] = await Promise.all([
     getDriveCoreDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
     getDriveSecurityScannerHealth(),
     getDriveWorkspaceDatabaseHealth(),
+    getDriveCompareFindingsHealth(),
   ]);
   const storageNextStep = !objectStorage.database.ready
     ? "A DRIVE Object Storage 0.4.0 SQL-séma alkalmazása szükséges."
@@ -66,6 +68,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? "A DRIVE Workspace 1.0.0 metaadat, megjegyzés, QR és CsomagBOX adatmodell aktív."
         : "A DIMPRO_DRIVE_WORKSPACE_V100_BOOTSTRAP.sql alkalmazása szükséges a bővített Drive Workspace funkciókhoz.",
     },
+    compareFindings: {
+      version: "2.0.0",
+      databaseReady: compareFindings.ready,
+      actualSchemaVersion: compareFindings.schemaVersion,
+      bootstrapId: compareFindings.bootstrapId,
+      errorCode: compareFindings.errorCode,
+      nextStep: compareFindings.ready
+        ? "A Compare Findings V2 tartós, auditált eltérési jegyzéke aktív."
+        : "A Drive Compare Findings V2 SQL-migráció alkalmazása szükséges.",
+    },
     security: {
       version: "0.5.0",
       scannerSource: security.scannerSource,
@@ -93,6 +105,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? "A karanténverziók auditálható jóváhagyása és elutasítása aktív."
         : "A DRIVE Quarantine Review 0.4.1 SQL-séma alkalmazása szükséges.",
     },
-    activationSafe: database.ready && workspace.ready && review.ready && objectStorage.uploadReady && security.ready,
+    activationSafe: database.ready && workspace.ready && compareFindings.ready && review.ready && objectStorage.uploadReady && security.ready,
   }, { headers: { "cache-control": "no-store" } });
 }

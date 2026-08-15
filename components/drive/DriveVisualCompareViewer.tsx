@@ -82,6 +82,16 @@ type AutoCandidateVisualQuality = {
 };
 
 type CompareFindingStatus = "REVIEW" | "ACCEPTED_DIFFERENCE" | "FIX_REQUIRED";
+type CompareFindingPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+type CompareFindingLink = {
+  id: string;
+  targetType: string;
+  targetId: string;
+  relationType: string;
+  createdAt: string;
+  createdBy: string;
+};
 
 type CompareFinding = {
   id: string;
@@ -89,7 +99,15 @@ type CompareFinding = {
   zoneLabel: string;
   sourceZoneIndex: number;
   status: CompareFindingStatus;
+  priority: CompareFindingPriority;
   note: string;
+  assigneeUserId: string | null;
+  assigneeName: string;
+  dueAt: string | null;
+  version: number;
+  createdByName: string;
+  updatedByName: string;
+  links: CompareFindingLink[];
   score: number;
   mismatchPixels: number;
   inkPixels: number;
@@ -107,6 +125,41 @@ type CompareFinding = {
     source: DriveAutoAlignmentSource;
     confidenceScore: number;
   };
+};
+
+type CompareFindingServer = {
+  id: string;
+  leftDocumentId: string;
+  leftVersionId: string;
+  rightDocumentId: string;
+  rightVersionId: string;
+  pageNumber: number;
+  sourceZoneIndex: number;
+  zoneLabel: string;
+  zone: { x: number; y: number; width: number; height: number };
+  score: number;
+  mismatchPixels: number;
+  inkPixels: number;
+  alignment: { offsetX: number; offsetY: number; scalePercent: number; rotationDegrees: number; source: DriveAutoAlignmentSource; confidenceScore: number };
+  status: CompareFindingStatus;
+  priority: CompareFindingPriority;
+  note: string;
+  assigneeUserId: string | null;
+  assigneeName: string;
+  dueAt: string | null;
+  version: number;
+  createdByName: string;
+  updatedByName: string;
+  createdAt: string;
+  updatedAt: string;
+  links: CompareFindingLink[];
+};
+
+type ProjectMemberOption = {
+  userId: string;
+  displayName: string;
+  role: string;
+  status: string;
 };
 
 type AutoPairReplacement = {
@@ -136,6 +189,27 @@ const compareFindingStatusLabels: Record<CompareFindingStatus, string> = {
   ACCEPTED_DIFFERENCE: "ELFOGADOTT ELTÉRÉS",
   FIX_REQUIRED: "JAVÍTANDÓ",
 };
+
+const compareFindingPriorityLabels: Record<CompareFindingPriority, string> = {
+  LOW: "Alacsony",
+  MEDIUM: "Közepes",
+  HIGH: "Magas",
+  CRITICAL: "Kritikus",
+};
+
+function toLocalDateTimeInput(value: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function fromLocalDateTimeInput(value: string) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
 
 function csvCell(value: string | number | null | undefined) {
   const text = String(value ?? "");
@@ -614,6 +688,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [compareFindings, setCompareFindings] = useState<CompareFinding[]>([]);
   const [focusedCompareFindingId, setFocusedCompareFindingId] = useState<string | null>(null);
   const [compareFindingsMessage, setCompareFindingsMessage] = useState("");
+  const [compareFindingsLoading, setCompareFindingsLoading] = useState(false);
+  const [compareFindingsSavingId, setCompareFindingsSavingId] = useState<string | null>(null);
+  const [projectMembers, setProjectMembers] = useState<ProjectMemberOption[]>([]);
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
@@ -628,11 +705,89 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     ? Math.min(leftPageCount || 0, rightPageCount || 0)
     : 0;
 
+  const mapServerCompareFinding = useCallback((finding: CompareFindingServer): CompareFinding => ({
+    id: finding.id,
+    contextKey: compareFindingContextKey,
+    zoneLabel: finding.zoneLabel,
+    sourceZoneIndex: finding.sourceZoneIndex,
+    status: finding.status,
+    priority: finding.priority,
+    note: finding.note,
+    assigneeUserId: finding.assigneeUserId,
+    assigneeName: finding.assigneeName,
+    dueAt: finding.dueAt,
+    version: finding.version,
+    createdByName: finding.createdByName,
+    updatedByName: finding.updatedByName,
+    links: finding.links || [],
+    score: finding.score,
+    mismatchPixels: finding.mismatchPixels,
+    inkPixels: finding.inkPixels,
+    pageNumber: finding.pageNumber,
+    createdAt: finding.createdAt,
+    updatedAt: finding.updatedAt,
+    zone: finding.zone,
+    left: {
+      documentId: finding.leftDocumentId,
+      documentName: leftDocument.name,
+      versionId: finding.leftVersionId,
+      versionNumber: leftDocument.currentVersion?.versionNumber ?? null,
+      revisionCode: leftDocument.currentVersion?.revisionCode || "",
+    },
+    right: {
+      documentId: finding.rightDocumentId,
+      documentName: rightDocument.name,
+      versionId: finding.rightVersionId,
+      versionNumber: rightDocument.currentVersion?.versionNumber ?? null,
+      revisionCode: rightDocument.currentVersion?.revisionCode || "",
+    },
+    alignment: finding.alignment,
+  }), [compareFindingContextKey, leftDocument.name, leftDocument.currentVersion?.versionNumber, leftDocument.currentVersion?.revisionCode, rightDocument.name, rightDocument.currentVersion?.versionNumber, rightDocument.currentVersion?.revisionCode]);
+
+  const loadCompareFindings = useCallback(async () => {
+    const leftVersionId = leftDocument.currentVersion?.id;
+    const rightVersionId = rightDocument.currentVersion?.id;
+    setFocusedCompareFindingId(null);
+    if (!leftVersionId || !rightVersionId) {
+      setCompareFindings([]);
+      return;
+    }
+    setCompareFindingsLoading(true);
+    try {
+      const params = new URLSearchParams({ leftVersionId, rightVersionId });
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/compare-findings?${params.toString()}`, { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as { ok?: boolean; error?: string; code?: string; findings?: CompareFindingServer[] };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Az eltérési jegyzék nem tölthető be.");
+      setCompareFindings((payload.findings || []).map(mapServerCompareFinding));
+      setCompareFindingsMessage(payload.findings?.length ? `${payload.findings.length} tartós eltérési tétel betöltve.` : "Ehhez az A/B verziópárhoz még nincs mentett eltérési tétel.");
+    } catch (caught) {
+      setCompareFindings([]);
+      setCompareFindingsMessage(caught instanceof Error ? caught.message : "Az eltérési jegyzék nem tölthető be.");
+    } finally {
+      setCompareFindingsLoading(false);
+    }
+  }, [projectId, leftDocument.currentVersion?.id, rightDocument.currentVersion?.id, mapServerCompareFinding]);
+
   useEffect(() => {
     setCompareFindings([]);
     setFocusedCompareFindingId(null);
     setCompareFindingsMessage("");
-  }, [compareFindingContextKey]);
+    void loadCompareFindings();
+  }, [compareFindingContextKey, loadCompareFindings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/memberships`, { credentials: "same-origin", cache: "no-store" });
+        const payload = await response.json() as { ok?: boolean; memberships?: ProjectMemberOption[] };
+        if (!cancelled && response.ok && payload.ok) setProjectMembers((payload.memberships || []).filter((member) => member.status === "ACTIVE"));
+      } catch {
+        if (!cancelled) setProjectMembers([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const fetchPreview = useCallback(async (side: Side, document: DriveDocument) => {
     const versionId = document.currentVersion?.id;
@@ -968,11 +1123,11 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     }
   }
 
-  function addSelectedDifferenceToFindings() {
+  async function addSelectedDifferenceToFindings() {
     const zone = activeDifferenceZones[selectedDifferenceZoneIndex];
     const suggestion = autoAlignmentSuggestion;
     const leftCanvas = leftCanvasRef.current;
-    if (!zone || !suggestion || !leftCanvas?.width || !leftCanvas.height) return;
+    if (!zone || !suggestion || !leftCanvas?.width || !leftCanvas.height || compareFindingsSavingId) return;
     const zoneLabel = `Δ${selectedDifferenceZoneIndex + 1}`;
     const duplicate = compareFindings.find((finding) =>
       finding.contextKey === compareFindingContextKey
@@ -986,66 +1141,102 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       setCompareFindingsMessage(`${zoneLabel} már szerepel az eltérési jegyzékben.`);
       return;
     }
-    const now = new Date().toISOString();
-    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `compare-finding-${pageNumber}-${selectedDifferenceZoneIndex}-${compareFindings.length + 1}`;
-    const finding: CompareFinding = {
-      id,
-      contextKey: compareFindingContextKey,
-      zoneLabel,
-      sourceZoneIndex: selectedDifferenceZoneIndex,
-      status: "REVIEW",
-      note: "",
-      score: zone.score,
-      mismatchPixels: zone.mismatchPixels,
-      inkPixels: zone.inkPixels,
-      pageNumber,
-      createdAt: now,
-      updatedAt: now,
-      zone: {
-        x: zone.x / leftCanvas.width,
-        y: zone.y / leftCanvas.height,
-        width: zone.width / leftCanvas.width,
-        height: zone.height / leftCanvas.height,
-      },
-      left: {
-        documentId: leftDocument.id,
-        documentName: leftDocument.name,
-        versionId: leftDocument.currentVersion?.id || "",
-        versionNumber: leftDocument.currentVersion?.versionNumber ?? null,
-        revisionCode: leftDocument.currentVersion?.revisionCode || "",
-      },
-      right: {
-        documentId: rightDocument.id,
-        documentName: rightDocument.name,
-        versionId: rightDocument.currentVersion?.id || "",
-        versionNumber: rightDocument.currentVersion?.versionNumber ?? null,
-        revisionCode: rightDocument.currentVersion?.revisionCode || "",
-      },
-      alignment: {
-        offsetX: suggestion.offsetX,
-        offsetY: suggestion.offsetY,
-        scalePercent: suggestion.scalePercent,
-        rotationDegrees: suggestion.rotationDegrees,
-        source: suggestion.source,
-        confidenceScore: suggestion.confidenceScore,
-      },
-    };
-    setCompareFindings((current) => [...current, finding]);
-    setFocusedCompareFindingId(id);
-    setCompareFindingsMessage(`${zoneLabel} felvéve az eltérési jegyzékbe. A státuszt és a megjegyzést te hagyod jóvá.`);
+    setCompareFindingsSavingId("NEW");
+    setCompareFindingsMessage(`${zoneLabel} mentése…`);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/compare-findings`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          leftDocumentId: leftDocument.id,
+          leftVersionId: leftDocument.currentVersion?.id || "",
+          rightDocumentId: rightDocument.id,
+          rightVersionId: rightDocument.currentVersion?.id || "",
+          pageNumber,
+          sourceZoneIndex: selectedDifferenceZoneIndex,
+          zoneLabel,
+          zoneX: zone.x / leftCanvas.width,
+          zoneY: zone.y / leftCanvas.height,
+          zoneWidth: zone.width / leftCanvas.width,
+          zoneHeight: zone.height / leftCanvas.height,
+          score: zone.score,
+          mismatchPixels: zone.mismatchPixels,
+          inkPixels: zone.inkPixels,
+          alignmentOffsetX: suggestion.offsetX,
+          alignmentOffsetY: suggestion.offsetY,
+          alignmentScalePercent: suggestion.scalePercent,
+          alignmentRotationDegrees: suggestion.rotationDegrees,
+          alignmentSource: suggestion.source,
+          alignmentConfidenceScore: suggestion.confidenceScore,
+          status: "REVIEW",
+          priority: "MEDIUM",
+          note: "",
+        }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; finding?: CompareFindingServer };
+      if (!response.ok || !payload.ok || !payload.finding) throw new Error(payload.error || "Az eltérési tétel mentése sikertelen.");
+      const finding = mapServerCompareFinding(payload.finding);
+      setCompareFindings((current) => [...current.filter((item) => item.id !== finding.id), finding].sort((a, b) => a.pageNumber - b.pageNumber || a.sourceZoneIndex - b.sourceZoneIndex));
+      setFocusedCompareFindingId(finding.id);
+      setCompareFindingsMessage(`${zoneLabel} tartósan mentve. A státusz, prioritás, felelős és határidő emberi döntés.`);
+    } catch (caught) {
+      setCompareFindingsMessage(caught instanceof Error ? caught.message : "Az eltérési tétel mentése sikertelen.");
+      await loadCompareFindings();
+    } finally {
+      setCompareFindingsSavingId(null);
+    }
   }
 
-  function updateCompareFinding(id: string, patch: Partial<Pick<CompareFinding, "status" | "note">>) {
+  function editCompareFindingNote(id: string, note: string) {
     const updatedAt = new Date().toISOString();
-    setCompareFindings((current) => current.map((finding) => finding.id === id ? { ...finding, ...patch, updatedAt } : finding));
+    setCompareFindings((current) => current.map((finding) => finding.id === id ? { ...finding, note: note.slice(0, 4000), updatedAt } : finding));
   }
 
-  function removeCompareFinding(id: string) {
-    setCompareFindings((current) => current.filter((finding) => finding.id !== id));
-    setFocusedCompareFindingId((current) => current === id ? null : current);
-    setCompareFindingsMessage("Eltérési tétel törölve a helyi munkameneti jegyzékből.");
+  async function persistCompareFinding(id: string, patch: Partial<Pick<CompareFinding, "status" | "priority" | "note" | "assigneeUserId" | "dueAt">>) {
+    const currentFinding = compareFindings.find((finding) => finding.id === id);
+    if (!currentFinding || compareFindingsSavingId) return;
+    setCompareFindingsSavingId(id);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/compare-findings/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expectedVersion: currentFinding.version, ...patch }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; finding?: CompareFindingServer };
+      if (!response.ok || !payload.ok || !payload.finding) throw new Error(payload.error || "Az eltérési tétel frissítése sikertelen.");
+      const updated = mapServerCompareFinding(payload.finding);
+      setCompareFindings((current) => current.map((finding) => finding.id === id ? updated : finding));
+      setCompareFindingsMessage(`${updated.zoneLabel} mentve · v${updated.version} · ${updated.updatedByName || "DIMPRO felhasználó"}.`);
+    } catch (caught) {
+      setCompareFindingsMessage(caught instanceof Error ? caught.message : "Az eltérési tétel frissítése sikertelen.");
+      await loadCompareFindings();
+    } finally {
+      setCompareFindingsSavingId(null);
+    }
+  }
+
+  async function removeCompareFinding(id: string) {
+    const finding = compareFindings.find((item) => item.id === id);
+    if (!finding || compareFindingsSavingId) return;
+    setCompareFindingsSavingId(id);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/compare-findings/${encodeURIComponent(id)}?expectedVersion=${finding.version}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Az eltérési tétel archiválása sikertelen.");
+      setCompareFindings((current) => current.filter((item) => item.id !== id));
+      setFocusedCompareFindingId((current) => current === id ? null : current);
+      setCompareFindingsMessage(`${finding.zoneLabel} archiválva. Az auditnapló megmarad.`);
+    } catch (caught) {
+      setCompareFindingsMessage(caught instanceof Error ? caught.message : "Az eltérési tétel archiválása sikertelen.");
+      await loadCompareFindings();
+    } finally {
+      setCompareFindingsSavingId(null);
+    }
   }
 
   function focusCompareFinding(finding: CompareFinding) {
@@ -1073,7 +1264,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     const baseName = `DIMPRO_Compare_Findings_${projectId}_${stamp}`.replace(/[^0-9A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű_.-]+/g, "_");
     if (format === "json") {
       const payload = {
-        version: "1.0",
+        version: "2.0",
         exportedAt: new Date().toISOString(),
         projectId,
         comparison: { left: compareFindings[0]?.left, right: compareFindings[0]?.right },
@@ -1082,12 +1273,12 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       triggerTextDownload(`${baseName}.json`, `${JSON.stringify(payload, null, 2)}\n`, "application/json;charset=utf-8");
       return;
     }
-    const header = ["id","status","delta","scorePercent","page","leftDocument","leftVersionId","leftRevision","rightDocument","rightVersionId","rightRevision","note","createdAt","updatedAt","zoneX","zoneY","zoneWidth","zoneHeight","alignmentX","alignmentY","alignmentScalePercent","alignmentRotationDegrees","alignmentSource","alignmentConfidence"].join(";");
+    const header = ["id","status","priority","assignee","dueAt","version","delta","scorePercent","page","leftDocument","leftVersionId","leftRevision","rightDocument","rightVersionId","rightRevision","note","updatedBy","createdAt","updatedAt","zoneX","zoneY","zoneWidth","zoneHeight","alignmentX","alignmentY","alignmentScalePercent","alignmentRotationDegrees","alignmentSource","alignmentConfidence","linkCount"].join(";");
     const rows = compareFindings.map((finding) => [
-      finding.id, compareFindingStatusLabels[finding.status], finding.zoneLabel, finding.score, finding.pageNumber,
-      finding.left.documentName, finding.left.versionId, finding.left.revisionCode, finding.right.documentName, finding.right.versionId, finding.right.revisionCode, finding.note, finding.createdAt, finding.updatedAt,
+      finding.id, compareFindingStatusLabels[finding.status], compareFindingPriorityLabels[finding.priority], finding.assigneeName, finding.dueAt, finding.version, finding.zoneLabel, finding.score, finding.pageNumber,
+      finding.left.documentName, finding.left.versionId, finding.left.revisionCode, finding.right.documentName, finding.right.versionId, finding.right.revisionCode, finding.note, finding.updatedByName, finding.createdAt, finding.updatedAt,
       finding.zone.x.toFixed(6), finding.zone.y.toFixed(6), finding.zone.width.toFixed(6), finding.zone.height.toFixed(6),
-      finding.alignment.offsetX, finding.alignment.offsetY, finding.alignment.scalePercent, finding.alignment.rotationDegrees, finding.alignment.source, finding.alignment.confidenceScore,
+      finding.alignment.offsetX, finding.alignment.offsetY, finding.alignment.scalePercent, finding.alignment.rotationDegrees, finding.alignment.source, finding.alignment.confidenceScore, finding.links.length,
     ].map(csvCell).join(";"));
     triggerTextDownload(`${baseName}.csv`, `\uFEFF${[header, ...rows].join("\n")}\n`, "text/csv;charset=utf-8");
   }
@@ -1533,7 +1724,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                   <div className={styles.visualCompareDifferenceHeatmapHeader}>
                     <div><strong>Eltérés hőtérkép</strong><span>A nagyobb százalék több eltérő rajzi vonalat jelez az adott zónában.</span></div>
                     <div className={styles.visualCompareDifferenceHeatmapActions}>
-                      <button type="button" onClick={addSelectedDifferenceToFindings} data-add-compare-finding disabled={!activeDifferenceZone}><Plus size={11} /> Δ{Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1)) + 1} jegyzékbe</button>
+                      <button type="button" onClick={addSelectedDifferenceToFindings} data-add-compare-finding disabled={!activeDifferenceZone || Boolean(compareFindingsSavingId)}><Plus size={11} /> Δ{Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1)) + 1} jegyzékbe</button>
                       <button type="button" onClick={() => setDifferenceHeatmapEnabled((current) => !current)} className={differenceHeatmapEnabled ? styles.visualCompareToolActive : ""} data-difference-heatmap-toggle aria-pressed={differenceHeatmapEnabled}>{differenceHeatmapEnabled ? "Hőtérkép ki" : "Hőtérkép be"}</button>
                     </div>
                   </div>
@@ -1588,7 +1779,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       {(compareFindings.length > 0 || autoAlignmentSuggestion) && (
         <div className={styles.visualCompareFindingsPanel} data-compare-findings-count={compareFindings.length}>
           <div className={styles.visualCompareFindingsHeader}>
-            <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V1</strong><small>Helyi Compare munkamenet · nincs automatikus hibaminősítés vagy szerveres mentés.</small></span></div>
+            <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V2</strong><small>Tartós, projektizolált és auditált review-lista · nincs automatikus hibaminősítés.</small></span></div>
             <div className={styles.visualCompareFindingsExport}>
               <button type="button" onClick={() => exportCompareFindings("json")} disabled={!compareFindings.length} data-export-compare-findings="json"><Download size={11} /> JSON</button>
               <button type="button" onClick={() => exportCompareFindings("csv")} disabled={!compareFindings.length} data-export-compare-findings="csv"><Download size={11} /> CSV</button>
@@ -1605,17 +1796,24 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                     <div className={styles.visualCompareFindingMeta}>
                       <strong>{finding.left.revisionCode || `V${finding.left.versionNumber ?? "–"}`} ↔ {finding.right.revisionCode || `V${finding.right.versionNumber ?? "–"}`}</strong>
                       <small>{finding.mismatchPixels}/{finding.inkPixels} eltérő vonalpont · {autoAlignmentSourceLabel(finding.alignment.source)}</small>
+                      <small>v{finding.version} · utolsó mentés: {finding.updatedByName || "DIMPRO felhasználó"}</small>
                     </div>
-                    <select value={finding.status} onChange={(event) => updateCompareFinding(finding.id, { status: event.target.value as CompareFindingStatus })} aria-label={`${finding.zoneLabel} státusz`} data-finding-status-select={findingIndex + 1}>
+                    <select value={finding.status} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { status: event.target.value as CompareFindingStatus })} aria-label={`${finding.zoneLabel} státusz`} data-finding-status-select={findingIndex + 1}>
                       {Object.entries(compareFindingStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
-                    <textarea value={finding.note} onChange={(event) => updateCompareFinding(finding.id, { note: event.target.value })} rows={2} maxLength={800} placeholder="Rövid műszaki megjegyzés…" aria-label={`${finding.zoneLabel} megjegyzés`} data-finding-note={findingIndex + 1} />
-                    <button type="button" className={styles.visualCompareFindingDelete} onClick={() => removeCompareFinding(finding.id)} aria-label={`${finding.zoneLabel} törlése`} title="Törlés a helyi jegyzékből"><Trash2 size={12} /></button>
+                    <textarea value={finding.note} disabled={compareFindingsSavingId === finding.id} onChange={(event) => editCompareFindingNote(finding.id, event.target.value)} onBlur={(event) => void persistCompareFinding(finding.id, { note: event.currentTarget.value })} rows={2} maxLength={4000} placeholder="Rövid műszaki megjegyzés…" aria-label={`${finding.zoneLabel} megjegyzés`} data-finding-note={findingIndex + 1} />
+                    <button type="button" className={styles.visualCompareFindingDelete} disabled={compareFindingsSavingId === finding.id} onClick={() => void removeCompareFinding(finding.id)} aria-label={`${finding.zoneLabel} archiválása`} title="Archiválás · az auditnapló megmarad"><Trash2 size={12} /></button>
+                    <div className={styles.visualCompareFindingWorkflow}>
+                      <label><span>Prioritás</span><select value={finding.priority} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { priority: event.target.value as CompareFindingPriority })}>{Object.entries(compareFindingPriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                      <label><span>Felelős</span><select value={finding.assigneeUserId || ""} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { assigneeUserId: event.target.value || null })}><option value="">Nincs kijelölve</option>{projectMembers.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.userId}</option>)}</select></label>
+                      <label><span>Határidő</span><input type="datetime-local" value={toLocalDateTimeInput(finding.dueAt)} disabled={compareFindingsSavingId === finding.id} onChange={(event) => void persistCompareFinding(finding.id, { dueAt: fromLocalDateTimeInput(event.target.value) || null })} /></label>
+                      <div className={styles.visualCompareFindingLinks}><span>Kapcsolatok</span><strong>{finding.links.length}</strong><small>hibajegy / jegyzőkönyv / DokuBOX kapcsolat előkészítve</small></div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <div className={styles.visualCompareFindingsEmpty}>Válassz egy Δ zónát, majd add az eltérési jegyzékhez. A rendszer alapból <strong>ELLENŐRIZENDŐ</strong> státuszt ad.</div>}
+          ) : <div className={styles.visualCompareFindingsEmpty}>{compareFindingsLoading ? "Mentett eltérési tételek betöltése…" : <>Válassz egy Δ zónát, majd add az eltérési jegyzékhez. A rendszer alapból <strong>ELLENŐRIZENDŐ</strong> és <strong>KÖZEPES</strong> prioritást ad.</>}</div>}
           {compareFindingsMessage && <div className={styles.visualCompareFindingsMessage}>{compareFindingsMessage}</div>}
           {focusedCompareFinding && focusedFindingDisplayZone && (
             <div className={styles.visualCompareFindingInspector} data-finding-inspector={focusedCompareFinding.zoneLabel}>

@@ -874,7 +874,7 @@
 }
 
 
-/* Drive Compare Findings / Eltérési jegyzék V1 */
+/* Drive Compare Findings / Eltérési jegyzék V2 */
 .visualCompareDifferenceHeatmapActions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; flex-wrap: wrap; }
 .visualCompareDifferenceHeatmapActions button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .visualCompareDifferenceHeatmapActions button:disabled { opacity: .45; cursor: not-allowed; }
@@ -901,6 +901,16 @@
 .visualCompareFindingBody select { min-height: 29px; padding: 0 6px; font-weight: 850; }
 .visualCompareFindingBody textarea { min-height: 42px; resize: vertical; padding: 6px; line-height: 1.35; }
 .visualCompareFindingDelete { width: 28px; height: 28px; border: 1px solid #e1c9c5; border-radius: 6px; background: #fff9f8; color: #a24f43; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.visualCompareFindingDelete:disabled { opacity: .45; cursor: wait; }
+.visualCompareFindingWorkflow { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: minmax(120px,.55fr) minmax(170px,.85fr) minmax(175px,.75fr) minmax(180px,1fr); gap: 6px; align-items: end; border-top: 1px solid #e5ecef; padding-top: 6px; }
+.visualCompareFindingWorkflow label { min-width: 0; display: grid; gap: 3px; color: #6f858f; font-size: 7px; font-weight: 850; }
+.visualCompareFindingWorkflow label > span, .visualCompareFindingLinks > span { text-transform: uppercase; letter-spacing: .04em; }
+.visualCompareFindingWorkflow select, .visualCompareFindingWorkflow input { width: 100%; min-width: 0; min-height: 29px; border: 1px solid #ccd9df; border-radius: 6px; background: #fff; color: #314b5a; padding: 0 6px; font: inherit; font-size: 8px; font-weight: 750; }
+.visualCompareFindingWorkflow select:disabled, .visualCompareFindingWorkflow input:disabled, .visualCompareFindingBody select:disabled, .visualCompareFindingBody textarea:disabled { opacity: .58; cursor: wait; }
+.visualCompareFindingLinks { min-width: 0; min-height: 29px; border: 1px solid #dbe5e9; border-radius: 6px; background: #f8fbfc; padding: 5px 7px; display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 6px; color: #6f858f; font-size: 7px; }
+.visualCompareFindingLinks strong { color: #36566a; font-size: 10px; justify-self: end; }
+.visualCompareFindingLinks small { grid-column: 1 / -1; color: #82949d; font-size: 7px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .visualCompareFindingsEmpty { border: 1px dashed #ccd9df; border-radius: 7px; background: rgba(246,250,252,.7); color: #6c828e; padding: 9px; font-size: 8px; line-height: 1.45; }
 .visualCompareFindingsMessage { color: #527184; font-size: 8px; font-weight: 750; }
 .visualCompareFindingInspector { min-width: 0; display: grid; grid-template-columns: minmax(150px,.55fr) minmax(260px,1fr); gap: 8px; align-items: center; border-top: 1px solid #e2eaed; padding-top: 7px; }
@@ -912,6 +922,7 @@
   .visualCompareFindingBody { grid-template-columns: minmax(130px,.8fr) minmax(130px,.7fr) minmax(180px,1.2fr) 30px; }
 }
 @media (max-width: 820px) {
+  .visualCompareFindingWorkflow { grid-template-columns: 1fr 1fr; }
   .visualCompareFindingsHeader { align-items: flex-start; flex-direction: column; }
   .visualCompareFindingBody { grid-template-columns: 1fr 1fr 30px; }
   .visualCompareFindingMeta { grid-column: 1 / -1; }
@@ -919,6 +930,7 @@
   .visualCompareFindingInspector { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
+  .visualCompareFindingWorkflow { grid-template-columns: 1fr; }
   .visualCompareDifferenceHeatmapActions { width: 100%; justify-content: flex-start; }
   .visualCompareFindingCard { grid-template-columns: 52px minmax(0,1fr); }
   .visualCompareFindingBody { grid-template-columns: minmax(0,1fr) 30px; }

@@ -43,3 +43,11 @@ export {
   getDriveVersionSecurityStatus,
   scanDriveQuarantinedVersion,
 } from "./securityScanService";
+
+export {
+  createDriveCompareFinding,
+  deleteDriveCompareFinding,
+  getDriveCompareFindingsHealth,
+  listDriveCompareFindings,
+  updateDriveCompareFinding,
+} from "./compareFindingsRepository";

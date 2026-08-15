@@ -90,6 +90,7 @@ export type ProjectAuditEntityType =
   | "box_item"
   | "saved_view"
   | "compare_job"
+  | "compare_finding"
   | "ai_job";
 
 export type ProjectAuditEvent = {
