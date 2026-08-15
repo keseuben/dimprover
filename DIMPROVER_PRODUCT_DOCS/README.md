@@ -174,3 +174,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `244_dimpro_field_issue_core_v230_dev_activation_20260815.md` – Terepi hibafelvétel → Project Issue Core V0.3 DEV aktiválás: FIELD_CAPTURE HJ sync, explicit mentés, idempotens create, külső felelős, optimistic update, 70/70 + 21/21 live PASS; build Tgp-ODgYRzmIgsfJ8fe7o.
 
 - `245_dimpro_field_issue_attachments_v240_release_candidate_20260815.md` – Terepi HJ mellékletkapcsolatok V0.4 RC: valós DIMPRO Drive document/version, PHOTO/EVIDENCE + PLAN/ATTACHMENT, 102/102 PASS; operator build g6fF6NQq2d03y1OdgKqbU; DB migráció biztonsági kapun blokkolt, nincs cutover.
+
+- `246_benjadmin_ai_developer_space_v1_dev_activation_20260815.md` – BENJADMIN AI Fejlesztői Tér V1 DEV aktiválás: Ármin/Jázmin/Outmin ownership + routing + ETA + session/lifecycle + Kész/Hiba értesítés, immutable release identity, 40/40 + 9/9 + 17/17 + 19/19 PASS; aktív build 0GC_mboRAp_cBl7Yzygha, natív executor továbbra is fail-closed.
