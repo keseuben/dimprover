@@ -135,3 +135,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `225_benjadmin_windows_bridge_p81_hardening_dev_activation_20260815.md` – P8.1 hardening DEV aktiválás: 407/407 PASS, build XR4JDXq1W-fVQA68otcGI; DB migration pending, Bridge/Pairing/Execution OFF.
 
 - `226_benjadmin_windows_bridge_p81_windows_e2e_package_20260815.md` – P8.1 Windows E2E package builder: SHA-ellenőrzött installer/self-check/pair/heartbeat/uninstall csomag, execution és autostart OFF.
+
+- `227_benjadmin_windows_bridge_p81_db_and_server_e2e_20260815.md` – P8.1 DEV DB migration + server-side Pair/Approve/Heartbeat/Revoke E2E PASS; pairing secret provisioned, live Bridge/Pairing/Execution OFF.
