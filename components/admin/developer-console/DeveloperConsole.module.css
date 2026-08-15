@@ -1389,3 +1389,17 @@
 .aiDeveloperTaskWarning { margin: 5px 0; padding: 5px 6px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 6px; color: var(--amber); background: var(--amber-soft); font-size: 11px; line-height: 1.4; }
 .aiDeveloperTaskActions .aiBridgeHandoffButton { border-color: color-mix(in srgb, var(--blue) 55%, var(--border)); color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--surface)); }
 .aiDeveloperTaskActions .aiBridgeRunningButton { border-color: color-mix(in srgb, var(--violet) 55%, var(--border)); color: var(--violet); background: color-mix(in srgb, var(--violet) 7%, var(--surface)); }
+
+.aiAutoRouteWaiting { min-height: 26px; padding: 0 7px; border: 1px dashed var(--accent); border-radius: 6px; display: inline-flex; align-items: center; color: var(--accent-strong); background: var(--accent-soft); font-size: 11px; font-weight: 900; }
+.aiBridgeResult { margin: 6px 0; padding: 7px; border: 1px solid color-mix(in srgb, var(--green) 38%, var(--border)); border-radius: 7px; background: color-mix(in srgb, var(--green) 6%, var(--surface)); display: grid; gap: 4px; }
+.aiBridgeResult > strong { color: var(--green); font-size: 10px; letter-spacing: .06em; }
+.aiBridgeResult p { margin: 0; color: var(--text); font-size: 11px; line-height: 1.45; }
+.aiBridgeResult > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.aiBridgeResult > div span { padding: 2px 5px; border-radius: 999px; color: var(--text-soft); background: var(--panel); font-size: 10px; }
+.aiBridgeResult small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+
+.aiCoordinatorSuggestion { margin: 6px 0; padding: 7px; border: 1px solid color-mix(in srgb, var(--amber) 42%, var(--border)); border-radius: 7px; background: var(--amber-soft); display: grid; gap: 3px; }
+.aiCoordinatorSuggestion strong { color: var(--amber); font-size: 10px; letter-spacing: .06em; }
+.aiCoordinatorSuggestion span { color: var(--text); font-size: 11px; font-weight: 800; }
+.aiCoordinatorSuggestion small { color: var(--text-soft); font-size: 10px; }
+.aiCoordinatorSuggestion button { justify-self: start; min-height: 25px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--amber) 50%, var(--border)); border-radius: 6px; color: var(--amber); background: var(--surface); font-size: 10px; font-weight: 900; cursor: pointer; }

@@ -11,6 +11,58 @@ export type ManualBridgeHandoff = {
   sanitized: boolean;
 };
 
+export type ManualBridgeResultInput = {
+  summary: string;
+  commit?: string | null;
+  buildId?: string | null;
+  tests?: string | null;
+  docs?: string | null;
+  nextStep?: string | null;
+};
+
+export type ManualBridgeResult = {
+  summary: string;
+  commit: string | null;
+  buildId: string | null;
+  tests: string | null;
+  docs: string | null;
+  nextStep: string | null;
+  sha256: string;
+  sanitized: boolean;
+  sensitiveFindings: string[];
+};
+
+function sanitizeResultText(value: unknown, max: number) {
+  const raw = clean(value, max);
+  if (!raw) return { value: null as string | null, findings: [] as string[] };
+  const findings = scanSensitiveText(raw);
+  return { value: findings.length ? `[ÉRZÉKENY ADAT MASZKOLVA – ${findings.join(", ")}]` : raw, findings };
+}
+
+export function buildManualBridgeResult(input: ManualBridgeResultInput): ManualBridgeResult {
+  const summary = sanitizeResultText(input.summary, 2400);
+  const tests = sanitizeResultText(input.tests, 2400);
+  const docs = sanitizeResultText(input.docs, 2400);
+  const nextStep = sanitizeResultText(input.nextStep, 2400);
+  const findings = [...new Set([...summary.findings, ...tests.findings, ...docs.findings, ...nextStep.findings])];
+  const commit = clean(input.commit, 80) || null;
+  const buildId = clean(input.buildId, 160) || null;
+  const canonical = {
+    summary: summary.value || "",
+    commit,
+    buildId,
+    tests: tests.value,
+    docs: docs.value,
+    nextStep: nextStep.value,
+  };
+  return {
+    ...canonical,
+    sha256: createHash("sha256").update(JSON.stringify(canonical)).digest("hex"),
+    sanitized: findings.length > 0,
+    sensitiveFindings: findings,
+  };
+}
+
 function clean(value: unknown, max = 8000) {
   return String(value || "").replace(/\r\n/g, "\n").trim().slice(0, max);
 }

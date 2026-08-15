@@ -46,6 +46,12 @@ function metadataText(task: LiveTask, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+
+function metadataRecord(task: LiveTask, key: string) {
+  const value = task.metadata?.[key];
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
 function durationLabel(minutes: number | null) {
   if (!minutes) return "—";
   const hours = Math.floor(minutes / 60);
@@ -67,7 +73,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
   context: RuntimeContext | null;
   selectedProjectId: string;
   busyTaskId: string | null;
-  onTaskAction: (taskId: string, action: "ROUTE" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "TESTING" | "COMPLETE" | "FAIL", payload?: { workerCode?: string; estimateMinutes?: number; note?: string }) => Promise<void>;
+  onTaskAction: (taskId: string, action: "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL", payload?: { workerCode?: string; estimateMinutes?: number; note?: string; summary?: string; commit?: string; buildId?: string; tests?: string; docs?: string; nextStep?: string }) => Promise<void>;
   onOpenTerminalHub: () => void;
 }) {
   const tasks = live?.tasks || [];
@@ -158,6 +164,10 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
             const routed = Boolean(task.requested_worker_id || task.assigned_worker_id);
             const bridgeState = metadataText(task, "bridgeState") || (started ? "WAITING_HANDOFF" : null);
             const handoffSanitized = task.metadata?.handoffSanitized === true;
+            const bridgeResult = metadataRecord(task, "bridgeResult");
+            const resultHistory = Array.isArray(task.metadata?.bridgeResultHistory) ? task.metadata.bridgeResultHistory.length : 0;
+            const suggestedWorker = metadataRecord(task, "coordinatorSuggestedWorker");
+            const preferenceState = metadataText(task, "coordinatorPreferenceState");
             const busy = busyTaskId === task.id;
             return (
               <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"}>
@@ -169,12 +179,10 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
                 </div>
                 {handoffSanitized ? <p className={styles.aiDeveloperTaskWarning}>Az átadó prompt érzékeny adatot észlelt és maszkolta. Nyers titkot ne adj át AI-nak.</p> : null}
                 {task.blocked_reason ? <p className={styles.aiDeveloperTaskError}>{task.blocked_reason}</p> : null}
+                {preferenceState && preferenceState !== "PREFERRED_ACCEPTED" ? <div className={styles.aiCoordinatorSuggestion} data-testid="benjadmin-worker-suggestion"><strong>Ben-AI</strong><span>{preferenceState === "PREFERRED_BUSY" ? "A választott kódoló jelenleg foglalt." : "A választott kódoló most nem választható."}</span>{suggestedWorker?.workerName ? <><small>Javasolt következő kódoló: {String(suggestedWorker.workerName)}</small><button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ACCEPT_SUGGESTION")}>Javaslat elfogadása</button></> : <small>Nincs jelenleg szabad és jogosult alternatíva.</small>}</div> : null}
+                {bridgeResult ? <div className={styles.aiBridgeResult} data-testid="benjadmin-bridge-result"><strong>CHATGPT EREDMÉNY · V{String(bridgeResult.version || resultHistory || 1)}</strong><p>{String(bridgeResult.summary || "Eredmény rögzítve.")}</p><div>{bridgeResult.commit ? <span>commit {String(bridgeResult.commit).slice(0, 12)}</span> : null}{bridgeResult.buildId ? <span>build {String(bridgeResult.buildId)}</span> : null}{bridgeResult.tests ? <span>teszt: {String(bridgeResult.tests)}</span> : null}{bridgeResult.docs ? <span>docs: {String(bridgeResult.docs)}</span> : null}</div>{bridgeResult.nextStep ? <small>Következő: {String(bridgeResult.nextStep)}</small> : null}</div> : null}
                 <div className={styles.aiDeveloperTaskActions}>
-                  {!routed ? <>
-                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "ARMINAI", estimateMinutes: estimate || 90 })}>Ármin</button>
-                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "JAZMINAI", estimateMinutes: estimate || 90 })}>Jázmin</button>
-                    <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "OUTMINAI", estimateMinutes: estimate || 90 })}>Outmin</button>
-                  </> : null}
+                  {!routed ? <span className={styles.aiAutoRouteWaiting}>Ben-AI · automatikus kiosztásra vár</span> : null}
                   {routed && ["queued", "ready"].includes(task.status) ? <button type="button" className={styles.aiDeveloperStartButton} disabled={busy} onClick={() => void onTaskAction(task.id, "START")}><Play size={11} /> Indítás</button> : null}
                   {started && bridgeState === "WAITING_HANDOFF" ? <button type="button" className={styles.aiBridgeHandoffButton} data-action="HANDOFF" disabled={busy} onClick={() => void copyHandoffAndMark(task)}><ClipboardCopy size={11} /> Átadó másolása</button> : null}
                   {started && bridgeState === "HANDED_OFF" ? <button type="button" className={styles.aiBridgeRunningButton} data-action="RUNNING" disabled={busy} onClick={() => void onTaskAction(task.id, "RUNNING")}><Radio size={11} /> Chat elindult</button> : null}

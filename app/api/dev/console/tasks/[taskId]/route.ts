@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import {
+  acceptBenAiSuggestedWorker,
   advanceDevEngineTaskManualBridge,
   finalizeDevEngineTask,
+  recordDevEngineTaskManualBridgeResult,
   routeDevEngineTask,
   setDevEngineTaskTesting,
   startDevEngineTaskManualBridge,
@@ -15,7 +17,7 @@ import { engineErrorResponse, engineUnauthorized } from "@/app/api/dev/engine/_s
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type TaskAction = "ROUTE" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "TESTING" | "COMPLETE" | "FAIL";
+type TaskAction = "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL";
 
 async function notifyOutcome(input: { taskId: string; title: string; body: string; priority: "normal" | "high" }) {
   try {
@@ -35,7 +37,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
   if (!(await getDevCenterMutationSubject(request.headers, false))) return engineUnauthorized();
   try {
     const { taskId } = await context.params;
-    const body = await request.json().catch(() => ({})) as { action?: TaskAction; workerCode?: string; estimateMinutes?: number; note?: string };
+    const body = await request.json().catch(() => ({})) as { action?: TaskAction; workerCode?: string; estimateMinutes?: number; note?: string; summary?: string; commit?: string; buildId?: string; tests?: string; docs?: string; nextStep?: string };
     const action = String(body.action || "").toUpperCase() as TaskAction;
     let result: Record<string, unknown>;
     let notice = "";
@@ -46,6 +48,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       result = routed;
       notice = `Felelős: ${routed.worker.name}. A task READY állapotba került.`;
       await createBenAiConsoleMessage({ summary: `${routed.task.title} -> ${routed.worker.name}`, detail: "Worker ownership és task routing rögzítve az AI Fejlesztői Térben.", taskId, projectId: routed.task.projectId, kind: "TASK_ASSIGNMENT", metadata: { workerCode: routed.worker.code, action } });
+    } else if (action === "ACCEPT_SUGGESTION") {
+      const accepted = await acceptBenAiSuggestedWorker(taskId);
+      result = accepted;
+      notice = `Ben-AI javaslat elfogadva: ${accepted.worker?.name || accepted.worker?.code || "worker"}.`;
+      await createBenAiConsoleMessage({ summary: notice, detail: "A javasolt worker kapacitása és projektjogosultsága újraellenőrizve, majd a task hozzá került.", taskId, projectId: accepted.task.projectId, kind: "TASK_ASSIGNMENT", metadata: { action, workerCode: accepted.worker?.code || null } });
     } else if (action === "ESTIMATE") {
       const estimated = await updateDevEngineTaskEstimate({ taskId, estimateMinutes: Number(body.estimateMinutes), note: body.note });
       result = estimated;
@@ -68,6 +75,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
         kind: "TASK_UPDATE",
         metadata: { action, bridgeState: advanced.bridgeState, handoffPromptSha256: advanced.handoffPromptSha256 },
       });
+    } else if (action === "RESULT_REPORT") {
+      const recorded = await recordDevEngineTaskManualBridgeResult({ taskId, summary: String(body.summary || ""), commit: body.commit, buildId: body.buildId, tests: body.tests, docs: body.docs, nextStep: body.nextStep });
+      result = recorded;
+      notice = `${recorded.task.title} · strukturált ChatGPT eredmény rögzítve.`;
+      await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingSuggested: recorded.testingSuggested } });
     } else if (action === "TESTING") {
       const testing = await setDevEngineTaskTesting(taskId);
       result = testing;

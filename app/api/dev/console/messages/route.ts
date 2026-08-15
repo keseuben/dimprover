@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
-import { createDevEngineTask, routeDevEngineTask } from "@/app/lib/dev-center/engine-repository";
+import { autoRouteDevEngineTaskByAvailability, createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
 import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { buildBenAiDispatch, estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     const target = String(body.target || "BENAI").toUpperCase();
     if (!instruction) return json({ ok: false, error: "Az utasítás nem lehet üres." }, 400);
     let task: { id?: string } | null = null;
+    let autoRouting: Awaited<ReturnType<typeof autoRouteDevEngineTaskByAvailability>> | null = null;
     if (body.createTask && body.projectId) {
       const requestedWorkerId = Object.prototype.hasOwnProperty.call(workerMap, target) ? workerMap[target] : null;
       const title = instruction.split(/\r?\n/)[0].slice(0, 180);
@@ -61,10 +62,13 @@ export async function POST(request: NextRequest) {
       });
       if (!created.ok) return json({ ok: false, error: created.error || "A fejlesztési feladat nem hozható létre." }, 400);
       task = created.task;
-      if (requestedWorkerId && ["ARMINAI", "JAZMINAI", "OUTMINAI"].includes(target)) {
-        const routed = await routeDevEngineTask({ taskId: String(created.task.id), workerCode: target, estimateMinutes: estimate.minutes, note: "Közvetlen BENJADMIN címzés" });
-        task = routed.task;
-      }
+      autoRouting = await autoRouteDevEngineTaskByAvailability({
+        taskId: String(created.task.id),
+        estimateMinutes: estimate.minutes,
+        preferredWorkerCode: requestedWorkerId ? target : null,
+        note: requestedWorkerId ? "BENJADMIN kézi preferencia · Ben-AI kapacitásellenőrzéssel" : "Ben-AI automatikus kapacitásalapú kiosztás",
+      });
+      task = autoRouting.task;
     }
     const message = await createBenjadminConsoleMessage({
       text: instruction,
@@ -74,7 +78,23 @@ export async function POST(request: NextRequest) {
       projectId: body.projectId || null,
       kind: body.kind === "DECISION" ? "DECISION" : "INSTRUCTION",
     });
-    const dispatch = buildBenAiDispatch({ text: instruction, target, taskId: task?.id || null, projectId: body.projectId || null });
+    const dispatchTarget = autoRouting?.routed && autoRouting.worker?.code ? autoRouting.worker.code : target;
+    const dispatch = buildBenAiDispatch({ text: instruction, target: dispatchTarget, taskId: task?.id || null, projectId: body.projectId || null });
+    if (autoRouting && !autoRouting.routed) {
+      dispatch.stage = "COORDINATOR_ROUTING";
+      dispatch.selectedWorkerId = null;
+      dispatch.selectedWorkerCode = null;
+      dispatch.selectedWorkerName = null;
+      if (autoRouting.reason === "PREFERRED_UNAVAILABLE") {
+        const preferred = autoRouting.preferredWorker?.name || target;
+        const suggestion = autoRouting.suggestedWorker?.name || null;
+        dispatch.summary = `${preferred} jelenleg foglalt vagy ezen a projekten nem választható.`;
+        dispatch.nextStep = suggestion ? `Ben-AI javaslata: ${suggestion} szabad és jogosult. A feladat egyelőre vár, amíg jóvá nem hagyod az alternatívát vagy felszabadul a választott worker.` : "Jelenleg nincs szabad és jogosult alternatív worker; a task Ben-AI várólistán marad.";
+      } else {
+        dispatch.summary = "Ben-AI átvette a taskot, de jelenleg nincs szabad és jogosult worker. A feladat a koordinátori várólistán marad.";
+        dispatch.nextStep = "Ben-AI a következő kapacitásvizsgálatkor automatikusan kiosztja; kézi worker-választás normál esetben nem szükséges.";
+      }
+    }
     const coordinatorMessage = await createBenAiConsoleMessage({
       summary: dispatch.summary,
       detail: dispatch.nextStep,
@@ -89,7 +109,7 @@ export async function POST(request: NextRequest) {
         handoffPrompt: dispatch.handoffPrompt,
       },
     });
-    return json({ ok: true, message, coordinatorMessage, task, dispatch }, 201);
+    return json({ ok: true, message, coordinatorMessage, task, dispatch, autoRouting }, 201);
   } catch (error) {
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 400;
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DevWorktreeValidationError, validateGitWorktreeForPlane } from "./worktree-validation";
-import { assertManualBridgeTransition, buildManualBridgeHandoff, normalizeManualBridgeState, type ManualBridgeState } from "./manual-bridge";
+import { assertManualBridgeTransition, buildManualBridgeHandoff, buildManualBridgeResult, normalizeManualBridgeState, type ManualBridgeState } from "./manual-bridge";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEV_CENTER_ENGINE_BOOTSTRAP_ID, DEV_CENTER_ENGINE_REQUIRED_WORKERS, DEV_CENTER_ENGINE_SCHEMA_VERSION, DEV_CENTER_ENGINE_TABLES } from "./engine-schema";
 import type { DevEngineGateStatus, DevEngineHandshakeStage, DevEngineOperation, DevEngineScope, DevEngineTask, DevEngineTaskStatus, DevEngineWorker, DevEngineWorkerSession } from "./engine-types";
@@ -590,6 +590,273 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
   return { ok: true as const, task: mapTask(data as JsonRecord), worker: mapWorker(worker as JsonRecord) };
 }
 
+export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null }) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (!["queued", "ready"].includes(task.status) || task.assignedWorkerId || task.claimedBySessionId) {
+    throw new DevCenterEngineError("Ben-AI automatikus routing csak várakozó taskon futtatható.", "DEV_CENTER_AUTO_ROUTE_STATE_DENIED", 409, { taskId: task.id, status: task.status });
+  }
+  const preferredWorkerCode = text(input.preferredWorkerCode).toUpperCase();
+  if (preferredWorkerCode && !Object.prototype.hasOwnProperty.call(CONSOLE_ROUTABLE_WORKERS, preferredWorkerCode)) {
+    throw new DevCenterEngineError("A kézi worker preferencia ismeretlen.", "DEV_CENTER_TASK_WORKER_INVALID", 400, { preferredWorkerCode });
+  }
+  const workerResult = await client.from("dev_center_workers").select("id,code,name,status,updated_at").in("code", ["ARMINAI", "JAZMINAI", "OUTMINAI"]);
+  if (workerResult.error) databaseError("A Ben-AI worker pool nem olvasható.", workerResult.error);
+  const sessionResult = await client.from("dev_center_worker_sessions").select("worker_id,task_id,status").neq("status", "closed");
+  if (sessionResult.error) databaseError("A worker session terhelés nem olvasható.", sessionResult.error);
+  const taskResult = await client.from("dev_center_tasks").select("id,status,requested_worker_id,assigned_worker_id").in("status", ["queued", "ready", "claimed", "in_progress", "testing"]);
+  if (taskResult.error) databaseError("A worker task terhelés nem olvasható.", taskResult.error);
+
+  const activeSessionCount = new Map<string, number>();
+  for (const row of sessionResult.data || []) {
+    const workerId = text(row.worker_id);
+    if (workerId) activeSessionCount.set(workerId, (activeSessionCount.get(workerId) || 0) + 1);
+  }
+  const activeSessionTaskIds = new Set((sessionResult.data || []).map((row) => text(row.task_id)).filter(Boolean));
+  const activeTaskCount = new Map<string, number>();
+  const queueCount = new Map<string, number>();
+  for (const row of taskResult.data || []) {
+    if (text(row.id) === task.id) continue;
+    const workerId = text(row.assigned_worker_id) || text(row.requested_worker_id);
+    if (!workerId) continue;
+    const status = text(row.status);
+    if (["claimed", "in_progress", "testing"].includes(status) && activeSessionTaskIds.has(text(row.id))) activeTaskCount.set(workerId, (activeTaskCount.get(workerId) || 0) + 1);
+    if (["queued", "ready"].includes(status)) queueCount.set(workerId, (queueCount.get(workerId) || 0) + 1);
+  }
+
+  const candidates = (workerResult.data || [])
+    .map((row) => ({
+      id: text(row.id), code: text(row.code).toUpperCase(), name: text(row.name), status: text(row.status).toLowerCase(),
+      activeSessions: activeSessionCount.get(text(row.id)) || 0,
+      activeTasks: activeTaskCount.get(text(row.id)) || 0,
+      queuedTasks: queueCount.get(text(row.id)) || 0,
+      updatedAt: text(row.updated_at),
+    }))
+    .filter((worker) => worker.id && worker.code && !["offline", "paused"].includes(worker.status))
+    .sort((a, b) => a.activeSessions - b.activeSessions || a.activeTasks - b.activeTasks || a.queuedTasks - b.queuedTasks || a.code.localeCompare(b.code));
+
+  const rejected: Array<{ workerCode: string; reason: string; code: string | null }> = [];
+  const eligibleFree: typeof candidates = [];
+  for (const worker of candidates.filter((candidate) => candidate.activeSessions === 0 && candidate.activeTasks === 0)) {
+    try {
+      await assertWorkerProjectIsolation(client, { workerId: worker.id, projectId: task.projectId });
+      if (task.repositoryId) await assertRepositoryIsolation(client, { workerId: worker.id, projectId: task.projectId, repositoryId: task.repositoryId, required: "WRITE" });
+      eligibleFree.push(worker);
+    } catch (error) {
+      if (error instanceof PartnerIsolationPolicyError) {
+        rejected.push({ workerCode: worker.code, reason: error.message, code: error.code });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const preferredWorker = preferredWorkerCode ? candidates.find((worker) => worker.code === preferredWorkerCode) || null : null;
+  const preferredRejected = preferredWorkerCode ? rejected.find((item) => item.workerCode === preferredWorkerCode) || null : null;
+  const preferredBusy = Boolean(preferredWorker && (preferredWorker.activeSessions > 0 || preferredWorker.activeTasks > 0));
+  const preferredUnavailable = Boolean(preferredWorkerCode && (!preferredWorker || preferredBusy || preferredRejected));
+  const suggestedWorker = eligibleFree.find((worker) => worker.code !== preferredWorkerCode) || null;
+
+  if (preferredUnavailable) {
+    const now = nowIso();
+    const metadata = {
+      ...task.metadata,
+      coordinator: "BENAI",
+      coordinatorAutoRouted: false,
+      coordinatorManualPreference: preferredWorkerCode,
+      coordinatorPreferenceState: preferredRejected ? "PREFERRED_NOT_AUTHORIZED" : preferredBusy ? "PREFERRED_BUSY" : "PREFERRED_UNAVAILABLE",
+      coordinatorCheckedAt: now,
+      coordinatorSuggestedWorker: suggestedWorker ? { workerId: suggestedWorker.id, workerCode: suggestedWorker.code, workerName: suggestedWorker.name } : null,
+      coordinatorCandidates: candidates.map((worker) => ({ workerCode: worker.code, activeSessions: worker.activeSessions, activeTasks: worker.activeTasks, queuedTasks: worker.queuedTasks })),
+      coordinatorRejected: rejected,
+    };
+    const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
+    if (waiting.error) databaseError("A Ben-AI preferencia-visszajelzés nem menthető.", waiting.error, 409);
+    await addAudit(client, {
+      action: "TASK_BENAI_PREFERRED_WORKER_UNAVAILABLE",
+      entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId,
+      summary: `${task.title} · ${preferredWorkerCode} jelenleg nem választható; ${suggestedWorker?.name || "nincs szabad alternatíva"}.`,
+      metadata: { preferredWorkerCode, preferredBusy, preferredRejected, suggestedWorkerCode: suggestedWorker?.code || null, productionAccess: "DENY" },
+    });
+    return { ok: true as const, routed: false as const, reason: "PREFERRED_UNAVAILABLE" as const, task: mapTask(waiting.data as JsonRecord), worker: null, preferredWorker, suggestedWorker, candidates, rejected };
+  }
+
+  const chosen = preferredWorkerCode ? eligibleFree.find((worker) => worker.code === preferredWorkerCode) || null : eligibleFree[0] || null;
+  if (chosen) {
+    const routed = await routeDevEngineTask({
+      taskId: task.id,
+      workerCode: chosen.code,
+      estimateMinutes: input.estimateMinutes,
+      note: text(input.note).slice(0, 500) || (preferredWorkerCode ? "Ben-AI által ellenőrzött kézi worker preferencia" : "Ben-AI automatikus kapacitásalapú kiosztás"),
+    });
+    const now = nowIso();
+    const currentMetadata = jsonRecord(routed.task.metadata);
+    const metadata = {
+      ...currentMetadata,
+      coordinator: "BENAI",
+      coordinatorAutoRouted: !preferredWorkerCode,
+      coordinatorManualPreference: preferredWorkerCode || null,
+      coordinatorPreferenceState: preferredWorkerCode ? "PREFERRED_ACCEPTED" : null,
+      coordinatorQueueState: null,
+      coordinatorSuggestedWorker: null,
+      coordinatorRejected: [],
+      coordinatorRoutedAt: now,
+      coordinatorSelection: { workerCode: chosen.code, activeSessions: chosen.activeSessions, activeTasks: chosen.activeTasks, queuedTasks: chosen.queuedTasks },
+    };
+    const updated = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
+    if (updated.error) databaseError("A Ben-AI routing metadata nem menthető.", updated.error, 409);
+    await addAudit(client, {
+      action: preferredWorkerCode ? "TASK_BENAI_PREFERRED_WORKER_ROUTED" : "TASK_BENAI_AUTO_ROUTED",
+      entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId,
+      summary: `${task.title} → ${routed.worker.name} · ${preferredWorkerCode ? "kézi preferencia Ben-AI ellenőrzéssel" : "Ben-AI automatikus kiosztás"}.`,
+      metadata: { workerId: routed.worker.id, workerCode: routed.worker.code, preferredWorkerCode: preferredWorkerCode || null, productionAccess: "DENY", selection: metadata.coordinatorSelection },
+    });
+    return { ok: true as const, routed: true as const, reason: preferredWorkerCode ? "PREFERRED_ACCEPTED" as const : "AUTO_ROUTED" as const, task: mapTask(updated.data as JsonRecord), worker: routed.worker, preferredWorker, suggestedWorker: null, candidates, rejected };
+  }
+
+  const now = nowIso();
+  const metadata = {
+    ...task.metadata,
+    coordinator: "BENAI",
+    coordinatorAutoRouted: false,
+    coordinatorQueueState: "WAITING_FOR_FREE_WORKER",
+    coordinatorCheckedAt: now,
+    coordinatorCandidates: candidates.map((worker) => ({ workerCode: worker.code, activeSessions: worker.activeSessions, activeTasks: worker.activeTasks, queuedTasks: worker.queuedTasks })),
+    coordinatorRejected: rejected,
+  };
+  const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
+  if (waiting.error) databaseError("A Ben-AI várakozási állapot nem menthető.", waiting.error, 409);
+  await addAudit(client, { action: "TASK_BENAI_WAITING_FOR_WORKER", entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId, summary: `${task.title} · nincs szabad, jogosult worker; Ben-AI várólistán.`, metadata: { productionAccess: "DENY", rejected } });
+  return { ok: true as const, routed: false as const, reason: "NO_FREE_WORKER" as const, task: mapTask(waiting.data as JsonRecord), worker: null, preferredWorker, suggestedWorker: null, candidates, rejected };
+}
+
+export async function rebalanceBenAiWaitingTasks(limit = 12) {
+  const client = await requireClient();
+  const result = await client.from("dev_center_tasks")
+    .select("id,status,assigned_worker_id,claimed_by_session_id,metadata,priority,updated_at")
+    .in("status", ["queued", "ready"])
+    .is("assigned_worker_id", null)
+    .is("claimed_by_session_id", null)
+    .order("priority", { ascending: false })
+    .order("updated_at", { ascending: true })
+    .limit(Math.max(1, Math.min(40, Math.floor(limit))));
+  if (result.error) databaseError("A Ben-AI várólista nem olvasható.", result.error);
+  const outcomes: Array<{ taskId: string; routed: boolean; workerCode: string | null; reason: string }> = [];
+  for (const row of result.data || []) {
+    const metadata = jsonRecord(row.metadata);
+    const queueState = text(metadata.coordinatorQueueState);
+    const preferenceState = text(metadata.coordinatorPreferenceState);
+    if (queueState !== "WAITING_FOR_FREE_WORKER" && !["PREFERRED_BUSY", "PREFERRED_NOT_AUTHORIZED", "PREFERRED_UNAVAILABLE"].includes(preferenceState)) continue;
+    try {
+      const routed = await autoRouteDevEngineTaskByAvailability({
+        taskId: text(row.id),
+        estimateMinutes: clampEstimateMinutes(metadata.estimateMinutes),
+        preferredWorkerCode: text(metadata.coordinatorManualPreference) || null,
+        note: "Ben-AI várólista automatikus újraértékelés",
+      });
+      outcomes.push({ taskId: text(row.id), routed: routed.routed, workerCode: routed.worker?.code || null, reason: routed.reason });
+    } catch (error) {
+      outcomes.push({ taskId: text(row.id), routed: false, workerCode: null, reason: error instanceof DevCenterEngineError ? error.code : "REBALANCE_ERROR" });
+    }
+  }
+  return { ok: true as const, outcomes, routedCount: outcomes.filter((item) => item.routed).length };
+}
+
+export async function acceptBenAiSuggestedWorker(taskId: string) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, taskId);
+  const metadata = jsonRecord(task.metadata);
+  const suggested = jsonRecord(metadata.coordinatorSuggestedWorker);
+  const workerCode = text(suggested.workerCode).toUpperCase();
+  if (!workerCode) throw new DevCenterEngineError("Ehhez a taskhoz nincs aktív Ben-AI worker javaslat.", "DEV_CENTER_BENAI_SUGGESTION_MISSING", 409, { taskId });
+  const routed = await autoRouteDevEngineTaskByAvailability({
+    taskId,
+    estimateMinutes: clampEstimateMinutes(metadata.estimateMinutes),
+    preferredWorkerCode: workerCode,
+    note: "BENJADMIN elfogadta Ben-AI alternatív worker javaslatát",
+  });
+  if (!routed.routed) {
+    throw new DevCenterEngineError("A korábban javasolt worker időközben már nem szabad. Ben-AI friss javaslatot készített.", "DEV_CENTER_BENAI_SUGGESTION_STALE", 409, { taskId, workerCode, suggestedWorker: routed.suggestedWorker || null });
+  }
+  return routed;
+}
+
+export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
+  await rebalanceBenAiWaitingTasks(12);
+  const client = await requireClient();
+  const workerCode = text(workerCodeValue).toUpperCase();
+  const workerId = CONSOLE_ROUTABLE_WORKERS[workerCode];
+  if (!workerId) throw new DevCenterEngineError("Ismeretlen Plus worker identitás.", "DEV_CENTER_PLUS_WORKER_INVALID", 400, { workerCode });
+  const workers = await client.from("dev_center_workers").select("id,code,name,status").eq("id", workerId).maybeSingle();
+  if (workers.error) databaseError("A Plus worker nem olvasható.", workers.error);
+  if (!workers.data || ["offline", "paused"].includes(text(workers.data.status).toLowerCase())) {
+    throw new DevCenterEngineError("A Plus worker jelenleg nem fogadhat feladatot.", "DEV_CENTER_PLUS_WORKER_NOT_AVAILABLE", 409, { workerCode });
+  }
+  const tasksResult = await client.from("dev_center_tasks")
+    .select("*")
+    .or(`requested_worker_id.eq.${workerId},assigned_worker_id.eq.${workerId}`)
+    .in("status", ["queued", "ready", "claimed", "in_progress", "testing"])
+    .order("priority", { ascending: false })
+    .order("updated_at", { ascending: true })
+    .limit(30);
+  if (tasksResult.error) databaseError("A Plus worker inbox nem olvasható.", tasksResult.error);
+  const rows = (tasksResult.data || []).map((row) => mapTask(row as JsonRecord));
+  const active = rows.find((task) => ["claimed", "in_progress"].includes(task.status) && ["WAITING_HANDOFF", "HANDED_OFF", "RUNNING"].includes(normalizeManualBridgeState(jsonRecord(task.metadata).bridgeState) || ""));
+  const queued = rows.find((task) => ["queued", "ready"].includes(task.status));
+  let task = active || queued || null;
+  if (!task) return { ok: true as const, found: false as const, worker: mapWorker(workers.data as JsonRecord), task: null, session: null, handoff: null };
+
+  let session: DevEngineWorkerSession | null = null;
+  if (["queued", "ready"].includes(task.status)) {
+    const started = await startDevEngineTaskManualBridge(task.id);
+    task = started.task;
+    session = started.session;
+  } else {
+    const sessionId = text(jsonRecord(task.metadata).activeSessionId);
+    if (sessionId) {
+      const sessionRow = await client.from("dev_center_worker_sessions").select("*").eq("id", sessionId).maybeSingle();
+      if (sessionRow.error) databaseError("A Plus worker session nem olvasható.", sessionRow.error);
+      if (sessionRow.data) session = mapSession(sessionRow.data as JsonRecord);
+    }
+  }
+
+  let bridgeState = normalizeManualBridgeState(jsonRecord(task.metadata).bridgeState) || "WAITING_HANDOFF";
+  if (bridgeState === "WAITING_HANDOFF") {
+    const handed = await advanceDevEngineTaskManualBridge({ taskId: task.id, target: "HANDED_OFF" });
+    task = handed.task;
+    bridgeState = "HANDED_OFF";
+  }
+  if (bridgeState === "HANDED_OFF") {
+    const running = await advanceDevEngineTaskManualBridge({ taskId: task.id, target: "RUNNING" });
+    task = running.task;
+    bridgeState = "RUNNING";
+  }
+  const metadata = jsonRecord(task.metadata);
+  const now = nowIso();
+  await addAudit(client, {
+    action: "TASK_PLUS_BRIDGE_PULLED",
+    entityType: "task", entityId: task.id, sessionId: text(metadata.activeSessionId) || null, taskId: task.id, projectId: task.projectId,
+    summary: `${task.title} · ${text(workers.data.name) || workerCode} Plus bridge felvette.`,
+    metadata: { workerCode, bridgeState, handoffPromptSha256: text(metadata.handoffPromptSha256) || null, productionAccess: "DENY", pulledAt: now },
+  });
+  return {
+    ok: true as const,
+    found: true as const,
+    worker: mapWorker(workers.data as JsonRecord),
+    task,
+    session,
+    handoff: {
+      prompt: text(metadata.handoffPrompt),
+      sha256: text(metadata.handoffPromptSha256) || null,
+      sanitized: metadata.handoffSanitized === true,
+      sensitiveFindings: Array.isArray(metadata.handoffSensitiveFindings) ? metadata.handoffSensitiveFindings : [],
+      bridgeState,
+      expectedFinishAt: text(metadata.expectedFinishAt) || null,
+      estimateMinutes: clampEstimateMinutes(metadata.estimateMinutes),
+    },
+  };
+}
+
 export async function updateDevEngineTaskEstimate(input: { taskId: string; estimateMinutes: number; note?: string | null }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
@@ -702,6 +969,86 @@ export async function advanceDevEngineTaskManualBridge(input: { taskId: string; 
   return { ok: true as const, task: mapTask(data as JsonRecord), bridgeState: input.target, handoffPrompt: text(nextMetadata.handoffPrompt), handoffPromptSha256: text(nextMetadata.handoffPromptSha256) || null };
 }
 
+export async function recordDevEngineTaskManualBridgeResult(input: {
+  taskId: string;
+  summary: string;
+  commit?: string | null;
+  buildId?: string | null;
+  tests?: string | null;
+  docs?: string | null;
+  nextStep?: string | null;
+}) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (!["claimed", "in_progress", "testing"].includes(task.status)) {
+    throw new DevCenterEngineError("Strukturált ChatGPT eredmény csak elindított taskhoz rögzíthető.", "DEV_CENTER_BRIDGE_RESULT_TASK_NOT_STARTED", 409, { taskId: task.id, status: task.status });
+  }
+  const metadata = jsonRecord(task.metadata);
+  const currentBridgeState = normalizeManualBridgeState(metadata.bridgeState);
+  if (!currentBridgeState || !["RUNNING", "RESULT_PENDING"].includes(currentBridgeState)) {
+    throw new DevCenterEngineError("Eredmény csak RUNNING vagy RESULT_PENDING bridge állapotban rögzíthető.", "DEV_CENTER_BRIDGE_RESULT_STATE_DENIED", 409, { taskId: task.id, bridgeState: currentBridgeState || "WAITING_HANDOFF" });
+  }
+  const sessionId = text(metadata.activeSessionId);
+  if (!sessionId) throw new DevCenterEngineError("Az eredmény rögzítéséhez aktív session szükséges.", "DEV_CENTER_BRIDGE_SESSION_REQUIRED", 409, { taskId: task.id });
+  const session = await client.from("dev_center_worker_sessions").select("id,status,task_id,worker_id").eq("id", sessionId).maybeSingle();
+  if (session.error) databaseError("A ChatGPT bridge session nem olvasható.", session.error);
+  if (!session.data || session.data.status === "closed" || session.data.task_id !== task.id) {
+    throw new DevCenterEngineError("Az eredményhez tartozó ChatGPT bridge session nem aktív.", "DEV_CENTER_BRIDGE_SESSION_INVALID", 409, { taskId: task.id, sessionId });
+  }
+  const summary = text(input.summary);
+  if (!summary) throw new DevCenterEngineError("Az eredmény rövid összefoglalója kötelező.", "DEV_CENTER_BRIDGE_RESULT_SUMMARY_REQUIRED", 400);
+  const commit = text(input.commit);
+  const buildId = text(input.buildId);
+  if (commit && !/^[0-9a-f]{7,64}$/i.test(commit)) throw new DevCenterEngineError("A commit azonosító csak 7–64 hexadecimális karakter lehet.", "DEV_CENTER_BRIDGE_RESULT_COMMIT_INVALID", 400);
+  if (buildId && !/^[A-Za-z0-9._-]{4,160}$/.test(buildId)) throw new DevCenterEngineError("A build ID formátuma nem engedélyezett.", "DEV_CENTER_BRIDGE_RESULT_BUILD_INVALID", 400);
+  const safe = buildManualBridgeResult({ summary, commit: commit || null, buildId: buildId || null, tests: input.tests, docs: input.docs, nextStep: input.nextStep });
+  const now = nowIso();
+  const previousHistory = Array.isArray(metadata.bridgeResultHistory) ? metadata.bridgeResultHistory.filter((item) => item && typeof item === "object" && !Array.isArray(item)).slice(-19) : [];
+  const version = previousHistory.length + 1;
+  const result = {
+    version,
+    recordedAt: now,
+    source: "MANUAL_CHATGPT_BRIDGE",
+    summary: safe.summary,
+    commit: safe.commit,
+    buildId: safe.buildId,
+    tests: safe.tests,
+    docs: safe.docs,
+    nextStep: safe.nextStep,
+    sha256: safe.sha256,
+    sanitized: safe.sanitized,
+    sensitiveFindings: safe.sensitiveFindings,
+  };
+  const nextMetadata = {
+    ...metadata,
+    bridgeState: "RESULT_PENDING",
+    bridgeUpdatedAt: now,
+    resultPendingAt: currentBridgeState === "RUNNING" ? now : text(metadata.resultPendingAt) || now,
+    workflowState: task.status === "testing" ? "TESTING" : "RESULT_PENDING",
+    bridgeResult: result,
+    bridgeResultHistory: [...previousHistory, result],
+    bridgeResultRecordedAt: now,
+    bridgeResultSha256: safe.sha256,
+    bridgeResultSanitized: safe.sanitized,
+    bridgeResultSensitiveFindings: safe.sensitiveFindings,
+    testingSuggested: task.status !== "testing",
+    testingSuggestedAt: task.status !== "testing" ? now : text(metadata.testingSuggestedAt) || null,
+  };
+  const { data, error } = await client.from("dev_center_tasks").update({ metadata: nextMetadata, updated_at: now }).eq("id", task.id).select("*").single();
+  if (error) databaseError("A strukturált ChatGPT eredmény mentése sikertelen.", error, 409);
+  await addAudit(client, {
+    action: "TASK_BRIDGE_RESULT_RECORDED",
+    entityType: "task",
+    entityId: task.id,
+    sessionId,
+    taskId: task.id,
+    projectId: task.projectId,
+    summary: `${task.title} · strukturált ChatGPT eredmény rögzítve.`,
+    metadata: { version, commit: safe.commit, buildId: safe.buildId, resultSha256: safe.sha256, sanitized: safe.sanitized, productionAccess: "DENY" },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), result, bridgeState: "RESULT_PENDING" as const, testingSuggested: task.status !== "testing" };
+}
+
 export async function setDevEngineTaskTesting(taskId: string) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, taskId);
@@ -754,5 +1101,7 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
     summary: input.outcome === "completed" ? `${task.title} elkészült.` : `${task.title} hibával / blokkolással leállt.`,
     metadata: { note: note || null, notificationRequested: true },
   });
-  return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false };
+  let rebalance: Awaited<ReturnType<typeof rebalanceBenAiWaitingTasks>> | null = null;
+  try { rebalance = await rebalanceBenAiWaitingTasks(12); } catch { /* a task lezárását a koordinátori újraosztás hibája nem törheti meg */ }
+  return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false, rebalance };
 }

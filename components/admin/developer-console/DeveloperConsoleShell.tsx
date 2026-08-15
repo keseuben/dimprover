@@ -274,7 +274,7 @@ export default function DeveloperConsoleShell() {
     } finally { setSending(false); }
   }
 
-  async function runTaskAction(taskId: string, action: "ROUTE" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "TESTING" | "COMPLETE" | "FAIL", payload: { workerCode?: string; estimateMinutes?: number; note?: string } = {}) {
+  async function runTaskAction(taskId: string, action: "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL", payload: { workerCode?: string; estimateMinutes?: number; note?: string; summary?: string; commit?: string; buildId?: string; tests?: string; docs?: string; nextStep?: string } = {}) {
     setBusyTaskId(taskId);
     setNotice("");
     setError("");

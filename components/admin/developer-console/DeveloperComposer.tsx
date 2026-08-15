@@ -7,12 +7,13 @@ import type { ConsoleTarget, LiveProject } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 const targets: Array<{ value: ConsoleTarget; label: string }> = [
-  { value: "BENAI", label: "@Ben-AI" },
-  { value: "ARMINAI", label: "@Ármin-AI" },
-  { value: "JAZMINAI", label: "@Jázmin-AI" },
-  { value: "OUTMINAI", label: "@Outmin-AI" },
-  { value: "EVERYONE", label: "@Mindenki" },
+  { value: "BENAI", label: "Ben-AI · AUTO" },
+  { value: "ARMINAI", label: "Ármin" },
+  { value: "JAZMINAI", label: "Jázmin" },
+  { value: "OUTMINAI", label: "Outmin" },
 ];
+
+
 
 export default function DeveloperComposer({ projects, selectedProjectId, onProjectChange, onSend, busy }: {
   projects: LiveProject[];
@@ -41,8 +42,8 @@ export default function DeveloperComposer({ projects, selectedProjectId, onProje
       </div>
       <div className={styles.composerEntryCard}>
       <div className={styles.composerOptions}>
-        <div className={styles.targetButtons}>
-          {targets.map((item) => <button type="button" key={item.value} className={target === item.value ? styles.activeTarget : ""} onClick={() => setTarget(item.value)}>{item.label}</button>)}
+        <div className={styles.targetButtons} aria-label="Ben-AI fejlesztési koordináció és opcionális worker preferencia">
+          {targets.map((item) => <button type="button" key={item.value} className={target === item.value ? styles.activeTarget : ""} onClick={() => setTarget(item.value)} title={item.value === "BENAI" ? "Ben-AI automatikusan a szabad és jogosult kódolónak osztja ki." : `${item.label} preferálása; Ben-AI előbb ellenőrzi, hogy szabad-e.`}>{item.label}</button>)}
         </div>
         <div className={styles.composerControls}>
           <label><CheckSquare2 size={14} /><input type="checkbox" checked={createTask} onChange={(event) => setCreateTask(event.target.checked)} /> Fejlesztési feladat létrehozása</label>
