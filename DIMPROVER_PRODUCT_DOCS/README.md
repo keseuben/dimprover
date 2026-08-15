@@ -155,3 +155,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `235_benjadmin_terminalhub_p10_prod_readiness_dev_activation_20260815.md` – P10 PROD readiness foundation DEV aktiválás: READ_ONLY + AI BLOCKED/default deny policy aktív kódban, live connector/execution flagek OFF; PROD érintetlen.
 
 - `236_benjadmin_terminalhub_p101_prod_readonly_connector_candidate_20260815.md` – P10.1 PROD read-only connector foundation: reference-only, no-network/no-shell, AUDIT_ONLY probe allowlist; 338/338 PASS, PROD kapcsolat nélkül.
+
+- `237_benjadmin_terminalhub_p101_prod_readonly_connector_dev_activation_20260815.md` – P10.1 read-only PROD connector foundation DEV aktiválás: reference-only/no-network, 42/42 security contract, live execution flagek OFF; PROD érintetlen.
