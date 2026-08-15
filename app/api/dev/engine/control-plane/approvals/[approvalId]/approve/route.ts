@@ -1,0 +1,7 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
+import { approveDevDestructiveApproval, ControlPlaneApprovalError } from "@/app/lib/dev-center/control-plane-approvals";
+import { engineUnauthorized } from "../../../../_shared";
+export const dynamic="force-dynamic"; export const runtime="nodejs";
+function errorResponse(error:unknown){if(error instanceof ControlPlaneApprovalError)return NextResponse.json({ok:false,code:error.code,error:error.message},{status:error.status,headers:{"cache-control":"no-store"}});return NextResponse.json({ok:false,code:"CONTROL_APPROVAL_INTERNAL_ERROR",error:error instanceof Error?error.message:"Approval hiba."},{status:500,headers:{"cache-control":"no-store"}});}
+export async function POST(request:NextRequest,{params}:{params:Promise<{approvalId:string}>}){const subject=await getDevCenterMutationSubject(request.headers,false);if(!subject)return engineUnauthorized();try{const {approvalId}=await params;const body=await request.json().catch(()=>({})) as Record<string,unknown>;const result=await approveDevDestructiveApproval({approvalId,operation:String(body.operation||""),commandName:String(body.commandName||""),sessionId:String(body.sessionId||""),confirmation:String(body.confirmation||""),approvedBy:subject.kind==="worker"?subject.workerId:"BENJADMIN"});return NextResponse.json({ok:true,...result},{headers:{"cache-control":"no-store"}});}catch(error){return errorResponse(error);}}

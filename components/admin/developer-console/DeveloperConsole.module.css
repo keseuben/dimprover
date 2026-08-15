@@ -1267,3 +1267,16 @@
 .secretVaultPanel > footer { padding: 6px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; line-height: 1.45; }
 @media (max-width: 980px) { .terminalPrivateInput { grid-template-columns: 1fr; } .secretVaultPolicy { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 620px) { .secretVaultPolicy { grid-template-columns: 1fr; } }
+
+/* BENJADMIN Terminal Hub P9 · destructive Managed Command approval */
+.terminalManagedControls button[data-destructive="true"] { border-color: color-mix(in srgb, var(--red) 42%, var(--border)); color: var(--red); background: var(--red-soft); }
+.terminalDestructiveApproval { margin: 0 7px 7px; padding: 8px; border: 1px solid color-mix(in srgb, var(--red) 48%, var(--border)); border-radius: 8px; display: grid; gap: 7px; background: color-mix(in srgb, var(--red-soft) 58%, var(--panel)); }
+.terminalDestructiveApproval > div { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.terminalDestructiveApproval > div:first-child { color: var(--red); }
+.terminalDestructiveApproval > div:first-child span { min-width: 0; display: grid; gap: 2px; }
+.terminalDestructiveApproval strong, .terminalDestructiveApproval small, .terminalDestructiveApproval span, .terminalDestructiveApproval button { font-size: 12px; }
+.terminalDestructiveApproval small { color: var(--text-soft); }
+.terminalDestructiveApproval > div:last-child { justify-content: flex-end; color: var(--amber); }
+.terminalDestructiveApproval button { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font-weight: 850; cursor: pointer; }
+.terminalDestructiveApproval button:first-of-type { border-color: color-mix(in srgb, var(--red) 48%, var(--border)); color: var(--red); background: var(--red-soft); }
+.terminalDestructiveApproval button:disabled { opacity: .45; cursor: not-allowed; }

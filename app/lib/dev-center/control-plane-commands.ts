@@ -91,6 +91,12 @@ const DEV_ENGINE_OPERATIONS: DevEngineOperation[] = [
   "restart",
   "deploy",
 ];
+const DEV_DESTRUCTIVE_OPERATIONS: ControlOperation[] = ["migration", "restart", "deploy"];
+const DEV_APPROVAL_TYPE: Partial<Record<ControlOperation, string>> = {
+  migration: "dev_migration",
+  restart: "dev_restart",
+  deploy: "dev_deploy",
+};
 
 const COMMAND_OPERATION: Record<ControlCommandName, ControlOperation[]> = {
   refresh_state: ["read"],
@@ -186,6 +192,14 @@ export function parseControlCommandRequest(value: unknown): ControlCommandReques
     );
   }
 
+  if (targetEnvironment === "DEV" && DEV_DESTRUCTIVE_OPERATIONS.includes(operation) && !approvalId) {
+    throw new ControlPlaneCommandError(
+      "DEV destruktív művelet csak explicit, rövid életű approval azonosítóval queue-zható.",
+      "CONTROL_DEV_APPROVAL_REQUIRED",
+      409,
+    );
+  }
+
   if (
     targetEnvironment === "DEV"
     && DEV_ENGINE_OPERATIONS.includes(operation as DevEngineOperation)
@@ -210,14 +224,14 @@ export function parseControlCommandRequest(value: unknown): ControlCommandReques
   };
 }
 
-async function assertApprovedProductionOperation(input: ControlCommandRequest) {
-  if (input.targetEnvironment !== "PRODUCTION" || !MUTATING_OPERATIONS.includes(input.operation)) {
-    return null;
-  }
+async function assertApprovedControlOperation(input: ControlCommandRequest) {
+  const productionApproval = input.targetEnvironment === "PRODUCTION" && MUTATING_OPERATIONS.includes(input.operation);
+  const devDestructiveApproval = input.targetEnvironment === "DEV" && DEV_DESTRUCTIVE_OPERATIONS.includes(input.operation);
+  if (!productionApproval && !devDestructiveApproval) return null;
   if (!input.approvalId) {
     throw new ControlPlaneCommandError(
-      "Hiányzó PROD approval.",
-      "CONTROL_PROD_APPROVAL_REQUIRED",
+      devDestructiveApproval ? "Hiányzó DEV destruktív approval." : "Hiányzó PROD approval.",
+      devDestructiveApproval ? "CONTROL_DEV_APPROVAL_REQUIRED" : "CONTROL_PROD_APPROVAL_REQUIRED",
       409,
     );
   }
@@ -225,49 +239,56 @@ async function assertApprovedProductionOperation(input: ControlCommandRequest) {
   const client = getClient();
   const result = await client
     .from("dev_center_approvals")
-    .select("id,status,target_environment,operation,expires_at")
+    .select("id,approval_type,target_environment,operation,status,requested_by,approved_by,approved_at,expires_at,metadata")
     .eq("id", input.approvalId)
     .maybeSingle();
 
   if (result.error?.code === "PGRST205") {
-    throw new ControlPlaneCommandError(
-      "A B3.1 approval séma még nincs alkalmazva.",
-      "CONTROL_SCHEMA_NOT_READY",
-      409,
-    );
+    throw new ControlPlaneCommandError("A B3.1/P9 approval séma még nincs alkalmazva.", "CONTROL_SCHEMA_NOT_READY", 409);
   }
-  if (result.error) {
-    throw new ControlPlaneCommandError(
-      result.error.message,
-      "CONTROL_APPROVAL_READ_FAILED",
-      500,
-    );
-  }
+  if (result.error) throw new ControlPlaneCommandError(result.error.message, "CONTROL_APPROVAL_READ_FAILED", 500);
 
   const row = result.data as Record<string, unknown> | null;
+  const prefix = devDestructiveApproval ? "CONTROL_DEV_APPROVAL" : "CONTROL_PROD_APPROVAL";
   if (!row || text(row.status) !== "approved") {
-    throw new ControlPlaneCommandError(
-      "A PROD approval nem jóváhagyott vagy nem található.",
-      "CONTROL_PROD_APPROVAL_NOT_APPROVED",
-      403,
-    );
+    throw new ControlPlaneCommandError("Az approval nem jóváhagyott vagy nem található.", `${prefix}_NOT_APPROVED`, 403);
   }
-  if (text(row.target_environment) !== "PRODUCTION" || text(row.operation) !== input.operation) {
-    throw new ControlPlaneCommandError(
-      "A PROD approval nem ehhez a célhoz/művelethez tartozik.",
-      "CONTROL_PROD_APPROVAL_SCOPE_MISMATCH",
-      403,
-    );
+  if (text(row.target_environment) !== input.targetEnvironment || text(row.operation) !== input.operation) {
+    throw new ControlPlaneCommandError("Az approval nem ehhez a célhoz/művelethez tartozik.", `${prefix}_SCOPE_MISMATCH`, 403);
   }
   const expiresAt = text(row.expires_at);
   if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
-    throw new ControlPlaneCommandError(
-      "A PROD approval lejárt.",
-      "CONTROL_PROD_APPROVAL_EXPIRED",
-      403,
-    );
+    throw new ControlPlaneCommandError("Az approval lejárt.", `${prefix}_EXPIRED`, 403);
+  }
+
+  if (devDestructiveApproval) {
+    if (text(row.approval_type) !== DEV_APPROVAL_TYPE[input.operation]) {
+      throw new ControlPlaneCommandError("A DEV approval típusa nem egyezik a művelettel.", "CONTROL_DEV_APPROVAL_TYPE_MISMATCH", 403);
+    }
+    const metadata = record(row.metadata);
+    if (text(metadata.commandName) !== input.commandName || text(metadata.sessionId) !== (input.sessionId || "") || metadata.singleUse !== true) {
+      throw new ControlPlaneCommandError("A DEV approval command/session scope eltér.", "CONTROL_DEV_APPROVAL_SCOPE_MISMATCH", 403);
+    }
   }
   return row;
+}
+
+function approvalRpcError(error: { code?: string; message?: string }) {
+  if (error.code === "PGRST202") return new ControlPlaneCommandError("A P9 atomikus approval queue function még nincs alkalmazva.", "CONTROL_SCHEMA_NOT_READY", 409);
+  const message = String(error.message || "");
+  const map: Record<string, string> = {
+    APPROVAL_REQUIRED: "CONTROL_APPROVAL_REQUIRED",
+    APPROVAL_NOT_FOUND: "CONTROL_APPROVAL_NOT_FOUND",
+    APPROVAL_NOT_APPROVED: "CONTROL_APPROVAL_NOT_APPROVED",
+    APPROVAL_EXPIRED: "CONTROL_APPROVAL_EXPIRED",
+    APPROVAL_SCOPE_MISMATCH: "CONTROL_APPROVAL_SCOPE_MISMATCH",
+    APPROVAL_COMMAND_MISMATCH: "CONTROL_APPROVAL_COMMAND_MISMATCH",
+    APPROVAL_SESSION_MISMATCH: "CONTROL_APPROVAL_SESSION_MISMATCH",
+    APPROVAL_CONSUME_FAILED: "CONTROL_APPROVAL_CONSUME_FAILED",
+  };
+  const matched = Object.keys(map).find((key) => message.includes(key));
+  if (error.code === "23505") return new ControlPlaneCommandError("Az approval már fel lett használva.", "CONTROL_APPROVAL_ALREADY_USED", 409);
+  return new ControlPlaneCommandError(message || "Az approval-alapú queue művelet sikertelen.", matched ? map[matched] : "CONTROL_APPROVED_COMMAND_QUEUE_FAILED", 409);
 }
 
 async function assertDevOperation(input: ControlCommandRequest) {
@@ -290,56 +311,52 @@ async function assertDevOperation(input: ControlCommandRequest) {
 export async function queueControlCommand(value: unknown) {
   const input = parseControlCommandRequest(value);
   const [approval, devAuthorization] = await Promise.all([
-    assertApprovedProductionOperation(input),
+    assertApprovedControlOperation(input),
     assertDevOperation(input),
   ]);
 
   const client = getClient();
-  const insert = await client
-    .from("dev_center_command_queue")
-    .insert({
-      start_context_id: input.startContextId || null,
-      approval_id: input.approvalId || null,
-      target_environment: input.targetEnvironment,
-      operation: input.operation,
-      command_name: input.commandName,
-      requested_by: input.requestedBy,
-      status: "queued",
-      requires_approval:
-        input.targetEnvironment === "PRODUCTION"
-        && MUTATING_OPERATIONS.includes(input.operation),
-      payload: {
-        ...input.payload,
-        sessionId: input.sessionId || null,
-        validatedAt: new Date().toISOString(),
-        devAuthorization: devAuthorization ? {
-          environment: devAuthorization.environment.code,
-          activeLockCount: devAuthorization.activeLockCount,
-          activeWorktreeLeaseCount: devAuthorization.activeWorktreeLeaseCount,
-        } : null,
-      },
-    })
-    .select("*")
-    .single();
-
-  if (insert.error?.code === "PGRST205") {
-    throw new ControlPlaneCommandError(
-      "A B3.1 command queue séma még nincs alkalmazva.",
-      "CONTROL_SCHEMA_NOT_READY",
-      409,
-   );
-  }
-  if (insert.error) {
-    throw new ControlPlaneCommandError(
-      insert.error.message,
-      "CONTROL_COMMAND_QUEUE_FAILED",
-      500,
-    );
-  }
-
-  return {
-    ok: true as const,
-    command: insert.data,
-    approval: approval ? { id: approval.id, status: approval.status } : null,
+  const payload = {
+    ...input.payload,
+    sessionId: input.sessionId || null,
+    validatedAt: new Date().toISOString(),
+    devAuthorization: devAuthorization ? {
+      environment: devAuthorization.environment.code,
+      activeLockCount: devAuthorization.activeLockCount,
+      activeWorktreeLeaseCount: devAuthorization.activeWorktreeLeaseCount,
+    } : null,
   };
+  const approvalRequired = Boolean(approval);
+
+  if (approvalRequired) {
+    const rpc = await client.rpc("dev_center_queue_approved_command", {
+      p_approval_id: input.approvalId,
+      p_target_environment: input.targetEnvironment,
+      p_operation: input.operation,
+      p_command_name: input.commandName,
+      p_requested_by: input.requestedBy,
+      p_start_context_id: input.startContextId || null,
+      p_payload: payload,
+    });
+    if (rpc.error) throw approvalRpcError(rpc.error);
+    const command = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+    if (!command) throw new ControlPlaneCommandError("Az atomikus command queue nem adott vissza rekordot.", "CONTROL_APPROVED_COMMAND_QUEUE_EMPTY", 500);
+    return { ok: true as const, command, approval: { id: input.approvalId, status: "consumed" as const } };
+  }
+
+  const insert = await client.from("dev_center_command_queue").insert({
+    start_context_id: input.startContextId || null,
+    approval_id: null,
+    target_environment: input.targetEnvironment,
+    operation: input.operation,
+    command_name: input.commandName,
+    requested_by: input.requestedBy,
+    status: "queued",
+    requires_approval: false,
+    payload,
+  }).select("*").single();
+  if (insert.error?.code === "PGRST205") throw new ControlPlaneCommandError("A B3.1 command queue séma még nincs alkalmazva.", "CONTROL_SCHEMA_NOT_READY", 409);
+  if (insert.error) throw new ControlPlaneCommandError(insert.error.message, "CONTROL_COMMAND_QUEUE_FAILED", 500);
+  return { ok: true as const, command: insert.data, approval: null };
+
 }
