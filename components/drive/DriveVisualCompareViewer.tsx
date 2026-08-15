@@ -7,18 +7,22 @@ import {
   Columns2,
   Contrast,
   Check,
+  ClipboardList,
   Crosshair,
+  Download,
   Eye,
   EyeOff,
   Layers3,
   Loader2,
   Maximize2,
   Move,
+  Plus,
   RefreshCcw,
   RotateCcw,
   RotateCw,
   Scan,
   Sparkles,
+  Trash2,
   X,
   ZoomIn,
   ZoomOut,
@@ -77,6 +81,34 @@ type AutoCandidateVisualQuality = {
   zones: VisualDifferenceZone[];
 };
 
+type CompareFindingStatus = "REVIEW" | "ACCEPTED_DIFFERENCE" | "FIX_REQUIRED";
+
+type CompareFinding = {
+  id: string;
+  contextKey: string;
+  zoneLabel: string;
+  sourceZoneIndex: number;
+  status: CompareFindingStatus;
+  note: string;
+  score: number;
+  mismatchPixels: number;
+  inkPixels: number;
+  pageNumber: number;
+  createdAt: string;
+  updatedAt: string;
+  zone: { x: number; y: number; width: number; height: number };
+  left: { documentId: string; documentName: string; versionId: string; versionNumber: number | null; revisionCode: string };
+  right: { documentId: string; documentName: string; versionId: string; versionNumber: number | null; revisionCode: string };
+  alignment: {
+    offsetX: number;
+    offsetY: number;
+    scalePercent: number;
+    rotationDegrees: number;
+    source: DriveAutoAlignmentSource;
+    confidenceScore: number;
+  };
+};
+
 type AutoPairReplacement = {
   pairIndex: number;
   side: PointSide;
@@ -98,6 +130,29 @@ type Props = {
 };
 
 const rasterExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
+
+const compareFindingStatusLabels: Record<CompareFindingStatus, string> = {
+  REVIEW: "ELLENŐRIZENDŐ",
+  ACCEPTED_DIFFERENCE: "ELFOGADOTT ELTÉRÉS",
+  FIX_REQUIRED: "JAVÍTANDÓ",
+};
+
+function csvCell(value: string | number | null | undefined) {
+  const text = String(value ?? "");
+  return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function triggerTextDownload(fileName: string, text: string, mimeType: string) {
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 function documentKind(document: DriveDocument): PreviewKind {
   const extension = (document.extension || "").toLowerCase();
@@ -451,7 +506,7 @@ function AutoCandidateVisualPreview({ candidate, index, leftCanvasRef, rightCanv
 }
 
 type DifferenceZoneInspectorProps = {
-  candidate: AutoAlignmentSuggestion;
+  candidate: Pick<SimilarityAlignment, "offsetX" | "offsetY" | "scalePercent" | "rotationDegrees">;
   zone: VisualDifferenceZone;
   zoneIndex: number;
   leftCanvasRef: RefObject<HTMLCanvasElement | null>;
@@ -528,6 +583,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const leftKind = useMemo(() => documentKind(leftDocument), [leftDocument]);
   const rightKind = useMemo(() => documentKind(rightDocument), [rightDocument]);
   const compatible = leftKind !== "UNSUPPORTED" && rightKind !== "UNSUPPORTED" && leftKind === rightKind;
+  const compareFindingContextKey = `${projectId}:${leftDocument.id}:${leftDocument.currentVersion?.id || "none"}:${rightDocument.id}:${rightDocument.currentVersion?.id || "none"}`;
 
   const [mode, setMode] = useState<CompareMode>("SIDE_BY_SIDE");
   const [leftPreview, setLeftPreview] = useState<PreviewPayload | null>(null);
@@ -555,6 +611,9 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const [autoCandidateVisualQuality, setAutoCandidateVisualQuality] = useState<Record<number, AutoCandidateVisualQuality | null>>({});
   const [differenceHeatmapEnabled, setDifferenceHeatmapEnabled] = useState(false);
   const [selectedDifferenceZoneIndex, setSelectedDifferenceZoneIndex] = useState(0);
+  const [compareFindings, setCompareFindings] = useState<CompareFinding[]>([]);
+  const [focusedCompareFindingId, setFocusedCompareFindingId] = useState<string | null>(null);
+  const [compareFindingsMessage, setCompareFindingsMessage] = useState("");
   const [autoAlignmentError, setAutoAlignmentError] = useState("");
   const [autoPairReplacement, setAutoPairReplacement] = useState<AutoPairReplacement | null>(null);
   const [showBase, setShowBase] = useState(true);
@@ -568,6 +627,12 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const sharedPageCount = leftKind === "PDF" && rightKind === "PDF"
     ? Math.min(leftPageCount || 0, rightPageCount || 0)
     : 0;
+
+  useEffect(() => {
+    setCompareFindings([]);
+    setFocusedCompareFindingId(null);
+    setCompareFindingsMessage("");
+  }, [compareFindingContextKey]);
 
   const fetchPreview = useCallback(async (side: Side, document: DriveDocument) => {
     const versionId = document.currentVersion?.id;
@@ -892,6 +957,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     if (!zone) return;
     setDifferenceHeatmapEnabled(true);
     setSelectedDifferenceZoneIndex(zoneIndex);
+    setFocusedCompareFindingId(null);
     const stage = stageRef.current;
     if (stage) {
       stage.scrollTo({
@@ -900,6 +966,130 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
         behavior: "smooth",
       });
     }
+  }
+
+  function addSelectedDifferenceToFindings() {
+    const zone = activeDifferenceZones[selectedDifferenceZoneIndex];
+    const suggestion = autoAlignmentSuggestion;
+    const leftCanvas = leftCanvasRef.current;
+    if (!zone || !suggestion || !leftCanvas?.width || !leftCanvas.height) return;
+    const zoneLabel = `Δ${selectedDifferenceZoneIndex + 1}`;
+    const duplicate = compareFindings.find((finding) =>
+      finding.contextKey === compareFindingContextKey
+      && finding.pageNumber === pageNumber
+      && finding.sourceZoneIndex === selectedDifferenceZoneIndex
+      && Math.abs(finding.zone.x - zone.x / leftCanvas.width) < 0.002
+      && Math.abs(finding.zone.y - zone.y / leftCanvas.height) < 0.002
+    );
+    if (duplicate) {
+      setFocusedCompareFindingId(duplicate.id);
+      setCompareFindingsMessage(`${zoneLabel} már szerepel az eltérési jegyzékben.`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `compare-finding-${pageNumber}-${selectedDifferenceZoneIndex}-${compareFindings.length + 1}`;
+    const finding: CompareFinding = {
+      id,
+      contextKey: compareFindingContextKey,
+      zoneLabel,
+      sourceZoneIndex: selectedDifferenceZoneIndex,
+      status: "REVIEW",
+      note: "",
+      score: zone.score,
+      mismatchPixels: zone.mismatchPixels,
+      inkPixels: zone.inkPixels,
+      pageNumber,
+      createdAt: now,
+      updatedAt: now,
+      zone: {
+        x: zone.x / leftCanvas.width,
+        y: zone.y / leftCanvas.height,
+        width: zone.width / leftCanvas.width,
+        height: zone.height / leftCanvas.height,
+      },
+      left: {
+        documentId: leftDocument.id,
+        documentName: leftDocument.name,
+        versionId: leftDocument.currentVersion?.id || "",
+        versionNumber: leftDocument.currentVersion?.versionNumber ?? null,
+        revisionCode: leftDocument.currentVersion?.revisionCode || "",
+      },
+      right: {
+        documentId: rightDocument.id,
+        documentName: rightDocument.name,
+        versionId: rightDocument.currentVersion?.id || "",
+        versionNumber: rightDocument.currentVersion?.versionNumber ?? null,
+        revisionCode: rightDocument.currentVersion?.revisionCode || "",
+      },
+      alignment: {
+        offsetX: suggestion.offsetX,
+        offsetY: suggestion.offsetY,
+        scalePercent: suggestion.scalePercent,
+        rotationDegrees: suggestion.rotationDegrees,
+        source: suggestion.source,
+        confidenceScore: suggestion.confidenceScore,
+      },
+    };
+    setCompareFindings((current) => [...current, finding]);
+    setFocusedCompareFindingId(id);
+    setCompareFindingsMessage(`${zoneLabel} felvéve az eltérési jegyzékbe. A státuszt és a megjegyzést te hagyod jóvá.`);
+  }
+
+  function updateCompareFinding(id: string, patch: Partial<Pick<CompareFinding, "status" | "note">>) {
+    const updatedAt = new Date().toISOString();
+    setCompareFindings((current) => current.map((finding) => finding.id === id ? { ...finding, ...patch, updatedAt } : finding));
+  }
+
+  function removeCompareFinding(id: string) {
+    setCompareFindings((current) => current.filter((finding) => finding.id !== id));
+    setFocusedCompareFindingId((current) => current === id ? null : current);
+    setCompareFindingsMessage("Eltérési tétel törölve a helyi munkameneti jegyzékből.");
+  }
+
+  function focusCompareFinding(finding: CompareFinding) {
+    setFocusedCompareFindingId(finding.id);
+    setPageNumber(finding.pageNumber);
+    setDifferenceHeatmapEnabled(true);
+    if (activeDifferenceZones[finding.sourceZoneIndex]) setSelectedDifferenceZoneIndex(finding.sourceZoneIndex);
+    requestAnimationFrame(() => {
+      const stage = stageRef.current;
+      const canvas = leftCanvasRef.current;
+      if (!stage || !canvas?.width || !canvas.height) return;
+      const centerX = (finding.zone.x + finding.zone.width / 2) * canvas.width;
+      const centerY = (finding.zone.y + finding.zone.height / 2) * canvas.height;
+      stage.scrollTo({
+        left: Math.max(0, centerX - stage.clientWidth / 2),
+        top: Math.max(0, centerY - stage.clientHeight / 2),
+        behavior: "smooth",
+      });
+    });
+  }
+
+  function exportCompareFindings(format: "json" | "csv") {
+    if (!compareFindings.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const baseName = `DIMPRO_Compare_Findings_${projectId}_${stamp}`.replace(/[^0-9A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű_.-]+/g, "_");
+    if (format === "json") {
+      const payload = {
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        projectId,
+        comparison: { left: compareFindings[0]?.left, right: compareFindings[0]?.right },
+        findings: compareFindings,
+      };
+      triggerTextDownload(`${baseName}.json`, `${JSON.stringify(payload, null, 2)}\n`, "application/json;charset=utf-8");
+      return;
+    }
+    const header = ["id","status","delta","scorePercent","page","leftDocument","leftVersionId","leftRevision","rightDocument","rightVersionId","rightRevision","note","createdAt","updatedAt","zoneX","zoneY","zoneWidth","zoneHeight","alignmentX","alignmentY","alignmentScalePercent","alignmentRotationDegrees","alignmentSource","alignmentConfidence"].join(";");
+    const rows = compareFindings.map((finding) => [
+      finding.id, compareFindingStatusLabels[finding.status], finding.zoneLabel, finding.score, finding.pageNumber,
+      finding.left.documentName, finding.left.versionId, finding.left.revisionCode, finding.right.documentName, finding.right.versionId, finding.right.revisionCode, finding.note, finding.createdAt, finding.updatedAt,
+      finding.zone.x.toFixed(6), finding.zone.y.toFixed(6), finding.zone.width.toFixed(6), finding.zone.height.toFixed(6),
+      finding.alignment.offsetX, finding.alignment.offsetY, finding.alignment.scalePercent, finding.alignment.rotationDegrees, finding.alignment.source, finding.alignment.confidenceScore,
+    ].map(csvCell).join(";"));
+    triggerTextDownload(`${baseName}.csv`, `\uFEFF${[header, ...rows].join("\n")}\n`, "text/csv;charset=utf-8");
   }
 
   function startAutoPairReplacement(pairIndex: number) {
@@ -1140,6 +1330,20 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const activeVisualQuality = autoCandidateVisualQuality[autoAlignmentCandidateIndex] || null;
   const activeDifferenceZones = activeVisualQuality?.zones || [];
   const activeDifferenceZone = activeDifferenceZones[Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1))] || null;
+  const focusedCompareFinding = compareFindings.find((finding) => finding.id === focusedCompareFindingId) || null;
+  const focusedFindingCanvasWidth = overlaySize.width || 0;
+  const focusedFindingCanvasHeight = overlaySize.height || 0;
+  const focusedFindingDisplayZone: VisualDifferenceZone | null = focusedCompareFinding && focusedFindingCanvasWidth > 0 && focusedFindingCanvasHeight > 0
+    ? {
+        x: focusedCompareFinding.zone.x * focusedFindingCanvasWidth,
+        y: focusedCompareFinding.zone.y * focusedFindingCanvasHeight,
+        width: focusedCompareFinding.zone.width * focusedFindingCanvasWidth,
+        height: focusedCompareFinding.zone.height * focusedFindingCanvasHeight,
+        score: focusedCompareFinding.score,
+        mismatchPixels: focusedCompareFinding.mismatchPixels,
+        inkPixels: focusedCompareFinding.inkPixels,
+      }
+    : null;
   const effectiveShowBase = pointAlignmentCollecting
     ? pointAlignmentExpectedSide === "A"
     : autoPairReplacementCollecting
@@ -1328,7 +1532,10 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 <div className={styles.visualCompareDifferenceHeatmapPanel}>
                   <div className={styles.visualCompareDifferenceHeatmapHeader}>
                     <div><strong>Eltérés hőtérkép</strong><span>A nagyobb százalék több eltérő rajzi vonalat jelez az adott zónában.</span></div>
-                    <button type="button" onClick={() => setDifferenceHeatmapEnabled((current) => !current)} className={differenceHeatmapEnabled ? styles.visualCompareToolActive : ""} data-difference-heatmap-toggle aria-pressed={differenceHeatmapEnabled}>{differenceHeatmapEnabled ? "Hőtérkép ki" : "Hőtérkép be"}</button>
+                    <div className={styles.visualCompareDifferenceHeatmapActions}>
+                      <button type="button" onClick={addSelectedDifferenceToFindings} data-add-compare-finding disabled={!activeDifferenceZone}><Plus size={11} /> Δ{Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1)) + 1} jegyzékbe</button>
+                      <button type="button" onClick={() => setDifferenceHeatmapEnabled((current) => !current)} className={differenceHeatmapEnabled ? styles.visualCompareToolActive : ""} data-difference-heatmap-toggle aria-pressed={differenceHeatmapEnabled}>{differenceHeatmapEnabled ? "Hőtérkép ki" : "Hőtérkép be"}</button>
+                    </div>
                   </div>
                   <div className={styles.visualCompareDifferenceZoneList}>
                     {activeDifferenceZones.map((zone, zoneIndex) => (
@@ -1374,6 +1581,47 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 <button type="button" onClick={() => { setAutoAlignmentSuggestion(null); setAutoAlignmentCandidates([]); setAutoAlignmentCandidateIndex(0); setAutoCandidateVisualQuality({}); setDifferenceHeatmapEnabled(false); setSelectedDifferenceZoneIndex(0); setAutoPairReplacement(null); }}><X size={12} /> Elvetés</button>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {(compareFindings.length > 0 || autoAlignmentSuggestion) && (
+        <div className={styles.visualCompareFindingsPanel} data-compare-findings-count={compareFindings.length}>
+          <div className={styles.visualCompareFindingsHeader}>
+            <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V1</strong><small>Helyi Compare munkamenet · nincs automatikus hibaminősítés vagy szerveres mentés.</small></span></div>
+            <div className={styles.visualCompareFindingsExport}>
+              <button type="button" onClick={() => exportCompareFindings("json")} disabled={!compareFindings.length} data-export-compare-findings="json"><Download size={11} /> JSON</button>
+              <button type="button" onClick={() => exportCompareFindings("csv")} disabled={!compareFindings.length} data-export-compare-findings="csv"><Download size={11} /> CSV</button>
+            </div>
+          </div>
+          {compareFindings.length ? (
+            <div className={styles.visualCompareFindingsList}>
+              {compareFindings.map((finding, findingIndex) => (
+                <div key={finding.id} className={`${styles.visualCompareFindingCard} ${finding.id === focusedCompareFindingId ? styles.visualCompareFindingCardActive : ""}`} data-compare-finding={findingIndex + 1} data-finding-status={finding.status}>
+                  <button type="button" className={styles.visualCompareFindingFocus} onClick={() => focusCompareFinding(finding)} title="Eltérési zóna fókuszálása">
+                    <strong>{finding.zoneLabel}</strong><span>{finding.score}%</span><small>oldal {finding.pageNumber}</small>
+                  </button>
+                  <div className={styles.visualCompareFindingBody}>
+                    <div className={styles.visualCompareFindingMeta}>
+                      <strong>{finding.left.revisionCode || `V${finding.left.versionNumber ?? "–"}`} ↔ {finding.right.revisionCode || `V${finding.right.versionNumber ?? "–"}`}</strong>
+                      <small>{finding.mismatchPixels}/{finding.inkPixels} eltérő vonalpont · {autoAlignmentSourceLabel(finding.alignment.source)}</small>
+                    </div>
+                    <select value={finding.status} onChange={(event) => updateCompareFinding(finding.id, { status: event.target.value as CompareFindingStatus })} aria-label={`${finding.zoneLabel} státusz`} data-finding-status-select={findingIndex + 1}>
+                      {Object.entries(compareFindingStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <textarea value={finding.note} onChange={(event) => updateCompareFinding(finding.id, { note: event.target.value })} rows={2} maxLength={800} placeholder="Rövid műszaki megjegyzés…" aria-label={`${finding.zoneLabel} megjegyzés`} data-finding-note={findingIndex + 1} />
+                    <button type="button" className={styles.visualCompareFindingDelete} onClick={() => removeCompareFinding(finding.id)} aria-label={`${finding.zoneLabel} törlése`} title="Törlés a helyi jegyzékből"><Trash2 size={12} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <div className={styles.visualCompareFindingsEmpty}>Válassz egy Δ zónát, majd add az eltérési jegyzékhez. A rendszer alapból <strong>ELLENŐRIZENDŐ</strong> státuszt ad.</div>}
+          {compareFindingsMessage && <div className={styles.visualCompareFindingsMessage}>{compareFindingsMessage}</div>}
+          {focusedCompareFinding && focusedFindingDisplayZone && (
+            <div className={styles.visualCompareFindingInspector} data-finding-inspector={focusedCompareFinding.zoneLabel}>
+              <div><strong>{focusedCompareFinding.zoneLabel} mentett ellenőrző nézet</strong><span>A tétel saját A/B verzió-, oldal-, zóna- és illesztési snapshotja alapján.</span></div>
+              <DifferenceZoneInspector candidate={focusedCompareFinding.alignment} zone={focusedFindingDisplayZone} zoneIndex={focusedCompareFinding.sourceZoneIndex} leftCanvasRef={leftCanvasRef} rightCanvasRef={rightCanvasRef} />
+            </div>
           )}
         </div>
       )}
@@ -1491,6 +1739,17 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                 title={`Δ${zoneIndex + 1}: ${zone.score}% helyi eltérés`}
               ><span>Δ{zoneIndex + 1}</span></button>
             ))}
+            {focusedCompareFinding && focusedFindingDisplayZone && (
+              <button
+                type="button"
+                className={styles.visualCompareFindingZoneOverlay}
+                style={{ left: focusedFindingDisplayZone.x, top: focusedFindingDisplayZone.y, width: focusedFindingDisplayZone.width, height: focusedFindingDisplayZone.height }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => focusCompareFinding(focusedCompareFinding)}
+                data-finding-zone-overlay={focusedCompareFinding.zoneLabel}
+                title={`${focusedCompareFinding.zoneLabel}: mentett eltérési tétel`}
+              ><span>{focusedCompareFinding.zoneLabel}</span></button>
+            )}
             {autoAlignmentSuggestion && autoReviewPairLines.length > 0 && (
               <svg className={styles.visualCompareAutoPairLines} width="100%" height="100%" aria-hidden="true">
                 {autoReviewPairLines.map((pair) => <line key={`auto-line-${pair.pairIndex}`} x1={pair.a.x} y1={pair.a.y} x2={pair.b.x} y2={pair.b.y} data-auto-review-line={pair.pairIndex + 1} />)}
