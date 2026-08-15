@@ -9,6 +9,7 @@ import TerminalCommandLibrary from "./TerminalCommandLibrary";
 import LiveWorkspaceReadOnly from "./LiveWorkspaceReadOnly";
 import TerminalManagedCommands from "./TerminalManagedCommands";
 import WindowsBridgePanel from "./WindowsBridgePanel";
+import SecretVaultPanel from "./SecretVaultPanel";
 import type { ConsoleLiveState, ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
@@ -107,6 +108,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
               <TerminalCorePanel readiness={terminalReadiness} />
               <TerminalManagedCommands sessions={live?.sessions || []} />
               <WindowsBridgePanel />
+              <SecretVaultPanel />
               <div className={styles.terminalEndpointGrid}>
                 {(status?.endpoints || []).map((endpoint) => (
                   <article key={endpoint.kind} data-state={endpoint.state}>
@@ -141,7 +143,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
           ) : null}
         </div>
 
-        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P8 foundation: Live Workspace P4–P7 aktív. Terminal execution, Windows Bridge pairing/execution, PROD és Secret Vault továbbra is fail-closed.</span></footer>
+        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P9 foundation: Private Input + AI visibility + redaction audit aktív contract. Terminal execution, PROD és Secret Vault storage továbbra is fail-closed.</span></footer>
       </section>
     </div>
   );

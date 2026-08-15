@@ -1240,3 +1240,30 @@
 .windowsBridgeMigrationArea > p { margin: 0; padding: 8px; border-top: 1px solid var(--border); color: var(--green); }
 @media (max-width: 1100px) { .windowsBridgeMigrationGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 650px) { .windowsBridgeMigrationGrid { grid-template-columns: 1fr; } }
+
+/* BENJADMIN Terminal Hub P9 · Private Input + Secret Vault skeleton */
+.terminalCoreActions button[data-private="true"] { border-color: color-mix(in srgb, var(--amber) 55%, var(--border)); color: var(--amber); background: var(--amber-soft); }
+.terminalPrivateInput { padding: 7px 8px; border-bottom: 1px solid color-mix(in srgb, var(--amber) 42%, var(--border)); display: grid; grid-template-columns: minmax(220px,.9fr) minmax(240px,1.5fr) auto; align-items: center; gap: 7px; background: color-mix(in srgb, var(--amber-soft) 50%, var(--panel)); }
+.terminalPrivateInput > div { min-width: 0; display: flex; align-items: center; gap: 7px; color: var(--amber); }
+.terminalPrivateInput > div span { min-width: 0; display: grid; gap: 1px; }
+.terminalPrivateInput strong, .terminalPrivateInput small { font-size: 12px; }
+.terminalPrivateInput small { color: var(--text-soft); }
+.terminalPrivateInput input { min-width: 0; min-height: 34px; padding: 0 9px; border: 1px solid color-mix(in srgb, var(--amber) 44%, var(--border)); border-radius: 7px; outline: none; color: var(--text); background: var(--surface); font-family: "Cascadia Code",Consolas,monospace; font-size: 12px; }
+.terminalPrivateInput button { min-height: 34px; padding: 0 9px; border: 1px solid color-mix(in srgb, var(--amber) 48%, var(--border)); border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; color: var(--amber); background: var(--surface); font-size: 12px; font-weight: 850; cursor: pointer; }
+.terminalPrivateInput button:disabled { opacity: .45; cursor: not-allowed; }
+.secretVaultPanel { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--panel); }
+.secretVaultPanel > header { min-height: 48px; padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface2); }
+.secretVaultPanel > header > div { display: flex; align-items: center; gap: 7px; }
+.secretVaultPanel > header span { display: grid; gap: 1px; }
+.secretVaultPanel > header small, .secretVaultPanel > header strong, .secretVaultPanel > header b { font-size: 12px; }
+.secretVaultPanel > header small { color: var(--muted); }
+.secretVaultPanel > header strong { color: var(--text); }
+.secretVaultPanel > header b { padding: 3px 6px; border-radius: 5px; color: var(--red); background: var(--red-soft); }
+.secretVaultPanel[data-enabled="true"] > header b { color: var(--amber); background: var(--amber-soft); }
+.secretVaultPanel > header button { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; display: grid; place-items: center; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.secretVaultPanel > p { margin: 0; padding: 7px 8px; color: var(--red); background: var(--red-soft); font-size: 12px; }
+.secretVaultPolicy { padding: 7px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.secretVaultPolicy span { min-height: 40px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 5px; color: var(--text-soft); background: var(--surface); font-size: 12px; }
+.secretVaultPanel > footer { padding: 6px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; line-height: 1.45; }
+@media (max-width: 980px) { .terminalPrivateInput { grid-template-columns: 1fr; } .secretVaultPolicy { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 620px) { .secretVaultPolicy { grid-template-columns: 1fr; } }

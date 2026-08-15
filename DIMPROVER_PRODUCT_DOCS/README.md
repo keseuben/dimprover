@@ -137,3 +137,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `226_benjadmin_windows_bridge_p81_windows_e2e_package_20260815.md` – P8.1 Windows E2E package builder: SHA-ellenőrzött installer/self-check/pair/heartbeat/uninstall csomag, execution és autostart OFF.
 
 - `227_benjadmin_windows_bridge_p81_db_and_server_e2e_20260815.md` – P8.1 DEV DB migration + server-side Pair/Approve/Heartbeat/Revoke E2E PASS; pairing secret provisioned, live Bridge/Pairing/Execution OFF.
+
+- `228_benjadmin_terminalhub_p9_security_candidate_20260815.md` – P9 security candidate: Private Input, session AI visibility, redaction audit, strengthened secret scanner, Secret Vault skeleton; 475/475 PASS.

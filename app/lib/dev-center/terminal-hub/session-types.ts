@@ -1,4 +1,5 @@
 export type TerminalSessionState = "BLOCKED" | "STARTING" | "RUNNING" | "DISCONNECTED" | "EXITED" | "CLOSED" | "FAILED";
+export type TerminalAiVisibility = "FILTERED" | "BLOCKED";
 
 export type TerminalSessionSummary = {
   id: string;
@@ -13,6 +14,7 @@ export type TerminalSessionSummary = {
   exitCode: number | null;
   sequence: number;
   owner: string;
+  aiVisibility: TerminalAiVisibility;
 };
 
 export type TerminalOutputChunk = {
@@ -23,4 +25,4 @@ export type TerminalOutputChunk = {
 
 export type TerminalSessionCreateRequest = { cwd: string; cols?: number; rows?: number };
 export type TerminalSessionResizeRequest = { cols: number; rows: number };
-export type TerminalSessionInputRequest = { data: string };
+export type TerminalSessionInputRequest = { data: string; private?: boolean };

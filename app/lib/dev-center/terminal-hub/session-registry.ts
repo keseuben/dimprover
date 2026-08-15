@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getTerminalCoreReadiness } from "./readiness";
-import type { TerminalOutputChunk, TerminalSessionCreateRequest, TerminalSessionSummary } from "./session-types";
+import type { TerminalAiVisibility, TerminalOutputChunk, TerminalSessionCreateRequest, TerminalSessionSummary } from "./session-types";
 import { resolveAllowedWorkspacePath } from "./workspace-policy";
 
 export class TerminalSessionError extends Error {
@@ -111,7 +111,7 @@ export async function createTerminalSession(owner: string, input: TerminalSessio
   const rows = clampInt(input.rows, MIN_ROWS, MAX_ROWS, 32);
   const createdAt = nowIso();
   const session: RuntimeSession = {
-    summary: { id: randomUUID(), state: "STARTING", environment: "DEV", cwd: resolved.path, cols, rows, createdAt, lastActivityAt: createdAt, exitedAt: null, exitCode: null, sequence: 0, owner },
+    summary: { id: randomUUID(), state: "STARTING", environment: "DEV", cwd: resolved.path, cols, rows, createdAt, lastActivityAt: createdAt, exitedAt: null, exitCode: null, sequence: 0, owner, aiVisibility: "FILTERED" },
     output: [], handle: null, touchedAt: Date.now(),
   };
   sessions.set(session.summary.id, session);
@@ -139,6 +139,16 @@ export function writeTerminalSession(owner: string, id: string, data: string) {
   if (!session.handle || session.summary.state !== "RUNNING") throw new TerminalSessionError("A terminál session nem írható.", "TERMINAL_SESSION_NOT_RUNNING", 409);
   if (!data || Buffer.byteLength(data, "utf8") > MAX_INPUT_BYTES) throw new TerminalSessionError("A terminál input üres vagy túl nagy.", "TERMINAL_INPUT_INVALID", 400);
   session.handle.write(data);
+  session.summary.lastActivityAt = nowIso();
+  session.touchedAt = Date.now();
+  return publicSummary(session);
+}
+
+
+export function setTerminalSessionAiVisibility(owner: string, id: string, mode: TerminalAiVisibility) {
+  const session = getTerminalSession(owner, id);
+  if (!["FILTERED", "BLOCKED"].includes(mode)) throw new TerminalSessionError("Érvénytelen AI visibility mód.", "TERMINAL_AI_VISIBILITY_INVALID", 400);
+  session.summary.aiVisibility = mode;
   session.summary.lastActivityAt = nowIso();
   session.touchedAt = Date.now();
   return publicSummary(session);
