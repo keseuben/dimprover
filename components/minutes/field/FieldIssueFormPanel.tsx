@@ -18,6 +18,13 @@ type FieldIssueFormPanelProps = {
   canPersistToCore: boolean
   syncing: boolean
   onPersistActiveIssue: () => void
+  canPersistAttachments: boolean
+  attachmentSyncing: boolean
+  attachmentTotal: number
+  attachmentSynced: number
+  attachmentDirty: number
+  driveError: string
+  onSyncAttachments: () => void
 }
 
 type PresetField = "title" | "description" | "note"
@@ -251,6 +258,13 @@ export default function FieldIssueFormPanel({
   canPersistToCore,
   syncing,
   onPersistActiveIssue,
+  canPersistAttachments,
+  attachmentSyncing,
+  attachmentTotal,
+  attachmentSynced,
+  attachmentDirty,
+  driveError,
+  onSyncAttachments,
 }: FieldIssueFormPanelProps) {
   const [presetFields, setPresetFields] = useState<Partial<Record<PresetField, boolean>>>({})
 
@@ -306,6 +320,33 @@ export default function FieldIssueFormPanel({
           </button>
         </div>
         {!canPersistToCore ? <div className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">Csak olvasás · issue.write jogosultság szükséges</div> : null}
+      </div>
+
+      <div data-field-attachment-sync="0.4.0" className="mb-4 border border-emerald-200 bg-emerald-50/55 p-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-800">HJ mellékletek · DIMPRO Drive</div>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-slate-600">
+              Fotók és tervkapcsolatok valódi Drive dokumentumhoz/verzióhoz kapcsolódnak. A fizikai fájl nem kerül a HJ adatbázisába.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.07em]">
+              <span className="border border-slate-200 bg-white px-2 py-1 text-slate-600">Összes: {attachmentTotal}</span>
+              <span className="border border-emerald-200 bg-white px-2 py-1 text-emerald-700">Szinkron: {attachmentSynced}</span>
+              <span className={`border bg-white px-2 py-1 ${attachmentDirty ? "border-amber-200 text-amber-700" : "border-slate-200 text-slate-500"}`}>Frissítendő/hiba: {attachmentDirty}</span>
+            </div>
+            {driveError ? <p className="mt-2 text-[11px] font-bold text-rose-700">Drive: {driveError}</p> : null}
+          </div>
+          <button
+            type="button"
+            onClick={onSyncAttachments}
+            disabled={!activeIssue.coreIssueId || !canPersistAttachments || attachmentSyncing || attachmentTotal === 0}
+            className="min-h-11 shrink-0 border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+          >
+            {attachmentSyncing ? "Mellékletek mentése…" : "HJ mellékletek szinkronizálása"}
+          </button>
+        </div>
+        {!activeIssue.coreIssueId ? <div className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">Előbb készíts központi HJ-t.</div> : null}
+        {activeIssue.coreIssueId && !canPersistAttachments ? <div className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">issue.write + document.read + document.write jogosultság szükséges.</div> : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

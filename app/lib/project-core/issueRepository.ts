@@ -28,6 +28,9 @@ export type ProjectIssue = {
   updatedByName: string;
   createdAt: string;
   updatedAt: string;
+  attachmentCount: number;
+  photoAttachmentCount: number;
+  planAttachmentCount: number;
 };
 
 type DbIssue = {
@@ -86,7 +89,7 @@ function getClient(): SupabaseClient {
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.3.0" } },
+    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.4.0" } },
   });
 }
 
@@ -132,7 +135,7 @@ function dbError(message: string, error: unknown, status = 500): never {
     throw new ProjectIssueRepositoryError("A hibajegy metadata mezőjének objektumnak kell lennie.", "PROJECT_ISSUE_METADATA_INVALID", 400);
   }
   throw new ProjectIssueRepositoryError(
-    missing ? "A Project Issue Core V0.3 PostgreSQL-séma még nincs alkalmazva." : message,
+    missing ? "A Project Issue Core V0.4 PostgreSQL-séma még nincs alkalmazva." : message,
     missing ? "PROJECT_ISSUE_SCHEMA_NOT_READY" : code,
     missing ? 503 : status,
   );
@@ -163,18 +166,22 @@ function mapIssue(row: DbIssue): ProjectIssue {
     updatedByName: row.updated_by_name || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    attachmentCount: 0,
+    photoAttachmentCount: 0,
+    planAttachmentCount: 0,
   };
 }
 
 export async function getProjectIssueHealth() {
   try {
     const client = getClient();
-    const [table, marker] = await Promise.all([
+    const [table, attachmentTable, marker] = await Promise.all([
       client.from("project_core_issues").select("id,project_id,serial,version").limit(0),
+      client.from("project_issue_attachments").select("id,project_id,issue_id,version").limit(0),
       client.from("project_issue_schema_meta").select("schema_version,migration_count,bootstrap_id").eq("component", "project-issue-core").maybeSingle(),
     ]);
-    const ready = !table.error && !marker.error && marker.data?.schema_version === "0.3.0" && Number(marker.data?.migration_count) === 3 && marker.data?.bootstrap_id === "project-issue-core-v030-20260815";
-    return { ready, schemaVersion: marker.data?.schema_version || null, bootstrapId: marker.data?.bootstrap_id || null, errorCode: table.error?.code || marker.error?.code || null };
+    const ready = !table.error && !attachmentTable.error && !marker.error && marker.data?.schema_version === "0.4.0" && Number(marker.data?.migration_count) === 4 && marker.data?.bootstrap_id === "project-issue-core-v040-20260815";
+    return { ready, schemaVersion: marker.data?.schema_version || null, bootstrapId: marker.data?.bootstrap_id || null, errorCode: table.error?.code || attachmentTable.error?.code || marker.error?.code || null };
   } catch (error) {
     return { ready: false, schemaVersion: null, bootstrapId: null, errorCode: error instanceof ProjectIssueRepositoryError ? error.code : "PROJECT_ISSUE_HEALTH_FAILED" };
   }
@@ -182,9 +189,28 @@ export async function getProjectIssueHealth() {
 
 export async function listProjectIssues(projectId: string) {
   const client = getClient();
-  const result = await client.from("project_core_issues").select("*").eq("project_id", projectId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(500);
-  if (result.error) dbError("A projekt hibajegyzéke nem tölthető be.", result.error);
-  return { ok: true as const, issues: ((result.data || []) as DbIssue[]).map(mapIssue) };
+  const [issueResult, attachmentResult] = await Promise.all([
+    client.from("project_core_issues").select("*").eq("project_id", projectId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(500),
+    client.from("project_issue_attachments").select("issue_id,attachment_kind").eq("project_id", projectId).is("deleted_at", null).limit(5000),
+  ]);
+  if (issueResult.error) dbError("A projekt hibajegyzéke nem tölthető be.", issueResult.error);
+  if (attachmentResult.error) dbError("A projekt HJ melléklet-összesítése nem tölthető be.", attachmentResult.error);
+  const counts = new Map<string, { total: number; photo: number; plan: number }>();
+  for (const row of attachmentResult.data || []) {
+    const issueId = String(row.issue_id || "");
+    if (!issueId) continue;
+    const current = counts.get(issueId) || { total: 0, photo: 0, plan: 0 };
+    current.total += 1;
+    if (row.attachment_kind === "PHOTO") current.photo += 1;
+    if (row.attachment_kind === "PLAN") current.plan += 1;
+    counts.set(issueId, current);
+  }
+  const issues = ((issueResult.data || []) as DbIssue[]).map((row) => {
+    const issue = mapIssue(row);
+    const count = counts.get(issue.id) || { total: 0, photo: 0, plan: 0 };
+    return { ...issue, attachmentCount: count.total, photoAttachmentCount: count.photo, planAttachmentCount: count.plan };
+  });
+  return { ok: true as const, issues };
 }
 
 export async function convertCompareFindingToIssue(projectId: string, findingId: string, actorUserId: string, actorName: string) {

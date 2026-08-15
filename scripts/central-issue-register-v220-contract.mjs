@@ -30,8 +30,8 @@ check("updated actor stored", sql.includes("updated_by = p_actor_user_id") && sq
 check("issue update audit", sql.includes("PROJECT_ISSUE_UPDATED") && sql.includes("entity_type,entity_id") && sql.includes("'issue',v_issue.id"));
 check("audit change snapshot", sql.includes("'changes',v_changes"));
 check("RPC service role only", sql.includes("revoke all on function public.project_issue_update_atomic") && sql.includes("grant execute on function public.project_issue_update_atomic") && sql.includes("to service_role"));
-check("repository supports Issue Core >=0.2", (repo.includes('"dimpro-project-issue-core/0.2.0"') || repo.includes('"dimpro-project-issue-core/0.3.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"')));
-check("repository compatible marker", (repo.includes("migration_count) === 2") || repo.includes("migration_count) === 3")) && (repo.includes("project-issue-core-v020-20260815") || repo.includes("project-issue-core-v030-20260815")));
+check("repository supports Issue Core >=0.2", (repo.includes('"dimpro-project-issue-core/0.2.0"') || repo.includes('"dimpro-project-issue-core/0.3.0"') || repo.includes('"dimpro-project-issue-core/0.4.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"') || repo.includes('schema_version === "0.4.0"')));
+check("repository compatible marker", (repo.includes("migration_count) === 2") || repo.includes("migration_count) === 3") || repo.includes("migration_count) === 4")) && (repo.includes("project-issue-core-v020-20260815") || repo.includes("project-issue-core-v030-20260815") || repo.includes("project-issue-core-v040-20260815")));
 check("repository update method", repo.includes("updateProjectIssue") && repo.includes('client.rpc("project_issue_update_atomic"'));
 check("repository patch allowlist", repo.includes("ISSUE_PATCH_KEYS") && ["title","description","location","discipline","severity","status","responsibleUserId","dueAt","note"].every((value) => repo.includes(`"${value}"`)));
 check("repository version conflict 409", repo.includes("PROJECT_ISSUE_VERSION_CONFLICT") && repo.includes(", 409)"));
@@ -40,7 +40,7 @@ check("PATCH API issue.write", itemApi.includes('requireProjectPermission(reques
 check("PATCH API calls repository", itemApi.includes("updateProjectIssue(projectId, issueId, input") && repo.includes("expectedVersion"));
 check("list API remains issue.read", listApi.includes('requireProjectPermission(request, projectId, "issue.read")'));
 check("health API remains issue.read", healthApi.includes('requireProjectPermission(request, projectId, "issue.read")'));
-check("health API compatible version", (healthApi.includes('version: "0.2.0"') || healthApi.includes('version: "0.3.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"')));
+check("health API compatible version", (healthApi.includes('version: "0.2.0"') || healthApi.includes('version: "0.3.0"') || healthApi.includes('version: "0.4.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"') || repo.includes('schema_version === "0.4.0"')));
 check("route uses AppLayout", route.includes("<AppLayout>") && route.includes("IssueRegisterPage"));
 check("static sample HJ removed", !ui.includes('id: "HJ-001"') && !ui.includes("issueRegisterItems"));
 check("UI project API", ui.includes('fetch("/api/projects"'));

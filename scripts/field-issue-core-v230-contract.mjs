@@ -43,8 +43,8 @@ check("optimistic version conflict preserved", migration.includes("PROJECT_ISSUE
 check("external responsible name update", migration.includes("p_patch ? 'responsibleName'") && migration.includes("v_responsible_user_id := null"));
 check("metadata patch merged", migration.includes("metadata = case when p_patch ? 'metadata' then metadata || (p_patch->'metadata')"));
 check("update audit preserved", migration.includes("'PROJECT_ISSUE_UPDATED'") && migration.includes("'changes',v_changes"));
-check("repository client V0.3", repo.includes('"dimpro-project-issue-core/0.3.0"'));
-check("repository health V0.3", repo.includes('schema_version === "0.3.0"') && repo.includes("migration_count) === 3") && repo.includes("project-issue-core-v030-20260815"));
+check("repository client >=V0.3", repo.includes('"dimpro-project-issue-core/0.3.0"') || repo.includes('"dimpro-project-issue-core/0.4.0"'));
+check("repository health >=V0.3", (repo.includes('schema_version === "0.3.0"') || repo.includes('schema_version === "0.4.0"')) && (repo.includes("migration_count) === 3") || repo.includes("migration_count) === 4")) && (repo.includes("project-issue-core-v030-20260815") || repo.includes("project-issue-core-v040-20260815")));
 check("repository create source type excludes compare", repo.includes('ProjectIssueCreateSourceType = "FIELD_CAPTURE" | "MANUAL" | "MEETING" | "IMPORT"'));
 check("repository generic create allowlist", repo.includes("ISSUE_CREATE_SOURCE_TYPES") && repo.includes('"FIELD_CAPTURE", "MANUAL", "MEETING", "IMPORT"'));
 check("repository source type error maps", repo.includes("PROJECT_ISSUE_SOURCE_TYPE_INVALID"));
@@ -56,7 +56,7 @@ check("repository patch metadata", repo.includes('"metadata"') && repo.includes(
 check("POST API requires issue.write", issueRoute.includes('requireProjectPermission(request, projectId, "issue.write")'));
 check("POST API uses createProjectIssue", issueRoute.includes("createProjectIssue") && issueRoute.includes("export async function POST"));
 check("POST API idempotent status", issueRoute.includes("result.created ? 201 : 200"));
-check("health route V0.3", healthRoute.includes('version: "0.3.0"'));
+check("health route >=V0.3", healthRoute.includes('version: "0.3.0"') || healthRoute.includes('version: "0.4.0"'));
 check("field route loads projects", fieldRoute.includes('fetch("/api/projects"'));
 check("field route reads projectId URL", fieldRoute.includes('URLSearchParams(window.location.search).get("projectId")'));
 check("field route writes projectId URL", fieldRoute.includes('url.searchParams.set("projectId", nextProjectId)'));
@@ -79,13 +79,13 @@ check("field write permission respected", fieldPage.includes('permissions.includ
 check("field edits mark DIRTY", fieldPage.includes('syncState: issue.coreIssueId ? "DIRTY"'));
 check("mobile save calls core sync", fieldPage.includes('tab === "save"') && fieldPage.includes("await persistFieldIssueToCore(activeIssue)"));
 check("local delete preserves central issue", fieldPage.includes("központi HJ megmarad") && !fieldPage.includes("DELETE /api/projects"));
-check("field root V0.3 marker", fieldPage.includes('data-field-issue-core="0.3.0"'));
+check("field root >=V0.3 marker", fieldPage.includes('data-field-issue-core="0.3.0"') || fieldPage.includes('data-field-issue-core="0.4.0"'));
 check("field project selector real", fieldPage.includes('aria-label="Terepi hibafelvétel projekt"') && fieldPage.includes("onProjectChange"));
 check("field form central save button", fieldForm.includes("Központi HJ mentése") && fieldForm.includes("Központi HJ frissítése"));
 check("field form shows sync status", fieldForm.includes("data-field-core-sync") && fieldForm.includes("Még nincs központi HJ"));
 check("field list shows sync badge", fieldList.includes("syncLabel") && fieldList.includes("Központi HJ kapcsolat"));
 check("central register shows external responsible", centralRegister.includes("Külső: ${issue.responsibleName}"));
 check("V0.2 precedes V0.3", order.indexOf("20260815164500_project_issue_core_v020.sql") < order.indexOf("20260815173500_project_issue_core_v030.sql"));
-check("migration order ends V0.3", order.trim().endsWith("supabase/migrations/20260815173500_project_issue_core_v030.sql"));
+check("V0.3 precedes V0.4", order.includes("20260815190500_project_issue_core_v040.sql") && order.indexOf("20260815173500_project_issue_core_v030.sql") < order.indexOf("20260815190500_project_issue_core_v040.sql"));
 
 console.log(`\nField Issue Core V2.3 contract: ${pass}/${pass} PASS`);

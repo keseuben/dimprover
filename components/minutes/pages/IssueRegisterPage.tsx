@@ -44,6 +44,9 @@ type ProjectIssue = {
   updatedByName: string
   createdAt: string
   updatedAt: string
+  attachmentCount: number
+  photoAttachmentCount: number
+  planAttachmentCount: number
 }
 
 type IssueDraft = Pick<ProjectIssue, "title" | "description" | "location" | "discipline" | "note">
@@ -243,7 +246,7 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
                   {projects.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}
                 </select>
                 <span className="border border-white/25 bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-cyan-50">{canWrite ? "Szerkeszthető" : "Csak olvasás"}</span>
-                <span className="border border-white/25 bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-cyan-50">Issue Core {healthReady ? "0.2.0 ✓" : "ellenőrzés"}</span>
+                <span className="border border-white/25 bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-cyan-50">Issue Core {healthReady ? "0.4.0 ✓" : "ellenőrzés"}</span>
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-4 xl:w-[620px]">
@@ -280,7 +283,7 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
                   return <div key={issue.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/65"} data-project-issue={issue.serial}>
                     <div className="grid min-w-[1390px] grid-cols-[110px_minmax(280px,1fr)_150px_170px_210px_155px_155px_140px_48px] items-center border-b border-slate-100 px-4 py-2.5 text-sm hover:bg-cyan-50/55">
                       <div><div className="font-black text-rose-700">{issue.serial}</div><div className="mt-0.5 text-[9px] font-black uppercase text-slate-400">v{issue.version}</div></div>
-                      <div className="min-w-0"><div className="truncate font-bold text-slate-950">{issue.title}</div><div className="mt-0.5 flex flex-wrap gap-1.5 text-[10px] font-semibold text-slate-500"><span>{sourceLabel(issue.sourceType)}</span>{issue.discipline ? <span>· {issue.discipline}</span> : null}</div></div>
+                      <div className="min-w-0"><div className="truncate font-bold text-slate-950">{issue.title}</div><div className="mt-0.5 flex flex-wrap gap-1.5 text-[10px] font-semibold text-slate-500"><span>{sourceLabel(issue.sourceType)}</span>{issue.discipline ? <span>· {issue.discipline}</span> : null}<span className="border border-emerald-200 bg-emerald-50 px-1.5 text-emerald-700">📎 {issue.attachmentCount || 0}</span>{issue.photoAttachmentCount ? <span>📷 {issue.photoAttachmentCount}</span> : null}{issue.planAttachmentCount ? <span>▱ {issue.planAttachmentCount}</span> : null}</div></div>
                       <div><select value={issue.severity} disabled={!canWrite || savingId === issue.id} onChange={(event) => void persistIssue(issue, { severity: event.target.value }, "súlyosság mentve")} className={`h-8 w-full border px-2 text-[11px] font-black ${severityClass(issue.severity)}`}>{severities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
                       <div><select value={issue.status} disabled={!canWrite || savingId === issue.id} onChange={(event) => void persistIssue(issue, { status: event.target.value }, "státusz mentve")} className={`h-8 w-full border px-2 text-[11px] font-black ${statusClass(issue.status)}`}>{statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
                       <div><select value={issue.responsibleUserId || ""} disabled={!canWrite || savingId === issue.id} onChange={(event) => void persistIssue(issue, { responsibleUserId: event.target.value }, "felelős mentve")} className="h-8 w-full border border-slate-300 bg-white px-2 text-[11px] font-bold text-slate-700"><option value="">{issue.responsibleName ? `Külső: ${issue.responsibleName}` : "Nincs kijelölve"}</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName || member.userId}</option>)}</select></div>
@@ -302,6 +305,7 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
                         <div className="space-y-2 text-xs font-semibold text-slate-600">
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Forrás</div><div className="mt-1 font-black text-slate-800">{sourceLabel(issue.sourceType)}</div><div className="mt-1 break-all text-[10px] text-slate-500">{issue.sourceId || "-"}</div></div>
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Workflow</div><div className="mt-2 flex flex-wrap gap-2"><span className={`border px-2 py-1 text-[10px] font-black ${statusClass(issue.status)}`}>{statusLabel(issue.status)}</span><span className={`border px-2 py-1 text-[10px] font-black ${severityClass(issue.severity)}`}>{severityLabel(issue.severity)}</span>{isOverdue(issue) ? <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-800">Lejárt</span> : null}</div><div className="mt-2">Határidő: <strong>{displayDate(issue.dueAt)}</strong></div><div>Felelős: <strong>{issue.responsibleName || "Nincs kijelölve"}</strong></div></div>
+                          <div data-issue-attachment-summary="0.4.0" className="border border-emerald-200 bg-emerald-50/45 p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-emerald-700">Központi HJ mellékletek</div><div className="mt-2 flex flex-wrap gap-2"><span className="border border-emerald-200 bg-white px-2 py-1 text-[10px] font-black">Összes: {issue.attachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Fotó: {issue.photoAttachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Terv: {issue.planAttachmentCount || 0}</span></div></div>
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Audit</div><div className="mt-1">Létrehozva: {displayDateTime(issue.createdAt)} · {issue.createdByName || "DIMPRO"}</div><div className="mt-1">Frissítve: {displayDateTime(issue.updatedAt)} · {issue.updatedByName || "DIMPRO"}</div><div className="mt-1">Aktuális verzió: <strong>v{issue.version}</strong></div></div>
                         </div>
                       </div>

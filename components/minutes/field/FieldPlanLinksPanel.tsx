@@ -59,6 +59,16 @@ export type IssuePlanLink = {
   markerLabel: string
   planMarkers?: PlanIssueMarker[]
   planPageExports?: PlanPageExport[]
+  coreAttachmentId?: string
+  coreAttachmentVersion?: number
+  driveDocumentId?: string
+  driveVersionId?: string
+  driveVersionNumber?: number
+  driveMimeType?: string
+  driveSizeBytes?: number
+  attachmentSyncState?: "LOCAL" | "DIRTY" | "SYNCING" | "SYNCED" | "ERROR"
+  attachmentSyncError?: string
+  attachmentSyncedAt?: string
   finalized: boolean
 }
 
@@ -68,7 +78,29 @@ export type ProjectPlanOption = {
   widthMm: number
   heightMm: number
   previewKind: string
+  driveDocumentId?: string
+  driveVersionId?: string
+  driveVersionNumber?: number
+  mimeType?: string
+  sizeBytes?: number
   url: string
+}
+
+function planAttachmentSyncLabel(link: IssuePlanLink) {
+  if (link.attachmentSyncState === "SYNCING") return "Drive/HJ mentés…"
+  if (link.attachmentSyncState === "DIRTY") return "Drive/HJ frissítendő"
+  if (link.attachmentSyncState === "ERROR") return "Drive/HJ hiba"
+  if (link.coreAttachmentId) return `Drive/HJ · v${link.coreAttachmentVersion || 1}`
+  if (link.driveDocumentId) return "Drive terv · HJ-ra vár"
+  return "Helyi terv"
+}
+
+function planAttachmentSyncClass(link: IssuePlanLink) {
+  if (link.attachmentSyncState === "ERROR") return "border-rose-200 bg-rose-50 text-rose-700"
+  if (link.attachmentSyncState === "DIRTY") return "border-amber-200 bg-amber-50 text-amber-800"
+  if (link.coreAttachmentId) return "border-emerald-200 bg-emerald-50 text-emerald-800"
+  if (link.driveDocumentId) return "border-cyan-200 bg-cyan-50 text-cyan-800"
+  return "border-slate-200 bg-white text-slate-500"
 }
 
 type FieldPlanLinksPanelProps = {
@@ -247,6 +279,7 @@ export default function FieldPlanLinksPanel({
                   <div>
                     <div className="text-xs font-black uppercase tracking-[0.1em] text-cyan-800">{link.markerLabel || activeIssueSerial} · {index + 1}. kapcsolt terv</div>
                     <div className="mt-1 text-sm font-black text-slate-900">{link.planName}</div>
+                    <div className={`mt-1 inline-block border px-1.5 py-0.5 text-[9px] font-black uppercase ${planAttachmentSyncClass(link)}`}>{planAttachmentSyncLabel(link)}</div>
                   </div>
                   <span className={`border px-2 py-1 text-[10px] font-black uppercase ${link.finalized ? "border-cyan-200 bg-cyan-50 text-cyan-800" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{link.finalized ? "véglegesítve" : "vázlat"}</span>
                 </div>
@@ -270,6 +303,7 @@ export default function FieldPlanLinksPanel({
                   ) : null}
                   <div className="mt-3 grid gap-2 text-[11px] font-black uppercase tracking-[0.06em] text-slate-500">
                     <div className="border border-slate-200 bg-slate-50 px-2 py-1.5">Kapcsolt terv: {link.planName}</div>
+                    <div className={`border px-2 py-1.5 ${planAttachmentSyncClass(link)}`}>{planAttachmentSyncLabel(link)}{link.driveVersionNumber ? ` · Drive v${link.driveVersionNumber}` : ""}{link.attachmentSyncError ? ` · ${link.attachmentSyncError}` : ""}</div>
                     <div className="border border-slate-200 bg-slate-50 px-2 py-1.5">Oldal: {link.pageNumber}. · Méret: {link.sheetSize} {link.orientation === "landscape" ? "fekvő" : "álló"}</div>
                     <div className="border border-slate-200 bg-slate-50 px-2 py-1.5">Jelölő: {link.markerLabel} · HJ: {(link.planMarkers ?? []).filter((marker) => marker.markerKind !== "photo").length} · Fotóhely: {(link.planMarkers ?? []).filter((marker) => marker.markerKind === "photo").length}</div>
                     <div className={`border px-2 py-1.5 ${(link.planPageExports?.length ?? 0) ? "border-cyan-200 bg-cyan-50 text-cyan-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>Teljes tervlap melléklet: {(link.planPageExports?.length ?? 0) ? `${link.planPageExports?.length} oldal mentve` : "még nincs mentve"}</div>

@@ -20,8 +20,32 @@ export type FieldPhoto = {
   appendixLayout: PhotoAppendixLayout
   appendixOrientation: PhotoAppendixOrientation
   category: PhotoCategory
+  coreAttachmentId?: string
+  coreAttachmentVersion?: number
+  driveDocumentId?: string
+  driveVersionId?: string
+  driveVersionNumber?: number
+  driveContentDirty?: boolean
+  attachmentSyncState?: "LOCAL" | "DIRTY" | "SYNCING" | "SYNCED" | "ERROR"
+  attachmentSyncError?: string
+  attachmentSyncedAt?: string
 }
 
+
+function attachmentSyncLabel(photo: FieldPhoto) {
+  if (photo.attachmentSyncState === "SYNCING") return "Drive/HJ mentés…"
+  if (photo.attachmentSyncState === "DIRTY") return "Drive/HJ frissítendő"
+  if (photo.attachmentSyncState === "ERROR") return "Drive/HJ hiba"
+  if (photo.coreAttachmentId) return `Drive/HJ · v${photo.coreAttachmentVersion || 1}`
+  return "Helyi fotó"
+}
+
+function attachmentSyncClass(photo: FieldPhoto) {
+  if (photo.attachmentSyncState === "ERROR") return "border-rose-200 bg-rose-50 text-rose-700"
+  if (photo.attachmentSyncState === "DIRTY") return "border-amber-200 bg-amber-50 text-amber-800"
+  if (photo.coreAttachmentId) return "border-emerald-200 bg-emerald-50 text-emerald-800"
+  return "border-slate-200 bg-white text-slate-500"
+}
 
 const photoNotePresets = [
   "Közeli részletfotó a hibáról.",
@@ -158,12 +182,17 @@ export default function FieldPhotosPanel({
                       </span>
                       <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">{photo.name}</span>
                       <span className="mt-0.5 block text-[11px] font-bold text-slate-400">{photoAppendixOptions.find((option) => option.value === photo.appendixLayout)?.label} · {photo.appendixOrientation === "landscape" ? "fekvő" : "álló"}</span>
+                      <span className={`mt-1 inline-block border px-1.5 py-0.5 text-[9px] font-black uppercase ${attachmentSyncClass(photo)}`}>{attachmentSyncLabel(photo)}</span>
                     </span>
                     <span className="text-lg font-black text-slate-400">{isExpanded ? "−" : "+"}</span>
                   </button>
                   {isExpanded && (
                     <div className="border-t border-slate-200 p-3">
                       <div className="grid h-32 place-items-center bg-white bg-cover bg-center text-3xl" style={photo.url ? { backgroundImage: `url(${photo.url})` } : undefined}>{!photo.url && "📸"}</div>
+                      <div className={`mt-2 border px-2 py-2 text-[10px] font-black uppercase ${attachmentSyncClass(photo)}`}>
+                        {attachmentSyncLabel(photo)}{photo.driveVersionNumber ? ` · Drive v${photo.driveVersionNumber}` : ""}
+                        {photo.attachmentSyncError ? <span className="mt-1 block normal-case text-rose-700">{photo.attachmentSyncError}</span> : null}
+                      </div>
                       <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-500">
                         <div>Eredeti: {formatFileSize(photo.originalSize)}</div>
                         <div>PDF: {formatFileSize(photo.compressedSize)}</div>

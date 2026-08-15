@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { PDFDocument } from "pdf-lib"
 import { createPlanCropAppendixPdf } from "./exportPlanCropAppendixPdf"
-import FieldPlanLinksPanel, { type IssuePlanLink } from "./FieldPlanLinksPanel"
+import FieldPlanLinksPanel, { type IssuePlanLink, type ProjectPlanOption } from "./FieldPlanLinksPanel"
 import FieldPhotosPanel, { type FieldPhoto, type PhotoAppendixLayout, type PhotoAppendixOrientation, type PhotoCategory } from "./FieldPhotosPanel"
 import FieldExportPanel from "./FieldExportPanel"
 import { type PdfAttachment } from "./FieldAttachmentsPanel"
@@ -12,6 +12,16 @@ import FieldIssueListPanel from "./FieldIssueListPanel"
 import FieldIssueFormPanel from "./FieldIssueFormPanel"
 import type { FieldIssue } from "./FieldIssueTypes"
 import { getPlanIssueDisciplineMeta } from "../../viewers/PlanMarkerTypes"
+import {
+  dataUrlToFieldFile,
+  ensureFieldIssueDriveFolder,
+  linkFieldIssueAttachment,
+  loadFieldDriveTree,
+  objectUrlToFieldFile,
+  unlinkFieldIssueAttachment,
+  uploadFieldFileToDrive,
+  type FieldDriveTree,
+} from "./fieldIssueAttachmentClient"
 
 type FieldProjectOption = { id: string; code: string; name: string }
 
@@ -99,7 +109,7 @@ const initialIssues: FieldIssue[] = [
 ]
 
 const initialPlanLinks: IssuePlanLink[] = []
-const sampleProjectPlans = [
+const sampleProjectPlans: ProjectPlanOption[] = [
   { name: "E-13-01-01 ALAPRAJZ.pdf", sheetLabel: "A1 fekvő", widthMm: 841, heightMm: 594, previewKind: "floor", url: "" },
   { name: "E-13-02-01 METSZETEK.pdf", sheetLabel: "A1 fekvő", widthMm: 841, heightMm: 594, previewKind: "section", url: "" },
   { name: "E-13-03-01 HOMLOKZATOK 1.pdf", sheetLabel: "A1 fekvő", widthMm: 841, heightMm: 594, previewKind: "elevation", url: "" },
@@ -112,7 +122,7 @@ const sampleProjectPlans = [
   { name: "EK-13T-01-01 CSŐTRAVERZ TERVE.pdf", sheetLabel: "A2 fekvő", widthMm: 594, heightMm: 420, previewKind: "traverse", url: "" },
 ]
 const PLAN_UPLOAD_ACCEPT = "application/pdf,.ifc,.dwg,.dxf,image/*"
-const MAX_PLAN_UPLOAD_SIZE = 120 * 1024 * 1024
+const MAX_PLAN_UPLOAD_SIZE = 100 * 1024 * 1024
 const PLAN_UPLOAD_EXTENSIONS = [".pdf", ".ifc", ".dwg", ".dxf", ".png", ".jpg", ".jpeg", ".webp"]
 
 function getPlanUploadFileKind(file: File) {
@@ -1243,6 +1253,9 @@ export default function FieldMinutePage({ onBack, projectId, projectName, projec
   const [saveMessage, setSaveMessage] = useState("Helyi vázlat aktív · központi HJ mentés külön művelettel")
   const [fieldSyncingId, setFieldSyncingId] = useState("")
   const fieldSourceIdsRef = useRef(new Map<string, string>())
+  const [fieldDriveTree, setFieldDriveTree] = useState<FieldDriveTree | null>(null)
+  const [fieldDriveError, setFieldDriveError] = useState("")
+  const [attachmentSyncingId, setAttachmentSyncingId] = useState("")
   const [isExporting, setIsExporting] = useState(false)
   const [signers, setSigners] = useState<SignerData>({
     inspectorName: "",
@@ -1278,6 +1291,59 @@ export default function FieldMinutePage({ onBack, projectId, projectName, projec
   )
 
   const canWriteIssueCore = permissions.includes("issue.write")
+  const canReadDocuments = permissions.includes("document.read")
+  const canWriteDocuments = permissions.includes("document.write")
+  const canPersistAttachments = canWriteIssueCore && canReadDocuments && canWriteDocuments
+
+  useEffect(() => {
+    let cancelled = false
+    if (!canReadDocuments) {
+      setFieldDriveTree(null)
+      setFieldDriveError("A projekt dokumentumtárához document.read jogosultság szükséges.")
+      return () => { cancelled = true }
+    }
+    setFieldDriveError("")
+    void loadFieldDriveTree(projectId)
+      .then((tree) => {
+        if (!cancelled) setFieldDriveTree(tree)
+      })
+      .catch((caught) => {
+        if (cancelled) return
+        setFieldDriveTree(null)
+        setFieldDriveError(caught instanceof Error ? caught.message : "A projekt Drive dokumentumtára nem tölthető be.")
+      })
+    return () => { cancelled = true }
+  }, [canReadDocuments, projectId])
+
+  const driveProjectPlans = useMemo<ProjectPlanOption[]>(() => {
+    if (!fieldDriveTree) return []
+    return fieldDriveTree.documents
+      .filter((document) => document.status !== "DELETED" && document.currentVersion?.status === "AVAILABLE")
+      .filter((document) => {
+        const name = document.name.toLowerCase()
+        const mime = document.currentVersion?.mimeType || ""
+        return mime === "application/pdf" || mime.startsWith("image/") || [".pdf", ".dxf", ".dwg", ".ifc", ".png", ".jpg", ".jpeg", ".webp"].some((extension) => name.endsWith(extension))
+      })
+      .map((document) => {
+        const version = document.currentVersion!
+        return {
+          name: document.name,
+          sheetLabel: `Drive dokumentum · v${version.versionNumber}`,
+          widthMm: 0,
+          heightMm: 0,
+          previewKind: "drive",
+          driveDocumentId: document.id,
+          driveVersionId: version.id,
+          driveVersionNumber: version.versionNumber,
+          mimeType: version.mimeType,
+          sizeBytes: version.sizeBytes,
+          url: `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/preview/content?versionId=${encodeURIComponent(version.id)}`,
+        }
+      })
+  }, [fieldDriveTree, projectId])
+
+  const projectPlanOptions = driveProjectPlans.length ? driveProjectPlans : sampleProjectPlans
+  const getProjectPlanMeta = (planName: string) => projectPlanOptions.find((plan) => plan.name === planName) ?? projectPlanOptions[0]
 
   const activeIssuePhotos = useMemo(
     () => photos.filter((photo) => photo.issueId === activeIssue?.id),
@@ -1287,6 +1353,12 @@ export default function FieldMinutePage({ onBack, projectId, projectName, projec
     () => planLinks.filter((link) => link.issueId === activeIssue?.id),
     [activeIssue?.id, planLinks],
   )
+
+  const activeAttachmentTotal = activeIssuePhotos.length + activeIssuePlanLinks.length
+  const activeAttachmentSynced = activeIssuePhotos.filter((photo) => photo.coreAttachmentId && photo.attachmentSyncState === "SYNCED").length
+    + activeIssuePlanLinks.filter((link) => link.coreAttachmentId && link.attachmentSyncState === "SYNCED").length
+  const activeAttachmentDirty = activeIssuePhotos.filter((photo) => photo.attachmentSyncState === "DIRTY" || photo.attachmentSyncState === "ERROR").length
+    + activeIssuePlanLinks.filter((link) => link.attachmentSyncState === "DIRTY" || link.attachmentSyncState === "ERROR").length
 
   const pendingDeleteIssue = useMemo(
     () => issues.find((issue) => issue.id === pendingDeleteIssueId) ?? null,
@@ -1541,7 +1613,7 @@ ${emailMessage}`
       dueAt: fieldDueAt(issue.deadline),
       note: issue.note,
       metadata: {
-        fieldCaptureVersion: "0.3.0",
+        fieldCaptureVersion: "0.4.0",
         fieldLocalIssueId: issue.id,
         fieldLocalSerial: issue.localSerial || issue.serial,
         contractorRepresentative: issue.contractorRepresentative,
@@ -1552,6 +1624,8 @@ ${emailMessage}`
         recordDate,
         photoCount: photos.filter((photo) => photo.issueId === issue.id).length,
         planLinkCount: planLinks.filter((link) => link.issueId === issue.id).length,
+        linkedPhotoCount: photos.filter((photo) => photo.issueId === issue.id && photo.coreAttachmentId).length,
+        linkedPlanCount: planLinks.filter((link) => link.issueId === issue.id && link.coreAttachmentId).length,
       },
     }
   }
@@ -1654,6 +1728,228 @@ ${emailMessage}`
       return false
     } finally {
       setFieldSyncingId("")
+    }
+  }
+
+  async function refreshFieldDriveTree() {
+    if (!canReadDocuments) return null
+    try {
+      const tree = await loadFieldDriveTree(projectId)
+      setFieldDriveTree(tree)
+      setFieldDriveError("")
+      return tree
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A projekt Drive dokumentumtára nem tölthető be."
+      setFieldDriveError(message)
+      return null
+    }
+  }
+
+  function fieldPhotoAttachmentMetadata(photo: FieldPhoto, issue: FieldIssue) {
+    return {
+      fieldAttachmentVersion: "0.4.0",
+      fieldLocalIssueId: issue.id,
+      fieldLocalSerial: issue.localSerial || issue.serial,
+      fieldPhotoId: photo.id,
+      photoSerial: photo.serial,
+      originalName: photo.name,
+      note: photo.note,
+      category: photo.category,
+      appendixLayout: photo.appendixLayout,
+      appendixOrientation: photo.appendixOrientation,
+      width: photo.width,
+      height: photo.height,
+      edited: photo.edited,
+      originalSize: photo.originalSize,
+      optimizedSize: photo.compressedSize,
+      projectCode,
+      workArea,
+      recordDate,
+    }
+  }
+
+  function fieldPlanAttachmentMetadata(link: IssuePlanLink, issue: FieldIssue) {
+    return {
+      fieldAttachmentVersion: "0.4.0",
+      fieldLocalIssueId: issue.id,
+      fieldLocalSerial: issue.localSerial || issue.serial,
+      fieldPlanLinkId: link.id,
+      planName: link.planName,
+      planSource: link.planSource,
+      pageNumber: link.pageNumber,
+      originalSheetLabel: link.originalSheetLabel,
+      originalSheetWidthMm: link.originalSheetWidthMm,
+      originalSheetHeightMm: link.originalSheetHeightMm,
+      drawingScale: link.drawingScale,
+      selectionLocked: link.selectionLocked,
+      cropView: link.cropView,
+      selection: {
+        x: link.selectionX,
+        y: link.selectionY,
+        width: link.selectionWidth,
+        height: link.selectionHeight,
+      },
+      markerCount: link.planMarkers?.length || 0,
+      annotationCount: link.annotationCount,
+      projectCode,
+      workArea,
+      recordDate,
+    }
+  }
+
+  async function syncFieldPhotoAttachment(photo: FieldPhoto, issue: FieldIssue, issueFolderId?: string) {
+    if (!issue.coreIssueId || !issue.coreSerial) throw new Error("Előbb mentsd a terepi hibát központi HJ-ként.")
+    setAttachmentSyncingId(`photo:${photo.id}`)
+    setPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, attachmentSyncState: "SYNCING", attachmentSyncError: "" } : item))
+    try {
+      let driveDocumentId = photo.driveDocumentId || ""
+      let driveVersionId = photo.driveVersionId || ""
+      let driveVersionNumber = photo.driveVersionNumber || 0
+      if (!driveDocumentId || !driveVersionId || photo.driveContentDirty) {
+        const folder = issueFolderId ? { id: issueFolderId } : await ensureFieldIssueDriveFolder(projectId, issue.coreSerial)
+        const fileName = `${issue.coreSerial}_${photo.serial}.jpg`
+        const file = await dataUrlToFieldFile(photo.dataUrl || photo.url, fileName, "image/jpeg")
+        const uploaded = await uploadFieldFileToDrive({
+          projectId,
+          file,
+          folderId: driveDocumentId ? null : folder.id,
+          documentId: driveDocumentId || null,
+          expectedCurrentVersion: driveVersionNumber || 0,
+          documentName: fileName,
+          description: `${issue.coreSerial} terepi hibafotó · ${photo.serial}`,
+          changeNote: driveDocumentId ? "Terepi HJ hibafotó új verzió." : "Terepi HJ hibafotó feltöltés.",
+        })
+        driveDocumentId = uploaded.documentId
+        driveVersionId = uploaded.versionId
+        driveVersionNumber = uploaded.versionNumber
+      }
+      const linked = await linkFieldIssueAttachment({
+        projectId,
+        issueId: issue.coreIssueId,
+        attachmentKind: "PHOTO",
+        fieldAttachmentId: photo.id,
+        relationType: "EVIDENCE",
+        driveDocumentId,
+        driveVersionId,
+        metadata: fieldPhotoAttachmentMetadata(photo, issue),
+      })
+      setPhotos((current) => current.map((item) => item.id === photo.id ? {
+        ...item,
+        coreAttachmentId: linked.attachment.id,
+        coreAttachmentVersion: linked.attachment.version,
+        driveDocumentId,
+        driveVersionId,
+        driveVersionNumber,
+        driveContentDirty: false,
+        attachmentSyncState: "SYNCED",
+        attachmentSyncError: "",
+        attachmentSyncedAt: new Date().toISOString(),
+      } : item))
+      return true
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A hibafotó HJ/Drive szinkronja sikertelen."
+      setPhotos((current) => current.map((item) => item.id === photo.id ? { ...item, attachmentSyncState: "ERROR", attachmentSyncError: message } : item))
+      throw new Error(message)
+    } finally {
+      setAttachmentSyncingId("")
+    }
+  }
+
+  async function syncFieldPlanAttachment(link: IssuePlanLink, issue: FieldIssue, issueFolderId?: string) {
+    if (!issue.coreIssueId || !issue.coreSerial) throw new Error("Előbb mentsd a terepi hibát központi HJ-ként.")
+    setAttachmentSyncingId(`plan:${link.id}`)
+    setPlanLinks((current) => current.map((item) => item.id === link.id ? { ...item, attachmentSyncState: "SYNCING", attachmentSyncError: "" } : item))
+    try {
+      let driveDocumentId = link.driveDocumentId || ""
+      let driveVersionId = link.driveVersionId || ""
+      let driveVersionNumber = link.driveVersionNumber || 0
+      if (!driveDocumentId || !driveVersionId) {
+        const sourceUrl = link.planViewerUrl || link.planPreviewUrl || ""
+        if (!sourceUrl) throw new Error("A terepi tervfájl helyi forrása már nem érhető el.")
+        const folder = issueFolderId ? { id: issueFolderId } : await ensureFieldIssueDriveFolder(projectId, issue.coreSerial)
+        const file = await objectUrlToFieldFile(sourceUrl, link.planName)
+        const uploaded = await uploadFieldFileToDrive({
+          projectId,
+          file,
+          folderId: folder.id,
+          documentName: link.planName,
+          description: `${issue.coreSerial} terepi HJ tervkapcsolat`,
+          changeNote: "Terepi HJ tervfájl feltöltés.",
+        })
+        driveDocumentId = uploaded.documentId
+        driveVersionId = uploaded.versionId
+        driveVersionNumber = uploaded.versionNumber
+      }
+      const linked = await linkFieldIssueAttachment({
+        projectId,
+        issueId: issue.coreIssueId,
+        attachmentKind: "PLAN",
+        fieldAttachmentId: link.id,
+        relationType: "ATTACHMENT",
+        driveDocumentId,
+        driveVersionId,
+        metadata: fieldPlanAttachmentMetadata(link, issue),
+      })
+      setPlanLinks((current) => current.map((item) => item.id === link.id ? {
+        ...item,
+        coreAttachmentId: linked.attachment.id,
+        coreAttachmentVersion: linked.attachment.version,
+        driveDocumentId,
+        driveVersionId,
+        driveVersionNumber,
+        driveMimeType: linked.attachment.mimeType,
+        driveSizeBytes: linked.attachment.sizeBytes,
+        attachmentSyncState: "SYNCED",
+        attachmentSyncError: "",
+        attachmentSyncedAt: new Date().toISOString(),
+      } : item))
+      return true
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A tervkapcsolat HJ/Drive szinkronja sikertelen."
+      setPlanLinks((current) => current.map((item) => item.id === link.id ? { ...item, attachmentSyncState: "ERROR", attachmentSyncError: message } : item))
+      throw new Error(message)
+    } finally {
+      setAttachmentSyncingId("")
+    }
+  }
+
+  async function syncActiveIssueAttachmentsToCore() {
+    if (!activeIssue?.coreIssueId || !activeIssue.coreSerial) {
+      setSaveMessage("Előbb mentsd az aktív hibát központi HJ-ként.")
+      return
+    }
+    if (!canPersistAttachments) {
+      setSaveMessage("A HJ mellékletekhez issue.write + document.read + document.write jogosultság szükséges.")
+      return
+    }
+    if (attachmentSyncingId) return
+    const pendingPhotos = activeIssuePhotos.filter((photo) => !photo.coreAttachmentId || photo.attachmentSyncState !== "SYNCED")
+    const pendingPlans = activeIssuePlanLinks.filter((link) => !link.coreAttachmentId || link.attachmentSyncState !== "SYNCED")
+    if (!pendingPhotos.length && !pendingPlans.length) {
+      setSaveMessage(`${activeIssue.coreSerial} mellékletei már szinkronban vannak.`)
+      return
+    }
+    setAttachmentSyncingId("all")
+    setSaveMessage(`${activeIssue.coreSerial} mellékletek szinkronizálása · ${pendingPhotos.length} fotó + ${pendingPlans.length} terv`)
+    try {
+      const needsFolder = pendingPhotos.some((photo) => !photo.driveDocumentId || !photo.driveVersionId || photo.driveContentDirty)
+        || pendingPlans.some((link) => !link.driveDocumentId || !link.driveVersionId)
+      const issueFolder = needsFolder ? await ensureFieldIssueDriveFolder(projectId, activeIssue.coreSerial) : null
+      let synced = 0
+      for (const photo of pendingPhotos) {
+        await syncFieldPhotoAttachment(photo, activeIssue, issueFolder?.id)
+        synced += 1
+      }
+      for (const link of pendingPlans) {
+        await syncFieldPlanAttachment(link, activeIssue, issueFolder?.id)
+        synced += 1
+      }
+      await refreshFieldDriveTree()
+      setSaveMessage(`${activeIssue.coreSerial} mellékletek központilag szinkronizálva · ${synced} kapcsolat`)
+    } catch (caught) {
+      setSaveMessage(caught instanceof Error ? caught.message : "A HJ mellékletek szinkronizálása megszakadt.")
+    } finally {
+      setAttachmentSyncingId("")
     }
   }
 
@@ -1791,6 +2087,8 @@ ${emailMessage}`
         appendixLayout: "half" as PhotoAppendixLayout,
         appendixOrientation: "portrait" as PhotoAppendixOrientation,
         category: "photo" as PhotoCategory,
+        driveContentDirty: true,
+        attachmentSyncState: "LOCAL" as const,
       }
     })
 
@@ -1801,36 +2099,55 @@ ${emailMessage}`
     setSaveMessage(`${nextPhotos.length} fotó hozzáadva az aktív hibához`)
   }
 
-  function updatePhotoNote(photoId: string, note: string) {
-    setPhotos((current) =>
-      current.map((photo) => (photo.id === photoId ? { ...photo, note } : photo)),
-    )
+  function markPhotoAttachmentChanged(photo: FieldPhoto, patch: Partial<FieldPhoto>, contentDirty = false): FieldPhoto {
+    return {
+      ...photo,
+      ...patch,
+      driveContentDirty: contentDirty ? true : photo.driveContentDirty,
+      attachmentSyncState: photo.coreAttachmentId ? "DIRTY" : (photo.attachmentSyncState || "LOCAL"),
+      attachmentSyncError: "",
+    }
   }
-  function deletePhoto(photoId: string) {
+
+  function updatePhotoNote(photoId: string, note: string) {
+    setPhotos((current) => current.map((photo) => photo.id === photoId ? markPhotoAttachmentChanged(photo, { note }) : photo))
+  }
+
+  async function deletePhoto(photoId: string) {
     const photo = photos.find((item) => item.id === photoId)
     if (!photo) return
-    if (!window.confirm(photo.serial + " fotó törlése?")) return
+    const issue = issues.find((item) => item.id === photo.issueId)
+    if (!window.confirm(photo.serial + " fotó törlése? A Drive dokumentum megmarad, csak a HJ-kapcsolat szűnik meg.")) return
+    if (photo.coreAttachmentId) {
+      if (!issue?.coreIssueId || !photo.coreAttachmentVersion || !canWriteIssueCore) {
+        setSaveMessage("A központi fotókapcsolat nem választható le a szükséges HJ-jogosultság nélkül.")
+        return
+      }
+      setAttachmentSyncingId(`photo:${photo.id}`)
+      try {
+        await unlinkFieldIssueAttachment({ projectId, issueId: issue.coreIssueId, attachmentId: photo.coreAttachmentId, expectedVersion: photo.coreAttachmentVersion })
+      } catch (caught) {
+        setSaveMessage(caught instanceof Error ? caught.message : "A központi fotókapcsolat leválasztása sikertelen.")
+        setAttachmentSyncingId("")
+        return
+      }
+      setAttachmentSyncingId("")
+    }
     setPhotos((current) => current.filter((item) => item.id !== photoId))
     setExpandedPhotoId((current) => (current === photoId ? null : current))
-    setSaveMessage(photo.serial + " fotó törölve")
+    setSaveMessage(photo.serial + " helyi fotó törölve · Drive dokumentum megmaradt")
   }
 
   function updatePhotoAppendixLayout(photoId: string, appendixLayout: PhotoAppendixLayout) {
-    setPhotos((current) =>
-      current.map((photo) => (photo.id === photoId ? { ...photo, appendixLayout } : photo)),
-    )
+    setPhotos((current) => current.map((photo) => photo.id === photoId ? markPhotoAttachmentChanged(photo, { appendixLayout }) : photo))
   }
 
   function updatePhotoAppendixOrientation(photoId: string, appendixOrientation: PhotoAppendixOrientation) {
-    setPhotos((current) =>
-      current.map((photo) => (photo.id === photoId ? { ...photo, appendixOrientation } : photo)),
-    )
+    setPhotos((current) => current.map((photo) => photo.id === photoId ? markPhotoAttachmentChanged(photo, { appendixOrientation }) : photo))
   }
 
   function updatePhotoCategory(photoId: string, category: PhotoCategory) {
-    setPhotos((current) =>
-      current.map((photo) => (photo.id === photoId ? { ...photo, category } : photo)),
-    )
+    setPhotos((current) => current.map((photo) => photo.id === photoId ? markPhotoAttachmentChanged(photo, { category }) : photo))
   }
 
   function updateSigner(field: keyof SignerData, value: string) {
@@ -1866,7 +2183,7 @@ ${emailMessage}`
     setPhotos((current) =>
       current.map((photo) =>
         photo.id === photoId
-          ? { ...photo, dataUrl: optimized.dataUrl, url: optimized.dataUrl, compressedSize: optimized.compressedSize, width: optimized.width || photo.width, height: optimized.height || photo.height, edited: true }
+          ? markPhotoAttachmentChanged(photo, { dataUrl: optimized.dataUrl, url: optimized.dataUrl, compressedSize: optimized.compressedSize, width: optimized.width || photo.width, height: optimized.height || photo.height, edited: true }, true)
           : photo,
       ),
     )
@@ -1968,6 +2285,10 @@ ${emailMessage}`
       planPageExports: source.planPageExports ?? [],
       annotationCount: copiedMarkers.length,
       annotations: [],
+      coreAttachmentId: undefined,
+      coreAttachmentVersion: undefined,
+      attachmentSyncState: "LOCAL",
+      attachmentSyncError: "",
       finalized: false,
     }
     setPlanLinks((current) => [...current, nextLink])
@@ -1989,7 +2310,7 @@ ${emailMessage}`
 
   function addPlanLink() {
     if (!activeIssue) return
-    const selectedPlan = sampleProjectPlans[activeIssuePlanLinks.length % sampleProjectPlans.length]
+    const selectedPlan = projectPlanOptions[activeIssuePlanLinks.length % projectPlanOptions.length]
     const nextLink: IssuePlanLink = {
       id: `plan-link-${Date.now()}`,
       issueId: activeIssue.id,
@@ -2001,6 +2322,12 @@ ${emailMessage}`
       originalSheetHeightMm: selectedPlan.heightMm,
       planPreviewUrl: selectedPlan.url,
       planViewerUrl: selectedPlan.url,
+      driveDocumentId: selectedPlan.driveDocumentId,
+      driveVersionId: selectedPlan.driveVersionId,
+      driveVersionNumber: selectedPlan.driveVersionNumber,
+      driveMimeType: selectedPlan.mimeType,
+      driveSizeBytes: selectedPlan.sizeBytes,
+      attachmentSyncState: "LOCAL",
       previewOffsetX: 0,
       previewOffsetY: 0,
       previewZoom: 1,
@@ -2034,7 +2361,12 @@ ${emailMessage}`
   }
 
   function updatePlanLink(id: string, patch: Partial<IssuePlanLink>) {
-    setPlanLinks((current) => current.map((link) => (link.id === id ? { ...link, ...patch } : link)))
+    setPlanLinks((current) => current.map((link) => link.id === id ? {
+      ...link,
+      ...patch,
+      attachmentSyncState: link.coreAttachmentId ? "DIRTY" : (link.attachmentSyncState || "LOCAL"),
+      attachmentSyncError: "",
+    } : link))
     setSaveMessage("Tervkapcsolat frissítve")
   }
 
@@ -2126,14 +2458,33 @@ ${emailMessage}`
   }
 
 
-  function deletePlanLink(id: string) {
+  async function deletePlanLink(id: string) {
+    const link = planLinks.find((item) => item.id === id)
+    if (!link) return
+    const issue = issues.find((item) => item.id === link.issueId)
+    if (link.coreAttachmentId) {
+      if (!issue?.coreIssueId || !link.coreAttachmentVersion || !canWriteIssueCore) {
+        setSaveMessage("A központi tervkapcsolat nem választható le a szükséges HJ-jogosultság nélkül.")
+        return
+      }
+      if (!window.confirm(`${link.planName} leválasztása a ${issue.coreSerial || issue.serial} HJ-ról? A Drive dokumentum megmarad.`)) return
+      setAttachmentSyncingId(`plan:${link.id}`)
+      try {
+        await unlinkFieldIssueAttachment({ projectId, issueId: issue.coreIssueId, attachmentId: link.coreAttachmentId, expectedVersion: link.coreAttachmentVersion })
+      } catch (caught) {
+        setSaveMessage(caught instanceof Error ? caught.message : "A központi tervkapcsolat leválasztása sikertelen.")
+        setAttachmentSyncingId("")
+        return
+      }
+      setAttachmentSyncingId("")
+    }
     const objectUrl = planViewerObjectUrlRefs.current[id]
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl)
       delete planViewerObjectUrlRefs.current[id]
     }
-    setPlanLinks((current) => current.filter((link) => link.id !== id))
-    setSaveMessage("Tervkapcsolat törölve")
+    setPlanLinks((current) => current.filter((item) => item.id !== id))
+    setSaveMessage("Tervkapcsolat törölve · Drive dokumentum megmaradt")
   }
 
 
@@ -2198,6 +2549,7 @@ ${emailMessage}`
         markerX: 50,
         markerY: 50,
         markerLabel: activeIssue.serial,
+        attachmentSyncState: "LOCAL",
         finalized: false,
       }
     }))
@@ -3039,7 +3391,7 @@ Folytatod így az exportot?`)
   }
 
   return (
-    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-16 text-slate-800 md:pb-0" data-field-issue-core="0.3.0" data-project-id={projectId}>
+    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-16 text-slate-800 md:pb-0" data-field-issue-core="0.4.0" data-project-id={projectId}>
       <section className="border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.055)]">
         <div className="sticky top-0 z-30 relative overflow-hidden border-b border-cyan-500 bg-gradient-to-r from-[#0f2f46] via-[#0e7490] to-[#0891b2] px-3 py-4 text-white shadow-[0_6px_16px_rgba(8,145,178,0.18)] backdrop-blur sm:px-6 md:relative">
           <FieldHeaderHexPattern />
@@ -3324,6 +3676,13 @@ Folytatod így az exportot?`)
                     canPersistToCore={canWriteIssueCore}
                     syncing={fieldSyncingId === activeIssue.id}
                     onPersistActiveIssue={() => void persistFieldIssueToCore(activeIssue)}
+                    canPersistAttachments={canPersistAttachments}
+                    attachmentSyncing={Boolean(attachmentSyncingId)}
+                    attachmentTotal={activeAttachmentTotal}
+                    attachmentSynced={activeAttachmentSynced}
+                    attachmentDirty={activeAttachmentDirty}
+                    driveError={fieldDriveError}
+                    onSyncAttachments={() => void syncActiveIssueAttachmentsToCore()}
                   />
                   </div> : null}
                 </div>
@@ -3396,7 +3755,7 @@ Folytatod így az exportot?`)
                   activeIssuePlanLinks={activeIssuePlanLinks}
                   activeIssuePhotos={activeIssuePhotos}
                   reusablePlanLinks={reusablePlanLinksForActiveIssue}
-                  sampleProjectPlans={sampleProjectPlans}
+                  sampleProjectPlans={projectPlanOptions}
                   planSheetSizeOptions={planSheetSizeOptions}
                   planOrientationOptions={planOrientationOptions}
                   showPlanSourceMenu={showPlanSourceMenu}
@@ -3412,7 +3771,7 @@ Folytatod így az exportot?`)
                   onUpdatePlanSheetSize={updatePlanSheetSize}
                   onUpdatePlanOrientation={updatePlanOrientation}
                   onDeletePlanLink={deletePlanLink}
-                  getSampleProjectPlanMeta={getSampleProjectPlanMeta}
+                  getSampleProjectPlanMeta={getProjectPlanMeta}
                   formatPlanSheetMeta={formatPlanSheetMeta}
                 />
                 </div> : null}

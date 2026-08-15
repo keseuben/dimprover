@@ -48,7 +48,7 @@ check("issue audit event", sql.includes("PROJECT_ISSUE_CREATED_FROM_COMPARE_FIND
 check("finding conversion audit event", sql.includes("DRIVE_COMPARE_FINDING_CONVERTED_TO_ISSUE"));
 check("drive change feed event", sql.includes("COMPARE_FINDING_ISSUE_CREATED"));
 check("RPC service role only", sql.includes("revoke all on function public.project_issue_create_from_compare_finding_atomic") && sql.includes("grant execute on function public.project_issue_create_from_compare_finding_atomic"));
-check("issue repository health", issueRepo.includes("getProjectIssueHealth") && (issueRepo.includes('schema_version === "0.1.0"') || issueRepo.includes('schema_version === "0.2.0"') || issueRepo.includes('schema_version === "0.3.0"')));
+check("issue repository health", issueRepo.includes("getProjectIssueHealth") && (issueRepo.includes('schema_version === "0.1.0"') || issueRepo.includes('schema_version === "0.2.0"') || issueRepo.includes('schema_version === "0.3.0"') || issueRepo.includes('schema_version === "0.4.0"')));
 check("issue repository list", issueRepo.includes("listProjectIssues") && issueRepo.includes("project_core_issues"));
 check("issue repository conversion", issueRepo.includes("convertCompareFindingToIssue") && issueRepo.includes("project_issue_create_from_compare_finding_atomic"));
 check("human-gate error maps 409", issueRepo.includes("PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED") && issueRepo.includes(", 409)"));
