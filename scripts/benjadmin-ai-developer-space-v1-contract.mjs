@@ -38,7 +38,7 @@ check("New tasks persist estimate",messages.includes("estimateMinutes: estimate.
 check("Direct address routes immediately",messages.includes("routeDevEngineTask")&&messages.includes('includes(target)'));
 check("Task action API admin mutation auth",taskRoute.includes("getDevCenterMutationSubject(request.headers, false)"));
 check("Task action API PATCH",taskRoute.includes("export async function PATCH"));
-check("Task action closed enum",taskRoute.includes('"ROUTE" | "ESTIMATE" | "START" | "TESTING" | "COMPLETE" | "FAIL"'));
+check("Task action closed enum",taskRoute.includes('"ROUTE" | "ESTIMATE" | "START" | "TESTING" | "COMPLETE" | "FAIL"') || taskRoute.includes('"ROUTE" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "TESTING" | "COMPLETE" | "FAIL"'));
 check("Outcome push notification",taskRoute.includes("sendDevPushNotification")&&taskRoute.includes("BENJADMIN · Feladat elkészült")&&taskRoute.includes("BENJADMIN · Fejlesztési hiba"));
 check("Push failure does not break task close",taskRoute.includes("catch (error)")&&taskRoute.includes('sent: 0'));
 check("Live task exposes metadata/timing",live.includes("blocked_reason,started_at,completed_at,metadata"));
