@@ -4,6 +4,7 @@ import { LockKeyhole, RefreshCw, ServerCog, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { ProdReadiness } from "@/app/lib/dev-center/terminal-hub/prod-readiness";
 import type { ProdReadOnlyConnectorReadiness } from "@/app/lib/dev-center/terminal-hub/prod-readonly-connector";
+import type { ProdReadOnlyProbePlan } from "@/app/lib/dev-center/terminal-hub/prod-probe-plan";
 import styles from "./DeveloperConsole.module.css";
 
 function adminHeaders() {
@@ -14,6 +15,10 @@ function adminHeaders() {
 export default function ProdReadinessPanel() {
   const [readiness, setReadiness] = useState<ProdReadiness | null>(null);
   const [connector, setConnector] = useState<ProdReadOnlyConnectorReadiness | null>(null);
+  const [selectedProbe, setSelectedProbe] = useState("PUBLIC_HEALTH");
+  const [probePlan, setProbePlan] = useState<ProdReadOnlyProbePlan | null>(null);
+  const [planMessage, setPlanMessage] = useState("");
+  const [planBusy, setPlanBusy] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,13 +35,33 @@ export default function ProdReadinessPanel() {
       if (!connectorResponse.ok || !connectorPayload?.ok || !connectorPayload.connector) throw new Error(connectorPayload?.error || "A PROD connector readiness nem tölthető be.");
       setReadiness(payload.readiness);
       setConnector(connectorPayload.connector);
+      const firstProbe = connectorPayload.connector.probeCatalog[0]?.id;
+      if (firstProbe && !connectorPayload.connector.probeCatalog.some((item) => item.id === selectedProbe)) setSelectedProbe(firstProbe);
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A PROD readiness nem tölthető be.");
     } finally { setBusy(false); }
-  }, []);
+  }, [selectedProbe]);
 
   useEffect(() => { void load(); }, [load]);
+
+  async function buildProbePlan() {
+    if (connector?.state !== "FOUNDATION_READY") { setPlanMessage("A connector foundation még nem READY; terv nem készül."); return; }
+    setPlanBusy(true); setPlanMessage(""); setProbePlan(null);
+    try {
+      const response = await fetch("/api/dev/terminal-hub/prod-connector/plan", {
+        method: "POST",
+        headers: { ...adminHeaders(), "content-type": "application/json" },
+        body: JSON.stringify({ probeId: selectedProbe }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; plan?: ProdReadOnlyProbePlan; error?: string; code?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.plan) throw new Error(`${payload?.error || "A probe terv nem készíthető el."}${payload?.code ? ` · ${payload.code}` : ""}`);
+      setProbePlan(payload.plan);
+      setPlanMessage("Terv elkészült. Ez nem hálózati végrehajtás.");
+    } catch (caught) {
+      setPlanMessage(caught instanceof Error ? caught.message : "A probe terv nem készíthető el.");
+    } finally { setPlanBusy(false); }
+  }
 
   const state = readiness?.state || "DISABLED";
   return (
@@ -67,6 +92,25 @@ export default function ProdReadinessPanel() {
           <span data-ok={!connector?.networkTransportImplemented}><b>Network transport</b><small>{connector?.networkTransportImplemented ? "AKTÍV · TILTOTT" : "NINCS IMPLEMENTÁLVA"}</small></span>
         </div>
         <div className={styles.prodConnectorProbeList}>{(connector?.probeCatalog || []).map((probe) => <span key={probe.id}>{probe.id} · AUDIT_ONLY</span>)}</div>
+        <section className={styles.prodProbePlanner} data-ready={connector?.state === "FOUNDATION_READY" ? "true" : "false"}>
+          <header><div><ServerCog size={15} /><strong>P10.2 · PROBE PLAN COMPILER</strong></div><b>PLAN ONLY · NO NETWORK</b></header>
+          <div className={styles.prodProbePlannerControls}>
+            <select aria-label="PROD read-only probe terv" value={selectedProbe} onChange={(event) => { setSelectedProbe(event.target.value); setProbePlan(null); setPlanMessage(""); }} disabled={planBusy}>
+              {(connector?.probeCatalog || []).map((probe) => <option key={probe.id} value={probe.id}>{probe.id}</option>)}
+            </select>
+            <button type="button" onClick={() => void buildProbePlan()} disabled={planBusy || connector?.state !== "FOUNDATION_READY"}>{planBusy ? "TERV KÉSZÜL…" : "TERV ELŐÁLLÍTÁSA"}</button>
+            <span>Browser input: csak probe ID · command/host/credential NEM adható meg.</span>
+          </div>
+          {probePlan ? <div className={styles.prodProbePlanResult}>
+            <span><b>Probe</b><small>{probePlan.probeId}</small></span>
+            <span><b>Adapter action</b><small>{probePlan.adapterAction}</small></span>
+            <span><b>Execution</b><small>{probePlan.executionAvailable ? "TILTOTT ÁLLAPOT" : "NINCS"}</small></span>
+            <span><b>Network</b><small>{probePlan.networkAccessAttempted ? "TILTOTT ÁLLAPOT" : "NEM TÖRTÉNT"}</small></span>
+            <span><b>Output</b><small>{probePlan.outputPolicy.dataClass} · max {probePlan.limits.maxOutputBytes} B</small></span>
+            <span><b>Policy</b><small>sanitize + audit · RAW→AI tiltva</small></span>
+          </div> : null}
+          {planMessage ? <p>{planMessage}</p> : <p>Csak immutable read-only terv készül. A compiler nem old fel reference-et és nem indít transportot.</p>}
+        </section>
         <p>Reference érték nem jelenik meg · credential nem oldódik fel · hálózati kapcsolat nem történik · RAW PROD → AI tiltott.</p>
       </section>
       {readiness?.blockers?.length ? <ul>{readiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p><ShieldCheck size={14} /> Read-only smoke readiness zöld. Ez továbbra sem jelent PROD execution jogot.</p>}

@@ -1327,3 +1327,23 @@
 .prodConnectorFoundation > p { margin: 0; padding: 7px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.45; }
 @media (max-width: 1000px) { .prodConnectorReferenceGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 620px) { .prodConnectorReferenceGrid { grid-template-columns: 1fr; } }
+
+/* BENJADMIN Terminal Hub P10.2 · networkless probe plan compiler */
+.prodProbePlanner { margin: 0 7px 7px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.prodProbePlanner > header { min-height: 38px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 7px; background: var(--surface2); }
+.prodProbePlanner > header > div { display: flex; align-items: center; gap: 5px; }
+.prodProbePlanner > header strong, .prodProbePlanner > header b { font-size: 12px; }
+.prodProbePlanner > header b { padding: 3px 6px; border-radius: 5px; color: var(--green); background: var(--green-soft); }
+.prodProbePlannerControls { padding: 7px; display: grid; grid-template-columns: minmax(200px,.65fr) auto minmax(260px,1.35fr); align-items: center; gap: 6px; }
+.prodProbePlannerControls select, .prodProbePlannerControls button, .prodProbePlannerControls span { font-size: 12px; }
+.prodProbePlannerControls select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+.prodProbePlannerControls button { min-height: 34px; padding: 0 10px; border: 1px solid color-mix(in srgb,var(--green) 38%,var(--border)); border-radius: 6px; color: var(--green); background: var(--green-soft); font-weight: 850; cursor: pointer; }
+.prodProbePlannerControls button:disabled { opacity: .45; cursor: not-allowed; }
+.prodProbePlannerControls span { color: var(--muted); line-height: 1.4; }
+.prodProbePlanResult { padding: 0 7px 7px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
+.prodProbePlanResult > span { min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 2px; background: var(--surface); }
+.prodProbePlanResult b, .prodProbePlanResult small { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.prodProbePlanResult b { color: var(--text); }.prodProbePlanResult small { color: var(--green); }
+.prodProbePlanner > p { margin: 0; padding: 7px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.45; }
+@media (max-width: 1050px) { .prodProbePlannerControls { grid-template-columns: 1fr auto; }.prodProbePlannerControls span { grid-column: 1 / -1; }.prodProbePlanResult { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 650px) { .prodProbePlannerControls, .prodProbePlanResult { grid-template-columns: 1fr; } }

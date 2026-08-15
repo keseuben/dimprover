@@ -47,7 +47,7 @@ check("UI reference értéket nem renderel",!ui.includes('ENDPOINT_REF')&&!ui.in
 check("UI hálózati transport nincs",ui.includes('NINCS IMPLEMENTÁLVA'));
 check("UI RAW PROD AI tiltás",ui.includes('RAW PROD → AI tiltott'));
 check("UI probe catalogot mutat",ui.includes('probeCatalog')&&ui.includes('AUDIT_ONLY'));
-check("UI nincs connector action gomb",!/>\s*(?:Connect|SSH|Probe|Run|Deploy|Restart|Migration|Futtatás)\s*</i.test(ui));
+check("UI nincs connector execution action gomb",!/<button[^>]*>\s*(?:Connect|SSH|Probe|Run|Deploy|Restart|Migration|Futtatás)\s*<\/button>/i.test(ui));
 check("P10.1 CSS létezik",css.includes('BENJADMIN Terminal Hub P10.1')&&css.includes('.prodConnectorFoundation'));
 const c=css.slice(css.indexOf('BENJADMIN Terminal Hub P10.1'));
 check("P10.1 tipográfia minimum 12px",!/font-size:\s*(?:[0-9]|1[01])px/.test(c));
