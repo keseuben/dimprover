@@ -151,3 +151,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `233_benjadmin_terminalhub_p9_destructive_command_approval_dev_activation_20260815.md` – P9 destructive Managed Command approval DEV aktiválás: 621/621 PASS, atomikus single-use approval gate aktív; execution/PROD/Vault továbbra is OFF.
 
 - `234_benjadmin_terminalhub_p10_prod_readiness_candidate_20260815.md` – P10 PROD readiness foundation: READ_ONLY + AI BLOCKED + separate connector/default deny policy; 661/661 PASS, valódi PROD kapcsolat nélkül.
+
+- `235_benjadmin_terminalhub_p10_prod_readiness_dev_activation_20260815.md` – P10 PROD readiness foundation DEV aktiválás: READ_ONLY + AI BLOCKED/default deny policy aktív kódban, live connector/execution flagek OFF; PROD érintetlen.
