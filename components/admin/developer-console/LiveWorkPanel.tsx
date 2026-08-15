@@ -85,7 +85,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
     .filter((task) => (!selectedProjectId || task.project_id === selectedProjectId)
       && Boolean(task.requested_worker_id || task.assigned_worker_id)
       && !["completed", "cancelled"].includes(task.status))
-    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
+    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0) || String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")));
 
   async function copyHandoffAndMark(task: LiveTask) {
     const prompt = metadataText(task, "handoffPrompt");
@@ -131,13 +131,13 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
           );
         })}
       </div>
-      <section className={styles.aiWorkerInbox} aria-label="Worker Inbox">
+      <section className={styles.aiWorkerInbox} aria-label="Worker Inbox" data-testid="benjadmin-worker-inbox">
         <div className={styles.railSectionTitle}><Inbox size={14} /> WORKER INBOX</div>
         <div className={styles.aiWorkerInboxGrid}>
           {workers.map((item) => {
             const worker = live?.workers.find((candidate) => candidate.code === item.code);
             const owned = worker ? inboxTasks.filter((task) => task.requested_worker_id === worker.id || task.assigned_worker_id === worker.id) : [];
-            return <article key={`inbox-${item.code}`}>
+            return <article key={`inbox-${item.code}`} data-worker-code={item.code}>
               <header><BenjadminAvatar member={item.author} size="chat" status={owned.length ? "waiting" : "idle"} /><div><strong>{worker?.name || item.fallbackName}</strong><span>{owned.length} nyitott task</span></div></header>
               <div>
                 {owned.slice(0, 3).map((task) => <p key={task.id}><span>{task.title}</span><small>{metadataText(task, "bridgeState") || metadataText(task, "workflowState") || task.status.toUpperCase()}</small></p>)}
@@ -160,7 +160,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
             const handoffSanitized = task.metadata?.handoffSanitized === true;
             const busy = busyTaskId === task.id;
             return (
-              <article key={task.id} data-status={task.status}>
+              <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"}>
                 <header><div><strong>{task.title}</strong><span>{taskOwner(task, live)} · {task.status.toUpperCase()}</span></div><b>{durationLabel(estimate)}</b></header>
                 <div className={styles.aiDeveloperTaskFacts}>
                   <span><Clock3 size={11} /> ETA {expectedFinishAt ? finishLabel(expectedFinishAt) : "indítás után"}</span>
@@ -176,10 +176,10 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
                     <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ROUTE", { workerCode: "OUTMINAI", estimateMinutes: estimate || 90 })}>Outmin</button>
                   </> : null}
                   {routed && ["queued", "ready"].includes(task.status) ? <button type="button" className={styles.aiDeveloperStartButton} disabled={busy} onClick={() => void onTaskAction(task.id, "START")}><Play size={11} /> Indítás</button> : null}
-                  {started && bridgeState === "WAITING_HANDOFF" ? <button type="button" className={styles.aiBridgeHandoffButton} disabled={busy} onClick={() => void copyHandoffAndMark(task)}><ClipboardCopy size={11} /> Átadó másolása</button> : null}
-                  {started && bridgeState === "HANDED_OFF" ? <button type="button" className={styles.aiBridgeRunningButton} disabled={busy} onClick={() => void onTaskAction(task.id, "RUNNING")}><Radio size={11} /> Chat elindult</button> : null}
-                  {started && bridgeState === "RUNNING" ? <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "RESULT_PENDING")}><CheckCircle2 size={11} /> Eredmény jött</button> : null}
-                  {started && bridgeState === "RESULT_PENDING" && task.status !== "testing" ? <button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "TESTING")}><FlaskConical size={11} /> Teszt</button> : null}
+                  {started && bridgeState === "WAITING_HANDOFF" ? <button type="button" className={styles.aiBridgeHandoffButton} data-action="HANDOFF" disabled={busy} onClick={() => void copyHandoffAndMark(task)}><ClipboardCopy size={11} /> Átadó másolása</button> : null}
+                  {started && bridgeState === "HANDED_OFF" ? <button type="button" className={styles.aiBridgeRunningButton} data-action="RUNNING" disabled={busy} onClick={() => void onTaskAction(task.id, "RUNNING")}><Radio size={11} /> Chat elindult</button> : null}
+                  {started && bridgeState === "RUNNING" ? <button type="button" data-action="RESULT_PENDING" disabled={busy} onClick={() => void onTaskAction(task.id, "RESULT_PENDING")}><CheckCircle2 size={11} /> Eredmény jött</button> : null}
+                  {started && bridgeState === "RESULT_PENDING" && task.status !== "testing" ? <button type="button" data-action="TESTING" disabled={busy} onClick={() => void onTaskAction(task.id, "TESTING")}><FlaskConical size={11} /> Teszt</button> : null}
                   {routed && !["completed", "cancelled"].includes(task.status) ? <>
                     <button type="button" disabled={busy || !estimate} title="Becslés -30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: Math.max(15, (estimate || 60) - 30) })}>−30p</button>
                     <button type="button" disabled={busy} title="Becslés +30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: (estimate || 60) + 30 })}>+30p</button>

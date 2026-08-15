@@ -51,6 +51,9 @@ check("UI has explicit result arrived action", () => assert.ok(panel.includes("E
 check("TESTING is offered after RESULT_PENDING", () => assert.ok(panel.includes('bridgeState === "RESULT_PENDING"') && panel.includes('"TESTING"')));
 check("UI warns when handoff was sanitized", () => assert.ok(panel.includes("érzékeny adatot észlelt és maszkolta")));
 check("Shell accepts V1.1 bridge actions", () => assert.ok(shell.includes('"HANDOFF" | "RUNNING" | "RESULT_PENDING"')));
+check("Worker Inbox exposes stable browser hooks", () => assert.ok(panel.includes('data-testid="benjadmin-worker-inbox"') && panel.includes('data-worker-code={item.code}') && panel.includes('data-task-id={task.id}') && panel.includes('data-bridge-state={bridgeState || "ROUTING"}')));
+check("Bridge actions expose stable browser hooks", () => assert.ok(panel.includes('data-action="HANDOFF"') && panel.includes('data-action="RUNNING"') && panel.includes('data-action="RESULT_PENDING"') && panel.includes('data-action="TESTING"')));
+check("Worker Inbox prioritizes latest updated task", () => assert.ok(panel.includes('String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || ""))')));
 check("Worker Inbox CSS exists", () => assert.ok(css.includes(".aiWorkerInboxGrid")));
 check("Bridge button CSS exists", () => assert.ok(css.includes(".aiBridgeHandoffButton") && css.includes(".aiBridgeRunningButton")));
 check("Team avatars bypass server-side image upscale", () => assert.ok(read("components/admin/developer-console/BenjadminAvatar.tsx").includes("priority={eager || member === \"BENJADMIN\" || member === \"BENAI\"} unoptimized")));
