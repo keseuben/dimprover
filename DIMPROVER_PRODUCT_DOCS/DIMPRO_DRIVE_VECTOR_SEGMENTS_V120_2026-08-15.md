@@ -145,3 +145,78 @@ Ugyanezen forrásverzión:
 - Historical Revision Selector: **20/20 PASS** — `/srv/dimpro-dev/artifacts/jazmin-drive-revision-selector-2026-08-15T09-17-27-035Z`.
 
 A böngészős forrásteszt idejére a külön feature worktree Next.js DEV szerverén ideiglenesen engedélyezve volt a `license.dimpro.hu` dev origin. Ez kizárólag tesztkonfiguráció volt, a `next.config.ts` a teszt után visszaállt, és nem része a feature commitnak.
+
+
+## Végleges DEV build és cutover
+
+Integrált BENJADMIN commit:
+
+- `f4331e3 feat(drive): align revisions from open vector segments`
+- eredeti feature commit: `141cad7`.
+
+Az integráció a közben elkészült BENJADMIN P9 destructive approval commitokra épült, konfliktus nélkül.
+
+Végleges Turbopack build:
+
+- **`bYVOdiYac5eZKANDt_efN`**;
+- standalone statikus chunk ellenőrzés: **245 PASS**;
+- a build külön `.next-drive-vector-segments-v120` release könyvtárban készült, ezért a régi DEV runtime a build teljes ideje alatt online maradt.
+
+Rollback pont:
+
+- `/srv/dimpro-dev/backups/drive_vector_segments_v120_runtime_20260815_113450`;
+- előző aktív build: `ITkECuMZrrOgi89fg8q_y`;
+- forrás backup branch: `backup/benjadmin-pre-vector-segments-integration-20260815_112112`;
+- korábbi feature-start backup: `backup/benjadmin-pre-vector-segments-20260815_104334`.
+
+Aktív runtime a cutover után:
+
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev`;
+- cwd: `/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2`;
+- port: 3100;
+- build: `bYVOdiYac5eZKANDt_efN`;
+- runtime identity guard: PASS;
+- admin DEV console: HTTP 200;
+- publikus Drive: a meglévő auth-flow szerint HTTP 307.
+
+### Exact production build acceptance
+
+A végleges Turbopack buildet cutover előtt külön port 3210 candidate-en ellenőriztük:
+
+- Vector Segments valós PDF acceptance: **23/23 PASS**;
+- artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-vector-segments-2026-08-15T09-33-20-640Z`;
+- Geometric Nodes: **22/22 PASS** — `/srv/dimpro-dev/artifacts/jazmin-drive-geometric-nodes-2026-08-15T09-33-43-883Z`;
+- Auto Pair Review: **38/38 PASS** — `/srv/dimpro-dev/artifacts/jazmin-drive-auto-pair-review-2026-08-15T09-33-54-092Z`;
+- Difference Heatmap: **58/58 PASS** — `/srv/dimpro-dev/artifacts/jazmin-drive-difference-heatmap-2026-08-15T09-34-04-281Z`.
+
+### Aktív DEV post-cutover acceptance
+
+Ugyanaz a nyitott-vonalas teszt közvetlenül az aktív 3100 runtime-on:
+
+- **23/23 PASS**;
+- artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-vector-segments-2026-08-15T09-35-23-043Z`.
+
+A Drive biztonsági réteg a Compare engine módosítása után is változatlanul egészséges:
+
+- storage mode: `active`;
+- objektum letöltés: engedélyezett a CLEAN release-gate szerint;
+- ClamAV: `PONG`;
+- engine: ClamAV 1.5.3;
+- `activationSafe=true`.
+
+### Végső forráskapuk
+
+- Drive/Compare contract: **189/189 PASS**;
+- Vector Segments algoritmikus acceptance: **12/12 PASS**;
+- Drive Security V0.5: **47/47 PASS**;
+- Drive Security Backfill V0.5.1: **34/34 PASS**;
+- Drive Workspace: **22/22 PASS**;
+- Drive Core V0.30: **24/24 PASS**;
+- Project Core: **19/19 PASS**;
+- BENJADMIN P9 Security: **55/55 PASS**;
+- Runtime Identity Guard: **20/20 PASS**;
+- TypeScript: PASS;
+- teljes lint: PASS, **0 error / 104 meglévő warning**;
+- production Turbopack build: PASS.
+
+A V1.2.0 fejlesztési kör lezárásakor a `VECTOR_SEGMENTS` felismerés az aktív DEV Compare része, miközben a korábbi szöveg-, geometriai csomópont-, kontúr-, manuális 2/3 pontos, vizuális score- és hőtérkép workflow-k regresszió nélkül megmaradtak.
