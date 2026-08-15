@@ -38,6 +38,36 @@ function resolveProjectRoot() {
   return process.env.DIMPRO_PROJECT_ROOT?.trim() || cwd;
 }
 
+function safeDistRoot(root: string, configured: string) {
+  const value = configured.trim();
+  if (!value) return null;
+  const distRoot = path.resolve(root, value);
+  const relative = path.relative(root, distRoot);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
+  return distRoot;
+}
+
+export async function resolveDeveloperConsoleBuildId(root: string) {
+  const candidates: string[] = [];
+  const configured = process.env.NEXT_DIST_DIR?.trim();
+  if (configured) candidates.push(configured);
+  try {
+    const pointer = (await readFile(path.join(root, ".dimprover", "active-next-release"), "utf8")).trim();
+    if (pointer && !candidates.includes(pointer)) candidates.push(pointer);
+  } catch { /* active release pointer még nincs */ }
+  if (!candidates.includes(".next")) candidates.push(".next");
+
+  for (const candidate of candidates) {
+    const distRoot = safeDistRoot(root, candidate);
+    if (!distRoot) continue;
+    try {
+      const buildId = (await readFile(path.join(distRoot, "BUILD_ID"), "utf8")).trim();
+      if (buildId) return buildId;
+    } catch { /* következő biztonságos release candidate */ }
+  }
+  return "";
+}
+
 function getClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -266,8 +296,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     }
   };
   const [branch, commit] = await Promise.all([safeGit(["branch", "--show-current"]), safeGit(["rev-parse", "--short=12", "HEAD"])]);
-  let buildId = "";
-  try { buildId = (await readFile(path.join(root, ".next", "BUILD_ID"), "utf8")).trim(); } catch { /* build még nincs */ }
+  const buildId = await resolveDeveloperConsoleBuildId(root);
   let latestProductDoc = "";
   try {
     const docs = await readdir(path.join(root, "DIMPROVER_PRODUCT_DOCS"));
