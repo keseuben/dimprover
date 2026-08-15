@@ -172,3 +172,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `243_dimpro_central_issue_register_v220_dev_activation_20260815.md` – Központi Hibajegyzék V2.2 DEV aktiválás: Project Issue Core V0.2, valós projektlista/HJ kezelés, optimistic update + 409, audit E2E, 46/46 + 16/16 live acceptance; build WmSckw0g-juU3zh5b3tGX.
 
 - `244_dimpro_field_issue_core_v230_dev_activation_20260815.md` – Terepi hibafelvétel → Project Issue Core V0.3 DEV aktiválás: FIELD_CAPTURE HJ sync, explicit mentés, idempotens create, külső felelős, optimistic update, 70/70 + 21/21 live PASS; build Tgp-ODgYRzmIgsfJ8fe7o.
+
+- `245_dimpro_field_issue_attachments_v240_release_candidate_20260815.md` – Terepi HJ mellékletkapcsolatok V0.4 RC: valós DIMPRO Drive document/version, PHOTO/EVIDENCE + PLAN/ATTACHMENT, 102/102 PASS; operator build g6fF6NQq2d03y1OdgKqbU; DB migráció biztonsági kapun blokkolt, nincs cutover.
