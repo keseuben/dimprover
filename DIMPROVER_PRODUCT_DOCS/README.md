@@ -141,3 +141,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `228_benjadmin_terminalhub_p9_security_candidate_20260815.md` – P9 security candidate: Private Input, session AI visibility, redaction audit, strengthened secret scanner, Secret Vault skeleton; 475/475 PASS.
 
 - `229_benjadmin_terminalhub_p9_security_dev_activation_20260815.md` – P9 security DEV aktiválás: 475/475 PASS, build OUKeDkvfIFbA152AN2VWQ; PM2 cross-worktree cwd incidens feltárva és helyes operator cwd-ra javítva.
+
+- `230_benjadmin_runtime_identity_guard_20260815.md` – BENJADMIN DEV PM2 runtime identity guard + standalone .dimprover self-heal; live/mismatch/fixture acceptance PASS.

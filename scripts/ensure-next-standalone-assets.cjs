@@ -19,6 +19,7 @@ const sourceServer = path.join(nextRoot, "server");
 const targetServer = path.join(standaloneDistRoot, "server");
 const buildIdPath = path.join(nextRoot, "BUILD_ID");
 const markerPath = path.join(standaloneRoot, ".dimpro-assets-build-id");
+const standaloneDataPath = path.join(standaloneRoot, ".dimprover");
 const force = process.argv.includes("--force");
 
 function fail(message) {
@@ -28,6 +29,17 @@ function fail(message) {
 
 function removeIfExists(target) {
   if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+}
+
+
+function removeTracedStandaloneDataCopy() {
+  if (!fs.existsSync(standaloneDataPath)) return false;
+  const stat = fs.lstatSync(standaloneDataPath);
+  if (stat.isSymbolicLink()) return false;
+  if (!stat.isDirectory()) fail("A standalone .dimprover útvonal nem könyvtár és nem symlink.");
+  removeIfExists(standaloneDataPath);
+  console.log("[DIMPRO standalone assets] Build-local .dimprover másolat eltávolítva; a start központi symlinket készít.");
+  return true;
 }
 
 function copyDirectory(source, target) {
@@ -80,7 +92,8 @@ const targetChunkDirectory = path.join(targetStatic, "chunks");
 const targetHasChunks = fs.existsSync(targetChunkDirectory)
   && fs.readdirSync(targetChunkDirectory).some((name) => name.endsWith(".js") || name.endsWith(".css"));
 const targetHasPublic = fs.existsSync(targetPublic) && fs.readdirSync(targetPublic).length > 0;
-const needsSync = force || currentMarker !== buildId || !targetHasChunks || !targetHasPublic;
+const tracedDataCopyRemoved = removeTracedStandaloneDataCopy();
+const needsSync = force || tracedDataCopyRemoved || currentMarker !== buildId || !targetHasChunks || !targetHasPublic;
 
 if (needsSync) {
   pruneStandalone();

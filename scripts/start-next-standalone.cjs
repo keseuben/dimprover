@@ -30,6 +30,12 @@ if (!fs.existsSync(buildIdPath) || !fs.existsSync(serverPath)) {
   process.exit(1);
 }
 
+execFileSync(process.execPath, [path.join(root, "scripts", "ensure-next-standalone-assets.cjs")], {
+  cwd: root,
+  env: { ...process.env, NEXT_DIST_DIR: relative },
+  stdio: "inherit",
+});
+
 const centralDataRoot = path.join(root, ".dimprover");
 const standaloneDataPath = path.join(distRoot, "standalone", ".dimprover");
 fs.mkdirSync(centralDataRoot, { recursive: true });
@@ -44,12 +50,6 @@ if (!fs.existsSync(standaloneDataPath)) {
     process.exit(1);
   }
 }
-
-execFileSync(process.execPath, [path.join(root, "scripts", "ensure-next-standalone-assets.cjs")], {
-  cwd: root,
-  env: { ...process.env, NEXT_DIST_DIR: relative },
-  stdio: "inherit",
-});
 
 const buildId = fs.readFileSync(buildIdPath, "utf8").trim();
 console.log(`[DIMPRO standalone start] Release: ${relative}; build: ${buildId}`);

@@ -1,0 +1,25 @@
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+const root=process.cwd(); const guard=fs.readFileSync(path.join(root,"scripts/benjadmin-dev-runtime-identity-check.mjs"),"utf8"); const start=fs.readFileSync(path.join(root,"scripts/start-next-standalone.cjs"),"utf8"); const ensure=fs.readFileSync(path.join(root,"scripts/ensure-next-standalone-assets.cjs"),"utf8"); let pass=0,fail=0; function check(n,o){if(o){pass++;console.log(`PASS ${n}`)}else{fail++;console.error(`FAIL ${n}`)}}
+check("Guard fix BENJADMIN processznév",guard.includes('dimpro-benjadmin-operator-ui-v2-dev'));
+check("Guard fix operator cwd",guard.includes('/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2'));
+check("Guard cwd mismatch fail",guard.includes('BENJADMIN_PM2_CWD_MISMATCH'));
+check("Guard pontosan egy processz",guard.includes('BENJADMIN_PM2_IDENTITY_COUNT'));
+check("Guard online állapot",guard.includes('BENJADMIN_PM2_NOT_ONLINE'));
+check("Guard port 3100",guard.includes('BENJADMIN_RUNTIME_EXPECTED_PORT')&&guard.includes('"3100"'));
+check("Guard host 127.0.0.1",guard.includes('BENJADMIN_RUNTIME_EXPECTED_HOST')&&guard.includes('127.0.0.1'));
+check("Guard npm start args",guard.includes('BENJADMIN_PM2_START_ARGS_MISMATCH'));
+check("Guard BUILD_ID",guard.includes('.next", "BUILD_ID')&&guard.includes('BENJADMIN_BUILD_ID_MISSING'));
+check("Guard standalone marker",guard.includes('.dimpro-assets-build-id')&&guard.includes('BENJADMIN_STANDALONE_BUILD_MISMATCH'));
+check("Guard console 200",guard.includes('/admin/dev-console')&&guard.includes(', 200')&&guard.includes('Host: "admin.dev.dimpro.hu"'));
+check("Guard P9 auth gate 401",guard.includes('/secret-vault/readiness')&&guard.includes(', 401'));
+check("Guard read-only",!/(pm2\s+(?:delete|restart|start|stop)|rmSync|writeFileSync|unlinkSync)/.test(guard));
+check("Guard natív HTTP explicit Host fejléc",guard.includes('import httpModule from "node:http"')&&guard.includes('Host: "admin.dev.dimpro.hu"'));
+check("Start előbb asset sync",start.indexOf('ensure-next-standalone-assets.cjs') < start.indexOf('const centralDataRoot'));
+check("Ensure felismeri traced .dimprover copy-t",ensure.includes('removeTracedStandaloneDataCopy'));
+check("Ensure csak nem-symlink könyvtárat töröl",ensure.includes('if (stat.isSymbolicLink()) return false')&&ensure.includes('if (!stat.isDirectory()) fail'));
+check("Ensure traced copy syncet kényszerít",ensure.includes('tracedDataCopyRemoved')&&ensure.includes('force || tracedDataCopyRemoved'));
+const live=spawnSync(process.execPath,['scripts/benjadmin-dev-runtime-identity-check.mjs'],{cwd:root,encoding:'utf8'}); check("Live identity guard PASS",live.status===0&&live.stdout.includes('"ok": true'));
+const mismatch=spawnSync(process.execPath,['scripts/benjadmin-dev-runtime-identity-check.mjs'],{cwd:root,encoding:'utf8',env:{...process.env,BENJADMIN_RUNTIME_EXPECTED_CWD:'/tmp/not-the-benjadmin-worktree',BENJADMIN_RUNTIME_SKIP_HTTP:'1'}}); check("Mesterséges cwd mismatch fail-closed",mismatch.status===2&&mismatch.stderr.includes('BENJADMIN_PM2_CWD_MISMATCH'));
+console.log(`SUMMARY ${pass}/${pass+fail} PASS`); if(fail)process.exit(1);
