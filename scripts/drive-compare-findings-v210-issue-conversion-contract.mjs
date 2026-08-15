@@ -48,7 +48,7 @@ check("issue audit event", sql.includes("PROJECT_ISSUE_CREATED_FROM_COMPARE_FIND
 check("finding conversion audit event", sql.includes("DRIVE_COMPARE_FINDING_CONVERTED_TO_ISSUE"));
 check("drive change feed event", sql.includes("COMPARE_FINDING_ISSUE_CREATED"));
 check("RPC service role only", sql.includes("revoke all on function public.project_issue_create_from_compare_finding_atomic") && sql.includes("grant execute on function public.project_issue_create_from_compare_finding_atomic"));
-check("issue repository health", issueRepo.includes("getProjectIssueHealth") && issueRepo.includes('schema_version === "0.1.0"'));
+check("issue repository health", issueRepo.includes("getProjectIssueHealth") && (issueRepo.includes('schema_version === "0.1.0"') || issueRepo.includes('schema_version === "0.2.0"')));
 check("issue repository list", issueRepo.includes("listProjectIssues") && issueRepo.includes("project_core_issues"));
 check("issue repository conversion", issueRepo.includes("convertCompareFindingToIssue") && issueRepo.includes("project_issue_create_from_compare_finding_atomic"));
 check("human-gate error maps 409", issueRepo.includes("PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED") && issueRepo.includes(", 409)"));
@@ -68,6 +68,6 @@ check("UI does not auto-classify", ui.includes("nincs automatikus hibaminősít�
 check("UI preserves source finding", ui.includes("az eredeti") && ui.includes("findinghez kapcsolva"));
 check("UI shows linked issue serial", ui.includes("targetLabel") && ui.includes("Hibajegy létrehozása"));
 check("V2.1 action CSS", css.includes("visualCompareFindingIssueAction"));
-check("migration order ends with issue core", order.trim().endsWith("supabase/migrations/20260815161000_project_issue_core_v010.sql"));
+check("V0.1 migration precedes V0.2", order.includes("supabase/migrations/20260815161000_project_issue_core_v010.sql") && order.indexOf("20260815161000_project_issue_core_v010.sql") < order.indexOf("20260815164500_project_issue_core_v020.sql"));
 
 console.log(`\nCompare Findings V2.1 issue conversion contract: ${pass}/${checks.length} PASS`);

@@ -85,7 +85,7 @@ function getClient(): SupabaseClient {
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.1.0" } },
+    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.2.0" } },
   });
 }
 
@@ -100,8 +100,29 @@ function dbError(message: string, error: unknown, status = 500): never {
   if (text.includes("PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED")) {
     throw new ProjectIssueRepositoryError("Hibajegy csak emberi döntéssel JAVÍTANDÓ státuszú eltérésből hozható létre.", "PROJECT_ISSUE_COMPARE_FINDING_REQUIRES_FIX_REQUIRED", 409);
   }
+  if (text.includes("PROJECT_ISSUE_NOT_FOUND")) {
+    throw new ProjectIssueRepositoryError("A hibajegy nem található vagy már archivált.", "PROJECT_ISSUE_NOT_FOUND", 404);
+  }
+  if (text.includes("PROJECT_ISSUE_VERSION_CONFLICT")) {
+    throw new ProjectIssueRepositoryError("A hibajegyet közben más is módosította. Frissítsd a listát.", "PROJECT_ISSUE_VERSION_CONFLICT", 409);
+  }
+  if (text.includes("PROJECT_ISSUE_RESPONSIBLE_NOT_ACTIVE")) {
+    throw new ProjectIssueRepositoryError("Felelősként csak aktív projekttag választható.", "PROJECT_ISSUE_RESPONSIBLE_NOT_ACTIVE", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_DUE_AT_INVALID")) {
+    throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-határidő.", "PROJECT_ISSUE_DUE_AT_INVALID", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_STATUS_INVALID")) {
+    throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-státusz.", "PROJECT_ISSUE_STATUS_INVALID", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_SEVERITY_INVALID")) {
+    throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-súlyosság.", "PROJECT_ISSUE_SEVERITY_INVALID", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_TITLE_REQUIRED")) {
+    throw new ProjectIssueRepositoryError("A hibajegy címe nem lehet üres.", "PROJECT_ISSUE_TITLE_REQUIRED", 400);
+  }
   throw new ProjectIssueRepositoryError(
-    missing ? "A Project Issue Core V0.1 PostgreSQL-séma még nincs alkalmazva." : message,
+    missing ? "A Project Issue Core V0.2 PostgreSQL-séma még nincs alkalmazva." : message,
     missing ? "PROJECT_ISSUE_SCHEMA_NOT_READY" : code,
     missing ? 503 : status,
   );
@@ -142,7 +163,7 @@ export async function getProjectIssueHealth() {
       client.from("project_core_issues").select("id,project_id,serial,version").limit(0),
       client.from("project_issue_schema_meta").select("schema_version,migration_count,bootstrap_id").eq("component", "project-issue-core").maybeSingle(),
     ]);
-    const ready = !table.error && !marker.error && marker.data?.schema_version === "0.1.0" && Number(marker.data?.migration_count) === 1 && marker.data?.bootstrap_id === "project-issue-core-v010-20260815";
+    const ready = !table.error && !marker.error && marker.data?.schema_version === "0.2.0" && Number(marker.data?.migration_count) === 2 && marker.data?.bootstrap_id === "project-issue-core-v020-20260815";
     return { ready, schemaVersion: marker.data?.schema_version || null, bootstrapId: marker.data?.bootstrap_id || null, errorCode: table.error?.code || marker.error?.code || null };
   } catch (error) {
     return { ready: false, schemaVersion: null, bootstrapId: null, errorCode: error instanceof ProjectIssueRepositoryError ? error.code : "PROJECT_ISSUE_HEALTH_FAILED" };
@@ -173,4 +194,56 @@ export async function convertCompareFindingToIssue(projectId: string, findingId:
     link: payload.link || null,
     created: Boolean(payload.created),
   };
+}
+
+
+const ISSUE_STATUSES: ProjectIssueStatus[] = ["NEW", "IN_PROGRESS", "FIXED", "VERIFIED", "CLOSED", "REOPENED"];
+const ISSUE_SEVERITIES: ProjectIssueSeverity[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const ISSUE_PATCH_KEYS = ["title", "description", "location", "discipline", "severity", "status", "responsibleUserId", "dueAt", "note"] as const;
+
+function buildIssuePatch(input: Record<string, unknown>) {
+  const patch: Record<string, unknown> = {};
+  for (const key of ISSUE_PATCH_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+    const value = input[key];
+    if (key === "status") {
+      if (!ISSUE_STATUSES.includes(value as ProjectIssueStatus)) throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-státusz.", "PROJECT_ISSUE_STATUS_INVALID", 400);
+      patch.status = value;
+    } else if (key === "severity") {
+      if (!ISSUE_SEVERITIES.includes(value as ProjectIssueSeverity)) throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-súlyosság.", "PROJECT_ISSUE_SEVERITY_INVALID", 400);
+      patch.severity = value;
+    } else if (key === "responsibleUserId") {
+      patch.responsibleUserId = typeof value === "string" ? value.trim().slice(0, 240) : "";
+    } else if (key === "dueAt") {
+      if (value === null || value === "") patch.dueAt = "";
+      else if (typeof value === "string" && !Number.isNaN(new Date(value).getTime())) patch.dueAt = new Date(value).toISOString();
+      else throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-határidő.", "PROJECT_ISSUE_DUE_AT_INVALID", 400);
+    } else {
+      const limits: Record<string, number> = { title: 500, description: 12000, location: 1000, discipline: 240, note: 4000 };
+      patch[key] = typeof value === "string" ? value.slice(0, limits[key] || 4000) : "";
+    }
+  }
+  if (Object.keys(patch).length === 0) throw new ProjectIssueRepositoryError("Nincs módosítható hibajegymező a kérésben.", "PROJECT_ISSUE_PATCH_EMPTY", 400);
+  if (Object.prototype.hasOwnProperty.call(patch, "title") && !String(patch.title || "").trim()) throw new ProjectIssueRepositoryError("A hibajegy címe nem lehet üres.", "PROJECT_ISSUE_TITLE_REQUIRED", 400);
+  return patch;
+}
+
+export async function updateProjectIssue(projectId: string, issueId: string, input: Record<string, unknown>, actorUserId: string, actorName: string) {
+  const expectedVersion = Number(input.expectedVersion);
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+    throw new ProjectIssueRepositoryError("A módosításhoz érvényes expectedVersion szükséges.", "PROJECT_ISSUE_EXPECTED_VERSION_REQUIRED", 400);
+  }
+  const patch = buildIssuePatch(input);
+  const client = getClient();
+  const result = await client.rpc("project_issue_update_atomic", {
+    p_project_id: projectId,
+    p_issue_id: issueId,
+    p_expected_version: expectedVersion,
+    p_patch: patch,
+    p_actor_user_id: actorUserId,
+    p_actor_name: actorName,
+  });
+  if (result.error) dbError("A hibajegy frissítése sikertelen.", result.error);
+  if (!result.data) throw new ProjectIssueRepositoryError("A hibajegy frissítését a szerver nem tudta visszaigazolni.", "PROJECT_ISSUE_UPDATE_RESPONSE_INVALID", 500);
+  return { ok: true as const, issue: mapIssue(result.data as DbIssue) };
 }

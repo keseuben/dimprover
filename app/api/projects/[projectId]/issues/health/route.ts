@@ -11,5 +11,5 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "issue.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   const health = await getProjectIssueHealth();
-  return NextResponse.json({ ok: true, version: "0.1.0", databaseReady: health.ready, actualSchemaVersion: health.schemaVersion, bootstrapId: health.bootstrapId, errorCode: health.errorCode }, { status: health.ready ? 200 : 503, headers: { "cache-control": "no-store" } });
+  return NextResponse.json({ ok: true, version: "0.2.0", databaseReady: health.ready, actualSchemaVersion: health.schemaVersion, bootstrapId: health.bootstrapId, errorCode: health.errorCode }, { status: health.ready ? 200 : 503, headers: { "cache-control": "no-store" } });
 }
