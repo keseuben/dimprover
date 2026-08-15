@@ -175,3 +175,70 @@ Audit ellenőrzés:
 - mindhárom upload sessionben `driveSecurityScan.status=CLEAN`.
 
 A DEV QA állományok így már nem tartalmaznak Security V0.5 előtti, CLEAN audit nélküli AVAILABLE WEB/DESKTOP verziót.
+
+
+## Végleges DEV cutover
+
+Feature commit:
+
+- `c8cb775 feat(drive): backfill legacy security scans`
+
+Végleges Turbopack DEV build:
+
+- **`M55ElcARAz3F8zvoQlTWy`**
+- standalone statikus chunk ellenőrzés: **245 PASS**
+
+Cutover rollback backup:
+
+- `/srv/dimpro-dev/backups/drive_security_backfill_v051_runtime_20260815_095721`
+- előző build: `Es_1tfzv1TRIkUuW-Z17V`
+
+Aktív runtime:
+
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev`
+- cwd: `/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2`
+- port: 3100
+- build: `M55ElcARAz3F8zvoQlTWy`
+- runtime identity guard: PASS
+
+### SHA-256 fail-closed acceptance
+
+A végleges exact builden egy QA CLEAN scan audit SHA-256 értéke ideiglenesen, kontrollált tesztben hibás értékre lett cserélve. A backfill planner eredménye:
+
+- state: `LEGACY_AVAILABLE`;
+- scanStatus: `CLEAN`;
+- securityHashMatch: `false`;
+- executable: true;
+- a verziót újravizsgálandó legacy jelöltnek minősítette.
+
+Az eredeti metadata a teszt `finally` ágában visszaállt. Visszaállítás után a projekt backfill terve ismét **0 jelölt**.
+
+### Post-cutover aktív runtime acceptance
+
+- admin backfill endpoint jogosultság nélkül: HTTP 401;
+- admin dry-run: 0 legacy jelölt;
+- Drive storage mode: `active`;
+- ClamAV health: `PONG`, engine 1.5.3;
+- `activationSafe=true`;
+- backfill-elt V1 security status: `CLEAN`;
+- V1 preview: HTTP 200;
+- same-origin PDF Range: HTTP 206, 100 byte kontrolltartomány;
+- publikus `/drive`: meglévő auth redirect szerint HTTP 307;
+- BENJADMIN dev console: HTTP 200.
+
+### Végső regresszió
+
+- Drive Security Backfill V0.5.1: **34/34 PASS**;
+- Drive Security V0.5.0: **47/47 PASS**;
+- Drive/Compare: **173/173 PASS**;
+- Drive Workspace: **22/22 PASS**;
+- Drive Core V0.30: **24/24 PASS**;
+- Project Core: **19/19 PASS**;
+- BENJADMIN Live Workspace P7: **43/43 PASS**;
+- BENJADMIN Terminal Hub P9 Security: **55/55 PASS**;
+- Runtime Identity Guard: **20/20 PASS**;
+- TypeScript: PASS;
+- teljes `npm run lint`: PASS, 0 error / 104 warning;
+- production build: PASS.
+
+A DEV QA adatbázisban a backfill lezárása után nincs Security V0.5 előtti, CLEAN + egyező SHA-256 audit nélküli AVAILABLE WEB/DESKTOP legacy verzió.
