@@ -48,7 +48,7 @@ try {
   check("V1.1 task creation 201", created.response.status === 201 && created.payload?.ok === true && Boolean(taskId), `status=${created.response.status}`);
   const routedMeta = created.payload?.task?.metadata || {};
   check("Routing starts WAITING_HANDOFF", routedMeta.bridgeState === "WAITING_HANDOFF", JSON.stringify({ bridgeState: routedMeta.bridgeState }));
-  check("Task persists handoff prompt", typeof routedMeta.handoffPrompt === "string" && routedMeta.handoffPrompt.includes(marker) && routedMeta.handoffPrompt.includes("Ármin-AI"), String(routedMeta.handoffPrompt || "").slice(0, 240));
+  check("Task persists handoff prompt", typeof routedMeta.handoffPrompt === "string" && routedMeta.handoffPrompt.includes(marker) && /Felelős:\s*Ármin(?:-?AI)/i.test(routedMeta.handoffPrompt), String(routedMeta.handoffPrompt || "").slice(0, 240));
   check("Task persists handoff SHA", /^[0-9a-f]{64}$/.test(String(routedMeta.handoffPromptSha256 || "")), String(routedMeta.handoffPromptSha256 || ""));
   check("Safe task is not marked sanitized", routedMeta.handoffSanitized === false && Array.isArray(routedMeta.handoffSensitiveFindings) && routedMeta.handoffSensitiveFindings.length === 0, JSON.stringify({ sanitized: routedMeta.handoffSanitized, findings: routedMeta.handoffSensitiveFindings }));
   check("Handoff prompt is DEV-only", routedMeta.handoffPrompt.includes("DEV-only végrehajtás") && routedMeta.handoffPrompt.includes("PROD módosítás nincs"), "");
