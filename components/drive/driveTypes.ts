@@ -124,6 +124,51 @@ export type DriveQrCode = {
   revokedAt: string | null;
 };
 
+export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
+
+export type DriveBoxItem = {
+  id: string;
+  projectId: string;
+  boxId: string;
+  documentId: string;
+  versionId: string | null;
+  version?: {
+    id: string;
+    versionNumber: number;
+    revisionCode: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+  } | null;
+  sortOrder: number;
+  addedBy: string;
+  addedAt: string;
+};
+
+export type DriveCompareSeed = {
+  documentId: string;
+  versionId: string | null;
+};
+
+export type DriveBox = {
+  id: string;
+  projectId: string;
+  name: string;
+  purpose: DriveBoxPurpose;
+  colorToken: string;
+  iconKey: string;
+  note: string;
+  sortOrder: number;
+  status: "ACTIVE" | "ARCHIVED";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  items: DriveBoxItem[];
+};
+
 export type DriveDocumentDetails = {
   projectId: string;
   document: Omit<DriveDocument, "currentVersion"> & {
@@ -139,7 +184,7 @@ export type DriveDocumentDetails = {
   qrCodes: DriveQrCode[];
 };
 
-export type DriveLayoutMode = "three" | "two" | "one" | "split";
+export type DriveLayoutMode = "three" | "two" | "one" | "split" | "commander";
 export type DriveViewMode = "simple" | "engineering";
 
 export type DriveHealth = {

@@ -193,6 +193,36 @@ export async function calculateDriveObjectSha256(input: { storageKey: string; bu
   };
 }
 
+export async function getDriveObjectStream(input: {
+  storageKey: string;
+  bucket?: string | null;
+  range?: string | null;
+}) {
+  const { client, config } = getStorageClient();
+  const bucket = input.bucket || config.bucket;
+  if (bucket !== config.bucket) {
+    throw new DriveCoreRepositoryError("A dokumentum tárhelye eltér az aktív DRIVE buckettől.", "DRIVE_OBJECT_BUCKET_MISMATCH", 409);
+  }
+  const result = await client.send(new GetObjectCommand({
+    Bucket: bucket,
+    Key: input.storageKey,
+    Range: input.range?.trim() || undefined,
+  }));
+  const body = result.Body;
+  if (!body || typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] !== "function") {
+    throw new DriveCoreRepositoryError("A DRIVE objektum tartalma nem streamelhető.", "DRIVE_OBJECT_STREAM_UNAVAILABLE", 502);
+  }
+  return {
+    body: body as AsyncIterable<Uint8Array>,
+    contentLength: Number(result.ContentLength || 0),
+    contentType: result.ContentType || "application/octet-stream",
+    contentRange: result.ContentRange || null,
+    acceptRanges: result.AcceptRanges || "bytes",
+    etag: result.ETag || null,
+    lastModified: result.LastModified?.toISOString() || null,
+  };
+}
+
 export async function deleteDriveObject(input: { storageKey: string; bucket?: string | null }) {
   const { client, config } = getStorageClient();
   const bucket = input.bucket || config.bucket;
@@ -207,6 +237,7 @@ export async function createDriveSignedGetUrl(input: {
   bucket?: string | null;
   fileName: string;
   mimeType?: string | null;
+  disposition?: "attachment" | "inline";
 }) {
   const { client, config } = getStorageClient();
   const bucket = input.bucket || config.bucket;
@@ -214,11 +245,12 @@ export async function createDriveSignedGetUrl(input: {
     throw new DriveCoreRepositoryError("A dokumentum tárhelye eltér az aktív DRIVE buckettől.", "DRIVE_OBJECT_BUCKET_MISMATCH", 409);
   }
   const safeName = input.fileName.replace(/[\r\n"\\/]/g, "_").slice(0, 240) || "dimpro-drive-file";
+  const disposition = input.disposition === "inline" ? "inline" : "attachment";
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: input.storageKey,
     ResponseContentType: input.mimeType || "application/octet-stream",
-    ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+    ResponseContentDisposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(safeName)}`,
   });
   const url = await getSignedUrl(client, command, { expiresIn: config.signedUrlTtlSeconds });
   return {

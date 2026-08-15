@@ -387,6 +387,274 @@ begin
 end;
 $$;
 
+
+
+-- CsomagBOX: projektizolált, auditált virtuális doboz létrehozás.
+create or replace function public.drive_workspace_create_box_atomic(
+  p_project_id text,
+  p_name text,
+  p_purpose text,
+  p_color_token text,
+  p_icon_key text,
+  p_note text,
+  p_actor_user_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.drive_core_boxes;
+  v_sort integer;
+begin
+  if not exists (select 1 from public.project_core_projects where id = p_project_id) then
+    raise exception 'DRIVE_PROJECT_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  select coalesce(max(sort_order),0) + 100 into v_sort
+    from public.drive_core_boxes where project_id = p_project_id and status = 'ACTIVE';
+
+  insert into public.drive_core_boxes (
+    id, project_id, name, purpose, color_token, icon_key, note, sort_order, status, created_by, created_at, updated_at
+  ) values (
+    'drive-box-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id,
+    left(btrim(coalesce(p_name,'')),120),
+    case when p_purpose in ('GENERAL','DROP','COMPARE','AI_ANALYSIS','ISSUE','MEETING') then p_purpose else 'GENERAL' end,
+    left(coalesce(nullif(btrim(p_color_token),''),'blue'),40),
+    left(coalesce(nullif(btrim(p_icon_key),''),'box'),80),
+    left(coalesce(p_note,''),2000),
+    least(v_sort,999999),
+    'ACTIVE',
+    p_actor_user_id,
+    now(),
+    now()
+  ) returning * into v_row;
+
+  insert into public.project_core_audit_events (
+    id, project_id, actor_user_id, event_type, entity_type, entity_id, summary, metadata
+  ) values (
+    'project-audit-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id, p_actor_user_id, 'DRIVE_BOX_CREATED', 'box', v_row.id,
+    'CsomagBOX létrehozva: ' || v_row.name,
+    jsonb_build_object('boxId',v_row.id,'purpose',v_row.purpose,'colorToken',v_row.color_token)
+  );
+
+  insert into public.drive_core_change_events (
+    id, project_id, event_type, entity_type, entity_id, payload, actor_user_id
+  ) values (
+    'drive-change-' || substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id, 'BOX_CREATED', 'box', v_row.id, to_jsonb(v_row), p_actor_user_id
+  );
+
+  return to_jsonb(v_row);
+end;
+$$;
+
+-- CsomagBOX: ugyanaz a dokumentum több BOX-ban lehet, ugyanazon BOX-on belül idempotens.
+create or replace function public.drive_workspace_add_box_item_atomic(
+  p_project_id text,
+  p_box_id text,
+  p_document_id text,
+  p_version_id text,
+  p_actor_user_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_box public.drive_core_boxes;
+  v_document public.drive_core_documents;
+  v_version public.drive_core_document_versions;
+  v_row public.drive_core_box_items;
+  v_sort integer;
+begin
+  select * into v_box from public.drive_core_boxes
+    where id = p_box_id and project_id = p_project_id and status = 'ACTIVE';
+  if v_box.id is null then
+    raise exception 'DRIVE_BOX_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  select * into v_document from public.drive_core_documents
+    where id = p_document_id and project_id = p_project_id and status <> 'DELETED';
+  if v_document.id is null then
+    raise exception 'DRIVE_DOCUMENT_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if nullif(p_version_id,'') is not null then
+    select * into v_version from public.drive_core_document_versions
+      where id = p_version_id and project_id = p_project_id and document_id = p_document_id;
+    if v_version.id is null then
+      raise exception 'DRIVE_VERSION_NOT_FOUND' using errcode = 'P0002';
+    end if;
+  end if;
+
+  select * into v_row from public.drive_core_box_items
+    where box_id = p_box_id and document_id = p_document_id
+      and coalesce(version_id,'') = coalesce(nullif(p_version_id,''),'')
+    limit 1;
+  if v_row.id is not null then
+    return jsonb_build_object('item',to_jsonb(v_row),'idempotent',true);
+  end if;
+
+  select coalesce(max(sort_order),0) + 100 into v_sort
+    from public.drive_core_box_items where project_id = p_project_id and box_id = p_box_id;
+
+  insert into public.drive_core_box_items (
+    id, project_id, box_id, document_id, version_id, sort_order, added_by, added_at
+  ) values (
+    'drive-boxitem-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id, p_box_id, p_document_id, nullif(p_version_id,''), least(v_sort,999999), p_actor_user_id, now()
+  ) returning * into v_row;
+
+  insert into public.project_core_audit_events (
+    id, project_id, actor_user_id, event_type, entity_type, entity_id, summary, metadata
+  ) values (
+    'project-audit-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id, p_actor_user_id, 'DRIVE_BOX_ITEM_ADDED', 'box_item', v_row.id,
+    'Fájl CsomagBOX-hoz adva: ' || v_document.name || ' → ' || v_box.name,
+    jsonb_build_object('boxId',p_box_id,'documentId',p_document_id,'versionId',nullif(p_version_id,''),'boxItemId',v_row.id)
+  );
+
+  insert into public.drive_core_change_events (
+    id, project_id, event_type, entity_type, entity_id, payload, actor_user_id
+  ) values (
+    'drive-change-' || substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id, 'BOX_ITEM_ADDED', 'box_item', v_row.id,
+    jsonb_build_object('boxId',p_box_id,'documentId',p_document_id,'versionId',nullif(p_version_id,''),'item',to_jsonb(v_row)), p_actor_user_id
+  );
+
+  return jsonb_build_object('item',to_jsonb(v_row),'idempotent',false);
+end;
+$$;
+
+create or replace function public.drive_workspace_remove_box_item_atomic(
+  p_project_id text,
+  p_box_id text,
+  p_item_id text,
+  p_actor_user_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_box public.drive_core_boxes;
+  v_row public.drive_core_box_items;
+  v_document public.drive_core_documents;
+begin
+  select * into v_box from public.drive_core_boxes
+    where id = p_box_id and project_id = p_project_id and status = 'ACTIVE';
+  if v_box.id is null then
+    raise exception 'DRIVE_BOX_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  select * into v_row from public.drive_core_box_items
+    where id = p_item_id and project_id = p_project_id and box_id = p_box_id
+    for update;
+  if v_row.id is null then
+    raise exception 'DRIVE_BOX_ITEM_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  select * into v_document from public.drive_core_documents
+    where id = v_row.document_id and project_id = p_project_id;
+
+  delete from public.drive_core_box_items where id = v_row.id;
+
+  insert into public.project_core_audit_events (
+    id, project_id, actor_user_id, event_type, entity_type, entity_id, summary, metadata
+  ) values (
+    'project-audit-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id, p_actor_user_id, 'DRIVE_BOX_ITEM_REMOVED', 'box_item', v_row.id,
+    'Fájl eltávolítva CsomagBOX-ból: ' || coalesce(v_document.name,v_row.document_id) || ' ← ' || v_box.name,
+    jsonb_build_object('boxId',p_box_id,'documentId',v_row.document_id,'versionId',v_row.version_id,'boxItemId',v_row.id)
+  );
+
+  insert into public.drive_core_change_events (
+    id, project_id, event_type, entity_type, entity_id, payload, actor_user_id
+  ) values (
+    'drive-change-' || substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id, 'BOX_ITEM_REMOVED', 'box_item', v_row.id,
+    jsonb_build_object('boxId',p_box_id,'documentId',v_row.document_id,'versionId',v_row.version_id,'removed',to_jsonb(v_row)), p_actor_user_id
+  );
+
+  return to_jsonb(v_row);
+end;
+$$;
+
+
+
+-- Commander/fájlkezelő: dokumentum projektizolált, auditált áthelyezése.
+create or replace function public.drive_workspace_move_document_atomic(
+  p_project_id text,
+  p_document_id text,
+  p_target_folder_id text,
+  p_actor_user_id text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_document public.drive_core_documents;
+  v_target public.drive_core_folders;
+  v_previous_folder_id text;
+begin
+  select * into v_document from public.drive_core_documents
+    where id = p_document_id and project_id = p_project_id and status <> 'DELETED'
+    for update;
+  if v_document.id is null then
+    raise exception 'DRIVE_DOCUMENT_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  select * into v_target from public.drive_core_folders
+    where id = p_target_folder_id and project_id = p_project_id and status = 'ACTIVE';
+  if v_target.id is null then
+    raise exception 'DRIVE_TARGET_FOLDER_NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  v_previous_folder_id := v_document.folder_id;
+  if v_previous_folder_id = p_target_folder_id then
+    return jsonb_build_object('document',to_jsonb(v_document),'previousFolderId',v_previous_folder_id,'idempotent',true);
+  end if;
+
+  update public.drive_core_documents
+    set folder_id = p_target_folder_id, updated_at = now()
+    where id = p_document_id and project_id = p_project_id
+    returning * into v_document;
+
+  insert into public.project_core_audit_events (
+    id, project_id, actor_user_id, event_type, entity_type, entity_id, summary, metadata
+  ) values (
+    'project-audit-' || substr(replace(gen_random_uuid()::text,'-',''),1,12),
+    p_project_id, p_actor_user_id, 'DRIVE_DOCUMENT_MOVED', 'document', v_document.id,
+    'DRIVE dokumentum áthelyezve: ' || v_document.name,
+    jsonb_build_object('documentId',v_document.id,'fromFolderId',v_previous_folder_id,'toFolderId',p_target_folder_id)
+  );
+
+  insert into public.drive_core_change_events (
+    id, project_id, event_type, entity_type, entity_id, payload, actor_user_id
+  ) values (
+    'drive-change-' || substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id, 'DOCUMENT_MOVED', 'document', v_document.id,
+    jsonb_build_object('documentId',v_document.id,'fromFolderId',v_previous_folder_id,'toFolderId',p_target_folder_id), p_actor_user_id
+  );
+
+  return jsonb_build_object('document',to_jsonb(v_document),'previousFolderId',v_previous_folder_id,'idempotent',false);
+end;
+$$;
+
+revoke all on function public.drive_workspace_move_document_atomic(text,text,text,text) from public, anon, authenticated;
+grant execute on function public.drive_workspace_move_document_atomic(text,text,text,text) to service_role;
+
+revoke all on function public.drive_workspace_create_box_atomic(text,text,text,text,text,text,text) from public, anon, authenticated;
+revoke all on function public.drive_workspace_add_box_item_atomic(text,text,text,text,text) from public, anon, authenticated;
+revoke all on function public.drive_workspace_remove_box_item_atomic(text,text,text,text) from public, anon, authenticated;
+grant execute on function public.drive_workspace_create_box_atomic(text,text,text,text,text,text,text) to service_role;
+grant execute on function public.drive_workspace_add_box_item_atomic(text,text,text,text,text) to service_role;
+grant execute on function public.drive_workspace_remove_box_item_atomic(text,text,text,text) to service_role;
+
 revoke all on function public.drive_workspace_upsert_metadata_atomic(text,text,jsonb,text) from public, anon, authenticated;
 revoke all on function public.drive_workspace_upsert_note_atomic(text,text,text,text,text) from public, anon, authenticated;
 revoke all on function public.drive_workspace_ensure_qr_atomic(text,text,text,text,text) from public, anon, authenticated;

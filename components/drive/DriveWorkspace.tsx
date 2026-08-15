@@ -4,17 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   Building2,
-  ChevronDown,
-  ChevronUp,
   HelpCircle,
   Loader2,
-  Plus,
 } from "lucide-react";
+import BoxShelf from "./BoxShelf";
+import CommanderPanel from "./CommanderPanel";
+import CompareWorkspace from "./CompareWorkspace";
 import DetailsPanel from "./DetailsPanel";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import type {
+  DriveBox,
+  DriveBoxPurpose,
+  DriveCompareSeed,
+  DriveDocument,
   DriveDocumentDetails,
   DriveHealth,
   DriveLayoutMode,
@@ -58,6 +62,7 @@ function formatBytes(value: number) {
 export default function DriveWorkspace({ projectId, projectName, projectCode, projectStatus = "ACTIVE", permissions = [] }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
+  const [boxes, setBoxes] = useState<DriveBox[]>([]);
   const [apiPermissions, setApiPermissions] = useState<DrivePermission[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -71,10 +76,27 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("three");
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [boxShelfOpen, setBoxShelfOpen] = useState(true);
+  const [compareActive, setCompareActive] = useState(false);
+  const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
+
+  const loadBoxes = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes`, { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as { ok?: boolean; error?: string; boxes?: DriveBox[] };
+      if (!response.ok || !payload.ok) {
+        if (response.status === 503) { setBoxes([]); return; }
+        throw new Error(payload.error || "A CsomagBOX lista nem tölthető be.");
+      }
+      setBoxes(payload.boxes || []);
+    } catch (caught) {
+      setBoxes([]);
+      setError(caught instanceof Error ? caught.message : "A CsomagBOX lista nem tölthető be.");
+    }
+  }, [projectId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +113,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       setHealth(healthPayload);
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
+      if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       setSelectedDocumentId((current) => {
         if (current && treePayload.tree?.documents.some((document) => document.id === current)) return current;
@@ -101,11 +124,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [loadBoxes, projectId]);
 
   useEffect(() => {
     setTree(null);
     setHealth(null);
+    setBoxes([]);
     setDetails(null);
     setSelectedFolderId("all");
     setSelectedDocumentId("");
@@ -353,6 +377,117 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  const boxColorsByDocument = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    for (const box of boxes) {
+      for (const item of box.items) {
+        const colors = result[item.documentId] || [];
+        if (!colors.includes(box.colorToken)) colors.push(box.colorToken);
+        result[item.documentId] = colors;
+      }
+    }
+    return result;
+  }, [boxes]);
+
+  async function createBox(input: { name: string; purpose: DriveBoxPurpose; colorToken: string; iconKey: string; note: string }) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes`, {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; box?: DriveBox };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A CsomagBOX létrehozása sikertelen.");
+      setNotice(`CsomagBOX létrehozva: ${input.name}`);
+      await loadBoxes();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A CsomagBOX létrehozása sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  async function addDocumentToBox(boxId: string, document: DriveDocument) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/items`, {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ documentId: document.id, versionId: document.currentVersion?.id || null }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; idempotent?: boolean };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A fájl CsomagBOX-hoz adása sikertelen.");
+      const boxName = boxes.find((box) => box.id === boxId)?.name || "CsomagBOX";
+      setNotice(payload.idempotent ? `${document.name} már szerepel ebben a BOX-ban.` : `${document.name} hozzáadva: ${boxName}`);
+      await loadBoxes();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A fájl CsomagBOX-hoz adása sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  async function removeBoxItem(boxId: string, itemId: string) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/items/${encodeURIComponent(itemId)}`, {
+        method: "DELETE", credentials: "same-origin", cache: "no-store",
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A fájl eltávolítása a BOX-ból sikertelen.");
+      setNotice("Fájl eltávolítva a CsomagBOX-ból.");
+      await loadBoxes();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A fájl eltávolítása a BOX-ból sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  async function moveDocument(document: DriveDocument, targetFolderId: string) {
+    if (!canWrite || !health?.workspace?.databaseReady || !targetFolderId) return;
+    if (document.folderId === targetFolderId) {
+      setNotice(`${document.name} már ebben a mappában található.`);
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/move`, {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetFolderId }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; idempotent?: boolean };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentum áthelyezése sikertelen.");
+      const targetName = tree?.folders.find((folder) => folder.id === targetFolderId)?.name || "célmappa";
+      setNotice(payload.idempotent ? `${document.name} már a kiválasztott mappában volt.` : `${document.name} áthelyezve: ${targetName}`);
+      await load();
+      setSelectedDocumentId(document.id);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A dokumentum áthelyezése sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  function openCompare(seedItems?: DriveCompareSeed[]) {
+    const validSeeds: DriveCompareSeed[] = [];
+    for (const seed of seedItems || []) {
+      if (!seed.documentId || !(tree?.documents || []).some((document) => document.id === seed.documentId)) continue;
+      const key = `${seed.documentId}::${seed.versionId || "current"}`;
+      if (validSeeds.some((item) => `${item.documentId}::${item.versionId || "current"}` === key)) continue;
+      validSeeds.push({ documentId: seed.documentId, versionId: seed.versionId || null });
+      if (validSeeds.length >= 2) break;
+    }
+    if (validSeeds.length >= 2) {
+      setCompareSeedItems(validSeeds);
+    } else {
+      const selected = (tree?.documents || []).find((document) => document.id === selectedDocumentId) || null;
+      const fallback = (tree?.documents || []).find((document) => document.id !== selected?.id) || null;
+      setCompareSeedItems([
+        selected ? { documentId: selected.id, versionId: selected.currentVersion?.id || null } : null,
+        fallback ? { documentId: fallback.id, versionId: fallback.currentVersion?.id || null } : null,
+      ].filter((item): item is DriveCompareSeed => Boolean(item)));
+    }
+    setCompareActive(true);
+  }
+
+  function toggleCompare() {
+    if (compareActive) {
+      setCompareActive(false);
+      return;
+    }
+    openCompare();
+  }
+
   if (loading && !tree) {
     return <div className={styles.loadingState}><div><Loader2 className={styles.spin} size={28} /><strong>DIMPRO Drive betöltése</strong><span>Projektmappák, jogosultságok és Workspace 1.0 ellenőrzése…</span></div></div>;
   }
@@ -362,6 +497,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     layoutMode === "two" ? styles.layoutTwo : "",
     layoutMode === "one" ? styles.layoutOne : "",
     layoutMode === "split" ? styles.layoutSplit : "",
+    layoutMode === "commander" ? styles.layoutCommander : "",
   ].filter(Boolean).join(" ");
 
   const folderHidden = layoutMode !== "three";
@@ -398,6 +534,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         canWrite={canWrite}
         onCreateFolder={() => void createFolder()}
         onUpload={requestUpload}
+        boxCount={boxes.length}
+        boxShelfOpen={boxShelfOpen}
+        boxReady={Boolean(health?.workspace?.databaseReady)}
+        onToggleBoxShelf={() => setBoxShelfOpen((current) => !current)}
+        compareActive={compareActive}
+        onToggleCompare={toggleCompare}
       />
       <input ref={fileInputRef} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file); }} />
 
@@ -410,54 +552,78 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       {!error && notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
       {!error && !notice && health?.workspace && !health.workspace.databaseReady && <div className={`${styles.notice} ${styles.noticeInfo}`}>{health.workspace.nextStep}</div>}
 
-      <div className={browserClass}>
-        <FolderTreePanel
-          folders={tree?.folders || []}
-          selectedFolderId={selectedFolderId}
-          documentCounts={folderDocumentCounts}
-          totalDocumentCount={tree?.summary.documentCount || 0}
-          onSelectFolder={setSelectedFolderId}
-          responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`}
-        />
-        <FileGridPanel
-          title={title}
-          subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
-          documents={visibleDocuments}
-          selectedDocumentId={selectedDocumentId}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onSelectDocument={(document) => setSelectedDocumentId(document.id)}
-          onRefresh={() => void load()}
-        />
-        <DetailsPanel
-          document={selectedDocument}
-          details={details}
-          loading={detailsLoading}
-          busy={busy}
-          canWrite={canWrite}
-          onSaveMetadata={saveMetadata}
-          onSaveNote={saveNote}
-          onEnsureQr={ensureQr}
-          onDownload={downloadSelected}
-          responsiveClassName={`${styles.detailsResponsive} ${detailsHidden ? styles.hiddenPanel : ""}`}
-        />
+      <div className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}>
+        {compareActive ? (
+          <CompareWorkspace
+            projectId={projectId}
+            documents={tree?.documents || []}
+            boxes={boxes}
+            seedItems={compareSeedItems}
+            onClose={() => setCompareActive(false)}
+          />
+        ) : layoutMode === "commander" ? (
+          <CommanderPanel
+            folders={tree?.folders || []}
+            documents={tree?.documents || []}
+            selectedDocumentId={selectedDocumentId}
+            canWrite={canWrite}
+            moveReady={Boolean(health?.workspace?.databaseReady)}
+            busy={busy}
+            onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+            onMoveDocument={moveDocument}
+          />
+        ) : (
+          <>
+            <FolderTreePanel
+              folders={tree?.folders || []}
+              selectedFolderId={selectedFolderId}
+              documentCounts={folderDocumentCounts}
+              totalDocumentCount={tree?.summary.documentCount || 0}
+              onSelectFolder={setSelectedFolderId}
+              responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`}
+            />
+            <FileGridPanel
+              title={title}
+              subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+              documents={visibleDocuments}
+              selectedDocumentId={selectedDocumentId}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onRefresh={() => void load()}
+              boxColorsByDocument={boxColorsByDocument}
+            />
+            <DetailsPanel
+              projectId={projectId}
+              document={selectedDocument}
+              details={details}
+              loading={detailsLoading}
+              busy={busy}
+              canWrite={canWrite}
+              onSaveMetadata={saveMetadata}
+              onSaveNote={saveNote}
+              onEnsureQr={ensureQr}
+              onDownload={downloadSelected}
+              responsiveClassName={`${styles.detailsResponsive} ${detailsHidden ? styles.hiddenPanel : ""}`}
+            />
+          </>
+        )}
       </div>
 
-      <section className={`${styles.boxShelf} ${boxShelfOpen ? "" : styles.boxShelfCollapsed}`} aria-label="CsomagBOX polc">
-        <header className={styles.boxShelfHeader}>
-          <div className={styles.boxShelfTitle}><strong>CsomagBOX polc</strong><span>Előkészített felület · a motor a 3. napi fejlesztésben aktiválódik</span></div>
-          <button type="button" className={styles.boxShelfToggle} onClick={() => setBoxShelfOpen((current) => !current)} title={boxShelfOpen ? "Polc elrejtése" : "Polc megnyitása"}>
-            {boxShelfOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-          </button>
-        </header>
-        {boxShelfOpen && <div className={styles.boxCards}>
-          <article className={styles.boxCard}><strong>Összehasonlítás</strong><span>2 fájl · revíziók és tervváltozatok</span><button type="button" disabled>Megnyitás</button></article>
-          <article className={`${styles.boxCard} ${styles.boxCardOrange}`}><strong>Kivitelezőnek</strong><span>DROP küldésre előkészített csomag</span><button type="button" disabled>DROP küldés</button></article>
-          <article className={`${styles.boxCard} ${styles.boxCardPurple}`}><strong>Heti értekezlet</strong><span>Értekezleti dokumentumcsomag</span><button type="button" disabled>AI vizsgálat</button></article>
-          <article className={`${styles.boxCard} ${styles.boxCardGreen}`}><strong>Kiadási csomag</strong><span>Jóváhagyott dokumentumok gyűjtése</span><button type="button" disabled>Kiadás</button></article>
-          <div className={styles.boxAdd}><Plus size={22} /><span>Új CsomagBOX</span></div>
-        </div>}
-      </section>
+      <BoxShelf
+        open={boxShelfOpen}
+        onOpenChange={setBoxShelfOpen}
+        boxes={boxes}
+        documents={tree?.documents || []}
+        selectedDocument={selectedDocument}
+        canWrite={canWrite}
+        databaseReady={Boolean(health?.workspace?.databaseReady)}
+        busy={busy}
+        onCreateBox={createBox}
+        onAddDocument={addDocumentToBox}
+        onRemoveItem={removeBoxItem}
+        onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
+      />
     </div>
   );
 }

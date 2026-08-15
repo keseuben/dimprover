@@ -6,6 +6,7 @@ import {
   createDriveSignedGetUrl,
   createDriveSignedPutUrl,
   deleteDriveObject,
+  getDriveObjectStream,
   headDriveObject,
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
@@ -412,5 +413,111 @@ export async function initDriveObjectDownload(input: {
       source: record.documentSource,
       trustedDropArchive,
     },
+  };
+}
+
+
+const DRIVE_INLINE_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/avif",
+]);
+
+async function resolveDrivePreviewRecord(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+}) {
+  const config = getDriveObjectStorageConfig();
+  const status = getDriveObjectStorageSafeStatus(config);
+  const database = await getDriveObjectStorageDatabaseHealth();
+  if (!database.ready) {
+    throw new DriveCoreRepositoryError("A DRIVE Object Storage adatbázissémája még nincs aktiválva.", "DRIVE_OBJECT_SCHEMA_NOT_READY", 503);
+  }
+  const record = await getDriveDownloadVersionRecord({
+    projectId: input.projectId,
+    documentId: input.documentId,
+    versionId: input.versionId,
+  });
+  if (!record) throw new DriveCoreRepositoryError("A dokumentumverzió nem található.", "DRIVE_PREVIEW_NOT_FOUND", 404);
+  const trustedDropArchive = record.documentSource === "DROP"
+    && record.version.status === "AVAILABLE"
+    && record.version.storageProvider === "S3"
+    && Boolean(record.version.storageKey);
+  if (!status.objectDownloadEnabled && !trustedDropArchive) {
+    throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_PREVIEW_DISABLED", 503);
+  }
+  if (record.version.status !== "AVAILABLE" || record.version.storageProvider !== "S3" || !record.version.storageKey) {
+    throw new DriveCoreRepositoryError(
+      "Ez a dokumentumverzió még nem jeleníthető meg a privát DRIVE tárhelyről.",
+      "DRIVE_PREVIEW_NOT_AVAILABLE",
+      409,
+    );
+  }
+  const normalizedMime = (record.version.mimeType || "").toLowerCase();
+  const kind = normalizedMime === "application/pdf"
+    ? "PDF" as const
+    : DRIVE_INLINE_IMAGE_MIME_TYPES.has(normalizedMime)
+      ? "IMAGE" as const
+      : null;
+  if (!kind) {
+    throw new DriveCoreRepositoryError(
+      "Ehhez a fájltípushoz nincs biztonságos inline DRIVE előnézet.",
+      "DRIVE_PREVIEW_UNSUPPORTED_TYPE",
+      415,
+    );
+  }
+  return { config, record, kind, trustedDropArchive };
+}
+
+export async function initDriveObjectPreview(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+}) {
+  const resolved = await resolveDrivePreviewRecord(input);
+  const versionId = resolved.record.version.id;
+  const url = `/api/projects/${encodeURIComponent(input.projectId)}/drive/documents/${encodeURIComponent(input.documentId)}/preview/content?versionId=${encodeURIComponent(versionId)}`;
+  return {
+    ok: true as const,
+    preview: {
+      documentId: input.documentId,
+      versionId,
+      versionNumber: resolved.record.version.versionNumber,
+      fileName: resolved.record.version.originalName || resolved.record.documentName,
+      mimeType: resolved.record.version.mimeType,
+      sizeBytes: resolved.record.version.sizeBytes,
+      kind: resolved.kind,
+      method: "GET" as const,
+      url,
+      expiresAt: new Date(Date.now() + resolved.config.signedUrlTtlSeconds * 1000).toISOString(),
+      source: resolved.record.documentSource,
+      trustedDropArchive: resolved.trustedDropArchive,
+      transport: "same-origin-proxy" as const,
+    },
+  };
+}
+
+export async function openDriveObjectPreviewContent(input: {
+  projectId: string;
+  documentId: string;
+  versionId?: string | null;
+  range?: string | null;
+}) {
+  const resolved = await resolveDrivePreviewRecord(input);
+  const object = await getDriveObjectStream({
+    storageKey: resolved.record.version.storageKey!,
+    bucket: resolved.record.version.storageBucket,
+    range: input.range,
+  });
+  return {
+    ok: true as const,
+    kind: resolved.kind,
+    fileName: resolved.record.version.originalName || resolved.record.documentName,
+    mimeType: resolved.record.version.mimeType,
+    object,
   };
 }

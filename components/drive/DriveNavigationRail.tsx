@@ -19,11 +19,23 @@ import styles from "./DriveWorkspace.module.css";
 type Props = {
   boardOpen: boolean;
   onToggleBoard: () => void;
+  onHoverOpen: () => void;
+  onHoverLeave: () => void;
 };
 
-export default function DriveNavigationRail({ boardOpen, onToggleBoard }: Props) {
+export default function DriveNavigationRail({
+  boardOpen,
+  onToggleBoard,
+  onHoverOpen,
+  onHoverLeave,
+}: Props) {
   return (
-    <nav className={styles.rail} aria-label="DIMPRO Drive fő navigáció">
+    <nav
+      className={styles.rail}
+      aria-label="DIMPRO Drive fő navigáció"
+      onMouseEnter={onHoverOpen}
+      onMouseLeave={onHoverLeave}
+    >
       <button
         type="button"
         className={styles.brandMark}

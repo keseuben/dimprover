@@ -1,6 +1,6 @@
 "use client";
 
-import { Columns2, Columns3, Rows3, Square } from "lucide-react";
+import { Columns2, Columns3, PanelsLeftRight, Rows3, Square } from "lucide-react";
 import type { DriveLayoutMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -14,6 +14,7 @@ const modes: Array<{ value: DriveLayoutMode; label: string; icon: typeof Columns
   { value: "two", label: "2 paneles nézet", icon: Columns2 },
   { value: "one", label: "1 paneles nézet", icon: Square },
   { value: "split", label: "Osztott nézet", icon: Rows3 },
+  { value: "commander", label: "Commander – kétpaneles fájlkezelő", icon: PanelsLeftRight },
 ];
 
 export default function ViewLayoutSwitcher({ value, onChange }: Props) {

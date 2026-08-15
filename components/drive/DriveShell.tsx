@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import DriveNavigationRail from "./DriveNavigationRail";
 import DriveWorkspace from "./DriveWorkspace";
@@ -28,7 +28,10 @@ export default function DriveShell() {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [boardOpen, setBoardOpen] = useState(true);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [boardPinned, setBoardPinned] = useState(false);
+  const boardOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boardCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -58,19 +61,95 @@ export default function DriveShell() {
 
   useEffect(() => { void loadProjects(); }, [loadProjects]);
 
+  useEffect(() => () => {
+    if (boardOpenTimer.current) clearTimeout(boardOpenTimer.current);
+    if (boardCloseTimer.current) clearTimeout(boardCloseTimer.current);
+  }, []);
+
+  const cancelBoardTimers = useCallback(() => {
+    if (boardOpenTimer.current) {
+      clearTimeout(boardOpenTimer.current);
+      boardOpenTimer.current = null;
+    }
+    if (boardCloseTimer.current) {
+      clearTimeout(boardCloseTimer.current);
+      boardCloseTimer.current = null;
+    }
+  }, []);
+
+  const openBoardSoon = useCallback(() => {
+    if (boardPinned || boardOpen) return;
+    if (boardCloseTimer.current) {
+      clearTimeout(boardCloseTimer.current);
+      boardCloseTimer.current = null;
+    }
+    if (boardOpenTimer.current) return;
+    boardOpenTimer.current = setTimeout(() => {
+      setBoardOpen(true);
+      boardOpenTimer.current = null;
+    }, 220);
+  }, [boardOpen, boardPinned]);
+
+  const closeBoardSoon = useCallback(() => {
+    if (boardPinned || !boardOpen) return;
+    if (boardOpenTimer.current) {
+      clearTimeout(boardOpenTimer.current);
+      boardOpenTimer.current = null;
+    }
+    if (boardCloseTimer.current) return;
+    boardCloseTimer.current = setTimeout(() => {
+      setBoardOpen(false);
+      boardCloseTimer.current = null;
+    }, 280);
+  }, [boardOpen, boardPinned]);
+
+  const keepBoardOpen = useCallback(() => {
+    if (boardCloseTimer.current) {
+      clearTimeout(boardCloseTimer.current);
+      boardCloseTimer.current = null;
+    }
+  }, []);
+
+  const toggleBoard = useCallback(() => {
+    cancelBoardTimers();
+    setBoardOpen((current) => !current);
+  }, [cancelBoardTimers]);
+
+  const toggleBoardPinned = useCallback(() => {
+    cancelBoardTimers();
+    setBoardPinned((current) => {
+      const next = !current;
+      if (next) setBoardOpen(true);
+      return next;
+    });
+  }, [cancelBoardTimers]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
   );
 
   return (
-    <div className={`${styles.shell} ${boardOpen ? "" : styles.shellBoardClosed}`}>
-      <DriveNavigationRail boardOpen={boardOpen} onToggleBoard={() => setBoardOpen((current) => !current)} />
+    <div className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}>
+      <DriveNavigationRail
+        boardOpen={boardOpen}
+        onToggleBoard={toggleBoard}
+        onHoverOpen={openBoardSoon}
+        onHoverLeave={closeBoardSoon}
+      />
       <FloatingProjectBoard
         projects={projects}
         selectedProjectId={selectedProject?.id || ""}
+        pinned={boardPinned}
         onProjectChange={setSelectedProjectId}
-        onClose={() => setBoardOpen(false)}
+        onClose={() => {
+          cancelBoardTimers();
+          setBoardPinned(false);
+          setBoardOpen(false);
+        }}
+        onTogglePinned={toggleBoardPinned}
+        onHoverEnter={keepBoardOpen}
+        onHoverLeave={closeBoardSoon}
       />
       <main className={styles.main}>
         {loading ? (

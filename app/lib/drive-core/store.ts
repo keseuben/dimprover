@@ -14,7 +14,9 @@ export {
   completeDriveObjectUpload,
   getDriveObjectStorageHealth,
   initDriveObjectDownload,
+  initDriveObjectPreview,
   initDriveObjectUpload,
+  openDriveObjectPreviewContent,
 } from "./storageService";
 
 export {
@@ -24,9 +26,14 @@ export {
 } from "./reviewService";
 
 export {
+  addDriveBoxItem,
+  createDriveBox,
   ensureDriveQrCode,
   getDriveDocumentWorkspaceDetails,
   getDriveWorkspaceDatabaseHealth,
+  listDriveBoxes,
+  moveDriveDocument,
+  removeDriveBoxItem,
   upsertDriveEngineeringMetadata,
   upsertDriveFileNote,
 } from "./workspaceRepository";
