@@ -180,3 +180,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `247_benjadmin_ai_bridge_v11_dev_activation_20260815.md` – ChatGPT Bridge V1.1 / Worker Inbox DEV aktiválás: WAITING_HANDOFF → HANDED_OFF → RUNNING → RESULT_PENDING, task-bound sanitizált handoff prompt + SHA, Worker Inbox, 39/39 + 25/25 + 8/8 + 12/12 + 17/17 + 9/9 + 40/40 PASS; aktív build MRUtvwU8fqo4rvDtgbTYt, natív executor fail-closed.
 
 - `248_dimpro_field_issue_attachments_v240_dev_activation_20260815.md` – Terepi HJ mellékletkapcsolatok V0.4 DEV aktiválás: Project Issue Core 0.4.0 + Drive PHOTO/EVIDENCE és PLAN/ATTACHMENT, guarded migration + backup, 102/102 + 39/39 runtime E2E + 36/36 live PASS; unified Ármin V11/Jázmin V0.4 build AYDYKkH-j2894_4NduMJF.
+
+- `249_benjadmin_plus_only_v12_dev_activation_20260815.md` – BENJADMIN Plus-only AI Bridge V1.2 DEV aktiválás: Ben-AI AUTO + opcionális worker preferencia/alternatív javaslat, egyparancsos Worker Inbox task pull, strukturált sanitizált eredmény-visszaadás; 47/47 + 29/29 + 11/11 + 25/25 + 8/8 + 17/17 + 9/9 + 40/40 PASS; aktív build 1dWSJOqc7KqMuzEoJsSZ5, natív provider/executor továbbra is fail-closed.
