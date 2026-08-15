@@ -49,13 +49,14 @@ before('supabase/migrations/20260809214500_service_role_backend_grants_v010.sql'
 before('supabase/migrations/20260810063500_dimpro_org_license_seats_invites_v020.sql', 'supabase/migrations/20260815133000_drive_compare_findings_v200.sql');
 before('supabase/migrations/20260815133000_drive_compare_findings_v200.sql', 'supabase/migrations/20260815161000_project_issue_core_v010.sql');
 before('supabase/migrations/20260815161000_project_issue_core_v010.sql', 'supabase/migrations/20260815164500_project_issue_core_v020.sql');
-assert.equal(order.at(-1), 'supabase/migrations/20260815164500_project_issue_core_v020.sql', 'A Project Issue Core V0.2 migrációnak a jelenlegi sorrendlista végén kell lennie.');
+before('supabase/migrations/20260815164500_project_issue_core_v020.sql', 'supabase/migrations/20260815173500_project_issue_core_v030.sql');
+assert.equal(order.at(-1), 'supabase/migrations/20260815173500_project_issue_core_v030.sql', 'A Project Issue Core V0.3 migrációnak a jelenlegi sorrendlista végén kell lennie.');
 
 console.log(JSON.stringify({
   ok: true,
   contract: 'DIMPRO Supabase migration order V1',
   migrationCount: order.length,
-  dependencyChecks: 18,
+  dependencyChecks: 19,
   first: order[0],
   last: order.at(-1),
 }, null, 2));

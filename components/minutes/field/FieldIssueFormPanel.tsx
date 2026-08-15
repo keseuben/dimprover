@@ -14,6 +14,10 @@ type FieldIssueFormPanelProps = {
   onSetSaveMessage: (message: string) => void
   onRequestIssueDelete: (issueId: string) => void
   onAddDeadlineDays: (days: number) => void
+  projectName: string
+  canPersistToCore: boolean
+  syncing: boolean
+  onPersistActiveIssue: () => void
 }
 
 type PresetField = "title" | "description" | "note"
@@ -243,6 +247,10 @@ export default function FieldIssueFormPanel({
   locationOptions,
   onUpdateActiveIssue,
   onAddDeadlineDays,
+  projectName,
+  canPersistToCore,
+  syncing,
+  onPersistActiveIssue,
 }: FieldIssueFormPanelProps) {
   const [presetFields, setPresetFields] = useState<Partial<Record<PresetField, boolean>>>({})
 
@@ -268,10 +276,36 @@ export default function FieldIssueFormPanel({
           <div className="text-xs font-black uppercase tracking-[0.12em] text-cyan-800">Aktív hiba</div>
           <h2 className="mt-1 text-2xl font-black text-slate-950">{activeIssue.serial}</h2>
         </div>
-        <div className="border border-cyan-200 bg-cyan-50/70 px-3 py-2 text-right">
-          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-cyan-800">Automatikus mentés</div>
-          <div className="mt-0.5 text-sm font-black text-slate-800">Automatikusan mentve · {new Date().toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}</div>
+        <div className={`border px-3 py-2 text-right ${activeIssue.syncState === "ERROR" ? "border-rose-200 bg-rose-50" : activeIssue.coreIssueId ? "border-emerald-200 bg-emerald-50" : "border-cyan-200 bg-cyan-50/70"}`}>
+          <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">Project Issue Core</div>
+          <div className="mt-0.5 text-sm font-black text-slate-800">
+            {activeIssue.coreSerial ? `${activeIssue.coreSerial} · v${activeIssue.coreVersion || 1}` : "Helyi terepi vázlat"}
+          </div>
+          <div className="mt-0.5 text-[10px] font-bold text-slate-500">
+            {activeIssue.syncState === "SYNCING" ? "Központi mentés folyamatban…" : activeIssue.syncState === "DIRTY" ? "Helyi változás · újramentés szükséges" : activeIssue.syncState === "ERROR" ? "Mentési hiba" : activeIssue.syncState === "SYNCED" ? "Központi HJ szinkronban" : "Még nincs központi HJ"}
+          </div>
         </div>
+      </div>
+
+      <div data-field-core-sync className={`mb-4 border p-3 ${activeIssue.syncState === "ERROR" ? "border-rose-200 bg-rose-50" : "border-cyan-200 bg-cyan-50/55"}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-cyan-800">Központi Hibajegyzék · {projectName}</div>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-slate-600">
+              {activeIssue.coreIssueId ? "A terepi tétel már központi HJ. A gomb a helyi változásokat verzióvédetten frissíti." : "A gomb központi HJ-azonosítót készít. A fotó- és tervkapcsolatok helyi munkapéldánya megmarad."}
+            </p>
+            {activeIssue.syncError ? <p className="mt-1 text-[11px] font-bold text-rose-700">{activeIssue.syncError}</p> : null}
+          </div>
+          <button
+            type="button"
+            onClick={onPersistActiveIssue}
+            disabled={!canPersistToCore || syncing || !activeIssue.title.trim()}
+            className="min-h-11 shrink-0 border border-cyan-700 bg-cyan-700 px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+          >
+            {syncing ? "HJ mentése…" : activeIssue.coreIssueId ? "Központi HJ frissítése" : "Központi HJ mentése"}
+          </button>
+        </div>
+        {!canPersistToCore ? <div className="mt-2 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">Csak olvasás · issue.write jogosultság szükséges</div> : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

@@ -13,6 +13,37 @@ import FieldIssueFormPanel from "./FieldIssueFormPanel"
 import type { FieldIssue } from "./FieldIssueTypes"
 import { getPlanIssueDisciplineMeta } from "../../viewers/PlanMarkerTypes"
 
+type FieldProjectOption = { id: string; code: string; name: string }
+
+type FieldMinutePageProps = {
+  onBack: () => void
+  projectId: string
+  projectName: string
+  projectCode: string
+  permissions: string[]
+  projects: FieldProjectOption[]
+  onProjectChange: (projectId: string) => void
+}
+
+type CoreProjectIssue = {
+  id: string
+  serial: string
+  sourceType: string
+  sourceId: string
+  title: string
+  description: string
+  location: string
+  discipline: string
+  severity: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+  status: "NEW" | "IN_PROGRESS" | "FIXED" | "VERIFIED" | "CLOSED" | "REOPENED"
+  responsibleUserId: string | null
+  responsibleName: string
+  dueAt: string | null
+  note: string
+  version: number
+  updatedAt: string
+}
+
 const severityOptions = ["Alacsony", "Közepes", "Magas", "Sürgős"]
 const statusOptions = ["Új", "Folyamatban", "Javítva", "Ellenőrizve", "Lezárva"]
 const companyOptions = ["Egyéb / kézi megadás", "Generálkivitelező Kft.", "ALfa építőipar Kft.", "Villanyszerelő Bt.", "Gépész Partner Kft."]
@@ -48,12 +79,12 @@ type EmailPdfType = "full" | "active-contractor" | "contractor-pack"
 type PlanSource = "library" | "device"
 type PlanSheetSize = "A4" | "A3"
 type PlanOrientation = "portrait" | "landscape"
-const FIELD_PROJECT_NAME = "Duna Part Lakópark"
-const FIELD_WORK_AREA = "A épület"
+const DEFAULT_FIELD_WORK_AREA = "A épület"
 const initialIssues: FieldIssue[] = [
   {
     id: "field-001",
     serial: "TH-001",
+    localSerial: "TH-001",
     title: "Új terepi hiba",
     location: "",
     description: "",
@@ -63,6 +94,7 @@ const initialIssues: FieldIssue[] = [
     deadline: getTodayDateValue(),
     status: "Új",
     note: "",
+    syncState: "LOCAL",
   },
 ]
 
@@ -156,6 +188,33 @@ function formatDateValue(date: Date) {
 
 function getTodayDateValue() {
   return formatDateValue(new Date())
+}
+
+const fieldSeverityToCore: Record<string, CoreProjectIssue["severity"]> = {
+  Alacsony: "LOW",
+  Közepes: "MEDIUM",
+  Magas: "HIGH",
+  Sürgős: "URGENT",
+}
+
+const fieldStatusToCore: Record<string, CoreProjectIssue["status"]> = {
+  Új: "NEW",
+  Folyamatban: "IN_PROGRESS",
+  Javítva: "FIXED",
+  Ellenőrizve: "VERIFIED",
+  Lezárva: "CLOSED",
+  Újranyitva: "REOPENED",
+}
+
+function fieldDueAt(deadline: string) {
+  return deadline ? `${deadline}T23:59:00` : ""
+}
+
+function makeFieldCaptureSourceId(projectId: string, localIssueId: string) {
+  const randomPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+  return `field-capture-${projectId.slice(0, 48)}-${localIssueId}-${randomPart}`.slice(0, 240)
 }
 
 function FieldHeaderHexPattern() {
@@ -1173,14 +1232,17 @@ function PhotoMarkupEditor({
   )
 }
 
-export default function FieldMinutePage({ onBack }: { onBack: () => void }) {
+export default function FieldMinutePage({ onBack, projectId, projectName, projectCode, permissions, projects, onProjectChange }: FieldMinutePageProps) {
   const [issues, setIssues] = useState<FieldIssue[]>(initialIssues)
   const [photos, setPhotos] = useState<FieldPhoto[]>(initialPhotos)
   const [planLinks, setPlanLinks] = useState<IssuePlanLink[]>(initialPlanLinks)
   const [activeIssueId, setActiveIssueId] = useState(initialIssues[0]?.id ?? "")
   const [activeTab, setActiveTab] = useState<MobileTab>("issues")
   const [recordDate, setRecordDate] = useState(() => getTodayDateValue())
-  const [saveMessage, setSaveMessage] = useState("Automatikus mentés aktív")
+  const [workArea, setWorkArea] = useState(DEFAULT_FIELD_WORK_AREA)
+  const [saveMessage, setSaveMessage] = useState("Helyi vázlat aktív · központi HJ mentés külön művelettel")
+  const [fieldSyncingId, setFieldSyncingId] = useState("")
+  const fieldSourceIdsRef = useRef(new Map<string, string>())
   const [isExporting, setIsExporting] = useState(false)
   const [signers, setSigners] = useState<SignerData>({
     inspectorName: "",
@@ -1214,6 +1276,8 @@ export default function FieldMinutePage({ onBack }: { onBack: () => void }) {
     () => issues.find((issue) => issue.id === activeIssueId) ?? issues[0],
     [activeIssueId, issues],
   )
+
+  const canWriteIssueCore = permissions.includes("issue.write")
 
   const activeIssuePhotos = useMemo(
     () => photos.filter((photo) => photo.issueId === activeIssue?.id),
@@ -1417,8 +1481,8 @@ export default function FieldMinutePage({ onBack }: { onBack: () => void }) {
 
   const emailSubject = useMemo(() => {
     const dateLabel = recordDate.replaceAll("-", ". ")
-    return `Terepi hibafelvételi jegyzőkönyv – Duna Part Lakópark – ${dateLabel}.`
-  }, [recordDate])
+    return `Terepi hibafelvételi jegyzőkönyv – ${projectName} – ${dateLabel}.`
+  }, [projectName, recordDate])
 
   const emailMessage = useMemo(() => {
     const pdfTypeLabel = emailPdfType === "full"
@@ -1463,12 +1527,144 @@ ${emailMessage}`
     await exportFieldPdf()
   }
 
+  function buildFieldIssueCorePayload(issue: FieldIssue, sourceId: string) {
+    return {
+      sourceType: "FIELD_CAPTURE",
+      sourceId,
+      title: issue.title.trim(),
+      description: issue.description,
+      location: issue.location,
+      discipline: "",
+      severity: fieldSeverityToCore[issue.severity] || "MEDIUM",
+      status: fieldStatusToCore[issue.status] || "NEW",
+      responsibleName: issue.responsible.trim(),
+      dueAt: fieldDueAt(issue.deadline),
+      note: issue.note,
+      metadata: {
+        fieldCaptureVersion: "0.3.0",
+        fieldLocalIssueId: issue.id,
+        fieldLocalSerial: issue.localSerial || issue.serial,
+        contractorRepresentative: issue.contractorRepresentative,
+        projectId,
+        projectCode,
+        projectName,
+        workArea,
+        recordDate,
+        photoCount: photos.filter((photo) => photo.issueId === issue.id).length,
+        planLinkCount: planLinks.filter((link) => link.issueId === issue.id).length,
+      },
+    }
+  }
+
+  function coreIssueMatchesField(core: CoreProjectIssue, issue: FieldIssue) {
+    return core.title === issue.title.trim()
+      && core.description === issue.description
+      && core.location === issue.location.trim()
+      && core.severity === (fieldSeverityToCore[issue.severity] || "MEDIUM")
+      && core.status === (fieldStatusToCore[issue.status] || "NEW")
+      && core.responsibleName === issue.responsible.trim()
+      && (core.dueAt?.slice(0, 10) || "") === (issue.deadline || "")
+      && core.note === issue.note
+  }
+
+  async function refreshCoreIssueVersion(localIssueId: string, coreIssueId: string) {
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/issues`, { credentials: "same-origin", cache: "no-store" })
+      if (!response.ok) return
+      const payload = await response.json() as { ok?: boolean; issues?: CoreProjectIssue[] }
+      const fresh = payload.issues?.find((item) => item.id === coreIssueId)
+      if (!fresh) return
+      setIssues((current) => current.map((item) => item.id === localIssueId
+        ? { ...item, coreVersion: fresh.version, coreSerial: fresh.serial, serial: fresh.serial, syncState: "ERROR", syncError: "A központi HJ közben módosult. A friss verzió betöltve; mentsd újra a terepi adatokat." }
+        : item))
+    } catch {
+      // A fő mentési hibaüzenet megmarad; a verziófrissítés best-effort helyreállítás.
+    }
+  }
+
+  async function persistFieldIssueToCore(targetIssue: FieldIssue | undefined = activeIssue) {
+    if (!targetIssue) return false
+    if (!canWriteIssueCore) {
+      setSaveMessage("A kiválasztott projektben nincs issue.write jogosultság · a terepi adat helyi vázlat maradt")
+      return false
+    }
+    if (!targetIssue.title.trim()) {
+      setSaveMessage("A központi HJ mentéséhez add meg a hiba megnevezését")
+      return false
+    }
+    if (fieldSyncingId) return false
+
+    const sourceId = targetIssue.sourceId
+      || fieldSourceIdsRef.current.get(targetIssue.id)
+      || makeFieldCaptureSourceId(projectId, targetIssue.id)
+    fieldSourceIdsRef.current.set(targetIssue.id, sourceId)
+    setFieldSyncingId(targetIssue.id)
+    setIssues((current) => current.map((item) => item.id === targetIssue.id
+      ? { ...item, sourceId, syncState: "SYNCING", syncError: "" }
+      : item))
+
+    const corePayload = buildFieldIssueCorePayload(targetIssue, sourceId)
+    try {
+      const isUpdate = Boolean(targetIssue.coreIssueId && targetIssue.coreVersion)
+      const url = isUpdate
+        ? `/api/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(targetIssue.coreIssueId!)}`
+        : `/api/projects/${encodeURIComponent(projectId)}/issues`
+      const body = isUpdate
+        ? { expectedVersion: targetIssue.coreVersion, ...corePayload }
+        : corePayload
+      const response = await fetch(url, {
+        method: isUpdate ? "PATCH" : "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const payload = await response.json() as { ok?: boolean; error?: string; code?: string; issue?: CoreProjectIssue; created?: boolean }
+      if (!response.ok || !payload.ok || !payload.issue) {
+        if (payload.code === "PROJECT_ISSUE_VERSION_CONFLICT" && targetIssue.coreIssueId) {
+          await refreshCoreIssueVersion(targetIssue.id, targetIssue.coreIssueId)
+        }
+        throw new Error(payload.error || "A központi HJ mentése sikertelen.")
+      }
+
+      const coreIssue = payload.issue
+      const aligned = coreIssueMatchesField(coreIssue, targetIssue)
+      setIssues((current) => current.map((item) => item.id === targetIssue.id
+        ? {
+            ...item,
+            sourceId,
+            serial: coreIssue.serial,
+            coreIssueId: coreIssue.id,
+            coreSerial: coreIssue.serial,
+            coreVersion: coreIssue.version,
+            syncState: aligned ? "SYNCED" : "DIRTY",
+            syncError: aligned ? "" : "A visszakapcsolt központi HJ eltér a helyi adatoktól; mentsd újra.",
+            syncedAt: new Date().toISOString(),
+          }
+        : item))
+      setSaveMessage(aligned
+        ? `${coreIssue.serial} központi HJ ${payload.created ? "létrehozva" : "mentve"} · v${coreIssue.version}`
+        : `${coreIssue.serial} központi HJ visszakapcsolva · a helyi változásokhoz újabb mentés szükséges`)
+      return aligned
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A központi HJ mentése sikertelen."
+      setIssues((current) => current.map((item) => item.id === targetIssue.id
+        ? { ...item, sourceId, syncState: "ERROR", syncError: message }
+        : item))
+      setSaveMessage(message)
+      return false
+    } finally {
+      setFieldSyncingId("")
+    }
+  }
+
   function updateActiveIssue(patch: Partial<FieldIssue>) {
     if (!activeIssue) return
     setIssues((current) =>
-      current.map((issue) => (issue.id === activeIssue.id ? { ...issue, ...patch } : issue)),
+      current.map((issue) => issue.id === activeIssue.id
+        ? { ...issue, ...patch, syncState: issue.coreIssueId ? "DIRTY" : (issue.syncState || "LOCAL"), syncError: "" }
+        : issue),
     )
-    setSaveMessage("Változás rögzítve helyben")
+    setSaveMessage(activeIssue.coreIssueId ? "Változás helyben rögzítve · központi HJ frissítése szükséges" : "Változás rögzítve helyben")
   }
 
   function addDeadlineDays(days: number) {
@@ -1482,6 +1678,7 @@ ${emailMessage}`
     const nextIssue: FieldIssue = {
       id: `field-${String(nextNumber).padStart(3, "0")}`,
       serial: `TH-${String(nextNumber).padStart(3, "0")}`,
+      localSerial: `TH-${String(nextNumber).padStart(3, "0")}`,
       title: "Új terepi hiba",
       location: "",
       description: "",
@@ -1491,6 +1688,7 @@ ${emailMessage}`
       deadline: recordDate,
       status: "Új",
       note: "",
+      syncState: "LOCAL",
     }
 
     setIssues((current) => [...current, nextIssue])
@@ -1518,6 +1716,8 @@ ${emailMessage}`
   function deleteSelectedIssues() {
     if (!selectedIssueIds.length) return
     const selectedSet = new Set(selectedIssueIds)
+    const selectedSynced = issues.filter((issue) => selectedSet.has(issue.id) && issue.coreIssueId)
+    if (selectedSynced.length && !window.confirm(`${selectedSynced.length} kijelölt tétel már központi HJ. A helyi terepi tétel törlődik, de a központi HJ megmarad. Folytatod?`)) return
     const removedSerials = issues.filter((issue) => selectedSet.has(issue.id)).map((issue) => issue.serial).join(", ")
     const nextIssues = issues.filter((issue) => !selectedSet.has(issue.id))
     setIssues(nextIssues)
@@ -1534,7 +1734,7 @@ ${emailMessage}`
       setActiveTab(nextActiveIssue ? "issues" : "form")
     }
     setSelectedIssueIds([])
-    setSaveMessage(`${removedSerials || selectedIssueIds.length + " tétel"} törölve`)
+    setSaveMessage(`${removedSerials || selectedIssueIds.length + " tétel"} helyi terepi tétel törölve${selectedSynced.length ? " · központi HJ megmaradt" : ""}`)
   }
 
   function confirmIssueDelete() {
@@ -1558,7 +1758,7 @@ ${emailMessage}`
     }
     setSelectedIssueIds((current) => current.filter((id) => id !== issueId))
     setPendingDeleteIssueId(null)
-    setSaveMessage(`${issueToDelete.serial} törölve`)
+    setSaveMessage(`${issueToDelete.serial} helyi terepi tétel törölve${issueToDelete.coreIssueId ? " · központi HJ megmaradt" : ""}`)
   }
 
   async function handlePhotoUpload(files: FileList | null) {
@@ -2396,12 +2596,12 @@ ${emailMessage}`
           <div class="topline"></div>
           <header class="head">
             <div class="logo"><div class="logo-mark">D</div><span>DIMPROVER</span></div>
-            <div class="title"><h1>Terepi hibafelvételi<br/>jegyzőkönyv</h1><p>${escapeHtml(FIELD_PROJECT_NAME)} · ${escapeHtml(FIELD_WORK_AREA)} · ${escapeHtml(recordDate.replaceAll("-", ". "))}.</p></div>
+            <div class="title"><h1>Terepi hibafelvételi<br/>jegyzőkönyv</h1><p>${escapeHtml(projectName)} · ${escapeHtml(workArea)} · ${escapeHtml(recordDate.replaceAll("-", ". "))}.</p></div>
             <div class="doc-info"><p><b>Állapot:</b> vázlat</p><p><b>Export:</b> fotómelléklettel</p><p><b>Típus:</b> terepi jkv</p>${exportNote ? `<p><b>Szűrés:</b> ${escapeHtml(exportNote)}</p>` : ""}</div>
           </header>
           <section class="project-box">
-            <div><b>Projekt</b><strong>${escapeHtml(FIELD_PROJECT_NAME)}</strong></div>
-            <div><b>Munkaterület</b><strong>${escapeHtml(FIELD_WORK_AREA)}</strong></div>
+            <div><b>Projekt</b><strong>${escapeHtml(projectName)}</strong></div>
+            <div><b>Munkaterület</b><strong>${escapeHtml(workArea)}</strong></div>
             <div><b>Rögzítés dátuma</b><strong>${escapeHtml(recordDate.replaceAll("-", ". "))}.</strong></div>
           </section>
           <section class="summary">
@@ -2515,7 +2715,7 @@ Folytatod így az exportot?`)
   }
 
   function getProjectLocationPdfSlug() {
-    return [abbreviatePdfFilenamePart(FIELD_PROJECT_NAME), abbreviatePdfFilenamePart(FIELD_WORK_AREA)].filter(Boolean).join("_")
+    return [abbreviatePdfFilenamePart(projectName), abbreviatePdfFilenamePart(workArea)].filter(Boolean).join("_")
   }
 
   function createFieldPdfFilename(kind: "teljes" | "jkv" | "tervreszlet" | "felelos", label?: string) {
@@ -2774,9 +2974,11 @@ Folytatod így az exportot?`)
   }
 
 
-  function continueFromIssueToPhotos() {
+  async function continueFromIssueToPhotos() {
+    const saved = await persistFieldIssueToCore(activeIssue)
+    if (!saved) return
     openPhotosCard()
-    setSaveMessage("Aktív hiba rögzítve · következő lépés: fotók / tervfotók")
+    setSaveMessage(`${activeIssue?.coreSerial || activeIssue?.serial || "HJ"} rögzítve · következő lépés: fotók / tervfotók`)
   }
 
   function continueFromPhotosToPlans() {
@@ -2827,9 +3029,9 @@ Folytatod így az exportot?`)
     setSaveMessage("Mentés / lezárás munkalap megnyitva · Export / PDF előkészítés")
   }
 
-  function handleMobileTab(tab: MobileTab) {
+  async function handleMobileTab(tab: MobileTab) {
     if (tab === "save") {
-      setSaveMessage("Mentve · helyi vázlat")
+      await persistFieldIssueToCore(activeIssue)
       return
     }
 
@@ -2837,7 +3039,7 @@ Folytatod így az exportot?`)
   }
 
   return (
-    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-16 text-slate-800 md:pb-0">
+    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-16 text-slate-800 md:pb-0" data-field-issue-core="0.3.0" data-project-id={projectId}>
       <section className="border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.055)]">
         <div className="sticky top-0 z-30 relative overflow-hidden border-b border-cyan-500 bg-gradient-to-r from-[#0f2f46] via-[#0e7490] to-[#0891b2] px-3 py-4 text-white shadow-[0_6px_16px_rgba(8,145,178,0.18)] backdrop-blur sm:px-6 md:relative">
           <FieldHeaderHexPattern />
@@ -2860,14 +3062,14 @@ Folytatod így az exportot?`)
 
             <div className="justify-self-end xl:w-[620px]">
               <div className="grid gap-2 sm:grid-cols-3">
-                <select className="h-11 border border-white/30 bg-white px-3 text-[16px] font-bold text-slate-950 shadow-sm outline-none focus:border-cyan-200 md:text-sm">
-                  <option>Duna Part Lakópark</option>
-                  <option>Metrodom Park</option>
+                <select value={projectId} onChange={(event) => onProjectChange(event.target.value)} aria-label="Terepi hibafelvétel projekt" className="h-11 border border-white/30 bg-white px-3 text-[16px] font-bold text-slate-950 shadow-sm outline-none focus:border-cyan-200 md:text-sm">
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}
                 </select>
                 <input
                   className="h-11 border border-white/30 bg-white px-3 text-[16px] font-bold text-slate-950 shadow-sm outline-none placeholder:text-slate-500 focus:border-cyan-200 md:text-sm"
                   placeholder="Épület / munkaterület"
-                  defaultValue="A épület"
+                  value={workArea}
+                  onChange={(event) => setWorkArea(event.target.value)}
                 />
                 <input
                   className="h-11 border border-white/30 bg-white px-3 text-[16px] font-bold text-slate-950 shadow-sm outline-none focus:border-cyan-200 md:text-sm"
@@ -3118,6 +3320,10 @@ Folytatod így az exportot?`)
                     onSetSaveMessage={setSaveMessage}
                     onRequestIssueDelete={requestIssueDelete}
                     onAddDeadlineDays={addDeadlineDays}
+                    projectName={projectName}
+                    canPersistToCore={canWriteIssueCore}
+                    syncing={fieldSyncingId === activeIssue.id}
+                    onPersistActiveIssue={() => void persistFieldIssueToCore(activeIssue)}
                   />
                   </div> : null}
                 </div>
@@ -3280,7 +3486,7 @@ Folytatod így az exportot?`)
             <button
               key={tab.id}
               type="button"
-              onClick={() => handleMobileTab(tab.id)}
+              onClick={() => void handleMobileTab(tab.id)}
               className={`px-2 py-3 ${activeTab === tab.id ? "bg-emerald-50 text-cyan-800" : ""}`}
             >
               {tab.label}

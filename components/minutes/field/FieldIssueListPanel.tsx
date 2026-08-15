@@ -49,6 +49,21 @@ function statusClass(status: string) {
   return "bg-white text-slate-700 border-slate-200"
 }
 
+function syncLabel(issue: FieldIssue) {
+  if (issue.syncState === "SYNCING") return "HJ mentés…"
+  if (issue.syncState === "DIRTY") return `${issue.coreSerial || "HJ"} · módosult`
+  if (issue.syncState === "ERROR") return `${issue.coreSerial || "HJ"} · hiba`
+  if (issue.coreSerial) return `${issue.coreSerial} · v${issue.coreVersion || 1}`
+  return "Helyi vázlat"
+}
+
+function syncClass(issue: FieldIssue) {
+  if (issue.syncState === "ERROR") return "border-rose-200 bg-rose-50 text-rose-700"
+  if (issue.syncState === "DIRTY") return "border-amber-200 bg-amber-50 text-amber-800"
+  if (issue.coreSerial) return "border-emerald-200 bg-emerald-50 text-emerald-800"
+  return "border-slate-200 bg-slate-50 text-slate-500"
+}
+
 export default function FieldIssueListPanel({
   issues,
   photos,
@@ -138,6 +153,7 @@ export default function FieldIssueListPanel({
                   {issueListIsList ? (
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="shrink-0 text-sm font-black text-slate-900">{issue.serial}</span>
+                      <span className={`shrink-0 border px-1.5 py-0.5 text-[8px] font-black uppercase ${syncClass(issue)}`}>{syncLabel(issue)}</span>
                       <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800">{issue.title}</span>
                       <span className={`shrink-0 border px-1.5 py-0.5 text-[9px] font-black uppercase ${severityClass(issue.severity)}`}>{issue.severity}</span>
                       <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.06em] text-slate-400">📸 {issuePhotos} · HJ {linkedPlanMarkers.length}</span>
@@ -145,7 +161,7 @@ export default function FieldIssueListPanel({
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-base font-black text-slate-900">{issue.serial}</span>
+                        <div className="flex min-w-0 items-center gap-2"><span className="text-base font-black text-slate-900">{issue.serial}</span><span className={`border px-1.5 py-0.5 text-[8px] font-black uppercase ${syncClass(issue)}`}>{syncLabel(issue)}</span></div>
                         <span className={`border px-2 py-1 text-[11px] font-black uppercase ${severityClass(issue.severity)}`}>
                           {issue.severity}
                         </span>
@@ -183,6 +199,11 @@ export default function FieldIssueListPanel({
               {isExpanded ? (
                 <div className="border-t border-cyan-100 bg-cyan-50/55 px-4 py-3">
                   <div className="grid gap-2 text-xs font-semibold text-slate-700">
+                    <div className="border border-cyan-200 bg-white px-3 py-2">
+                      <b className="block text-[10px] uppercase tracking-[0.1em] text-cyan-800">Központi HJ kapcsolat</b>
+                      <div className="mt-1 flex flex-wrap items-center gap-2"><span className={`border px-2 py-1 text-[9px] font-black uppercase ${syncClass(issue)}`}>{syncLabel(issue)}</span><span className="text-[10px] font-semibold text-slate-500">Helyi azonosító: {issue.localSerial || issue.id}</span></div>
+                      {issue.syncError ? <span className="mt-1 block text-[10px] font-bold text-rose-700">{issue.syncError}</span> : null}
+                    </div>
                     <div className="border border-cyan-200 bg-white px-3 py-2">
                       <b className="block text-[10px] uppercase tracking-[0.1em] text-cyan-800">Hangjegyzetek</b>
                       <span className="mt-1 block text-slate-500">Még nincs hangjegyzet ehhez a hibához.</span>

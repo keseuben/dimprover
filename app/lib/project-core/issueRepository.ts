@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export type ProjectIssueSeverity = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type ProjectIssueStatus = "NEW" | "IN_PROGRESS" | "FIXED" | "VERIFIED" | "CLOSED" | "REOPENED";
+export type ProjectIssueCreateSourceType = "FIELD_CAPTURE" | "MANUAL" | "MEETING" | "IMPORT";
 
 export type ProjectIssue = {
   id: string;
@@ -85,7 +86,7 @@ function getClient(): SupabaseClient {
   }
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.2.0" } },
+    global: { headers: { "x-client-info": "dimpro-project-issue-core/0.3.0" } },
   });
 }
 
@@ -121,8 +122,17 @@ function dbError(message: string, error: unknown, status = 500): never {
   if (text.includes("PROJECT_ISSUE_TITLE_REQUIRED")) {
     throw new ProjectIssueRepositoryError("A hibajegy címe nem lehet üres.", "PROJECT_ISSUE_TITLE_REQUIRED", 400);
   }
+  if (text.includes("PROJECT_ISSUE_SOURCE_TYPE_INVALID")) {
+    throw new ProjectIssueRepositoryError("Ez a hibajegy-forrástípus nem hozható létre a generikus issue útvonalon.", "PROJECT_ISSUE_SOURCE_TYPE_INVALID", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_SOURCE_ID_INVALID")) {
+    throw new ProjectIssueRepositoryError("Érvénytelen vagy hiányzó hibajegy-forrásazonosító.", "PROJECT_ISSUE_SOURCE_ID_INVALID", 400);
+  }
+  if (text.includes("PROJECT_ISSUE_METADATA_INVALID")) {
+    throw new ProjectIssueRepositoryError("A hibajegy metadata mezőjének objektumnak kell lennie.", "PROJECT_ISSUE_METADATA_INVALID", 400);
+  }
   throw new ProjectIssueRepositoryError(
-    missing ? "A Project Issue Core V0.2 PostgreSQL-séma még nincs alkalmazva." : message,
+    missing ? "A Project Issue Core V0.3 PostgreSQL-séma még nincs alkalmazva." : message,
     missing ? "PROJECT_ISSUE_SCHEMA_NOT_READY" : code,
     missing ? 503 : status,
   );
@@ -163,7 +173,7 @@ export async function getProjectIssueHealth() {
       client.from("project_core_issues").select("id,project_id,serial,version").limit(0),
       client.from("project_issue_schema_meta").select("schema_version,migration_count,bootstrap_id").eq("component", "project-issue-core").maybeSingle(),
     ]);
-    const ready = !table.error && !marker.error && marker.data?.schema_version === "0.2.0" && Number(marker.data?.migration_count) === 2 && marker.data?.bootstrap_id === "project-issue-core-v020-20260815";
+    const ready = !table.error && !marker.error && marker.data?.schema_version === "0.3.0" && Number(marker.data?.migration_count) === 3 && marker.data?.bootstrap_id === "project-issue-core-v030-20260815";
     return { ready, schemaVersion: marker.data?.schema_version || null, bootstrapId: marker.data?.bootstrap_id || null, errorCode: table.error?.code || marker.error?.code || null };
   } catch (error) {
     return { ready: false, schemaVersion: null, bootstrapId: null, errorCode: error instanceof ProjectIssueRepositoryError ? error.code : "PROJECT_ISSUE_HEALTH_FAILED" };
@@ -199,7 +209,7 @@ export async function convertCompareFindingToIssue(projectId: string, findingId:
 
 const ISSUE_STATUSES: ProjectIssueStatus[] = ["NEW", "IN_PROGRESS", "FIXED", "VERIFIED", "CLOSED", "REOPENED"];
 const ISSUE_SEVERITIES: ProjectIssueSeverity[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-const ISSUE_PATCH_KEYS = ["title", "description", "location", "discipline", "severity", "status", "responsibleUserId", "dueAt", "note"] as const;
+const ISSUE_PATCH_KEYS = ["title", "description", "location", "discipline", "severity", "status", "responsibleUserId", "responsibleName", "dueAt", "note", "metadata"] as const;
 
 function buildIssuePatch(input: Record<string, unknown>) {
   const patch: Record<string, unknown> = {};
@@ -214,10 +224,14 @@ function buildIssuePatch(input: Record<string, unknown>) {
       patch.severity = value;
     } else if (key === "responsibleUserId") {
       patch.responsibleUserId = typeof value === "string" ? value.trim().slice(0, 240) : "";
+    } else if (key === "responsibleName") {
+      patch.responsibleName = typeof value === "string" ? value.trim().slice(0, 240) : "";
     } else if (key === "dueAt") {
       if (value === null || value === "") patch.dueAt = "";
       else if (typeof value === "string" && !Number.isNaN(new Date(value).getTime())) patch.dueAt = new Date(value).toISOString();
       else throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-határidő.", "PROJECT_ISSUE_DUE_AT_INVALID", 400);
+    } else if (key === "metadata") {
+      patch.metadata = normalizeCreateMetadata(value);
     } else {
       const limits: Record<string, number> = { title: 500, description: 12000, location: 1000, discipline: 240, note: 4000 };
       patch[key] = typeof value === "string" ? value.slice(0, limits[key] || 4000) : "";
@@ -226,6 +240,73 @@ function buildIssuePatch(input: Record<string, unknown>) {
   if (Object.keys(patch).length === 0) throw new ProjectIssueRepositoryError("Nincs módosítható hibajegymező a kérésben.", "PROJECT_ISSUE_PATCH_EMPTY", 400);
   if (Object.prototype.hasOwnProperty.call(patch, "title") && !String(patch.title || "").trim()) throw new ProjectIssueRepositoryError("A hibajegy címe nem lehet üres.", "PROJECT_ISSUE_TITLE_REQUIRED", 400);
   return patch;
+}
+
+const ISSUE_CREATE_SOURCE_TYPES: ProjectIssueCreateSourceType[] = ["FIELD_CAPTURE", "MANUAL", "MEETING", "IMPORT"];
+
+function normalizeCreateMetadata(value: unknown) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new ProjectIssueRepositoryError("A hibajegy metadata mezőjének objektumnak kell lennie.", "PROJECT_ISSUE_METADATA_INVALID", 400);
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized.length > 30000) throw new ProjectIssueRepositoryError("A hibajegy metadata mezője túl nagy.", "PROJECT_ISSUE_METADATA_TOO_LARGE", 400);
+  return value as Record<string, unknown>;
+}
+
+function buildIssueCreatePayload(input: Record<string, unknown>) {
+  const sourceType = typeof input.sourceType === "string" ? input.sourceType.trim().toUpperCase() as ProjectIssueCreateSourceType : "" as ProjectIssueCreateSourceType;
+  if (!ISSUE_CREATE_SOURCE_TYPES.includes(sourceType)) {
+    throw new ProjectIssueRepositoryError("Ez a hibajegy-forrástípus nem hozható létre a generikus issue útvonalon.", "PROJECT_ISSUE_SOURCE_TYPE_INVALID", 400);
+  }
+  const sourceId = typeof input.sourceId === "string" ? input.sourceId.trim().slice(0, 240) : "";
+  if (!sourceId) throw new ProjectIssueRepositoryError("A hibajegy forrásazonosítója kötelező.", "PROJECT_ISSUE_SOURCE_ID_INVALID", 400);
+  const title = typeof input.title === "string" ? input.title.trim().slice(0, 500) : "";
+  if (!title) throw new ProjectIssueRepositoryError("A hibajegy címe nem lehet üres.", "PROJECT_ISSUE_TITLE_REQUIRED", 400);
+  const severity = (typeof input.severity === "string" ? input.severity.trim().toUpperCase() : "MEDIUM") as ProjectIssueSeverity;
+  if (!ISSUE_SEVERITIES.includes(severity)) throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-súlyosság.", "PROJECT_ISSUE_SEVERITY_INVALID", 400);
+  const status = (typeof input.status === "string" ? input.status.trim().toUpperCase() : "NEW") as ProjectIssueStatus;
+  if (!ISSUE_STATUSES.includes(status)) throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-státusz.", "PROJECT_ISSUE_STATUS_INVALID", 400);
+  let dueAt = "";
+  if (typeof input.dueAt === "string" && input.dueAt.trim()) {
+    const parsed = new Date(input.dueAt);
+    if (Number.isNaN(parsed.getTime())) throw new ProjectIssueRepositoryError("Érvénytelen hibajegy-határidő.", "PROJECT_ISSUE_DUE_AT_INVALID", 400);
+    dueAt = parsed.toISOString();
+  }
+  return {
+    sourceType,
+    sourceId,
+    payload: {
+      title,
+      description: typeof input.description === "string" ? input.description.slice(0, 12000) : "",
+      location: typeof input.location === "string" ? input.location.trim().slice(0, 1000) : "",
+      discipline: typeof input.discipline === "string" ? input.discipline.trim().slice(0, 240) : "",
+      severity,
+      status,
+      responsibleUserId: typeof input.responsibleUserId === "string" ? input.responsibleUserId.trim().slice(0, 240) : "",
+      responsibleName: typeof input.responsibleName === "string" ? input.responsibleName.trim().slice(0, 240) : "",
+      dueAt,
+      note: typeof input.note === "string" ? input.note.slice(0, 4000) : "",
+      metadata: normalizeCreateMetadata(input.metadata),
+    },
+  };
+}
+
+export async function createProjectIssue(projectId: string, input: Record<string, unknown>, actorUserId: string, actorName: string) {
+  const normalized = buildIssueCreatePayload(input);
+  const client = getClient();
+  const result = await client.rpc("project_issue_create_atomic", {
+    p_project_id: projectId,
+    p_source_type: normalized.sourceType,
+    p_source_id: normalized.sourceId,
+    p_payload: normalized.payload,
+    p_actor_user_id: actorUserId,
+    p_actor_name: actorName,
+  });
+  if (result.error) dbError("A hibajegy létrehozása sikertelen.", result.error);
+  const payload = result.data as { issue?: DbIssue; link?: DbLink; created?: boolean } | null;
+  if (!payload?.issue?.id) throw new ProjectIssueRepositoryError("A hibajegy létrejöttét a szerver nem tudta visszaigazolni.", "PROJECT_ISSUE_CREATE_RESPONSE_INVALID", 500);
+  return { ok: true as const, issue: mapIssue(payload.issue), link: payload.link || null, created: Boolean(payload.created) };
 }
 
 export async function updateProjectIssue(projectId: string, issueId: string, input: Record<string, unknown>, actorUserId: string, actorName: string) {

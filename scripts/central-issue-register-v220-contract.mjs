@@ -30,8 +30,8 @@ check("updated actor stored", sql.includes("updated_by = p_actor_user_id") && sq
 check("issue update audit", sql.includes("PROJECT_ISSUE_UPDATED") && sql.includes("entity_type,entity_id") && sql.includes("'issue',v_issue.id"));
 check("audit change snapshot", sql.includes("'changes',v_changes"));
 check("RPC service role only", sql.includes("revoke all on function public.project_issue_update_atomic") && sql.includes("grant execute on function public.project_issue_update_atomic") && sql.includes("to service_role"));
-check("repository identifies 0.2.0", repo.includes('"dimpro-project-issue-core/0.2.0"') && repo.includes('schema_version === "0.2.0"'));
-check("repository marker count 2", repo.includes("migration_count) === 2") && repo.includes("project-issue-core-v020-20260815"));
+check("repository supports Issue Core >=0.2", (repo.includes('"dimpro-project-issue-core/0.2.0"') || repo.includes('"dimpro-project-issue-core/0.3.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"')));
+check("repository compatible marker", (repo.includes("migration_count) === 2") || repo.includes("migration_count) === 3")) && (repo.includes("project-issue-core-v020-20260815") || repo.includes("project-issue-core-v030-20260815")));
 check("repository update method", repo.includes("updateProjectIssue") && repo.includes('client.rpc("project_issue_update_atomic"'));
 check("repository patch allowlist", repo.includes("ISSUE_PATCH_KEYS") && ["title","description","location","discipline","severity","status","responsibleUserId","dueAt","note"].every((value) => repo.includes(`"${value}"`)));
 check("repository version conflict 409", repo.includes("PROJECT_ISSUE_VERSION_CONFLICT") && repo.includes(", 409)"));
@@ -40,7 +40,7 @@ check("PATCH API issue.write", itemApi.includes('requireProjectPermission(reques
 check("PATCH API calls repository", itemApi.includes("updateProjectIssue(projectId, issueId, input") && repo.includes("expectedVersion"));
 check("list API remains issue.read", listApi.includes('requireProjectPermission(request, projectId, "issue.read")'));
 check("health API remains issue.read", healthApi.includes('requireProjectPermission(request, projectId, "issue.read")'));
-check("health API version 0.2.0", healthApi.includes('version: "0.2.0"') && repo.includes('schema_version === "0.2.0"'));
+check("health API compatible version", (healthApi.includes('version: "0.2.0"') || healthApi.includes('version: "0.3.0"')) && (repo.includes('schema_version === "0.2.0"') || repo.includes('schema_version === "0.3.0"')));
 check("route uses AppLayout", route.includes("<AppLayout>") && route.includes("IssueRegisterPage"));
 check("static sample HJ removed", !ui.includes('id: "HJ-001"') && !ui.includes("issueRegisterItems"));
 check("UI project API", ui.includes('fetch("/api/projects"'));
@@ -60,6 +60,6 @@ check("UI project issue marker", ui.includes('data-project-issue-register="0.2.0
 check("UI source labels", ["Drive Compare","Terepi hibafelvétel","Kézi hibajegy","Értekezlet","Import"].every((value) => ui.includes(value)));
 check("UI overdue metric", ui.includes("isOverdue") && ui.includes("Lejárt"));
 check("UI audit metadata visible", ui.includes("Létrehozva:") && ui.includes("Frissítve:") && ui.includes("Aktuális verzió"));
-check("migration order ends V0.2", order.trim().endsWith("supabase/migrations/20260815164500_project_issue_core_v020.sql"));
+check("V0.2 migration precedes V0.3", order.includes("20260815164500_project_issue_core_v020.sql") && order.indexOf("20260815164500_project_issue_core_v020.sql") < order.indexOf("20260815173500_project_issue_core_v030.sql"));
 
 console.log(`\nCentral Issue Register V2.2 contract: ${pass}/${checks.length} PASS`);
