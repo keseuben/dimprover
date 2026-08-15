@@ -147,3 +147,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `231_benjadmin_runtime_identity_guard_dev_activation_20260815.md` – runtime identity guard DEV aktiválás: cwd/port/build/P9 auth-gate live PASS; standalone .dimprover self-heal aktív.
 
 - `232_benjadmin_terminalhub_p9_destructive_command_approval_candidate_20260815.md` – P9 DEV destructive Managed Command approval: 5 perces two-step approval, atomikus single-use queue/consume, 540/540 PASS; DEV DB migration applied.
+
+- `233_benjadmin_terminalhub_p9_destructive_command_approval_dev_activation_20260815.md` – P9 destructive Managed Command approval DEV aktiválás: 621/621 PASS, atomikus single-use approval gate aktív; execution/PROD/Vault továbbra is OFF.
