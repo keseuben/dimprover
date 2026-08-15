@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, RefreshCcw } from "lucide-react"
+import IssueAttachmentWorkspace from "@/components/minutes/shared/IssueAttachmentWorkspace"
 
 type IssueRegisterPageProps = { onBack: () => void }
 type IssueStatus = "NEW" | "IN_PROGRESS" | "FIXED" | "VERIFIED" | "CLOSED" | "REOPENED"
@@ -135,6 +136,8 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === projectId) || null, [projectId, projects])
   const canWrite = selectedProject?.permissions.includes("issue.write") || false
+  const canReadDocuments = selectedProject?.permissions.includes("document.read") || false
+  const memberNames = useMemo(() => Object.fromEntries(members.map((member) => [member.userId, member.displayName || member.userId])), [members])
 
   const loadProjects = useCallback(async () => {
     const response = await fetch("/api/projects", { credentials: "same-origin", cache: "no-store" })
@@ -232,7 +235,7 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
   const overdueCount = issues.filter(isOverdue).length
 
   return (
-    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-5 text-slate-800" data-project-issue-register="0.2.0">
+    <div className="min-w-0 overflow-hidden bg-[#f3f7fa] pb-5 text-slate-800" data-project-issue-register="0.5.0">
       <section className="border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.055)]">
         <div className="relative overflow-hidden border-b border-cyan-500 bg-gradient-to-r from-[#0f2f46] via-[#0e7490] to-[#0891b2] px-3 py-2.5 text-white shadow-[0_6px_16px_rgba(8,145,178,0.18)] sm:px-5">
           <HeaderHexPattern />
@@ -305,10 +308,11 @@ export default function IssueRegisterPage({ onBack }: IssueRegisterPageProps) {
                         <div className="space-y-2 text-xs font-semibold text-slate-600">
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Forrás</div><div className="mt-1 font-black text-slate-800">{sourceLabel(issue.sourceType)}</div><div className="mt-1 break-all text-[10px] text-slate-500">{issue.sourceId || "-"}</div></div>
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Workflow</div><div className="mt-2 flex flex-wrap gap-2"><span className={`border px-2 py-1 text-[10px] font-black ${statusClass(issue.status)}`}>{statusLabel(issue.status)}</span><span className={`border px-2 py-1 text-[10px] font-black ${severityClass(issue.severity)}`}>{severityLabel(issue.severity)}</span>{isOverdue(issue) ? <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-800">Lejárt</span> : null}</div><div className="mt-2">Határidő: <strong>{displayDate(issue.dueAt)}</strong></div><div>Felelős: <strong>{issue.responsibleName || "Nincs kijelölve"}</strong></div></div>
-                          <div data-issue-attachment-summary="0.4.0" className="border border-emerald-200 bg-emerald-50/45 p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-emerald-700">Központi HJ mellékletek</div><div className="mt-2 flex flex-wrap gap-2"><span className="border border-emerald-200 bg-white px-2 py-1 text-[10px] font-black">Összes: {issue.attachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Fotó: {issue.photoAttachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Terv: {issue.planAttachmentCount || 0}</span></div></div>
+                          <div data-issue-attachment-summary="0.5.0" className="border border-emerald-200 bg-emerald-50/45 p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-emerald-700">Központi HJ mellékletek</div><div className="mt-2 flex flex-wrap gap-2"><span className="border border-emerald-200 bg-white px-2 py-1 text-[10px] font-black">Összes: {issue.attachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Fotó: {issue.photoAttachmentCount || 0}</span><span className="border border-slate-200 bg-white px-2 py-1 text-[10px] font-black">Terv: {issue.planAttachmentCount || 0}</span></div><div className="mt-2 text-[10px] font-semibold text-emerald-800/80">A részletes lista, előnézet és eseménytörténet lent látható.</div></div>
                           <div className="border border-slate-200 bg-white p-3"><div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Audit</div><div className="mt-1">Létrehozva: {displayDateTime(issue.createdAt)} · {issue.createdByName || "DIMPRO"}</div><div className="mt-1">Frissítve: {displayDateTime(issue.updatedAt)} · {issue.updatedByName || "DIMPRO"}</div><div className="mt-1">Aktuális verzió: <strong>v{issue.version}</strong></div></div>
                         </div>
                       </div>
+                      <div className="mt-4"><IssueAttachmentWorkspace projectId={projectId} issueId={issue.id} issueSerial={issue.serial} attachmentCount={issue.attachmentCount || 0} photoAttachmentCount={issue.photoAttachmentCount || 0} planAttachmentCount={issue.planAttachmentCount || 0} canWrite={canWrite} canReadDocuments={canReadDocuments} memberNames={memberNames} onChanged={() => loadProjectIssues(projectId)} /></div>
                     </div> : null}
                   </div>
                 })}

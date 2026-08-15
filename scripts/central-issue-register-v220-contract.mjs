@@ -56,7 +56,7 @@ check("UI due date editing", ui.includes("határidő mentve") && ui.includes('ty
 check("UI technical detail editor", ["Hiba megnevezése","Helyszín","Szakág","Leírás","Belső megjegyzés"].every((value) => ui.includes(value)));
 check("UI detail save", ui.includes("Részletek mentése") && ui.includes("részletek mentve"));
 check("UI filters", ui.includes("Minden státusz") && ui.includes("Minden súlyosság") && ui.includes('type="search"'));
-check("UI project issue marker", ui.includes('data-project-issue-register="0.2.0"') && ui.includes("data-project-issue={issue.serial}"));
+check("UI project issue marker", (ui.includes('data-project-issue-register="0.2.0"') || ui.includes('data-project-issue-register="0.5.0"')) && ui.includes("data-project-issue={issue.serial}"));
 check("UI source labels", ["Drive Compare","Terepi hibafelvétel","Kézi hibajegy","Értekezlet","Import"].every((value) => ui.includes(value)));
 check("UI overdue metric", ui.includes("isOverdue") && ui.includes("Lejárt"));
 check("UI audit metadata visible", ui.includes("Létrehozva:") && ui.includes("Frissítve:") && ui.includes("Aktuális verzió"));

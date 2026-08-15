@@ -118,7 +118,7 @@ check("plan card sync badge", plans.includes("planAttachmentSyncLabel") && plans
 check("local photo delete unlinks HJ association", fieldPage.includes("unlinkFieldIssueAttachment") && fieldPage.includes("Drive dokumentum megmarad, csak a HJ-kapcsolat"));
 check("local plan delete preserves Drive document", fieldPage.includes("Tervkapcsolat törölve · Drive dokumentum megmaradt"));
 check("central issue list displays attachment counts", central.includes("attachmentCount") && central.includes("photoAttachmentCount") && central.includes("planAttachmentCount"));
-check("central detail attachment summary marker", central.includes('data-issue-attachment-summary="0.4.0"'));
+check("central detail attachment summary marker", central.includes('data-issue-attachment-summary="0.4.0"') || central.includes('data-issue-attachment-summary="0.5.0"'));
 check("migration V0.3 precedes V0.4", order.indexOf("20260815173500_project_issue_core_v030.sql") < order.indexOf("20260815190500_project_issue_core_v040.sql"));
 check("migration order ends V0.4", order.trim().endsWith("supabase/migrations/20260815190500_project_issue_core_v040.sql"));
 
