@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileSearch2, QrCode, Save, StickyNote } from "lucide-react";
+import { Check, Download, FileSearch2, QrCode, Save, ShieldCheck, StickyNote, X } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails } from "./driveTypes";
 import DriveDocumentViewer from "./DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
@@ -25,6 +25,11 @@ type Props = {
   loading: boolean;
   busy: boolean;
   canWrite: boolean;
+  canApprove: boolean;
+  securityReady: boolean;
+  securityLabel: string;
+  onScan: () => Promise<void>;
+  onReview: (action: "APPROVE" | "REJECT") => Promise<void>;
   onSaveMetadata: (input: MetadataForm) => Promise<void>;
   onSaveNote: (note: string) => Promise<void>;
   onEnsureQr: () => Promise<void>;
@@ -51,6 +56,11 @@ export default function DetailsPanel({
   loading,
   busy,
   canWrite,
+  canApprove,
+  securityReady,
+  securityLabel,
+  onScan,
+  onReview,
   onSaveMetadata,
   onSaveNote,
   onEnsureQr,
@@ -136,6 +146,26 @@ export default function DetailsPanel({
                 </div>
               ))}
             </div>
+
+            {document.currentVersion?.status === "QUARANTINED" && (
+              <div className={styles.infoBox}>
+                <strong>Biztonsági karantén</strong><br />
+                {securityReady ? `${securityLabel} elérhető. A fájl csak CLEAN eredmény és külön jóváhagyás után nyitható meg.` : `Vírusellenőrző nem elérhető (${securityLabel}). A kiadás fail-closed tiltva.`}
+              </div>
+            )}
+            {canApprove && document.currentVersion?.status === "QUARANTINED" && (
+              <div className={styles.detailsActions}>
+                <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={busy || !securityReady} onClick={() => void onScan()}>
+                  <ShieldCheck size={12} /> Vírusellenőrzés
+                </button>
+                <button type="button" className={styles.smallButton} disabled={busy || !securityReady} onClick={() => void onReview("APPROVE")}>
+                  <Check size={12} /> Jóváhagyás
+                </button>
+                <button type="button" className={styles.smallButton} disabled={busy} onClick={() => void onReview("REJECT")}>
+                  <X size={12} /> Elutasítás
+                </button>
+              </div>
+            )}
 
             <div className={styles.detailsActions}>
               <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata(metadata)}>

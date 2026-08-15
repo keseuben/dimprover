@@ -1,6 +1,7 @@
 import { DriveCoreRepositoryError } from "./errors";
 import { deleteDriveObject } from "./s3ObjectStorage";
 import { getDriveObjectStorageSafeStatus } from "./storageConfig";
+import { requireDriveCleanSecurityScan } from "./securityScanRepository";
 import {
   completeDriveCleanupTaskRecord,
   getDriveQuarantineReviewDatabaseHealth,
@@ -68,6 +69,9 @@ export async function reviewDriveQuarantinedVersion(input: {
 }) {
   const action = normalizeAction(input.body.action);
   const note = normalizeNote(input.body.note, action);
+  if (action === "APPROVE") {
+    await requireDriveCleanSecurityScan({ projectId: input.projectId, documentId: input.documentId, versionId: input.versionId });
+  }
   const result = await reviewDriveQuarantinedVersionRecord({
     projectId: input.projectId,
     documentId: input.documentId,

@@ -4,6 +4,7 @@ import {
   getDriveCoreDatabaseHealth,
   getDriveObjectStorageHealth,
   getDriveQuarantineReviewHealth,
+  getDriveSecurityScannerHealth,
   getDriveWorkspaceDatabaseHealth,
 } from "@/app/lib/drive-core/store";
 
@@ -15,10 +16,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const [database, objectStorage, review, workspace] = await Promise.all([
+  const [database, objectStorage, review, security, workspace] = await Promise.all([
     getDriveCoreDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
+    getDriveSecurityScannerHealth(),
     getDriveWorkspaceDatabaseHealth(),
   ]);
   const storageNextStep = !objectStorage.database.ready
@@ -64,6 +66,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? "A DRIVE Workspace 1.0.0 metaadat, megjegyzés, QR és CsomagBOX adatmodell aktív."
         : "A DIMPRO_DRIVE_WORKSPACE_V100_BOOTSTRAP.sql alkalmazása szükséges a bővített Drive Workspace funkciókhoz.",
     },
+    security: {
+      version: "0.5.0",
+      scannerSource: security.scannerSource,
+      ready: security.ready,
+      mode: security.mode,
+      socketConfigured: security.socketConfigured,
+      maxScanMb: security.maxScanMb,
+      ping: security.ping,
+      engine: security.engine,
+      engineVersion: security.engineVersion,
+      signatureVersion: security.signatureVersion,
+      signatureDate: security.signatureDate,
+      errorCode: security.errorCode,
+      releaseRule: "WEB/DESKTOP feltöltés csak CLEAN ClamAV eredmény után hagyható jóvá.",
+    },
     review: {
       version: review.version,
       databaseReady: review.database.ready,
@@ -76,6 +93,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? "A karanténverziók auditálható jóváhagyása és elutasítása aktív."
         : "A DRIVE Quarantine Review 0.4.1 SQL-séma alkalmazása szükséges.",
     },
-    activationSafe: database.ready,
+    activationSafe: database.ready && workspace.ready && review.ready && objectStorage.uploadReady && security.ready,
   }, { headers: { "cache-control": "no-store" } });
 }

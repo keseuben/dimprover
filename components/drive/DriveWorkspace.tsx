@@ -82,6 +82,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
+  const canApprove = effectivePermissions.includes("document.approve");
+  const securityReady = Boolean(health?.security?.ready);
 
   const loadBoxes = useCallback(async () => {
     try {
@@ -286,11 +288,21 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         headers: { "content-type": "application/json" },
         body: "{}",
       });
-      const completePayload = await completeResponse.json() as { ok?: boolean; error?: string; session?: { finalVersionStatus?: string }; document?: { id?: string } };
+      const completePayload = await completeResponse.json() as {
+        ok?: boolean;
+        error?: string;
+        session?: { finalVersionStatus?: string };
+        document?: { id?: string };
+        securityScan?: { ok?: boolean; error?: string; code?: string; scan?: { status?: string; engine?: string | null; engineVersion?: string | null } };
+      };
       if (!completeResponse.ok || !completePayload.ok) throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
-      setNotice(completePayload.session?.finalVersionStatus === "QUARANTINED"
-        ? "A fájl feltöltődött és karanténellenőrzésre vár."
-        : "A fájl feltöltődött, a SHA-256 ellenőrzés sikeres és a verzió aktiválva lett.");
+      if (completePayload.securityScan?.scan?.status === "CLEAN") {
+        setNotice(`A fájl feltöltődött és ClamAV szerint tiszta. Jóváhagyásig karanténban marad${completePayload.securityScan.scan.engineVersion ? ` · ${completePayload.securityScan.scan.engine || "ClamAV"} ${completePayload.securityScan.scan.engineVersion}` : ""}.`);
+      } else if (completePayload.securityScan?.ok === false) {
+        setNotice(`A fájl feltöltődött és karanténban maradt. A vírusvizsgálat nem futott le: ${completePayload.securityScan.error || completePayload.securityScan.code || "ismeretlen scanner hiba"}.`);
+      } else {
+        setNotice("A fájl feltöltődött és biztonsági ellenőrzésre vár. Jóváhagyásig karanténban marad.");
+      }
       await load();
       if (completePayload.document?.id) setSelectedDocumentId(completePayload.document.id);
     } catch (caught) {
@@ -303,6 +315,67 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  async function scanSelectedVersion() {
+    const version = selectedDocument?.currentVersion;
+    if (!selectedDocument || !version || !canApprove) return;
+    setBusy(true); setError(""); setNotice("ClamAV vírusellenőrzés folyamatban…");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/versions/${encodeURIComponent(version.id)}/security-scan`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        scan?: { status?: string; engine?: string | null; engineVersion?: string | null; signatureName?: string | null };
+        autoRejected?: boolean;
+      };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A vírusellenőrzés sikertelen.");
+      if (payload.scan?.status === "CLEAN") {
+        setNotice(`ClamAV: TISZTA${payload.scan.engineVersion ? ` · ${payload.scan.engine || "ClamAV"} ${payload.scan.engineVersion}` : ""}. A verzió jóváhagyható.`);
+      } else if (payload.scan?.status === "INFECTED" || payload.autoRejected) {
+        setError(`Vírusveszély észlelve; a verzió automatikusan elutasításra került${payload.scan?.signatureName ? ` · ${payload.scan.signatureName}` : ""}.`);
+      } else {
+        setNotice(`Biztonsági vizsgálat állapota: ${payload.scan?.status || "ismeretlen"}.`);
+      }
+      await load();
+      await loadDetails(selectedDocument.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A vírusellenőrzés sikertelen.");
+      setNotice("");
+    } finally { setBusy(false); }
+  }
+
+  async function reviewSelectedVersion(action: "APPROVE" | "REJECT") {
+    const version = selectedDocument?.currentVersion;
+    if (!selectedDocument || !version || !canApprove) return;
+    const promptText = action === "APPROVE" ? "Jóváhagyási megjegyzés:" : "Elutasítás indoka:";
+    const note = window.prompt(promptText, action === "APPROVE" ? "ClamAV ellenőrizve, kiadható." : "");
+    if (note === null) return;
+    if (action === "REJECT" && note.trim().length < 3) {
+      setError("Elutasításkor legalább rövid indoklás szükséges.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/versions/${encodeURIComponent(version.id)}/review`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, note }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; cleanup?: { deleted?: boolean; error?: string | null } };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A karanténdöntés sikertelen.");
+      setNotice(action === "APPROVE"
+        ? "A CLEAN vírusvizsgálatú verzió jóváhagyva és AVAILABLE állapotba került."
+        : payload.cleanup?.deleted ? "A verzió elutasítva és az objektum törölve." : `A verzió elutasítva. ${payload.cleanup?.error || "Objektumtörlés függőben."}`);
+      await load();
+      await loadDetails(selectedDocument.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A karanténdöntés sikertelen.");
+    } finally { setBusy(false); }
   }
 
   async function saveMetadata(input: Record<string, string>) {
@@ -600,6 +673,11 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               loading={detailsLoading}
               busy={busy}
               canWrite={canWrite}
+              canApprove={canApprove}
+              securityReady={securityReady}
+              securityLabel={health?.security?.ready ? `${health.security.engine || "ClamAV"}${health.security.engineVersion ? ` ${health.security.engineVersion}` : ""}` : health?.security?.errorCode || "Scanner nem elérhető"}
+              onScan={scanSelectedVersion}
+              onReview={reviewSelectedVersion}
               onSaveMetadata={saveMetadata}
               onSaveNote={saveNote}
               onEnsureQr={ensureQr}

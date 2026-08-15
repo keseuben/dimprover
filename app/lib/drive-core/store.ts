@@ -37,3 +37,9 @@ export {
   upsertDriveEngineeringMetadata,
   upsertDriveFileNote,
 } from "./workspaceRepository";
+
+export {
+  getDriveSecurityScannerHealth,
+  getDriveVersionSecurityStatus,
+  scanDriveQuarantinedVersion,
+} from "./securityScanService";

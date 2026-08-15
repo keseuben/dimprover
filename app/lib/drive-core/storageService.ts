@@ -10,6 +10,7 @@ import {
   headDriveObject,
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
+import { requireDriveCleanSecurityScan } from "./securityScanRepository";
 import {
   abortDriveUploadSessionRecord,
   createDriveUploadSessionRecord,
@@ -114,7 +115,8 @@ export async function initDriveObjectUpload(input: {
   const now = new Date();
   const uploadId = `drive-upload-${randomUUID().slice(0, 16)}`;
   const expiresAt = new Date(now.getTime() + Math.max(config.signedUrlTtlSeconds + 300, 1_200) * 1000).toISOString();
-  const finalVersionStatus = config.mode === "active" ? "AVAILABLE" as const : "QUARANTINED" as const;
+  // WEB/DESKTOP feltöltés mindig karanténba kerül. AVAILABLE csak sikeres vírusvizsgálat + jóváhagyás után lehet.
+  const finalVersionStatus = "QUARANTINED" as const;
   const storageKey = buildDriveStorageKey({ projectId: input.projectId, uploadId, fileName: originalName });
   const session: DriveUploadSession = {
     id: uploadId,
@@ -385,6 +387,13 @@ export async function initDriveObjectDownload(input: {
       409,
     );
   }
+  if (!trustedDropArchive) {
+    await requireDriveCleanSecurityScan({
+      projectId: input.projectId,
+      documentId: input.documentId,
+      versionId: record.version.id,
+    });
+  }
   const signed = await createDriveSignedGetUrl({
     storageKey: record.version.storageKey,
     bucket: record.version.storageBucket,
@@ -456,6 +465,13 @@ async function resolveDrivePreviewRecord(input: {
       "DRIVE_PREVIEW_NOT_AVAILABLE",
       409,
     );
+  }
+  if (!trustedDropArchive) {
+    await requireDriveCleanSecurityScan({
+      projectId: input.projectId,
+      documentId: input.documentId,
+      versionId: record.version.id,
+    });
   }
   const normalizedMime = (record.version.mimeType || "").toLowerCase();
   const kind = normalizedMime === "application/pdf"

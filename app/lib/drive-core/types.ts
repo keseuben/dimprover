@@ -12,6 +12,22 @@ export type DriveChecksumVerification = {
 };
 
 export type DriveReviewAction = "APPROVE" | "REJECT";
+export type DriveSecurityScanStatus = "PENDING" | "SCANNING" | "CLEAN" | "INFECTED" | "ERROR";
+export type DriveSecurityScan = {
+  status: DriveSecurityScanStatus;
+  attempt: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  engine: string | null;
+  engineVersion: string | null;
+  signatureVersion: string | null;
+  signatureName: string | null;
+  sha256: string | null;
+  bytesScanned: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  scannerSource: string | null;
+};
 export type DriveCleanupStatus = "PENDING" | "COMPLETED" | "FAILED";
 
 export type DriveObjectCleanupTask = {

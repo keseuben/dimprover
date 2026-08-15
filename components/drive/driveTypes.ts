@@ -202,4 +202,19 @@ export type DriveHealth = {
     databaseReady: boolean;
     nextStep: string;
   };
+  security?: {
+    version: string;
+    scannerSource: string;
+    ready: boolean;
+    mode: string;
+    socketConfigured: boolean;
+    maxScanMb: number;
+    ping: string | null;
+    engine: string | null;
+    engineVersion: string | null;
+    signatureVersion: string | null;
+    signatureDate: string | null;
+    errorCode: string | null;
+    releaseRule: string;
+  };
 };

@@ -95,6 +95,21 @@ type HealthPayload = {
     warning: string;
     nextStep: string;
   };
+  security?: {
+    version: string;
+    scannerSource: string;
+    ready: boolean;
+    mode: string;
+    socketConfigured: boolean;
+    maxScanMb: number;
+    ping: string | null;
+    engine: string | null;
+    engineVersion: string | null;
+    signatureVersion: string | null;
+    signatureDate: string | null;
+    errorCode: string | null;
+    releaseRule: string;
+  };
   review?: {
     version: string;
     databaseReady: boolean;
@@ -157,6 +172,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const canWrite = effectivePermissions.includes("document.write");
   const canApprove = effectivePermissions.includes("document.approve");
   const reviewReady = Boolean(health?.review?.ready);
+  const securityScannerReady = Boolean(health?.security?.ready);
   const storageWriteEnabled = Boolean(health?.storage?.realObjectWriteEnabled);
   const storageDownloadEnabled = Boolean(health?.storage?.realObjectDownloadEnabled);
 
@@ -365,6 +381,35 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function scanDocumentVersion(document: DriveDocument) {
+    const version = document.currentVersion;
+    if (!version) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/versions/${encodeURIComponent(version.id)}/security-scan`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const payload = await response.json() as {
+        ok?: boolean; error?: string; scan?: { status?: string; engine?: string | null; engineVersion?: string | null; signatureName?: string | null };
+        autoRejected?: boolean;
+      };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A DRIVE vírusvizsgálat sikertelen.");
+      if (payload.scan?.status === "CLEAN") {
+        setNotice(`ClamAV ellenőrzés: TISZTA${payload.scan.engineVersion ? ` · ${payload.scan.engine || "ClamAV"} ${payload.scan.engineVersion}` : ""}. A verzió most jóváhagyható.`);
+      } else if (payload.scan?.status === "INFECTED" || payload.autoRejected) {
+        setError(`A fájl vírusveszély miatt automatikusan elutasításra került${payload.scan?.signatureName ? `: ${payload.scan.signatureName}` : "."}`);
+      } else {
+        setNotice(`Vírusellenőrzési állapot: ${payload.scan?.status || "ismeretlen"}.`);
+      }
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A DRIVE vírusvizsgálat sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function reviewDocumentVersion(document: DriveDocument, action: "APPROVE" | "REJECT") {
     const version = document.currentVersion;
     if (!version) return;
@@ -481,6 +526,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         <b>{storageWriteEnabled ? `Feltöltés aktív · max. ${health?.storage?.maxUploadMb || 0} MB` : "Feltöltés tiltva"}</b>
       </div>
 
+      <div className={`${styles.reviewStatus} ${securityScannerReady ? styles.reviewStatusReady : styles.reviewStatusBlocked}`}>
+        <ShieldCheck size={16} />
+        <div>
+          <b>{securityScannerReady ? "ClamAV vírusvédelem aktív" : "ClamAV vírusvédelem nem elérhető"}</b>
+          <span>{securityScannerReady
+            ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""} · minden WEB/DESKTOP feltöltés karanténból indul`
+            : `Fail-closed: jóváhagyás tiltva · ${health?.security?.errorCode || "scanner unavailable"}`}</span>
+        </div>
+      </div>
+
       <div className={`${styles.reviewStatus} ${reviewReady ? styles.reviewStatusReady : styles.reviewStatusBlocked}`}>
         <ShieldCheck size={17} />
         <div>
@@ -582,8 +637,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     <button
                       type="button"
                       className={styles.approveButton}
-                      disabled={busy || !reviewReady}
-                      title={reviewReady ? "Karanténverzió jóváhagyása" : "A Quarantine Review 0.4.1 SQL még nem aktív."}
+                      disabled={busy || !securityScannerReady}
+                      title={securityScannerReady ? "ClamAV vírusellenőrzés indítása" : "A vírusellenőrző jelenleg nem elérhető; a jóváhagyás fail-closed."}
+                      onClick={() => void scanDocumentVersion(document)}
+                      aria-label={`${document.name} vírusellenőrzése`}
+                    ><ShieldCheck size={15} /></button>
+                    <button
+                      type="button"
+                      className={styles.approveButton}
+                      disabled={busy || !reviewReady || !securityScannerReady}
+                      title={!securityScannerReady ? "A jóváhagyás vírusellenőrző nélkül tiltott." : reviewReady ? "Karanténverzió jóváhagyása – csak CLEAN scan után" : "A Quarantine Review 0.4.1 SQL még nem aktív."}
                       onClick={() => void reviewDocumentVersion(document, "APPROVE")}
                       aria-label={`${document.name} jóváhagyása`}
                     ><Check size={15} /></button>
