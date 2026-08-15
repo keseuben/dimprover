@@ -25,7 +25,7 @@ export default function BenjadminAvatar({ member, size = "chat", status = "idle"
   return (
     <span className={`${styles.avatarOuter} ${styles[`avatar_${size}`]} ${styles[`status_${status}`]}`} title={`${item.name} · ${status} · profil megnyitása`} role="button" tabIndex={0} onClick={() => openBenjadminPersonProfile(member)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openBenjadminPersonProfile(member); } }}>
       <span className={styles.avatarInner}>
-        <Image src={item.image} alt={`${item.name} avatar`} fill sizes={size === "head" ? "280px" : size === "task" ? "52px" : "58px"} priority={eager || member === "BENJADMIN" || member === "BENAI"} unoptimized={member === "BENJADMIN"} />
+        <Image src={item.image} alt={`${item.name} avatar`} fill sizes={size === "head" ? "280px" : size === "task" ? "52px" : "58px"} priority={eager || member === "BENJADMIN" || member === "BENAI"} unoptimized />
       </span>
     </span>
   );

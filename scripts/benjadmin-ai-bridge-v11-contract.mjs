@@ -53,6 +53,7 @@ check("UI warns when handoff was sanitized", () => assert.ok(panel.includes("ér
 check("Shell accepts V1.1 bridge actions", () => assert.ok(shell.includes('"HANDOFF" | "RUNNING" | "RESULT_PENDING"')));
 check("Worker Inbox CSS exists", () => assert.ok(css.includes(".aiWorkerInboxGrid")));
 check("Bridge button CSS exists", () => assert.ok(css.includes(".aiBridgeHandoffButton") && css.includes(".aiBridgeRunningButton")));
+check("Team avatars bypass server-side image upscale", () => assert.ok(read("components/admin/developer-console/BenjadminAvatar.tsx").includes("priority={eager || member === \"BENJADMIN\" || member === \"BENAI\"} unoptimized")));
 check("No PROD task action added", () => assert.ok(!api.match(/PROD_[A-Z_]+|DEPLOY_PROD|WRITE_PROD/)));
 
 console.log(`SUMMARY ${checks.filter(Boolean).length}/${checks.length} PASS`);
