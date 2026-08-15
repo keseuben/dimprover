@@ -1,3 +1,4 @@
+import { buildManualBridgeHandoff } from "./manual-bridge";
 export type BenAiBridgeMode = "MANUAL_CHATGPT_BRIDGE" | "OPENAI_RESPONSES";
 export type BenAiDispatchStage = "CHAT_ONLY" | "COORDINATOR_ROUTING" | "TASK_ASSIGNED" | "EXECUTOR_NOT_CONFIGURED";
 
@@ -119,7 +120,7 @@ export function buildBenAiDispatch(input: {
       projectId,
       summary: `Ben-AI koordináció szükséges. ${providerText}`,
       nextStep: bridge.mode === "OPENAI_RESPONSES" ? "Ben-AI feladatbontás és worker-választás." : "A ChatGPT Parancstár aktuális munkamenet-promptjával a koordináció folytatható.",
-      handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nCímzett: Ben-AI\nUtasítás: ${short}\n\nFeladat: bontsd végrehajtható fejlesztési lépésekre, válassz belső workert, tartsd meg a B3/B3.1/B3.2 DEV biztonsági kapukat. PROD maradjon read-only.`,
+      handoffPrompt: buildManualBridgeHandoff({ taskId, projectId, workerName: "Ben-AI", instruction: `${input.text}\n\nFeladat: bontsd végrehajtható fejlesztési lépésekre, válassz belső workert, tartsd meg a B3/B3.1/B3.2 DEV biztonsági kapukat.` }).prompt,
       estimate,
     };
   }
@@ -139,7 +140,7 @@ export function buildBenAiDispatch(input: {
     projectId,
     summary: `A task ${worker.name} részére előirányozva. ${executorText}`,
     nextStep: bridge.executorConfigured ? "Session -> repository -> branch -> worktree -> scope lock -> READY." : "A task ChatGPT/MCP átadással végrehajtható; a natív worker executor külön következő fejlesztési blokk.",
-    handoffPrompt: `BENJADMIN FEJLESZTÉSI TASK\nTask: ${taskId}\nProjekt: ${projectId || "—"}\nFelelős: ${worker.name}\nUtasítás: ${short}\n\nDEV-only végrehajtás. Kötelező lánc: status -> read -> backup -> task/session/worktree/scope -> code -> docs -> tsc -> lint -> targeted acceptance -> build -> DEV restart -> smoke -> commit/handoff. PROD módosítás nincs.`,
+    handoffPrompt: buildManualBridgeHandoff({ taskId, projectId, workerName: worker.name, instruction: input.text }).prompt,
     estimate,
   };
 }

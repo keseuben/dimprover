@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DevWorktreeValidationError, validateGitWorktreeForPlane } from "./worktree-validation";
+import { assertManualBridgeTransition, buildManualBridgeHandoff, normalizeManualBridgeState, type ManualBridgeState } from "./manual-bridge";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEV_CENTER_ENGINE_BOOTSTRAP_ID, DEV_CENTER_ENGINE_REQUIRED_WORKERS, DEV_CENTER_ENGINE_SCHEMA_VERSION, DEV_CENTER_ENGINE_TABLES } from "./engine-schema";
 import type { DevEngineGateStatus, DevEngineHandshakeStage, DevEngineOperation, DevEngineScope, DevEngineTask, DevEngineTaskStatus, DevEngineWorker, DevEngineWorkerSession } from "./engine-types";
@@ -551,6 +552,7 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
   }
   const now = nowIso();
   const estimateMinutes = clampEstimateMinutes(input.estimateMinutes) ?? clampEstimateMinutes(jsonRecord(task.metadata).estimateMinutes);
+  const handoff = buildManualBridgeHandoff({ taskId: task.id, projectId: task.projectId, workerName: text(worker.name) || workerCode, instruction: task.description || task.title });
   const nextMetadata = {
     ...task.metadata,
     ownerCode: workerCode,
@@ -560,6 +562,13 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
     ...(estimateMinutes ? { estimateMinutes } : {}),
     workflowState: "ROUTED",
     bridgeMode: "MANUAL_CHATGPT_BRIDGE",
+    bridgeState: "WAITING_HANDOFF",
+    bridgeUpdatedAt: now,
+    handoffPrompt: handoff.prompt,
+    handoffPromptSha256: handoff.sha256,
+    handoffPromptGeneratedAt: now,
+    handoffSanitized: handoff.sanitized,
+    handoffSensitiveFindings: handoff.sensitiveFindings,
   };
   const { data, error } = await client.from("dev_center_tasks").update({
     requested_worker_id: workerId,
@@ -622,6 +631,9 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
     const now = nowIso();
     const estimateMinutes = clampEstimateMinutes(jsonRecord(task.metadata).estimateMinutes);
     const expectedFinishAt = estimateMinutes ? new Date(Date.now() + estimateMinutes * 60_000).toISOString() : null;
+    const existingMeta = jsonRecord(task.metadata);
+    const existingPrompt = text(existingMeta.handoffPrompt);
+    const fallbackHandoff = existingPrompt ? null : buildManualBridgeHandoff({ taskId: task.id, projectId: task.projectId, workerName: text(workerResult.data.name) || text(workerResult.data.code), instruction: task.description || task.title });
     const nextMetadata = {
       ...task.metadata,
       workflowState: "STARTED_MANUAL_BRIDGE",
@@ -629,7 +641,16 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
       expectedFinishAt,
       activeSessionId: sessionId,
       bridgeMode: "MANUAL_CHATGPT_BRIDGE",
+      bridgeState: normalizeManualBridgeState(existingMeta.bridgeState) || "WAITING_HANDOFF",
+      bridgeUpdatedAt: now,
       executionGate: "TASK_BOUND",
+      ...(fallbackHandoff ? {
+        handoffPrompt: fallbackHandoff.prompt,
+        handoffPromptSha256: fallbackHandoff.sha256,
+        handoffPromptGeneratedAt: now,
+        handoffSanitized: fallbackHandoff.sanitized,
+        handoffSensitiveFindings: fallbackHandoff.sensitiveFindings,
+      } : {}),
     };
     const updated = await client.from("dev_center_tasks").update({ metadata: nextMetadata, updated_at: now }).eq("id", taskId).select("*").single();
     if (updated.error) databaseError("A task indítási metaadata nem menthető.", updated.error);
@@ -643,12 +664,57 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
   }
 }
 
+export async function advanceDevEngineTaskManualBridge(input: { taskId: string; target: Exclude<ManualBridgeState, "WAITING_HANDOFF"> }) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (!["claimed", "in_progress", "testing"].includes(task.status)) {
+    throw new DevCenterEngineError("A ChatGPT bridge állapota csak elindított tasknál módosítható.", "DEV_CENTER_BRIDGE_TASK_NOT_STARTED", 409, { taskId: task.id, status: task.status });
+  }
+  const metadata = jsonRecord(task.metadata);
+  const sessionId = text(metadata.activeSessionId);
+  if (!sessionId) throw new DevCenterEngineError("A ChatGPT bridge állapotváltásához aktív session szükséges.", "DEV_CENTER_BRIDGE_SESSION_REQUIRED", 409, { taskId: task.id });
+  const session = await client.from("dev_center_worker_sessions").select("id,status,task_id,worker_id").eq("id", sessionId).maybeSingle();
+  if (session.error) databaseError("A ChatGPT bridge session nem olvasható.", session.error);
+  if (!session.data || session.data.status === "closed" || session.data.task_id !== task.id) {
+    throw new DevCenterEngineError("A ChatGPT bridge session nem aktív vagy más taskhoz tartozik.", "DEV_CENTER_BRIDGE_SESSION_INVALID", 409, { taskId: task.id, sessionId });
+  }
+  const transition = assertManualBridgeTransition(metadata.bridgeState, input.target);
+  if (!transition.allowed) {
+    throw new DevCenterEngineError(`Érvénytelen ChatGPT bridge állapotváltás: ${transition.current} → ${input.target}.`, "DEV_CENTER_BRIDGE_TRANSITION_DENIED", 409, { taskId: task.id, current: transition.current, target: input.target, expected: transition.expected });
+  }
+  const now = nowIso();
+  const timestampKey = input.target === "HANDED_OFF" ? "handoffAt" : input.target === "RUNNING" ? "bridgeRunningAt" : "resultPendingAt";
+  const workflowState = input.target === "HANDED_OFF" ? "MANUAL_BRIDGE_HANDED_OFF" : input.target === "RUNNING" ? "MANUAL_BRIDGE_RUNNING" : "RESULT_PENDING";
+  const nextMetadata = { ...metadata, bridgeState: input.target, bridgeUpdatedAt: now, workflowState, [timestampKey]: now };
+  const { data, error } = await client.from("dev_center_tasks").update({ metadata: nextMetadata, updated_at: now }).eq("id", task.id).select("*").single();
+  if (error) databaseError("A ChatGPT bridge állapot mentése sikertelen.", error, 409);
+  const labels: Record<typeof input.target, string> = { HANDED_OFF: "ChatGPT átadás rögzítve", RUNNING: "ChatGPT munkamenet fut", RESULT_PENDING: "ChatGPT eredmény visszaérkezett" };
+  await addAudit(client, {
+    action: `TASK_BRIDGE_${input.target}`,
+    entityType: "task",
+    entityId: task.id,
+    sessionId,
+    taskId: task.id,
+    projectId: task.projectId,
+    summary: `${task.title} · ${labels[input.target]}.`,
+    metadata: { bridgeMode: "MANUAL_CHATGPT_BRIDGE", bridgeState: input.target, previousBridgeState: transition.current, productionAccess: "DENY", handoffPromptSha256: text(metadata.handoffPromptSha256) || null },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), bridgeState: input.target, handoffPrompt: text(nextMetadata.handoffPrompt), handoffPromptSha256: text(nextMetadata.handoffPromptSha256) || null };
+}
+
 export async function setDevEngineTaskTesting(taskId: string) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, taskId);
   if (!["claimed", "in_progress", "testing"].includes(task.status)) throw new DevCenterEngineError("Tesztelési állapot csak elindított tasknál állítható.", "DEV_CENTER_TASK_TESTING_STATE_DENIED", 409, { taskId, status: task.status });
   const now = nowIso();
-  const metadata = { ...task.metadata, workflowState: "TESTING", testingStartedAt: now };
+  const currentMeta = jsonRecord(task.metadata);
+  const currentBridgeState = normalizeManualBridgeState(currentMeta.bridgeState);
+  const metadata = {
+    ...task.metadata,
+    workflowState: "TESTING",
+    testingStartedAt: now,
+    ...(currentBridgeState && currentBridgeState !== "RESULT_PENDING" ? { bridgeState: "RESULT_PENDING", bridgeUpdatedAt: now, resultPendingAt: now, bridgeAutoAdvancedByTesting: true } : {}),
+  };
   const { data, error } = await client.from("dev_center_tasks").update({ status: "testing", metadata, updated_at: now }).eq("id", taskId).select("*").single();
   if (error) databaseError("A tesztelési állapot mentése sikertelen.", error, 409);
   await addAudit(client, { action: "TASK_TESTING", entityType: "task", entityId: taskId, taskId, projectId: task.projectId, summary: `${task.title} tesztelési fázisba lépett.` });
@@ -671,6 +737,7 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
     ...task.metadata,
     workflowState: input.outcome === "completed" ? "COMPLETED" : "FAILED",
     finishedAt: now,
+    bridgeFinishedAt: now,
     outcomeNote: note || null,
   };
   const patch = input.outcome === "completed"

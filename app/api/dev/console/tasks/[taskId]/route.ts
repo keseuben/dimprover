@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import {
+  advanceDevEngineTaskManualBridge,
   finalizeDevEngineTask,
   routeDevEngineTask,
   setDevEngineTaskTesting,
@@ -14,7 +15,7 @@ import { engineErrorResponse, engineUnauthorized } from "@/app/api/dev/engine/_s
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type TaskAction = "ROUTE" | "ESTIMATE" | "START" | "TESTING" | "COMPLETE" | "FAIL";
+type TaskAction = "ROUTE" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "TESTING" | "COMPLETE" | "FAIL";
 
 async function notifyOutcome(input: { taskId: string; title: string; body: string; priority: "normal" | "high" }) {
   try {
@@ -55,6 +56,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       result = started;
       notice = `${started.worker.name} munkamenete elindult · ${started.session.handshakeStage}.`;
       await createBenAiConsoleMessage({ summary: `${started.task.title} · INDÍTVA`, detail: `Session: ${started.session.id} · kapu: ${started.session.handshakeStage}. A kódírás csak a branch/worktree/scope READY kapu után engedett.`, taskId, projectId: started.task.projectId, kind: "TASK_UPDATE", metadata: { workerCode: started.worker.code, sessionId: started.session.id, expectedFinishAt: started.expectedFinishAt, action } });
+    } else if (action === "HANDOFF" || action === "RUNNING" || action === "RESULT_PENDING") {
+      const advanced = await advanceDevEngineTaskManualBridge({ taskId, target: action === "HANDOFF" ? "HANDED_OFF" : action });
+      result = advanced;
+      notice = action === "HANDOFF" ? `${advanced.task.title} átadva a kijelölt ChatGPT workernek.` : action === "RUNNING" ? `${advanced.task.title} · ChatGPT munkamenet fut.` : `${advanced.task.title} · eredmény visszaérkezett, tesztelésre vár.`;
+      await createBenAiConsoleMessage({
+        summary: notice,
+        detail: action === "HANDOFF" ? "A kézi ChatGPT/MCP átadás időpontja és prompt SHA rögzítve." : action === "RUNNING" ? "A kódoló ChatGPT munkamenet futása kézzel visszaigazolva." : "A kódoló eredménye visszaérkezett; következő kapu a tesztelés.",
+        taskId,
+        projectId: advanced.task.projectId,
+        kind: "TASK_UPDATE",
+        metadata: { action, bridgeState: advanced.bridgeState, handoffPromptSha256: advanced.handoffPromptSha256 },
+      });
     } else if (action === "TESTING") {
       const testing = await setDevEngineTaskTesting(taskId);
       result = testing;
