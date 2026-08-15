@@ -93,7 +93,7 @@ try {
   check("Accepted worker differs from busy preferred", result.payload?.result?.worker?.code === suggestedWorkerCode && result.payload?.result?.worker?.code !== primaryWorkerCode, String(result.payload?.result?.worker?.code || ""));
   check("Accepted preference state persisted", result.payload?.result?.task?.metadata?.coordinatorPreferenceState === "PREFERRED_ACCEPTED", String(result.payload?.result?.task?.metadata?.coordinatorPreferenceState || ""));
 
-  const fakeSecret = `API_KEY=${marker}_SHOULD_NOT_SURVIVE`;
+  const fakeSecret = `API_KEY="${marker}_SHOULD_NOT_SURVIVE"`;
   result = await call(`/api/dev/console/tasks/${primaryTaskId}`, "PATCH", {
     action: "RESULT_REPORT",
     summary: `${marker} fejlesztés elkészült`,
