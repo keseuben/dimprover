@@ -10,6 +10,7 @@ import LiveWorkspaceReadOnly from "./LiveWorkspaceReadOnly";
 import TerminalManagedCommands from "./TerminalManagedCommands";
 import WindowsBridgePanel from "./WindowsBridgePanel";
 import SecretVaultPanel from "./SecretVaultPanel";
+import ProdReadinessPanel from "./ProdReadinessPanel";
 import type { ConsoleLiveState, ConsoleTheme } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
@@ -109,6 +110,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
               <TerminalManagedCommands sessions={live?.sessions || []} />
               <WindowsBridgePanel />
               <SecretVaultPanel />
+              <ProdReadinessPanel />
               <div className={styles.terminalEndpointGrid}>
                 {(status?.endpoints || []).map((endpoint) => (
                   <article key={endpoint.kind} data-state={endpoint.state}>
@@ -143,7 +145,7 @@ export default function TerminalHubWorkspace({ open, onClose, live, theme }: { o
           ) : null}
         </div>
 
-        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P9 foundation: Private Input + AI visibility + redaction audit aktív contract. Terminal execution, PROD és Secret Vault storage továbbra is fail-closed.</span></footer>
+        <footer className={styles.terminalHubFooter}><Boxes size={14} /><span>P10 foundation: PROD readiness csak külön read-only connectorral készíthető elő; AI BLOCKED, execution default deny, approval/release/rollback kötelező.</span></footer>
       </section>
     </div>
   );

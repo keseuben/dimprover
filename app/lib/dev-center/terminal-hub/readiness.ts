@@ -18,7 +18,7 @@ export function getTerminalCoreReadiness(): TerminalCoreReadiness {
   const blockers: string[] = [];
   if (!flags.terminalHubEnabled) blockers.push("Terminal Hub UI flag OFF.");
   if (!flags.terminalExecutionEnabled) blockers.push("Terminal execution kill switch OFF.");
-  if (flags.prodTerminalEnabled) blockers.push("PROD terminal flag P2-ben nem lehet ON.");
+  if (flags.prodTerminalEnabled) blockers.push("A PROD terminal execution flag nem kapcsolható a DEV Terminal Core-hoz.");
   if (!identity.ready) blockers.push(identity.blocker || "A terminál OS-identitás nem READY.");
   return {
     ready: blockers.length === 0,

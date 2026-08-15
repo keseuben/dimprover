@@ -78,7 +78,7 @@ check("Vaultnak nincs secret get/put route",!fs.existsSync(path.join(root,'app/a
 check("Vault UI raw secret soha",vaultUi.includes('Raw secret AI: SOHA'));
 check("Vault UI GET/PUT nincs",vaultUi.includes('GET/PUT API: NINCS'));
 check("Vault UI Terminal Hubba kötve",hub.includes('import SecretVaultPanel')&&hub.includes('<SecretVaultPanel />'));
-check("P9 footer fail-closed",hub.includes('P9 foundation:')&&hub.includes('Secret Vault storage továbbra is fail-closed'));
+check("P9 security későbbi footer mellett is fail-closed",hub.includes("<SecretVaultPanel />")&&(hub.includes("P9 foundation:")||hub.includes("P10 foundation:"))&&hub.includes("execution default deny"));
 const p9css=css.slice(css.indexOf('BENJADMIN Terminal Hub P9'));
 check("P9 CSS blokk létezik",p9css.length>100);
 check("P9 tipográfia minimum 12px",!/font-size:\s*(?:[0-9]|1[01])px/.test(p9css));

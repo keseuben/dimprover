@@ -15,6 +15,8 @@ export type TerminalHubFeatureFlags = {
   windowsBridgePairingEnabled: boolean;
   windowsBridgeExecutionEnabled: boolean;
   prodTerminalEnabled: boolean;
+  prodReadinessEnabled: boolean;
+  prodReadOnlyConnectorEnabled: boolean;
   secretVaultEnabled: boolean;
   terminalExecutionEnabled: boolean;
 };

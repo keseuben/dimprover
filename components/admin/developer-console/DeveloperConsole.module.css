@@ -1280,3 +1280,31 @@
 .terminalDestructiveApproval button { min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); font-weight: 850; cursor: pointer; }
 .terminalDestructiveApproval button:first-of-type { border-color: color-mix(in srgb, var(--red) 48%, var(--border)); color: var(--red); background: var(--red-soft); }
 .terminalDestructiveApproval button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* BENJADMIN Terminal Hub P10 · PROD readiness foundation */
+.prodReadinessPanel { min-width: 0; border: 1px solid color-mix(in srgb, var(--red) 34%, var(--border)); border-radius: 9px; overflow: hidden; background: var(--panel); }
+.prodReadinessPanel > header { min-height: 48px; padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; background: color-mix(in srgb, var(--red-soft) 34%, var(--surface2)); }
+.prodReadinessPanel > header > div { display: flex; align-items: center; gap: 7px; }
+.prodReadinessPanel > header > div:first-child > div { min-width: 0; display: grid; gap: 1px; }
+.prodReadinessPanel > header span, .prodReadinessPanel > header strong, .prodReadinessPanel > header b { font-size: 12px; }
+.prodReadinessPanel > header span { color: var(--muted); }
+.prodReadinessPanel > header strong { color: var(--text); }
+.prodReadinessPanel > header b { padding: 3px 6px; border-radius: 5px; color: var(--red); background: var(--red-soft); }
+.prodReadinessPanel[data-state="READ_ONLY_READY"] > header b { color: var(--green); background: var(--green-soft); }
+.prodReadinessPanel > header button { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; display: grid; place-items: center; color: var(--text-soft); background: var(--surface); cursor: pointer; }
+.prodReadinessPolicyGrid { padding: 7px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.prodReadinessPolicyGrid article { min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 7px; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 3px 6px; background: var(--surface); }
+.prodReadinessPolicyGrid article > svg { grid-row: 1 / span 2; color: var(--red); }
+.prodReadinessPolicyGrid span, .prodReadinessPolicyGrid strong, .prodReadinessPolicyGrid small { font-size: 12px; }
+.prodReadinessPolicyGrid span { color: var(--muted); }
+.prodReadinessPolicyGrid strong { color: var(--text); }
+.prodReadinessPolicyGrid small { grid-column: 1 / -1; color: var(--text-soft); line-height: 1.4; }
+.prodReadinessSafetyRow { padding: 0 7px 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+.prodReadinessSafetyRow span { padding: 4px 6px; border: 1px solid color-mix(in srgb, var(--red) 38%, var(--border)); border-radius: 5px; color: var(--red); background: var(--red-soft); font-size: 12px; }
+.prodReadinessSafetyRow span[data-ok="true"] { border-color: color-mix(in srgb, var(--green) 35%, var(--border)); color: var(--green); background: var(--green-soft); }
+.prodReadinessPanel > ul { margin: 0; padding: 6px 10px 7px 25px; border-top: 1px solid var(--border); color: var(--amber); background: color-mix(in srgb, var(--amber-soft) 40%, var(--panel)); }
+.prodReadinessPanel > ul li { padding: 2px 0; font-size: 12px; }
+.prodReadinessPanel > p { margin: 0; padding: 7px 9px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; color: var(--green); font-size: 12px; }
+.prodReadinessPanel > footer { min-height: 31px; padding: 5px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; font-weight: 800; }
+.prodReadinessError { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); color: var(--red); background: var(--red-soft); font-size: 12px; }
+@media (max-width: 900px) { .prodReadinessPolicyGrid { grid-template-columns: 1fr; } }

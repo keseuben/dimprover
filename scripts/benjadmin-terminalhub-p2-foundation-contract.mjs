@@ -21,7 +21,7 @@ check("P2 PTY dependency rögzítve", Boolean(pkg.dependencies?.["node-pty"]));
 check("P2 XTerm dependency rögzítve", Boolean(pkg.dependencies?.["@xterm/xterm"] && pkg.dependencies?.["@xterm/addon-fit"]));
 check("Nem-root UID/GID readiness kötelező", identity.includes("BENJADMIN_TERMINAL_UID") && identity.includes("BENJADMIN_TERMINAL_GID") && identity.includes("Root UID/GID nem engedélyezett"));
 check("P2 execution kill switch kötelező", readiness.includes("terminalExecutionEnabled") && readiness.includes("Terminal execution kill switch OFF"));
-check("PROD terminal P2-ben tiltott", readiness.includes("prodTerminalEnabled") && readiness.includes("PROD terminal flag P2-ben nem lehet ON"));
+check("PROD terminal DEV core-ban tiltott", readiness.includes("prodTerminalEnabled") && readiness.includes("A PROD terminal execution flag nem kapcsolható a DEV Terminal Core-hoz."));
 check("P2 execution readiness későbbi read-only moduloktól független", !readiness.includes("Live Workspace P4 előtt nem lehet ON") && !readiness.includes("Windows Bridge P8 előtt nem lehet ON"));
 check("P2 readiness továbbra is megjeleníti P4/P8 flagállapotot", readiness.includes("liveWorkspaceEnabled: flags.liveWorkspaceEnabled") && readiness.includes("windowsBridgeEnabled: flags.windowsBridgeEnabled"));
 check("Readiness API admin-only", route.includes("isDevCenterAuthorized(request.headers, false)") && route.includes("status: 401"));

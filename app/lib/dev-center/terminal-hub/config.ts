@@ -20,6 +20,8 @@ export function getTerminalHubFeatureFlags(): TerminalHubFeatureFlags {
     windowsBridgePairingEnabled: terminalHubEnabled && flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false) && flag("BENJADMIN_WINDOWS_BRIDGE_PAIRING_ENABLED", false),
     windowsBridgeExecutionEnabled: terminalHubEnabled && flag("BENJADMIN_WINDOWS_BRIDGE_ENABLED", false) && flag("BENJADMIN_WINDOWS_BRIDGE_EXECUTION_ENABLED", false),
     prodTerminalEnabled: terminalHubEnabled && flag("BENJADMIN_PROD_TERMINAL_ENABLED", false),
+    prodReadinessEnabled: terminalHubEnabled && flag("BENJADMIN_PROD_READINESS_ENABLED", false),
+    prodReadOnlyConnectorEnabled: terminalHubEnabled && flag("BENJADMIN_PROD_READINESS_ENABLED", false) && flag("BENJADMIN_PROD_READONLY_CONNECTOR_ENABLED", false),
     secretVaultEnabled: terminalHubEnabled && flag("BENJADMIN_SECRET_VAULT_ENABLED", false),
     // Implementation-only extra kill switch: the 06 plan flags stay authoritative.
     terminalExecutionEnabled: terminalHubEnabled && flag("BENJADMIN_TERMINAL_EXECUTION_ENABLED", false),
