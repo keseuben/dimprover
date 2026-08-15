@@ -1308,3 +1308,22 @@
 .prodReadinessPanel > footer { min-height: 31px; padding: 5px 8px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface2); font-size: 12px; font-weight: 800; }
 .prodReadinessError { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); color: var(--red); background: var(--red-soft); font-size: 12px; }
 @media (max-width: 900px) { .prodReadinessPolicyGrid { grid-template-columns: 1fr; } }
+
+/* BENJADMIN Terminal Hub P10.1 · read-only connector foundation */
+.prodConnectorFoundation { margin: 0 7px 7px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.prodConnectorFoundation > header { min-height: 38px; padding: 5px 7px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 7px; background: var(--surface2); }
+.prodConnectorFoundation > header > div { display: flex; align-items: center; gap: 5px; }
+.prodConnectorFoundation > header strong, .prodConnectorFoundation > header b { font-size: 12px; }
+.prodConnectorFoundation > header b { padding: 3px 6px; border-radius: 5px; color: var(--amber); background: var(--amber-soft); }
+.prodConnectorFoundation[data-state="FOUNDATION_READY"] > header b { color: var(--green); background: var(--green-soft); }
+.prodConnectorFoundation[data-state="BLOCKED"] > header b { color: var(--red); background: var(--red-soft); }
+.prodConnectorReferenceGrid { padding: 7px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+.prodConnectorReferenceGrid > span { min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 2px; background: var(--panel); }
+.prodConnectorReferenceGrid b, .prodConnectorReferenceGrid small { font-size: 12px; }
+.prodConnectorReferenceGrid b { color: var(--text); }.prodConnectorReferenceGrid small { color: var(--red); }
+.prodConnectorReferenceGrid > span[data-ok="true"] small { color: var(--green); }
+.prodConnectorProbeList { padding: 0 7px 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+.prodConnectorProbeList span { padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-soft); background: var(--surface2); font-size: 12px; }
+.prodConnectorFoundation > p { margin: 0; padding: 7px 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.45; }
+@media (max-width: 1000px) { .prodConnectorReferenceGrid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 620px) { .prodConnectorReferenceGrid { grid-template-columns: 1fr; } }
