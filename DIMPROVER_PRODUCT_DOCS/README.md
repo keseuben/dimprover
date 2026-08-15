@@ -161,3 +161,6 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `238_benjadmin_terminalhub_p102_probe_plan_compiler_candidate_20260815.md` – P10.2 networkless PROD probe-plan compiler: allowlist probe ID → immutable AUDIT_ONLY plan; 405/405 PASS, no-network E2E.
 
 - `239_benjadmin_terminalhub_p102_probe_plan_compiler_dev_activation_20260815.md` – P10.2 networkless PROD probe-plan compiler DEV aktiválás: 405/405 + Drive 206/206 PASS; live PROD/P10 flagek OFF.
+
+
+- `240_dimpro_drive_compare_findings_v200_dev_activation_20260815.md` – DIMPRO Drive Compare Findings V2.0 DEV aktiválás: DB migration + valós create/reload/update/409/soft-delete/audit E2E, 30/30 + 206/206 PASS, pointer-alapú 3100 cutover; PROD érintetlen.
