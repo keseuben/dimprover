@@ -143,3 +143,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `229_benjadmin_terminalhub_p9_security_dev_activation_20260815.md` – P9 security DEV aktiválás: 475/475 PASS, build OUKeDkvfIFbA152AN2VWQ; PM2 cross-worktree cwd incidens feltárva és helyes operator cwd-ra javítva.
 
 - `230_benjadmin_runtime_identity_guard_20260815.md` – BENJADMIN DEV PM2 runtime identity guard + standalone .dimprover self-heal; live/mismatch/fixture acceptance PASS.
+
+- `231_benjadmin_runtime_identity_guard_dev_activation_20260815.md` – runtime identity guard DEV aktiválás: cwd/port/build/P9 auth-gate live PASS; standalone .dimprover self-heal aktív.
