@@ -122,3 +122,50 @@ A V1.3 után külön döntés alapján jöhet a szerveres Compare Finding adatmo
 - felelős / határidő / prioritás;
 - többfelhasználós audit és státusztörténet;
 - PDF/Excel eltérési jegyzék export.
+
+
+## Végleges aktív DEV állapot
+
+A Findings feature az időközben elkészült BENJADMIN P10.1 read-only PROD connector fejlesztéssel együtt került az aktív DEV buildbe.
+
+Forrás:
+
+- `a7a091a feat(drive): add compare findings review list`
+- ezt követően a P10.1 dokumentációs checkpoint: `9d4e51b docs(benjadmin): checkpoint P10.1 PROD connector activation`
+
+Aktív DEV build:
+
+- **`LpY1sHLXS6rxcU91NpiFl`**
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev`
+- cwd: `/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2`
+- port: 3100
+- Runtime Identity Guard: **20/20 PASS**
+
+Aktív DEV browser acceptance:
+
+- Compare Findings V1.3: **78/78 PASS**
+- artifact: `/srv/dimpro-dev/artifacts/jazmin-drive-compare-findings-2026-08-15T11-22-48-489Z`
+
+Kapcsolódó végső kapuk:
+
+- Drive/Compare contract: **206/206 PASS**
+- Drive Security V0.5: **47/47 PASS**
+- Drive Security Backfill V0.5.1: **34/34 PASS**
+- Vector Segments V1.2: **12/12 PASS**
+- Drive Workspace/Core: **22/22 + 24/24 PASS**
+- Project Core: **19/19 PASS**
+- BENJADMIN P10 PROD readiness: **40/40 PASS**
+- BENJADMIN P10.1 read-only connector: **42/42 PASS**
+- BENJADMIN P9 Security: **55/55 PASS**
+- teljes ESLint: **0 error / 104 meglévő warning**
+- TypeScript: **PASS**
+- Drive storage: `active`
+- ClamAV: `PONG`, engine 1.5.3
+- `activationSafe=true`
+
+Rollback pontok:
+
+- source backup branch: `backup/benjadmin-pre-compare-findings-integration-20260815_125917`
+- P10.1 runtime előtti backup: `/srv/dimpro-dev/backups/benjadmin-p101-pre-runtime-20260815T131550`
+
+A V1.3 Findings továbbra is kizárólag kliensoldali Compare munkameneti review-lista. A következő szerveres perzisztencia-lépés külön adatmodell- és workflow-döntést igényel.
