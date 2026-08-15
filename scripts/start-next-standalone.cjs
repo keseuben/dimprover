@@ -24,6 +24,7 @@ if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
 }
 
 const buildIdPath = path.join(distRoot, "BUILD_ID");
+const releaseMetadataPath = path.join(distRoot, ".dimpro-release.json");
 const serverPath = path.join(distRoot, "standalone", "server.js");
 if (!fs.existsSync(buildIdPath) || !fs.existsSync(serverPath)) {
   console.error(`[DIMPRO standalone start] Hiányos release: ${relative}`);
@@ -52,5 +53,18 @@ if (!fs.existsSync(standaloneDataPath)) {
 }
 
 const buildId = fs.readFileSync(buildIdPath, "utf8").trim();
-console.log(`[DIMPRO standalone start] Release: ${relative}; build: ${buildId}`);
+let releaseSource = "legacy-meta";
+if (fs.existsSync(releaseMetadataPath)) {
+  let metadata;
+  try { metadata = JSON.parse(fs.readFileSync(releaseMetadataPath, "utf8")); } catch {
+    console.error(`[DIMPRO standalone start] Sérült release meta: ${relative}`);
+    process.exit(1);
+  }
+  if (metadata?.buildId !== buildId || !/^[0-9a-f]{40}$/i.test(String(metadata?.gitCommit || ""))) {
+    console.error(`[DIMPRO standalone start] A release meta nem egyezik a builddel: ${relative}`);
+    process.exit(1);
+  }
+  releaseSource = `${String(metadata.gitBranch || "detached")} · ${String(metadata.gitCommit).slice(0, 12)}`;
+}
+console.log(`[DIMPRO standalone start] Release: ${relative}; build: ${buildId}; source: ${releaseSource}`);
 require(serverPath);

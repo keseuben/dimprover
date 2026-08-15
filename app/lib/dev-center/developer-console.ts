@@ -47,7 +47,15 @@ function safeDistRoot(root: string, configured: string) {
   return distRoot;
 }
 
-export async function resolveDeveloperConsoleBuildId(root: string) {
+export type DeveloperConsoleReleaseIdentity = {
+  buildId: string;
+  branch: string;
+  commit: string;
+  distDir: string;
+  metadataReady: boolean;
+};
+
+async function developerConsoleDistCandidates(root: string) {
   const candidates: string[] = [];
   const configured = process.env.NEXT_DIST_DIR?.trim();
   if (configured) candidates.push(configured);
@@ -56,16 +64,34 @@ export async function resolveDeveloperConsoleBuildId(root: string) {
     if (pointer && !candidates.includes(pointer)) candidates.push(pointer);
   } catch { /* active release pointer még nincs */ }
   if (!candidates.includes(".next")) candidates.push(".next");
+  return candidates;
+}
 
+export async function resolveDeveloperConsoleReleaseIdentity(root: string): Promise<DeveloperConsoleReleaseIdentity> {
+  const candidates = await developerConsoleDistCandidates(root);
   for (const candidate of candidates) {
     const distRoot = safeDistRoot(root, candidate);
     if (!distRoot) continue;
+    let buildId = "";
+    try { buildId = (await readFile(path.join(distRoot, "BUILD_ID"), "utf8")).trim(); } catch { continue; }
+    if (!buildId) continue;
+
     try {
-      const buildId = (await readFile(path.join(distRoot, "BUILD_ID"), "utf8")).trim();
-      if (buildId) return buildId;
-    } catch { /* következő biztonságos release candidate */ }
+      const raw = await readFile(path.join(distRoot, ".dimpro-release.json"), "utf8");
+      const metadata = JSON.parse(raw) as { buildId?: unknown; gitCommit?: unknown; gitBranch?: unknown };
+      const gitCommit = text(metadata.gitCommit).toLowerCase();
+      const gitBranch = text(metadata.gitBranch);
+      if (text(metadata.buildId) === buildId && /^[0-9a-f]{40}$/.test(gitCommit)) {
+        return { buildId, branch: gitBranch, commit: gitCommit.slice(0, 12), distDir: candidate, metadataReady: true };
+      }
+    } catch { /* legacy release: Git fallback következik */ }
+    return { buildId, branch: "", commit: "", distDir: candidate, metadataReady: false };
   }
-  return "";
+  return { buildId: "", branch: "", commit: "", distDir: "", metadataReady: false };
+}
+
+export async function resolveDeveloperConsoleBuildId(root: string) {
+  return (await resolveDeveloperConsoleReleaseIdentity(root)).buildId;
 }
 
 function getClient(): SupabaseClient {
@@ -295,8 +321,11 @@ export async function getDeveloperConsoleRuntimeContext() {
       return "";
     }
   };
-  const [branch, commit] = await Promise.all([safeGit(["branch", "--show-current"]), safeGit(["rev-parse", "--short=12", "HEAD"])]);
-  const buildId = await resolveDeveloperConsoleBuildId(root);
+  const releaseIdentity = await resolveDeveloperConsoleReleaseIdentity(root);
+  const [gitBranch, gitCommit] = await Promise.all([safeGit(["branch", "--show-current"]), safeGit(["rev-parse", "--short=12", "HEAD"])]);
+  const branch = releaseIdentity.branch || gitBranch;
+  const commit = releaseIdentity.commit || gitCommit;
+  const buildId = releaseIdentity.buildId;
   let latestProductDoc = "";
   try {
     const docs = await readdir(path.join(root, "DIMPROVER_PRODUCT_DOCS"));
@@ -311,6 +340,7 @@ export async function getDeveloperConsoleRuntimeContext() {
     branch,
     commit,
     buildId,
+    releaseIdentity: { distDir: releaseIdentity.distDir, metadataReady: releaseIdentity.metadataReady },
     worktree: root,
     latestProductDoc,
     aiBridge: { mode: bridge.mode, label: bridge.label, providerConfigured: bridge.providerConfigured, executorConfigured: bridge.executorConfigured },

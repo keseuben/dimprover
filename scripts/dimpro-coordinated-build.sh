@@ -2,6 +2,12 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+SOURCE_BRANCH="$(git -C "$ROOT" branch --show-current 2>/dev/null || true)"
+if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "[DIMPRO build] A release source commit nem határozható meg." >&2
+  exit 1
+fi
 
 if [[ "$ROOT" == /srv/dimpro-dev/* ]]; then
   DEFAULT_BUILD_CPUS="2"
@@ -39,5 +45,5 @@ exec "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
     -p MemorySwapMax="$MEMORY_SWAP_MAX" \
     -p IOWeight=10 \
     nice -n 10 ionice -c2 -n7 \
-    bash -lc 'cd "$1" && npx next build && node scripts/ensure-next-standalone-assets.cjs --force' \
-    _ "$ROOT"
+    bash -lc 'cd "$1" && export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" && npx next build && node scripts/ensure-next-standalone-assets.cjs --force' \
+    _ "$ROOT" "$SOURCE_COMMIT" "$SOURCE_BRANCH"
