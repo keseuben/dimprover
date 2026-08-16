@@ -191,3 +191,38 @@ A final aktiválás idején a lemez továbbra is szűk, kb. 98–99% használat�
 4. ETA alert napló megjelenítése a Konzolban;
 5. szerver tárhely-karbantartási automatika / release retention szabály;
 6. a natív executor irány külön marad: AI provider és executor továbbra sincs konfigurálva, ezért a jelenlegi Plus workflow nem teljesen autonóm AI backend.
+
+## Szünet előtti végső live closeout - 2026-08-16 10:15-10:17 CEST
+
+A felhasználó kérésére a jelenlegi fejlesztési kört ezen a stabil ponton lezárjuk, és új funkciót nem aktiválunk.
+
+A tényleges aktív 3100-as DEV runtime-on ismételt végső acceptance:
+
+- Project Identity + Drive Bridge V1 runtime E2E: `35/35 PASS`.
+- Project Core -> Identity Core reverse binding: PASS.
+- publikus projektkód generálás és tartósítás: PASS.
+- valós `drive-folder-*` Beérkező Drop binding: PASS.
+- OWNER canonical membership mapping: PASS.
+- DRAFT -> ACTIVE -> CLOSING Identity/Drop lifecycle sync: PASS.
+- Drop release gate: `OFF`.
+- Drop Send: `OFF`.
+- Drop Drive archive: `OFF`.
+- BENJADMIN Push/ETA runtime acceptance: `17/17 PASS`.
+- BENJADMIN Live ETA browser acceptance: `9/9 PASS`.
+- Drive Project Provisioning + Web Upload V1.1 runtime E2E: `40/40 PASS`.
+- A Drive revalidáció három valós fájlja signed PUT -> server SHA-256 -> `CLEAN` security scan láncon ment át.
+- Identity Core live preflight: központi Identity táblák `ready:true`.
+- PM2 operator: online, unstable restart `0`.
+- aktív pointer: `.next-ben-push-project-identity-v100-final`.
+- aktív build: `bmpSo999l5WI0ZAE3JqFG`.
+- release source: `02e5074b7f0ac06b98b383783f45512b389e0576`.
+- PROD nem módosult.
+
+A korábbi `dimpro-push-p3-transition-candidate` PM2 candidate folyamat a végső live ellenőrzés után eltávolításra került.
+
+A BENJADMIN automatikus fejlesztési lánca közben külön branch-en létrehozta az `a32bbc1` Push Deep-Link candidate fejlesztést. Ez **nem része ennek a lezárt release-nek, nincs az operator branchbe integrálva és nincs aktiválva**. A szünet után külön döntés alapján folytatható.
+
+A következő visszatérési pont továbbra is két külön irányként kezelendő:
+
+1. DIMPRO Drive: `Quick Image Send -> Permanent Drive V1` a már elkészült Project Identity Bridge-re építve;
+2. BENJADMIN: a külön Push Deep-Link candidate felülvizsgálata és csak jóváhagyás után integrálása.
