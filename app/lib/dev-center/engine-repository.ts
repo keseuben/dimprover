@@ -730,7 +730,7 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
   return { ok: true as const, routed: false as const, reason: "NO_FREE_WORKER" as const, task: mapTask(waiting.data as JsonRecord), worker: null, preferredWorker, suggestedWorker: null, candidates, rejected };
 }
 
-export async function rebalanceBenAiWaitingTasks(limit = 12) {
+export async function rebalanceBenAiWaitingTasks(limit = 12, context?: { trigger?: "TASK_FINALIZED" | "PLUS_PULL"; sourceTaskId?: string | null; sourceOutcome?: "completed" | "failed" | null }) {
   const client = await requireClient();
   const result = await client.from("dev_center_tasks")
     .select("id,status,assigned_worker_id,claimed_by_session_id,metadata,priority,updated_at")
@@ -741,7 +741,7 @@ export async function rebalanceBenAiWaitingTasks(limit = 12) {
     .order("updated_at", { ascending: true })
     .limit(Math.max(1, Math.min(40, Math.floor(limit))));
   if (result.error) databaseError("A Ben-AI várólista nem olvasható.", result.error);
-  const outcomes: Array<{ taskId: string; routed: boolean; workerCode: string | null; reason: string }> = [];
+  const outcomes: Array<{ taskId: string; routed: boolean; workerCode: string | null; reason: string; chainPrepared: boolean; chainPreparedAt: string | null }> = [];
   for (const row of result.data || []) {
     const metadata = jsonRecord(row.metadata);
     const queueState = text(metadata.coordinatorQueueState);
@@ -754,9 +754,36 @@ export async function rebalanceBenAiWaitingTasks(limit = 12) {
         preferredWorkerCode: text(metadata.coordinatorManualPreference) || null,
         note: "Ben-AI várólista automatikus újraértékelés",
       });
-      outcomes.push({ taskId: text(row.id), routed: routed.routed, workerCode: routed.worker?.code || null, reason: routed.reason });
+      let chainPrepared = false;
+      let chainPreparedAt: string | null = null;
+      if (routed.routed && context?.trigger === "TASK_FINALIZED") {
+        chainPreparedAt = nowIso();
+        const routedMeta = jsonRecord(routed.task.metadata);
+        const chainMetadata: JsonRecord = {
+          ...routedMeta,
+          coordinatorChainState: "READY_FOR_PLUS_PULL",
+          coordinatorChainPreparedAt: chainPreparedAt,
+          coordinatorChainFromTaskId: text(context.sourceTaskId) || null,
+          coordinatorChainSourceOutcome: context.sourceOutcome || null,
+          coordinatorChainWorkerCode: routed.worker?.code || null,
+          coordinatorChainWorkerName: routed.worker?.name || null,
+        };
+        const chainUpdate = await client.from("dev_center_tasks").update({ metadata: chainMetadata, updated_at: chainPreparedAt }).eq("id", routed.task.id).select("id").single();
+        if (chainUpdate.error) databaseError("A Ben-AI következő-task láncállapota nem menthető.", chainUpdate.error, 409);
+        await addAudit(client, {
+          action: "TASK_BENAI_CHAIN_PREPARED",
+          entityType: "task",
+          entityId: routed.task.id,
+          taskId: routed.task.id,
+          projectId: routed.task.projectId,
+          summary: `${routed.task.title} · Ben-AI következő Plus taskként előkészítette ${routed.worker?.name || routed.worker?.code || "worker"} részére.`,
+          metadata: { sourceTaskId: text(context.sourceTaskId) || null, sourceOutcome: context.sourceOutcome || null, workerCode: routed.worker?.code || null, productionAccess: "DENY", preparedAt: chainPreparedAt },
+        });
+        chainPrepared = true;
+      }
+      outcomes.push({ taskId: text(row.id), routed: routed.routed, workerCode: routed.worker?.code || null, reason: routed.reason, chainPrepared, chainPreparedAt });
     } catch (error) {
-      outcomes.push({ taskId: text(row.id), routed: false, workerCode: null, reason: error instanceof DevCenterEngineError ? error.code : "REBALANCE_ERROR" });
+      outcomes.push({ taskId: text(row.id), routed: false, workerCode: null, reason: error instanceof DevCenterEngineError ? error.code : "REBALANCE_ERROR", chainPrepared: false, chainPreparedAt: null });
     }
   }
   return { ok: true as const, outcomes, routedCount: outcomes.filter((item) => item.routed).length };
@@ -782,7 +809,7 @@ export async function acceptBenAiSuggestedWorker(taskId: string) {
 }
 
 export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
-  await rebalanceBenAiWaitingTasks(12);
+  await rebalanceBenAiWaitingTasks(12, { trigger: "PLUS_PULL" });
   const client = await requireClient();
   const workerCode = text(workerCodeValue).toUpperCase();
   const workerId = CONSOLE_ROUTABLE_WORKERS[workerCode];
@@ -844,6 +871,7 @@ export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
     plusBridgeSessionId: text(metadata.activeSessionId) || session?.id || null,
     plusBridgePullCount: pullCount,
     plusBridgePullState: bridgeState,
+    ...(text(metadata.coordinatorChainState) ? { coordinatorChainState: "PULLED", coordinatorChainPulledAt: now } : {}),
   };
   const pullUpdate = await client.from("dev_center_tasks").update({ metadata: pullMetadata, updated_at: now }).eq("id", task.id).select("*").single();
   if (pullUpdate.error) databaseError("A Plus bridge task-felvétel állapota nem menthető.", pullUpdate.error, 409);
@@ -1117,6 +1145,8 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
     metadata: { note: note || null, notificationRequested: true },
   });
   let rebalance: Awaited<ReturnType<typeof rebalanceBenAiWaitingTasks>> | null = null;
-  try { rebalance = await rebalanceBenAiWaitingTasks(12); } catch { /* a task lezárását a koordinátori újraosztás hibája nem törheti meg */ }
+  try {
+    rebalance = await rebalanceBenAiWaitingTasks(12, { trigger: "TASK_FINALIZED", sourceTaskId: task.id, sourceOutcome: input.outcome });
+  } catch { /* a task lezárását a koordinátori újraosztás hibája nem törheti meg */ }
   return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false, rebalance };
 }

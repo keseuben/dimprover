@@ -1386,6 +1386,9 @@
 .aiWorkerInboxGrid p span { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .aiWorkerInboxGrid p small { flex: 0 0 auto; color: var(--accent-strong); font-size: 9px; font-weight: 900; }
 .aiBridgeState { color: var(--violet) !important; font-weight: 900; }
+.aiNextTaskState { margin: 5px 0 6px; padding: 5px 7px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border)); border-radius: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); color: var(--text-soft); font-size: 10px; }
+.aiNextTaskState strong { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-strong); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; }
+.aiNextTaskState span, .aiNextTaskState small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .aiPlusPullState { margin: 5px 0 6px; padding: 5px 7px; border: 1px solid color-mix(in srgb, var(--green) 38%, var(--border)); border-radius: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: color-mix(in srgb, var(--green) 6%, var(--surface)); color: var(--text-soft); font-size: 10px; }
 .aiPlusPullState strong { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; }
 .aiPlusPullState span, .aiPlusPullState code, .aiPlusPullState small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }

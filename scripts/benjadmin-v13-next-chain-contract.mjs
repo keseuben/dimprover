@@ -1,0 +1,22 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const engine=fs.readFileSync("app/lib/dev-center/engine-repository.ts","utf8");
+const panel=fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx","utf8");
+const css=fs.readFileSync("components/admin/developer-console/DeveloperConsole.module.css","utf8");
+let passed=0;function check(name,fn){fn();passed++;console.log(`PASS ${name}`)}
+check("Rebalance accepts finalize trigger",()=>assert.ok(engine.includes('trigger?: "TASK_FINALIZED" | "PLUS_PULL"')));
+check("Finalize invokes triggered rebalance",()=>assert.ok(engine.includes('trigger: "TASK_FINALIZED", sourceTaskId: task.id')));
+check("Prepared task gets READY_FOR_PLUS_PULL",()=>assert.ok(engine.includes('coordinatorChainState: "READY_FOR_PLUS_PULL"')));
+check("Prepared task stores source task",()=>assert.ok(engine.includes("coordinatorChainFromTaskId")));
+check("Prepared task stores worker",()=>assert.ok(engine.includes("coordinatorChainWorkerCode")&&engine.includes("coordinatorChainWorkerName")));
+check("Chain preparation is audited",()=>assert.ok(engine.includes('action: "TASK_BENAI_CHAIN_PREPARED"')));
+check("Chain audit denies PROD",()=>assert.ok(engine.includes("preparedAt: chainPreparedAt")&&engine.includes('productionAccess: "DENY"')));
+check("Pull transitions chain to PULLED",()=>assert.ok(engine.includes('coordinatorChainState: "PULLED"')));
+check("Plus pull rebalance is not finalize chain",()=>assert.ok(engine.includes('trigger: "PLUS_PULL"')));
+check("UI exposes next-task widget",()=>assert.ok(panel.includes('data-testid="benjadmin-next-task-state"')));
+check("UI says Ben-AI prepared next",()=>assert.ok(panel.includes("Ben-AI előkészítette következőnek")));
+check("UI shows prepared date/time",()=>assert.ok(panel.includes("finishLabel(chainPreparedAt)")));
+check("UI shows Folytasd hint",()=>assert.ok(panel.includes("Folytasd. → felvétel")));
+check("Next-task widget responsive",()=>assert.ok(css.includes(".aiNextTaskState")&&css.includes("flex-wrap: wrap")));
+check("No provider API introduced",()=>assert.ok(!engine.includes("responses.create")&&!engine.includes("OPENAI_API_KEY")));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

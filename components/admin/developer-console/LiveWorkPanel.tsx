@@ -178,6 +178,9 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
             const plusWorkerName = metadataText(task, "plusBridgeWorkerName");
             const plusSessionId = metadataText(task, "plusBridgeSessionId");
             const plusPullCount = metadataNumber(task, "plusBridgePullCount");
+            const chainState = metadataText(task, "coordinatorChainState");
+            const chainPreparedAt = metadataText(task, "coordinatorChainPreparedAt");
+            const chainWorkerName = metadataText(task, "coordinatorChainWorkerName");
             const busy = busyTaskId === task.id;
             return (
               <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"} data-plus-pulled-at={plusPulledAt || ""}>
@@ -187,6 +190,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
                   <span>{metadataText(task, "executionGate") || metadataText(task, "workflowState") || "QUEUE"}</span>
                   <span className={styles.aiBridgeState}><Radio size={10} /> {bridgeState || "ROUTING"}</span>
                 </div>
+                {chainState === "READY_FOR_PLUS_PULL" && chainPreparedAt && !plusPulledAt ? <div className={styles.aiNextTaskState} data-testid="benjadmin-next-task-state"><strong><ListChecks size={11} /> Ben-AI előkészítette következőnek</strong><span>{finishLabel(chainPreparedAt)}</span>{chainWorkerName ? <span>{chainWorkerName}</span> : null}<small>Folytasd. → felvétel</small></div> : null}
                 {plusPulledAt ? <div className={styles.aiPlusPullState} data-testid="benjadmin-plus-pull-state"><strong><Radio size={11} /> ChatGPT felvette</strong><span>{finishLabel(plusPulledAt)}</span>{plusWorkerName ? <span>{plusWorkerName}</span> : null}{plusSessionId ? <code>{plusSessionId.slice(0, 18)}</code> : null}{plusPullCount && plusPullCount > 1 ? <small>{plusPullCount}. pull</small> : null}</div> : null}
                 {handoffSanitized ? <p className={styles.aiDeveloperTaskWarning}>Az átadó prompt érzékeny adatot észlelt és maszkolta. Nyers titkot ne adj át AI-nak.</p> : null}
                 {task.blocked_reason ? <p className={styles.aiDeveloperTaskError}>{task.blocked_reason}</p> : null}
