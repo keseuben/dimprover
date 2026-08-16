@@ -203,3 +203,22 @@ A végső ellenőrzéskor:
 5. Desktop bridge előkészítés csak ezután.
 
 SmartSync és Private Vault külön, explicit jóváhagyott fejlesztési kör marad.
+
+## Végső live revalidáció - 2026-08-16 07:59-08:00 CEST
+
+Az aktív `127.0.0.1:3100` DEV runtime-on a candidate eltávolítása előtt/után ismét lefutott a teljes célzott regresszió.
+
+- Drive Project Provisioning + Web Upload V1.1 live runtime E2E: `40/40 PASS`.
+- A három valós QA fájl mindegyike signed PUT -> complete -> szerveroldali SHA-256 -> `CLEAN` ClamAV ellenőrzésen ment át.
+- BENJADMIN V1.3 next-chain live runtime acceptance: `12/12 PASS`.
+- BENJADMIN V1.3 next-chain live browser acceptance: `9/9 PASS`.
+- BENJADMIN dátum/idő browser acceptance: `6/6 PASS`.
+- Field Issue Attachments V2.4 / Drive-HJ regresszió: `39/39 PASS`.
+- PM2 `dimpro-benjadmin-operator-ui-v2-dev`: online, unstable restart: `0`.
+- Aktív pointer: `.next-ben-v13-drive-v110-final`.
+- Aktív build: `HfISE6GuO1uUrUnHUT4Dz`.
+- Release source: `1e25420190801def449d9e5daa808366a913e347`.
+- Candidate PM2 folyamat eltávolítva.
+- PROD, SmartSync és Private Vault továbbra sem érintett.
+
+A végső live Drive QA projekt ebben a revalidációban: `project-56df0e91-dba`.
