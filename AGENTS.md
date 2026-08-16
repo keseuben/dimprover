@@ -12,7 +12,8 @@ A `/srv/dimpro-dev` környezetben új fejlesztői worktree létrehozásához els
 A koordinált DEV build után a `scripts/dimpro-dev-storage-retention.mjs` automatikusan build-retentiont futtat. Kötelező védelmek:
 
 - aktív PM2 `NEXT_DIST_DIR` és `active-next-release` soha nem törölhető;
-- worktree-nként legalább a 3 legfrissebb `.next*` build megmarad;
+- aktív/nem nyugdíjazott worktree-nként legalább a 3 legfrissebb `.next*` build megmarad;
+- ha egy worktree legalább 24 órája inaktív, clean, canonical baseline-ba integrált, és sem PM2, sem futó processz nem használja, `retired` állapotúnak minősül; ilyenkor a regenerálható `.next*` buildre nem vonatkozik örök `newest`/`.next` védelem;
 - backup, artifact és teljes worktree automatikusan nem törölhető;
 - `node_modules` automatikusan nem törölhető, csak explicit deep-prune módban clean + merged + inactive gate után;
 - minden apply központi `maintenance` / `build` lock alatt történik;

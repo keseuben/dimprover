@@ -9,7 +9,9 @@
     "minAgeHours": 24,
     "criticalMinAgeHours": 6,
     "emergencyMinAgeHours": 2,
-    "protectedNames": [".next"]
+    "protectedNames": [
+      ".next"
+    ]
   },
   "dependencies": {
     "minInactiveHours": 72,
@@ -22,7 +24,12 @@
   },
   "worktrees": {
     "reportOnly": true,
-    "minInactiveHours": 168
+    "minInactiveHours": 168,
+    "retireRegenerablesAfterHours": 24,
+    "requireMergedIntoAnyRef": [
+      "integration/benjadmin-dev",
+      "feat/benjadmin-operator-ui-v2"
+    ]
   },
   "backups": {
     "autoDelete": false

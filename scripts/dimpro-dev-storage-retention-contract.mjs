@@ -33,13 +33,13 @@ const operator = path.join(root, 'worktrees', 'benjadmin-operator-ui-v2');
 fs.mkdirSync(operator, { recursive: true });
 write(path.join(operator, 'config.json'), JSON.stringify({
   schemaVersion: 1,
-  warningUsedPercent: 0,
-  criticalUsedPercent: 0,
-  emergencyUsedPercent: 0,
+  warningUsedPercent: 1,
+  criticalUsedPercent: 1,
+  emergencyUsedPercent: 1,
   targetFreeGiB: 999999,
   builds: { keepNewestPerWorktree: 2, minAgeHours: 1, criticalMinAgeHours: 1, emergencyMinAgeHours: 1, protectedNames: ['.next'] },
   dependencies: { minInactiveHours: 24, requireCleanWorktree: true, requireMergedIntoAnyRef: ['main'], autoPrune: false },
-  worktrees: { reportOnly: true, minInactiveHours: 168 },
+  worktrees: { reportOnly: true, minInactiveHours: 168, retireRegenerablesAfterHours: 24, requireMergedIntoAnyRef: ['main'] },
   backups: { autoDelete: false }, artifacts: { autoDelete: false }
 }, null, 2));
 fs.mkdirSync(path.join(operator, '.dimprover'), { recursive: true });
@@ -93,6 +93,47 @@ r = run(nonDev, nonDevOp, ['--apply-builds', '--quiet'], false);
 check('Apply outside DEV fails closed', r.status !== 0);
 check('Fail-closed non-DEV leaves build intact', fs.existsSync(path.join(nonDevOp, '.next-old')));
 
+
+// A retired worktree must not keep its only/newest .next build forever.
+const retiredRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dimpro-retired-worktree-contract-'));
+const retiredOperator = path.join(retiredRoot, 'worktrees', 'benjadmin-operator-ui-v2');
+fs.mkdirSync(retiredOperator, { recursive: true });
+let gitResult = spawnSync('git', ['init', '-b', 'main'], { cwd: retiredOperator, encoding: 'utf8' });
+check('Retired fixture git init succeeds', gitResult.status === 0, gitResult.stderr);
+write(path.join(retiredOperator, 'README.md'), 'retired fixture\n');
+write(path.join(retiredOperator, '.gitignore'), '.next*\nnode_modules\nconfig.json\n');
+gitResult = spawnSync('git', ['add', 'README.md', '.gitignore'], { cwd: retiredOperator, encoding: 'utf8' });
+check('Retired fixture git add succeeds', gitResult.status === 0, gitResult.stderr);
+const oldDate = new Date(Date.now() - 72 * 3600000).toISOString();
+gitResult = spawnSync('git', ['-c', 'user.name=DIMPRO Retention Test', '-c', 'user.email=retention-test@localhost', 'commit', '-m', 'fixture'], {
+  cwd: retiredOperator,
+  encoding: 'utf8',
+  env: { ...process.env, GIT_AUTHOR_DATE: oldDate, GIT_COMMITTER_DATE: oldDate },
+});
+check('Retired fixture old commit succeeds', gitResult.status === 0, gitResult.stderr);
+write(path.join(retiredOperator, 'config.json'), JSON.stringify({
+  schemaVersion: 1,
+  warningUsedPercent: 1,
+  criticalUsedPercent: 1,
+  emergencyUsedPercent: 1,
+  targetFreeGiB: 999999,
+  builds: { keepNewestPerWorktree: 3, minAgeHours: 1, criticalMinAgeHours: 1, emergencyMinAgeHours: 1, protectedNames: ['.next'] },
+  dependencies: { minInactiveHours: 24, requireCleanWorktree: true, requireMergedIntoAnyRef: ['main'], autoPrune: false },
+  worktrees: { reportOnly: true, minInactiveHours: 168, retireRegenerablesAfterHours: 24, requireMergedIntoAnyRef: ['main'] },
+  backups: { autoDelete: false }, artifacts: { autoDelete: false }
+}, null, 2));
+const retiredWt = path.join(retiredRoot, 'worktrees', 'retired-feature');
+gitResult = spawnSync('git', ['worktree', 'add', '-b', 'retired-feature', retiredWt, 'main'], { cwd: retiredOperator, encoding: 'utf8' });
+check('Retired fixture worktree add succeeds', gitResult.status === 0, gitResult.stderr);
+touchDir(path.join(retiredWt, '.next'), 30);
+const retiredRun = run(retiredRoot, retiredOperator, ['--quiet', `--report-file=${path.join(retiredRoot, 'retired.json')}`]);
+check('Retired fixture dry-run succeeds', retiredRun.status === 0, retiredRun.stderr);
+const retiredReport = JSON.parse(fs.readFileSync(path.join(retiredRoot, 'retired.json'), 'utf8'));
+const retiredCandidate = retiredReport.buildCandidates.find((x) => x.path === path.join(retiredWt, '.next'));
+check('Retired worktree newest .next becomes cleanup candidate', Boolean(retiredCandidate));
+check('Retired worktree candidate is explicitly marked retired', retiredCandidate?.retiredWorktree === true);
+check('Retired worktree bypasses newest/protected-name hold', !(retiredCandidate?.reasons || []).includes('newest-3') && !(retiredCandidate?.reasons || []).includes('protected-name'));
+
 const source = fs.readFileSync(script, 'utf8');
 const wrapper = fs.readFileSync(path.join(repoRoot, 'scripts', 'dimpro-dev-storage-retention.sh'), 'utf8');
 const buildScript = fs.readFileSync(path.join(repoRoot, 'scripts', 'dimpro-coordinated-build.sh'), 'utf8');
@@ -106,8 +147,11 @@ check('Post-build retention is wired into coordinated build', buildScript.includ
 check('Post-build retention can be disabled explicitly', buildScript.includes('DIMPRO_AUTO_STORAGE_RETENTION'));
 check('Worktree helper compares package-lock hashes', worktreeHelper.includes('sha256sum') && worktreeHelper.includes('package-lock.json'));
 check('Worktree helper uses Turbopack-safe node_modules hardlinks', worktreeHelper.includes('cp -al "$OPERATOR_ROOT/node_modules"'));
+check('Retired worktree policy is encoded', source.includes('retiredWorktree') && source.includes('retireRegenerablesAfterHours'));
+check('PM2 cwd protects worktree retirement', source.includes('pm2WorktreeRoots'));
 check('Agent policy documents retention rule', agents.includes('BEGIN:dimpro-dev-storage-rules'));
 
 fs.rmSync(root, { recursive: true, force: true });
 fs.rmSync(nonDev, { recursive: true, force: true });
+fs.rmSync(retiredRoot, { recursive: true, force: true });
 console.log(JSON.stringify({ ok: true, passed, failed: 0, contract: 'DIMPRO DEV Storage Retention V1' }, null, 2));

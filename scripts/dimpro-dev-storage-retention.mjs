@@ -105,6 +105,7 @@ if ((applyBuildsRequested || pruneDependenciesRequested) && activeOperation) {
 }
 
 const protectedPaths = new Set();
+const pm2WorktreeRoots = new Set();
 const protect = (candidate) => {
   if (!candidate) return;
   const p = path.isAbsolute(candidate) ? candidate : path.join(operatorRoot, candidate);
@@ -125,6 +126,7 @@ if (!testMode) {
     try {
       for (const proc of JSON.parse(pm2Json)) {
         const env = proc?.pm2_env || {};
+        if (env.pm_cwd) pm2WorktreeRoots.add(real(env.pm_cwd));
         if (!env.pm_cwd || !env.NEXT_DIST_DIR) continue;
         const target = path.isAbsolute(env.NEXT_DIST_DIR) ? env.NEXT_DIST_DIR : path.join(env.pm_cwd, env.NEXT_DIST_DIR);
         protect(target);
@@ -141,6 +143,16 @@ if (activeOperation?.target) {
     .find((token) => within(token, worktreesRoot) && fs.existsSync(token))
     || (postBuild && within(process.cwd(), worktreesRoot) ? process.cwd() : null);
   if (operationWorktree) protect(path.isAbsolute(activeOperation.target) ? activeOperation.target : path.join(operationWorktree, activeOperation.target));
+}
+
+const runningRoots = new Set();
+if (!testMode) {
+  const procCwds = exec("bash", ["-lc", "for p in /proc/[0-9]*/cwd; do readlink -f \"$p\" 2>/dev/null || true; done"]);
+  for (const line of procCwds.split("\n").filter(Boolean)) runningRoots.add(line);
+}
+function hasRunningProcess(wt) {
+  for (const cwd of runningRoots) if (within(cwd, wt)) return true;
+  return false;
 }
 
 const now = Date.now();
@@ -161,6 +173,8 @@ const minBuildAgeHours = initialDisk.usedPercent >= emergencyUsedPercent
     ? criticalBuildAgeHours
     : normalBuildAgeHours;
 const protectedNames = new Set(config.builds?.protectedNames || []);
+const retireAfterHours = Math.max(24, Number(config.worktrees?.retireRegenerablesAfterHours || 24));
+const retirementRefs = config.worktrees?.requireMergedIntoAnyRef || config.dependencies?.requireMergedIntoAnyRef || [];
 
 for (const wt of listWorktrees()) {
   const entries = fs.readdirSync(wt, { withFileTypes: true })
@@ -174,15 +188,27 @@ for (const wt of listWorktrees()) {
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
   const newest = new Set(entries.slice(0, keepNewest).map((item) => path.resolve(item.path)));
   const latestBuildMs = entries[0]?.mtimeMs || 0;
-  worktreeActivity.set(wt, Math.max(latestBuildMs, headCommitMs(wt)));
+  const dependencyStat = safeStat(path.join(wt, "node_modules"));
+  const latestActivityMs = Math.max(latestBuildMs, headCommitMs(wt), dependencyStat?.mtimeMs || 0);
+  worktreeActivity.set(wt, latestActivityMs);
+  const worktreeHead = headCommit(wt);
+  const worktreeInactiveHours = latestActivityMs > 0 ? (now - latestActivityMs) / 3600000 : 0;
+  const retiredWorktree = path.resolve(wt) !== path.resolve(operatorRoot)
+    && isGitClean(wt)
+    && retirementRefs.length > 0
+    && retirementRefs.some((ref) => isAncestor(worktreeHead, ref))
+    && worktreeInactiveHours >= retireAfterHours
+    && !hasRunningProcess(wt)
+    && !pm2WorktreeRoots.has(real(wt))
+    && !String(activeOperation?.command || "").includes(wt);
   for (const item of entries) {
     const resolved = path.resolve(item.path);
     const reasons = [];
-    if (newest.has(resolved)) reasons.push(`newest-${keepNewest}`);
-    if (protectedNames.has(item.name)) reasons.push("protected-name");
+    if (!retiredWorktree && newest.has(resolved)) reasons.push(`newest-${keepNewest}`);
+    if (!retiredWorktree && protectedNames.has(item.name)) reasons.push("protected-name");
     if (protectedPaths.has(resolved) || protectedPaths.has(real(resolved))) reasons.push("active-or-rollback");
     if (item.ageHours < minBuildAgeHours) reasons.push(`younger-than-${minBuildAgeHours}h`);
-    const record = { ...item, ageHours: Math.round(item.ageHours * 10) / 10, reasons };
+    const record = { ...item, ageHours: Math.round(item.ageHours * 10) / 10, retiredWorktree, worktreeInactiveHours: Math.round(worktreeInactiveHours * 10) / 10, reasons };
     allBuilds.push(record);
     if (reasons.length) protectedBuilds.push(record);
     else buildCandidates.push(record);
@@ -191,16 +217,6 @@ for (const wt of listWorktrees()) {
 
 buildCandidates.sort((a, b) => a.mtimeMs - b.mtimeMs);
 for (const item of buildCandidates) item.bytes = sizeBytes(item.path);
-
-const runningRoots = new Set();
-if (!testMode) {
-  const procCwds = exec("bash", ["-lc", "for p in /proc/[0-9]*/cwd; do readlink -f \"$p\" 2>/dev/null || true; done"]);
-  for (const line of procCwds.split("\n").filter(Boolean)) runningRoots.add(line);
-}
-function hasRunningProcess(wt) {
-  for (const cwd of runningRoots) if (within(cwd, wt)) return true;
-  return false;
-}
 
 const dependencyCandidates = [];
 const dependencyProtected = [];
@@ -299,6 +315,7 @@ const manifest = {
     keepNewestBuildsPerWorktree: keepNewest,
     minBuildAgeHours,
     minDependencyInactiveHours: minDepHours,
+    retireRegenerablesAfterHours: retireAfterHours,
   },
   diskBefore: { ...before, free: human(before.freeBytes) },
   diskAfter: { ...after, free: human(after.freeBytes) },
@@ -330,7 +347,8 @@ const manifest = {
     "Backup és artifact könyvtárak V1-ben soha nem törlődnek automatikusan.",
     "Worktree könyvtár V1-ben soha nem törlődik automatikusan.",
     "node_modules csak explicit --prune-dependencies módban és clean+merged+inactive gate után törölhető.",
-    "Post-build automata kizárólag régi .next* build outputokat takarít, ha a lemezhasználat eléri a warning küszöböt."
+    "Post-build automata kizárólag régi .next* build outputokat takarít, ha a lemezhasználat eléri a warning küszöböt.",
+    "Clean + integrált + inaktív + processz/PM2-mentes retired worktree esetén a newest/protected-name buildvédelem nem tart meg regenerálható buildet örökre."
   ]
 };
 
