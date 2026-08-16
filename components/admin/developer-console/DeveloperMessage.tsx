@@ -6,10 +6,17 @@ import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import type { ConsoleMessage } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
-function formatTime(value: string) {
+function formatDateTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--:--:--";
-  return new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+  if (Number.isNaN(date.getTime())) return "----.--.--. --:--:--";
+  return new Intl.DateTimeFormat("hu-HU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
 }
 
 function kindLabel(kind: ConsoleMessage["kind"]) {
@@ -78,7 +85,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
             </div>
             {side === "right" ? <BenjadminAvatar member={message.author} size="chat" status={statusFor(message)} /> : null}
           </div>
-          <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
+          <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
         </header>
         <div className={styles.messageBody}>{message.summary || "—"}</div>
         {message.detail ? <p className={styles.messageDetail}>{message.detail}</p> : null}
