@@ -190,3 +190,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `252_benjadmin_v13_datetime_dev_activation_20260816.md` – BENJADMIN V1.3 dátum+idő DEV aktiválás: középső feladat/kiosztás/worklog események teljes dátum+idővel, ETA dátum+idővel; 8/8 contract + 6/6 browser + 29/29 V1.2 runtime + 40/40 teljes Konzol PASS; aktív build UpQpSOr7iVQFXY02dHCyY.
 
 - `253_benjadmin_v13_folytasd_plus_command_dev_activation_20260816.md` – BENJADMIN V1.3 Plus-only `Folytasd.` parancs DEV aktiválás: ugyanaz a Worker Inbox task-pull rövid parancsból; 10/10 + 47/47 + 29/29 + 11/11 + 40/40 PASS; aktív build MSJiGAOnJKK0FH7Gr7CXj.
+
+- `254_benjadmin_v13_live_pull_feedback_dev_activation_20260816.md` – BENJADMIN V1.3 élő Plus task-pull feedback: ChatGPT felvette időpont + worker + session + pull-szám a taskkártyán; 16/16 contract + 16/16 runtime + 9/9 browser + 29/29 V1.2 + 40/40 Konzol PASS; aktív build Xj1I9F74A1fDjeSsojZHf.
