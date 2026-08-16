@@ -194,3 +194,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `254_benjadmin_v13_live_pull_feedback_dev_activation_20260816.md` – BENJADMIN V1.3 élő Plus task-pull feedback: ChatGPT felvette időpont + worker + session + pull-szám a taskkártyán; 16/16 contract + 16/16 runtime + 9/9 browser + 29/29 V1.2 + 40/40 Konzol PASS; aktív build Xj1I9F74A1fDjeSsojZHf.
 
 - `256_dimpro_drive_project_provision_web_upload_v110_dev_activation_20260816.md` – DIMPRO Drive Project Provisioning + Web Upload V1.1 DEV aktiválás: automatikus Drive bootstrap + Beérkező Drop, multi-file és Windows/asztal drag&drop, 47/47 contract + 40/40 live runtime E2E, 3/3 CLEAN ClamAV; aktív unified build HfISE6GuO1uUrUnHUT4Dz.
+
+- `255_benjadmin_v13_next_chain_unified_dev_activation_20260816.md` – BENJADMIN V1.3 automatikus következő-task láncolás unified DEV aktiválás: COMPLETE → Ben-AI újraosztás → READY_FOR_PLUS_PULL → Folytasd. → PULLED/RUNNING; 15/15 + 12/12 + 9/9 PASS; aktív unified build HfISE6GuO1uUrUnHUT4Dz.
