@@ -164,3 +164,46 @@ A normál jövőbeli működés:
 Ha a post-build build-retention nem elég és a lemez továbbra is kritikus, a deep dependency prune csak külön karbantartási műveletként indítható.
 
 A teljes worktree-k és backupok életciklusára később külön V1.1 retention policy készíthető, de V1.0-ban szándékosan report-only maradnak.
+
+## 12. Operator integráció és első valós maintenance
+
+Operator integrációs commit:
+
+`77fb514ce357a2beb4472ba31df25a4253b167cb`
+
+Az integráció után az operatoron ismét lefutott:
+
+- ESLint az új retention scriptekre: 0 error / 0 warning;
+- shell syntax ellenőrzés: PASS;
+- Storage Retention contract: `24/24 PASS`;
+- valódi DEV dry-run: 20 régi build / kb. 11,38 GB eligible.
+
+Az első tényleges build-only maintenance a központi `maintenance` lock alatt futott.
+
+Eredmény:
+
+- lemezhasználat: `98% -> 89%`;
+- szabad hely: `2,33 GB -> 12,67 GB`;
+- törölt régi `.next*` build: `20 db`;
+- törölt `node_modules`: `0 db`;
+- törölt backup: `0 db`;
+- törölt artifact: `0 db`;
+- törölt worktree: `0 db`.
+
+A maintenance után az aktív runtime változatlanul elérhető maradt:
+
+- pointer: `.next-benjadmin-v13-pwa-subscription-final`;
+- build: `BDgezeB9qEAmoq06oP0Ku`;
+- PM2: online;
+- unstable restart: `0`.
+
+A post-maintenance dry-run régi buildből `0` további eligible jelöltet mutatott. A deep dependency rétegben 4 explicit jelölt / kb. 5,05 GB maradt, de ezeket V1 automatikusan nem törli.
+
+## 13. Közös baseline szabály
+
+A retention commitot az operator integráció után a közös `integration/benjadmin-dev` refbe is fast-forward módon kell előrehozni. Ezzel minden későbbi, erről a baseline-ról induló AI-worktree örökli:
+
+- az `AGENTS.md` storage szabályt;
+- a worktree helper symlink logikát;
+- a post-build build-retentiont;
+- a fail-closed cleanup gate-eket.
