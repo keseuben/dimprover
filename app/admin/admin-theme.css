@@ -851,6 +851,18 @@
 .dev-pwa-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
 .dev-pwa-note { margin: 10px 0 0; color: var(--admin-text-muted); font-size: 10px; }
 .dev-pwa-note strong { color: var(--admin-text); }
+
+.dev-pwa-device-note {
+  margin: 9px 0 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--admin-accent) 32%, var(--admin-border));
+  border-radius: 9px;
+  color: var(--admin-text-soft);
+  background: color-mix(in srgb, var(--admin-accent) 5%, var(--admin-surface));
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.5;
+}
 .dev-pwa-message { margin: 9px 0 0; padding: 9px 10px; border-radius: 9px; color: var(--admin-text-soft); background: var(--admin-surface-muted); font-size: 11px; line-height: 1.45; }
 .dev-spin { animation: dev-spin 0.85s linear infinite; }
 @keyframes dev-spin { to { transform: rotate(360deg); } }

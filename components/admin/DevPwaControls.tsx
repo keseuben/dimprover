@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellRing, Download, LoaderCircle, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { BellRing, Download, LoaderCircle, RefreshCw, ShieldAlert, ShieldCheck, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { DEV_RING_STORAGE_KEY, playDimproDevBell } from "./devBell";
 
 type BeforeInstallPromptEvent = Event & {
@@ -12,6 +12,7 @@ type BeforeInstallPromptEvent = Event & {
 type PushConfigResponse = {
   ok?: boolean;
   publicKey?: string;
+  configured?: boolean;
   subscriptionCount?: number;
   error?: string;
 };
@@ -41,6 +42,8 @@ export default function DevPwaControls() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [subscriptionCount, setSubscriptionCount] = useState(0);
+  const [serverReady, setServerReady] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState("");
 
   useEffect(() => {
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches
@@ -62,26 +65,47 @@ export default function DevPwaControls() {
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
 
-    async function inspectPushState() {
-      if (!("serviceWorker" in navigator)) return;
-      try {
-        const registration = await navigator.serviceWorker.register("/dimpro-dev-sw.js", { scope: "/admin/" });
-        const existing = await registration.pushManager.getSubscription();
-        setSubscribed(Boolean(existing));
-        const response = await fetch("/api/dev/push/public-key", { headers: adminHeaders(), cache: "no-store" });
-        const payload = await response.json().catch(() => null) as PushConfigResponse | null;
-        if (response.ok && payload?.ok) setSubscriptionCount(payload.subscriptionCount || 0);
-      } catch {
-        setMessage("A PWA szolgáltatás ellenőrzése nem sikerült.");
-      }
-    }
-    void inspectPushState();
+    void refreshPushState(false);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
+
+  async function refreshPushState(showMessage = true) {
+    const browserSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    setSupported(browserSupported);
+    setPermission("Notification" in window ? Notification.permission : "unsupported");
+    setBusy(showMessage ? "refresh" : "");
+    try {
+      let localSubscribed = false;
+      if (browserSupported) {
+        const registration = await navigator.serviceWorker.register("/dimpro-dev-sw.js", { scope: "/admin/" });
+        const existing = await registration.pushManager.getSubscription();
+        localSubscribed = Boolean(existing);
+      }
+      setSubscribed(localSubscribed);
+      const response = await fetch("/api/dev/push/public-key", { headers: adminHeaders(), cache: "no-store" });
+      const payload = await response.json().catch(() => null) as PushConfigResponse | null;
+      const ready = Boolean(response.ok && payload?.ok && payload.publicKey);
+      setServerReady(ready);
+      setSubscriptionCount(payload?.subscriptionCount || 0);
+      setLastCheckedAt(new Date().toISOString());
+      if (showMessage) {
+        if (!browserSupported) setMessage("Ez a böngésző nem támogatja a PWA push értesítést.");
+        else if (!ready) setMessage("A BENJADMIN push szerver még nincs teljesen konfigurálva.");
+        else if (Notification.permission === "denied") setMessage("A böngésző blokkolja az értesítéseket. A webhely engedélyeinél állítsa az Értesítések jogosultságot Engedélyezve értékre.");
+        else if (localSubscribed) setMessage("Ez az eszköz aktív push-feliratkozással rendelkezik.");
+        else setMessage("A push szerver kész. Ezen az eszközön még engedélyezni kell az értesítéseket.");
+      }
+    } catch (error) {
+      setServerReady(false);
+      if (showMessage) setMessage(error instanceof Error ? error.message : "A PWA push állapot ellenőrzése sikertelen.");
+    } finally {
+      if (showMessage) setBusy("");
+    }
+  }
 
   async function installApp() {
     if (!installPrompt) {
@@ -101,6 +125,14 @@ export default function DevPwaControls() {
   async function enablePush() {
     if (!supported) {
       setMessage("Ez a böngésző nem támogatja a PWA push értesítést.");
+      return;
+    }
+    if (!serverReady) {
+      setMessage("A BENJADMIN push szerver nincs kész. Frissítse az állapotot, majd próbálja újra.");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setMessage("A böngészőben az értesítés blokkolva van. A webhely engedélyeinél előbb engedélyezze az Értesítéseket.");
       return;
     }
     setBusy("push");
@@ -135,7 +167,8 @@ export default function DevPwaControls() {
 
       setSubscribed(true);
       setSubscriptionCount(payload.subscriptionCount || 1);
-      setMessage("A hangos rendszerértesítés engedélyezve lett ezen az eszközön.");
+      setMessage("A rendszerértesítés engedélyezve lett ezen az eszközön.");
+      setLastCheckedAt(new Date().toISOString());
       await registration.showNotification("DIMPRO Dev értesítések engedélyezve", {
         body: "A fejlesztések elkészüléséről ez az eszköz rendszerértesítést kap.",
         icon: "/pwa/dimpro-dev-192.png",
@@ -166,6 +199,7 @@ export default function DevPwaControls() {
       setSubscribed(false);
       setSubscriptionCount((count) => Math.max(0, count - 1));
       setMessage("A push értesítés ki lett kapcsolva ezen az eszközön.");
+      setLastCheckedAt(new Date().toISOString());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A leiratkozás sikertelen.");
     } finally {
@@ -196,12 +230,21 @@ export default function DevPwaControls() {
     setMessage("");
     try {
       if (!subscribed) throw new Error("Előbb engedélyezze a push értesítést ezen az eszközön.");
-      const response = await fetch("/api/dev/push/test", { method: "POST", headers: adminHeaders(true), body: "{}" });
-      const payload = await response.json().catch(() => null) as { ok?: boolean; sent?: number; failed?: number; error?: string } | null;
+      const liveResponse = await fetch("/api/dev/console/live", { headers: adminHeaders(), cache: "no-store" });
+      const livePayload = await liveResponse.json().catch(() => null) as { live?: { tasks?: Array<{ id?: string }> } } | null;
+      const taskId = livePayload?.live?.tasks?.find((task) => typeof task.id === "string" && task.id)?.id || "";
+      const response = await fetch("/api/dev/push/test", {
+        method: "POST",
+        headers: adminHeaders(true),
+        body: JSON.stringify({ taskId }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; sent?: number; failed?: number; targetTaskId?: string | null; error?: string } | null;
       if (!response.ok || !payload?.ok) throw new Error(payload?.error || "A tesztértesítés sikertelen.");
       setMessage(payload.sent
-        ? `Tesztértesítés elküldve ${payload.sent} eszközre.`
-        : "Nincs aktív push eszköz. Kapcsolja ki, majd engedélyezze újra az értesítést.");
+        ? payload.targetTaskId
+          ? `Task deep-link teszt elküldve ${payload.sent} eszközre. Az értesítés a ${payload.targetTaskId} feladatra nyit.`
+          : `Tesztértesítés elküldve ${payload.sent} eszközre.`
+        : "Nincs aktív push eszköz. Engedélyezze a push értesítést ezen az eszközön.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A tesztértesítés sikertelen.");
     } finally {
@@ -214,6 +257,7 @@ export default function DevPwaControls() {
       <div className="dev-pwa-status-row">
         <span className={installed ? "is-active" : ""}><Smartphone size={15} /> {installed ? "PWA telepítve" : "PWA böngészőben"}</span>
         <span className={subscribed ? "is-active" : ""}><BellRing size={15} /> {subscribed ? "Push aktív" : "Push kikapcsolva"}</span>
+        <span className={serverReady ? "is-active" : ""}>{serverReady ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />} {serverReady ? "Push szerver kész" : "Push szerver nem kész"}</span>
         <span className={ringEnabled ? "is-active" : ""}>{ringEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />} {ringEnabled ? "Egyedi hang aktív" : "Egyedi hang kikapcsolva"}</span>
       </div>
 
@@ -222,9 +266,13 @@ export default function DevPwaControls() {
           {busy === "install" ? <LoaderCircle className="dev-spin" size={17} /> : <Download size={17} />}
           {installed ? "Telepítve" : "Telepítés mobilra"}
         </button>
-        <button type="button" onClick={subscribed ? disablePush : enablePush} disabled={busy === "push"}>
+        <button type="button" onClick={subscribed ? disablePush : enablePush} disabled={busy === "push" || permission === "denied" || !serverReady}>
           {busy === "push" ? <LoaderCircle className="dev-spin" size={17} /> : <BellRing size={17} />}
-          {subscribed ? "Push kikapcsolása" : "Push engedélyezése"}
+          {subscribed ? "Push kikapcsolása" : permission === "denied" ? "Push blokkolva" : "Push engedélyezése"}
+        </button>
+        <button type="button" onClick={() => void refreshPushState(true)} disabled={busy === "refresh"}>
+          {busy === "refresh" ? <LoaderCircle className="dev-spin" size={17} /> : <RefreshCw size={17} />}
+          Állapot frissítése
         </button>
         <button type="button" onClick={toggleRing}>
           {ringEnabled ? <VolumeX size={17} /> : <Volume2 size={17} />}
@@ -236,12 +284,22 @@ export default function DevPwaControls() {
         </button>
         <button type="button" onClick={sendTestPush} disabled={busy === "test" || !subscribed}>
           {busy === "test" ? <LoaderCircle className="dev-spin" size={17} /> : <BellRing size={17} />}
-          Push teszt
+          Task push teszt
         </button>
       </div>
 
       <p className="dev-pwa-note">
-        Engedély: <strong>{permission}</strong> · Regisztrált eszközök: <strong>{subscriptionCount}</strong>
+        Böngésző: <strong>{supported ? "támogatott" : "nem támogatott"}</strong> · Engedély: <strong>{permission}</strong> · Ezen az eszközön: <strong>{subscribed ? "aktív" : "inaktív"}</strong> · Szerveren: <strong>{subscriptionCount} eszköz</strong>
+      </p>
+      <p className="dev-pwa-device-note" data-testid="benjadmin-push-device-state">
+        {serverReady && supported && permission !== "denied"
+          ? subscribed
+            ? "KÉSZ: ez az eszköz fogadhat BENJADMIN rendszerértesítéseket."
+            : "TEENDŐ: nyomja meg a Push engedélyezése gombot ezen az eszközön."
+          : permission === "denied"
+            ? "TEENDŐ: a böngésző webhely-beállításainál engedélyezze az Értesítések jogosultságot."
+            : "ELLENŐRZÉS SZÜKSÉGES: a push támogatás vagy a szerverkonfiguráció hiányos."}
+        {lastCheckedAt ? ` · Ellenőrizve: ${new Date(lastCheckedAt).toLocaleString("hu-HU")}` : ""}
       </p>
       <p className="dev-pwa-sound-note">
         Az egyedi DIMPRO hang a megnyitott PWA-ban szól. Háttérben vagy lezárt képernyőn az Android saját értesítési hangja és rezgése működik.

@@ -11,5 +11,10 @@ export async function GET(request: NextRequest) {
   }
   const publicKey = getDevVapidPublicKey();
   const subscriptions = await listDevPushSubscriptions();
-  return NextResponse.json({ ok: Boolean(publicKey), publicKey, subscriptionCount: subscriptions.length }, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json({
+    ok: Boolean(publicKey),
+    configured: Boolean(publicKey),
+    publicKey,
+    subscriptionCount: subscriptions.length,
+  }, { headers: { "cache-control": "no-store" } });
 }

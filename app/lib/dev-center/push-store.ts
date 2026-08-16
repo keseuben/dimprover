@@ -17,6 +17,8 @@ type PushStore = {
 };
 
 function getRuntimeProjectRoot() {
+  const configuredRoot = process.env.DIMPRO_PROJECT_ROOT?.trim();
+  if (configuredRoot) return path.resolve(configuredRoot);
   const cwd = process.cwd();
   if (cwd.endsWith(path.join(".next", "standalone"))) return path.resolve(cwd, "..", "..");
   return cwd;
