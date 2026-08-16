@@ -1386,6 +1386,11 @@
 .aiWorkerInboxGrid p span { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .aiWorkerInboxGrid p small { flex: 0 0 auto; color: var(--accent-strong); font-size: 9px; font-weight: 900; }
 .aiBridgeState { color: var(--violet) !important; font-weight: 900; }
+.aiPlusPullState { margin: 5px 0 6px; padding: 5px 7px; border: 1px solid color-mix(in srgb, var(--green) 38%, var(--border)); border-radius: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: color-mix(in srgb, var(--green) 6%, var(--surface)); color: var(--text-soft); font-size: 10px; }
+.aiPlusPullState strong { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; }
+.aiPlusPullState span, .aiPlusPullState code, .aiPlusPullState small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.aiPlusPullState code { padding: 1px 4px; border-radius: 4px; background: var(--panel); }
+
 .aiDeveloperTaskWarning { margin: 5px 0; padding: 5px 6px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 6px; color: var(--amber); background: var(--amber-soft); font-size: 11px; line-height: 1.4; }
 .aiDeveloperTaskActions .aiBridgeHandoffButton { border-color: color-mix(in srgb, var(--blue) 55%, var(--border)); color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--surface)); }
 .aiDeveloperTaskActions .aiBridgeRunningButton { border-color: color-mix(in srgb, var(--violet) 55%, var(--border)); color: var(--violet); background: color-mix(in srgb, var(--violet) 7%, var(--surface)); }

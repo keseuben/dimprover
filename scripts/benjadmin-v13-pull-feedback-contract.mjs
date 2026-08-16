@@ -1,0 +1,24 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const engine = fs.readFileSync("app/lib/dev-center/engine-repository.ts", "utf8");
+const route = fs.readFileSync("app/api/dev/console/plus-bridge/[workerCode]/next/route.ts", "utf8");
+const panel = fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx", "utf8");
+const css = fs.readFileSync("components/admin/developer-console/DeveloperConsole.module.css", "utf8");
+let passed=0; function check(name,fn){fn();passed+=1;console.log(`PASS ${name}`)}
+check("Pull timestamp persisted on task",()=>assert.ok(engine.includes("plusBridgePulledAt: now")));
+check("First pull timestamp persisted",()=>assert.ok(engine.includes("plusBridgeFirstPulledAt")));
+check("Pull worker identity persisted",()=>assert.ok(engine.includes("plusBridgeWorkerCode")&&engine.includes("plusBridgeWorkerName")));
+check("Pull session persisted",()=>assert.ok(engine.includes("plusBridgeSessionId")));
+check("Pull count persisted",()=>assert.ok(engine.includes("plusBridgePullCount")));
+check("Task metadata update is atomic before response",()=>assert.ok(engine.includes('update({ metadata: pullMetadata, updated_at: now })')));
+check("Audit carries pull count",()=>assert.ok(engine.includes("pulledAt: now, pullCount")));
+check("Console worklog carries pull timestamp",()=>assert.ok(route.includes("pulledAt:")&&route.includes("pullCount:")));
+check("Task card exposes pulled-at hook",()=>assert.ok(panel.includes("data-plus-pulled-at")));
+check("Task card exposes live pull widget",()=>assert.ok(panel.includes('data-testid="benjadmin-plus-pull-state"')));
+check("Task card says ChatGPT felvette",()=>assert.ok(panel.includes("ChatGPT felvette")));
+check("Pull widget shows date/time",()=>assert.ok(panel.includes("finishLabel(plusPulledAt)")));
+check("Pull widget shows worker",()=>assert.ok(panel.includes("plusWorkerName")));
+check("Pull widget shows session",()=>assert.ok(panel.includes("plusSessionId")));
+check("Pull widget has responsive flex styling",()=>assert.ok(css.includes(".aiPlusPullState")&&css.includes("flex-wrap: wrap")));
+check("No provider API introduced",()=>assert.ok(!route.includes("OPENAI_API_KEY")&&!engine.includes("responses.create")));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

@@ -19,7 +19,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
         taskId: pulled.task.id,
         projectId: pulled.task.projectId,
         kind: "TASK_UPDATE",
-        metadata: { action: "PLUS_PULL", workerCode: pulled.worker.code, bridgeState: pulled.handoff?.bridgeState, handoffPromptSha256: pulled.handoff?.sha256 },
+        metadata: {
+          action: "PLUS_PULL",
+          workerCode: pulled.worker.code,
+          bridgeState: pulled.handoff?.bridgeState,
+          handoffPromptSha256: pulled.handoff?.sha256,
+          pulledAt: typeof pulled.task.metadata?.plusBridgePulledAt === "string" ? pulled.task.metadata.plusBridgePulledAt : null,
+          sessionId: typeof pulled.task.metadata?.plusBridgeSessionId === "string" ? pulled.task.metadata.plusBridgeSessionId : null,
+          pullCount: Number(pulled.task.metadata?.plusBridgePullCount || 0) || 1,
+        },
       });
     }
     return NextResponse.json(pulled, { headers: { "cache-control": "no-store" } });

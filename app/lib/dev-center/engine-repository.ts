@@ -833,11 +833,26 @@ export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
   }
   const metadata = jsonRecord(task.metadata);
   const now = nowIso();
+  const previousPullCount = Number(metadata.plusBridgePullCount);
+  const pullCount = (Number.isFinite(previousPullCount) && previousPullCount > 0 ? Math.floor(previousPullCount) : 0) + 1;
+  const pullMetadata: JsonRecord = {
+    ...metadata,
+    plusBridgeFirstPulledAt: text(metadata.plusBridgeFirstPulledAt) || now,
+    plusBridgePulledAt: now,
+    plusBridgeWorkerCode: workerCode,
+    plusBridgeWorkerName: text(workers.data.name) || workerCode,
+    plusBridgeSessionId: text(metadata.activeSessionId) || session?.id || null,
+    plusBridgePullCount: pullCount,
+    plusBridgePullState: bridgeState,
+  };
+  const pullUpdate = await client.from("dev_center_tasks").update({ metadata: pullMetadata, updated_at: now }).eq("id", task.id).select("*").single();
+  if (pullUpdate.error) databaseError("A Plus bridge task-felvétel állapota nem menthető.", pullUpdate.error, 409);
+  task = mapTask(pullUpdate.data as JsonRecord);
   await addAudit(client, {
     action: "TASK_PLUS_BRIDGE_PULLED",
-    entityType: "task", entityId: task.id, sessionId: text(metadata.activeSessionId) || null, taskId: task.id, projectId: task.projectId,
+    entityType: "task", entityId: task.id, sessionId: text(pullMetadata.plusBridgeSessionId) || null, taskId: task.id, projectId: task.projectId,
     summary: `${task.title} · ${text(workers.data.name) || workerCode} Plus bridge felvette.`,
-    metadata: { workerCode, bridgeState, handoffPromptSha256: text(metadata.handoffPromptSha256) || null, productionAccess: "DENY", pulledAt: now },
+    metadata: { workerCode, bridgeState, handoffPromptSha256: text(pullMetadata.handoffPromptSha256) || null, productionAccess: "DENY", pulledAt: now, pullCount },
   });
   return {
     ok: true as const,
@@ -846,13 +861,13 @@ export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
     task,
     session,
     handoff: {
-      prompt: text(metadata.handoffPrompt),
-      sha256: text(metadata.handoffPromptSha256) || null,
-      sanitized: metadata.handoffSanitized === true,
-      sensitiveFindings: Array.isArray(metadata.handoffSensitiveFindings) ? metadata.handoffSensitiveFindings : [],
+      prompt: text(pullMetadata.handoffPrompt),
+      sha256: text(pullMetadata.handoffPromptSha256) || null,
+      sanitized: pullMetadata.handoffSanitized === true,
+      sensitiveFindings: Array.isArray(pullMetadata.handoffSensitiveFindings) ? pullMetadata.handoffSensitiveFindings : [],
       bridgeState,
-      expectedFinishAt: text(metadata.expectedFinishAt) || null,
-      estimateMinutes: clampEstimateMinutes(metadata.estimateMinutes),
+      expectedFinishAt: text(pullMetadata.expectedFinishAt) || null,
+      estimateMinutes: clampEstimateMinutes(pullMetadata.estimateMinutes),
     },
   };
 }

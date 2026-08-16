@@ -174,15 +174,20 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
             const resultHistory = Array.isArray(task.metadata?.bridgeResultHistory) ? task.metadata.bridgeResultHistory.length : 0;
             const suggestedWorker = metadataRecord(task, "coordinatorSuggestedWorker");
             const preferenceState = metadataText(task, "coordinatorPreferenceState");
+            const plusPulledAt = metadataText(task, "plusBridgePulledAt");
+            const plusWorkerName = metadataText(task, "plusBridgeWorkerName");
+            const plusSessionId = metadataText(task, "plusBridgeSessionId");
+            const plusPullCount = metadataNumber(task, "plusBridgePullCount");
             const busy = busyTaskId === task.id;
             return (
-              <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"}>
+              <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"} data-plus-pulled-at={plusPulledAt || ""}>
                 <header><div><strong>{task.title}</strong><span>{taskOwner(task, live)} · {task.status.toUpperCase()}</span></div><b>{durationLabel(estimate)}</b></header>
                 <div className={styles.aiDeveloperTaskFacts}>
                   <span><Clock3 size={11} /> ETA {expectedFinishAt ? finishLabel(expectedFinishAt) : "indítás után"}</span>
                   <span>{metadataText(task, "executionGate") || metadataText(task, "workflowState") || "QUEUE"}</span>
                   <span className={styles.aiBridgeState}><Radio size={10} /> {bridgeState || "ROUTING"}</span>
                 </div>
+                {plusPulledAt ? <div className={styles.aiPlusPullState} data-testid="benjadmin-plus-pull-state"><strong><Radio size={11} /> ChatGPT felvette</strong><span>{finishLabel(plusPulledAt)}</span>{plusWorkerName ? <span>{plusWorkerName}</span> : null}{plusSessionId ? <code>{plusSessionId.slice(0, 18)}</code> : null}{plusPullCount && plusPullCount > 1 ? <small>{plusPullCount}. pull</small> : null}</div> : null}
                 {handoffSanitized ? <p className={styles.aiDeveloperTaskWarning}>Az átadó prompt érzékeny adatot észlelt és maszkolta. Nyers titkot ne adj át AI-nak.</p> : null}
                 {task.blocked_reason ? <p className={styles.aiDeveloperTaskError}>{task.blocked_reason}</p> : null}
                 {preferenceState && preferenceState !== "PREFERRED_ACCEPTED" ? <div className={styles.aiCoordinatorSuggestion} data-testid="benjadmin-worker-suggestion"><strong>Ben-AI</strong><span>{preferenceState === "PREFERRED_BUSY" ? "A választott kódoló jelenleg foglalt." : "A választott kódoló most nem választható."}</span>{suggestedWorker?.workerName ? <><small>Javasolt következő kódoló: {String(suggestedWorker.workerName)}</small><button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ACCEPT_SUGGESTION")}>Javaslat elfogadása</button></> : <small>Nincs jelenleg szabad és jogosult alternatíva.</small>}</div> : null}
