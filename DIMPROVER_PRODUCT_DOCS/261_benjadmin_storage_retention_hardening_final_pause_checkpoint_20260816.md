@@ -147,3 +147,91 @@ A következő fejlesztési munkamenet előtt kötelező:
 3. aktív release + rollback pointer ellenőrzés;
 4. trusted baseline readiness;
 5. csak ezután új feature worktree indítása a Turbopack-safe helperrel.
+
+## 2026-08-16 21:20 utáni kézi tárhelykarbantartás
+
+A felhasználó kérésére, az AI-fejlesztések szünetében külön biztonságos DEV tárhelykarbantartás történt.
+
+Kiinduló állapot a hardening release után:
+
+- lemezhasználat: kb. `90%`;
+- szabad hely: kb. `12,1 GB`;
+- aktív release: `.next-benjadmin-v13-storage-retention-hardening-final`;
+- build: `uAeE_RE6Wld75DZ9JUXHN`;
+- PM2 operator: online, unstable restart `0`.
+
+### 1. Explicit dependency deep-prune
+
+A retention motor 4 olyan `node_modules` könyvtárat talált, amely clean + integrált + 145–164 órája inaktív + nem hardlinkelt volt.
+
+Eltávolítva kizárólag a dependency-fa:
+
+- `benjadmin-m0-infra/node_modules`;
+- `benjadmin-m1-shell/node_modules`;
+- `benjadmin-m3-orchestration/node_modules`;
+- `integration-prod-v1212-benjadmin-m35/node_modules`.
+
+Eredmény:
+
+- felszabadult kb. `5,05 GB`;
+- lemezhasználat `90% -> 85%`;
+- worktree, branch és commit nem törlődött.
+
+### 2. Három régi, integrált worktree regenerálható tartalmának törlése
+
+A teljes worktree-ket szándékosan megtartottuk. Csak a `node_modules` és régi `.next*` build output került törlésre:
+
+- `drop-v1212-ios-sendmail`: node_modules + `.next-drop-v1212-dev-candidate`;
+- `hage-org-license-v020`: node_modules + `.next-identity-org-license-v020-candidate`;
+- `integration/baseline`: node_modules + `.next`.
+
+A törlés előtt minden célra kötelező gate futott:
+
+- clean Git worktree;
+- HEAD a `integration/benjadmin-dev` őse;
+- nincs futó processz a worktree-ben;
+- nincs PM2 cwd hivatkozás;
+- csak `node_modules` vagy `.next*` basename törölhető.
+
+Manifest:
+
+`/srv/dimpro-dev/artifacts/storage-maintenance-regenerable-20260816-2120`
+
+Felszabadult kb. `5,35 GB`, a lemezhasználat `85% -> 83%` lett.
+
+### 3. Regenerálható cache-ek
+
+Törölve:
+
+- `/tmp/node-compile-cache`;
+- npm `_cacache`;
+- npm `_npx` cache;
+- 30 percnél régebbi Puppeteer ideiglenes profilok;
+- retention contract ideiglenes fixture könyvtárak;
+- APT package cache.
+
+Szándékosan megtartva:
+
+- `/root/.cache/puppeteer` kb. `636 MB`, a browser acceptance miatt;
+- `/root/.cache/ffmpeg-static-nodejs` kb. `1,1 GB`, a fejlesztői médiatesztek gyors újraindítása miatt;
+- teljes backup-tár kb. `2,2 GB`;
+- Git branchek és commitok;
+- minden worktree forráskód;
+- aktív release és rollback release.
+
+Cache cleanup manifest:
+
+`/srv/dimpro-dev/artifacts/storage-maintenance-cache-20260816-2120`
+
+### 4. Végső állapot
+
+- lemezhasználat: `81%`;
+- szabad hely: kb. `21,84 GB`;
+- aktív build: `uAeE_RE6Wld75DZ9JUXHN`;
+- PM2 operator: online;
+- unstable restart: `0`;
+- Drop health: HTTP `200`, `ok:true`;
+- Drop release gate továbbra is `false`;
+- retention final dry-run: régi build jelölt `0`.
+
+A dry-run még 1 db, kb. `1,26 GB` dependency-jelöltet mutat a `benjadmin-m2-dev-center` worktree-ben. Ezt szándékosan **nem töröltük**, mert PM2-ben még létezik hozzá leállított processz-bejegyzés. A jelenlegi 81%-os lemezhasználat mellett további agresszív törlés nem indokolt.
