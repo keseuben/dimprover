@@ -36,7 +36,7 @@ check("Suggestion is revalidated before assignment", () => assert.ok(files.engin
 check("Waiting Ben-AI tasks can rebalance", () => assert.ok(files.engine.includes("rebalanceBenAiWaitingTasks")));
 check("Rebalance only touches waiting coordinator states", () => assert.ok(files.engine.includes('queueState !== "WAITING_FOR_FREE_WORKER"')));
 check("Plus pull engine exists", () => assert.ok(files.engine.includes("pullDevEngineTaskForPlusWorker")));
-check("Plus pull rebalances before worker inbox", () => assert.ok(files.engine.includes("await rebalanceBenAiWaitingTasks(12)")));
+check("Plus pull rebalances before worker inbox", () => assert.ok(files.engine.includes("await rebalanceBenAiWaitingTasks(12") && files.engine.includes("trigger: \"PLUS_PULL\"")));
 check("Plus pull validates worker identity code", () => assert.ok(files.engine.includes("DEV_CENTER_PLUS_WORKER_INVALID")));
 check("Plus pull starts real M3 session", () => assert.ok(files.engine.includes("startDevEngineTaskManualBridge(task.id)")));
 check("Plus pull moves handoff to RUNNING", () => assert.ok(files.engine.includes('target: "HANDED_OFF"') && files.engine.includes('target: "RUNNING"')));
