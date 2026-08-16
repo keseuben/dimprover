@@ -38,15 +38,16 @@ else
   git worktree add -b "$BRANCH" "$TARGET" "$BASE_REF"
 fi
 
-# Dependency retention szabály: azonos lockfile esetén NEM másolunk 1.3–1.5 GB node_modules-t.
-# A worktree az operator dependency fáját használja symlinken keresztül.
+# Dependency retention szabály:
+# azonos package-lock.json esetén Turbopack-kompatibilis hardlinkelt node_modules fa készül.
+# Külső node_modules symlink TILOS, mert a Turbopack a projektgyökéren kívüli symlinket elutasítja.
 if [[ -d "$OPERATOR_ROOT/node_modules" && -f "$OPERATOR_ROOT/package-lock.json" && -f "$TARGET/package-lock.json" ]]; then
   OP_HASH="$(sha256sum "$OPERATOR_ROOT/package-lock.json" | cut -d' ' -f1)"
   WT_HASH="$(sha256sum "$TARGET/package-lock.json" | cut -d' ' -f1)"
   if [[ "$OP_HASH" == "$WT_HASH" ]]; then
     if [[ ! -e "$TARGET/node_modules" && ! -L "$TARGET/node_modules" ]]; then
-      ln -s "$OPERATOR_ROOT/node_modules" "$TARGET/node_modules"
-      echo "[DIMPRO worktree] node_modules -> operator symlink létrehozva."
+      cp -al "$OPERATOR_ROOT/node_modules" "$TARGET/node_modules"
+      echo "[DIMPRO worktree] node_modules hardlinkelt dependency-fa létrehozva."
     else
       echo "[DIMPRO worktree] node_modules már létezik; nem módosítom." >&2
     fi

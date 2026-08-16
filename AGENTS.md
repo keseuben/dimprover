@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:dimpro-dev-storage-rules -->
 # DIMPRO DEV storage / worktree szabály
 
-A `/srv/dimpro-dev` környezetben új fejlesztői worktree létrehozásához elsődlegesen a `scripts/dimpro-create-dev-worktree.sh` segédet használd. Azonos `package-lock.json` esetén a worktree az operator `node_modules` könyvtárát symlinken használja; teljes dependency-fa másolása vagy újratelepítése csak valódi lockfile-eltérésnél megengedett.
+A `/srv/dimpro-dev` környezetben új fejlesztői worktree létrehozásához elsődlegesen a `scripts/dimpro-create-dev-worktree.sh` segédet használd. Azonos `package-lock.json` esetén a worktree az operator `node_modules` könyvtárából `cp -al` hardlinkelt dependency-fát használ. Külső `node_modules` symlink tiltott, mert a Next/Turbopack a projektgyökéren kívüli symlinket elutasítja. Teljes fizikai dependency-másolat vagy újratelepítés csak valódi lockfile-eltérésnél megengedett.
 
 A koordinált DEV build után a `scripts/dimpro-dev-storage-retention.mjs` automatikusan build-retentiont futtat. Kötelező védelmek:
 

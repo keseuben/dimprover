@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const repoRoot = '/srv/dimpro-dev/worktrees/jazmin-dev-storage-retention-v1';
+const repoRoot = process.cwd();
 const script = path.join(repoRoot, 'scripts', 'dimpro-dev-storage-retention.mjs');
 let passed = 0;
 function check(name, condition, detail = '') {
@@ -105,7 +105,7 @@ check('Standalone apply uses maintenance lock', wrapper.includes('dimpro-coordin
 check('Post-build retention is wired into coordinated build', buildScript.includes('dimpro-dev-storage-retention.mjs --post-build --apply-builds'));
 check('Post-build retention can be disabled explicitly', buildScript.includes('DIMPRO_AUTO_STORAGE_RETENTION'));
 check('Worktree helper compares package-lock hashes', worktreeHelper.includes('sha256sum') && worktreeHelper.includes('package-lock.json'));
-check('Worktree helper uses node_modules symlink', worktreeHelper.includes('ln -s "$OPERATOR_ROOT/node_modules"'));
+check('Worktree helper uses Turbopack-safe node_modules hardlinks', worktreeHelper.includes('cp -al "$OPERATOR_ROOT/node_modules"'));
 check('Agent policy documents retention rule', agents.includes('BEGIN:dimpro-dev-storage-rules'));
 
 fs.rmSync(root, { recursive: true, force: true });

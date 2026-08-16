@@ -90,7 +90,7 @@ A hardlinkelt dependency-k V1-ben védettek.
 
 `scripts/dimpro-create-dev-worktree.sh <branch> <worktree-name> [base-ref]`
 
-Azonos `package-lock.json` esetén nem készít új 1,3–1,5 GB-os dependency másolatot, hanem az operator `node_modules` könyvtárára symlinket hoz létre.
+Azonos `package-lock.json` esetén nem készít új fizikai 1,3–1,5 GB-os dependency másolatot, hanem `cp -al` hardlinkelt dependency-fát hoz létre az operator `node_modules` tartalmából. Külső symlink nem használható, mert a Next/Turbopack build ezt `Symlink [project]/node_modules is invalid, it points out of the filesystem root` hibával elutasítja.
 
 Eltérő lockfile esetén dependency nincs automatikusan létrehozva; ekkor külön dependency telepítés szükséges.
 
@@ -138,7 +138,7 @@ Igazolt többek között:
 - hardlink dependency védett;
 - standalone apply maintenance lockot használ;
 - post-build automata be van kötve;
-- worktree helper lockfile hash alapján symlinkel;
+- worktree helper lockfile hash alapján Turbopack-kompatibilis hardlinkelt dependency-fát készít;
 - AGENTS normatív szabály frissült.
 
 ## 10. Valódi DEV dry-run 2026-08-16
@@ -159,7 +159,7 @@ A dry-run során fájltörlés nem történt.
 
 A normál jövőbeli működés:
 
-`új worktree helperrel -> shared node_modules, ha kompatibilis -> koordinált build -> post-build retention -> aktív/rollback/newest build védelem`
+`új worktree helperrel -> hardlinkelt node_modules, ha kompatibilis -> koordinált build -> post-build retention -> aktív/rollback/newest build védelem`
 
 Ha a post-build build-retention nem elég és a lemez továbbra is kritikus, a deep dependency prune csak külön karbantartási műveletként indítható.
 
