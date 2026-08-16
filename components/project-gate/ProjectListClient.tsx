@@ -25,6 +25,14 @@ type ProjectsResponse = {
 type CreateProjectResponse = {
   ok: boolean;
   project?: ProjectListItem;
+  driveProvisioning?: {
+    ok?: boolean;
+    ready?: boolean;
+    retryRequired?: boolean;
+    folderCount?: number;
+    incomingDropFolder?: { id: string; name: string; path: string } | null;
+    error?: string;
+  };
   error?: string;
 };
 
@@ -43,6 +51,7 @@ export default function ProjectListClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
@@ -83,6 +92,7 @@ export default function ProjectListClient() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setNotice("");
     const form = new FormData(event.currentTarget);
 
     try {
@@ -103,6 +113,11 @@ export default function ProjectListClient() {
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt nem hozható létre.");
       event.currentTarget.reset();
       setShowCreate(false);
+      if (payload.driveProvisioning?.ready) {
+        setNotice(`A projekt és a DIMPRO Drive létrejött. ${payload.driveProvisioning.folderCount || 0} mappa használható, a Beérkező Drop célmappa készen áll.`);
+      } else if (payload.project) {
+        setNotice(`A projekt létrejött, de a Drive inicializálása újrapróbálást igényel${payload.driveProvisioning?.error ? `: ${payload.driveProvisioning.error}` : "."}`);
+      }
       await loadProjects();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "A projekt nem hozható létre.");
@@ -160,6 +175,7 @@ export default function ProjectListClient() {
         )}
 
         {error && <div className={styles.errorBox}>{error}</div>}
+        {!error && notice && <div className={styles.successBox}>{notice}</div>}
 
         {loading ? (
           <div className={styles.loading}><Loader2 size={28} className={styles.spin} /> Projektadatok betöltése…</div>

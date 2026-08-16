@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { resolveProjectCoreAuth } from "@/app/lib/project-core/auth";
 import { projectCoreErrorResponse } from "@/app/lib/project-core/api";
 import { createProject, listAccessibleProjects } from "@/app/lib/project-core/store";
+import { normalizeDriveCoreError } from "@/app/lib/drive-core/errors";
+import { provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
 
 export async function GET(request: NextRequest) {
   const authResult = await resolveProjectCoreAuth(request);
@@ -35,7 +37,24 @@ export async function POST(request: NextRequest) {
       displayName: authResult.actor.displayName,
     });
     if (!result.ok) return NextResponse.json(result, { status: 400 });
-    return NextResponse.json(result, { status: 201 });
+
+    let driveProvisioning: Record<string, unknown>;
+    try {
+      driveProvisioning = await provisionProjectDrive(result.project.id, authResult.actor.userId);
+    } catch (driveError) {
+      const normalized = normalizeDriveCoreError(driveError);
+      driveProvisioning = {
+        ok: false,
+        version: "1.1.0",
+        projectId: result.project.id,
+        ready: false,
+        retryRequired: true,
+        error: normalized.body.error,
+        code: normalized.body.code,
+      };
+    }
+
+    return NextResponse.json({ ...result, driveProvisioning }, { status: 201 });
   } catch (error) {
     return projectCoreErrorResponse(error);
   }

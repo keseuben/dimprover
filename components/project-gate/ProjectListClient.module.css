@@ -205,6 +205,7 @@
 }
 
 .errorBox,
+.successBox,
 .loading {
   margin-top: 24px;
   border: 1px solid #d9a84d;
@@ -216,6 +217,23 @@
   font-weight: 750;
 }
 
+
+.successBox {
+  margin-top: 24px;
+  border: 1px solid #8bc9ad;
+  border-radius: 8px;
+  background: #eefaf3;
+  color: #17603d;
+  padding: 14px 16px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.page[data-theme="dark"] .successBox {
+  border-color: #2f7355;
+  background: #142b22;
+  color: #9fe0bd;
+}
 .page[data-theme="dark"] .errorBox {
   border-color: #7b622e;
   background: #2d2516;

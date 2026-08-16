@@ -25,7 +25,7 @@
 .sqlName code { color: var(--pg-heading); font-size: 12px; font-weight: 750; word-break: break-all; }
 .sqlName small { flex: 0 0 auto; color: var(--pg-text-muted); font-size: 12px; }
 .setupFootnote { font-size: 12px !important; }
-.workspace { overflow: hidden; }
+.workspace { position: relative; overflow: hidden; }
 .workspaceHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 18px; border-bottom: 1px solid var(--pg-border); }
 .workspaceHeader > div:first-child > span { color: var(--pg-primary-active); font-size: 12px; font-weight: 850; letter-spacing: .12em; }
 .workspaceHeader h2 { margin: 3px 0 0; color: var(--pg-heading); font-size: 21px; }
@@ -340,4 +340,68 @@
   .technicalActions { align-items: stretch; flex-direction: column; }
   .technicalActions button { justify-content: center; }
   .folderCards { grid-template-columns: 1fr; }
+}
+
+
+.workspaceDragActive { outline: 2px solid var(--pg-primary); outline-offset: -2px; }
+.externalDropOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--pg-primary-active) 13%, rgba(255,255,255,.88));
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.externalDropOverlay > div {
+  display: grid;
+  min-width: min(520px,80%);
+  min-height: 180px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 2px dashed var(--pg-primary);
+  border-radius: 12px;
+  background: var(--pg-surface);
+  color: var(--pg-primary-active);
+  text-align: center;
+  box-shadow: var(--pg-shadow);
+}
+.externalDropOverlay strong { color: var(--pg-heading); font-size: 18px; }
+.externalDropOverlay span { color: var(--pg-text-secondary); font-size: 13px; }
+.uploadHint { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px dashed var(--pg-primary); border-radius: 8px; background: var(--pg-primary-soft); color: var(--pg-primary-active); }
+.uploadHint div { min-width: 0; }
+.uploadHint strong, .uploadHint span { display: block; }
+.uploadHint strong { color: var(--pg-heading); font-size: 13px; }
+.uploadHint span { margin-top: 3px; color: var(--pg-text-secondary); font-size: 12px; line-height: 1.45; }
+.uploadQueue { margin: 10px 14px 0; border: 1px solid var(--pg-border); border-radius: 8px; background: var(--pg-bg-secondary); overflow: hidden; }
+.uploadQueue > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--pg-border); background: var(--pg-surface); }
+.uploadQueue > header > div { display: flex; align-items: center; gap: 8px; color: var(--pg-primary-active); }
+.uploadQueue > header span { display: block; }
+.uploadQueue > header strong, .uploadQueue > header small { display: block; }
+.uploadQueue > header strong { color: var(--pg-heading); font-size: 13px; }
+.uploadQueue > header small { margin-top: 2px; color: var(--pg-text-muted); font-size: 11px; }
+.uploadQueue > header button, .uploadQueueList article > button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 8px; border: 1px solid var(--pg-border); border-radius: 6px; background: var(--pg-surface); color: var(--pg-text-secondary); font-size: 11px; font-weight: 800; cursor: pointer; }
+.uploadQueue > header button:disabled, .uploadQueueList article > button:disabled { cursor: not-allowed; opacity: .5; }
+.uploadQueueList { max-height: 260px; overflow-y: auto; }
+.uploadQueueList article { display: grid; grid-template-columns: 30px minmax(0,1fr) 76px auto; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--pg-border); background: var(--pg-surface); }
+.uploadQueueList article:last-child { border-bottom: 0; }
+.uploadQueueIcon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; background: var(--pg-primary-soft); color: var(--pg-primary-active); }
+.uploadQueueInfo { min-width: 0; }
+.uploadQueueInfo strong, .uploadQueueInfo small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uploadQueueInfo strong { color: var(--pg-heading); font-size: 12px; }
+.uploadQueueInfo small { margin-top: 2px; color: var(--pg-text-muted); font-size: 11px; }
+.uploadProgress { height: 4px; margin-top: 5px; overflow: hidden; border-radius: 999px; background: var(--pg-border); }
+.uploadProgress i { display: block; height: 100%; border-radius: inherit; background: var(--pg-primary); transition: width 120ms linear; }
+.uploadQueueList article > b { color: var(--pg-text-secondary); font-size: 11px; text-align: right; }
+.uploadQueueDONE .uploadQueueIcon { background: color-mix(in srgb,var(--pg-success) 12%,var(--pg-surface)); color: var(--pg-success); }
+.uploadQueueDONE .uploadProgress i { background: var(--pg-success); }
+.uploadQueueERROR .uploadQueueIcon { background: color-mix(in srgb,var(--pg-danger) 10%,var(--pg-surface)); color: var(--pg-danger); }
+.uploadQueueERROR .uploadProgress i { background: var(--pg-danger); }
+@media (max-width: 700px) {
+  .uploadQueueList article { grid-template-columns: 30px minmax(0,1fr) auto; }
+  .uploadQueueList article > b { display: none; }
+  .externalDropOverlay > div { min-width: 90%; }
 }

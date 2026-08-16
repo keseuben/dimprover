@@ -45,6 +45,13 @@ export {
 } from "./securityScanService";
 
 export {
+  DRIVE_INCOMING_DROP_FOLDER_NAME,
+  DRIVE_PROJECT_PROVISIONING_VERSION,
+  getProjectDriveProvisioningState,
+  provisionProjectDrive,
+} from "./projectProvisioning";
+
+export {
   createDriveCompareFinding,
   deleteDriveCompareFinding,
   getDriveCompareFindingsHealth,

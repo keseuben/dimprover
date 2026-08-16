@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   UploadCloud,
+  RotateCcw,
   X,
 } from "lucide-react";
 import styles from "./DriveWorkspace.module.css";
@@ -137,6 +138,43 @@ type DownloadPayload = {
   download?: { url: string; fileName: string; expiresAt: string };
 };
 
+type UploadQueueStatus = "QUEUED" | "UPLOADING" | "VERIFYING" | "DONE" | "ERROR";
+type UploadQueueItem = {
+  id: string;
+  file: File;
+  targetFolderId: string;
+  targetFolderPath: string;
+  status: UploadQueueStatus;
+  progress: number;
+  message: string;
+  error?: string;
+  documentId?: string;
+};
+
+function putSignedFile(
+  file: File,
+  signedUpload: NonNullable<UploadInitPayload["signedUpload"]>,
+  onProgress: (progress: number) => void,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(signedUpload.method, signedUpload.url, true);
+    for (const [key, value] of Object.entries(signedUpload.headers || {})) request.setRequestHeader(key, value);
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) return;
+      onProgress(Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))));
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) resolve();
+      else reject(new Error(`A tárhelyfeltöltés sikertelen (${request.status}).`));
+    };
+    request.onerror = () => reject(new Error("A privát tárhely feltöltése hálózati hibával leállt."));
+    request.onabort = () => reject(new Error("A privát tárhely feltöltése megszakadt."));
+    request.send(file);
+  });
+}
+
+
 type Props = {
   projectId: string;
   permissions?: string[];
@@ -167,6 +205,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [showDocumentForm, setShowDocumentForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
+  const [uploadBatchBusy, setUploadBatchBusy] = useState(false);
+  const [externalDragActive, setExternalDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
 
   const effectivePermissions = [...new Set([...permissions, ...apiPermissions])];
   const canWrite = effectivePermissions.includes("document.write");
@@ -287,30 +329,27 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     finally { setBusy(false); }
   }
 
-  async function submitFileUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const file = form.get("file");
-    if (!(file instanceof File) || file.size <= 0) {
-      setError("Válassz ki egy nem üres fájlt a feltöltéshez.");
-      return;
-    }
-    setBusy(true); setError(""); setNotice("A privát feltöltési kapcsolat előkészítése…");
+  function patchUploadQueueItem(id: string, patch: Partial<UploadQueueItem>) {
+    setUploadQueue((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  async function uploadQueueItem(item: UploadQueueItem) {
     let abortUrl = "";
     try {
+      patchUploadQueueItem(item.id, { status: "UPLOADING", progress: 1, error: undefined, message: "Feltöltés előkészítése…" });
       const initResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/uploads/init`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          folderId: form.get("folderId"),
-          documentName: form.get("documentName") || file.name,
-          originalName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          description: form.get("description"),
-          revisionCode: form.get("revisionCode") || "V1",
-          changeNote: "Webes feltöltés a Projektkapu DRIVE felületéről.",
+          folderId: item.targetFolderId,
+          documentName: item.file.name,
+          originalName: item.file.name,
+          mimeType: item.file.type || "application/octet-stream",
+          sizeBytes: item.file.size,
+          description: "Többfájlos / drag & drop webes feltöltés a Projektkapu DRIVE felületéről.",
+          revisionCode: "V1",
+          changeNote: "Drive Web Upload UX 1.1 feltöltés.",
           source: "WEB",
         }),
       });
@@ -319,44 +358,158 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         throw new Error(initPayload.error || "A feltöltési munkamenet nem hozható létre.");
       }
       abortUrl = initPayload.abortUrl || "";
-      setNotice(`Feltöltés a privát tárhelyre: ${file.name}`);
-      const objectResponse = await fetch(initPayload.signedUpload.url, {
-        method: initPayload.signedUpload.method,
-        headers: initPayload.signedUpload.headers,
-        body: file,
-      });
-      if (!objectResponse.ok) throw new Error(`A tárhelyfeltöltés sikertelen (${objectResponse.status}).`);
+      patchUploadQueueItem(item.id, { message: "Feltöltés a privát tárhelyre…" });
+      await putSignedFile(item.file, initPayload.signedUpload, (progress) => patchUploadQueueItem(item.id, { progress }));
 
-      setNotice("A feltöltött objektum szerveroldali ellenőrzése és véglegesítése…");
+      patchUploadQueueItem(item.id, { status: "VERIFYING", progress: 100, message: "SHA-256 és biztonsági ellenőrzés…" });
       const completeResponse = await fetch(initPayload.completeUrl, {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: "{}",
       });
-      const completePayload = await completeResponse.json() as { ok?: boolean; error?: string; session?: { finalVersionStatus?: string } };
-      if (!completeResponse.ok || !completePayload.ok) {
-        throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
-      }
-      setNotice(completePayload.session?.finalVersionStatus === "QUARANTINED"
-        ? "A fájl feltöltődött és karanténba került. Letöltés csak ellenőrzés után engedélyezhető."
-        : "A fájl feltöltődött, ellenőrzése megtörtént és bekerült a projekt dokumentumtárába.");
-      setShowUploadForm(false);
-      await load();
+      const completePayload = await completeResponse.json() as {
+        ok?: boolean;
+        error?: string;
+        session?: { finalVersionStatus?: string };
+        document?: { id?: string };
+        securityScan?: { scan?: { status?: string } };
+      };
+      if (!completeResponse.ok || !completePayload.ok) throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
+      const finalStatus = completePayload.session?.finalVersionStatus || "QUARANTINED";
+      const scanStatus = completePayload.securityScan?.scan?.status;
+      patchUploadQueueItem(item.id, {
+        status: "DONE",
+        progress: 100,
+        documentId: completePayload.document?.id,
+        message: scanStatus === "CLEAN"
+          ? `Feltöltve · CLEAN · ${finalStatus}`
+          : `Feltöltve · ${finalStatus}`,
+      });
+      return completePayload.document?.id || null;
     } catch (caught) {
       if (abortUrl) {
         await fetch(abortUrl, {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ reason: "A kliensoldali feltöltési folyamat megszakadt." }),
+          body: JSON.stringify({ reason: "Drive Web Upload UX 1.1 kliensoldali feltöltés megszakadt." }),
         }).catch(() => undefined);
       }
-      setError(caught instanceof Error ? caught.message : "A fájlfeltöltés sikertelen.");
-      setNotice("");
-    } finally {
-      setBusy(false);
+      const message = caught instanceof Error ? caught.message : "A fájlfeltöltés sikertelen.";
+      patchUploadQueueItem(item.id, { status: "ERROR", error: message, message });
+      return null;
     }
+  }
+
+  async function processUploadBatch(items: UploadQueueItem[]) {
+    if (!items.length || uploadBatchBusy) return;
+    setUploadBatchBusy(true);
+    setError("");
+    setNotice(`Feltöltési sor indítása: ${items.length} fájl.`);
+    let cursor = 0;
+    let successCount = 0;
+    const worker = async () => {
+      while (cursor < items.length) {
+        const current = items[cursor++];
+        const documentId = await uploadQueueItem(current);
+        if (documentId) {
+          successCount += 1;
+        }
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    await load();
+    setUploadBatchBusy(false);
+    setNotice(`${successCount}/${items.length} fájl feltöltése sikeres. A hibás tételek külön újrapróbálhatók.`);
+  }
+
+  function enqueueFiles(files: File[], targetFolderId: string) {
+    if (!canWrite || uploadBatchBusy) {
+      if (uploadBatchBusy) setError("Már fut egy feltöltési sor. Várd meg a befejezését, majd adj hozzá új fájlokat.");
+      return;
+    }
+    if (!storageWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+    const folder = tree?.folders.find((entry) => entry.id === targetFolderId);
+    if (!folder) {
+      setError("Feltöltés előtt válassz ki egy konkrét célmappát.");
+      return;
+    }
+    const maxUploadBytes = health?.storage?.maxUploadBytes || Number.MAX_SAFE_INTEGER;
+    const now = Date.now();
+    const prepared = files.filter((file) => file.size > 0).map((file, index) => ({
+      id: `drive-upload-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      targetFolderId: folder.id,
+      targetFolderPath: folder.path,
+      status: file.size > maxUploadBytes ? "ERROR" as const : "QUEUED" as const,
+      progress: 0,
+      message: file.size > maxUploadBytes ? `Túl nagy fájl · maximum ${health?.storage?.maxUploadMb || 0} MB` : "Feltöltésre vár",
+      error: file.size > maxUploadBytes ? "A fájl meghaladja a Drive feltöltési méretkorlátját." : undefined,
+    }));
+    if (!prepared.length) {
+      setError("Nincs feltölthető, nem üres fájl a kiválasztásban.");
+      return;
+    }
+    setUploadQueue((current) => [...prepared, ...current]);
+    const runnable = prepared.filter((item) => item.status === "QUEUED");
+    if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  function submitFileUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const targetFolderId = String(form.get("folderId") || "");
+    const files = form.getAll("file").filter((value): value is File => value instanceof File && value.size > 0);
+    enqueueFiles(files, targetFolderId);
+    if (files.length) setShowUploadForm(false);
+  }
+
+  function retryUpload(item: UploadQueueItem) {
+    if (uploadBatchBusy) return;
+    const retry = { ...item, status: "QUEUED" as const, progress: 0, error: undefined, message: "Újrapróbálásra vár" };
+    setUploadQueue((items) => items.map((entry) => entry.id === item.id ? retry : entry));
+    void processUploadBatch([retry]);
+  }
+
+  function isExternalFileDrag(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types || []).includes("Files");
+  }
+
+  function handleExternalDragEnter(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setExternalDragActive(true);
+  }
+
+  function handleExternalDragOver(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleExternalDragLeave(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setExternalDragActive(false);
+  }
+
+  function handleExternalDrop(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setExternalDragActive(false);
+    const files = Array.from(event.dataTransfer.files || []);
+    if (selectedFolderId === "all") {
+      setError("A behúzott fájlok feltöltése előtt válassz ki egy célmappát a bal oldali mappafában.");
+      return;
+    }
+    enqueueFiles(files, selectedFolderId);
   }
 
   async function downloadDocument(document: DriveDocument) {
@@ -481,7 +634,14 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   }
 
   return (
-    <section className={styles.workspace}>
+    <section
+      className={`${styles.workspace} ${externalDragActive ? styles.workspaceDragActive : ""}`}
+      data-drive-upload-v110="1.1.0"
+      onDragEnter={handleExternalDragEnter}
+      onDragOver={handleExternalDragOver}
+      onDragLeave={handleExternalDragLeave}
+      onDrop={handleExternalDrop}
+    >
       <header className={styles.workspaceHeader}>
         <div>
           <span>DIMPRO DRIVE · PROJEKTFÁJLOK</span>
@@ -551,6 +711,25 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
       {(error || notice) && <div className={error ? styles.errorNotice : styles.successNotice}>{error || notice}</div>}
 
+      {uploadQueue.length > 0 && <section className={styles.uploadQueue} data-drive-upload-queue="1.1.0">
+        <header>
+          <div><UploadCloud size={17} /><span><strong>Feltöltési sor</strong><small>{uploadQueue.filter((item) => item.status === "DONE").length}/{uploadQueue.length} kész · maximum 2 párhuzamos feltöltés</small></span></div>
+          <button type="button" disabled={uploadBatchBusy} onClick={() => setUploadQueue((items) => items.filter((item) => !["DONE", "ERROR"].includes(item.status)))}>Lezárt tételek törlése</button>
+        </header>
+        <div className={styles.uploadQueueList}>
+          {uploadQueue.map((item) => <article key={item.id} className={styles[`uploadQueue${item.status}`] || ""}>
+            <span className={styles.uploadQueueIcon}>{item.status === "DONE" ? <Check size={15} /> : item.status === "ERROR" ? <AlertTriangle size={15} /> : <UploadCloud size={15} />}</span>
+            <div className={styles.uploadQueueInfo}>
+              <strong>{item.file.name}</strong>
+              <small>{formatBytes(item.file.size)} · {item.targetFolderPath} · {item.message}</small>
+              <div className={styles.uploadProgress}><i style={{ width: `${item.progress}%` }} /></div>
+            </div>
+            <b>{item.status === "UPLOADING" ? `${item.progress}%` : item.status === "VERIFYING" ? "Ellenőrzés" : item.status === "DONE" ? "Kész" : item.status === "ERROR" ? "Hiba" : "Sorban"}</b>
+            {item.status === "ERROR" && <button type="button" disabled={uploadBatchBusy} onClick={() => retryUpload(item)} title="Feltöltés újrapróbálása"><RotateCcw size={14} /> Újra</button>}
+          </article>)}
+        </div>
+      </section>}
+
       {(showFolderForm || showDocumentForm || showUploadForm) && (
         <div className={styles.formsRow}>
           {showFolderForm && <form onSubmit={submitFolder} className={styles.formCard}>
@@ -569,17 +748,17 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             <footer><button type="button" onClick={() => setShowDocumentForm(false)}>Mégse</button><button type="submit" disabled={busy}>{busy ? "Mentés…" : "Dokumentum felvétele"}</button></footer>
           </form>}
           {showUploadForm && storageWriteEnabled && <form onSubmit={submitFileUpload} className={`${styles.formCard} ${styles.uploadForm}`}>
-            <header><UploadCloud size={17} /><strong>Fájl feltöltése a privát DRIVE tárhelyre</strong></header>
+            <header><UploadCloud size={17} /><strong>Többfájlos feltöltés a privát DRIVE tárhelyre</strong></header>
             <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>
-            <label>Fájl<input name="file" type="file" required /></label>
-            <label>Dokumentumnév<input name="documentName" maxLength={240} placeholder="Üresen hagyva a fájlnév lesz" /></label>
-            <div className={styles.formSplit}><label>Revízió<input name="revisionCode" defaultValue="V1" maxLength={40} /></label><label>Maximális méret<input value={`${health?.storage?.maxUploadMb || 0} MB`} readOnly /></label></div>
-            <label>Leírás<textarea name="description" rows={2} placeholder="Rövid tartalmi leírás" /></label>
-            <small>A böngésző rövid életű, projektjogosultsághoz kötött signed URL-lel közvetlenül a privát tárhelyre tölt. A titkos tárhelykulcs nem kerül a klienshez.</small>
-            <footer><button type="button" onClick={() => setShowUploadForm(false)}>Mégse</button><button type="submit" disabled={busy}>{busy ? "Feltöltés…" : "Biztonságos feltöltés"}</button></footer>
+            <label>Fájlok<input name="file" type="file" multiple required /></label>
+            <div className={styles.uploadHint}><UploadCloud size={20} /><div><strong>Több fájlt is kijelölhetsz egyszerre</strong><span>Windows Intézőből vagy az asztalról közvetlenül a Drive felületre is behúzhatod őket. Külső drop esetén a bal oldalon kiválasztott mappa lesz a cél.</span></div></div>
+            <small>Maximum fájlméret: {health?.storage?.maxUploadMb || 0} MB / fájl. Minden tétel ugyanazon signed upload → SHA-256 → karantén / vírusellenőrzési láncon halad át.</small>
+            <footer><button type="button" onClick={() => setShowUploadForm(false)}>Mégse</button><button type="submit" disabled={uploadBatchBusy}>{uploadBatchBusy ? "Feltöltési sor fut…" : "Fájlok hozzáadása"}</button></footer>
           </form>}
         </div>
       )}
+
+      {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat a feltöltéshez</strong><span>{selectedFolder ? `Célmappa: ${selectedFolder.path}` : "Előbb válassz célmappát a bal oldalon"}</span></div></div>}
 
       <div className={styles.browser}>
         <aside className={styles.folderPanel}>
