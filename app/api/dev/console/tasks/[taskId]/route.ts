@@ -90,8 +90,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       result = finalized;
       const success = action === "COMPLETE";
       notice = success ? `${finalized.task.title} elkészült.` : `${finalized.task.title} hibával / blokkolással leállt.`;
-      await createBenAiConsoleMessage({ summary: notice, detail: body.note || (success ? "A task sikeresen lezárva." : finalized.task.blockedReason || "Blokkoló hiba."), taskId, projectId: finalized.task.projectId, kind: success ? "TASK_UPDATE" : "ERROR", level: success ? "success" : "error", progressPercent: success ? 100 : null, metadata: { action, outcome: success ? "completed" : "failed" } });
-      notification = await notifyOutcome({ taskId, title: success ? "BENJADMIN · Feladat elkészült" : "BENJADMIN · Fejlesztési hiba", body: notice, priority: success ? "normal" : "high" });
+      if (finalized.alreadyFinalized) {
+        notification = { ok: true, skipped: true, reason: "ALREADY_FINALIZED" };
+      } else {
+        await createBenAiConsoleMessage({ summary: notice, detail: body.note || (success ? "A task sikeresen lezárva." : finalized.task.blockedReason || "Blokkoló hiba."), taskId, projectId: finalized.task.projectId, kind: success ? "TASK_UPDATE" : "ERROR", level: success ? "success" : "error", progressPercent: success ? 100 : null, metadata: { action, outcome: success ? "completed" : "failed" } });
+        notification = await notifyOutcome({ taskId, title: success ? "BENJADMIN · Feladat elkészült" : "BENJADMIN · Fejlesztési hiba", body: notice, priority: success ? "normal" : "high" });
+      }
     } else {
       return NextResponse.json({ ok: false, error: "Ismeretlen AI Fejlesztői Tér task művelet." }, { status: 400, headers: { "cache-control": "no-store" } });
     }

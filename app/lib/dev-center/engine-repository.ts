@@ -1115,7 +1115,9 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
   if (task.status === "cancelled") throw new DevCenterEngineError("Törölt task nem zárható le eredménnyel.", "DEV_CENTER_TASK_FINALIZE_STATE_DENIED", 409);
-  if (task.status === "completed" && input.outcome === "completed") return { ok: true as const, task, alreadyFinalized: true };
+  const currentMetadata = jsonRecord(task.metadata);
+  if (task.status === "completed" && input.outcome === "completed") return { ok: true as const, task, alreadyFinalized: true, rebalance: null };
+  if (task.status === "blocked" && input.outcome === "failed" && text(currentMetadata.workflowState) === "FAILED") return { ok: true as const, task, alreadyFinalized: true, rebalance: null };
   const now = nowIso();
   const note = text(input.note).slice(0, 1000);
   const sessions = await client.from("dev_center_worker_sessions").select("id").eq("task_id", task.id).neq("status", "closed");

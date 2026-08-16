@@ -246,6 +246,9 @@ export default function DevPwaControls() {
       <p className="dev-pwa-sound-note">
         Az egyedi DIMPRO hang a megnyitott PWA-ban szól. Háttérben vagy lezárt képernyőn az Android saját értesítési hangja és rezgése működik.
       </p>
+      <p className="dev-pwa-sound-note" data-testid="benjadmin-push-alert-types">
+        Push események: feladat elkészült · fejlesztési hiba · ETA 15 percen belül · ETA lejárt. Az ETA értesítés csak aktív push-feliratkozás esetén kerül kiküldésre.
+      </p>
       {message ? <p className="dev-pwa-message">{message}</p> : null}
     </section>
   );

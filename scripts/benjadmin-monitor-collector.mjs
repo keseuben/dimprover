@@ -114,6 +114,29 @@ async function probeHttp(url, timeoutMs = 5000) {
   }
 }
 
+async function triggerEtaAlerts(timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const adminKey = fs.readFileSync(".dimprover/license/admin-key.txt", "utf8").trim();
+    if (!adminKey) return { ok: false, skipped: true, reason: "ETA_ALERT_ADMIN_KEY_MISSING" };
+    const response = await fetch("http://127.0.0.1:3100/api/dev/console/eta-alerts/run", {
+      method: "POST",
+      headers: { "Host": "admin.dev.dimpro.hu", "x-dimpro-license-admin-key": adminKey, "content-type": "application/json" },
+      body: "{}",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) return { ok: false, status: response.status, error: payload?.error || "ETA_ALERT_TRIGGER_FAILED" };
+    return { ok: true, subscriptionCount: payload.subscriptionCount || 0, eligible: payload.eligible || 0, sentTasks: payload.sentTasks || 0, delivered: payload.delivered || 0, deduped: payload.deduped || 0, skippedNoSubscribers: payload.skippedNoSubscribers || 0 };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "ETA_ALERT_TRIGGER_FAILED" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function probeTcp(host, port, timeoutMs = 3000) {
   const started = Date.now();
   return new Promise((resolve) => {
@@ -215,11 +238,13 @@ async function collectOnce(client) {
   if (cleanupError) throw new Error(`MONITOR_RETENTION_FAILED:${cleanupError.code || "UNKNOWN"}`);
 
   const dev = rows[0];
+  const etaAlerts = await triggerEtaAlerts();
   console.log(JSON.stringify({
     ok: true,
     sampledAt: dev.sampled_at,
     targets: rows.map((row) => ({ target: row.target_code, status: row.status, responseMs: row.response_ms })),
     dev: { cpuPercent: dev.cpu_percent, memoryPercent: dev.memory_percent, diskPercent: dev.disk_percent, swapPercent: dev.metadata.swap_percent },
+    etaAlerts,
   }));
 }
 
