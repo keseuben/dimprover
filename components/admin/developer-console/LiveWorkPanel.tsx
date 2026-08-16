@@ -73,6 +73,24 @@ function finishLabel(value: string | null) {
   }).format(date);
 }
 
+function etaDistanceLabel(now: number, expectedFinishAt: string | null) {
+  if (!expectedFinishAt) return { state: "unknown" as const, label: "hátralévő idő: —", minutes: null as number | null };
+  const target = new Date(expectedFinishAt).getTime();
+  if (!Number.isFinite(target)) return { state: "unknown" as const, label: "hátralévő idő: —", minutes: null as number | null };
+  const deltaMinutes = Math.ceil((target - now) / 60000);
+  const absoluteMinutes = Math.abs(deltaMinutes);
+  const distance = durationLabel(absoluteMinutes || 1);
+  if (deltaMinutes < 0) return { state: "overdue" as const, label: `késés ${distance}`, minutes: deltaMinutes };
+  if (deltaMinutes <= 15) return { state: "due-soon" as const, label: `még ${distance}`, minutes: deltaMinutes };
+  return { state: "on-track" as const, label: `még ${distance}`, minutes: deltaMinutes };
+}
+
+function estimateRangeLabel(minMinutes: number | null, maxMinutes: number | null) {
+  if (!minMinutes && !maxMinutes) return "becslési tartomány: —";
+  if (minMinutes && maxMinutes && minMinutes !== maxMinutes) return `becslés ${durationLabel(minMinutes)}–${durationLabel(maxMinutes)}`;
+  return `becslés ${durationLabel(minMinutes || maxMinutes)}`;
+}
+
 export default function LiveWorkPanel({ live, now, context, selectedProjectId, busyTaskId, onTaskAction, onOpenTerminalHub }: {
   live: ConsoleLiveState | null;
   now: number;
@@ -165,7 +183,10 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
         <div className={styles.aiDeveloperTaskList}>
           {projectTasks.map((task) => {
             const estimate = metadataNumber(task, "estimateMinutes");
+            const estimateMin = metadataNumber(task, "estimateMinMinutes");
+            const estimateMax = metadataNumber(task, "estimateMaxMinutes");
             const expectedFinishAt = metadataText(task, "expectedFinishAt");
+            const etaDistance = etaDistanceLabel(now, expectedFinishAt);
             const started = ["claimed", "in_progress", "testing"].includes(task.status);
             const routed = Boolean(task.requested_worker_id || task.assigned_worker_id);
             const bridgeState = metadataText(task, "bridgeState") || (started ? "WAITING_HANDOFF" : null);
@@ -187,6 +208,8 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
                 <header><div><strong>{task.title}</strong><span>{taskOwner(task, live)} · {task.status.toUpperCase()}</span></div><b>{durationLabel(estimate)}</b></header>
                 <div className={styles.aiDeveloperTaskFacts}>
                   <span><Clock3 size={11} /> ETA {expectedFinishAt ? finishLabel(expectedFinishAt) : "indítás után"}</span>
+                  <span className={styles.aiEtaLive} data-eta-state={etaDistance.state} data-testid="benjadmin-live-eta">{etaDistance.label}</span>
+                  <span className={styles.aiEtaRange}>{estimateRangeLabel(estimateMin, estimateMax)}</span>
                   <span>{metadataText(task, "executionGate") || metadataText(task, "workflowState") || "QUEUE"}</span>
                   <span className={styles.aiBridgeState}><Radio size={10} /> {bridgeState || "ROUTING"}</span>
                 </div>

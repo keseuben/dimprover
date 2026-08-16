@@ -1,0 +1,22 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const panel=fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx","utf8");
+const css=fs.readFileSync("components/admin/developer-console/DeveloperConsole.module.css","utf8");
+const shell=fs.readFileSync("components/admin/developer-console/DeveloperConsoleShell.tsx","utf8");
+let passed=0;function check(name,fn){fn();passed++;console.log(`PASS ${name}`)}
+check("Console now ticks every second",()=>assert.ok(shell.includes("setInterval(() => setNow(Date.now()), 1000)")));
+check("ETA distance helper exists",()=>assert.ok(panel.includes("function etaDistanceLabel")));
+check("ETA supports overdue state",()=>assert.ok(panel.includes('state: "overdue"')));
+check("ETA supports due-soon state",()=>assert.ok(panel.includes('state: "due-soon"')));
+check("ETA supports on-track state",()=>assert.ok(panel.includes('state: "on-track"')));
+check("ETA uses full date/time finish label",()=>assert.ok(panel.includes("finishLabel(expectedFinishAt)")));
+check("ETA live widget exposed",()=>assert.ok(panel.includes('data-testid="benjadmin-live-eta"')));
+check("ETA widget exposes state hook",()=>assert.ok(panel.includes('data-eta-state={etaDistance.state}')));
+check("Estimate min metadata used",()=>assert.ok(panel.includes('metadataNumber(task, "estimateMinMinutes")')));
+check("Estimate max metadata used",()=>assert.ok(panel.includes('metadataNumber(task, "estimateMaxMinutes")')));
+check("Estimate range rendered",()=>assert.ok(panel.includes("estimateRangeLabel(estimateMin, estimateMax)")));
+check("Overdue style exists",()=>assert.ok(css.includes('.aiEtaLive[data-eta-state="overdue"]')));
+check("Due-soon style exists",()=>assert.ok(css.includes('.aiEtaLive[data-eta-state="due-soon"]')));
+check("ETA remains nowrap inside wrapping facts row",()=>assert.ok(css.includes(".aiEtaLive")&&css.includes("white-space: nowrap")&&css.includes(".aiDeveloperTaskFacts")&&css.includes("flex-wrap: wrap")));
+check("No provider API introduced",()=>assert.ok(!panel.includes("OPENAI_API_KEY")&&!panel.includes("responses.create")));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

@@ -1386,6 +1386,12 @@
 .aiWorkerInboxGrid p span { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .aiWorkerInboxGrid p small { flex: 0 0 auto; color: var(--accent-strong); font-size: 9px; font-weight: 900; }
 .aiBridgeState { color: var(--violet) !important; font-weight: 900; }
+.aiEtaLive { padding: 1px 5px; border-radius: 999px; background: color-mix(in srgb, var(--green) 7%, transparent); color: var(--green) !important; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.aiEtaLive[data-eta-state="due-soon"] { background: color-mix(in srgb, var(--amber) 10%, transparent); color: var(--amber) !important; }
+.aiEtaLive[data-eta-state="overdue"] { background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red) !important; }
+.aiEtaLive[data-eta-state="unknown"] { background: transparent; color: var(--muted) !important; }
+.aiEtaRange { color: var(--muted) !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .aiNextTaskState { margin: 5px 0 6px; padding: 5px 7px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border)); border-radius: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); color: var(--text-soft); font-size: 10px; }
 .aiNextTaskState strong { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-strong); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; }
 .aiNextTaskState span, .aiNextTaskState small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
