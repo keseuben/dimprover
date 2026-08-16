@@ -75,7 +75,7 @@ check("Unlink API still uses optimistic version", unlinkRoute.includes('Number(i
 check("Unlink route does not delete Drive document", !unlinkRoute.includes("deleteDriveObject") && !unlinkRoute.includes("drive/documents") && !unlinkRoute.includes("DELETE_DOCUMENT"));
 check("V0.4 unlink migration preserves Drive storage", !v040.slice(v040.indexOf("project_issue_attachment_unlink_atomic")).includes("drive_core_documents set deleted_at"));
 check("No V0.5 DB migration introduced", !migrationOrder.includes("project_issue_core_v050") && !fs.readdirSync(path.join(root, "supabase/migrations")).some((name) => name.includes("project_issue_core_v050")));
-check("Migration order still ends V0.4", migrationOrder.trim().endsWith("supabase/migrations/20260815190500_project_issue_core_v040.sql"));
+check("Migration order keeps V0.4 before Identity V0.2.1", migrationOrder.indexOf("20260815190500_project_issue_core_v040.sql") < migrationOrder.indexOf("20260816081500_dimpro_project_drive_binding_v021.sql"));
 
 console.log(`\nCentral Issue Attachments V2.5 contract: ${pass}/${pass + fail} PASS`);
 if (fail) process.exit(1);
