@@ -59,7 +59,7 @@ async function uploadFile(projectId, folderId, name, mimeType, body) {
   const complete = await api(init.payload.completeUrl, { method: "POST", headers: headers(true), body: "{}" });
   check(`${name} complete`, complete.status === 200 && complete.payload?.ok === true);
   check(`${name} SHA verified`, complete.payload?.object?.checksumVerified === true && complete.payload?.object?.sha256 === sha256);
-  check(`${name} security result`, Boolean(complete.payload?.securityScan) && ["CLEAN", "INFECTED", "ERROR", undefined].includes(complete.payload?.securityScan?.scan?.status));
+  check(`${name} CLEAN security scan`, complete.payload?.securityScan?.ok === true && complete.payload?.securityScan?.scan?.status === "CLEAN");
   return complete.payload;
 }
 
