@@ -186,3 +186,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `250_dimpro_central_issue_attachments_v250_dev_activation_20260815.md` – Központi Hibajegyzék V0.5 DEV aktiválás: teljes HJ mellékletmunkatér, Drive preview/download, HJ audit API és jogosultságfüggő unlink; 55/55 + 39/39 + V1.2 29/29 + 11/11 live PASS; aktív unified build _WHElecnVqTN-ASeiQC-q.
 
 - `251_dimpro_drive_teljes_fejlesztesi_helyzet_es_hatralevo_terv_20260815.md` – DIMPRO Drive teljes állapot- és folytatási terv: projekt provisioning, multi-file + OS drag&drop, saját Drive/Projektkapu ownership, Project/Identity bridge, Gyors KépSend → tartós Beérkező Drop archiválás és kontrollált Drop DEV aktiválás.
+
+- `252_benjadmin_v13_datetime_dev_activation_20260816.md` – BENJADMIN V1.3 dátum+idő DEV aktiválás: középső feladat/kiosztás/worklog események teljes dátum+idővel, ETA dátum+idővel; 8/8 contract + 6/6 browser + 29/29 V1.2 runtime + 40/40 teljes Konzol PASS; aktív build UpQpSOr7iVQFXY02dHCyY.
