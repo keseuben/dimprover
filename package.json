@@ -12,7 +12,10 @@
     "build:raw": "next build && node scripts/ensure-next-standalone-assets.cjs --force",
     "operation:release": "bash scripts/dimpro-coordinated-operation.sh release --",
     "operation:migration": "bash scripts/dimpro-coordinated-operation.sh migration --",
-    "operation:restart": "bash scripts/dimpro-coordinated-operation.sh restart --"
+    "operation:restart": "bash scripts/dimpro-coordinated-operation.sh restart --",
+    "storage:retention:dry-run": "node scripts/dimpro-dev-storage-retention.mjs --quiet",
+    "storage:retention:apply-builds": "bash scripts/dimpro-dev-storage-retention.sh --quiet",
+    "storage:retention:deep-report": "node scripts/dimpro-dev-storage-retention.mjs --quiet"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

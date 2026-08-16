@@ -204,3 +204,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `258_benjadmin_v13_push_deeplink_pause_checkpoint_20260816.md` – BENJADMIN V1.3 Push task deep-link final DEV aktiválás és szünet előtti checkpoint; completed-task deep-link 12/12 browser PASS, 18/18 contract, aktív build WEUYIqSaVPyEtViDaWb2X.
 
 - `259_benjadmin_v13_pwa_push_subscription_dev_activation_20260816.md` – BENJADMIN V1.3 PWA push-feliratkozás hardening: release-független subscription store, eszközállapot UX, task push teszt; 26/26 contract, 13/13 runtime, 11/11 browser; aktív build BDgezeB9qEAmoq06oP0Ku.
+
+- `260_dimpro_dev_storage_retention_v100_20260816.md` – központi DEV Storage Retention V1: worktree/node_modules takarékos szabály, aktív release-védelem, post-build `.next*` retention, explicit deep-prune gate és 24/24 contract.
