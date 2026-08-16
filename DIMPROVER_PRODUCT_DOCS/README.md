@@ -210,3 +210,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `261_benjadmin_storage_retention_hardening_final_pause_checkpoint_20260816.md` – Storage Retention V1 hardening final: Turbopack-safe hardlink dependency worktree, 24/24 + 13/13 + 8/8 retention/worktree acceptance, aktív build uAeE_RE6Wld75DZ9JUXHN, trusted baseline 31dd509.
 
 - `262_dimpro_dev_storage_retention_v110_20260816.md` – DEV Storage Retention V1.1: retired worktree szabály, 81 GB → 42 GB worktree-tár, 45% végső lemezhasználat, 34/34 + 13/13 PASS.
+
+- 263_benjadmin_v14_worker_activity_chat_archive_dev_activation_20260816.md – V1.4 worker coding feed, AI-színkódolt közös csevegés, napi/heti lazy archívum és SANITIZED worker activity bridge.

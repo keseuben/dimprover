@@ -69,11 +69,21 @@ try {
   ]).select("id");
   check("Historical archive fixtures inserted", !inserted.error && (inserted.data || []).length === 2, inserted.error?.message || "");
 
-  const before = encodeURIComponent(new Date(Date.now() - 1 * 3600000).toISOString());
-  r = await api(`/api/dev/console/messages?limit=120&before=${before}`);
-  check("Cursor history GET succeeds", r.response.status === 200 && r.payload?.page?.before, `status=${r.response.status}`);
-  check("Cursor history returns yesterday fixture", (r.payload?.messages || []).some((item) => item.summary === `${marker} yesterday`), `messages=${(r.payload?.messages || []).length}`);
-  check("Cursor page exposes oldest/newest metadata", typeof r.payload?.page?.oldestAt === "string" && typeof r.payload?.page?.newestAt === "string", JSON.stringify(r.payload?.page));
+  let cursor = new Date(Date.now() - 1 * 3600000).toISOString();
+  let historyPages = 0;
+  let historyFound = false;
+  let lastPage = null;
+  while (historyPages < 12 && cursor && !historyFound) {
+    r = await api(`/api/dev/console/messages?limit=120&before=${encodeURIComponent(cursor)}`);
+    if (historyPages === 0) check("Cursor history GET succeeds", r.response.status === 200 && r.payload?.page?.before, `status=${r.response.status}`);
+    historyPages += 1;
+    lastPage = r.payload?.page || null;
+    historyFound = (r.payload?.messages || []).some((item) => item.summary === `${marker} yesterday`);
+    cursor = r.payload?.page?.oldestAt || null;
+    if (!r.payload?.page?.hasMore) break;
+  }
+  check("Cursor history returns yesterday fixture", historyFound, `pages=${historyPages}`);
+  check("Cursor page exposes oldest/newest metadata", typeof lastPage?.oldestAt === "string" && typeof lastPage?.newestAt === "string", JSON.stringify(lastPage));
 
   const stored = await db.from("dev_center_live_worklog").select("summary,detail,source,metadata,progress_percent").like("summary", `${marker}%`).order("created_at", { ascending: true });
   check("Worker activity rows persisted", !stored.error && (stored.data || []).length >= 6, `rows=${(stored.data || []).length}`);
