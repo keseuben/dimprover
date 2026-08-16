@@ -67,6 +67,8 @@ export default function DeveloperConsoleShell() {
   const [resources, setResources] = useState<DevelopmentResource[]>([]);
   const [resourceHealth, setResourceHealth] = useState<ResourceHealth | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [deepLinkTaskId, setDeepLinkTaskId] = useState("");
+  const [focusedTaskId, setFocusedTaskId] = useState("");
   const [connection, setConnection] = useState<ConnectionMode>("connecting");
   const [lastUpdate, setLastUpdate] = useState("");
   const [error, setError] = useState("");
@@ -86,6 +88,11 @@ export default function DeveloperConsoleShell() {
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
     setTheme(storedTheme === "light" || storedTheme === "sunlight" ? storedTheme : "dark");
+    const queryTaskId = new URLSearchParams(window.location.search).get("task")?.trim() || "";
+    if (queryTaskId) {
+      setDeepLinkTaskId(queryTaskId);
+      setFocusedTaskId(queryTaskId);
+    }
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -98,6 +105,13 @@ export default function DeveloperConsoleShell() {
   const changeProject = useCallback((id: string) => {
     localStorage.setItem(PROJECT_KEY, id);
     setSelectedProjectId(id);
+    setDeepLinkTaskId("");
+    setFocusedTaskId("");
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("task")) {
+      url.searchParams.delete("task");
+      window.history.replaceState(window.history.state, "", url);
+    }
   }, []);
 
   useEffect(() => {
@@ -245,6 +259,17 @@ export default function DeveloperConsoleShell() {
     };
   }, [applySnapshot, loadResources, silentFetch]);
 
+  useEffect(() => {
+    if (!deepLinkTaskId || !live) return;
+    const task = live.tasks.find((item) => item.id === deepLinkTaskId);
+    if (!task) return;
+    if (task.project_id && task.project_id !== selectedProjectId) {
+      localStorage.setItem(PROJECT_KEY, task.project_id);
+      setSelectedProjectId(task.project_id);
+    }
+    setFocusedTaskId(task.id);
+  }, [deepLinkTaskId, live, selectedProjectId]);
+
   const selectedProjectName = useMemo(() => live?.projects.find((item) => item.id === selectedProjectId)?.name || "", [live?.projects, selectedProjectId]);
 
   async function send(input: { text: string; target: ConsoleTarget; createTask: boolean; kind: "INSTRUCTION" | "DECISION" }) {
@@ -307,7 +332,7 @@ export default function DeveloperConsoleShell() {
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
         <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} />
-        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
+        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />

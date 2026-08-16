@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
+import { useEffect } from "react";
 import BenjadminAvatar from "./BenjadminAvatar";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
 import TerminalHubCard from "./TerminalHubCard";
@@ -91,11 +92,12 @@ function estimateRangeLabel(minMinutes: number | null, maxMinutes: number | null
   return `becslés ${durationLabel(minMinutes || maxMinutes)}`;
 }
 
-export default function LiveWorkPanel({ live, now, context, selectedProjectId, busyTaskId, onTaskAction, onOpenTerminalHub }: {
+export default function LiveWorkPanel({ live, now, context, selectedProjectId, focusedTaskId, busyTaskId, onTaskAction, onOpenTerminalHub }: {
   live: ConsoleLiveState | null;
   now: number;
   context: RuntimeContext | null;
   selectedProjectId: string;
+  focusedTaskId: string;
   busyTaskId: string | null;
   onTaskAction: (taskId: string, action: "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL", payload?: { workerCode?: string; estimateMinutes?: number; note?: string; summary?: string; commit?: string; buildId?: string; tests?: string; docs?: string; nextStep?: string }) => Promise<void>;
   onOpenTerminalHub: () => void;
@@ -108,9 +110,17 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
   const activeSessionTaskIds = new Set(sessions.filter((session) => session.status !== "closed" && session.task_id).map((session) => session.task_id as string));
   const projectTasks = tasks
     .filter((task) => (!selectedProjectId || task.project_id === selectedProjectId)
-      && (["queued", "ready", "blocked"].includes(task.status) || activeSessionTaskIds.has(task.id)))
-    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+      && (task.id === focusedTaskId || ["queued", "ready", "blocked"].includes(task.status) || activeSessionTaskIds.has(task.id)))
+    .sort((a, b) => Number(b.id === focusedTaskId) - Number(a.id === focusedTaskId) || Number(b.priority || 0) - Number(a.priority || 0) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
     .slice(0, 8);
+  useEffect(() => {
+    if (!focusedTaskId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`benjadmin-task-${focusedTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedTaskId, selectedProjectId]);
+
   const inboxTasks = tasks
     .filter((task) => (!selectedProjectId || task.project_id === selectedProjectId)
       && Boolean(task.requested_worker_id || task.assigned_worker_id)
@@ -203,10 +213,12 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, b
             const chainPreparedAt = metadataText(task, "coordinatorChainPreparedAt");
             const chainWorkerName = metadataText(task, "coordinatorChainWorkerName");
             const busy = busyTaskId === task.id;
+            const focused = task.id === focusedTaskId;
             return (
-              <article key={task.id} data-status={task.status} data-task-id={task.id} data-bridge-state={bridgeState || "ROUTING"} data-plus-pulled-at={plusPulledAt || ""}>
+              <article id={`benjadmin-task-${task.id}`} key={task.id} data-status={task.status} data-task-id={task.id} data-focused={focused ? "true" : "false"} data-bridge-state={bridgeState || "ROUTING"} data-plus-pulled-at={plusPulledAt || ""}>
                 <header><div><strong>{task.title}</strong><span>{taskOwner(task, live)} · {task.status.toUpperCase()}</span></div><b>{durationLabel(estimate)}</b></header>
                 <div className={styles.aiDeveloperTaskFacts}>
+                  {focused ? <span className={styles.aiTaskFocusBadge} data-testid="benjadmin-task-focus"><BellRing size={10} /> Értesítésből megnyitva</span> : null}
                   <span><Clock3 size={11} /> ETA {expectedFinishAt ? finishLabel(expectedFinishAt) : "indítás után"}</span>
                   <span className={styles.aiEtaLive} data-eta-state={etaDistance.state} data-testid="benjadmin-live-eta">{etaDistance.label}</span>
                   <span className={styles.aiEtaRange}>{estimateRangeLabel(estimateMin, estimateMax)}</span>

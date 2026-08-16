@@ -24,7 +24,7 @@ async function notifyOutcome(input: { taskId: string; title: string; body: strin
     return await sendDevPushNotification({
       title: input.title,
       body: input.body,
-      url: "/admin/dev-console",
+      url: `/admin/dev-console?task=${encodeURIComponent(input.taskId)}`,
       tag: `benjadmin-task-${input.taskId}`,
       priority: input.priority,
     });

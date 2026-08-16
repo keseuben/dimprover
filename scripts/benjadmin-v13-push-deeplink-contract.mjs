@@ -1,0 +1,28 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const shell=fs.readFileSync("components/admin/developer-console/DeveloperConsoleShell.tsx","utf8");
+const panel=fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx","utf8");
+const css=fs.readFileSync("components/admin/developer-console/DeveloperConsole.module.css","utf8");
+const eta=fs.readFileSync("app/lib/dev-center/eta-alerts.ts","utf8");
+const taskRoute=fs.readFileSync("app/api/dev/console/tasks/[taskId]/route.ts","utf8");
+const sw=fs.readFileSync("public/dimpro-dev-sw.js","utf8");
+let passed=0;function check(name,fn){fn();passed++;console.log(`PASS ${name}`)}
+check("Shell reads task query parameter",()=>assert.ok(shell.includes('new URLSearchParams(window.location.search).get("task")')));
+check("Shell stores deep-link task",()=>assert.ok(shell.includes("setDeepLinkTaskId(queryTaskId)")&&shell.includes("setFocusedTaskId(queryTaskId)")));
+check("Deep-link selects task project",()=>assert.ok(shell.includes("task.project_id !== selectedProjectId")&&shell.includes("setSelectedProjectId(task.project_id)")));
+check("Deep-link project persists",()=>assert.ok(shell.includes("localStorage.setItem(PROJECT_KEY, task.project_id)")));
+check("Manual project change clears task focus",()=>assert.ok(shell.includes('setDeepLinkTaskId("")')&&shell.includes('setFocusedTaskId("")')));
+check("Manual project change removes task query",()=>assert.ok(shell.includes('url.searchParams.delete("task")')));
+check("Focused task id reaches LiveWorkPanel",()=>assert.ok(shell.includes("focusedTaskId={focusedTaskId}")));
+check("Completed focused task remains visible",()=>assert.ok(panel.includes("task.id === focusedTaskId ||")));
+check("Focused task sorts to top",()=>assert.ok(panel.includes("Number(b.id === focusedTaskId) - Number(a.id === focusedTaskId)")));
+check("Focused task has DOM hook",()=>assert.ok(panel.includes('data-focused={focused ? "true" : "false"}')&&panel.includes("benjadmin-task-${task.id}")));
+check("Focused task auto scrolls",()=>assert.ok(panel.includes("scrollIntoView")&&panel.includes("benjadmin-task-${focusedTaskId}")));
+check("Focused task shows notification badge",()=>assert.ok(panel.includes('data-testid="benjadmin-task-focus"')&&panel.includes("Értesítésből megnyitva")));
+check("Focused task highlight styling exists",()=>assert.ok(css.includes('.aiDeveloperTaskList > article[data-focused="true"]')));
+check("Focus badge remains compact",()=>assert.ok(css.includes(".aiTaskFocusBadge")&&css.includes("white-space: nowrap")));
+check("ETA push deep-links to task",()=>assert.ok(eta.includes("/admin/dev-console?task=${encodeURIComponent(task.id)}")));
+check("Outcome push deep-links to task",()=>assert.ok(taskRoute.includes("/admin/dev-console?task=${encodeURIComponent(input.taskId)}")));
+check("Service worker navigates existing app window",()=>assert.ok(sw.includes("existing.navigate(targetUrl)")&&sw.includes("openWindow(targetUrl)")));
+check("No AI provider introduced",()=>assert.ok(!shell.includes("OPENAI_API_KEY")&&!panel.includes("responses.create")));
+console.log(JSON.stringify({ok:true,passed,failed:0},null,2));

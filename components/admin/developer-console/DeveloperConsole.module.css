@@ -1357,6 +1357,9 @@
 .aiDeveloperTaskList > article[data-status="claimed"], .aiDeveloperTaskList > article[data-status="in_progress"] { border-left-color: var(--green); }
 .aiDeveloperTaskList > article[data-status="testing"] { border-left-color: var(--violet); }
 .aiDeveloperTaskList > article[data-status="blocked"] { border-left-color: var(--red); background: var(--red-soft); }
+.aiDeveloperTaskList > article[data-focused="true"] { scroll-margin-block: 80px; border-color: var(--accent-strong); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.aiTaskFocusBadge { padding: 1px 5px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 11%, transparent); color: var(--accent-strong) !important; font-weight: 900; letter-spacing: .02em; white-space: nowrap; }
+
 .aiDeveloperTaskList header { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
 .aiDeveloperTaskList header > div { min-width: 0; display: grid; gap: 2px; }
 .aiDeveloperTaskList header strong { overflow: hidden; color: var(--text); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; }
