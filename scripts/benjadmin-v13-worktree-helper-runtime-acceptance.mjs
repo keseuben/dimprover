@@ -10,7 +10,7 @@ const stamp=Date.now();
 const branch=`acceptance/armin-worktree-helper-${stamp}`;
 const name=`acceptance-armin-worktree-helper-${stamp}`;
 const target=path.join(worktreesRoot,name);
-const baseRef="feature/armin-benjadmin-v13-storage-retention-hardening-20260816";
+const baseRef=process.env.BENJADMIN_WORKTREE_HELPER_BASE_REF||"HEAD";
 let passed=0;
 function check(label,ok,detail=""){if(!ok)throw new Error(`${label}${detail?` :: ${detail}`:""}`);passed++;console.log(`PASS ${label}${detail?` :: ${detail}`:""}`)}
 function run(args){return spawnSync("bash",[helper,...args],{cwd:featureRoot,env:{...process.env,DIMPRO_OPERATOR_ROOT:operatorRoot,DIMPRO_WORKTREES_ROOT:worktreesRoot},encoding:"utf8"})}

@@ -16,6 +16,7 @@ check("Lockfile hash extracts hash only",()=>assert.ok(helper.includes("cut -d' 
 check("Existing node_modules is not overwritten",()=>assert.ok(helper.includes('[[ ! -e "$TARGET/node_modules" && ! -L "$TARGET/node_modules" ]]')));
 check("Matching lockfile uses Turbopack-safe hardlink tree",()=>assert.ok(helper.includes('cp -al "$OPERATOR_ROOT/node_modules" "$TARGET/node_modules"')&&!helper.includes('ln -s "$OPERATOR_ROOT/node_modules"')));
 check("Agent rule forbids external node_modules symlink",()=>assert.ok(agents.includes("Külső `node_modules` symlink tiltott")));
+check("Worktree runtime acceptance is branch-agnostic",()=>assert.ok(fs.readFileSync(path.join(root,"scripts/benjadmin-v13-worktree-helper-runtime-acceptance.mjs"),"utf8").includes("BENJADMIN_WORKTREE_HELPER_BASE_REF")&&!fs.readFileSync(path.join(root,"scripts/benjadmin-v13-worktree-helper-runtime-acceptance.mjs"),"utf8").includes("feature/armin-benjadmin-v13-storage-retention-hardening-20260816")));
 check("Retention keeps newest builds per worktree",()=>assert.ok(retention.includes("keepNewestPerWorktree")));
 check("Retention protects PM2 NEXT_DIST_DIR",()=>assert.ok(retention.includes("NEXT_DIST_DIR")&&retention.includes("protectedPaths")));
 check("Retention protects shared hardlinks",()=>assert.ok(retention.includes("shared-hardlinks")));
