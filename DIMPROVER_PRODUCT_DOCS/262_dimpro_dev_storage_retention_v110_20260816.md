@@ -159,3 +159,28 @@ Aktív DEV release változatlan:
 A jövőben a 85%-os warning küszöb elérése előtt a worktree-létrehozó helper csökkenti az új dependency-másolatokat. 85% felett a post-build retention a régi build outputokat kezeli. A retired-worktree szabály megakadályozza, hogy lezárt worktree-k egyetlen `newest` buildje korlátlan ideig bent maradjon.
 
 A teljes worktree, backup és artifact törlése továbbra is külön, kézi döntést igényel.
+
+## 10. Végső build-validáció
+
+A V1.1 tooling módosítás után teljes ellenőrzés futott:
+
+- `npx tsc --noEmit`: PASS;
+- teljes lint: 0 error / 103 meglévő warning;
+- Storage Retention V1.1: `34/34 PASS`;
+- Storage Retention Hardening compatibility: `13/13 PASS`;
+- koordinált Next/Turbopack validation build: PASS;
+- validation build ID: `TodLCutmIMr8Cd1FKce5X`;
+- release source: `82d3e431b98352a9ef4d358b813e197182bc142c`;
+- statikus chunk ellenőrzés: `245 PASS`;
+- post-build retention: PASS, 45%-os lemezhasználatnál helyesen 0 automatikus törlés.
+
+A validation build nem került aktiválásra, és sikeres ellenőrzés után központi maintenance lock alatt eltávolításra került. A Next által generált `tsconfig.json` include-módosítás vissza lett állítva.
+
+Végső aktív runtime továbbra is:
+
+- `.next-benjadmin-v13-storage-retention-hardening-final`;
+- build `uAeE_RE6Wld75DZ9JUXHN`;
+- PM2 online;
+- unstable restart 0.
+
+Végső tárhelyállapot: kb. `45%`, szabad hely kb. `62 GB`.
