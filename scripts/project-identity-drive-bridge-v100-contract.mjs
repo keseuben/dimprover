@@ -61,10 +61,10 @@ check("Migration gate requires explicit DEV approval", () => assert.ok(s.migrati
 check("Migration gate verifies table privileges stable", () => assert.ok(s.migrationGate.includes("assertTableSecurityStable")));
 check("Migration gate verifies RPC service-only", () => assert.ok(s.migrationGate.includes("assertRpcSecurity") && s.migrationGate.includes("serviceExecute")));
 
-check("Runtime expected schema is 0.2.1", () => assert.ok(s.identityRepo.includes('schemaVersion: "0.2.1"') && s.identityRepo.includes("dimpro-identity-project-drive-v021-20260816")));
+check("Runtime supports 0.2.0 to 0.2.1 transition", () => assert.ok(s.identityRepo.includes("FORWARD_SCHEMA") && s.identityRepo.includes('schemaVersion: "0.2.0"') && s.identityRepo.includes('schemaVersion: "0.2.1"') && s.identityRepo.includes("markerCompatible")));
 check("Live preflight expects 0.2.1", () => assert.ok(s.identityPreflight.includes('schema_version === "0.2.1"') && s.identityPreflight.includes(">= 5")));
 check("Identity bridge version 1.0.0", () => assert.ok(s.service.includes('DIMPRO_PROJECT_IDENTITY_BRIDGE_VERSION = "1.0.0"')));
-check("Identity service gates on schema health", () => assert.ok(s.service.includes("getDimproIdentitySchemaHealth") && s.service.includes("DIMPRO_PROJECT_IDENTITY_SCHEMA_NOT_READY")));
+check("Identity service gates specifically on 0.2.1", () => assert.ok(s.service.includes("getDimproIdentitySchemaHealth") && s.service.includes('health.marker?.schemaVersion === "0.2.1"') && s.service.includes("DIMPRO_PROJECT_IDENTITY_SCHEMA_NOT_READY")));
 check("Canonical actor resolves by id/auth/email", () => assert.ok(s.service.includes('from("dimpro_users")') && s.service.includes('eq("auth_user_id"') && s.service.includes('eq("email_normalized"')));
 check("Canonical organization resolution is UUID-safe", () => assert.ok(s.service.includes("resolveCanonicalOrganization") && s.service.includes("normalizeUuid(organizationId)")));
 check("Service calls atomic bind RPC", () => assert.ok(s.service.includes('client.rpc("dimpro_bind_project_core_atomic"')));

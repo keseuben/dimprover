@@ -108,7 +108,11 @@ function normalizedEmail(value: string | null | undefined) {
 
 async function requireIdentityClient() {
   const health = await getDimproIdentitySchemaHealth();
-  if (!health.ready) {
+  const projectDriveSchemaReady = health.ready
+    && health.marker?.schemaVersion === "0.2.1"
+    && Number(health.marker?.migrationCount || 0) >= 5
+    && health.marker?.bootstrapId === "dimpro-identity-project-drive-v021-20260816";
+  if (!projectDriveSchemaReady) {
     throw new DimproIdentityError(
       "A DIMPRO Identity Core 0.2.1 projekt-Drive binding sémája nem áll készen.",
       "DIMPRO_PROJECT_IDENTITY_SCHEMA_NOT_READY",

@@ -20,6 +20,13 @@ import {
 
 const EXPECTED_SCHEMA = {
   component: "dimpro-identity-core",
+  schemaVersion: "0.2.0",
+  migrationCount: 4,
+  bootstrapId: "dimpro-identity-org-license-v020-20260810",
+} as const;
+
+const FORWARD_SCHEMA = {
+  component: "dimpro-identity-core",
   schemaVersion: "0.2.1",
   migrationCount: 5,
   bootstrapId: "dimpro-identity-project-drive-v021-20260816",
@@ -587,12 +594,22 @@ export async function getDimproIdentitySchemaHealth(): Promise<DimproIdentitySch
     metadata: objectValue(row.metadata),
     updatedAt: text(row.updated_at),
   } : null;
+  const markerCompatible = Boolean(marker) && (
+    (
+      marker?.component === EXPECTED_SCHEMA.component
+      && marker?.schemaVersion === EXPECTED_SCHEMA.schemaVersion
+      && marker?.migrationCount >= EXPECTED_SCHEMA.migrationCount
+      && marker?.bootstrapId === EXPECTED_SCHEMA.bootstrapId
+    )
+    || (
+      marker?.component === FORWARD_SCHEMA.component
+      && marker?.schemaVersion === FORWARD_SCHEMA.schemaVersion
+      && marker?.migrationCount >= FORWARD_SCHEMA.migrationCount
+      && marker?.bootstrapId === FORWARD_SCHEMA.bootstrapId
+    )
+  );
   const ready = !markerResult.error
-    && Boolean(marker)
-    && marker?.component === EXPECTED_SCHEMA.component
-    && marker?.schemaVersion === EXPECTED_SCHEMA.schemaVersion
-    && marker?.migrationCount >= EXPECTED_SCHEMA.migrationCount
-    && marker?.bootstrapId === EXPECTED_SCHEMA.bootstrapId
+    && markerCompatible
     && Object.values(checks).every(Boolean);
 
   return {
