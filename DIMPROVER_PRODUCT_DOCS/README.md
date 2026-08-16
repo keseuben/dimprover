@@ -198,3 +198,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `255_benjadmin_v13_next_chain_unified_dev_activation_20260816.md` – BENJADMIN V1.3 automatikus következő-task láncolás unified DEV aktiválás: COMPLETE → Ben-AI újraosztás → READY_FOR_PLUS_PULL → Folytasd. → PULLED/RUNNING; 15/15 + 12/12 + 9/9 PASS; aktív unified build HfISE6GuO1uUrUnHUT4Dz.
 
 - `256_benjadmin_v13_live_eta_dev_activation_20260816.md` – BENJADMIN V1.3 élő ETA: teljes dátum+idő, hátralévő idő, becslési tartomány, due-soon és overdue állapot; 15/15 contract + 9/9 browser + 40/40 Konzol PASS; aktív build iupEjxIIqIwyiaNuqSddW.
+
+- `257_benjadmin_v13_push_eta_project_identity_final_dev_activation_20260816.md` – BENJADMIN V1.3 Push/ETA + Project Identity V1.0 final DEV aktiválás: Identity V0.2.1, ETA watcher 60s, push dedupe, schema-kompatibilis rollback, 21/21 push contract, 17/17 push runtime, 65/65 final Identity contract, 35/35 Identity runtime E2E, 40/40 Konzol; aktív build bmpSo999l5WI0ZAE3JqFG.
