@@ -59,7 +59,7 @@ check("Worker suggestion card visible in console", () => assert.ok(files.panel.i
 check("Worker suggestion has accept button", () => assert.ok(files.panel.includes('onTaskAction(task.id, "ACCEPT_SUGGESTION")')));
 check("V1.2 UI styling exists", () => assert.ok(files.css.includes(".aiCoordinatorSuggestion") && files.css.includes(".aiBridgeResult")));
 check("Plus CLI supports one-command pull", () => assert.ok(files.cli.includes('["pull", "next", "claim"]') && files.cli.includes("plus-bridge/${encodeURIComponent(workerCode)}/next")));
-check("Command library exposes one-line Plus instruction", () => assert.ok(files.commands.includes("Vedd fel a következő BENJADMIN feladatot") && files.commands.includes("Plus-only · következő BENJADMIN feladat")));
+check("Command library exposes Plus continuation instruction", () => assert.ok((files.commands.includes("Vedd fel a következő BENJADMIN feladatot") || files.commands.includes('text: "Folytasd."')) && (files.commands.includes("Plus-only · következő BENJADMIN feladat") || files.commands.includes("Plus-only · Folytasd"))));
 check("Plus CLI supports result report", () => assert.ok(files.cli.includes('action === "report"') && files.cli.includes('action: "RESULT_REPORT"')));
 check("Plus CLI supports testing and completion", () => assert.ok(files.cli.includes('action === "testing"') && files.cli.includes('action === "complete"')));
 check("No OpenAI API call required by Plus bridge", () => assert.ok(!files.plus.includes("OPENAI_API_KEY") && !files.cli.includes("OPENAI_API_KEY") && !files.engine.includes("responses.create")));

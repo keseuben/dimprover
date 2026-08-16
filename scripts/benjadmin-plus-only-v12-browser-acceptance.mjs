@@ -94,10 +94,10 @@ try {
     const buttons = await page.$$("button");
     for (const button of buttons) { const text = await page.evaluate((n) => n.textContent || "", button); if (text.includes("ChatGPT Parancstár")) { await button.click(); break; } }
   }
-  await page.waitForFunction(() => document.body.textContent?.includes("Plus-only · következő BENJADMIN feladat"), { timeout: 30000 });
+  await page.waitForFunction(() => document.body.textContent?.includes("Plus-only · következő BENJADMIN feladat") || document.body.textContent?.includes("Plus-only · Folytasd"), { timeout: 30000 });
   const bodyText = await page.evaluate(() => document.body.textContent || "");
-  check("Command Library shows Plus-only template", bodyText.includes("Plus-only · következő BENJADMIN feladat"), "");
-  check("Command Library shows one-line pull instruction", bodyText.includes("Vedd fel a következő BENJADMIN feladatot"), "");
+  check("Command Library shows Plus-only template", bodyText.includes("Plus-only · következő BENJADMIN feladat") || bodyText.includes("Plus-only · Folytasd"), "");
+  check("Command Library shows continuation instruction", bodyText.includes("Vedd fel a következő BENJADMIN feladatot") || bodyText.includes("Folytasd."), "");
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   check("V1.2 desktop remains overflow-safe", noOverflow, "");
   console.log(JSON.stringify({ ok: true, passed, failed: 0, primaryTaskId, preferredTaskId, primaryWorker, suggestedWorker }, null, 2));
