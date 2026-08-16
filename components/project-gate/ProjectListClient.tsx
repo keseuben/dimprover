@@ -33,6 +33,15 @@ type CreateProjectResponse = {
     incomingDropFolder?: { id: string; name: string; path: string } | null;
     error?: string;
   };
+  identityProvisioning?: {
+    ok?: boolean;
+    ready?: boolean;
+    retryRequired?: boolean;
+    dropBindingReady?: boolean;
+    identityProject?: { id?: string; publicCode?: string; status?: string; projectDropEnabled?: boolean } | null;
+    destination?: { driveFolderId?: string; incomingFolderName?: string; enabled?: boolean } | null;
+    error?: string;
+  };
   error?: string;
 };
 
@@ -113,8 +122,14 @@ export default function ProjectListClient() {
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt nem hozható létre.");
       event.currentTarget.reset();
       setShowCreate(false);
-      if (payload.driveProvisioning?.ready) {
-        setNotice(`A projekt és a DIMPRO Drive létrejött. ${payload.driveProvisioning.folderCount || 0} mappa használható, a Beérkező Drop célmappa készen áll.`);
+      if (payload.driveProvisioning?.ready && payload.identityProvisioning?.ready) {
+        const publicCode = payload.identityProvisioning.identityProject?.publicCode;
+        const lifecycleNote = payload.identityProvisioning.identityProject?.status === "draft"
+          ? " A projekt Drop DRAFT állapotban zárva marad; ACTIVE állapotban nyitható meg."
+          : "";
+        setNotice(`A projekt, a DIMPRO Drive és a canonical projektazonosság létrejött. ${payload.driveProvisioning.folderCount || 0} mappa használható, a Beérkező Drop célmappa készen áll.${publicCode ? ` Publikus projektkód: ${publicCode}.` : ""}${lifecycleNote}`);
+      } else if (payload.driveProvisioning?.ready && payload.project) {
+        setNotice(`A projekt és a DIMPRO Drive létrejött, de a canonical projektazonosság szinkronja újrapróbálást igényel${payload.identityProvisioning?.error ? `: ${payload.identityProvisioning.error}` : "."}`);
       } else if (payload.project) {
         setNotice(`A projekt létrejött, de a Drive inicializálása újrapróbálást igényel${payload.driveProvisioning?.error ? `: ${payload.driveProvisioning.error}` : "."}`);
       }

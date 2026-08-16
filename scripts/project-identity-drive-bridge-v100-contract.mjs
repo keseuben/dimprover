@@ -19,6 +19,7 @@ const files = {
   projectRoute: "app/api/projects/[projectId]/route.ts",
   lifecycleRoute: "app/api/projects/[projectId]/lifecycle/route.ts",
   membershipsRoute: "app/api/projects/[projectId]/memberships/route.ts",
+  projectList: "components/project-gate/ProjectListClient.tsx",
   driveProvisioning: "app/lib/drive-core/projectProvisioning.ts",
 };
 for (const file of Object.values(files)) if (!exists(file)) throw new Error(`Hiányzó fájl: ${file}`);
@@ -86,6 +87,8 @@ check("Project update resyncs Identity", () => assert.ok(s.projectRoute.includes
 check("Lifecycle resyncs Identity", () => assert.ok(s.lifecycleRoute.includes("syncIdentityLifecycle") && s.lifecycleRoute.includes("identityProvisioning")));
 check("Deleted lifecycle does not bootstrap new Drive", () => assert.ok(s.lifecycleRoute.includes('nextStatus !== "DELETED"')));
 check("Membership create resyncs canonical memberships", () => assert.ok(s.membershipsRoute.includes("syncIdentityMemberships") && s.membershipsRoute.includes("identityProvisioning")));
+check("Project list shows canonical public code", () => assert.ok(s.projectList.includes("identityProvisioning") && s.projectList.includes("Publikus projektkód")));
+check("Project list explains DRAFT Drop gate", () => assert.ok(s.projectList.includes("DRAFT állapotban zárva marad") && s.projectList.includes("ACTIVE állapotban")));
 check("Drive incoming folder canonical name retained", () => assert.ok(s.driveProvisioning.includes('DRIVE_INCOMING_DROP_FOLDER_NAME = "Beérkező Drop"')));
 
 const combined = Object.values(s).join("\n");
