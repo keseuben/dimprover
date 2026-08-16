@@ -4,6 +4,8 @@ import { projectCoreErrorResponse } from "@/app/lib/project-core/api";
 import { createProject, listAccessibleProjects } from "@/app/lib/project-core/store";
 import { normalizeDriveCoreError } from "@/app/lib/drive-core/errors";
 import { provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
+import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
+import { DimproIdentityError } from "@/app/lib/identity-core/types";
 
 export async function GET(request: NextRequest) {
   const authResult = await resolveProjectCoreAuth(request);
@@ -38,7 +40,15 @@ export async function POST(request: NextRequest) {
     });
     if (!result.ok) return NextResponse.json(result, { status: 400 });
 
-    let driveProvisioning: Record<string, unknown>;
+    let driveProvisioning: Awaited<ReturnType<typeof provisionProjectDrive>> | {
+      ok: false;
+      version: string;
+      projectId: string;
+      ready: false;
+      retryRequired: true;
+      error: string;
+      code: string;
+    };
     try {
       driveProvisioning = await provisionProjectDrive(result.project.id, authResult.actor.userId);
     } catch (driveError) {
@@ -54,7 +64,51 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    return NextResponse.json({ ...result, driveProvisioning }, { status: 201 });
+    let identityProvisioning: Awaited<ReturnType<typeof provisionProjectIdentityBridge>> | {
+      ok: false;
+      version: string;
+      projectId: string;
+      ready: false;
+      retryRequired: true;
+      error: string;
+      code: string;
+    };
+    if (driveProvisioning.ok && driveProvisioning.ready && driveProvisioning.incomingDropFolder) {
+      try {
+        identityProvisioning = await provisionProjectIdentityBridge({
+          projectId: result.project.id,
+          actorUserId: authResult.actor.userId,
+          driveFolderId: driveProvisioning.incomingDropFolder.id,
+          incomingFolderName: driveProvisioning.incomingDropFolder.name,
+        });
+      } catch (identityError) {
+        identityProvisioning = {
+          ok: false,
+          version: "1.0.0",
+          projectId: result.project.id,
+          ready: false,
+          retryRequired: true,
+          error: identityError instanceof DimproIdentityError
+            ? identityError.message
+            : "A canonical DIMPRO projektkapcsolat inicializálása átmenetileg sikertelen.",
+          code: identityError instanceof DimproIdentityError
+            ? identityError.code
+            : "DIMPRO_PROJECT_IDENTITY_PROVISIONING_FAILED",
+        };
+      }
+    } else {
+      identityProvisioning = {
+        ok: false,
+        version: "1.0.0",
+        projectId: result.project.id,
+        ready: false,
+        retryRequired: true,
+        error: "A canonical DIMPRO projektkapcsolat a Drive provisioning befejezése után hozható létre.",
+        code: "DIMPRO_PROJECT_IDENTITY_DRIVE_PREREQUISITE",
+      };
+    }
+
+    return NextResponse.json({ ...result, driveProvisioning, identityProvisioning }, { status: 201 });
   } catch (error) {
     return projectCoreErrorResponse(error);
   }

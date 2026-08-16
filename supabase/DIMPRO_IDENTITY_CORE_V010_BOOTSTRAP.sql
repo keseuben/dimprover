@@ -1263,7 +1263,7 @@ create table if not exists public.dimpro_project_drop_settings (
   id uuid primary key default extensions.gen_random_uuid(),
   project_id uuid not null references public.dimpro_projects(id) on delete cascade,
   enabled boolean not null default false,
-  drive_folder_id uuid null,
+  drive_folder_id text null,
   incoming_folder_name text not null default 'Beérkező Drop',
   preserve_groups boolean not null default true,
   require_virus_scan boolean not null default true,

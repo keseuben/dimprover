@@ -75,9 +75,9 @@ const tableResults = await Promise.all(requiredTables.map(async (table) => {
 const marker = markerResult.data || null;
 const ready = !markerResult.error
   && marker?.component === "dimpro-identity-core"
-  && marker?.schema_version === "0.2.0"
-  && Number(marker?.migration_count || 0) >= 4
-  && marker?.bootstrap_id === "dimpro-identity-org-license-v020-20260810"
+  && marker?.schema_version === "0.2.1"
+  && Number(marker?.migration_count || 0) >= 5
+  && marker?.bootstrap_id === "dimpro-identity-project-drive-v021-20260816"
   && tableResults.every((item) => item.ready);
 
 console.log(JSON.stringify({

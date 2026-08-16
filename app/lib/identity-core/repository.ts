@@ -20,9 +20,9 @@ import {
 
 const EXPECTED_SCHEMA = {
   component: "dimpro-identity-core",
-  schemaVersion: "0.2.0",
-  migrationCount: 4,
-  bootstrapId: "dimpro-identity-org-license-v020-20260810",
+  schemaVersion: "0.2.1",
+  migrationCount: 5,
+  bootstrapId: "dimpro-identity-project-drive-v021-20260816",
 } as const;
 
 const REQUIRED_TABLE_CHECKS = [
