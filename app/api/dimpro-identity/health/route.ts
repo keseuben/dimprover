@@ -10,7 +10,7 @@ export async function GET() {
     return dimproIdentityJson({
       ok: health.ready,
       service: "dimpro-identity-core",
-      version: "0.2.0",
+      version: health.marker?.schemaVersion || "0.2.0",
       ...health,
     }, health.ready ? 200 : 503);
   } catch (error) {

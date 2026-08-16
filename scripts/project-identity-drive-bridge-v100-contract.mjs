@@ -13,6 +13,7 @@ const files = {
   migrationGate: "scripts/dimpro-project-drive-v021-migration-gate.mjs",
   identityRepo: "app/lib/identity-core/repository.ts",
   identityPreflight: "scripts/dimpro-identity-core-live-preflight.mjs",
+  identityHealthRoute: "app/api/dimpro-identity/health/route.ts",
   service: "app/lib/identity-core/projectProvisioning.ts",
   provisionRoute: "app/api/projects/[projectId]/identity/provision/route.ts",
   projectsRoute: "app/api/projects/route.ts",
@@ -64,6 +65,7 @@ check("Migration gate verifies RPC service-only", () => assert.ok(s.migrationGat
 
 check("Runtime supports 0.2.0 to 0.2.1 transition", () => assert.ok(s.identityRepo.includes("FORWARD_SCHEMA") && s.identityRepo.includes('schemaVersion: "0.2.0"') && s.identityRepo.includes('schemaVersion: "0.2.1"') && s.identityRepo.includes("markerCompatible")));
 check("Live preflight expects 0.2.1", () => assert.ok(s.identityPreflight.includes('schema_version === "0.2.1"') && s.identityPreflight.includes(">= 5")));
+check("Identity health reports active marker version", () => assert.ok(s.identityHealthRoute.includes('version: health.marker?.schemaVersion || "0.2.0"')));
 check("Identity bridge version 1.0.0", () => assert.ok(s.service.includes('DIMPRO_PROJECT_IDENTITY_BRIDGE_VERSION = "1.0.0"')));
 check("Identity service gates specifically on 0.2.1", () => assert.ok(s.service.includes("getDimproIdentitySchemaHealth") && s.service.includes('health.marker?.schemaVersion === "0.2.1"') && s.service.includes("DIMPRO_PROJECT_IDENTITY_SCHEMA_NOT_READY")));
 check("Canonical actor resolves by id/auth/email", () => assert.ok(s.service.includes('from("dimpro_users")') && s.service.includes('eq("auth_user_id"') && s.service.includes('eq("email_normalized"')));
