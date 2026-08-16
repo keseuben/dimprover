@@ -12,10 +12,10 @@ export const COMMAND_LIBRARY: CommandTemplate[] = [
   {
     id: "plus-next-benjadmin-task",
     category: "Indítás",
-    title: "Plus-only · következő BENJADMIN feladat",
-    description: "A kódoló ChatGPT a saját Worker Inboxából egyetlen rövid paranccsal felveszi a Ben-AI által kiosztott következő feladatot.",
-    text: "Vedd fel a következő BENJADMIN feladatot, és folytasd a teljes DEV fejlesztési ciklust a taskban rögzített szabályok szerint. A végén írd vissza a strukturált eredményt BENJADMIN-ba.",
-    tags: ["plus-only", "ben-ai", "worker-inbox", "pull"],
+    title: "Plus-only · Folytasd",
+    description: "A kódoló ChatGPT a saját Worker Inboxából a rövid Folytasd paranccsal felveszi a Ben-AI által kiosztott következő feladatot.",
+    text: "Folytasd.",
+    tags: ["plus-only", "ben-ai", "worker-inbox", "pull", "folytasd"],
   },
   {
     id: "start-read-first",

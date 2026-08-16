@@ -35,7 +35,7 @@ function print(payload) {
 }
 
 try {
-  if (["pull", "next", "claim"].includes(action)) {
+  if (["pull", "next", "claim", "continue", "folytasd", "folytatas", "kovetkezo"].includes(action)) {
     const workerCode = subject.toUpperCase();
     if (!workerCode) throw new Error("Worker code szükséges: ARMINAI / JAZMINAI / OUTMINAI.");
     const payload = await request(`/api/dev/console/plus-bridge/${encodeURIComponent(workerCode)}/next`, "POST");
@@ -60,7 +60,7 @@ try {
     if (!subject) throw new Error("Task ID szükséges a javaslat elfogadásához.");
     print(await request(`/api/dev/console/tasks/${encodeURIComponent(subject)}`, "PATCH", { action: "ACCEPT_SUGGESTION" }));
   } else {
-    throw new Error("Használat: benjadmin-plus-bridge-cli.mjs pull <WORKER> | report/testing/complete/fail/accept-suggestion <TASK_ID>");
+    throw new Error("Használat: benjadmin-plus-bridge-cli.mjs pull|continue|folytasd <WORKER> | report/testing/complete/fail/accept-suggestion <TASK_ID>");
   }
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), code: error?.code || null, status: error?.status || null }, null, 2)}\n`);
