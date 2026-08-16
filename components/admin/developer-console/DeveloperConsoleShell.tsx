@@ -14,6 +14,7 @@ import LiveWorkPanel from "./LiveWorkPanel";
 import OutminPartnerBar from "./OutminPartnerBar";
 import TeamQuickDrawer from "./TeamQuickDrawer";
 import TerminalHubWorkspace from "./TerminalHubWorkspace";
+import WorkerActivityDrawer from "./WorkerActivityDrawer";
 import type { ConnectionMode } from "./ConnectionStatus";
 import type { BenAiDispatch, ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -51,12 +52,12 @@ function mergeLive(current: ConsoleLiveState | null, incoming: ConsoleLiveState)
 }
 
 function mergeMessages(current: ConsoleMessage[], incoming: ConsoleMessage[]) {
-  const existing = new Map(current.map((item) => [item.id, item]));
-  return incoming.map((item) => {
-    const old = existing.get(item.id);
-    if (!old) return item;
-    return JSON.stringify(old) === JSON.stringify(item) ? old : item;
-  });
+  const map = new Map(current.map((item) => [item.id, item]));
+  for (const item of incoming) {
+    const old = map.get(item.id);
+    map.set(item.id, old && JSON.stringify(old) === JSON.stringify(item) ? old : item);
+  }
+  return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-2400);
 }
 
 export default function DeveloperConsoleShell() {
@@ -82,8 +83,12 @@ export default function DeveloperConsoleShell() {
   const [teamOpen, setTeamOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [terminalHubOpen, setTerminalHubOpen] = useState(false);
+  const [workerActivityCode, setWorkerActivityCode] = useState<"ARMINAI" | "JAZMINAI" | "OUTMINAI" | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const liveRef = useRef<ConsoleLiveState | null>(null);
   const messagesRef = useRef<ConsoleMessage[]>([]);
+  const historyExhaustedRef = useRef(false);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
@@ -117,7 +122,7 @@ export default function DeveloperConsoleShell() {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      const hasOpenLayer = commandsOpen || resourcesOpen || aiWorkersOpen || teamOpen || installOpen || terminalHubOpen;
+      const hasOpenLayer = commandsOpen || resourcesOpen || aiWorkersOpen || teamOpen || installOpen || terminalHubOpen || Boolean(workerActivityCode);
       if (!hasOpenLayer) return;
       event.preventDefault();
       setCommandsOpen(false);
@@ -126,10 +131,11 @@ export default function DeveloperConsoleShell() {
       setTeamOpen(false);
       setInstallOpen(false);
       setTerminalHubOpen(false);
+      setWorkerActivityCode(null);
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [aiWorkersOpen, commandsOpen, installOpen, resourcesOpen, teamOpen, terminalHubOpen]);
+  }, [aiWorkersOpen, commandsOpen, installOpen, resourcesOpen, teamOpen, terminalHubOpen, workerActivityCode]);
 
   const applySnapshot = useCallback((incomingLive: ConsoleLiveState, incomingMessages: ConsoleMessage[]) => {
     setLive((current) => {
@@ -161,16 +167,36 @@ export default function DeveloperConsoleShell() {
         fetch("/api/dev/console/messages", { headers: adminHeaders(), cache: "no-store" }),
       ]);
       const livePayload = await liveResponse.json().catch(() => null) as { ok?: boolean; live?: ConsoleLiveState; error?: string } | null;
-      const messagePayload = await messageResponse.json().catch(() => null) as { ok?: boolean; messages?: ConsoleMessage[]; error?: string } | null;
+      const messagePayload = await messageResponse.json().catch(() => null) as { ok?: boolean; messages?: ConsoleMessage[]; page?: { hasMore?: boolean; oldestAt?: string | null }; error?: string } | null;
       if (!liveResponse.ok || !livePayload?.live) throw new Error(livePayload?.error || "Az élő állapot nem tölthető be.");
       if (!messageResponse.ok || !messagePayload?.messages) throw new Error(messagePayload?.error || "A munkanapló nem tölthető be.");
       applySnapshot(livePayload.live, messagePayload.messages);
+      if (!historyExhaustedRef.current) setHasOlderMessages(Boolean(messagePayload.page?.hasMore));
       return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Az élő állapot nem érhető el.");
       return false;
     }
   }, [applySnapshot]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlderMessages) return;
+    const before = messagesRef.current[0]?.createdAt;
+    if (!before) { setHasOlderMessages(false); return; }
+    setLoadingOlderMessages(true);
+    try {
+      const response = await fetch("/api/dev/console/messages?limit=120&before=" + encodeURIComponent(before), { headers: adminHeaders(), cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; messages?: ConsoleMessage[]; page?: { hasMore?: boolean }; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.messages) throw new Error(payload?.error || "A korábbi fejlesztési archívum nem tölthető be.");
+      setMessages((current) => { const next = mergeMessages(current, payload.messages || []); messagesRef.current = next; return next; });
+      historyExhaustedRef.current = !payload.page?.hasMore;
+      setHasOlderMessages(Boolean(payload.page?.hasMore));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A korábbi fejlesztési archívum nem tölthető be.");
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [loadingOlderMessages]);
 
   useEffect(() => {
     let cancelled = false;
@@ -331,8 +357,8 @@ export default function DeveloperConsoleShell() {
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
-        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} />
-        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} />
+        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />
+        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} onOpenWorkerActivity={(code) => setWorkerActivityCode(code)} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />
@@ -342,6 +368,7 @@ export default function DeveloperConsoleShell() {
       <TeamQuickDrawer open={teamOpen} onClose={() => setTeamOpen(false)} live={live} />
       <AppInstallDrawer open={installOpen} onClose={() => setInstallOpen(false)} />
       <TerminalHubWorkspace open={terminalHubOpen} onClose={() => setTerminalHubOpen(false)} live={live} theme={theme} />
+      <WorkerActivityDrawer workerCode={workerActivityCode} onClose={() => setWorkerActivityCode(null)} messages={messages} live={live} selectedProjectId={selectedProjectId} />
     </main>
   );
 }

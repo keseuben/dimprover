@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { autoRouteDevEngineTaskByAvailability, createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
-import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessages, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
+import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessagesPage, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { buildBenAiDispatch, estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,11 @@ const workerMap: Record<string, string | null> = {
 export async function GET(request: NextRequest) {
   if (!(await isDevCenterAuthorized(request.headers, true))) return json({ ok: false, error: "Nincs jogosultság a fejlesztői konzolhoz." }, 401);
   try {
-    return json({ ok: true, messages: await listDeveloperConsoleMessages(180), generatedAt: new Date().toISOString() });
+    const limit = Number(request.nextUrl.searchParams.get("limit") || 180);
+    const beforeRaw = request.nextUrl.searchParams.get("before")?.trim() || null;
+    const before = beforeRaw && Number.isFinite(new Date(beforeRaw).getTime()) ? new Date(beforeRaw).toISOString() : null;
+    const result = await listDeveloperConsoleMessagesPage({ limit, before });
+    return json({ ok: true, messages: result.messages, page: result.page, generatedAt: new Date().toISOString() });
   } catch (error) {
     return json({ ok: false, error: error instanceof Error ? error.message : "A fejlesztői konzol nem tölthető be." }, 500);
   }

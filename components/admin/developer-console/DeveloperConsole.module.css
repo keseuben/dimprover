@@ -1420,3 +1420,226 @@
 .aiCoordinatorSuggestion span { color: var(--text); font-size: 11px; font-weight: 800; }
 .aiCoordinatorSuggestion small { color: var(--text-soft); font-size: 10px; }
 .aiCoordinatorSuggestion button { justify-self: start; min-height: 25px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--amber) 50%, var(--border)); border-radius: 6px; color: var(--amber); background: var(--surface); font-size: 10px; font-weight: 900; cursor: pointer; }
+
+/* BENJADMIN V1.4 · worker identity colors, coding feed and conversation archive */
+.messageRow[data-author="BENAI"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--blue) 34%, var(--border));
+  background: color-mix(in srgb, var(--blue) 9%, var(--panel));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--blue) 8%, transparent);
+}
+.messageRow[data-author="ARMINAI"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--green) 38%, var(--border));
+  background: color-mix(in srgb, var(--green) 10%, var(--panel));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--green) 8%, transparent);
+}
+.messageRow[data-author="JAZMINAI"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--violet) 38%, var(--border));
+  background: color-mix(in srgb, var(--violet) 10%, var(--panel));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--violet) 8%, transparent);
+}
+.messageRow[data-author="OUTMINAI"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--amber) 38%, var(--border));
+  background: color-mix(in srgb, var(--amber) 10%, var(--panel));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--amber) 8%, transparent);
+}
+.messageRow[data-author="MFORGE"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--green) 34%, var(--border));
+  background: color-mix(in srgb, var(--green) 8%, var(--panel));
+}
+.messageRow[data-author="VGUARD"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--violet) 34%, var(--border));
+  background: color-mix(in srgb, var(--violet) 8%, var(--panel));
+}
+.messageRow[data-author="BENJADMIN"]:not(.level_error):not(.level_warning) .messageCard {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+.messageRepeatBadge {
+  min-width: 26px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  letter-spacing: 0;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.messageActivityMeta {
+  margin-top: 7px;
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-soft);
+  background: color-mix(in srgb, var(--surface2) 75%, transparent);
+  font-size: 10px;
+}
+.messageActivityMeta > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+.messageActivityMeta code {
+  max-width: 100%;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.messageActivityMeta .messageSanitized {
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  font-weight: 900;
+}
+
+.conversationArchive {
+  margin: 0 0 10px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface2) 55%, transparent);
+}
+.conversationArchive > header {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.conversationArchive > header strong { color: var(--text-soft); letter-spacing: .08em; }
+.conversationArchive > header span { margin-left: auto; text-align: right; }
+.archiveGroup { margin-top: 5px; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.archiveGroupButton {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.archiveGroupButton:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.archiveGroupButton strong { font-size: 11px; }
+.archiveGroupButton span { margin-left: auto; color: var(--muted); font-size: 10px; }
+.archiveGroupMessages {
+  padding: 5px 8px 8px;
+  border-top: 1px solid var(--border);
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
+}
+.archiveGroupMessages .messageCard { width: min(88%, 760px); }
+.archiveLoadMore {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+.archiveLoadMore:disabled { opacity: .55; cursor: default; }
+.todayEmpty { padding: 28px 10px; color: var(--muted); text-align: center; font-size: 12px; }
+
+.workerCard[data-worker-code="ARMINAI"] { border-color: color-mix(in srgb, var(--green) 30%, var(--border)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); }
+.workerCard[data-worker-code="JAZMINAI"] { border-color: color-mix(in srgb, var(--violet) 30%, var(--border)); background: color-mix(in srgb, var(--violet) 6%, var(--surface)); }
+.workerCard[data-worker-code="OUTMINAI"] { border-color: color-mix(in srgb, var(--amber) 30%, var(--border)); background: color-mix(in srgb, var(--amber) 6%, var(--surface)); }
+.workerActivityOpen {
+  width: 100%;
+  min-height: 30px;
+  margin-top: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+.workerActivityOpen:hover { border-color: var(--accent); }
+.workerActivityDrawer { --worker-tint: var(--accent); }
+.workerActivityDrawer[data-worker-code="ARMINAI"] { --worker-tint: var(--green); }
+.workerActivityDrawer[data-worker-code="JAZMINAI"] { --worker-tint: var(--violet); }
+.workerActivityDrawer[data-worker-code="OUTMINAI"] { --worker-tint: var(--amber); }
+.workerActivityHero {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--worker-tint) 42%, var(--border));
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, .7fr);
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--worker-tint) 8%, var(--surface));
+}
+.workerActivityHero > div:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+.workerActivityHero strong { color: var(--text); font-size: 13px; }
+.workerActivityHero span { color: color-mix(in srgb, var(--worker-tint) 78%, var(--text)); font-size: 10px; font-weight: 900; }
+.workerActivityHero p { margin: 2px 0 0; color: var(--text-soft); font-size: 11px; line-height: 1.4; }
+.workerActivityHeroFacts { display: grid; gap: 4px; }
+.workerActivityHeroFacts span { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workerActivityRetention {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.workerActivityRetention > div { display: grid; gap: 2px; }
+.workerActivityRetention strong { color: var(--text-soft); font-size: 10px; letter-spacing: .07em; }
+.workerActivityRetention span { font-size: 10px; line-height: 1.45; }
+.workerActivityFilters { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.workerActivityFilters button {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+}
+.workerActivityFilters button[data-active="true"] { border-color: var(--worker-tint); color: var(--text); background: color-mix(in srgb, var(--worker-tint) 10%, var(--surface)); }
+.workerActivityFeed { min-width: 0; display: grid; gap: 1px; }
+.workerActivityFeed .messageRow { justify-content: flex-start; }
+.workerActivityFeed .messageCard, .workerActivityFeed .message_center .messageCard, .workerActivityFeed .messageSystem .messageCard { width: 100%; max-width: none; }
+.workerActivityEmpty { min-height: 220px; display: grid; place-items: center; align-content: center; gap: 6px; color: var(--muted); text-align: center; }
+.workerActivityEmpty strong { color: var(--text-soft); }
+.workerActivityEmpty span { max-width: 520px; font-size: 11px; }
+
+@media (max-width: 680px) {
+  .workerActivityHero { grid-template-columns: auto minmax(0, 1fr); }
+  .workerActivityHeroFacts { grid-column: 1 / -1; }
+  .conversationArchive > header span { display: none; }
+  .archiveGroupMessages { padding-inline: 4px; }
+}

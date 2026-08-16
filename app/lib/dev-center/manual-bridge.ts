@@ -93,6 +93,7 @@ export function buildManualBridgeHandoff(input: {
     "",
     "DEV-only végrehajtás.",
     "Kötelező lánc: status -> read -> backup -> task/session/worktree/scope -> code -> docs -> tsc -> lint -> targeted acceptance -> build -> DEV restart -> smoke -> commit/handoff.",
+    "Kódolási aktivitás: analysis / coding / file-change / diff / test / build / commit / release mérföldköveknél küldj SANITIZED worker activity eseményt a `node scripts/benjadmin-worker-activity.mjs` helpernek JSON stdin-en. Nyers terminálkimenetet vagy titkot ne naplózz.",
     "PROD módosítás nincs. Titkokat, nyers credentialt, .env értéket vagy privát kulcsot ne adj vissza és ne írj naplóba.",
   ].join("\n");
   return {

@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 
 export type ConsoleTarget = "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "EVERYONE";
 export type ConsoleAuthor = "BENJADMIN" | "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" | "SYSTEM";
-export type ConsoleMessageKind = "MESSAGE" | "INSTRUCTION" | "TASK_ASSIGNMENT" | "TASK_UPDATE" | "DECISION" | "APPROVAL_REQUEST" | "BUILD_EVENT" | "TEST_RESULT" | "ERROR" | "WARNING" | "COMMIT" | "RELEASE" | "SYSTEM";
+export type ConsoleMessageKind = "MESSAGE" | "INSTRUCTION" | "TASK_ASSIGNMENT" | "TASK_UPDATE" | "DECISION" | "APPROVAL_REQUEST" | "CODE_ACTIVITY" | "FILE_CHANGE" | "DIFF" | "TERMINAL_ACTIVITY" | "BUILD_EVENT" | "TEST_RESULT" | "ERROR" | "WARNING" | "COMMIT" | "RELEASE" | "ARCHIVE_SUMMARY" | "SYSTEM";
 
 export type ConsoleMessage = {
   id: string;
@@ -129,7 +129,7 @@ function targetFromMetadata(metadata: Record<string, unknown>) {
 function kindFromWorklog(row: Row): ConsoleMessageKind {
   const metadata = record(row.metadata);
   const explicit = text(metadata.kind).toUpperCase();
-  if (["MESSAGE", "INSTRUCTION", "TASK_ASSIGNMENT", "TASK_UPDATE", "DECISION", "APPROVAL_REQUEST", "BUILD_EVENT", "TEST_RESULT", "ERROR", "WARNING", "COMMIT", "RELEASE", "SYSTEM"].includes(explicit)) return explicit as ConsoleMessageKind;
+  if (["MESSAGE", "INSTRUCTION", "TASK_ASSIGNMENT", "TASK_UPDATE", "DECISION", "APPROVAL_REQUEST", "CODE_ACTIVITY", "FILE_CHANGE", "DIFF", "TERMINAL_ACTIVITY", "BUILD_EVENT", "TEST_RESULT", "ERROR", "WARNING", "COMMIT", "RELEASE", "ARCHIVE_SUMMARY", "SYSTEM"].includes(explicit)) return explicit as ConsoleMessageKind;
   const phase = text(row.phase).toLowerCase();
   const rowLevel = level(row.level);
   if (rowLevel === "error") return "ERROR";
@@ -378,4 +378,92 @@ export async function getDeveloperConsoleWorkspaceActivitySource() {
     audits: audits.data || [],
     generatedAt: new Date().toISOString(),
   };
+}
+
+export type DeveloperConsoleMessagePage = {
+  messages: ConsoleMessage[];
+  page: {
+    limit: number;
+    before: string | null;
+    oldestAt: string | null;
+    newestAt: string | null;
+    hasMore: boolean;
+  };
+};
+
+export async function listDeveloperConsoleMessagesPage(input: { limit?: number; before?: string | null } = {}): Promise<DeveloperConsoleMessagePage> {
+  const client = getClient();
+  const safeLimit = Math.max(20, Math.min(240, Math.floor(input.limit || 180)));
+  const fetchLimit = safeLimit + 1;
+  const before = text(input.before) || null;
+  let worklogQuery = client.from("dev_center_live_worklog")
+    .select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at")
+    .order("created_at", { ascending: false })
+    .limit(fetchLimit);
+  let auditQuery = client.from("dev_center_audit_events")
+    .select("id,actor_type,actor_id,action,entity_type,entity_id,task_id,project_id,summary,metadata,created_at")
+    .order("created_at", { ascending: false })
+    .limit(fetchLimit);
+  if (before) {
+    worklogQuery = worklogQuery.lt("created_at", before);
+    auditQuery = auditQuery.lt("created_at", before);
+  }
+  const [worklog, audits] = await Promise.all([worklogQuery, auditQuery]);
+  if (worklog.error) throw new Error(worklog.error.message || "A fejlesztői konzol munkanaplója nem tölthető be.");
+  if (audits.error) throw new Error(audits.error.message || "A fejlesztői konzol auditja nem tölthető be.");
+  const merged = [
+    ...(worklog.data || []).map((row) => mapWorklogRow(row as Row)),
+    ...(audits.data || []).map((row) => mapAuditRow(row as Row)),
+  ]
+    .filter((item) => item.createdAt)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const messages = merged.slice(-safeLimit);
+  return {
+    messages,
+    page: {
+      limit: safeLimit,
+      before,
+      oldestAt: messages[0]?.createdAt || null,
+      newestAt: messages.at(-1)?.createdAt || null,
+      hasMore: merged.length > safeLimit || (worklog.data || []).length >= fetchLimit || (audits.data || []).length >= fetchLimit,
+    },
+  };
+}
+
+export async function createWorkerActivityConsoleMessage(input: {
+  workerCode: string;
+  taskId?: string | null;
+  projectId?: string | null;
+  phase: string;
+  kind: ConsoleMessageKind;
+  summary: string;
+  detail?: string;
+  level?: ConsoleMessage["level"];
+  progressPercent?: number | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const workerCode = text(input.workerCode).toUpperCase();
+  if (!["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"].includes(workerCode)) throw new Error("Ismeretlen worker kód.");
+  const summary = text(input.summary).slice(0, 4000);
+  if (!summary) throw new Error("A worker activity összefoglaló nem lehet üres.");
+  const client = getClient();
+  const result = await client.from("dev_center_live_worklog").insert({
+    worker_code: workerCode,
+    task_id: input.taskId || null,
+    phase: text(input.phase).slice(0, 80) || "development",
+    level: input.level || "info",
+    summary,
+    detail: text(input.detail).slice(0, 8000),
+    progress_percent: input.progressPercent == null ? null : Math.max(0, Math.min(100, Math.round(input.progressPercent))),
+    source: "worker-activity",
+    metadata: {
+      kind: input.kind,
+      projectId: input.projectId || null,
+      origin: "BENJADMIN_WORKER_ACTIVITY",
+      productionAccess: "DENY",
+      ...(input.metadata || {}),
+    },
+  }).select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at").single();
+  if (result.error || !result.data) throw new Error(result.error?.message || "A worker activity nem rögzíthető.");
+  return mapWorklogRow(result.data as Row);
 }

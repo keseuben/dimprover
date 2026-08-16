@@ -7,7 +7,9 @@ import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "
 import TerminalHubCard from "./TerminalHubCard";
 import styles from "./DeveloperConsole.module.css";
 
-const workers: Array<{ code: string; author: ConsoleAuthor; fallbackName: string }> = [
+type WorkerCode = "ARMINAI" | "JAZMINAI" | "OUTMINAI";
+
+const workers: Array<{ code: WorkerCode; author: ConsoleAuthor; fallbackName: string }> = [
   { code: "ARMINAI", author: "ARMINAI", fallbackName: "Ármin-AI" },
   { code: "JAZMINAI", author: "JAZMINAI", fallbackName: "Jázmin-AI" },
   { code: "OUTMINAI", author: "OUTMINAI", fallbackName: "Outmin-AI" },
@@ -92,7 +94,7 @@ function estimateRangeLabel(minMinutes: number | null, maxMinutes: number | null
   return `becslés ${durationLabel(minMinutes || maxMinutes)}`;
 }
 
-export default function LiveWorkPanel({ live, now, context, selectedProjectId, focusedTaskId, busyTaskId, onTaskAction, onOpenTerminalHub }: {
+export default function LiveWorkPanel({ live, now, context, selectedProjectId, focusedTaskId, busyTaskId, onTaskAction, onOpenTerminalHub, onOpenWorkerActivity }: {
   live: ConsoleLiveState | null;
   now: number;
   context: RuntimeContext | null;
@@ -101,6 +103,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
   busyTaskId: string | null;
   onTaskAction: (taskId: string, action: "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL", payload?: { workerCode?: string; estimateMinutes?: number; note?: string; summary?: string; commit?: string; buildId?: string; tests?: string; docs?: string; nextStep?: string }) => Promise<void>;
   onOpenTerminalHub: () => void;
+  onOpenWorkerActivity: (code: WorkerCode) => void;
 }) {
   const tasks = live?.tasks || [];
   const sessions = live?.sessions || [];
@@ -159,14 +162,15 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
           const build = builds.find((candidate) => candidate.task_id === task?.id || (session?.id && candidate.session_id === session.id));
           const state = workerStatus(task);
           return (
-            <article key={item.code} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
+            <article key={item.code} data-worker-code={item.code} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
               <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : ""}</span></div></div>
               <p>{task?.title || "Nincs aktív feladat."}</p>
               <div className={styles.workerFacts}>
                 <span><Clock3 size={13} /> {session?.handshake_stage || "Nincs aktív session"}</span>
-                <span><Hammer size={13} /> {build ? `${build.run_type || "build"}: ${build.status}` : "Build: nincs"}</span>
+                <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : "Build: nincs"}</span>
                 <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : task?.branch_name || "Git: —"}</span>
               </div>
+              <button type="button" className={styles.workerActivityOpen} data-worker-activity-open={item.code} onClick={() => onOpenWorkerActivity(item.code)}><Code2 size={12} /> Részletes kódolási csevegés</button>
             </article>
           );
         })}
