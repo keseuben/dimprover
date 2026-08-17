@@ -49,6 +49,11 @@ function collapseRepeatedMessages(items: ConsoleMessage[]) {
       && previous.summary.trim() === message.summary.trim()
       && previous.detail.trim() === message.detail.trim()
       && previous.taskId === message.taskId
+      && String(previous.metadata?.mainModule || "") === String(message.metadata?.mainModule || "")
+      && String(previous.metadata?.moduleName || "") === String(message.metadata?.moduleName || "")
+      && String(previous.metadata?.submoduleName || "") === String(message.metadata?.submoduleName || "")
+      && String(previous.metadata?.workItem || "") === String(message.metadata?.workItem || "")
+      && String(previous.metadata?.presenceKey || "") === String(message.metadata?.presenceKey || "")
       && Number.isFinite(previousAt)
       && Number.isFinite(currentAt)
       && currentAt - previousAt <= 30 * 60_000;

@@ -87,7 +87,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
   const activityNarrative = metadataText(message, "activityNarrative");
   const workStageIndex = Math.max(1, Math.min(6, Number(message.metadata?.workStageIndex || 1)));
   const workStageLabel = metadataText(message, "workStageLabel") || "ELEMZÉS / ELŐKÉSZÍTÉS";
-  const showWorkContext = Boolean(message.taskId && (mainModule || moduleName || submoduleName || workItem));
+  const showWorkContext = Boolean(mainModule || moduleName || submoduleName || workItem);
 
   async function copyHandoff() {
     if (!handoffPrompt) return;

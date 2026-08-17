@@ -682,6 +682,37 @@ export async function createWorkerActivityConsoleMessage(input: {
   const summary = text(input.summary).slice(0, 4000);
   if (!summary) throw new Error("A worker activity összefoglaló nem lehet üres.");
   const client = getClient();
+  const inputMetadata = input.metadata || {};
+  const dedupeKey = [
+    workerCode,
+    text(input.phase).toLowerCase(),
+    input.kind,
+    text(input.taskId),
+    text(input.projectId),
+    summary.replace(/\s+/g, " ").toLowerCase(),
+    text(input.detail).replace(/\s+/g, " ").toLowerCase(),
+    text(inputMetadata.workStageIndex),
+    text(inputMetadata.activityAction),
+    text(inputMetadata.activityNarrative),
+    text(inputMetadata.mainModule),
+    text(inputMetadata.moduleName),
+    text(inputMetadata.submoduleName),
+    text(inputMetadata.workItem),
+  ].join("|");
+  const recent = await client.from("dev_center_live_worklog")
+    .select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at")
+    .eq("source", "worker-activity")
+    .eq("worker_code", workerCode)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (!recent.error && recent.data?.[0]) {
+    const previous = recent.data[0] as Row;
+    const previousMeta = record(previous.metadata);
+    const previousAt = Date.parse(text(previous.created_at));
+    if (text(previousMeta.activityDedupeKey) === dedupeKey && Number.isFinite(previousAt) && Date.now() - previousAt <= 30 * 60_000) {
+      return mapWorklogRow(previous);
+    }
+  }
   const result = await client.from("dev_center_live_worklog").insert({
     worker_code: workerCode,
     task_id: input.taskId || null,
@@ -695,8 +726,9 @@ export async function createWorkerActivityConsoleMessage(input: {
       kind: input.kind,
       projectId: input.projectId || null,
       origin: "BENJADMIN_WORKER_ACTIVITY",
+      ...inputMetadata,
+      activityDedupeKey: dedupeKey,
       productionAccess: "DENY",
-      ...(input.metadata || {}),
     },
   }).select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at").single();
   if (result.error || !result.data) throw new Error(result.error?.message || "A worker activity nem rögzíthető.");
