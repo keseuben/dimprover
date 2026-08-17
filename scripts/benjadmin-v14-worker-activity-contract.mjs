@@ -28,6 +28,10 @@ check("Jazmin card uses violet tint", () => assert.ok(css.includes('[data-author
 check("Outmin card uses amber tint", () => assert.ok(css.includes('[data-author="OUTMINAI"]') && css.includes("var(--amber) 10%")));
 check("Coding detail metadata is visible", () => assert.ok(message.includes("filePath") && message.includes("diffSummary") && message.includes("command") && message.includes("SANITIZED")));
 check("Repeated activity cards collapse", () => assert.ok(conversation.includes("collapseRepeatedMessages") && conversation.includes("repeatCount") && conversation.includes("30 * 60_000")));
+check("Repeated cards require same development context", () => assert.ok(conversation.includes("previous.metadata?.mainModule") && conversation.includes("previous.metadata?.presenceKey")));
+check("Taskless worker cards show context", () => assert.ok(message.includes("Boolean(mainModule || moduleName || submoduleName || workItem)")));
+check("Worker activity persistence dedupes exact repeats", () => assert.ok(lib.includes("activityDedupeKey") && lib.includes("30 * 60_000") && lib.includes(".eq(\"worker_code\", workerCode)")));
+check("Worker dedupe keeps PROD deny final", () => assert.ok(lib.includes("activityDedupeKey: dedupeKey,\n      productionAccess: \"DENY\"")));
 check("Daily archive exists", () => assert.ok(conversation.includes('type: "day"') && conversation.includes("Tegnap")));
 check("Older-than-week archive exists behind reveal", () => assert.ok(conversation.includes("showEarlierArchive") && conversation.includes("mondayKey") && conversation.includes("Korábbi archívum megjelenítése")));
 check("Archive groups are lazy rendered", () => assert.ok(conversation.includes("expandedArchives") && conversation.includes("ageDays <= 7") && css.includes("content-visibility: auto")));
