@@ -21,6 +21,7 @@ type Props = {
   description?: string;
   progress?: number;
   onFiles: (files: File[]) => void | Promise<void>;
+  onExternalOpen?: () => void;
 };
 
 const hexClip = "polygon(25% 2%, 75% 2%, 98% 50%, 75% 98%, 25% 98%, 2% 50%)";
@@ -35,6 +36,7 @@ export default function DropHexUploadZone({
   description = "Húzza a fájlokat a hexagon területre, vagy kattintson a tallózáshoz.",
   progress = 0,
   onFiles,
+  onExternalOpen,
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -45,25 +47,26 @@ export default function DropHexUploadZone({
   const [capturedPhotoCount, setCapturedPhotoCount] = useState(0);
   const inactive = disabled || busy;
 
-  const isAvailable = useCallback(() => {
+  const isAvailable = useCallback((allowHidden = false) => {
     const root = rootRef.current;
     if (!root || inactive) return false;
+    if (allowHidden) return true;
     const rect = root.getBoundingClientRect();
     const style = window.getComputedStyle(root);
     return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
   }, [inactive]);
 
-  const openInput = useCallback((input: HTMLInputElement | null) => {
-    if (!input || !isAvailable()) return;
+  const openInput = useCallback((input: HTMLInputElement | null, allowHidden = false) => {
+    if (!input || !isAvailable(allowHidden)) return;
     // Azonos nevű vagy azonos kamera-fájl újbóli kiválasztásakor is keletkezzen change esemény.
     input.value = "";
     input.click();
   }, [isAvailable]);
 
   useEffect(() => {
-    const openFile = () => openInput(fileRef.current);
-    const openGallery = () => openInput(galleryRef.current || fileRef.current);
-    const openCamera = () => openInput(cameraRef.current || galleryRef.current || fileRef.current);
+    const openFile = () => { onExternalOpen?.(); openInput(fileRef.current, true); };
+    const openGallery = () => { onExternalOpen?.(); openInput(galleryRef.current || fileRef.current, true); };
+    const openCamera = () => { onExternalOpen?.(); openInput(cameraRef.current || galleryRef.current || fileRef.current, true); };
     window.addEventListener(DROP_MOBILE_OPEN_FILE_EVENT, openFile);
     window.addEventListener(DROP_MOBILE_OPEN_GALLERY_EVENT, openGallery);
     window.addEventListener(DROP_MOBILE_OPEN_CAMERA_EVENT, openCamera);
@@ -72,7 +75,7 @@ export default function DropHexUploadZone({
       window.removeEventListener(DROP_MOBILE_OPEN_GALLERY_EVENT, openGallery);
       window.removeEventListener(DROP_MOBILE_OPEN_CAMERA_EVENT, openCamera);
     };
-  }, [openInput]);
+  }, [onExternalOpen, openInput]);
 
   function handoff(files: FileList | null, source: DropFileSource, input?: HTMLInputElement | null) {
     // A FileList a böngésző inputjához kötött élő objektum lehet. Előbb készítünk
@@ -92,6 +95,7 @@ export default function DropHexUploadZone({
     <div
       ref={rootRef}
       data-drop-upload-zone="true"
+      data-drop-upload-available={inactive ? "false" : "true"}
       data-drop-camera-captures={capturedPhotoCount}
       className={`relative min-h-72 overflow-hidden rounded-[1.75rem] border p-4 transition sm:min-h-80 sm:p-6 ${dragActive ? "border-cyan-500 bg-cyan-50" : "border-slate-200 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%),linear-gradient(180deg,#f8fbfd,#ffffff)]"}`}
       onDragEnter={(event) => { event.preventDefault(); if (!inactive) setDragActive(true); }}

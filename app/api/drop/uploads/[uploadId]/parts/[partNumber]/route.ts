@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ uploadId: string; partNumber: string }> };
 
-const ALLOWED_UPLOAD_PART_HOSTS = new Set(["drop.dimpro.hu", "www.drop.dimpro.hu", "localhost", "127.0.0.1"]);
+const ALLOWED_UPLOAD_PART_HOSTS = new Set(["drop.dimpro.hu", "www.drop.dimpro.hu", "drop.dev.dimpro.hu", "localhost", "127.0.0.1"]);
 
 function isAllowedUploadPartHost(request: NextRequest) {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();

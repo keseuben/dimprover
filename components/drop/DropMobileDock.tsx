@@ -89,12 +89,8 @@ function isActive(pathname: string, href: string) {
   return path === href || path.startsWith(`${href}/`);
 }
 
-function visibleUploadZone() {
-  return Array.from(document.querySelectorAll<HTMLElement>("[data-drop-upload-zone='true']")).some((element) => {
-    const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
-    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-  });
+function availableUploadTarget() {
+  return Boolean(document.querySelector<HTMLElement>("[data-drop-upload-zone='true'][data-drop-upload-available='true']"));
 }
 
 export default function DropMobileDock({
@@ -148,7 +144,7 @@ export default function DropMobileDock({
 
   useEffect(() => {
     if (!sheet) return;
-    setHasUploadZone(visibleUploadZone());
+    setHasUploadZone(availableUploadTarget());
   }, [sheet, pathname]);
 
   const hideDock = !allowed || keyboardOpen || externalModalOpen;
@@ -197,7 +193,7 @@ export default function DropMobileDock({
                 <button type="button" disabled={!hasUploadZone} onClick={() => trigger("file")} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-black text-slate-800 disabled:opacity-40"><FileUp size={24}/> Fájl tallózása</button>
                 <Link href="/send" onClick={() => setSheet(null)} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-slate-950 p-3 text-sm font-black text-white"><Send size={24}/> DIMPRO Send</Link>
                 <Link href="/bekuldes" onClick={() => setSheet(null)} className="col-span-2 flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-900"><FolderInput size={20}/> Beküldőkapu megnyitása</Link>
-                {!hasUploadZone ? <p className="col-span-2 text-center text-xs font-semibold leading-5 text-slate-500">A Galéria, Kamera és Fájl gomb akkor aktív, amikor egy megnyitott csomag feltöltőterülete látható.</p> : null}
+                {!hasUploadZone ? <p className="col-span-2 text-center text-xs font-semibold leading-5 text-slate-500">A Galéria, Kamera és Fájl gomb akkor aktív, amikor van folytatható feltöltési munkamenet.</p> : null}
               </div>
             ) : (
               <div className="mt-4 space-y-3">

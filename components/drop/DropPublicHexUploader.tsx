@@ -1204,14 +1204,14 @@ export default function DropPublicHexUploader({
     </div> : null}
 
     <div ref={imagesStepRef} className="scroll-mt-28"/>
-    {workflowStep === 1 ? <div>
+    <div className={workflowStep === 1 ? "block" : "hidden"}>
       <div className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-800">2. Képek</p><h3 className="mt-1 text-lg font-black text-slate-950">Adja hozzá a küldendő képeket</h3><p className="mt-1 text-sm leading-6 text-slate-600">Használhatja a kamerát, a galériát vagy a fájlválasztót. A képeket még a következő lépésben ellenőrizheti.</p></div>
-    <div ref={uploadZoneRef} className="mt-5"><DropHexUploadZone accept={imageOnly ? acceptedImageExtensions : acceptedExtensions} disabled={running || finalizing || delivered} busy={preparing || running || finalizing || restoring} imageMode allowCamera title={imageOnly ? "Fotók hozzáadása" : "Húzza ide a küldendő fájlokat"} description="Kattintással, galériából vagy kamerából is hozzáadható. A kiválasztott Nagy, Közepes vagy Kicsi képméret a helyi előkészítéskor érvényesül." progress={totalProgress} onFiles={addFiles}/></div>
+    <div ref={uploadZoneRef} className="mt-5"><DropHexUploadZone accept={imageOnly ? acceptedImageExtensions : acceptedExtensions} disabled={running || finalizing || delivered} busy={preparing || running || finalizing || restoring} imageMode allowCamera title={imageOnly ? "Fotók hozzáadása" : "Húzza ide a küldendő fájlokat"} description="Kattintással, galériából vagy kamerából is hozzáadható. A kiválasztott Nagy, Közepes vagy Kicsi képméret a helyi előkészítéskor érvényesül." progress={totalProgress} onFiles={addFiles} onExternalOpen={() => goToStep(1)}/></div>
     {!running && !finalizing && !delivered && lastAddedIds.length ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={undoLastAdd} className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900"><RotateCcw size={15}/> Legutóbbi hozzáadás visszavonása</button><span className="self-center text-[11px] font-semibold text-slate-500">A névszabály a feltöltés megkezdése előtt bármikor módosítható; a várakozó fájlneveket a rendszer újraszámolja.</span></div> : null}
 
     {restoring ? <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-950"><LoaderCircle size={17} className="animate-spin"/>Helyi feltöltési sor visszaállítása…</div> : null}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => goToStep(0)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza</button><button type="button" onClick={() => goToStep(2)} disabled={queue.length === 0} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-800 px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300">Tovább az ellenőrzéshez <ArrowRight size={15}/></button></div>
-    </div> : null}
+    </div>
 
     <div ref={reviewStepRef} className="scroll-mt-28"/>
     {queue.length ? <div className="mt-5">
