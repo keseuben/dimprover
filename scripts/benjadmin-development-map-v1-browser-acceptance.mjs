@@ -19,7 +19,7 @@ async function cleanup(){
 }
 try{
   const ins=await db.from("dev_center_tasks").insert([
-    {id:normalTaskId,project_id:"project_dimprover",repository_id:"repo_dimprover",title:`${marker} BENJADMIN közös fejlesztői csevegés térkép`,description:"Vezetői szintű térképkártya drag and drop acceptance.",status:"testing",priority:88,requested_worker_id:"worker_arminai",assigned_worker_id:"worker_arminai",branch_name:"feature/map-browser",worktree_path:"/srv/dimpro-dev/worktrees/map-browser",scope:[],acceptance:[],created_by:"map browser acceptance",metadata:{origin:"DEVELOPMENT_MAP_BROWSER",productionAccess:"DENY"}},
+    {id:normalTaskId,project_id:"project_dimprover",repository_id:"repo_dimprover",title:`${marker} BENJADMIN közös fejlesztői csevegés térkép`,description:"Vezetői szintű térképkártya drag and drop átsorolás.",status:"testing",priority:88,requested_worker_id:"worker_arminai",assigned_worker_id:"worker_arminai",branch_name:"feature/map-browser",worktree_path:"/srv/dimpro-dev/worktrees/map-browser",scope:[],acceptance:[],created_by:"map browser acceptance",metadata:{origin:"DEVELOPMENT_MAP_BROWSER",productionAccess:"DENY"}},
     {id:techTaskId,project_id:"project_dimprover",repository_id:"repo_dimprover",title:`${marker} M3 acceptance atomic claim race`,description:"Technikai acceptance fixture.",status:"queued",priority:99,requested_worker_id:null,assigned_worker_id:null,branch_name:null,worktree_path:null,scope:[],acceptance:[],created_by:"map browser acceptance",metadata:{origin:"DEVELOPMENT_MAP_BROWSER",productionAccess:"DENY"}}
   ]).select("id");
   check("Browser fixtures created",!ins.error&&(ins.data||[]).length===2,ins.error?.message||"");

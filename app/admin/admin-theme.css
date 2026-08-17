@@ -3711,6 +3711,48 @@
 }
 
 @media (max-width: 520px) {
+  .benjadmin-shell-topbar {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 6px 8px;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .benjadmin-shell-topbar__title {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 0;
+  }
+
+  .benjadmin-shell-topbar__title strong {
+    display: none;
+  }
+
+  .benjadmin-shell-topbar__actions {
+    min-width: 0;
+    flex: 0 1 auto;
+    gap: 4px;
+  }
+
+  .benjadmin-canonical-badge {
+    display: none;
+  }
+
+  .benjadmin-environment-badge {
+    min-height: 28px;
+    padding: 0 7px;
+    letter-spacing: 0.1em;
+  }
+
+  .benjadmin-shell-topbar__actions button {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 9px;
+  }
+
   .benjadmin-rail__brand {
     display: none;
   }
