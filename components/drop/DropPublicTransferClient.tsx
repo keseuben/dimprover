@@ -700,7 +700,7 @@ export default function DropPublicTransferClient({ mode, slug }: Props) {
     {mode === "send" && !sessionReady ? <section className="mx-auto mt-8 max-w-xl rounded-[1.75rem] border border-cyan-200 bg-white p-6 shadow-sm sm:p-8">
       <div className="flex items-start gap-3"><KeyRound className="mt-1 text-cyan-800"/><div><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">Központi küldési jogosultság</p><h2 className="mt-2 text-2xl font-black text-slate-950">DIMPRO Send-kód</h2><p className="mt-2 text-sm leading-6 text-slate-600">A kódot a központi DIMPRO felhasználói, licenc- és jogosultsági rendszer ellenőrzi. A kötőjelek automatikusan megjelennek, az ellenőrzés az utolsó karakter után indul.</p></div></div>
       <label className="mt-6 block"><span className="mb-2 block text-xs font-black uppercase tracking-[.1em] text-slate-600">Küldési jogosultságkód</span><input value={formatDropSendCode(sendCode)} onChange={(event) => changeSendCode(event.target.value)} disabled={loading} autoFocus autoComplete="one-time-code" spellCheck={false} className={`${inputClass} h-16 text-center font-mono text-xl uppercase tracking-[.16em]`} placeholder="ABCD-123-456"/></label>
-      <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex cursor-pointer items-start gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={rememberSendCode} onChange={(event) => changeRememberSendCode(event.target.checked)} className="mt-0.5 accent-cyan-700"/><span><strong className="block text-slate-900">Kód megjegyzése ezen az eszközön</strong><span className="mt-0.5 block font-medium leading-5 text-slate-500">A kód csak ennek a böngészőnek a helyi tárhelyén marad meg, és legközelebb automatikusan betöltődik.</span></span></label>{savedSendCodePresent ? <HoldDeleteSendCodeButton onConfirm={clearRememberedSendCode} compact/> : null}</div>
+      <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex cursor-pointer items-start gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={rememberSendCode} onChange={(event) => changeRememberSendCode(event.target.checked)} className="mt-0.5 accent-cyan-700"/><span><strong className="block text-slate-900">Kód megjegyzése ezen az eszközön</strong><span className="mt-0.5 block font-medium leading-5 text-slate-500">A kód csak ennek a böngészőnek a helyi tárhelyén marad meg, és legközelebb automatikusan betöltődik.</span></span></label>{savedSendCodePresent ? <SwipeDeleteSendCodeControl onConfirm={clearRememberedSendCode} compact/> : null}</div>
       <button type="button" onClick={() => void startSendSession()} disabled={loading || !isCompleteDropSendCode(sendCode)} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">{loading ? <LoaderCircle size={17} className="animate-spin"/> : <KeyRound size={17}/>} {loading ? "Jogosultság ellenőrzése…" : "Belépés"}</button>
       <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">Küldési jogosultság igénylése vagy technikai segítség: <strong>admin@dimpro.hu</strong></p>
       {message ? <Message text={message}/> : null}
@@ -709,7 +709,7 @@ export default function DropPublicTransferClient({ mode, slug }: Props) {
     {mode === "submission_gate" && loading ? <div className="mt-10 flex items-center justify-center gap-3 text-sm font-bold text-slate-700"><LoaderCircle className="animate-spin"/>Beküldőkapu betöltése…</div> : null}
 
     {sessionReady ? <section className="mt-8 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-      {sendUser ? <section className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-4"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-950 text-cyan-300"><UserRound size={20}/></span><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-800">Központilag azonosított küldő</p><h2 className="mt-1 text-lg font-black text-slate-950">{sendUser.fullName}</h2><p className="mt-1 text-sm font-semibold text-slate-700">{sendUser.email}</p>{sendUser.organizationName ? <p className="mt-1 text-xs text-slate-600">{sendUser.organizationName}</p> : null}</div><span className="ml-auto rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[9px] font-black uppercase text-emerald-800">Identity Core</span></div><p className="mt-3 text-xs leading-5 text-slate-600">A feladói név és e-mail-cím a központi felhasználói rekordból érkezik, ezen a felületen nem módosítható. DIMPRO azonosító: <strong>{sendUser.publicCode}</strong></p>{savedSendCodePresent ? <div className="mt-3"><HoldDeleteSendCodeButton onConfirm={clearRememberedSendCode}/></div> : null}</section> : null}
+      {sendUser ? <section className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-4"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-950 text-cyan-300"><UserRound size={20}/></span><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-800">Központilag azonosított küldő</p><h2 className="mt-1 text-lg font-black text-slate-950">{sendUser.fullName}</h2><p className="mt-1 text-sm font-semibold text-slate-700">{sendUser.email}</p>{sendUser.organizationName ? <p className="mt-1 text-xs text-slate-600">{sendUser.organizationName}</p> : null}</div><span className="ml-auto rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[9px] font-black uppercase text-emerald-800">Identity Core</span></div><p className="mt-3 text-xs leading-5 text-slate-600">A feladói név és e-mail-cím a központi felhasználói rekordból érkezik, ezen a felületen nem módosítható. DIMPRO azonosító: <strong>{sendUser.publicCode}</strong></p>{savedSendCodePresent ? <div className="mt-3"><SwipeDeleteSendCodeControl onConfirm={clearRememberedSendCode}/></div> : null}</section> : null}
 
       {gate ? <div className="mb-6 rounded-2xl border border-teal-200 bg-teal-50 p-4"><p className="text-xs font-black uppercase tracking-[.16em] text-teal-800">{gate.type === "personal" ? "Személyes Beküldőkapu" : gate.type === "project" ? "Projekt Beküldőkapu" : "Szervezeti Beküldőkapu"}</p><h2 className="mt-2 text-xl font-black text-slate-950">{gate.title}</h2>{gate.description ? <p className="mt-2 text-sm leading-6 text-slate-700">{gate.description}</p> : null}<div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">{gate.projectName ? <span className="rounded-full bg-white px-3 py-1.5">Projekt: {gate.projectName}</span> : null}{gate.targetFolder ? <span className="rounded-full bg-white px-3 py-1.5">Célmappa: {gate.targetFolder}</span> : null}<span className="rounded-full bg-white px-3 py-1.5">Keret: 250 MB</span></div></div> : null}
 
@@ -851,24 +851,64 @@ function RecipientPanel({ recipientMode, defaultRecipient, approvedRecipients, s
 function LoadingShell({ mode, text }: { mode: Props["mode"]; text: string }) { return <main className="min-h-screen bg-[#f4f9fa] px-4 py-8 sm:px-6"><div className="mx-auto max-w-5xl"><Header mode={mode}/><div className="mt-10 flex items-center justify-center gap-3 rounded-2xl border border-cyan-200 bg-white p-6 text-sm font-bold text-slate-700"><LoaderCircle className="animate-spin"/>{text}</div></div></main>; }
 function Header({ mode }: { mode: Props["mode"] }) { return <header className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><Link href="/" className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[.14em] text-cyan-800"><ArrowLeft size={15}/> DIMPRO Drop</Link><div className="mt-4 flex items-start gap-4"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-slate-950 text-cyan-300">{mode === "send" ? <Send size={25}/> : <UsersRound size={25}/>}</span><div><p className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">DROP 1.2.12</p><h1 className="mt-2 text-3xl font-black text-slate-950">{mode === "send" ? "DIMPRO Send" : "DIMPRO Beküldőkapu"}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{mode === "send" ? "Központi Identity Core jogosultsággal küldhet fájlokat, képeket és projektkapcsolt csomagokat.": "Küldjön fájlokat előre meghatározott személynek, projekthez vagy szervezeti címzettnek 250 MB-ig."}</p></div></div><div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-700"><span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800"><ShieldCheck size={14}/> Robotvédelem</span><span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-3 py-1.5 text-cyan-800"><Mail size={14}/> E-mailes kézbesítés</span><span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-teal-800"><UserRound size={14}/> Központi azonosítás</span></div></header>; }
 
-function HoldDeleteSendCodeButton({ onConfirm, compact = false }: { onConfirm: () => void; compact?: boolean }) {
-  const [progress, setProgress] = useState(0);
-  const timerRef = useRef<number | null>(null);
-  const intervalRef = useRef<number | null>(null);
-  const startedRef = useRef(0);
-  const stop = () => {
-    if (timerRef.current) window.clearTimeout(timerRef.current);
-    if (intervalRef.current) window.clearInterval(intervalRef.current);
-    timerRef.current = null; intervalRef.current = null; startedRef.current = 0;
-    setProgress(0);
+function SwipeDeleteSendCodeControl({ onConfirm, compact = false }: { onConfirm: () => void; compact?: boolean }) {
+  const [offset, setOffset] = useState(0);
+  const startRef = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+  const threshold = -72;
+  const maxTravel = -96;
+
+  const reset = () => {
+    startRef.current.active = false;
+    setOffset(0);
   };
-  const start = () => {
-    stop(); startedRef.current = Date.now();
-    intervalRef.current = window.setInterval(() => setProgress(Math.min(100, ((Date.now() - startedRef.current) / 2000) * 100)), 40);
-    timerRef.current = window.setTimeout(() => { stop(); onConfirm(); }, 2000);
+  const start = (event: React.PointerEvent<HTMLButtonElement>) => {
+    startRef.current = { x: event.clientX, y: event.clientY, active: true };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  useEffect(() => () => stop(), []);
-  return <button type="button" onPointerDown={start} onPointerUp={stop} onPointerCancel={stop} onPointerLeave={stop} onContextMenu={(event)=>event.preventDefault()} className={`relative overflow-hidden rounded-lg border border-rose-400 bg-rose-50 text-xs font-black text-rose-800 select-none ${compact ? "px-3 py-2" : "px-3 py-2.5"}`}><span className="absolute inset-y-0 left-0 bg-rose-200/70 transition-none" style={{width:`${progress}%`}}/><span className="relative inline-flex items-center gap-2"><Trash2 size={14}/> Tartsa nyomva 2 mp-ig a mentett kód törléséhez</span></button>;
+  const move = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!startRef.current.active) return;
+    const rawX = event.clientX - startRef.current.x;
+    const rawY = event.clientY - startRef.current.y;
+    if (Math.abs(rawY) > Math.abs(rawX) || Math.abs(rawX) < 8) return;
+    setOffset(Math.max(maxTravel, Math.min(0, rawX)));
+  };
+  const finish = () => {
+    if (!startRef.current.active) return;
+    const shouldDelete = offset <= threshold;
+    reset();
+    if (shouldDelete) onConfirm();
+  };
+
+  return <div data-drop-send-code-swipe-delete className={`relative overflow-hidden rounded-xl border border-rose-300 bg-rose-100 ${compact ? "min-w-[15rem]" : "max-w-md"}`}>
+    <div aria-hidden="true" className="absolute inset-0 flex items-center justify-end bg-rose-100 px-4 text-xs font-black text-rose-900">
+      <span className={`inline-flex items-center gap-2 transition-opacity ${offset < -12 ? "opacity-100" : "opacity-60"}`}><Trash2 size={15}/> Törlés</span>
+    </div>
+    <button
+      type="button"
+      onPointerDown={start}
+      onPointerMove={move}
+      onPointerUp={finish}
+      onPointerCancel={reset}
+      onKeyDown={(event) => {
+        if (event.key === "Delete") {
+          event.preventDefault();
+          onConfirm();
+        }
+      }}
+      className="relative flex min-h-11 w-full touch-pan-y select-none items-center gap-2 bg-white px-3 py-2 text-left text-xs font-black text-rose-800 transition-transform"
+      style={{ transform: `translateX(${offset}px)` }}
+      aria-label="Mentett Send-kód törlése. Húzza balra, vagy használja a Törlés gombot."
+    >
+      <Trash2 size={14}/>
+      <span className="min-w-0 flex-1">Húzza balra a mentett kód törléséhez</span>
+      <ArrowLeft size={15} className="shrink-0"/>
+    </button>
+    <div className="relative border-t border-rose-200 bg-white px-2 py-1.5 text-right">
+      <button type="button" onClick={onConfirm} className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black text-rose-800">
+        Kód törlése
+      </button>
+    </div>
+  </div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-2 block text-xs font-black uppercase tracking-[.1em] text-slate-600">{label}</span>{children}</label>; }

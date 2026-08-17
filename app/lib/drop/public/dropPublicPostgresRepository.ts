@@ -124,6 +124,24 @@ function databaseError(message: string, error: SchemaError): never {
   throw new DropPublicRepositoryError(message, error?.code || "DROP_PUBLIC_DATABASE_ERROR", 500);
 }
 
+const OPTIONAL_WORKFLOW_COLUMNS = [
+  "show_recipients_on_download",
+  "export_groups_as_folders",
+  "append_group_name_to_filename",
+] as const;
+
+function isOptionalWorkflowSchemaError(error: SchemaError) {
+  const source = `${error?.message || ""} ${error?.details || ""} ${error?.hint || ""}`.toLowerCase();
+  return OPTIONAL_WORKFLOW_COLUMNS.some((column) => source.includes(column))
+    && (error?.code === "42703" || error?.code === "PGRST204" || source.includes("does not exist") || source.includes("schema cache"));
+}
+
+function workflowRowForLegacySchema(row: DbRow) {
+  const compatible = { ...row };
+  for (const column of OPTIONAL_WORKFLOW_COLUMNS) delete compatible[column];
+  return compatible;
+}
+
 function mapSendCode(row: DbRow): DropSendCodeRecord {
   return {
     id: text(row.id), label: text(row.label), codeHash: text(row.code_hash), codeSalt: text(row.code_salt), codeHint: text(row.code_hint),
@@ -435,8 +453,12 @@ export async function bindDropPublicSessionPackage(rawToken: string, packageId: 
 
 export async function saveDropPackageWorkflow(input: Omit<DropPackageWorkflowRecord, "createdAt" | "updatedAt">) {
   const now = nowIso();
-  const row = { ...workflowRow(input), created_at: now, updated_at: now };
-  const result = await getDropSupabaseClient().from("drop_public_package_workflows").upsert(row, { onConflict: "package_id" }).select("*").single();
+  const row: DbRow = { ...workflowRow(input), created_at: now, updated_at: now };
+  const client = getDropSupabaseClient();
+  let result = await client.from("drop_public_package_workflows").upsert(row, { onConflict: "package_id" }).select("*").single();
+  if (result.error && isOptionalWorkflowSchemaError(result.error)) {
+    result = await client.from("drop_public_package_workflows").upsert(workflowRowForLegacySchema(row), { onConflict: "package_id" }).select("*").single();
+  }
   if (result.error) databaseError("A küldemény workflow-adatainak központi mentése sikertelen.", result.error);
   return mapWorkflow(result.data as DbRow);
 }
@@ -451,7 +473,12 @@ export async function updateDropPackageWorkflow(packageId: string, patch: Partia
   const current = await getDropPackageWorkflow(packageId);
   if (!current) throw new DropPublicRepositoryError("A küldemény workflow-adata nem található.", "DROP_PUBLIC_WORKFLOW_NOT_FOUND", 404);
   const next: DropPackageWorkflowRecord = { ...current, ...patch, packageId, updatedAt: nowIso() };
-  const result = await getDropSupabaseClient().from("drop_public_package_workflows").update(workflowRow(next)).eq("package_id", packageId).select("*").single();
+  const row: DbRow = workflowRow(next);
+  const client = getDropSupabaseClient();
+  let result = await client.from("drop_public_package_workflows").update(row).eq("package_id", packageId).select("*").single();
+  if (result.error && isOptionalWorkflowSchemaError(result.error)) {
+    result = await client.from("drop_public_package_workflows").update(workflowRowForLegacySchema(row)).eq("package_id", packageId).select("*").single();
+  }
   if (result.error) databaseError("A küldemény workflow-adatainak módosítása sikertelen.", result.error);
   return mapWorkflow(result.data as DbRow);
 }

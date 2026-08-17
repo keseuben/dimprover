@@ -1,12 +1,16 @@
 const fs = require('fs');
 const ui = fs.readFileSync('components/drop/DropPublicHexUploader.tsx','utf8');
 const transfer = fs.readFileSync('components/drop/DropPublicTransferClient.tsx','utf8');
+const postgresRepo = fs.readFileSync('app/lib/drop/public/dropPublicPostgresRepository.ts','utf8');
 const api = fs.readFileSync('app/api/drop/public/packages/[packageId]/finalize/route.ts','utf8');
 const service = fs.readFileSync('app/lib/drop/public/dropPublicFinalizeService.ts','utf8');
 const worker = fs.readFileSync('app/lib/drop/worker/dropWorkerService.ts','utf8');
 const tests = [
  ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Beállítások','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
  ['Stepper már a Gyors KépSend alapadatoknál látható', transfer.includes('data-drop-quick-send-precreate-stepper') && transfer.includes('sendMode === "quick_image"') && transfer.includes('DROP_QUICK_SEND_WORKFLOW_STEPS.map')],
+ ['Régebbi DEV workflow séma kompatibilis', postgresRepo.includes('OPTIONAL_WORKFLOW_COLUMNS') && postgresRepo.includes('isOptionalWorkflowSchemaError') && postgresRepo.includes('workflowRowForLegacySchema') && postgresRepo.includes('PGRST204')],
+ ['Mentett Send-kód balra húzással törölhető', transfer.includes('SwipeDeleteSendCodeControl') && transfer.includes('Húzza balra a mentett kód törléséhez') && transfer.includes('offset <= threshold') && transfer.includes('bg-rose-100')],
+ ['Mentett Send-kód desktop alternatíva', transfer.includes('Kód törlése') && transfer.includes('onClick={onConfirm}')],
  ['Mobil stepper mind a 6 pontot egyszerre mutatja', ui.includes('grid grid-cols-6 gap-1') && ui.includes('hidden sm:inline') && !ui.includes('overflow-x-auto rounded-2xl border border-cyan-200 bg-white/95')],
  ['Egyszerre egy egyszerű lépés látható', ui.includes('workflowStep === 0 ? <div>') && ui.includes('workflowStep === 1 ? <div>') && [2,3,4,5].every(x=>ui.includes(`workflowStep === ${x} ? "block" : "hidden"`))],
  ['Haladó beállítások alapból összecsukva', ui.includes('<details className="mt-3 rounded-2xl') && ui.includes('További beállítások') && ui.includes('· opcionális')],
