@@ -33,6 +33,7 @@ try{
   let r=await api("/api/dev/console/messages","POST",{text:`${marker} completed push deep link`,target:"ARMINAI",projectId:"project_dimprover",createTask:true,kind:"INSTRUCTION"});
   taskId=r.payload?.task?.id||""; check("Deep-link fixture task created",r.response.status===201&&Boolean(taskId),taskId);
   r=await api("/api/dev/console/plus-bridge/ARMINAI/next","POST"); check("Deep-link fixture task started",r.response.status===200&&r.payload?.task?.id===taskId,`status=${r.response.status}`);
+  r=await api(`/api/dev/console/tasks/${taskId}`,"PATCH",{action:"TESTING"}); check("Deep-link fixture enters TESTING",r.response.status===200&&r.payload?.result?.task?.status==="testing",`status=${r.response.status}`);
   r=await api(`/api/dev/console/tasks/${taskId}`,"PATCH",{action:"COMPLETE",note:`${marker} completed`}); check("Deep-link fixture task completed",r.response.status===200&&r.payload?.result?.task?.status==="completed",`status=${r.response.status}`);
 
   browser=await puppeteer.launch({headless:true,args:["--no-sandbox","--disable-setuid-sandbox","--host-resolver-rules=MAP admin.dev.dimpro.hu 127.0.0.1"]});

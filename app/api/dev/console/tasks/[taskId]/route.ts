@@ -17,7 +17,7 @@ import { engineErrorResponse, engineUnauthorized } from "@/app/api/dev/engine/_s
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type TaskAction = "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "TESTING" | "COMPLETE" | "FAIL";
+type TaskAction = "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "RESULT_TO_TESTING" | "TESTING" | "COMPLETE" | "FAIL";
 
 async function notifyOutcome(input: { taskId: string; title: string; body: string; priority: "normal" | "high" }) {
   try {
@@ -75,11 +75,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
         kind: "TASK_UPDATE",
         metadata: { action, bridgeState: advanced.bridgeState, handoffPromptSha256: advanced.handoffPromptSha256 },
       });
-    } else if (action === "RESULT_REPORT") {
+    } else if (action === "RESULT_REPORT" || action === "RESULT_TO_TESTING") {
       const recorded = await recordDevEngineTaskManualBridgeResult({ taskId, summary: String(body.summary || ""), commit: body.commit, buildId: body.buildId, tests: body.tests, docs: body.docs, nextStep: body.nextStep });
-      result = recorded;
-      notice = `${recorded.task.title} · strukturált ChatGPT eredmény rögzítve.`;
-      await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingSuggested: recorded.testingSuggested } });
+      if (action === "RESULT_TO_TESTING") {
+        const testing = await setDevEngineTaskTesting(taskId);
+        result = { ...recorded, testing };
+        notice = `${recorded.task.title} · ChatGPT eredmény rögzítve, TESTING kapu megnyitva.`;
+        await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingStarted: true } });
+      } else {
+        result = recorded;
+        notice = `${recorded.task.title} · strukturált ChatGPT eredmény rögzítve.`;
+        await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingSuggested: recorded.testingSuggested } });
+      }
     } else if (action === "TESTING") {
       const testing = await setDevEngineTaskTesting(taskId);
       result = testing;

@@ -1135,6 +1135,9 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
   const task = await getTaskForConsoleControl(client, input.taskId);
   if (task.status === "cancelled") throw new DevCenterEngineError("Törölt task nem zárható le eredménnyel.", "DEV_CENTER_TASK_FINALIZE_STATE_DENIED", 409);
   const currentMetadata = jsonRecord(task.metadata);
+  if (input.outcome === "completed" && task.status !== "completed" && task.status !== "testing") {
+    throw new DevCenterEngineError("A fejlesztési task csak TESTING állapotból zárható sikeresen. Előbb rögzítsd az eredményt és futtasd a tesztkaput.", "DEV_CENTER_TASK_COMPLETE_TESTING_REQUIRED", 409, { taskId: task.id, status: task.status });
+  }
   if (task.status === "completed" && input.outcome === "completed") return { ok: true as const, task, alreadyFinalized: true, rebalance: null };
   if (task.status === "blocked" && input.outcome === "failed" && text(currentMetadata.workflowState) === "FAILED") return { ok: true as const, task, alreadyFinalized: true, rebalance: null };
   const now = nowIso();

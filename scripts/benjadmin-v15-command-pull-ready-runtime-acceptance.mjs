@@ -30,5 +30,15 @@ try{
  check("Prepared state transitions to PULLED",pulled.coordinatorChainState==="PULLED"&&/^\d{4}-\d{2}-\d{2}T/.test(String(pulled.coordinatorChainPulledAt||"")),JSON.stringify({state:pulled.coordinatorChainState,at:pulled.coordinatorChainPulledAt}));
  check("Plus pull session is created",Boolean(pulled.plusBridgeSessionId)&&pulled.plusBridgeSessionId===r.payload?.session?.id,String(pulled.plusBridgeSessionId||""));
  check("Handoff remains SANITIZED contract",typeof r.payload?.handoff?.prompt==="string"&&r.payload.handoff.prompt.includes("PROD módosítás nincs"),String(r.payload?.handoff?.prompt||"").slice(0,120));
+ r=await api(`/api/dev/console/tasks/${taskId}`,"PATCH",{action:"COMPLETE",note:`${marker} premature complete`});
+ check("Direct COMPLETE before TESTING denied",r.response.status===409&&r.payload?.code==="DEV_CENTER_TASK_COMPLETE_TESTING_REQUIRED",JSON.stringify({status:r.response.status,code:r.payload?.code}));
+ r=await api(`/api/dev/console/tasks/${taskId}`,"PATCH",{action:"RESULT_TO_TESTING",summary:`${marker} implementation ready`,commit:"abcdef1234567",buildId:`V15-${Date.now()}`,tests:"V15 targeted acceptance PASS",docs:"264_benjadmin_v15_command_pull_chain.md",nextStep:"COMPLETE after TESTING"});
+ check("Result-to-testing combined action succeeds",r.response.status===200&&r.payload?.result?.testing?.task?.status==="testing",JSON.stringify({status:r.response.status,taskStatus:r.payload?.result?.testing?.task?.status}));
+ check("Structured result is preserved in combined action",r.payload?.result?.result?.commit==="abcdef1234567"&&String(r.payload?.result?.result?.tests||"").includes("PASS"),JSON.stringify(r.payload?.result?.result||{}));
+ r=await api(`/api/dev/console/tasks/${taskId}`,"PATCH",{action:"COMPLETE",note:`${marker} verified complete`});
+ check("COMPLETE succeeds after TESTING",r.response.status===200&&r.payload?.result?.task?.status==="completed",JSON.stringify({status:r.response.status,taskStatus:r.payload?.result?.task?.status}));
+ const finalAudit=await db.from("dev_center_audit_events").select("action").eq("task_id",taskId);
+ const actions=(finalAudit.data||[]).map((row)=>row.action);
+ check("Audit contains result testing and completion",actions.includes("TASK_BRIDGE_RESULT_RECORDED")&&actions.includes("TASK_TESTING")&&actions.includes("TASK_COMPLETED"),JSON.stringify(actions));
  console.log(JSON.stringify({ok:true,passed,failed:0,taskId,workerCode},null,2));
 }finally{await cleanup()}

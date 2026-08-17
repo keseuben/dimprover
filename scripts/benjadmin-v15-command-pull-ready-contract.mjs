@@ -2,6 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 const engine=fs.readFileSync("app/lib/dev-center/engine-repository.ts","utf8");
 const route=fs.readFileSync("app/api/dev/console/messages/route.ts","utf8");
+const taskRoute=fs.readFileSync("app/api/dev/console/tasks/[taskId]/route.ts","utf8");
 const panel=fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx","utf8");
 const cli=fs.readFileSync("scripts/benjadmin-plus-bridge-cli.mjs","utf8");
 let passed=0;
@@ -20,5 +21,9 @@ check("UI labels ready state as ChatGPT pullra kész",()=>assert.ok(panel.includ
 check("Manual Start hidden for pull-ready task",()=>assert.ok(panel.includes('chainState !== "READY_FOR_PLUS_PULL"')));
 check("CLI retains one-word continuation aliases",()=>assert.ok(cli.includes('"folytasd"')&&cli.includes('"continue"')));
 check("CLI still uses Plus next endpoint",()=>assert.ok(cli.includes('/plus-bridge/${encodeURIComponent(workerCode)}/next')));
+check("Combined result-to-testing action exists",()=>assert.ok(taskRoute.includes('"RESULT_TO_TESTING"')&&taskRoute.includes("setDevEngineTaskTesting(taskId)")));
+check("CLI supports report-testing",()=>assert.ok(cli.includes('"report-testing"')&&cli.includes('action: "RESULT_TO_TESTING"')));
+check("Backend completion requires TESTING",()=>assert.ok(engine.includes("DEV_CENTER_TASK_COMPLETE_TESTING_REQUIRED")));
+check("UI complete button is TESTING-only",()=>assert.ok(panel.includes('{task.status === "testing" ? <>')));
 check("No native API provider enabled",()=>assert.ok(!route.includes("OPENAI_API_KEY")&&!engine.includes("OPENAI_API_KEY")));
 console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN V1.5 command pull ready"},null,2));

@@ -246,7 +246,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
                     <button type="button" disabled={busy || !estimate} title="Becslés -30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: Math.max(15, (estimate || 60) - 30) })}>−30p</button>
                     <button type="button" disabled={busy} title="Becslés +30 perc" onClick={() => void onTaskAction(task.id, "ESTIMATE", { estimateMinutes: (estimate || 60) + 30 })}>+30p</button>
                   </> : null}
-                  {started || task.status === "testing" ? <>
+                  {task.status === "testing" ? <>
                     <button type="button" className={styles.aiDeveloperDoneButton} disabled={busy} onClick={() => void onTaskAction(task.id, "COMPLETE")}><CheckCircle2 size={11} /> Kész</button>
                     <button type="button" className={styles.aiDeveloperFailButton} disabled={busy} onClick={() => { const note = window.prompt("Mi a blokkoló hiba / ok?") || ""; if (note.trim()) void onTaskAction(task.id, "FAIL", { note }); }}><XCircle size={11} /> Hiba</button>
                   </> : null}

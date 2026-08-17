@@ -38,6 +38,8 @@ try{
   } else {
     console.log(`PASS Live subscribers present; non-dry send intentionally skipped in acceptance :: count=${push.payload.subscriptionCount}`);passed++;
   }
+  r=await api(`/api/dev/console/tasks/${etaTask}`,"PATCH",{action:"TESTING"});
+  check("ETA task enters TESTING before complete",r.response.status===200&&r.payload?.result?.task?.status==="testing",`status=${r.response.status}`);
   r=await api(`/api/dev/console/tasks/${etaTask}`,"PATCH",{action:"COMPLETE",note:`${marker} done`});
   check("First COMPLETE succeeds",r.response.status===200&&r.payload?.result?.alreadyFinalized===false,JSON.stringify(r.payload?.notification||null));
   r=await api(`/api/dev/console/tasks/${etaTask}`,"PATCH",{action:"COMPLETE",note:`${marker} repeat`});

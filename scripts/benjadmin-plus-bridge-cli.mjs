@@ -45,6 +45,10 @@ try {
     const body = await readStdinJson();
     const payload = await request(`/api/dev/console/tasks/${encodeURIComponent(subject)}`, "PATCH", { action: "RESULT_REPORT", ...body });
     print(payload);
+  } else if (["report-testing", "result-testing"].includes(action)) {
+    if (!subject) throw new Error("Task ID szükséges a report-testing művelethez.");
+    const body = await readStdinJson();
+    print(await request(`/api/dev/console/tasks/${encodeURIComponent(subject)}`, "PATCH", { action: "RESULT_TO_TESTING", ...body }));
   } else if (action === "testing") {
     if (!subject) throw new Error("Task ID szükséges a testing művelethez.");
     print(await request(`/api/dev/console/tasks/${encodeURIComponent(subject)}`, "PATCH", { action: "TESTING" }));
@@ -60,7 +64,7 @@ try {
     if (!subject) throw new Error("Task ID szükséges a javaslat elfogadásához.");
     print(await request(`/api/dev/console/tasks/${encodeURIComponent(subject)}`, "PATCH", { action: "ACCEPT_SUGGESTION" }));
   } else {
-    throw new Error("Használat: benjadmin-plus-bridge-cli.mjs pull|continue|folytasd <WORKER> | report/testing/complete/fail/accept-suggestion <TASK_ID>");
+    throw new Error("Használat: benjadmin-plus-bridge-cli.mjs pull|continue|folytasd <WORKER> | report/report-testing/testing/complete/fail/accept-suggestion <TASK_ID>");
   }
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), code: error?.code || null, status: error?.status || null }, null, 2)}\n`);
