@@ -1193,6 +1193,7 @@ export async function updateDevEngineTaskDevelopmentMap(input: { taskId: string;
   const currentMeta = jsonRecord(current.metadata);
   const previousMap = jsonRecord(currentMeta.developmentMap);
   const previousContext = jsonRecord(currentMeta.developmentContext);
+  const previousHistory = Array.isArray(currentMeta.developmentMapHistory) ? currentMeta.developmentMapHistory.filter((item) => item && typeof item === "object" && !Array.isArray(item)).slice(-19) : [];
   const now = nowIso();
   const workItem = text(input.workItem) || text(previousMap.workItem) || current.title;
   const developmentMap = {
@@ -1216,7 +1217,18 @@ export async function updateDevEngineTaskDevelopmentMap(input: { taskId: string;
     updatedAt: now,
     source: "BENJADMIN_DEVELOPMENT_MAP",
   };
-  const metadata = { ...currentMeta, developmentMap, developmentContext };
+  const historyEntry = {
+    nodeId: text(previousMap.nodeId) || null,
+    groupName: text(previousMap.groupName) || null,
+    projectName: text(previousMap.projectName) || null,
+    moduleName: text(previousMap.moduleName) || null,
+    contextModuleName: text(previousMap.contextModuleName) || null,
+    workItem: text(previousMap.workItem) || text(previousContext.workItem) || current.title,
+    source: text(previousMap.source) || null,
+    updatedAt: text(previousMap.updatedAt) || null,
+    capturedAt: now,
+  };
+  const metadata = { ...currentMeta, developmentMap, developmentContext, developmentMapHistory: [...previousHistory, historyEntry] };
   const { data, error } = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", taskId).select("*").single();
   if (error || !data) databaseError("A Fejlesztési Térkép átsorolás mentése sikertelen.", error, 400);
   await addAudit(client, {
@@ -1238,4 +1250,42 @@ export async function updateDevEngineTaskDevelopmentMap(input: { taskId: string;
     },
   });
   return { ok: true as const, task: mapTask(data as JsonRecord), placement: developmentMap, physicalGitMove: false };
+}
+
+export async function undoDevEngineTaskDevelopmentMap(input: { taskId: string; updatedBy?: string | null }) {
+  const client = await requireClient();
+  const taskId = text(input.taskId);
+  if (!taskId) throw new DevCenterEngineError("A fejlesztési task azonosítója kötelező.", "DEV_CENTER_TASK_ID_REQUIRED", 400);
+  const { developmentMapNodeById } = await import("./development-map");
+  const current = await getTaskForConsoleControl(client, taskId);
+  const currentMeta = jsonRecord(current.metadata);
+  const currentMap = jsonRecord(currentMeta.developmentMap);
+  const currentContext = jsonRecord(currentMeta.developmentContext);
+  const history = Array.isArray(currentMeta.developmentMapHistory) ? currentMeta.developmentMapHistory.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : [];
+  if (!history.length) throw new DevCenterEngineError("Nincs visszaállítható korábbi Fejlesztési Térkép-besorolás.", "DEV_CENTER_DEVELOPMENT_MAP_UNDO_EMPTY", 409);
+  const previous = jsonRecord(history[history.length - 1]);
+  const previousNodeId = text(previous.nodeId);
+  const previousNode = previousNodeId ? developmentMapNodeById(previousNodeId) : null;
+  if (previousNodeId && !previousNode) throw new DevCenterEngineError("A korábbi Fejlesztési Térkép célpont már nem érvényes; automatikus visszaállítás letiltva.", "DEV_CENTER_DEVELOPMENT_MAP_UNDO_TARGET_INVALID", 409);
+  const now = nowIso();
+  const workItem = text(previous.workItem) || text(currentMap.workItem) || current.title;
+  const developmentMap = previousNode ? {
+    nodeId: previousNode.id, groupName: previousNode.groupName, projectName: previousNode.projectName,
+    moduleName: previousNode.moduleName, contextModuleName: previousNode.contextModuleName, workItem,
+    source: "BENJADMIN_DEVELOPMENT_MAP_UNDO", updatedAt: now, updatedBy: text(input.updatedBy, "BenjAdmin"), physicalGitMove: false,
+  } : undefined;
+  const developmentContext = previousNode ? {
+    ...currentContext, mainModule: previousNode.contextMainModule, moduleName: previousNode.moduleName,
+    submoduleName: previousNode.contextModuleName, workItem, updatedAt: now, source: "BENJADMIN_DEVELOPMENT_MAP_UNDO",
+  } : currentContext;
+  const metadata = { ...currentMeta, developmentMap, developmentContext, developmentMapHistory: history.slice(0, -1) };
+  if (!developmentMap) delete metadata.developmentMap;
+  const { data, error } = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", taskId).select("*").single();
+  if (error || !data) databaseError("A Fejlesztési Térkép visszaállítása sikertelen.", error, 400);
+  await addAudit(client, {
+    action: "TASK_DEVELOPMENT_MAP_UNDONE", entityType: "task", entityId: taskId, taskId, projectId: current.projectId,
+    summary: `${current.title} · előző térképi besorolás visszaállítva`,
+    metadata: { previousNodeId: text(currentMap.nodeId) || null, restoredNodeId: previousNode?.id || null, restoredUnclassified: !previousNode, productionAccess: "DENY", physicalGitMove: false, updatedBy: text(input.updatedBy, "BenjAdmin") },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), placement: developmentMap || null, undone: true, physicalGitMove: false };
 }

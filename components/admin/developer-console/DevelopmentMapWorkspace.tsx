@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Archive, Boxes, CheckCircle2, ChevronRight, CircleDot, FolderKanban, GripVertical, Layers3, Map as MapIcon, RefreshCw, Search, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, Archive, Boxes, CheckCircle2, ChevronRight, CircleDot, FolderKanban, GripVertical, Layers3, Map as MapIcon, RefreshCw, RotateCcw, Search, ShieldCheck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEVELOPMENT_MAP_NODES, isTechnicalDevelopmentTask, resolveDevelopmentMapNode } from "@/app/lib/dev-center/development-map";
 import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
@@ -25,7 +25,12 @@ function taskUpdated(task: LiveTask) {
   return Number.isFinite(date.getTime()) ? date.toLocaleString("hu-HU", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 }
 
-function TaskCard({ task, compact = false }: { task: LiveTask; compact?: boolean }) {
+function mapHistoryCount(task: LiveTask) {
+  const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata) ? task.metadata as Record<string, unknown> : {};
+  return Array.isArray(metadata.developmentMapHistory) ? metadata.developmentMapHistory.length : 0;
+}
+
+function TaskCard({ task, compact = false, onUndo, busy = false }: { task: LiveTask; compact?: boolean; onUndo?: (taskId: string) => void; busy?: boolean }) {
   const context = taskContext(task);
   const node = resolveDevelopmentMapNode({ projectId: task.project_id, title: task.title, description: task.description, status: task.status, scope: task.scope, metadata: task.metadata });
   const technical = isTechnicalDevelopmentTask(task);
@@ -48,6 +53,7 @@ function TaskCard({ task, compact = false }: { task: LiveTask; compact?: boolean
         {!compact ? <>
           <div className="mt-2 flex items-start gap-1.5 text-[10px] font-bold leading-4 text-cyan-800"><Layers3 size={12} className="mt-0.5 shrink-0" /><span>{node ? `${node.groupName} › ${node.projectName} › ${node.moduleName}` : `${context.mainModule} › ${context.moduleName} › ${context.submoduleName}`}</span></div>
           <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-600">{context.workItem}</p>
+          {onUndo && mapHistoryCount(task) > 0 ? <button type="button" disabled={busy} data-development-map-undo={task.id} className="mt-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-600 disabled:opacity-50" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onUndo(task.id); }}><RotateCcw size={11} className="mr-1 inline" />Előző besorolás</button> : null}
         </> : null}
       </div>
     </div>
@@ -60,8 +66,7 @@ export default function DevelopmentMapWorkspace() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
-  const [showTechnical, setShowTechnical] = useState(false);
-  const [showClosed, setShowClosed] = useState(false);
+  const [layer, setLayer] = useState<"active" | "technical" | "archive">("active");
   const [movingTaskId, setMovingTaskId] = useState("");
 
   const load = useCallback(async () => {
@@ -85,11 +90,25 @@ export default function DevelopmentMapWorkspace() {
   const tasks = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (live?.tasks || [])
-      .filter((task) => showClosed || !["completed", "cancelled"].includes(task.status))
-      .filter((task) => showTechnical || !isTechnicalDevelopmentTask(task))
+      .filter((task) => {
+        const archived = ["completed", "cancelled"].includes(task.status);
+        const technical = isTechnicalDevelopmentTask(task);
+        if (layer === "archive") return archived;
+        if (layer === "technical") return !archived && technical;
+        return !archived && !technical;
+      })
       .filter((task) => !needle || `${task.title} ${task.description || ""} ${task.project_id || ""}`.toLowerCase().includes(needle))
       .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0) || String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-  }, [live?.tasks, query, showClosed, showTechnical]);
+  }, [live?.tasks, query, layer]);
+
+  const layerCounts = useMemo(() => {
+    const all = live?.tasks || [];
+    return {
+      active: all.filter((task) => !["completed", "cancelled"].includes(task.status) && !isTechnicalDevelopmentTask(task)).length,
+      technical: all.filter((task) => !["completed", "cancelled"].includes(task.status) && isTechnicalDevelopmentTask(task)).length,
+      archive: all.filter((task) => ["completed", "cancelled"].includes(task.status)).length,
+    };
+  }, [live?.tasks]);
 
   const unclassified = useMemo(() => tasks.filter((task) => !resolveDevelopmentMapNode({ projectId: task.project_id, title: task.title, description: task.description, status: task.status, scope: task.scope, metadata: task.metadata })), [tasks]);
   const groups = useMemo(() => {
@@ -116,12 +135,25 @@ export default function DevelopmentMapWorkspace() {
     finally { setMovingTaskId(""); }
   }
 
+  async function undoTask(taskId: string) {
+    if (!taskId || movingTaskId) return;
+    setMovingTaskId(taskId); setNotice(""); setError("");
+    try {
+      const response = await fetch(`/api/dev/console/development-map/${encodeURIComponent(taskId)}`, { method: "PATCH", headers: adminHeaders(true), body: JSON.stringify({ action: "undo" }) });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string; placement?: { projectName?: string; moduleName?: string; contextModuleName?: string } | null } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Az előző besorolás nem állítható vissza.");
+      setNotice(payload.placement ? `Visszaállítva: ${payload.placement.projectName || "projekt"} › ${payload.placement.moduleName || "modul"} › ${payload.placement.contextModuleName || "munkarész"}.` : "Visszaállítva a korábbi, még nem besorolt állapot.");
+      await load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Az előző besorolás nem állítható vissza."); }
+    finally { setMovingTaskId(""); }
+  }
+
   if (loading && !live) return <div className="grid min-h-[70vh] place-items-center text-sm font-bold text-slate-500">Fejlesztési Térkép betöltése…</div>;
 
   return <main className="min-h-[calc(100vh-62px)] bg-slate-100 p-3 text-slate-950" data-testid="benjadmin-development-map">
     <header className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-950 text-cyan-100"><MapIcon size={20} /></span><div><span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">BENJADMIN</span><h1 className="text-lg font-black">Fejlesztési Térkép</h1><p className="text-[11px] font-semibold text-slate-500">Főcsoport → Projekt → Modul → Kontextus Modul / Almodul → Munkarész</p></div></div>
-      <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700"><ShieldCheck size={11} className="mr-1 inline" />METAADAT MOZGATÁS · PROD DENY</span><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600">Ctrl+Alt+2 = elrejtés</span></div>
+      <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700"><ShieldCheck size={11} className="mr-1 inline" />METAADAT MOZGATÁS · PROD DENY</span><span className="rounded-full bg-amber-50 px-3 py-1 text-[10px] font-black text-amber-700">TAXONÓMIA: V1 · EXCEL JÓVÁHAGYÁSRA VÁR</span><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600">Ctrl+Alt+2 = elrejtés</span></div>
     </header>
     {error ? <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-800"><AlertTriangle size={15} />{error}<button className="ml-auto rounded-lg border border-red-200 bg-white px-2 py-1" onClick={() => void load()}><RefreshCw size={12} className="inline" /> Újra</button></div> : null}
     {notice ? <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800">{notice}</div> : null}
@@ -129,9 +161,9 @@ export default function DevelopmentMapWorkspace() {
       <aside className="min-h-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" data-testid="benjadmin-development-map-source">
         <div className="mb-3 flex items-center justify-between gap-2"><div><span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">FORRÁS</span><h2 className="font-black">Fejlesztések / átsorolás</h2></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black">{tasks.length} db</span></div>
         <label className="mb-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><Search size={14} className="text-slate-400" /><input className="min-w-0 flex-1 bg-transparent text-xs font-bold outline-none" placeholder="Keresés fejlesztésben…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-        <div className="mb-3 grid grid-cols-2 gap-2 text-[10px] font-black"><button type="button" className={`rounded-lg border px-2 py-2 ${showTechnical ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-500"}`} onClick={() => setShowTechnical((v) => !v)}><Wrench size={12} className="mr-1 inline" />Technikai taskok</button><button type="button" className={`rounded-lg border px-2 py-2 ${showClosed ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-500"}`} onClick={() => setShowClosed((v) => !v)}><Archive size={12} className="mr-1 inline" />Lezártak</button></div>
+        <div className="mb-3 grid grid-cols-3 gap-2 text-[10px] font-black" data-testid="benjadmin-development-map-layers"><button type="button" data-map-layer="active" className={`rounded-lg border px-2 py-2 ${layer === "active" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-500"}`} onClick={() => setLayer("active")}><CircleDot size={12} className="mr-1 inline" />Aktív · {layerCounts.active}</button><button type="button" data-map-layer="technical" className={`rounded-lg border px-2 py-2 ${layer === "technical" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-500"}`} onClick={() => setLayer("technical")}><Wrench size={12} className="mr-1 inline" />Technikai · {layerCounts.technical}</button><button type="button" data-map-layer="archive" className={`rounded-lg border px-2 py-2 ${layer === "archive" ? "border-cyan-500 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-500"}`} onClick={() => setLayer("archive")}><Archive size={12} className="mr-1 inline" />Archív · {layerCounts.archive}</button></div>
         {unclassified.length ? <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-2 text-[10px] font-bold text-amber-800"><AlertTriangle size={12} className="mr-1 inline" />{unclassified.length} elem nincs biztosan besorolva. Ezeket érdemes elsőként áthúzni.</div> : null}
-        <div className="grid max-h-[calc(100vh-375px)] gap-2 overflow-auto pr-1">{tasks.map((task) => <TaskCard key={task.id} task={task} />)}{!tasks.length ? <p className="p-5 text-center text-xs font-bold text-slate-400">Nincs a szűrésnek megfelelő fejlesztés.</p> : null}</div>
+        <div className="grid max-h-[calc(100vh-375px)] gap-2 overflow-auto pr-1">{tasks.map((task) => <TaskCard key={task.id} task={task} onUndo={undoTask} busy={movingTaskId === task.id} />)}{!tasks.length ? <p className="p-5 text-center text-xs font-bold text-slate-400">Nincs a szűrésnek megfelelő fejlesztés.</p> : null}</div>
       </aside>
       <section className="min-h-0 overflow-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-sm" data-testid="benjadmin-development-map-targets">
         <div className="mb-3 flex items-center justify-between"><div><span className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-700">CÉLSTRUKTÚRA</span><h2 className="font-black">Projekt- és modulhierarchia</h2></div><span className="text-[10px] font-bold text-slate-500">Húzd a kártyát a megfelelő modulra</span></div>
@@ -150,6 +182,6 @@ export default function DevelopmentMapWorkspace() {
         </details>)}</div>
       </section>
     </section>
-    <footer className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-500"><CheckCircle2 size={13} className="text-emerald-600" />Átsoroláskor csak BENJADMIN metadata és audit esemény változik.<CircleDot size={11} />Git branch, worktree és fájlútvonal fizikailag változatlan marad.</footer>
+    <footer className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-bold text-slate-500"><CheckCircle2 size={13} className="text-emerald-600" />Átsoroláskor csak BENJADMIN metadata és audit esemény változik; az előző besorolás auditáltan visszaállítható.<CircleDot size={11} />Git branch, worktree és fájlútvonal fizikailag változatlan marad.</footer>
   </main>;
 }

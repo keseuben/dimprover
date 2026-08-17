@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+const read=(f)=>fs.readFileSync(f,"utf8"); let p=0,f=0;
+const check=(name,ok)=>{console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)p++;else f++;};
+const ui=read("components/admin/developer-console/DevelopmentMapWorkspace.tsx");
+const repo=read("app/lib/dev-center/engine-repository.ts");
+const route=read("app/api/dev/console/development-map/[taskId]/route.ts");
+const model=read("app/lib/dev-center/development-map.ts");
+check("Active technical archive layers", ui.includes('data-map-layer="active"')&&ui.includes('data-map-layer="technical"')&&ui.includes('data-map-layer="archive"'));
+check("Layer counts visible",ui.includes("layerCounts.active")&&ui.includes("layerCounts.technical")&&ui.includes("layerCounts.archive"));
+check("Previous placement history persisted",repo.includes("developmentMapHistory")&&repo.includes("historyEntry"));
+check("History bounded",repo.includes("slice(-19)"));
+check("Undo endpoint action exists",route.includes('body.action === "undo"')&&route.includes("undoDevEngineTaskDevelopmentMap"));
+check("Undo UI exists",ui.includes("data-development-map-undo")&&ui.includes("Előző besorolás"));
+check("Undo audit exists",repo.includes("TASK_DEVELOPMENT_MAP_UNDONE"));
+check("Undo invalid target fails closed",repo.includes("DEV_CENTER_DEVELOPMENT_MAP_UNDO_TARGET_INVALID"));
+check("Empty undo fails closed",repo.includes("DEV_CENTER_DEVELOPMENT_MAP_UNDO_EMPTY"));
+check("No physical Git move",repo.includes("physicalGitMove: false")&&ui.includes("Git/worktree nem"));
+check("PROD deny remains explicit",repo.includes('productionAccess: "DENY"'));
+check("Taxonomy remains provisional",ui.includes("TAXONÓMIA: V1")&&ui.includes("EXCEL JÓVÁHAGYÁSRA VÁR"));
+check("No Excel taxonomy import invented",!model.includes("xlsx")&&!model.includes("Excel import"));
+console.log(JSON.stringify({ok:f===0,passed:p,failed:f,total:p+f},null,2)); if(f)process.exit(1);
