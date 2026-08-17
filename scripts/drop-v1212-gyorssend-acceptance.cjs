@@ -5,7 +5,11 @@ const service = fs.readFileSync('app/lib/drop/public/dropPublicFinalizeService.t
 const worker = fs.readFileSync('app/lib/drop/worker/dropWorkerService.ts','utf8');
 const tests = [
  ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Beállítások','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
- ['Stepper visszalépés state-törlés nélkül', ui.includes('onClick={() => goToStep(index)}') && ui.includes('setWorkflowStep(step)') && !ui.includes('function goToStep(step: number) {\n    setQueue([])')],
+ ['Mobil stepper mind a 6 pontot egyszerre mutatja', ui.includes('grid grid-cols-6 gap-1') && ui.includes('hidden sm:inline') && !ui.includes('overflow-x-auto rounded-2xl border border-cyan-200 bg-white/95')],
+ ['Egyszerre egy egyszerű lépés látható', ui.includes('workflowStep === 0 ? <div>') && ui.includes('workflowStep === 1 ? <div>') && [2,3,4,5].every(x=>ui.includes(`workflowStep === ${x} ? "block" : "hidden"`))],
+ ['Haladó beállítások alapból összecsukva', ui.includes('<details className="mt-3 rounded-2xl') && ui.includes('További beállítások') && ui.includes('· opcionális')],
+ ['Egyszerű előre-vissza navigáció', ['Tovább a képekhez','Tovább az ellenőrzéshez','Tovább a mentéshez','Tovább a riporthoz','Tovább a lezáráshoz'].every(x=>ui.includes(x))],
+ ['Stepper visszalépés state-törlés nélkül', ui.includes('onClick={() => goToStep(index)}') && ui.includes('setWorkflowStep(safeStep)') && !ui.includes('function goToStep(step: number) {\n    setQueue([])')],
  ['Feltöltés normál kattintás', ui.includes('? "Feltöltés folytatása" : "Fájlok feltöltése"') && !ui.includes('Fájlok feltöltése · 2 mp')],
  ['Véglegesítés slide-to-confirm', ui.includes('SlideConfirm') && ui.includes('Húzza jobbra a küldemény véglegesítéséhez')],
  ['Slide 85% küszöb', ui.includes('progress >= 85')],
