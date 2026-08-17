@@ -58,8 +58,9 @@ export default function FieldCaptureShell() {
   const chooseSource = (options: PreCaptureOptions, source: "camera" | "gallery") => {
     pendingOptionsRef.current = options;
     if (options.rememberForSession) { saveFieldCaptureDefaults(options); setDefaults(options); }
+    if (source === "camera") launcherRef.current?.openCamera();
+    else launcherRef.current?.openGallery();
     setSheetOpen(false);
-    window.setTimeout(() => source === "camera" ? launcherRef.current?.openCamera() : launcherRef.current?.openGallery(), 40);
   };
 
   const onFiles = useCallback(async (files: File[]) => {

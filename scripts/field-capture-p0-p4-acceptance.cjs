@@ -33,6 +33,7 @@ const tests = [
   ['Maximum 200 terepi kép', types.includes('FIELD_CAPTURE_MAX_ITEMS = 200') && shell.includes('FIELD_CAPTURE_MAX_ITEMS')],
   ['Kamera environment capture', launcher.includes('capture="environment"') && launcher.includes('data-field-capture-camera-input')],
   ['Galéria több kép import', launcher.includes('data-field-capture-gallery-input') && launcher.includes('multiple')],
+  ['Kamera/Galéria közvetlen user gesture-ből nyílik', shell.includes('if (source === "camera") launcherRef.current?.openCamera();') && shell.includes('else launcherRef.current?.openGallery();') && !shell.includes('window.setTimeout(() => source === "camera"')],
   ['Fényképezés előtti bottom sheet', sheet.includes('Fényképezés előtti beállítások') && sheet.includes('Mit rögzítsen ehhez a képhez?')],
   ['GPS külön kapcsoló', sheet.includes('GPS helyadat') && types.includes('gpsEnabled: boolean')],
   ['Tájolás külön kapcsoló', sheet.includes('Telefon iránya / tájolás') && types.includes('orientationEnabled: boolean')],
