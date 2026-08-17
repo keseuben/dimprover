@@ -42,8 +42,6 @@ try {
         this.beta = 90;
         this.gamma = 165;
         this.absolute = true;
-        this.webkitCompassHeading = 43;
-        this.webkitCompassAccuracy = 6;
       }
     }
     Object.defineProperty(window, 'DeviceOrientationEvent', { configurable: true, writable: true, value: FakeOrientationEvent });
@@ -103,7 +101,7 @@ try {
   await open.click();
   await page.waitForFunction(() => (document.body.textContent || '').includes('Terep Tesztelő'), { timeout: 10_000 });
   pass('Ugyanaz a Send entitlement nyitja a Terepet', true);
-  pass('Terep shell megnyílt', await page.evaluate(() => (document.body.textContent || '').includes('Gyors terepi rögzítés')));
+  pass('Terep shell megnyílt', await page.evaluate(() => (document.body.textContent || '').includes('Új terepi kép')));
   pass('GPS alapból KI', await page.evaluate(() => !(document.body.textContent || '').includes('GPS ±')));
 
   const newPhoto = await visibleButton(page, 'Új terepi kép');
@@ -139,7 +137,34 @@ try {
   assert.ok(cardToggle, 'Képkártya lenyitó hiányzik');
   if (!(await visibleButton(page, 'GPS újramérés'))) await cardToggle.click();
   pass('GPS újramérés gomb elérhető', Boolean(await visibleButton(page, 'GPS újramérés')));
-  pass('Tájolás újramérés gomb elérhető', Boolean(await visibleButton(page, 'Tájolás újramérés')));
+  pass('Kamerairány újramérés gomb elérhető', Boolean(await visibleButton(page, 'Kamerairány újramérés')));
+
+  const editButton = await visibleButton(page, 'Kép szerkesztése / jelölése');
+  assert.ok(editButton, 'Kép szerkesztése gomb hiányzik');
+  await editButton.click();
+  await page.waitForFunction(() => (document.body.textContent || '').includes('DIMPRO Képjelölő'), { timeout: 5000 });
+  pass('DIMPRO Képjelölő megnyílik', true);
+  const editorCanvas = await page.$('[aria-label="DIMPRO képszerkesztő"] canvas');
+  assert.ok(editorCanvas, 'Képjelölő canvas hiányzik');
+  const canvasBox = await editorCanvas.boundingBox();
+  assert.ok(canvasBox && canvasBox.width > 100 && canvasBox.height > 100, 'Képjelölő canvas mérete hibás');
+  await page.mouse.move(canvasBox.x + canvasBox.width * .30, canvasBox.y + canvasBox.height * .35);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + canvasBox.width * .65, canvasBox.y + canvasBox.height * .58, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => (el.textContent || '').includes('Szerkesztett kép mentése') && !el.disabled), { timeout: 10_000 });
+  const saveEdited = await visibleButton(page, 'Szerkesztett kép mentése');
+  assert.ok(saveEdited, 'Szerkesztett kép mentése gomb hiányzik');
+  await saveEdited.click();
+  await page.waitForFunction(() => !(document.body.textContent || '').includes('DIMPRO Képjelölő'), { timeout: 30_000 });
+  await page.waitForFunction(() => (document.body.textContent || '').includes('Szerkesztve · v1'), { timeout: 30_000 });
+  pass('Szerkesztett kép visszakerül a Terep munkamenetbe', true);
+
+  const toReview = await visibleButton(page, 'Tovább az ellenőrzéshez');
+  assert.ok(toReview, 'Tovább az ellenőrzéshez gomb hiányzik');
+  await toReview.click();
+  await page.waitForFunction(() => (document.body.textContent || '').includes('2. Ellenőrzés'), { timeout: 5000 });
+  pass('Rögzítésből Ellenőrzés lépésre tovább lehet menni', true);
 
   const noteArea = await page.$('textarea[placeholder*="repedés"]');
   assert.ok(noteArea, 'Megjegyzés mező hiányzik');
@@ -157,11 +182,19 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('textarea')].some((el) => el.value.toLowerCase().includes('terepi hangos teszt')), { timeout: 5000 });
   pass('Shared DIMPRO Voice működik Terepen', true);
 
+  const toSave = await visibleButton(page, 'Tovább a mentéshez');
+  assert.ok(toSave, 'Tovább a mentéshez gomb hiányzik');
+  await toSave.click();
+  await page.waitForFunction(() => (document.body.textContent || '').includes('3. Mentés') && (document.body.textContent || '').includes('helyi terepi munkamenet mentve'), { timeout: 5000 });
+  pass('Ellenőrzésből Mentés lépésre tovább lehet menni', true);
+  pass('Mentés lépés nem állít szerveres szinkront', await page.evaluate(() => (document.body.textContent || '').includes('P7 szerveres DIMPRO szinkron')));
+
   await page.reload({ waitUntil: 'networkidle2', timeout: 60_000 });
   await page.waitForFunction(() => document.querySelectorAll('[data-field-capture-item]').length === 1, { timeout: 10_000 });
   pass('IndexedDB queue reload után visszaáll', true);
   pass('GPS rekord reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('GPS ±8 m')));
   pass('Kamerairány rekord reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('D · 180°')));
+  pass('Szerkesztett kép állapota reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('Szerkesztve · v1')));
   pass('Visszaállított mobil UI nem lóg ki', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   pass('Böngésző pageerror nincs', pageErrors.length === 0, pageErrors.join(' | '));
   pass('Böngésző console error nincs', consoleErrors.length === 0, consoleErrors.join(' | '));

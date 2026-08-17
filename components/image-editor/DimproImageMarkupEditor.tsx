@@ -224,8 +224,7 @@ export default function DimproImageMarkupEditor({ file, title = "Kép szerkeszt�
       setBaseImageDataUrl(dataUrl);
       setHistory([{ baseImageDataUrl: dataUrl, items: [] }]);
       setHistoryIndex(0);
-      setStatus("A kép szerkesztésre kész.");
-      setLoading(false);
+      setStatus("A kép betöltése a rajzfelületre…");
     };
     reader.onerror = () => { if (!cancelled) { setStatus("A kép nem olvasható."); setLoading(false); } };
     reader.readAsDataURL(file);
@@ -243,8 +242,11 @@ export default function DimproImageMarkupEditor({ file, title = "Kép szerkeszt�
       canvas.height = Math.max(1, image.naturalHeight || image.height);
       setCanvasSize({ width: canvas.width, height: canvas.height });
       redraw();
+      setLoading(false);
+      setStatus("A kép szerkesztésre kész.");
       window.setTimeout(fitToStage, 60);
     };
+    image.onerror = () => { setStatus("A kép nem jeleníthető meg a rajzfelületen."); setLoading(false); };
     image.src = baseImageDataUrl;
   }, [baseImageDataUrl, fitToStage, redraw]);
 
@@ -367,7 +369,7 @@ export default function DimproImageMarkupEditor({ file, title = "Kép szerkeszt�
   async function save() {
     if (saving) return;
     const output = renderedCanvas();
-    if (!output) return;
+    if (!output) { setStatus("A kép még nem áll készen a mentéshez."); return; }
     setSaving(true);
     setStatus("Szerkesztett kép mentése…");
     try {
