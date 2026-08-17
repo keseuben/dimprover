@@ -105,3 +105,28 @@ Testing-gate commit:
 `dced01b34e1454e101925546727e21ebdbecf5e7`
 
 A végleges build ID, runtime acceptance és DEV aktiválási adatok a candidate teszt után kerülnek ide.
+
+## DEV aktiválási lezárás · 2026-08-17 10:05 CEST
+
+A BENJADMIN V1.5 a JázminAI által lezárt Drop/GyorsSend v1.2.12 változtatásokkal közös, egyesített DEV release-ben került aktiválásra.
+
+- aktív kódforrás: `2993748ca098e19704085e0288a6e096c2834902`
+- aktív build: `kdYIPMc_9wAXSfHo3W1XN`
+- active release: `.next-drop-v1212-simple-stepper-2993748`
+- rollback release: `.next-benjadmin-v14-worker-activity-final`
+- trusted baseline: `2993748ca098e19704085e0288a6e096c2834902`
+- PM2: `dimpro-benjadmin-operator-ui-v2-dev` online, unstable 0
+- PROD: változatlan / READ_ONLY
+
+### Aktiválási acceptance
+
+- TypeScript: PASS
+- célzott ESLint: 0 error
+- BENJADMIN V1.5 contract: 19/19 PASS
+- BENJADMIN V1.5 live runtime: 20/20 PASS
+- TESTING-gate browser: 10/10 PASS
+- korábbi exact candidate kapuk: next-chain browser 10/10, deep-link 13/13, V1.4 worker browser 15/15, V1.4 contract 23/23, V1.4 runtime 18/18, next-chain runtime 13/13, Plus V1.2 runtime 29/29
+- BENJADMIN post-cutover HTTP smoke: 200
+- Drop post-cutover HTTP smoke: 200
+
+A sikeres lezárási szabály változatlanul fail-closed: `COMPLETE` csak `TESTING` állapotból engedett. Blokkoló hiba aktív task közben továbbra is `FAIL` úton jelenthető.
