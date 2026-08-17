@@ -104,3 +104,11 @@ A `user_drive_asset_refs` és `project_drive_asset_refs` végleges létrehozása
 6. P6 tájolás adapter heading/accuracy kezeléssel.
 7. P7 Voice Engine kibővítés szerveres opcionális transzkripcióval, ha az A browser engine terepen nem elég.
 8. P8/P9 Saját Drive és Projektkapu Drive külön ownership/lifecycle.
+
+## DEV host és auth pontosítás
+
+- kanonikus DIMPRO alkalmazás DEV host: `app.dev.dimpro.hu`
+- kompatibilis belső DEV host: `dev.dimpro.hu`
+- a `/field-capture` oldal központi DIMPRO bejelentkezéshez kötött
+- az `/api/field-capture/health` publikus, csak readiness adatokat adó monitoring endpoint
+- a Terepi Service Worker kizárólag DEV hoston regisztrálódik, scope: `/field-capture/`

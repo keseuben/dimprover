@@ -19,6 +19,7 @@ const pwaShell = read('components/field-capture/FieldCapturePwaShell.tsx');
 const manifest = read('public/field-capture-dev.webmanifest');
 const sw = read('public/field-capture-sw.js');
 const schema = read('supabase/DIMPRO_FIELD_CAPTURE_P0_P4_SCHEMA_DRAFT.sql');
+const proxy = read('proxy.ts');
 
 const tests = [
   ['Külön /field-capture route', page.includes('FieldCaptureShell') && flags.includes('route: "/field-capture"')],
@@ -53,7 +54,9 @@ const tests = [
   ['Külön capture schema draft', ['field_capture_sessions','field_capture_items','field_capture_asset_refs','field_capture_locations','field_capture_orientations','field_capture_voice_notes','field_capture_destinations','field_capture_events','field_capture_sync_queue'].every((name) => schema.includes(name))],
   ['Schema draft nincs automatikus migrációként deklarálva', schema.includes('NEM FUT LE AUTOMATIKUSAN')],
   ['GPS/heading strukturált rekord és nem EXIF source of truth', schema.includes('accuracy_meters') && schema.includes('heading_degrees') && shell.includes('nem EXIF')],
-  ['PWA regisztráció DEV hostra korlátozott', pwaShell.includes('window.location.hostname === "dev.dimpro.hu"')],
+  ['PWA regisztráció hivatalos DEV hostokra korlátozott', pwaShell.includes('window.location.hostname === "dev.dimpro.hu"') && pwaShell.includes('window.location.hostname === "app.dev.dimpro.hu"')],
+  ['Field Capture health publikus monitoring végpont', proxy.includes('pathname === "/api/field-capture/health"')],
+  ['Field Capture oldal auth-védett marad', !proxy.includes('pathname === "/field-capture" ||')],
 ];
 let failed = 0;
 tests.forEach(([name, ok], index) => { if (!ok) failed += 1; console.log(`${String(index + 1).padStart(2,'0')}. ${ok ? 'PASS' : 'FAIL'} - ${name}`); });

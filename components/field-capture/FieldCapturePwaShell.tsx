@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export default function FieldCapturePwaShell({ children }: { children: React.ReactNode }) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
-    const devHost = window.location.hostname === "dev.dimpro.hu" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    const devHost = window.location.hostname === "dev.dimpro.hu" || window.location.hostname === "app.dev.dimpro.hu" || window.location.hostname.endsWith(".dev.dimpro.hu") || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     if (!devHost || !("serviceWorker" in navigator)) return;
     let registration: ServiceWorkerRegistration | null = null;
     void navigator.serviceWorker.register("/field-capture-sw.js", { scope: "/field-capture/", updateViaCache: "none" }).then((next) => {
