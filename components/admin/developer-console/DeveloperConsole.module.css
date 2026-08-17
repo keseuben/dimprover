@@ -224,6 +224,24 @@
 .message_right .messageIdentity span { justify-content: flex-end; }
 .messageBody { margin-top: 7px; color: var(--text); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .messageDetail { margin: 5px 0 0; color: var(--text-soft); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.messageWorkContext { margin-top: 7px; padding: 8px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: 8px; display: grid; gap: 6px; background: color-mix(in srgb, var(--accent) 3%, var(--surface2)); }
+.messageContextPath { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5px; }
+.messageContextPath > span { min-width: 0; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; column-gap: 4px; background: var(--surface); }
+.messageContextPath > span > svg { grid-row: 1 / span 2; color: var(--accent-strong); }
+.messageContextPath small { min-width: 0; color: var(--muted); font-size: 8px; font-weight: 950; letter-spacing: .06em; white-space: nowrap; }
+.messageContextPath b { min-width: 0; color: var(--text); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.messageStageRow { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.messageStageBadge { flex: 0 0 auto; padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--border)); border-radius: 999px; color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--surface)); font-size: 9px; font-weight: 950; letter-spacing: .04em; }
+.messageWorkContext[data-work-stage="2"] .messageStageBadge { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); color: var(--green); background: var(--green-soft); }
+.messageWorkContext[data-work-stage="3"] .messageStageBadge { border-color: color-mix(in srgb, var(--violet) 45%, var(--border)); color: var(--violet); background: color-mix(in srgb, var(--violet) 8%, var(--surface)); }
+.messageWorkContext[data-work-stage="4"] .messageStageBadge { border-color: color-mix(in srgb, var(--amber) 48%, var(--border)); color: var(--amber); background: var(--amber-soft); }
+.messageWorkContext[data-work-stage="5"] .messageStageBadge { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); color: var(--accent-strong); background: var(--accent-soft); }
+.messageWorkContext[data-work-stage="6"] .messageStageBadge { border-color: color-mix(in srgb, var(--green) 58%, var(--border)); color: var(--green); background: color-mix(in srgb, var(--green) 11%, var(--surface)); }
+.messageStageRow > span { min-width: 0; display: flex; align-items: center; gap: 4px; color: var(--text-soft); font-size: 10px; line-height: 1.35; }
+.messageStageRow > span svg { flex: 0 0 auto; color: var(--muted); }
+.messageWorkItem { margin: 0; color: var(--text-soft); font-size: 10px; line-height: 1.4; }
+.messageWorkItem b { color: var(--text); }
+.messageActivityNarrative { margin: 0; padding-top: 5px; border-top: 1px dashed var(--border); color: var(--text-soft); font-size: 11px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .messageHandoffButton { margin-top: 7px; min-height: 30px; padding: 0 9px; border: 1px solid color-mix(in srgb, var(--violet) 55%, var(--border)); border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; color: var(--violet); background: color-mix(in srgb, var(--violet) 7%, var(--surface)); cursor: pointer; font-size: 11px; font-weight: 900; }
 .messageHandoffButton:hover { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 12%, var(--surface)); }
 .messageProgress { position: relative; height: 18px; margin-top: 7px; border-radius: 5px; overflow: hidden; background: var(--surface2); }
@@ -455,6 +473,9 @@
   .messageCard, .message_center .messageCard, .messageSystem .messageCard { width: 88%; }
   .messageBody { font-size: 13px; }
   .messageMeta { gap: 4px 6px; }
+  .messageContextPath { grid-template-columns: 1fr; }
+  .messageStageRow { align-items: flex-start; flex-direction: column; }
+  .messageStageBadge { white-space: nowrap; }
   .livePanel { padding: 6px; max-height: 270px; }
   .workerCards { grid-template-columns: 1fr; }
   .latestBuilds { display: none; }

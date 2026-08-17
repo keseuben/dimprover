@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, BadgeCheck, Check, CheckCircle2, ClipboardCopy, FileCode2, FileDiff, GitCommitHorizontal, Hammer, ListChecks, MessageSquareText, ShieldAlert, Sparkles, TerminalSquare } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Boxes, Check, CheckCircle2, ClipboardCopy, FileCode2, FileDiff, GitCommitHorizontal, Hammer, Layers3, ListChecks, MessageSquareText, ShieldAlert, Sparkles, TerminalSquare, Wrench } from "lucide-react";
 import { useState } from "react";
 import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import type { ConsoleMessage } from "./types";
@@ -79,6 +79,15 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
   const diffSummary = metadataText(message, "diffSummary");
   const repeatCount = Math.max(1, Number(message.metadata?.repeatCount || 1));
   const sanitized = message.metadata?.sanitized === true;
+  const mainModule = metadataText(message, "mainModule");
+  const moduleName = metadataText(message, "moduleName");
+  const submoduleName = metadataText(message, "submoduleName");
+  const workItem = metadataText(message, "workItem");
+  const activityAction = metadataText(message, "activityAction");
+  const activityNarrative = metadataText(message, "activityNarrative");
+  const workStageIndex = Math.max(1, Math.min(6, Number(message.metadata?.workStageIndex || 1)));
+  const workStageLabel = metadataText(message, "workStageLabel") || "ELEMZÉS / ELŐKÉSZÍTÉS";
+  const showWorkContext = Boolean(message.taskId && (mainModule || moduleName || submoduleName || workItem));
 
   async function copyHandoff() {
     if (!handoffPrompt) return;
@@ -110,7 +119,22 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
           <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
         </header>
         <div className={styles.messageBody}>{message.summary || "—"}</div>
-        {message.detail ? <p className={styles.messageDetail}>{message.detail}</p> : null}
+        {showWorkContext ? (
+          <section className={styles.messageWorkContext} data-work-stage={workStageIndex} data-testid="benjadmin-message-work-context">
+            <div className={styles.messageContextPath}>
+              {mainModule ? <span><Layers3 size={11} /><small>FŐMODUL</small><b>{mainModule}</b></span> : null}
+              {moduleName ? <span><Boxes size={11} /><small>MODUL</small><b>{moduleName}</b></span> : null}
+              {submoduleName ? <span><FileCode2 size={11} /><small>ALMODUL / FUNKCIÓ</small><b>{submoduleName}</b></span> : null}
+            </div>
+            <div className={styles.messageStageRow}>
+              <strong className={styles.messageStageBadge} data-testid="benjadmin-work-stage">6/{workStageIndex} · {workStageLabel}</strong>
+              {activityAction ? <span><Wrench size={12} />{activityAction}</span> : null}
+            </div>
+            {workItem ? <p className={styles.messageWorkItem}><b>Munkarész:</b> {workItem}</p> : null}
+            {activityNarrative ? <p className={styles.messageActivityNarrative}>{activityNarrative}</p> : null}
+          </section>
+        ) : null}
+        {message.detail && !activityNarrative ? <p className={styles.messageDetail}>{message.detail}</p> : null}
         {(filePath || diffSummary || command || sanitized) ? (
           <div className={styles.messageActivityMeta}>
             {filePath ? <span><FileCode2 size={11} /><code>{filePath}</code></span> : null}

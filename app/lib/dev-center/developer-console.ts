@@ -218,6 +218,157 @@ function mapAuditRow(row: Row): ConsoleMessage {
   };
 }
 
+
+type ConsoleTaskContext = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: string;
+  scope: Array<{ type: string; key: string }>;
+  metadata: Record<string, unknown>;
+};
+
+const WORK_STAGE_LABELS = ["", "ELEMZÉS / ELŐKÉSZÍTÉS", "FEJLESZTÉS", "TESZTELÉS", "ELLENŐRZÉS / JAVÍTÁS", "BUILD / KIADÁS", "LEZÁRÁS / ÁTADÁS"] as const;
+
+function safeStageIndex(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(1, Math.min(6, Math.round(numeric))) : 0;
+}
+
+function stageForMessage(message: ConsoleMessage) {
+  const explicit = safeStageIndex(message.metadata.workStageIndex);
+  if (explicit) return explicit;
+  const phase = text(message.metadata.activityPhase || message.metadata.phase).toLowerCase();
+  if (message.kind === "RELEASE" || text(message.metadata.action).toUpperCase() === "COMPLETE") return 6;
+  if (message.kind === "BUILD_EVENT" || message.kind === "COMMIT" || phase === "build" || phase === "commit") return 5;
+  if (message.kind === "ERROR" || message.kind === "WARNING" || ["error", "review", "fix"].includes(phase)) return 4;
+  if (message.kind === "TEST_RESULT" || ["test", "testing"].includes(phase)) return 3;
+  if (["CODE_ACTIVITY", "FILE_CHANGE", "DIFF", "TERMINAL_ACTIVITY"].includes(message.kind) || ["coding", "file-change", "diff", "terminal"].includes(phase)) return 2;
+  return 1;
+}
+
+function scopeEntries(value: unknown) {
+  if (!Array.isArray(value)) return [] as Array<{ type: string; key: string }>;
+  return value.map((item) => record(item)).map((item) => ({ type: text(item.type), key: text(item.key) })).filter((item) => item.type && item.key);
+}
+
+function inferHierarchy(task: ConsoleTaskContext) {
+  const meta = task.metadata;
+  const haystack = `${task.title} ${task.description}`.toLowerCase();
+  let mainModule = text(meta.mainModule || meta.main_module || meta.productArea || meta.product);
+  let moduleName = text(meta.moduleName || meta.module || meta.module_name || meta.moduleHint);
+  let submoduleName = text(meta.submoduleName || meta.submodule || meta.sub_module || meta.featureArea);
+  const workItem = text(meta.workItem || meta.work_item || meta.currentWorkItem) || task.title;
+
+  if (!mainModule) {
+    if (haystack.includes('benjadmin')) mainModule = 'BENJADMIN';
+    else if (haystack.includes('gyorssend') || haystack.includes('gyorskép') || haystack.includes('drop')) mainModule = 'DIMPRO Drop';
+    else if (haystack.includes('drive')) mainModule = 'DIMPRO Drive';
+    else if (haystack.includes('fájlműhely') || haystack.includes('fajlmuhely')) mainModule = 'DIMPRO Fájlműhely';
+    else if (haystack.includes('projektkapu')) mainModule = 'DIMPROVER Projektkapu';
+    else if (haystack.includes('értekez') || haystack.includes('teams')) mainModule = 'DIMPRO Értekezleti Asszisztens';
+    else mainModule = task.projectId === 'project_dimprover' ? 'DIMPROVER' : task.projectId || 'DIMPRO';
+  }
+
+  if (!moduleName) {
+    if (mainModule === 'BENJADMIN') {
+      if (haystack.includes('scheduler') || haystack.includes('éjszak') || haystack.includes('ébreszt')) moduleName = 'Fejlesztési ütemező';
+      else if (haystack.includes('worker') || haystack.includes('live workspace')) moduleName = 'AI Fejlesztői Tér';
+      else moduleName = 'Fejlesztői Konzol';
+    } else if (mainModule === 'DIMPRO Drop') moduleName = haystack.includes('gyors') ? 'GyorsSend / Gyorskép' : 'Drop Core';
+    else if (mainModule === 'DIMPRO Drive') moduleName = 'Drive munkatér';
+    else moduleName = 'Fejlesztési munkarész';
+  }
+
+  if (!submoduleName) {
+    if (haystack.includes('közös fejlesztői') || haystack.includes('worker context') || haystack.includes('kárty')) submoduleName = 'Közös fejlesztői csevegés';
+    else if (haystack.includes('voice') || haystack.includes('diktál')) submoduleName = 'Hang / diktálás';
+    else if (haystack.includes('multipart') || haystack.includes('upload') || haystack.includes('feltölt')) submoduleName = 'Feltöltési folyamat';
+    else if (haystack.includes('scheduler') || haystack.includes('éjszak')) submoduleName = 'Éjszakai / órás futási lánc';
+    else if (haystack.includes('pwa')) submoduleName = 'PWA';
+    else if (haystack.includes('chat') || haystack.includes('cseveg')) submoduleName = 'Csevegés és aktivitás';
+    else {
+      const moduleScope = task.scope.find((item) => item.type === 'module');
+      const pathScope = task.scope.find((item) => item.type === 'path');
+      submoduleName = moduleScope?.key || pathScope?.key || 'Aktuális funkció';
+    }
+  }
+  return { mainModule, moduleName, submoduleName, workItem };
+}
+
+function actionForStage(stage: number, message: ConsoleMessage) {
+  const explicit = text(message.metadata.activityAction);
+  if (explicit) return explicit;
+  if (stage === 1) return 'Elemzi a feladatot, a technikai scope-ot és a szükséges módosításokat.';
+  if (stage === 2) return 'A kijelölt funkció kódját fejleszti és a kapcsolódó fájlokat módosítja.';
+  if (stage === 3) return 'Célzott teszteket és regressziós ellenőrzéseket futtat az elkészült módosításon.';
+  if (stage === 4) return 'A teszteredményeket ellenőrzi, hibát javít vagy minőségi felülvizsgálatot végez.';
+  if (stage === 5) return 'TypeScript/lint/build kapukat futtat, és előkészíti a DEV release-t.';
+  return 'Lezárja a fejlesztési munkarészt, rögzíti az eredményt és átadja a következő láncszemnek.';
+}
+
+function narrativeForMessage(message: ConsoleMessage, task: ConsoleTaskContext | null, stage: number) {
+  const explicit = text(message.metadata.activityNarrative);
+  if (explicit) return explicit;
+  const parts: string[] = [actionForStage(stage, message)];
+  const taskDescription = task?.description ? task.description.replace(/\s+/g, ' ').trim() : '';
+  if (taskDescription && !message.detail) parts.push(`Feladatcél: ${taskDescription.slice(0, 420)}${taskDescription.length > 420 ? '…' : ''}`);
+  if (message.detail) parts.push(message.detail);
+  return parts.slice(0, 3).join(' ');
+}
+
+async function enrichMessagesWithTaskContext(client: SupabaseClient, messages: ConsoleMessage[]) {
+  const taskIds = [...new Set(messages.map((message) => message.taskId).filter((value): value is string => Boolean(value)))];
+  const taskMap = new Map<string, ConsoleTaskContext>();
+  if (taskIds.length) {
+    const taskResult = await client.from('dev_center_tasks').select('id,project_id,title,description,status,scope,metadata').in('id', taskIds);
+    if (taskResult.error) throw new Error(taskResult.error.message || 'A fejlesztési task kontextusa nem tölthető be.');
+    for (const raw of taskResult.data || []) {
+      const row = raw as Row;
+      const id = text(row.id);
+      if (!id) continue;
+      taskMap.set(id, {
+        id,
+        projectId: text(row.project_id),
+        title: text(row.title),
+        description: text(row.description),
+        status: text(row.status),
+        scope: scopeEntries(row.scope),
+        metadata: record(row.metadata),
+      });
+    }
+  }
+
+  return messages.map((message) => {
+    const task = message.taskId ? taskMap.get(message.taskId) || null : null;
+    const hierarchy = task ? inferHierarchy(task) : {
+      mainModule: text(message.metadata.mainModule),
+      moduleName: text(message.metadata.moduleName),
+      submoduleName: text(message.metadata.submoduleName),
+      workItem: text(message.metadata.workItem),
+    };
+    const stage = stageForMessage(message);
+    return {
+      ...message,
+      metadata: {
+        ...(task?.metadata || {}),
+        ...message.metadata,
+        mainModule: text(message.metadata.mainModule) || hierarchy.mainModule,
+        moduleName: text(message.metadata.moduleName) || hierarchy.moduleName,
+        submoduleName: text(message.metadata.submoduleName) || hierarchy.submoduleName,
+        workItem: text(message.metadata.workItem) || hierarchy.workItem,
+        taskTitle: task?.title || text(message.metadata.taskTitle),
+        taskStatus: task?.status || text(message.metadata.taskStatus),
+        workStageIndex: stage,
+        workStageLabel: text(message.metadata.workStageLabel) || WORK_STAGE_LABELS[stage],
+        activityAction: actionForStage(stage, message),
+        activityNarrative: narrativeForMessage(message, task, stage),
+      },
+    };
+  });
+}
+
 export async function listDeveloperConsoleMessages(limit = 180) {
   const client = getClient();
   const safeLimit = Math.max(20, Math.min(240, Math.floor(limit)));
@@ -227,13 +378,14 @@ export async function listDeveloperConsoleMessages(limit = 180) {
   ]);
   if (worklog.error) throw new Error(worklog.error.message || "A fejlesztői konzol munkanaplója nem tölthető be.");
   if (audits.error) throw new Error(audits.error.message || "A fejlesztői konzol auditja nem tölthető be.");
-  return [
+  const messages = [
     ...(worklog.data || []).map((row) => mapWorklogRow(row as Row)),
     ...(audits.data || []).map((row) => mapAuditRow(row as Row)),
   ]
     .filter((item) => item.createdAt)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(-safeLimit);
+  return enrichMessagesWithTaskContext(client, messages);
 }
 
 export async function createBenjadminConsoleMessage(input: { text: string; target?: string; detail?: string; taskId?: string | null; projectId?: string | null; kind?: ConsoleMessageKind }) {
@@ -417,7 +569,7 @@ export async function listDeveloperConsoleMessagesPage(input: { limit?: number; 
   ]
     .filter((item) => item.createdAt)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const messages = merged.slice(-safeLimit);
+  const messages = await enrichMessagesWithTaskContext(client, merged.slice(-safeLimit));
   return {
     messages,
     page: {
