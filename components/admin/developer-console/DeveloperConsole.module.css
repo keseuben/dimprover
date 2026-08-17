@@ -1713,3 +1713,25 @@
   .schedulerFacts { grid-template-columns: 1fr; }
   .schedulerActions button { flex: 1; }
 }
+
+
+/* Worker development context propagation V1 — Worker cards, Inbox, Live Workspace. */
+.workerContextCompact, .inboxContextCompact, .liveWorkspaceWorkerContext { min-width: 0; margin: 5px 0; padding: 5px 6px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: 7px; display: grid; gap: 2px; background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.workerContextCompact > span, .inboxContextCompact > span, .liveWorkspaceWorkerContext > span { min-width: 0; color: var(--text-soft); font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
+.workerContextCompact > span b, .inboxContextCompact > span b, .liveWorkspaceWorkerContext > span b { color: var(--muted); }
+.workerContextCompact > strong, .inboxContextCompact > strong, .liveWorkspaceWorkerContext > strong { width: fit-content; padding: 2px 5px; border-radius: 999px; color: var(--accent-strong); background: var(--accent-soft); font-size: 9px; letter-spacing: .035em; }
+.workerContextCompact > small, .inboxContextCompact > small, .liveWorkspaceWorkerContext > small { min-width: 0; color: var(--muted); font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
+.workerContextCompact[data-work-stage="3"] > strong, .inboxContextCompact[data-work-stage="3"] > strong, .liveWorkspaceWorkerContext[data-work-stage="3"] > strong { color: var(--blue); background: var(--blue-soft); }
+.workerContextCompact[data-work-stage="4"] > strong, .inboxContextCompact[data-work-stage="4"] > strong, .liveWorkspaceWorkerContext[data-work-stage="4"] > strong { color: var(--amber); background: var(--amber-soft); }
+.workerContextCompact[data-work-stage="5"] > strong, .inboxContextCompact[data-work-stage="5"] > strong, .liveWorkspaceWorkerContext[data-work-stage="5"] > strong { color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, var(--surface)); }
+.workerContextCompact[data-work-stage="6"] > strong, .inboxContextCompact[data-work-stage="6"] > strong, .liveWorkspaceWorkerContext[data-work-stage="6"] > strong { color: var(--green); background: var(--green-soft); }
+.aiWorkerInboxTask { margin-top: 5px; padding: 5px; border-radius: 6px; background: var(--panel); }
+.aiWorkerInboxTask > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.aiWorkerInboxTask > div:first-child span { min-width: 0; overflow: hidden; color: var(--text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.aiWorkerInboxTask > div:first-child small { flex: 0 0 auto; color: var(--accent-strong); font-size: 9px; font-weight: 900; }
+.aiWorkerInboxTask .inboxContextCompact { margin-bottom: 0; background: var(--surface); }
+.liveWorkspaceWorkerContext { margin: 3px 0 1px; }
+@media (max-width: 700px) {
+  .workerContextCompact > span, .inboxContextCompact > span, .liveWorkspaceWorkerContext > span { white-space: normal; }
+  .aiWorkerInboxTask > div:first-child { align-items: flex-start; }
+}

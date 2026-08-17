@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import puppeteer from "puppeteer";
+import { createClient } from "@supabase/supabase-js";
+try { process.loadEnvFile?.(".env.local"); } catch {}
+const key=fs.readFileSync(".dimprover/license/admin-key.txt","utf8").trim();
+const apiBase=process.env.BENJADMIN_API_BASE||"http://127.0.0.1:3100";
+const uiBase=process.env.BENJADMIN_UI_BASE||"http://admin.dev.dimpro.hu:3100/admin";
+const host=process.env.BENJADMIN_HOST||"admin.dev.dimpro.hu";
+const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{autoRefreshToken:false,persistSession:false}});
+const marker=`CONTEXT-PROP-BROWSER-${Date.now()}`; const taskId=`dev-task-context-ui-${Date.now().toString(36)}`; let passed=0,browser;
+const headers={host,"x-dimpro-license-admin-key":key,"content-type":"application/json"};
+function check(name,ok,detail=""){if(!ok)throw new Error(`${name}${detail?` :: ${detail}`:""}`);passed++;console.log(`PASS ${String(passed).padStart(2,"0")} ${name}${detail?` :: ${detail}`:""}`)}
+async function api(path,method="GET",body){const r=await fetch(`${apiBase}${path}`,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});const p=await r.json().catch(()=>({}));return{r,p}}
+async function cleanup(){if(browser)await browser.close().catch(()=>{});await db.from("dev_center_live_worklog").delete().like("summary",`${marker}%`);await db.from("dev_center_tasks").delete().eq("id",taskId)}
+try{
+ const wr=await db.from("dev_center_workers").select("id,code,name").eq("code","JAZMINAI").maybeSingle(); check("Jazmin worker available",!wr.error&&Boolean(wr.data?.id),wr.error?.message||"");
+ const ins=await db.from("dev_center_tasks").insert({id:taskId,project_id:"project_dimprover",repository_id:"repo_dimprover",title:`${marker} Inbox context`,description:"A Worker Inbox és az élő worker-kártya ugyanazt a részletes fejlesztési kontextust mutassa.",status:"in_progress",priority:99,requested_worker_id:wr.data.id,assigned_worker_id:wr.data.id,branch_name:"feature/context-prop-ui",scope:[{type:"module",key:"Fejlesztői Konzol"}],acceptance:[],created_by:"ArminAI browser acceptance",metadata:{origin:"CONTEXT_PROP_BROWSER"}}).select("id").single(); check("Browser task fixture inserted",!ins.error&&ins.data?.id===taskId,ins.error?.message||"");
+ const act=await api("/api/dev/console/activity","POST",{workerCode:"JAZMINAI",phase:"test",taskId,projectId:"project_dimprover",summary:`${marker} sync`,mainModule:"BENJADMIN",moduleName:"Fejlesztői Konzol",submoduleName:"Worker Inbox",workItem:"Inbox kontextus és fázis",activityAction:"A Worker Inbox kontextusát ellenőrzi.",activityNarrative:"A worker-kártyán és az Inboxban ugyanaz a BENJADMIN modulhierarchia jelenik meg. A 6/3 TESZTELÉS badge mutatja az aktuális munkafázist, miközben a kártya mobil nézetben sem okoz vízszintes túlcsordulást.",workStageIndex:3,progressPercent:67}); check("Browser activity synced",act.r.status===201,`status=${act.r.status}`);
+ browser=await puppeteer.launch({headless:true,args:["--no-sandbox","--disable-setuid-sandbox","--host-resolver-rules=MAP admin.dev.dimpro.hu 127.0.0.1"]}); const page=await browser.newPage(); await page.setBypassServiceWorker(true);
+ await page.evaluateOnNewDocument((adminKey)=>{localStorage.setItem("dimproLicenseAdminKey",adminKey);sessionStorage.setItem("dimproBenjadminSession","active");localStorage.setItem("benjadmin-developer-console-theme","light");localStorage.setItem("benjadmin-developer-console-project","project_dimprover");},key);
+ await page.setViewport({width:1536,height:900,deviceScaleFactor:1}); await page.goto(`${uiBase}/dev-console`,{waitUntil:"domcontentloaded",timeout:60000}); await page.waitForSelector('[data-testid="benjadmin-worker-inbox"]',{timeout:30000});
+ await page.waitForFunction((id)=>Boolean(document.querySelector(`[data-testid="benjadmin-worker-inbox"] [data-task-id="${id}"]`)),{timeout:30000},taskId);
+ const inbox=await page.evaluate((id)=>{const row=document.querySelector(`[data-testid="benjadmin-worker-inbox"] [data-task-id="${id}"]`);const ctx=row?.querySelector('[data-context-location="inbox"]');return{text:row?.textContent||"",ctx:ctx?.textContent||"",stage:ctx?.getAttribute("data-work-stage")||"",overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}},taskId);
+ check("Worker Inbox task visible",inbox.text.includes(marker),inbox.text); check("Inbox main module visible",inbox.ctx.includes("BENJADMIN"),inbox.ctx); check("Inbox module visible",inbox.ctx.includes("Fejlesztői Konzol"),inbox.ctx); check("Inbox submodule visible",inbox.ctx.includes("Worker Inbox"),inbox.ctx); check("Inbox six-stage visible",inbox.ctx.includes("6/3")&&inbox.ctx.includes("TESZTELÉS")&&inbox.stage==="3",JSON.stringify(inbox)); check("Desktop Inbox overflow safe",inbox.overflow===false,JSON.stringify(inbox));
+ const workerCard=await page.evaluate((id)=>{const cards=[...document.querySelectorAll('article[data-worker-code="JAZMINAI"]')];const card=cards.find(x=>x.textContent?.includes(id))||cards.find(x=>x.querySelector('[data-context-location="worker"]'));const ctx=card?.querySelector('[data-context-location="worker"]');return{text:card?.textContent||"",ctx:ctx?.textContent||"",stage:ctx?.getAttribute("data-work-stage")||""}},taskId);
+ check("Worker card context rendered",workerCard.ctx.includes("BENJADMIN")&&workerCard.ctx.includes("6/3"),JSON.stringify(workerCard));
+ await page.setViewport({width:390,height:844,deviceScaleFactor:1}); await new Promise(r=>setTimeout(r,300)); const mobile=await page.evaluate((id)=>{const row=document.querySelector(`[data-testid="benjadmin-worker-inbox"] [data-task-id="${id}"]`);return{visible:Boolean(row),text:row?.textContent||"",overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}},taskId); check("Mobile Inbox task remains visible",mobile.visible&&mobile.text.includes("6/3"),JSON.stringify(mobile)); check("Mobile Inbox overflow safe",mobile.overflow===false,JSON.stringify(mobile));
+ console.log(JSON.stringify({ok:true,passed,failed:0,taskId,marker},null,2));
+}finally{await cleanup()}

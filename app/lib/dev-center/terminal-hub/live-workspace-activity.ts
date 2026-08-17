@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { getDeveloperConsoleWorkspaceActivitySource } from "../developer-console";
+import { resolveTaskDevelopmentContext } from "../development-context";
 import { getTerminalHubFeatureFlags } from "./config";
 import { sanitizeTerminalText } from "./data-policy";
 import { LiveWorkspaceError, resolveLiveWorkspaceRoot } from "./live-workspace";
@@ -33,6 +34,14 @@ export type LiveWorkspaceWorkerActivity = {
   branch: string | null;
   lastHeartbeatAt: string | null;
   updatedAt: string | null;
+  mainModule: string | null;
+  moduleName: string | null;
+  submoduleName: string | null;
+  workItem: string | null;
+  workStageIndex: number | null;
+  workStageLabel: string | null;
+  activityAction: string | null;
+  activityNarrative: string | null;
 };
 
 export type LiveWorkspaceActivityEvent = {
@@ -68,6 +77,7 @@ export type LiveWorkspaceActivitySnapshot = {
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
+function record(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
 function safeText(value: unknown, limit = 800) {
   return sanitizeTerminalText(text(value)).replace(/\s+/g, " ").trim().slice(0, limit);
@@ -195,6 +205,9 @@ export async function getLiveWorkspaceActivity(workspaceId: string): Promise<Liv
     const activePath = sessionWorktree || taskWorktree;
     const selectedWorkspace = Boolean(activePath && activePath === workspacePath);
     const heartbeat = text(session?.last_heartbeat_at);
+    const development = task ? resolveTaskDevelopmentContext({
+      projectId: text(task.project_id), title: text(task.title), description: text(task.description), status: text(task.status), scope: task.scope, metadata: record(task.metadata),
+    }) : null;
     return {
       workerId,
       code: safeText(worker.code, 40) || workerId,
@@ -213,6 +226,14 @@ export async function getLiveWorkspaceActivity(workspaceId: string): Promise<Liv
       branch: safeText(session?.branch_name || task?.branch_name, 200) || null,
       lastHeartbeatAt: heartbeat || null,
       updatedAt: text(session?.updated_at || worker.updated_at) || null,
+      mainModule: development?.mainModule || null,
+      moduleName: development?.moduleName || null,
+      submoduleName: development?.submoduleName || null,
+      workItem: development?.workItem || null,
+      workStageIndex: development?.workStageIndex || null,
+      workStageLabel: development?.workStageLabel || null,
+      activityAction: development?.activityAction || null,
+      activityNarrative: development?.activityNarrative || null,
     };
   });
 

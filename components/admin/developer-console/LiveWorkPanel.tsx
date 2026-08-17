@@ -2,6 +2,7 @@
 
 import { AlertTriangle, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
 import { useEffect } from "react";
+import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
 import BenjadminAvatar from "./BenjadminAvatar";
 import DevelopmentSchedulerPanel from "./DevelopmentSchedulerPanel";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
@@ -95,6 +96,26 @@ function estimateRangeLabel(minMinutes: number | null, maxMinutes: number | null
   return `becslés ${durationLabel(minMinutes || maxMinutes)}`;
 }
 
+function liveTaskContext(task: LiveTask) {
+  return resolveTaskDevelopmentContext({
+    projectId: task.project_id || null,
+    title: task.title,
+    description: task.description || null,
+    status: task.status,
+    scope: task.scope,
+    metadata: task.metadata || {},
+  });
+}
+
+function CompactTaskContext({ task, location }: { task: LiveTask; location: "worker" | "inbox" }) {
+  const context = liveTaskContext(task);
+  return <div className={location === "worker" ? styles.workerContextCompact : styles.inboxContextCompact} data-context-location={location} data-work-stage={context.workStageIndex}>
+    <span>{context.mainModule} <b>›</b> {context.moduleName} <b>›</b> {context.submoduleName}</span>
+    <strong>6/{context.workStageIndex} · {context.workStageLabel}</strong>
+    <small>{context.workItem}</small>
+  </div>;
+}
+
 export default function LiveWorkPanel({ live, now, context, selectedProjectId, focusedTaskId, busyTaskId, onTaskAction, onOpenTerminalHub, onOpenWorkerActivity }: {
   live: ConsoleLiveState | null;
   now: number;
@@ -167,6 +188,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             <article key={item.code} data-worker-code={item.code} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
               <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : ""}</span></div></div>
               <p>{task?.title || "Nincs aktív feladat."}</p>
+              {task ? <CompactTaskContext task={task} location="worker" /> : null}
               <div className={styles.workerFacts}>
                 <span><Clock3 size={13} /> {session?.handshake_stage || "Nincs aktív session"}</span>
                 <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : "Build: nincs"}</span>
@@ -186,7 +208,10 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             return <article key={`inbox-${item.code}`} data-worker-code={item.code}>
               <header><BenjadminAvatar member={item.author} size="chat" status={owned.length ? "waiting" : "idle"} /><div><strong>{worker?.name || item.fallbackName}</strong><span>{owned.length} nyitott task</span></div></header>
               <div>
-                {owned.slice(0, 3).map((task) => <p key={task.id}><span>{task.title}</span><small>{metadataText(task, "bridgeState") || metadataText(task, "workflowState") || task.status.toUpperCase()}</small></p>)}
+                {owned.slice(0, 3).map((task) => <div key={task.id} className={styles.aiWorkerInboxTask} data-task-id={task.id}>
+                  <div><span>{task.title}</span><small>{metadataText(task, "bridgeState") || metadataText(task, "workflowState") || task.status.toUpperCase()}</small></div>
+                  <CompactTaskContext task={task} location="inbox" />
+                </div>)}
                 {!owned.length ? <p><span>Nincs várakozó feladat.</span><small>INBOX ÜRES</small></p> : null}
               </div>
             </article>;

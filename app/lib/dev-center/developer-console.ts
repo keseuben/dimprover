@@ -508,7 +508,7 @@ export async function getDeveloperConsoleWorkspaceActivitySource() {
       .select("id,code,name,role,status,updated_at")
       .order("code"),
     client.from("dev_center_tasks")
-      .select("id,project_id,title,status,priority,assigned_worker_id,branch_name,worktree_path,updated_at,created_at")
+      .select("id,project_id,title,description,status,priority,assigned_worker_id,branch_name,worktree_path,scope,metadata,updated_at,created_at")
       .order("updated_at", { ascending: false })
       .limit(120),
     client.from("dev_center_worker_sessions")
@@ -582,6 +582,39 @@ export async function listDeveloperConsoleMessagesPage(input: { limit?: number; 
   };
 }
 
+async function syncTaskDevelopmentContext(client: SupabaseClient, input: {
+  taskId: string;
+  message: ConsoleMessage;
+  metadata: Record<string, unknown>;
+}) {
+  const taskResult = await client.from("dev_center_tasks").select("id,project_id,title,description,status,scope,metadata").eq("id", input.taskId).maybeSingle();
+  if (taskResult.error || !taskResult.data) return false;
+  const row = taskResult.data as Row;
+  const task: ConsoleTaskContext = {
+    id: text(row.id), projectId: text(row.project_id), title: text(row.title), description: text(row.description), status: text(row.status),
+    scope: scopeEntries(row.scope), metadata: record(row.metadata),
+  };
+  const hierarchy = inferHierarchy(task);
+  const stage = stageForMessage(input.message);
+  const currentMeta = record(row.metadata);
+  const developmentContext = {
+    mainModule: text(input.metadata.mainModule) || hierarchy.mainModule,
+    moduleName: text(input.metadata.moduleName) || hierarchy.moduleName,
+    submoduleName: text(input.metadata.submoduleName) || hierarchy.submoduleName,
+    workItem: text(input.metadata.workItem) || hierarchy.workItem,
+    activityAction: text(input.metadata.activityAction) || actionForStage(stage, input.message),
+    activityNarrative: text(input.metadata.activityNarrative) || narrativeForMessage(input.message, task, stage),
+    workStageIndex: stage,
+    workStageLabel: text(input.metadata.workStageLabel) || WORK_STAGE_LABELS[stage],
+    source: "WORKER_ACTIVITY",
+    workerCode: input.message.author,
+    updatedAt: input.message.createdAt || new Date().toISOString(),
+    productionAccess: "DENY",
+  };
+  const update = await client.from("dev_center_tasks").update({ metadata: { ...currentMeta, developmentContext }, updated_at: new Date().toISOString() }).eq("id", input.taskId);
+  return !update.error;
+}
+
 export async function createWorkerActivityConsoleMessage(input: {
   workerCode: string;
   taskId?: string | null;
@@ -617,5 +650,7 @@ export async function createWorkerActivityConsoleMessage(input: {
     },
   }).select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at").single();
   if (result.error || !result.data) throw new Error(result.error?.message || "A worker activity nem rögzíthető.");
-  return mapWorklogRow(result.data as Row);
+  const message = mapWorklogRow(result.data as Row);
+  if (input.taskId) await syncTaskDevelopmentContext(client, { taskId: input.taskId, message, metadata: input.metadata || {} }).catch(() => false);
+  return message;
 }
