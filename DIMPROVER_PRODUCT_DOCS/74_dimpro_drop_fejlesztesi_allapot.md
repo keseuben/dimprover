@@ -1059,3 +1059,14 @@ A DEV workflow-adatbázis régebbi sémájához visszafelé kompatibilis reposit
 ## 2026-08-17 - GyorsSend tobbkepes mobil feltoltes es DEV multipart host javitas
 
 A mobil lebego Feltoltes hexagon Galeria/Kamera/Fajl gombjai aktiv GyorsSend munkamenetben akkor is hasznalhatok, ha a stepper mar az Ellenorzes/Mentes/Riport lepesen all. A 2. Kepek feltoltoinputjai mountolva maradnak, a mobil gyorsmenu visszavalt a Kepek lepesre es ugyanabban a felhasznaloi gesztusban megnyitja a nativ valasztot. A multipart part API explicit engedelyezi a drop.dev.dimpro.hu DEV hostot a PROD hostok mellett. DEV release: 3a163b6, BUILD_ID oErJuHhlslPBBgU1rAS0u. TSC es celzott ESLint PASS; live DEV init 201 es multipart part-sign 200 signed S3 URL-lel. PROD valtozatlan.
+
+## 2026-08-17 - Gyors KépSend 200 kép, hosszabb megőrzés, DEV PWA azonosítás és telefonos mentés
+
+- Gyors KépSend csomagonkénti képlimit: 200 kép. A normál DIMPRO Send alap 50 fájlos publikus limitje változatlan maradt.
+- Megőrzési idő: Gyors KépSendben 5 / 7 / 14 / 30 nap választható; Normál Sendben 1 / 3 / 5 / 7 / 14 / 30 nap. A publikus Send workflow backend-validáció 14 és 30 napot is elfogad.
+- A DEV PWA külön manifestet használ: `/drop-dev.webmanifest`, `name = DIMPRO Drop DEV`, `short_name = Drop DEV`. A PROD manifest és PROD név változatlan.
+- A telefonos képmentésből a Web Share útvonal eltávolításra került, így a DIMPRO nem nyit Messenger / Outlook / SMS megosztási panelt. A PWA közvetlen képfájl-letöltést indít; a telefon saját médiaindexelése határozza meg, melyik Galéria/Letöltések albumban jelenik meg.
+- Élő DEV ellenőrzés: 30 napos Gyors KépSend csomag HTTP 201, `maxFileCount = 200`, kb. 30 napos lejárattal. DEV manifest és application-name élőben `DIMPRO Drop DEV`.
+- Minőségi kapuk: TypeScript PASS, célzott ESLint PASS, GyorsSend acceptance 39/39 PASS.
+- Tartós DEV forráscommit: `af0e5b2`. Aktív kombinált DEV build: `3hf7Y5Q0UQMrfzoayRhBm`.
+- PROD változatlan.
