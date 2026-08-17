@@ -1070,3 +1070,15 @@ A mobil lebego Feltoltes hexagon Galeria/Kamera/Fajl gombjai aktiv GyorsSend mun
 - Minőségi kapuk: TypeScript PASS, célzott ESLint PASS, GyorsSend acceptance 39/39 PASS.
 - Tartós DEV forráscommit: `af0e5b2`. Aktív kombinált DEV build: `3hf7Y5Q0UQMrfzoayRhBm`.
 - PROD változatlan.
+
+## 2026-08-17 - DROP 1.2.13: címzettközpontú GyorsSend ellenőrzés és DEV e-mail safe mode
+
+- A Drop látható és API-s verziója DROP 1.2.13-ra frissült; a PWA release dátuma 2026.08.17. A service worker cache neve `dimpro-drop-static-v1213`, a DEV manifest is precache-elt.
+- A Gyors KépSend 1. stepperlépése `Címzettek`. A címzettkártya és a megőrzési idő ezen a lépésen elsődleges adatként jelenik meg.
+- A 3. `Ellenőrzés` lépés a képek mellett újra megjeleníti a címzetteket, a megőrzési időt és a riport-e-mail választást. A továbbhaladáshoz külön `Ellenőriztem` megerősítés szükséges; a képlista darabszámának változásakor ez automatikusan visszaáll.
+- A lezáró slide-to-confirm csak érvényes ellenőrzési megerősítés után aktív.
+- A DEV SMTP jelenleg nincs konfigurálva és `DROP_EMAIL_NOTIFICATIONS_ENABLED=false`. A rendszer ezt előre jelzi, a riport e-mail választást letiltja, és az e-mail hiánya többé nem blokkolja a csomag lezárását.
+- SMTP-hiány esetén a workflow `not_requested` értesítési állapottal, auditált `e-mail kézbesítés kihagyva` részlettel zárul; a worker ezért nem kerül hibás újrapróbálási ciklusba. A felület nem állítja, hogy e-mail kiküldés történt.
+- A korábbi 3 képes tesztcsomag (`991de2f5-...`) adatvesztés nélkül `failed`, nem lezárt állapotban maradt; új klienssel ismételt véglegesítéskor már az új safe-mode szabály alkalmazható.
+- Minőségi kapuk: teljes TypeScript PASS, célzott ESLint PASS, GyorsSend acceptance 44/44 PASS, build sikeres, DEV health/features/send/manifest/service-worker HTTP 200, normál smoke után PM2 error-log delta 0.
+- DEV build: `W8dETSP5steuks8QoklWn`, forráscommit: `1c68759`. PROD változatlan.
