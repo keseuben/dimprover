@@ -137,7 +137,7 @@ try {
 
   const cardToggle = await page.$('[data-field-capture-item] > button');
   assert.ok(cardToggle, 'Képkártya lenyitó hiányzik');
-  await cardToggle.click();
+  if (!(await visibleButton(page, 'GPS újramérés'))) await cardToggle.click();
   pass('GPS újramérés gomb elérhető', Boolean(await visibleButton(page, 'GPS újramérés')));
   pass('Tájolás újramérés gomb elérhető', Boolean(await visibleButton(page, 'Tájolás újramérés')));
 

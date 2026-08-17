@@ -119,3 +119,36 @@ Következő kapu: Next build → DEV cutover → Drop/Terep smoke → mobil brow
 5. P8 Saját DIMPRO Drive külön ownership/reference.
 6. P9 Projektkapu Drive külön ownership/reference és projektjogosultság.
 7. P10–P12 szerveres sync, audit, riport/export és terepi teljes acceptance.
+
+## DEV aktiválás és mobil browser acceptance
+
+Aktív DEV release:
+
+- build: `dhjxw0kjig7yyHkoufQQp`
+- alkalmazáskód commit: `caa452a`
+- kanonikus DEV URL: `https://drop.dev.dimpro.hu/terep`
+- Drop landing: HTTP 200
+- Terep: HTTP 200
+- Terep health: HTTP 200
+- DIMPRO Send regresszió: HTTP 200
+- Drop health regresszió: HTTP 200
+
+Mobil Puppeteer acceptance az aktív release ellen: **21/21 PASS**.
+
+Ellenőrzött elemek többek között:
+
+- Terep ugyanazon Drop hoston fut
+- ugyanaz a Send entitlement nyitja meg
+- GPS alapból KI
+- iOS-szerű tájolási permission user gesture-ből kezelhető
+- első kép LOCAL_ONLY állapotban létrejön
+- GPS `±8 m` pontosság megjelenik
+- tájolás `ÉK · 43°` formában megjelenik
+- GPS és tájolás újramérés elérhető
+- shared DIMPRO Voice működik
+- IndexedDB reload után a kép, GPS és tájolási rekord visszaáll
+- mobil vízszintes overflow nincs
+- browser pageerror: 0
+- browser console error: 0
+
+A browser acceptance teszt kontrollált, szimulált Identity/GPS/orientation környezetet használ; nem tartalmaz és nem igényel valódi Send-kódot. Fizikai Samsung/PWA teszt továbbra is szükséges a készülék saját GPS-, iránytű-, kamera- és permission-viselkedésének ellenőrzéséhez.
