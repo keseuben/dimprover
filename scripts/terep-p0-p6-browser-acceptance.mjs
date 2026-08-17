@@ -96,8 +96,8 @@ try {
   const code = await page.$('input[placeholder="ABCD-123-456"]');
   assert.ok(code, 'Terep Send-kód mező hiányzik');
   await code.type('TEST123456', { delay: 5 });
-  const open = await visibleButton(page, 'Terep megnyitása');
-  assert.ok(open, 'Terep megnyitása gomb hiányzik');
+  const open = await visibleButton(page, 'Terepi Gyorsrögzítő megnyitása');
+  assert.ok(open, 'Terepi Gyorsrögzítő megnyitása gomb hiányzik');
   await open.click();
   await page.waitForFunction(() => (document.body.textContent || '').includes('Terep Tesztelő'), { timeout: 10_000 });
   pass('Ugyanaz a Send entitlement nyitja a Terepet', true);

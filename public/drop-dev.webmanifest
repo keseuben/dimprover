@@ -76,8 +76,8 @@
       ]
     },
     {
-      "name": "DIMPRO Terep",
-      "short_name": "Terep",
+      "name": "DIMPRO Terepi Gyorsrögzítő",
+      "short_name": "Terepi",
       "description": "Helyszíni képek gyors, offline-first rögzítése a DIMPRO Drop PWA-ban.",
       "url": "/terep",
       "icons": [

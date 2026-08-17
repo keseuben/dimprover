@@ -194,7 +194,7 @@ export default function DropMobileDock({
                 <button type="button" disabled={!hasUploadZone} onClick={() => trigger("file")} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-black text-slate-800 disabled:opacity-40"><FileUp size={24}/> Fájl tallózása</button>
                 <Link href="/send" onClick={() => setSheet(null)} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-slate-950 p-3 text-sm font-black text-white"><Send size={24}/> DIMPRO Send</Link>
                 <Link href="/bekuldes" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-900"><FolderInput size={20}/> Beküldőkapu</Link>
-                <Link href="/terep" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 text-sm font-black text-cyan-950"><MapPinned size={20}/> Terep</Link>
+                <Link href="/terep" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 text-sm font-black text-cyan-950"><MapPinned size={20}/> Terepi Gyorsrögzítő</Link>
                 {!hasUploadZone ? <p className="col-span-2 text-center text-xs font-semibold leading-5 text-slate-500">A Galéria, Kamera és Fájl gomb akkor aktív, amikor van folytatható feltöltési munkamenet.</p> : null}
               </div>
             ) : (
@@ -244,7 +244,7 @@ export default function DropMobileDock({
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <Link href="/bekuldes" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-teal-200 bg-white px-3 text-xs font-black text-teal-900"><FolderInput size={17}/> Beküldőkapu</Link>
-                  <Link href="/terep" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-white px-3 text-xs font-black text-cyan-900"><MapPinned size={17}/> Terep</Link>
+                  <Link href="/terep" onClick={() => setSheet(null)} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-white px-3 text-xs font-black text-cyan-900"><MapPinned size={17}/> Terepi Gyorsrögzítő</Link>
                   <Link href="/open" onClick={() => setSheet(null)} className="col-span-2 flex min-h-14 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800"><KeyRound size={17}/> Csomag / Tér</Link>
                 </div>
               </div>

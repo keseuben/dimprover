@@ -82,13 +82,13 @@ export default function TerepAccessGate() {
         <div className="flex items-start gap-3">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-slate-950 text-cyan-300"><MapPinned size={23}/></span>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">DIMPRO Drop · Terep</p>
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-cyan-700">DIMPRO Drop · Terepi Gyorsrögzítő</p>
             <h1 className="mt-1 text-2xl font-black text-slate-950">Terepi Gyorsrögzítő</h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">Ugyanaz a DIMPRO Send-jogosultság nyitja meg, mint a Gyors KépSendet. Külön Terep-licenc jelenleg nem szükséges.</p>
           </div>
         </div>
         <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold leading-5 text-emerald-900">
-          <ShieldCheck size={16} className="mr-2 inline"/>Központi Identity Core ellenőrzés · a Terep külön workflow, de ugyanazon Drop/Send licenc alatt.
+          <ShieldCheck size={16} className="mr-2 inline"/>Központi Identity Core ellenőrzés · a Terepi Gyorsrögzítő külön workflow, de ugyanazon Drop/Send licenc alatt.
         </div>
         <label className="mt-5 block">
           <span className="mb-2 block text-xs font-black uppercase tracking-[.1em] text-slate-600">DIMPRO Send-kód</span>
@@ -97,9 +97,9 @@ export default function TerepAccessGate() {
         {message ? <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold leading-5 text-rose-900">{message}</p> : null}
         <button type="button" onClick={() => void verify()} disabled={loading || !isCompleteDropSendCode(code)} className="mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
           {loading ? <LoaderCircle size={17} className="animate-spin"/> : <KeyRound size={17}/>}
-          {loading ? "Jogosultság ellenőrzése…" : "Terep megnyitása"}
+          {loading ? "Jogosultság ellenőrzése…" : "Terepi Gyorsrögzítő megnyitása"}
         </button>
-        <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-slate-500"><UserRound size={14}/>Ha a Drop PWA már megjegyezte a Send-kódot, a Terep automatikusan megpróbál belépni vele.</p>
+        <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-slate-500"><UserRound size={14}/>Ha a Drop PWA már megjegyezte a Send-kódot, a Terepi Gyorsrögzítő automatikusan megpróbál belépni vele.</p>
       </section>
     </main>
   );
