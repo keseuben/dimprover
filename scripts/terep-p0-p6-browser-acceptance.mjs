@@ -156,7 +156,7 @@ try {
   const saveEdited = await visibleButton(page, 'Szerkesztett kép mentése');
   assert.ok(saveEdited, 'Szerkesztett kép mentése gomb hiányzik');
   await saveEdited.click();
-  await page.waitForFunction(() => !(document.body.textContent || '').includes('DIMPRO Képjelölő'), { timeout: 30_000 });
+  await page.waitForFunction(() => document.querySelector("[role=dialog]") === null, { timeout: 30_000 });
   await page.waitForFunction(() => (document.body.textContent || '').includes('Szerkesztve · v1'), { timeout: 30_000 });
   pass('Szerkesztett kép visszakerül a Terep munkamenetbe', true);
 

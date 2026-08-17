@@ -92,6 +92,7 @@ const tests = [
   ['Kamerairány a hátlapi -z vektorból számolódik', sensors.includes('Rz(alpha) * Rx(beta) * Ry(gamma) * [0, 0, -1]') && sensors.includes('cameraHeadingFromDeviceOrientation') && sensors.includes('horizontalProjection')],
   ['Kamerairány több szenzorminta körátlagából készül', sensors.includes('TARGET_ORIENTATION_SAMPLES') && sensors.includes('circularMean') && sensors.includes('absoluteSamples')],
   ['GPS tiltásnál böngésző engedélyezési útmutató látható', card.includes('webhelybeállítások') && card.includes('Hely') && card.includes('Engedélyezés')],
+  ['Mobil workflow akciósáv a Drop dock fölött marad', shell.includes('data-terep-workflow-actions') && shell.includes('sticky z-[130]') && shell.includes('calc(84px + env(safe-area-inset-bottom))')],
 ];
 let failed = 0;
 tests.forEach(([name, ok], index) => { if (!ok) failed += 1; console.log(`${String(index + 1).padStart(2,'0')}. ${ok ? 'PASS' : 'FAIL'} - ${name}`); });
