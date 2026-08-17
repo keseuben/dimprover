@@ -28,6 +28,8 @@ const tests = [
  ['Eszközre mentés Web Share', ui.includes('nav.canShare') && ui.includes('nav.share')],
  ['Eszközre mentés download fallback', ui.includes('anchor.download = file.name')],
  ['Upload nem küld emailt', ui.includes('A fájlok feltöltése önmagában nem küld e-mailt')],
+ ['Worker nem véglegesít not_requested csomagot', service.includes('.eq("notification_status", "pending")') && !service.includes('.in("notification_status", ["not_requested", "pending"])')],
+ ['Explicit véglegesítés scan-várakozásnál pending retry', service.includes('notificationStatus: "pending"') && service.includes('A puszta fájlfeltöltés nem indíthat automatikus kézbesítést')],
  ['Stale 2 mp véglegesítés szöveg eltávolítva', !ui.includes('2 másodperces véglegesítés után')],
 ];
 let failed=0;

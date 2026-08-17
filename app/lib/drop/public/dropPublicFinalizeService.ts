@@ -97,7 +97,9 @@ export async function finalizeDropPublicPackageById(input: {
     );
     if (pending.length) {
       await updateDropPackageWorkflow(input.packageId, {
-        notificationStatus: "not_requested",
+        // Csak kifejezett felhasználói véglegesítési kísérlet után kerülhet a worker retry-sorába.
+        // A puszta fájlfeltöltés nem indíthat automatikus kézbesítést.
+        notificationStatus: "pending",
         notificationDetail: `${pending.length} fájl vírusellenőrzése vagy feldolgozása még folyamatban van.`,
       });
       throw finalizeError(
@@ -312,7 +314,9 @@ export async function listDropPublicFinalizationCandidates(limit = 20) {
   const { data, error } = await client.from("drop_public_package_workflows")
     .select("package_id,notification_status,updated_at")
     .is("finalized_at", null)
-    .in("notification_status", ["not_requested", "pending"])
+    // A not_requested az alapállapot: ettől a worker még nem kézbesíthet.
+    // Pending csak explicit véglegesítési kísérletből keletkezik.
+    .eq("notification_status", "pending")
     .order("updated_at", { ascending: true })
     .limit(Math.max(1, Math.min(100, limit)));
   if (error) throw error;
