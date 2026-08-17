@@ -6,7 +6,7 @@
       "branchPatterns": ["(^|[-_/])armin([-_/]|$)"]
     },
     "JAZMINAI": {
-      "ownerPatterns": ["(^|[-_])jazmin([-_]|$)", "^drop-", "^field-capture-", "^terep-"],
+      "ownerPatterns": ["(^|[-_])jazmin([-_]|$)", "^drop-", "^field-capture-", "^terep-", "^terepi-"],
       "branchPatterns": ["(^|[-_/])jazmin([-_/]|$)"],
       "pathRules": [
         { "prefix": "app/field-capture/", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "PWA / terepi rögzítés" },

@@ -47,7 +47,7 @@ if [[ -z "$WORKER_CODE" ]]; then
   OWNER_HINT="$(printf "%s %s" "$OWNER" "$TASK" | tr "[:upper:]" "[:lower:]")"
   case "$OWNER_HINT" in
     *armin*) WORKER_CODE="ARMINAI" ;;
-    *jazmin*|drop-*|*\ drop-*|field-capture-*|*\ field-capture-*|terep-*|*\ terep-*) WORKER_CODE="JAZMINAI" ;;
+    *jazmin*|drop-*|*\ drop-*|field-capture-*|*\ field-capture-*|terep-*|*\ terep-*|terepi-*|*\ terepi-*) WORKER_CODE="JAZMINAI" ;;
     *outmin*) WORKER_CODE="OUTMINAI" ;;
     *mforge*|*m-forge*) WORKER_CODE="MFORGE" ;;
     *vguard*|*v-guard*) WORKER_CODE="VGUARD" ;;
