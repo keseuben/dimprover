@@ -127,3 +127,23 @@ Csató Ferenc HAGE-tagságából hiányzott a `DROP_QUICK_VOICE_NOTE` felhaszná
 ### Fizikai készülék-validáció
 
 A kód és a compiled browser gate alapján az iPhone HEIC fallback és Safari PWA telepítési útmutató éles. A következő private-pilot lépés továbbra is fizikai iPhone-on: valós HEIC fotó kiválasztása/feltöltése, Safari Megosztás → Főképernyőhöz adás, majd telepített PWA megnyitás. Ez a fizikai készülékteszt nem helyettesíthető szerveroldali automatizált teszttel.
+
+## 2026-08-17 – GyorsSend stepper és DEV stabilizálás
+
+A Drop GyorsSend / Gyors KépSend 1.2.12 DEV felülete hatlépéses, folyamatos stepper workflow-t kapott: **Beállítások → Képek → Ellenőrzés → Mentés → Riport → Lezárás**. A Gyors KépSend kiválasztásakor az első lépés már a csomag létrehozása előtt látható, sikeres előkészítés után pedig ugyanaz a folyamat közvetlenül a **2. Képek** lépésen folytatódik. Visszalépéskor a munkamenet adatai nem törlődnek. Mobilon mind a hat lépéspont egyszerre látható; a lépések tartalma egyszerűsített, az opcionális beállítások visszafogottan jelennek meg.
+
+A korábbi 2 másodperces megerősítések közül a fájlfeltöltés normál kattintás lett, a küldemény véglegesítése jobbra húzható `slide-to-confirm`. A mentett Send-kód törlése szintén gesztusalapú: **balra húzás**, piros törlési háttérrel és külön desktop/billentyűzetes alternatívával. A képkártyák balra húzása töröl, jobbra húzása feltöltésre kész állapotot ad; a törlés visszavonható.
+
+A DEV adatbázisban a 1.2.4/1.2.5 workflow-séma három új oszlopa még nincs hivatalosan migrálva: `show_recipients_on_download`, `export_groups_as_folders`, `append_group_name_to_filename`. A DEV runtime nem rendelkezik `SUPABASE_DB_URL` / `SUPABASE_DB_PASSWORD` vagy Supabase management credential párossal, ezért kerülőutas DDL-módosítás nem történt. A repository visszafelé kompatibilis fallbacket kapott: hiányzó opcionális workflow-oszlop esetén a mentés a régebbi sémával is sikeres, későbbi hivatalos migráció után pedig automatikusan az új mezőket használja.
+
+DEV-validáció 2026-08-17:
+- branch: `feature/drop-v1212-gyorssend-20260817`;
+- aktív kódcommit: `3f1dec4`;
+- BUILD_ID: `4BKkRbtTUaizcCxvwZkOh`;
+- célzott GyorsSend acceptance: **36/36 PASS**;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- `drop.dev.dimpro.hu`, `/send`, `/api/drop/health`, `/api/drop/features`: HTTP 200;
+- valós DEV Send-kódos böngészőfolyamat: csomaglétrehozás HTTP 201, majd **2. Képek** aktív lépés, workflow-hiba nélkül;
+- 390 px mobilnézet: vízszintes túlcsordulás nincs;
+- PROD nem módosult ebben a fejlesztési körben.

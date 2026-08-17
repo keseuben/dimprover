@@ -1049,3 +1049,9 @@ A hotfix DEV-first módon javítja a Send entitlementhez hiányzó automatikus `
 **Részletes dokumentáció:** `127_dimpro_drop_v1212_ios_sendmail_heic_pwa_hotfix.md`.
 
 Éles a Send-kód automatikus e-mail kézbesítés és biztonságos `Új kód + e-mail` rotáció, az iPhone HEIC/HEIF konverziós fallback, valamint az iOS Safari PWA telepítési útmutató. Csató Ferenc és Nagy Róbert Send-kódja élesben újragenerálva és SMTP által elfogadva; Csató hiányzó `DROP_QUICK_VOICE_NOTE` tagsági modulja engedélyezve. Production candidate browser 12/12, live browser 8/8, contract 27/27, Send DEV integráció 16/16, standalone 141/141, TypeScript PASS, lint 0 error / 108 baseline warning. Private pilot marad; fizikai iPhone HEIC/PWA validáció szükséges.
+
+## 2026-08-17 – DROP 1.2.12 GyorsSend DEV stepper stabilizálás
+
+A DEV GyorsSend / Gyors KépSend folyamat 6 lépéses stepperre állt át: Beállítások, Képek, Ellenőrzés, Mentés, Riport, Lezárás. A stepper már a Gyors KépSend alapadatainál látható, és sikeres csomag-előkészítés után közvetlenül a 2. Képek lépésen folytatódik. A fájlfeltöltés normál kattintásos, a véglegesítés jobbra húzható megerősítés; a mentett Send-kód törlése és a képtörlés balra húzásos, piros vizuális visszajelzéssel. A riportküldés nem automatikus.
+
+A DEV workflow-adatbázis régebbi sémájához visszafelé kompatibilis repository-fallback készült; hivatalos DDL migráció credential hiányában nem történt. Aktív DEV BUILD_ID: `4BKkRbtTUaizcCxvwZkOh`, kódcommit: `3f1dec4`, acceptance 36/36 PASS, TypeScript PASS, célzott ESLint PASS, valós Send-kódos package create HTTP 201 és 2. Képek lépés PASS. PROD változatlan.
