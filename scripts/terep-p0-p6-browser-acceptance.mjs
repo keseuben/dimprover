@@ -38,9 +38,9 @@ try {
       static async requestPermission() { return 'granted'; }
       constructor(type) {
         super(type);
-        this.alpha = 317;
-        this.beta = 0;
-        this.gamma = 0;
+        this.alpha = 15;
+        this.beta = 90;
+        this.gamma = 165;
         this.absolute = true;
         this.webkitCompassHeading = 43;
         this.webkitCompassAccuracy = 6;
@@ -114,7 +114,7 @@ try {
   const labels = await page.$$('label');
   for (const label of labels) {
     const text = await label.evaluate((el) => (el.textContent || '').trim());
-    if (text.includes('GPS helyadat') || text.includes('Telefon iránya / tájolás') || text.includes('Hangos megjegyzés')) {
+    if (text.includes('GPS helyadat') || text.includes('Hátlapi kamera iránya') || text.includes('Hangos megjegyzés')) {
       const checkbox = await label.$('input[type="checkbox"]');
       if (checkbox && !(await checkbox.evaluate((el) => el.checked))) await checkbox.click();
     }
@@ -132,8 +132,8 @@ try {
   pass('Első LOCAL_ONLY kép létrejött', true);
   await page.waitForFunction(() => (document.body.textContent || '').includes('GPS ±8 m'), { timeout: 10_000 });
   pass('GPS pontosság megjelenik ±8 m-ként', true);
-  await page.waitForFunction(() => (document.body.textContent || '').includes('ÉK · 43°'), { timeout: 10_000 });
-  pass('Tájolás égtáj + fok formában megjelenik', true);
+  await page.waitForFunction(() => (document.body.textContent || '').includes('D · 180°'), { timeout: 10_000 });
+  pass('Kamerairány teljes eszközforgatásból Délként jelenik meg', true);
 
   const cardToggle = await page.$('[data-field-capture-item] > button');
   assert.ok(cardToggle, 'Képkártya lenyitó hiányzik');
@@ -161,7 +161,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('[data-field-capture-item]').length === 1, { timeout: 10_000 });
   pass('IndexedDB queue reload után visszaáll', true);
   pass('GPS rekord reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('GPS ±8 m')));
-  pass('Tájolási rekord reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('ÉK · 43°')));
+  pass('Kamerairány rekord reload után megmarad', await page.evaluate(() => (document.body.textContent || '').includes('D · 180°')));
   pass('Visszaállított mobil UI nem lóg ki', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   pass('Böngésző pageerror nincs', pageErrors.length === 0, pageErrors.join(' | '));
   pass('Böngésző console error nincs', consoleErrors.length === 0, consoleErrors.join(' | '));

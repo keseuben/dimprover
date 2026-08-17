@@ -27,6 +27,8 @@ type PersistedFieldCaptureItem = {
   status: FieldCaptureItem["status"];
   progress: number;
   error: string | null;
+  edited: boolean;
+  editRevision: number;
   options: PreCaptureOptions;
   locationStatus: FieldCaptureItem["locationStatus"];
   orientationStatus: FieldCaptureItem["orientationStatus"];
@@ -109,6 +111,8 @@ export async function persistFieldCaptureItem(item: FieldCaptureItem) {
     status: item.status === "UPLOADING" ? "QUEUED" : item.status,
     progress: item.status === "UPLOADING" ? 0 : item.progress,
     error: item.error,
+    edited: item.edited,
+    editRevision: item.editRevision,
     options: item.options,
     locationStatus: item.locationStatus,
     orientationStatus: item.orientationStatus,
@@ -179,6 +183,8 @@ export async function restoreFieldCaptureItems(sessionId: string): Promise<Field
       status: row.status === "UPLOADING" ? "QUEUED" : row.status,
       progress: row.status === "UPLOADING" ? 0 : row.progress,
       error: row.error,
+      edited: Boolean(row.edited),
+      editRevision: Number.isFinite(row.editRevision) ? Math.max(0, row.editRevision) : 0,
       options: row.options,
       locationStatus: row.location?.status || row.locationStatus || (row.options.gpsEnabled ? "UNAVAILABLE" : "OFF"),
       orientationStatus: row.orientation?.status || row.orientationStatus || (row.options.orientationEnabled ? "UNAVAILABLE" : "OFF"),

@@ -18,6 +18,9 @@ export async function GET() {
       serverUploadBinding: false,
       gpsAdapter: true,
       orientationAdapter: true,
+      cameraVectorHeading: true,
+      imageMarkupEditor: true,
+      localWorkflow: true,
       userDriveBinding: false,
       projectDriveBinding: false
     }

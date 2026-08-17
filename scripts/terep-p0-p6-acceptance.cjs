@@ -17,6 +17,7 @@ const sheet = read('components/field-capture/PreCaptureOptionsSheet.tsx');
 const shell = read('components/field-capture/FieldCaptureShell.tsx');
 const card = read('components/field-capture/CapturePreviewCard.tsx');
 const voice = read('components/field-capture/VoiceNotePanel.tsx');
+const editor = read('components/image-editor/DimproImageMarkupEditor.tsx');
 const gate = read('components/field-capture/TerepAccessGate.tsx');
 const dropLayout = read('app/drop/layout.tsx');
 const dropShell = read('components/drop/DropPwaShell.tsx');
@@ -51,7 +52,7 @@ const tests = [
   ['Galéria több kép import', launcher.includes('data-field-capture-gallery-input') && launcher.includes('multiple')],
   ['Kamera/Galéria közvetlen user gesture-ből nyílik', shell.includes('if (source === "camera") launcherRef.current?.openCamera();') && shell.includes('else launcherRef.current?.openGallery();') && !shell.includes('window.setTimeout(() => source === "camera"')],
   ['GPS külön kapcsoló alapból OFF', sheet.includes('GPS helyadat') && types.includes('gpsEnabled: false')],
-  ['Tájolás külön kapcsoló alapból OFF', sheet.includes('Telefon iránya / tájolás') && types.includes('orientationEnabled: false')],
+  ['Kamerairány külön kapcsoló alapból OFF', sheet.includes('Hátlapi kamera iránya') && types.includes('orientationEnabled: false')],
   ['GPS valós browser geolocation adapter', sensors.includes('navigator.geolocation.getCurrentPosition') && sensors.includes('enableHighAccuracy: true')],
   ['GPS pontosság és LOW_ACCURACY státusz', sensors.includes('LOW_ACCURACY_METERS') && sensors.includes('accuracyMeters') && sensors.includes('"LOW_ACCURACY"')],
   ['GPS timeout nem blokkolja a capture-t', sensors.includes('timeout: LOCATION_TIMEOUT_MS') && shell.indexOf('setItems((current) => [...current, ...created])') < shell.indexOf('captureFieldSensors(options)')],
@@ -63,7 +64,7 @@ const tests = [
   ['GPS/tájolás külön IndexedDB rekordként mentődik', queue.includes('location: item.location') && queue.includes('orientation: item.orientation')],
   ['Régi IndexedDB sor kompatibilisen visszaáll', queue.includes('row.location ||') && queue.includes('row.orientation ||')],
   ['GPS újramérés elérhető', card.includes('GPS újramérés') && shell.includes('remeasureLocation')],
-  ['Tájolás újramérés elérhető', card.includes('Tájolás újramérés') && shell.includes('remeasureOrientation')],
+  ['Kamerairány újramérés elérhető', card.includes('Kamerairány újramérés') && shell.includes('remeasureOrientation')],
   ['GPS UI ± méteres pontosság', card.includes('GPS ±') && card.includes('accuracyMeters')],
   ['Heading UI fok + égtáj', card.includes('headingDegrees') && card.includes('directionLabel')],
   ['Session default menthető', session.includes('preCaptureDefaults') && session.includes('saveFieldCaptureDefaults') && sheet.includes('Ezek legyenek az alapbeállítások')],
@@ -82,6 +83,15 @@ const tests = [
   ['Külön capture schema draft megmarad', ['field_capture_sessions','field_capture_items','field_capture_asset_refs','field_capture_locations','field_capture_orientations','field_capture_voice_notes','field_capture_destinations','field_capture_events','field_capture_sync_queue'].every((name) => schema.includes(name))],
   ['Schema draft nincs automatikus migrációként deklarálva', schema.includes('NEM FUT LE AUTOMATIKUSAN')],
   ['GPS/heading source of truth nem EXIF', schema.includes('accuracy_meters') && schema.includes('heading_degrees') && shell.includes('nem EXIF')],
+  ['Háromlépéses Terep workflow', shell.includes('Rögzítés') && shell.includes('Ellenőrzés') && shell.includes('Mentés') && shell.includes('Tovább az ellenőrzéshez') && shell.includes('Tovább a mentéshez')],
+  ['Mentés lépés nem állít hamis szerveres szinkront', shell.includes('P7 szerveres DIMPRO szinkron') && shell.includes('nem állítja, hogy a képek felhőbe kerültek')],
+  ['Közös DIMPRO Képjelölő komponens', editor.includes('DIMPRO Képjelölő') && editor.includes('pen') && editor.includes('arrow') && editor.includes('crop')],
+  ['Terep képkártyán szerkesztés elérhető', card.includes('Kép szerkesztése / jelölése') && shell.includes('DimproImageMarkupEditor')],
+  ['Szerkesztett munkapéldány újra optimalizálódik', shell.includes('saveEditedImage') && shell.includes('prepareFieldCaptureFiles([result.file]') && shell.includes('edited: true')],
+  ['Szerkesztési állapot IndexedDB-ben megmarad', queue.includes('edited: item.edited') && queue.includes('editRevision: item.editRevision') && queue.includes('edited: Boolean(row.edited)')],
+  ['Kamerairány a hátlapi -z vektorból számolódik', sensors.includes('Rz(alpha) * Rx(beta) * Ry(gamma) * [0, 0, -1]') && sensors.includes('cameraHeadingFromDeviceOrientation') && sensors.includes('horizontalProjection')],
+  ['Kamerairány több szenzorminta körátlagából készül', sensors.includes('TARGET_ORIENTATION_SAMPLES') && sensors.includes('circularMean') && sensors.includes('absoluteSamples')],
+  ['GPS tiltásnál böngésző engedélyezési útmutató látható', card.includes('webhelybeállítások') && card.includes('Hely') && card.includes('Engedélyezés')],
 ];
 let failed = 0;
 tests.forEach(([name, ok], index) => { if (!ok) failed += 1; console.log(`${String(index + 1).padStart(2,'0')}. ${ok ? 'PASS' : 'FAIL'} - ${name}`); });

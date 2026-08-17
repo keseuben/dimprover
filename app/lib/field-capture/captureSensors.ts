@@ -8,7 +8,9 @@ import type {
 
 const LOCATION_TIMEOUT_MS = 6500;
 const LOW_ACCURACY_METERS = 50;
-const ORIENTATION_TIMEOUT_MS = 3500;
+const ORIENTATION_TIMEOUT_MS = 4200;
+const MIN_CAMERA_HORIZONTAL_PROJECTION = 0.16;
+const TARGET_ORIENTATION_SAMPLES = 5;
 
 function nowIso() {
   return new Date().toISOString();
@@ -18,9 +20,54 @@ function normalizeHeading(value: number) {
   return ((value % 360) + 360) % 360;
 }
 
+function degrees(value: number) {
+  return value * Math.PI / 180;
+}
+
 export function fieldDirectionLabel(heading: number) {
   const labels = ["É", "ÉK", "K", "DK", "D", "DNy", "Ny", "ÉNy"] as const;
   return labels[Math.round(normalizeHeading(heading) / 45) % 8];
+}
+
+/**
+ * A W3C Device Orientation koordinátarendszerben +z a kijelzőből kifelé mutat.
+ * A hátlapi kamera optikai tengelye ezért -z. A Z-X'-Y'' forgatások után a
+ * kamera-vektort vízszintes síkra vetítjük; atan2(x,y) adja az Északtól
+ * óramutató járásával megegyező azimutot.
+ */
+export function cameraHeadingFromDeviceOrientation(alpha: number, beta: number, gamma: number) {
+  const a = degrees(alpha);
+  const b = degrees(beta);
+  const g = degrees(gamma);
+
+  // Rz(alpha) * Rx(beta) * Ry(gamma) * [0, 0, -1]
+  const east = -Math.cos(a) * Math.sin(g) - Math.sin(a) * Math.cos(g) * Math.sin(b);
+  const north = -Math.sin(a) * Math.sin(g) + Math.cos(a) * Math.cos(g) * Math.sin(b);
+  const horizontalProjection = Math.hypot(east, north);
+  if (!Number.isFinite(horizontalProjection) || horizontalProjection < MIN_CAMERA_HORIZONTAL_PROJECTION) {
+    return { heading: null, horizontalProjection };
+  }
+  return { heading: normalizeHeading(Math.atan2(east, north) * 180 / Math.PI), horizontalProjection };
+}
+
+function circularMean(values: number[]) {
+  if (!values.length) return null;
+  let x = 0;
+  let y = 0;
+  for (const value of values) {
+    const angle = degrees(value);
+    x += Math.cos(angle);
+    y += Math.sin(angle);
+  }
+  if (Math.hypot(x, y) < 0.0001) return null;
+  return normalizeHeading(Math.atan2(y, x) * 180 / Math.PI);
+}
+
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 export async function captureFieldLocation(enabled: boolean): Promise<FieldCaptureLocationRecord> {
@@ -53,10 +100,12 @@ export async function captureFieldLocation(enabled: boolean): Promise<FieldCaptu
           capturedAt: nowIso(),
           source: "browser-geolocation",
           status: denied ? "DENIED" : "UNAVAILABLE",
-          detail: denied ? "A GPS helyhozzáférés nincs engedélyezve." : "A GPS mérés nem sikerült vagy időtúllépés történt.",
+          detail: denied
+            ? "A GPS helyhozzáférés nincs engedélyezve. A böngésző Webhelybeállítások → Hely menüjében engedélyezze, majd válassza a GPS újramérést."
+            : "A GPS mérés nem sikerült vagy időtúllépés történt.",
         });
       },
-      { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT_MS, maximumAge: 15000 },
+      { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT_MS, maximumAge: 10000 },
     );
   });
 }
@@ -79,8 +128,15 @@ type ExtendedOrientationEvent = DeviceOrientationEvent & {
   webkitCompassAccuracy?: number;
 };
 
-function orientationStatus(absolute: boolean, accuracy: number | null): FieldCaptureOrientationStatus {
-  if (!absolute) return "UNSTABLE";
+type OrientationSample = {
+  heading: number;
+  absolute: boolean;
+  accuracy: number | null;
+  projection: number;
+};
+
+function orientationStatus(absolute: boolean, accuracy: number | null, projection: number): FieldCaptureOrientationStatus {
+  if (!absolute || projection < 0.35) return "UNSTABLE";
   if (accuracy !== null && accuracy > 45) return "UNSTABLE";
   return "READY";
 }
@@ -93,6 +149,8 @@ export async function captureFieldOrientation(enabled: boolean): Promise<FieldCa
 
   return new Promise((resolve) => {
     let done = false;
+    const samples: OrientationSample[] = [];
+
     const finish = (record: FieldCaptureOrientationRecord) => {
       if (done) return;
       done = true;
@@ -101,20 +159,15 @@ export async function captureFieldOrientation(enabled: boolean): Promise<FieldCa
       window.clearTimeout(timer);
       resolve(record);
     };
-    const onOrientation = (raw: Event) => {
-      const event = raw as ExtendedOrientationEvent;
-      let heading: number | null = null;
-      let accuracy: number | null = null;
-      let absolute = Boolean(event.absolute);
-      if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
-        heading = normalizeHeading(event.webkitCompassHeading);
-        accuracy = typeof event.webkitCompassAccuracy === "number" && Number.isFinite(event.webkitCompassAccuracy) ? Math.max(0, event.webkitCompassAccuracy) : null;
-        absolute = true;
-      } else if (typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
-        heading = normalizeHeading(360 - event.alpha);
-      }
-      if (heading === null) return;
-      const status = orientationStatus(absolute, accuracy);
+
+    const finishFromSamples = () => {
+      const absoluteSamples = samples.filter((sample) => sample.absolute);
+      const usable = absoluteSamples.length ? absoluteSamples : samples;
+      const heading = circularMean(usable.map((sample) => sample.heading));
+      if (heading === null) return false;
+      const accuracy = median(usable.flatMap((sample) => sample.accuracy === null ? [] : [sample.accuracy]));
+      const projection = median(usable.map((sample) => sample.projection)) ?? 0;
+      const status = orientationStatus(Boolean(absoluteSamples.length), accuracy, projection);
       finish({
         enabled: true,
         headingDegrees: heading,
@@ -123,21 +176,48 @@ export async function captureFieldOrientation(enabled: boolean): Promise<FieldCa
         capturedAt: nowIso(),
         source: "device-orientation",
         status,
-        detail: status === "READY" ? "Tájolás rögzítve." : "A tájolás rendelkezésre áll, de a mérés bizonytalan lehet.",
+        detail: status === "READY"
+          ? `Hátlapi kamera nézeti iránya rögzítve ${usable.length} szenzormintából.`
+          : `A kamera iránya becsülhető, de a mérés bizonytalan lehet (${usable.length} minta). Tartsa a telefont a fotózási helyzetben, majd mérje újra.`,
       });
+      return true;
     };
+
+    const onOrientation = (raw: Event) => {
+      const event = raw as ExtendedOrientationEvent;
+      if (typeof event.alpha !== "number" || typeof event.beta !== "number" || typeof event.gamma !== "number") return;
+      if (![event.alpha, event.beta, event.gamma].every(Number.isFinite)) return;
+
+      const hasWebkitHeading = typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading);
+      const alpha = hasWebkitHeading ? normalizeHeading(360 - event.webkitCompassHeading!) : event.alpha;
+      const camera = cameraHeadingFromDeviceOrientation(alpha, event.beta, event.gamma);
+      if (camera.heading === null) return;
+
+      const absolute = raw.type === "deviceorientationabsolute" || Boolean(event.absolute) || hasWebkitHeading;
+      const accuracy = typeof event.webkitCompassAccuracy === "number" && Number.isFinite(event.webkitCompassAccuracy)
+        ? Math.max(0, event.webkitCompassAccuracy)
+        : null;
+      samples.push({ heading: camera.heading, absolute, accuracy, projection: camera.horizontalProjection });
+
+      const absoluteCount = samples.filter((sample) => sample.absolute).length;
+      if (absoluteCount >= TARGET_ORIENTATION_SAMPLES || (samples.length >= TARGET_ORIENTATION_SAMPLES + 2 && absoluteCount === 0)) finishFromSamples();
+    };
+
     window.addEventListener("deviceorientationabsolute", onOrientation as EventListener, { passive: true });
     window.addEventListener("deviceorientation", onOrientation as EventListener, { passive: true });
-    const timer = window.setTimeout(() => finish({
-      enabled: true,
-      headingDegrees: null,
-      headingAccuracyDegrees: null,
-      directionLabel: null,
-      capturedAt: nowIso(),
-      source: "device-orientation",
-      status: "UNAVAILABLE",
-      detail: "A tájolási mérés nem adott használható értéket az időkorláton belül.",
-    }), ORIENTATION_TIMEOUT_MS);
+    const timer = window.setTimeout(() => {
+      if (samples.length && finishFromSamples()) return;
+      finish({
+        enabled: true,
+        headingDegrees: null,
+        headingAccuracyDegrees: null,
+        directionLabel: null,
+        capturedAt: nowIso(),
+        source: "device-orientation",
+        status: "UNAVAILABLE",
+        detail: "A hátlapi kamera iránya nem volt megbízhatóan meghatározható. Tartsa a telefont fotózási helyzetben, majd válassza a Tájolás újramérést.",
+      });
+    }, ORIENTATION_TIMEOUT_MS);
   });
 }
 

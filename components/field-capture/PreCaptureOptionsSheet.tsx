@@ -53,7 +53,7 @@ export default function PreCaptureOptionsSheet({ open, value, onClose, onReset, 
 
         <div className="mt-4 space-y-2">
           <CaptureToggleRow title="GPS helyadat" description="Képenként külön mérés készül, pontossággal és időbélyeggel. Gyenge GPS esetén figyelmeztetést kap." checked={draft.gpsEnabled} onChange={(checked) => setDraft({ ...draft, gpsEnabled: checked })} badge="aktív" />
-          <CaptureToggleRow title="Telefon iránya / tájolás" description="A GPS-től független iránymérés. A rendszer fokértéket és égtájat rögzít, ha a készülék támogatja." checked={draft.orientationEnabled} onChange={(checked) => void toggleOrientation(checked)} badge="aktív" />
+          <CaptureToggleRow title="Hátlapi kamera iránya" description="A GPS-től független iránymérés. A rendszer fokértéket és égtájat rögzít, ha a készülék támogatja." checked={draft.orientationEnabled} onChange={(checked) => void toggleOrientation(checked)} badge="aktív" />
           {orientationPermissionMessage ? <p className="px-2 text-[11px] font-semibold leading-5 text-slate-500">{orientationPermissionMessage}</p> : null}
           <CaptureToggleRow title="Hangos megjegyzés" description="A kép után felajánlja a már működő DIMPRO böngészős diktálási sessiont." checked={draft.voiceNoteEnabled} onChange={(checked) => setDraft({ ...draft, voiceNoteEnabled: checked })} />
           {draft.voiceNoteEnabled ? (
@@ -81,7 +81,7 @@ export default function PreCaptureOptionsSheet({ open, value, onClose, onReset, 
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px] font-bold text-slate-500">
           <span className="rounded-xl bg-white p-2"><MapPin size={14} className="mx-auto mb-1" />GPS külön</span>
-          <span className="rounded-xl bg-white p-2"><Compass size={14} className="mx-auto mb-1" />Tájolás külön</span>
+          <span className="rounded-xl bg-white p-2"><Compass size={14} className="mx-auto mb-1" />Kamerairány</span>
           <span className="rounded-xl bg-white p-2"><Mic size={14} className="mx-auto mb-1" />Voice shared</span>
         </div>
       </section>

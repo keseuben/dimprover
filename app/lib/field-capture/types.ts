@@ -1,4 +1,4 @@
-export const FIELD_CAPTURE_VERSION = "0.2.0-dev";
+export const FIELD_CAPTURE_VERSION = "0.3.0-dev";
 export const FIELD_CAPTURE_MAX_ITEMS = 200;
 
 export type FieldCaptureTranscriptMode = "raw" | "cleaned";
@@ -89,6 +89,8 @@ export type FieldCaptureItem = {
   status: FieldCaptureSyncState;
   progress: number;
   error: string | null;
+  edited: boolean;
+  editRevision: number;
   options: PreCaptureOptions;
   locationStatus: FieldCaptureLocationStatus;
   orientationStatus: FieldCaptureOrientationStatus;
