@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { autoRouteDevEngineTaskByAvailability } from "./engine-repository";
 import { recoverStaleSessionsAtomic } from "./orchestration-repository";
+import { assertWorkerProjectIsolation, PartnerIsolationPolicyError } from "./partner-isolation";
 
 type JsonRecord = Record<string, unknown>;
 export type DevelopmentScheduleStatus = "active" | "paused" | "completed" | "cancelled";
@@ -387,6 +388,12 @@ async function prepareAlreadyRoutedTask(db: SupabaseClient, task: JsonRecord, sc
   const sessions = await db.from("dev_center_worker_sessions").select("id,task_id,status").eq("worker_id", workerId).neq("status", "closed").limit(1);
   if (sessions.error) throw new DevelopmentSchedulerError(sessions.error.message, "SCHEDULER_WORKER_SESSION_READ_FAILED", 500);
   if ((sessions.data || []).length > 0) return null;
+  try {
+    await assertWorkerProjectIsolation(db, { workerId, projectId: text(task.project_id) });
+  } catch (error) {
+    if (error instanceof PartnerIsolationPolicyError && error.status < 500) return null;
+    throw error;
+  }
   const metadata = record(task.metadata);
   const nextMetadata = {
     ...metadata,

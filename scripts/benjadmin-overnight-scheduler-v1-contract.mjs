@@ -29,6 +29,7 @@ check("Stale run can recover", () => assert.ok(engine.includes("staleRunning") &
 check("Retry exhaustion advances safely", () => assert.ok(engine.includes("DEVELOPMENT_SCHEDULER_RETRY_EXHAUSTED")));
 check("Missed slots support catch-up and skip", () => assert.ok(engine.includes('missedRunPolicy') && engine.includes('=== "skip"') && engine.includes("nextSlot")));
 check("Scheduler reuses existing Ben-AI routing", () => assert.ok(engine.includes("autoRouteDevEngineTaskByAvailability") && engine.includes("prepareForPlusPull: true")));
+check("Already-routed task rechecks project isolation", () => assert.ok(engine.includes("assertWorkerProjectIsolation") && engine.includes("PartnerIsolationPolicyError")));
 check("Scheduler prepares READY_FOR_PLUS_PULL", () => assert.ok(engine.includes("READY_FOR_PLUS_PULL") && engine.includes("BENJADMIN_SCHEDULER")));
 check("Scheduler never creates a development task", () => assert.ok(!engine.includes('from("dev_center_tasks").insert')));
 check("Active worker prevents duplicate task start", () => assert.ok(engine.includes('outcome = "worker_active"') && engine.includes("worker/session már aktív")));

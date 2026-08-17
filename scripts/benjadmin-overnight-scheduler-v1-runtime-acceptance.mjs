@@ -72,17 +72,11 @@ try {
   check("Scheduler snapshot is ready without new migration", result.response.status === 200 && result.payload?.scheduler?.ready === true, `status=${result.response.status}`);
   check("Scheduler uses decision-memory storage", result.payload?.scheduler?.storageMode === "CONTROL_PLANE_DECISION_MEMORY_V1", String(result.payload?.scheduler?.storageMode || ""));
 
-  const workers = await db.from("dev_center_workers").select("id,code,name,status").in("code", ["ARMINAI", "JAZMINAI", "OUTMINAI"]);
+  const workers = await db.from("dev_center_workers").select("id,code,name,status").in("code", ["ARMINAI", "JAZMINAI"]);
   if (workers.error) throw workers.error;
   workerSnapshot = workers.data || [];
-  const sessions = await db.from("dev_center_worker_sessions").select("worker_id,status").neq("status", "closed");
-  if (sessions.error) throw sessions.error;
-  const busy = new Set((sessions.data || []).map((row) => row.worker_id).filter(Boolean));
-  const selected = workerSnapshot.find((worker) => !busy.has(worker.id));
-  if (!selected) throw new Error("Nincs session-szinten szabad worker a scheduler acceptance-hez.");
-  workerCode = String(selected.code);
-  await db.from("dev_center_workers").update({ status: "ready", updated_at: new Date().toISOString() }).eq("id", selected.id);
-  check("Acceptance selected session-free worker", Boolean(workerCode), `${workerCode}`);
+  for (const worker of workerSnapshot) await db.from("dev_center_workers").update({ status: "ready", updated_at: new Date().toISOString() }).eq("id", worker.id);
+  check("Internal scheduler worker pool prepared", workerSnapshot.length >= 2, workerSnapshot.map((worker) => worker.code).join(","));
 
   const project = await db.from("dev_center_projects").insert({
     id: projectId, name: `${marker} projekt`, slug: projectSlug, category: "Acceptance", description: "BENJADMIN Scheduler V1 acceptance fixture",
@@ -92,7 +86,7 @@ try {
 
   const task = await db.from("dev_center_tasks").insert({
     id: taskId, project_id: projectId, title: `${marker} órás task`, description: "Scheduler acceptance task", status: "ready", priority: 99,
-    requested_worker_id: selected.id, assigned_worker_id: selected.id, created_by: "BenjAdmin", metadata: { marker, origin: "SCHEDULER_ACCEPTANCE", productionAccess: "DENY" },
+    requested_worker_id: null, assigned_worker_id: null, created_by: "BenjAdmin", metadata: { marker, origin: "SCHEDULER_ACCEPTANCE", productionAccess: "DENY" },
   });
   if (task.error) throw task.error;
   check("Isolated project and queued task fixture created", true, `${projectId} / ${taskId}`);
