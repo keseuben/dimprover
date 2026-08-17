@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const source = ["monitor", "manual", "chatgpt", "recovery"].includes(String(body.source || "")) ? String(body.source) as "monitor" | "manual" | "chatgpt" | "recovery" : "monitor";
-    const result = await runDevelopmentSchedulerTick({ source, scheduleId: typeof body.scheduleId === "string" ? body.scheduleId : null });
+    const result = await runDevelopmentSchedulerTick({ source, scheduleId: typeof body.scheduleId === "string" ? body.scheduleId : null, now: typeof body.now === "string" ? body.now : undefined });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof DevelopmentSchedulerError) return NextResponse.json({ ok: false, error: error.message, code: error.code, details: error.details || null }, { status: error.status });

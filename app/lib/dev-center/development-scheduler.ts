@@ -383,7 +383,10 @@ async function prepareAlreadyRoutedTask(db: SupabaseClient, task: JsonRecord, sc
   const workerId = text(task.assigned_worker_id) || text(task.requested_worker_id);
   if (!workerId) return null;
   const worker = await db.from("dev_center_workers").select("id,code,name,status").eq("id", workerId).maybeSingle();
-  if (worker.error || !worker.data) return null;
+  if (worker.error || !worker.data || ["offline", "paused"].includes(text(worker.data.status).toLowerCase())) return null;
+  const sessions = await db.from("dev_center_worker_sessions").select("id,task_id,status").eq("worker_id", workerId).neq("status", "closed").limit(1);
+  if (sessions.error) throw new DevelopmentSchedulerError(sessions.error.message, "SCHEDULER_WORKER_SESSION_READ_FAILED", 500);
+  if ((sessions.data || []).length > 0) return null;
   const metadata = record(task.metadata);
   const nextMetadata = {
     ...metadata,
@@ -469,7 +472,12 @@ async function processSchedule(db: SupabaseClient, schedule: Schedule, source: S
   const latenessMs = nowMs - new Date(slotAt).getTime();
   const claim = await claimRun(db, schedule, slotAt, source, nowIso);
 
-  if (claim.duplicate && !claim.exhausted) return { scheduleId: schedule.id, slotAt, outcome: "duplicate" as const, run: claim.run };
+  if (claim.duplicate && !claim.exhausted) {
+    if (["running", "failed"].includes(claim.run.status)) return { scheduleId: schedule.id, slotAt, outcome: "duplicate_wait" as const, run: claim.run };
+    const updatedSchedule = await advanceSchedule(db, schedule, slotAt, nowIso, claim.run.status);
+    await audit(db, { action: "DEVELOPMENT_SCHEDULER_SLOT_RECOVERED", scheduleId: schedule.id, projectId: schedule.projectId, taskId: claim.run.taskId, summary: `${schedule.title} · korábban lezárt slot schedule-léptetése helyreállítva.`, level: "warning", metadata: { slotAt, runStatus: claim.run.status, nextRunAt: updatedSchedule.nextRunAt } });
+    return { scheduleId: schedule.id, slotAt, outcome: "duplicate_recovered" as const, run: claim.run, schedule: updatedSchedule };
+  }
   if (claim.exhausted) {
     const skipped = await finishRun(db, claim.run, { status: "skipped", summary: "Scheduler slot kihagyva: a retry limit elfogyott.", metadata: { retryExhaustedAt: nowIso } }, nowIso);
     const updatedSchedule = await advanceSchedule(db, schedule, slotAt, nowIso, "skipped", 1);
