@@ -24,6 +24,6 @@ check("CLI still uses Plus next endpoint",()=>assert.ok(cli.includes('/plus-brid
 check("Combined result-to-testing action exists",()=>assert.ok(taskRoute.includes('"RESULT_TO_TESTING"')&&taskRoute.includes("setDevEngineTaskTesting(taskId)")));
 check("CLI supports report-testing",()=>assert.ok(cli.includes('"report-testing"')&&cli.includes('action: "RESULT_TO_TESTING"')));
 check("Backend completion requires TESTING",()=>assert.ok(engine.includes("DEV_CENTER_TASK_COMPLETE_TESTING_REQUIRED")));
-check("UI complete button is TESTING-only",()=>assert.ok(panel.includes('{task.status === "testing" ? <>')));
+check("UI complete button is TESTING-only",()=>assert.ok(panel.includes('{task.status === "testing" ? <button')));
 check("No native API provider enabled",()=>assert.ok(!route.includes("OPENAI_API_KEY")&&!engine.includes("OPENAI_API_KEY")));
 console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN V1.5 command pull ready"},null,2));
