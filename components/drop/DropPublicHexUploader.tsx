@@ -32,7 +32,7 @@ import DropHexUploadZone from "./DropHexUploadZone";
 import DropImageSizeSelector from "./DropImageSizeSelector";
 import DropImageMetadataSelector from "./DropImageMetadataSelector";
 import { requestDropMicrophonePermission } from "./dropVoicePermission";
-import { DropSpeechTranscriptAccumulator, type DropSpeechRecognitionEventLike } from "./dropSpeechTranscript";
+import { DimproBrowserVoiceSession, dimproBrowserVoiceSupported } from "./dropBrowserVoiceSession";
 import { createStableDropClientUploadId, uploadDropInitialized, type DropInitializedUpload } from "./dropMultipartClient";
 import { buildDropPhotoDisplayName, getDropImageOptimizationOptions, prepareDropFiles, revokePreparedDropFile, sanitizeDropManualFileName, sanitizeDropOriginalFileName, type DropFileNameRule, type DropImageMetadataPolicy, type DropImageSizePreset, type PreparedDropFile } from "./dropUploadPreparation";
 import { recommendedDropIntentBatchCount, requestDropUploadIntentBatch, type DropClientUploadIntent } from "./dropRobotGuardClient";
@@ -83,8 +83,6 @@ type DropImageGroup = {
   fileNamePrefix: string | null;
   fileCount: number;
 };
-type DropSpeechRecognition = { lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number; start: () => void; stop: () => void; abort: () => void; onresult: ((event: DropSpeechRecognitionEventLike) => void) | null; onerror: ((event: Event & { error?: string }) => void) | null; onend: (() => void) | null };
-type DropSpeechRecognitionConstructor = new () => DropSpeechRecognition;
 type VoiceFeedbackState = "recording" | "processing" | "ready" | "error" | "cancelled";
 type VoiceFeedback = { state: VoiceFeedbackState; text: string };
 type DropReportMode = "none" | "generate_only" | "generate_send";
@@ -243,25 +241,17 @@ export default function DropPublicHexUploader({
   const [editingGroupName, setEditingGroupName] = useState("");
   const [groupMutationBusy, setGroupMutationBusy] = useState("");
   const uploadZoneRef = useRef<HTMLDivElement | null>(null);
-  const voiceRecognitionRef = useRef<DropSpeechRecognition | null>(null);
+  const voiceSessionRef = useRef<DimproBrowserVoiceSession | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
-  const voiceTranscriptAccumulatorRef = useRef(new DropSpeechTranscriptAccumulator());
-  const voiceCommitRequestedRef = useRef(false);
   const voiceTargetRef = useRef<string | null>(null);
   const [voiceItemId, setVoiceItemId] = useState<string | null>(null);
   const [voiceSecondsLeft, setVoiceSecondsLeft] = useState(Math.max(10, Math.min(60, quickVoiceSecondsPerNote)));
   const [voicePreviewText, setVoicePreviewText] = useState("");
-  const [voiceSupported, setVoiceSupported] = useState<boolean | null>(null);
   const [voiceFeedbackByItem, setVoiceFeedbackByItem] = useState<Record<string, VoiceFeedback>>({});
 
   useDropAutomaticWakeLock(`public-uploader:${packageInfo.id}`, preparing || running || finalizing);
   useEffect(() => { queueRef.current = queue; }, [queue]);
-  useEffect(() => () => { queueRef.current.forEach(revokePreparedDropFile); abortRef.current?.abort(); voiceRecognitionRef.current?.abort(); if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current); if (networkResumeTimerRef.current) window.clearTimeout(networkResumeTimerRef.current); }, []);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const speechWindow = window as Window & { SpeechRecognition?: DropSpeechRecognitionConstructor; webkitSpeechRecognition?: DropSpeechRecognitionConstructor };
-    setVoiceSupported(Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition));
-  }, []);
+  useEffect(() => () => { queueRef.current.forEach(revokePreparedDropFile); abortRef.current?.abort(); voiceSessionRef.current?.abort(); if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current); if (networkResumeTimerRef.current) window.clearTimeout(networkResumeTimerRef.current); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -540,14 +530,12 @@ export default function DropPublicHexUploader({
     setVoiceFeedbackByItem((current) => ({ ...current, [itemId]: { state, text } }));
   }
 
-  function finishVoiceNote(commit: boolean) {
+  function finishVoiceNote(text: string, commit: boolean) {
     const targetId = voiceTargetRef.current;
-    const text = voiceTranscriptAccumulatorRef.current.getText();
     if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
     voiceTimerRef.current = null;
-    voiceRecognitionRef.current = null;
+    voiceSessionRef.current = null;
     voiceTargetRef.current = null;
-    voiceCommitRequestedRef.current = false;
     if (commit && targetId && text) {
       const item = queueRef.current.find((candidate) => candidate.id === targetId);
       if (item && commentEditableStatus(item.status)) {
@@ -559,12 +547,11 @@ export default function DropPublicHexUploader({
         setVoiceFeedback(targetId, "error", "Az átirat elkészült, de a kép megjegyzése ebben az állapotban már nem módosítható.");
       }
     } else if (commit && targetId) {
-      setVoiceFeedback(targetId, "error", "A felvétel lezárult, de a böngésző nem adott vissza felismerhető szöveget. Próbálja újra, vagy használja a telefon billentyűzetének mikrofonját.");
+      setVoiceFeedback(targetId, "error", "A diktálás lezárult, de nem érkezett felismerhető szöveg. Próbálja újra, vagy használja a telefon billentyűzetének mikrofonját.");
       setMessage("Nem érkezett felismerhető átirat a böngészőtől.");
     } else if (targetId) {
       setVoiceFeedback(targetId, "cancelled", "A diktálás megszakítva. Nem került szöveg a megjegyzésbe.");
     }
-    voiceTranscriptAccumulatorRef.current.reset();
     setVoiceItemId(null);
     setVoicePreviewText("");
     setVoiceSecondsLeft(Math.max(10, Math.min(60, quickVoiceSecondsPerNote)));
@@ -573,13 +560,14 @@ export default function DropPublicHexUploader({
   function stopVoiceNote(commit = true) {
     if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
     voiceTimerRef.current = null;
-    voiceCommitRequestedRef.current = commit;
     const targetId = voiceTargetRef.current;
-    if (commit) setVoiceFeedback(targetId, "processing", "Felvétel lezárva · a böngésző az átiratot véglegesíti…");
-    const recognition = voiceRecognitionRef.current;
-    if (!recognition) { finishVoiceNote(commit); return; }
-    try { recognition.stop(); } catch { finishVoiceNote(commit); }
-    window.setTimeout(() => { if (voiceRecognitionRef.current === recognition) finishVoiceNote(commit); }, 1500);
+    if (commit) setVoiceFeedback(targetId, "processing", "Diktálás lezárása · az átirat véglegesítése folyamatban…");
+    const session = voiceSessionRef.current;
+    if (!session) {
+      finishVoiceNote("", commit);
+      return;
+    }
+    session.stop(commit);
   }
 
   async function startVoiceNote(itemId: string) {
@@ -587,10 +575,7 @@ export default function DropPublicHexUploader({
     const item = queueRef.current.find((candidate) => candidate.id === itemId);
     if (!item || !commentEditableStatus(item.status)) return;
     if (typeof window === "undefined") return;
-    const speechWindow = window as Window & { SpeechRecognition?: DropSpeechRecognitionConstructor; webkitSpeechRecognition?: DropSpeechRecognitionConstructor };
-    const Constructor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-    if (!Constructor) {
-      setVoiceSupported(false);
+    if (!dimproBrowserVoiceSupported()) {
       setVoiceFeedback(itemId, "error", "Ezen az eszközön vagy böngészőben nincs támogatott közvetlen beszédfelismerés. Használja a telefon billentyűzetének mikrofonját vagy a kézi gépelést.");
       setMessage("A böngésző nem támogat közvetlen beszédfelismerést.");
       return;
@@ -604,50 +589,52 @@ export default function DropPublicHexUploader({
       setMessage(detail);
       return;
     }
-    if (voiceRecognitionRef.current) {
-      voiceCommitRequestedRef.current = false;
-      try { voiceRecognitionRef.current.abort(); } catch {}
-      finishVoiceNote(false);
+
+    if (voiceSessionRef.current) {
+      voiceSessionRef.current.abort();
+      voiceSessionRef.current = null;
     }
     const maximum = Math.max(10, Math.min(60, quickVoiceSecondsPerNote));
-    const recognition = new Constructor();
-    recognition.lang = "hu-HU";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    voiceRecognitionRef.current = recognition;
     voiceTargetRef.current = itemId;
-    voiceTranscriptAccumulatorRef.current.reset();
-    voiceCommitRequestedRef.current = true;
     setVoiceItemId(itemId);
     setVoiceSecondsLeft(maximum);
     setVoicePreviewText("");
-    setVoiceSupported(true);
-    setVoiceFeedback(itemId, "recording", "Felvétel folyamatban · a hangot a böngésző beszédfelismerője dolgozza fel, DIMPRO hangfájlt nem tárol.");
-    recognition.onresult = (event) => {
-      const preview = voiceTranscriptAccumulatorRef.current.update(event);
-      setVoicePreviewText(preview);
-      if (preview) setVoiceFeedback(itemId, "recording", "Beszéd felismerve · a szöveg még szerkeszthető átirattá alakul.");
-    };
-    recognition.onerror = (event) => {
-      if (event.error && event.error !== "aborted") {
-        voiceCommitRequestedRef.current = true;
-        const label = event.error === "no-speech" ? "Nem érzékelt beszédet." : event.error === "not-allowed" ? "A mikrofonengedély nincs megadva." : `Beszédfelismerési hiba: ${event.error}.`;
-        setVoiceFeedback(itemId, "error", `${label} A már felismert szöveget megőrizzük, ha van.`);
-        setMessage(label);
-      }
-    };
-    recognition.onend = () => {
-      if (voiceRecognitionRef.current === recognition) finishVoiceNote(voiceCommitRequestedRef.current);
-    };
+
+    const session = new DimproBrowserVoiceSession({
+      language: "hu-HU",
+      onTranscript: (text) => {
+        if (voiceTargetRef.current !== itemId) return;
+        setVoicePreviewText(text);
+        if (text) setVoiceFeedback(itemId, "recording", "Beszéd felismerve · a diktálás folytatódik.");
+      },
+      onState: (state, detail) => {
+        if (voiceTargetRef.current !== itemId) return;
+        if (state === "error") {
+          setVoiceFeedback(itemId, "error", detail);
+          setMessage(detail);
+        } else {
+          setVoiceFeedback(itemId, "recording", detail);
+        }
+      },
+      onEnd: ({ text, commit }) => {
+        if (voiceTargetRef.current !== itemId) return;
+        finishVoiceNote(text, commit);
+      },
+    });
+    voiceSessionRef.current = session;
+    setVoiceFeedback(itemId, "recording", "DIMPRO diktálás aktív · ha a mobil böngésző megszakítja a felismerést, automatikusan folytatjuk.");
     try {
-      recognition.start();
+      session.start();
     } catch (error) {
-      finishVoiceNote(false);
-      setVoiceFeedback(itemId, "error", error instanceof Error ? error.message : "A beszédfelismerés nem indítható el.");
-      setMessage(error instanceof Error ? error.message : "A beszédfelismerés nem indítható el.");
+      voiceSessionRef.current = null;
+      voiceTargetRef.current = null;
+      setVoiceItemId(null);
+      const detail = error instanceof Error ? error.message : "A beszédfelismerés nem indítható el.";
+      setVoiceFeedback(itemId, "error", detail);
+      setMessage(detail);
       return;
     }
+
     voiceTimerRef.current = window.setInterval(() => {
       setVoiceSecondsLeft((current) => {
         const next = Math.max(0, current - 1);
@@ -1020,6 +1007,7 @@ export default function DropPublicHexUploader({
             await fetch(initialized.abortUrl, { method: "DELETE", headers: { "content-type": "application/json", Authorization: `Bearer ${initialized.uploadToken}` }, body: JSON.stringify({ reason: failure }) }).catch(() => undefined);
           }
           patch(item.id, { status: aborted || offline ? "paused" : "failed", message: failure, autoResume: !aborted }, true);
+          if (!aborted && !offline) setMessage("Feltöltési hiba: " + failure);
           if (offline) void registerDropBackgroundResume();
           if (aborted || offline) break;
         }
@@ -1235,17 +1223,34 @@ export default function DropPublicHexUploader({
       <div className="mt-4 space-y-2 sm:hidden">
         {visibleQueue.map((item) => {
           const expanded = expandedMobile.has(item.id);
-          return <article key={item.id} data-drop-queue-item data-drop-queue-status={item.status} draggable={!running && pendingStatus(item.status)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId(null)} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-            <div aria-hidden="true" className="absolute inset-0 flex items-start justify-between bg-gradient-to-r from-emerald-100 via-slate-50 to-rose-100 px-4 pt-5 text-xs font-black"><span className={`inline-flex items-center gap-2 text-emerald-950 transition-opacity ${(swipeOffsets[item.id] || 0) > 12 ? "opacity-100" : "opacity-0"}`}><PlayCircle size={17}/> Feltöltésre kész</span><span className={`ml-auto inline-flex items-center gap-2 text-rose-950 transition-opacity ${(swipeOffsets[item.id] || 0) < -12 ? "opacity-100" : "opacity-0"}`}><Trash2 size={17}/> Törlés</span></div>
-            <button type="button" onClick={() => toggleExpanded(item.id)} onPointerDown={(event) => swipeStart(item.id, event)} onPointerMove={(event) => swipeMove(item.id, event)} onPointerUp={() => swipeEnd(item)} onPointerCancel={() => setSwipeOffsets((current) => ({ ...current, [item.id]: 0 }))} className={`relative flex w-full touch-pan-y items-center gap-3 p-3 text-left transition-transform ${(swipeOffsets[item.id] || 0) < 0 ? "bg-rose-100" : (swipeOffsets[item.id] || 0) > 0 ? "bg-emerald-100" : "bg-white"}`} style={{ transform: `translateX(${swipeOffsets[item.id] || 0}px)` }}>
-              {item.previewUrl ? <img src={item.previewUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover"/> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-white text-slate-400"><FileText size={24}/></span>}
-              {statusIcon(item)}
-              <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-950">{item.displayName}</strong>{item.groupName ? <span className="mt-1 inline-flex rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black text-teal-800">{item.groupName}</span> : null}<span className="mt-1 block truncate text-[11px] text-slate-500">{item.message}</span><span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-200"><span className="block h-full bg-cyan-700" style={{ width: `${item.progress}%` }}/></span></span>
-              {expanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-            </button>
-            {renderItemGroupSelector(item, true)}
-            {allowFileComments ? <div className="border-t border-slate-200 bg-white p-3"><div className="mb-1 flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Megjegyzés ehhez a képhez</span>{allowQuickVoiceNote && imageOnly ? <button type="button" onClick={() => voiceItemId === item.id ? stopVoiceNote(true) : void startVoiceNote(item.id)} disabled={finalizing || delivered || !commentEditableStatus(item.status)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${voiceItemId === item.id ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>{voiceItemId === item.id ? <MicOff size={14}/> : <Mic size={14}/>} {voiceItemId === item.id ? `Leállítás · 00:${String(voiceSecondsLeft).padStart(2,"0")}` : "Diktálás"}</button> : null}</div><textarea value={item.comment} onChange={(event) => updateComment(item.id, event.target.value.slice(0, 2000))} onBlur={() => { if (item.fileId) void commentFile(item.fileId, item.comment).catch((error) => setMessage(error instanceof Error ? error.message : "A megjegyzés mentése sikertelen.")); }} disabled={finalizing || delivered} placeholder="Megjegyzés azonnal, a kártya megnyitása nélkül…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-5 outline-none focus:border-cyan-500"/>{renderVoiceStatus(item.id, true)}{allowQuickVoiceNote && imageOnly && voiceSupported !== false ? <p className="mt-1 text-[10px] text-slate-500">A DIMPRO nem rögzít hangfájlt; a böngésző/eszköz beszédfelismerése csak szerkeszthető szöveget ad vissza.</p> : null}{allowQuickVoiceNote && imageOnly && voiceSupported === false ? <p className="mt-1 text-[10px] text-amber-700">A böngésző nem támogat közvetlen beszédfelismerést; a telefon billentyűzetének mikrofonja továbbra is használható.</p> : null}</div> : null}
-            {expanded ? <div className="border-t border-slate-200 p-3"><p className="text-xs leading-5 text-slate-600">{formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)} · {item.optimizationNote}</p><label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>{fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. gephaz_csovezetek" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/></label> : null}{!running && pendingStatus(item.status) ? <button type="button" onClick={() => softDelete(item.id)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700"><X size={14}/> Eltávolítás</button> : null}</div> : null}
+          const swipeOffset = swipeOffsets[item.id] || 0;
+          return <article key={item.id} data-drop-queue-item data-drop-queue-status={item.status} draggable={!running && pendingStatus(item.status)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId(null)} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="relative overflow-hidden bg-white">
+              <div aria-hidden="true" className={`absolute inset-0 z-0 flex items-center justify-between bg-gradient-to-r from-emerald-100 via-slate-50 to-rose-100 px-4 text-xs font-black transition-opacity ${Math.abs(swipeOffset) > 8 ? "opacity-100" : "opacity-0"}`}>
+                <span className={`inline-flex items-center gap-2 text-emerald-950 transition-opacity ${swipeOffset > 12 ? "opacity-100" : "opacity-0"}`}><PlayCircle size={17}/> Feltöltésre kész</span>
+                <span className={`ml-auto inline-flex items-center gap-2 text-rose-950 transition-opacity ${swipeOffset < -12 ? "opacity-100" : "opacity-0"}`}><Trash2 size={17}/> Törlés</span>
+              </div>
+              <button type="button" onClick={() => toggleExpanded(item.id)} onPointerDown={(event) => swipeStart(item.id, event)} onPointerMove={(event) => swipeMove(item.id, event)} onPointerUp={() => swipeEnd(item)} onPointerCancel={() => setSwipeOffsets((current) => ({ ...current, [item.id]: 0 }))} className={`relative z-10 flex w-full touch-pan-y items-center gap-3 p-3 text-left transition-transform ${swipeOffset < 0 ? "bg-rose-50" : swipeOffset > 0 ? "bg-emerald-50" : "bg-white"}`} style={{ transform: `translateX(${swipeOffset}px)` }}>
+                {item.previewUrl ? <img src={item.previewUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover"/> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-400"><FileText size={24}/></span>}
+                {statusIcon(item)}
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm text-slate-950">{item.displayName}</strong>
+                  <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black ${item.groupName ? "bg-teal-100 text-teal-800" : "bg-slate-100 text-slate-600"}`}>{item.groupName || "Csoport nélkül"}</span>
+                  <span className="mt-1 block truncate text-[11px] text-slate-500">{item.message}</span>
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-200"><span className="block h-full bg-cyan-700" style={{ width: `${item.progress}%` }}/></span>
+                </span>
+                {expanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+              </button>
+            </div>
+            {expanded ? <div className="relative z-10 border-t border-slate-200 bg-white p-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600"><strong className="text-slate-800">Eredeti:</strong> {item.originalName}<br/><strong className="text-slate-800">Méret:</strong> {formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)}</div>
+              {renderItemGroupSelector(item)}
+              <label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>
+              {fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase tracking-[.08em] text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. gephaz_csovezetek" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/></label> : null}
+              <p className={`mt-3 rounded-xl border px-3 py-2 text-[11px] font-semibold leading-5 ${item.optimized ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-slate-50 text-slate-600"}`}>{item.optimizationNote}</p>
+              {allowFileComments ? <div className="mt-3"><div className="mb-1.5 flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Megjegyzés ehhez a képhez</span>{allowQuickVoiceNote && imageOnly ? <button type="button" onClick={() => voiceItemId === item.id ? stopVoiceNote(true) : void startVoiceNote(item.id)} disabled={finalizing || delivered || !commentEditableStatus(item.status)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${voiceItemId === item.id ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>{voiceItemId === item.id ? <MicOff size={14}/> : <Mic size={14}/>} {voiceItemId === item.id ? `Leállítás · 00:${String(voiceSecondsLeft).padStart(2,"0")}` : "Diktálás"}</button> : null}</div><textarea value={item.comment} onChange={(event) => updateComment(item.id, event.target.value.slice(0, 2000))} onBlur={() => { if (item.fileId) void commentFile(item.fileId, item.comment).catch((error) => setMessage(error instanceof Error ? error.message : "A megjegyzés mentése sikertelen.")); }} disabled={finalizing || delivered} placeholder="Írja ide a képen látható munkarészt, hibát vagy információt…" className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-5 outline-none focus:border-cyan-500"/>{renderVoiceStatus(item.id, true)}</div> : null}
+              {!running && pendingStatus(item.status) ? <button type="button" onClick={() => softDelete(item.id)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700"><X size={14}/> Kép eltávolítása</button> : null}
+            </div> : null}
           </article>;
         })}
       </div>

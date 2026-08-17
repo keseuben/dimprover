@@ -24,7 +24,7 @@ import DropPublicHexUploader, { DROP_QUICK_SEND_WORKFLOW_STEPS } from "./DropPub
 import DropUploadRulesDialog, { DropRulesButton } from "./DropUploadRulesDialog";
 import { clearDropQueuePackage } from "./dropOfflineQueueStore";
 import { requestDropMicrophonePermission } from "./dropVoicePermission";
-import { DropSpeechTranscriptAccumulator, type DropSpeechRecognitionEventLike } from "./dropSpeechTranscript";
+import { DimproBrowserVoiceSession, dimproBrowserVoiceSupported } from "./dropBrowserVoiceSession";
 import {
   formatDropSendCode,
   isCompleteDropSendCode,
@@ -154,14 +154,9 @@ type Props = { mode: "send" | "submission_gate"; slug?: string };
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100";
 
-type MessageSpeechRecognition = { lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number; start: () => void; stop: () => void; abort: () => void; onresult: ((event: DropSpeechRecognitionEventLike) => void) | null; onerror: ((event: Event & { error?: string }) => void) | null; onend: (() => void) | null };
-type MessageSpeechRecognitionConstructor = new () => MessageSpeechRecognition;
-
 function MessageVoiceDictation({ enabled, maxSeconds, onTranscript }: { enabled: boolean; maxSeconds: number; onTranscript: (text: string) => void }) {
-  const recognitionRef = useRef<MessageSpeechRecognition | null>(null);
+  const sessionRef = useRef<DimproBrowserVoiceSession | null>(null);
   const timerRef = useRef<number | null>(null);
-  const transcriptAccumulatorRef = useRef(new DropSpeechTranscriptAccumulator());
-  const commitRef = useRef(true);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [active, setActive] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -171,59 +166,57 @@ function MessageVoiceDictation({ enabled, maxSeconds, onTranscript }: { enabled:
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const speechWindow = window as Window & { SpeechRecognition?: MessageSpeechRecognitionConstructor; webkitSpeechRecognition?: MessageSpeechRecognitionConstructor };
-    setSupported(Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition));
+    setSupported(dimproBrowserVoiceSupported());
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
-      try { recognitionRef.current?.abort(); } catch {}
+      timerRef.current = null;
+      sessionRef.current?.abort();
+      sessionRef.current = null;
     };
   }, []);
 
   function cleanup() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
-    recognitionRef.current = null;
+    sessionRef.current = null;
     setActive(false);
     setProcessing(false);
     setSecondsLeft(Math.max(10, Math.min(60, maxSeconds)));
     setPreview("");
   }
 
-  function finish(commit: boolean) {
-    const text = transcriptAccumulatorRef.current.getText();
+  function finish(text: string, commit: boolean) {
     cleanup();
-    transcriptAccumulatorRef.current.reset();
     if (!commit) {
       setStatus({ kind: "cancelled", text: "A diktálás megszakítva; az üzenet nem változott." });
       return;
     }
     if (!text) {
-      setStatus({ kind: "error", text: "A felvétel lezárult, de a böngésző nem adott vissza felismerhető szöveget. Próbálja újra." });
+      setStatus({ kind: "error", text: "A diktálás lezárult, de nem érkezett felismerhető szöveg. Próbálja újra." });
       return;
     }
     onTranscript(text);
-    setStatus({ kind: "ready", text: "Átirat elkészült és bekerült a levél üzenetébe. Küldés előtt szerkeszthető." });
+    setStatus({ kind: "ready", text: "Átirat elkészült és bekerült az üzenetbe. Küldés előtt szerkeszthető." });
   }
 
   function stop(commit = true) {
-    commitRef.current = commit;
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
     if (commit) {
       setProcessing(true);
-      setStatus({ kind: "processing", text: "Felvétel lezárva · az átirat véglegesítése folyamatban…" });
+      setStatus({ kind: "processing", text: "Diktálás lezárása · az átirat véglegesítése folyamatban…" });
     }
-    const recognition = recognitionRef.current;
-    if (!recognition) { finish(commit); return; }
-    try { recognition.stop(); } catch { finish(commit); return; }
-    window.setTimeout(() => { if (recognitionRef.current === recognition) finish(commit); }, 1500);
+    const session = sessionRef.current;
+    if (!session) {
+      finish("", commit);
+      return;
+    }
+    session.stop(commit);
   }
 
   async function start() {
     if (!enabled || processing || active || typeof window === "undefined") return;
-    const speechWindow = window as Window & { SpeechRecognition?: MessageSpeechRecognitionConstructor; webkitSpeechRecognition?: MessageSpeechRecognitionConstructor };
-    const Constructor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-    if (!Constructor) {
+    if (!dimproBrowserVoiceSupported()) {
       setSupported(false);
       setStatus({ kind: "error", text: "Ezen a böngészőn nincs támogatott közvetlen beszédfelismerés. Használja a telefon billentyűzetének mikrofonját." });
       return;
@@ -238,38 +231,33 @@ function MessageVoiceDictation({ enabled, maxSeconds, onTranscript }: { enabled:
       setStatus({ kind: "error", text: error instanceof Error ? error.message : "A mikrofonengedély ellenőrzése sikertelen." });
       return;
     }
-    const recognition = new Constructor();
+
     const maximum = Math.max(10, Math.min(60, maxSeconds));
-    recognition.lang = "hu-HU";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
-    transcriptAccumulatorRef.current.reset();
-    commitRef.current = true;
+    const session = new DimproBrowserVoiceSession({
+      language: "hu-HU",
+      onTranscript: (text) => setPreview(text),
+      onState: (state, detail) => {
+        if (state === "error") setStatus({ kind: "error", text: detail });
+        else setStatus({ kind: "recording", text: detail });
+      },
+      onEnd: ({ text, commit }) => finish(text, commit),
+    });
+    sessionRef.current = session;
     setActive(true);
     setProcessing(false);
     setSecondsLeft(maximum);
     setPreview("");
     setSupported(true);
-    setStatus({ kind: "recording", text: "Felvétel folyamatban · a böngésző beszédfelismerője dolgozza fel; DIMPRO hangfájlt nem tárol." });
-    recognition.onresult = (event) => {
-      setPreview(transcriptAccumulatorRef.current.update(event));
-    };
-    recognition.onerror = (event) => {
-      if (event.error && event.error !== "aborted") {
-        const label = event.error === "no-speech" ? "Nem érzékelt beszédet." : event.error === "not-allowed" ? "A mikrofonengedély nincs megadva." : `Beszédfelismerési hiba: ${event.error}.`;
-        setStatus({ kind: "error", text: `${label} A már felismert szöveget megőrizzük, ha van.` });
-      }
-    };
-    recognition.onend = () => {
-      if (recognitionRef.current === recognition) finish(commitRef.current);
-    };
-    try { recognition.start(); } catch (error) {
-      cleanup();
+    setStatus({ kind: "recording", text: "Hallgatom… Ha a mobil böngésző megszakítja a felismerést, a DIMPRO automatikusan folytatja." });
+    try {
+      session.start();
+    } catch (error) {
+      sessionRef.current = null;
+      setActive(false);
       setStatus({ kind: "error", text: error instanceof Error ? error.message : "A beszédfelismerés nem indítható el." });
       return;
     }
+
     timerRef.current = window.setInterval(() => {
       setSecondsLeft((current) => {
         const next = Math.max(0, current - 1);
@@ -283,9 +271,10 @@ function MessageVoiceDictation({ enabled, maxSeconds, onTranscript }: { enabled:
   const statusClass = status.kind === "error" ? "border-rose-300 bg-rose-50 text-rose-900" : status.kind === "ready" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : status.kind === "processing" ? "border-amber-300 bg-amber-50 text-amber-900" : status.kind === "cancelled" ? "border-slate-300 bg-slate-50 text-slate-700" : "border-cyan-200 bg-cyan-50 text-cyan-900";
   return <div className="mt-2">
     <button type="button" onClick={() => active ? stop(true) : void start()} disabled={processing || supported === false} className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-black ${active ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"} disabled:opacity-50`}>{active ? <MicOff size={15}/> : <Mic size={15}/>} {active ? `Leállítás · 00:${String(secondsLeft).padStart(2, "0")}` : processing ? "Átirat készül…" : "Üzenet diktálása"}</button>
-    {(active || status.text) ? <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${statusClass}`}>{active ? <strong className="block">Felvétel · hátralévő idő: 00:{String(secondsLeft).padStart(2, "0")}</strong> : null}{preview ? <span className="mt-1 block">Élő átirat: {preview}</span> : null}{status.text ? <span className="mt-1 block">{status.text}</span> : null}</div> : null}
+    {(active || status.text) ? <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${statusClass}`}>{active ? <strong className="block">DIMPRO diktálás · hátralévő idő: 00:{String(secondsLeft).padStart(2, "0")}</strong> : null}{preview ? <span className="mt-1 block">Élő átirat: {preview}</span> : null}{status.text ? <span className="mt-1 block">{status.text}</span> : null}</div> : null}
   </div>;
 }
+
 const textareaClass = `${inputClass} min-h-28 resize-y`;
 const newRecipient = (): SendRecipient => ({ id: `recipient_${Date.now()}_${Math.random().toString(16).slice(2)}`, name: "", email: "", company: "" });
 const DROP_SEND_CODE_STORAGE_KEY = "dimpro.drop.sendCode.v1";

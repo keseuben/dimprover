@@ -29,7 +29,7 @@ const tests = [
  ['Riportpreferencia auditált', service.includes('public.report.preference')],
  ['Retention riport külön marad', worker.includes('ensureFinalReportJob') && worker.includes('send_final_report_to_uploader !== false')],
  ['Bal swipe törlés küszöb', ui.includes('offset <= -72') && ui.includes('softDelete(item.id)')],
- ['Bal swipe piros háttér', ui.includes('bg-rose-100') && ui.includes('Törlés')],
+ ['Bal swipe piros háttér', (ui.includes('bg-rose-100') || ui.includes('bg-rose-50')) && ui.includes('Törlés')],
  ['Törlés Undo 6 mp', ui.includes('undoSwipeDelete') && ui.includes('Visszavonás') && ui.includes('6000')],
  ['Desktop törlés is Undo útvonal', ui.includes('aria-label={`${item.displayName} eltávolítása`}') && ui.includes('onClick={() => softDelete(item.id)}')],
  ['Jobb swipe feltöltésre kész', ui.includes('offset >= 72') && ui.includes('Feltöltésre kész')],

@@ -48,7 +48,7 @@ import {
   markDropUploadReceived,
   queueDropObjectCleanup,
 } from "./dropStorageRepository";
-import { createDropUploadSessionToken, verifyDropUploadSessionToken } from "./dropUploadToken";
+import { assertDropUploadSessionTokenReady, createDropUploadSessionToken, verifyDropUploadSessionToken } from "./dropUploadToken";
 
 export type DropResolvedSpaceSession = Awaited<ReturnType<typeof resolveDropSpaceSession>>;
 
@@ -251,6 +251,8 @@ function buildUploadInitResult(input: {
 }
 
 async function initializeDropUploadCore(input: InitializeUploadCoreInput): Promise<DropUploadInitResult> {
+  // Fail fast before creating S3 multipart / DB rows if the secure session signer is unavailable.
+  assertDropUploadSessionTokenReady();
   const { config } = await assertQuarantineUploadReady();
   const feature = getDropFeatureState();
   const multipartSchema = await getDropMultipartSchemaHealth();

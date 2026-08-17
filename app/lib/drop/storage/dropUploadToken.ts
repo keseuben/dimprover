@@ -19,6 +19,10 @@ function getSecret() {
   return secret;
 }
 
+export function assertDropUploadSessionTokenReady() {
+  void getSecret();
+}
+
 function sign(encodedPayload: string) {
   return createHmac("sha256", getSecret()).update(`dup_s_1.${encodedPayload}`).digest("base64url");
 }
