@@ -1643,3 +1643,52 @@
   .conversationArchive > header span { display: none; }
   .archiveGroupMessages { padding-inline: 4px; }
 }
+
+/* BENJADMIN Development Scheduler V1 */
+.schedulerPanel {
+  margin: 8px 0;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--blue) 38%, var(--border));
+  border-radius: 9px;
+  display: grid;
+  gap: 7px;
+  background: color-mix(in srgb, var(--blue) 5%, var(--surface));
+}
+.schedulerHeader { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.schedulerHeader > div { display: flex; align-items: center; gap: 6px; color: var(--blue); font-size: 10px; font-weight: 950; letter-spacing: .08em; }
+.schedulerHeader > button { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 7px; display: grid; place-items: center; color: var(--muted); background: var(--surface); cursor: pointer; }
+.schedulerHeader > button:hover { border-color: var(--blue); color: var(--blue); }
+.schedulerHeader > button:disabled { opacity: .5; cursor: default; }
+.schedulerEmpty, .schedulerError { margin: 0; padding: 6px 0; color: var(--muted); font-size: 10px; }
+.schedulerError { color: var(--red); }
+.schedulerSchemaPending { padding: 7px; border: 1px dashed var(--border); border-radius: 7px; display: flex; align-items: center; gap: 6px; color: var(--amber); background: var(--amber-soft); font-size: 10px; font-weight: 800; }
+.schedulerMain { display: grid; gap: 4px; }
+.schedulerMain > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.schedulerMain strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 11px; }
+.schedulerMain span { padding: 2px 6px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: 9px; font-weight: 950; }
+.schedulerMain span[data-scheduler-status=paused] { color: var(--amber); background: var(--amber-soft); }
+.schedulerMain p { margin: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
+.schedulerFacts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.schedulerFacts > span { min-width: 0; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; gap: 4px; color: var(--muted); background: var(--surface); font-size: 9px; }
+.schedulerFacts b { color: var(--text-soft); }
+.schedulerFacts [data-wake-miss=true] { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); color: var(--amber); background: var(--amber-soft); }
+.schedulerLatest { padding: 7px; border: 1px solid var(--border); border-radius: 7px; display: grid; gap: 2px; background: var(--surface); }
+.schedulerLatest strong { color: var(--text-soft); font-size: 10px; }
+.schedulerLatest span, .schedulerLatest small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.schedulerLatest[data-run-status=ready_for_pull] { border-color: color-mix(in srgb, var(--green) 42%, var(--border)); background: var(--green-soft); }
+.schedulerLatest[data-run-status=failed], .schedulerLatest[data-run-status=skipped] { border-color: color-mix(in srgb, var(--red) 35%, var(--border)); background: var(--red-soft); }
+.schedulerActions { display: flex; flex-wrap: wrap; gap: 4px; }
+.schedulerActions button, .schedulerPreset button { min-height: 29px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 9px; font-weight: 900; }
+.schedulerActions button:hover, .schedulerPreset button:hover { border-color: var(--blue); color: var(--blue); }
+.schedulerActions button:disabled, .schedulerPreset button:disabled { opacity: .5; cursor: default; }
+.schedulerPreset { display: grid; gap: 5px; }
+.schedulerPreset strong { color: var(--text-soft); font-size: 10px; }
+.schedulerPreset span { color: var(--muted); font-size: 9px; line-height: 1.45; }
+.schedulerPreset button { width: 100%; border-color: color-mix(in srgb, var(--blue) 42%, var(--border)); color: var(--blue); background: var(--blue-soft); }
+.schedulerModes { display: flex; flex-wrap: wrap; gap: 4px; }
+.schedulerModes span { padding: 2px 5px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted2); background: var(--surface2); font-size: 8px; font-weight: 900; letter-spacing: .04em; }
+
+@media (max-width: 680px) {
+  .schedulerFacts { grid-template-columns: 1fr; }
+  .schedulerActions button { flex: 1; }
+}

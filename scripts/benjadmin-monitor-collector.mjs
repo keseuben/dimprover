@@ -137,6 +137,33 @@ async function triggerEtaAlerts(timeoutMs = 5000) {
   }
 }
 
+async function triggerDevelopmentScheduler(timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const adminKey = fs.readFileSync(".dimprover/license/admin-key.txt", "utf8").trim();
+    if (!adminKey) return { ok: false, skipped: true, reason: "SCHEDULER_ADMIN_KEY_MISSING" };
+    const response = await fetch("http://127.0.0.1:3100/api/dev/console/scheduler/tick", {
+      method: "POST",
+      headers: { "Host": "admin.dev.dimpro.hu", "x-dimpro-license-admin-key": adminKey, "content-type": "application/json" },
+      body: JSON.stringify({ source: "monitor" }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.status === 404) return { ok: false, skipped: true, reason: "SCHEDULER_ENDPOINT_NOT_DEPLOYED" };
+    if (!response.ok || !payload?.ok) {
+      const schemaNotReady = ["42P01", "PGRST205", "SCHEDULER_SCHEMA_NOT_READY"].includes(String(payload?.code || payload?.errorCode || ""));
+      return { ok: false, skipped: schemaNotReady, reason: schemaNotReady ? "SCHEDULER_SCHEMA_NOT_READY" : "SCHEDULER_TICK_FAILED", status: response.status, error: payload?.error || null };
+    }
+    return { ok: true, dueCount: Number(payload.dueCount || 0), outcomes: Array.isArray(payload.outcomes) ? payload.outcomes.length : 0, wakeObserved: Number(payload.externalWake?.observed || 0), wakeMissed: Number(payload.externalWake?.missed || 0), productionAccess: payload.productionAccess || "DENY" };
+  } catch (error) {
+    return { ok: false, skipped: true, reason: "SCHEDULER_TICK_UNAVAILABLE", error: error instanceof Error ? error.message : "SCHEDULER_TICK_UNAVAILABLE" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function probeTcp(host, port, timeoutMs = 3000) {
   const started = Date.now();
   return new Promise((resolve) => {
@@ -238,13 +265,17 @@ async function collectOnce(client) {
   if (cleanupError) throw new Error(`MONITOR_RETENTION_FAILED:${cleanupError.code || "UNKNOWN"}`);
 
   const dev = rows[0];
-  const etaAlerts = await triggerEtaAlerts();
+  const [etaAlerts, developmentScheduler] = await Promise.all([
+    triggerEtaAlerts(),
+    triggerDevelopmentScheduler(),
+  ]);
   console.log(JSON.stringify({
     ok: true,
     sampledAt: dev.sampled_at,
     targets: rows.map((row) => ({ target: row.target_code, status: row.status, responseMs: row.response_ms })),
     dev: { cpuPercent: dev.cpu_percent, memoryPercent: dev.memory_percent, diskPercent: dev.disk_percent, swapPercent: dev.metadata.swap_percent },
     etaAlerts,
+    developmentScheduler,
   }));
 }
 

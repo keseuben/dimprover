@@ -3,6 +3,7 @@
 import { AlertTriangle, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
 import { useEffect } from "react";
 import BenjadminAvatar from "./BenjadminAvatar";
+import DevelopmentSchedulerPanel from "./DevelopmentSchedulerPanel";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
 import TerminalHubCard from "./TerminalHubCard";
 import styles from "./DeveloperConsole.module.css";
@@ -152,6 +153,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
         <BenjadminAvatar member="BENAI" size="task" status={genericQueue.length ? "waiting" : "idle"} eager />
         <div><strong>Ben-AI</strong><span>KOORDINÁTOR · {context?.aiBridge?.mode === "OPENAI_RESPONSES" ? "API HÍD" : "KÉZI CHATGPT HÍD"}</span><p>{genericQueue.length ? `${genericQueue.length} kiosztásra váró általános task` : context?.aiBridge?.executorConfigured ? "A végrehajtó híd konfigurálva." : "Natív worker executor még nincs bekötve."}</p></div>
       </section>
+      <DevelopmentSchedulerPanel selectedProjectId={selectedProjectId} />
       <div className={styles.workerCards}>
         {workers.map((item) => {
           const worker = live?.workers.find((candidate) => candidate.code === item.code);
