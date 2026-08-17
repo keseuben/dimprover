@@ -13,7 +13,7 @@ const tests = [
  ['Mentett Send-kód balra húzással törölhető', transfer.includes('SwipeDeleteSendCodeControl') && transfer.includes('Húzza balra a mentett kód törléséhez') && transfer.includes('offset <= threshold') && transfer.includes('bg-rose-100')],
  ['Mentett Send-kód desktop alternatíva', transfer.includes('Kód törlése') && transfer.includes('onClick={onConfirm}')],
  ['Mobil stepper mind a 6 pontot egyszerre mutatja', ui.includes('grid grid-cols-6 gap-1') && ui.includes('hidden sm:inline') && !ui.includes('overflow-x-auto rounded-2xl border border-cyan-200 bg-white/95')],
- ['Egyszerre egy egyszerű lépés látható', ui.includes('workflowStep === 0 ? <div>') && ui.includes('workflowStep === 1 ? <div>') && [2,3,4,5].every(x=>ui.includes(`workflowStep === ${x} ? "block" : "hidden"`))],
+ ['Egyszerre egy egyszerű lépés látható', ui.includes('workflowStep === 0 ? <div>') && ui.includes('className={workflowStep === 1 ? "block" : "hidden"}') && [2,3,4,5].every(x=>ui.includes(`workflowStep === ${x} ? "block" : "hidden"`))],
  ['Haladó beállítások alapból összecsukva', ui.includes('<details className="mt-3 rounded-2xl') && ui.includes('További beállítások') && ui.includes('· opcionális')],
  ['Egyszerű előre-vissza navigáció', ['Tovább a képekhez','Tovább az ellenőrzéshez','Tovább a mentéshez','Tovább a riporthoz','Tovább a lezáráshoz'].every(x=>ui.includes(x))],
  ['Stepper visszalépés state-törlés nélkül', ui.includes('onClick={() => goToStep(index)}') && ui.includes('setWorkflowStep(safeStep)') && !ui.includes('function goToStep(step: number) {\n    setQueue([])')],
