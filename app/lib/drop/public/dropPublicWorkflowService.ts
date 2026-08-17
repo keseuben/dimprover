@@ -26,7 +26,7 @@ function email(value: unknown) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : "";
 }
 function retention(value: unknown, fallback: number) {
-  const parsed = Number(value); return [1, 3, 5, 7].includes(parsed) ? parsed : fallback;
+  const parsed = Number(value); return [1, 3, 5, 7, 14, 30].includes(parsed) ? parsed : fallback;
 }
 function normalizeRecipientInputs(value: unknown, max: number): DropRecipientInput[] {
   if (!Array.isArray(value)) return [];
@@ -483,7 +483,7 @@ export async function createDropPublicWorkflowPackage(input: {
     retentionDays,
     recipients,
     groups: [],
-    maxFileCount: defaults.limits.maxFileCount,
+    maxFileCount: quickImageSend ? 200 : defaults.limits.maxFileCount,
     maxFileSizeBytes,
     maxTotalSizeBytes,
   }, {

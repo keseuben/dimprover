@@ -4,6 +4,7 @@ const transfer = fs.readFileSync('components/drop/DropPublicTransferClient.tsx',
 const postgresRepo = fs.readFileSync('app/lib/drop/public/dropPublicPostgresRepository.ts','utf8');
 const api = fs.readFileSync('app/api/drop/public/packages/[packageId]/finalize/route.ts','utf8');
 const service = fs.readFileSync('app/lib/drop/public/dropPublicFinalizeService.ts','utf8');
+const workflowService = fs.readFileSync('app/lib/drop/public/dropPublicWorkflowService.ts','utf8');
 const worker = fs.readFileSync('app/lib/drop/worker/dropWorkerService.ts','utf8');
 const tests = [
  ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Beállítások','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
@@ -35,13 +36,16 @@ const tests = [
  ['Jobb swipe feltöltésre kész', ui.includes('offset >= 72') && ui.includes('Feltöltésre kész')],
  ['Jobb swipe zöld háttér', ui.includes('bg-emerald-100')],
  ['Swipe függőleges scroll-védelem', ui.includes('Math.abs(rawY) > Math.abs(rawX)') && ui.includes('Math.abs(rawX) < 8')],
- ['Eszközre mentés opció', ui.includes('saveToDevice') && ui.includes('Mentés erre az eszközre is')],
- ['Eszközre mentés Web Share', ui.includes('nav.canShare') && ui.includes('nav.share')],
- ['Eszközre mentés download fallback', ui.includes('anchor.download = file.name')],
+ ['Telefonra mentés opció', ui.includes('saveToDevice') && ui.includes('Mentés a telefonra is')],
+ ['Telefonra mentés nem nyit Web Share menüt', !ui.includes('nav.canShare') && !ui.includes('nav.share') && !ui.includes('navigator.share')],
+ ['Telefonra mentés közvetlen download', ui.includes('anchor.download = file.name')],
  ['Upload nem küld emailt', ui.includes('A fájlok feltöltése önmagában nem küld e-mailt')],
  ['Worker nem véglegesít not_requested csomagot', service.includes('.eq("notification_status", "pending")') && !service.includes('.in("notification_status", ["not_requested", "pending"])')],
  ['Explicit véglegesítés scan-várakozásnál pending retry', service.includes('notificationStatus: "pending"') && service.includes('A puszta fájlfeltöltés nem indíthat automatikus kézbesítést')],
  ['Stale 2 mp véglegesítés szöveg eltávolítva', !ui.includes('2 másodperces véglegesítés után')],
+ ['Gyors KépSend 200 képes limit', workflowService.includes('maxFileCount: quickImageSend ? 200 : defaults.limits.maxFileCount')],
+ ['14 és 30 napos retention támogatás', workflowService.includes('[1, 3, 5, 7, 14, 30].includes(parsed)') && transfer.includes('[5, 7, 14, 30].map')],
+ ['DEV PWA külön név', fs.readFileSync('app/drop/layout.tsx','utf8').includes('DIMPRO Drop DEV') && fs.readFileSync('public/drop-dev.webmanifest','utf8').includes('Drop DEV')],
 ];
 let failed=0;
 tests.forEach(([name,ok],i)=>{if(!ok) failed++; console.log(`${String(i+1).padStart(2,'0')}. ${ok?'PASS':'FAIL'} - ${name}`)});

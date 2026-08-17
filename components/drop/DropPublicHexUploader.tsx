@@ -1110,22 +1110,23 @@ export default function DropPublicHexUploader({
 
   async function saveQueuedImagesToDevice() {
     const files = queueRef.current.filter((item) => item.uploadFile.type.startsWith("image/")).map((item) => item.uploadFile);
-    if (!files.length) { setMessage("Nincs eszközre menthető kép a sorban."); return; }
+    if (!files.length) { setMessage("Nincs telefonra menthető kép a sorban."); return; }
     try {
-      const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean; share?: (data: ShareData) => Promise<void> };
-      if (nav.share && nav.canShare?.({ files })) {
-        await nav.share({ files, title: packageInfo.title });
-        setMessage("Az eszköz mentési/megosztási felülete megnyílt.");
-        return;
-      }
       for (const file of files) {
         const url = URL.createObjectURL(file);
-        const anchor = document.createElement("a"); anchor.href = url; anchor.download = file.name; anchor.rel = "noopener"; anchor.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = file.name;
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
       }
-      setMessage(`${files.length} kép eszközre mentése elindítva. A böngésző letöltési szabályai érvényesek.`);
-    } catch (error) {
-      if ((error as DOMException)?.name !== "AbortError") setMessage("Az eszközre mentés nem sikerült. Használja a kép letöltését vagy az eszköz megosztási menüjét.");
+      setMessage(`${files.length} kép mentése elindítva a telefonra. A DIMPRO nem nyit meg megosztási menüt.`);
+    } catch {
+      setMessage("A telefonra mentés nem sikerült. Próbálja meg újra a képek mentését.");
     }
   }
 
@@ -1268,7 +1269,7 @@ export default function DropPublicHexUploader({
       <div ref={saveStepRef} className="scroll-mt-28"/>
       <div className={workflowStep === 3 ? "block" : "hidden"}>
       <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-sky-800">4. Mentés</p><h3 className="mt-1 text-lg font-black text-slate-950">Szeretné a képeket ezen az eszközön is megtartani?</h3><p className="mt-1 text-sm leading-6 text-slate-600">Ez opcionális. Ha nem kapcsolja be, a küldési folyamat ettől még teljesen működik.</p></div>
-      {imageOnly ? <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Smartphone size={20} className="mt-0.5 text-sky-800"/><div className="flex-1"><p className="text-[10px] font-black uppercase tracking-[.1em] text-sky-800">Mentési beállítások</p><strong className="mt-1 block text-sm text-slate-950">Kamerás képek mentése erre az eszközre is</strong><p className="mt-1 text-xs leading-5 text-slate-600">A PWA a böngésző és az operációs rendszer engedélyezett mentési/megosztási felületét használja. A DIMPRO nem próbál háttérben jogosulatlanul a galériába írni.</p><label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-sky-200 bg-white p-3"><input type="checkbox" checked={saveToDevice} onChange={(event) => setSaveToDevice(event.target.checked)} className="h-5 w-5 accent-sky-700"/><span className="text-xs font-black text-slate-900">Mentés erre az eszközre is</span></label>{saveToDevice ? <button type="button" onClick={() => void saveQueuedImagesToDevice()} disabled={!queue.some((item) => item.uploadFile.type.startsWith("image/"))} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-sky-800 px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300"><Download size={16}/> Képek mentése az eszközre</button> : null}</div></div></div> : null}
+      {imageOnly ? <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Smartphone size={20} className="mt-0.5 text-sky-800"/><div className="flex-1"><p className="text-[10px] font-black uppercase tracking-[.1em] text-sky-800">Mentési beállítások</p><strong className="mt-1 block text-sm text-slate-950">Képek mentése a telefonra is</strong><p className="mt-1 text-xs leading-5 text-slate-600">A DIMPRO közvetlen képfájl-mentést indít, és nem nyitja meg a Messenger / Outlook / SMS megosztási menüt. A telefon a letöltött képeket a saját fájl- és médiakezelési szabályai szerint tárolja.</p><label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-sky-200 bg-white p-3"><input type="checkbox" checked={saveToDevice} onChange={(event) => setSaveToDevice(event.target.checked)} className="h-5 w-5 accent-sky-700"/><span className="text-xs font-black text-slate-900">Mentés a telefonra is</span></label>{saveToDevice ? <button type="button" onClick={() => void saveQueuedImagesToDevice()} disabled={!queue.some((item) => item.uploadFile.type.startsWith("image/"))} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-sky-800 px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300"><Download size={16}/> Képek mentése a telefonra</button> : null}</div></div></div> : null}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => goToStep(2)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza</button><button type="button" onClick={() => goToStep(4)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-800 px-4 py-2.5 text-xs font-black text-white">Tovább a riporthoz <ArrowRight size={15}/></button></div>
       </div>
