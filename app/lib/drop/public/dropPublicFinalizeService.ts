@@ -218,9 +218,13 @@ export async function finalizeDropPublicPackageById(input: {
       await markDropInvitationSent({ packageId: input.packageId, recipientId: result.recipientId }).catch(() => undefined);
     }
     if (mail.deliveryEnabled && pendingRecipients.length > 0 && mail.sentCount === 0) {
+      const devAllowlistBlocked = mail.results.length > 0 && mail.results.every((row) => row.error?.startsWith("DEV_EMAIL_RECIPIENT_NOT_ALLOWED:"));
+      const deliveryFailureDetail = devAllowlistBlocked
+        ? "A DEV e-mail tesztmód csak az engedélyezett tesztcímzettekre küldhet levelet."
+        : `${alreadySent.length}/${recipients.length} címzett korábban értesítve; 0/${mail.attempted} e-mail ment ki.`;
       await updateDropPackageWorkflow(input.packageId, {
         notificationStatus: "failed",
-        notificationDetail: `${alreadySent.length}/${recipients.length} címzett korábban értesítve; az újrapróbálás során 0/${mail.attempted} e-mail ment ki.`,
+        notificationDetail: deliveryFailureDetail,
       });
       await writeDropEvent({
         packageId: input.packageId,
@@ -231,9 +235,11 @@ export async function finalizeDropPublicPackageById(input: {
         payload: { source, workflowType: workflow.workflowType, attempted: mail.attempted, failedCount: mail.failedCount },
       });
       throw finalizeError(
-        "A címzettek e-mailes értesítése sikertelen. A küldemény nem lett lezárva; a worker újrapróbálja.",
-        "DROP_PUBLIC_DELIVERY_EMAIL_FAILED",
-        502,
+        devAllowlistBlocked
+          ? "A DEV tesztkörnyezetben ez a címzett nincs engedélyezve e-mail küldésre."
+          : "A címzettek e-mailes értesítése sikertelen. A küldemény nem lett lezárva; ellenőrizze az e-mail beállítást és próbálja újra.",
+        devAllowlistBlocked ? "DROP_PUBLIC_DEV_EMAIL_RECIPIENT_NOT_ALLOWED" : "DROP_PUBLIC_DELIVERY_EMAIL_FAILED",
+        devAllowlistBlocked ? 409 : 502,
       );
     }
 

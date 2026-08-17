@@ -27,6 +27,19 @@ function emptyPreviewBundle(): DropPublicEmailPreviewBundle {
 
 export type DropPublicEmailAvailability = { enabled: boolean; reason: string | null; code: "ready" | "feature_disabled" | "profile_missing" };
 
+function dropEmailRecipientAllowlist() {
+  return new Set(
+    String(process.env.DROP_EMAIL_RECIPIENT_ALLOWLIST || "")
+      .split(/[;,\s]+/)
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function dropEmailSubjectPrefix() {
+  return String(process.env.DROP_EMAIL_SUBJECT_PREFIX || "").trim().slice(0, 32);
+}
+
 export async function getDropPublicDeliveryEmailAvailability(): Promise<DropPublicEmailAvailability> {
   if (!getDropFeatureState().flags.emailNotificationsEnabled) {
     return { enabled: false, code: "feature_disabled", reason: "A DEV e-mail kézbesítés jelenleg nincs engedélyezve." };
@@ -73,7 +86,19 @@ export async function sendDropPublicDeliveryEmails(input: {
   }).catch(() => emptyPreviewBundle());
 
   const results: Array<{ recipientId: string; email: string; sent: boolean; messageId?: string; error?: string }> = [];
+  const recipientAllowlist = dropEmailRecipientAllowlist();
+  const subjectPrefix = dropEmailSubjectPrefix();
   for (const recipient of input.recipients) {
+    const normalizedRecipient = recipient.email.trim().toLowerCase();
+    if (recipientAllowlist.size > 0 && !recipientAllowlist.has(normalizedRecipient)) {
+      results.push({
+        recipientId: recipient.id,
+        email: recipient.email,
+        sent: false,
+        error: "DEV_EMAIL_RECIPIENT_NOT_ALLOWED: A címzett nincs a DEV e-mail engedélylistán.",
+      });
+      continue;
+    }
     try {
       const content = buildDropPublicDeliveryEmailContent({
         recipientName: recipient.name,
@@ -94,7 +119,7 @@ export async function sendDropPublicDeliveryEmails(input: {
         profileId: "drop",
         to: [recipient.email],
         replyTo: input.packageRow.uploader_email,
-        subject: `DIMPRO Drop – ${input.workflow.subject}`,
+        subject: `${subjectPrefix ? `${subjectPrefix} ` : ""}DIMPRO Drop – ${input.workflow.subject}`,
         text: content.text,
         html: content.html,
         attachments: previewBundle.attachments.length ? previewBundle.attachments : undefined,
