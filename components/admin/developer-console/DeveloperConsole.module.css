@@ -1735,3 +1735,16 @@
   .workerContextCompact > span, .inboxContextCompact > span, .liveWorkspaceWorkerContext > span { white-space: normal; }
   .aiWorkerInboxTask > div:first-child { align-items: flex-start; }
 }
+
+/* BENJADMIN Fejlesztési Térkép V1 · kompakt bal rail */
+.mapRailHeader { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.mapRailHeader .railSectionTitle { min-width: 0; }
+.mapRailHeader > button { min-height: 25px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-radius: 7px; display: inline-flex; align-items: center; gap: 4px; color: var(--accent-strong); background: var(--surface); cursor: pointer; font-size: 9px; font-weight: 950; white-space: nowrap; }
+.mapRailHeader > button:hover { background: var(--accent-soft); }
+.mapTaskItem { grid-template-columns: minmax(0,1fr) auto; }
+.mapTaskPath { color: var(--accent-strong) !important; font-size: 9px !important; font-weight: 850; line-height: 1.35; }
+.mapTaskStage { width: fit-content; margin-top: 2px; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border)); border-radius: 999px; color: var(--green) !important; background: color-mix(in srgb, var(--green) 7%, var(--surface)); font-size: 9px !important; font-weight: 950; }
+.technicalTaskSummary { margin-top: 6px; padding: 7px; border: 1px dashed var(--border); border-radius: 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; color: var(--muted); background: var(--surface2); cursor: pointer; text-align: left; }
+.technicalTaskSummary span { font-size: 10px; font-weight: 900; }
+.technicalTaskSummary b { color: var(--text); font-size: 11px; }
+.technicalTaskSummary small { grid-column: 1 / -1; font-size: 9px; }

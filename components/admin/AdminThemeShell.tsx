@@ -10,6 +10,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
+  Map as MapIcon,
   MessagesSquare,
   Moon,
   PanelLeftClose,
@@ -59,6 +60,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   const [teamScreen, setTeamScreen] = useState(false);
   const [showcaseScreen, setShowcaseScreen] = useState(false);
   const developerConsoleWindowRef = useRef<Window | null>(null);
+  const developmentMapWindowRef = useRef<Window | null>(null);
 
   const activeItem = useMemo(
     () => navigationItems.find((item) => matchesPath(pathname, item.href)) || navigationItems[0],
@@ -234,6 +236,37 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     popup.focus();
   }, [maximizeDeveloperConsoleWindow, router]);
 
+  const openDevelopmentMap = useCallback(() => {
+    const target = "/admin/dev-map";
+    const current = developmentMapWindowRef.current;
+    if (current && !current.closed) {
+      maximizeDeveloperConsoleWindow(current);
+      current.focus();
+      return;
+    }
+    const width = Math.max(1100, window.screen.availWidth || window.innerWidth);
+    const height = Math.max(720, window.screen.availHeight || window.innerHeight);
+    const features = `popup=yes,resizable=yes,scrollbars=no,left=0,top=0,width=${width},height=${height}`;
+    const popup = window.open(target, "benjadmin-development-map", features);
+    if (!popup) {
+      router.push(target);
+      return;
+    }
+    developmentMapWindowRef.current = popup;
+    maximizeDeveloperConsoleWindow(popup);
+    window.setTimeout(() => maximizeDeveloperConsoleWindow(popup), 120);
+    popup.focus();
+  }, [maximizeDeveloperConsoleWindow, router]);
+
+  useEffect(() => {
+    const onDevelopmentMapRequest = () => {
+      if (accessState !== "authorized" || privacyCover) return;
+      openDevelopmentMap();
+    };
+    window.addEventListener("benjadmin:development-map-open", onDevelopmentMapRequest);
+    return () => window.removeEventListener("benjadmin:development-map-open", onDevelopmentMapRequest);
+  }, [accessState, openDevelopmentMap, privacyCover]);
+
   useEffect(() => {
     const onDeveloperConsoleShortcut = (event: KeyboardEvent) => {
       const ctrlAltOne = event.ctrlKey && event.altKey && !event.metaKey && (event.code === "Digit1" || event.code === "Numpad1");
@@ -251,6 +284,24 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     window.addEventListener("keydown", onDeveloperConsoleShortcut);
     return () => window.removeEventListener("keydown", onDeveloperConsoleShortcut);
   }, [accessState, openDeveloperConsole, pathname, privacyCover]);
+
+  useEffect(() => {
+    const onDevelopmentMapShortcut = (event: KeyboardEvent) => {
+      const ctrlAltTwo = event.ctrlKey && event.altKey && !event.metaKey && (event.code === "Digit2" || event.code === "Numpad2");
+      if (!ctrlAltTwo || accessState !== "authorized" || privacyCover) return;
+      event.preventDefault();
+      if (pathname === "/admin/dev-map") {
+        try {
+          window.blur();
+          if (window.opener && !window.opener.closed) window.opener.focus();
+        } catch {}
+        return;
+      }
+      openDevelopmentMap();
+    };
+    window.addEventListener("keydown", onDevelopmentMapShortcut);
+    return () => window.removeEventListener("keydown", onDevelopmentMapShortcut);
+  }, [accessState, openDevelopmentMap, pathname, privacyCover]);
 
 
   if (accessState === "checking") {
@@ -380,6 +431,15 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
               aria-label="Fejlesztői Konzol megnyitása"
             >
               <MessagesSquare size={18} />
+            </button>
+            <button
+              type="button"
+              data-testid="benjadmin-development-map-button"
+              onClick={openDevelopmentMap}
+              title="BENJADMIN Fejlesztési Térkép · Ctrl+Alt+2 · külön, teljes méretű ablak"
+              aria-label="Fejlesztési Térkép megnyitása"
+            >
+              <MapIcon size={18} />
             </button>
             <button
               type="button"

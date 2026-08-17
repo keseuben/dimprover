@@ -1174,3 +1174,61 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
   } catch { /* a task lezárását a koordinátori újraosztás hibája nem törheti meg */ }
   return { ok: true as const, task: mapTask(data as JsonRecord), alreadyFinalized: false, rebalance };
 }
+
+export async function updateDevEngineTaskDevelopmentMap(input: { taskId: string; nodeId: string; workItem?: string | null; updatedBy?: string | null }) {
+  const client = await requireClient();
+  const taskId = text(input.taskId);
+  if (!taskId) throw new DevCenterEngineError("A fejlesztési task azonosítója kötelező.", "DEV_CENTER_TASK_ID_REQUIRED", 400);
+  const { developmentMapNodeById } = await import("./development-map");
+  const node = developmentMapNodeById(text(input.nodeId));
+  if (!node) throw new DevCenterEngineError("Ismeretlen Fejlesztési Térkép célpont.", "DEV_CENTER_DEVELOPMENT_MAP_NODE_NOT_FOUND", 404);
+  const current = await getTaskForConsoleControl(client, taskId);
+  const currentMeta = jsonRecord(current.metadata);
+  const previousMap = jsonRecord(currentMeta.developmentMap);
+  const previousContext = jsonRecord(currentMeta.developmentContext);
+  const now = nowIso();
+  const workItem = text(input.workItem) || text(previousMap.workItem) || current.title;
+  const developmentMap = {
+    nodeId: node.id,
+    groupName: node.groupName,
+    projectName: node.projectName,
+    moduleName: node.moduleName,
+    contextModuleName: node.contextModuleName,
+    workItem,
+    source: "BENJADMIN_DEVELOPMENT_MAP",
+    updatedAt: now,
+    updatedBy: text(input.updatedBy, "BenjAdmin"),
+    physicalGitMove: false,
+  };
+  const developmentContext = {
+    ...previousContext,
+    mainModule: node.contextMainModule,
+    moduleName: node.moduleName,
+    submoduleName: node.contextModuleName,
+    workItem,
+    updatedAt: now,
+    source: "BENJADMIN_DEVELOPMENT_MAP",
+  };
+  const metadata = { ...currentMeta, developmentMap, developmentContext };
+  const { data, error } = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", taskId).select("*").single();
+  if (error || !data) databaseError("A Fejlesztési Térkép átsorolás mentése sikertelen.", error, 400);
+  await addAudit(client, {
+    action: "TASK_DEVELOPMENT_MAP_MOVED",
+    entityType: "task",
+    entityId: taskId,
+    taskId,
+    projectId: current.projectId,
+    summary: `${current.title} → ${node.projectName} / ${node.moduleName}`,
+    metadata: {
+      previousNodeId: text(previousMap.nodeId) || null,
+      nextNodeId: node.id,
+      groupName: node.groupName,
+      projectName: node.projectName,
+      moduleName: node.moduleName,
+      contextModuleName: node.contextModuleName,
+      productionAccess: "DENY",
+      physicalGitMove: false,
+    },
+  });
+  return { ok: true as const, task: mapTask(data as JsonRecord), placement: developmentMap, physicalGitMove: false };
+}
