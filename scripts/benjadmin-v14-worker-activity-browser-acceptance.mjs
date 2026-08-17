@@ -92,20 +92,28 @@ try {
   await page.waitForFunction((m) => document.body.textContent?.includes(`${m} yesterday`), { timeout: 10000 }, marker);
   check("Yesterday archive expands on demand", true);
 
-  let weekVisible = await page.evaluate((m) => document.body.textContent?.includes(`${m} week`), marker);
+  const earlierButton = await page.$('[data-testid="benjadmin-archive-show-earlier"]');
+  check("Older than one week stays behind one reveal button", Boolean(earlierButton));
+  if (earlierButton) await page.click('[data-testid="benjadmin-archive-show-earlier"]');
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  let weekVisible = false;
   for (let i = 0; i < 12 && !weekVisible; i += 1) {
+    await page.evaluate(() => { for (const button of document.querySelectorAll("[data-archive-toggle]")) if (button instanceof HTMLElement && button.textContent?.includes("Hét")) button.click(); });
+    weekVisible = await page.evaluate((m) => document.body.textContent?.includes(`${m} week`), marker);
+    if (weekVisible) break;
     const hasLoad = await page.$('[data-testid="benjadmin-archive-load-more"]');
     if (!hasLoad) break;
     await page.click('[data-testid="benjadmin-archive-load-more"]');
     await new Promise((resolve) => setTimeout(resolve, 400));
-    await page.evaluate(() => { for (const button of document.querySelectorAll("[data-archive-toggle]")) if (button instanceof HTMLElement && button.textContent?.includes("Hét")) button.click(); });
-    weekVisible = await page.evaluate((m) => document.body.textContent?.includes(`${m} week`), marker);
   }
-  if (!weekVisible) {
-    await page.evaluate(() => { for (const button of document.querySelectorAll("[data-archive-toggle]")) if (button instanceof HTMLElement && button.textContent?.includes("Hét")) button.click(); });
-    weekVisible = await page.evaluate((m) => document.body.textContent?.includes(`${m} week`), marker);
-  }
-  check("Weekly archive is lazy-loadable and expandable", weekVisible);
+  check("Weekly archive is lazy-loadable after explicit reveal", weekVisible);
+
+  const chronological = await page.evaluate((m) => {
+    const rows = [...document.querySelectorAll('[aria-label="BENJADMIN közös fejlesztői beszélgetés"] article[data-author]')].filter((node) => node.textContent?.includes(m));
+    const dates = rows.map((node) => node.querySelector('time')?.getAttribute('datetime') || '');
+    return dates.filter(Boolean);
+  }, marker);
+  check("Conversation cards are chronological oldest to newest", chronological.every((value, index) => index === 0 || chronological[index - 1].localeCompare(value) <= 0), JSON.stringify(chronological));
 
   await page.click('[data-worker-activity-open="ARMINAI"]');
   await page.waitForSelector('aside[data-worker-code="ARMINAI"] [data-testid="benjadmin-worker-activity-feed"]', { timeout: 15000 });

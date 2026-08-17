@@ -81,6 +81,7 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
   const previousCount = useRef(0);
   const [unseen, setUnseen] = useState(0);
   const [expandedArchives, setExpandedArchives] = useState<Set<string>>(() => new Set());
+  const [showEarlierArchive, setShowEarlierArchive] = useState(false);
 
   const visible = useMemo(() => messages.filter((message) => {
     if (message.author === "OUTMINAI") return false;
@@ -92,28 +93,46 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
     const now = new Date();
     const today = dayKey(now.toISOString());
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const chronological = [...visible].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const current: ConsoleMessage[] = [];
-    const older: ConsoleMessage[] = [];
-    for (const message of visible) (dayKey(message.createdAt) === today ? current : older).push(message);
-    const groups = new Map<string, ArchiveGroup>();
-    for (const message of older) {
+    const recent: ConsoleMessage[] = [];
+    const earlier: ConsoleMessage[] = [];
+    for (const message of chronological) {
+      if (dayKey(message.createdAt) === today) {
+        current.push(message);
+        continue;
+      }
       const created = new Date(message.createdAt);
       const ageDays = Math.max(1, Math.floor((todayStart - new Date(created.getFullYear(), created.getMonth(), created.getDate()).getTime()) / 86400000));
-      const isWeek = ageDays > 7;
-      const key = isWeek ? `week:${mondayKey(message.createdAt)}` : `day:${dayKey(message.createdAt)}`;
-      const label = isWeek ? `Hét · ${weekLabel(mondayKey(message.createdAt))}` : `${ageDays === 1 ? "Tegnap · " : ""}${humanDay(message.createdAt)}`;
-      const existing = groups.get(key) || { key, label, type: isWeek ? "week" : "day", messages: [] };
-      existing.messages.push(message);
-      groups.set(key, existing);
+      if (ageDays <= 7) recent.push(message); else earlier.push(message);
     }
+
+    const makeGroups = (items: ConsoleMessage[], mode: "day" | "week") => {
+      const groups = new Map<string, ArchiveGroup>();
+      for (const message of items) {
+        const created = new Date(message.createdAt);
+        const ageDays = Math.max(1, Math.floor((todayStart - new Date(created.getFullYear(), created.getMonth(), created.getDate()).getTime()) / 86400000));
+        const key = mode === "week" ? `week:${mondayKey(message.createdAt)}` : `day:${dayKey(message.createdAt)}`;
+        const label = mode === "week" ? `Hét · ${weekLabel(mondayKey(message.createdAt))}` : `${ageDays === 1 ? "Tegnap · " : ""}${humanDay(message.createdAt)}`;
+        const existing = groups.get(key) || { key, label, type: mode, messages: [] };
+        existing.messages.push(message);
+        groups.set(key, existing);
+      }
+      return [...groups.values()]
+        .map((group) => ({ ...group, messages: collapseRepeatedMessages(group.messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) }))
+        .sort((a, b) => (a.messages[0]?.createdAt || "").localeCompare(b.messages[0]?.createdAt || ""));
+    };
+
+    const recentGroups = makeGroups(recent, "day");
+    const earlierGroups = makeGroups(earlier, "week");
     return {
       today: collapseRepeatedMessages(current),
-      groups: [...groups.values()]
-        .map((group) => ({ ...group, messages: collapseRepeatedMessages(group.messages) }))
-        .sort((a, b) => (b.messages.at(-1)?.createdAt || "").localeCompare(a.messages.at(-1)?.createdAt || "")),
-      rawOlderCount: older.length,
+      groups: showEarlierArchive ? [...earlierGroups, ...recentGroups] : recentGroups,
+      recentCount: recent.length,
+      earlierCount: earlier.length,
+      rawOlderCount: recent.length + earlier.length,
     };
-  }, [visible]);
+  }, [showEarlierArchive, visible]);
 
   useEffect(() => {
     const delta = Math.max(0, visible.length - previousCount.current);
@@ -144,6 +163,11 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
     element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }
 
+  async function revealEarlierArchive() {
+    setShowEarlierArchive(true);
+    if (hasOlder) await onLoadOlder?.();
+  }
+
   function toggleArchive(key: string) {
     setExpandedArchives((current) => {
       const next = new Set(current);
@@ -156,12 +180,12 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
     <section className={styles.conversation} aria-label="BENJADMIN közös fejlesztői beszélgetés">
       <div className={styles.conversationTitle}>
         <div><MessagesSquare size={17} /><span>KÖZÖS FEJLESZTŐI CSEVEGÉS</span></div>
-        <small>Ma {archive.today.length} · archív {archive.rawOlderCount} · napi / heti lazy history</small>
+        <small>Ma {archive.today.length} · elmúlt 7 nap {archive.recentCount} · korábbi {archive.earlierCount}{hasOlder ? "+" : ""}</small>
       </div>
       <div className={styles.conversationScroller} ref={scroller} onScroll={onScroll}>
-        {(archive.groups.length || hasOlder) ? (
-          <section className={styles.conversationArchive} aria-label="Korábbi fejlesztői csevegések" data-testid="benjadmin-conversation-archive">
-            <header><Archive size={14} /><strong>ARCHÍVUM</strong><span>A korábbi napok csak kérésre nyílnak meg.</span></header>
+        {(archive.groups.length || archive.earlierCount || hasOlder) ? (
+          <section className={styles.conversationArchive} aria-label="Korábbi fejlesztői csevegések" data-testid="benjadmin-conversation-archive" data-show-earlier={showEarlierArchive ? "true" : "false"}>
+            <header><Archive size={14} /><strong>{showEarlierArchive ? "ARCHÍVUM" : "ELMÚLT 7 NAP"}</strong><span>Időrendi sorrend · a legfrissebb esemény legalul.</span></header>
             {archive.groups.map((group) => {
               const expanded = expandedArchives.has(group.key);
               return <section key={group.key} className={styles.archiveGroup} data-archive-key={group.key} data-expanded={expanded ? "true" : "false"}>
@@ -174,7 +198,8 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
                 {expanded ? <div className={styles.archiveGroupMessages}>{group.messages.map((message) => <DeveloperMessage key={message.id} message={message} />)}</div> : null}
               </section>;
             })}
-            {hasOlder ? <button type="button" className={styles.archiveLoadMore} data-testid="benjadmin-archive-load-more" disabled={loadingOlder} onClick={() => void onLoadOlder?.()}>{loadingOlder ? <LoaderCircle size={14} className={styles.spin} /> : <Archive size={14} />} {loadingOlder ? "Korábbi archívum betöltése…" : "Régebbi archívum betöltése"}</button> : null}
+            {!showEarlierArchive && (archive.earlierCount > 0 || hasOlder) ? <button type="button" className={styles.archiveLoadMore} data-testid="benjadmin-archive-show-earlier" disabled={loadingOlder} onClick={() => void revealEarlierArchive()}>{loadingOlder ? <LoaderCircle size={14} className={styles.spin} /> : <Archive size={14} />} {loadingOlder ? "Korábbi archívum megnyitása…" : "Korábbi archívum megjelenítése"}</button> : null}
+            {showEarlierArchive && hasOlder ? <button type="button" className={styles.archiveLoadMore} data-testid="benjadmin-archive-load-more" disabled={loadingOlder} onClick={() => void onLoadOlder?.()}>{loadingOlder ? <LoaderCircle size={14} className={styles.spin} /> : <Archive size={14} />} {loadingOlder ? "Korábbi archívum betöltése…" : "További korábbi archívum betöltése"}</button> : null}
           </section>
         ) : null}
         {archive.today.length ? archive.today.map((message) => <DeveloperMessage key={message.id} message={message} />) : (!archive.groups.length ? (

@@ -29,8 +29,8 @@ check("Outmin card uses amber tint", () => assert.ok(css.includes('[data-author=
 check("Coding detail metadata is visible", () => assert.ok(message.includes("filePath") && message.includes("diffSummary") && message.includes("command") && message.includes("SANITIZED")));
 check("Repeated activity cards collapse", () => assert.ok(conversation.includes("collapseRepeatedMessages") && conversation.includes("repeatCount") && conversation.includes("30 * 60_000")));
 check("Daily archive exists", () => assert.ok(conversation.includes('type: "day"') && conversation.includes("Tegnap")));
-check("Weekly archive exists", () => assert.ok(conversation.includes("isWeek ?") && conversation.includes("mondayKey")));
-check("Archive groups are lazy rendered", () => assert.ok(conversation.includes("expandedArchives") && css.includes("content-visibility: auto")));
+check("Older-than-week archive exists behind reveal", () => assert.ok(conversation.includes("showEarlierArchive") && conversation.includes("mondayKey") && conversation.includes("Korábbi archívum megjelenítése")));
+check("Archive groups are lazy rendered", () => assert.ok(conversation.includes("expandedArchives") && conversation.includes("ageDays <= 7") && css.includes("content-visibility: auto")));
 check("Older history loads by cursor", () => assert.ok(messageRoute.includes('searchParams.get("before")') && lib.includes("listDeveloperConsoleMessagesPage")));
 check("SSE merge preserves loaded history", () => assert.ok(shell.includes("new Map(current.map") && shell.includes("slice(-2400)")));
 check("History exhaustion survives live refresh", () => assert.ok(shell.includes("historyExhaustedRef") && shell.includes("!historyExhaustedRef.current")));
