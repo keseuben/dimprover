@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
         estimateMinutes: estimate.minutes,
         preferredWorkerCode: requestedWorkerId ? target : null,
         note: requestedWorkerId ? "BENJADMIN kézi preferencia · Ben-AI kapacitásellenőrzéssel" : "Ben-AI automatikus kapacitásalapú kiosztás",
+        prepareForPlusPull: true,
+        chainSource: "BENJADMIN_COMMAND",
       });
       task = autoRouting.task;
     }
@@ -84,6 +86,14 @@ export async function POST(request: NextRequest) {
     });
     const dispatchTarget = autoRouting?.routed && autoRouting.worker?.code ? autoRouting.worker.code : target;
     const dispatch = buildBenAiDispatch({ text: instruction, target: dispatchTarget, taskId: task?.id || null, projectId: body.projectId || null });
+    if (autoRouting?.routed && autoRouting.worker) {
+      dispatch.stage = "TASK_ASSIGNED";
+      dispatch.selectedWorkerId = autoRouting.worker.id;
+      dispatch.selectedWorkerCode = autoRouting.worker.code;
+      dispatch.selectedWorkerName = autoRouting.worker.name;
+      dispatch.summary = autoRouting.worker.name + " megkapta a feladatot; a BENJADMIN átadó ChatGPT pullra kész.";
+      dispatch.nextStep = "A kijelölt " + autoRouting.worker.name + " ChatGPT munkamenetben elég a rövid Folytasd. parancs; a Plus/MCP bridge felveszi a taskot és RUNNING állapotba viszi.";
+    }
     if (autoRouting && !autoRouting.routed) {
       dispatch.stage = "COORDINATOR_ROUTING";
       dispatch.selectedWorkerId = null;
@@ -110,6 +120,8 @@ export async function POST(request: NextRequest) {
         selectedWorkerId: dispatch.selectedWorkerId,
         selectedWorkerCode: dispatch.selectedWorkerCode,
         executorConfigured: dispatch.executorConfigured,
+        plusPullReady: autoRouting?.routed === true,
+        coordinatorChainState: autoRouting?.routed ? "READY_FOR_PLUS_PULL" : null,
         handoffPrompt: dispatch.handoffPrompt,
       },
     });

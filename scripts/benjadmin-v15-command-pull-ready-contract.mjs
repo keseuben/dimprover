@@ -1,0 +1,24 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const engine=fs.readFileSync("app/lib/dev-center/engine-repository.ts","utf8");
+const route=fs.readFileSync("app/api/dev/console/messages/route.ts","utf8");
+const panel=fs.readFileSync("components/admin/developer-console/LiveWorkPanel.tsx","utf8");
+const cli=fs.readFileSync("scripts/benjadmin-plus-bridge-cli.mjs","utf8");
+let passed=0;
+function check(name,fn){fn();passed++;console.log(`PASS ${String(passed).padStart(2,"0")} ${name}`)}
+check("Auto routing supports Plus-pull preparation",()=>assert.ok(engine.includes("prepareForPlusPull?: boolean")));
+check("Initial command requests Plus-pull preparation",()=>assert.ok(route.includes("prepareForPlusPull: true")&&route.includes('chainSource: "BENJADMIN_COMMAND"')));
+check("Prepared task persists READY_FOR_PLUS_PULL",()=>assert.ok(engine.includes('coordinatorChainState: "READY_FOR_PLUS_PULL"')));
+check("Prepared task persists worker identity",()=>assert.ok(engine.includes("coordinatorChainWorkerCode: routed.worker.code")&&engine.includes("coordinatorChainWorkerName: routed.worker.name")));
+check("Prepared task audit is recorded",()=>assert.ok(engine.includes('action: "TASK_BENAI_CHAIN_PREPARED"')));
+check("Prepared task audit denies PROD",()=>assert.ok(engine.includes('productionAccess: "DENY"')));
+check("Accepted worker suggestion is also pull-ready",()=>assert.ok(engine.includes('chainSource: "BENJADMIN_SUGGESTION_ACCEPTED"')));
+check("Dispatch stage becomes TASK_ASSIGNED",()=>assert.ok(route.includes('dispatch.stage = "TASK_ASSIGNED"')));
+check("Dispatch tells user Folytasd",()=>assert.ok(route.includes("Folytasd. parancs")));
+check("Coordinator message marks plusPullReady",()=>assert.ok(route.includes("plusPullReady: autoRouting?.routed === true")));
+check("UI labels ready state as ChatGPT pullra kész",()=>assert.ok(panel.includes("ChatGPT pullra kész")));
+check("Manual Start hidden for pull-ready task",()=>assert.ok(panel.includes('chainState !== "READY_FOR_PLUS_PULL"')));
+check("CLI retains one-word continuation aliases",()=>assert.ok(cli.includes('"folytasd"')&&cli.includes('"continue"')));
+check("CLI still uses Plus next endpoint",()=>assert.ok(cli.includes('/plus-bridge/${encodeURIComponent(workerCode)}/next')));
+check("No native API provider enabled",()=>assert.ok(!route.includes("OPENAI_API_KEY")&&!engine.includes("OPENAI_API_KEY")));
+console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN V1.5 command pull ready"},null,2));

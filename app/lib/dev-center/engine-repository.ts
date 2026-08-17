@@ -590,7 +590,7 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
   return { ok: true as const, task: mapTask(data as JsonRecord), worker: mapWorker(worker as JsonRecord) };
 }
 
-export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null }) {
+export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null; prepareForPlusPull?: boolean; chainSource?: string | null }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
   if (!["queued", "ready"].includes(task.status) || task.assignedWorkerId || task.claimedBySessionId) {
@@ -702,6 +702,15 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       coordinatorRejected: [],
       coordinatorRoutedAt: now,
       coordinatorSelection: { workerCode: chosen.code, activeSessions: chosen.activeSessions, activeTasks: chosen.activeTasks, queuedTasks: chosen.queuedTasks },
+      ...(input.prepareForPlusPull ? {
+        coordinatorChainState: "READY_FOR_PLUS_PULL",
+        coordinatorChainPreparedAt: now,
+        coordinatorChainSource: text(input.chainSource) || "BENJADMIN_COMMAND",
+        coordinatorChainFromTaskId: null,
+        coordinatorChainSourceOutcome: null,
+        coordinatorChainWorkerCode: routed.worker.code,
+        coordinatorChainWorkerName: routed.worker.name,
+      } : {}),
     };
     const updated = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
     if (updated.error) databaseError("A Ben-AI routing metadata nem menthető.", updated.error, 409);
@@ -711,6 +720,14 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       summary: `${task.title} → ${routed.worker.name} · ${preferredWorkerCode ? "kézi preferencia Ben-AI ellenőrzéssel" : "Ben-AI automatikus kiosztás"}.`,
       metadata: { workerId: routed.worker.id, workerCode: routed.worker.code, preferredWorkerCode: preferredWorkerCode || null, productionAccess: "DENY", selection: metadata.coordinatorSelection },
     });
+    if (input.prepareForPlusPull) {
+      await addAudit(client, {
+        action: "TASK_BENAI_CHAIN_PREPARED",
+        entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId,
+        summary: `${task.title} · ${routed.worker.name} részére ChatGPT pullra kész.`,
+        metadata: { workerCode: routed.worker.code, productionAccess: "DENY", preparedAt: now, chainSource: text(input.chainSource) || "BENJADMIN_COMMAND" },
+      });
+    }
     return { ok: true as const, routed: true as const, reason: preferredWorkerCode ? "PREFERRED_ACCEPTED" as const : "AUTO_ROUTED" as const, task: mapTask(updated.data as JsonRecord), worker: routed.worker, preferredWorker, suggestedWorker: null, candidates, rejected };
   }
 
@@ -801,6 +818,8 @@ export async function acceptBenAiSuggestedWorker(taskId: string) {
     estimateMinutes: clampEstimateMinutes(metadata.estimateMinutes),
     preferredWorkerCode: workerCode,
     note: "BENJADMIN elfogadta Ben-AI alternatív worker javaslatát",
+    prepareForPlusPull: true,
+    chainSource: "BENJADMIN_SUGGESTION_ACCEPTED",
   });
   if (!routed.routed) {
     throw new DevCenterEngineError("A korábban javasolt worker időközben már nem szabad. Ben-AI friss javaslatot készített.", "DEV_CENTER_BENAI_SUGGESTION_STALE", 409, { taskId, workerCode, suggestedWorker: routed.suggestedWorker || null });
