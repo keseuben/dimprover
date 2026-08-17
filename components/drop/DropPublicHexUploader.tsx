@@ -88,7 +88,7 @@ type DropSpeechRecognitionConstructor = new () => DropSpeechRecognition;
 type VoiceFeedbackState = "recording" | "processing" | "ready" | "error" | "cancelled";
 type VoiceFeedback = { state: VoiceFeedbackState; text: string };
 type DropReportMode = "none" | "generate_only" | "generate_send";
-const WORKFLOW_STEPS = ["Beállítások", "Képek", "Ellenőrzés", "Mentés", "Riport", "Lezárás"] as const;
+export const DROP_QUICK_SEND_WORKFLOW_STEPS = ["Beállítások", "Képek", "Ellenőrzés", "Mentés", "Riport", "Lezárás"] as const;
 type DeletedUndo = { item: Item; index: number };
 
 type Props = {
@@ -1041,7 +1041,7 @@ export default function DropPublicHexUploader({
   }
 
   function goToStep(step: number) {
-    const safeStep = Math.max(0, Math.min(WORKFLOW_STEPS.length - 1, step));
+    const safeStep = Math.max(0, Math.min(DROP_QUICK_SEND_WORKFLOW_STEPS.length - 1, step));
     setWorkflowStep(safeStep);
     const refs = [settingsStepRef, imagesStepRef, reviewStepRef, saveStepRef, reportStepRef, finalizeStepRef];
     window.requestAnimationFrame(() => refs[safeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -1152,9 +1152,9 @@ export default function DropPublicHexUploader({
 
     <nav className="sticky top-2 z-[70] mt-4 rounded-2xl border border-cyan-200 bg-white/95 p-2 shadow-lg backdrop-blur" aria-label="GyorsSend lépések">
       <div className="grid grid-cols-6 gap-1">
-        {WORKFLOW_STEPS.map((label, index) => <button key={label} type="button" onClick={() => goToStep(index)} aria-label={`${index + 1}. lépés: ${label}`} className={`grid min-h-11 place-items-center rounded-xl px-1 py-2 text-xs font-black transition sm:flex sm:gap-2 sm:px-3 ${workflowStep === index ? "bg-cyan-800 text-white shadow" : "bg-slate-50 text-slate-700 hover:bg-cyan-50"}`} aria-current={workflowStep === index ? "step" : undefined}><span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] ${workflowStep === index ? "bg-white text-cyan-900" : index < workflowStep ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{index + 1}</span><span className="hidden sm:inline">{label}</span></button>)}
+        {DROP_QUICK_SEND_WORKFLOW_STEPS.map((label, index) => <button key={label} type="button" onClick={() => goToStep(index)} aria-label={`${index + 1}. lépés: ${label}`} className={`grid min-h-11 place-items-center rounded-xl px-1 py-2 text-xs font-black transition sm:flex sm:gap-2 sm:px-3 ${workflowStep === index ? "bg-cyan-800 text-white shadow" : "bg-slate-50 text-slate-700 hover:bg-cyan-50"}`} aria-current={workflowStep === index ? "step" : undefined}><span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] ${workflowStep === index ? "bg-white text-cyan-900" : index < workflowStep ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{index + 1}</span><span className="hidden sm:inline">{label}</span></button>)}
       </div>
-      <p className="mt-1.5 text-center text-[11px] font-black text-slate-600 sm:hidden">{workflowStep + 1}/{WORKFLOW_STEPS.length} · {WORKFLOW_STEPS[workflowStep]}</p>
+      <p className="mt-1.5 text-center text-[11px] font-black text-slate-600 sm:hidden">{workflowStep + 1}/{DROP_QUICK_SEND_WORKFLOW_STEPS.length} · {DROP_QUICK_SEND_WORKFLOW_STEPS[workflowStep]}</p>
     </nav>
     <div ref={settingsStepRef} className="scroll-mt-28"/>
     {workflowStep === 0 ? <div>

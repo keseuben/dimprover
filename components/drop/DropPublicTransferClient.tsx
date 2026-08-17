@@ -20,7 +20,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import DropPublicHexUploader from "./DropPublicHexUploader";
+import DropPublicHexUploader, { DROP_QUICK_SEND_WORKFLOW_STEPS } from "./DropPublicHexUploader";
 import DropUploadRulesDialog, { DropRulesButton } from "./DropUploadRulesDialog";
 import { clearDropQueuePackage } from "./dropOfflineQueueStore";
 import { requestDropMicrophonePermission } from "./dropVoicePermission";
@@ -717,6 +717,13 @@ export default function DropPublicTransferClient({ mode, slug }: Props) {
         <button type="button" onClick={() => entitlement?.canUseStandardSend !== false && setSendMode("standard")} disabled={entitlement?.canUseStandardSend === false} className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${sendMode === "standard" ? "border-cyan-500 bg-cyan-50 shadow-sm" : "border-slate-200 bg-slate-50"}`}><span className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-950 text-cyan-300"><Send size={20}/></span><span><strong className="block text-sm text-slate-950">Normál DIMPRO Send</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Fájlok, dokumentumok és képek továbbítása üzenettel és opcionális letöltési PIN-nel.</span></span></span></button>
         <button type="button" onClick={() => entitlement?.canUseQuickImageSend !== false && setSendMode("quick_image")} disabled={entitlement?.canUseQuickImageSend === false} className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${sendMode === "quick_image" ? "border-teal-500 bg-teal-50 shadow-sm" : "border-slate-200 bg-slate-50"}`}><span className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-teal-700 text-white"><Camera size={20}/></span><span><span className="flex flex-wrap items-center gap-2"><strong className="text-sm text-slate-950">Gyors KépSend</strong><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-800">Mobilra ajánlott</span></span><span className="mt-1 block text-xs leading-5 text-slate-600">Helyszíni képek méretcsökkentéssel, logikai képcsoportokkal és képenkénti megjegyzésekkel.</span></span></span></button>
       </div> : null}
+
+      {mode === "send" && sendMode === "quick_image" ? <nav data-drop-quick-send-precreate-stepper className="sticky top-2 z-[70] mb-6 rounded-2xl border border-cyan-200 bg-white/95 p-2 shadow-lg backdrop-blur" aria-label="GyorsSend lépések">
+        <div className="grid grid-cols-6 gap-1">
+          {DROP_QUICK_SEND_WORKFLOW_STEPS.map((label, index) => <button key={label} type="button" disabled={index > 0} aria-label={`${index + 1}. lépés: ${label}`} aria-current={index === 0 ? "step" : undefined} className={`grid min-h-11 place-items-center rounded-xl px-1 py-2 text-xs font-black sm:flex sm:gap-2 sm:px-3 ${index === 0 ? "bg-cyan-800 text-white shadow" : "bg-slate-50 text-slate-500"}`}><span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] ${index === 0 ? "bg-white text-cyan-900" : "bg-slate-200 text-slate-600"}`}>{index + 1}</span><span className="hidden sm:inline">{label}</span></button>)}
+        </div>
+        <p className="mt-1.5 text-center text-[11px] font-black text-slate-600 sm:hidden">1/{DROP_QUICK_SEND_WORKFLOW_STEPS.length} · {DROP_QUICK_SEND_WORKFLOW_STEPS[0]}</p>
+      </nav> : null}
 
       {mode === "send" ? <ProjectConnectionPanel entitlement={entitlement} projects={projects} projectCode={projectCode} verifiedProject={verifiedProject} checking={projectChecking} onProjectCode={(value) => void verifyProject(value)} onNoProject={() => { setProjectCode(""); setVerifiedProject(null); setMessage(""); }}/> : null}
 
