@@ -8,7 +8,9 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const { packageId } = await context.params;
     const rawSession = request.cookies.get(DROP_PUBLIC_SESSION_COOKIE)?.value?.trim() || "";
-    const result = await finalizeDropPublicPackage({ rawSession, headers: request.headers, packageId });
+    const body = await request.json().catch(() => ({})) as { reportMode?: unknown };
+    const reportMode = body.reportMode === "generate_only" || body.reportMode === "generate_send" || body.reportMode === "none" ? body.reportMode : "none";
+    const result = await finalizeDropPublicPackage({ rawSession, headers: request.headers, packageId, reportMode });
     return NextResponse.json({ ok: true, version: "DROP 1.2.12", result }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

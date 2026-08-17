@@ -41,6 +41,7 @@ function errorCode(error: unknown) {
 export async function finalizeDropPublicPackageById(input: {
   packageId: string;
   source?: "browser" | "worker" | "admin";
+  reportMode?: "none" | "generate_only" | "generate_send";
 }) {
   const source = input.source || "worker";
   const claimed = await claimDropPackageFinalization(input.packageId);
@@ -54,6 +55,22 @@ export async function finalizeDropPublicPackageById(input: {
   try {
     const packageRow = await findDropPackageById(input.packageId);
     if (!packageRow) throw finalizeError("A küldemény nem található.", "DROP_PACKAGE_NOT_FOUND", 404);
+    if (input.source === "browser" && input.reportMode) {
+      const shouldSendFinalReport = input.reportMode === "generate_send";
+      const { error: reportPreferenceError } = await client.from("drop_packages").update({
+        send_final_report_to_uploader: shouldSendFinalReport,
+        send_final_report_to_invitees: shouldSendFinalReport,
+        updated_at: new Date().toISOString(),
+      }).eq("id", input.packageId);
+      if (reportPreferenceError) throw reportPreferenceError;
+      await writeDropEvent({
+        packageId: input.packageId,
+        eventType: "public.report.preference",
+        actorName: packageRow.uploader_name,
+        actorEmail: packageRow.uploader_email,
+        payload: { reportMode: input.reportMode, automaticReportEmailEnabled: shouldSendFinalReport },
+      });
+    }
     if (!["active", "upload_closed"].includes(packageRow.status)) {
       throw finalizeError("A küldemény jelenlegi állapotában nem kézbesíthető.", "DROP_PUBLIC_PACKAGE_NOT_FINALIZABLE", 409);
     }
@@ -282,12 +299,12 @@ export async function finalizeDropPublicPackageById(input: {
   }
 }
 
-export async function finalizeDropPublicPackage(input: { rawSession: string; headers: Headers; packageId: string }) {
+export async function finalizeDropPublicPackage(input: { rawSession: string; headers: Headers; packageId: string; reportMode?: "none" | "generate_only" | "generate_send" }) {
   const session = await resolveDropPublicSession(input.rawSession, input.headers);
   if (session.packageId !== input.packageId) {
     throw finalizeError("A küldemény nem ehhez a publikus munkamenethez tartozik.", "DROP_PUBLIC_PACKAGE_SESSION_MISMATCH", 403);
   }
-  return finalizeDropPublicPackageById({ packageId: input.packageId, source: "browser" });
+  return finalizeDropPublicPackageById({ packageId: input.packageId, source: "browser", reportMode: input.reportMode || "none" });
 }
 
 export async function listDropPublicFinalizationCandidates(limit = 20) {

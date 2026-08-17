@@ -5,11 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   CloudOff,
   Database,
+  Download,
   FileText,
   FolderCog,
   FolderPlus,
@@ -22,7 +24,7 @@ import {
   PauseCircle,
   PlayCircle,
   RotateCcw,
-  Send,
+  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -85,6 +87,8 @@ type DropSpeechRecognition = { lang: string; continuous: boolean; interimResults
 type DropSpeechRecognitionConstructor = new () => DropSpeechRecognition;
 type VoiceFeedbackState = "recording" | "processing" | "ready" | "error" | "cancelled";
 type VoiceFeedback = { state: VoiceFeedbackState; text: string };
+type DropReportMode = "none" | "generate_only" | "generate_send";
+type DeletedUndo = { item: Item; index: number };
 
 type Props = {
   packageInfo: {
@@ -139,28 +143,35 @@ function pendingStatus(status: Status) { return status === "queued" || status ==
 function commentEditableStatus(status: Status) { return pendingStatus(status) || status === "quarantined"; }
 function groupEditableStatus(status: Status) { return pendingStatus(status) || status === "quarantined"; }
 
-function HoldActionButton({ label, busyLabel, disabled, busy, onConfirm, icon, className = "" }: { label: string; busyLabel?: string; disabled?: boolean; busy?: boolean; onConfirm: () => void; icon?: React.ReactNode; className?: string }) {
-  const timerRef = useRef<number | null>(null);
-  const intervalRef = useRef<number | null>(null);
+function SlideConfirm({ label, busyLabel, disabled, busy, onConfirm, className = "" }: { label: string; busyLabel?: string; disabled?: boolean; busy?: boolean; onConfirm: () => void; className?: string }) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number } | null>(null);
   const [progress, setProgress] = useState(0);
-  const clear = useCallback(() => {
-    if (timerRef.current) window.clearTimeout(timerRef.current);
-    if (intervalRef.current) window.clearInterval(intervalRef.current);
-    timerRef.current = null; intervalRef.current = null; setProgress(0);
-  }, []);
-  useEffect(() => clear, [clear]);
-  const start = () => {
-    if (disabled || busy || timerRef.current) return;
-    const started = Date.now(); setProgress(1);
-    intervalRef.current = window.setInterval(() => setProgress(Math.min(99, Math.round((Date.now() - started) / 20))), 40);
-    timerRef.current = window.setTimeout(() => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current);
-      timerRef.current = null; intervalRef.current = null; setProgress(100); onConfirm(); window.setTimeout(() => setProgress(0), 250);
-    }, 2000);
+  const reset = useCallback(() => { dragRef.current = null; setProgress(0); }, []);
+  const start = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (disabled || busy) return;
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  return <button type="button" disabled={disabled || busy} onPointerDown={start} onPointerUp={clear} onPointerLeave={clear} onPointerCancel={clear} onContextMenu={(event) => event.preventDefault()} className={`relative isolate inline-flex min-h-12 select-none items-center justify-center gap-2 overflow-hidden rounded-xl px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${className}`} style={{ touchAction: "manipulation" }} aria-label={`${label}. Tartsa nyomva 2 másodpercig.`}>
-    <span aria-hidden="true" className="absolute inset-y-0 left-0 -z-10 bg-emerald-900/35 transition-[width] duration-75" style={{ width: `${progress}%` }}/>{busy ? <LoaderCircle size={17} className="animate-spin"/> : icon}<span>{busy ? (busyLabel || label) : progress ? `Tartsa nyomva… ${Math.max(0, 2 - progress / 50).toFixed(1)} mp` : label}</span>
-  </button>;
+  const move = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !trackRef.current) return;
+    const width = Math.max(1, trackRef.current.getBoundingClientRect().width - 56);
+    setProgress(Math.max(0, Math.min(100, ((event.clientX - drag.startX) / width) * 100)));
+  };
+  const finish = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+    const confirmed = progress >= 85;
+    reset();
+    if (confirmed && !disabled && !busy) onConfirm();
+  };
+  return <div ref={trackRef} className={`relative min-h-14 min-w-[260px] flex-1 overflow-hidden rounded-2xl border border-teal-300 bg-teal-50 sm:max-w-md ${className}`}>
+    <div aria-hidden="true" className="absolute inset-y-0 left-0 bg-teal-700/15 transition-[width]" style={{ width: `${progress}%` }}/>
+    <button type="button" disabled={disabled || busy} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={reset} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && !disabled && !busy) { event.preventDefault(); onConfirm(); } }} className="relative flex min-h-14 w-full touch-pan-y select-none items-center gap-3 px-2 pr-4 text-left text-sm font-black text-teal-950 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`${label}. Húzza jobbra a vezérlőt, vagy használja az Enter/billentyűzetes megerősítést.`}>
+      <span className="absolute top-1.5 grid h-11 w-11 place-items-center rounded-xl bg-teal-800 text-white shadow-md" style={{ left: `calc(${progress}% - ${progress * 0.56}px)`, transition: "left 120ms ease-out" }}>{busy ? <LoaderCircle size={18} className="animate-spin"/> : <ArrowRight size={19}/>}</span>
+      <span className="min-w-0 flex-1 px-14 text-center">{busy ? (busyLabel || label) : progress >= 85 ? "Engedje el a véglegesítéshez" : label}</span>
+    </button>
+  </div>;
 }
 
 export default function DropPublicHexUploader({
@@ -189,6 +200,19 @@ export default function DropPublicHexUploader({
   const [finalizing, setFinalizing] = useState(false);
   const [delivered, setDelivered] = useState(false);
   const [message, setMessage] = useState("");
+  const [workflowStep, setWorkflowStep] = useState(0);
+  const [reportMode, setReportMode] = useState<DropReportMode>("none");
+  const [saveToDevice, setSaveToDevice] = useState(false);
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+  const [deletedUndo, setDeletedUndo] = useState<DeletedUndo | null>(null);
+  const swipeStartRef = useRef<Record<string, { x: number; y: number; pointerId: number; axis: "pending" | "horizontal" | "vertical" }>>({});
+  const deleteUndoTimerRef = useRef<number | null>(null);
+  const settingsStepRef = useRef<HTMLDivElement | null>(null);
+  const imagesStepRef = useRef<HTMLDivElement | null>(null);
+  const reviewStepRef = useRef<HTMLDivElement | null>(null);
+  const saveStepRef = useRef<HTMLDivElement | null>(null);
+  const reportStepRef = useRef<HTMLDivElement | null>(null);
+  const finalizeStepRef = useRef<HTMLDivElement | null>(null);
   const [imageSizePreset, setImageSizePreset] = useState<DropImageSizePreset>(defaultImageSizePreset);
   const [metadataPolicy, setMetadataPolicy] = useState<DropImageMetadataPolicy>("strip");
   const [galleryCleanupReminder, setGalleryCleanupReminder] = useState(remindGalleryCleanup);
@@ -478,7 +502,7 @@ export default function DropPublicHexUploader({
       await Promise.all(next.map(persist));
       setQueue((items) => [...items, ...next]);
       setLastAddedIds(next.map((item) => item.id));
-      setMessage(`${next.length} fájl biztonságosan elmentve ezen a készüléken.`);
+      setMessage(`${next.length} fájl biztonságosan elmentve ezen a készüléken.`); setWorkflowStep(2);
     } catch (error) { setMessage(error instanceof Error ? error.message : "A fájlok előkészítése sikertelen."); }
     finally { setPreparing(false); }
   }, [delivered, effectivePhotoLabel, fileNameRule, imageSizePreset, metadataPolicy, packageInfo.currentFileCount, packageInfo.currentTotalSizeBytes, packageInfo.id, packageInfo.maxFileCount, packageInfo.maxFileSizeBytes, packageInfo.maxTotalSizeBytes, packageInfo.publicCode, packageInfo.title, persist, preparing, running, selectedGroup]);
@@ -886,10 +910,10 @@ export default function DropPublicHexUploader({
       setMessage("Megjegyzések mentve · vírusellenőrzés és csomagkézbesítés előkészítése…");
       for (let attempt = 0; attempt < 36; attempt += 1) {
         await waitForDropOnline();
-        const response = await dropFetchWithRetry(`/api/drop/public/packages/${encodeURIComponent(packageInfo.id)}/finalize`, { method: "POST" }, { attempts: 3, skipRetryStatuses: [425], onRetry: (detail) => setMessage(detail) });
+        const response = await dropFetchWithRetry(`/api/drop/public/packages/${encodeURIComponent(packageInfo.id)}/finalize`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reportMode }) }, { attempts: 3, skipRetryStatuses: [425], onRetry: (detail) => setMessage(detail) });
         const payload = await response.json() as { error?: string; code?: string; details?: { totalCount?: number; readyCount?: number; pendingCount?: number }; result?: { delivery?: { sent: number; failed: number; alreadySent?: number }; workflow?: { recipientEmails?: string[]; notificationDetail?: string | null } } };
         if (response.ok) {
-          setDelivered(true);
+          setDelivered(true); setWorkflowStep(5);
           const deliverySent = payload.result?.delivery?.sent;
           const recipientFallback = payload.result?.workflow?.recipientEmails?.length;
           const sentCount = typeof deliverySent === "number" ? deliverySent : typeof recipientFallback === "number" ? recipientFallback : null;
@@ -997,7 +1021,7 @@ export default function DropPublicHexUploader({
           if (aborted || offline) break;
         }
       }
-      if (allSucceeded) setMessage("A feltöltések elkészültek, az azonnali vírusellenőrzés elindult. Az oldal bezárható.");
+      if (allSucceeded) { setMessage("A feltöltések elkészültek, az azonnali vírusellenőrzés elindult. Ellenőrizze a mentési és riportbeállításokat, majd zárja le a küldeményt."); setWorkflowStep(3); }
     } catch (error) {
       allSucceeded = false;
       const aborted = error instanceof DOMException && error.name === "AbortError";
@@ -1006,13 +1030,111 @@ export default function DropPublicHexUploader({
       abortRef.current = null;
       setRunning(false);
     }
-    if (allSucceeded) setMessage("A kiválasztott fájlok feltöltése elkészült. Most hozzáadhat további képeket ebbe vagy másik csoportba. A küldemény csak a külön, 2 másodperces véglegesítés után kerül kiküldésre.");
+    if (allSucceeded) setMessage("A kiválasztott fájlok feltöltése elkészült. Most hozzáadhat további képeket ebbe vagy másik csoportba. A küldemény csak a külön, jobbra húzható véglegesítési megerősítés után kerül lezárásra.");
   }
   useEffect(() => { uploadAllRef.current = () => void uploadAll(); });
 
   function pauseUpload() {
     abortRef.current?.abort();
     queueRef.current.filter((item) => item.status === "uploading" || item.status === "initializing" || item.status === "finalizing").forEach((item) => patch(item.id, { status: "paused", message: "Feltöltés szüneteltetve · folytatható", autoResume: false }, true));
+  }
+
+  function goToStep(step: number) {
+    setWorkflowStep(step);
+    const refs = [settingsStepRef, imagesStepRef, reviewStepRef, saveStepRef, reportStepRef, finalizeStepRef];
+    refs[step]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function commitSwipeDelete() {
+    if (!deletedUndo) return;
+    revokePreparedDropFile(deletedUndo.item);
+    void removeDropQueueItem(packageInfo.id, deletedUndo.item.id).catch(() => undefined);
+    setDeletedUndo(null);
+    if (deleteUndoTimerRef.current) window.clearTimeout(deleteUndoTimerRef.current);
+    deleteUndoTimerRef.current = null;
+  }
+
+  function softDelete(itemId: string) {
+    if (running || finalizing) return;
+    if (deletedUndo) commitSwipeDelete();
+    const index = queueRef.current.findIndex((item) => item.id === itemId);
+    const item = queueRef.current[index];
+    if (!item || !pendingStatus(item.status)) return;
+    setQueue((items) => items.filter((candidate) => candidate.id !== itemId));
+    setSwipeOffsets((current) => ({ ...current, [itemId]: 0 }));
+    setDeletedUndo({ item, index });
+    setMessage(`${item.displayName} törölve. 6 másodpercig visszavonható.`);
+    deleteUndoTimerRef.current = window.setTimeout(() => {
+      revokePreparedDropFile(item);
+      void removeDropQueueItem(packageInfo.id, item.id).catch(() => undefined);
+      setDeletedUndo((current) => current?.item.id === item.id ? null : current);
+    }, 6000);
+  }
+
+  function undoSwipeDelete() {
+    if (!deletedUndo) return;
+    if (deleteUndoTimerRef.current) window.clearTimeout(deleteUndoTimerRef.current);
+    const restored = deletedUndo;
+    setQueue((items) => { const next = [...items]; next.splice(Math.min(restored.index, next.length), 0, restored.item); return next; });
+    void persist(restored.item);
+    setDeletedUndo(null);
+    deleteUndoTimerRef.current = null;
+    setMessage("Törlés visszavonva.");
+  }
+
+  function swipeStart(itemId: string, event: React.PointerEvent<HTMLElement>) {
+    if (running || finalizing) return;
+    swipeStartRef.current[itemId] = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, axis: "pending" };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+  function swipeMove(itemId: string, event: React.PointerEvent<HTMLElement>) {
+    const start = swipeStartRef.current[itemId];
+    if (!start || start.pointerId !== event.pointerId) return;
+    const rawX = event.clientX - start.x;
+    const rawY = event.clientY - start.y;
+    if (start.axis === "pending") {
+      if (Math.abs(rawX) < 8 && Math.abs(rawY) < 8) return;
+      if (Math.abs(rawY) > Math.abs(rawX)) {
+        start.axis = "vertical";
+        setSwipeOffsets((current) => ({ ...current, [itemId]: 0 }));
+        return;
+      }
+      start.axis = "horizontal";
+    }
+    if (start.axis === "vertical") return;
+    const delta = Math.max(-120, Math.min(120, rawX));
+    setSwipeOffsets((current) => ({ ...current, [itemId]: delta }));
+  }
+  function swipeEnd(item: Item) {
+    const offset = swipeOffsets[item.id] || 0;
+    delete swipeStartRef.current[item.id];
+    if (offset <= -72) softDelete(item.id);
+    else if (offset >= 72 && pendingStatus(item.status)) {
+      patch(item.id, { autoResume: true, message: "Feltöltésre kész · indítsa a feltöltést" }, true);
+      setMessage(`${item.displayName}: feltöltésre kész.`);
+    }
+    setSwipeOffsets((current) => ({ ...current, [item.id]: 0 }));
+  }
+
+  async function saveQueuedImagesToDevice() {
+    const files = queueRef.current.filter((item) => item.uploadFile.type.startsWith("image/")).map((item) => item.uploadFile);
+    if (!files.length) { setMessage("Nincs eszközre menthető kép a sorban."); return; }
+    try {
+      const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean; share?: (data: ShareData) => Promise<void> };
+      if (nav.share && nav.canShare?.({ files })) {
+        await nav.share({ files, title: packageInfo.title });
+        setMessage("Az eszköz mentési/megosztási felülete megnyílt.");
+        return;
+      }
+      for (const file of files) {
+        const url = URL.createObjectURL(file);
+        const anchor = document.createElement("a"); anchor.href = url; anchor.download = file.name; anchor.rel = "noopener"; anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }
+      setMessage(`${files.length} kép eszközre mentése elindítva. A böngésző letöltési szabályai érvényesek.`);
+    } catch (error) {
+      if ((error as DOMException)?.name !== "AbortError") setMessage("Az eszközre mentés nem sikerült. Használja a kép letöltését vagy az eszköz megosztási menüjét.");
+    }
   }
 
   function statusIcon(item: Item) {
@@ -1025,6 +1147,13 @@ export default function DropPublicHexUploader({
   return <section data-drop-offline-queue className="relative mt-6 rounded-[1.75rem] border border-cyan-200 bg-white p-4 shadow-sm sm:p-6">
     <div className="pointer-events-none absolute -left-[10000px] h-px w-px overflow-hidden" aria-hidden="true"><label>Weboldal<input value={website} onChange={(event) => setWebsite(event.target.value)} tabIndex={-1}/></label></div>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">DIMPRO HexaUpload · DROP 1.2.12</p><h2 className="mt-2 text-2xl font-black text-slate-950">{imageOnly ? "Képek küldése" : "Fájlok és képek"}</h2><p className="mt-2 text-sm leading-6 text-slate-600">A helyi queue oldalfrissítés után is megmarad. A multipart feltöltés a már elkészült fájlrészek után folytatódik.</p></div></div>
+
+    <nav className="sticky top-2 z-[70] mt-4 overflow-x-auto rounded-2xl border border-cyan-200 bg-white/95 p-2 shadow-lg backdrop-blur" aria-label="GyorsSend lépések">
+      <div className="flex min-w-max items-center gap-1 sm:min-w-0 sm:grid sm:grid-cols-6">
+        {["Beállítások", "Képek", "Ellenőrzés", "Mentés", "Riport", "Lezárás"].map((label, index) => <button key={label} type="button" onClick={() => goToStep(index)} className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-black transition ${workflowStep === index ? "bg-cyan-800 text-white shadow" : "bg-slate-50 text-slate-700 hover:bg-cyan-50"}`} aria-current={workflowStep === index ? "step" : undefined}><span className={`grid h-6 w-6 place-items-center rounded-full text-[10px] ${workflowStep === index ? "bg-white text-cyan-900" : index < workflowStep ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{index + 1}</span><span>{label}</span></button>)}
+      </div>
+    </nav>
+    <div ref={settingsStepRef} className="scroll-mt-28"/>
 
     {allowImageGroups ? <div className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
       <div className="flex items-start gap-3"><Images size={21} className="mt-0.5 shrink-0 text-teal-800"/><div><p className="text-xs font-black uppercase tracking-[.14em] text-teal-800">Logikai képcsoportok</p><h3 className="mt-1 text-base font-black text-slate-950">Következő feltöltés: {selectedGroup?.name || "Csoport nélkül"}</h3><p className="mt-1 text-xs leading-5 text-slate-700">A csoport alapból csak logikai címke: nem hoz létre fizikai mappát. A következő Galéria / Kamera képek mindig a fent jelzett aktív csoportba kerülnek.</p></div></div>
@@ -1074,11 +1203,13 @@ export default function DropPublicHexUploader({
 
     {allowImageGroups ? <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-teal-300 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.1em] text-teal-800">Kamera / Galéria célcsoport</p><p className="mt-0.5 text-sm font-black text-slate-950">{selectedGroup?.name || "Csoport nélkül"}</p></div><select value={selectedGroupId} onChange={(event) => { setSelectedGroupId(event.target.value); setVisibleGroupId(event.target.value || "__ungrouped__"); }} disabled={running || preparing || creatingGroup} className="h-11 min-w-52 rounded-xl border border-teal-300 bg-teal-50 px-3 text-sm font-bold text-teal-950 outline-none focus:ring-4 focus:ring-teal-100"><option value="">Csoport nélkül</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {groupDisplayCount(group.id)} fájl</option>)}</select></div> : null}
 
+    <div ref={imagesStepRef} className="scroll-mt-28"/>
     <div ref={uploadZoneRef} className="mt-5"><DropHexUploadZone accept={imageOnly ? acceptedImageExtensions : acceptedExtensions} disabled={running || finalizing || delivered} busy={preparing || running || finalizing || restoring} imageMode allowCamera title={imageOnly ? "Fotók hozzáadása" : "Húzza ide a küldendő fájlokat"} description="Kattintással, galériából vagy kamerából is hozzáadható. A kiválasztott Nagy, Közepes vagy Kicsi képméret a helyi előkészítéskor érvényesül." progress={totalProgress} onFiles={addFiles}/></div>
     {!running && !finalizing && !delivered && lastAddedIds.length ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={undoLastAdd} className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-black text-amber-900"><RotateCcw size={15}/> Legutóbbi hozzáadás visszavonása</button><span className="self-center text-[11px] font-semibold text-slate-500">A névszabály a feltöltés megkezdése előtt bármikor módosítható; a várakozó fájlneveket a rendszer újraszámolja.</span></div> : null}
 
     {restoring ? <div className="mt-4 flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-950"><LoaderCircle size={17} className="animate-spin"/>Helyi feltöltési sor visszaállítása…</div> : null}
 
+    <div ref={reviewStepRef} className="scroll-mt-28"/>
     {queue.length ? <div className="mt-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-slate-600">Feltöltési sor · {queue.length} fájl{visibleGroupId !== "__all__" ? ` · ebből megjelenítve ${visibleQueue.length}` : ""}{restoredCount ? ` · ${restoredCount} visszaállítva` : ""}</p><p className="mt-1 text-xs font-semibold text-slate-500">Eredeti: {formatBytes(originalBytes)} · Küldendő: {formatBytes(totalBytes)}{savings ? ` · ${savings}% megtakarítás` : ""}</p></div><strong className="text-sm text-cyan-800">{totalProgress}%</strong></div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-cyan-700 transition-[width]" style={{ width: `${totalProgress}%` }}/></div>
@@ -1086,8 +1217,9 @@ export default function DropPublicHexUploader({
       <div className="mt-4 space-y-2 sm:hidden">
         {visibleQueue.map((item) => {
           const expanded = expandedMobile.has(item.id);
-          return <article key={item.id} data-drop-queue-item data-drop-queue-status={item.status} draggable={!running && pendingStatus(item.status)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId(null)} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-            <button type="button" onClick={() => toggleExpanded(item.id)} className="flex w-full items-center gap-3 p-3 text-left">
+          return <article key={item.id} data-drop-queue-item data-drop-queue-status={item.status} draggable={!running && pendingStatus(item.status)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId(null)} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            <div aria-hidden="true" className="absolute inset-0 flex items-start justify-between bg-gradient-to-r from-emerald-100 via-slate-50 to-rose-100 px-4 pt-5 text-xs font-black"><span className={`inline-flex items-center gap-2 text-emerald-950 transition-opacity ${(swipeOffsets[item.id] || 0) > 12 ? "opacity-100" : "opacity-0"}`}><PlayCircle size={17}/> Feltöltésre kész</span><span className={`ml-auto inline-flex items-center gap-2 text-rose-950 transition-opacity ${(swipeOffsets[item.id] || 0) < -12 ? "opacity-100" : "opacity-0"}`}><Trash2 size={17}/> Törlés</span></div>
+            <button type="button" onClick={() => toggleExpanded(item.id)} onPointerDown={(event) => swipeStart(item.id, event)} onPointerMove={(event) => swipeMove(item.id, event)} onPointerUp={() => swipeEnd(item)} onPointerCancel={() => setSwipeOffsets((current) => ({ ...current, [item.id]: 0 }))} className={`relative flex w-full touch-pan-y items-center gap-3 p-3 text-left transition-transform ${(swipeOffsets[item.id] || 0) < 0 ? "bg-rose-100" : (swipeOffsets[item.id] || 0) > 0 ? "bg-emerald-100" : "bg-white"}`} style={{ transform: `translateX(${swipeOffsets[item.id] || 0}px)` }}>
               {item.previewUrl ? <img src={item.previewUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover"/> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-white text-slate-400"><FileText size={24}/></span>}
               {statusIcon(item)}
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-950">{item.displayName}</strong>{item.groupName ? <span className="mt-1 inline-flex rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black text-teal-800">{item.groupName}</span> : null}<span className="mt-1 block truncate text-[11px] text-slate-500">{item.message}</span><span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-slate-200"><span className="block h-full bg-cyan-700" style={{ width: `${item.progress}%` }}/></span></span>
@@ -1095,7 +1227,7 @@ export default function DropPublicHexUploader({
             </button>
             {renderItemGroupSelector(item, true)}
             {allowFileComments ? <div className="border-t border-slate-200 bg-white p-3"><div className="mb-1 flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Megjegyzés ehhez a képhez</span>{allowQuickVoiceNote && imageOnly ? <button type="button" onClick={() => voiceItemId === item.id ? stopVoiceNote(true) : void startVoiceNote(item.id)} disabled={finalizing || delivered || !commentEditableStatus(item.status)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${voiceItemId === item.id ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>{voiceItemId === item.id ? <MicOff size={14}/> : <Mic size={14}/>} {voiceItemId === item.id ? `Leállítás · 00:${String(voiceSecondsLeft).padStart(2,"0")}` : "Diktálás"}</button> : null}</div><textarea value={item.comment} onChange={(event) => updateComment(item.id, event.target.value.slice(0, 2000))} onBlur={() => { if (item.fileId) void commentFile(item.fileId, item.comment).catch((error) => setMessage(error instanceof Error ? error.message : "A megjegyzés mentése sikertelen.")); }} disabled={finalizing || delivered} placeholder="Megjegyzés azonnal, a kártya megnyitása nélkül…" className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-5 outline-none focus:border-cyan-500"/>{renderVoiceStatus(item.id, true)}{allowQuickVoiceNote && imageOnly && voiceSupported !== false ? <p className="mt-1 text-[10px] text-slate-500">A DIMPRO nem rögzít hangfájlt; a böngésző/eszköz beszédfelismerése csak szerkeszthető szöveget ad vissza.</p> : null}{allowQuickVoiceNote && imageOnly && voiceSupported === false ? <p className="mt-1 text-[10px] text-amber-700">A böngésző nem támogat közvetlen beszédfelismerést; a telefon billentyűzetének mikrofonja továbbra is használható.</p> : null}</div> : null}
-            {expanded ? <div className="border-t border-slate-200 p-3"><p className="text-xs leading-5 text-slate-600">{formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)} · {item.optimizationNote}</p><label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>{fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. gephaz_csovezetek" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/></label> : null}{!running && pendingStatus(item.status) ? <button type="button" onClick={() => remove(item.id)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700"><X size={14}/> Eltávolítás</button> : null}</div> : null}
+            {expanded ? <div className="border-t border-slate-200 p-3"><p className="text-xs leading-5 text-slate-600">{formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)} · {item.optimizationNote}</p><label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>{fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1 block text-[10px] font-black uppercase text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. gephaz_csovezetek" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/></label> : null}{!running && pendingStatus(item.status) ? <button type="button" onClick={() => softDelete(item.id)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700"><X size={14}/> Eltávolítás</button> : null}</div> : null}
           </article>;
         })}
       </div>
@@ -1103,21 +1235,33 @@ export default function DropPublicHexUploader({
       <div className="mt-4 hidden gap-4 sm:grid md:grid-cols-2 xl:grid-cols-3">
         {visibleQueue.map((item) => <article key={item.id} data-drop-queue-item data-drop-queue-status={item.status} draggable={!running && pendingStatus(item.status)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId(null)} className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
           {item.previewUrl ? <button type="button" onClick={() => setPreview({ url: item.previewUrl!, name: item.displayName })} className="group relative block aspect-[4/3] w-full overflow-hidden bg-slate-200 text-left" aria-label={`${item.displayName} kép nagyítása`}><img src={item.previewUrl} alt={item.displayName} className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"/><span className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-xl bg-slate-950/75 text-white backdrop-blur"><Maximize2 size={16}/></span>{item.optimized ? <span className="absolute bottom-2 left-2 rounded-full bg-emerald-700/90 px-2.5 py-1 text-[10px] font-black text-white">Optimalizálva</span> : null}</button> : <div className="grid aspect-[4/3] w-full place-items-center bg-slate-100 text-slate-400"><div className="text-center"><FileText className="mx-auto" size={34}/><p className="mt-2 text-xs font-black">Nincs képelőnézet</p></div></div>}
-          <div className="flex flex-1 flex-col p-4"><div className="flex items-start gap-3">{statusIcon(item)}<div className="min-w-0 flex-1"><strong className="block break-words text-sm leading-5 text-slate-950">{item.displayName}</strong>{item.groupName ? <span className="mt-1 inline-flex rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black text-teal-800">{item.groupName}</span> : null}<p className="mt-1 text-xs leading-5 text-slate-500">{formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)} · {item.message}</p></div>{!running && pendingStatus(item.status) ? <button type="button" onClick={() => remove(item.id)} className="shrink-0 rounded-lg border border-slate-300 bg-white p-2 text-slate-500" aria-label={`${item.displayName} eltávolítása`}><X size={14}/></button> : null}</div>{renderItemGroupSelector(item)}<label className="mt-3 block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>{fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.08em] text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. eszaki_homlokzat" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/><span className="mt-1 block text-[10px] leading-4 text-slate-500">Eredeti név: {item.originalName} · sorszám: F{String(item.sequenceNumber).padStart(4,"0")}</span></label> : null}<p className={`mt-3 rounded-xl border px-3 py-2 text-[11px] font-semibold leading-5 ${item.optimized ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-600"}`}>{item.optimizationNote}</p>{allowFileComments ? <div className="mt-3"><div className="mb-1.5 flex items-center justify-between gap-2"><span className="text-[11px] font-black uppercase tracking-[.08em] text-slate-600">Megjegyzés ehhez a képhez</span>{allowQuickVoiceNote && imageOnly ? <button type="button" onClick={() => voiceItemId === item.id ? stopVoiceNote(true) : void startVoiceNote(item.id)} disabled={finalizing || delivered || !commentEditableStatus(item.status)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${voiceItemId === item.id ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>{voiceItemId === item.id ? <MicOff size={14}/> : <Mic size={14}/>} {voiceItemId === item.id ? `Leállítás · 00:${String(voiceSecondsLeft).padStart(2,"0")}` : "Diktálás"}</button> : null}</div><textarea value={item.comment} onChange={(event) => updateComment(item.id, event.target.value.slice(0, 2000))} onBlur={() => { if (item.fileId) void commentFile(item.fileId, item.comment).catch((error) => setMessage(error instanceof Error ? error.message : "A megjegyzés mentése sikertelen.")); }} disabled={finalizing || delivered} placeholder="Írja ide a képen látható munkarészt, hibát vagy információt…" className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-cyan-500"/>{renderVoiceStatus(item.id)}{allowQuickVoiceNote && imageOnly ? <p className="mt-1 text-[10px] text-slate-500">A DIMPRO nem rögzít hangfájlt; a böngésző/eszköz beszédfelismerése csak szerkeszthető szöveget ad vissza.</p> : null}</div> : null}</div>
+          <div className="flex flex-1 flex-col p-4"><div className="flex items-start gap-3">{statusIcon(item)}<div className="min-w-0 flex-1"><strong className="block break-words text-sm leading-5 text-slate-950">{item.displayName}</strong>{item.groupName ? <span className="mt-1 inline-flex rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black text-teal-800">{item.groupName}</span> : null}<p className="mt-1 text-xs leading-5 text-slate-500">{formatBytes(item.originalSize)} → {formatBytes(item.uploadSize)} · {item.message}</p></div>{!running && pendingStatus(item.status) ? <button type="button" onClick={() => softDelete(item.id)} className="shrink-0 rounded-lg border border-slate-300 bg-white p-2 text-slate-500" aria-label={`${item.displayName} eltávolítása`}><X size={14}/></button> : null}</div>{renderItemGroupSelector(item)}<label className="mt-3 block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Letöltési fájlnév</span><input key={item.displayName} defaultValue={item.displayName} onBlur={(event) => renameQueuedFile(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold"/></label>{fileNameRule === "dimpro_photo" && item.previewUrl ? <label className="mt-3 block"><span className="mb-1.5 block text-[10px] font-black uppercase tracking-[.08em] text-violet-700">Kép rövid neve / fájlnév-kiegészítés</span><input defaultValue={item.customLabel} onBlur={(event) => updatePhotoLabel(item.id, event.target.value)} disabled={running || !pendingStatus(item.status)} placeholder="pl. eszaki_homlokzat" className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold"/><span className="mt-1 block text-[10px] leading-4 text-slate-500">Eredeti név: {item.originalName} · sorszám: F{String(item.sequenceNumber).padStart(4,"0")}</span></label> : null}<p className={`mt-3 rounded-xl border px-3 py-2 text-[11px] font-semibold leading-5 ${item.optimized ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-slate-200 bg-white text-slate-600"}`}>{item.optimizationNote}</p>{allowFileComments ? <div className="mt-3"><div className="mb-1.5 flex items-center justify-between gap-2"><span className="text-[11px] font-black uppercase tracking-[.08em] text-slate-600">Megjegyzés ehhez a képhez</span>{allowQuickVoiceNote && imageOnly ? <button type="button" onClick={() => voiceItemId === item.id ? stopVoiceNote(true) : void startVoiceNote(item.id)} disabled={finalizing || delivered || !commentEditableStatus(item.status)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black ${voiceItemId === item.id ? "border-rose-300 bg-rose-50 text-rose-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>{voiceItemId === item.id ? <MicOff size={14}/> : <Mic size={14}/>} {voiceItemId === item.id ? `Leállítás · 00:${String(voiceSecondsLeft).padStart(2,"0")}` : "Diktálás"}</button> : null}</div><textarea value={item.comment} onChange={(event) => updateComment(item.id, event.target.value.slice(0, 2000))} onBlur={() => { if (item.fileId) void commentFile(item.fileId, item.comment).catch((error) => setMessage(error instanceof Error ? error.message : "A megjegyzés mentése sikertelen.")); }} disabled={finalizing || delivered} placeholder="Írja ide a képen látható munkarészt, hibát vagy információt…" className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-cyan-500"/>{renderVoiceStatus(item.id)}{allowQuickVoiceNote && imageOnly ? <p className="mt-1 text-[10px] text-slate-500">A DIMPRO nem rögzít hangfájlt; a böngésző/eszköz beszédfelismerése csak szerkeszthető szöveget ad vissza.</p> : null}</div> : null}</div>
         </article>)}
       </div>
 
+      <div ref={saveStepRef} className="scroll-mt-28"/>
+      {imageOnly ? <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4"><div className="flex items-start gap-3"><Smartphone size={20} className="mt-0.5 text-sky-800"/><div className="flex-1"><p className="text-[10px] font-black uppercase tracking-[.1em] text-sky-800">Mentési beállítások</p><strong className="mt-1 block text-sm text-slate-950">Kamerás képek mentése erre az eszközre is</strong><p className="mt-1 text-xs leading-5 text-slate-600">A PWA a böngésző és az operációs rendszer engedélyezett mentési/megosztási felületét használja. A DIMPRO nem próbál háttérben jogosulatlanul a galériába írni.</p><label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-sky-200 bg-white p-3"><input type="checkbox" checked={saveToDevice} onChange={(event) => setSaveToDevice(event.target.checked)} className="h-5 w-5 accent-sky-700"/><span className="text-xs font-black text-slate-900">Mentés erre az eszközre is</span></label>{saveToDevice ? <button type="button" onClick={() => void saveQueuedImagesToDevice()} disabled={!queue.some((item) => item.uploadFile.type.startsWith("image/"))} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-sky-800 px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300"><Download size={16}/> Képek mentése az eszközre</button> : null}</div></div></div> : null}
+
+      <div ref={reportStepRef} className="scroll-mt-28"/>
+      <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50/70 p-4"><p className="text-[10px] font-black uppercase tracking-[.1em] text-violet-800">Riport</p><h3 className="mt-1 text-base font-black text-slate-950">A riportküldés nem automatikus és nem kötelező</h3><p className="mt-1 text-xs leading-5 text-slate-600">Válassza ki, mi történjen a végleges riporttal. Az alapbeállítás nem küld riportot.</p><div className="mt-3 grid gap-2 md:grid-cols-3">{([
+        ["none", "Riportküldés nélkül", "A küldemény lezárható automatikus riport-e-mail nélkül; belső megőrzési riport a retention szabályok miatt készülhet."],
+        ["generate_only", "Riport készítése", "A riport elkészül, de e-mailben nem kerül kiküldésre."],
+        ["generate_send", "Riport készítése és küldése", "A riport a beállított címzetteknek kiküldhető."],
+      ] as const).map(([value, title, detail]) => <button key={value} type="button" onClick={() => setReportMode(value)} className={`rounded-xl border p-3 text-left ${reportMode === value ? "border-violet-500 bg-white shadow-sm ring-2 ring-violet-100" : "border-violet-100 bg-violet-50"}`}><strong className="block text-xs text-slate-950">{title}</strong><span className="mt-1 block text-[11px] leading-5 text-slate-600">{detail}</span></button>)}</div></div>
+
+      <div ref={finalizeStepRef} className="scroll-mt-28"/>
       {draggedItemId ? <div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const id = draggedItemId; setDraggedItemId(null); if (id) remove(id); }} className="mt-5 flex min-h-24 items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-rose-400 bg-rose-50 px-4 py-5 text-sm font-black text-rose-800"><Trash2 size={22}/> Húzza ide a képkártyát a törléshez</div> : null}
       {!delivered ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.1em] text-emerald-800">Következő lépés</p><strong className="text-sm text-slate-950">További feltöltés ebbe vagy másik csoportba</strong><p className="mt-1 text-xs leading-5 text-slate-600">Aktív csoport: <strong>{selectedGroup?.name || "Csoport nélkül"}</strong>. {groups.length ? groups.map((group) => `${group.name}: ${groupDisplayCount(group.id)} fájl`).join(" · ") : "Még nincs külön csoport."}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => uploadZoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })} disabled={running || preparing || finalizing} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-xs font-black text-emerald-900"><FolderPlus size={16}/> További feltöltés ide</button>{allowImageGroups ? <button type="button" onClick={() => setGroupManagerOpen(true)} disabled={running || preparing || finalizing} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-xs font-black text-teal-900"><FolderCog size={16}/> Másik csoport / kezelés</button> : null}</div></div>
         <div className="mt-4 flex flex-wrap gap-3 border-t border-emerald-200 pt-4">
-          <HoldActionButton label={queue.some((item) => item.status === "paused") ? "Feltöltés folytatása · 2 mp" : "Fájlok feltöltése · 2 mp"} busyLabel="Feltöltés folyamatban…" disabled={finalizing || restoring || !queue.some((item) => pendingStatus(item.status))} busy={running} onConfirm={() => void uploadAll()} icon={<PlayCircle size={17}/>} className="bg-emerald-700 hover:bg-emerald-800"/>
+          <button type="button" onClick={() => void uploadAll()} disabled={finalizing || restoring || running || !queue.some((item) => pendingStatus(item.status))} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:bg-slate-300">{running ? <LoaderCircle size={17} className="animate-spin"/> : <PlayCircle size={17}/>} {queue.some((item) => item.status === "paused") ? "Feltöltés folytatása" : "Fájlok feltöltése"}</button>
           {running ? <button type="button" onClick={pauseUpload} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-black text-amber-900"><PauseCircle size={17}/> Szüneteltetés</button> : null}
-          {!running && queue.length > 0 && queue.every((item) => item.status === "quarantined") ? <HoldActionButton label="Küldemény véglegesítése · 2 mp" busyLabel="Kézbesítés folyamatban…" disabled={restoring} busy={finalizing} onConfirm={() => void finalizeDelivery()} icon={<Send size={17}/>} className="bg-teal-700 hover:bg-teal-800"/> : null}
+          {!running && queue.length > 0 && queue.every((item) => item.status === "quarantined") ? <SlideConfirm label="Húzza jobbra a küldemény véglegesítéséhez" busyLabel="Kézbesítés folyamatban…" disabled={restoring} busy={finalizing} onConfirm={() => void finalizeDelivery()}/> : null}
           {!running && !finalizing ? <button type="button" onClick={() => void clearQueue()} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700"><Trash2 size={16}/> Lista ürítése</button> : null}
-        </div><p className="mt-3 text-[11px] font-semibold leading-5 text-emerald-950">A fájlok feltöltése önmagában nem küld e-mailt. A címzettek csak a külön „Küldemény véglegesítése” 2 másodperces nyomva tartása után kapják meg a csomagot.</p></div> : null}
+        </div><p className="mt-3 text-[11px] font-semibold leading-5 text-emerald-950">A fájlok feltöltése önmagában nem küld e-mailt. A küldemény lezárása külön, jobbra húzható megerősítéssel történik. A riportküldés a fenti Riport lépés választását követi.</p></div> : null}
     </div> : null}
 
     {delivered ? <div className="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950"><CheckCircle2 size={24}/><h3 className="mt-2 text-lg font-black">A képek elküldve</h3><p className="mt-1 text-sm leading-6">A küldési folyamat befejeződött. Nem kell további gombot keresnie ezen a munkameneten belül.</p><div className="mt-4 flex flex-wrap gap-3">{onStartNewTransfer ? <button type="button" onClick={onStartNewTransfer} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><RotateCcw size={16}/> Új képfeltöltés / Send</button> : null}{onClose ? <button type="button" onClick={onClose} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-black text-emerald-900"><ArrowLeft size={16}/> Bezárás / kezdőlap</button> : null}</div></div> : null}
+    {deletedUndo ? <div className="fixed bottom-4 left-1/2 z-[140] flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-2xl"><span className="max-w-[55vw] truncate">Kép törölve</span><button type="button" onClick={undoSwipeDelete} className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-slate-950">Visszavonás</button></div> : null}
     {message ? <div className={`mt-4 rounded-xl border px-4 py-3 text-sm font-bold ${delivered ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>{finalizing ? <LoaderCircle size={16} className="mr-2 inline animate-spin"/> : null}{message}</div> : null}
 
     {allowImageGroups && !delivered ? <><button type="button" onClick={() => setGroupManagerOpen(true)} className="fixed bottom-24 right-4 z-[88] inline-flex h-14 items-center gap-2 rounded-full border border-teal-200 bg-teal-800 px-4 text-xs font-black text-white shadow-2xl sm:bottom-6 sm:right-6" aria-label="Képcsoportok kezelése"><FolderCog size={20}/><span className="max-w-28 truncate">{selectedGroup?.name || "Csoportok"}</span></button>{groupManagerOpen ? <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/50 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label="Képcsoportok kezelése" onClick={() => setGroupManagerOpen(false)}><section className="max-h-[82vh] w-full max-w-xl overflow-y-auto rounded-[1.75rem] bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.13em] text-teal-800">Képcsoportok</p><h3 className="mt-1 text-xl font-black text-slate-950">Váltás és csoportkezelés</h3><p className="mt-1 text-xs leading-5 text-slate-600">Válassza ki, melyik csoportba kerüljenek a következő képek. A csoport logikai címke; törlése nem törli a fotókat.</p></div><button type="button" onClick={() => setGroupManagerOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600"><X size={18}/></button></div><button type="button" onClick={() => chooseUploadGroup("")} className={`mt-4 flex w-full items-center justify-between rounded-xl border p-3 text-left ${!selectedGroupId ? "border-teal-500 bg-teal-50" : "border-slate-200 bg-white"}`}><span><strong className="block text-sm text-slate-950">Csoport nélkül</strong><span className="text-xs text-slate-500">{groupDisplayCount(null)} fájl · rendszerkategória</span></span><span className="text-xs font-black text-teal-800">Kiválasztás</span></button>{groupDisplayCount(null) > 0 ? <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-[11px] font-bold leading-5 text-amber-950">A csoport nélküli képekből egy lépésben valódi csoport készíthető.</p><div className="mt-2 flex gap-2"><input value={ungroupedGroupName} onChange={(event) => setUngroupedGroupName(event.target.value)} placeholder="Új csoport neve" className="h-10 min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 text-xs font-semibold"/><button type="button" onClick={() => void createGroupFromUngrouped()} disabled={groupMutationBusy !== "" || ungroupedGroupName.trim().length < 2} className="rounded-lg bg-amber-700 px-3 text-[11px] font-black text-white disabled:bg-slate-300">Csoport létrehozása ezekből</button></div></div> : null}<div className="mt-2 space-y-2">{groups.map((group) => <div key={group.id} className={`rounded-xl border p-3 ${selectedGroupId === group.id ? "border-teal-500 bg-teal-50" : "border-slate-200 bg-white"}`}>{editingGroupId === group.id ? <div className="flex gap-2"><input value={editingGroupName} onChange={(event) => setEditingGroupName(event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-teal-200 px-3 text-sm font-semibold"/><button type="button" onClick={() => void updateGroup(group.id, editingGroupName)} disabled={groupMutationBusy !== "" || editingGroupName.trim().length < 2} className="rounded-lg bg-teal-800 px-3 text-xs font-black text-white disabled:bg-slate-300">Mentés</button><button type="button" onClick={() => { setEditingGroupId(null); setEditingGroupName(""); }} className="rounded-lg border border-slate-200 px-3 text-xs font-black text-slate-600">Mégse</button></div> : <><div className="flex items-center justify-between gap-3"><button type="button" onClick={() => chooseUploadGroup(group.id)} className="min-w-0 flex-1 text-left"><strong className="block truncate text-sm text-slate-950">{group.name}</strong><span className="text-xs text-slate-500">{groupDisplayCount(group.id)} fájl · következő feltöltéshez kiválasztható</span></button><span className="text-xs font-black text-teal-800">{selectedGroupId === group.id ? "Aktív" : "Váltás"}</span></div><div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => { setEditingGroupId(group.id); setEditingGroupName(group.name); }} disabled={groupMutationBusy !== ""} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-700">Átnevezés</button><button type="button" onClick={() => void deleteGroup(group.id)} disabled={groupMutationBusy !== ""} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-black text-rose-700">Törlés</button></div></>}</div>)}</div><div className="mt-4 border-t border-slate-200 pt-4"><p className="text-[10px] font-black uppercase tracking-[.08em] text-slate-600">Új csoport</p><div className="mt-2 flex gap-2"><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="pl. Gépészet" className="h-11 min-w-0 flex-1 rounded-xl border border-teal-200 px-3 text-sm font-semibold"/><button type="button" onClick={() => void createGroup()} disabled={creatingGroup || newGroupName.trim().length < 2} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 text-xs font-black text-white disabled:bg-slate-300"><FolderPlus size={15}/> Létrehozás</button></div></div></section></div> : null}</> : null}

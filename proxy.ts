@@ -210,6 +210,11 @@ export async function proxy(request: NextRequest) {
     }
 
     const url = request.nextUrl.clone();
+    if (host === "drop.dev.dimpro.hu") {
+      url.protocol = "http:";
+      url.hostname = "localhost";
+      url.port = process.env.PORT?.trim() || "3100";
+    }
     const rewriteHeaders = new Headers(request.headers);
     rewriteHeaders.set("x-dimpro-drop-internal", "1");
 
