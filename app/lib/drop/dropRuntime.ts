@@ -44,11 +44,11 @@ export async function getDropRuntimeHealth() {
   const tokenSecurityReady = isDropTokenSecurityConfigured();
   const scannerReady = Boolean(scannerHealth?.ping === "PONG");
   const workerReady = Boolean(workerConfig.enabled && workerSchema.ready && scannerReady);
-  const driveMailProfile = mailConfig?.profiles.find((profile) => profile.id === "drive");
+  const dropMailProfile = mailConfig?.profiles.find((profile) => profile.id === "drop");
   const emailNotificationsReady = Boolean(
     featureState.flags.emailNotificationsEnabled
-      && driveMailProfile?.enabled
-      && driveMailProfile.smtpConfigured,
+      && dropMailProfile?.enabled
+      && dropMailProfile.smtpConfigured,
   );
   const spacesReady = Boolean(featureState.flags.spacesEnabled && spacesSchema.ready);
   const spacePackageCreationReady = Boolean(
