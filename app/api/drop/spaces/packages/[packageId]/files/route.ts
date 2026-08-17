@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     ]);
     const state = await getDropPackageUploadState(session, packageId);
     return NextResponse.json(
-      { ok: true, version: "DROP 1.2.12", ...state },
+      { ok: true, version: "DROP 1.2.13", ...state },
       { headers: dropNoStoreHeaders() },
     );
   } catch (error) {

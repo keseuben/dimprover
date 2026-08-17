@@ -243,7 +243,7 @@ export default function DropSpacePackagePanel() {
     <section className="mt-5 rounded-[1.75rem] border border-cyan-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">DROP 1.2.12 · térmunkatér</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">DROP 1.2.13 · térmunkatér</p>
           <h2 className="mt-2 text-2xl font-black text-slate-950">Csomagok és fájlfeltöltés</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Válassz egy mini csomagkártyát, majd használd az alatta megjelenő teljes szélességű feltöltőteret.</p>
         </div>

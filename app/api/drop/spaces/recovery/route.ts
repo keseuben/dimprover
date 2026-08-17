@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     console.error("DROP space recovery failed:", error instanceof Error ? error.message : "unknown error");
   }
   return NextResponse.json(
-    { ok: true, version: "DROP 1.2.12", message: genericMessage },
+    { ok: true, version: "DROP 1.2.13", message: genericMessage },
     { status: 202, headers: dropNoStoreHeaders() },
   );
 }

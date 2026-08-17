@@ -144,7 +144,7 @@ export async function runDropOperationsMonitor(input: {
 
 export async function getDropOperationsResponse(limit = 60) {
   const history = await loadDropOperationsHistory(limit);
-  return { ok: true, version: "DROP 1.2.12" as const, latest: history[0] || null, history };
+  return { ok: true, version: "DROP 1.2.13" as const, latest: history[0] || null, history };
 }
 
 

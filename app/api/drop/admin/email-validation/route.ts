@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     ]);
     return response({
       ok: true,
-      version: "DROP 1.2.12",
+      version: "DROP 1.2.13",
       clients: DROP_EMAIL_VALIDATION_CLIENTS,
       preview: {
         subject: preview.subject,
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       notes: body.notes,
       confirmation: body.confirmation,
     });
-    return response({ ok: true, version: "DROP 1.2.12", record, message: "A DIMPRO Drop kliensvalidációs tesztlevele elküldve." }, 201);
+    return response({ ok: true, version: "DROP 1.2.13", record, message: "A DIMPRO Drop kliensvalidációs tesztlevele elküldve." }, 201);
   } catch (error) {
     return errorResponse(error);
   }
@@ -83,7 +83,7 @@ export async function PATCH(request: NextRequest) {
       reviewStatus: body.reviewStatus,
       reviewNotes: body.reviewNotes,
     });
-    return response({ ok: true, version: "DROP 1.2.12", record });
+    return response({ ok: true, version: "DROP 1.2.13", record });
   } catch (error) {
     return errorResponse(error);
   }

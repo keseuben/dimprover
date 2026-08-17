@@ -48,7 +48,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const { token } = await context.params;
     const invitation = await resolveDropSpaceInvitation(token);
     return NextResponse.json(
-      { ok: true, version: "DROP 1.2.12", invitation: safeInvitation(invitation) },
+      { ok: true, version: "DROP 1.2.13", invitation: safeInvitation(invitation) },
       { headers: dropNoStoreHeaders() },
     );
   } catch (error) {
@@ -89,7 +89,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     const response = NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.12",
+        version: "DROP 1.2.13",
         accepted: {
           ...safeInvitation(accepted),
           acceptedAt: accepted.acceptedAt,

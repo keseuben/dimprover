@@ -17,6 +17,6 @@ export async function POST(request: NextRequest) {
     const requestedLayout = Number(body?.imagesPerPage);
     const imagesPerPage: DropReportImagesPerPage = requestedLayout === 2 || requestedLayout === 4 || requestedLayout === 6 ? requestedLayout : 1;
     const report=await issueDropPackagePdfReportDownload({rawToken,headers:request.headers,imagesPerPage});
-    return new NextResponse(new Uint8Array(report.buffer),{status:200,headers:{...dropNoStoreHeaders(),"content-type":"application/pdf","content-disposition":disposition(report.filename),"x-content-type-options":"nosniff","x-dimpro-drop-version":"DROP 1.2.12"}});
+    return new NextResponse(new Uint8Array(report.buffer),{status:200,headers:{...dropNoStoreHeaders(),"content-type":"application/pdf","content-disposition":disposition(report.filename),"x-content-type-options":"nosniff","x-dimpro-drop-version":"DROP 1.2.13"}});
   } catch(error){return dropErrorResponse(error);}
 }

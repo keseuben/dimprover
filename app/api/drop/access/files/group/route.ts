@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest) {
       email: packageRow.uploader_email || null,
       source: "drop-public-uploader",
     });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", ...result }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

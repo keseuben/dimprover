@@ -470,7 +470,7 @@ export async function runDropWorkerCycle(input: { limit?: number; scanOnly?: boo
   if (input.scanOnly) {
     return {
       ok: true as const,
-      version: "DROP 1.2.12",
+      version: "DROP 1.2.13",
       mode: "scan-only" as const,
       workerId: config.workerId,
       scanner: {
@@ -524,7 +524,7 @@ export async function runDropWorkerCycle(input: { limit?: number; scanOnly?: boo
 
   return {
     ok: true as const,
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     mode: "full" as const,
     workerId: config.workerId,
     scanner: {

@@ -383,7 +383,7 @@ async function archiveSource(input: {
         dropSourceId: input.source.sourceId,
         sourceStorageKey: input.source.sourceStorageKey,
         sourceSha256: input.source.sha256,
-        archiveVersion: "DROP 1.2.12",
+        archiveVersion: "DROP 1.2.13",
       },
     };
     session = await createDriveUploadSessionRecord(record, ARCHIVE_ACTOR);
@@ -515,7 +515,7 @@ export async function getDropDriveArchiveState(packageId: string) {
   const completed = sessions.filter((session) => session?.status === "FINALIZED").length;
   const failedOrPending = Math.max(0, expectedKeys.length - completed);
   return {
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     enabled,
     required: context.required,
     ready: !context.required || (enabled && reportReady && expectedKeys.length > 0 && failedOrPending === 0),

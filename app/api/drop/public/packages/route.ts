@@ -11,6 +11,6 @@ export async function POST(request: NextRequest) {
     if (!body) return NextResponse.json({ ok: false, error: "Érvénytelen küldeményadatok.", code: "DROP_PUBLIC_PACKAGE_INPUT_INVALID" }, { status: 400, headers: dropNoStoreHeaders() });
     assertDropFeatureEnabled(body.workflowType === "submission_gate" ? "submissionGateEnabled" : "sendEnabled");
     const created = await createDropPublicWorkflowPackage({ rawSession, headers: request.headers, body });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", created }, { status: 201, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", created }, { status: 201, headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

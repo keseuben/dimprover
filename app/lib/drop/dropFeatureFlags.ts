@@ -46,7 +46,7 @@ export function getDropFeatureState() {
 
   return {
     ok: true as const,
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     stage: getDropRuntimeStage(),
     releaseGateEnabled,
     flags,

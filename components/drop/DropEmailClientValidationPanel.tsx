@@ -188,7 +188,7 @@ export default function DropEmailClientValidationPanel({ adminKey }: { adminKey:
         <div className="flex items-start gap-3">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-100 text-violet-800"><MailCheck size={23}/></span>
           <div>
-            <p className="text-xs font-black uppercase tracking-[.16em] text-violet-700">DROP 1.2.12 · belső admineszköz</p>
+            <p className="text-xs font-black uppercase tracking-[.16em] text-violet-700">DROP 1.2.13 · belső admineszköz</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">E-mail kliensvalidáció</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">A tényleges címzetti Drop-sablon, három CID-képelőnézet és két fájlkártya ellenőrzése Gmailben, Thunderbirdben, Outlookban és mobil levelezőkben.</p>
           </div>

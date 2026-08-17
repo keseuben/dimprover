@@ -377,7 +377,7 @@ export async function getDropFinalReportPublicState(packageId: string) {
       })
     : null;
   return {
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     enabled: reportEnabled,
     packageStatus: bundle.packageRow.status,
     finalReportStatus: bundle.packageRow.final_report_status || "not_requested",

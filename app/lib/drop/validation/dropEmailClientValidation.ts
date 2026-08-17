@@ -330,7 +330,7 @@ export async function reviewDropEmailValidation(input: {
 
 export function getDropEmailValidationSafety() {
   return {
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     adminOnly: true,
     explicitRecipientRequired: true,
     confirmationPhrase: "TESZT",

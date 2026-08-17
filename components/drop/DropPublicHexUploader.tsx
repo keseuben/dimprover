@@ -86,7 +86,7 @@ type DropImageGroup = {
 type VoiceFeedbackState = "recording" | "processing" | "ready" | "error" | "cancelled";
 type VoiceFeedback = { state: VoiceFeedbackState; text: string };
 type DropReportMode = "none" | "generate_only" | "generate_send";
-export const DROP_QUICK_SEND_WORKFLOW_STEPS = ["Beállítások", "Képek", "Ellenőrzés", "Mentés", "Riport", "Lezárás"] as const;
+export const DROP_QUICK_SEND_WORKFLOW_STEPS = ["Címzettek", "Képek", "Ellenőrzés", "Mentés", "Riport", "Lezárás"] as const;
 type DeletedUndo = { item: Item; index: number };
 
 type Props = {
@@ -110,6 +110,9 @@ type Props = {
   allowQuickVoiceNote?: boolean;
   quickVoiceSecondsPerNote?: number;
   uploaderName?: string;
+  recipientSummary?: Array<{ name: string; email: string; company?: string | null }>;
+  retentionDays?: number;
+  emailDelivery?: { enabled: boolean; reason?: string | null; code?: string };
   initialWorkflowStep?: number;
   onStartNewTransfer?: () => void;
   onClose?: () => void;
@@ -185,6 +188,9 @@ export default function DropPublicHexUploader({
   allowQuickVoiceNote = false,
   quickVoiceSecondsPerNote = 60,
   uploaderName = "Publikus Drop feladó",
+  recipientSummary = [],
+  retentionDays = 5,
+  emailDelivery = { enabled: true, reason: null },
   initialWorkflowStep = 0,
   onStartNewTransfer,
   onClose,
@@ -203,6 +209,7 @@ export default function DropPublicHexUploader({
   const [message, setMessage] = useState("");
   const [workflowStep, setWorkflowStep] = useState(() => Math.max(0, Math.min(DROP_QUICK_SEND_WORKFLOW_STEPS.length - 1, initialWorkflowStep)));
   const [reportMode, setReportMode] = useState<DropReportMode>("none");
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [saveToDevice, setSaveToDevice] = useState(false);
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
   const [deletedUndo, setDeletedUndo] = useState<DeletedUndo | null>(null);
@@ -251,6 +258,7 @@ export default function DropPublicHexUploader({
 
   useDropAutomaticWakeLock(`public-uploader:${packageInfo.id}`, preparing || running || finalizing);
   useEffect(() => { queueRef.current = queue; }, [queue]);
+  useEffect(() => { setReviewConfirmed(false); }, [queue.length]);
   useEffect(() => () => { queueRef.current.forEach(revokePreparedDropFile); abortRef.current?.abort(); voiceSessionRef.current?.abort(); if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current); if (networkResumeTimerRef.current) window.clearTimeout(networkResumeTimerRef.current); }, []);
 
   useEffect(() => {
@@ -901,13 +909,17 @@ export default function DropPublicHexUploader({
       for (let attempt = 0; attempt < 36; attempt += 1) {
         await waitForDropOnline();
         const response = await dropFetchWithRetry(`/api/drop/public/packages/${encodeURIComponent(packageInfo.id)}/finalize`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reportMode }) }, { attempts: 3, skipRetryStatuses: [425], onRetry: (detail) => setMessage(detail) });
-        const payload = await response.json() as { error?: string; code?: string; details?: { totalCount?: number; readyCount?: number; pendingCount?: number }; result?: { delivery?: { sent: number; failed: number; alreadySent?: number }; workflow?: { recipientEmails?: string[]; notificationDetail?: string | null } } };
+        const payload = await response.json() as { error?: string; code?: string; details?: { totalCount?: number; readyCount?: number; pendingCount?: number }; result?: { delivery?: { sent: number; failed: number; skipped?: number; alreadySent?: number; emailEnabled?: boolean; disabledReason?: string | null }; workflow?: { recipientEmails?: string[]; notificationDetail?: string | null } } };
         if (response.ok) {
           setDelivered(true); setWorkflowStep(5);
           const deliverySent = payload.result?.delivery?.sent;
+          const deliverySkipped = payload.result?.delivery?.skipped || 0;
           const recipientFallback = payload.result?.workflow?.recipientEmails?.length;
           const sentCount = typeof deliverySent === "number" ? deliverySent : typeof recipientFallback === "number" ? recipientFallback : null;
-          setMessage(`A küldemény elkészült.${sentCount !== null ? ` ${sentCount} címzett egy-egy összesített értesítése elküldve.` : " A címzettek értesítése elküldve."}${galleryCleanupReminder ? " A telefon galériájából a böngésző biztonsági okból nem törölhet; a sikeres küldés után a kiválasztott fotókat most kézzel törölheti." : ""}`);
+          const deliveryText = deliverySkipped > 0
+            ? ` A csomag lezárva, de DEV-ben ${deliverySkipped} címzett nem kapott e-mailt. ${payload.result?.delivery?.disabledReason || "A DEV SMTP nincs konfigurálva."}`
+            : sentCount !== null ? ` ${sentCount} címzett egy-egy összesített értesítése elküldve.` : " A címzettek értesítése elküldve.";
+          setMessage(`A küldemény elkészült.${deliveryText}${galleryCleanupReminder ? " A telefon galériájából a böngésző biztonsági okból nem törölhet; a sikeres küldés után a kiválasztott fotókat most kézzel törölheti." : ""}`);
           await clearDropQueuePackage(packageInfo.id).catch(() => undefined);
           dispatchDropLocalNotification({ title: "DIMPRO Drop · küldemény elkészült", body: `${packageInfo.title} kézbesítése befejeződött.`, tag: `drop-delivered-${packageInfo.id}`, url: "/send" });
           return;
@@ -1141,7 +1153,7 @@ export default function DropPublicHexUploader({
 
   return <section data-drop-offline-queue className="relative mt-6 rounded-[1.75rem] border border-cyan-200 bg-white p-4 shadow-sm sm:p-6">
     <div className="pointer-events-none absolute -left-[10000px] h-px w-px overflow-hidden" aria-hidden="true"><label>Weboldal<input value={website} onChange={(event) => setWebsite(event.target.value)} tabIndex={-1}/></label></div>
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">DIMPRO HexaUpload · DROP 1.2.12</p><h2 className="mt-2 text-2xl font-black text-slate-950">{imageOnly ? "Képek küldése" : "Fájlok és képek"}</h2><p className="mt-2 text-sm leading-6 text-slate-600">A helyi queue oldalfrissítés után is megmarad. A multipart feltöltés a már elkészült fájlrészek után folytatódik.</p></div></div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-cyan-700">DIMPRO HexaUpload · DROP 1.2.13</p><h2 className="mt-2 text-2xl font-black text-slate-950">{imageOnly ? "Képek küldése" : "Fájlok és képek"}</h2><p className="mt-2 text-sm leading-6 text-slate-600">A helyi queue oldalfrissítés után is megmarad. A multipart feltöltés a már elkészült fájlrészek után folytatódik.</p></div></div>
 
     <nav className="sticky top-2 z-[70] mt-4 rounded-2xl border border-cyan-200 bg-white/95 p-2 shadow-lg backdrop-blur" aria-label="GyorsSend lépések">
       <div className="grid grid-cols-6 gap-1">
@@ -1151,7 +1163,7 @@ export default function DropPublicHexUploader({
     </nav>
     <div ref={settingsStepRef} className="scroll-mt-28"/>
     {workflowStep === 0 ? <div>
-      <div className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-800">1. Beállítások</p><h3 className="mt-1 text-lg font-black text-slate-950">Az ajánlott beállításokkal azonnal folytathatja</h3><p className="mt-1 text-sm leading-6 text-slate-600">A DIMPRO automatikusan optimalizálja a képeket. Csak akkor nyissa meg a további beállításokat, ha valamit módosítani szeretne.</p></div>
+      <div data-drop-recipient-summary className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-800">1. Címzettek</p><h3 className="mt-1 text-lg font-black text-slate-950">Kik kapják meg a küldeményt?</h3><p className="mt-1 text-sm leading-6 text-slate-600">A címzetteket az előző képernyőn választotta ki. Itt ellenőrizheti őket, mielőtt visszalép vagy továbbhalad.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{recipientSummary.map((recipient) => <div key={`${recipient.email}-${recipient.name}`} className="rounded-xl border border-cyan-200 bg-white p-3"><strong className="block text-sm text-slate-950">{recipient.name}</strong><span className="mt-1 block break-all text-xs font-semibold text-slate-600">{recipient.email}</span>{recipient.company ? <span className="mt-1 block text-[11px] text-slate-500">{recipient.company}</span> : null}</div>)}</div><div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-white p-3"><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-500">Megőrzés</span><strong className="mt-1 block text-sm text-slate-950">{retentionDays} nap</strong></div><div className={`rounded-xl border p-3 ${emailDelivery.enabled ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-500">Címzetti e-mail</span><strong className="mt-1 block text-sm text-slate-950">{emailDelivery.enabled ? "Elérhető" : "DEV-ben nincs konfigurálva"}</strong>{!emailDelivery.enabled && emailDelivery.reason ? <span className="mt-1 block text-[11px] leading-5 text-amber-900">{emailDelivery.reason}</span> : null}</div></div></div>
       <details className="mt-3 rounded-2xl border border-slate-200 bg-white"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-black text-slate-800">További beállítások <span className="ml-1 text-xs font-semibold text-slate-500">· opcionális</span></summary><div className="border-t border-slate-200 px-1 pb-1">
 
     {allowImageGroups ? <div className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-4">
@@ -1221,6 +1233,7 @@ export default function DropPublicHexUploader({
       <div className={workflowStep === 2 ? "block" : "hidden"}>
       <div className="mb-4 rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-800">3. Ellenőrzés</p><h3 className="mt-1 text-lg font-black text-slate-950">Nézze át a képeket</h3><p className="mt-1 text-sm leading-6 text-slate-600">Itt törölhet, megjegyzést írhat vagy képcsoportot válthat. Semmi nem vész el, ha visszalép.</p></div>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-slate-600">Feltöltési sor · {queue.length} fájl{visibleGroupId !== "__all__" ? ` · ebből megjelenítve ${visibleQueue.length}` : ""}{restoredCount ? ` · ${restoredCount} visszaállítva` : ""}</p><p className="mt-1 text-xs font-semibold text-slate-500">Eredeti: {formatBytes(originalBytes)} · Küldendő: {formatBytes(totalBytes)}{savings ? ` · ${savings}% megtakarítás` : ""}</p></div><strong className="text-sm text-cyan-800">{totalProgress}%</strong></div>
+      <div data-drop-delivery-review className="mt-4 rounded-2xl border border-teal-300 bg-teal-50/70 p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-teal-800">Küldési adatok ellenőrzése</p><h4 className="mt-1 text-base font-black text-slate-950">A képek után még egyszer ellenőrizze a címzetteket és a megőrzést</h4><div className="mt-3 grid gap-2 sm:grid-cols-2">{recipientSummary.map((recipient) => <div key={`review-${recipient.email}-${recipient.name}`} className="rounded-xl border border-teal-200 bg-white p-3"><strong className="block text-sm text-slate-950">{recipient.name}</strong><span className="mt-1 block break-all text-xs text-slate-600">{recipient.email}</span></div>)}</div><div className="mt-3 rounded-xl border border-teal-200 bg-white p-3"><span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-500">Megőrzési idő</span><strong className="ml-2 text-sm text-slate-950">{retentionDays} nap</strong></div><div className={`mt-3 rounded-xl border p-3 ${emailDelivery.enabled ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}><strong className="text-xs text-slate-950">Címzetti e-mail kézbesítés: {emailDelivery.enabled ? "bekapcsolva" : "DEV-ben nem elérhető"}</strong>{!emailDelivery.enabled ? <p className="mt-1 text-[11px] leading-5 text-amber-900">A csomag lezárható, de a címzettek nem kapnak e-mailt. {emailDelivery.reason || "A DEV SMTP nincs konfigurálva."}</p> : null}</div><div className="mt-3"><p className="text-[10px] font-black uppercase tracking-[.08em] text-violet-800">Kér riport e-mailt?</p><div className="mt-2 grid gap-2 md:grid-cols-3">{([ ["none", "Nem kérek riport e-mailt", "A csomag riport e-mail nélkül zárul."], ["generate_only", "Riport készüljön", "A riport elkészül, de nem kerül e-mailben kiküldésre."], ["generate_send", "Riport készüljön és érkezzen e-mailben", "A riport e-mailben is kiküldésre kerül."] ] as const).map(([value, title, detail]) => <button key={`review-${value}`} type="button" disabled={value === "generate_send" && !emailDelivery.enabled} onClick={() => setReportMode(value)} className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${reportMode === value ? "border-violet-500 bg-white ring-2 ring-violet-100" : "border-violet-100 bg-violet-50"}`}><strong className="block text-xs text-slate-950">{title}</strong><span className="mt-1 block text-[11px] leading-5 text-slate-600">{detail}</span></button>)}</div></div><label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${reviewConfirmed ? "border-emerald-400 bg-emerald-50" : "border-amber-300 bg-white"}`}><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} className="mt-0.5 h-5 w-5 accent-emerald-700"/><span><strong className="block text-sm text-slate-950">Ellenőriztem a címzetteket, a {retentionDays} napos megőrzést és a riport beállítását</strong><span className="mt-1 block text-[11px] leading-5 text-slate-600">Új kép hozzáadásakor vagy kép törlésekor ezt a megerősítést újra kérjük.</span></span></label></div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-cyan-700 transition-[width]" style={{ width: `${totalProgress}%` }}/></div>
 
       <div className="mt-4 space-y-2 sm:hidden">
@@ -1265,7 +1278,7 @@ export default function DropPublicHexUploader({
         </article>)}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => goToStep(1)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza a képekhez</button><button type="button" onClick={() => goToStep(3)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-800 px-4 py-2.5 text-xs font-black text-white">Tovább a mentéshez <ArrowRight size={15}/></button></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => goToStep(1)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza a képekhez</button><button type="button" onClick={() => goToStep(3)} disabled={!reviewConfirmed} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-800 px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300">Tovább a mentéshez <ArrowRight size={15}/></button></div>
       </div>
 
       <div ref={saveStepRef} className="scroll-mt-28"/>
@@ -1282,7 +1295,7 @@ export default function DropPublicHexUploader({
         ["none", "Riportküldés nélkül", "A küldemény lezárható automatikus riport-e-mail nélkül; belső megőrzési riport a retention szabályok miatt készülhet."],
         ["generate_only", "Riport készítése", "A riport elkészül, de e-mailben nem kerül kiküldésre."],
         ["generate_send", "Riport készítése és küldése", "A riport a beállított címzetteknek kiküldhető."],
-      ] as const).map(([value, title, detail]) => <button key={value} type="button" onClick={() => setReportMode(value)} className={`rounded-xl border p-3 text-left ${reportMode === value ? "border-violet-500 bg-white shadow-sm ring-2 ring-violet-100" : "border-violet-100 bg-violet-50"}`}><strong className="block text-xs text-slate-950">{title}</strong><span className="mt-1 block text-[11px] leading-5 text-slate-600">{detail}</span></button>)}</div></div>
+      ] as const).map(([value, title, detail]) => <button key={value} type="button" disabled={value === "generate_send" && !emailDelivery.enabled} onClick={() => setReportMode(value)} className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${reportMode === value ? "border-violet-500 bg-white shadow-sm ring-2 ring-violet-100" : "border-violet-100 bg-violet-50"}`}><strong className="block text-xs text-slate-950">{title}</strong><span className="mt-1 block text-[11px] leading-5 text-slate-600">{detail}</span></button>)}</div></div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => goToStep(3)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza</button><button type="button" onClick={() => goToStep(5)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-800 px-4 py-2.5 text-xs font-black text-white">Tovább a lezáráshoz <ArrowRight size={15}/></button></div>
       </div>
@@ -1295,7 +1308,7 @@ export default function DropPublicHexUploader({
         <div className="mt-4 flex flex-wrap gap-3 border-t border-emerald-200 pt-4">
           <button type="button" onClick={() => void uploadAll()} disabled={finalizing || restoring || running || !queue.some((item) => pendingStatus(item.status))} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800 disabled:bg-slate-300">{running ? <LoaderCircle size={17} className="animate-spin"/> : <PlayCircle size={17}/>} {queue.some((item) => item.status === "paused") ? "Feltöltés folytatása" : "Fájlok feltöltése"}</button>
           {running ? <button type="button" onClick={pauseUpload} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-black text-amber-900"><PauseCircle size={17}/> Szüneteltetés</button> : null}
-          {!running && queue.length > 0 && queue.every((item) => item.status === "quarantined") ? <SlideConfirm label="Húzza jobbra a küldemény véglegesítéséhez" busyLabel="Kézbesítés folyamatban…" disabled={restoring} busy={finalizing} onConfirm={() => void finalizeDelivery()}/> : null}
+          {!running && queue.length > 0 && queue.every((item) => item.status === "quarantined") ? <SlideConfirm label="Húzza jobbra a küldemény véglegesítéséhez" busyLabel="Kézbesítés folyamatban…" disabled={restoring || !reviewConfirmed} busy={finalizing} onConfirm={() => void finalizeDelivery()}/> : null}
           {!running && !finalizing ? <button type="button" onClick={() => void clearQueue()} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700"><Trash2 size={16}/> Lista ürítése</button> : null}
         </div><p className="mt-3 text-[11px] font-semibold leading-5 text-emerald-950">A fájlok feltöltése önmagában nem küld e-mailt. A küldemény lezárása külön, jobbra húzható megerősítéssel történik. A riportküldés a fenti Riport lépés választását követi.</p></div> : null}
       <div className="mt-4"><button type="button" onClick={() => goToStep(4)} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-black text-slate-700">Vissza a riporthoz</button></div>
@@ -1303,7 +1316,7 @@ export default function DropPublicHexUploader({
     </div> : null}
     {!delivered && queue.length === 0 && workflowStep >= 2 ? <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4"><strong className="text-sm text-amber-950">Még nincs kiválasztott kép.</strong><p className="mt-1 text-xs leading-5 text-amber-900">Lépjen vissza a Képek pontra, és adjon hozzá legalább egy képet.</p><button type="button" onClick={() => goToStep(1)} className="mt-3 min-h-11 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-black text-white">Vissza a képekhez</button></div> : null}
 
-    {delivered ? <div className="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950"><CheckCircle2 size={24}/><h3 className="mt-2 text-lg font-black">A képek elküldve</h3><p className="mt-1 text-sm leading-6">A küldési folyamat befejeződött. Nem kell további gombot keresnie ezen a munkameneten belül.</p><div className="mt-4 flex flex-wrap gap-3">{onStartNewTransfer ? <button type="button" onClick={onStartNewTransfer} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><RotateCcw size={16}/> Új képfeltöltés / Send</button> : null}{onClose ? <button type="button" onClick={onClose} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-black text-emerald-900"><ArrowLeft size={16}/> Bezárás / kezdőlap</button> : null}</div></div> : null}
+    {delivered ? <div className="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950"><CheckCircle2 size={24}/><h3 className="mt-2 text-lg font-black">A küldemény lezárva</h3><p className="mt-1 text-sm leading-6">A fájlcsomag véglegesítése befejeződött. Az e-mail kézbesítés eredménye az állapotüzenetben látható.</p><div className="mt-4 flex flex-wrap gap-3">{onStartNewTransfer ? <button type="button" onClick={onStartNewTransfer} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white"><RotateCcw size={16}/> Új képfeltöltés / Send</button> : null}{onClose ? <button type="button" onClick={onClose} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-black text-emerald-900"><ArrowLeft size={16}/> Bezárás / kezdőlap</button> : null}</div></div> : null}
     {deletedUndo ? <div className="fixed bottom-4 left-1/2 z-[140] flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-2xl"><span className="max-w-[55vw] truncate">Kép törölve</span><button type="button" onClick={undoSwipeDelete} className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-slate-950">Visszavonás</button></div> : null}
     {message ? <div className={`mt-4 rounded-xl border px-4 py-3 text-sm font-bold ${delivered ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>{finalizing ? <LoaderCircle size={16} className="mr-2 inline animate-spin"/> : null}{message}</div> : null}
 

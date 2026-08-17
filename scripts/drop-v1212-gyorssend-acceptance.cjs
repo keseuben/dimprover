@@ -5,9 +5,10 @@ const postgresRepo = fs.readFileSync('app/lib/drop/public/dropPublicPostgresRepo
 const api = fs.readFileSync('app/api/drop/public/packages/[packageId]/finalize/route.ts','utf8');
 const service = fs.readFileSync('app/lib/drop/public/dropPublicFinalizeService.ts','utf8');
 const workflowService = fs.readFileSync('app/lib/drop/public/dropPublicWorkflowService.ts','utf8');
+const publicEmail = fs.readFileSync('app/lib/drop/public/dropPublicEmail.ts','utf8');
 const worker = fs.readFileSync('app/lib/drop/worker/dropWorkerService.ts','utf8');
 const tests = [
- ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Beállítások','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
+ ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Címzettek','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
  ['Stepper már a Gyors KépSend alapadatoknál látható', transfer.includes('data-drop-quick-send-precreate-stepper') && transfer.includes('sendMode === "quick_image"') && transfer.includes('DROP_QUICK_SEND_WORKFLOW_STEPS.map')],
  ['Gyors KépSend a 2. Képek lépésen folytatódik', transfer.includes('initialWorkflowStep={created.workflow.quickImageSend ? 1 : 0}') && ui.includes('initialWorkflowStep = 0') && ui.includes('Math.min(DROP_QUICK_SEND_WORKFLOW_STEPS.length - 1, initialWorkflowStep)')],
  ['Régebbi DEV workflow séma kompatibilis', postgresRepo.includes('OPTIONAL_WORKFLOW_COLUMNS') && postgresRepo.includes('isOptionalWorkflowSchemaError') && postgresRepo.includes('workflowRowForLegacySchema') && postgresRepo.includes('PGRST204')],
@@ -46,6 +47,11 @@ const tests = [
  ['Gyors KépSend 200 képes limit', workflowService.includes('maxFileCount: quickImageSend ? 200 : defaults.limits.maxFileCount')],
  ['14 és 30 napos retention támogatás', workflowService.includes('[1, 3, 5, 7, 14, 30].includes(parsed)') && transfer.includes('[5, 7, 14, 30].map')],
  ['DEV PWA külön név', fs.readFileSync('app/drop/layout.tsx','utf8').includes('DIMPRO Drop DEV') && fs.readFileSync('public/drop-dev.webmanifest','utf8').includes('Drop DEV')],
+ ['1. lépés címzettközpontú', transfer.includes('data-drop-quick-send-recipient-step') && ui.includes('1. Címzettek') && ui.includes('recipientSummary.map')],
+ ['Képek után kötelező küldési ellenőrzés', ui.includes('data-drop-delivery-review') && ui.includes('reviewConfirmed') && ui.includes('Ellenőriztem a címzetteket') && ui.includes('disabled={!reviewConfirmed}')],
+ ['Riport e-mail választás már Ellenőrzés lépésben', ui.includes('Kér riport e-mailt?') && ui.includes('Riport készüljön és érkezzen e-mailben')],
+ ['DEV SMTP hiány nem blokkolja a lezárást', publicEmail.includes('getDropPublicDeliveryEmailAvailability') && service.includes('emailSkipped') && service.includes('notificationStatus = emailSkipped ? \"not_requested\"')],
+ ['DROP 1.2.13 verzió', fs.readFileSync('components/drop/dropPwaReleaseInfo.ts','utf8').includes('version: \"1.2.13\"') && fs.readFileSync('public/drop-sw.js','utf8').includes('dimpro-drop-static-v1213')],
 ];
 let failed=0;
 tests.forEach(([name,ok],i)=>{if(!ok) failed++; console.log(`${String(i+1).padStart(2,'0')}. ${ok?'PASS':'FAIL'} - ${name}`)});

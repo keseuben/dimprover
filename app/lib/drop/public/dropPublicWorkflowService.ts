@@ -1,7 +1,7 @@
 import { getDimproSendContextByEntitlementId, recordDimproUploadRulesAcceptance, verifyDimproProjectCode } from "@/app/lib/identity-core/repository";
 import { DROP_UPLOAD_RULES_VERSION } from "@/app/lib/drop/dropUploadRules";
 import type { DimproSendRecipient } from "@/app/lib/identity-core/types";
-import { createDropPackage, findDropPackageById, getDropSupabaseClient, reissueDropAccessTokenAtomic, writeDropEvent } from "../dropRepository";
+import { createDropPackage, findDropPackageById, getDropSupabaseClient, listDropRecipientsForPackage, reissueDropAccessTokenAtomic, writeDropEvent } from "../dropRepository";
 import type { DropRecipientInput } from "../dropTypes";
 import {
   bindDropPublicSessionPackage,
@@ -15,6 +15,7 @@ import {
   saveDropPackageWorkflow,
 } from "./dropPublicRepository";
 import type { DropPackageWorkflowRecord, DropPublicRecipient, DropPublicWorkflowType, DropSendEntitlementProfile } from "./dropPublicTypes";
+import { getDropPublicDeliveryEmailAvailability } from "./dropPublicEmail";
 
 function workflowError(message: string, code: string, status: number) {
   const error = new Error(message); Object.assign(error, { code, status }); return error;
@@ -519,6 +520,7 @@ export async function createDropPublicWorkflowPackage(input: {
       quickVoiceSecondsPerNote,
     },
   });
+  const emailDelivery = await getDropPublicDeliveryEmailAvailability();
   return {
     package: {
       id: created.package.id,
@@ -544,6 +546,9 @@ export async function createDropPublicWorkflowPackage(input: {
       quickImageSend,
       allowQuickVoiceNote,
       quickVoiceSecondsPerNote,
+      recipients: recipients.map((recipient) => ({ name: recipient.name, email: recipient.email, company: recipient.company || null })),
+      retentionDays,
+      emailDelivery,
     },
   };
 }
@@ -614,6 +619,10 @@ export async function resumeDropPublicWorkflowPackage(input: {
   if (workflow.workflowType === "submission_gate" && workflow.gateId) {
     allowFileComments = await getDropSubmissionGateById(workflow.gateId).then((gate) => gate.allowFileComments).catch(() => false);
   }
+  const [resumeRecipients, emailDelivery] = await Promise.all([
+    listDropRecipientsForPackage(packageRow.id),
+    getDropPublicDeliveryEmailAvailability(),
+  ]);
   return {
     package: {
       id: packageRow.id,
@@ -627,6 +636,7 @@ export async function resumeDropPublicWorkflowPackage(input: {
       currentTotalSizeBytes: packageRow.current_total_size_bytes,
       status: packageRow.status,
       mode: packageRow.mode,
+      retentionDays: packageRow.retention_days,
     },
     uploadToken,
     resumable: active,
@@ -643,6 +653,9 @@ export async function resumeDropPublicWorkflowPackage(input: {
       dimproSendEntitlementId: workflow.dimproSendEntitlementId || null,
       allowQuickVoiceNote,
       quickVoiceSecondsPerNote,
+      recipients: resumeRecipients.map((recipient) => ({ name: recipient.name, email: recipient.email, company: recipient.company || null })),
+      retentionDays: packageRow.retention_days,
+      emailDelivery,
     },
     security: {
       sessionCookieOnly: true,

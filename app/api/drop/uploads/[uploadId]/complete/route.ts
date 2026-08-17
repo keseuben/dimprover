@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         ok: true,
-        version: "DROP 1.2.12",
+        version: "DROP 1.2.13",
         result,
         warning: "A fájl privát karanténba került. Letöltés csak víruskereső és végleges biztonsági kiadás után engedélyezhető.",
       },

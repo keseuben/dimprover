@@ -11,6 +11,6 @@ export async function POST(request: NextRequest, context: Context) {
     const body = await request.json().catch(() => ({})) as { reportMode?: unknown };
     const reportMode = body.reportMode === "generate_only" || body.reportMode === "generate_send" || body.reportMode === "none" ? body.reportMode : "none";
     const result = await finalizeDropPublicPackage({ rawSession, headers: request.headers, packageId, reportMode });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", result }, { headers: dropNoStoreHeaders() });
   } catch (error) { return dropErrorResponse(error); }
 }

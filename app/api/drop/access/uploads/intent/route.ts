@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       headers: request.headers,
       count: Number(body?.count || 1),
     });
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...issued }, { status: 201, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", ...issued }, { status: 201, headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

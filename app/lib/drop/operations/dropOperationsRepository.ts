@@ -261,7 +261,7 @@ export async function collectDropOperationsSnapshot(input: {
   ];
   const status = aggregateStatus(checks);
   return {
-    version: "DROP 1.2.12",
+    version: "DROP 1.2.13",
     source: input.source || "api",
     collectedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,

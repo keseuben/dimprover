@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     assertDropFeatureEnabled("spacesEnabled");
     const [{ packageId }, session] = await Promise.all([context.params, resolveSession(request)]);
     const groups = await getDropPackageGroupsForSession(session, packageId);
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", groups }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", groups }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     assertDropFeatureEnabled("spacesEnabled");
     const [{ packageId }, session, body] = await Promise.all([context.params, resolveSession(request), request.json()]);
     const result = await createDropPackageGroupForSession(session, packageId, body);
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { status: result.created ? 201 : 200, headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", ...result }, { status: result.created ? 201 : 200, headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }

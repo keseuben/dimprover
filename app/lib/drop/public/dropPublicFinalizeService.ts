@@ -23,7 +23,7 @@ function finalizeError(message: string, code: string, status: number, details?: 
   Object.assign(error, { code, status, ...(details ? { details } : {}) });
   return error;
 }
-function persistedDeliverySummary(workflow: { recipientEmails?: string[]; notificationStatus?: string; notificationDetail?: string | null }) {
+function persistedDeliverySummary(workflow: { recipientEmails?: string[]; notificationStatus?: string; notificationDetail?: string | null; finalizedAt?: string | null }) {
   const recipients = workflow.recipientEmails?.length || 0;
   const match = workflow.notificationDetail?.match(/(\d+)\s*\/\s*(\d+)/);
   const parsedSent = match ? Number(match[1]) : Number.NaN;
@@ -32,7 +32,8 @@ function persistedDeliverySummary(workflow: { recipientEmails?: string[]; notifi
   const sent = Number.isFinite(parsedSent) && parsedSent >= 0
     ? Math.min(parsedSent, total)
     : workflow.notificationStatus === "sent" ? total : 0;
-  return { attempted: 0, sent, failed: Math.max(0, total - sent), alreadySent: sent, emailPreviews: 0, emailPreviewSkipped: 0 };
+  const skipped = workflow.notificationStatus === "not_requested" && Boolean(workflow.finalizedAt) && Boolean(workflow.notificationDetail?.includes("e-mail kézbesítés kihagyva")) ? total : 0;
+  return { attempted: 0, sent, failed: skipped ? 0 : Math.max(0, total - sent), skipped, alreadySent: sent, emailPreviews: 0, emailPreviewSkipped: 0 };
 }
 function errorCode(error: unknown) {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
@@ -211,11 +212,12 @@ export async function finalizeDropPublicPackageById(input: {
           results: [], sentCount: 0, failedCount: 0, attempted: 0,
           previewCount: 0, previewEligibleCount: 0, previewSkippedCount: 0,
           previewErrorCount: 0, previewTotalBytes: 0,
+          deliveryEnabled: true, disabledReason: null,
         };
     for (const result of mail.results.filter((row) => row.sent)) {
       await markDropInvitationSent({ packageId: input.packageId, recipientId: result.recipientId }).catch(() => undefined);
     }
-    if (pendingRecipients.length > 0 && mail.sentCount === 0) {
+    if (mail.deliveryEnabled && pendingRecipients.length > 0 && mail.sentCount === 0) {
       await updateDropPackageWorkflow(input.packageId, {
         notificationStatus: "failed",
         notificationDetail: `${alreadySent.length}/${recipients.length} címzett korábban értesítve; az újrapróbálás során 0/${mail.attempted} e-mail ment ki.`,
@@ -244,19 +246,23 @@ export async function finalizeDropPublicPackageById(input: {
         eventPayload: { source: `public_workflow_finalize_${source}`, workflowType: workflow.workflowType },
       });
     }
+    const emailSkipped = !mail.deliveryEnabled && pendingRecipients.length > 0;
     const totalSent = alreadySent.length + mail.sentCount;
-    const totalFailed = recipients.length - totalSent;
-    const notificationStatus = totalFailed === 0 ? "sent" : totalSent > 0 ? "partial" : "failed";
+    const totalFailed = emailSkipped ? 0 : recipients.length - totalSent;
+    const notificationStatus = emailSkipped ? "not_requested" : totalFailed === 0 ? "sent" : totalSent > 0 ? "partial" : "failed";
+    const notificationDetail = emailSkipped
+      ? `${totalSent}/${recipients.length} címzett e-mailje elküldve; e-mail kézbesítés kihagyva. ${mail.disabledReason || "A levelezési szolgáltatás nincs elérhető."}`
+      : `${totalSent}/${recipients.length} címzett e-mailje elküldve.`;
     const updated = await updateDropPackageWorkflow(input.packageId, {
       finalizedAt: new Date().toISOString(),
       notificationStatus,
-      notificationDetail: `${totalSent}/${recipients.length} címzett e-mailje elküldve.`,
+      notificationDetail,
       downloadLinkHint: `…${token.capability.rawToken.slice(-8)}`,
     });
     await writeDropEvent({
       packageId: input.packageId,
       eventType: "public.delivery.finalized",
-      severity: totalFailed ? "warning" : "info",
+      severity: emailSkipped || totalFailed ? "warning" : "info",
       actorName: packageRow.uploader_name,
       actorEmail: packageRow.uploader_email,
       payload: {
@@ -266,6 +272,9 @@ export async function finalizeDropPublicPackageById(input: {
         recipientCount: recipients.length,
         sentCount: totalSent,
         failedCount: totalFailed,
+        emailDeliveryEnabled: mail.deliveryEnabled,
+        emailDeliverySkipped: emailSkipped,
+        emailDeliveryDisabledReason: mail.disabledReason,
         requireDownloadPin: workflow.requireDownloadPin,
         emailPreviewCount: mail.previewCount,
         emailPreviewEligibleCount: mail.previewEligibleCount,
@@ -283,6 +292,9 @@ export async function finalizeDropPublicPackageById(input: {
         attempted: mail.attempted,
         sent: totalSent,
         failed: totalFailed,
+        skipped: emailSkipped ? pendingRecipients.length : 0,
+        emailEnabled: mail.deliveryEnabled,
+        disabledReason: mail.disabledReason,
         alreadySent: alreadySent.length,
         emailPreviews: mail.previewCount,
         emailPreviewSkipped: mail.previewSkippedCount,

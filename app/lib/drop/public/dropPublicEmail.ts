@@ -1,4 +1,5 @@
-import { sendDimproMail } from "@/app/lib/license/mail-profiles";
+import { getMailProfilesSafeConfig, sendDimproMail } from "@/app/lib/license/mail-profiles";
+import { getDropFeatureState } from "../dropFeatureFlags";
 import type { DropPackageRecord, DropRecipientRecord } from "../dropTypes";
 import type { DropPackageWorkflowRecord } from "./dropPublicTypes";
 import {
@@ -24,6 +25,20 @@ function emptyPreviewBundle(): DropPublicEmailPreviewBundle {
   };
 }
 
+export type DropPublicEmailAvailability = { enabled: boolean; reason: string | null; code: "ready" | "feature_disabled" | "profile_missing" };
+
+export async function getDropPublicDeliveryEmailAvailability(): Promise<DropPublicEmailAvailability> {
+  if (!getDropFeatureState().flags.emailNotificationsEnabled) {
+    return { enabled: false, code: "feature_disabled", reason: "A DEV e-mail kézbesítés jelenleg nincs engedélyezve." };
+  }
+  const config = await getMailProfilesSafeConfig().catch(() => null);
+  const profile = config?.profiles.find((item) => item.id === "drop");
+  if (!profile?.enabled || !profile.smtpConfigured) {
+    return { enabled: false, code: "profile_missing", reason: "A DIMPRO Drop e-mail profil nincs teljesen beállítva." };
+  }
+  return { enabled: true, code: "ready", reason: null };
+}
+
 export async function sendDropPublicDeliveryEmails(input: {
   packageRow: DropPackageRecord;
   workflow: DropPackageWorkflowRecord;
@@ -33,6 +48,15 @@ export async function sendDropPublicDeliveryEmails(input: {
   downloadUrl: string;
   downloadPin: string | null;
 }) {
+  const availability = await getDropPublicDeliveryEmailAvailability();
+  if (!availability.enabled) {
+    return {
+      results: [], sentCount: 0, failedCount: 0, attempted: 0,
+      previewCount: 0, previewEligibleCount: 0, previewSkippedCount: 0,
+      previewErrorCount: 0, previewTotalBytes: 0,
+      deliveryEnabled: false, disabledReason: availability.reason,
+    };
+  }
   // Az előnézet kiegészítő kényelmi funkció. Bármely S3- vagy képfeldolgozási
   // hiba esetén az e-mail normál fájllistával továbbra is kiküldhető.
   const previewBundle = await buildDropPublicEmailPreviews({
@@ -91,5 +115,7 @@ export async function sendDropPublicDeliveryEmails(input: {
     previewSkippedCount: previewBundle.skippedCount,
     previewErrorCount: previewBundle.errors.length,
     previewTotalBytes: previewBundle.totalBytes,
+    deliveryEnabled: true,
+    disabledReason: null,
   };
 }

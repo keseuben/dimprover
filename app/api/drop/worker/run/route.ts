@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     ]);
     return NextResponse.json({
       ok: schema.ready && scanner.ping === "PONG" && config.enabled,
-      version: "DROP 1.2.12",
+      version: "DROP 1.2.13",
       schema,
       worker: getDropWorkerSafeStatus(config),
       scanner: {

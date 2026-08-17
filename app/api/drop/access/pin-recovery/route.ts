@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }));
   }
   return NextResponse.json(
-    { ok: true, version: "DROP 1.2.12", requestId, message: genericMessage },
+    { ok: true, version: "DROP 1.2.13", requestId, message: genericMessage },
     { status: 202, headers: dropNoStoreHeaders() },
   );
 }

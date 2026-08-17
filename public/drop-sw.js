@@ -1,5 +1,5 @@
-const DROP_SW_VERSION = "DROP 1.2.12";
-const STATIC_CACHE = "dimpro-drop-static-v1212";
+const DROP_SW_VERSION = "DROP 1.2.13";
+const STATIC_CACHE = "dimpro-drop-static-v1213";
 const STATIC_ASSETS = [
   "/drop.webmanifest",
   "/drop-dev.webmanifest",

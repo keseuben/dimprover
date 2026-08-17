@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     assertDropFeatureEnabled("spacesEnabled");
     const { spaceId } = await context.params;
     const result = await listDropSpaceProjectOptions(spaceId);
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", ...result }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       driveTargetFolderId: typeof body.driveTargetFolderId === "string" ? body.driveTargetFolderId : null,
     });
     return NextResponse.json(
-      { ok: true, version: "DROP 1.2.12", ...result },
+      { ok: true, version: "DROP 1.2.13", ...result },
       { status: result.created ? 201 : 200, headers: dropNoStoreHeaders() },
     );
   } catch (error) {
@@ -66,7 +66,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { spaceId } = await context.params;
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     const result = await unlinkDropSpaceProject(spaceId, body?.projectId);
-    return NextResponse.json({ ok: true, version: "DROP 1.2.12", ...result }, { headers: dropNoStoreHeaders() });
+    return NextResponse.json({ ok: true, version: "DROP 1.2.13", ...result }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);
   }
