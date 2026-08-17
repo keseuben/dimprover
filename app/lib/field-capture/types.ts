@@ -1,4 +1,4 @@
-export const FIELD_CAPTURE_VERSION = "0.1.0-dev";
+export const FIELD_CAPTURE_VERSION = "0.2.0-dev";
 export const FIELD_CAPTURE_MAX_ITEMS = 200;
 
 export type FieldCaptureTranscriptMode = "raw" | "cleaned";
@@ -37,6 +37,29 @@ export type FieldCaptureSyncState =
 export type FieldCaptureLocationStatus = "OFF" | "REQUESTING" | "READY" | "UNAVAILABLE" | "DENIED" | "LOW_ACCURACY";
 export type FieldCaptureOrientationStatus = "OFF" | "REQUESTING" | "READY" | "UNAVAILABLE" | "DENIED" | "UNSTABLE";
 
+export type FieldCaptureLocationRecord = {
+  enabled: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyMeters: number | null;
+  capturedAt: string | null;
+  source: "browser-geolocation" | "native-bridge" | "imported" | null;
+  status: FieldCaptureLocationStatus;
+  detail: string;
+};
+
+export type FieldCaptureDirectionLabel = "É" | "ÉK" | "K" | "DK" | "D" | "DNy" | "Ny" | "ÉNy";
+export type FieldCaptureOrientationRecord = {
+  enabled: boolean;
+  headingDegrees: number | null;
+  headingAccuracyDegrees: number | null;
+  directionLabel: FieldCaptureDirectionLabel | null;
+  capturedAt: string | null;
+  source: "device-orientation" | "native-sensor" | "imported" | null;
+  status: FieldCaptureOrientationStatus;
+  detail: string;
+};
+
 export type FieldCaptureLocalSession = {
   id: string;
   createdAt: string;
@@ -69,6 +92,8 @@ export type FieldCaptureItem = {
   options: PreCaptureOptions;
   locationStatus: FieldCaptureLocationStatus;
   orientationStatus: FieldCaptureOrientationStatus;
+  location: FieldCaptureLocationRecord;
+  orientation: FieldCaptureOrientationRecord;
 };
 
 export type CaptureDestinationTarget = "CAPTURE" | "DEVICE" | "USER_DRIVE" | "PROJECT_DRIVE";

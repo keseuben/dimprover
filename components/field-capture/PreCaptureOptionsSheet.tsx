@@ -2,6 +2,7 @@
 
 import { Camera, Compass, Images, MapPin, Mic, RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { requestFieldOrientationPermission } from "@/app/lib/field-capture/captureSensors";
 import CaptureSaveTargets from "./CaptureSaveTargets";
 import CaptureToggleRow from "./CaptureToggleRow";
 import type { PreCaptureOptions } from "@/app/lib/field-capture/types";
@@ -14,7 +15,26 @@ export default function PreCaptureOptionsSheet({ open, value, onClose, onReset, 
   onChoose: (options: PreCaptureOptions, source: "camera" | "gallery") => void;
 }) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => { if (open) setDraft(value); }, [open, value]);
+  const [orientationPermissionMessage, setOrientationPermissionMessage] = useState("");
+  useEffect(() => { if (open) { setDraft(value); setOrientationPermissionMessage(""); } }, [open, value]);
+
+  async function toggleOrientation(checked: boolean) {
+    if (!checked) { setDraft((current) => ({ ...current, orientationEnabled: false })); setOrientationPermissionMessage(""); return; }
+    const permission = await requestFieldOrientationPermission();
+    if (permission === "denied") {
+      setDraft((current) => ({ ...current, orientationEnabled: false }));
+      setOrientationPermissionMessage("A tájolási szenzor engedélyét a böngésző nem adta meg.");
+      return;
+    }
+    if (permission === "unavailable") {
+      setDraft((current) => ({ ...current, orientationEnabled: true }));
+      setOrientationPermissionMessage("A böngésző nem jelez tájolási API-t; a kép mentése ettől még működik.");
+      return;
+    }
+    setDraft((current) => ({ ...current, orientationEnabled: true }));
+    setOrientationPermissionMessage(permission === "granted" ? "Tájolási szenzor engedélyezve." : "Tájolási szenzor használatra kész.");
+  }
+
   if (!open) return null;
 
   return (
@@ -32,8 +52,9 @@ export default function PreCaptureOptionsSheet({ open, value, onClose, onReset, 
         </div>
 
         <div className="mt-4 space-y-2">
-          <CaptureToggleRow title="GPS helyadat" description="Képenként külön kérhető. A tényleges mérés P5-ben aktiválódik; most a capture-kérés kerül mentésre." checked={draft.gpsEnabled} onChange={(checked) => setDraft({ ...draft, gpsEnabled: checked })} badge="P5 előkészítve" />
-          <CaptureToggleRow title="Telefon iránya / tájolás" description="A GPS-től független kapcsoló. Heading mérés a P6 fázisban." checked={draft.orientationEnabled} onChange={(checked) => setDraft({ ...draft, orientationEnabled: checked })} badge="P6 előkészítve" />
+          <CaptureToggleRow title="GPS helyadat" description="Képenként külön mérés készül, pontossággal és időbélyeggel. Gyenge GPS esetén figyelmeztetést kap." checked={draft.gpsEnabled} onChange={(checked) => setDraft({ ...draft, gpsEnabled: checked })} badge="aktív" />
+          <CaptureToggleRow title="Telefon iránya / tájolás" description="A GPS-től független iránymérés. A rendszer fokértéket és égtájat rögzít, ha a készülék támogatja." checked={draft.orientationEnabled} onChange={(checked) => void toggleOrientation(checked)} badge="aktív" />
+          {orientationPermissionMessage ? <p className="px-2 text-[11px] font-semibold leading-5 text-slate-500">{orientationPermissionMessage}</p> : null}
           <CaptureToggleRow title="Hangos megjegyzés" description="A kép után felajánlja a már működő DIMPRO böngészős diktálási sessiont." checked={draft.voiceNoteEnabled} onChange={(checked) => setDraft({ ...draft, voiceNoteEnabled: checked })} />
           {draft.voiceNoteEnabled ? (
             <div className="grid grid-cols-2 gap-2 rounded-2xl border border-violet-100 bg-violet-50 p-2">

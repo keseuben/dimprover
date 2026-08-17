@@ -81,6 +81,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/" ||
     pathname === "/open" ||
     pathname === "/send" ||
+    pathname === "/terep" ||
     pathname === "/bekuldes" ||
     pathname.startsWith("/bekuldes/") ||
     pathname.startsWith("/u/") ||
@@ -96,6 +97,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/dimpro-identity/send/contacts" ||
     pathname === "/api/dimpro-identity/projects/verify-code";
   const isDropPublicApiRoute =
+    pathname === "/api/field-capture/health" ||
     pathname === "/api/drop/health" ||
     pathname === "/api/drop/features" ||
     pathname === "/api/drop/access/open" ||

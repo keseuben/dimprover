@@ -1,6 +1,6 @@
 "use client";
 
-import type { FieldCaptureItem, PreCaptureOptions } from "./types";
+import type { FieldCaptureItem, FieldCaptureLocationRecord, FieldCaptureOrientationRecord, PreCaptureOptions } from "./types";
 
 const DB_NAME = "dimpro-field-capture-v1";
 const DB_VERSION = 1;
@@ -30,6 +30,8 @@ type PersistedFieldCaptureItem = {
   options: PreCaptureOptions;
   locationStatus: FieldCaptureItem["locationStatus"];
   orientationStatus: FieldCaptureItem["orientationStatus"];
+  location?: FieldCaptureLocationRecord;
+  orientation?: FieldCaptureOrientationRecord;
   createdAt: string;
   updatedAt: string;
   security: {
@@ -110,6 +112,8 @@ export async function persistFieldCaptureItem(item: FieldCaptureItem) {
     options: item.options,
     locationStatus: item.locationStatus,
     orientationStatus: item.orientationStatus,
+    location: item.location,
+    orientation: item.orientation,
     createdAt: now,
     updatedAt: now,
     security: {
@@ -124,7 +128,7 @@ export async function persistFieldCaptureItem(item: FieldCaptureItem) {
 
 export async function patchFieldCaptureItem(
   id: string,
-  patch: Partial<Pick<PersistedFieldCaptureItem, "note" | "voiceTranscript" | "status" | "progress" | "error">>,
+  patch: Partial<Pick<PersistedFieldCaptureItem, "note" | "voiceTranscript" | "status" | "progress" | "error" | "locationStatus" | "orientationStatus" | "location" | "orientation">>,
 ) {
   const current = await withStore<PersistedFieldCaptureItem | undefined>("readonly", (store) => store.get(id));
   if (!current) return null;
@@ -176,8 +180,16 @@ export async function restoreFieldCaptureItems(sessionId: string): Promise<Field
       progress: row.status === "UPLOADING" ? 0 : row.progress,
       error: row.error,
       options: row.options,
-      locationStatus: row.locationStatus,
-      orientationStatus: row.orientationStatus,
+      locationStatus: row.location?.status || row.locationStatus || (row.options.gpsEnabled ? "UNAVAILABLE" : "OFF"),
+      orientationStatus: row.orientation?.status || row.orientationStatus || (row.options.orientationEnabled ? "UNAVAILABLE" : "OFF"),
+      location: row.location || {
+        enabled: Boolean(row.options.gpsEnabled), latitude: null, longitude: null, accuracyMeters: null, capturedAt: null,
+        source: null, status: row.locationStatus || (row.options.gpsEnabled ? "UNAVAILABLE" : "OFF"), detail: "Korábbi helyi rekordból visszaállítva."
+      },
+      orientation: row.orientation || {
+        enabled: Boolean(row.options.orientationEnabled), headingDegrees: null, headingAccuracyDegrees: null, directionLabel: null, capturedAt: null,
+        source: null, status: row.orientationStatus || (row.options.orientationEnabled ? "UNAVAILABLE" : "OFF"), detail: "Korábbi helyi rekordból visszaállítva."
+      },
     };
   });
 }

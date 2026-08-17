@@ -7,6 +7,7 @@ import {
   FolderInput,
   HardDriveUpload,
   KeyRound,
+  MapPinned,
   Send,
   ShieldCheck,
   UsersRound,
@@ -77,6 +78,7 @@ export default async function DropLandingPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/send" className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white shadow-[0_18px_45px_rgba(15,23,42,.16)]"><Send size={18}/> DIMPRO Send</Link>
               <Link href="/bekuldes" className="inline-flex items-center gap-2 rounded-2xl border border-teal-300 bg-teal-50 px-5 py-3.5 text-sm font-black text-teal-900"><FolderInput size={18}/> Beküldőkapu</Link>
+              <Link href="/terep" className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300 bg-cyan-50 px-5 py-3.5 text-sm font-black text-cyan-950"><MapPinned size={18}/> Terep</Link>
             </div>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-slate-600">
               <span className="inline-flex items-center gap-2"><CheckCircle2 size={17} className="text-emerald-600"/> Nincs szabad, csomaghoz nem kötött feltöltés</span>

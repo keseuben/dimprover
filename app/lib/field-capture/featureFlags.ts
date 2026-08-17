@@ -10,8 +10,8 @@ export function getFieldCaptureFeatureState() {
     ok: true as const,
     version: FIELD_CAPTURE_VERSION,
     enabled: featureEnabled,
-    phase: "P0-P4" as const,
-    route: "/field-capture",
+    phase: "P0-P6" as const,
+    route: "/terep",
     separateContextModule: true,
     sharedEngines: {
       imagePreparation: "components/drop/dropUploadPreparation.ts",

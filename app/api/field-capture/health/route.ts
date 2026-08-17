@@ -16,8 +16,8 @@ export async function GET() {
       phoneSave: true,
       serverCaptureSchema: false,
       serverUploadBinding: false,
-      gpsAdapter: false,
-      orientationAdapter: false,
+      gpsAdapter: true,
+      orientationAdapter: true,
       userDriveBinding: false,
       projectDriveBinding: false
     }

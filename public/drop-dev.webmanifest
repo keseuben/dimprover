@@ -74,6 +74,19 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "DIMPRO Terep",
+      "short_name": "Terep",
+      "description": "Helyszíni képek gyors, offline-first rögzítése a DIMPRO Drop PWA-ban.",
+      "url": "/terep",
+      "icons": [
+        {
+          "src": "/drop-app-icon-v099-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
