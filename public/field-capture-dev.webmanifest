@@ -1,0 +1,19 @@
+{
+  "id": "/field-capture/",
+  "name": "DIMPRO Terepi Gyorsrögzítő DEV",
+  "short_name": "Terepi DEV",
+  "description": "DIMPRO Terepi Gyorsrögzítő DEV – capture-first helyszíni fotó és gyors adatbevitel.",
+  "start_url": "/field-capture",
+  "scope": "/field-capture/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f8f8",
+  "theme_color": "#0f766e",
+  "lang": "hu-HU",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    { "src": "/drop-app-icon-v099-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/drop-app-icon-v099-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/drop-app-icon-maskable-v099-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
