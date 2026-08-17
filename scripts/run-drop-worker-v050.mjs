@@ -3,11 +3,12 @@ if (secret.length < 32) {
   console.error(JSON.stringify({ ok: false, code: "DROP_WORKER_SECRET_MISSING", secretsExposed: false }));
   process.exit(2);
 }
+const baseUrl = process.env.DROP_WORKER_BASE_URL?.trim() || "http://127.0.0.1:3000";
 
 const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), 19 * 60 * 1000);
 try {
-  const response = await fetch("http://127.0.0.1:3000/api/drop/worker/run", {
+  const response = await fetch(`${baseUrl}/api/drop/worker/run`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
