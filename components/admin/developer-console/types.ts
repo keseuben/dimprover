@@ -73,6 +73,30 @@ export type LiveRelease = { id: string; project_id?: string | null; status: stri
 export type LiveApproval = { id: string; command_id?: string | null; status: string; requested_by?: string | null; requested_at?: string; expires_at?: string | null; metadata?: Record<string, unknown> };
 export type LiveAudit = { id: string; action: string; summary?: string; task_id?: string | null; project_id?: string | null; created_at?: string };
 
+export type LiveWorkerPresence = {
+  workerCode: string;
+  active: boolean;
+  state: "active" | "inactive";
+  phase: string;
+  summary: string;
+  detail: string;
+  taskId: string | null;
+  projectId: string | null;
+  mainModule: string;
+  moduleName: string;
+  submoduleName: string;
+  workItem: string;
+  operation: string | null;
+  owner: string | null;
+  worktree: string | null;
+  branch: string | null;
+  target: string | null;
+  inferredBy: string;
+  confidence: string;
+  lastSeenAt: string;
+  productionAccess: "DENY";
+};
+
 export type ConsoleLiveState = {
   projects: LiveProject[];
   workers: LiveWorker[];
@@ -82,6 +106,7 @@ export type ConsoleLiveState = {
   releases: LiveRelease[];
   approvals: LiveApproval[];
   audits: LiveAudit[];
+  workerPresence: LiveWorkerPresence[];
   generatedAt: string;
   refreshIntervalMs: number;
 };

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "workers": {
+    "ARMINAI": {
+      "ownerPatterns": ["(^|[-_])armin([-_]|$)"],
+      "branchPatterns": ["(^|[-_/])armin([-_/]|$)"]
+    },
+    "JAZMINAI": {
+      "ownerPatterns": ["(^|[-_])jazmin([-_]|$)", "^drop-", "^field-capture-", "^terep-"],
+      "branchPatterns": ["(^|[-_/])jazmin([-_/]|$)"],
+      "pathRules": [
+        { "prefix": "app/field-capture/", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "PWA / terepi rögzítés" },
+        { "prefix": "components/field-capture/", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "PWA / terepi rögzítés" },
+        { "prefix": "app/lib/field-capture/", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "Capture Engine" },
+        { "prefix": "app/drop/terep/", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "Drop PWA / Terep" },
+        { "prefix": "components/drop/", "mainModule": "DIMPRO Drop", "moduleName": "GyorsSend / Gyorskép", "submoduleName": "Drop PWA" },
+        { "prefix": "app/drop/", "mainModule": "DIMPRO Drop", "moduleName": "GyorsSend / Gyorskép", "submoduleName": "Drop PWA" },
+        { "prefix": "scripts/terep-", "mainModule": "DIMPRO Drop", "moduleName": "Terepi Gyorsrögzítő", "submoduleName": "Acceptance / teszt" },
+        { "prefix": "scripts/drop-", "mainModule": "DIMPRO Drop", "moduleName": "GyorsSend / Gyorskép", "submoduleName": "Acceptance / teszt" },
+        { "prefix": "public/drop", "mainModule": "DIMPRO Drop", "moduleName": "Drop PWA", "submoduleName": "Manifest / kliens" },
+        { "prefix": "app/drive/", "mainModule": "DIMPRO Drive", "moduleName": "Drive Web / munkatér", "submoduleName": "Drive" },
+        { "prefix": "components/drive/", "mainModule": "DIMPRO Drive", "moduleName": "Drive Web / munkatér", "submoduleName": "Drive" }
+      ]
+    },
+    "OUTMINAI": {
+      "ownerPatterns": ["(^|[-_])outmin([-_]|$)"],
+      "branchPatterns": ["(^|[-_/])outmin([-_/]|$)"]
+    },
+    "MFORGE": {
+      "ownerPatterns": ["(^|[-_])mforge([-_]|$)", "(^|[-_])m-forge([-_]|$)"],
+      "branchPatterns": ["mforge", "m-forge"]
+    },
+    "VGUARD": {
+      "ownerPatterns": ["(^|[-_])vguard([-_]|$)", "(^|[-_])v-guard([-_]|$)"],
+      "branchPatterns": ["vguard", "v-guard"]
+    }
+  }
+}

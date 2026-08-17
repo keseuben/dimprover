@@ -447,7 +447,7 @@ export async function createBenAiConsoleMessage(input: { summary: string; detail
 
 export async function getDeveloperConsoleLiveStatus() {
   const client = getClient();
-  const [projects, workers, tasks, sessions, builds, releases, approvals, audits] = await Promise.all([
+  const [projects, workers, tasks, sessions, builds, releases, approvals, audits, presenceRows] = await Promise.all([
     client.from("dev_center_projects").select("id,name,slug,status,updated_at").order("name"),
     client.from("dev_center_workers").select("id,code,name,role,status,updated_at").order("code"),
     client.from("dev_center_tasks").select("id,project_id,title,description,status,priority,requested_worker_id,assigned_worker_id,claimed_by_session_id,branch_name,worktree_path,scope,acceptance,blocked_reason,started_at,completed_at,metadata,updated_at,created_at").order("updated_at", { ascending: false }).limit(80),
@@ -456,10 +456,48 @@ export async function getDeveloperConsoleLiveStatus() {
     client.from("dev_center_releases").select("id,project_id,status,git_commit,build_id,approved_by,approved_at,released_at,created_at,updated_at").order("created_at", { ascending: false }).limit(30),
     client.from("dev_center_approvals").select("id,approval_type,target_environment,operation,status,requested_by,requested_at,approved_by,approved_at,expires_at,reason,metadata").order("requested_at", { ascending: false }).limit(30),
     client.from("dev_center_audit_events").select("id,actor_type,actor_id,action,entity_type,entity_id,task_id,project_id,summary,created_at").order("created_at", { ascending: false }).limit(60),
+    client.from("dev_center_live_worklog").select("id,worker_code,task_id,phase,summary,detail,source,metadata,created_at").eq("source", "worker-presence-bridge").order("created_at", { ascending: false }).limit(40),
   ]);
-  for (const result of [projects, workers, tasks, sessions, builds, releases, approvals, audits]) {
+  for (const result of [projects, workers, tasks, sessions, builds, releases, approvals, audits, presenceRows]) {
     if (result.error) throw new Error(result.error.message || "A fejlesztői konzol élő állapota nem tölthető be.");
   }
+  const presenceLatest = new Map<string, Row>();
+  for (const raw of presenceRows.data || []) {
+    const row = raw as Row;
+    const code = text(row.worker_code).toUpperCase();
+    if (code && !presenceLatest.has(code)) presenceLatest.set(code, row);
+  }
+  const nowMs = Date.now();
+  const workerPresence = [...presenceLatest.entries()].map(([workerCode, row]) => {
+    const metadata = record(row.metadata);
+    const lastSeenAt = text(metadata.lastSeenAt) || text(row.created_at);
+    const lastSeenMs = Date.parse(lastSeenAt);
+    const state = text(metadata.presenceState).toUpperCase();
+    const active = state === "ACTIVE" && Number.isFinite(lastSeenMs) && nowMs - lastSeenMs <= 5 * 60_000;
+    return {
+      workerCode,
+      active,
+      state: active ? "active" : "inactive",
+      phase: text(row.phase),
+      summary: text(row.summary),
+      detail: text(row.detail),
+      taskId: text(row.task_id) || null,
+      projectId: text(metadata.projectId) || null,
+      mainModule: text(metadata.mainModule),
+      moduleName: text(metadata.moduleName),
+      submoduleName: text(metadata.submoduleName),
+      workItem: text(metadata.workItem),
+      operation: text(metadata.operation) || null,
+      owner: text(metadata.owner) || null,
+      worktree: text(metadata.worktree) || null,
+      branch: text(metadata.branch) || null,
+      target: text(metadata.target) || null,
+      inferredBy: text(metadata.inferredBy),
+      confidence: text(metadata.confidence),
+      lastSeenAt,
+      productionAccess: "DENY",
+    };
+  });
   return {
     projects: projects.data || [],
     workers: workers.data || [],
@@ -469,6 +507,7 @@ export async function getDeveloperConsoleLiveStatus() {
     releases: releases.data || [],
     approvals: approvals.data || [],
     audits: audits.data || [],
+    workerPresence,
     generatedAt: new Date().toISOString(),
     refreshIntervalMs: 1000,
   };

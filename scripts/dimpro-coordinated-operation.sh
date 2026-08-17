@@ -42,6 +42,17 @@ chmod 600 "$LOCK_FILE" "$HISTORY_FILE" 2>/dev/null || true
 OWNER="${DIMPRO_OPERATION_OWNER:-${DIMPRO_BUILD_OWNER:-${USER:-unknown}}}"
 TASK="${DIMPRO_OPERATION_TASK:-$OPERATION}"
 TARGET="${NEXT_DIST_DIR:-}"
+WORKER_CODE="${DIMPRO_WORKER_CODE:-}"
+if [[ -z "$WORKER_CODE" ]]; then
+  OWNER_HINT="$(printf "%s %s" "$OWNER" "$TASK" | tr "[:upper:]" "[:lower:]")"
+  case "$OWNER_HINT" in
+    *armin*) WORKER_CODE="ARMINAI" ;;
+    *jazmin*|drop-*|*\ drop-*|field-capture-*|*\ field-capture-*|terep-*|*\ terep-*) WORKER_CODE="JAZMINAI" ;;
+    *outmin*) WORKER_CODE="OUTMINAI" ;;
+    *mforge*|*m-forge*) WORKER_CODE="MFORGE" ;;
+    *vguard*|*v-guard*) WORKER_CODE="VGUARD" ;;
+  esac
+fi
 WAIT_SECONDS="${DIMPRO_OPERATION_WAIT_SECONDS:-7200}"
 HOST="$(hostname)"
 BOOT_ID="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || true)"
@@ -80,7 +91,7 @@ try { fs.unlinkSync(process.env.STATE_FILE); } catch {}
 NODE
 
 STARTED_AT="$(date --iso-8601=seconds)"
-export STATE_FILE HISTORY_FILE OPERATION OWNER TASK TARGET HOST BOOT_ID COMMAND_DISPLAY STARTED_AT COORDINATOR_PID
+export STATE_FILE HISTORY_FILE OPERATION OWNER TASK TARGET WORKER_CODE HOST BOOT_ID COMMAND_DISPLAY STARTED_AT COORDINATOR_PID
 node <<'NODE'
 const fs = require('node:fs');
 const state = {
@@ -90,6 +101,7 @@ const state = {
   owner: process.env.OWNER,
   task: process.env.TASK,
   target: process.env.TARGET || null,
+  workerCode: process.env.WORKER_CODE || null,
   host: process.env.HOST,
   bootId: process.env.BOOT_ID || null,
   pid: Number(process.env.COORDINATOR_PID),

@@ -29,11 +29,29 @@ function elapsed(now: number, value?: string | null) {
 }
 
 
-function workerStatus(task: LiveTask | null) {
+function workerStatus(task: LiveTask | null, presence: ConsoleLiveState["workerPresence"][number] | null) {
+  if (task?.status === "blocked") return { status: "blocked" as const, label: "BLOKKOLVA" };
+  if (presence?.active) return { status: "working" as const, label: task ? "DOLGOZIK" : "DOLGOZIK · AUTO" };
   if (!task) return { status: "idle" as const, label: "INAKTÍV" };
-  if (task.status === "blocked") return { status: "blocked" as const, label: "BLOKKOLVA" };
   if (["queued", "ready"].includes(task.status)) return { status: "waiting" as const, label: "VÁRAKOZIK" };
   return { status: "working" as const, label: "DOLGOZIK" };
+}
+
+function presenceStage(phase: string) {
+  const value = phase.toLowerCase();
+  if (["build", "commit", "release"].includes(value)) return { index: 5, label: "BUILD / KIADÁS" };
+  if (["test", "testing"].includes(value)) return { index: 3, label: "TESZTELÉS" };
+  if (["review", "fix"].includes(value)) return { index: 4, label: "ELLENŐRZÉS / JAVÍTÁS" };
+  return { index: 2, label: "FEJLESZTÉS" };
+}
+
+function PresenceContext({ presence }: { presence: ConsoleLiveState["workerPresence"][number] }) {
+  const stage = presenceStage(presence.phase);
+  return <div className={styles.workerContextCompact} data-context-location="worker" data-work-stage={stage.index} data-auto-presence="true">
+    <span>{presence.mainModule || "Automatikus észlelés"} <b>›</b> {presence.moduleName || presence.phase.toUpperCase()} <b>›</b> {presence.submoduleName || presence.inferredBy}</span>
+    <strong>6/{stage.index} · {stage.label}</strong>
+    <small>{presence.workItem || presence.summary}</small>
+  </div>;
 }
 
 function taskOwner(task: LiveTask, live: ConsoleLiveState | null) {
@@ -183,16 +201,17 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             ? tasks.find((candidate) => candidate.id === session.task_id) || null
             : tasks.find((candidate) => (candidate.assigned_worker_id === worker?.id || candidate.requested_worker_id === worker?.id) && ["queued", "ready", "blocked"].includes(candidate.status)) || null;
           const build = builds.find((candidate) => candidate.task_id === task?.id || (session?.id && candidate.session_id === session.id));
-          const state = workerStatus(task);
+          const presence = live?.workerPresence?.find((candidate) => candidate.workerCode === item.code && candidate.active) || null;
+          const state = workerStatus(task, presence);
           return (
-            <article key={item.code} data-worker-code={item.code} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
-              <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : ""}</span></div></div>
-              <p>{task?.title || "Nincs aktív feladat."}</p>
-              {task ? <CompactTaskContext task={task} location="worker" /> : null}
+            <article key={item.code} data-worker-code={item.code} data-auto-presence={presence && !task ? "true" : "false"} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
+              <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : presence?.lastSeenAt ? `· ${elapsed(now, presence.lastSeenAt)}` : ""}</span></div></div>
+              <p>{task?.title || presence?.summary || "Nincs aktív feladat."}</p>
+              {task ? <CompactTaskContext task={task} location="worker" /> : presence ? <PresenceContext presence={presence} /> : null}
               <div className={styles.workerFacts}>
-                <span><Clock3 size={13} /> {session?.handshake_stage || "Nincs aktív session"}</span>
-                <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : "Build: nincs"}</span>
-                <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : task?.branch_name || "Git: —"}</span>
+                <span><Clock3 size={13} /> {session?.handshake_stage || (presence ? `AUTO · ${presence.phase.toUpperCase()}` : "Nincs aktív session")}</span>
+                <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : presence?.operation ? `${presence.operation}: aktív` : "Build: nincs"}</span>
+                <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : task?.branch_name || presence?.branch || presence?.inferredBy || "Git: —"}</span>
               </div>
               <button type="button" className={styles.workerActivityOpen} data-worker-activity-open={item.code} onClick={() => onOpenWorkerActivity(item.code)}><Code2 size={12} /> Részletes kódolási csevegés</button>
             </article>

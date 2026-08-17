@@ -39,6 +39,7 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
     ? live?.tasks.find((item) => item.id === session.task_id) || null
     : worker ? live?.tasks.find((item) => (item.assigned_worker_id === worker.id || item.requested_worker_id === worker.id) && !["completed", "cancelled"].includes(item.status)) || null : null;
   const build = activeTask ? live?.builds.find((item) => item.task_id === activeTask.id || (session?.id && item.session_id === session.id)) : null;
+  const autoPresence = workerCode ? live?.workerPresence?.find((item) => item.workerCode === workerCode && item.active) || null : null;
 
   const activity = useMemo(() => {
     if (!author) return [];
@@ -50,7 +51,7 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
   }, [author, filter, messages, selectedProjectId]);
 
   if (!workerCode || !author) return null;
-  const status = activeTask?.status === "blocked" ? "blocked" : activeTask ? "working" : "idle";
+  const status = activeTask?.status === "blocked" ? "blocked" : activeTask || autoPresence ? "working" : "idle";
   return (
     <div className={styles.drawerLayer} role="presentation">
       <button type="button" className={styles.drawerBackdrop} aria-label="Worker aktivitás bezárása" onClick={onClose} />
@@ -64,13 +65,13 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
             <BenjadminAvatar member={author} size="head" status={status} eager />
             <div>
               <strong>{worker?.name || memberName(author)}</strong>
-              <span>{activeTask ? `DOLGOZIK · ${activeTask.status.toUpperCase()}` : "INAKTÍV"}</span>
-              <p>{activeTask?.title || "Nincs aktív fejlesztési task."}</p>
+              <span>{activeTask ? `DOLGOZIK · ${activeTask.status.toUpperCase()}` : autoPresence ? "DOLGOZIK · AUTO" : "INAKTÍV"}</span>
+              <p>{activeTask?.title || autoPresence?.summary || "Nincs aktív fejlesztési task."}</p>
             </div>
             <div className={styles.workerActivityHeroFacts}>
-              <span><Radio size={12} /> {session?.handshake_stage || "Nincs aktív session"}</span>
-              <span><Hammer size={12} /> {build ? `${build.run_type || "build"}: ${build.status}` : "Build: nincs"}</span>
-              <span><Code2 size={12} /> {activeTask?.branch_name || "Branch: —"}</span>
+              <span><Radio size={12} /> {session?.handshake_stage || (autoPresence ? `AUTO · ${autoPresence.phase.toUpperCase()}` : "Nincs aktív session")}</span>
+              <span><Hammer size={12} /> {build ? `${build.run_type || "build"}: ${build.status}` : autoPresence?.operation ? `${autoPresence.operation}: aktív` : "Build: nincs"}</span>
+              <span><Code2 size={12} /> {activeTask?.branch_name || autoPresence?.branch || autoPresence?.inferredBy || "Branch: —"}</span>
             </div>
           </section>
 

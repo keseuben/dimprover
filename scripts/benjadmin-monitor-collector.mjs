@@ -3,6 +3,7 @@ import { readFile, statfs } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
+import { syncWorkerPresence } from "./benjadmin-worker-presence-bridge.mjs";
 
 const LOOP = process.argv.includes("--loop");
 const INTERVAL_MS = Math.max(30_000, Number(process.env.BENJADMIN_MONITOR_INTERVAL_MS || 60_000));
@@ -265,9 +266,11 @@ async function collectOnce(client) {
   if (cleanupError) throw new Error(`MONITOR_RETENTION_FAILED:${cleanupError.code || "UNKNOWN"}`);
 
   const dev = rows[0];
-  const [etaAlerts, developmentScheduler] = await Promise.all([
+  const coordinationRoot = process.env.DIMPRO_COORDINATION_ROOT?.trim() || (process.cwd().startsWith("/srv/dimpro-dev/") ? "/srv/dimpro-dev/coordination" : `${process.cwd()}/.dimprover`);
+  const [etaAlerts, developmentScheduler, workerPresence] = await Promise.all([
     triggerEtaAlerts(),
     triggerDevelopmentScheduler(),
+    syncWorkerPresence({ client, root: process.cwd(), coordinationRoot }).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : "WORKER_PRESENCE_FAILED", productionAccess: "DENY" })),
   ]);
   console.log(JSON.stringify({
     ok: true,
@@ -276,6 +279,7 @@ async function collectOnce(client) {
     dev: { cpuPercent: dev.cpu_percent, memoryPercent: dev.memory_percent, diskPercent: dev.disk_percent, swapPercent: dev.metadata.swap_percent },
     etaAlerts,
     developmentScheduler,
+    workerPresence,
   }));
 }
 

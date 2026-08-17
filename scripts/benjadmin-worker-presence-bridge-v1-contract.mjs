@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd(); let n=0;
+function read(f){return fs.readFileSync(path.join(root,f),"utf8")}
+function check(name,ok,detail=""){if(!ok){console.error(`FAIL ${String(n+1).padStart(2,"0")} ${name}${detail?` :: ${detail}`:""}`);process.exitCode=1;return;}n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}${detail?` :: ${detail}`:""}`)}
+const bridge=read("scripts/benjadmin-worker-presence-bridge.mjs");
+const aliases=JSON.parse(read("scripts/benjadmin-worker-presence-aliases.json"));
+const monitor=read("scripts/benjadmin-monitor-collector.mjs");
+const op=read("scripts/dimpro-coordinated-operation.sh");
+const live=read("app/lib/dev-center/developer-console.ts");
+const types=read("components/admin/developer-console/types.ts");
+const panel=read("components/admin/developer-console/LiveWorkPanel.tsx");
+const team=read("components/admin/developer-console/TeamQuickDrawer.tsx");
+const drawer=read("components/admin/developer-console/WorkerActivityDrawer.tsx");
+const lease=read("scripts/benjadmin-worker-presence.mjs");
+check("Bridge has explicit lease source",bridge.includes("collectLeaseEvidence"));
+check("Bridge has task/session source",bridge.includes("collectSessionEvidence"));
+check("Bridge has coordination operation source",bridge.includes("collectOperationEvidence"));
+check("Bridge has recent file source",bridge.includes("collectDirtyEvidence"));
+check("Bridge has recent commit source",bridge.includes("collectRecentCommitEvidence"));
+check("Evidence is scored and fail-closed",bridge.includes("if (!match) return []") && bridge.includes("score:"));
+check("Presence rows are PROD denied",bridge.includes("productionAccess: \"DENY\""));
+check("Same presence key updates instead of spam",bridge.includes("presenceKey") && bridge.includes(".update({"));
+check("Stale presence is ended",bridge.includes("presenceState: \"ENDED\""));
+check("Monitor invokes presence sync",monitor.includes("syncWorkerPresence") && monitor.includes("workerPresence"));
+check("Coordination state includes workerCode",op.includes("WORKER_CODE") && op.includes("workerCode:"));
+check("Terep owner maps to Jázmin",aliases.workers.JAZMINAI.ownerPatterns.some((x)=>x.includes("terep-")));
+check("Drop owner maps to Jázmin",aliases.workers.JAZMINAI.ownerPatterns.some((x)=>x.includes("drop-")));
+check("Field Capture owner maps to Jázmin",aliases.workers.JAZMINAI.ownerPatterns.some((x)=>x.includes("field-capture-")));
+check("Armin owner remains explicit",aliases.workers.ARMINAI.ownerPatterns.some((x)=>x.includes("armin")));
+check("Live API exposes workerPresence",live.includes("workerPresence") && types.includes("LiveWorkerPresence"));
+check("Worker card supports AUTO working state",panel.includes("DOLGOZIK · AUTO") && panel.includes("data-auto-presence"));
+check("Worker card exposes six-stage AUTO context",panel.includes("PresenceContext") && panel.includes("presenceStage"));
+check("Team drawer respects auto presence",team.includes("autoPresence") && team.includes("AKTÍV · AUTO"));
+check("Worker activity drawer respects auto presence",drawer.includes("autoPresence") && drawer.includes("DOLGOZIK · AUTO"));
+check("Explicit lease helper supports claim",lease.includes("\"claim\"") && lease.includes("expiresAt"));
+check("Explicit lease helper supports heartbeat",lease.includes("\"heartbeat\""));
+check("Explicit lease helper supports release",lease.includes("\"release\""));
+check("Lease helper remains PROD denied",lease.includes("productionAccess:\"DENY\""));
+console.log(JSON.stringify({ok:!process.exitCode,passed:n,failed:process.exitCode?1:0},null,2));
