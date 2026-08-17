@@ -138,3 +138,20 @@ A V1 után a következő érdemi szint a külső ChatGPT wake kezelése:
 6. BENJADMIN jelezze a külső wake egészségi állapotát és a legutóbbi sikeres ébresztést.
 
 Így nem kell minden estére új, 9 alkalmas ChatGPT schedule-t készíteni, és az éjszakai terv nem tűnik el akkor sem, ha egy külső wake kimarad.
+
+## V1.1 külső ChatGPT wake konfiguráció
+
+A korábbi `BENJADMIN éjszakai fejlesztés` Scheduled Task 9 alkalmas `COUNT=9` ütemezése helyett tartós órás heartbeat konfiguráció készült.
+
+Aktív task:
+- cím: `BENJADMIN órás ébresztő`;
+- schedule: `RRULE:FREQ=HOURLY`;
+- `COUNT` nincs;
+- timing mode: `exact_schedule`;
+- enabled: true.
+
+Az external wake 0–24 órában óránként lefut, de a prompt először BENJADMIN scheduler állapotot kérdez. Ha nincs esedékes vagy `READY_FOR_PLUS_PULL` scheduler run, nem indít fejlesztést és nem kér felhasználói beavatkozást. A tényleges éjszakai időablakot így a BENJADMIN Development Schedule kezeli, nem a ChatGPT task RRULE-ja.
+
+A korábbi condition-watch próbát exact hourly heartbeatre módosítottuk, mert a külső wake feladata maga az óránkénti stabil ébresztés; a feltételkezelés a BENJADMIN control-plane-ben történik.
+
+Checkpoint pillanatában a task `is_enabled=true`, a `RRULE:FREQ=HOURLY` és `COUNT` nélküli konfiguráció visszaolvasható. Az első új recurring futás `last_run_time` megfigyelése még pending; ezért a platformoldali ismétlődés teljes E2E bizonyítása csak egy következő órás futás után tekinthető lezártnak.
