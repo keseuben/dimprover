@@ -8,6 +8,7 @@ const worker = fs.readFileSync('app/lib/drop/worker/dropWorkerService.ts','utf8'
 const tests = [
  ['6 lépéses sticky stepper', ui.includes('aria-label="GyorsSend lépések"') && ['Beállítások','Képek','Ellenőrzés','Mentés','Riport','Lezárás'].every(x=>ui.includes(`"${x}"`))],
  ['Stepper már a Gyors KépSend alapadatoknál látható', transfer.includes('data-drop-quick-send-precreate-stepper') && transfer.includes('sendMode === "quick_image"') && transfer.includes('DROP_QUICK_SEND_WORKFLOW_STEPS.map')],
+ ['Gyors KépSend a 2. Képek lépésen folytatódik', transfer.includes('initialWorkflowStep={created.workflow.quickImageSend ? 1 : 0}') && ui.includes('initialWorkflowStep = 0') && ui.includes('Math.min(DROP_QUICK_SEND_WORKFLOW_STEPS.length - 1, initialWorkflowStep)')],
  ['Régebbi DEV workflow séma kompatibilis', postgresRepo.includes('OPTIONAL_WORKFLOW_COLUMNS') && postgresRepo.includes('isOptionalWorkflowSchemaError') && postgresRepo.includes('workflowRowForLegacySchema') && postgresRepo.includes('PGRST204')],
  ['Mentett Send-kód balra húzással törölhető', transfer.includes('SwipeDeleteSendCodeControl') && transfer.includes('Húzza balra a mentett kód törléséhez') && transfer.includes('offset <= threshold') && transfer.includes('bg-rose-100')],
  ['Mentett Send-kód desktop alternatíva', transfer.includes('Kód törlése') && transfer.includes('onClick={onConfirm}')],

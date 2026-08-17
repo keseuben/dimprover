@@ -112,6 +112,7 @@ type Props = {
   allowQuickVoiceNote?: boolean;
   quickVoiceSecondsPerNote?: number;
   uploaderName?: string;
+  initialWorkflowStep?: number;
   onStartNewTransfer?: () => void;
   onClose?: () => void;
 };
@@ -186,6 +187,7 @@ export default function DropPublicHexUploader({
   allowQuickVoiceNote = false,
   quickVoiceSecondsPerNote = 60,
   uploaderName = "Publikus Drop feladó",
+  initialWorkflowStep = 0,
   onStartNewTransfer,
   onClose,
 }: Props) {
@@ -201,7 +203,7 @@ export default function DropPublicHexUploader({
   const [finalizing, setFinalizing] = useState(false);
   const [delivered, setDelivered] = useState(false);
   const [message, setMessage] = useState("");
-  const [workflowStep, setWorkflowStep] = useState(0);
+  const [workflowStep, setWorkflowStep] = useState(() => Math.max(0, Math.min(DROP_QUICK_SEND_WORKFLOW_STEPS.length - 1, initialWorkflowStep)));
   const [reportMode, setReportMode] = useState<DropReportMode>("none");
   const [saveToDevice, setSaveToDevice] = useState(false);
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
