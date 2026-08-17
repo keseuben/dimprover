@@ -20,6 +20,8 @@ const manifest = read('public/field-capture-dev.webmanifest');
 const sw = read('public/field-capture-sw.js');
 const schema = read('supabase/DIMPRO_FIELD_CAPTURE_P0_P4_SCHEMA_DRAFT.sql');
 const proxy = read('proxy.ts');
+const dropPublicApiBlock = proxy.slice(proxy.indexOf('const isDropPublicApiRoute ='), proxy.indexOf('const isDropInternalPage'));
+const generalPublicApiBlock = proxy.slice(proxy.indexOf('const isPublicApiRoute ='), proxy.indexOf('const isPublicAruterPage'));
 
 const tests = [
   ['Külön /field-capture route', page.includes('FieldCaptureShell') && flags.includes('route: "/field-capture"')],
@@ -55,7 +57,7 @@ const tests = [
   ['Schema draft nincs automatikus migrációként deklarálva', schema.includes('NEM FUT LE AUTOMATIKUSAN')],
   ['GPS/heading strukturált rekord és nem EXIF source of truth', schema.includes('accuracy_meters') && schema.includes('heading_degrees') && shell.includes('nem EXIF')],
   ['PWA regisztráció hivatalos DEV hostokra korlátozott', pwaShell.includes('window.location.hostname === "dev.dimpro.hu"') && pwaShell.includes('window.location.hostname === "app.dev.dimpro.hu"')],
-  ['Field Capture health publikus monitoring végpont', proxy.includes('pathname === "/api/field-capture/health"')],
+  ['Field Capture health a központi publikus monitoring listában van', generalPublicApiBlock.includes('pathname === "/api/field-capture/health"') && !dropPublicApiBlock.includes('pathname === "/api/field-capture/health"')],
   ['Field Capture oldal auth-védett marad', !proxy.includes('pathname === "/field-capture" ||')],
 ];
 let failed = 0;
