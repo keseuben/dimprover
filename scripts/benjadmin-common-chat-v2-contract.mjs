@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd(); let passed=0; let failed=0;
+function read(file){return fs.readFileSync(path.join(root,file),"utf8")}
+function check(name,ok){if(!ok){failed++;console.error(`FAIL ${String(passed+failed).padStart(2,"0")} ${name}`);process.exitCode=1;return;}passed++;console.log(`PASS ${String(passed+failed).padStart(2,"0")} ${name}`)}
+const backend=read("app/lib/dev-center/developer-console.ts");
+const types=read("components/admin/developer-console/types.ts");
+const panel=read("components/admin/developer-console/LiveWorkPanel.tsx");
+const drawer=read("components/admin/developer-console/WorkerActivityDrawer.tsx");
+const conversation=read("components/admin/developer-console/DeveloperConversation.tsx");
+const shell=read("components/admin/developer-console/DeveloperConsoleShell.tsx");
+const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+check("Presence type has stable id",types.includes("id: string;") && types.includes("LiveWorkerPresence"));
+check("Presence type exposes lifecycle state",types.includes('lifecycleState: "ACTIVE" | "ENDED" | "STALE" | "UNKNOWN"'));
+check("Presence type exposes bridge key and timestamps",types.includes("presenceKey: string | null") && types.includes("detectedAt: string") && types.includes("endedAt: string | null"));
+check("Presence type exposes end reason",types.includes("endReason: string | null"));
+check("Live state exposes presence history",types.includes("workerPresenceHistory: LiveWorkerPresence[]"));
+check("Live state exposes worker transitions",types.includes("workerTransitions: LiveWorkerTransition[]"));
+check("Backend fetches extended presence window",backend.includes('.eq("source", "worker-presence-bridge").order("created_at", { ascending: false }).limit(120)'));
+check("Backend keeps bounded history",backend.includes("workerPresenceHistory") && backend.includes(".slice(0, 80)"));
+check("Backend maps active lifecycle",backend.includes('rawLifecycle === "ACTIVE"') && backend.includes('lifecycleState: WorkerPresenceView["lifecycleState"]'));
+check("Backend maps explicit ENDED lifecycle",backend.includes('rawLifecycle === "ENDED"') && backend.includes('"ENDED"'));
+check("Backend marks expired ACTIVE as STALE",backend.includes('"STALE"') && backend.includes('"TTL_EXPIRED"'));
+check("Transition key prefers exact task",backend.includes('return `task:${presence.taskId}`'));
+check("Context handoff requires full hierarchy",backend.includes("!presence.mainModule || !presence.moduleName || !presence.submoduleName || !presence.workItem"));
+check("Transition model detects worker change",backend.includes("previous.workerCode !== current.workerCode"));
+check("Transition reason distinguishes task and context",backend.includes('"TASK_HANDOFF" : "CONTEXT_HANDOFF"'));
+check("Transition history is bounded",backend.includes(".slice(0, 30)"));
+check("Live API returns both lifecycle collections",backend.includes("workerPresenceHistory,") && backend.includes("workerTransitions,"));
+check("Analysis maps to stage 1",panel.includes('["analysis", "planning", "prepare", "preparation", "discovery"]') && panel.includes('index: 1, label: "ELEMZÉS / ELŐKÉSZÍTÉS"'));
+check("Closing maps to stage 6",panel.includes('["complete", "completed", "close", "closing", "handoff"]') && panel.includes('index: 6, label: "LEZÁRÁS / ÁTADÁS"'));
+check("Worker card shows lifecycle counts",panel.includes("data-presence-history-count") && panel.includes("data-worker-transition-count"));
+check("Worker drawer shows presence lifecycle",drawer.includes('data-testid="benjadmin-worker-presence-history"') && drawer.includes("WORKER PRESENCE ÉLETCIKLUS"));
+check("Worker drawer shows handoff history",drawer.includes('data-testid="benjadmin-worker-transition-history"') && drawer.includes("WORKER ÁTADÁSOK"));
+check("Common chat shows recent handoff strip",conversation.includes('data-testid="benjadmin-worker-transition-strip"') && conversation.includes("LEGUTÓBBI WORKER-ÁTADÁSOK"));
+check("Project filter applies to handoffs",conversation.includes("!selectedProjectId || !transition.projectId || transition.projectId === selectedProjectId"));
+check("Shell passes transition data into common chat",shell.includes("workerTransitions={live?.workerTransitions || []}"));
+check("SSE/poll merge stabilizes lifecycle arrays",shell.includes("workerPresenceHistory: stableMerge") && shell.includes("workerTransitions: stableMerge"));
+check("Lifecycle UI remains responsive",css.includes(".conversationTransitions > div { grid-template-columns: 1fr; }") && css.includes(".workerLifecycleFacts"));
+check("Worker presence remains PROD denied",backend.includes('productionAccess: "DENY"'));
+console.log(JSON.stringify({ok:failed===0,passed,failed},null,2));
+if(failed) process.exit(1);

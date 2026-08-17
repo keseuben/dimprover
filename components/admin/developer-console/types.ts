@@ -74,9 +74,11 @@ export type LiveApproval = { id: string; command_id?: string | null; status: str
 export type LiveAudit = { id: string; action: string; summary?: string; task_id?: string | null; project_id?: string | null; created_at?: string };
 
 export type LiveWorkerPresence = {
+  id: string;
   workerCode: string;
   active: boolean;
   state: "active" | "inactive";
+  lifecycleState: "ACTIVE" | "ENDED" | "STALE" | "UNKNOWN";
   phase: string;
   summary: string;
   detail: string;
@@ -93,8 +95,29 @@ export type LiveWorkerPresence = {
   target: string | null;
   inferredBy: string;
   confidence: string;
+  presenceKey: string | null;
+  detectedAt: string;
   lastSeenAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+  source: string;
+  createdAt: string;
   productionAccess: "DENY";
+};
+
+export type LiveWorkerTransition = {
+  id: string;
+  contextKey: string;
+  fromWorkerCode: string;
+  toWorkerCode: string;
+  changedAt: string;
+  reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF";
+  taskId: string | null;
+  projectId: string | null;
+  mainModule: string;
+  moduleName: string;
+  submoduleName: string;
+  workItem: string;
 };
 
 export type ConsoleLiveState = {
@@ -107,6 +130,8 @@ export type ConsoleLiveState = {
   approvals: LiveApproval[];
   audits: LiveAudit[];
   workerPresence: LiveWorkerPresence[];
+  workerPresenceHistory: LiveWorkerPresence[];
+  workerTransitions: LiveWorkerTransition[];
   generatedAt: string;
   refreshIntervalMs: number;
 };

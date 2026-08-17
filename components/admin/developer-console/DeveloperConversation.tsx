@@ -1,9 +1,9 @@
 "use client";
 
-import { Archive, ArrowDown, CalendarDays, ChevronDown, ChevronRight, LoaderCircle, MessagesSquare } from "lucide-react";
+import { Archive, ArrowDown, ArrowRightLeft, CalendarDays, ChevronDown, ChevronRight, LoaderCircle, MessagesSquare } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DeveloperMessage from "./DeveloperMessage";
-import type { ConsoleMessage } from "./types";
+import type { ConsoleMessage, LiveWorkerTransition } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 function dayKey(value: string) {
@@ -69,9 +69,10 @@ function collapseRepeatedMessages(items: ConsoleMessage[]) {
 
 type ArchiveGroup = { key: string; label: string; type: "day" | "week"; messages: ConsoleMessage[] };
 
-export default function DeveloperConversation({ messages, selectedProjectId, hasOlder = false, loadingOlder = false, onLoadOlder }: {
+export default function DeveloperConversation({ messages, selectedProjectId, workerTransitions = [], hasOlder = false, loadingOlder = false, onLoadOlder }: {
   messages: ConsoleMessage[];
   selectedProjectId: string;
+  workerTransitions?: LiveWorkerTransition[];
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => Promise<void>;
@@ -88,6 +89,11 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
     if (!selectedProjectId) return true;
     return !message.projectId || message.projectId === selectedProjectId;
   }), [messages, selectedProjectId]);
+
+  const visibleTransitions = useMemo(() => workerTransitions
+    .filter((transition) => !selectedProjectId || !transition.projectId || transition.projectId === selectedProjectId)
+    .sort((a, b) => b.changedAt.localeCompare(a.changedAt))
+    .slice(0, 4), [selectedProjectId, workerTransitions]);
 
   const archive = useMemo(() => {
     const now = new Date();
@@ -183,6 +189,14 @@ export default function DeveloperConversation({ messages, selectedProjectId, has
         <small>Ma {archive.today.length} · elmúlt 7 nap {archive.recentCount} · korábbi {archive.earlierCount}{hasOlder ? "+" : ""}</small>
       </div>
       <div className={styles.conversationScroller} ref={scroller} onScroll={onScroll}>
+        {visibleTransitions.length ? <section className={styles.conversationTransitions} data-testid="benjadmin-worker-transition-strip">
+          <header><ArrowRightLeft size={12} /><strong>LEGUTÓBBI WORKER-ÁTADÁSOK</strong><span>{visibleTransitions.length}</span></header>
+          <div>{visibleTransitions.map((transition) => <article key={transition.id} data-transition-reason={transition.reason}>
+            <strong>{transition.fromWorkerCode} <ArrowRightLeft size={10} /> {transition.toWorkerCode}</strong>
+            <span>{transition.mainModule} › {transition.moduleName} › {transition.submoduleName}</span>
+            <small>{transition.workItem}</small>
+          </article>)}</div>
+        </section> : null}
         {(archive.groups.length || archive.earlierCount || hasOlder) ? (
           <section className={styles.conversationArchive} aria-label="Korábbi fejlesztői csevegések" data-testid="benjadmin-conversation-archive" data-show-earlier={showEarlierArchive ? "true" : "false"}>
             <header><Archive size={14} /><strong>{showEarlierArchive ? "ARCHÍVUM" : "ELMÚLT 7 NAP"}</strong><span>Időrendi sorrend · a legfrissebb esemény legalul.</span></header>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Code2, FileCode2, FileDiff, FlaskConical, Hammer, History, Radio, X } from "lucide-react";
+import { Activity, ArrowRightLeft, Clock3, Code2, FileCode2, FileDiff, FlaskConical, Hammer, History, Radio, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import DeveloperMessage from "./DeveloperMessage";
@@ -15,6 +15,12 @@ const workerAuthor: Record<WorkerCode, ConsoleAuthor> = {
   JAZMINAI: "JAZMINAI",
   OUTMINAI: "OUTMINAI",
 };
+
+function compactDateTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("hu-HU", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(date);
+}
 
 function matchesFilter(message: ConsoleMessage, filter: Filter) {
   if (filter === "ALL") return true;
@@ -40,6 +46,9 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
     : worker ? live?.tasks.find((item) => (item.assigned_worker_id === worker.id || item.requested_worker_id === worker.id) && !["completed", "cancelled"].includes(item.status)) || null : null;
   const build = activeTask ? live?.builds.find((item) => item.task_id === activeTask.id || (session?.id && item.session_id === session.id)) : null;
   const autoPresence = workerCode ? live?.workerPresence?.find((item) => item.workerCode === workerCode && item.active) || null : null;
+  const presenceHistory = workerCode ? (live?.workerPresenceHistory || []).filter((item) => item.workerCode === workerCode).slice(0, 12) : [];
+  const transitions = workerCode ? (live?.workerTransitions || []).filter((item) => item.fromWorkerCode === workerCode || item.toWorkerCode === workerCode).slice(0, 10) : [];
+  const workerLabel = (code: string) => live?.workers.find((item) => item.code === code)?.name || code;
 
   const activity = useMemo(() => {
     if (!author) return [];
@@ -78,6 +87,27 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
           <section className={styles.workerActivityRetention}>
             <History size={14} />
             <div><strong>LIVE → SESSION → HISTORY</strong><span>Az aktuális események részletesek; a korábbi munkamenetek napi/heti archívumban maradnak kereshetők. A tartós kódforrás a Git/Diff.</span></div>
+          </section>
+
+          <section className={styles.workerPresenceHistory} data-testid="benjadmin-worker-presence-history" data-history-count={presenceHistory.length}>
+            <header><History size={13} /><strong>WORKER PRESENCE ÉLETCIKLUS</strong><span>{presenceHistory.length} esemény</span></header>
+            <div className={styles.workerPresenceTimeline}>
+              {presenceHistory.length ? presenceHistory.map((presence) => <article key={presence.id} data-lifecycle-state={presence.lifecycleState}>
+                <div><strong>{presence.lifecycleState}</strong><time dateTime={presence.detectedAt || presence.createdAt}><Clock3 size={10} /> {compactDateTime(presence.detectedAt || presence.createdAt)}</time></div>
+                <span>{presence.mainModule || "—"} › {presence.moduleName || "—"} › {presence.submoduleName || "—"}</span>
+                <p>{presence.workItem || presence.summary}</p>
+                <small>{presence.phase.toUpperCase()} · {presence.inferredBy || "ismeretlen forrás"}{presence.confidence ? ` · ${presence.confidence}` : ""}{presence.endReason ? ` · ${presence.endReason}` : ""}</small>
+              </article>) : <p className={styles.workerPresenceEmpty}>Még nincs tartós presence-életciklus ehhez a workerhez.</p>}
+            </div>
+          </section>
+
+          <section className={styles.workerTransitionHistory} data-testid="benjadmin-worker-transition-history" data-transition-count={transitions.length}>
+            <header><ArrowRightLeft size={13} /><strong>WORKER ÁTADÁSOK</strong><span>{transitions.length} átadás</span></header>
+            {transitions.length ? transitions.map((transition) => <article key={transition.id}>
+              <div><b>{workerLabel(transition.fromWorkerCode)}</b><ArrowRightLeft size={11} /><b>{workerLabel(transition.toWorkerCode)}</b><time dateTime={transition.changedAt}>{compactDateTime(transition.changedAt)}</time></div>
+              <span>{transition.mainModule} › {transition.moduleName} › {transition.submoduleName}</span>
+              <small>{transition.workItem} · {transition.reason}</small>
+            </article>) : <p className={styles.workerPresenceEmpty}>Ehhez a workerhez még nincs azonos kontextusú átadás.</p>}
           </section>
 
           <div className={styles.workerActivityFilters} role="tablist" aria-label="Worker aktivitás szűrő">

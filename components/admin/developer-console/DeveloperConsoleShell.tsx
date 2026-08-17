@@ -48,6 +48,9 @@ function mergeLive(current: ConsoleLiveState | null, incoming: ConsoleLiveState)
     releases: stableMerge(current.releases, incoming.releases),
     approvals: stableMerge(current.approvals, incoming.approvals),
     audits: stableMerge(current.audits, incoming.audits),
+    workerPresence: stableMerge(current.workerPresence || [], incoming.workerPresence || []),
+    workerPresenceHistory: stableMerge(current.workerPresenceHistory || [], incoming.workerPresenceHistory || []),
+    workerTransitions: stableMerge(current.workerTransitions || [], incoming.workerTransitions || []),
   };
 }
 
@@ -357,7 +360,7 @@ export default function DeveloperConsoleShell() {
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
-        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />
+        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} workerTransitions={live?.workerTransitions || []} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />
         <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} onOpenWorkerActivity={(code) => setWorkerActivityCode(code)} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />

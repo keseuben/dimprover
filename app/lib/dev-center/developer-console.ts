@@ -445,6 +445,139 @@ export async function createBenAiConsoleMessage(input: { summary: string; detail
   return mapWorklogRow(result.data as Row);
 }
 
+type WorkerPresenceView = {
+  id: string;
+  workerCode: string;
+  active: boolean;
+  state: "active" | "inactive";
+  lifecycleState: "ACTIVE" | "ENDED" | "STALE" | "UNKNOWN";
+  phase: string;
+  summary: string;
+  detail: string;
+  taskId: string | null;
+  projectId: string | null;
+  mainModule: string;
+  moduleName: string;
+  submoduleName: string;
+  workItem: string;
+  operation: string | null;
+  owner: string | null;
+  worktree: string | null;
+  branch: string | null;
+  target: string | null;
+  inferredBy: string;
+  confidence: string;
+  presenceKey: string | null;
+  detectedAt: string;
+  lastSeenAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+  source: string;
+  createdAt: string;
+  productionAccess: "DENY";
+};
+
+type WorkerPresenceTransitionView = {
+  id: string;
+  contextKey: string;
+  fromWorkerCode: string;
+  toWorkerCode: string;
+  changedAt: string;
+  reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF";
+  taskId: string | null;
+  projectId: string | null;
+  mainModule: string;
+  moduleName: string;
+  submoduleName: string;
+  workItem: string;
+};
+
+function mapWorkerPresenceRow(row: Row, nowMs: number): WorkerPresenceView {
+  const metadata = record(row.metadata);
+  const createdAt = text(row.created_at);
+  const detectedAt = text(metadata.detectedAt) || createdAt;
+  const lastSeenAt = text(metadata.lastSeenAt) || createdAt;
+  const lastSeenMs = Date.parse(lastSeenAt);
+  const rawLifecycle = text(metadata.presenceState).toUpperCase();
+  const active = rawLifecycle === "ACTIVE" && Number.isFinite(lastSeenMs) && nowMs - lastSeenMs <= 5 * 60_000;
+  const lifecycleState: WorkerPresenceView["lifecycleState"] = active
+    ? "ACTIVE"
+    : rawLifecycle === "ENDED"
+      ? "ENDED"
+      : rawLifecycle === "ACTIVE"
+        ? "STALE"
+        : "UNKNOWN";
+  return {
+    id: text(row.id),
+    workerCode: text(row.worker_code).toUpperCase(),
+    active,
+    state: active ? "active" : "inactive",
+    lifecycleState,
+    phase: text(row.phase),
+    summary: text(row.summary),
+    detail: text(row.detail),
+    taskId: text(row.task_id) || null,
+    projectId: text(metadata.projectId) || null,
+    mainModule: text(metadata.mainModule),
+    moduleName: text(metadata.moduleName),
+    submoduleName: text(metadata.submoduleName),
+    workItem: text(metadata.workItem),
+    operation: text(metadata.operation) || null,
+    owner: text(metadata.owner) || null,
+    worktree: text(metadata.worktree) || null,
+    branch: text(metadata.branch) || null,
+    target: text(metadata.target) || null,
+    inferredBy: text(metadata.inferredBy),
+    confidence: text(metadata.confidence),
+    presenceKey: text(metadata.presenceKey) || null,
+    detectedAt,
+    lastSeenAt,
+    endedAt: text(metadata.endedAt) || null,
+    endReason: text(metadata.endReason) || (lifecycleState === "STALE" ? "TTL_EXPIRED" : null),
+    source: text(row.source) || "worker-presence-bridge",
+    createdAt,
+    productionAccess: "DENY",
+  };
+}
+
+function workerPresenceContextKey(presence: WorkerPresenceView) {
+  if (presence.taskId) return `task:${presence.taskId}`;
+  const normalize = (value: string) => value.trim().toLocaleLowerCase("hu-HU").replace(/\s+/g, " ");
+  if (!presence.mainModule || !presence.moduleName || !presence.submoduleName || !presence.workItem) return "";
+  return ["context", presence.projectId || "global", presence.mainModule, presence.moduleName, presence.submoduleName, presence.workItem]
+    .map(normalize)
+    .join(":");
+}
+
+function buildWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPresenceTransitionView[] {
+  const lastByContext = new Map<string, WorkerPresenceView>();
+  const transitions: WorkerPresenceTransitionView[] = [];
+  const chronological = [...history].sort((a, b) => (a.detectedAt || a.createdAt).localeCompare(b.detectedAt || b.createdAt));
+  for (const current of chronological) {
+    const contextKey = workerPresenceContextKey(current);
+    if (!contextKey || !current.workerCode) continue;
+    const previous = lastByContext.get(contextKey);
+    if (previous && previous.workerCode !== current.workerCode) {
+      transitions.push({
+        id: `${previous.id}:${current.id}`,
+        contextKey,
+        fromWorkerCode: previous.workerCode,
+        toWorkerCode: current.workerCode,
+        changedAt: current.detectedAt || current.createdAt,
+        reason: current.taskId ? "TASK_HANDOFF" : "CONTEXT_HANDOFF",
+        taskId: current.taskId,
+        projectId: current.projectId,
+        mainModule: current.mainModule,
+        moduleName: current.moduleName,
+        submoduleName: current.submoduleName,
+        workItem: current.workItem,
+      });
+    }
+    lastByContext.set(contextKey, current);
+  }
+  return transitions.sort((a, b) => b.changedAt.localeCompare(a.changedAt)).slice(0, 30);
+}
+
 export async function getDeveloperConsoleLiveStatus() {
   const client = getClient();
   const [projects, workers, tasks, sessions, builds, releases, approvals, audits, presenceRows] = await Promise.all([
@@ -456,48 +589,22 @@ export async function getDeveloperConsoleLiveStatus() {
     client.from("dev_center_releases").select("id,project_id,status,git_commit,build_id,approved_by,approved_at,released_at,created_at,updated_at").order("created_at", { ascending: false }).limit(30),
     client.from("dev_center_approvals").select("id,approval_type,target_environment,operation,status,requested_by,requested_at,approved_by,approved_at,expires_at,reason,metadata").order("requested_at", { ascending: false }).limit(30),
     client.from("dev_center_audit_events").select("id,actor_type,actor_id,action,entity_type,entity_id,task_id,project_id,summary,created_at").order("created_at", { ascending: false }).limit(60),
-    client.from("dev_center_live_worklog").select("id,worker_code,task_id,phase,summary,detail,source,metadata,created_at").eq("source", "worker-presence-bridge").order("created_at", { ascending: false }).limit(40),
+    client.from("dev_center_live_worklog").select("id,worker_code,task_id,phase,summary,detail,source,metadata,created_at").eq("source", "worker-presence-bridge").order("created_at", { ascending: false }).limit(120),
   ]);
   for (const result of [projects, workers, tasks, sessions, builds, releases, approvals, audits, presenceRows]) {
     if (result.error) throw new Error(result.error.message || "A fejlesztői konzol élő állapota nem tölthető be.");
   }
-  const presenceLatest = new Map<string, Row>();
-  for (const raw of presenceRows.data || []) {
-    const row = raw as Row;
-    const code = text(row.worker_code).toUpperCase();
-    if (code && !presenceLatest.has(code)) presenceLatest.set(code, row);
-  }
   const nowMs = Date.now();
-  const workerPresence = [...presenceLatest.entries()].map(([workerCode, row]) => {
-    const metadata = record(row.metadata);
-    const lastSeenAt = text(metadata.lastSeenAt) || text(row.created_at);
-    const lastSeenMs = Date.parse(lastSeenAt);
-    const state = text(metadata.presenceState).toUpperCase();
-    const active = state === "ACTIVE" && Number.isFinite(lastSeenMs) && nowMs - lastSeenMs <= 5 * 60_000;
-    return {
-      workerCode,
-      active,
-      state: active ? "active" : "inactive",
-      phase: text(row.phase),
-      summary: text(row.summary),
-      detail: text(row.detail),
-      taskId: text(row.task_id) || null,
-      projectId: text(metadata.projectId) || null,
-      mainModule: text(metadata.mainModule),
-      moduleName: text(metadata.moduleName),
-      submoduleName: text(metadata.submoduleName),
-      workItem: text(metadata.workItem),
-      operation: text(metadata.operation) || null,
-      owner: text(metadata.owner) || null,
-      worktree: text(metadata.worktree) || null,
-      branch: text(metadata.branch) || null,
-      target: text(metadata.target) || null,
-      inferredBy: text(metadata.inferredBy),
-      confidence: text(metadata.confidence),
-      lastSeenAt,
-      productionAccess: "DENY",
-    };
-  });
+  const workerPresenceHistory = (presenceRows.data || [])
+    .map((raw) => mapWorkerPresenceRow(raw as Row, nowMs))
+    .filter((item) => Boolean(item.id && item.workerCode))
+    .slice(0, 80);
+  const presenceLatest = new Map<string, WorkerPresenceView>();
+  for (const item of workerPresenceHistory) {
+    if (!presenceLatest.has(item.workerCode)) presenceLatest.set(item.workerCode, item);
+  }
+  const workerPresence = [...presenceLatest.values()];
+  const workerTransitions = buildWorkerPresenceTransitions(workerPresenceHistory);
   return {
     projects: projects.data || [],
     workers: workers.data || [],
@@ -508,6 +615,8 @@ export async function getDeveloperConsoleLiveStatus() {
     approvals: approvals.data || [],
     audits: audits.data || [],
     workerPresence,
+    workerPresenceHistory,
+    workerTransitions,
     generatedAt: new Date().toISOString(),
     refreshIntervalMs: 1000,
   };

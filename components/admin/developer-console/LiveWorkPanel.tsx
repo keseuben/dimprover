@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, History, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
 import { useEffect } from "react";
 import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
 import BenjadminAvatar from "./BenjadminAvatar";
@@ -39,9 +39,11 @@ function workerStatus(task: LiveTask | null, presence: ConsoleLiveState["workerP
 
 function presenceStage(phase: string) {
   const value = phase.toLowerCase();
-  if (["build", "commit", "release"].includes(value)) return { index: 5, label: "BUILD / KIADÁS" };
+  if (["analysis", "planning", "prepare", "preparation", "discovery"].includes(value)) return { index: 1, label: "ELEMZÉS / ELŐKÉSZÍTÉS" };
   if (["test", "testing"].includes(value)) return { index: 3, label: "TESZTELÉS" };
-  if (["review", "fix"].includes(value)) return { index: 4, label: "ELLENŐRZÉS / JAVÍTÁS" };
+  if (["review", "fix", "verification"].includes(value)) return { index: 4, label: "ELLENŐRZÉS / JAVÍTÁS" };
+  if (["build", "commit", "release"].includes(value)) return { index: 5, label: "BUILD / KIADÁS" };
+  if (["complete", "completed", "close", "closing", "handoff"].includes(value)) return { index: 6, label: "LEZÁRÁS / ÁTADÁS" };
   return { index: 2, label: "FEJLESZTÉS" };
 }
 
@@ -202,6 +204,9 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             : tasks.find((candidate) => (candidate.assigned_worker_id === worker?.id || candidate.requested_worker_id === worker?.id) && ["queued", "ready", "blocked"].includes(candidate.status)) || null;
           const build = builds.find((candidate) => candidate.task_id === task?.id || (session?.id && candidate.session_id === session.id));
           const presence = live?.workerPresence?.find((candidate) => candidate.workerCode === item.code && candidate.active) || null;
+          const presenceHistory = (live?.workerPresenceHistory || []).filter((candidate) => candidate.workerCode === item.code).slice(0, 8);
+          const latestPresence = presenceHistory[0] || null;
+          const transitions = (live?.workerTransitions || []).filter((candidate) => candidate.fromWorkerCode === item.code || candidate.toWorkerCode === item.code).slice(0, 8);
           const state = workerStatus(task, presence);
           return (
             <article key={item.code} data-worker-code={item.code} data-auto-presence={presence && !task ? "true" : "false"} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
@@ -212,6 +217,11 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
                 <span><Clock3 size={13} /> {session?.handshake_stage || (presence ? `AUTO · ${presence.phase.toUpperCase()}` : "Nincs aktív session")}</span>
                 <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : presence?.operation ? `${presence.operation}: aktív` : "Build: nincs"}</span>
                 <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : task?.branch_name || presence?.branch || presence?.inferredBy || "Git: —"}</span>
+              </div>
+              <div className={styles.workerLifecycleFacts} data-presence-history-count={presenceHistory.length} data-worker-transition-count={transitions.length}>
+                <span><History size={11} /> {presenceHistory.length} presence esemény</span>
+                <span><ArrowRightLeft size={11} /> {transitions.length} worker-átadás</span>
+                {latestPresence ? <span data-lifecycle-state={latestPresence.lifecycleState}>{latestPresence.lifecycleState}{latestPresence.endReason ? ` · ${latestPresence.endReason}` : ""}</span> : null}
               </div>
               <button type="button" className={styles.workerActivityOpen} data-worker-activity-open={item.code} onClick={() => onOpenWorkerActivity(item.code)}><Code2 size={12} /> Részletes kódolási csevegés</button>
             </article>

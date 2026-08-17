@@ -195,6 +195,16 @@
 .conversationTitle { min-height: 42px; padding: 6px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel); }
 .conversationTitle > div { display: flex; align-items: center; gap: 7px; color: var(--accent-strong); font-size: 11px; font-weight: 950; letter-spacing: .07em; }
 .conversationTitle small { color: var(--muted); font-size: 10px; }
+.conversationTransitions { margin: 0 0 10px; padding: 7px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 8px; display: grid; gap: 5px; background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.conversationTransitions > header { display: flex; align-items: center; gap: 5px; color: var(--accent-strong); }
+.conversationTransitions > header strong { font-size: 9px; letter-spacing: .065em; }
+.conversationTransitions > header span { margin-left: auto; color: var(--muted); font-size: 9px; }
+.conversationTransitions > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.conversationTransitions article { min-width: 0; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 2px; background: var(--surface); }
+.conversationTransitions article strong { display: flex; align-items: center; gap: 4px; color: var(--text); font-size: 9px; }
+.conversationTransitions article strong svg { color: var(--accent-strong); }
+.conversationTransitions article span, .conversationTransitions article small { min-width: 0; color: var(--muted); font-size: 8px; line-height: 1.3; overflow-wrap: anywhere; }
+.conversationTransitions article span { color: var(--text-soft); font-weight: 800; }
 .conversationScroller { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 16px 24px; scroll-behavior: smooth; }
 .emptyConversation { min-height: 260px; display: grid; place-items: center; align-content: center; gap: 7px; color: var(--muted); text-align: center; }
 .emptyConversation strong { color: var(--text-soft); }
@@ -282,6 +292,10 @@
 .workerCard p { margin: 7px 0; color: var(--text-soft); font-size: 11px; line-height: 1.45; }
 .workerFacts { display: grid; gap: 3px; }
 .workerFacts span { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workerLifecycleFacts { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.workerLifecycleFacts span { min-width: 0; padding: 2px 5px; border: 1px solid var(--border); border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; color: var(--muted); background: var(--surface2); font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
+.workerLifecycleFacts span[data-lifecycle-state="ACTIVE"] { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); color: var(--green); background: var(--green-soft); }
+.workerLifecycleFacts span[data-lifecycle-state="STALE"] { border-color: color-mix(in srgb, var(--amber) 42%, var(--border)); color: var(--amber); background: var(--amber-soft); }
 .executorReadinessBox { margin-top: 7px; padding: 8px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 8px; display: grid; gap: 3px; background: color-mix(in srgb, var(--amber) 6%, var(--surface)); }
 .executorReadinessBox[data-ready="true"] { border-color: color-mix(in srgb, var(--green) 50%, var(--border)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); }
 .executorReadinessBox strong { color: var(--text); font-size: 10px; letter-spacing: .06em; }
@@ -471,6 +485,8 @@
   .conversationTitle { padding: 5px 7px; }
   .conversationTitle small { display: none; }
   .conversationScroller { padding: 8px 7px 20px; }
+  .conversationTransitions > div { grid-template-columns: 1fr; }
+  .workerLifecycleFacts span { white-space: normal; }
   .messageCard, .message_center .messageCard, .messageSystem .messageCard { width: 88%; }
   .messageBody { font-size: 13px; }
   .messageMeta { gap: 4px 6px; }
@@ -1636,6 +1652,23 @@
 .workerActivityRetention > div { display: grid; gap: 2px; }
 .workerActivityRetention strong { color: var(--text-soft); font-size: 10px; letter-spacing: .07em; }
 .workerActivityRetention span { font-size: 10px; line-height: 1.45; }
+.workerPresenceHistory, .workerTransitionHistory { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 6px; background: var(--surface); }
+.workerPresenceHistory > header, .workerTransitionHistory > header { display: flex; align-items: center; gap: 5px; color: var(--accent-strong); }
+.workerPresenceHistory > header strong, .workerTransitionHistory > header strong { font-size: 10px; letter-spacing: .065em; }
+.workerPresenceHistory > header span, .workerTransitionHistory > header span { margin-left: auto; color: var(--muted); font-size: 9px; font-weight: 850; }
+.workerPresenceTimeline { display: grid; gap: 5px; }
+.workerPresenceTimeline article, .workerTransitionHistory article { min-width: 0; padding: 6px 7px; border: 1px solid var(--border); border-radius: 7px; display: grid; gap: 2px; background: var(--surface2); }
+.workerPresenceTimeline article > div, .workerTransitionHistory article > div { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.workerPresenceTimeline article > div strong { padding: 2px 5px; border-radius: 999px; color: var(--muted); background: var(--panel); font-size: 8px; letter-spacing: .045em; }
+.workerPresenceTimeline article[data-lifecycle-state="ACTIVE"] > div strong { color: var(--green); background: var(--green-soft); }
+.workerPresenceTimeline article[data-lifecycle-state="STALE"] > div strong { color: var(--amber); background: var(--amber-soft); }
+.workerPresenceTimeline time, .workerTransitionHistory time { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; color: var(--muted2); font-size: 8px; white-space: nowrap; }
+.workerPresenceTimeline article > span, .workerTransitionHistory article > span { color: var(--text-soft); font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
+.workerPresenceTimeline article > p { margin: 1px 0; color: var(--text); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.workerPresenceTimeline article > small, .workerTransitionHistory article > small { color: var(--muted); font-size: 8px; line-height: 1.35; overflow-wrap: anywhere; }
+.workerTransitionHistory article > div b { color: var(--text); font-size: 9px; }
+.workerTransitionHistory article > div svg { color: var(--accent-strong); }
+.workerPresenceEmpty { margin: 0; padding: 8px 4px; color: var(--muted); font-size: 9px; text-align: center; }
 .workerActivityFilters { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 .workerActivityFilters button {
   min-height: 30px;
