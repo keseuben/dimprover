@@ -44,7 +44,7 @@ export async function requestVGuardReviewRun(taskId: string) {
   let providerResult: ExternalProviderExecutionResult | null = null;
   let usageRecorded = false;
   try {
-    const opened = await openDevEngineSession({ openedBy: "BenAI", environmentId: "env_dev", note: `V.Guard independent review · ${taskId}`, metadata: { origin: "EXTERNAL_AI_WORKER_V13_REVIEW", taskId, productionAccess: "DENY", reviewOnly: true } });
+    const opened = await openDevEngineSession({ openedBy: "BenAI", environmentId: "env_dev", note: `V.Guard independent review · ${taskId}`, metadata: { origin: "EXTERNAL_AI_WORKER_V13_REVIEW", taskId, workerCode: "VGUARD", productionAccess: "DENY", reviewOnly: true } });
     sessionId = opened.session.id;
     await advanceDevEngineSession(sessionId, "assign_benai", {});
     const bound = await advanceDevEngineSession(sessionId, "bind_worker", { workerId: "worker_vguard" });

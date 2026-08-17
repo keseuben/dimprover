@@ -102,9 +102,9 @@ async function requireClient() {
   return getDatabaseClient();
 }
 
-async function addAudit(client: SupabaseClient, input: { action: string; entityType: string; entityId?: string | null; sessionId?: string | null; taskId?: string | null; projectId?: string | null; summary?: string; metadata?: JsonRecord }) {
+async function addAudit(client: SupabaseClient, input: { action: string; entityType: string; entityId?: string | null; sessionId?: string | null; taskId?: string | null; projectId?: string | null; summary?: string; metadata?: JsonRecord; actorId?: string | null }) {
   const { error } = await client.from("dev_center_audit_events").insert({
-    id: `dev-audit-${randomUUID().slice(0, 12)}`, actor_type: "system", actor_id: "BenAI", action: input.action,
+    id: `dev-audit-${randomUUID().slice(0, 12)}`, actor_type: "system", actor_id: text(input.actorId) || "BenAI", action: input.action,
     entity_type: input.entityType, entity_id: input.entityId || null, session_id: input.sessionId || null,
     task_id: input.taskId || null, project_id: input.projectId || null, summary: input.summary || "", metadata: input.metadata || {},
   });
@@ -195,7 +195,9 @@ export async function openDevEngineSession(input: Record<string, unknown>) {
   const { data, error } = await client.from("dev_center_worker_sessions").insert(row).select("*").single();
   if (error) databaseError("A BENJADMIN worker session megnyitása sikertelen.", error, 400);
   await addSessionEvent(client, id, "SESSION_OPEN", "SESSION_OPENED", "Session megnyitva; fejlesztési művelet még nem engedélyezett.");
-  await addAudit(client, { action: "SESSION_OPENED", entityType: "worker_session", entityId: id, sessionId: id, summary: "BENJADMIN worker session megnyitva." });
+  const sessionMetadata = jsonRecord(input.metadata);
+  const sessionWorkerCode = text(sessionMetadata.workerCode).toUpperCase();
+  await addAudit(client, { action: "SESSION_OPENED", entityType: "worker_session", entityId: id, sessionId: id, taskId: text(sessionMetadata.taskId) || null, projectId: text(sessionMetadata.projectId) || null, summary: "BENJADMIN worker session megnyitva.", actorId: sessionWorkerCode || null, metadata: { workerCode: sessionWorkerCode || null, productionAccess: "DENY" } });
   return { ok: true as const, session: mapSession(data as JsonRecord) };
 }
 
@@ -899,7 +901,7 @@ export async function pullDevEngineTaskForPlusWorker(workerCodeValue: string) {
     action: "TASK_PLUS_BRIDGE_PULLED",
     entityType: "task", entityId: task.id, sessionId: text(pullMetadata.plusBridgeSessionId) || null, taskId: task.id, projectId: task.projectId,
     summary: `${task.title} · ${text(workers.data.name) || workerCode} Plus bridge felvette.`,
-    metadata: { workerCode, bridgeState, handoffPromptSha256: text(pullMetadata.handoffPromptSha256) || null, productionAccess: "DENY", pulledAt: now, pullCount },
+    metadata: { workerCode, bridgeState, handoffPromptSha256: text(pullMetadata.handoffPromptSha256) || null, productionAccess: "DENY", pulledAt: now, pullCount }, actorId: workerCode,
   });
   return {
     ok: true as const,
@@ -951,7 +953,7 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
   if (!workerResult.data) throw new DevCenterEngineError("A taskhoz rendelt worker nem található.", "DEV_CENTER_WORKER_NOT_FOUND", 404);
   let sessionId = "";
   try {
-    const opened = await openDevEngineSession({ openedBy: "BenjAdmin", environmentId: "env_dev", note: `AI Fejlesztői Tér indítás: ${task.title}`, metadata: { origin: "BENJADMIN_AI_DEVELOPER_SPACE", bridgeMode: "MANUAL_CHATGPT_BRIDGE" } });
+    const opened = await openDevEngineSession({ openedBy: "BenjAdmin", environmentId: "env_dev", note: `AI Fejlesztői Tér indítás: ${task.title}`, metadata: { origin: "BENJADMIN_AI_DEVELOPER_SPACE", bridgeMode: "MANUAL_CHATGPT_BRIDGE", workerCode: workerResult.data.code, taskId: task.id, projectId: task.projectId, productionAccess: "DENY" } });
     sessionId = opened.session.id;
     await advanceDevEngineSession(sessionId, "assign_benai", {});
     await advanceDevEngineSession(sessionId, "bind_worker", { workerId: task.requestedWorkerId });
@@ -970,6 +972,8 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
       expectedFinishAt,
       activeSessionId: sessionId,
       bridgeMode: "MANUAL_CHATGPT_BRIDGE",
+      activeWorkerCode: text(workerResult.data.code).toUpperCase(),
+      activeWorkerName: text(workerResult.data.name),
       bridgeState: normalizeManualBridgeState(existingMeta.bridgeState) || "WAITING_HANDOFF",
       bridgeUpdatedAt: now,
       executionGate: "TASK_BOUND",
@@ -983,7 +987,7 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
     };
     const updated = await client.from("dev_center_tasks").update({ metadata: nextMetadata, updated_at: now }).eq("id", taskId).select("*").single();
     if (updated.error) databaseError("A task indítási metaadata nem menthető.", updated.error);
-    await addAudit(client, { action: "TASK_MANUAL_BRIDGE_STARTED", entityType: "task", entityId: taskId, sessionId, taskId, projectId: task.projectId, summary: `${task.title} munkamenet elindítva ${workerResult.data.name} részére.`, metadata: { workerId: task.requestedWorkerId, workerCode: workerResult.data.code, expectedFinishAt, executionGate: "TASK_BOUND", productionAccess: "DENY" } });
+    await addAudit(client, { action: "TASK_MANUAL_BRIDGE_STARTED", entityType: "task", entityId: taskId, sessionId, taskId, projectId: task.projectId, summary: `${task.title} munkamenet elindítva ${workerResult.data.name} részére.`, metadata: { workerId: task.requestedWorkerId, workerCode: workerResult.data.code, expectedFinishAt, executionGate: "TASK_BOUND", productionAccess: "DENY" }, actorId: text(workerResult.data.code) });
     return { ok: true as const, task: mapTask(updated.data as JsonRecord), session: bound.session, worker: mapWorker(workerResult.data as JsonRecord), expectedFinishAt };
   } catch (error) {
     if (sessionId) {
@@ -1026,7 +1030,8 @@ export async function advanceDevEngineTaskManualBridge(input: { taskId: string; 
     taskId: task.id,
     projectId: task.projectId,
     summary: `${task.title} · ${labels[input.target]}.`,
-    metadata: { bridgeMode: "MANUAL_CHATGPT_BRIDGE", bridgeState: input.target, previousBridgeState: transition.current, productionAccess: "DENY", handoffPromptSha256: text(metadata.handoffPromptSha256) || null },
+    metadata: { bridgeMode: "MANUAL_CHATGPT_BRIDGE", bridgeState: input.target, previousBridgeState: transition.current, productionAccess: "DENY", handoffPromptSha256: text(metadata.handoffPromptSha256) || null, workerCode: text(metadata.plusBridgeWorkerCode) || text(metadata.activeWorkerCode) || text(metadata.coordinatorChainWorkerCode) || null },
+    actorId: text(metadata.plusBridgeWorkerCode) || text(metadata.activeWorkerCode) || text(metadata.coordinatorChainWorkerCode) || null,
   });
   return { ok: true as const, task: mapTask(data as JsonRecord), bridgeState: input.target, handoffPrompt: text(nextMetadata.handoffPrompt), handoffPromptSha256: text(nextMetadata.handoffPromptSha256) || null };
 }
@@ -1106,7 +1111,8 @@ export async function recordDevEngineTaskManualBridgeResult(input: {
     taskId: task.id,
     projectId: task.projectId,
     summary: `${task.title} · strukturált ChatGPT eredmény rögzítve.`,
-    metadata: { version, commit: safe.commit, buildId: safe.buildId, resultSha256: safe.sha256, sanitized: safe.sanitized, productionAccess: "DENY" },
+    metadata: { version, commit: safe.commit, buildId: safe.buildId, resultSha256: safe.sha256, sanitized: safe.sanitized, productionAccess: "DENY", workerCode: text(metadata.plusBridgeWorkerCode) || text(metadata.activeWorkerCode) || text(metadata.coordinatorChainWorkerCode) || null },
+    actorId: text(metadata.plusBridgeWorkerCode) || text(metadata.activeWorkerCode) || text(metadata.coordinatorChainWorkerCode) || null,
   });
   return { ok: true as const, task: mapTask(data as JsonRecord), result, bridgeState: "RESULT_PENDING" as const, testingSuggested: task.status !== "testing" };
 }
@@ -1126,7 +1132,7 @@ export async function setDevEngineTaskTesting(taskId: string) {
   };
   const { data, error } = await client.from("dev_center_tasks").update({ status: "testing", metadata, updated_at: now }).eq("id", taskId).select("*").single();
   if (error) databaseError("A tesztelési állapot mentése sikertelen.", error, 409);
-  await addAudit(client, { action: "TASK_TESTING", entityType: "task", entityId: taskId, taskId, projectId: task.projectId, summary: `${task.title} tesztelési fázisba lépett.` });
+  await addAudit(client, { action: "TASK_TESTING", entityType: "task", entityId: taskId, taskId, projectId: task.projectId, summary: `${task.title} tesztelési fázisba lépett.`, actorId: text(currentMeta.plusBridgeWorkerCode) || text(currentMeta.activeWorkerCode) || text(currentMeta.coordinatorChainWorkerCode) || null, metadata: { workerCode: text(currentMeta.plusBridgeWorkerCode) || text(currentMeta.activeWorkerCode) || text(currentMeta.coordinatorChainWorkerCode) || null, productionAccess: "DENY" } });
   return { ok: true as const, task: mapTask(data as JsonRecord) };
 }
 
@@ -1166,7 +1172,8 @@ export async function finalizeDevEngineTask(input: { taskId: string; outcome: "c
     taskId: task.id,
     projectId: task.projectId,
     summary: input.outcome === "completed" ? `${task.title} elkészült.` : `${task.title} hibával / blokkolással leállt.`,
-    metadata: { note: note || null, notificationRequested: true },
+    actorId: text(currentMetadata.plusBridgeWorkerCode) || text(currentMetadata.activeWorkerCode) || text(currentMetadata.coordinatorChainWorkerCode) || null,
+    metadata: { note: note || null, notificationRequested: true, workerCode: text(currentMetadata.plusBridgeWorkerCode) || text(currentMetadata.activeWorkerCode) || text(currentMetadata.coordinatorChainWorkerCode) || null, productionAccess: "DENY" },
   });
   let rebalance: Awaited<ReturnType<typeof rebalanceBenAiWaitingTasks>> | null = null;
   try {

@@ -26,10 +26,12 @@ import BenjadminTeamScreen from "./BenjadminTeamScreen";
 import BenjadminTeamShowcaseScreen from "./BenjadminTeamShowcaseScreen";
 import BenjadminPersonProfileHost from "./BenjadminPersonProfileHost";
 
-type AdminTheme = "light" | "dark";
+type AdminTheme = "light" | "dark" | "sunlight";
 type AccessState = "checking" | "guest" | "authorized";
 
 const STORAGE_KEY = "dimpro-admin-theme";
+const DEVELOPMENT_MAP_THEME_KEY = "benjadmin-development-map-theme";
+const DEVELOPER_CONSOLE_THEME_KEY = "benjadmin-developer-console-theme";
 const BOARD_PIN_STORAGE_KEY = "dimpro-benjadmin-board-pinned";
 const ADMIN_AUTH_EVENT = "dimpro-admin-auth-changed";
 
@@ -97,7 +99,10 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     const storedBoardPinned = window.localStorage.getItem(BOARD_PIN_STORAGE_KEY) === "true";
-    setTheme(stored === "light" ? "light" : "dark");
+    const requestedMapTheme = pathname === "/admin/dev-map" ? new URLSearchParams(window.location.search).get("theme") : null;
+    const savedMapTheme = pathname === "/admin/dev-map" ? window.localStorage.getItem(DEVELOPMENT_MAP_THEME_KEY) : null;
+    const initialTheme = requestedMapTheme || savedMapTheme || stored;
+    setTheme(initialTheme === "light" || initialTheme === "sunlight" ? initialTheme : "dark");
     setBoardPinned(storedBoardPinned);
     setBoardOpen(storedBoardPinned);
     setThemeReady(true);
@@ -113,16 +118,17 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
       window.removeEventListener(ADMIN_AUTH_EVENT, onAuthChanged);
       window.removeEventListener("storage", onStorage);
     };
-  }, [verifyStoredAdminKey]);
+  }, [pathname, verifyStoredAdminKey]);
 
   useEffect(() => {
     if (!themeReady) return;
-    window.localStorage.setItem(STORAGE_KEY, theme);
+    if (pathname === "/admin/dev-map") window.localStorage.setItem(DEVELOPMENT_MAP_THEME_KEY, theme);
+    else window.localStorage.setItem(STORAGE_KEY, theme);
     window.localStorage.setItem(BOARD_PIN_STORAGE_KEY, String(boardPinned));
     document.documentElement.dataset.adminTheme = theme;
-    document.documentElement.style.colorScheme = theme;
+    document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
     if (boardPinned) setBoardOpen(true);
-  }, [boardPinned, themeReady, theme]);
+  }, [boardPinned, pathname, themeReady, theme]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -237,9 +243,13 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   }, [maximizeDeveloperConsoleWindow, router]);
 
   const openDevelopmentMap = useCallback(() => {
-    const target = "/admin/dev-map";
+    const consoleTheme = pathname.startsWith("/admin/dev-console") ? window.localStorage.getItem(DEVELOPER_CONSOLE_THEME_KEY) : null;
+    const sourceTheme: AdminTheme = consoleTheme === "light" || consoleTheme === "sunlight" || consoleTheme === "dark" ? consoleTheme : theme;
+    window.localStorage.setItem(DEVELOPMENT_MAP_THEME_KEY, sourceTheme);
+    const target = `/admin/dev-map?theme=${encodeURIComponent(sourceTheme)}`;
     const current = developmentMapWindowRef.current;
     if (current && !current.closed) {
+      try { current.postMessage({ type: "BENJADMIN_DEVELOPMENT_MAP_THEME", theme: sourceTheme }, window.location.origin); } catch {}
       maximizeDeveloperConsoleWindow(current);
       current.focus();
       return;
@@ -256,7 +266,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     maximizeDeveloperConsoleWindow(popup);
     window.setTimeout(() => maximizeDeveloperConsoleWindow(popup), 120);
     popup.focus();
-  }, [maximizeDeveloperConsoleWindow, router]);
+  }, [maximizeDeveloperConsoleWindow, pathname, router, theme]);
 
   useEffect(() => {
     const onDevelopmentMapRequest = () => {
@@ -284,6 +294,17 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
     window.addEventListener("keydown", onDeveloperConsoleShortcut);
     return () => window.removeEventListener("keydown", onDeveloperConsoleShortcut);
   }, [accessState, openDeveloperConsole, pathname, privacyCover]);
+
+  useEffect(() => {
+    if (pathname !== "/admin/dev-map") return;
+    const onMapThemeMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== "BENJADMIN_DEVELOPMENT_MAP_THEME") return;
+      const next = event.data?.theme;
+      if (next === "light" || next === "dark" || next === "sunlight") setTheme(next);
+    };
+    window.addEventListener("message", onMapThemeMessage);
+    return () => window.removeEventListener("message", onMapThemeMessage);
+  }, [pathname]);
 
   useEffect(() => {
     const onDevelopmentMapShortcut = (event: KeyboardEvent) => {
@@ -323,7 +344,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   if (teamScreen) {
     return (
       <BenjadminTeamScreen
-        theme={theme}
+        theme={theme === "dark" ? "dark" : "light"}
         onClose={() => setTeamScreen(false)}
       />
     );
@@ -334,7 +355,7 @@ export default function AdminThemeShell({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className={`dimpro-admin-shell admin-theme-${theme} benjadmin-shell ${boardPinned && boardOpen ? "is-board-pinned" : ""}`} data-theme={theme}>
+    <div className={`dimpro-admin-shell admin-theme-${theme} ${theme === "sunlight" ? "admin-theme-light" : ""} benjadmin-shell ${boardPinned && boardOpen ? "is-board-pinned" : ""}`} data-theme={theme}>
       <aside className="benjadmin-rail" aria-label="BENJADMIN fő navigáció">
         <div className="benjadmin-rail__top">
           <Link href="/admin" className="benjadmin-rail__brand" aria-label="BENJADMIN áttekintés" title="BENJADMIN">

@@ -171,16 +171,27 @@ function mapWorklogRow(row: Row): ConsoleMessage {
   };
 }
 
+function workerAuthor(value: unknown): ConsoleAuthor | null {
+  const worker = text(value).toUpperCase().replace(/[^A-Z]/g, "");
+  if (worker === "ARMINAI") return "ARMINAI";
+  if (worker === "JAZMINAI") return "JAZMINAI";
+  if (worker === "OUTMINAI") return "OUTMINAI";
+  if (worker === "MFORGE" || worker === "MFORGEAI") return "MFORGE";
+  if (worker === "VGUARD" || worker === "VGUARDAI") return "VGUARD";
+  return null;
+}
+
 function auditAuthor(row: Row): ConsoleAuthor {
+  const action = text(row.action).toUpperCase();
+  const metadata = record(row.metadata);
+  if (action.includes("TASK_BENAI_") || action === "BENAI_ASSIGNED") return "BENAI";
+  const operationalWorker = workerAuthor(metadata.workerCode);
+  if (operationalWorker && (action.includes("SESSION_") || action.includes("TASK_BRIDGE_") || action.includes("TASK_PLUS_BRIDGE_") || action.includes("TASK_MANUAL_BRIDGE_") || action === "TASK_TESTING" || action === "TASK_COMPLETED" || action === "TASK_FAILED" || action.includes("WORKTREE_") || action.includes("SCOPE_"))) return operationalWorker;
   const actor = text(row.actor_id).toUpperCase().replace(/[^A-Z]/g, "");
   if (actor === "BENJADMIN") return "BENJADMIN";
+  const actorWorker = workerAuthor(actor);
+  if (actorWorker) return actorWorker;
   if (actor === "BENAI") return "BENAI";
-  if (actor === "ARMINAI") return "ARMINAI";
-  if (actor === "JAZMINAI") return "JAZMINAI";
-  if (actor === "OUTMINAI") return "OUTMINAI";
-  if (actor === "MFORGE" || actor === "MFORGEAI") return "MFORGE";
-  if (actor === "VGUARD" || actor === "VGUARDAI") return "VGUARD";
-  const action = text(row.action).toUpperCase();
   if (action.includes("PARTNER_") || action.includes("HANDOFF")) return "OUTMINAI";
   if (action.includes("TASK_") || action.includes("SESSION_") || action.includes("SCOPE_") || action.includes("WORKTREE_")) return "BENAI";
   return "SYSTEM";

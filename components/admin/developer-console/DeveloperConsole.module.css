@@ -219,7 +219,8 @@
 .messageIdentity > div { min-width: 0; display: grid; gap: 1px; }
 .messageIdentity strong { color: var(--text); font-size: 11px; font-weight: 950; }
 .messageIdentity span { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .07em; }
-.message_right .messageIdentity { margin-left: auto; }
+.message_right .messageHeader { flex-direction: row-reverse; }
+.message_right .messageIdentity { margin-left: 0; }
 .message_right .messageIdentity > div { text-align: right; }
 .message_right .messageIdentity span { justify-content: flex-end; }
 .messageBody { margin-top: 7px; color: var(--text); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }

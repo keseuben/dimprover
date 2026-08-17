@@ -15,7 +15,7 @@ const page = read("app/admin/dev-map/page.tsx");
 
 const checks = [
   ["Ctrl+Alt+2 shortcut exists", shell.includes("ctrlAltTwo") && shell.includes("Digit2") && shell.includes("Numpad2")],
-  ["Full map route opens", shell.includes('const target = "/admin/dev-map"') && shell.includes('"benjadmin-development-map"')],
+  ["Full map route opens", shell.includes('const target = `/admin/dev-map?theme=') && shell.includes('"benjadmin-development-map"')],
   ["Map shortcut hides/focuses opener", shell.includes('pathname === "/admin/dev-map"') && shell.includes("window.blur()") && shell.includes("window.opener.focus()")],
   ["Topbar map button exists", shell.includes('data-testid="benjadmin-development-map-button"')],
   ["Console rail opens map event", rail.includes('benjadmin:development-map-open') && rail.includes('data-testid="benjadmin-open-development-map"')],

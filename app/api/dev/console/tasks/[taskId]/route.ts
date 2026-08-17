@@ -10,12 +10,65 @@ import {
   startDevEngineTaskManualBridge,
   updateDevEngineTaskEstimate,
 } from "@/app/lib/dev-center/engine-repository";
-import { createBenAiConsoleMessage } from "@/app/lib/dev-center/developer-console";
+import { createBenAiConsoleMessage, createWorkerActivityConsoleMessage } from "@/app/lib/dev-center/developer-console";
 import { sendDevPushNotification } from "@/app/lib/dev-center/push-store";
 import { engineErrorResponse, engineUnauthorized } from "@/app/api/dev/engine/_shared";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+function taskWorkerCode(task: unknown) {
+  if (!task || typeof task !== "object") return "";
+  const metadata = (task as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+  const meta = metadata as Record<string, unknown>;
+  const context = meta.developmentContext && typeof meta.developmentContext === "object" && !Array.isArray(meta.developmentContext)
+    ? meta.developmentContext as Record<string, unknown>
+    : {};
+  for (const value of [meta.plusBridgeWorkerCode, meta.activeWorkerCode, meta.coordinatorChainWorkerCode, context.workerCode]) {
+    const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+    if (["ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"].includes(code)) return code;
+  }
+  return "";
+}
+
+async function createOperationalMessage(input: {
+  task: unknown;
+  taskId: string;
+  projectId: string;
+  summary: string;
+  detail?: string;
+  kind: "TASK_UPDATE" | "TEST_RESULT" | "ERROR";
+  level?: "info" | "success" | "warning" | "error";
+  progressPercent?: number | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const workerCode = taskWorkerCode(input.task);
+  if (!workerCode) {
+    return createBenAiConsoleMessage({
+      summary: input.summary,
+      detail: input.detail,
+      taskId: input.taskId,
+      projectId: input.projectId,
+      kind: input.kind,
+      level: input.level,
+      progressPercent: input.progressPercent,
+      metadata: input.metadata,
+    });
+  }
+  return createWorkerActivityConsoleMessage({
+    workerCode,
+    taskId: input.taskId,
+    projectId: input.projectId,
+    phase: input.kind === "TEST_RESULT" ? "test" : input.kind === "ERROR" ? "error" : "development",
+    kind: input.kind,
+    summary: input.summary,
+    detail: input.detail,
+    level: input.level,
+    progressPercent: input.progressPercent,
+    metadata: { ...(input.metadata || {}), workerCode, productionAccess: "DENY" },
+  });
+}
 
 type TaskAction = "ROUTE" | "ACCEPT_SUGGESTION" | "ESTIMATE" | "START" | "HANDOFF" | "RUNNING" | "RESULT_PENDING" | "RESULT_REPORT" | "RESULT_TO_TESTING" | "TESTING" | "COMPLETE" | "FAIL";
 
@@ -62,12 +115,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       const started = await startDevEngineTaskManualBridge(taskId);
       result = started;
       notice = `${started.worker.name} munkamenete elindult · ${started.session.handshakeStage}.`;
-      await createBenAiConsoleMessage({ summary: `${started.task.title} · INDÍTVA`, detail: `Session: ${started.session.id} · kapu: ${started.session.handshakeStage}. A kódírás csak a branch/worktree/scope READY kapu után engedett.`, taskId, projectId: started.task.projectId, kind: "TASK_UPDATE", metadata: { workerCode: started.worker.code, sessionId: started.session.id, expectedFinishAt: started.expectedFinishAt, action } });
+      await createWorkerActivityConsoleMessage({ workerCode: started.worker.code, taskId, projectId: started.task.projectId, phase: "development", kind: "TASK_UPDATE", summary: `${started.task.title} · INDÍTVA`, detail: `Session: ${started.session.id} · kapu: ${started.session.handshakeStage}. A kódírás csak a branch/worktree/scope READY kapu után engedett.`, metadata: { workerCode: started.worker.code, sessionId: started.session.id, expectedFinishAt: started.expectedFinishAt, action, productionAccess: "DENY" } });
     } else if (action === "HANDOFF" || action === "RUNNING" || action === "RESULT_PENDING") {
       const advanced = await advanceDevEngineTaskManualBridge({ taskId, target: action === "HANDOFF" ? "HANDED_OFF" : action });
       result = advanced;
       notice = action === "HANDOFF" ? `${advanced.task.title} átadva a kijelölt ChatGPT workernek.` : action === "RUNNING" ? `${advanced.task.title} · ChatGPT munkamenet fut.` : `${advanced.task.title} · eredmény visszaérkezett, tesztelésre vár.`;
-      await createBenAiConsoleMessage({
+      await createOperationalMessage({
+        task: advanced.task,
         summary: notice,
         detail: action === "HANDOFF" ? "A kézi ChatGPT/MCP átadás időpontja és prompt SHA rögzítve." : action === "RUNNING" ? "A kódoló ChatGPT munkamenet futása kézzel visszaigazolva." : "A kódoló eredménye visszaérkezett; következő kapu a tesztelés.",
         taskId,
@@ -81,17 +135,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
         const testing = await setDevEngineTaskTesting(taskId);
         result = { ...recorded, testing };
         notice = `${recorded.task.title} · ChatGPT eredmény rögzítve, TESTING kapu megnyitva.`;
-        await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingStarted: true } });
+        await createOperationalMessage({ task: recorded.task, summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingStarted: true } });
       } else {
         result = recorded;
         notice = `${recorded.task.title} · strukturált ChatGPT eredmény rögzítve.`;
-        await createBenAiConsoleMessage({ summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingSuggested: recorded.testingSuggested } });
+        await createOperationalMessage({ task: recorded.task, summary: notice, detail: recorded.result.summary, taskId, projectId: recorded.task.projectId, kind: "TEST_RESULT", level: recorded.result.sanitized ? "warning" : "success", metadata: { action, bridgeState: recorded.bridgeState, resultVersion: recorded.result.version, resultSha256: recorded.result.sha256, commit: recorded.result.commit, buildId: recorded.result.buildId, sanitized: recorded.result.sanitized, testingSuggested: recorded.testingSuggested } });
       }
     } else if (action === "TESTING") {
       const testing = await setDevEngineTaskTesting(taskId);
       result = testing;
       notice = `${testing.task.title} tesztelési fázisban.`;
-      await createBenAiConsoleMessage({ summary: notice, detail: "A task állapota TESTING.", taskId, projectId: testing.task.projectId, kind: "TEST_RESULT", metadata: { action } });
+      await createOperationalMessage({ task: testing.task, summary: notice, detail: "A task állapota TESTING.", taskId, projectId: testing.task.projectId, kind: "TEST_RESULT", metadata: { action } });
     } else if (action === "COMPLETE" || action === "FAIL") {
       const finalized = await finalizeDevEngineTask({ taskId, outcome: action === "COMPLETE" ? "completed" : "failed", note: body.note });
       result = finalized;
@@ -100,7 +154,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       if (finalized.alreadyFinalized) {
         notification = { ok: true, skipped: true, reason: "ALREADY_FINALIZED" };
       } else {
-        await createBenAiConsoleMessage({ summary: notice, detail: body.note || (success ? "A task sikeresen lezárva." : finalized.task.blockedReason || "Blokkoló hiba."), taskId, projectId: finalized.task.projectId, kind: success ? "TASK_UPDATE" : "ERROR", level: success ? "success" : "error", progressPercent: success ? 100 : null, metadata: { action, outcome: success ? "completed" : "failed" } });
+        await createOperationalMessage({ task: finalized.task, summary: notice, detail: body.note || (success ? "A task sikeresen lezárva." : finalized.task.blockedReason || "Blokkoló hiba."), taskId, projectId: finalized.task.projectId, kind: success ? "TASK_UPDATE" : "ERROR", level: success ? "success" : "error", progressPercent: success ? 100 : null, metadata: { action, outcome: success ? "completed" : "failed" } });
         notification = await notifyOutcome({ taskId, title: success ? "BENJADMIN · Feladat elkészült" : "BENJADMIN · Fejlesztési hiba", body: notice, priority: success ? "normal" : "high" });
       }
     } else {

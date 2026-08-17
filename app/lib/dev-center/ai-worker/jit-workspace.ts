@@ -56,7 +56,7 @@ export async function prepareMForgeJitWorkspace(input: MForgeJitWorkspacePlan) {
   let sessionId = "";
   let physicalWorkspaceCreated = false;
   try {
-    const opened = await openDevEngineSession({ openedBy: "BenAI", environmentId: plan.environmentId, note: `M.Forge JIT workspace · ${plan.taskId}`, metadata: { origin: "EXTERNAL_AI_WORKER_V12_JIT", taskId: plan.taskId, productionAccess: "DENY" } });
+    const opened = await openDevEngineSession({ openedBy: "BenAI", environmentId: plan.environmentId, note: `M.Forge JIT workspace · ${plan.taskId}`, metadata: { origin: "EXTERNAL_AI_WORKER_V12_JIT", taskId: plan.taskId, workerCode: plan.workerCode, productionAccess: "DENY" } });
     sessionId = opened.session.id;
     await advanceDevEngineSession(sessionId, "assign_benai", {});
     const worker = await advanceDevEngineSession(sessionId, "bind_worker", { workerId: plan.workerId });

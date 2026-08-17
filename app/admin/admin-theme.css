@@ -22,6 +22,25 @@
     linear-gradient(180deg, #f8fbfd 0%, var(--admin-bg) 35%, #f1f5f9 100%);
 }
 
+.dimpro-admin-shell.admin-theme-sunlight {
+  --admin-bg: #f7f5ee;
+  --admin-surface: #fffdf8;
+  --admin-surface-soft: #f8f5ec;
+  --admin-surface-muted: #f1eee4;
+  --admin-border: #ddd8ca;
+  --admin-border-strong: #c9c2b2;
+  --admin-text: #1d2b38;
+  --admin-text-soft: #52616b;
+  --admin-text-muted: #697780;
+  --admin-accent: #087f96;
+  --admin-accent-strong: #0a697c;
+  --admin-lime: #587c18;
+  --admin-shadow: 0 16px 45px rgba(74, 62, 42, 0.08);
+  background:
+    radial-gradient(circle at 12% 2%, rgba(216, 174, 71, 0.08), transparent 22rem),
+    linear-gradient(180deg, #fffdf8 0%, #f7f5ee 38%, #f2efe7 100%);
+}
+
 .dimpro-admin-shell.admin-theme-dark {
   --admin-bg: #050812;
   --admin-surface: #07101f;
@@ -7418,3 +7437,17 @@
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-facts b { color:#214b5f; }
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__member footer b { color:#214b5f; }
 .benjadmin-team-screen.admin-theme-light .benjadmin-team-screen__infra-card header > span { color:#0f766e; background:#ecfdf5; }
+
+
+/* BENJADMIN Fejlesztési Térkép · theme-neutral drag target. */
+.benjadmin-development-map-dropzone {
+  border-color: color-mix(in srgb, var(--admin-border-strong) 82%, transparent) !important;
+  color: var(--admin-text-soft) !important;
+  background: color-mix(in srgb, var(--admin-surface-soft) 88%, var(--admin-surface)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-border) 35%, transparent);
+}
+[data-development-map-node]:hover .benjadmin-development-map-dropzone {
+  border-color: color-mix(in srgb, var(--admin-accent) 52%, var(--admin-border)) !important;
+  color: var(--admin-accent-strong) !important;
+  background: color-mix(in srgb, var(--admin-accent) 5%, var(--admin-surface)) !important;
+}

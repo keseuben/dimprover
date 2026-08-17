@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import { pullDevEngineTaskForPlusWorker } from "@/app/lib/dev-center/engine-repository";
-import { createBenAiConsoleMessage } from "@/app/lib/dev-center/developer-console";
+import { createWorkerActivityConsoleMessage } from "@/app/lib/dev-center/developer-console";
 import { engineErrorResponse, engineUnauthorized } from "@/app/api/dev/engine/_shared";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
     const { workerCode } = await context.params;
     const pulled = await pullDevEngineTaskForPlusWorker(workerCode);
     if (pulled.found && pulled.task) {
-      await createBenAiConsoleMessage({
+      await createWorkerActivityConsoleMessage({
+        workerCode: pulled.worker.code,
+        phase: "development",
         summary: `${pulled.worker.name} felvette a következő BENJADMIN feladatot.`,
         detail: `${pulled.task.title} · Plus-only ChatGPT bridge · ${pulled.handoff?.bridgeState || "RUNNING"}.`,
         taskId: pulled.task.id,
