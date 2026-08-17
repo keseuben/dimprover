@@ -112,3 +112,27 @@ A `user_drive_asset_refs` és `project_drive_asset_refs` végleges létrehozása
 - a `/field-capture` oldal központi DIMPRO bejelentkezéshez kötött
 - az `/api/field-capture/health` publikus, csak readiness adatokat adó monitoring endpoint
 - a Terepi Service Worker kizárólag DEV hoston regisztrálódik, scope: `/field-capture/`
+
+## P0–P4 mobil browser acceptance lezárás
+
+2026-08-17 esti DEV ellenőrzés:
+
+- aktív build: `YemJawidC5RIFJvn2tWjo`
+- alkalmazáskód forráscommit: `9f1c071`
+- statikus Field Capture acceptance: 36/36 PASS
+- mobil Puppeteer acceptance: 19/19 PASS
+- tesztelt mobil viewport: 390 × 844, touch/mobile móddal
+- authos `/field-capture` oldal HTTP 200 tesztmunkamenettel; kijelentkezve továbbra is 307 -> `/login`
+- GPS, tájolás, hang és telefonra mentés alapból KI
+- Galéria/file picker közvetlen user gesture-ből megnyílik
+- első kép `LOCAL_ONLY` kártyaként létrejön
+- képenkénti megjegyzés szerkeszthető
+- shared DIMPRO Browser Voice átirat bekerül a megjegyzésbe
+- offline állapotban második capture item létrehozható
+- IndexedDB queue oldalfrissítés után visszaáll
+- mobil UI-n nincs vízszintes overflow
+- browser pageerror: 0; console error: 0
+
+A browser acceptance első futása valódi mobil UX-kockázatot talált: a Kamera/Galéria input 40 ms-os késleltetéssel indult, ami elveszíthette a böngésző user-activation állapotát. A `9f1c071` javítás óta az input megnyitása közvetlenül a gombnyomás eseményében történik.
+
+A P0–P4 baseline ezzel DEV szinten lezárható. A fizikai Samsung/PWA acceptance továbbra is szükséges a valós kamera, galéria, billentyűzet, Android download és PWA lifecycle ellenőrzéséhez.

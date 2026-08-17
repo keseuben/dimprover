@@ -26,11 +26,22 @@ const regular = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: f
 const checks = [];
 const pass = (name, ok, detail = '') => { assert.ok(ok, `${name}${detail ? `: ${detail}` : ''}`); checks.push(name); };
 const buttonByText = async (page, text) => {
-  for (const button of await page.$$('button')) {
-    const value = await button.evaluate((el) => el.textContent || '');
-    if (value.includes(text)) return button;
+  const buttons = await page.$$('button');
+  const fallback = [];
+  for (const button of buttons) {
+    const state = await button.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        text: (el.textContent || '').replace(/\s+/g, ' ').trim(),
+        visible: rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none',
+      };
+    });
+    if (!state.visible) continue;
+    if (state.text === text) return button;
+    if (state.text.includes(text)) fallback.push(button);
   }
-  return null;
+  return fallback[0] || null;
 };
 
 let userId = '';
@@ -176,7 +187,7 @@ try {
   const stop = await buttonByText(page, 'Leállítás');
   assert.ok(stop, 'Diktálás Leállítás gomb hiányzik');
   await stop.click();
-  await page.waitForFunction(() => [...document.querySelectorAll('textarea')].some((el) => el.value.includes('terepi hangos teszt')), { timeout: 5000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('textarea')].some((el) => el.value.toLowerCase().includes('terepi hangos teszt')), { timeout: 5000 });
   pass('Shared DIMPRO Voice átirat bekerül a kép megjegyzésébe', true);
 
   if (typeof page.setOfflineMode === 'function') {
