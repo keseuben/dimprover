@@ -148,6 +148,21 @@ async function collectLeaseEvidence(coordinationRoot, nowMs) {
   return items;
 }
 
+async function collectReleasedLeaseKeys(coordinationRoot) {
+  const dir = path.join(coordinationRoot, "worker-presence-leases");
+  let files = [];
+  try { files = await readdir(dir); } catch { return new Set(); }
+  const released = new Set();
+  for (const name of files.filter((item) => item.endsWith(".json"))) {
+    const lease = await readJson(path.join(dir, name));
+    const code = normalizeWorker(lease?.workerCode);
+    const leaseId = text(lease?.leaseId) || name;
+    if (!code || text(lease?.state).toUpperCase() !== "RELEASED") continue;
+    released.add(`lease:${code}:${leaseId}`);
+  }
+  return released;
+}
+
 async function collectSessionEvidence(client, nowMs) {
   const [sessions, workers, tasks] = await Promise.all([
     client.from("dev_center_worker_sessions").select("id,worker_id,task_id,status,handshake_stage,branch_name,worktree_path,opened_at,last_heartbeat_at,updated_at").neq("status", "closed").order("updated_at", { ascending: false }).limit(80),
@@ -279,7 +294,10 @@ export async function collectWorkerPresenceEvidence({ client, root, coordination
 function mergeMetadata(existing, patch) { return { ...record(existing), ...patch }; }
 
 export async function syncWorkerPresence({ client, root, coordinationRoot, now = Date.now() }) {
-  const detected = await collectWorkerPresenceEvidence({ client, root, coordinationRoot, now });
+  const [detected, releasedPresenceKeys] = await Promise.all([
+    collectWorkerPresenceEvidence({ client, root, coordinationRoot, now }),
+    collectReleasedLeaseKeys(coordinationRoot),
+  ]);
   const existing = await client.from("dev_center_live_worklog")
     .select("id,worker_code,phase,summary,detail,source,metadata,created_at")
     .eq("source", SOURCE).order("created_at", { ascending: false }).limit(40);
@@ -323,9 +341,15 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
     }
   }
   for (const [code, latest] of latestByWorker.entries()) {
-    if (detectedCodes.has(code)) continue;
     const meta = record(latest.metadata);
     if (text(meta.presenceState) !== "ACTIVE") continue;
+    const presenceKey = text(meta.presenceKey);
+    if (releasedPresenceKeys.has(presenceKey)) {
+      const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString(), endReason: "LEASE_RELEASED" }) }).eq("id", latest.id);
+      if (!result.error) ended++;
+      continue;
+    }
+    if (detectedCodes.has(code)) continue;
     const lastSeenMs = Date.parse(text(meta.lastSeenAt || latest.created_at));
     if (Number.isFinite(lastSeenMs) && now - lastSeenMs < ACTIVE_TTL_MS) continue;
     const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString() }) }).eq("id", latest.id);

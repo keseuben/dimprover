@@ -17,14 +17,20 @@ fs.mkdirSync(leaseDir,{recursive:true,mode:0o700});
 const file=path.join(leaseDir,`${workerCode}.json`);
 let current={};try{current=JSON.parse(fs.readFileSync(file,"utf8"));}catch{}
 if(action==="release"){
-  try{fs.unlinkSync(file);}catch{}
-  console.log(JSON.stringify({ok:true,workerCode,state:"RELEASED",productionAccess:"DENY"}));process.exit(0);
+  const now=new Date();
+  if(text(current.leaseId)){
+    const released={...current,schemaVersion:1,workerCode,state:"RELEASED",releasedAt:now.toISOString(),expiresAt:now.toISOString(),productionAccess:"DENY"};
+    const tmp=`${file}.${process.pid}.tmp`;fs.writeFileSync(tmp,`${JSON.stringify(released,null,2)}\n`,{mode:0o600});fs.renameSync(tmp,file);fs.chmodSync(file,0o600);
+  }else{
+    try{fs.unlinkSync(file);}catch{}
+  }
+  console.log(JSON.stringify({ok:true,workerCode,state:"RELEASED",leaseId:text(current.leaseId)||null,productionAccess:"DENY"}));process.exit(0);
 }
 if(!["claim","heartbeat"].includes(action)){console.error(`Ismeretlen action: ${action}`);process.exit(64);}
 const now=new Date();
 const ttlMinutes=Math.max(3,Math.min(240,Number(arg("ttl")||15)));
 const lease={
-  schemaVersion:1, leaseId:text(current.leaseId)||crypto.randomUUID(), workerCode,
+  schemaVersion:1, leaseId:text(current.state).toUpperCase()==="ACTIVE"&&text(current.leaseId)?text(current.leaseId):crypto.randomUUID(), workerCode,
   state:"ACTIVE", startedAt:text(current.startedAt)||now.toISOString(), heartbeatAt:now.toISOString(), expiresAt:new Date(now.getTime()+ttlMinutes*60_000).toISOString(),
   taskId:arg("task")||text(current.taskId)||null, projectId:arg("project")||text(current.projectId)||null,
   phase:arg("phase")||text(current.phase)||"coding", summary:arg("summary")||text(current.summary)||null,

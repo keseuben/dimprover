@@ -38,4 +38,7 @@ check("Explicit lease helper supports claim",lease.includes("\"claim\"") && leas
 check("Explicit lease helper supports heartbeat",lease.includes("\"heartbeat\""));
 check("Explicit lease helper supports release",lease.includes("\"release\""));
 check("Lease helper remains PROD denied",lease.includes("productionAccess:\"DENY\""));
+check("Terepi owner maps to Jázmin",aliases.workers.JAZMINAI.ownerPatterns.some((x)=>x.includes("terepi-")));
+check("Release persists a RELEASED marker",lease.includes("state:\"RELEASED\"") && lease.includes("releasedAt"));
+check("Released lease closes presence immediately",bridge.includes("collectReleasedLeaseKeys") && bridge.includes("LEASE_RELEASED"));
 console.log(JSON.stringify({ok:!process.exitCode,passed:n,failed:process.exitCode?1:0},null,2));
