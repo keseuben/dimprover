@@ -935,3 +935,50 @@ Tesztkapu:
 - git diff --check: PASS.
 
 A Commerce pénztár még nem váltotta le a legacy pénztárat, és shared DEV runtime cutover nem történt. A 0.1.7 készletfoglalási bridge DEV apply szükséges a reserve/issue teljes runtime E2E előtt. PROD változatlan.
+
+### 2026-08-19 00:12 checkpoint — Order Inventory Bridge 0.1.7 runtime zöld
+
+A 0.1.7 bridge tényleges DEV runtime-on ellenőrizve, és a korábbi QA fixture biztonságosan semlegesítve maradt auditálható módon: aktív rendelés nem maradt a pénztári sorban, a tesztkészlet nullára lett állítva StockMovement ADJUSTMENT-tel, a QA termék/variant/raktár/forrás archiválva lett. Destruktív adatbázis-törlés nem történt.
+
+Valós DEV runtime E2E, önsemlegesítő QA életciklussal:
+- Order Inventory Bridge runtime: 14/14 PASS;
+- fizikai készlet ledgeren indítva: PASS;
+- mapped + unresolved vegyes külső rendelés: PASS;
+- csak mapped tétel foglalódik: PASS;
+- reserve replay idempotens: PASS;
+- physical / reserved / available invariáns: PASS;
+- PAID nem fogyaszt fizikai készletet: PASS;
+- ISSUED reservation consume: PASS;
+- mapped item CONSUMED, legacy item UNRESOLVED marad: PASS;
+- mapped PAID rendelés reservation nélkül nem adható ki: PASS;
+- order inventory event ledger: PASS;
+- QA rendelések terminális állapotba kerülnek: PASS;
+- QA készlet nullázva auditált StockMovementtel: PASS;
+- QA product/source/warehouse archiválva: PASS;
+- QA rendelések nincsenek aktív cashier queue-ban: PASS.
+
+Teljes célzott regresszió:
+- Order Core contract: 30/30 PASS;
+- Order Inventory Bridge contract: 27/27 PASS;
+- Legacy SKU resolution bridge: 16/16 PASS;
+- Commerce Cashier UI: 20/20 PASS;
+- Inventory contract: 16/16 PASS;
+- Reservation contract: 18/18 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- Commerce schema/security verify: 0.1.7 / 8 migráció PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- elkészült: Product/Catalog/Pricing/Media/Inventory/Reservation/Receiving/Shared Order Core/Order↔Reservation backend alap, Commerce cashier UI skeleton és legacy SKU resolver bridge;
+- részben elkészült: legacy Árutér tényleges feature-flagelt dual-write/mirror; teljes cashier böngészős E2E; reservation expiry worker;
+- hiányzik: kontrollált legacy mirror bekapcsolás, Storefront Pilot teljes Commerce Order átállás, Connector/NaturaSoft és későbbi POS réteg;
+- DB: Commerce 0.1.7, 8 migráció;
+- API: Order create/list/detail/status/reserve + legacy bridge aktív kódszinten;
+- UI: új `/aruter/admin/penztar` elkészült, legacy `/aruter/penztar` változatlan;
+- ismert hiba: jelen checkpointban nincs nyitott Order/Reservation backend regresszió; a shared DEV runtime még nem erre a forráspontra van cutoverelve;
+- következő lépés: tiszta candidate build erről a checkpointról, majd feature-flagelt legacy mirror előkészítés;
+- becsült aktív idő: candidate build + smoke 1–2 óra; legacy mirror 3–5 óra; cashier browser E2E 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
