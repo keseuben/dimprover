@@ -130,7 +130,7 @@ function liveTaskContext(task: LiveTask) {
 function CompactTaskContext({ task, location }: { task: LiveTask; location: "worker" | "inbox" }) {
   const context = liveTaskContext(task);
   return <div className={location === "worker" ? styles.workerContextCompact : styles.inboxContextCompact} data-context-location={location} data-work-stage={context.workStageIndex}>
-    <span>{context.mainModule} <b>›</b> {context.moduleName} <b>›</b> {context.submoduleName}</span>
+    <span>{context.mainModule} <b>›</b> {context.projectName} <b>›</b> {context.moduleName} <b>›</b> {context.submoduleName}</span>
     <strong>6/{context.workStageIndex} · {context.workStageLabel}</strong>
     <small>{context.workItem}</small>
   </div>;

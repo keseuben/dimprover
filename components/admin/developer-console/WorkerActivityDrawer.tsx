@@ -2,6 +2,7 @@
 
 import { Activity, ArrowRightLeft, Clock3, Code2, FileCode2, FileDiff, FlaskConical, Hammer, History, Radio, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
 import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import DeveloperMessage from "./DeveloperMessage";
 import type { ConsoleAuthor, ConsoleLiveState, ConsoleMessage } from "./types";
@@ -46,6 +47,7 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
     : worker ? live?.tasks.find((item) => (item.assigned_worker_id === worker.id || item.requested_worker_id === worker.id) && !["completed", "cancelled"].includes(item.status)) || null : null;
   const build = activeTask ? live?.builds.find((item) => item.task_id === activeTask.id || (session?.id && item.session_id === session.id)) : null;
   const autoPresence = workerCode ? live?.workerPresence?.find((item) => item.workerCode === workerCode && item.active) || null : null;
+  const activeContext = activeTask ? resolveTaskDevelopmentContext({ projectId: activeTask.project_id || null, title: activeTask.title, description: activeTask.description || null, status: activeTask.status, scope: activeTask.scope, metadata: activeTask.metadata || {} }) : null;
   const presenceHistory = workerCode ? (live?.workerPresenceHistory || []).filter((item) => item.workerCode === workerCode).slice(0, 12) : [];
   const transitions = workerCode ? (live?.workerTransitions || []).filter((item) => item.fromWorkerCode === workerCode || item.toWorkerCode === workerCode).slice(0, 10) : [];
   const workerLabel = (code: string) => live?.workers.find((item) => item.code === code)?.name || code;
@@ -83,6 +85,12 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
               <span><Code2 size={12} /> {activeTask?.branch_name || autoPresence?.branch || autoPresence?.inferredBy || "Branch: —"}</span>
             </div>
           </section>
+
+          {activeContext ? <section className={styles.workerContextCompact} data-context-location="drawer" data-work-stage={activeContext.workStageIndex}>
+            <span>{activeContext.mainModule} <b>›</b> {activeContext.projectName} <b>›</b> {activeContext.moduleName} <b>›</b> {activeContext.submoduleName}</span>
+            <strong>6/{activeContext.workStageIndex} · {activeContext.workStageLabel}</strong>
+            <small>{activeContext.workItem}</small>
+          </section> : null}
 
           <section className={styles.workerActivityRetention}>
             <History size={14} />

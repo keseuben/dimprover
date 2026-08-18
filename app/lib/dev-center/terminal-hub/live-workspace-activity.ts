@@ -31,6 +31,8 @@ export type LiveWorkspaceWorkerActivity = {
   taskId: string | null;
   taskTitle: string | null;
   taskStatus: string | null;
+  projectId: string | null;
+  projectName: string | null;
   branch: string | null;
   lastHeartbeatAt: string | null;
   updatedAt: string | null;
@@ -223,6 +225,8 @@ export async function getLiveWorkspaceActivity(workspaceId: string): Promise<Liv
       taskId: text(task?.id) || null,
       taskTitle: safeText(task?.title, 300) || null,
       taskStatus: text(task?.status) || null,
+      projectId: development?.projectId || text(task?.project_id) || null,
+      projectName: development?.projectName || null,
       branch: safeText(session?.branch_name || task?.branch_name, 200) || null,
       lastHeartbeatAt: heartbeat || null,
       updatedAt: text(session?.updated_at || worker.updated_at) || null,

@@ -8,6 +8,8 @@ export type DevelopmentTaskContextInput = {
 };
 
 export type DevelopmentContextView = {
+  projectId: string;
+  projectName: string;
   mainModule: string;
   moduleName: string;
   submoduleName: string;
@@ -108,11 +110,15 @@ export function resolveTaskDevelopmentContext(task: DevelopmentTaskContextInput)
   const meta = record(task.metadata);
   const stored = record(meta.developmentContext);
   const hierarchy = inferHierarchy(task);
+  const projectId = text(stored.projectId || meta.projectId || task.projectId);
+  const projectName = text(stored.projectName || meta.projectName || meta.project_name) || (projectId === "project_dimprover" ? "DIMPROVER" : projectId || "DIMPRO");
   const workStageIndex = stageForTask(task, stored, meta);
   const description = text(task.description).replace(/\s+/g, " ");
   const activityAction = text(stored.activityAction || meta.activityAction) || actionForStage(workStageIndex);
   const activityNarrative = text(stored.activityNarrative || meta.activityNarrative) || (description ? `${activityAction} Feladatcél: ${description.slice(0, 360)}${description.length > 360 ? "…" : ""}` : activityAction);
   return {
+    projectId,
+    projectName,
     ...hierarchy,
     activityAction,
     activityNarrative,

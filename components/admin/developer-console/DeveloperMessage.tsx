@@ -79,6 +79,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
   const diffSummary = metadataText(message, "diffSummary");
   const repeatCount = Math.max(1, Number(message.metadata?.repeatCount || 1));
   const sanitized = message.metadata?.sanitized === true;
+  const projectName = metadataText(message, "projectName") || metadataText(message, "projectId") || message.projectId || "";
   const mainModule = metadataText(message, "mainModule");
   const moduleName = metadataText(message, "moduleName");
   const submoduleName = metadataText(message, "submoduleName");
@@ -123,6 +124,7 @@ export default function DeveloperMessage({ message }: { message: ConsoleMessage 
           <section className={styles.messageWorkContext} data-work-stage={workStageIndex} data-testid="benjadmin-message-work-context">
             <div className={styles.messageContextPath}>
               {mainModule ? <span><Layers3 size={11} /><small>FŐMODUL</small><b>{mainModule}</b></span> : null}
+              {projectName ? <span><Layers3 size={11} /><small>PROJEKT</small><b>{projectName}</b></span> : null}
               {moduleName ? <span><Boxes size={11} /><small>MODUL</small><b>{moduleName}</b></span> : null}
               {submoduleName ? <span><FileCode2 size={11} /><small>ALMODUL / FUNKCIÓ</small><b>{submoduleName}</b></span> : null}
             </div>

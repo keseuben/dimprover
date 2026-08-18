@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBenAiBridgeStatus } from "./benai-dispatch";
 import { resolveProjectRepositoryId } from "./partner-isolation";
 import { getInternalExecutorReadiness } from "./internal-executor-readiness";
+import { DEVELOPMENT_STAGE_LABELS, resolveTaskDevelopmentContext, safeDevelopmentStage } from "./development-context";
 
 const execFileAsync = promisify(execFile);
 
@@ -240,15 +241,8 @@ type ConsoleTaskContext = {
   metadata: Record<string, unknown>;
 };
 
-const WORK_STAGE_LABELS = ["", "ELEMZÉS / ELŐKÉSZÍTÉS", "FEJLESZTÉS", "TESZTELÉS", "ELLENŐRZÉS / JAVÍTÁS", "BUILD / KIADÁS", "LEZÁRÁS / ÁTADÁS"] as const;
-
-function safeStageIndex(value: unknown) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? Math.max(1, Math.min(6, Math.round(numeric))) : 0;
-}
-
 function stageForMessage(message: ConsoleMessage) {
-  const explicit = safeStageIndex(message.metadata.workStageIndex);
+  const explicit = safeDevelopmentStage(message.metadata.workStageIndex);
   if (explicit) return explicit;
   const phase = text(message.metadata.activityPhase || message.metadata.phase).toLowerCase();
   if (message.kind === "RELEASE" || text(message.metadata.action).toUpperCase() === "COMPLETE") return 6;
@@ -264,49 +258,6 @@ function scopeEntries(value: unknown) {
   return value.map((item) => record(item)).map((item) => ({ type: text(item.type), key: text(item.key) })).filter((item) => item.type && item.key);
 }
 
-function inferHierarchy(task: ConsoleTaskContext) {
-  const meta = task.metadata;
-  const haystack = `${task.title} ${task.description}`.toLowerCase();
-  let mainModule = text(meta.mainModule || meta.main_module || meta.productArea || meta.product);
-  let moduleName = text(meta.moduleName || meta.module || meta.module_name || meta.moduleHint);
-  let submoduleName = text(meta.submoduleName || meta.submodule || meta.sub_module || meta.featureArea);
-  const workItem = text(meta.workItem || meta.work_item || meta.currentWorkItem) || task.title;
-
-  if (!mainModule) {
-    if (haystack.includes('benjadmin')) mainModule = 'BENJADMIN';
-    else if (haystack.includes('gyorssend') || haystack.includes('gyorskép') || haystack.includes('drop')) mainModule = 'DIMPRO Drop';
-    else if (haystack.includes('drive')) mainModule = 'DIMPRO Drive';
-    else if (haystack.includes('fájlműhely') || haystack.includes('fajlmuhely')) mainModule = 'DIMPRO Fájlműhely';
-    else if (haystack.includes('projektkapu')) mainModule = 'DIMPROVER Projektkapu';
-    else if (haystack.includes('értekez') || haystack.includes('teams')) mainModule = 'DIMPRO Értekezleti Asszisztens';
-    else mainModule = task.projectId === 'project_dimprover' ? 'DIMPROVER' : task.projectId || 'DIMPRO';
-  }
-
-  if (!moduleName) {
-    if (mainModule === 'BENJADMIN') {
-      if (haystack.includes('scheduler') || haystack.includes('éjszak') || haystack.includes('ébreszt')) moduleName = 'Fejlesztési ütemező';
-      else if (haystack.includes('worker') || haystack.includes('live workspace')) moduleName = 'AI Fejlesztői Tér';
-      else moduleName = 'Fejlesztői Konzol';
-    } else if (mainModule === 'DIMPRO Drop') moduleName = haystack.includes('gyors') ? 'GyorsSend / Gyorskép' : 'Drop Core';
-    else if (mainModule === 'DIMPRO Drive') moduleName = 'Drive munkatér';
-    else moduleName = 'Fejlesztési munkarész';
-  }
-
-  if (!submoduleName) {
-    if (haystack.includes('közös fejlesztői') || haystack.includes('worker context') || haystack.includes('kárty')) submoduleName = 'Közös fejlesztői csevegés';
-    else if (haystack.includes('voice') || haystack.includes('diktál')) submoduleName = 'Hang / diktálás';
-    else if (haystack.includes('multipart') || haystack.includes('upload') || haystack.includes('feltölt')) submoduleName = 'Feltöltési folyamat';
-    else if (haystack.includes('scheduler') || haystack.includes('éjszak')) submoduleName = 'Éjszakai / órás futási lánc';
-    else if (haystack.includes('pwa')) submoduleName = 'PWA';
-    else if (haystack.includes('chat') || haystack.includes('cseveg')) submoduleName = 'Csevegés és aktivitás';
-    else {
-      const moduleScope = task.scope.find((item) => item.type === 'module');
-      const pathScope = task.scope.find((item) => item.type === 'path');
-      submoduleName = moduleScope?.key || pathScope?.key || 'Aktuális funkció';
-    }
-  }
-  return { mainModule, moduleName, submoduleName, workItem };
-}
 
 function actionForStage(stage: number, message: ConsoleMessage) {
   const explicit = text(message.metadata.activityAction);
@@ -353,7 +304,9 @@ async function enrichMessagesWithTaskContext(client: SupabaseClient, messages: C
 
   return messages.map((message) => {
     const task = message.taskId ? taskMap.get(message.taskId) || null : null;
-    const hierarchy = task ? inferHierarchy(task) : {
+    const hierarchy = task ? resolveTaskDevelopmentContext(task) : {
+      projectId: text(message.metadata.projectId) || message.projectId || "",
+      projectName: text(message.metadata.projectName),
       mainModule: text(message.metadata.mainModule),
       moduleName: text(message.metadata.moduleName),
       submoduleName: text(message.metadata.submoduleName),
@@ -365,6 +318,8 @@ async function enrichMessagesWithTaskContext(client: SupabaseClient, messages: C
       metadata: {
         ...(task?.metadata || {}),
         ...message.metadata,
+        projectId: text(message.metadata.projectId) || (task ? hierarchy.projectId : message.projectId || ""),
+        projectName: text(message.metadata.projectName) || (task ? hierarchy.projectName : ""),
         mainModule: text(message.metadata.mainModule) || hierarchy.mainModule,
         moduleName: text(message.metadata.moduleName) || hierarchy.moduleName,
         submoduleName: text(message.metadata.submoduleName) || hierarchy.submoduleName,
@@ -372,7 +327,7 @@ async function enrichMessagesWithTaskContext(client: SupabaseClient, messages: C
         taskTitle: task?.title || text(message.metadata.taskTitle),
         taskStatus: task?.status || text(message.metadata.taskStatus),
         workStageIndex: stage,
-        workStageLabel: text(message.metadata.workStageLabel) || WORK_STAGE_LABELS[stage],
+        workStageLabel: text(message.metadata.workStageLabel) || DEVELOPMENT_STAGE_LABELS[stage],
         activityAction: actionForStage(stage, message),
         activityNarrative: narrativeForMessage(message, task, stage),
       },
@@ -753,10 +708,12 @@ async function syncTaskDevelopmentContext(client: SupabaseClient, input: {
     id: text(row.id), projectId: text(row.project_id), title: text(row.title), description: text(row.description), status: text(row.status),
     scope: scopeEntries(row.scope), metadata: record(row.metadata),
   };
-  const hierarchy = inferHierarchy(task);
+  const hierarchy = resolveTaskDevelopmentContext(task);
   const stage = stageForMessage(input.message);
   const currentMeta = record(row.metadata);
   const developmentContext = {
+    projectId: text(input.metadata.projectId) || hierarchy.projectId,
+    projectName: text(input.metadata.projectName) || hierarchy.projectName,
     mainModule: text(input.metadata.mainModule) || hierarchy.mainModule,
     moduleName: text(input.metadata.moduleName) || hierarchy.moduleName,
     submoduleName: text(input.metadata.submoduleName) || hierarchy.submoduleName,
@@ -764,7 +721,7 @@ async function syncTaskDevelopmentContext(client: SupabaseClient, input: {
     activityAction: text(input.metadata.activityAction) || actionForStage(stage, input.message),
     activityNarrative: text(input.metadata.activityNarrative) || narrativeForMessage(input.message, task, stage),
     workStageIndex: stage,
-    workStageLabel: text(input.metadata.workStageLabel) || WORK_STAGE_LABELS[stage],
+    workStageLabel: text(input.metadata.workStageLabel) || DEVELOPMENT_STAGE_LABELS[stage],
     source: "WORKER_ACTIVITY",
     workerCode: input.message.author,
     updatedAt: input.message.createdAt || new Date().toISOString(),

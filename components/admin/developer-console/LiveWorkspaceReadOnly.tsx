@@ -184,7 +184,7 @@ export default function LiveWorkspaceReadOnly({ enabled, activityEnabled, monaco
                 <span>{worker.workspaceLabel || "nincs aktív worktree"}{worker.branch ? ` · ${worker.branch}` : ""}</span>
                 <small>{worker.taskTitle || worker.role || worker.workerStatus}</small>
                 {worker.mainModule && worker.workStageIndex ? <div className={styles.liveWorkspaceWorkerContext} data-work-stage={worker.workStageIndex}>
-                  <span>{worker.mainModule} <b>›</b> {worker.moduleName || "—"} <b>›</b> {worker.submoduleName || "—"}</span>
+                  <span>{worker.mainModule} <b>›</b> {worker.projectName || worker.projectId || "—"} <b>›</b> {worker.moduleName || "—"} <b>›</b> {worker.submoduleName || "—"}</span>
                   <strong>6/{worker.workStageIndex} · {worker.workStageLabel}</strong>
                   {worker.workItem ? <small>{worker.workItem}</small> : null}
                 </div> : null}
