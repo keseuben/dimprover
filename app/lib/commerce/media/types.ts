@@ -24,3 +24,27 @@ export type MediaLink = OrganizationScoped & CommerceLifecycle & {
   sortOrder: number;
   primary: boolean;
 };
+
+export type MediaVariantKind = "ORIGINAL" | "WEB" | "THUMBNAIL";
+export type MediaOverlayType = "WATERMARK" | "LOGO" | "STAMP" | "ARROW" | "CIRCLE" | "TEXT" | "BLUR";
+
+export type MediaVariant = OrganizationScoped & CommerceLifecycle & {
+  id: CommerceEntityId;
+  assetId: CommerceEntityId;
+  kind: MediaVariantKind;
+  storageKey: string;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+  sizeBytes: number;
+  sha256?: string | null;
+};
+
+export type MediaOverlay = OrganizationScoped & CommerceLifecycle & {
+  id: CommerceEntityId;
+  assetId: CommerceEntityId;
+  type: MediaOverlayType;
+  payload: Record<string, string | number | boolean | null>;
+  sortOrder: number;
+  active: boolean;
+};

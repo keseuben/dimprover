@@ -236,3 +236,20 @@ Candidate smoke, izolált localhost porton:
 - candidate standalone startup: PASS.
 
 Megjegyzés: shared DEV runtime cutover még NEM történt. A candidate izoláltan zöld, így ÁrminAI/JázminAI aktuális release-e nem lett lecserélve.
+
+### 2026-08-18 19:xx checkpoint — Media Engine M1 adatmodell + kliens előkészítés
+
+Elkészült:
+- külön `commerce_media_variants` modell: ORIGINAL / WEB / THUMBNAIL;
+- külön, nem destruktív `commerce_media_overlays` modell: WATERMARK / LOGO / STAMP / ARROW / CIRCLE / TEXT / BLUR;
+- `commerce_media_finalize_upload` atomi metadata-finalizáló RPC;
+- organization + asset storage-prefix guard;
+- WEB és THUMBNAIL kötelező; ORIGINAL alapértelmezetten tiltott, ha `retainOriginal=false`;
+- Product és ProductVariant média-link tenant scope ellenőrzéssel;
+- finalize audit + outbox esemény;
+- Commerce kliens képelőkészítő wrapper a már meglévő közös Drop image engine-re építve, külön web és thumbnail outputtal, metaadat-strip alapértelmezéssel;
+- Media M1 contract: 16/16 PASS;
+- Media DB rollback E2E: 10/10 PASS;
+- TypeScript: PASS; lint: PASS; diff-check: PASS.
+
+A Media M1 migráció ekkor még staged; tényleges DEV apply külön koordinált migration gate után következik.
