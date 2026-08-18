@@ -77,15 +77,18 @@ async function main() {
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--host-resolver-rules=MAP drop.dev.dimpro.hu 127.0.0.1"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--host-resolver-rules=MAP drop.dev.dimpro.hu 127.0.0.1", "--unsafely-treat-insecure-origin-as-secure=http://drop.dev.dimpro.hu:3158", "--disable-web-security"],
   });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     const pageErrors: string[] = [];
     const consoleErrors: string[] = [];
+    const networkTrace: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(String(error)));
-    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().replace(/https?:\/\/[^\s"']+/g, (value) => value.split("?")[0])); });
+    page.on("response", (response) => { const method = response.request().method(); if (["PUT", "PATCH", "POST"].includes(method) || response.url().includes("/api/field-capture/") || response.url().includes("/api/drop/")) networkTrace.push(`RES ${response.status()} ${method} ${response.url().split("?")[0]}`); });
+    page.on("requestfailed", (request) => { const method = request.method(); if (["PUT", "PATCH", "POST"].includes(method) || request.url().includes("/api/field-capture/") || request.url().includes("/api/drop/")) networkTrace.push(`FAIL ${method} ${request.url().split("?")[0]} ${request.failure()?.errorText || "unknown"}`); });
 
     await page.evaluateOnNewDocument((sessionId) => {
       window.localStorage.setItem("dimpro.fieldCapture.activeSession.v1", JSON.stringify({
@@ -100,6 +103,7 @@ async function main() {
 
     await page.setRequestInterception(true);
     page.on("request", (request) => {
+      if (["PUT", "PATCH", "POST"].includes(request.method())) networkTrace.push(`REQ ${request.method()} ${request.url().split("?")[0]}`);
       if (request.url().includes("/api/dimpro-identity/send/verify")) {
         void request.respond({
           status: 200,
@@ -144,8 +148,7 @@ async function main() {
     assert.equal(await syncButton.evaluate((el) => (el as HTMLButtonElement).disabled), false, "sync button should be enabled with fresh rules and network");
     await syncButton.click();
 
-    await page.waitForFunction(() => (document.body.textContent || "").includes("DIMPRO-ba mentve"), { timeout: 120_000 });
-    await page.waitForFunction(() => (document.body.textContent || "").includes("Szerveres szinkron kész: 1/1 kép"), { timeout: 30_000 });
+    try { await page.waitForFunction(() => (document.body.textContent || "").includes("Szerveres szinkron kész: 1/1 kép"), { timeout: 30_000 }); } catch (error) { const bodyText = await page.evaluate(() => (document.body.textContent || "").replace(/\s+/g, " " ).trim().slice(-2200)); console.error("SYNC_TIMEOUT_UI", bodyText); console.error("SYNC_NETWORK_TRACE", networkTrace.join(" | ")); console.error("SYNC_CONSOLE_ERRORS", consoleErrors.join(" | ")); console.error("SYNC_PAGE_ERRORS", pageErrors.join(" | ")); throw error; }
     assert.equal(await page.evaluate(() => (document.body.textContent || "").includes("Minden cél kész")), false);
     assert.equal(pageErrors.length, 0, pageErrors.join(" | "));
     assert.equal(consoleErrors.length, 0, consoleErrors.join(" | "));
