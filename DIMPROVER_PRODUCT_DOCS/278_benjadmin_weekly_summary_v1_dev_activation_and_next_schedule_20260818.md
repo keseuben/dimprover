@@ -115,3 +115,20 @@ A BLOKK 9–12 együtt **kb. 3–4,5 óra** tiszta fejlesztési idő, feltéve h
 A következő munkamenet indulási sorrendje:
 
 `Storage Hygiene → Weekly V1.1 → Scheduler/Worker heti integráció → teljes regresszió/release`.
+
+## BLOKK 9 első storage gate — 2026-08-18
+
+A közvetlen retention felmérés eredménye:
+
+- disk: kb. 82%;
+- szabad hely: kb. 20.49 GB;
+- warning küszöb: 85%;
+- retention cél: minimum 20 GB szabad hely;
+- build candidate: 21 db, kb. 11.6 GB;
+- dependency candidate: 1 db, kb. 1.26 GB;
+- aktív és rollback runtime release-ek védettek;
+- automatikus build-törlés jelenleg nem indokolt, mert a warning threshold nem teljesül és a cél-szabadhely rendelkezésre áll;
+- `dimpro-dev-storage-retention-contract`: **34/34 PASS**;
+- storage retention hardening contract: **13/13 PASS**.
+
+Döntés: nincs agresszív kézi törlés. A retention motor továbbra is automatikusan figyeli a warning/critical küszöböket; a következő nagy buildkör előtt újra ellenőrizendő.
