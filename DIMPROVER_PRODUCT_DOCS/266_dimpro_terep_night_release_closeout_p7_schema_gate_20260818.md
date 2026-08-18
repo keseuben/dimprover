@@ -137,3 +137,63 @@ Read-only P7 preflight:
 A rollback-test első indítását a közös DIMPRO koordinátor helyesen blokkolta, mert ÁrminAI közben build lockot tartott. Lockot nem törtünk fel, párhuzamos migráció nem történt.
 
 A korábbi `BLOCKED – P7_SCHEMA_MIGRATION_GATE` állapot ezért infrastruktúra szinten **RESOLVED**, az apply továbbra is csak a közös `migration` lock alatt történhet.
+
+## 2026-08-18 reggeli folytatás – P7 schema apply és szerver API foundation
+
+A P7 DEV adatbázis-kapu sikeresen lezárult.
+
+Rollback-próba:
+- központi `migration` lock alatt futott;
+- eredmény: PASS;
+- a tranzakció után a Field Capture objektumok nem maradtak bent.
+
+DEV schema apply:
+- migráció: `supabase/migrations/20260818074500_field_capture_p7_server_session_v010.sql`;
+- SHA-256: `d38670aabc988dde326aa1c657f87cda550a4541dc224e36f9479344fc7c46a6`;
+- DEV target: `pbgyuznivqvestuksvif`;
+- backup: `/srv/dimpro-dev/backups/field-capture-p7-v010/20260818T061317Z/supabase-dev-pre-field-capture-p7.dump`;
+- backup SHA-256: `6b57d304eb48c4b65f4d47c4cbf6f70e0503ff91207a8d216513629bef5afa12`;
+- `pg_restore --list`: PASS;
+- schema marker: `0.1.0 / migration_count=1 / field-capture-p7-v010-20260818`;
+- 9/9 domain tábla: PASS;
+- `project_id`: `text`;
+- Drive `folder_id`: `text`;
+- RLS: minden domain táblán aktív;
+- `anon` / `authenticated`: közvetlen táblajog nincs;
+- `service_role`: szerveroldali CRUD PASS.
+
+A migráció előtt további retry-idempotencia hardening került be:
+- `field_capture_asset_refs`: `unique(capture_item_id, variant)`;
+- checkpoint: `1b11eab`.
+
+P7 szerver API foundation:
+- `app/lib/field-capture/serverRepository.ts`;
+- `app/lib/field-capture/serverService.ts`;
+- `POST /api/field-capture/sessions`;
+- `POST /api/field-capture/sessions/[sessionId]/items`;
+- dinamikus `/api/field-capture/health` schema readiness.
+
+Biztonsági és működési elvek:
+- kizárólag Bearer Send-session token;
+- szerveroldali `verifyDimproSendSession()` + entitlement context;
+- nyers Send/PIN/capability token nem kerül persistence-be;
+- projektjogosultság ellenőrzése után a meglévő `project_core_projects.dimpro_project_id` híd oldja fel a Project Core ID-t;
+- idempotens session / item / asset / sync upsert;
+- GPS / kamerairány / Voice strukturált szerverrekord;
+- audit event hibája nem nyelődik el;
+- kliens státusz/source értékek szerveroldali whitelist-validációt kapnak;
+- Drive célok egyelőre csak destination-state rekordok; új Drive API/storage engine nem készült.
+
+P7 szerver contract:
+- `scripts/field-capture-p7-server-contract.mjs`;
+- eredmény: **12/12 PASS**;
+- célzott ESLint: PASS;
+- `npx tsc --noEmit`: PASS;
+- `git diff --check`: PASS.
+
+A következő kapu:
+1. checkpoint;
+2. koordinált Next candidate build;
+3. candidate health + unauth/bad-token regresszió;
+4. DEV-only valódi Send-session HTTP session/item idempotencia acceptance;
+5. csak minden PASS után DEV cutover.
