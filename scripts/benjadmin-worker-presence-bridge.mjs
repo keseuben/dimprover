@@ -13,6 +13,7 @@ const PRESENCE_RECORD = "WORKER_PRESENCE_V1";
 const ACTIVE_TTL_MS = Math.max(120_000, Number(process.env.BENJADMIN_WORKER_PRESENCE_TTL_MS || 5 * 60_000));
 const COMMIT_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_COMMIT_TTL_MS || 12 * 60_000));
 const SESSION_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_SESSION_TTL_MS || 10 * 60_000));
+const WORKTREE_SCAN_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_WORKTREE_SCAN_TTL_MS || 30 * 60_000));
 
 function text(value) { return typeof value === "string" ? value.trim() : ""; }
 function record(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
@@ -282,30 +283,73 @@ async function git(root, args, maxBuffer = 1024 * 1024) {
   try { const result = await execFileAsync("git", ["-C", root, ...args], { timeout: 5000, maxBuffer }); return result.stdout; } catch { return ""; }
 }
 
-async function collectDirtyEvidence(root, aliases, nowMs) {
+export function parseGitWorktreeList(raw) {
+  const items = [];
+  let current = null;
+  for (const line of String(raw || "").split("\n")) {
+    if (!line) {
+      if (current?.worktree) items.push(current);
+      current = null;
+      continue;
+    }
+    if (line.startsWith("worktree ")) {
+      if (current?.worktree) items.push(current);
+      current = { worktree: text(line.slice(9)), branch: "" };
+      continue;
+    }
+    if (!current) continue;
+    if (line.startsWith("branch ")) current.branch = text(line.slice(7)).replace(/^refs\/heads\//, "");
+  }
+  if (current?.worktree) items.push(current);
+  return items;
+}
+
+export async function discoverRecentWorkerWorktrees(root, aliases, nowMs) {
+  const raw = await git(root, ["worktree", "list", "--porcelain"], 2 * 1024 * 1024);
+  if (!raw) return [];
+  const primary = path.resolve(root);
+  const discovered = [];
+  for (const item of parseGitWorktreeList(raw)) {
+    const worktree = path.resolve(text(item.worktree));
+    if (!worktree || worktree === primary) continue;
+    const branchMatch = inferWorkerFromText(item.branch, aliases, "branch");
+    const pathMatch = inferWorkerFromText(path.basename(worktree), aliases, "owner");
+    const match = branchMatch || pathMatch;
+    if (!match) continue;
+    let touchedMs = 0;
+    try { touchedMs = (await stat(worktree)).mtimeMs; } catch { continue; }
+    if (!touchedMs || nowMs - touchedMs > WORKTREE_SCAN_TTL_MS) continue;
+    discovered.push({ root: worktree, workerCode: match.workerCode, branch: text(item.branch), touchedMs });
+  }
+  return discovered;
+}
+
+async function collectDirtyEvidence(root, aliases, nowMs, workerHint = "") {
   const raw = await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], 2 * 1024 * 1024);
   if (!raw) return [];
   const grouped = new Map();
   for (const item of raw.split("\0").filter(Boolean)) {
     const relativePath = item.length > 3 ? item.slice(3) : "";
     const rule = inferPathRule(relativePath, aliases);
-    if (!rule) continue;
+    const code = normalizeWorker(workerHint) || rule?.workerCode || "";
+    if (!code) continue;
     let modifiedMs = 0;
     try { modifiedMs = (await stat(path.join(root, relativePath))).mtimeMs; } catch { continue; }
     if (!modifiedMs || nowMs - modifiedMs > ACTIVE_TTL_MS) continue;
-    const current = grouped.get(rule.workerCode) || { rule, paths: [], latestMs: 0 };
+    const contextRule = rule || { mainModule: "", moduleName: "", submoduleName: "" };
+    const current = grouped.get(code) || { rule: contextRule, paths: [], latestMs: 0 };
     current.paths.push(relativePath);
     current.latestMs = Math.max(current.latestMs, modifiedMs);
-    if (!current.rule.mainModule && rule.mainModule) current.rule = rule;
-    grouped.set(rule.workerCode, current);
+    if (!current.rule.mainModule && contextRule.mainModule) current.rule = contextRule;
+    grouped.set(code, current);
   }
   const branch = text(await git(root, ["branch", "--show-current"]));
   return [...grouped.entries()].map(([code, value]) => evidence({
-    workerCode: code, score: 90, presenceKey: `dirty:${code}:${branch || path.basename(root)}`, phase: "coding",
+    workerCode: code, score: workerHint ? 95 : 90, presenceKey: `dirty:${code}:${branch || path.basename(root)}`, phase: "coding",
     summary: `${workerName(code)} · KÓDOLÁS · ${value.rule.moduleName || value.rule.mainModule || "fejlesztés"}`,
     detail: `Frissen módosított fájlok: ${value.paths.slice(0, 4).join(", ")}${value.paths.length > 4 ? ` (+${value.paths.length - 4})` : ""}.`,
     mainModule: value.rule.mainModule, moduleName: value.rule.moduleName, submoduleName: value.rule.submoduleName,
-    workItem: value.paths[0] || "Aktív fájlmódosítás", worktree: root, branch, inferredBy: "recent-file-path", confidence: "configured",
+    workItem: value.paths[0] || "Aktív fájlmódosítás", worktree: root, branch, inferredBy: workerHint ? "recent-worker-worktree" : "recent-file-path", confidence: workerHint ? "high" : "configured",
     detectedAt: new Date(value.latestMs).toISOString(),
   }));
 }
@@ -341,14 +385,22 @@ async function collectRecentCommitEvidence(root, aliases, nowMs) {
 
 export async function collectWorkerPresenceEvidence({ client, root, coordinationRoot, now = Date.now() }) {
   const aliases = await loadPresenceAliases(root);
-  const chunks = await Promise.all([
+  const centralChunks = await Promise.all([
     collectLeaseEvidence(coordinationRoot, now),
     collectSessionEvidence(client, now),
     collectSchedulerEvidence(client, coordinationRoot, now),
     collectOperationEvidence(coordinationRoot, aliases, now),
+  ]);
+  const recentWorktrees = await discoverRecentWorkerWorktrees(root, aliases, now);
+  const ambientChunks = await Promise.all([
     collectDirtyEvidence(root, aliases, now),
     collectRecentCommitEvidence(root, aliases, now),
+    ...recentWorktrees.flatMap((item) => [
+      collectDirtyEvidence(item.root, aliases, now, item.workerCode),
+      collectRecentCommitEvidence(item.root, aliases, now),
+    ]),
   ]);
+  const chunks = [...centralChunks, ...ambientChunks];
   const best = new Map();
   for (const item of chunks.flat()) {
     const current = best.get(item.workerCode);

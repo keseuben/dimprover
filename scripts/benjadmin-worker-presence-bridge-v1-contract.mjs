@@ -41,4 +41,11 @@ check("Lease helper remains PROD denied",lease.includes("productionAccess:\"DENY
 check("Terepi owner maps to Jázmin",aliases.workers.JAZMINAI.ownerPatterns.some((x)=>x.includes("terepi-")));
 check("Release persists a RELEASED marker",lease.includes("state:\"RELEASED\"") && lease.includes("releasedAt"));
 check("Released lease closes presence immediately",bridge.includes("collectReleasedLeaseKeys") && bridge.includes("LEASE_RELEASED"));
+check("Bridge discovers recent worker worktrees",bridge.includes("discoverRecentWorkerWorktrees") && bridge.includes("worktree", "list", "--porcelain"));
+check("Ambient worktree scan has bounded TTL",bridge.includes("WORKTREE_SCAN_TTL_MS") && bridge.includes("BENJADMIN_WORKER_WORKTREE_SCAN_TTL_MS"));
+check("Dirty evidence accepts worker branch hint",bridge.includes("workerHint = \"\"") && bridge.includes("recent-worker-worktree"));
+check("Outmin branch alias remains explicit",aliases.workers.OUTMINAI.branchPatterns.some((x)=>x.includes("outmin")));
+check("Outmin Commerce Core path is configured",aliases.workers.OUTMINAI.pathRules.some((x)=>x.prefix==="app/lib/commerce/" && x.mainModule==="DIMPRO Árutér" && x.moduleName==="Commerce Core"));
+check("Outmin Aruter web path is configured",aliases.workers.OUTMINAI.pathRules.some((x)=>x.prefix==="app/aruter/" && x.submoduleName==="aruter.dev.dimpro.hu"));
+check("Outmin Commerce database paths are configured",aliases.workers.OUTMINAI.pathRules.some((x)=>x.prefix==="supabase/DIMPRO_COMMERCE_CORE_") && aliases.workers.OUTMINAI.pathRules.some((x)=>x.prefix==="supabase/rollback/DIMPRO_COMMERCE_CORE_"));
 console.log(JSON.stringify({ok:!process.exitCode,passed:n,failed:process.exitCode?1:0},null,2));

@@ -44,5 +44,6 @@ check("Runtime acceptance covers exact dedupe and worker switch",acceptance.incl
 check("Runtime acceptance covers derived worker transition",acceptance.includes("Live API derives ARMINAI to JAZMINAI transition")&&acceptance.includes("benjadmin-worker-transition-strip"));
 check("Runtime acceptance covers cursor pagination",acceptance.includes("Cursor loads a non-overlapping older page")&&acceptance.includes("before=${encodeURIComponent"));
 check("Browser acceptance covers 7-day earlier archive and mobile",acceptance.includes("+3 day browser clock")&&acceptance.includes("+9 day browser clock")&&acceptance.includes("mobile overflow safe"));
+check("Common chat never hardcodes OUTMINAI as hidden",!/OUTMINAI.*return false/.test(conversation));
 console.log(JSON.stringify({ok:failed===0,passed,failed},null,2));
 if(failed) process.exit(1);

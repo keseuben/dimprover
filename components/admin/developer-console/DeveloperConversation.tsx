@@ -91,7 +91,6 @@ export default function DeveloperConversation({ messages, selectedProjectId, wor
   const [showEarlierArchive, setShowEarlierArchive] = useState(false);
 
   const visible = useMemo(() => messages.filter((message) => {
-    if (message.author === "OUTMINAI") return false;
     if (!selectedProjectId) return true;
     return !message.projectId || message.projectId === selectedProjectId;
   }), [messages, selectedProjectId]);

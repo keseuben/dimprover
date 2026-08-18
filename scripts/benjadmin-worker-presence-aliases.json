@@ -24,7 +24,17 @@
     },
     "OUTMINAI": {
       "ownerPatterns": ["(^|[-_])outmin([-_]|$)"],
-      "branchPatterns": ["(^|[-_/])outmin([-_/]|$)"]
+      "branchPatterns": ["(^|[-_/])outmin([-_/]|$)"],
+      "pathRules": [
+        { "prefix": "app/lib/commerce/", "mainModule": "DIMPRO Árutér", "moduleName": "Commerce Core", "submoduleName": "M0–M1 közös üzleti motor" },
+        { "prefix": "app/api/aruter/", "mainModule": "DIMPRO Árutér", "moduleName": "Árutér API", "submoduleName": "aruter.dev.dimpro.hu" },
+        { "prefix": "app/aruter/", "mainModule": "DIMPRO Árutér", "moduleName": "Árutér Web", "submoduleName": "aruter.dev.dimpro.hu" },
+        { "prefix": "components/aruter/", "mainModule": "DIMPRO Árutér", "moduleName": "Árutér Web", "submoduleName": "aruter.dev.dimpro.hu" },
+        { "prefix": "supabase/DIMPRO_COMMERCE_CORE_", "mainModule": "DIMPRO Árutér", "moduleName": "Commerce Core", "submoduleName": "Adatbázis / bootstrap" },
+        { "prefix": "supabase/rollback/DIMPRO_COMMERCE_CORE_", "mainModule": "DIMPRO Árutér", "moduleName": "Commerce Core", "submoduleName": "Adatbázis / rollback" },
+        { "prefix": "scripts/commerce-", "mainModule": "DIMPRO Árutér", "moduleName": "Commerce Core", "submoduleName": "Acceptance / teszt" },
+        { "prefix": "scripts/aruter-", "mainModule": "DIMPRO Árutér", "moduleName": "Árutér Web", "submoduleName": "Acceptance / teszt" }
+      ]
     },
     "MFORGE": {
       "ownerPatterns": ["(^|[-_])mforge([-_]|$)", "(^|[-_])m-forge([-_]|$)"],
