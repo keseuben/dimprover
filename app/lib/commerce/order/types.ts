@@ -13,6 +13,7 @@ export type CommerceOrder = OrganizationScoped & CommerceLifecycle & {
   orderNumber: string;
   sourceChannel: CommerceOrderSourceChannel;
   externalReference?: string | null;
+  fulfillmentSourceId?: CommerceEntityId | null;
   status: CommerceOrderStatus;
   customerName: string;
   customerType: CommerceOrderCustomerType;

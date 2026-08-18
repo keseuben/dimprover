@@ -849,3 +849,45 @@ Valós DEV Order runtime E2E:
 Legacy Árutér cashier regresszió továbbra is kötelező; a meglévő store/UI nincs lecserélve. Következő blokk: resolved Commerce variantok Order ↔ Inventory Reservation kapcsolata. M1 szabály: PAID állapotban a foglalás megmarad, fizikai készlet csak ISSUED esetén fogy; CANCELLED esetén a foglalás felszabadul. A legacy `UNRESOLVED` tétel láthatóságát ez nem blokkolhatja.
 
 PROD változatlan; shared DEV runtime cutover nem történt.
+
+### 2026-08-18 23:55 checkpoint — Order ↔ Inventory Reservation Bridge M1 staged
+
+Elkészült kódszinten:
+- Order `fulfillment_source_id` előkészítés belső készletforráshoz;
+- explicit `commerce_order_reserve_inventory` service-only RPC;
+- mapped Commerce variant tétel készletfoglalása a meglévő Reservation motoron keresztül;
+- legacy/unmapped tétel nem blokkolja a rendelés láthatóságát, `UNRESOLVED` marad;
+- OrderItem `reservation_id` + `RESERVED` státusz;
+- Order inventory event ledger és idempotens reserve művelet;
+- reserve idempotencia source + expiry eltérésre is védett;
+- PAID állapotban a foglalás megmarad;
+- ISSUED csak teljes, aktív mapped reservation mellett engedélyezett, majd a reservation CONSUME fizikai készletet csökkent;
+- CANCELLED esetén aktív reservation automatikusan RELEASE, a fizikai készlet változatlan;
+- teljesen unresolved legacy rendelés továbbra is végigmehet PAID → ISSUED állapotig;
+- új `POST /api/v1/commerce/orders/[orderId]/reserve` API;
+- repository szinten `commerce.order.write` + `commerce.inventory.move` jogosultság szükséges.
+
+Tesztkapu DEV apply előtt:
+- Order Inventory Bridge contract: 27/27 PASS;
+- DB transaction + rollback acceptance: 20/20 PASS;
+- mapped + unresolved vegyes rendelés: PASS;
+- reserved balance invariáns: PASS;
+- PAID nem fogyaszt készletet: PASS;
+- ISSUED consume: PASS;
+- CANCELLED release: PASS;
+- mapped, de nem foglalt PAID rendelés kiadása blokkolt: PASS;
+- unresolved-only legacy rendelés nem blokkolt: PASS;
+- authenticated reserve RPC DENY, service-role ALLOW;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- migration preflight: PASS;
+- migration SHA-256: `edb44dba30646aae6230d7fbe8b0cd3141ea3d3157550b2e0f60cb8d0813d4ec`.
+
+34. pont szerinti állapot:
+- elkészült: Order ↔ Reservation DB/service/API alap és M1 készlet-életciklus szabály;
+- részben elkészült: automatikus variant/SKU feloldás a legacy bridge-ben és automatikus reserve trigger az Árutér dual-write során;
+- hiányzik: Commerce cashier UI tényleges bekötés, legacy dual-write, lejáró reservation worker, mapped/unmapped figyelmeztetés a pénztári UI-ban;
+- DB/migration: 0.1.7 staged, még nincs DEV-re alkalmazva ebben a checkpointban;
+- következő lépés: coordinated DEV apply → runtime E2E → cashier bridge következő integrációs réteg;
+- PROD változatlan.
