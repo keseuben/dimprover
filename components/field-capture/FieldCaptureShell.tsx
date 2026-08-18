@@ -25,6 +25,7 @@ import { clearFieldCaptureSession, patchFieldCaptureItem, persistFieldCaptureIte
 import { DEFAULT_PRE_CAPTURE_OPTIONS, FIELD_CAPTURE_MAX_ITEMS, FIELD_CAPTURE_VERSION, type FieldCaptureItem, type FieldCaptureLocalSession, type PreCaptureOptions } from "@/app/lib/field-capture/types";
 import DropUploadRulesDialog, { DropRulesButton } from "@/components/drop/DropUploadRulesDialog";
 import { DROP_UPLOAD_RULES_VERSION, isDropUploadRulesAcceptanceFresh } from "@/app/lib/drop/dropUploadRules";
+import { syncFieldCaptureSession, type FieldCaptureClientSyncPatch } from "@/app/lib/field-capture/clientSyncService";
 
 function randomId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -74,11 +75,13 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>(1);
   const [editingItem, setEditingItem] = useState<FieldCaptureItem | null>(null);
-  const initialRulesFresh = Boolean(identity && isDropUploadRulesAcceptanceFresh({ version: identity.uploadRulesVersion, acceptedAt: identity.uploadRulesLastAcceptedAt }));
+  const initialRulesFresh = Boolean(identity && identity.uploadRulesAcceptanceCount >= 3 && isDropUploadRulesAcceptanceFresh({ version: identity.uploadRulesVersion, acceptedAt: identity.uploadRulesLastAcceptedAt }));
   const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
   const [rulesAccepted, setRulesAccepted] = useState(initialRulesFresh);
-  const [rulesAcceptedAt, setRulesAcceptedAt] = useState(identity?.uploadRulesLastAcceptedAt || null);
+  const [rulesAcceptedAt, setRulesAcceptedAt] = useState(initialRulesFresh ? identity?.uploadRulesLastAcceptedAt || null : null);
+  const [rulesConsentChecked, setRulesConsentChecked] = useState(initialRulesFresh);
   const [rulesSaving, setRulesSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const current = loadOrCreateFieldCaptureLocalSession();
@@ -104,11 +107,47 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
       const response = await fetch("/api/field-capture/upload-rules/accept", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + identity.sessionToken }, body: JSON.stringify({ accepted: true, rulesVersion: DROP_UPLOAD_RULES_VERSION }) });
       const payload = await response.json() as { ok?: boolean; error?: string; acceptedAt?: string; rulesVersion?: string };
       if (!response.ok || !payload.ok || !payload.acceptedAt || payload.rulesVersion !== DROP_UPLOAD_RULES_VERSION) throw new Error(payload.error || "A feltöltési szabályzat elfogadása nem rögzíthető.");
-      setRulesAccepted(true); setRulesAcceptedAt(payload.acceptedAt); setRulesDialogOpen(false);
+      setRulesAccepted(true); setRulesAcceptedAt(payload.acceptedAt); setRulesConsentChecked(true); setRulesDialogOpen(false);
       setMessage("A feltöltési szabályzat elfogadva. A szerveres szinkron engedélyezhető.");
     } catch (error) {
-      setRulesAccepted(false); setMessage(error instanceof Error ? error.message : "A feltöltési szabályzat elfogadása sikertelen.");
+      setRulesAccepted(false); setRulesAcceptedAt(null); setMessage(error instanceof Error ? error.message : "A feltöltési szabályzat elfogadása sikertelen.");
     } finally { setRulesSaving(false); }
+  }
+
+  function applySyncPatch(itemId: string, patch: FieldCaptureClientSyncPatch) {
+    setItems((current) => current.map((item) => item.id === itemId ? { ...item, ...patch } : item));
+  }
+
+  async function runServerSync() {
+    if (!identity || !session || !items.length || syncing) return;
+    if (!online) {
+      setMessage("Nincs hálózati kapcsolat. A képek biztonságosan a helyi sorban maradnak; szinkronizálás később indítható.");
+      return;
+    }
+    if (!rulesAccepted || !rulesAcceptedAt) {
+      setRulesDialogOpen(true);
+      setMessage("A szerveres szinkron előtt fogadd el a feltöltési szabályokat.");
+      return;
+    }
+    setSyncing(true);
+    setMessage("DIMPRO szerveres szinkron indítása…");
+    try {
+      const result = await syncFieldCaptureSession({
+        identity: { sessionToken: identity.sessionToken },
+        session,
+        items,
+        rulesVersion: DROP_UPLOAD_RULES_VERSION,
+        rulesAcceptedAt,
+        onPatch: applySyncPatch,
+      });
+      const pending = result.pendingDestinations ? " · " + result.pendingDestinations + " kép célhelye vírusellenőrzésre vár" : "";
+      const failed = result.failed ? " · " + result.failed + " hiba" : "";
+      setMessage("Szerveres szinkron kész: " + result.synced + "/" + items.length + " kép" + pending + failed + ".");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A DIMPRO szerveres szinkron sikertelen. A helyi képek megmaradtak.");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   function goToStep(step: WorkflowStep) {
@@ -279,7 +318,11 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
         {workflowStep === 2 ? <section className="mt-3 rounded-[1.8rem] border border-cyan-200 bg-cyan-50/70 p-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-800">2. Ellenőrzés</p><h2 className="mt-1 text-lg font-black text-slate-950">Nézze át és egészítse ki a képeket</h2><p className="mt-1 text-sm leading-6 text-slate-600">Itt írhat megjegyzést, diktálhat, újramérheti a GPS-t vagy a kamera irányát, és a képet közvetlenül meg is jelölheti.</p></section> : null}
 
-        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4"><div className="flex items-start gap-3"><CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés</p><h2 className="mt-1 text-lg font-black text-slate-950">A helyi terepi munkamenet mentve van</h2><p className="mt-1 text-sm leading-6 text-slate-600">A képek az IndexedDB offline tárban maradnak. A P7 szerveres DIMPRO szinkron külön fejlesztési kapu lesz; addig a rendszer nem állítja, hogy a képek felhőbe kerültek.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4"><Summary value={items.length} label="kép" /><Summary value={noteCount} label="megjegyzés" /><Summary value={editedCount} label="szerkesztett" /><Summary value={gpsCount} label="GPS" /></div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3 text-xs leading-5 text-slate-700"><div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="block text-slate-950">Feltöltési szabályok</strong><span>{rulesAccepted && rulesAcceptedAt ? "Központilag elfogadva: " + new Date(rulesAcceptedAt).toLocaleString("hu-HU") : "A szerveres feltöltés előtt elfogadás szükséges."}</span></div><DropRulesButton accepted={rulesAccepted} onClick={() => setRulesDialogOpen(true)} label="Szabályok" /></div>{!rulesAccepted ? <button type="button" onClick={() => setRulesDialogOpen(true)} className="mt-3 w-full rounded-xl bg-amber-700 px-4 py-3 font-black text-white">Feltöltési szabályok megnyitása</button> : null}</div><div className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold leading-5 text-amber-900"><CloudUpload size={15} className="mr-1 inline" /> DIMPRO szerveres szinkron előkészítve; kliensoldali feltöltési lánc fejlesztés alatt. Kamerairány-adat: {orientationCount}/{items.length} kép.</div></section> : null}
+        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4"><div className="flex items-start gap-3"><CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés</p><h2 className="mt-1 text-lg font-black text-slate-950">A helyi terepi munkamenet mentve van</h2><p className="mt-1 text-sm leading-6 text-slate-600">A képek az IndexedDB offline tárban maradnak. A P7 szerveres DIMPRO szinkron külön fejlesztési kapu lesz; addig a rendszer nem állítja, hogy a képek felhőbe kerültek.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4"><Summary value={items.length} label="kép" /><Summary value={noteCount} label="megjegyzés" /><Summary value={editedCount} label="szerkesztett" /><Summary value={gpsCount} label="GPS" /></div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3 text-xs leading-5 text-slate-700"><div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="block text-slate-950">Feltöltési szabályok</strong><span>{rulesAccepted && rulesAcceptedAt ? "Központilag elfogadva: " + new Date(rulesAcceptedAt).toLocaleString("hu-HU") : "A szerveres feltöltés előtt elfogadás szükséges."}</span></div><DropRulesButton accepted={rulesAccepted} onClick={() => setRulesDialogOpen(true)} label="Szabályok" /></div>{!rulesAccepted ? <button type="button" onClick={() => setRulesDialogOpen(true)} className="mt-3 w-full rounded-xl bg-amber-700 px-4 py-3 font-black text-white">Feltöltési szabályok megnyitása</button> : null}</div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3">
+          <div className="flex items-start gap-2 text-xs leading-5 text-cyan-950"><CloudUpload size={16} className="mt-0.5 shrink-0 text-cyan-700" /><div><strong className="block">DIMPRO szerveres szinkron</strong><span>{online ? "Privát staging + folytatható Drop feltöltés." : "Offline · a helyi sor megmarad."} Kamerairány-adat: {orientationCount}/{items.length} kép.</span></div></div>
+          <button data-terep-sync-button type="button" onClick={() => void runServerSync()} disabled={syncing || !online || !rulesAccepted || !rulesAcceptedAt || !items.length} className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-cyan-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{syncing ? <LoaderCircle size={18} className="animate-spin" /> : <CloudUpload size={18} />}{syncing ? "Szinkronizálás…" : "Szinkronizálás a DIMPRO szerverre"}</button>
+          {!online ? <p className="mt-2 text-[11px] font-bold text-amber-800">Hálózat nélkül nem indul szerveres művelet; a képek az IndexedDB-ben maradnak.</p> : null}
+        </div></section> : null}
 
         {message ? <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-950">{message}</div> : null}
 
@@ -297,8 +340,8 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
       </div>
 
       <PreCaptureOptionsSheet open={sheetOpen} value={defaults} onClose={() => setSheetOpen(false)} onReset={resetDefaults} onChoose={chooseSource} />
-      <DropUploadRulesDialog open={rulesDialogOpen} onClose={() => { if (rulesAccepted) setRulesDialogOpen(false); }} accepted={rulesAccepted} onAcceptedChange={setRulesAccepted} resumableEnabled scannerAvailable publicDownloadReady />
-      {rulesDialogOpen && !rulesAccepted ? <button type="button" disabled={rulesSaving} onClick={() => void acceptUploadRules()} className="fixed bottom-5 left-1/2 z-[110] -translate-x-1/2 rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white shadow-xl disabled:bg-slate-400">{rulesSaving ? "Elfogadás rögzítése…" : "Elfogadás és folytatás"}</button> : null}
+      <DropUploadRulesDialog open={rulesDialogOpen} onClose={() => setRulesDialogOpen(false)} accepted={rulesAccepted || rulesConsentChecked} onAcceptedChange={setRulesConsentChecked} resumableEnabled scannerAvailable publicDownloadReady />
+      {rulesDialogOpen && !rulesAccepted ? <button type="button" disabled={rulesSaving || !rulesConsentChecked} onClick={() => void acceptUploadRules()} className="fixed bottom-5 left-1/2 z-[110] -translate-x-1/2 rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white shadow-xl disabled:bg-slate-400">{rulesSaving ? "Elfogadás rögzítése…" : "Elfogadás és folytatás"}</button> : null}
       {editingItem ? <DimproImageMarkupEditor file={editingItem.uploadFile} title={`#${editingItem.sequence} · ${editingItem.displayName}`} onClose={() => setEditingItem(null)} onSave={(result) => saveEditedImage(editingItem, result)} /> : null}
     </main>
   );

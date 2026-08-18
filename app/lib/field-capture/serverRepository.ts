@@ -231,6 +231,43 @@ export async function assertFieldCaptureSessionOwner(input: {
 
 export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite) {
   const db = client();
+  const existingItemResult = await db
+    .from("field_capture_items")
+    .select("id,status,edit_revision")
+    .eq("session_id", input.sessionId)
+    .eq("client_item_id", input.clientItemId)
+    .maybeSingle();
+  if (existingItemResult.error) databaseError("A terepi képtétel korábbi állapota nem olvasható.", existingItemResult.error);
+  const existingItem = existingItemResult.data as DbRow | null;
+
+  let existingAsset: DbRow | null = null;
+  if (existingItem && input.asset) {
+    const existingAssetResult = await db
+      .from("field_capture_asset_refs")
+      .select("id,variant,original_name,display_name,mime_type,original_size_bytes,stored_size_bytes,width,height,checksum_sha256,optimized,storage_status")
+      .eq("capture_item_id", text(existingItem.id))
+      .eq("variant", input.asset.variant)
+      .maybeSingle();
+    if (existingAssetResult.error) databaseError("A terepi asset korábbi állapota nem olvasható.", existingAssetResult.error);
+    existingAsset = existingAssetResult.data as DbRow | null;
+  }
+
+  const revisionChanged = Boolean(existingItem && input.editRevision > Number(existingItem.edit_revision || 0));
+  const assetChanged = Boolean(input.asset && (
+    !existingAsset
+    || revisionChanged
+    || nullableText(existingAsset.original_name) !== input.asset.originalName
+    || text(existingAsset.display_name) !== input.asset.displayName
+    || text(existingAsset.mime_type) !== input.asset.mimeType
+    || Number(existingAsset.original_size_bytes || 0) !== Number(input.asset.originalSizeBytes || 0)
+    || Number(existingAsset.width || 0) !== Number(input.asset.width || 0)
+    || Number(existingAsset.height || 0) !== Number(input.asset.height || 0)
+    || Boolean(existingAsset.optimized) !== input.asset.optimized
+  ));
+  const nextItemStatus = existingItem && !assetChanged
+    ? text(existingItem.status)
+    : input.asset ? "QUEUED" : "SERVER_STORED";
+
   const itemResult = await db
     .from("field_capture_items")
     .upsert({
@@ -239,7 +276,7 @@ export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite)
       sequence_no: input.sequenceNo,
       captured_at: input.capturedAt,
       note: input.note,
-      status: input.asset ? "QUEUED" : "SERVER_STORED",
+      status: nextItemStatus,
       capture_options: input.captureOptions,
       edited: input.edited,
       edit_revision: input.editRevision,
@@ -251,7 +288,7 @@ export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite)
   const item = mapItem(itemResult.data as DbRow);
 
   if (input.asset) {
-    const assetResult = await db.from("field_capture_asset_refs").upsert({
+    const assetPayload: Record<string, unknown> = {
       capture_item_id: item.id,
       variant: input.asset.variant,
       original_name: input.asset.originalName,
@@ -261,79 +298,107 @@ export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite)
       stored_size_bytes: input.asset.storedSizeBytes,
       width: input.asset.width,
       height: input.asset.height,
-      checksum_sha256: input.asset.checksumSha256,
+      checksum_sha256: assetChanged ? input.asset.checksumSha256 : input.asset.checksumSha256 || nullableText(existingAsset?.checksum_sha256),
       optimized: input.asset.optimized,
-      storage_status: "PENDING",
       updated_at: new Date().toISOString(),
-    }, { onConflict: "capture_item_id,variant" });
+    };
+    if (assetChanged) {
+      Object.assign(assetPayload, {
+        blob_id: null,
+        storage_provider: null,
+        storage_bucket: null,
+        storage_key: null,
+        storage_status: "PENDING",
+      });
+    }
+    const assetResult = await db.from("field_capture_asset_refs").upsert(assetPayload, { onConflict: "capture_item_id,variant" });
     if (assetResult.error) databaseError("A terepi asset metaadat mentése sikertelen.", assetResult.error);
 
-    const queueResult = await db.from("field_capture_sync_queue").upsert({
-      session_id: input.sessionId,
-      capture_item_id: item.id,
-      device_local_id: input.clientItemId,
-      operation: "UPLOAD_ASSET",
-      status: "QUEUED",
-      payload_meta: { variant: input.asset.variant, mimeType: input.asset.mimeType },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "session_id,device_local_id,operation" });
-    if (queueResult.error) databaseError("A terepi szinkronsor előkészítése sikertelen.", queueResult.error);
+    const existingQueueResult = await db.from("field_capture_sync_queue")
+      .select("id,status,payload_meta")
+      .eq("session_id", input.sessionId)
+      .eq("device_local_id", input.clientItemId)
+      .eq("operation", "UPLOAD_ASSET")
+      .maybeSingle();
+    if (existingQueueResult.error) databaseError("A terepi szinkronsor korábbi állapota nem olvasható.", existingQueueResult.error);
+    if (!existingQueueResult.data || assetChanged) {
+      const queueResult = await db.from("field_capture_sync_queue").upsert({
+        session_id: input.sessionId,
+        capture_item_id: item.id,
+        device_local_id: input.clientItemId,
+        operation: "UPLOAD_ASSET",
+        status: "QUEUED",
+        retry_count: 0,
+        next_retry_at: null,
+        payload_meta: { variant: input.asset.variant, mimeType: input.asset.mimeType },
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "session_id,device_local_id,operation" });
+      if (queueResult.error) databaseError("A terepi szinkronsor előkészítése sikertelen.", queueResult.error);
+    }
   }
 
   if (input.location) {
-    const result = await db.from("field_capture_locations").upsert({
-      capture_item_id: item.id,
-      ...input.location,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "capture_item_id" });
+    const result = await db.from("field_capture_locations").upsert(
+      { capture_item_id: item.id, ...input.location, updated_at: new Date().toISOString() },
+      { onConflict: "capture_item_id" },
+    );
     if (result.error) databaseError("A GPS metaadat mentése sikertelen.", result.error);
   }
 
   if (input.orientation) {
-    const result = await db.from("field_capture_orientations").upsert({
-      capture_item_id: item.id,
-      ...input.orientation,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "capture_item_id" });
+    const result = await db.from("field_capture_orientations").upsert(
+      { capture_item_id: item.id, ...input.orientation, updated_at: new Date().toISOString() },
+      { onConflict: "capture_item_id" },
+    );
     if (result.error) databaseError("A kamerairány metaadat mentése sikertelen.", result.error);
   }
 
   if (input.voice) {
-    const result = await db.from("field_capture_voice_notes").upsert({
-      capture_item_id: item.id,
-      ...input.voice,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "capture_item_id" });
+    const result = await db.from("field_capture_voice_notes").upsert(
+      { capture_item_id: item.id, ...input.voice, updated_at: new Date().toISOString() },
+      { onConflict: "capture_item_id" },
+    );
     if (result.error) databaseError("A diktálás metaadat mentése sikertelen.", result.error);
   }
 
   if (input.destinations.length > 0) {
+    const existingDestinationsResult = await db.from("field_capture_destinations")
+      .select("target,status")
+      .eq("capture_item_id", item.id);
+    if (existingDestinationsResult.error) databaseError("A terepi mentési célok korábbi állapota nem olvasható.", existingDestinationsResult.error);
+    const existingStatusByTarget = new Map(
+      ((existingDestinationsResult.data || []) as DbRow[]).map((row) => [text(row.target), text(row.status)]),
+    );
     const rows = input.destinations.map((destination) => ({
       capture_item_id: item.id,
       target: destination.target,
       folder_id: destination.folderId,
       ownership: destination.ownership,
-      status: destination.status,
+      status: assetChanged ? "PENDING" : existingStatusByTarget.get(destination.target) || destination.status,
       retained_independently: destination.retainedIndependently,
       detail: destination.detail,
       updated_at: new Date().toISOString(),
     }));
-    const result = await db.from("field_capture_destinations")
-      .upsert(rows, { onConflict: "capture_item_id,target" });
+    const result = await db.from("field_capture_destinations").upsert(rows, { onConflict: "capture_item_id,target" });
     if (result.error) databaseError("A terepi mentési célok rögzítése sikertelen.", result.error);
   }
 
   const eventResult = await db.from("field_capture_events").insert({
     session_id: input.sessionId,
     capture_item_id: item.id,
-    event_type: "ITEM_UPSERTED",
-    payload: { clientItemId: input.clientItemId, sequenceNo: input.sequenceNo },
+    event_type: existingItem ? "ITEM_REFRESHED" : "ITEM_UPSERTED",
+    payload: {
+      clientItemId: input.clientItemId,
+      sequenceNo: input.sequenceNo,
+      storageStatePreserved: Boolean(existingItem && !assetChanged),
+      assetChanged,
+    },
   });
   if (eventResult.error) databaseError("A terepi képtétel auditnaplózása sikertelen.", eventResult.error);
 
   return item;
 }
-
 
 export async function getFieldCaptureProjectDimproId(projectCoreId: string) {
   const result = await client()

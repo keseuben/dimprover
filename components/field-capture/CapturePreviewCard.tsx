@@ -57,6 +57,8 @@ export default function CapturePreviewCard({ item, reviewMode = false, onNoteCha
           <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-black text-cyan-800">#{item.sequence}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-800">{statusLabel(item.status)}</span>{item.edited ? <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-800">Szerkesztve · v{item.editRevision}</span> : null}</div>
           <strong className="mt-2 block truncate text-sm text-slate-950">{item.displayName}</strong>
           <span className="mt-1 block text-xs text-slate-500">{fileSize(item.originalSize)} → {fileSize(item.uploadSize)}{item.optimized ? " · optimalizálva" : ""}</span>
+          {item.status === "UPLOADING" ? <div className="mt-2"><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-cyan-600 transition-[width]" style={{ width: Math.max(0, Math.min(100, item.progress)) + "%" }} /></div><span className="mt-1 block text-[10px] font-black text-cyan-700">Feltöltés {Math.round(item.progress)}%</span></div> : null}
+          {(item.status === "ERROR" || item.status === "DESTINATION_PENDING") && item.error ? <span className="mt-2 block text-[10px] font-bold leading-4 text-amber-800">{item.error}</span> : null}
         </div>
         {expanded ? <ChevronUp size={20} className="text-slate-500" /> : <ChevronDown size={20} className="text-slate-500" />}
       </button>
