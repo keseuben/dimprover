@@ -150,3 +150,19 @@ Az izolált DEV fixture ellenőrzi:
 14. PROD DENY.
 
 A runtime/browser acceptance csak az exact candidate build elkészülte után tekinthető lezártnak.
+
+## Candidate-ben feltárt SSE lifecycle regresszió
+
+A Weekly Summary candidate browser acceptance után a Next runtime `ERR_INVALID_STATE: Controller is already closed` unhandled rejectiont jelzett. A stack nem a heti API-ra, hanem a meglévő `/api/dev/console/stream` SSE route-ra mutatott.
+
+A race oka: a `send()` async DB-lekérdezése alatt a kliens abortálhatta a streamet és lezárhatta a controllert; a visszatérő `send()` még `enqueue`-olt, majd a `catch` ág ismét `enqueue`-olt a már lezárt controllerre.
+
+Javítás:
+
+- közös `stop()` lifecycle;
+- `safeEnqueue()` fail-closed wrapper;
+- DB-await után ismételt `closed` ellenőrzés;
+- error event csak nyitott streamre;
+- abort és cancel ugyanazt a stop logikát használja.
+
+A javításhoz külön `benjadmin-console-stream-lifecycle-v1-contract.mjs` regressziós védelem készült. A release csak új exact build + browser close log-gate után engedhető tovább.

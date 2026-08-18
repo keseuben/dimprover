@@ -15,13 +15,30 @@ export async function GET(request: NextRequest) {
   let lastHash = "";
   let lastHeartbeat = 0;
 
+  const stop = () => {
+    closed = true;
+    if (timer) clearInterval(timer);
+    timer = null;
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      const safeEnqueue = (value: string) => {
+        if (closed) return false;
+        try {
+          controller.enqueue(encoder.encode(value));
+          return true;
+        } catch {
+          stop();
+          return false;
+        }
+      };
       const send = async () => {
         if (busy || closed) return;
         busy = true;
         try {
           const [live, messages] = await Promise.all([getDeveloperConsoleLiveStatus(), listDeveloperConsoleMessages(180)]);
+          if (closed) return;
           const snapshot = { live, messages };
           const payload = JSON.stringify(snapshot);
           const hash = createHash("sha256").update(payload).digest("hex");
@@ -29,13 +46,13 @@ export async function GET(request: NextRequest) {
           if (hash !== lastHash) {
             lastHash = hash;
             lastHeartbeat = now;
-            controller.enqueue(encoder.encode(`event: snapshot\ndata: ${JSON.stringify({ ...snapshot, sentAt: new Date(now).toISOString() })}\n\n`));
+            safeEnqueue(`event: snapshot\ndata: ${JSON.stringify({ ...snapshot, sentAt: new Date(now).toISOString() })}\n\n`);
           } else if (now - lastHeartbeat >= 15_000) {
             lastHeartbeat = now;
-            controller.enqueue(encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ sentAt: new Date(now).toISOString() })}\n\n`));
+            safeEnqueue(`event: heartbeat\ndata: ${JSON.stringify({ sentAt: new Date(now).toISOString() })}\n\n`);
           }
         } catch (error) {
-          controller.enqueue(encoder.encode(`event: stream-error\ndata: ${JSON.stringify({ error: error instanceof Error ? error.message : "STREAM_ERROR", sentAt: new Date().toISOString() })}\n\n`));
+          if (!closed) safeEnqueue(`event: stream-error\ndata: ${JSON.stringify({ error: error instanceof Error ? error.message : "STREAM_ERROR", sentAt: new Date().toISOString() })}\n\n`);
         } finally {
           busy = false;
         }
@@ -43,14 +60,12 @@ export async function GET(request: NextRequest) {
       void send();
       timer = setInterval(() => void send(), 1000);
       request.signal.addEventListener("abort", () => {
-        closed = true;
-        if (timer) clearInterval(timer);
-        try { controller.close(); } catch { /* kliens már lezárta */ }
+        stop();
+        try { controller.close(); } catch { /* a kliens vagy a runtime már lezárta */ }
       }, { once: true });
     },
     cancel() {
-      closed = true;
-      if (timer) clearInterval(timer);
+      stop();
     },
   });
 
