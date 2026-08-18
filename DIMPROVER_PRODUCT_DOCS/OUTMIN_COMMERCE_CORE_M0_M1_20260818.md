@@ -662,3 +662,28 @@ Frissített kapu:
 - migration SHA-256: `20b6ab00df66796e0510045ebadfe43f461a0491ac52e03d8dc3f93ed047ad34`;
 - migration preflight: PASS;
 - DEV apply továbbra is a központi lock felszabadulására vár; PROD változatlan.
+
+### 2026-08-18 23:06 checkpoint — Receiving M1 DEV aktív
+
+A staged 0.1.5 Receiving migráció a központi lock felszabadulása után coordinated módon sikeresen alkalmazva.
+
+DEV migráció:
+- Commerce schema: `0.1.5`, migration count: 6;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-receiving-m1/20260818T210216Z/supabase-dev-pre-commerce-receiving-m1.dump`;
+- backup SHA-256: `b99a339dcf2b0f9608ee8b58a4dbcc18152712ab680f0b95527612ee73fde428`;
+- migration SHA-256: `20b6ab00df66796e0510045ebadfe43f461a0491ac52e03d8dc3f93ed047ad34`;
+- schema/security verify: PASS; authenticated post RPC DENY, service-role post RPC ALLOW.
+
+Valós DEV runtime E2E:
+- Receiving repository runtime: 12/12 PASS;
+- tenant-scoped warehouse/source options: PASS;
+- draft receipt create + supplier snapshot: PASS;
+- SELLABLE + QUARANTINE tételfelvitel: PASS;
+- receipt detail/list: PASS;
+- service-only posting: PASS;
+- posting idempotency: PASS;
+- inventory ledger balance update: PASS;
+- immutable RECEIPT StockMovement reference: PASS;
+- runtime fixture cleanup: PASS.
+
+Runtime QA során a tesztkontextust a valós Commerce context logikához igazítottuk: az aktív szervezet aktív membershipjének `user_id` mezője kerül a `created_by_user_id` auditmezőbe. PROD változatlan.
