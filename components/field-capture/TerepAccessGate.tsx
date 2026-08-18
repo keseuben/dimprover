@@ -13,7 +13,7 @@ type IdentityPayload = {
   ok?: boolean;
   error?: string;
   user?: { fullName: string; email: string; publicCode: string; organizationName?: string | null };
-  entitlement?: { id: string; canUseStandardSend?: boolean; canUseQuickImageSend?: boolean };
+  entitlement?: { id: string; canUseStandardSend?: boolean; canUseQuickImageSend?: boolean; uploadRulesAcceptanceCount?: number; uploadRulesVersion?: string | null; uploadRulesLastAcceptedAt?: string | null };
   projects?: Array<{ id: string; publicCode: string; name: string; canUploadToDrop?: boolean }>;
   sendSession?: { token: string; expiresAt: string; entitlementId: string };
 };
@@ -71,6 +71,9 @@ export default function TerepAccessGate() {
           sessionToken: identity.sendSession.token,
           sessionExpiresAt: identity.sendSession.expiresAt,
           projects: identity.projects || [],
+          uploadRulesAcceptanceCount: identity.entitlement?.uploadRulesAcceptanceCount ?? 0,
+          uploadRulesVersion: identity.entitlement?.uploadRulesVersion ?? null,
+          uploadRulesLastAcceptedAt: identity.entitlement?.uploadRulesLastAcceptedAt ?? null,
         }}
       />
     );

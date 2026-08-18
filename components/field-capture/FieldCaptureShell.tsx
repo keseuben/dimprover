@@ -23,6 +23,8 @@ import { prepareFieldCaptureFiles } from "@/app/lib/field-capture/captureImageEn
 import { captureFieldLocation, captureFieldOrientation, captureFieldSensors } from "@/app/lib/field-capture/captureSensors";
 import { clearFieldCaptureSession, patchFieldCaptureItem, persistFieldCaptureItem, removeFieldCaptureItem, requestFieldCapturePersistentStorage, restoreFieldCaptureItems } from "@/app/lib/field-capture/offlineQueue";
 import { DEFAULT_PRE_CAPTURE_OPTIONS, FIELD_CAPTURE_MAX_ITEMS, FIELD_CAPTURE_VERSION, type FieldCaptureItem, type FieldCaptureLocalSession, type PreCaptureOptions } from "@/app/lib/field-capture/types";
+import DropUploadRulesDialog, { DropRulesButton } from "@/components/drop/DropUploadRulesDialog";
+import { DROP_UPLOAD_RULES_VERSION, isDropUploadRulesAcceptanceFresh } from "@/app/lib/drop/dropUploadRules";
 
 function randomId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -47,6 +49,9 @@ export type TerepIdentityContext = {
   sessionToken: string;
   sessionExpiresAt: string;
   projects: Array<{ id: string; publicCode: string; name: string; canUploadToDrop?: boolean }>;
+  uploadRulesAcceptanceCount: number;
+  uploadRulesVersion: string | null;
+  uploadRulesLastAcceptedAt: string | null;
 };
 
 type WorkflowStep = 1 | 2 | 3;
@@ -69,6 +74,11 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>(1);
   const [editingItem, setEditingItem] = useState<FieldCaptureItem | null>(null);
+  const initialRulesFresh = Boolean(identity && isDropUploadRulesAcceptanceFresh({ version: identity.uploadRulesVersion, acceptedAt: identity.uploadRulesLastAcceptedAt }));
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
+  const [rulesAccepted, setRulesAccepted] = useState(initialRulesFresh);
+  const [rulesAcceptedAt, setRulesAcceptedAt] = useState(identity?.uploadRulesLastAcceptedAt || null);
+  const [rulesSaving, setRulesSaving] = useState(false);
 
   useEffect(() => {
     const current = loadOrCreateFieldCaptureLocalSession();
@@ -85,6 +95,21 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
     void restoreFieldCaptureItems(current.id).then(setItems).catch((error) => setMessage(error instanceof Error ? error.message : "A helyi capture sor nem állítható vissza."));
     return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
   }, []);
+
+  async function acceptUploadRules() {
+    if (!identity || rulesSaving) return;
+    setRulesSaving(true);
+    setMessage("A feltöltési szabályzat elfogadásának rögzítése…");
+    try {
+      const response = await fetch("/api/field-capture/upload-rules/accept", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + identity.sessionToken }, body: JSON.stringify({ accepted: true, rulesVersion: DROP_UPLOAD_RULES_VERSION }) });
+      const payload = await response.json() as { ok?: boolean; error?: string; acceptedAt?: string; rulesVersion?: string };
+      if (!response.ok || !payload.ok || !payload.acceptedAt || payload.rulesVersion !== DROP_UPLOAD_RULES_VERSION) throw new Error(payload.error || "A feltöltési szabályzat elfogadása nem rögzíthető.");
+      setRulesAccepted(true); setRulesAcceptedAt(payload.acceptedAt); setRulesDialogOpen(false);
+      setMessage("A feltöltési szabályzat elfogadva. A szerveres szinkron engedélyezhető.");
+    } catch (error) {
+      setRulesAccepted(false); setMessage(error instanceof Error ? error.message : "A feltöltési szabályzat elfogadása sikertelen.");
+    } finally { setRulesSaving(false); }
+  }
 
   function goToStep(step: WorkflowStep) {
     if (step > 1 && !items.length) return;
@@ -254,7 +279,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
         {workflowStep === 2 ? <section className="mt-3 rounded-[1.8rem] border border-cyan-200 bg-cyan-50/70 p-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-800">2. Ellenőrzés</p><h2 className="mt-1 text-lg font-black text-slate-950">Nézze át és egészítse ki a képeket</h2><p className="mt-1 text-sm leading-6 text-slate-600">Itt írhat megjegyzést, diktálhat, újramérheti a GPS-t vagy a kamera irányát, és a képet közvetlenül meg is jelölheti.</p></section> : null}
 
-        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4"><div className="flex items-start gap-3"><CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés</p><h2 className="mt-1 text-lg font-black text-slate-950">A helyi terepi munkamenet mentve van</h2><p className="mt-1 text-sm leading-6 text-slate-600">A képek az IndexedDB offline tárban maradnak. A P7 szerveres DIMPRO szinkron külön fejlesztési kapu lesz; addig a rendszer nem állítja, hogy a képek felhőbe kerültek.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4"><Summary value={items.length} label="kép" /><Summary value={noteCount} label="megjegyzés" /><Summary value={editedCount} label="szerkesztett" /><Summary value={gpsCount} label="GPS" /></div><div className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold leading-5 text-amber-900"><CloudUpload size={15} className="mr-1 inline" /> DIMPRO szerveres szinkron: P7 következő fejlesztési lépés. Kamerairány-adat: {orientationCount}/{items.length} kép.</div></section> : null}
+        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4"><div className="flex items-start gap-3"><CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés</p><h2 className="mt-1 text-lg font-black text-slate-950">A helyi terepi munkamenet mentve van</h2><p className="mt-1 text-sm leading-6 text-slate-600">A képek az IndexedDB offline tárban maradnak. A P7 szerveres DIMPRO szinkron külön fejlesztési kapu lesz; addig a rendszer nem állítja, hogy a képek felhőbe kerültek.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4"><Summary value={items.length} label="kép" /><Summary value={noteCount} label="megjegyzés" /><Summary value={editedCount} label="szerkesztett" /><Summary value={gpsCount} label="GPS" /></div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3 text-xs leading-5 text-slate-700"><div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="block text-slate-950">Feltöltési szabályok</strong><span>{rulesAccepted && rulesAcceptedAt ? "Központilag elfogadva: " + new Date(rulesAcceptedAt).toLocaleString("hu-HU") : "A szerveres feltöltés előtt elfogadás szükséges."}</span></div><DropRulesButton accepted={rulesAccepted} onClick={() => setRulesDialogOpen(true)} label="Szabályok" /></div>{!rulesAccepted ? <button type="button" onClick={() => setRulesDialogOpen(true)} className="mt-3 w-full rounded-xl bg-amber-700 px-4 py-3 font-black text-white">Feltöltési szabályok megnyitása</button> : null}</div><div className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold leading-5 text-amber-900"><CloudUpload size={15} className="mr-1 inline" /> DIMPRO szerveres szinkron előkészítve; kliensoldali feltöltési lánc fejlesztés alatt. Kamerairány-adat: {orientationCount}/{items.length} kép.</div></section> : null}
 
         {message ? <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-950">{message}</div> : null}
 
@@ -272,6 +297,8 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
       </div>
 
       <PreCaptureOptionsSheet open={sheetOpen} value={defaults} onClose={() => setSheetOpen(false)} onReset={resetDefaults} onChoose={chooseSource} />
+      <DropUploadRulesDialog open={rulesDialogOpen} onClose={() => { if (rulesAccepted) setRulesDialogOpen(false); }} accepted={rulesAccepted} onAcceptedChange={setRulesAccepted} resumableEnabled scannerAvailable publicDownloadReady />
+      {rulesDialogOpen && !rulesAccepted ? <button type="button" disabled={rulesSaving} onClick={() => void acceptUploadRules()} className="fixed bottom-5 left-1/2 z-[110] -translate-x-1/2 rounded-xl bg-cyan-800 px-5 py-3 text-sm font-black text-white shadow-xl disabled:bg-slate-400">{rulesSaving ? "Elfogadás rögzítése…" : "Elfogadás és folytatás"}</button> : null}
       {editingItem ? <DimproImageMarkupEditor file={editingItem.uploadFile} title={`#${editingItem.sequence} · ${editingItem.displayName}`} onClose={() => setEditingItem(null)} onSave={(result) => saveEditedImage(editingItem, result)} /> : null}
     </main>
   );
