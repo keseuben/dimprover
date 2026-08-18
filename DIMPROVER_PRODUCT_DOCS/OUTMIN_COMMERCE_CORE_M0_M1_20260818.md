@@ -200,3 +200,39 @@ Acceptance:
 - TypeScript: PASS;
 - célzott lint: PASS;
 - git diff --check: PASS.
+
+### 2026-08-18 19:10 checkpoint — DEV migration + candidate build/smoke ZÖLD
+
+A korábbi, „migration apply még nem futott” checkpointot ez a későbbi állapot felülírja.
+
+DEV migration:
+- `commerce-core` schema `0.1.0` ténylegesen alkalmazva a DEV adatbázisra koordinált migration lock alatt;
+- migration SHA-256: `7ffb80339d3d129da59acbb85fcf4c8957940efcb067fddf36953935b453a367`;
+- teljes pre-migration DEV backup elkészült: `/srv/dimpro-dev/backups/commerce-core-m0-m1/20260818T163147Z/supabase-dev-pre-commerce-core-m0-m1.dump`;
+- backup SHA-256: `db61cedc032c4002cd1e3a0618a57bd513bef74c85ea704c20591176836e34ec`;
+- migration verify: PASS;
+- RLS/grant security verify: PASS minden Commerce táblán;
+- PROD változatlan.
+
+Candidate build:
+- első Turbopack kísérlet a worktree gyökérből kifelé mutató `node_modules` symlink miatt fail volt;
+- ezt csak az izolált OutminAI worktree-ben javítottuk: a node_modules külső symlink helyett ugyanazon DEV filesystemen hardlinkelt, lokális könyvtár készült;
+- a buildhez a meglévő DEV `.env.local` biztonságos, gitignored, 0600 jogosultságú helyi példánya került az izolált worktree-be; tartalma nincs naplózva vagy commitolva;
+- végleges koordinált Turbopack build: PASS;
+- build ID: `pUuyrKXLQ8Mio-Xtw1AUh`;
+- build source: `92eaa4980991ba948c77e6e03b559a7dfa52ce43`;
+- standalone release: PASS;
+- 249 statikus chunk: PASS;
+- post-build storage retention: PASS;
+- build operation exit code: 0.
+
+Candidate smoke, izolált localhost porton:
+- `/login`: HTTP 200;
+- `/aruter/admin/termekek`: HTTP 307 → `/login` aktív session nélkül, a központi auth guard szerint;
+- `/api/v1/commerce/context`: HTTP 307 → `/login` aktív session nélkül;
+- `/api/v1/commerce/products`: HTTP 307 → `/login` aktív session nélkül;
+- `/api/v1/commerce/inventory`: HTTP 307 → `/login` aktív session nélkül;
+- build route manifest tartalmazza a Commerce Termékek és API route-okat;
+- candidate standalone startup: PASS.
+
+Megjegyzés: shared DEV runtime cutover még NEM történt. A candidate izoláltan zöld, így ÁrminAI/JázminAI aktuális release-e nem lett lecserélve.
