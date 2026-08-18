@@ -4,6 +4,7 @@ import { addDecimal, normalizeDecimal, subtractDecimal } from "../app/lib/commer
 import { calculateInventoryQuantities } from "../app/lib/commerce/inventory/math";
 import { isValidGtin, normalizeProductIdentifier, resolveIdentifier } from "../app/lib/commerce/product/identifier";
 import type { ProductIdentifier } from "../app/lib/commerce/product/types";
+import { resolveCommercePermissions } from "../app/lib/commerce/core/permissions";
 
 const results: { name: string; ok: boolean; detail?: string }[] = [];
 function check(name: string, fn: () => void) {
@@ -36,6 +37,9 @@ check("15 schema contains tenant RLS policy", () => assert.ok(sql.includes("dimp
 check("16 stock ledger is idempotent per organization", () => assert.ok(sql.includes("unique (organization_id, idempotency_key)")));
 check("17 balance exposes generated available quantity", () => assert.ok(sql.includes("available_quantity numeric(20,6) generated always as (physical_quantity - reserved_quantity) stored")));
 check("18 legacy product stock_quantity is not used by Commerce Core", () => assert.equal(sql.includes("stock_quantity"), false));
+check("19 unknown organization role fails closed to context-only", () => assert.deepEqual(resolveCommercePermissions("UNMAPPED_ROLE"), ["commerce.context.read"]));
+check("20 admin role can adjust inventory", () => assert.ok(resolveCommercePermissions("ADMIN").includes("commerce.inventory.adjust")));
+check("21 manager role cannot adjust inventory", () => assert.equal(resolveCommercePermissions("MANAGER").includes("commerce.inventory.adjust"), false));
 const failed = results.filter((item) => !item.ok);
 for (const item of results) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.detail ? ` :: ${item.detail}` : ""}`);
 console.log(`RESULT ${results.length - failed.length}/${results.length} PASS`);

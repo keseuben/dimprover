@@ -26,17 +26,18 @@
 - staged Commerce Core M0/M1 SQL bootstrap + rollback fájl;
 - organization-scoped táblák és tenant SELECT RLS a canonical DIMPRO Identity Core membership függvényére építve;
 - StockMovement idempotency kulcs és append-only ledger irány;
-- 18 acceptance ellenőrzés.
+- Commerce server context + fail-closed role permission mapping;
+- `/api/v1/commerce/context` route organization-váltási ellenőrzéssel;
+- 21 acceptance ellenőrzés.
 
 **Részben elkészült:**
-- M0 tenant/authz: DB RLS olvasási határ megtervezve, szerver API permission enforcement még készül;
+- M0 tenant/authz: DB RLS olvasási határ + Commerce context/permission guard alap elkészült; további mutation permission enforcement még készül;
 - M1 Product Engine: domain + resolver alap kész, repository/CRUD/API még készül;
 - Inventory Engine: domain/invariant kész, tranzakciós ledger writer + balance rebuild még készül;
 - Media Engine: adatmodell skeleton kész, képfeldolgozó pipeline még nincs implementálva;
 - Pricing: csak alap Price entitás, teljes Pricing Engine későbbi milestone.
 
 **Még hiányzik:**
-- Commerce context server resolver és `/api/v1/commerce/context`;
 - Product repository/service;
 - Product CRUD API;
 - `/api/v1/products/resolve?code=`;
@@ -67,7 +68,8 @@
 - közvetlen kliensírás M0/M1-ben szándékosan nincs RLS policy-val engedélyezve; mutation kizárólag guardolt server API-n át tervezett.
 
 **API-k:**
-- még nincs új runtime API aktiválva; következő blokk.
+- `/api/v1/commerce/context` forráskód elkészült; runtime aktiválás még nincs, mert a Commerce branch nincs DEV release-be integrálva.
+- Product CRUD/resolve API még hiányzik.
 
 **UI:**
 - a meglévő Árutér UI változatlan;
@@ -78,7 +80,7 @@
 - lint: PASS (új Commerce scope)
 - build: következő quality gate-nél
 - smoke: runtime API/UI után
-- acceptance: 18/18 PASS
+- acceptance: 21/21 PASS
 
 **Ismert hibák / technikai adósság:**
 - a régi `AruterProduct.stockQuantity` legacy modell továbbra is létezik a régi Árutér kódban; nem lett átírva, az új Commerce Core nem használja;
@@ -87,15 +89,15 @@
 - készlet ledger tranzakciós balance-frissítés még nincs implementálva.
 
 **Következő fejlesztési blokk:**
-1. Commerce server context + permission guard;
-2. Product repository/service + CRUD;
-3. identifier resolve API;
-4. DEV migration gate;
+1. Product repository/service + CRUD;
+2. identifier resolve API;
+3. DEV migration gate;
+4. Inventory ledger transaction service;
 5. Termékek admin UI első letisztult grid + inspector.
 
 **Becsült következő fejlesztési ráfordítás:** 4–7 aktív fejlesztési óra a context + Product CRUD/API + első DB gate szintig.
 
 ## Készültség
-- M0 Core + DB baseline: kb. 35%
+- M0 Core + DB baseline: kb. 45%
 - M1 Product + Media + Inventory: kb. 15%
 - teljes Pilot: kb. 5%

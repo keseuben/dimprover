@@ -7,3 +7,5 @@ export * from "./inventory/math";
 export * from "./media/types";
 
 export * from "./pricing/types";
+
+export * from "./core/permissions";
