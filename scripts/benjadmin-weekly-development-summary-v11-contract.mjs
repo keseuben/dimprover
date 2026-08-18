@@ -33,8 +33,8 @@ check("UI has previous next and current week controls", () =>
   assert.ok(panel.includes("Előző hét") && panel.includes("Következő hét") && panel.includes("Aktuális hét")));
 check("Date picker normalizes to Monday", () =>
   assert.ok(panel.includes("mondayDateKey") && panel.includes('type="date"')));
-check("Future navigation stops on current week", () =>
-  assert.ok(panel.includes("disabled={!summary || summary.period.isCurrentWeek}")));
+check("Future navigation and manual requests clamp to current week", () =>
+  assert.ok(panel.includes("disabled={!summary || summary.period.isCurrentWeek}") && panel.includes("normalized > currentWeekKey") && backend.includes("requested.weekKey > current.weekKey ? current : requested")));
 check("Worker filter is interactive and persisted in URL", () =>
   assert.ok(panel.includes("weeklyWorker") && panel.includes("selectWorker") && panel.includes("data-worker-filter")));
 check("Six-stage filter is interactive and persisted in URL", () =>

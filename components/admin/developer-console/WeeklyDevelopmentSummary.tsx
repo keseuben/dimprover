@@ -117,8 +117,10 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
 
   function selectWeek(value: string) {
     const normalized = mondayDateKey(value);
-    setWeekKey(normalized);
-    writeQuery({ week: normalized });
+    const currentWeekKey = summary?.period.currentWeekKey || "";
+    const safeWeekKey = currentWeekKey && normalized > currentWeekKey ? currentWeekKey : normalized;
+    setWeekKey(safeWeekKey);
+    writeQuery({ week: safeWeekKey });
   }
 
   function goCurrentWeek() {

@@ -763,9 +763,10 @@ function budapestWeek(weekInput?: string | null, now = new Date()) {
   const current = budapestWeekFromCalendarDate(localNow.year, localNow.month, localNow.day);
   const raw = text(weekInput);
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const selected = match
+  const requested = match
     ? budapestWeekFromCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))
     : current;
+  const selected = requested.weekKey > current.weekKey ? current : requested;
   return { ...selected, currentWeekKey: current.weekKey, isCurrentWeek: selected.weekKey === current.weekKey };
 }
 
