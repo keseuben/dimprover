@@ -911,3 +911,27 @@ Tesztkapu:
 - git diff --check: PASS.
 
 A 0.1.7 Order Inventory Bridge DEV apply továbbra is a központi build lock felszabadulására vár. PROD változatlan.
+
+### 2026-08-19 00:06 checkpoint — Commerce központi pénztár UI skeleton
+
+Elkészült új, párhuzamos Commerce adminfelület:
+- `/aruter/admin/penztar` — a legacy `/aruter/penztar` változatlanul megmaradt;
+- közös Commerce cashier queue SENT_TO_CASHIER + PAID rendelésekkel;
+- Külső Árutér forrás egyértelmű badge-dzsel;
+- kosártétel-snapshotok: terméknév, SKU, mennyiség, raktárhely, nettó/bruttó összeg;
+- UNRESOLVED legacy tétel figyelmeztetést kap, de nem tűnik el a pénztárból;
+- RESOLVED / RESERVED / CONSUMED készletállapot megjelenítés;
+- jogosultságvezérelt reserve, pay és issue kezelősáv;
+- készletforrás-választás és Order reserve API bekötés előkészítve;
+- CARD / CASH / TRANSFER / LATER fizetési mód;
+- külön `commerce.order.pay` és `commerce.order.issue` UI gate;
+- a Termékek adminból külön Pénztár navigáció.
+
+Tesztkapu:
+- Commerce Cashier UI contract: 20/20 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+A Commerce pénztár még nem váltotta le a legacy pénztárat, és shared DEV runtime cutover nem történt. A 0.1.7 készletfoglalási bridge DEV apply szükséges a reserve/issue teljes runtime E2E előtt. PROD változatlan.
