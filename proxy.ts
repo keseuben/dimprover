@@ -98,6 +98,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/dimpro-identity/projects/verify-code";
   const isDropPublicApiRoute =
     pathname === "/api/field-capture/health" ||
+    pathname === "/api/field-capture/sessions" ||
+    pathname.startsWith("/api/field-capture/sessions/") ||
     pathname === "/api/drop/health" ||
     pathname === "/api/drop/features" ||
     pathname === "/api/drop/access/open" ||
@@ -142,6 +144,8 @@ export async function proxy(request: NextRequest) {
   const isPublicStaticDownload = pathname.startsWith("/downloads/");
   const isPublicApiRoute =
     pathname === "/api/field-capture/health" ||
+    pathname === "/api/field-capture/sessions" ||
+    pathname.startsWith("/api/field-capture/sessions/") ||
     pathname.startsWith("/api/dev/") ||
     pathname.startsWith("/api/downloads/") ||
     pathname.startsWith("/api/releases/") ||

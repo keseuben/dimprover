@@ -7,6 +7,7 @@ const repo = read("app/lib/field-capture/serverRepository.ts");
 const sessionRoute = read("app/api/field-capture/sessions/route.ts");
 const itemRoute = read("app/api/field-capture/sessions/[sessionId]/items/route.ts");
 const healthRoute = read("app/api/field-capture/health/route.ts");
+const proxy = read("proxy.ts");
 const migration = read("supabase/migrations/20260818074500_field_capture_p7_server_session_v010.sql");
 
 const tests = [
@@ -76,6 +77,11 @@ const tests = [
   ["JSON metadata body remains bounded", () => {
     assert.match(sessionRoute, /readDimproIdentityJsonBody/);
     assert.match(itemRoute, /readDimproIdentityJsonBody/);
+  }],
+  ["Drop host exposes authenticated Field Capture API surface", () => {
+    assert.ok(proxy.includes("pathname === \"/api/field-capture/sessions\""));
+    assert.ok(proxy.includes("pathname.startsWith(\"/api/field-capture/sessions/\")"));
+    assert.ok(proxy.includes("Ez az API nem érhető el a DIMPRO Drop nyilvános hostján."));
   }],
 ];
 

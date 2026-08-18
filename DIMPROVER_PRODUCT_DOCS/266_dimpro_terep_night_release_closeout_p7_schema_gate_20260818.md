@@ -263,3 +263,27 @@ Acceptance bővítés:
 - frissített Chrome webhelyengedély útmutató.
 
 Eredmény: **64/64 statikus Terep acceptance PASS**, célzott ESLint PASS, `npx tsc --noEmit` PASS, `git diff --check` PASS.
+
+
+## 2026-08-18 – P7 Drop-host API allowlist és GPS browser acceptance
+
+A P7 candidate smoke feltárta, hogy az új szerveres capture route-ok ugyan elkészültek, de a `drop.dev.dimpro.hu` proxy-allowlist csak a `/api/field-capture/health` útvonalat engedte át. Emiatt a `POST /api/field-capture/sessions` a route elérése előtt 404 választ kapott.
+
+Javítás:
+- a Drop host engedélyezi a `POST /api/field-capture/sessions` útvonalat;
+- engedélyezi az `/api/field-capture/sessions/*` item API útvonalakat;
+- a többi, nem engedélyezett API továbbra is 404 blokkolást kap;
+- az API saját bearer Send-session ellenőrzése változatlanul kötelező, tehát a proxy-allowlist nem teszi autentikáció nélkül használhatóvá a route-ot.
+
+Contract bővítés:
+- P7 server contract: **13/13 PASS**;
+- Terep statikus acceptance: **65/65 PASS**.
+
+A böngészős acceptance is frissült:
+- `navigator.permissions.query({ name: "geolocation" })` tesztstub;
+- a GPS kapcsoló után külön megjelenő **„Helyhozzáférés engedélyezése”** gomb ellenőrzése;
+- a gomb közvetlen kattintása;
+- **„Helyhozzáférés engedélyezve”** állapot megvárása;
+- ezután történik csak a kamerás/galériás capture acceptance.
+
+A javítás után új candidate build szükséges, mert a korábbi `TZDDbwusBNsFY6Qw6cW0B` build még nem tartalmazza a proxy-allowlist módosítást.

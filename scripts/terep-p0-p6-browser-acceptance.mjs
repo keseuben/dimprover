@@ -34,6 +34,14 @@ try {
         },
       },
     });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        async query({ name }) {
+          return { state: name === 'geolocation' ? 'prompt' : 'granted' };
+        },
+      },
+    });
     class FakeOrientationEvent extends Event {
       static async requestPermission() { return 'granted'; }
       constructor(type) {
@@ -119,6 +127,13 @@ try {
   }
   await page.waitForFunction(() => (document.body.textContent || '').includes('Tájolási szenzor'), { timeout: 5000 });
   pass('Tájolási permission user gesture-ből lefut', true);
+
+  await page.waitForFunction(() => (document.body.textContent || '').includes('Helyhozzáférés engedélyezése'), { timeout: 5000 });
+  const allowLocation = await visibleButton(page, 'Helyhozzáférés engedélyezése');
+  assert.ok(allowLocation, 'Helyhozzáférés engedélyezése gomb hiányzik');
+  await allowLocation.click();
+  await page.waitForFunction(() => (document.body.textContent || '').includes('Helyhozzáférés engedélyezve'), { timeout: 10_000 });
+  pass('GPS webhelyengedély külön user gesture-ből lefut', true);
 
   const gallery = await visibleButton(page, 'Galéria');
   assert.ok(gallery, 'Galéria gomb hiányzik');
