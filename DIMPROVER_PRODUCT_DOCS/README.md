@@ -232,3 +232,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `280_dimpro_terep_p8_user_drive_content_core_20260818.md` – Terepi Gyorsrögzítő P8 Saját DIMPRO Drive / Content Core V0.1: USER ownership, clean/clean Drop→Drive SHA-256 stream-copy, független retention és valós DEV E2E; klienskapcsoló még fail-closed.
 
 - `281_benjadmin_weekly_development_flow_v1_dev_activation_20260819.md` – Weekly Development Flow V1 DEV aktiválás: scheduler-run/handoff/wait/failure + 6/x analitika; selector-safe `b86f3a1`, 28/28 live Flow, 35/35 Weekly V1.1, 30/30 Common Chat, 30/30 Scheduler runtime, exact build és PROD DENY.
+
+- `282_dimpro_terep_client_sync_dev_activation_20260819.md` – Terepi Gyorsrögzítő kliensszinkron DEV aktiválás: privát staging + upload-rules gate + resumable Drop upload + reconcile, 6/6 + 14/14 + 14/14 + 14/14 + 14/14 + 66/66 + 44/44 PASS; candidate és live mobil browser E2E `SERVER_STORED`, aktív build `4sxAAl-wWLIzrwbUOxEv6`, PROD változatlan.
