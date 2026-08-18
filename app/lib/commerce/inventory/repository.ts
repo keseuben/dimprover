@@ -19,7 +19,11 @@ export class CommerceInventoryError extends Error {
 const STOCK_STATUSES = new Set<StockStatus>(["SELLABLE","RESERVED","QUARANTINE","DAMAGED","OUTLET","BLOCKED","IN_TRANSIT","RETURNED","SCRAP"]);
 const MOVEMENT_TYPES = new Set<StockMovementType>(["RECEIPT","SALE","RESERVATION_COMMIT","RESERVATION_RELEASE","TRANSFER_OUT","TRANSFER_IN","ADJUSTMENT","RETURN"]);
 
-function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
+function text(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  return "";
+}
 function nullableText(value: unknown) { const valueText = text(value); return valueText || null; }
 function dbError(message: string, error: PostgrestError | null, status = 503): never {
   throw new CommerceInventoryError(message, "COMMERCE_INVENTORY_DATABASE_ERROR", status, error?.code);

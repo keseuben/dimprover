@@ -475,3 +475,34 @@ Tesztkapu:
 - TypeScript: PASS;
 - lint: PASS;
 - git diff --check: PASS.
+
+### 2026-08-18 21:32 checkpoint — Inventory Reservation M1 DEV aktív
+
+A korábbi staged Reservation állapotot ez a checkpoint felülírja.
+
+DEV migráció:
+- Commerce schema: `0.1.3`, migration count: 4;
+- `commerce_inventory_reservations` és `commerce_inventory_reservation_events` aktív;
+- reserve/create és release/consume service-only RPC-k aktívak;
+- migration SHA-256: `8fe89576dfbaf95fa19abbb72a96e10695383d07d82e9725999db0e79148c18a`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-reservation-m1/20260818T193047Z/supabase-dev-pre-commerce-reservation-m1.dump`;
+- backup SHA-256: `21d11b57b99bb26d1602dd19d29f25e138b2632ca099c53985c7b12e2ffbb5b3`;
+- migration/security verify: PASS.
+
+Runtime ellenőrzés:
+- valós DEV reservation repository E2E: 11/11 PASS;
+- reserve: physical változatlan, reserved nő, available csökken;
+- release: reserved csökken;
+- consume: physical + reserved együtt csökken;
+- create idempotencia: PASS;
+- tenant-scoped reservation list: PASS;
+- végső balance invariáns: PASS;
+- QA cleanup: PASS.
+
+Javítás a runtime E2E során:
+- a Supabase numeric mezők bizonyos lekérdezéseknél number típusként érkeztek, miközben az Inventory repository korábbi `text()` helperje csak stringet kezelt;
+- emiatt a készletmennyiségek üres stringgé válhattak az API mapping során;
+- javítva: string / number / bigint numerikus értékek biztonságos DecimalString konverziója;
+- a javítás után a valós inventory balance ellenőrzés zöld.
+
+PROD változatlan; shared DEV runtime cutover továbbra sem történt.

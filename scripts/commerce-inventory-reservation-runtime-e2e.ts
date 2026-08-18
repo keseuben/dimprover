@@ -39,7 +39,7 @@ async function main() {
 
     const created=await createCommerceInventoryReservation(context,{sourceId,variantId,quantity:"4",stockStatus:"SELLABLE",idempotencyKey:createKey,referenceType:"ORDER",referenceId,expiresAt});
     reservationId=String(created.reservationId||"");
-    if(!reservationId||String(created.status)!=="ACTIVE"||String(created.remainingQuantity)!=="4.000000") throw new Error(`RES_RUNTIME_CREATE_${JSON.stringify(created)}`);
+    if(!reservationId||String(created.status)!=="ACTIVE"||Number(created.remainingQuantity)!==4) throw new Error(`RES_RUNTIME_CREATE_${JSON.stringify(created)}`);
     console.log("PASS 03 active reservation created through repository RPC");
 
     const duplicate=await createCommerceInventoryReservation(context,{sourceId,variantId,quantity:"4",stockStatus:"SELLABLE",idempotencyKey:createKey,referenceType:"ORDER",referenceId,expiresAt});
@@ -47,7 +47,7 @@ async function main() {
     console.log("PASS 04 reservation create idempotency works");
 
     let balances=await listCommerceInventory(context,{variantId,sourceId,stockStatus:"SELLABLE"});
-    if(balances.length!==1||balances[0]?.physicalQuantity!=="10.000000"||balances[0]?.reservedQuantity!=="4.000000"||balances[0]?.availableQuantity!=="6.000000") throw new Error(`RES_RUNTIME_BALANCE_AFTER_CREATE_${JSON.stringify(balances)}`);
+    if(balances.length!==1||Number(balances[0]?.physicalQuantity)!==10||Number(balances[0]?.reservedQuantity)!==4||Number(balances[0]?.availableQuantity)!==6) throw new Error(`RES_RUNTIME_BALANCE_AFTER_CREATE_${JSON.stringify(balances)}`);
     console.log("PASS 05 reserve changes reserved and available quantities only");
 
     const listed=await listCommerceInventoryReservations(context,{variantId,sourceId,status:"ACTIVE"});
@@ -55,19 +55,19 @@ async function main() {
     console.log("PASS 06 tenant-scoped reservation list returns fixture");
 
     const released=await applyCommerceInventoryReservationAction(context,reservationId,"RELEASE",{quantity:"1",idempotencyKey:`res-runtime-release-${productId.slice(0,8)}`});
-    if(String(released.remainingQuantity)!=="3.000000") throw new Error("RES_RUNTIME_RELEASE");
+    if(Number(released.remainingQuantity)!==3) throw new Error("RES_RUNTIME_RELEASE");
     console.log("PASS 07 partial release works");
 
     const consumed=await applyCommerceInventoryReservationAction(context,reservationId,"CONSUME",{quantity:"2",idempotencyKey:`res-runtime-consume2-${productId.slice(0,8)}`});
-    if(String(consumed.remainingQuantity)!=="1.000000") throw new Error("RES_RUNTIME_CONSUME_PARTIAL");
+    if(Number(consumed.remainingQuantity)!==1) throw new Error("RES_RUNTIME_CONSUME_PARTIAL");
     console.log("PASS 08 partial consume works");
 
     const finished=await applyCommerceInventoryReservationAction(context,reservationId,"CONSUME",{quantity:"1",idempotencyKey:`res-runtime-consume1-${productId.slice(0,8)}`});
-    if(String(finished.status)!=="CONSUMED"||String(finished.remainingQuantity)!=="0.000000") throw new Error(`RES_RUNTIME_FINISH_${JSON.stringify(finished)}`);
+    if(String(finished.status)!=="CONSUMED"||Number(finished.remainingQuantity)!==0) throw new Error(`RES_RUNTIME_FINISH_${JSON.stringify(finished)}`);
     console.log("PASS 09 final consume closes reservation");
 
     balances=await listCommerceInventory(context,{variantId,sourceId,stockStatus:"SELLABLE"});
-    if(balances[0]?.physicalQuantity!=="7.000000"||balances[0]?.reservedQuantity!=="0.000000"||balances[0]?.availableQuantity!=="7.000000") throw new Error(`RES_RUNTIME_FINAL_BALANCE_${JSON.stringify(balances)}`);
+    if(Number(balances[0]?.physicalQuantity)!==7||Number(balances[0]?.reservedQuantity)!==0||Number(balances[0]?.availableQuantity)!==7) throw new Error(`RES_RUNTIME_FINAL_BALANCE_${JSON.stringify(balances)}`);
     console.log("PASS 10 final balance physical/reserved/available is correct");
   } finally {
     const sql=`begin;
