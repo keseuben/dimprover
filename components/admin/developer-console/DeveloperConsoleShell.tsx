@@ -16,7 +16,7 @@ import TeamQuickDrawer from "./TeamQuickDrawer";
 import TerminalHubWorkspace from "./TerminalHubWorkspace";
 import WorkerActivityDrawer from "./WorkerActivityDrawer";
 import type { ConnectionMode } from "./ConnectionStatus";
-import type { BenAiDispatch, ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext } from "./types";
+import type { BenAiDispatch, ConsoleLiveState, ConsoleMessage, ConsoleTarget, ConsoleTheme, DevelopmentResource, ResourceHealth, RuntimeContext, WeeklyDevelopmentSummary } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 const THEME_KEY = "benjadmin-developer-console-theme";
@@ -86,7 +86,8 @@ export default function DeveloperConsoleShell() {
   const [teamOpen, setTeamOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [terminalHubOpen, setTerminalHubOpen] = useState(false);
-  const [workerActivityCode, setWorkerActivityCode] = useState<"ARMINAI" | "JAZMINAI" | "OUTMINAI" | null>(null);
+  const [workerActivityCode, setWorkerActivityCode] = useState<"BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" | null>(null);
+  const [workerActivityContextKey, setWorkerActivityContextKey] = useState("");
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const liveRef = useRef<ConsoleLiveState | null>(null);
@@ -96,10 +97,17 @@ export default function DeveloperConsoleShell() {
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
     setTheme(storedTheme === "light" || storedTheme === "sunlight" ? storedTheme : "dark");
-    const queryTaskId = new URLSearchParams(window.location.search).get("task")?.trim() || "";
+    const params = new URLSearchParams(window.location.search);
+    const queryTaskId = params.get("task")?.trim() || "";
     if (queryTaskId) {
       setDeepLinkTaskId(queryTaskId);
       setFocusedTaskId(queryTaskId);
+    }
+    const queryContextKey = params.get("weeklyContext")?.trim() || "";
+    const queryDrawerWorker = params.get("weeklyDrawerWorker")?.trim().toUpperCase() || "";
+    if (queryContextKey && ["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"].includes(queryDrawerWorker)) {
+      setWorkerActivityContextKey(queryContextKey);
+      setWorkerActivityCode(queryDrawerWorker as "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD");
     }
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -136,11 +144,51 @@ export default function DeveloperConsoleShell() {
     setSelectedProjectId(id);
     setDeepLinkTaskId("");
     setFocusedTaskId("");
+    setWorkerActivityContextKey("");
     const url = new URL(window.location.href);
-    if (url.searchParams.has("task")) {
-      url.searchParams.delete("task");
-      window.history.replaceState(window.history.state, "", url);
+    url.searchParams.delete("task");
+    url.searchParams.delete("weeklyContext");
+    url.searchParams.delete("weeklyDrawerWorker");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  const closeWorkerActivity = useCallback(() => {
+    setWorkerActivityCode(null);
+    setWorkerActivityContextKey("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("weeklyContext");
+    url.searchParams.delete("weeklyDrawerWorker");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  const openWorkerActivity = useCallback((code: "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD") => {
+    setWorkerActivityContextKey("");
+    setWorkerActivityCode(code);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("weeklyContext");
+    url.searchParams.delete("weeklyDrawerWorker");
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  const openWeeklyContext = useCallback((weeklyContext: WeeklyDevelopmentSummary["contexts"][number], weekKey: string) => {
+    if (weeklyContext.projectId) {
+      localStorage.setItem(PROJECT_KEY, weeklyContext.projectId);
+      setSelectedProjectId(weeklyContext.projectId);
     }
+    const drawerWorker = weeklyContext.workers.find((code): code is "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" =>
+      ["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"].includes(code)
+    ) || null;
+    setWorkerActivityContextKey(weeklyContext.key);
+    if (drawerWorker) setWorkerActivityCode(drawerWorker);
+    const url = new URL(window.location.href);
+    if (weekKey) url.searchParams.set("week", weekKey);
+    url.searchParams.set("weeklyContext", weeklyContext.key);
+    if (drawerWorker) url.searchParams.set("weeklyDrawerWorker", drawerWorker);
+    else url.searchParams.delete("weeklyDrawerWorker");
+    window.history.replaceState(window.history.state, "", url);
+    setNotice(drawerWorker
+      ? "Heti munkarész megnyitva · " + weeklyContext.workItem + " · " + drawerWorker
+      : "Heti munkarész kijelölve · " + weeklyContext.workItem);
   }, []);
 
   useEffect(() => {
@@ -156,6 +204,11 @@ export default function DeveloperConsoleShell() {
       setInstallOpen(false);
       setTerminalHubOpen(false);
       setWorkerActivityCode(null);
+      setWorkerActivityContextKey("");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("weeklyContext");
+      url.searchParams.delete("weeklyDrawerWorker");
+      window.history.replaceState(window.history.state, "", url);
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
@@ -381,8 +434,8 @@ export default function DeveloperConsoleShell() {
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
-        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} workerTransitions={live?.workerTransitions || []} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />
-        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} onOpenWorkerActivity={(code) => setWorkerActivityCode(code)} />
+        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} workerTransitions={live?.workerTransitions || []} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onOpenWeeklyContext={openWeeklyContext} />
+        <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} onOpenWorkerActivity={openWorkerActivity} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />
       <DeveloperComposer projects={live?.projects || []} selectedProjectId={selectedProjectId} onProjectChange={changeProject} onSend={send} busy={sending} />
@@ -392,7 +445,12 @@ export default function DeveloperConsoleShell() {
       <TeamQuickDrawer open={teamOpen} onClose={() => setTeamOpen(false)} live={live} />
       <AppInstallDrawer open={installOpen} onClose={() => setInstallOpen(false)} />
       <TerminalHubWorkspace open={terminalHubOpen} onClose={() => setTerminalHubOpen(false)} live={live} theme={theme} />
-      <WorkerActivityDrawer workerCode={workerActivityCode} onClose={() => setWorkerActivityCode(null)} messages={messages} live={live} selectedProjectId={selectedProjectId} />
+      <WorkerActivityDrawer workerCode={workerActivityCode} onClose={closeWorkerActivity} messages={messages} live={live} selectedProjectId={selectedProjectId} focusedContextKey={workerActivityContextKey} onClearFocusedContext={() => {
+        setWorkerActivityContextKey("");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("weeklyContext");
+        window.history.replaceState(window.history.state, "", url);
+      }} />
     </main>
   );
 }

@@ -43,6 +43,19 @@ export function safeDevelopmentStage(value: unknown) {
   return Number.isFinite(n) ? Math.max(1, Math.min(6, Math.round(n))) : 0;
 }
 
+export function buildDevelopmentContextKey(input: {
+  projectId?: unknown;
+  mainModule?: unknown;
+  moduleName?: unknown;
+  submoduleName?: unknown;
+  workItem?: unknown;
+}) {
+  const projectId = text(input.projectId) || "global";
+  const hierarchy = [text(input.mainModule), text(input.moduleName), text(input.submoduleName), text(input.workItem)];
+  if (!hierarchy.some(Boolean)) return "";
+  return [projectId, ...hierarchy].map((value) => value.toLocaleLowerCase("hu-HU").replace(/\s+/g, " " ).trim()).join("|");
+}
+
 function inferHierarchy(task: DevelopmentTaskContextInput) {
   const meta = record(task.metadata);
   const stored = record(meta.developmentContext);

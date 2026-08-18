@@ -1,9 +1,11 @@
 "use client";
 
-import { BarChart3, ChevronDown, ChevronUp, Clock3, RefreshCw, ShieldCheck, UsersRound } from "lucide-react";
+import { BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, RefreshCw, RotateCcw, ShieldCheck, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WeeklyDevelopmentSummary as Summary } from "./types";
 import styles from "./DeveloperConsole.module.css";
+
+type WeeklyContext = Summary["contexts"][number];
 
 function adminHeaders() {
   const key = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
@@ -16,17 +18,64 @@ function shortTime(value: string) {
   return new Intl.DateTimeFormat("hu-HU", { weekday: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-export default function WeeklyDevelopmentSummary({ selectedProjectId }: { selectedProjectId: string }) {
+function mondayDateKey(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const shift = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - shift);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function readInitialQuery() {
+  if (typeof window === "undefined") return { week: "", worker: "ALL", stage: 0 };
+  const params = new URLSearchParams(window.location.search);
+  const stage = Number(params.get("weeklyStage") || 0);
+  return {
+    week: mondayDateKey(params.get("week")?.trim() || ""),
+    worker: params.get("weeklyWorker")?.trim().toUpperCase() || "ALL",
+    stage: Number.isFinite(stage) && stage >= 1 && stage <= 6 ? Math.round(stage) : 0,
+  };
+}
+
+function writeQuery(values: { week?: string; worker?: string; stage?: number }) {
+  const url = new URL(window.location.href);
+  if (values.week !== undefined) {
+    if (values.week) url.searchParams.set("week", values.week);
+    else url.searchParams.delete("week");
+  }
+  if (values.worker !== undefined) {
+    if (values.worker && values.worker !== "ALL") url.searchParams.set("weeklyWorker", values.worker);
+    else url.searchParams.delete("weeklyWorker");
+  }
+  if (values.stage !== undefined) {
+    if (values.stage) url.searchParams.set("weeklyStage", String(values.stage));
+    else url.searchParams.delete("weeklyStage");
+  }
+  window.history.replaceState(window.history.state, "", url);
+}
+
+export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenContext }: {
+  selectedProjectId: string;
+  onOpenContext?: (context: WeeklyContext, weekKey: string) => void;
+}) {
+  const initial = useMemo(() => readInitialQuery(), []);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(true);
+  const [weekKey, setWeekKey] = useState(initial.week);
+  const [workerFilter, setWorkerFilter] = useState(initial.worker);
+  const [stageFilter, setStageFilter] = useState(initial.stage);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const query = selectedProjectId ? `?projectId=${encodeURIComponent(selectedProjectId)}` : "";
-      const response = await fetch(`/api/dev/console/weekly-summary${query}`, { headers: adminHeaders(), cache: "no-store" });
+      const query = new URLSearchParams();
+      if (selectedProjectId) query.set("projectId", selectedProjectId);
+      if (weekKey) query.set("week", weekKey);
+      const suffix = query.size ? `?${query.toString()}` : "";
+      const response = await fetch(`/api/dev/console/weekly-summary${suffix}`, { headers: adminHeaders(), cache: "no-store" });
       const payload = await response.json().catch(() => null) as { ok?: boolean; summary?: Summary; error?: string } | null;
       if (!response.ok || !payload?.ok || !payload.summary) throw new Error(payload?.error || "A heti fejlesztési összesítő nem tölthető be.");
       setSummary(payload.summary);
@@ -36,7 +85,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId }: { select
     } finally {
       setLoading(false);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, weekKey]);
 
   useEffect(() => {
     void load();
@@ -44,19 +93,77 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId }: { select
     return () => window.clearInterval(timer);
   }, [load]);
 
-  const topContexts = useMemo(() => summary?.contexts.slice(0, 6) || [], [summary]);
-  const summaryProjectId = summary?.projectId || "";
-  const readyForSelection = Boolean(summary?.ready && summaryProjectId === selectedProjectId);
+  const availableWorkers = useMemo(() => summary?.workers.map((item) => item.code) || [], [summary]);
+  useEffect(() => {
+    if (workerFilter === "ALL" || availableWorkers.includes(workerFilter)) return;
+    setWorkerFilter("ALL");
+    writeQuery({ worker: "ALL" });
+  }, [availableWorkers, workerFilter]);
 
-  return <section className={styles.weeklySummary} data-testid="benjadmin-weekly-development-summary" data-ready={readyForSelection ? "true" : "false"} data-expanded={expanded ? "true" : "false"} data-project-id={summary?.projectId || "all"}>
+  const filteredContexts = useMemo(() => {
+    const contexts = summary?.contexts || [];
+    return contexts.filter((context) => {
+      if (workerFilter !== "ALL" && !context.workers.includes(workerFilter)) return false;
+      if (stageFilter && Number(context.stageCounts[String(stageFilter)] || 0) <= 0) return false;
+      return true;
+    });
+  }, [stageFilter, summary, workerFilter]);
+  const topContexts = filteredContexts.slice(0, 12);
+
+  const summaryProjectId = summary?.projectId || "";
+  const readyForSelection = Boolean(summary?.ready
+    && summaryProjectId === selectedProjectId
+    && (!weekKey || summary.period.weekKey === weekKey));
+
+  function selectWeek(value: string) {
+    const normalized = mondayDateKey(value);
+    setWeekKey(normalized);
+    writeQuery({ week: normalized });
+  }
+
+  function goCurrentWeek() {
+    setWeekKey("");
+    writeQuery({ week: "" });
+  }
+
+  function selectWorker(code: string) {
+    const next = workerFilter === code ? "ALL" : code;
+    setWorkerFilter(next);
+    writeQuery({ worker: next });
+  }
+
+  function selectStage(stage: number) {
+    const next = stageFilter === stage ? 0 : stage;
+    setStageFilter(next);
+    writeQuery({ stage: next });
+  }
+
+  return <section
+    className={styles.weeklySummary}
+    data-testid="benjadmin-weekly-development-summary"
+    data-ready={readyForSelection ? "true" : "false"}
+    data-expanded={expanded ? "true" : "false"}
+    data-project-id={summary?.projectId || "all"}
+    data-week-key={summary?.period.weekKey || weekKey || ""}
+    data-worker-filter={workerFilter}
+    data-stage-filter={stageFilter || "all"}
+  >
     <header className={styles.weeklySummaryHeader}>
       <button type="button" className={styles.weeklySummaryToggle} data-testid="benjadmin-weekly-summary-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <BarChart3 size={15} />
-        <span><strong>HETI FEJLESZTÉSI ÖSSZESÍTŐ</strong><small>{summary?.period.label || "Aktuális naptári hét"}</small></span>
+        <span><strong>HETI FEJLESZTÉSI ÖSSZESÍTŐ</strong><small>{summary?.period.label || "Naptári hét"}</small></span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       <button type="button" className={styles.weeklySummaryRefresh} title="Heti összesítő frissítése" disabled={loading} onClick={() => void load()}><RefreshCw size={13} /></button>
     </header>
+
+    {expanded ? <div className={styles.weeklySummaryToolbar} data-testid="benjadmin-weekly-summary-toolbar">
+      <button type="button" title="Előző hét" disabled={!summary} onClick={() => summary && selectWeek(summary.period.previousWeekKey)}><ChevronLeft size={13} /></button>
+      <label title="Válassz egy napot; a rendszer az adott hét hétfőjére igazítja."><CalendarRange size={12} /><input type="date" aria-label="Heti összesítő hét kiválasztása" value={summary?.period.weekKey || weekKey} onChange={(event) => selectWeek(event.target.value)} /></label>
+      <button type="button" className={styles.weeklyCurrentButton} data-active={summary?.period.isCurrentWeek ? "true" : "false"} disabled={!summary?.period || summary.period.isCurrentWeek} onClick={goCurrentWeek}><RotateCcw size={11} /> Aktuális hét</button>
+      <button type="button" title="Következő hét" disabled={!summary || summary.period.isCurrentWeek} onClick={() => summary && selectWeek(summary.period.nextWeekKey)}><ChevronRight size={13} /></button>
+    </div> : null}
+
     {error ? <p className={styles.weeklySummaryError}>{error}</p> : null}
     {expanded && summary ? <div className={styles.weeklySummaryBody}>
       <div className={styles.weeklySummaryStats} data-testid="benjadmin-weekly-summary-stats">
@@ -67,19 +174,31 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId }: { select
         <span><b>{summary.stats.completedTasks}</b> lezárt</span>
         <span data-alert={summary.stats.blockedTasks || summary.stats.errors ? "true" : "false"}><b>{summary.stats.blockedTasks}</b> blokkolt · <b>{summary.stats.errors}</b> hiba</span>
       </div>
-      <div className={styles.weeklyWorkerStrip} data-testid="benjadmin-weekly-summary-workers">
-        <UsersRound size={12} />
-        {summary.workers.length ? summary.workers.map((worker) => <span key={worker.code} data-worker-code={worker.code}><strong>{worker.code}</strong><b>{worker.activityCount}</b><small>6/{worker.latestStage}</small></span>) : <small>Még nincs worker-aktivitás ezen a héten.</small>}
+
+      <div className={styles.weeklyFilterRow} data-testid="benjadmin-weekly-summary-filters">
+        <div className={styles.weeklyWorkerStrip}>
+          <UsersRound size={12} />
+          {summary.workers.length ? summary.workers.map((worker) => <button type="button" key={worker.code} data-worker-code={worker.code} data-active={workerFilter === worker.code ? "true" : "false"} onClick={() => selectWorker(worker.code)}>
+            <strong>{worker.code}</strong><b>{worker.activityCount}</b><small>6/{worker.latestStage}</small>
+          </button>) : <small>Még nincs worker-aktivitás ezen a héten.</small>}
+        </div>
+        <div className={styles.weeklyStageFilters} aria-label="Heti 6/x fázis szűrő">
+          {[1, 2, 3, 4, 5, 6].map((stage) => <button type="button" key={stage} data-stage={stage} data-active={stageFilter === stage ? "true" : "false"} onClick={() => selectStage(stage)}>6/{stage}</button>)}
+        </div>
       </div>
-      <div className={styles.weeklyContextList} data-testid="benjadmin-weekly-summary-contexts">
-        {topContexts.map((context) => <article key={context.key} data-work-stage={context.latestStage} data-context-key={context.key}>
+
+      <div className={styles.weeklyContextList} data-testid="benjadmin-weekly-summary-contexts" data-filtered-count={filteredContexts.length}>
+        {topContexts.map((context) => <button type="button" className={styles.weeklyContextCard} key={context.key} data-work-stage={context.latestStage} data-context-key={context.key} onClick={() => onOpenContext?.(context, summary.period.weekKey)}>
           <div><span>{context.projectName} <b>›</b> {context.mainModule} <b>›</b> {context.moduleName} <b>›</b> {context.submoduleName}</span><strong>6/{context.latestStage}</strong></div>
           <p>{context.workItem}</p>
           <small><Clock3 size={10} /> {shortTime(context.latestAt)} · {context.activityCount} aktivitás · {context.workers.join(" + ") || "rendszer"} · {context.latestAction}</small>
-        </article>)}
-        {!topContexts.length ? <p className={styles.weeklySummaryEmpty}>Ezen a héten még nincs kontextushoz köthető fejlesztési aktivitás.</p> : null}
+        </button>)}
+        {!topContexts.length ? <p className={styles.weeklySummaryEmpty}>{summary.contexts.length ? "A kiválasztott worker / 6-x fázis szerint nincs találat." : "Ezen a héten még nincs kontextushoz köthető fejlesztési aktivitás."}</p> : null}
       </div>
-      <footer><span>Build {summary.stats.builds} · teszt {summary.stats.tests}{summary.truncated ? " · RÉSZLEGES NÉZET" : ""}</span><span><ShieldCheck size={10} /> {summary.period.timezone} · PROD DENY</span></footer>
+      <footer>
+        <span>Megjelenítve {topContexts.length}/{summary.contexts.length} · Build {summary.stats.builds} · teszt {summary.stats.tests}{summary.truncated ? " · RÉSZLEGES NÉZET" : ""}</span>
+        <span><ShieldCheck size={10} /> {summary.period.timezone} · PROD DENY</span>
+      </footer>
     </div> : null}
   </section>;
 }

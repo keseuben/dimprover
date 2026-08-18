@@ -2,19 +2,22 @@
 
 import { Activity, ArrowRightLeft, Clock3, Code2, FileCode2, FileDiff, FlaskConical, Hammer, History, Radio, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
+import { buildDevelopmentContextKey, resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
 import BenjadminAvatar, { memberName } from "./BenjadminAvatar";
 import DeveloperMessage from "./DeveloperMessage";
 import type { ConsoleAuthor, ConsoleLiveState, ConsoleMessage } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
-type WorkerCode = "ARMINAI" | "JAZMINAI" | "OUTMINAI";
+type WorkerCode = "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD";
 type Filter = "ALL" | "CODE" | "FILES" | "TESTS" | "BUILD";
 
 const workerAuthor: Record<WorkerCode, ConsoleAuthor> = {
+  BENAI: "BENAI",
   ARMINAI: "ARMINAI",
   JAZMINAI: "JAZMINAI",
   OUTMINAI: "OUTMINAI",
+  MFORGE: "MFORGE",
+  VGUARD: "VGUARD",
 };
 
 function compactDateTime(value: string) {
@@ -31,12 +34,14 @@ function matchesFilter(message: ConsoleMessage, filter: Filter) {
   return ["BUILD_EVENT", "RELEASE"].includes(message.kind);
 }
 
-export default function WorkerActivityDrawer({ workerCode, onClose, messages, live, selectedProjectId }: {
+export default function WorkerActivityDrawer({ workerCode, onClose, messages, live, selectedProjectId, focusedContextKey = "", onClearFocusedContext }: {
   workerCode: WorkerCode | null;
   onClose: () => void;
   messages: ConsoleMessage[];
   live: ConsoleLiveState | null;
   selectedProjectId: string;
+  focusedContextKey?: string;
+  onClearFocusedContext?: () => void;
 }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const author = workerCode ? workerAuthor[workerCode] : null;
@@ -57,9 +62,20 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
     return messages
       .filter((message) => message.author === author)
       .filter((message) => !selectedProjectId || !message.projectId || message.projectId === selectedProjectId)
+      .filter((message) => {
+        if (!focusedContextKey) return true;
+        const metadata = message.metadata || {};
+        return buildDevelopmentContextKey({
+          projectId: metadata.projectId || message.projectId,
+          mainModule: metadata.mainModule,
+          moduleName: metadata.moduleName,
+          submoduleName: metadata.submoduleName,
+          workItem: metadata.workItem,
+        }) === focusedContextKey;
+      })
       .filter((message) => matchesFilter(message, filter))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [author, filter, messages, selectedProjectId]);
+  }, [author, filter, focusedContextKey, messages, selectedProjectId]);
 
   if (!workerCode || !author) return null;
   const status = activeTask?.status === "blocked" ? "blocked" : activeTask || autoPresence ? "working" : "idle";
@@ -117,6 +133,11 @@ export default function WorkerActivityDrawer({ workerCode, onClose, messages, li
               <small>{transition.workItem} · {transition.reason}</small>
             </article>) : <p className={styles.workerPresenceEmpty}>Ehhez a workerhez még nincs azonos kontextusú átadás.</p>}
           </section>
+
+          {focusedContextKey ? <section className={styles.workerActivityContextFilter} data-testid="benjadmin-worker-activity-context-filter">
+            <div><strong>HETI MUNKARÉSZRE SZŰRVE</strong><span>A napló csak a kiválasztott heti fejlesztési kontextus eseményeit mutatja.</span></div>
+            <button type="button" onClick={onClearFocusedContext}>Összes esemény</button>
+          </section> : null}
 
           <div className={styles.workerActivityFilters} role="tablist" aria-label="Worker aktivitás szűrő">
             <button type="button" data-active={filter === "ALL"} onClick={() => setFilter("ALL")}><Activity size={12} /> Minden</button>

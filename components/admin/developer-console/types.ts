@@ -220,7 +220,17 @@ export type ResourceHealth = {
 
 export type WeeklyDevelopmentSummary = {
   ready: true;
-  period: { startAt: string; endAt: string; label: string; timezone: "Europe/Budapest" };
+  period: {
+    startAt: string;
+    endAt: string;
+    label: string;
+    timezone: "Europe/Budapest";
+    weekKey: string;
+    currentWeekKey: string;
+    previousWeekKey: string;
+    nextWeekKey: string;
+    isCurrentWeek: boolean;
+  };
   projectId: string | null;
   stats: { activities: number; workers: number; contexts: number; openTasks: number; completedTasks: number; blockedTasks: number; builds: number; tests: number; errors: number };
   workers: Array<{ code: string; name: string; activityCount: number; contextCount: number; latestAt: string; latestStage: number }>;

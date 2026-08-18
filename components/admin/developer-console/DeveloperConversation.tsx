@@ -4,7 +4,7 @@ import { Archive, ArrowDown, ArrowRightLeft, CalendarDays, ChevronDown, ChevronR
 import { useEffect, useMemo, useRef, useState } from "react";
 import DeveloperMessage from "./DeveloperMessage";
 import WeeklyDevelopmentSummary from "./WeeklyDevelopmentSummary";
-import type { ConsoleMessage, LiveWorkerTransition } from "./types";
+import type { ConsoleMessage, LiveWorkerTransition, WeeklyDevelopmentSummary as WeeklySummary } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 function dayKey(value: string) {
@@ -75,13 +75,14 @@ function collapseRepeatedMessages(items: ConsoleMessage[]) {
 
 type ArchiveGroup = { key: string; label: string; type: "day" | "week"; messages: ConsoleMessage[] };
 
-export default function DeveloperConversation({ messages, selectedProjectId, workerTransitions = [], hasOlder = false, loadingOlder = false, onLoadOlder }: {
+export default function DeveloperConversation({ messages, selectedProjectId, workerTransitions = [], hasOlder = false, loadingOlder = false, onLoadOlder, onOpenWeeklyContext }: {
   messages: ConsoleMessage[];
   selectedProjectId: string;
   workerTransitions?: LiveWorkerTransition[];
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => Promise<void>;
+  onOpenWeeklyContext?: (context: WeeklySummary["contexts"][number], weekKey: string) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -193,7 +194,7 @@ export default function DeveloperConversation({ messages, selectedProjectId, wor
         <div><MessagesSquare size={17} /><span>KÖZÖS FEJLESZTŐI CSEVEGÉS</span></div>
         <small>Ma {archive.today.length} · elmúlt 7 nap {archive.recentCount} · korábbi {archive.earlierCount}{hasOlder ? "+" : ""}</small>
       </div>
-      <WeeklyDevelopmentSummary selectedProjectId={selectedProjectId} />
+      <WeeklyDevelopmentSummary selectedProjectId={selectedProjectId} onOpenContext={onOpenWeeklyContext} />
       <div className={styles.conversationScroller} ref={scroller} onScroll={onScroll}>
         {visibleTransitions.length ? <section className={styles.conversationTransitions} data-testid="benjadmin-worker-transition-strip">
           <header><ArrowRightLeft size={12} /><strong>LEGUTÓBBI WORKER-ÁTADÁSOK</strong><span>{visibleTransitions.length}</span></header>

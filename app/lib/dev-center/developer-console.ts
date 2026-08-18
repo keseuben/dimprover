@@ -7,7 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBenAiBridgeStatus } from "./benai-dispatch";
 import { resolveProjectRepositoryId } from "./partner-isolation";
 import { getInternalExecutorReadiness } from "./internal-executor-readiness";
-import { DEVELOPMENT_STAGE_LABELS, resolveTaskDevelopmentContext, safeDevelopmentStage } from "./development-context";
+import { buildDevelopmentContextKey, DEVELOPMENT_STAGE_LABELS, resolveTaskDevelopmentContext, safeDevelopmentStage } from "./development-context";
 
 const execFileAsync = promisify(execFile);
 
@@ -662,7 +662,17 @@ export async function getDeveloperConsoleWorkspaceActivitySource() {
 
 export type DeveloperWeeklySummary = {
   ready: true;
-  period: { startAt: string; endAt: string; label: string; timezone: "Europe/Budapest" };
+  period: {
+    startAt: string;
+    endAt: string;
+    label: string;
+    timezone: "Europe/Budapest";
+    weekKey: string;
+    currentWeekKey: string;
+    previousWeekKey: string;
+    nextWeekKey: string;
+    isCurrentWeek: boolean;
+  };
   projectId: string | null;
   stats: {
     activities: number;
@@ -720,32 +730,60 @@ function localMidnightUtc(year: number, month: number, day: number, timeZone: st
   return result;
 }
 
-function currentBudapestWeek(now = new Date()) {
-  const local = timezoneParts(now, WEEKLY_SUMMARY_TIMEZONE);
-  const calendarDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+function localDateKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function budapestWeekFromCalendarDate(year: number, month: number, day: number) {
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
   const mondayShift = (calendarDate.getUTCDay() + 6) % 7;
   calendarDate.setUTCDate(calendarDate.getUTCDate() - mondayShift);
+  const weekKey = localDateKey(calendarDate);
   const start = localMidnightUtc(calendarDate.getUTCFullYear(), calendarDate.getUTCMonth() + 1, calendarDate.getUTCDate(), WEEKLY_SUMMARY_TIMEZONE);
+  const previous = new Date(calendarDate);
+  previous.setUTCDate(previous.getUTCDate() - 7);
   const next = new Date(calendarDate);
   next.setUTCDate(next.getUTCDate() + 7);
   const end = localMidnightUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), WEEKLY_SUMMARY_TIMEZONE);
   const formatter = new Intl.DateTimeFormat("hu-HU", { timeZone: WEEKLY_SUMMARY_TIMEZONE, year: "numeric", month: "short", day: "2-digit" });
   const label = typeof formatter.formatRange === "function" ? formatter.formatRange(start, new Date(end.getTime() - 1)) : `${formatter.format(start)} – ${formatter.format(new Date(end.getTime() - 1))}`;
-  return { startAt: start.toISOString(), endAt: end.toISOString(), label, timezone: WEEKLY_SUMMARY_TIMEZONE };
+  return {
+    startAt: start.toISOString(),
+    endAt: end.toISOString(),
+    label,
+    timezone: WEEKLY_SUMMARY_TIMEZONE,
+    weekKey,
+    previousWeekKey: localDateKey(previous),
+    nextWeekKey: localDateKey(next),
+  };
+}
+
+function budapestWeek(weekInput?: string | null, now = new Date()) {
+  const localNow = timezoneParts(now, WEEKLY_SUMMARY_TIMEZONE);
+  const current = budapestWeekFromCalendarDate(localNow.year, localNow.month, localNow.day);
+  const raw = text(weekInput);
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const selected = match
+    ? budapestWeekFromCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))
+    : current;
+  return { ...selected, currentWeekKey: current.weekKey, isCurrentWeek: selected.weekKey === current.weekKey };
 }
 
 function weeklyContextKey(message: ConsoleMessage) {
   const metadata = record(message.metadata);
-  const projectId = text(metadata.projectId) || message.projectId || "global";
-  const values = [text(metadata.mainModule), text(metadata.moduleName), text(metadata.submoduleName), text(metadata.workItem)];
-  if (!values.some(Boolean)) return "";
-  return [projectId, ...values].map((value) => value.toLocaleLowerCase("hu-HU").replace(/\s+/g, " ").trim()).join("|");
+  return buildDevelopmentContextKey({
+    projectId: text(metadata.projectId) || message.projectId,
+    mainModule: metadata.mainModule,
+    moduleName: metadata.moduleName,
+    submoduleName: metadata.submoduleName,
+    workItem: metadata.workItem,
+  });
 }
 
-export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string | null): Promise<DeveloperWeeklySummary> {
+export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string | null, weekInput?: string | null): Promise<DeveloperWeeklySummary> {
   const client = getClient();
   const projectId = text(projectIdInput) || null;
-  const period = currentBudapestWeek();
+  const period = budapestWeek(weekInput);
   let openTaskQuery = client.from("dev_center_tasks")
     .select("id,project_id,status,completed_at,created_at")
     .in("status", ["queued", "ready", "claimed", "in_progress", "testing", "blocked", "failed"])
