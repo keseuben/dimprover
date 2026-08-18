@@ -100,6 +100,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/field-capture/health" ||
     pathname === "/api/field-capture/sessions" ||
     pathname.startsWith("/api/field-capture/sessions/") ||
+    pathname === "/api/field-capture/upload-rules/accept" ||
     pathname === "/api/drop/health" ||
     pathname === "/api/drop/features" ||
     pathname === "/api/drop/access/open" ||
@@ -146,6 +147,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/field-capture/health" ||
     pathname === "/api/field-capture/sessions" ||
     pathname.startsWith("/api/field-capture/sessions/") ||
+    pathname === "/api/field-capture/upload-rules/accept" ||
     pathname.startsWith("/api/dev/") ||
     pathname.startsWith("/api/downloads/") ||
     pathname.startsWith("/api/releases/") ||

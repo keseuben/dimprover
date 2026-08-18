@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const proxy = readFileSync("proxy.ts", "utf8");
+const route = readFileSync("app/api/field-capture/upload-rules/accept/route.ts", "utf8");
+const allow = "pathname === \"/api/field-capture/upload-rules/accept\"";
+assert.equal(proxy.split(allow).length - 1, 2);
+assert.match(route, /authorizeFieldCaptureRequest/);
+assert.match(route, /recordDimproUploadRulesAcceptance/);
+assert.match(route, /DROP_UPLOAD_RULES_VERSION/);
+assert.match(route, /dimproIdentityErrorResponse/);
+assert.doesNotMatch(route, /NextResponse\.redirect/);
+console.log("FIELD_CAPTURE_UPLOAD_RULES_PROXY_CONTRACT 6/6 PASS");
