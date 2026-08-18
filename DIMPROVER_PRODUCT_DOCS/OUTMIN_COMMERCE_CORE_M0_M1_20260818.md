@@ -687,3 +687,52 @@ Valós DEV runtime E2E:
 - runtime fixture cleanup: PASS.
 
 Runtime QA során a tesztkontextust a valós Commerce context logikához igazítottuk: az aktív szervezet aktív membershipjének `user_id` mezője kerül a `created_by_user_id` auditmezőbe. PROD változatlan.
+
+### 2026-08-18 23:xx checkpoint — Receiving M1 DEV aktív + runtime E2E
+
+A korábbi staged Receiving checkpointot ez az állapot felülírja.
+
+DEV migráció:
+- Commerce schema: `0.1.5`, migration count: 6;
+- `commerce_goods_receipts` + `commerce_goods_receipt_items` aktív;
+- `commerce_goods_receipt_post` service-only RPC aktív;
+- authenticated RPC: DENY; service-role RPC: ALLOW;
+- migration SHA-256: `20b6ab00df66796e0510045ebadfe43f461a0491ac52e03d8dc3f93ed047ad34`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-receiving-m1/20260818T210216Z/supabase-dev-pre-commerce-receiving-m1.dump`;
+- backup SHA-256: `b99a339dcf2b0f9608ee8b58a4dbcc18152712ab680f0b95527612ee73fde428`;
+- backup listing verify: PASS;
+- migration/security verify: PASS.
+
+Valós DEV repository runtime E2E:
+- 12/12 PASS;
+- tenant-scoped warehouse/source options: PASS;
+- draft receipt create: PASS;
+- SELLABLE + QUARANTINE tétel létrehozás: PASS;
+- beszállító/bizonylat snapshot visszaolvasás: PASS;
+- DRAFT lista scope: PASS;
+- service-only posting: PASS;
+- posting idempotencia: PASS;
+- inventory ledger balance: SELLABLE 5, QUARANTINE 2: PASS;
+- StockMovement reference `GOODS_RECEIPT_ITEM`: PASS;
+- POSTED állapot persistálás: PASS;
+- runtime QA cleanup: PASS.
+
+Runtime teszt közben javított ellenőrzés:
+- az első fixture véletlen user UUID-val futott, ezért a `created_by_user_id -> dimpro_users(id)` FK helyesen 23503 hibát adott;
+- a runtime E2E ezután valós aktív DEV user rekordot használ; üzleti kód módosítása emiatt nem volt szükséges.
+
+34. pont szerinti állapot:
+- elkészült: Commerce context/tenant/authz és DB baseline; Product CRUD + identifier resolver; Catalog törzsadatok; Inventory ledger/balance; Reservation; Pricing; Media upload/storage + management; Termék admin grid/inspector + inline edit + többképes galéria; Receiving backend + admin UI alap;
+- részben elkészült: Receiving média UI bekötés; teljes variant edit; külső készlet connectorok; checkout/order bridge;
+- hiányzik: Order/Checkout domain bridge a legacy Árutér pénztári flow megtartásával; reservation expiry worker; teljes pénztár-készletfoglalás integráció; teljes pilot E2E; receiving többképes dokumentációs UI;
+- fő Receiving fájlok: `app/lib/commerce/receiving/*`, `app/api/v1/commerce/receiving/*`, `components/aruter/CommerceReceivingAdmin.tsx`, `app/aruter/admin/bevetelezes/page.tsx`, Receiving migration/gate/rollback/acceptance/runtime E2E;
+- API: receipt list/create/detail/update/cancel, item create/update/archive, options, post;
+- UI: `/aruter/admin/bevetelezes`;
+- tsc: PASS; lint: PASS; diff-check: PASS; Receiving contract 28/28 PASS; DB rollback 17/17 PASS; runtime E2E 12/12 PASS; UI contract 16/16 PASS; teljes célzott Commerce regresszió PASS;
+- build: a következő candidate build ehhez a checkpoint után indul, kizárólag szabad exclusive-operation lock mellett;
+- smoke: shared DEV runtime cutover nem történt, ezért shared-runtime smoke még nem jelölhető PASS-nak;
+- ismert hiba: nincs nyitott Receiving backend/runtime hiba; a Receiving képkezelő UI még backlog;
+- következő legkorábbi hiányzó blokk: Receiving média UI összekötés, majd Order/Checkout bridge;
+- becsült aktív fejlesztési idő: Receiving média UI 1.5–3 óra; Order/Checkout bridge 6–10 óra; expiry worker + pilot E2E 3–6 óra.
+
+PROD változatlan, PROD alkalmazásmódosítás nem történt.
