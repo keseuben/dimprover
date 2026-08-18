@@ -295,3 +295,51 @@ Következő:
 2. izolált candidate route/security smoke;
 3. Commerce Media UI regresszió;
 4. shared DEV cutover továbbra is csak integrációs kapu után, más workerek aktuális release-ének felülírása nélkül.
+
+### 2026-08-18 19:xx záró checkpoint — Media runtime E2E + teljes esti quality gate
+
+Runtime E2E:
+- Media initiate + same-origin upload ticket: PASS;
+- WEB objektum tényleges objektumtárhelyi feltöltése: PASS;
+- THUMBNAIL objektum tényleges objektumtárhelyi feltöltése: PASS;
+- atomi media finalize: PASS;
+- finalize idempotencia: PASS;
+- asset + variant + product-link DB perzisztencia: PASS;
+- rövid életű signed thumbnail GET: PASS;
+- eredeti kép alapértelmezetten nem maradt meg: PASS;
+- tesztadat- és objektum-cleanup: PASS;
+- runtime E2E összesen: 8/8 PASS.
+
+Esti regressziós kapu:
+- legacy Árutér → központi pénztár: 10/10 PASS;
+- Product API: 14/14 PASS;
+- Inventory ledger/API: 16/16 PASS;
+- Product ár/készlet summary: 14/14 PASS;
+- Media M1 contract: 16/16 PASS;
+- Media upload contract: 18/18 PASS;
+- Media DB schema/security verify: PASS;
+- TypeScript: PASS;
+- célzott lint: PASS, 0 error;
+- git diff --check: PASS.
+
+Candidate release:
+- alkalmazáskód candidate source: `ec60f4c136d67b7d98618d95a5bdf8955ec8a3f7`;
+- build ID: `CP9CzIEmhk_ssIx8NXUat`;
+- standalone + 249 statikus chunk + post-build retention: PASS;
+- izolált candidate smoke: PASS;
+- shared DEV runtime cutover: NEM történt; ÁrminAI/JázminAI aktív release-e nem lett felülírva.
+
+34. pont szerinti aktuális állapot:
+- M0 Core + DB baseline: kb. 70% — tenant context, server-only security, audit/outbox alap, két DEV migráció és rollback/backup gate kész; feature-flag/context finomhangolás és teljes admin audit API még hiányzik.
+- M1 Product + Media + Inventory: kb. 45% — Product CRUD/resolve, atomi Inventory ledger, terméklista price/internal/external summary, Media upload/render foundation és admin Termékek skeleton kész; külön Variant/Category/Brand/Manufacturer CRUD UI/API, Pricing kezelő, reservation engine, overlay szerkesztő és többképes rendezés még hiányzik.
+- teljes Pilot: kb. 15% — a Commerce alap érdemben elindult, de Receiving/Order/Storefront Pilot még későbbi blokk.
+
+Következő biztonságos fejlesztési sorrend:
+1. Variant + Category + Brand/Manufacturer CRUD;
+2. Pricing API/UI alap;
+3. inventory reservation modell és service;
+4. Media multi-image/primary/sort + overlay API;
+5. Termékek inspector szerkesztő mód;
+6. csak ezután Receiving és közös Order/Checkout bridge a meglévő Árutér pénztári flow megtartásával.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
