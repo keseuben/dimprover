@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { resolveCommercePermissions } from "./permissions";
+import { createCommerceAdminClient } from "./server-db";
 import type { CommerceContext } from "./types";
 
 type Row = Record<string, unknown>;
@@ -42,16 +42,6 @@ async function createCommerceSessionClient() {
   });
 }
 
-function createCommerceAdminClient() {
-  const url = env("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !serviceRoleKey || serviceRoleKey.includes("<") || serviceRoleKey.includes(">")) {
-    throw new CommerceContextError("A Commerce szerveroldali adatkapcsolat nincs konfigurálva.", "COMMERCE_ADMIN_CONFIG_MISSING", 503);
-  }
-  return createSupabaseClient(url, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 export async function resolveCommerceContext(requestedOrganizationId?: string | null): Promise<CommerceContext> {
   const sessionClient = await createCommerceSessionClient();

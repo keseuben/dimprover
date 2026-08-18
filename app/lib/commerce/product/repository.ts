@@ -1,0 +1,320 @@
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import { createCommerceAdminClient } from "../core/server-db";
+import { hasCommercePermission } from "../core/permissions";
+import type { CommerceContext } from "../core/types";
+import { IDENTIFIER_PRIORITY, normalizeProductIdentifier, validateProductIdentifier } from "./identifier";
+import type { ProductIdentifierType, ProductStatus, UnitOfMeasure } from "./types";
+
+type Row = Record<string, unknown>;
+
+export type CommerceProductRecord = {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  typeModel: string | null;
+  categoryId: string | null;
+  brandId: string | null;
+  manufacturerId: string | null;
+  status: ProductStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommerceVariantRecord = {
+  id: string;
+  organizationId: string;
+  productId: string;
+  name: string;
+  sku: string | null;
+  unit: UnitOfMeasure;
+  status: ProductStatus;
+  attributes: Record<string, string | number | boolean | null>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommerceIdentifierRecord = {
+  id: string;
+  organizationId: string;
+  productId: string;
+  variantId: string | null;
+  type: ProductIdentifierType;
+  value: string;
+  normalizedValue: string;
+  primary: boolean;
+};
+
+export type CommerceProductDetail = CommerceProductRecord & {
+  variants: CommerceVariantRecord[];
+  identifiers: CommerceIdentifierRecord[];
+};
+
+export class CommerceProductError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly status: number,
+    public readonly causeCode?: string,
+  ) {
+    super(message);
+  }
+}
+
+const STATUS_VALUES = new Set<ProductStatus>(["DRAFT", "ACTIVE", "INACTIVE", "ARCHIVED"]);
+const UNIT_VALUES = new Set<UnitOfMeasure>(["DB", "KG", "G", "M", "M2", "M3", "FM", "L", "CSOMAG", "PAR", "KESZLET"]);
+const IDENTIFIER_TYPES = new Set<ProductIdentifierType>(["EAN_GTIN", "DIMPRO_QR", "DIMPRO_BARCODE", "SKU", "SUPPLIER_SKU"]);
+
+function text(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function nullableText(value: unknown) {
+  const v = text(value);
+  return v || null;
+}
+function dbError(message: string, error: PostgrestError | null, status = 503): never {
+  throw new CommerceProductError(message, "COMMERCE_PRODUCT_DATABASE_ERROR", status, error?.code);
+}
+function requirePermission(context: CommerceContext, permission: Parameters<typeof hasCommercePermission>[1]) {
+  if (!hasCommercePermission(context.permissions, permission)) {
+    throw new CommerceProductError("Nincs jogosultság ehhez a Commerce művelethez.", "COMMERCE_PERMISSION_DENIED", 403);
+  }
+}
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100) || "termek";
+}
+function mapProduct(row: Row): CommerceProductRecord {
+  return {
+    id: text(row.id), organizationId: text(row.organization_id), name: text(row.name), slug: text(row.slug),
+    description: nullableText(row.description), typeModel: nullableText(row.type_model), categoryId: nullableText(row.category_id),
+    brandId: nullableText(row.brand_id), manufacturerId: nullableText(row.manufacturer_id), status: text(row.status) as ProductStatus,
+    createdAt: text(row.created_at), updatedAt: text(row.updated_at),
+  };
+}
+function mapVariant(row: Row): CommerceVariantRecord {
+  const rawAttributes = row.attributes;
+  const attributes = rawAttributes && typeof rawAttributes === "object" && !Array.isArray(rawAttributes)
+    ? rawAttributes as Record<string, string | number | boolean | null>
+    : {};
+  return {
+    id: text(row.id), organizationId: text(row.organization_id), productId: text(row.product_id), name: text(row.name),
+    sku: nullableText(row.sku), unit: text(row.unit) as UnitOfMeasure, status: text(row.status) as ProductStatus,
+    attributes, createdAt: text(row.created_at), updatedAt: text(row.updated_at),
+  };
+}
+function mapIdentifier(row: Row): CommerceIdentifierRecord {
+  return {
+    id: text(row.id), organizationId: text(row.organization_id), productId: text(row.product_id),
+    variantId: nullableText(row.variant_id), type: text(row.identifier_type) as ProductIdentifierType,
+    value: text(row.value), normalizedValue: text(row.normalized_value), primary: Boolean(row.is_primary),
+  };
+}
+
+async function verifyScopedReference(client: SupabaseClient, context: CommerceContext, table: string, id: string | null) {
+  if (!id) return;
+  const result = await client.from(table).select("id").eq("id", id).eq("organization_id", context.organizationId).maybeSingle();
+  if (result.error) dbError("A kapcsolódó Commerce törzsadat nem ellenőrizhető.", result.error);
+  if (!result.data) throw new CommerceProductError("A kapcsolódó törzsadat nem található ebben a szervezetben.", "COMMERCE_REFERENCE_SCOPE_MISMATCH", 400);
+}
+
+export async function listCommerceProducts(context: CommerceContext, input: { query?: string; status?: string; limit?: number; offset?: number } = {}) {
+  requirePermission(context, "commerce.product.read");
+  const client = createCommerceAdminClient();
+  const limit = Math.max(1, Math.min(200, Math.round(input.limit ?? 50)));
+  const offset = Math.max(0, Math.round(input.offset ?? 0));
+  let query = client.from("commerce_products")
+    .select("id,organization_id,name,slug,description,type_model,category_id,brand_id,manufacturer_id,status,created_at,updated_at", { count: "exact" })
+    .eq("organization_id", context.organizationId)
+    .is("archived_at", null)
+    .order("name", { ascending: true })
+    .range(offset, offset + limit - 1);
+  const search = text(input.query);
+  if (search) query = query.or(`name.ilike.%${search.replace(/[%_,]/g, "")}%,type_model.ilike.%${search.replace(/[%_,]/g, "")}%`);
+  const requestedStatus = text(input.status).toUpperCase();
+  if (requestedStatus && STATUS_VALUES.has(requestedStatus as ProductStatus)) query = query.eq("status", requestedStatus);
+  const result = await query;
+  if (result.error) dbError("A terméklista lekérése sikertelen.", result.error);
+  return { items: ((result.data || []) as Row[]).map(mapProduct), total: result.count ?? 0, limit, offset };
+}
+
+export async function getCommerceProduct(context: CommerceContext, productIdInput: unknown): Promise<CommerceProductDetail> {
+  requirePermission(context, "commerce.product.read");
+  const productId = text(productIdInput);
+  if (!productId) throw new CommerceProductError("A termékazonosító kötelező.", "COMMERCE_PRODUCT_ID_REQUIRED", 400);
+  const client = createCommerceAdminClient();
+  const [productResult, variantResult, identifierResult] = await Promise.all([
+    client.from("commerce_products")
+      .select("id,organization_id,name,slug,description,type_model,category_id,brand_id,manufacturer_id,status,created_at,updated_at")
+      .eq("organization_id", context.organizationId).eq("id", productId).is("archived_at", null).maybeSingle(),
+    client.from("commerce_product_variants")
+      .select("id,organization_id,product_id,name,sku,unit,attributes,status,created_at,updated_at")
+      .eq("organization_id", context.organizationId).eq("product_id", productId).is("archived_at", null).order("created_at"),
+    client.from("commerce_product_identifiers")
+      .select("id,organization_id,product_id,variant_id,identifier_type,value,normalized_value,is_primary")
+      .eq("organization_id", context.organizationId).eq("product_id", productId).is("archived_at", null).order("created_at"),
+  ]);
+  if (productResult.error) dbError("A termék lekérése sikertelen.", productResult.error);
+  if (!productResult.data) throw new CommerceProductError("A termék nem található.", "COMMERCE_PRODUCT_NOT_FOUND", 404);
+  if (variantResult.error) dbError("A termékváltozatok lekérése sikertelen.", variantResult.error);
+  if (identifierResult.error) dbError("A termékazonosítók lekérése sikertelen.", identifierResult.error);
+  return {
+    ...mapProduct(productResult.data as Row),
+    variants: ((variantResult.data || []) as Row[]).map(mapVariant),
+    identifiers: ((identifierResult.data || []) as Row[]).map(mapIdentifier),
+  };
+}
+
+export async function createCommerceProduct(context: CommerceContext, input: Record<string, unknown>): Promise<CommerceProductDetail> {
+  requirePermission(context, "commerce.product.write");
+  const client = createCommerceAdminClient();
+  const name = text(input.name);
+  if (!name) throw new CommerceProductError("A terméknév kötelező.", "COMMERCE_PRODUCT_NAME_REQUIRED", 400);
+  const categoryId = nullableText(input.categoryId);
+  const brandId = nullableText(input.brandId);
+  const manufacturerId = nullableText(input.manufacturerId);
+  await Promise.all([
+    verifyScopedReference(client, context, "commerce_categories", categoryId),
+    verifyScopedReference(client, context, "commerce_brands", brandId),
+    verifyScopedReference(client, context, "commerce_manufacturers", manufacturerId),
+  ]);
+  const requestedStatus = text(input.status).toUpperCase();
+  const status: ProductStatus = STATUS_VALUES.has(requestedStatus as ProductStatus) ? requestedStatus as ProductStatus : "DRAFT";
+  const slug = slugify(text(input.slug) || name);
+  const insertResult = await client.from("commerce_products").insert({
+    organization_id: context.organizationId,
+    name,
+    slug,
+    description: nullableText(input.description),
+    type_model: nullableText(input.typeModel),
+    category_id: categoryId,
+    brand_id: brandId,
+    manufacturer_id: manufacturerId,
+    status,
+  }).select("id").single();
+  if (insertResult.error) {
+    if (insertResult.error.code === "23505") throw new CommerceProductError("Ilyen termék slug már létezik.", "COMMERCE_PRODUCT_DUPLICATE", 409, insertResult.error.code);
+    dbError("A termék létrehozása sikertelen.", insertResult.error);
+  }
+  const productId = text((insertResult.data as Row).id);
+  try {
+    const rawVariant = input.defaultVariant && typeof input.defaultVariant === "object" && !Array.isArray(input.defaultVariant)
+      ? input.defaultVariant as Record<string, unknown>
+      : {};
+    const unitCandidate = text(rawVariant.unit).toUpperCase();
+    const unit: UnitOfMeasure = UNIT_VALUES.has(unitCandidate as UnitOfMeasure) ? unitCandidate as UnitOfMeasure : "DB";
+    const sku = nullableText(rawVariant.sku);
+    const variantResult = await client.from("commerce_product_variants").insert({
+      organization_id: context.organizationId,
+      product_id: productId,
+      name: text(rawVariant.name) || name,
+      sku,
+      unit,
+      attributes: rawVariant.attributes && typeof rawVariant.attributes === "object" && !Array.isArray(rawVariant.attributes) ? rawVariant.attributes : {},
+      status,
+    }).select("id").single();
+    if (variantResult.error) dbError("Az alap termékváltozat létrehozása sikertelen.", variantResult.error);
+    const variantId = text((variantResult.data as Row).id);
+    const requestedIdentifiers = Array.isArray(input.identifiers) ? input.identifiers : [];
+    const identifierRows: Record<string, unknown>[] = [];
+    if (sku) {
+      identifierRows.push({ organization_id: context.organizationId, product_id: productId, variant_id: variantId, identifier_type: "SKU", value: sku, normalized_value: normalizeProductIdentifier("SKU", sku), is_primary: requestedIdentifiers.length === 0 });
+    }
+    for (const raw of requestedIdentifiers) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const identifier = raw as Record<string, unknown>;
+      const type = text(identifier.type).toUpperCase() as ProductIdentifierType;
+      if (!IDENTIFIER_TYPES.has(type)) throw new CommerceProductError("Ismeretlen termékazonosító típus.", "COMMERCE_IDENTIFIER_TYPE_INVALID", 400);
+      const value = text(identifier.value);
+      const validation = validateProductIdentifier(type, value);
+      if (!validation.ok) throw new CommerceProductError("Érvénytelen termékazonosító.", validation.reason, 400);
+      identifierRows.push({
+        organization_id: context.organizationId, product_id: productId, variant_id: variantId,
+        identifier_type: type, value, normalized_value: validation.normalized, is_primary: Boolean(identifier.primary),
+      });
+    }
+    if (identifierRows.length) {
+      const identifierInsert = await client.from("commerce_product_identifiers").insert(identifierRows);
+      if (identifierInsert.error) {
+        if (identifierInsert.error.code === "23505") throw new CommerceProductError("A termékazonosító már használatban van.", "COMMERCE_IDENTIFIER_DUPLICATE", 409, identifierInsert.error.code);
+        dbError("A termékazonosító mentése sikertelen.", identifierInsert.error);
+      }
+    }
+  } catch (error) {
+    await client.from("commerce_products").delete().eq("organization_id", context.organizationId).eq("id", productId);
+    throw error;
+  }
+  return getCommerceProduct(context, productId);
+}
+
+export async function updateCommerceProduct(context: CommerceContext, productIdInput: unknown, input: Record<string, unknown>): Promise<CommerceProductDetail> {
+  requirePermission(context, "commerce.product.write");
+  const productId = text(productIdInput);
+  if (!productId) throw new CommerceProductError("A termékazonosító kötelező.", "COMMERCE_PRODUCT_ID_REQUIRED", 400);
+  const client = createCommerceAdminClient();
+  const current = await client.from("commerce_products").select("id,name,slug").eq("organization_id", context.organizationId).eq("id", productId).is("archived_at", null).maybeSingle();
+  if (current.error) dbError("A termék ellenőrzése sikertelen.", current.error);
+  if (!current.data) throw new CommerceProductError("A termék nem található.", "COMMERCE_PRODUCT_NOT_FOUND", 404);
+  const patch: Record<string, unknown> = {};
+  if (input.name !== undefined) {
+    const name = text(input.name);
+    if (!name) throw new CommerceProductError("A terméknév nem lehet üres.", "COMMERCE_PRODUCT_NAME_REQUIRED", 400);
+    patch.name = name;
+  }
+  if (input.slug !== undefined) patch.slug = slugify(text(input.slug) || text((current.data as Row).name));
+  if (input.description !== undefined) patch.description = nullableText(input.description);
+  if (input.typeModel !== undefined) patch.type_model = nullableText(input.typeModel);
+  if (input.status !== undefined) {
+    const status = text(input.status).toUpperCase();
+    if (!STATUS_VALUES.has(status as ProductStatus)) throw new CommerceProductError("Ismeretlen termékállapot.", "COMMERCE_PRODUCT_STATUS_INVALID", 400);
+    patch.status = status;
+  }
+  for (const [inputKey, dbKey, table] of [
+    ["categoryId", "category_id", "commerce_categories"],
+    ["brandId", "brand_id", "commerce_brands"],
+    ["manufacturerId", "manufacturer_id", "commerce_manufacturers"],
+  ] as const) {
+    if (input[inputKey] !== undefined) {
+      const id = nullableText(input[inputKey]);
+      await verifyScopedReference(client, context, table, id);
+      patch[dbKey] = id;
+    }
+  }
+  if (!Object.keys(patch).length) return getCommerceProduct(context, productId);
+  const result = await client.from("commerce_products").update(patch).eq("organization_id", context.organizationId).eq("id", productId).select("id").maybeSingle();
+  if (result.error) {
+    if (result.error.code === "23505") throw new CommerceProductError("Ilyen termék slug már létezik.", "COMMERCE_PRODUCT_DUPLICATE", 409, result.error.code);
+    dbError("A termék módosítása sikertelen.", result.error);
+  }
+  if (!result.data) throw new CommerceProductError("A termék nem található.", "COMMERCE_PRODUCT_NOT_FOUND", 404);
+  return getCommerceProduct(context, productId);
+}
+
+export async function resolveCommerceProductByCode(context: CommerceContext, codeInput: unknown) {
+  requirePermission(context, "commerce.product.read");
+  const code = text(codeInput);
+  if (!code) throw new CommerceProductError("Az azonosító kód kötelező.", "COMMERCE_IDENTIFIER_REQUIRED", 400);
+  const client = createCommerceAdminClient();
+  const normalizedValues = [...new Set([
+    normalizeProductIdentifier("EAN_GTIN", code),
+    normalizeProductIdentifier("DIMPRO_QR", code),
+  ].filter(Boolean))];
+  const result = await client.from("commerce_product_identifiers")
+    .select("id,organization_id,product_id,variant_id,identifier_type,value,normalized_value,is_primary")
+    .eq("organization_id", context.organizationId)
+    .in("normalized_value", normalizedValues)
+    .is("archived_at", null);
+  if (result.error) dbError("A termékazonosító keresése sikertelen.", result.error);
+  const matches = ((result.data || []) as Row[]).map(mapIdentifier)
+    .sort((a, b) => (IDENTIFIER_PRIORITY[a.type] ?? 99) - (IDENTIFIER_PRIORITY[b.type] ?? 99));
+  const identifier = matches[0] || null;
+  if (!identifier) return null;
+  const product = await getCommerceProduct(context, identifier.productId);
+  return { identifier, product, matchedBy: identifier.type };
+}

@@ -120,3 +120,28 @@ Elvárások:
 - csak akkor köthető át új Commerce Order Engine-re, ha cross-surface acceptance bizonyítja, hogy a külső kosár megjelenik a központi pénztárban és végigvihető fizetett/kiadott állapotig.
 
 Ez M0/M1-ben regressziós kapu, még akkor is, ha a teljes Order Engine későbbi milestone.
+
+### 2026-08-18 esti checkpoint — Product API + Árutér pénztári kompatibilitás
+
+Elkészült:
+- a meglévő külső Árutér → központi pénztár működés kötelező kompatibilitási kapuként rögzítve;
+- legacy Árutér / pénztár regressziós acceptance: 10/10 PASS;
+- Commerce server DB helper és tenant context refaktor;
+- Product list/create/get/update repository;
+- Product CRUD API: `GET/POST /api/v1/commerce/products`, `GET/PATCH /api/v1/commerce/products/:id`;
+- identifier resolver API: `GET /api/v1/commerce/products/resolve?code=...`;
+- minden service-role query explicit `organization_id` szűrést kap;
+- category/brand/manufacturer cross-tenant reference ellenőrzés;
+- Product API contract: 14/14 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS.
+
+Részben elkészült:
+- Product create jelenleg compensation delete-et használ, amíg a DEV migration/RPC tranzakciós gate nem kész; ezt a migráció alkalmazása előtt atomi DB RPC-re kell cserélni vagy megerősíteni;
+- API runtime smoke csak a Commerce DEV migráció után futtatható.
+
+Következő:
+- DEV migration gate + rollback dry-run/contract;
+- tranzakciós Product create RPC vagy biztonságos service transaction megoldás;
+- Inventory ledger writer + balance update;
+- letisztult Termékek admin UI skeleton.
