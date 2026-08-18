@@ -83,6 +83,10 @@ const tests = [
     assert.ok(proxy.includes("pathname.startsWith(\"/api/field-capture/sessions/\")"));
     assert.ok(proxy.includes("Ez az API nem érhető el a DIMPRO Drop nyilvános hostján."));
   }],
+  ["Drop host geolocation policy is same-origin only", () => {
+    assert.ok(proxy.includes("geolocation=(self)"));
+    assert.ok(!proxy.includes("geolocation=()"));
+  }],
 ];
 
 let passed = 0;

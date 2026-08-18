@@ -84,6 +84,7 @@ const tests = [
   ['Health P0-P6 és szenzor readiness true', flags.includes('phase: "P0-P6"') && health.includes('gpsAdapter: true') && health.includes('orientationAdapter: true')],
   ['Field Capture/Terep health Drop hoston is publikus', dropPublicApiBlock.includes('pathname === "/api/field-capture/health"') && generalPublicApiBlock.includes('pathname === "/api/field-capture/health"')],
   ["P7 session/item API Drop hoston elérhető", dropPublicApiBlock.includes(`pathname === "/api/field-capture/sessions"`) && dropPublicApiBlock.includes(`pathname.startsWith("/api/field-capture/sessions/")`) && generalPublicApiBlock.includes(`pathname === "/api/field-capture/sessions"`)],
+  ["Drop GPS Permissions-Policy csak same-origin", proxy.includes("geolocation=(self)") && !proxy.includes("geolocation=()")],
   ['Külön capture schema draft megmarad', ['field_capture_sessions','field_capture_items','field_capture_asset_refs','field_capture_locations','field_capture_orientations','field_capture_voice_notes','field_capture_destinations','field_capture_events','field_capture_sync_queue'].every((name) => schema.includes(name))],
   ['Schema draft nincs automatikus migrációként deklarálva', schema.includes('NEM FUT LE AUTOMATIKUSAN')],
   ['GPS/heading source of truth nem EXIF', schema.includes('accuracy_meters') && schema.includes('heading_degrees') && shell.includes('nem EXIF')],

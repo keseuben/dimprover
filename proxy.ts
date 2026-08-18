@@ -41,7 +41,7 @@ function applyDropSecurityHeaders(response: NextResponse) {
   response.headers.set("Referrer-Policy", "no-referrer");
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), bluetooth=()",
+    "camera=(), microphone=(self), geolocation=(self), payment=(), usb=(), bluetooth=()",
   );
   response.headers.set(
     "Content-Security-Policy",

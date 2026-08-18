@@ -287,3 +287,25 @@ A böngészős acceptance is frissült:
 - ezután történik csak a kamerás/galériás capture acceptance.
 
 A javítás után új candidate build szükséges, mert a korábbi `TZDDbwusBNsFY6Qw6cW0B` build még nem tartalmazza a proxy-allowlist módosítást.
+
+
+## 2026-08-18 – Drop Permissions-Policy GPS javítás
+
+A candidate ellenőrzés során kiderült, hogy a Drop host biztonsági fejléce korábban `geolocation=()` értéket küldött. Ez a böngésző saját webhelyengedélyétől függetlenül teljesen letiltotta a Geolocation API használatát a Drop/Terep oldalon, ezért a felhasználó által engedélyezhető helyhozzáférési prompt sem működhetett megbízhatóan valódi készüléken.
+
+Javítás:
+- korábbi: `geolocation=()`;
+- új: `geolocation=(self)`;
+- más origin vagy beágyazott külső tartalom továbbra sem kap geolocation-jogot;
+- a böngésző natív webhelyengedélye továbbra is szükséges;
+- a Terep saját „Helyhozzáférés engedélyezése” user-gesture gombja kezdeményezi a tényleges kérést;
+- a GPS továbbra is opcionális és megtagadás esetén sem blokkolja a képrögzítést.
+
+Security acceptance:
+- P7 server contract: **14/14 PASS**;
+- Terep statikus acceptance: **66/66 PASS**;
+- célzott ESLint: PASS;
+- `npx tsc --noEmit`: PASS;
+- `git diff --check`: PASS.
+
+A korábbi `H0SAgkjuH0f5QTCCyJLh9` candidate build még a régi `geolocation=()` fejlécet tartalmazza, ezért új candidate build szükséges a security javítás kiadásához.
