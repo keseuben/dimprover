@@ -660,6 +660,214 @@ export async function getDeveloperConsoleWorkspaceActivitySource() {
   };
 }
 
+export type DeveloperWeeklySummary = {
+  ready: true;
+  period: { startAt: string; endAt: string; label: string; timezone: "Europe/Budapest" };
+  projectId: string | null;
+  stats: {
+    activities: number;
+    workers: number;
+    contexts: number;
+    openTasks: number;
+    completedTasks: number;
+    blockedTasks: number;
+    builds: number;
+    tests: number;
+    errors: number;
+  };
+  workers: Array<{ code: string; name: string; activityCount: number; contextCount: number; latestAt: string; latestStage: number }>;
+  contexts: Array<{
+    key: string;
+    projectId: string;
+    projectName: string;
+    mainModule: string;
+    moduleName: string;
+    submoduleName: string;
+    workItem: string;
+    activityCount: number;
+    workers: string[];
+    latestAt: string;
+    latestStage: number;
+    latestAction: string;
+    stageCounts: Record<string, number>;
+  }>;
+  truncated: boolean;
+  generatedAt: string;
+  productionAccess: "DENY";
+};
+
+const WEEKLY_SUMMARY_TIMEZONE = "Europe/Budapest" as const;
+const WEEKLY_SUMMARY_LIMIT = 1000;
+const WEEKLY_WORKERS = new Set<ConsoleAuthor>(["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"]);
+
+function timezoneParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return { year: value("year"), month: value("month"), day: value("day"), hour: value("hour"), minute: value("minute"), second: value("second") };
+}
+
+function timezoneOffsetMs(date: Date, timeZone: string) {
+  const parts = timezoneParts(date, timeZone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - date.getTime();
+}
+
+function localMidnightUtc(year: number, month: number, day: number, timeZone: string) {
+  const baseMs = Date.UTC(year, month - 1, day, 0, 0, 0);
+  let result = new Date(baseMs);
+  for (let index = 0; index < 3; index += 1) result = new Date(baseMs - timezoneOffsetMs(result, timeZone));
+  return result;
+}
+
+function currentBudapestWeek(now = new Date()) {
+  const local = timezoneParts(now, WEEKLY_SUMMARY_TIMEZONE);
+  const calendarDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  const mondayShift = (calendarDate.getUTCDay() + 6) % 7;
+  calendarDate.setUTCDate(calendarDate.getUTCDate() - mondayShift);
+  const start = localMidnightUtc(calendarDate.getUTCFullYear(), calendarDate.getUTCMonth() + 1, calendarDate.getUTCDate(), WEEKLY_SUMMARY_TIMEZONE);
+  const next = new Date(calendarDate);
+  next.setUTCDate(next.getUTCDate() + 7);
+  const end = localMidnightUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), WEEKLY_SUMMARY_TIMEZONE);
+  const formatter = new Intl.DateTimeFormat("hu-HU", { timeZone: WEEKLY_SUMMARY_TIMEZONE, year: "numeric", month: "short", day: "2-digit" });
+  const label = typeof formatter.formatRange === "function" ? formatter.formatRange(start, new Date(end.getTime() - 1)) : `${formatter.format(start)} – ${formatter.format(new Date(end.getTime() - 1))}`;
+  return { startAt: start.toISOString(), endAt: end.toISOString(), label, timezone: WEEKLY_SUMMARY_TIMEZONE };
+}
+
+function weeklyContextKey(message: ConsoleMessage) {
+  const metadata = record(message.metadata);
+  const projectId = text(metadata.projectId) || message.projectId || "global";
+  const values = [text(metadata.mainModule), text(metadata.moduleName), text(metadata.submoduleName), text(metadata.workItem)];
+  if (!values.some(Boolean)) return "";
+  return [projectId, ...values].map((value) => value.toLocaleLowerCase("hu-HU").replace(/\s+/g, " ").trim()).join("|");
+}
+
+export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string | null): Promise<DeveloperWeeklySummary> {
+  const client = getClient();
+  const projectId = text(projectIdInput) || null;
+  const period = currentBudapestWeek();
+  let openTaskQuery = client.from("dev_center_tasks")
+    .select("id,project_id,status,completed_at,created_at")
+    .in("status", ["queued", "ready", "claimed", "in_progress", "testing", "blocked", "failed"])
+    .order("created_at", { ascending: false })
+    .limit(WEEKLY_SUMMARY_LIMIT);
+  let completedTaskQuery = client.from("dev_center_tasks")
+    .select("id,project_id,status,completed_at,created_at")
+    .eq("status", "completed")
+    .gte("completed_at", period.startAt)
+    .lt("completed_at", period.endAt)
+    .order("completed_at", { ascending: false })
+    .limit(WEEKLY_SUMMARY_LIMIT);
+  if (projectId) {
+    openTaskQuery = openTaskQuery.eq("project_id", projectId);
+    completedTaskQuery = completedTaskQuery.eq("project_id", projectId);
+  }
+  const [worklog, audits, openTasks, completedTasks, workers, projects] = await Promise.all([
+    client.from("dev_center_live_worklog")
+      .select("id,task_id,worker_code,phase,level,summary,detail,progress_percent,source,metadata,created_at")
+      .gte("created_at", period.startAt).lt("created_at", period.endAt).order("created_at", { ascending: true }).limit(WEEKLY_SUMMARY_LIMIT),
+    client.from("dev_center_audit_events")
+      .select("id,actor_type,actor_id,action,entity_type,entity_id,task_id,project_id,summary,metadata,created_at")
+      .gte("created_at", period.startAt).lt("created_at", period.endAt).order("created_at", { ascending: true }).limit(WEEKLY_SUMMARY_LIMIT),
+    openTaskQuery,
+    completedTaskQuery,
+    client.from("dev_center_workers").select("code,name").order("code"),
+    client.from("dev_center_projects").select("id,name").order("name"),
+  ]);
+  for (const result of [worklog, audits, openTasks, completedTasks, workers, projects]) {
+    if (result.error) throw new Error(result.error.message || "A heti fejlesztési összesítő adatforrása nem tölthető be.");
+  }
+  const merged = [
+    ...(worklog.data || []).map((row) => mapWorklogRow(row as Row)),
+    ...(audits.data || []).map((row) => mapAuditRow(row as Row)),
+  ].filter((message) => message.createdAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const enriched = await enrichMessagesWithTaskContext(client, merged);
+  const messages = enriched.filter((message) => {
+    if (!projectId) return true;
+    return (text(message.metadata.projectId) || message.projectId || "") === projectId;
+  });
+  const workerNameMap = new Map((workers.data || []).map((row) => [text(row.code).toUpperCase(), text(row.name)]));
+  const projectNameMap = new Map((projects.data || []).map((row) => [text(row.id), text(row.name)]));
+  const contextMap = new Map<string, DeveloperWeeklySummary["contexts"][number]>();
+  const workerMap = new Map<string, { code: string; name: string; activityCount: number; contextKeys: Set<string>; latestAt: string; latestStage: number }>();
+  let builds = 0;
+  let tests = 0;
+  let errors = 0;
+  for (const message of messages) {
+    if (message.kind === "BUILD_EVENT") builds += 1;
+    if (message.kind === "TEST_RESULT") tests += 1;
+    if (message.kind === "ERROR" || message.level === "error") errors += 1;
+    const metadata = record(message.metadata);
+    const stage = safeDevelopmentStage(metadata.workStageIndex) || stageForMessage(message);
+    const contextKey = weeklyContextKey(message);
+    if (contextKey) {
+      const messageProjectId = text(metadata.projectId) || message.projectId || "";
+      const current = contextMap.get(contextKey) || {
+        key: contextKey,
+        projectId: messageProjectId,
+        projectName: text(metadata.projectName) || projectNameMap.get(messageProjectId) || messageProjectId || "DIMPRO",
+        mainModule: text(metadata.mainModule) || "DIMPRO",
+        moduleName: text(metadata.moduleName) || "Fejlesztési munkarész",
+        submoduleName: text(metadata.submoduleName) || "Aktuális funkció",
+        workItem: text(metadata.workItem) || text(message.summary) || "Aktuális munkarész",
+        activityCount: 0,
+        workers: [],
+        latestAt: "",
+        latestStage: 1,
+        latestAction: "",
+        stageCounts: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0 },
+      };
+      current.activityCount += 1;
+      current.stageCounts[String(stage)] = (current.stageCounts[String(stage)] || 0) + 1;
+      if (!current.latestAt || message.createdAt >= current.latestAt) {
+        current.latestAt = message.createdAt;
+        current.latestStage = stage;
+        current.latestAction = text(metadata.activityAction) || message.summary;
+      }
+      if (WEEKLY_WORKERS.has(message.author) && !current.workers.includes(message.author)) current.workers.push(message.author);
+      contextMap.set(contextKey, current);
+    }
+    if (WEEKLY_WORKERS.has(message.author)) {
+      const code = message.author;
+      const current = workerMap.get(code) || { code, name: workerNameMap.get(code) || code, activityCount: 0, contextKeys: new Set<string>(), latestAt: "", latestStage: 1 };
+      current.activityCount += 1;
+      if (contextKey) current.contextKeys.add(contextKey);
+      if (!current.latestAt || message.createdAt >= current.latestAt) {
+        current.latestAt = message.createdAt;
+        current.latestStage = stage;
+      }
+      workerMap.set(code, current);
+    }
+  }
+  const contexts = [...contextMap.values()]
+    .map((item) => ({ ...item, workers: [...item.workers].sort() }))
+    .sort((a, b) => b.latestAt.localeCompare(a.latestAt) || b.activityCount - a.activityCount);
+  const workerSummary = [...workerMap.values()]
+    .map((item) => ({ code: item.code, name: item.name, activityCount: item.activityCount, contextCount: item.contextKeys.size, latestAt: item.latestAt, latestStage: item.latestStage }))
+    .sort((a, b) => b.activityCount - a.activityCount || a.code.localeCompare(b.code));
+  return {
+    ready: true,
+    period,
+    projectId,
+    stats: {
+      activities: messages.length,
+      workers: workerSummary.length,
+      contexts: contexts.length,
+      openTasks: (openTasks.data || []).length,
+      completedTasks: (completedTasks.data || []).length,
+      blockedTasks: (openTasks.data || []).filter((row) => text(row.status) === "blocked").length,
+      builds,
+      tests,
+      errors,
+    },
+    workers: workerSummary,
+    contexts,
+    truncated: [worklog, audits, openTasks, completedTasks].some((result) => (result.data || []).length >= WEEKLY_SUMMARY_LIMIT),
+    generatedAt: new Date().toISOString(),
+    productionAccess: "DENY",
+  };
+}
+
 export type DeveloperConsoleMessagePage = {
   messages: ConsoleMessage[];
   page: {

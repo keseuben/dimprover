@@ -217,3 +217,15 @@ export type ResourceHealth = {
   rootKind: string;
   driveTarget: string;
 };
+
+export type WeeklyDevelopmentSummary = {
+  ready: true;
+  period: { startAt: string; endAt: string; label: string; timezone: "Europe/Budapest" };
+  projectId: string | null;
+  stats: { activities: number; workers: number; contexts: number; openTasks: number; completedTasks: number; blockedTasks: number; builds: number; tests: number; errors: number };
+  workers: Array<{ code: string; name: string; activityCount: number; contextCount: number; latestAt: string; latestStage: number }>;
+  contexts: Array<{ key: string; projectId: string; projectName: string; mainModule: string; moduleName: string; submoduleName: string; workItem: string; activityCount: number; workers: string[]; latestAt: string; latestStage: number; latestAction: string; stageCounts: Record<string, number> }>;
+  truncated: boolean;
+  generatedAt: string;
+  productionAccess: "DENY";
+};

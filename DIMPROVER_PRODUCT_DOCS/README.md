@@ -225,3 +225,4 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `274_benjadmin_scheduler_worker_presence_v2_dev_activation_20260818.md` – Scheduler + Worker Presence V2 DEV aktiválás: valós scheduler-run → automatikus worker-kártya, monitoros E2E és 6/x javítások.
 - `275_benjadmin_postnight_runtime_acceptance_v1_20260818.md` – BLOKK 7 lezárás: Map V2 13/13 runtime + 15/15 browser, Common Chat V2 30/30 runtime/browser, dedupe/worker-transition/cursor/archívum teljes acceptance.
 - `276_benjadmin_postnight_runtime_v1_dev_activation_20260818.md` – BLOKK 7 exact DEV aktiválás: source `8bba5a3`, build `YSdTIWIlHiSNBeaMJyECO`, Map V2 13/13 + 15/15, Common Chat V2 30/30, final health OK és swap 0%.
+- `277_benjadmin_weekly_development_summary_v1_checkpoint_20260818.md` – BLOKK 8 source checkpoint: Budapest naptári heti projekt/modul/munkarész + worker + 6/x összesítő, read-only API és középső összecsukható panel.

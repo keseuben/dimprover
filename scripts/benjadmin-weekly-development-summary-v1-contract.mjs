@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const read=(file)=>fs.readFileSync(file,"utf8");
+const backend=read("app/lib/dev-center/developer-console.ts");
+const route=read("app/api/dev/console/weekly-summary/route.ts");
+const panel=read("components/admin/developer-console/WeeklyDevelopmentSummary.tsx");
+const conversation=read("components/admin/developer-console/DeveloperConversation.tsx");
+const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+const acceptance=read("scripts/benjadmin-weekly-development-summary-v1-runtime-browser-acceptance.mjs");
+let passed=0;
+function check(name,fn){fn();passed+=1;console.log(`PASS ${String(passed).padStart(2,"0")} ${name}`);}
+check("Weekly summary has a dedicated authenticated API",()=>assert.ok(route.includes("isDevCenterAuthorized")&&route.includes("getDeveloperConsoleWeeklySummary")));
+check("Weekly summary reads worklog and audit sources",()=>assert.ok(backend.includes('from("dev_center_live_worklog")')&&backend.includes('from("dev_center_audit_events")')));
+check("Weekly summary reuses shared message context enrichment",()=>assert.ok(backend.includes("enrichMessagesWithTaskContext(client, merged)")));
+check("Weekly summary uses explicit Europe Budapest timezone",()=>assert.ok(backend.includes('WEEKLY_SUMMARY_TIMEZONE = "Europe/Budapest"')));
+check("Weekly summary is Monday based",()=>assert.ok(backend.includes("mondayShift")&&backend.includes("getUTCDay")));
+check("Weekly summary supports project filtering",()=>assert.ok(backend.includes("projectIdInput")&&route.includes("projectId")));
+check("Weekly summary aggregates workers and contexts",()=>assert.ok(backend.includes("workerMap")&&backend.includes("contextMap")&&backend.includes("stageCounts")));
+check("Weekly summary aggregates task state",()=>assert.ok(backend.includes("openTasks")&&backend.includes("completedTasks")&&backend.includes("blockedTasks")));
+check("Weekly summary aggregates build test and error",()=>assert.ok(backend.includes('message.kind === "BUILD_EVENT"')&&backend.includes('message.kind === "TEST_RESULT"')&&backend.includes('message.kind === "ERROR"')));
+check("Weekly summary remains PROD denied",()=>assert.ok(backend.includes('productionAccess: "DENY"')&&panel.includes("PROD DENY")));
+check("Weekly summary panel is mounted in common conversation",()=>assert.ok(conversation.includes("WeeklyDevelopmentSummary")&&conversation.includes("selectedProjectId={selectedProjectId}")));
+check("Weekly summary exposes six-stage worker and context badges",()=>assert.ok(panel.includes("6/{worker.latestStage}")&&panel.includes("6/{context.latestStage}")));
+check("Weekly summary exposes project module submodule work item",()=>assert.ok(panel.includes("context.projectName")&&panel.includes("context.mainModule")&&panel.includes("context.moduleName")&&panel.includes("context.submoduleName")&&panel.includes("context.workItem")));
+check("Weekly summary refreshes without page reload",()=>assert.ok(panel.includes("60_000")&&panel.includes("setInterval")));
+check("Weekly summary is collapsible",()=>assert.ok(panel.includes("aria-expanded")&&panel.includes("setExpanded")));
+check("Weekly summary has responsive mobile rules",()=>assert.ok(css.includes(".weeklySummaryStats")&&css.includes("@media (max-width: 700px)")));
+check("Weekly summary needs no database migration",()=>assert.ok(!route.includes("migration")&&!panel.includes("migration")));
+check("Weekly summary acceptance covers auth workers contexts task state and counters",()=>assert.ok(acceptance.includes("denies unauthenticated read")&&acceptance.includes("ARMINAI and JAZMINAI")&&acceptance.includes("groups two shared development contexts")&&acceptance.includes("task state counts")&&acceptance.includes("build test error counts")));
+check("Weekly summary acceptance covers collapse desktop and mobile",()=>assert.ok(acceptance.includes("Weekly panel collapses")&&acceptance.includes("desktop overflow safe")&&acceptance.includes("mobile overflow safe")));
+console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN Weekly Development Summary V1"},null,2));
