@@ -54,6 +54,9 @@ const tests = [
   ['GPS külön kapcsoló alapból OFF', sheet.includes('GPS helyadat') && types.includes('gpsEnabled: false')],
   ['Kamerairány külön kapcsoló alapból OFF', sheet.includes('Hátlapi kamera iránya') && types.includes('orientationEnabled: false')],
   ['GPS valós browser geolocation adapter', sensors.includes('navigator.geolocation.getCurrentPosition') && sensors.includes('enableHighAccuracy: true')],
+  ['GPS webhelyengedély állapota lekérdezhető', sensors.includes('navigator.permissions.query') && sensors.includes('getFieldLocationPermissionState')],
+  ['GPS külön felhasználói engedélykérés', sheet.includes('data-terep-location-permission-button') && sheet.includes('Helyhozzáférés engedélyezése') && sheet.includes('requestGpsPermission')],
+  ['GPS engedély megtagadása nem blokkolja a képet', sheet.includes('A kép GPS nélkül is elkészíthető.') && sheet.includes('onChoose(draft, "camera")')],
   ['GPS pontosság és LOW_ACCURACY státusz', sensors.includes('LOW_ACCURACY_METERS') && sensors.includes('accuracyMeters') && sensors.includes('"LOW_ACCURACY"')],
   ['GPS timeout nem blokkolja a capture-t', sensors.includes('timeout: LOCATION_TIMEOUT_MS') && shell.indexOf('setItems((current) => [...current, ...created])') < shell.indexOf('captureFieldSensors(options)')],
   ['Tájolás DeviceOrientation adapter', sensors.includes('deviceorientationabsolute') && sensors.includes('deviceorientation') && sensors.includes('webkitCompassHeading')],
@@ -91,7 +94,7 @@ const tests = [
   ['Szerkesztési állapot IndexedDB-ben megmarad', queue.includes('edited: item.edited') && queue.includes('editRevision: item.editRevision') && queue.includes('edited: Boolean(row.edited)')],
   ['Kamerairány a hátlapi -z vektorból számolódik', sensors.includes('Rz(alpha) * Rx(beta) * Ry(gamma) * [0, 0, -1]') && sensors.includes('cameraHeadingFromDeviceOrientation') && sensors.includes('horizontalProjection')],
   ['Kamerairány több szenzorminta körátlagából készül', sensors.includes('TARGET_ORIENTATION_SAMPLES') && sensors.includes('circularMean') && sensors.includes('absoluteSamples')],
-  ['GPS tiltásnál böngésző engedélyezési útmutató látható', card.includes('webhelybeállítások') && card.includes('Hely') && card.includes('Engedélyezés')],
+  ["GPS tiltásnál böngésző engedélyezési útmutató látható", (card.includes("webhelyinformáció") || sheet.includes("webhelyinformáció")) && sheet.includes("Engedélyek") && sheet.includes("Hely") && sheet.includes("Engedélyezés")],
   ['Mobil workflow akciósáv a Drop dock fölött marad', shell.includes('data-terep-workflow-actions') && shell.includes('sticky z-[130]') && shell.includes('calc(84px + env(safe-area-inset-bottom))')],
 ];
 let failed = 0;

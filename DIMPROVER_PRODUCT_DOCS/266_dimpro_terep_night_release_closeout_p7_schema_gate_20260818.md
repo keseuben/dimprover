@@ -235,3 +235,31 @@ Következő kontrollált lépés:
 6. csak teljes PASS után DEV cutover.
 
 Emberi termékdöntés nem szükséges; ez izolált build-környezeti javítás. A végrehajtási terv build-hiba STOP szabálya miatt a javítás külön következő fejlesztési körben indulhat.
+
+## 2026-08-18 – explicit böngésző GPS-helyhozzáférési kapu
+
+Felhasználói terepi teszt alapján a Chrome globális „a webhelyek kérhetik a helyadatait” beállítása nem adott elég egyértelmű visszajelzést arról, hogy a DIMPRO Drop/Terep webhely konkrét helyengedélye megvan-e. A korábbi működés a GPS-t csak a kép elkészítése után, háttérben kérte le.
+
+Új működés:
+- a GPS továbbra is opcionális és alapból OFF;
+- a GPS kapcsoló bekapcsolásakor a Terep ellenőrzi a böngésző `geolocation` permission állapotát;
+- külön, látható **„Helyhozzáférés engedélyezése”** gomb jelenik meg, ha nincs még engedély;
+- az engedélykérés közvetlen felhasználói gombnyomásból hívja a `navigator.geolocation.getCurrentPosition()` API-t;
+- siker esetén a felület jelzi, hogy a konkrét DIMPRO webhely helyhozzáférése engedélyezve van, és a próbamérés pontosságát is kijelzi;
+- tiltás esetén útmutató jelenik meg: Chrome → webhelyinformáció → Engedélyek → Hely → Engedélyezés → Engedély ellenőrzése újra;
+- a GPS-engedély megtagadása vagy hiánya továbbra sem blokkolhatja a kép elkészítését;
+- a tényleges, képhez mentett GPS-adat továbbra is a képrögzítéshez kapcsolódó külön strukturált `FieldCaptureLocationRecord`, nem EXIF.
+
+Érintett fájlok:
+- `app/lib/field-capture/captureSensors.ts`
+- `components/field-capture/PreCaptureOptionsSheet.tsx`
+- `components/field-capture/CapturePreviewCard.tsx`
+- `scripts/terep-p0-p6-acceptance.cjs`
+
+Acceptance bővítés:
+- webhelyengedély állapot lekérdezés;
+- külön felhasználói GPS engedélykérés;
+- GPS tiltás nem blokkolja a képet;
+- frissített Chrome webhelyengedély útmutató.
+
+Eredmény: **64/64 statikus Terep acceptance PASS**, célzott ESLint PASS, `npx tsc --noEmit` PASS, `git diff --check` PASS.

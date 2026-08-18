@@ -12,6 +12,41 @@ const ORIENTATION_TIMEOUT_MS = 4200;
 const MIN_CAMERA_HORIZONTAL_PROJECTION = 0.16;
 const TARGET_ORIENTATION_SAMPLES = 5;
 
+export type FieldLocationPermissionState = "granted" | "prompt" | "denied" | "unsupported" | "unavailable";
+
+export async function getFieldLocationPermissionState(): Promise<FieldLocationPermissionState> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return "unavailable";
+  if (!navigator.permissions?.query) return "unsupported";
+  try {
+    const permission = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+    return permission.state;
+  } catch {
+    return "unsupported";
+  }
+}
+
+export async function requestFieldLocationPermission(): Promise<{
+  state: FieldLocationPermissionState;
+  sample: FieldCaptureLocationRecord | null;
+}> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return { state: "unavailable", sample: null };
+  }
+  const before = await getFieldLocationPermissionState();
+  if (before === "denied") return { state: "denied", sample: null };
+
+  // Közvetlen felhasználói gombnyomásból hívandó. A böngésző így a konkrét
+  // DIMPRO webhelyhez kér helyhozzáférést, nem csak a globális
+  // "a webhelyek kérhetik" beállításra támaszkodunk.
+  const sample = await captureFieldLocation(true);
+  if (sample.status === "READY" || sample.status === "LOW_ACCURACY") {
+    return { state: "granted", sample };
+  }
+  if (sample.status === "DENIED") return { state: "denied", sample };
+  const after = await getFieldLocationPermissionState();
+  return { state: after, sample };
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -101,7 +136,7 @@ export async function captureFieldLocation(enabled: boolean): Promise<FieldCaptu
           source: "browser-geolocation",
           status: denied ? "DENIED" : "UNAVAILABLE",
           detail: denied
-            ? "A GPS helyhozzáférés nincs engedélyezve. A böngésző Webhelybeállítások → Hely menüjében engedélyezze, majd válassza a GPS újramérést."
+            ? "A GPS helyhozzáférés nincs engedélyezve ehhez a webhelyhez. Chrome: webhelyinformáció → Engedélyek → Hely → Engedélyezés, majd válassza a GPS újramérést."
             : "A GPS mérés nem sikerült vagy időtúllépés történt.",
         });
       },
