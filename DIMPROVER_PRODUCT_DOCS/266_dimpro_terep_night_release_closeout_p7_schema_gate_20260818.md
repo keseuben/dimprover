@@ -85,3 +85,55 @@ Emberi/infrastruktúra döntés szükséges a P7 folytatásához:
 5. csak ezután P7 szerveres capture session API + upload/sync foundation.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+## 2026-08-18 reggeli folytatás – P7 schema gate feloldása
+
+A reggeli audit során megtaláltuk a korábban már dokumentált, DEV-only közvetlen PostgreSQL migrációs útvonalat:
+
+- `/root/.pgpass`: root:root, `0600`;
+- fix DEV pooler: `aws-0-eu-central-1.pooler.supabase.com:5432`;
+- DEV Supabase project ref: `pbgyuznivqvestuksvif`;
+- PROD Supabase project ref: `hlgntizemijaemphleiw`, amelyet a P7 gate nem fogad el;
+- a jelszó értéke nem került logba, dokumentációba vagy repóba.
+
+A korábbi `DIMPRO_FIELD_CAPTURE_P0_P4_SCHEMA_DRAFT.sql` közvetlen alkalmazása elutasítva. Audit során két kompatibilitási hibát és egy biztonsági hiányt találtunk:
+1. `project_id uuid` helyett `text` szükséges a Project Core szerződés miatt;
+2. Drive `folder_id uuid` helyett `text` szükséges a Drive Core szerződés miatt;
+3. a draft nem tartalmazott kötelező RLS/grant hardeninget.
+
+Új, verziózott P7 migráció:
+- `supabase/migrations/20260818074500_field_capture_p7_server_session_v010.sql`
+- SHA-256: `c77da0e0f55e987d4274d83904ff28ecc73615e79013fca2ec4843917f67d0fd`
+- 9 domain tábla + külön schema marker;
+- RLS minden Field Capture táblán;
+- `anon` és `authenticated` közvetlen táblajoga tiltva;
+- csak `service_role` kap szerveroldali CRUD jogot;
+- idempotens session/item/sync kulcsok;
+- GPS, kamerairány, voice és storage metaadat külön strukturált rekordban;
+- nyers Send/PIN/capability token nem része a sémának.
+
+Új migration gate:
+- `scripts/field-capture-p7-migration-gate.mjs`
+- fix DEV target ellenőrzés;
+- root-only `.pgpass` ellenőrzés;
+- tiszta baseline / részleges schema tiltás;
+- teljes DEV `pg_dump` backup + `pg_restore --list` ellenőrzés;
+- tranzakciós rollback-test;
+- explicit `DEV_ONLY_FIELD_CAPTURE_P7_APPLY_APPROVED` apply-kapu;
+- apply után marker + RLS/grant security acceptance.
+
+Contract:
+- `scripts/field-capture-p7-migration-gate-contract.mjs`
+- eredmény: **13/13 PASS**.
+
+Read-only P7 preflight:
+- target: `pbgyuznivqvestuksvif`;
+- DB/user/port: `postgres / postgres / 5432`;
+- mind a 9 domain tábla hiányzik;
+- részleges Field Capture schema nincs;
+- Identity / Project Core / Drive Core / Drop upload sentinel: PASS;
+- állapot: **READY FOR ROLLBACK TEST + APPLY**.
+
+A rollback-test első indítását a közös DIMPRO koordinátor helyesen blokkolta, mert ÁrminAI közben build lockot tartott. Lockot nem törtünk fel, párhuzamos migráció nem történt.
+
+A korábbi `BLOCKED – P7_SCHEMA_MIGRATION_GATE` állapot ezért infrastruktúra szinten **RESOLVED**, az apply továbbra is csak a közös `migration` lock alatt történhet.
