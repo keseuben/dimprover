@@ -166,3 +166,9 @@ Javítás:
 - abort és cancel ugyanazt a stop logikát használja.
 
 A javításhoz külön `benjadmin-console-stream-lifecycle-v1-contract.mjs` regressziós védelem készült. A release csak új exact build + browser close log-gate után engedhető tovább.
+
+## Candidate-ben feltárt projekt-bootstrap race
+
+A `6918978` SSE-fix candidate újrafuttatásakor a heti panel egyszer `data-project-id=all` állapotban indult, miközben a mentett fixture projekt már a live snapshotban szerepelt. A `DeveloperConsoleShell` bootstrapja a `silentFetch()` után a React `liveRef` aszinkron frissítésére támaszkodott.
+
+Javítás: a `silentFetch()` közvetlenül visszaadja a betöltött `ConsoleLiveState` snapshotot, a bootstrap pedig elsődlegesen ennek `projects` listájából oldja fel a mentett projektet. A ref csak fallback. Ez determinisztikussá teszi a mentett projekt visszaállítását normál felhasználói betöltésnél is.

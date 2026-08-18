@@ -175,10 +175,10 @@ export default function DeveloperConsoleShell() {
       if (!messageResponse.ok || !messagePayload?.messages) throw new Error(messagePayload?.error || "A munkanapló nem tölthető be.");
       applySnapshot(livePayload.live, messagePayload.messages);
       if (!historyExhaustedRef.current) setHasOlderMessages(Boolean(messagePayload.page?.hasMore));
-      return true;
+      return livePayload.live;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Az élő állapot nem érhető el.");
-      return false;
+      return null;
     }
   }, [applySnapshot]);
 
@@ -258,7 +258,7 @@ export default function DeveloperConsoleShell() {
 
     async function bootstrap() {
       try {
-        const [contextResponse] = await Promise.all([
+        const [contextResponse, initialLive] = await Promise.all([
           fetch("/api/dev/console/context", { headers: adminHeaders(), cache: "no-store" }),
           silentFetch(),
           loadResources(),
@@ -267,7 +267,7 @@ export default function DeveloperConsoleShell() {
         if (contextResponse.ok && contextPayload?.context) setContext(contextPayload.context);
         if (!cancelled) {
           const storedProject = localStorage.getItem(PROJECT_KEY) || "";
-          const projects = liveRef.current?.projects || [];
+          const projects = initialLive?.projects || liveRef.current?.projects || [];
           const initial = projects.some((item) => item.id === storedProject) ? storedProject : projects.length === 1 ? projects[0].id : "";
           setSelectedProjectId(initial);
           void connect(0);

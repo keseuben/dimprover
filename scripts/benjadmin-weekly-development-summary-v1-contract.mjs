@@ -6,6 +6,7 @@ const backend=read("app/lib/dev-center/developer-console.ts");
 const route=read("app/api/dev/console/weekly-summary/route.ts");
 const panel=read("components/admin/developer-console/WeeklyDevelopmentSummary.tsx");
 const conversation=read("components/admin/developer-console/DeveloperConversation.tsx");
+const shell=read("components/admin/developer-console/DeveloperConsoleShell.tsx");
 const css=read("components/admin/developer-console/DeveloperConsole.module.css");
 const acceptance=read("scripts/benjadmin-weekly-development-summary-v1-runtime-browser-acceptance.mjs");
 let passed=0;
@@ -29,4 +30,5 @@ check("Weekly summary has responsive mobile rules",()=>assert.ok(css.includes(".
 check("Weekly summary needs no database migration",()=>assert.ok(!route.includes("migration")&&!panel.includes("migration")));
 check("Weekly summary acceptance covers auth workers contexts task state and counters",()=>assert.ok(acceptance.includes("denies unauthenticated read")&&acceptance.includes("ARMINAI and JAZMINAI")&&acceptance.includes("groups two shared development contexts")&&acceptance.includes("task state counts")&&acceptance.includes("build test error counts")));
 check("Weekly summary acceptance covers collapse desktop and mobile",()=>assert.ok(acceptance.includes("Weekly panel collapses")&&acceptance.includes("desktop overflow safe")&&acceptance.includes("mobile overflow safe")));
+check("Bootstrap project selection uses fetched live snapshot",()=>assert.ok(shell.includes("const [contextResponse, initialLive] = await Promise.all")&&shell.includes("const projects = initialLive?.projects || liveRef.current?.projects || []")&&shell.includes("return livePayload.live")));
 console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN Weekly Development Summary V1"},null,2));
