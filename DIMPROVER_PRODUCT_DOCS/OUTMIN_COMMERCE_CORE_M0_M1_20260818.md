@@ -253,3 +253,45 @@ Elkészült:
 - TypeScript: PASS; lint: PASS; diff-check: PASS.
 
 A Media M1 migráció ekkor még staged; tényleges DEV apply külön koordinált migration gate után következik.
+
+### 2026-08-18 19:25 checkpoint — Media Engine M1 DEV aktív + upload pipeline
+
+A korábbi staged Media M1 állapotot ez a checkpoint felülírja.
+
+DEV adatbázis:
+- Commerce schema: `0.1.1`, migration count: 2;
+- `commerce_media_variants` és `commerce_media_overlays` alkalmazva;
+- `commerce_media_finalize_upload` service-only RPC aktív;
+- Media migration SHA-256: `448f3894db5f97b225cd25fa2802a4b65b83e1c207113099a21b49b12e482970`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-media-m1/20260818T171548Z/supabase-dev-pre-commerce-media-m1.dump`;
+- backup SHA-256: `85be46f25a745051fa45633f642f842edd2fc18fd65ab6796a1a19dcfd092f29`;
+- migration verify + security gate: PASS;
+- PROD változatlan.
+
+Media upload pipeline:
+- Commerce-specifikus S3 konfiguráció támogatott, DEV-ben a meglévő Drive object storage credential a fallback; külön `commerce/...` prefixet használ;
+- böngésző nem kap közvetlen S3 credentialt és nem igényel új bucket CORS szabályt: a kép same-origin Commerce PUT API-n keresztül streamelődik az object storage-ba;
+- HMAC-SHA256 upload ticket, user + organization + asset + target scope-pal és lejárattal;
+- támogatott tárolt output: JPEG / PNG / WEBP; HEIC/HEIF a közös kliens image engine-ben konvertálható;
+- WEB + THUMBNAIL kötelező, ORIGINAL csak explicit retentionnel;
+- feltöltéskor content-type és content-length egyezés kötelező;
+- finalize előtt minden objektum HEAD ellenőrzést kap, utána atomi DB metadata finalize;
+- médiaolvasás rövid életű signed GET redirecten történik;
+- Product list summary tartalmazza a primary media asset azonosítót;
+- Termékek adminban elkészült a „Kép hozzáadása / Kép cseréje” workflow és a bélyegképes terméklista/inspector.
+
+Tesztkapu:
+- Media migration contract: 16/16 PASS;
+- Media DB rollback E2E: 10/10 PASS;
+- Media upload contract: 18/18 PASS;
+- upload token roundtrip/tamper/expiry: PASS;
+- object storage readiness PUT/HEAD/cleanup: 4/4 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS, 0 warning;
+- git diff --check: PASS.
+
+Következő:
+1. új Media route-okkal friss candidate build;
+2. izolált candidate route/security smoke;
+3. Commerce Media UI regresszió;
+4. shared DEV cutover továbbra is csak integrációs kapu után, más workerek aktuális release-ének felülírása nélkül.

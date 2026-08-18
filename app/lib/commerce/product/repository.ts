@@ -33,6 +33,7 @@ export type CommerceProductListItem = CommerceProductRecord & {
   internalAvailableQuantity: string;
   externalAvailableQuantity: string;
   externalSyncStatus: string | null;
+  primaryMediaAssetId: string | null;
 };
 
 export type CommerceVariantRecord = {
@@ -169,12 +170,12 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
   const variantIds = variants.map((variant) => variant.id);
   if (!variantIds.length) {
     return {
-      items: products.map((product) => ({ ...product, defaultVariantId:null, sku:null, unit:null, priceMinor:null, currency:null, internalAvailableQuantity:"0", externalAvailableQuantity:"0", externalSyncStatus:null })),
+      items: products.map((product) => ({ ...product, defaultVariantId:null, sku:null, unit:null, priceMinor:null, currency:null, internalAvailableQuantity:"0", externalAvailableQuantity:"0", externalSyncStatus:null, primaryMediaAssetId:null })),
       total: result.count ?? 0, limit, offset,
     };
   }
 
-  const [pricesResult, balancesResult, externalResult] = await Promise.all([
+  const [pricesResult, balancesResult, externalResult, mediaLinksResult] = await Promise.all([
     client.from("commerce_prices")
       .select("variant_id,currency,amount_minor,valid_from,valid_until,status,created_at")
       .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("status", "ACTIVE").is("archived_at", null).order("created_at", { ascending:false }),
@@ -184,10 +185,15 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     client.from("commerce_external_inventory_snapshots")
       .select("variant_id,quantity,sync_status,last_sync_at")
       .eq("organization_id", context.organizationId).in("variant_id", variantIds),
+    client.from("commerce_media_links")
+      .select("asset_id,linked_entity_id,is_primary,sort_order")
+      .eq("organization_id", context.organizationId).eq("link_type", "PRODUCT").in("linked_entity_id", productIds).is("archived_at", null)
+      .order("is_primary", { ascending:false }).order("sort_order", { ascending:true }),
   ]);
   if (pricesResult.error) dbError("A termékárak összesítése sikertelen.", pricesResult.error);
   if (balancesResult.error) dbError("A belső készlet összesítése sikertelen.", balancesResult.error);
   if (externalResult.error) dbError("A külső készlet összesítése sikertelen.", externalResult.error);
+  if (mediaLinksResult.error) dbError("A termékképek összesítése sikertelen.", mediaLinksResult.error);
 
   const variantsByProduct = new Map<string, CommerceVariantRecord[]>();
   for (const variant of variants) variantsByProduct.set(variant.productId, [...(variantsByProduct.get(variant.productId) || []), variant]);
@@ -228,6 +234,14 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     }
   }
 
+
+  const mediaByProduct = new Map<string, string>();
+  for (const row of (mediaLinksResult.data || []) as Row[]) {
+    const productId = text(row.linked_entity_id);
+    const assetId = text(row.asset_id);
+    if (productId && assetId && !mediaByProduct.has(productId)) mediaByProduct.set(productId, assetId);
+  }
+
   const items: CommerceProductListItem[] = products.map((product) => {
     const defaultVariant = variantsByProduct.get(product.id)?.[0] || null;
     const price = pricesByProduct.get(product.id) || null;
@@ -241,6 +255,7 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
       internalAvailableQuantity: internalByProduct.get(product.id) || "0",
       externalAvailableQuantity: externalByProduct.get(product.id) || "0",
       externalSyncStatus: externalStatusByProduct.get(product.id) || null,
+      primaryMediaAssetId: mediaByProduct.get(product.id) || null,
     };
   });
   return { items, total: result.count ?? 0, limit, offset };

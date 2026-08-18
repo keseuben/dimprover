@@ -3,18 +3,10 @@ import { cookies } from "next/headers";
 import { resolveCommercePermissions } from "./permissions";
 import { createCommerceAdminClient } from "./server-db";
 import type { CommerceContext } from "./types";
+import { CommerceContextError } from "./errors";
+export { CommerceContextError } from "./errors";
 
 type Row = Record<string, unknown>;
-
-export class CommerceContextError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly status: number,
-  ) {
-    super(message);
-  }
-}
 
 function env(name: string) {
   return process.env[name]?.trim() || "";

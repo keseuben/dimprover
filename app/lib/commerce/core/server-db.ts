@@ -1,5 +1,5 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import { CommerceContextError } from "./server-context";
+import { CommerceContextError } from "./errors";
 
 function env(name: string) {
   return process.env[name]?.trim() || "";

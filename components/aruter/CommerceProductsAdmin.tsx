@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Barcode, Boxes, ChevronRight, Loader2, Package, Plus, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { AlertCircle, Barcode, Boxes, ChevronRight, ImagePlus, Loader2, Package, Plus, RefreshCw, Search, SlidersHorizontal, Upload, X } from "lucide-react";
+import { uploadCommerceProductImage } from "./commerceMediaPreparation";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
 
 type ProductSummary = {
@@ -22,6 +23,7 @@ type ProductSummary = {
   internalAvailableQuantity: string;
   externalAvailableQuantity: string;
   externalSyncStatus: string | null;
+  primaryMediaAssetId: string | null;
 };
 
 type ProductDetail = Omit<ProductSummary, "defaultVariantId" | "sku" | "unit" | "priceMinor" | "currency" | "internalAvailableQuantity" | "externalAvailableQuantity" | "externalSyncStatus"> & {
@@ -83,6 +85,7 @@ export function CommerceProductsAdmin() {
   const [createMode, setCreateMode] = useState(false);
   const [draft, setDraft] = useState<CreateDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const loadProducts = useCallback(async (search = "") => {
     setLoading(true);
@@ -130,6 +133,22 @@ export function CommerceProductsAdmin() {
   }, [selectedId, createMode]);
 
   const selected = useMemo(() => products.find((item) => item.id === selectedId) ?? null, [products, selectedId]);
+
+
+  async function uploadProductImage(file: File | null) {
+    if (!file || !selectedId) return;
+    setUploadingImage(true);
+    setError(null);
+    try {
+      await uploadCommerceProductImage(selectedId, file);
+      await loadProducts(query);
+      setSelectedId(selectedId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "A termékkép feltöltése sikertelen.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function createProduct(event: FormEvent) {
     event.preventDefault();
@@ -218,7 +237,7 @@ export function CommerceProductsAdmin() {
                   <tbody>
                     {products.map((product) => (
                       <tr key={product.id} onClick={() => { setCreateMode(false); setSelectedId(product.id); }} className={`cursor-pointer border-t border-slate-100 transition hover:bg-teal-50/40 ${selectedId === product.id ? "bg-teal-50/70" : "bg-white"}`}>
-                        <td className="p-4"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><Package size={20} /></span><div><b className="text-slate-900">{product.name}</b><p className="mt-0.5 text-xs font-semibold text-slate-400">{product.slug}</p></div></div></td>
+                        <td className="p-4"><div className="flex items-center gap-3"><span className="flex h-11 w-11 overflow-hidden items-center justify-center rounded-xl bg-slate-100 text-slate-500">{product.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${product.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={20} />}</span><div><b className="text-slate-900">{product.name}</b><p className="mt-0.5 text-xs font-semibold text-slate-400">{product.slug}</p></div></div></td>
                         <td className="font-semibold text-slate-600">{product.typeModel || <EmptyValue />}</td>
                         <td><b>{formatPrice(product) || <EmptyValue />}</b></td><td><b className="text-emerald-700">{formatQuantity(product.internalAvailableQuantity, product.unit)}</b></td><td><div><b>{formatQuantity(product.externalAvailableQuantity, product.unit)}</b>{product.externalSyncStatus && <p className="mt-0.5 text-[11px] font-black text-slate-400">{product.externalSyncStatus}</p>}</div></td>
                         <td><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass(product.status)}`}>{statusLabel(product.status)}</span></td>
@@ -232,7 +251,7 @@ export function CommerceProductsAdmin() {
               <div className="divide-y divide-slate-100 md:hidden">
                 {products.map((product) => (
                   <button key={product.id} type="button" onClick={() => { setCreateMode(false); setSelectedId(product.id); }} className="flex w-full items-center gap-3 p-4 text-left">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><Package size={21} /></span>
+                    <span className="flex h-12 w-12 shrink-0 overflow-hidden items-center justify-center rounded-xl bg-slate-100 text-slate-500">{product.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${product.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={21} />}</span>
                     <span className="min-w-0 flex-1"><b className="block truncate">{product.name}</b><span className="block truncate text-sm font-semibold text-slate-500">{product.typeModel || "Nincs típus/modell"}</span></span>
                     <span className={`rounded-full border px-2 py-1 text-[11px] font-black ${statusClass(product.status)}`}>{statusLabel(product.status)}</span>
                     <ChevronRight size={18} className="text-slate-400" />
@@ -259,10 +278,10 @@ export function CommerceProductsAdmin() {
                 <div className="flex min-h-64 items-center justify-center"><Loader2 className="animate-spin text-teal-700" /></div>
               ) : detail || selected ? (
                 <div>
-                  <div className="flex items-start gap-3"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700"><Package size={25} /></span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div>
+                  <div className="flex items-start gap-3"><span className="flex h-14 w-14 shrink-0 overflow-hidden items-center justify-center rounded-2xl bg-teal-50 text-teal-700">{selected?.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${selected.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={25} />}</span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div>
                   <div className="my-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Belső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.internalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Külső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.externalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b>{selected?.externalSyncStatus && <p className="mt-1 text-[11px] font-black text-slate-400">{selected.externalSyncStatus}</p>}</div></div>
                   <div className="space-y-3 border-t border-slate-100 pt-4"><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">SKU</span><b className="text-right">{detail?.variants[0]?.sku || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Egység</span><b>{detail?.variants[0]?.unit || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Elsődleges azonosító</span><b className="max-w-[220px] truncate text-right">{detail?.identifiers.find((item) => item.primary)?.value || detail?.identifiers[0]?.value || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Státusz</span><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass((detail?.status || selected!.status))}`}>{statusLabel(detail?.status || selected!.status)}</span></div></div>
-                  <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Boxes size={18} className="text-teal-700" /><b>Kereskedelmi összesítő</b></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-500">Aktív ár</span><b>{selected ? formatPrice(selected) || <EmptyValue /> : <EmptyValue />}</b></div></div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><ImagePlus size={18} className="text-teal-700" /><b>Termékkép</b></div><p className="mt-1 text-xs font-semibold text-slate-500">A rendszer webes és bélyegkép-változatot készít; az eredeti fájlt alapból nem őrzi meg.</p><label className={`mt-3 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 font-black text-teal-700 ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}><Upload size={17} /> {uploadingImage ? "Kép feltöltése..." : selected?.primaryMediaAssetId ? "Kép cseréje" : "Kép hozzáadása"}<input type="file" accept="image/*,.heic,.heif" className="hidden" disabled={uploadingImage} onChange={(event) => { const file=event.target.files?.[0]||null; event.currentTarget.value=""; void uploadProductImage(file); }} /></label></div><div className="mt-4 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Boxes size={18} className="text-teal-700" /><b>Kereskedelmi összesítő</b></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-500">Aktív ár</span><b>{selected ? formatPrice(selected) || <EmptyValue /> : <EmptyValue />}</b></div></div>
                 </div>
               ) : (
                 <div className="flex min-h-64 flex-col items-center justify-center text-center"><Package className="text-slate-300" size={38} /><b className="mt-3">Válasszon egy terméket</b><p className="mt-1 max-w-xs text-sm font-semibold text-slate-500">A termék részletei és a készletinformációk itt jelennek meg.</p></div>
