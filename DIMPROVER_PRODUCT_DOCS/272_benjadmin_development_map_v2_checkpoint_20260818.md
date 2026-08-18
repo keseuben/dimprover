@@ -1,6 +1,6 @@
 # 272 — BENJADMIN Fejlesztési Térkép V2 · éjszakai DEV checkpoint
 
-**Dátum:** 2026-08-18  
+**Dátum:** 2026-08-18
 **Állapot:** forrás-checkpoint · DEV-only · runtime cutover még nem történt
 
 ## Elkészült
