@@ -194,6 +194,7 @@ try {
 
   const recentPage = await openConsoleWithClock(3);
   await recentPage.waitForFunction((m) => (document.body.textContent || "").includes(m), { timeout: 30000 }, marker);
+  await recentPage.waitForFunction((workItem) => { const strip = document.querySelector("[data-testid=benjadmin-worker-transition-strip]"); return Boolean(strip) && (strip.textContent || "").includes(workItem); }, { timeout: 30000 }, "Worker transition acceptance");
   const transitionStrip = await recentPage.evaluate((workItem) => {
     const strip = document.querySelector('[data-testid="benjadmin-worker-transition-strip"]');
     return { present: Boolean(strip), text: strip?.textContent || "", hasContext: (strip?.textContent || "").includes(workItem) };
