@@ -185,3 +185,18 @@ Következő blokk:
 3. Product list summary aggregator: ár + belső/külső készlet;
 4. Termékek UI összekötése az aggregált adatokkal;
 5. Media Engine MVP előkészítés.
+
+### 2026-08-18 18:30 checkpoint — Terméklista kereskedelmi összesítő
+
+Elkészült:
+- Product list summary aggregator: default variant, SKU, egység, aktív ár, belső SELLABLE készlet, külső készlet és külső sync státusz;
+- belső és külső készlet külön marad a listában és az inspectorban;
+- ár- és készletösszesítés minden lekérdezésnél explicit organization scope-pal történik;
+- a Termékek admin grid már tényleges Commerce summary mezőket jelenít meg, nem placeholder készletmezőket;
+- mobil lista és jobb oldali inspector változatlanul megmaradt.
+
+Acceptance:
+- Product summary contract: 14/14 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.

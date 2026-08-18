@@ -14,9 +14,17 @@ type ProductSummary = {
   brandId: string | null;
   manufacturerId: string | null;
   status: "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
+  defaultVariantId: string | null;
+  sku: string | null;
+  unit: string | null;
+  priceMinor: string | null;
+  currency: string | null;
+  internalAvailableQuantity: string;
+  externalAvailableQuantity: string;
+  externalSyncStatus: string | null;
 };
 
-type ProductDetail = ProductSummary & {
+type ProductDetail = Omit<ProductSummary, "defaultVariantId" | "sku" | "unit" | "priceMinor" | "currency" | "internalAvailableQuantity" | "externalAvailableQuantity" | "externalSyncStatus"> & {
   variants: Array<{ id: string; name: string; sku: string | null; unit: string; status: string; attributes: Record<string, unknown> }>;
   identifiers: Array<{ id: string; type: string; value: string; primary: boolean; variantId: string | null }>;
 };
@@ -44,6 +52,20 @@ function statusClass(status: ProductSummary["status"]) {
   if (status === "ACTIVE") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "DRAFT") return "border-amber-200 bg-amber-50 text-amber-700";
   return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+
+function formatPrice(product: ProductSummary) {
+  if (product.priceMinor == null || !product.currency) return null;
+  const amount = Number(product.priceMinor);
+  if (!Number.isFinite(amount)) return null;
+  return new Intl.NumberFormat("hu-HU", { style:"currency", currency:product.currency, maximumFractionDigits:product.currency === "HUF" ? 0 : 2 }).format(amount / (product.currency === "HUF" ? 1 : 100));
+}
+
+function formatQuantity(value: string, unit: string | null) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return "—";
+  return `${new Intl.NumberFormat("hu-HU", { maximumFractionDigits:3 }).format(quantity)}${unit ? ` ${unit.toLowerCase()}` : ""}`;
 }
 
 function EmptyValue() {
@@ -198,7 +220,7 @@ export function CommerceProductsAdmin() {
                       <tr key={product.id} onClick={() => { setCreateMode(false); setSelectedId(product.id); }} className={`cursor-pointer border-t border-slate-100 transition hover:bg-teal-50/40 ${selectedId === product.id ? "bg-teal-50/70" : "bg-white"}`}>
                         <td className="p-4"><div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><Package size={20} /></span><div><b className="text-slate-900">{product.name}</b><p className="mt-0.5 text-xs font-semibold text-slate-400">{product.slug}</p></div></div></td>
                         <td className="font-semibold text-slate-600">{product.typeModel || <EmptyValue />}</td>
-                        <td><EmptyValue /></td><td><EmptyValue /></td><td><EmptyValue /></td>
+                        <td><b>{formatPrice(product) || <EmptyValue />}</b></td><td><b className="text-emerald-700">{formatQuantity(product.internalAvailableQuantity, product.unit)}</b></td><td><div><b>{formatQuantity(product.externalAvailableQuantity, product.unit)}</b>{product.externalSyncStatus && <p className="mt-0.5 text-[11px] font-black text-slate-400">{product.externalSyncStatus}</p>}</div></td>
                         <td><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass(product.status)}`}>{statusLabel(product.status)}</span></td>
                         <td><ChevronRight size={18} className="text-slate-400" /></td>
                       </tr>
@@ -238,9 +260,9 @@ export function CommerceProductsAdmin() {
               ) : detail || selected ? (
                 <div>
                   <div className="flex items-start gap-3"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700"><Package size={25} /></span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div>
-                  <div className="my-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Belső készlet</p><b className="mt-1 block text-xl"><EmptyValue /></b></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Külső készlet</p><b className="mt-1 block text-xl"><EmptyValue /></b></div></div>
+                  <div className="my-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Belső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.internalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Külső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.externalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b>{selected?.externalSyncStatus && <p className="mt-1 text-[11px] font-black text-slate-400">{selected.externalSyncStatus}</p>}</div></div>
                   <div className="space-y-3 border-t border-slate-100 pt-4"><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">SKU</span><b className="text-right">{detail?.variants[0]?.sku || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Egység</span><b>{detail?.variants[0]?.unit || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Elsődleges azonosító</span><b className="max-w-[220px] truncate text-right">{detail?.identifiers.find((item) => item.primary)?.value || detail?.identifiers[0]?.value || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Státusz</span><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass((detail?.status || selected!.status))}`}>{statusLabel(detail?.status || selected!.status)}</span></div></div>
-                  <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Boxes size={18} className="text-teal-700" /><b>Készletmotor</b></div><p className="mt-2 text-sm font-semibold text-slate-500">A belső és külső készlet összesítője a következő Commerce blokkban kapcsolódik ide.</p></div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Boxes size={18} className="text-teal-700" /><b>Kereskedelmi összesítő</b></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-500">Aktív ár</span><b>{selected ? formatPrice(selected) || <EmptyValue /> : <EmptyValue />}</b></div></div>
                 </div>
               ) : (
                 <div className="flex min-h-64 flex-col items-center justify-center text-center"><Package className="text-slate-300" size={38} /><b className="mt-3">Válasszon egy terméket</b><p className="mt-1 max-w-xs text-sm font-semibold text-slate-500">A termék részletei és a készletinformációk itt jelennek meg.</p></div>

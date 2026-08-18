@@ -1,4 +1,5 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import { addDecimal, normalizeDecimal } from "../core/decimal";
 import { createCommerceAdminClient } from "../core/server-db";
 import { hasCommercePermission } from "../core/permissions";
 import type { CommerceContext } from "../core/types";
@@ -20,6 +21,18 @@ export type CommerceProductRecord = {
   status: ProductStatus;
   createdAt: string;
   updatedAt: string;
+};
+
+
+export type CommerceProductListItem = CommerceProductRecord & {
+  defaultVariantId: string | null;
+  sku: string | null;
+  unit: UnitOfMeasure | null;
+  priceMinor: string | null;
+  currency: string | null;
+  internalAvailableQuantity: string;
+  externalAvailableQuantity: string;
+  externalSyncStatus: string | null;
 };
 
 export type CommerceVariantRecord = {
@@ -135,13 +148,102 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     .is("archived_at", null)
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
-  const search = text(input.query);
-  if (search) query = query.or(`name.ilike.%${search.replace(/[%_,]/g, "")}%,type_model.ilike.%${search.replace(/[%_,]/g, "")}%`);
+  const search = text(input.query).replace(/[%_,().]/g, "");
+  if (search) query = query.or(`name.ilike.%${search}%,type_model.ilike.%${search}%`);
   const requestedStatus = text(input.status).toUpperCase();
   if (requestedStatus && STATUS_VALUES.has(requestedStatus as ProductStatus)) query = query.eq("status", requestedStatus);
   const result = await query;
   if (result.error) dbError("A terméklista lekérése sikertelen.", result.error);
-  return { items: ((result.data || []) as Row[]).map(mapProduct), total: result.count ?? 0, limit, offset };
+  const products = ((result.data || []) as Row[]).map(mapProduct);
+  if (!products.length) return { items: [] as CommerceProductListItem[], total: result.count ?? 0, limit, offset };
+
+  const productIds = products.map((product) => product.id);
+  const variantsResult = await client.from("commerce_product_variants")
+    .select("id,organization_id,product_id,name,sku,unit,attributes,status,created_at,updated_at")
+    .eq("organization_id", context.organizationId)
+    .in("product_id", productIds)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true });
+  if (variantsResult.error) dbError("A terméklista változatai nem tölthetők be.", variantsResult.error);
+  const variants = ((variantsResult.data || []) as Row[]).map(mapVariant);
+  const variantIds = variants.map((variant) => variant.id);
+  if (!variantIds.length) {
+    return {
+      items: products.map((product) => ({ ...product, defaultVariantId:null, sku:null, unit:null, priceMinor:null, currency:null, internalAvailableQuantity:"0", externalAvailableQuantity:"0", externalSyncStatus:null })),
+      total: result.count ?? 0, limit, offset,
+    };
+  }
+
+  const [pricesResult, balancesResult, externalResult] = await Promise.all([
+    client.from("commerce_prices")
+      .select("variant_id,currency,amount_minor,valid_from,valid_until,status,created_at")
+      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("status", "ACTIVE").is("archived_at", null).order("created_at", { ascending:false }),
+    client.from("commerce_inventory_balances")
+      .select("variant_id,available_quantity")
+      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("stock_status", "SELLABLE").is("archived_at", null),
+    client.from("commerce_external_inventory_snapshots")
+      .select("variant_id,quantity,sync_status,last_sync_at")
+      .eq("organization_id", context.organizationId).in("variant_id", variantIds),
+  ]);
+  if (pricesResult.error) dbError("A termékárak összesítése sikertelen.", pricesResult.error);
+  if (balancesResult.error) dbError("A belső készlet összesítése sikertelen.", balancesResult.error);
+  if (externalResult.error) dbError("A külső készlet összesítése sikertelen.", externalResult.error);
+
+  const variantsByProduct = new Map<string, CommerceVariantRecord[]>();
+  for (const variant of variants) variantsByProduct.set(variant.productId, [...(variantsByProduct.get(variant.productId) || []), variant]);
+  const productByVariant = new Map(variants.map((variant) => [variant.id, variant.productId]));
+  const internalByProduct = new Map<string, string>();
+  for (const row of (balancesResult.data || []) as Row[]) {
+    const productId = productByVariant.get(text(row.variant_id));
+    if (!productId) continue;
+    const quantity = normalizeDecimal(String(row.available_quantity ?? "0"));
+    internalByProduct.set(productId, addDecimal(internalByProduct.get(productId) || "0", quantity));
+  }
+  const externalByProduct = new Map<string, string>();
+  const externalStatusByProduct = new Map<string, string>();
+  const syncRank: Record<string, number> = { LIVE:1, FRESH:2, STALE:3, ERROR:4, OFFLINE:5 };
+  for (const row of (externalResult.data || []) as Row[]) {
+    const productId = productByVariant.get(text(row.variant_id));
+    if (!productId) continue;
+    const quantity = normalizeDecimal(String(row.quantity ?? "0"));
+    externalByProduct.set(productId, addDecimal(externalByProduct.get(productId) || "0", quantity));
+    const status = text(row.sync_status).toUpperCase();
+    const previous = externalStatusByProduct.get(productId);
+    if (!previous || (syncRank[status] || 99) > (syncRank[previous] || 99)) externalStatusByProduct.set(productId, status);
+  }
+  const now = Date.now();
+  const pricesByProduct = new Map<string, { priceMinor:string; currency:string }>();
+  for (const row of (pricesResult.data || []) as Row[]) {
+    const productId = productByVariant.get(text(row.variant_id));
+    if (!productId) continue;
+    const from = nullableText(row.valid_from);
+    const until = nullableText(row.valid_until);
+    if (from && Date.parse(from) > now) continue;
+    if (until && Date.parse(until) < now) continue;
+    const currency = text(row.currency) || "HUF";
+    const amountMinor = String(row.amount_minor ?? "0");
+    const current = pricesByProduct.get(productId);
+    if (!current || (currency === "HUF" && current.currency !== "HUF") || (currency === current.currency && Number(amountMinor) < Number(current.priceMinor))) {
+      pricesByProduct.set(productId, { priceMinor:amountMinor, currency });
+    }
+  }
+
+  const items: CommerceProductListItem[] = products.map((product) => {
+    const defaultVariant = variantsByProduct.get(product.id)?.[0] || null;
+    const price = pricesByProduct.get(product.id) || null;
+    return {
+      ...product,
+      defaultVariantId: defaultVariant?.id || null,
+      sku: defaultVariant?.sku || null,
+      unit: defaultVariant?.unit || null,
+      priceMinor: price?.priceMinor || null,
+      currency: price?.currency || null,
+      internalAvailableQuantity: internalByProduct.get(product.id) || "0",
+      externalAvailableQuantity: externalByProduct.get(product.id) || "0",
+      externalSyncStatus: externalStatusByProduct.get(product.id) || null,
+    };
+  });
+  return { items, total: result.count ?? 0, limit, offset };
 }
 
 export async function getCommerceProduct(context: CommerceContext, productIdInput: unknown): Promise<CommerceProductDetail> {
