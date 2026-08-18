@@ -3,13 +3,14 @@ import { getFieldCaptureFeatureState } from "@/app/lib/field-capture/featureFlag
 import { getFieldCaptureServerSchemaReadiness } from "@/app/lib/field-capture/serverRepository";
 import { getFieldCaptureDropUploadReadiness } from "@/app/lib/field-capture/dropUploadAdapter";
 import { getFieldCaptureUserDriveReadiness } from "@/app/lib/field-capture/userDriveService";
+import { getFieldCaptureStagingReadiness } from "@/app/lib/field-capture/stagingPackageService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
   const feature = getFieldCaptureFeatureState();
-  const [schema, upload, userDrive] = await Promise.all([
+  const [schema, upload, userDrive, staging] = await Promise.all([
     getFieldCaptureServerSchemaReadiness().catch(() => ({
       ready: false,
       markerReady: false,
@@ -38,6 +39,14 @@ export async function GET() {
       independentRetention: true,
       requiresCleanDropObject: true,
     })),
+    getFieldCaptureStagingReadiness().catch(() => ({
+      ready: false,
+      markerReady: false,
+      tableReady: false,
+      retentionDays: 7,
+      rawCapabilitiesPersisted: false,
+      publicDeliveryWorkflow: false,
+    })),
   ]);
   return NextResponse.json({
     ...feature,
@@ -51,7 +60,11 @@ export async function GET() {
       serverCaptureSchema: schema.ready,
       serverUploadBinding: schema.ready && upload.ready,
       serverUploadAdapter: upload.ready,
-      serverUploadPackageBinding: "EXISTING_ENTITLEMENT_PACKAGE",
+      serverUploadPackageBinding: "SEND_OR_FIELD_CAPTURE_STAGING",
+      stagingPackageBinding: schema.ready && staging.ready,
+      stagingRetentionDays: staging.retentionDays,
+      stagingPublicDeliveryWorkflow: false,
+      stagingRawCapabilitiesPersisted: false,
       serverUploadRawTokenPersistence: false,
       gpsAdapter: true,
       orientationAdapter: true,
@@ -68,5 +81,6 @@ export async function GET() {
     serverSchema: schema,
     serverUpload: upload,
     userDrive,
+    staging,
   }, { status: feature.enabled ? 200 : 503 });
 }

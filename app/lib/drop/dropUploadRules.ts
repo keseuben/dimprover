@@ -3,6 +3,8 @@ export const DROP_UPLOAD_RULES_EFFECTIVE_DATE = "2026-08-02";
 export const DROP_UPLOAD_RULES_MAX_FILE_BYTES = 500 * 1024 * 1024;
 export const DROP_UPLOAD_RULES_CHUNK_BYTES = 64 * 1024 * 1024;
 export const DROP_UPLOAD_RULES_RESUME_HOURS = 24;
+export const DROP_UPLOAD_RULES_ACCEPTANCE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+export const DROP_UPLOAD_RULES_ACCEPTANCE_FUTURE_SKEW_MS = 5 * 60 * 1000;
 
 export const DROP_UPLOAD_ALLOWED_GROUPS = [
   "Dokumentumok: PDF, DOC/DOCX, XLS/XLSX/XLSM, CSV, TXT, RTF, ODT/ODS és PPT/PPTX.",
@@ -34,6 +36,19 @@ function rulesError(message: string, code: string) {
   return error;
 }
 
+export function isDropUploadRulesAcceptanceFresh(input: {
+  version?: string | null;
+  acceptedAt?: string | null;
+  nowMs?: number;
+}) {
+  if ((input.version || "").trim() !== DROP_UPLOAD_RULES_VERSION) return false;
+  const acceptedTime = new Date(input.acceptedAt || "").getTime();
+  const now = input.nowMs ?? Date.now();
+  return Number.isFinite(acceptedTime)
+    && acceptedTime <= now + DROP_UPLOAD_RULES_ACCEPTANCE_FUTURE_SKEW_MS
+    && acceptedTime >= now - DROP_UPLOAD_RULES_ACCEPTANCE_MAX_AGE_MS;
+}
+
 export function validateDropUploadRulesAcceptance(input: unknown): DropUploadRulesAcceptance {
   const value = input as Record<string, unknown> | null;
   const accepted = value?.rulesAccepted === true;
@@ -45,10 +60,8 @@ export function validateDropUploadRulesAcceptance(input: unknown): DropUploadRul
   if (version !== DROP_UPLOAD_RULES_VERSION) {
     throw rulesError("A feltöltési szabályzat verziója elavult. Frissítsd az oldalt és fogadd el az aktuális szabályokat.", "DROP_UPLOAD_RULES_VERSION_MISMATCH");
   }
-  const acceptedTime = new Date(acceptedAt).getTime();
-  const now = Date.now();
-  if (!Number.isFinite(acceptedTime) || acceptedTime > now + 5 * 60_000 || acceptedTime < now - 48 * 60 * 60_000) {
+  if (!isDropUploadRulesAcceptanceFresh({ version, acceptedAt })) {
     throw rulesError("A feltöltési szabályzat elfogadási időpontja érvénytelen vagy lejárt.", "DROP_UPLOAD_RULES_ACCEPTANCE_EXPIRED");
   }
-  return { version: DROP_UPLOAD_RULES_VERSION, acceptedAt: new Date(acceptedTime).toISOString() };
+  return { version: DROP_UPLOAD_RULES_VERSION, acceptedAt: new Date(acceptedAt).toISOString() };
 }

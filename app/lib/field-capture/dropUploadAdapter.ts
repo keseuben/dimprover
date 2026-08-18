@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/drop/storage/dropUploadService";
 import { DROP_UPLOAD_RULES_VERSION } from "@/app/lib/drop/dropUploadRules";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
+import { assertFieldCaptureStagingPackageBinding } from "./stagingPackageService";
 import {
   getFieldCaptureDropUploadBinding,
   getFieldCaptureItemUploadContext,
@@ -64,24 +65,6 @@ async function assertPackageBinding(input: {
         409,
       );
     }
-    if (
-      !workflow
-      || workflow.workflowType !== "send"
-      || workflow.dimproSendEntitlementId !== input.entitlementId
-    ) {
-      throw new DimproIdentityError(
-        "A Drop csomag nem ehhez a DIMPRO Send jogosultsághoz tartozik.",
-        "FIELD_CAPTURE_DROP_PACKAGE_ENTITLEMENT_MISMATCH",
-        403,
-      );
-    }
-    if (workflow.finalizedAt) {
-      throw new DimproIdentityError(
-        "A Drop csomag már véglegesítve lett.",
-        "FIELD_CAPTURE_DROP_PACKAGE_FINALIZED",
-        409,
-      );
-    }
     if (packageRow.mode !== "image" && packageRow.mode !== "mixed") {
       throw new DimproIdentityError(
         "A Drop csomag nem fogad terepi képassetet.",
@@ -89,23 +72,54 @@ async function assertPackageBinding(input: {
         409,
       );
     }
-    if (input.session.projectId) {
-      const dimproProjectId = await getFieldCaptureProjectDimproId(input.session.projectId);
-      if (workflow.dimproProjectId !== dimproProjectId) {
+
+    if (workflow?.workflowType === "send") {
+      if (workflow.dimproSendEntitlementId !== input.entitlementId) {
         throw new DimproIdentityError(
-          "A Drop csomag másik projekthez tartozik.",
-          "FIELD_CAPTURE_DROP_PACKAGE_PROJECT_MISMATCH",
+          "A Drop csomag nem ehhez a DIMPRO Send jogosultsághoz tartozik.",
+          "FIELD_CAPTURE_DROP_PACKAGE_ENTITLEMENT_MISMATCH",
           403,
         );
       }
-    } else if (workflow.dimproProjectId) {
+      if (workflow.finalizedAt) {
+        throw new DimproIdentityError(
+          "A Drop csomag már véglegesítve lett.",
+          "FIELD_CAPTURE_DROP_PACKAGE_FINALIZED",
+          409,
+        );
+      }
+      if (input.session.projectId) {
+        const dimproProjectId = await getFieldCaptureProjectDimproId(input.session.projectId);
+        if (workflow.dimproProjectId !== dimproProjectId) {
+          throw new DimproIdentityError(
+            "A Drop csomag másik projekthez tartozik.",
+            "FIELD_CAPTURE_DROP_PACKAGE_PROJECT_MISMATCH",
+            403,
+          );
+        }
+      } else if (workflow.dimproProjectId) {
+        throw new DimproIdentityError(
+          "A projekt nélküli terepi munkamenet nem köthető projektcsomaghoz.",
+          "FIELD_CAPTURE_DROP_PACKAGE_PROJECT_CONTEXT_REQUIRED",
+          409,
+        );
+      }
+      return { packageRow, bindingMode: "SEND_WORKFLOW" as const };
+    }
+
+    const staging = await assertFieldCaptureStagingPackageBinding({
+      session: input.session,
+      packageId: input.packageId,
+      entitlementId: input.entitlementId,
+    });
+    if (!staging) {
       throw new DimproIdentityError(
-        "A projekt nélküli terepi munkamenet nem köthető projektcsomaghoz.",
-        "FIELD_CAPTURE_DROP_PACKAGE_PROJECT_CONTEXT_REQUIRED",
-        409,
+        "A Drop csomag nem ehhez a DIMPRO Send vagy Terep staging kontextushoz tartozik.",
+        "FIELD_CAPTURE_DROP_PACKAGE_ENTITLEMENT_MISMATCH",
+        403,
       );
     }
-    return { packageRow, workflow };
+    return { packageRow, bindingMode: "FIELD_CAPTURE_STAGING" as const };
   } catch (error) {
     identityError(error);
   }
