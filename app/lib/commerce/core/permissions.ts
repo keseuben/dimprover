@@ -10,6 +10,9 @@ const ALL_PERMISSIONS: CommercePermission[] = [
   "commerce.inventory.read",
   "commerce.inventory.move",
   "commerce.inventory.adjust",
+  "commerce.receiving.read",
+  "commerce.receiving.write",
+  "commerce.receiving.post",
 ];
 
 const MANAGER_PERMISSIONS: CommercePermission[] = ALL_PERMISSIONS.filter(
@@ -21,6 +24,7 @@ const USER_PERMISSIONS: CommercePermission[] = [
   "commerce.product.read",
   "commerce.media.read",
   "commerce.inventory.read",
+  "commerce.receiving.read",
 ];
 
 const GUEST_PERMISSIONS: CommercePermission[] = [

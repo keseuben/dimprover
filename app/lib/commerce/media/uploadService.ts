@@ -44,9 +44,12 @@ function requireWrite(context: CommerceContext) {
   }
 }
 
-async function verifyMediaTarget(context: CommerceContext, targetType: "PRODUCT" | "PRODUCT_VARIANT", targetId: string) {
+async function verifyMediaTarget(context: CommerceContext, targetType: "PRODUCT" | "PRODUCT_VARIANT" | "GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM", targetId: string) {
   const client = createCommerceAdminClient();
-  const table = targetType === "PRODUCT" ? "commerce_products" : "commerce_product_variants";
+  const table = targetType === "PRODUCT" ? "commerce_products"
+    : targetType === "PRODUCT_VARIANT" ? "commerce_product_variants"
+      : targetType === "GOODS_RECEIPT" ? "commerce_goods_receipts"
+        : "commerce_goods_receipt_items";
   const result = await client.from(table).select("id").eq("organization_id", context.organizationId).eq("id", targetId).is("archived_at", null).maybeSingle();
   if (result.error) dbError("A média célobjektuma nem ellenőrizhető.", result.error);
   if (!result.data) throw new CommerceMediaUploadError("A média célobjektuma nem található ebben a szervezetben.", "COMMERCE_MEDIA_TARGET_SCOPE_MISMATCH", 404);
@@ -77,9 +80,13 @@ export async function initiateCommerceMediaUpload(context: CommerceContext, inpu
   let config;
   try { config = getCommerceMediaStorageConfig(); } catch (error) { mapConfigError(error); }
   const targetTypeRaw = text(input.targetType).toUpperCase();
-  const targetType = targetTypeRaw === "PRODUCT_VARIANT" ? "PRODUCT_VARIANT" : targetTypeRaw === "PRODUCT" ? "PRODUCT" : null;
+  const targetType = targetTypeRaw === "PRODUCT_VARIANT" ? "PRODUCT_VARIANT"
+    : targetTypeRaw === "PRODUCT" ? "PRODUCT"
+      : targetTypeRaw === "GOODS_RECEIPT" ? "GOODS_RECEIPT"
+        : targetTypeRaw === "GOODS_RECEIPT_ITEM" ? "GOODS_RECEIPT_ITEM"
+          : null;
   const targetId = text(input.targetId);
-  if (!targetType || !targetId) throw new CommerceMediaUploadError("A média célterméke kötelező.", "COMMERCE_MEDIA_TARGET_REQUIRED", 400);
+  if (!targetType || !targetId) throw new CommerceMediaUploadError("A média célobjektuma kötelező.", "COMMERCE_MEDIA_TARGET_REQUIRED", 400);
   await verifyMediaTarget(context, targetType, targetId);
   const visibilityRaw = text(input.visibility).toUpperCase();
   const visibility: MediaVisibility = visibilityRaw === "PUBLIC" ? "PUBLIC" : "INTERNAL_ONLY";

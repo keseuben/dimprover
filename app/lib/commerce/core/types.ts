@@ -10,7 +10,10 @@ export type CommercePermission =
   | "commerce.media.write"
   | "commerce.inventory.read"
   | "commerce.inventory.move"
-  | "commerce.inventory.adjust";
+  | "commerce.inventory.adjust"
+  | "commerce.receiving.read"
+  | "commerce.receiving.write"
+  | "commerce.receiving.post";
 
 export type CommerceContext = {
   userId: CommerceEntityId;

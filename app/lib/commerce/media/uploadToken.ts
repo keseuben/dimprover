@@ -16,7 +16,7 @@ export type CommerceMediaUploadTicket = {
   organizationId: string;
   userId: string;
   assetId: string;
-  targetType: "PRODUCT" | "PRODUCT_VARIANT";
+  targetType: "PRODUCT" | "PRODUCT_VARIANT" | "GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM";
   targetId: string;
   visibility: MediaVisibility;
   retainOriginal: boolean;

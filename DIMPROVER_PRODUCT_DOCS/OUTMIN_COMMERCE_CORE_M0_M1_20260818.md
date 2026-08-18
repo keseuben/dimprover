@@ -593,3 +593,37 @@ Tesztkapu:
 Megjegyzés:
 - a korábbi `768fb36` Media Management build első coordinated futása sikeresen lefutott; egy korábban sorba állt azonos második build később feleslegesen újraindult és hibával zárult, ezért a második futás eredménye nem release-jelölt. A forráskód tiszta checkpointból folytatódott.
 - shared DEV runtime cutover és PM2 restart továbbra sem történt; PROD változatlan.
+
+### 2026-08-18 22:48 checkpoint — Receiving M1 staged, DEV apply előtt
+
+Elkészült kódszinten:
+- GoodsReceipt fej + GoodsReceiptItem tétel domain;
+- DRAFT / POSTED / CANCELLED státuszmodell;
+- szervezet + raktár + belső készletforrás scope ellenőrzés;
+- beszállítói név és bizonylatszám snapshot mezők;
+- tételenként variant, készletállapot, mennyiség, egység, opcionális egységköltség, pénznem, LOT-kód és lejárat;
+- bevételezés létrehozás/lista/részlet/módosítás/visszavonás API;
+- tétel létrehozás/módosítás/soft-delete API;
+- idempotens `commerce_goods_receipt_post` RPC;
+- könyveléskor a készlet kizárólag az immutable `commerce_inventory_apply_movement` ledgeren keresztül nő;
+- SELLABLE / QUARANTINE / DAMAGED / OUTLET bevételezési állapotok;
+- post audit + outbox;
+- külön receiving read/write/post permission;
+- Commerce Media Engine célobjektumai bővítve GOODS_RECEIPT és GOODS_RECEIPT_ITEM típussal, így a bevételezéshez és tételhez később ugyanazzal a képmotorral csatolható fotó.
+
+Tesztkapu a DEV apply előtt:
+- Receiving contract: 26/26 PASS;
+- DB transaction + rollback acceptance: 15/15 PASS;
+- Media upload regression: 18/18 PASS;
+- Media management regression: 20/20 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- migration preflight: PASS;
+- migration SHA-256: `f998ef4487fa3cead26bcb8e54d6599bbb17b1c421cf750c3a2830da7da1e94b`.
+
+Állapot:
+- a Receiving 0.1.5 migráció ebben a checkpointban még NINCS alkalmazva;
+- a központi coordinated build lockot tiszteletben tartjuk; alkalmazás csak szabad locknál történhet;
+- PROD változatlan.

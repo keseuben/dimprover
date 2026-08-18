@@ -21,3 +21,5 @@ export * from "./media/repository";
 
 export * from "./catalog/repository";
 export * from "./pricing/repository";
+export * from "./receiving/types";
+export * from "./receiving/repository";
