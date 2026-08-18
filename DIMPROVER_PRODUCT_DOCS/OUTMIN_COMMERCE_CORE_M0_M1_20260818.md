@@ -817,3 +817,35 @@ Tesztkapu a DEV apply előtt:
 - becsült aktív idő: Order DEV apply/runtime 1–2 óra; Reservation bridge 4–7 óra; cashier UI kontrollált bekötés 3–5 óra.
 
 PROD változatlan; shared DEV runtime cutover nem történt.
+
+### 2026-08-18 23:49 checkpoint — Order Core 0.1.6 DEV aktív
+
+A staged Shared Order Core migráció coordinated DEV művelettel sikeresen alkalmazva.
+
+DEV migráció:
+- Commerce schema: `0.1.6`, migration count: 7;
+- migration SHA-256: `dcb720b6e7842bd19cd8ecff09becb648feea34159a45122745b7298f2dce1e1`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-order-core-m1/20260818T214758Z/supabase-dev-pre-commerce-order-core-m1.dump`;
+- backup SHA-256: `f95e6b114d3bf9a8271f16769539bb630a7f05031bcab7029bf9e77a30c5a60b`;
+- schema/security verify: PASS;
+- authenticated create/status RPC: DENY; service-role create/status RPC: ALLOW.
+
+Valós DEV Order runtime E2E:
+- 14/14 PASS;
+- külső piactéri rendelés `SENT_TO_CASHIER` állapotban létrejön;
+- azonos create payload replay idempotens;
+- ugyanaz a kulcs eltérő teljes payload esetén elutasítva;
+- központi cashier queue látja a külső rendelést;
+- nem map-elt legacy tételsnapshotok `UNRESOLVED` állapotban is olvashatók;
+- cashier `PAID` + CARD + pénztáros rögzítés: PASS;
+- PAID replay idempotens;
+- PAID rendelés a cashier queue-ban marad;
+- `ISSUED` + kiadó rögzítés: PASS;
+- ISSUED rendelés kikerül az aktív cashier queue-ból;
+- append-only status ledger SENT_TO_CASHIER → PAID → ISSUED: PASS;
+- audit + outbox: PASS;
+- runtime cleanup: PASS.
+
+Legacy Árutér cashier regresszió továbbra is kötelező; a meglévő store/UI nincs lecserélve. Következő blokk: resolved Commerce variantok Order ↔ Inventory Reservation kapcsolata. M1 szabály: PAID állapotban a foglalás megmarad, fizikai készlet csak ISSUED esetén fogy; CANCELLED esetén a foglalás felszabadul. A legacy `UNRESOLVED` tétel láthatóságát ez nem blokkolhatja.
+
+PROD változatlan; shared DEV runtime cutover nem történt.
