@@ -67,7 +67,9 @@ type CommerceMediaInitiateResponse = {
   error?: string;
 };
 
-export async function uploadCommerceProductImage(productId: string, file: File) {
+export type CommerceMediaUploadTargetType = "PRODUCT" | "PRODUCT_VARIANT" | "GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM";
+
+export async function uploadCommerceTargetImage(targetType: CommerceMediaUploadTargetType, targetId: string, file: File) {
   const prepared = await prepareCommerceProductImages([file]);
   const image = prepared[0];
   if (!image?.web.width || !image.web.height || !image.thumbnail.width || !image.thumbnail.height) {
@@ -79,8 +81,8 @@ export async function uploadCommerceProductImage(productId: string, file: File) 
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        targetType: "PRODUCT",
-        targetId: productId,
+        targetType,
+        targetId,
         visibility: "PUBLIC",
         retainOriginal: false,
         variants: [
@@ -118,4 +120,8 @@ export async function uploadCommerceProductImage(productId: string, file: File) 
   } finally {
     revokeCommercePreparedImage(image);
   }
+}
+
+export async function uploadCommerceProductImage(productId: string, file: File) {
+  return uploadCommerceTargetImage("PRODUCT", productId, file);
 }

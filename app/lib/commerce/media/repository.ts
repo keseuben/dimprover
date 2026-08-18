@@ -38,6 +38,44 @@ function requireMediaWrite(context: CommerceContext) {
   if (!hasCommercePermission(context.permissions,"commerce.media.write")) throw new CommerceMediaUploadError("Nincs médiamódosítási jogosultság.","COMMERCE_PERMISSION_DENIED",403);
 }
 
+
+export type CommerceMediaLinkTargetType = "PRODUCT" | "PRODUCT_VARIANT" | "GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM";
+const LINK_TARGET_TABLES: Record<CommerceMediaLinkTargetType,string> = {
+  PRODUCT:"commerce_products", PRODUCT_VARIANT:"commerce_product_variants",
+  GOODS_RECEIPT:"commerce_goods_receipts", GOODS_RECEIPT_ITEM:"commerce_goods_receipt_items",
+};
+
+export async function listCommerceLinkedMedia(context: CommerceContext, linkTypeInput: unknown, entityIdInput: unknown) {
+  if (!hasCommercePermission(context.permissions,"commerce.media.read")) throw new CommerceMediaUploadError("Nincs médiaolvasási jogosultság.","COMMERCE_PERMISSION_DENIED",403);
+  const linkType=text(linkTypeInput).toUpperCase() as CommerceMediaLinkTargetType;
+  const entityId=text(entityIdInput);
+  if(!entityId||!LINK_TARGET_TABLES[linkType]) throw new CommerceMediaUploadError("Érvényes média célobjektum szükséges.","COMMERCE_MEDIA_TARGET_REQUIRED",400);
+  const client=createCommerceAdminClient();
+  const target=await client.from(LINK_TARGET_TABLES[linkType]).select("id").eq("organization_id",context.organizationId).eq("id",entityId).is("archived_at",null).maybeSingle();
+  if(target.error) dbError("A média célobjektuma nem ellenőrizhető.",target.error);
+  if(!target.data) throw new CommerceMediaUploadError("A média célobjektuma nem található ebben a szervezetben.","COMMERCE_MEDIA_TARGET_SCOPE_MISMATCH",404);
+  const links=await client.from("commerce_media_links")
+    .select("id,asset_id,sort_order,is_primary,created_at")
+    .eq("organization_id",context.organizationId).eq("link_type",linkType).eq("linked_entity_id",entityId).is("archived_at",null)
+    .order("sort_order",{ascending:true}).order("created_at",{ascending:true});
+  if(links.error) dbError("A kapcsolt média nem olvasható.",links.error);
+  const assetIds=(links.data||[]).map((row)=>text((row as Row).asset_id)).filter(Boolean);
+  if(!assetIds.length) return [];
+  const [assets,overlays]=await Promise.all([
+    client.from("commerce_media_assets").select("id,mime_type,width,height,size_bytes,visibility,processing_status,created_at").eq("organization_id",context.organizationId).in("id",assetIds).is("archived_at",null),
+    client.from("commerce_media_overlays").select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").eq("organization_id",context.organizationId).in("asset_id",assetIds).is("archived_at",null).order("sort_order",{ascending:true}),
+  ]);
+  if(assets.error) dbError("A média assetek nem olvashatók.",assets.error);
+  if(overlays.error) dbError("A média overlay-k nem olvashatók.",overlays.error);
+  const assetMap=new Map((assets.data||[]).map((row)=>[text((row as Row).id),row as Row]));
+  const overlaysByAsset=new Map<string,Row[]>();
+  for(const row of (overlays.data||[]) as Row[]){const id=text(row.asset_id);const list=overlaysByAsset.get(id)||[];list.push(row);overlaysByAsset.set(id,list);}
+  return ((links.data||[]) as Row[]).map((link)=>{
+    const assetId=text(link.asset_id),asset=assetMap.get(assetId)||{};
+    return {linkId:text(link.id),assetId,sortOrder:Number(link.sort_order||0),primary:Boolean(link.is_primary),mimeType:text(asset.mime_type),width:Number(asset.width||0)||null,height:Number(asset.height||0)||null,sizeBytes:Number(asset.size_bytes||0),visibility:text(asset.visibility),processingStatus:text(asset.processing_status),createdAt:text(asset.created_at),contentUrl:`/api/v1/commerce/media/assets/${assetId}/content?kind=WEB`,thumbnailUrl:`/api/v1/commerce/media/assets/${assetId}/content?kind=THUMBNAIL`,overlays:(overlaysByAsset.get(assetId)||[]).map((row)=>({id:text(row.id),type:text(row.overlay_type),payload:row.payload&&typeof row.payload==="object"&&!Array.isArray(row.payload)?row.payload:{},sortOrder:Number(row.sort_order||0),active:Boolean(row.active)}))};
+  });
+}
+
 export async function listCommerceProductMedia(context: CommerceContext, productIdInput: unknown) {
   if (!hasCommercePermission(context.permissions,"commerce.media.read")) throw new CommerceMediaUploadError("Nincs médiaolvasási jogosultság.","COMMERCE_PERMISSION_DENIED",403);
   const productId=text(productIdInput);

@@ -736,3 +736,36 @@ Runtime teszt közben javított ellenőrzés:
 - becsült aktív fejlesztési idő: Receiving média UI 1.5–3 óra; Order/Checkout bridge 6–10 óra; expiry worker + pilot E2E 3–6 óra.
 
 PROD változatlan, PROD alkalmazásmódosítás nem történt.
+
+### 2026-08-18 23:14 checkpoint — Receiving Media UI + runtime
+
+Elkészült:
+- a közös Commerce képfeltöltő kliens általánosítva PRODUCT / PRODUCT_VARIANT / GOODS_RECEIPT / GOODS_RECEIPT_ITEM célokra;
+- új tenant-scoped generikus linked-media lista repository + `GET /api/v1/commerce/media/links`;
+- új `CommerceReceivingMediaAttachments` komponens;
+- teljes bevételezési bizonylathoz több fotó csatolható;
+- egyedi GoodsReceiptItem tételhez is több fotó csatolható;
+- többes fájlválasztás, HEIC/HEIF input és közös WEB + THUMBNAIL optimalizáló marad;
+- thumbnail előnézet és megnyitás;
+- aktív non-destructive overlay jelenléte „jelölt” badge-dzsel látható;
+- az eredeti nagy fájl továbbra sem marad meg alapértelmezetten.
+
+Tesztkapu:
+- Receiving Media UI contract: 16/16 PASS;
+- valós DEV Receiving Media object-store/runtime E2E: 12/12 PASS;
+- receipt-header és receipt-item upload ticket: PASS;
+- WEB + THUMBNAIL objektumtárhely: PASS;
+- DB media link scope: PASS;
+- generic linked-media list: PASS;
+- signed thumbnail GET: PASS;
+- original retention policy: PASS;
+- runtime cleanup: PASS;
+- Media upload regression: 18/18 PASS;
+- Receiving UI regression: 16/16 PASS;
+- Receiving backend regression: PASS;
+- legacy Árutér → központi pénztár regresszió: PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+Megjegyzés: a 23:07-kor indult korábbi Receiving candidate build a `4e2f28b` forráspontról futott. Mivel ezután új Receiving Media forrásmódosítás készült ugyanabban a worktree-ben, az a build nem tekinthető a jelen checkpoint release-candidate buildjének. A jelen commit után külön tiszta coordinated candidate build szükséges. PROD változatlan.
