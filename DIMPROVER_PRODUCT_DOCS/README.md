@@ -230,3 +230,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `279_benjadmin_outmin_cross_worktree_presence_dev_activation_20260818.md` – OutminAI cross-worktree felismerés és Common Chat láthatóság DEV aktiválás: Árutér/Commerce context, 35/35 Worker Presence, 33/33 Common Chat, 30/30 browser, desktop+mobil PASS.
 
 - `280_dimpro_terep_p8_user_drive_content_core_20260818.md` – Terepi Gyorsrögzítő P8 Saját DIMPRO Drive / Content Core V0.1: USER ownership, clean/clean Drop→Drive SHA-256 stream-copy, független retention és valós DEV E2E; klienskapcsoló még fail-closed.
+
+- `281_benjadmin_weekly_development_flow_v1_dev_activation_20260819.md` – Weekly Development Flow V1 DEV aktiválás: scheduler-run/handoff/wait/failure + 6/x analitika; selector-safe `b86f3a1`, 28/28 live Flow, 35/35 Weekly V1.1, 30/30 Common Chat, 30/30 Scheduler runtime, exact build és PROD DENY.
