@@ -196,7 +196,7 @@ try {
       text: flow?.textContent || "",
       schedulerReady: flow?.getAttribute("data-scheduler-ready"),
       kinds: [...(flow?.querySelectorAll("[data-flow-kind]") || [])].map((node) => node.getAttribute("data-flow-kind")),
-      activeStages: [...(flow?.querySelectorAll('[data-testid="benjadmin-weekly-flow-stage"] [data-active="true"]') || [])].map((node) => node.getAttribute("data-stage")),
+      activeStages: [...(flow?.querySelectorAll('[data-testid="benjadmin-weekly-flow-stage"] [data-active="true"]') || [])].map((node) => node.getAttribute("data-flow-stage")),
       blockers: [...(flow?.querySelectorAll("[data-blocker-kind]") || [])].map((node) => node.getAttribute("data-blocker-kind")),
       hasTransition: Boolean(flow?.querySelector('[data-testid="benjadmin-weekly-flow-transitions"]')),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,

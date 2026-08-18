@@ -28,4 +28,5 @@ check("Flow UI renders blocker reasons only when present",()=>assert.ok(panel.in
 check("Flow CSS is compact and responsive",()=>assert.ok(css.includes(".weeklyFlowMetrics")&&css.includes(".weeklyFlowStages")&&css.includes(".weeklyFlowBlockers")&&css.includes("@media (max-width: 700px)")));
 check("Flow keeps PROD denied through weekly summary",()=>assert.ok(backend.includes('productionAccess: "DENY"')&&panel.includes("PROD DENY")));
 check("Flow adds no migration or new table",()=>assert.ok(!backend.includes("weekly_flow")&&!backend.includes("weekly_analytics")&&!panel.includes("migration")));
+check("Flow stage badges avoid V1.1 filter selector collision",()=>assert.ok(panel.includes("data-flow-stage={stage}")&&!panel.includes("<b key={stage} data-stage={stage}")));
 console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN Weekly Development Flow V1"},null,2));

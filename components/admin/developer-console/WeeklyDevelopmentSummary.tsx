@@ -187,7 +187,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         </div>
         <div className={styles.weeklyFlowStages} data-testid="benjadmin-weekly-flow-stage">
           <span>6/x lefedettség</span>
-          {[1, 2, 3, 4, 5, 6].map((stage) => <b key={stage} data-stage={stage} data-active={Number(summary.flowAnalytics.stageCounts[String(stage)] || 0) > 0 ? "true" : "false"}>6/{stage}<small>{summary.flowAnalytics.stageCounts[String(stage)] || 0}</small></b>)}
+          {[1, 2, 3, 4, 5, 6].map((stage) => <b key={stage} data-flow-stage={stage} data-active={Number(summary.flowAnalytics.stageCounts[String(stage)] || 0) > 0 ? "true" : "false"}>6/{stage}<small>{summary.flowAnalytics.stageCounts[String(stage)] || 0}</small></b>)}
         </div>
         {summary.flowAnalytics.transitions.length ? <div className={styles.weeklyFlowTransitions} data-testid="benjadmin-weekly-flow-transitions">
           <span>Átadások</span>
