@@ -381,3 +381,47 @@ Tesztkapu:
 - TypeScript: PASS;
 - lint: PASS;
 - diff-check: PASS.
+
+### 2026-08-18 21:18 checkpoint — Pricing M1 DEV aktív
+
+Elkészült:
+- `commerce_price_set_active` atomi, service-only RPC;
+- egy adott variant + currency esetén az új ár append/history logikával kerül be;
+- korábbi aktív ár automatikusan INACTIVE lesz és `valid_until` értéket kap;
+- árváltás tranzakciós advisory lock alatt fut;
+- közvetlen service-role INSERT/UPDATE/DELETE tiltott a `commerce_prices` táblán;
+- Pricing audit + outbox (`PRICE_SET_ACTIVE`, `PRICE_CHANGED`);
+- tenant-scoped ártörténet GET és aktív ár POST API: `/api/v1/commerce/prices`;
+- Termék inspectorban nettó HUF ár gyorsrögzítés, 27% ÁFA alapbeállítással;
+- korábbi árak az ártörténetben megmaradnak.
+
+DEV migráció:
+- Commerce schema: `0.1.2`, migration count: 3;
+- migration SHA-256: `d37aebfe4929a7c0e6e293c5e149bb5c8c578c9627ff7c1f5bc8adad277c399a`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-pricing-m1/20260818T191635Z/supabase-dev-pre-commerce-pricing-m1.dump`;
+- backup SHA-256: `ffce9b8e0ae9dff086551eafb673e2db6e85923ca20240f917775d1d0e3d6633`;
+- migration/security verify: PASS;
+- PROD változatlan.
+
+Tesztkapu:
+- Pricing contract: 16/16 PASS;
+- Pricing DB rollback acceptance: 10/10 PASS a tényleges apply előtt;
+- Pricing valós DEV runtime E2E: 8/8 PASS;
+- Product catalog/variant UI regresszió: 14/14 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- runtime QA rekordok cleanup után nem maradtak bent.
+
+Aktuális készültségbecslés:
+- M0 Core + DB baseline: kb. 75%;
+- M1 Product + Media + Inventory + Pricing: kb. 55%;
+- teljes Pilot: kb. 18%.
+
+Következő blokk:
+1. Inventory reservation modell + atomi reserve/release/consume service;
+2. Media multi-image / primary / sort + overlay API;
+3. Termék inspector teljes szerkesztő mód;
+4. Receiving alap;
+5. közös Order/Checkout bridge a meglévő Árutér → központi pénztár működés megtartásával.
