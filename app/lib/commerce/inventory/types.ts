@@ -62,3 +62,23 @@ export type StockMovement = OrganizationScoped & {
   occurredAt: CommerceUtcTimestamp;
   createdAt: CommerceUtcTimestamp;
 };
+
+export type InventoryReservationStatus = "ACTIVE" | "PARTIAL" | "RELEASED" | "CONSUMED" | "EXPIRED";
+export type InventoryReservationAction = "RELEASE" | "CONSUME";
+
+export type InventoryReservation = OrganizationScoped & CommerceLifecycle & {
+  id: CommerceEntityId;
+  sourceId: CommerceEntityId;
+  warehouseId?: CommerceEntityId | null;
+  variantId: CommerceEntityId;
+  stockStatus: Extract<StockStatus, "SELLABLE" | "OUTLET">;
+  requestedQuantity: DecimalString;
+  releasedQuantity: DecimalString;
+  consumedQuantity: DecimalString;
+  remainingQuantity: DecimalString;
+  status: InventoryReservationStatus;
+  referenceType?: string | null;
+  referenceId?: CommerceEntityId | null;
+  idempotencyKey: string;
+  expiresAt?: CommerceUtcTimestamp | null;
+};

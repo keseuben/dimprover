@@ -110,3 +110,108 @@ export async function applyCommerceStockMovement(context: CommerceContext, input
   if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) throw new CommerceInventoryError("A készletmozgás válasza érvénytelen.", "COMMERCE_MOVEMENT_RESPONSE_INVALID", 500);
   return result.data as Row;
 }
+
+export async function listCommerceInventoryReservations(
+  context: CommerceContext,
+  input: { variantId?: string; sourceId?: string; status?: string; limit?: number } = {},
+) {
+  requireRead(context);
+  const client = createCommerceAdminClient();
+  let query = client.from("commerce_inventory_reservations")
+    .select("id,organization_id,source_id,warehouse_id,variant_id,stock_status,requested_quantity,released_quantity,consumed_quantity,remaining_quantity,status,reference_type,reference_id,idempotency_key,expires_at,created_at,updated_at,archived_at")
+    .eq("organization_id", context.organizationId)
+    .is("archived_at", null)
+    .order("created_at", { ascending:false })
+    .limit(Math.max(1, Math.min(200, Math.floor(Number(input.limit) || 50))));
+  if (text(input.variantId)) query = query.eq("variant_id", text(input.variantId));
+  if (text(input.sourceId)) query = query.eq("source_id", text(input.sourceId));
+  const status = text(input.status).toUpperCase();
+  if (status) {
+    if (!["ACTIVE","PARTIAL","RELEASED","CONSUMED","EXPIRED"].includes(status)) {
+      throw new CommerceInventoryError("Ismeretlen foglalási állapot.", "COMMERCE_RESERVATION_STATUS_INVALID", 400);
+    }
+    query = query.eq("status", status);
+  }
+  const result = await query;
+  if (result.error) dbError("A készletfoglalások lekérése sikertelen.", result.error);
+  return ((result.data || []) as Row[]).map((row) => ({
+    id:text(row.id), organizationId:text(row.organization_id), sourceId:text(row.source_id), warehouseId:nullableText(row.warehouse_id),
+    variantId:text(row.variant_id), stockStatus:text(row.stock_status), requestedQuantity:text(row.requested_quantity),
+    releasedQuantity:text(row.released_quantity), consumedQuantity:text(row.consumed_quantity), remainingQuantity:text(row.remaining_quantity),
+    status:text(row.status), referenceType:nullableText(row.reference_type), referenceId:nullableText(row.reference_id),
+    idempotencyKey:text(row.idempotency_key), expiresAt:nullableText(row.expires_at), createdAt:text(row.created_at), updatedAt:text(row.updated_at), archivedAt:nullableText(row.archived_at),
+  }));
+}
+
+function reservationQuantity(value: unknown) {
+  let quantity: string;
+  try { quantity = normalizeDecimal(text(value)); }
+  catch { throw new CommerceInventoryError("A foglalási mennyiség legfeljebb 6 tizedesjegyű szám lehet.", "COMMERCE_RESERVATION_QUANTITY_INVALID", 400); }
+  if (compareDecimal(quantity,"0") <= 0) throw new CommerceInventoryError("A foglalási mennyiségnek pozitívnak kell lennie.", "COMMERCE_RESERVATION_QUANTITY_INVALID", 400);
+  return quantity;
+}
+
+function reservationIdempotencyKey(value: unknown) {
+  const key = text(value);
+  if (!key || key.length > 140) throw new CommerceInventoryError("Érvényes foglalási idempotency kulcs kötelező.", "COMMERCE_RESERVATION_IDEMPOTENCY_REQUIRED", 400);
+  return key;
+}
+
+function throwReservationRpcError(error: PostgrestError | null): never {
+  const message = error?.message || "";
+  const mapping: Array<[string,number]> = [
+    ["COMMERCE_RESERVATION_IDEMPOTENCY_PAYLOAD_MISMATCH",409], ["COMMERCE_RESERVATION_IDEMPOTENCY_REQUIRED",400],
+    ["COMMERCE_RESERVATION_QUANTITY_INVALID",400], ["COMMERCE_RESERVATION_STOCK_STATUS_INVALID",400],
+    ["COMMERCE_RESERVATION_EXPIRY_INVALID",400], ["COMMERCE_RESERVATION_ACTION_INVALID",400],
+    ["COMMERCE_RESERVATION_NOT_FOUND",404], ["COMMERCE_RESERVATION_CLOSED",409], ["COMMERCE_RESERVATION_EXPIRED",409],
+    ["COMMERCE_RESERVATION_QUANTITY_EXCEEDS_REMAINING",409], ["COMMERCE_INTERNAL_SOURCE_NOT_FOUND",404],
+    ["COMMERCE_VARIANT_SCOPE_MISMATCH",400], ["COMMERCE_RESERVED_EXCEEDS_PHYSICAL",409], ["COMMERCE_PHYSICAL_NEGATIVE",409],
+    ["COMMERCE_RESERVED_NEGATIVE",409],
+  ];
+  const known = mapping.find(([code]) => message.includes(code));
+  if (known) throw new CommerceInventoryError("A készletfoglalás üzleti szabály miatt nem alkalmazható.", known[0], known[1], error?.code);
+  dbError("A készletfoglalási művelet sikertelen.", error);
+}
+
+export async function createCommerceInventoryReservation(context: CommerceContext, input: Record<string,unknown>) {
+  requireMovement(context, "RESERVATION_COMMIT");
+  const sourceId=text(input.sourceId), variantId=text(input.variantId);
+  if (!sourceId || !variantId) throw new CommerceInventoryError("A készletforrás és termékváltozat kötelező.", "COMMERCE_RESERVATION_TARGET_REQUIRED", 400);
+  const quantity=reservationQuantity(input.quantity);
+  const idempotencyKey=reservationIdempotencyKey(input.idempotencyKey);
+  const stockStatus=(text(input.stockStatus).toUpperCase() || "SELLABLE");
+  if (!["SELLABLE","OUTLET"].includes(stockStatus)) throw new CommerceInventoryError("Foglalás csak eladható vagy outlet készletből hozható létre.", "COMMERCE_RESERVATION_STOCK_STATUS_INVALID", 400);
+  const expiresAt=nullableText(input.expiresAt);
+  if (expiresAt && Number.isNaN(Date.parse(expiresAt))) throw new CommerceInventoryError("A foglalás lejárata hibás.", "COMMERCE_RESERVATION_EXPIRY_INVALID", 400);
+  const client=createCommerceAdminClient();
+  const result=await client.rpc("commerce_inventory_reservation_create",{
+    p_organization_id:context.organizationId,p_source_id:sourceId,p_variant_id:variantId,p_quantity:quantity,
+    p_idempotency_key:idempotencyKey,p_stock_status:stockStatus,p_reference_type:nullableText(input.referenceType),
+    p_reference_id:nullableText(input.referenceId),p_expires_at:expiresAt,
+  });
+  if (result.error) throwReservationRpcError(result.error);
+  if (!result.data || typeof result.data!=="object" || Array.isArray(result.data)) throw new CommerceInventoryError("A foglalás válasza érvénytelen.", "COMMERCE_RESERVATION_RESPONSE_INVALID", 500);
+  return result.data as Row;
+}
+
+export async function applyCommerceInventoryReservationAction(
+  context: CommerceContext,
+  reservationIdInput: unknown,
+  actionInput: unknown,
+  input: Record<string,unknown>,
+) {
+  requireMovement(context, "RESERVATION_RELEASE");
+  const reservationId=text(reservationIdInput);
+  if (!reservationId) throw new CommerceInventoryError("A foglalásazonosító kötelező.", "COMMERCE_RESERVATION_ID_REQUIRED", 400);
+  const action=text(actionInput).toUpperCase();
+  if (!["RELEASE","CONSUME"].includes(action)) throw new CommerceInventoryError("Ismeretlen foglalási művelet.", "COMMERCE_RESERVATION_ACTION_INVALID", 400);
+  const quantity=reservationQuantity(input.quantity);
+  const idempotencyKey=reservationIdempotencyKey(input.idempotencyKey);
+  const client=createCommerceAdminClient();
+  const result=await client.rpc("commerce_inventory_reservation_apply",{
+    p_organization_id:context.organizationId,p_reservation_id:reservationId,p_action:action,p_quantity:quantity,p_idempotency_key:idempotencyKey,
+  });
+  if (result.error) throwReservationRpcError(result.error);
+  if (!result.data || typeof result.data!=="object" || Array.isArray(result.data)) throw new CommerceInventoryError("A foglalási művelet válasza érvénytelen.", "COMMERCE_RESERVATION_RESPONSE_INVALID", 500);
+  return result.data as Row;
+}

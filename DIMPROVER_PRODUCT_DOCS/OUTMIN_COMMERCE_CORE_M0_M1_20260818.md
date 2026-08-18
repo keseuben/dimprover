@@ -425,3 +425,38 @@ Következő blokk:
 3. Termék inspector teljes szerkesztő mód;
 4. Receiving alap;
 5. közös Order/Checkout bridge a meglévő Árutér → központi pénztár működés megtartásával.
+
+### 2026-08-18 21:xx checkpoint — Inventory Reservation M1 staged
+
+Elkészült kódszinten:
+- explicit `commerce_inventory_reservations` entitás;
+- külön reservation event ledger;
+- reserve / release / consume workflow;
+- foglaláskor `reserved_quantity` nő, fizikai készlet nem változik;
+- release csak a foglalt mennyiséget csökkenti;
+- consume egyszerre csökkenti a fizikai és foglalt mennyiséget;
+- generated `remaining_quantity`;
+- ACTIVE / PARTIAL / RELEASED / CONSUMED / EXPIRED státuszmodell;
+- idempotens create/release/consume műveletek;
+- lejárt, lezárt és fennmaradó mennyiséget meghaladó műveletek tiltása;
+- minden módosítás a meglévő immutable StockMovement ledgeren keresztül fut;
+- service-role közvetlen reservation-módosítás tiltott, RPC-only mutation;
+- tenant-scoped reservation list/create API;
+- külön release és consume API, kötelező `idempotency-key` támogatással;
+- későbbi Order/Checkout bridge számára reference type/id támogatás.
+
+Tesztkapu a staged migrációhoz:
+- Reservation contract: 18/18 PASS;
+- Reservation DB transaction + rollback acceptance: 15/15 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- migration preflight: PASS;
+- migration SHA-256: `8fe89576dfbaf95fa19abbb72a96e10695383d07d82e9725999db0e79148c18a`.
+
+Állapot:
+- a Reservation 0.1.3 migráció ekkor még NINCS alkalmazva a DEV adatbázisra;
+- oka: ÁrminAI központi coordinated build lockja aktív, ezért OutminAI nem indít párhuzamos migrációt/buildet;
+- következő lépés a lock felszabadulása után: coordinated DEV backup + migration apply → verify → valós repository runtime E2E → candidate build.
+- a lejárt reservation automatikus felszabadító worker még NINCS implementálva; ezt a későbbi Order/Checkout/expiry worker blokkban kell lezárni.
+- PROD változatlan.
