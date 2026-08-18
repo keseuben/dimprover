@@ -217,7 +217,7 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             <article key={item.code} data-worker-code={item.code} data-auto-presence={presence && !task ? "true" : "false"} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
               <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : presence?.lastSeenAt ? `· ${elapsed(now, presence.lastSeenAt)}` : ""}</span></div></div>
               <p>{task?.title || presence?.summary || "Nincs aktív feladat."}</p>
-              {task ? <CompactTaskContext task={task} location="worker" /> : presence ? <PresenceContext presence={presence} /> : null}
+              {presence?.schedulerRunId ? <PresenceContext presence={presence} /> : task ? <CompactTaskContext task={task} location="worker" /> : presence ? <PresenceContext presence={presence} /> : null}
               <div className={styles.workerFacts}>
                 <span><Clock3 size={13} /> {session?.handshake_stage || (presence ? `AUTO · ${presence.phase.toUpperCase()}` : "Nincs aktív session")}</span>
                 <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : presence?.operation ? `${presence.operation}: aktív` : "Build: nincs"}</span>

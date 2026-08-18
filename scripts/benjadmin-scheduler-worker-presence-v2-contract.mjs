@@ -20,6 +20,7 @@ check("Presence exposes scheduler start and heartbeat",()=>assert.ok(bridge.incl
 check("Presence exposes next step",()=>assert.ok(bridge.includes("nextStep")&&live.includes("nextStep")&&panel.includes("Következő:")));
 check("Build lock wait is explicit",()=>assert.ok(bridge.includes("buildLockWaiting")&&panel.includes("BUILD LOCK · VÁRAKOZÁS")));
 check("Scheduler run identity reaches UI",()=>assert.ok(bridge.includes("schedulerRunId")&&live.includes("schedulerRunId")&&types.includes("schedulerRunId")&&panel.includes("data-scheduler-run")));
+check("Scheduler presence context wins over assigned task context",()=>assert.ok(panel.includes("presence?.schedulerRunId ? <PresenceContext presence={presence} /> : task ? <CompactTaskContext")));
 check("Task development context is reused",()=>assert.ok(bridge.includes("developmentContext")&&bridge.includes("context.mainModule")&&bridge.includes("context.moduleName")&&bridge.includes("context.submoduleName")));
 check("Session evidence outranks scheduler evidence",()=>assert.ok(bridge.includes("score: 120")&&bridge.includes("score: 115")));
 check("Scheduler evidence outranks passive lease fallback",()=>assert.ok(bridge.includes("score: 115")&&bridge.includes("score: 110")));
