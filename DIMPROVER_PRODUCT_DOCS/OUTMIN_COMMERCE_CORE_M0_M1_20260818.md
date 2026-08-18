@@ -460,3 +460,18 @@ Tesztkapu a staged migrációhoz:
 - következő lépés a lock felszabadulása után: coordinated DEV backup + migration apply → verify → valós repository runtime E2E → candidate build.
 - a lejárt reservation automatikus felszabadító worker még NINCS implementálva; ezt a későbbi Order/Checkout/expiry worker blokkban kell lezárni.
 - PROD változatlan.
+
+### 2026-08-18 21:xx checkpoint — Termék inspector szerkesztő mód
+
+Elkészült:
+- a jobb oldali Termék inspectorban közvetlen „Szerkesztés” mód;
+- név, típus/modell, kategória, márka, gyártó és státusz egy helyen módosítható;
+- mentés a meglévő tenant-scoped Product PATCH API-n keresztül;
+- mentés után detail + lista frissül, oldalváltás nélkül;
+- a szerkesztő megtartja a letisztult, kis kattintásszámú Árutér UI irányt.
+
+Tesztkapu:
+- Product inspector edit contract: 12/12 PASS;
+- TypeScript: PASS;
+- lint: PASS;
+- git diff --check: PASS.

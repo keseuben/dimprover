@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Barcode, Boxes, ChevronRight, ImagePlus, Layers3, Loader2, Package, Plus, RefreshCw, Search, SlidersHorizontal, Tags, Upload, X } from "lucide-react";
+import { AlertCircle, Barcode, Boxes, ChevronRight, ImagePlus, Layers3, Loader2, Package, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Tags, Upload, X } from "lucide-react";
 import { uploadCommerceProductImage } from "./commerceMediaPreparation";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
 
@@ -48,9 +48,18 @@ type CreateDraft = {
 };
 
 type VariantDraft = { name: string; sku: string; unit: string };
+type EditDraft = {
+  name: string;
+  typeModel: string;
+  categoryId: string;
+  brandId: string;
+  manufacturerId: string;
+  status: ProductSummary["status"];
+};
 
 const EMPTY_DRAFT: CreateDraft = { name: "", typeModel: "", sku: "", unit: "DB", ean: "", categoryId: "", brandId: "", manufacturerId: "" };
 const EMPTY_VARIANT: VariantDraft = { name: "", sku: "", unit: "DB" };
+const EMPTY_EDIT: EditDraft = { name: "", typeModel: "", categoryId: "", brandId: "", manufacturerId: "", status: "DRAFT" };
 
 function statusLabel(status: ProductSummary["status"]) {
   if (status === "ACTIVE") return "Aktív";
@@ -103,6 +112,9 @@ export function CommerceProductsAdmin() {
   const [savingVariant, setSavingVariant] = useState(false);
   const [priceDraft, setPriceDraft] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditDraft>(EMPTY_EDIT);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +161,7 @@ export function CommerceProductsAdmin() {
   }, [loadProducts, query]);
 
   useEffect(() => {
+    setEditMode(false);
     if (!selectedId || createMode) {
       setDetail(null);
       return;
@@ -195,6 +208,47 @@ export function CommerceProductsAdmin() {
       setVariantDraft(EMPTY_VARIANT); setAddingVariant(false); await refreshDetail(selectedId); await loadProducts(query);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "A termékváltozat mentése sikertelen."); }
     finally { setSavingVariant(false); }
+  }
+
+  function beginEdit() {
+    const source = detail || selected;
+    if (!source) return;
+    setEditDraft({
+      name: source.name || "",
+      typeModel: source.typeModel || "",
+      categoryId: source.categoryId || "",
+      brandId: source.brandId || "",
+      manufacturerId: source.manufacturerId || "",
+      status: source.status,
+    });
+    setEditMode(true);
+  }
+
+  async function saveProductEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId || !editDraft.name.trim()) return;
+    setSavingEdit(true); setError(null);
+    try {
+      const response = await fetch(`/api/v1/commerce/products/${selectedId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: editDraft.name.trim(),
+          typeModel: editDraft.typeModel.trim() || null,
+          categoryId: editDraft.categoryId || null,
+          brandId: editDraft.brandId || null,
+          manufacturerId: editDraft.manufacturerId || null,
+          status: editDraft.status,
+        }),
+      });
+      const result = await response.json() as ApiResult<ProductDetail>;
+      if (!response.ok || !result.ok || !result.data) throw new Error(result.error || "A termék módosítása sikertelen.");
+      setDetail(result.data);
+      setEditMode(false);
+      await loadProducts(query);
+      setSelectedId(selectedId);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "A termék módosítása sikertelen."); }
+    finally { setSavingEdit(false); }
   }
 
   async function savePrice(event: FormEvent) {
@@ -363,7 +417,8 @@ export function CommerceProductsAdmin() {
                 <div className="flex min-h-64 items-center justify-center"><Loader2 className="animate-spin text-teal-700" /></div>
               ) : detail || selected ? (
                 <div>
-                  <div className="flex items-start gap-3"><span className="flex h-14 w-14 shrink-0 overflow-hidden items-center justify-center rounded-2xl bg-teal-50 text-teal-700">{selected?.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${selected.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={25} />}</span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div>
+                  <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-start gap-3"><span className="flex h-14 w-14 shrink-0 overflow-hidden items-center justify-center rounded-2xl bg-teal-50 text-teal-700">{selected?.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${selected.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={25} />}</span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div><button type="button" onClick={beginEdit} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-600 hover:border-teal-300 hover:text-teal-700"><Pencil size={15}/> Szerkesztés</button></div>
+                  {editMode && <form onSubmit={saveProductEdit} className="mt-5 rounded-2xl border border-teal-200 bg-teal-50/40 p-4"><div className="flex items-center justify-between gap-3"><div><b>Termék szerkesztése</b><p className="mt-0.5 text-xs font-semibold text-slate-500">A gyakori alapadatok egy helyen módosíthatók.</p></div><button type="button" onClick={()=>setEditMode(false)} className="rounded-lg p-2 text-slate-500"><X size={17}/></button></div><div className="mt-4 space-y-3"><label className="block"><span className="text-xs font-black text-slate-600">Termék neve *</span><input value={editDraft.name} onChange={(e)=>setEditDraft({...editDraft,name:e.target.value})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-400"/></label><label className="block"><span className="text-xs font-black text-slate-600">Típus / modell</span><input value={editDraft.typeModel} onChange={(e)=>setEditDraft({...editDraft,typeModel:e.target.value})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-400"/></label><label className="block"><span className="text-xs font-black text-slate-600">Kategória</span><select value={editDraft.categoryId} onChange={(e)=>setEditDraft({...editDraft,categoryId:e.target.value})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Nincs megadva</option>{categories.map((item)=><option key={item.id} value={item.id}>{item.parentId?"↳ ":""}{item.name}</option>)}</select></label><div className="grid grid-cols-2 gap-2"><label className="block"><span className="text-xs font-black text-slate-600">Márka</span><select value={editDraft.brandId} onChange={(e)=>setEditDraft({...editDraft,brandId:e.target.value})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm"><option value="">Nincs</option>{brands.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="block"><span className="text-xs font-black text-slate-600">Gyártó</span><select value={editDraft.manufacturerId} onChange={(e)=>setEditDraft({...editDraft,manufacturerId:e.target.value})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm"><option value="">Nincs</option>{manufacturers.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><label className="block"><span className="text-xs font-black text-slate-600">Státusz</span><select value={editDraft.status} onChange={(e)=>setEditDraft({...editDraft,status:e.target.value as ProductSummary["status"]})} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="ACTIVE">Aktív</option><option value="DRAFT">Vázlat</option><option value="INACTIVE">Inaktív</option></select></label></div><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={()=>setEditMode(false)} className="h-10 rounded-xl border border-slate-200 bg-white text-sm font-black">Mégsem</button><button disabled={savingEdit||!editDraft.name.trim()} className="h-10 rounded-xl bg-teal-700 text-sm font-black text-white disabled:bg-slate-300">{savingEdit?"Mentés...":"Módosítás mentése"}</button></div></form>}
                   <div className="my-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Belső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.internalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Külső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.externalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b>{selected?.externalSyncStatus && <p className="mt-1 text-[11px] font-black text-slate-400">{selected.externalSyncStatus}</p>}</div></div>
                   <div className="space-y-3 border-t border-slate-100 pt-4"><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">SKU</span><b className="text-right">{detail?.variants[0]?.sku || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Egység</span><b>{detail?.variants[0]?.unit || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Elsődleges azonosító</span><b className="max-w-[220px] truncate text-right">{detail?.identifiers.find((item) => item.primary)?.value || detail?.identifiers[0]?.value || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Státusz</span><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass((detail?.status || selected!.status))}`}>{statusLabel(detail?.status || selected!.status)}</span></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Kategória</span><b className="text-right">{catalogName(categories, detail?.categoryId || selected?.categoryId) || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Márka</span><b className="text-right">{catalogName(brands, detail?.brandId || selected?.brandId) || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Gyártó</span><b className="text-right">{catalogName(manufacturers, detail?.manufacturerId || selected?.manufacturerId) || <EmptyValue />}</b></div></div>
                   <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Layers3 size={18} className="text-teal-700" /><b>Termékváltozatok</b></div><button type="button" onClick={()=>setAddingVariant((value)=>!value)} className="rounded-lg border border-teal-200 px-2.5 py-1.5 text-xs font-black text-teal-700"><Plus size={14} className="inline"/> Új</button></div><div className="mt-3 space-y-2">{detail?.variants.map((variant)=><div key={variant.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"><div className="min-w-0"><b className="block truncate text-sm">{variant.name}</b><span className="text-xs font-semibold text-slate-500">{variant.sku || "nincs SKU"} · {variant.unit}</span></div><span className="text-[11px] font-black text-slate-400">{variant.status}</span></div>)}</div>{addingVariant&&<form onSubmit={createVariant} className="mt-3 space-y-2 border-t border-slate-100 pt-3"><input autoFocus value={variantDraft.name} onChange={(e)=>setVariantDraft({...variantDraft,name:e.target.value})} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none" placeholder="Változat neve"/><div className="grid grid-cols-[1fr_100px] gap-2"><input value={variantDraft.sku} onChange={(e)=>setVariantDraft({...variantDraft,sku:e.target.value})} className="h-10 rounded-xl border border-slate-200 px-3 text-sm outline-none" placeholder="SKU / cikkszám"/><select value={variantDraft.unit} onChange={(e)=>setVariantDraft({...variantDraft,unit:e.target.value})} className="h-10 rounded-xl border border-slate-200 px-2 text-sm"><option>DB</option><option>KG</option><option>M</option><option>M2</option><option>M3</option><option>L</option><option>CSOMAG</option></select></div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setAddingVariant(false);setVariantDraft(EMPTY_VARIANT);}} className="h-10 rounded-xl border border-slate-200 text-sm font-black">Mégsem</button><button disabled={savingVariant||!variantDraft.name.trim()} className="h-10 rounded-xl bg-teal-700 text-sm font-black text-white disabled:bg-slate-300">{savingVariant?"Mentés...":"Változat mentése"}</button></div></form>}</div>
