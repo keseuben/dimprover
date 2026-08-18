@@ -112,7 +112,10 @@ try {
   }, key, projectId);
   await page.setViewport({ width: 1536, height: 900, deviceScaleFactor: 1 });
   await page.goto(`${uiBase}/dev-console`, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForSelector('[data-testid="benjadmin-weekly-development-summary"][data-ready="true"]', { timeout: 30000 });
+  await page.waitForFunction((expectedProjectId) => {
+    const panel = document.querySelector('[data-testid="benjadmin-weekly-development-summary"]');
+    return panel?.getAttribute("data-ready") === "true" && panel?.getAttribute("data-project-id") === expectedProjectId;
+  }, { timeout: 30000 }, projectId);
   const desktop = await page.evaluate((projectName) => {
     const panel = document.querySelector('[data-testid="benjadmin-weekly-development-summary"]');
     return {
