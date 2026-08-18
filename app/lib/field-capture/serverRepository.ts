@@ -333,3 +333,251 @@ export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite)
 
   return item;
 }
+
+
+export async function getFieldCaptureProjectDimproId(projectCoreId: string) {
+  const result = await client()
+    .from("project_core_projects")
+    .select("id,dimpro_project_id,status")
+    .eq("id", projectCoreId)
+    .maybeSingle();
+  if (result.error) databaseError("A Project Core kapcsolat ellenőrzése sikertelen.", result.error);
+  if (!result.data || ["DELETED", "DELETION_SCHEDULED"].includes(text(result.data.status))) {
+    throw new DimproIdentityError(
+      "A terepi munkamenet projektkapcsolata már nem aktív.",
+      "FIELD_CAPTURE_PROJECT_CORE_LINK_MISSING",
+      409,
+    );
+  }
+  const dimproProjectId = nullableText(result.data.dimpro_project_id);
+  if (!dimproProjectId) {
+    throw new DimproIdentityError(
+      "A terepi munkamenethez nincs DIMPRO projektazonosító rendelve.",
+      "FIELD_CAPTURE_DIMPRO_PROJECT_LINK_MISSING",
+      409,
+    );
+  }
+  return dimproProjectId;
+}
+
+export async function getFieldCaptureItemUploadContext(input: {
+  sessionId: string;
+  itemId: string;
+}) {
+  const db = client();
+  const itemResult = await db
+    .from("field_capture_items")
+    .select("id,session_id,client_item_id,status")
+    .eq("id", input.itemId)
+    .eq("session_id", input.sessionId)
+    .maybeSingle();
+  if (itemResult.error) databaseError("A terepi képtétel feltöltési állapota nem olvasható.", itemResult.error);
+  if (!itemResult.data) {
+    throw new DimproIdentityError("A terepi képtétel nem található.", "FIELD_CAPTURE_ITEM_NOT_FOUND", 404);
+  }
+
+  const assetResult = await db
+    .from("field_capture_asset_refs")
+    .select("id,capture_item_id,variant,original_name,display_name,mime_type,original_size_bytes,stored_size_bytes,checksum_sha256,storage_provider,storage_bucket,storage_key,storage_status")
+    .eq("capture_item_id", input.itemId);
+  if (assetResult.error) databaseError("A terepi asset metaadatai nem olvashatók.", assetResult.error);
+  const assets = (assetResult.data || []) as DbRow[];
+  const asset = assets.find((row) => text(row.variant) === "OPTIMIZED")
+    || assets.find((row) => text(row.variant) === "ORIGINAL")
+    || null;
+  if (!asset) {
+    throw new DimproIdentityError(
+      "A terepi képtételhez nincs feltölthető asset.",
+      "FIELD_CAPTURE_UPLOAD_ASSET_MISSING",
+      409,
+    );
+  }
+
+  return {
+    itemId: text(itemResult.data.id),
+    clientItemId: text(itemResult.data.client_item_id),
+    itemStatus: text(itemResult.data.status),
+    asset: {
+      id: text(asset.id),
+      variant: text(asset.variant) as "ORIGINAL" | "OPTIMIZED",
+      originalName: nullableText(asset.original_name),
+      displayName: text(asset.display_name),
+      mimeType: text(asset.mime_type),
+      originalSizeBytes: asset.original_size_bytes == null ? null : Number(asset.original_size_bytes),
+      storedSizeBytes: asset.stored_size_bytes == null ? null : Number(asset.stored_size_bytes),
+      checksumSha256: nullableText(asset.checksum_sha256),
+      storageStatus: text(asset.storage_status),
+    },
+  };
+}
+
+export async function markFieldCaptureDropUploadInitialized(input: {
+  sessionId: string;
+  itemId: string;
+  clientItemId: string;
+  assetId: string;
+  variant: string;
+  packageId: string;
+  dropFileId: string;
+  dropUploadSessionId: string;
+  protocol: string;
+  storageProvider: string;
+}) {
+  const db = client();
+  const now = new Date().toISOString();
+
+  const assetResult = await db.from("field_capture_asset_refs")
+    .update({ storage_status: "UPLOADING", updated_at: now })
+    .eq("id", input.assetId)
+    .eq("capture_item_id", input.itemId);
+  if (assetResult.error) databaseError("A terepi asset feltöltési állapota nem frissíthető.", assetResult.error);
+
+  const queueResult = await db.from("field_capture_sync_queue").upsert({
+    session_id: input.sessionId,
+    capture_item_id: input.itemId,
+    device_local_id: input.clientItemId,
+    operation: "UPLOAD_ASSET",
+    status: "RUNNING",
+    payload_meta: {
+      variant: input.variant,
+      dropPackageId: input.packageId,
+      dropFileId: input.dropFileId,
+      dropUploadSessionId: input.dropUploadSessionId,
+      protocol: input.protocol,
+      storageProvider: input.storageProvider,
+      rawTokenPersisted: false,
+    },
+    last_error: null,
+    updated_at: now,
+  }, { onConflict: "session_id,device_local_id,operation" });
+  if (queueResult.error) databaseError("A terepi feltöltési sor nem frissíthető.", queueResult.error);
+
+  const itemResult = await db.from("field_capture_items")
+    .update({ status: "UPLOADING", updated_at: now })
+    .eq("id", input.itemId)
+    .eq("session_id", input.sessionId);
+  if (itemResult.error) databaseError("A terepi képtétel feltöltési állapota nem frissíthető.", itemResult.error);
+
+  const eventResult = await db.from("field_capture_events").insert({
+    session_id: input.sessionId,
+    capture_item_id: input.itemId,
+    event_type: "ASSET_UPLOAD_INITIALIZED",
+    payload: {
+      dropPackageId: input.packageId,
+      dropFileId: input.dropFileId,
+      dropUploadSessionId: input.dropUploadSessionId,
+      rawTokenPersisted: false,
+    },
+  });
+  if (eventResult.error) databaseError("A terepi feltöltés indítása nem naplózható.", eventResult.error);
+}
+
+export async function getFieldCaptureDropUploadBinding(input: {
+  sessionId: string;
+  itemId: string;
+  clientItemId: string;
+}) {
+  const result = await client().from("field_capture_sync_queue")
+    .select("id,status,payload_meta,last_error")
+    .eq("session_id", input.sessionId)
+    .eq("capture_item_id", input.itemId)
+    .eq("device_local_id", input.clientItemId)
+    .eq("operation", "UPLOAD_ASSET")
+    .maybeSingle();
+  if (result.error) databaseError("A terepi Drop feltöltési kapcsolat nem olvasható.", result.error);
+  if (!result.data) {
+    throw new DimproIdentityError(
+      "A terepi Drop feltöltési kapcsolat nem található.",
+      "FIELD_CAPTURE_DROP_UPLOAD_BINDING_MISSING",
+      409,
+    );
+  }
+  return {
+    status: text(result.data.status),
+    payload: result.data.payload_meta && typeof result.data.payload_meta === "object"
+      ? result.data.payload_meta as Record<string, unknown>
+      : {},
+    lastError: nullableText(result.data.last_error),
+  };
+}
+
+export async function markFieldCaptureDropUploadStored(input: {
+  sessionId: string;
+  itemId: string;
+  clientItemId: string;
+  assetId: string;
+  dropPackageId: string;
+  dropFileId: string;
+  dropUploadSessionId: string;
+  storageProvider: string;
+  storageBucket: string;
+  storageKey: string;
+  storedSizeBytes: number;
+  securityStatus: string | null;
+  virusScanStatus: string;
+}) {
+  const db = client();
+  const now = new Date().toISOString();
+
+  const assetResult = await db.from("field_capture_asset_refs")
+    .update({
+      storage_provider: input.storageProvider,
+      storage_bucket: input.storageBucket,
+      storage_key: input.storageKey,
+      stored_size_bytes: input.storedSizeBytes,
+      storage_status: "STORED",
+      updated_at: now,
+    })
+    .eq("id", input.assetId)
+    .eq("capture_item_id", input.itemId);
+  if (assetResult.error) databaseError("A terepi asset szerveres tárhelyállapota nem frissíthető.", assetResult.error);
+
+  const queueResult = await db.from("field_capture_sync_queue")
+    .update({
+      status: "DONE",
+      last_error: null,
+      payload_meta: {
+        dropPackageId: input.dropPackageId,
+        dropFileId: input.dropFileId,
+        dropUploadSessionId: input.dropUploadSessionId,
+        storageProvider: input.storageProvider,
+        securityStatus: input.securityStatus,
+        virusScanStatus: input.virusScanStatus,
+        rawTokenPersisted: false,
+      },
+      updated_at: now,
+    })
+    .eq("session_id", input.sessionId)
+    .eq("capture_item_id", input.itemId)
+    .eq("device_local_id", input.clientItemId)
+    .eq("operation", "UPLOAD_ASSET");
+  if (queueResult.error) databaseError("A terepi feltöltési sor lezárása sikertelen.", queueResult.error);
+
+  const itemResult = await db.from("field_capture_items")
+    .update({ status: "SERVER_STORED", updated_at: now })
+    .eq("id", input.itemId)
+    .eq("session_id", input.sessionId);
+  if (itemResult.error) databaseError("A terepi képtétel szerveres állapota nem frissíthető.", itemResult.error);
+
+  const captureDestination = await db.from("field_capture_destinations")
+    .update({ status: "STORED", asset_ref_id: input.assetId, updated_at: now })
+    .eq("capture_item_id", input.itemId)
+    .eq("target", "CAPTURE");
+  if (captureDestination.error) databaseError("A CAPTURE mentési cél állapota nem frissíthető.", captureDestination.error);
+
+  const eventResult = await db.from("field_capture_events").insert({
+    session_id: input.sessionId,
+    capture_item_id: input.itemId,
+    event_type: "ASSET_SERVER_STORED",
+    payload: {
+      dropPackageId: input.dropPackageId,
+      dropFileId: input.dropFileId,
+      dropUploadSessionId: input.dropUploadSessionId,
+      securityStatus: input.securityStatus,
+      virusScanStatus: input.virusScanStatus,
+      rawTokenPersisted: false,
+      driveSynced: false,
+    },
+  });
+  if (eventResult.error) databaseError("A terepi szerveres tárolás nem naplózható.", eventResult.error);
+}

@@ -155,7 +155,7 @@ async function recordDropUploadRulesAcceptance(input: {
   packageId: string;
   fileId: string;
   sessionId: string;
-  authorizationMode: "space_session" | "capability_token";
+  authorizationMode: "space_session" | "capability_token" | "admin";
   actorName: string;
   actorEmail: string | null;
   rulesVersion: string;
@@ -193,7 +193,7 @@ async function recordDropUploadRulesAcceptance(input: {
 type InitializeUploadCoreInput = {
   packageId: string;
   groupId: string | null;
-  authorizationMode: "space_session" | "capability_token";
+  authorizationMode: "space_session" | "capability_token" | "admin";
   createdByMembershipId: string | null;
   uploadedByName: string;
   uploadedByEmail: string | null;
@@ -408,6 +408,55 @@ export async function initializeDropSpaceUpload(input: {
     uploadedByEmail: input.session.membership.email,
     normalized,
   });
+}
+
+export async function initializeDropServerUpload(input: {
+  packageId: string;
+  body: unknown;
+  uploadedByName: string;
+  uploadedByEmail: string | null;
+}): Promise<DropUploadInitResult> {
+  const normalized = validateUploadInput(input.body);
+  const actor = validateCapabilityUploader({
+    uploadedByName: input.uploadedByName,
+    uploadedByEmail: input.uploadedByEmail || "",
+  });
+  return initializeDropUploadCore({
+    packageId: input.packageId,
+    groupId: normalized.groupId,
+    authorizationMode: "admin",
+    createdByMembershipId: null,
+    uploadedByName: actor.uploadedByName,
+    uploadedByEmail: actor.uploadedByEmail,
+    normalized,
+  });
+}
+
+export async function getDropServerUploadSnapshot(uploadId: string) {
+  await assertQuarantineUploadReady();
+  const bundle = await getDropUploadBundle(uploadId);
+  if (!bundle) {
+    throw createServiceError("A feltöltési munkamenet nem található.", "DROP_UPLOAD_SESSION_NOT_FOUND", 404);
+  }
+  return {
+    packageId: bundle.package.id,
+    file: {
+      id: bundle.file.id,
+      uploadStatus: bundle.file.upload_status,
+      processingStatus: bundle.file.processing_status,
+      securityStatus: bundle.file.security_status || null,
+      virusScanStatus: bundle.file.virus_scan_status,
+      sizeStoredBytes: Number(bundle.file.size_stored_bytes || 0),
+      storageProvider: bundle.file.storage_provider,
+      storageBucket: bundle.file.storage_bucket,
+      storageKey: bundle.file.storage_key,
+    },
+    session: {
+      id: bundle.session.id,
+      status: bundle.session.status,
+      completedAt: bundle.session.completed_at,
+    },
+  };
 }
 
 function assertTokenMatchesBundle(rawToken: string, uploadId: string, bundle: NonNullable<Awaited<ReturnType<typeof getDropUploadBundle>>>) {
