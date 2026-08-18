@@ -48,6 +48,33 @@ async function verifySourceWarehouse(context:CommerceContext,sourceId:string,war
   if(!warehouse.data||!(warehouse.data as Row).active)throw new CommerceReceivingError("Aktív raktár szükséges.","COMMERCE_RECEIPT_WAREHOUSE_NOT_ACTIVE",400);
 }
 
+
+export async function listCommerceReceivingOptions(context: CommerceContext) {
+  requireRead(context);
+  const client = createCommerceAdminClient();
+  const [warehouses, sources] = await Promise.all([
+    client.from("commerce_warehouses")
+      .select("id,code,name,active")
+      .eq("organization_id", context.organizationId)
+      .eq("active", true)
+      .is("archived_at", null)
+      .order("name", { ascending: true }),
+    client.from("commerce_inventory_sources")
+      .select("id,warehouse_id,source_type,code,name,active")
+      .eq("organization_id", context.organizationId)
+      .eq("source_type", "INTERNAL")
+      .eq("active", true)
+      .is("archived_at", null)
+      .order("name", { ascending: true }),
+  ]);
+  if (warehouses.error) dbError("A raktárlista nem olvasható.", warehouses.error);
+  if (sources.error) dbError("A készletforrás-lista nem olvasható.", sources.error);
+  return {
+    warehouses: ((warehouses.data || []) as Row[]).map((row) => ({ id:text(row.id), code:text(row.code), name:text(row.name) })),
+    sources: ((sources.data || []) as Row[]).map((row) => ({ id:text(row.id), warehouseId:text(row.warehouse_id), code:text(row.code), name:text(row.name) })),
+  };
+}
+
 export async function listCommerceGoodsReceipts(context:CommerceContext,input:{status?:unknown;limit?:number}={}){
   requireRead(context);const client=createCommerceAdminClient();
   let query=client.from("commerce_goods_receipts").select("*").eq("organization_id",context.organizationId).is("archived_at",null).order("received_at",{ascending:false}).order("created_at",{ascending:false}).limit(Math.max(1,Math.min(200,Math.floor(input.limit||50))));

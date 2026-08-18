@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Barcode, Boxes, ChevronRight, Layers3, Loader2, Package, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Tags, X } from "lucide-react";
+import { AlertCircle, Barcode, Boxes, ChevronRight, Layers3, Loader2, Package, PackagePlus, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Tags, X } from "lucide-react";
 import { CommerceProductMediaGallery } from "./CommerceProductMediaGallery";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
 
@@ -316,7 +316,7 @@ export function CommerceProductsAdmin() {
                 <h1 className="text-xl font-black text-slate-900">Termékek</h1>
               </div>
             </div>
-            <div className="flex items-center gap-2"><Link href="/aruter/admin/torzsadatok" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><Tags size={17} /> Törzsadatok</Link><button
+            <div className="flex items-center gap-2"><Link href="/aruter/admin/bevetelezes" className="hidden h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700 sm:inline-flex"><PackagePlus size={17} /> Bevételezés</Link><Link href="/aruter/admin/torzsadatok" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><Tags size={17} /> Törzsadatok</Link><button
               type="button"
               onClick={() => { setCreateMode(true); setSelectedId(null); setDraft(EMPTY_DRAFT); }}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 font-black text-white shadow-sm hover:bg-teal-800"

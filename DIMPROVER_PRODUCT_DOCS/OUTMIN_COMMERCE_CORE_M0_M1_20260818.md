@@ -627,3 +627,27 @@ Tesztkapu a DEV apply előtt:
 - a Receiving 0.1.5 migráció ebben a checkpointban még NINCS alkalmazva;
 - a központi coordinated build lockot tiszteletben tartjuk; alkalmazás csak szabad locknál történhet;
 - PROD változatlan.
+
+### 2026-08-18 22:5x checkpoint — Receiving admin UI skeleton
+
+Elkészült:
+- új `/aruter/admin/bevetelezes` letisztult adminfelület;
+- bevételezési lista + jobb oldali inspector;
+- vázlat bevételezés fej létrehozás: beszállító, bizonylatszám, raktár, belső készletforrás, megjegyzés;
+- aktív raktár és belső készletforrás tenant-scoped options API;
+- aktív termékekből tételfelvitel;
+- mennyiség, egység, készletállapot, LOT-kód, lejárat és nettó egységköltség mezők;
+- tétel soft-delete vázlatban;
+- explicit, idempotens „Bevételezés könyvelése” művelet;
+- könyvelt állapot vizuális visszajelzése;
+- Termékek adminból közvetlen Bevételezés navigáció.
+
+Tesztkapu:
+- Receiving UI contract: 16/16 PASS;
+- Receiving backend contract: 26/26 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+A UI a 0.1.5 Receiving schema DEV alkalmazása után lesz runtime E2E-re kész. PROD változatlan.
