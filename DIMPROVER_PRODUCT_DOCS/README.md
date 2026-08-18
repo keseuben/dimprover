@@ -212,3 +212,15 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `262_dimpro_dev_storage_retention_v110_20260816.md` – DEV Storage Retention V1.1: retired worktree szabály, 81 GB → 42 GB worktree-tár, 45% végső lemezhasználat, 34/34 + 13/13 PASS.
 
 - 263_benjadmin_v14_worker_activity_chat_archive_dev_activation_20260816.md – V1.4 worker coding feed, AI-színkódolt közös csevegés, napi/heti lazy archívum és SANITIZED worker activity bridge.
+
+- `264_benjadmin_v15_command_plus_pull_testing_gate_20260817.md` – BENJADMIN V1.5 Plus pull testing gate és command-chain checkpoint.
+- `266_benjadmin_overnight_scheduler_v1_dev_activation_20260817.md` – Overnight Scheduler V1 DEV aktiválás: órás decision-memory scheduler, retry/missed-wake és Plus pull lánc.
+- `267_benjadmin_worker_context_cards_v1_dev_activation_20260817.md` – Worker Context Cards V1 DEV aktiválás: Főmodul → Modul → Almodul → Munkarész és közös 6/x fázismodell.
+- `268_benjadmin_development_map_v1_dev_activation_20260817.md` – Fejlesztési Térkép V1 DEV aktiválás: auditált metadata-átsorolás, fizikai Git-mozgatás nélkül.
+- `269_benjadmin_map_theme_worker_attribution_v1_dev_activation_20260817.md` – Map theme + worker attribution V1 DEV aktiválás.
+- `270_benjadmin_worker_presence_bridge_v1_dev_activation_20260818.md` – Worker Presence Bridge V1 DEV aktiválás: task/session/lease/lock/file/commit alapú automatikus worker-felismerés.
+- `271_benjadmin_conversation_v2_checkpoint_20260818.md` – Common/Conversation V2 source checkpoint: kontextusérzékeny dedupe és archívum; runtime kapu a 275-ös dokumentumban lezárva.
+- `272_benjadmin_development_map_v2_checkpoint_20260818.md` – Development Map V2 source checkpoint: Aktív/Technikai/Archív rétegek és auditált undo; runtime kapu a 275-ös dokumentumban lezárva.
+- `273_benjadmin_scheduler_worker_presence_v2_checkpoint_20260818.md` – Scheduler + Worker Presence V2 source checkpoint.
+- `274_benjadmin_scheduler_worker_presence_v2_dev_activation_20260818.md` – Scheduler + Worker Presence V2 DEV aktiválás: valós scheduler-run → automatikus worker-kártya, monitoros E2E és 6/x javítások.
+- `275_benjadmin_postnight_runtime_acceptance_v1_20260818.md` – BLOKK 7 lezárás: Map V2 13/13 runtime + 15/15 browser, Common Chat V2 30/30 runtime/browser, dedupe/worker-transition/cursor/archívum teljes acceptance.
