@@ -172,3 +172,9 @@ A javításhoz külön `benjadmin-console-stream-lifecycle-v1-contract.mjs` regr
 A `6918978` SSE-fix candidate újrafuttatásakor a heti panel egyszer `data-project-id=all` állapotban indult, miközben a mentett fixture projekt már a live snapshotban szerepelt. A `DeveloperConsoleShell` bootstrapja a `silentFetch()` után a React `liveRef` aszinkron frissítésére támaszkodott.
 
 Javítás: a `silentFetch()` közvetlenül visszaadja a betöltött `ConsoleLiveState` snapshotot, a bootstrap pedig elsődlegesen ennek `projects` listájából oldja fel a mentett projektet. A ref csak fallback. Ez determinisztikussá teszi a mentett projekt visszaállítását normál felhasználói betöltésnél is.
+
+### Late live-project recovery
+
+A candidate második futása megmutatta, hogy az első bootstrap snapshot sikertelensége után az SSE/polling által később megérkező projektlista már nem próbálta újra a mentett projekt feloldását. Emiatt a shell `Összes projekt` állapotban maradhatott.
+
+A `DeveloperConsoleShell` most a live projektlista változásakor is fail-safe módon visszaállítja a mentett projektet. Ha a tárolt projekt már nem létezik, egyetlen elérhető projektre áll át, több projekt esetén pedig biztonságosan az összes projekt nézetre esik vissza.

@@ -110,6 +110,27 @@ export default function DeveloperConsoleShell() {
     setTheme(next);
   }, []);
 
+  useEffect(() => {
+    const projects = live?.projects || [];
+    if (!projects.length) return;
+    if (selectedProjectId && projects.some((item) => item.id === selectedProjectId)) return;
+    const storedProject = localStorage.getItem(PROJECT_KEY) || "";
+    if (storedProject && projects.some((item) => item.id === storedProject)) {
+      setSelectedProjectId(storedProject);
+      return;
+    }
+    if (selectedProjectId) {
+      const fallback = projects.length === 1 ? projects[0].id : "";
+      localStorage.setItem(PROJECT_KEY, fallback);
+      setSelectedProjectId(fallback);
+      return;
+    }
+    if (projects.length === 1) {
+      localStorage.setItem(PROJECT_KEY, projects[0].id);
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [live?.projects, selectedProjectId]);
+
   const changeProject = useCallback((id: string) => {
     localStorage.setItem(PROJECT_KEY, id);
     setSelectedProjectId(id);
