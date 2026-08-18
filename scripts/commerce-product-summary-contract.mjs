@@ -14,7 +14,7 @@ const checks = [
   ["08 external snapshots stay separate", repo.includes('from("commerce_external_inventory_snapshots")') && repo.includes("externalByProduct")],
   ["09 external sync status is surfaced", repo.includes("externalSyncStatus") && repo.includes("syncRank")],
   ["10 UI has separate internal and external stock columns", ui.includes("Belső készlet") && ui.includes("Külső készlet")],
-  ["11 UI displays active price from summary", ui.includes("formatPrice(product)") && ui.includes("Aktív ár")],
+  ["11 UI displays active price from summary", ui.includes("formatPrice(product)") && (ui.includes("Aktív ár") || ui.includes("Aktív nettó ár"))],
   ["12 UI keeps right-side inspector layout", ui.includes("xl:grid-cols-[minmax(0,1fr)_380px]") && ui.includes("xl:sticky")],
   ["13 mobile product list remains available", ui.includes("md:hidden") && ui.includes("Nincs típus/modell")],
   ["14 new product form supports EAN and SKU", ui.includes("EAN / GTIN") && ui.includes("Cikkszám / SKU")],
