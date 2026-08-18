@@ -769,3 +769,51 @@ Tesztkapu:
 - git diff --check: PASS.
 
 Megjegyzés: a 23:07-kor indult korábbi Receiving candidate build a `4e2f28b` forráspontról futott. Mivel ezután új Receiving Media forrásmódosítás készült ugyanabban a worktree-ben, az a build nem tekinthető a jelen checkpoint release-candidate buildjének. A jelen commit után külön tiszta coordinated candidate build szükséges. PROD változatlan.
+
+### 2026-08-18 23:47 checkpoint — Shared Order Core + legacy Árutér cashier bridge staged
+
+Cél:
+- a meglévő külső Árutér kosár → központi pénztár → Fizetve → Kiadva működés megtartása mellett létrejön a közös Commerce Order Engine;
+- a legacy Árutér felület és Zustand/store működés ebben a blokkban NEM lett lecserélve vagy eltávolítva.
+
+Elkészült kódszinten:
+- `commerce_orders`, `commerce_order_items`, `commerce_order_status_events` domain és DB-séma;
+- állapotlánc: DRAFT → SENT_TO_CASHIER → PAID → ISSUED, valamint kontrollált CANCELLED;
+- explicit `EXTERNAL_MARKETPLACE` forráscsatorna;
+- cashier queue index SENT_TO_CASHIER + PAID állapotokra;
+- legacy tételsnapshot megtartható Product/Variant mapping nélkül is, `UNRESOLVED` inventory státusszal;
+- opcionális `reservation_id` előkészítve a következő Order ↔ Inventory Reservation bridge blokkhoz;
+- service-only, advisory lockkal védett atomikus rendelés-create RPC;
+- teljes create payload hash alapú idempotencia: ugyanaz a kulcs + eltérő vevő/tétel/ár/adat payload elutasítva;
+- service-only, idempotens status RPC és append-only status event ledger;
+- audit + transactional outbox rendelés létrehozáskor és státuszváltáskor;
+- külön Order jogosultságok: read / write / pay / issue;
+- célzott szerepkörök: CASHIER, GOODS_RECORDER, WAREHOUSE_ISSUER;
+- Commerce Order list/detail/create/status API;
+- `legacy-bridge` API és mapper a jelenlegi `AruterOrder` objektumokhoz;
+- legacy státuszok: `sent_to_cashier` → `SENT_TO_CASHIER`, `paid` → `PAID`, `issued` → `ISSUED`;
+- legacy egységek, nettó ár, ÁFA és storageZone snapshotként átvihetők.
+
+Tesztkapu a DEV apply előtt:
+- Order Core contract: 30/30 PASS;
+- Order DB transaction + rollback acceptance: 17/17 PASS;
+- teljes payload idempotency mismatch teszt: PASS;
+- legacy snapshot tétel Product/Variant mapping nélkül: PASS;
+- SENT_TO_CASHIER → PAID → ISSUED state machine: PASS;
+- authenticated RPC: DENY; service-role RPC: ALLOW;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- migration preflight: PASS;
+- migration SHA-256: `dcb720b6e7842bd19cd8ecff09becb648feea34159a45122745b7298f2dce1e1`.
+
+34. pont szerinti állapot:
+- elkészült: shared Order domain skeleton, cashier workflow state machine, API és legacy mapper/bridge;
+- részben elkészült: legacy Árutér dual-write/mirror még nincs bekapcsolva; Order ↔ Inventory Reservation kapcsolat csak mezőszinten előkészített;
+- hiányzik: resolved variant automatikus készletfoglalás, cancel release, issued consume, cashier Commerce UI bekötés, teljes pilot E2E;
+- DB/migration: 0.1.6 staged, még nincs DEV-re alkalmazva ebben a checkpointban;
+- ismert tech debt: unmapped legacy tétel `UNRESOLVED` marad, ezt a pénztárban később figyelmeztetéssel kell jelezni; nem blokkolhatja a rendelés láthatóságát;
+- következő blokk: coordinated DEV apply + runtime E2E, majd Order ↔ Reservation bridge;
+- becsült aktív idő: Order DEV apply/runtime 1–2 óra; Reservation bridge 4–7 óra; cashier UI kontrollált bekötés 3–5 óra.
+
+PROD változatlan; shared DEV runtime cutover nem történt.

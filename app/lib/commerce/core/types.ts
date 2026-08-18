@@ -13,7 +13,11 @@ export type CommercePermission =
   | "commerce.inventory.adjust"
   | "commerce.receiving.read"
   | "commerce.receiving.write"
-  | "commerce.receiving.post";
+  | "commerce.receiving.post"
+  | "commerce.order.read"
+  | "commerce.order.write"
+  | "commerce.order.pay"
+  | "commerce.order.issue";
 
 export type CommerceContext = {
   userId: CommerceEntityId;

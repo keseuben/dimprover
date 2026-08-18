@@ -1,0 +1,65 @@
+import type { PostgrestError } from "@supabase/supabase-js";
+import { compareDecimal, normalizeDecimal } from "../core/decimal";
+import { hasCommercePermission } from "../core/permissions";
+import { createCommerceAdminClient } from "../core/server-db";
+import type { CommerceContext } from "../core/types";
+import type {
+  CommerceOrderCustomerType,
+  CommerceOrderDetail,
+  CommerceOrderPaymentMethod,
+  CommerceOrderSourceChannel,
+  CommerceOrderStatus,
+  CommerceOrderUnit,
+} from "./types";
+
+type Row=Record<string,unknown>;
+const STATUSES=new Set<CommerceOrderStatus>(["DRAFT","SENT_TO_CASHIER","PAID","ISSUED","CANCELLED"]);
+const SOURCES=new Set<CommerceOrderSourceChannel>(["EXTERNAL_MARKETPLACE","INTERNAL_COUNTER","POS","B2B","IMPORT"]);
+const CUSTOMERS=new Set<CommerceOrderCustomerType>(["WALK_IN","LOYAL_CUSTOMER","CONTRACTOR","GUEST","B2B"]);
+const PAYMENTS=new Set<CommerceOrderPaymentMethod>(["CASH","CARD","TRANSFER","LATER"]);
+const UNITS=new Set<CommerceOrderUnit>(["DB","KG","G","M","M2","M3","FM","L","CSOMAG","PAR","KESZLET","RAKLAP","ZSAK","LADA"]);
+
+export class CommerceOrderError extends Error{
+  constructor(message:string,public readonly code:string,public readonly status:number,public readonly causeCode?:string){super(message);}
+}
+function text(value:unknown){if(typeof value==="string")return value.trim();if(typeof value==="number"||typeof value==="bigint")return String(value);return "";}
+function nullableText(value:unknown){const v=text(value);return v||null;}
+function dbError(message:string,error:PostgrestError|null):never{throw new CommerceOrderError(message,"COMMERCE_ORDER_DATABASE_ERROR",503,error?.code);}
+function requireRead(context:CommerceContext){if(!hasCommercePermission(context.permissions,"commerce.order.read"))throw new CommerceOrderError("Nincs rendelésolvasási jogosultság.","COMMERCE_PERMISSION_DENIED",403);}
+function requireWrite(context:CommerceContext){if(!hasCommercePermission(context.permissions,"commerce.order.write"))throw new CommerceOrderError("Nincs rendelésrögzítési jogosultság.","COMMERCE_PERMISSION_DENIED",403);}
+function requireStatus(context:CommerceContext,status:CommerceOrderStatus){if(status==="PAID"&&!hasCommercePermission(context.permissions,"commerce.order.pay"))throw new CommerceOrderError("Nincs fizetés-rögzítési jogosultság.","COMMERCE_PERMISSION_DENIED",403);if(status==="ISSUED"&&!hasCommercePermission(context.permissions,"commerce.order.issue"))throw new CommerceOrderError("Nincs kiadási jogosultság.","COMMERCE_PERMISSION_DENIED",403);if((status==="SENT_TO_CASHIER"||status==="CANCELLED")&&!hasCommercePermission(context.permissions,"commerce.order.write"))throw new CommerceOrderError("Nincs rendelésmódosítási jogosultság.","COMMERCE_PERMISSION_DENIED",403);}
+function quantity(value:unknown){let v:string;try{v=normalizeDecimal(text(value));}catch{throw new CommerceOrderError("A mennyiség legfeljebb 6 tizedesjegyű szám lehet.","COMMERCE_ORDER_QUANTITY_INVALID",400);}if(compareDecimal(v,"0")<=0)throw new CommerceOrderError("A mennyiségnek pozitívnak kell lennie.","COMMERCE_ORDER_QUANTITY_INVALID",400);return v;}
+function nonNegativeInt(value:unknown,code:string,label:string){const raw=text(value);if(!/^\d+$/.test(raw))throw new CommerceOrderError(`${label} nemnegatív egész szám legyen.`,code,400);return raw;}
+
+function mapOrder(row:Row){return{id:text(row.id),organizationId:text(row.organization_id),orderNumber:text(row.order_number),sourceChannel:text(row.source_channel) as CommerceOrderSourceChannel,externalReference:nullableText(row.external_reference),status:text(row.status) as CommerceOrderStatus,customerName:text(row.customer_name),customerType:text(row.customer_type) as CommerceOrderCustomerType,recorderName:nullableText(row.recorder_name),cashierName:nullableText(row.cashier_name),issuerName:nullableText(row.issuer_name),paymentMethod:nullableText(row.payment_method) as CommerceOrderPaymentMethod|null,pickupAt:nullableText(row.pickup_at),note:nullableText(row.note),sentToCashierAt:nullableText(row.sent_to_cashier_at),paidAt:nullableText(row.paid_at),issuedAt:nullableText(row.issued_at),createdByUserId:nullableText(row.created_by_user_id),createdAt:text(row.created_at),updatedAt:text(row.updated_at),archivedAt:nullableText(row.archived_at)};}
+function mapItem(row:Row){return{id:text(row.id),organizationId:text(row.organization_id),orderId:text(row.order_id),productId:nullableText(row.product_id),variantId:nullableText(row.variant_id),reservationId:nullableText(row.reservation_id),inventoryStatus:text(row.inventory_status),productName:text(row.product_name),sku:nullableText(row.sku),unit:text(row.unit),quantity:text(row.quantity),priceNetMinor:text(row.price_net_minor),vatRateBasisPoints:Number(row.vat_rate_basis_points||0),storageZone:nullableText(row.storage_zone),createdAt:text(row.created_at),updatedAt:text(row.updated_at),archivedAt:nullableText(row.archived_at)};}
+
+export async function listCommerceOrders(context:CommerceContext,input:{status?:unknown;cashierQueue?:boolean;limit?:number}={}){
+  requireRead(context);const client=createCommerceAdminClient();let query=client.from("commerce_orders").select("*").eq("organization_id",context.organizationId).is("archived_at",null).order("created_at",{ascending:false}).limit(Math.max(1,Math.min(200,Math.floor(input.limit||50))));
+  const status=text(input.status).toUpperCase();if(status){if(!STATUSES.has(status as CommerceOrderStatus))throw new CommerceOrderError("Ismeretlen rendelési állapot.","COMMERCE_ORDER_STATUS_INVALID",400);query=query.eq("status",status);}else if(input.cashierQueue){query=query.in("status",["SENT_TO_CASHIER","PAID"]);}
+  const result=await query;if(result.error)dbError("A rendelések nem olvashatók.",result.error);return((result.data||[])as Row[]).map(mapOrder);
+}
+
+export async function getCommerceOrder(context:CommerceContext,orderIdInput:unknown):Promise<CommerceOrderDetail>{
+  requireRead(context);const orderId=text(orderIdInput);if(!orderId)throw new CommerceOrderError("A rendelés azonosítója kötelező.","COMMERCE_ORDER_ID_REQUIRED",400);const client=createCommerceAdminClient();
+  const [order,items]=await Promise.all([client.from("commerce_orders").select("*").eq("organization_id",context.organizationId).eq("id",orderId).is("archived_at",null).maybeSingle(),client.from("commerce_order_items").select("*").eq("organization_id",context.organizationId).eq("order_id",orderId).is("archived_at",null).order("created_at",{ascending:true}).order("id",{ascending:true})]);
+  if(order.error)dbError("A rendelés nem olvasható.",order.error);if(!order.data)throw new CommerceOrderError("A rendelés nem található.","COMMERCE_ORDER_NOT_FOUND",404);if(items.error)dbError("A rendelési tételek nem olvashatók.",items.error);return{...mapOrder(order.data as Row),items:((items.data||[])as Row[]).map(mapItem)} as CommerceOrderDetail;
+}
+
+function normalizeItems(input:unknown){
+  if(!Array.isArray(input)||!input.length)throw new CommerceOrderError("A rendelés legalább egy tételt tartalmazzon.","COMMERCE_ORDER_ITEMS_REQUIRED",400);
+  return input.map((raw)=>{if(!raw||typeof raw!=="object"||Array.isArray(raw))throw new CommerceOrderError("Érvénytelen rendelési tétel.","COMMERCE_ORDER_ITEM_INVALID",400);const item=raw as Record<string,unknown>;const unit=text(item.unit).toUpperCase() as CommerceOrderUnit;if(!UNITS.has(unit))throw new CommerceOrderError("Ismeretlen rendelési mennyiségi egység.","COMMERCE_ORDER_UNIT_INVALID",400);const productName=text(item.productName);if(!productName)throw new CommerceOrderError("A terméknév kötelező.","COMMERCE_ORDER_PRODUCT_NAME_REQUIRED",400);const vatRaw=text(item.vatRateBasisPoints)||"2700";if(!/^\d+$/.test(vatRaw)||Number(vatRaw)>10000)throw new CommerceOrderError("Az ÁFA bázispont értéke hibás.","COMMERCE_ORDER_VAT_INVALID",400);return{productId:nullableText(item.productId),variantId:nullableText(item.variantId),productName,sku:nullableText(item.sku),unit,quantity:quantity(item.quantity),priceNetMinor:nonNegativeInt(item.priceNetMinor,"COMMERCE_ORDER_PRICE_INVALID","A nettó egységár"),vatRateBasisPoints:Number(vatRaw),storageZone:nullableText(item.storageZone)};});
+}
+
+export async function createCommerceOrder(context:CommerceContext,input:Record<string,unknown>){
+  requireWrite(context);const orderNumber=text(input.orderNumber),idempotencyKey=text(input.idempotencyKey);if(!orderNumber||!idempotencyKey)throw new CommerceOrderError("Rendelésszám és idempotency kulcs kötelező.","COMMERCE_ORDER_REQUIRED_FIELDS",400);const source=(text(input.sourceChannel).toUpperCase()||"EXTERNAL_MARKETPLACE") as CommerceOrderSourceChannel;if(!SOURCES.has(source))throw new CommerceOrderError("Ismeretlen rendelési forrás.","COMMERCE_ORDER_SOURCE_INVALID",400);const customerType=(text(input.customerType).toUpperCase()||"GUEST") as CommerceOrderCustomerType;if(!CUSTOMERS.has(customerType))throw new CommerceOrderError("Ismeretlen vevőtípus.","COMMERCE_ORDER_CUSTOMER_TYPE_INVALID",400);const customerName=text(input.customerName)||"Helyszíni vásárló";const initialStatus=(text(input.status).toUpperCase()||"SENT_TO_CASHIER") as CommerceOrderStatus;if(!["DRAFT","SENT_TO_CASHIER"].includes(initialStatus))throw new CommerceOrderError("Új rendelés csak vázlatként vagy pénztárra küldve hozható létre.","COMMERCE_ORDER_INITIAL_STATUS_INVALID",400);const pickupAt=nullableText(input.pickupAt);if(pickupAt&&Number.isNaN(Date.parse(pickupAt)))throw new CommerceOrderError("Az átvételi időpont hibás.","COMMERCE_ORDER_PICKUP_AT_INVALID",400);const items=normalizeItems(input.items);
+  const client=createCommerceAdminClient();const result=await client.rpc("commerce_order_create_atomic",{p_organization_id:context.organizationId,p_order_number:orderNumber,p_source_channel:source,p_external_reference:nullableText(input.externalReference),p_customer_name:customerName,p_customer_type:customerType,p_recorder_name:nullableText(input.recorderName),p_pickup_at:pickupAt,p_note:nullableText(input.note),p_initial_status:initialStatus,p_items:items,p_created_by_user_id:context.userId,p_idempotency_key:idempotencyKey});
+  if(result.error){const msg=result.error.message||"";const mapping:Array<[string,number]>=[["COMMERCE_ORDER_IDEMPOTENCY_PAYLOAD_MISMATCH",409],["COMMERCE_ORDER_ITEMS_REQUIRED",400],["COMMERCE_ORDER_PRODUCT_SCOPE_MISMATCH",404],["COMMERCE_ORDER_VARIANT_SCOPE_MISMATCH",404],["COMMERCE_ORDER_PRODUCT_VARIANT_MISMATCH",400],["COMMERCE_ORDER_ACTOR_NOT_FOUND",403],["COMMERCE_ORDER_NUMBER_REQUIRED",400],["COMMERCE_ORDER_SOURCE_INVALID",400],["COMMERCE_ORDER_INITIAL_STATUS_INVALID",400],["COMMERCE_ORDER_CUSTOMER_TYPE_INVALID",400],["COMMERCE_ORDER_CUSTOMER_REQUIRED",400],["COMMERCE_ORDER_IDEMPOTENCY_REQUIRED",400]];const known=mapping.find(([code])=>msg.includes(code));if(known)throw new CommerceOrderError("A rendelés üzleti szabály miatt nem menthető.",known[0],known[1],result.error.code);if(result.error.code==="23505")throw new CommerceOrderError("A rendelés vagy külső hivatkozás már létezik.","COMMERCE_ORDER_DUPLICATE",409,result.error.code);dbError("A rendelés létrehozása sikertelen.",result.error);}
+  return result.data as Row;
+}
+
+export async function setCommerceOrderStatus(context:CommerceContext,orderIdInput:unknown,input:Record<string,unknown>){
+  const orderId=text(orderIdInput),status=text(input.status).toUpperCase() as CommerceOrderStatus;if(!orderId)throw new CommerceOrderError("A rendelés azonosítója kötelező.","COMMERCE_ORDER_ID_REQUIRED",400);if(!STATUSES.has(status)||status==="DRAFT")throw new CommerceOrderError("Érvénytelen célállapot.","COMMERCE_ORDER_STATUS_INVALID",400);requireStatus(context,status);const idempotencyKey=text(input.idempotencyKey);if(!idempotencyKey)throw new CommerceOrderError("Idempotency kulcs kötelező.","COMMERCE_ORDER_STATUS_IDEMPOTENCY_REQUIRED",400);const payment=text(input.paymentMethod).toUpperCase() as CommerceOrderPaymentMethod;if(payment&&!PAYMENTS.has(payment))throw new CommerceOrderError("Ismeretlen fizetési mód.","COMMERCE_ORDER_PAYMENT_METHOD_INVALID",400);
+  const client=createCommerceAdminClient();const result=await client.rpc("commerce_order_set_status",{p_organization_id:context.organizationId,p_order_id:orderId,p_status:status,p_payment_method:payment||null,p_cashier_name:nullableText(input.cashierName),p_issuer_name:nullableText(input.issuerName),p_actor_user_id:context.userId,p_idempotency_key:idempotencyKey});
+  if(result.error){const msg=result.error.message||"";const mapping:Array<[string,number]>=[["COMMERCE_ORDER_NOT_FOUND",404],["COMMERCE_ORDER_STATUS_TRANSITION_INVALID",409],["COMMERCE_ORDER_STATUS_INVALID",400],["COMMERCE_ORDER_PAYMENT_METHOD_INVALID",400],["COMMERCE_ORDER_STATUS_IDEMPOTENCY_REQUIRED",400],["COMMERCE_ORDER_ACTOR_NOT_FOUND",403]];const known=mapping.find(([code])=>msg.includes(code));if(known)throw new CommerceOrderError("A rendelés állapota üzleti szabály miatt nem módosítható.",known[0],known[1],result.error.code);dbError("A rendelési állapot mentése sikertelen.",result.error);}return result.data as Row;
+}
