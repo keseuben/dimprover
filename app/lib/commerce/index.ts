@@ -12,3 +12,5 @@ export * from "./core/permissions";
 
 export * from "./core/server-db";
 export * from "./product/repository";
+
+export * from "./inventory/repository";

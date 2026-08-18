@@ -33,7 +33,7 @@ const identifiers: ProductIdentifier[] = [
 check("13 identifier resolver follows EAN before DIMPRO QR", () => assert.equal(resolveIdentifier("4006381333931", identifiers)?.id, "ean"));
 const sql = fs.readFileSync("supabase/DIMPRO_COMMERCE_CORE_M0_M1_BOOTSTRAP.sql", "utf8");
 check("14 schema is organization-scoped", () => assert.ok((sql.match(/organization_id uuid not null/g) || []).length >= 12));
-check("15 schema contains tenant RLS policy", () => assert.ok(sql.includes("dimpro_is_organization_member(organization_id)")));
+check("15 schema is server-only with RLS and direct client grants revoked", () => assert.ok(sql.includes("enable row level security") && sql.includes("revoke all on table public.%I from anon, authenticated, service_role")));
 check("16 stock ledger is idempotent per organization", () => assert.ok(sql.includes("unique (organization_id, idempotency_key)")));
 check("17 balance exposes generated available quantity", () => assert.ok(sql.includes("available_quantity numeric(20,6) generated always as (physical_quantity - reserved_quantity) stored")));
 check("18 legacy product stock_quantity is not used by Commerce Core", () => assert.equal(sql.includes("stock_quantity"), false));

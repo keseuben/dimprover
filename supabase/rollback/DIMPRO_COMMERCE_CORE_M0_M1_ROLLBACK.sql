@@ -1,3 +1,5 @@
+drop function if exists public.commerce_inventory_apply_movement(uuid,uuid,uuid,text,text,numeric,numeric,numeric,text,text,uuid,timestamptz);
+drop function if exists public.commerce_product_create_atomic(uuid,text,text,text,text,uuid,uuid,uuid,text,jsonb,jsonb);
 -- DEV rollback for DIMPRO Commerce Core M0/M1 staged migration.
 drop table if exists public.commerce_outbox_events cascade;
 drop table if exists public.commerce_audit_events cascade;
@@ -16,3 +18,4 @@ drop table if exists public.commerce_brands cascade;
 drop table if exists public.commerce_categories cascade;
 drop table if exists public.commerce_warehouses cascade;
 drop table if exists public.commerce_storefronts cascade;
+drop table if exists public.commerce_schema_meta cascade;

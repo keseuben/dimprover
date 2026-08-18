@@ -13,7 +13,7 @@ const checks = [
   ["05 get product is organization scoped", repo.includes('.eq("organization_id", context.organizationId).eq("id", productId)')],
   ["06 create forces organization from context", repo.includes("organization_id: context.organizationId")],
   ["07 related category/brand/manufacturer scope is verified", repo.includes("verifyScopedReference") && repo.includes("COMMERCE_REFERENCE_SCOPE_MISMATCH")],
-  ["08 identifier duplicate maps to conflict", repo.includes("COMMERCE_IDENTIFIER_DUPLICATE") && repo.includes('insertResult.error.code === "23505"')],
+  ["08 identifier duplicate maps to conflict", repo.includes("COMMERCE_PRODUCT_DUPLICATE") && repo.includes('rpc.error.code === "23505"') && repo.includes("commerce_product_create_atomic")],
   ["09 resolve endpoint exists and accepts code", resolveRoute.includes('searchParams.get("code")') && resolveRoute.includes("resolveCommerceProductByCode")],
   ["10 identifier resolver applies priority ordering", repo.includes("IDENTIFIER_PRIORITY") && repo.includes(".sort((a, b) =>")],
   ["11 product read permission is enforced", repo.includes('requirePermission(context, "commerce.product.read")')],

@@ -187,69 +187,65 @@ export async function createCommerceProduct(context: CommerceContext, input: Rec
   const requestedStatus = text(input.status).toUpperCase();
   const status: ProductStatus = STATUS_VALUES.has(requestedStatus as ProductStatus) ? requestedStatus as ProductStatus : "DRAFT";
   const slug = slugify(text(input.slug) || name);
-  const insertResult = await client.from("commerce_products").insert({
-    organization_id: context.organizationId,
-    name,
-    slug,
-    description: nullableText(input.description),
-    type_model: nullableText(input.typeModel),
-    category_id: categoryId,
-    brand_id: brandId,
-    manufacturer_id: manufacturerId,
-    status,
-  }).select("id").single();
-  if (insertResult.error) {
-    if (insertResult.error.code === "23505") throw new CommerceProductError("Ilyen termék slug már létezik.", "COMMERCE_PRODUCT_DUPLICATE", 409, insertResult.error.code);
-    dbError("A termék létrehozása sikertelen.", insertResult.error);
+  const rawVariant = input.defaultVariant && typeof input.defaultVariant === "object" && !Array.isArray(input.defaultVariant)
+    ? input.defaultVariant as Record<string, unknown>
+    : {};
+  const unitCandidate = text(rawVariant.unit).toUpperCase();
+  const unit: UnitOfMeasure = UNIT_VALUES.has(unitCandidate as UnitOfMeasure) ? unitCandidate as UnitOfMeasure : "DB";
+  const sku = nullableText(rawVariant.sku);
+  const identifiers: Array<{ type: ProductIdentifierType; value: string; normalizedValue: string; primary: boolean }> = [];
+  const requestedIdentifiers = Array.isArray(input.identifiers) ? input.identifiers : [];
+  for (const raw of requestedIdentifiers) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const identifier = raw as Record<string, unknown>;
+    const type = text(identifier.type).toUpperCase() as ProductIdentifierType;
+    if (!IDENTIFIER_TYPES.has(type)) throw new CommerceProductError("Ismeretlen termékazonosító típus.", "COMMERCE_IDENTIFIER_TYPE_INVALID", 400);
+    const value = text(identifier.value);
+    const validation = validateProductIdentifier(type, value);
+    if (!validation.ok) throw new CommerceProductError("Érvénytelen termékazonosító.", validation.reason, 400);
+    if (!identifiers.some((item) => item.type === type && item.normalizedValue === validation.normalized)) {
+      identifiers.push({ type, value, normalizedValue: validation.normalized, primary: Boolean(identifier.primary) });
+    }
   }
-  const productId = text((insertResult.data as Row).id);
-  try {
-    const rawVariant = input.defaultVariant && typeof input.defaultVariant === "object" && !Array.isArray(input.defaultVariant)
-      ? input.defaultVariant as Record<string, unknown>
-      : {};
-    const unitCandidate = text(rawVariant.unit).toUpperCase();
-    const unit: UnitOfMeasure = UNIT_VALUES.has(unitCandidate as UnitOfMeasure) ? unitCandidate as UnitOfMeasure : "DB";
-    const sku = nullableText(rawVariant.sku);
-    const variantResult = await client.from("commerce_product_variants").insert({
-      organization_id: context.organizationId,
-      product_id: productId,
+  if (sku) {
+    const normalizedSku = normalizeProductIdentifier("SKU", sku);
+    if (!identifiers.some((item) => item.type === "SKU" && item.normalizedValue === normalizedSku)) {
+      identifiers.push({ type: "SKU", value: sku, normalizedValue: normalizedSku, primary: identifiers.length === 0 });
+    }
+  }
+  const rpc = await client.rpc("commerce_product_create_atomic", {
+    p_organization_id: context.organizationId,
+    p_name: name,
+    p_slug: slug,
+    p_description: nullableText(input.description),
+    p_type_model: nullableText(input.typeModel),
+    p_category_id: categoryId,
+    p_brand_id: brandId,
+    p_manufacturer_id: manufacturerId,
+    p_status: status,
+    p_default_variant: {
       name: text(rawVariant.name) || name,
       sku,
       unit,
       attributes: rawVariant.attributes && typeof rawVariant.attributes === "object" && !Array.isArray(rawVariant.attributes) ? rawVariant.attributes : {},
-      status,
-    }).select("id").single();
-    if (variantResult.error) dbError("Az alap termékváltozat létrehozása sikertelen.", variantResult.error);
-    const variantId = text((variantResult.data as Row).id);
-    const requestedIdentifiers = Array.isArray(input.identifiers) ? input.identifiers : [];
-    const identifierRows: Record<string, unknown>[] = [];
-    if (sku) {
-      identifierRows.push({ organization_id: context.organizationId, product_id: productId, variant_id: variantId, identifier_type: "SKU", value: sku, normalized_value: normalizeProductIdentifier("SKU", sku), is_primary: requestedIdentifiers.length === 0 });
-    }
-    for (const raw of requestedIdentifiers) {
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-      const identifier = raw as Record<string, unknown>;
-      const type = text(identifier.type).toUpperCase() as ProductIdentifierType;
-      if (!IDENTIFIER_TYPES.has(type)) throw new CommerceProductError("Ismeretlen termékazonosító típus.", "COMMERCE_IDENTIFIER_TYPE_INVALID", 400);
-      const value = text(identifier.value);
-      const validation = validateProductIdentifier(type, value);
-      if (!validation.ok) throw new CommerceProductError("Érvénytelen termékazonosító.", validation.reason, 400);
-      identifierRows.push({
-        organization_id: context.organizationId, product_id: productId, variant_id: variantId,
-        identifier_type: type, value, normalized_value: validation.normalized, is_primary: Boolean(identifier.primary),
-      });
-    }
-    if (identifierRows.length) {
-      const identifierInsert = await client.from("commerce_product_identifiers").insert(identifierRows);
-      if (identifierInsert.error) {
-        if (identifierInsert.error.code === "23505") throw new CommerceProductError("A termékazonosító már használatban van.", "COMMERCE_IDENTIFIER_DUPLICATE", 409, identifierInsert.error.code);
-        dbError("A termékazonosító mentése sikertelen.", identifierInsert.error);
-      }
-    }
-  } catch (error) {
-    await client.from("commerce_products").delete().eq("organization_id", context.organizationId).eq("id", productId);
-    throw error;
+    },
+    p_identifiers: identifiers,
+  });
+  if (rpc.error) {
+    const message = rpc.error.message || "";
+    if (rpc.error.code === "23505") throw new CommerceProductError("A termék slug, cikkszám vagy azonosító már használatban van.", "COMMERCE_PRODUCT_DUPLICATE", 409, rpc.error.code);
+    const known = [
+      "COMMERCE_ORGANIZATION_NOT_ACTIVE","COMMERCE_PRODUCT_NAME_REQUIRED","COMMERCE_PRODUCT_SLUG_REQUIRED",
+      "COMMERCE_PRODUCT_STATUS_INVALID","COMMERCE_CATEGORY_SCOPE_MISMATCH","COMMERCE_BRAND_SCOPE_MISMATCH",
+      "COMMERCE_MANUFACTURER_SCOPE_MISMATCH","COMMERCE_VARIANT_UNIT_INVALID","COMMERCE_IDENTIFIERS_ARRAY_REQUIRED",
+      "COMMERCE_IDENTIFIER_TYPE_INVALID","COMMERCE_IDENTIFIER_INVALID",
+    ].find((code) => message.includes(code));
+    if (known) throw new CommerceProductError("A termék adatai nem felelnek meg a Commerce szabályoknak.", known, 400, rpc.error.code);
+    dbError("A termék atomi létrehozása sikertelen.", rpc.error);
   }
+  const payload = rpc.data && typeof rpc.data === "object" && !Array.isArray(rpc.data) ? rpc.data as Row : null;
+  const productId = text(payload?.productId);
+  if (!productId) throw new CommerceProductError("A termék létrejött, de az azonosító nem érkezett vissza.", "COMMERCE_PRODUCT_CREATE_RESPONSE_INVALID", 500);
   return getCommerceProduct(context, productId);
 }
 

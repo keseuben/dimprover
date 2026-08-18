@@ -145,3 +145,43 @@ Következő:
 - tranzakciós Product create RPC vagy biztonságos service transaction megoldás;
 - Inventory ledger writer + balance update;
 - letisztult Termékek admin UI skeleton.
+
+### 2026-08-18 18:xx checkpoint — Migration gate + Inventory Engine + Termékek UI skeleton
+
+Elkészült:
+- canonical Commerce M0/M1 DEV migration: `supabase/migrations/20260818183000_dimpro_commerce_core_m0_m1.sql`;
+- schema marker: `commerce-core` / `0.1.0`;
+- server-only RLS/grant modell: anon/authenticated közvetlen tábla-hozzáférés tiltva, service API explicit jogokkal;
+- `commerce_product_create_atomic` SECURITY DEFINER RPC, így Product + default Variant + Identifier + audit + outbox egy tranzakcióban készül;
+- `commerce_inventory_apply_movement` SECURITY DEFINER RPC advisory xact lockkal, idempotencia-védelemmel és atomi balance + ledger + audit + outbox írással;
+- StockMovement/InventoryBalance közvetlen UPDATE nincs kitéve service_role felé;
+- Product repository átállt az atomi create RPC-re;
+- Inventory read repository + `GET /api/v1/commerce/inventory`;
+- Inventory movement API + `POST /api/v1/commerce/inventory/movements`, kötelező idempotency-key támogatással;
+- új, a legacy Árutér admin oldalt nem felülíró letisztult Commerce Termékek oldal: `/aruter/admin/termekek`;
+- desktop: Data Grid + jobb oldali inspector; mobil: kártyás lista; új termék gyorsfelvitel EAN/SKU/egység mezőkkel;
+- a gridben az Ár / Belső készlet / Külső készlet oszlopok már helyet kaptak, adataggregátoruk következő blokk.
+
+Migration/DB gate:
+- preflight: PASS, tiszta Commerce baseline;
+- tranzakciós rollback-test: PASS;
+- teljes DB rollback acceptance: 15/15 PASS;
+- valós DEV Identity sentinel ellenőrizve;
+- tényleges migration apply még nem futott, mert a közös exclusive-operation lockot ÁrminAI build használta a blokk közben.
+
+Acceptance:
+- core: 21/21 PASS;
+- legacy Árutér → központi pénztár kompatibilitás: 10/10 PASS;
+- Product API contract: 14/14 PASS;
+- Inventory API/ledger contract: 16/16 PASS;
+- DB rollback E2E: 15/15 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+Következő blokk:
+1. közös lock felszabadulása után koordinált DEV migration apply + verify;
+2. Product + Inventory runtime smoke;
+3. Product list summary aggregator: ár + belső/külső készlet;
+4. Termékek UI összekötése az aggregált adatokkal;
+5. Media Engine MVP előkészítés.
