@@ -197,3 +197,41 @@ A következő kapu:
 3. candidate health + unauth/bad-token regresszió;
 4. DEV-only valódi Send-session HTTP session/item idempotencia acceptance;
 5. csak minden PASS után DEV cutover.
+
+## 2026-08-18 – P7 candidate build BLOCKED
+
+A P7 schema és szerver API kapuk zöldek, azonban az első koordinált candidate build nem készült el.
+
+Build target:
+- `.next-terep-p7-v010-565be7f`
+- source commit: `565be7f`
+- központi build lock: szabályosan megszerezve és hibánál felszabadítva.
+
+Hiba:
+- `TurbopackInternalError: Symlink [project]/node_modules is invalid, it points out of the filesystem root`.
+
+Ok:
+- a Jázmin worktree saját `node_modules` helyett ideiglenesen a `benjadmin-operator-ui-v2/node_modules` könyvtárra mutató symlinket használt a statikus ellenőrzésekhez;
+- a package-lock SHA egyezett, ezért ESLint/tsc futtatásra megfelelő volt;
+- Next/Turbopack production build külső worktree-re mutató `node_modules` symlinket nem fogad el.
+
+Állapot:
+- kód quality gate: PASS;
+- migráció contract: 13/13 PASS;
+- P7 server contract: 12/12 PASS;
+- Terep statikus acceptance: 61/61 PASS;
+- teljes lint: 0 error / 103 meglévő warning;
+- DEV schema apply + backup: PASS;
+- candidate build: BLOCKED;
+- DEV cutover: NEM történt;
+- aktív DEV runtime: változatlan.
+
+Következő kontrollált lépés:
+1. a Jázmin worktree külső `node_modules` symlinkjének eltávolítása;
+2. saját helyi dependency tree létrehozása `npm ci` használatával, változatlan package-lock mellett;
+3. `tsc` + célzott/full lint visszaellenőrzés;
+4. új koordinált P7 candidate build;
+5. candidate HTTP acceptance;
+6. csak teljes PASS után DEV cutover.
+
+Emberi termékdöntés nem szükséges; ez izolált build-környezeti javítás. A végrehajtási terv build-hiba STOP szabálya miatt a javítás külön következő fejlesztési körben indulhat.
