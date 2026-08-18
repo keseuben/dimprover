@@ -33,10 +33,11 @@ function kindForPhase(phase) {
   return "CODE_ACTIVITY";
 }
 function stageForPhase(phase) {
-  if (phase === "build" || phase === "release") return 5;
-  if (phase === "test") return 3;
-  if (phase === "review" || phase === "fix") return 4;
-  if (phase === "commit") return 5;
+  if (["analysis", "planning", "prepare", "preparation", "discovery"].includes(phase)) return 1;
+  if (phase === "test" || phase === "testing") return 3;
+  if (["review", "fix", "verification"].includes(phase)) return 4;
+  if (["build", "commit", "release"].includes(phase)) return 5;
+  if (["complete", "completed", "close", "closing", "handoff"].includes(phase)) return 6;
   return 2;
 }
 function compilePatterns(values) {
@@ -381,10 +382,10 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
       recordType: PRESENCE_RECORD, kind: kindForPhase(item.phase), presenceState: "ACTIVE", presenceKey: item.presenceKey,
       lastSeenAt: new Date(now).toISOString(), detectedAt: item.detectedAt, inferredBy: item.inferredBy, confidence: item.confidence,
       operation: item.operation, owner: item.owner, worktree: item.worktree, branch: item.branch, target: item.target,
-      workStageIndex: item.workStageIndex, startedAt: item.startedAt, heartbeatAt: item.heartbeatAt, nextStep: item.nextStep,
+      workStageIndex: item.workStageIndex || stageForPhase(item.phase), startedAt: item.startedAt, heartbeatAt: item.heartbeatAt, nextStep: item.nextStep,
       buildLockWaiting: item.buildLockWaiting, schedulerRunId: item.schedulerRunId, schedulerSlotAt: item.schedulerSlotAt,
       projectId: item.projectId, mainModule: item.mainModule, moduleName: item.moduleName, submoduleName: item.submoduleName,
-      workItem: item.workItem, workStageIndex: stageForPhase(item.phase), activityAction: item.summary,
+      workItem: item.workItem, activityAction: item.summary,
       activityNarrative: item.detail || `A BENJADMIN automatikusan észlelte ${workerName(item.workerCode)} aktív fejlesztési munkáját.`,
       productionAccess: "DENY",
     };
