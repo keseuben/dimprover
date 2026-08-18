@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getBenAiBridgeStatus } from "./benai-dispatch";
 import { resolveProjectRepositoryId } from "./partner-isolation";
 import { getInternalExecutorReadiness } from "./internal-executor-readiness";
+import { getDevelopmentSchedulerSnapshot } from "./development-scheduler";
 import { buildDevelopmentContextKey, DEVELOPMENT_STAGE_LABELS, resolveTaskDevelopmentContext, safeDevelopmentStage } from "./development-context";
 
 const execFileAsync = promisify(execFile);
@@ -518,7 +519,7 @@ function workerPresenceContextKey(presence: WorkerPresenceView) {
     .join(":");
 }
 
-function buildWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPresenceTransitionView[] {
+function deriveWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPresenceTransitionView[] {
   const lastByContext = new Map<string, WorkerPresenceView>();
   const transitions: WorkerPresenceTransitionView[] = [];
   const chronological = [...history].sort((a, b) => (a.detectedAt || a.createdAt).localeCompare(b.detectedAt || b.createdAt));
@@ -528,7 +529,7 @@ function buildWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPr
     const previous = lastByContext.get(contextKey);
     if (previous && previous.workerCode !== current.workerCode) {
       transitions.push({
-        id: `${previous.id}:${current.id}`,
+        id: previous.id + ":" + current.id,
         contextKey,
         fromWorkerCode: previous.workerCode,
         toWorkerCode: current.workerCode,
@@ -544,7 +545,11 @@ function buildWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPr
     }
     lastByContext.set(contextKey, current);
   }
-  return transitions.sort((a, b) => b.changedAt.localeCompare(a.changedAt)).slice(0, 30);
+  return transitions.sort((a, b) => b.changedAt.localeCompare(a.changedAt));
+}
+
+function buildWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerPresenceTransitionView[] {
+  return deriveWorkerPresenceTransitions(history).slice(0, 30);
 }
 
 export async function getDeveloperConsoleLiveStatus() {
@@ -701,6 +706,17 @@ export type DeveloperWeeklySummary = {
     latestAction: string;
     stageCounts: Record<string, number>;
   }>;
+  flowAnalytics: {
+    schedulerReady: boolean;
+    schedulerRuns: { total: number; completed: number; failed: number; readyForPull: number; workerActive: number; noTask: number; skipped: number; retries: number };
+    handoffs: number;
+    buildLockWaits: number;
+    waitingForWorker: number;
+    taskFailures: number;
+    stageCounts: Record<string, number>;
+    transitions: Array<{ fromWorkerCode: string; toWorkerCode: string; changedAt: string; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF"; workItem: string; projectId: string | null }>;
+    blockers: Array<{ kind: "TASK_FAILED" | "WAITING_WORKER" | "BUILD_LOCK_WAIT" | "SCHEDULER_FAILED"; label: string; detail: string; at: string; workerCode: string | null; taskId: string | null; projectId: string | null }>;
+  };
   truncated: boolean;
   generatedAt: string;
   productionAccess: "DENY";
@@ -786,7 +802,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   const projectId = text(projectIdInput) || null;
   const period = budapestWeek(weekInput);
   let openTaskQuery = client.from("dev_center_tasks")
-    .select("id,project_id,status,completed_at,created_at")
+    .select("id,project_id,title,status,blocked_reason,metadata,updated_at,completed_at,created_at")
     .in("status", ["queued", "ready", "claimed", "in_progress", "testing", "blocked", "failed"])
     .order("created_at", { ascending: false })
     .limit(WEEKLY_SUMMARY_LIMIT);
@@ -816,6 +832,8 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   for (const result of [worklog, audits, openTasks, completedTasks, workers, projects]) {
     if (result.error) throw new Error(result.error.message || "A heti fejlesztési összesítő adatforrása nem tölthető be.");
   }
+  let schedulerSnapshot: Awaited<ReturnType<typeof getDevelopmentSchedulerSnapshot>> | null = null;
+  try { schedulerSnapshot = await getDevelopmentSchedulerSnapshot(projectId); } catch { schedulerSnapshot = null; }
   const merged = [
     ...(worklog.data || []).map((row) => mapWorklogRow(row as Row)),
     ...(audits.data || []).map((row) => mapAuditRow(row as Row)),
@@ -832,6 +850,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   let builds = 0;
   let tests = 0;
   let errors = 0;
+  const weeklyStageCounts: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0 };
   for (const message of messages) {
     if (message.kind === "BUILD_EVENT") builds += 1;
     if (message.kind === "TEST_RESULT") tests += 1;
@@ -858,6 +877,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
       };
       current.activityCount += 1;
       current.stageCounts[String(stage)] = (current.stageCounts[String(stage)] || 0) + 1;
+      weeklyStageCounts[String(stage)] = (weeklyStageCounts[String(stage)] || 0) + 1;
       if (!current.latestAt || message.createdAt >= current.latestAt) {
         current.latestAt = message.createdAt;
         current.latestStage = stage;
@@ -884,6 +904,62 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   const workerSummary = [...workerMap.values()]
     .map((item) => ({ code: item.code, name: item.name, activityCount: item.activityCount, contextCount: item.contextKeys.size, latestAt: item.latestAt, latestStage: item.latestStage }))
     .sort((a, b) => b.activityCount - a.activityCount || a.code.localeCompare(b.code));
+  const inPeriod = (value: string | null | undefined) => Boolean(value && value >= period.startAt && value < period.endAt);
+  const schedulerRuns = schedulerSnapshot?.ready
+    ? schedulerSnapshot.runs.filter((run) => inPeriod(run.slotAt || run.startedAt || run.createdAt))
+    : [];
+  const schedulerRunStats = {
+    total: schedulerRuns.length,
+    completed: schedulerRuns.filter((run) => run.status === "completed").length,
+    failed: schedulerRuns.filter((run) => run.status === "failed").length,
+    readyForPull: schedulerRuns.filter((run) => run.status === "ready_for_pull").length,
+    workerActive: schedulerRuns.filter((run) => run.status === "worker_active").length,
+    noTask: schedulerRuns.filter((run) => run.status === "no_task").length,
+    skipped: schedulerRuns.filter((run) => run.status === "skipped").length,
+    retries: schedulerRuns.reduce((sum, run) => sum + Math.max(0, Number(run.attemptCount || 1) - 1), 0),
+  };
+  const weeklyPresenceHistory = (worklog.data || [])
+    .filter((row) => text((row as Row).source) === "worker-presence-bridge")
+    .map((row) => mapWorkerPresenceRow(row as Row, Date.now()))
+    .filter((item) => !projectId || item.projectId === projectId);
+  const weeklyTransitions = deriveWorkerPresenceTransitions(weeklyPresenceHistory)
+    .filter((item) => inPeriod(item.changedAt))
+    .filter((item) => !projectId || item.projectId === projectId);
+  const buildLockWaits = weeklyPresenceHistory.filter((item) => item.buildLockWaiting);
+  const relevantAudits = (audits.data || []).filter((raw) => {
+    const row = raw as Row;
+    return !projectId || text(row.project_id) === projectId;
+  });
+  const waitingAudits = relevantAudits.filter((raw) => text((raw as Row).action) === "TASK_BENAI_WAITING_FOR_WORKER");
+  const failedAudits = relevantAudits.filter((raw) => text((raw as Row).action) === "TASK_FAILED");
+  const blockers: DeveloperWeeklySummary["flowAnalytics"]["blockers"] = [];
+  for (const raw of failedAudits) {
+    const row = raw as Row;
+    const meta = record(row.metadata);
+    blockers.push({ kind: "TASK_FAILED", label: text(row.summary) || "Task hibával leállt", detail: text(meta.note) || "Task blokkolt / sikertelen.", at: text(row.created_at), workerCode: text(meta.workerCode) || null, taskId: text(row.task_id) || null, projectId: text(row.project_id) || null });
+  }
+  for (const raw of waitingAudits) {
+    const row = raw as Row;
+    blockers.push({ kind: "WAITING_WORKER", label: text(row.summary) || "Workerre várakozó task", detail: "Ben-AI várólista: nincs szabad, jogosult worker.", at: text(row.created_at), workerCode: null, taskId: text(row.task_id) || null, projectId: text(row.project_id) || null });
+  }
+  for (const item of buildLockWaits) {
+    blockers.push({ kind: "BUILD_LOCK_WAIT", label: item.summary || "Build lock várakozás", detail: item.nextStep || "Közös build lock felszabadulására vár.", at: item.detectedAt || item.createdAt, workerCode: item.workerCode || null, taskId: item.taskId, projectId: item.projectId });
+  }
+  for (const run of schedulerRuns.filter((item) => item.status === "failed")) {
+    blockers.push({ kind: "SCHEDULER_FAILED", label: run.summary || "Scheduler futás hibázott", detail: "Scheduler run sikertelen · próbálkozás: " + String(run.attemptCount || 1), at: run.finishedAt || run.startedAt || run.slotAt, workerCode: run.workerCode || null, taskId: run.taskId, projectId });
+  }
+  blockers.sort((a, b) => b.at.localeCompare(a.at));
+  const flowAnalytics: DeveloperWeeklySummary["flowAnalytics"] = {
+    schedulerReady: Boolean(schedulerSnapshot?.ready),
+    schedulerRuns: schedulerRunStats,
+    handoffs: weeklyTransitions.length,
+    buildLockWaits: buildLockWaits.length,
+    waitingForWorker: waitingAudits.length,
+    taskFailures: failedAudits.length,
+    stageCounts: weeklyStageCounts,
+    transitions: weeklyTransitions.slice(0, 8).map((item) => ({ fromWorkerCode: item.fromWorkerCode, toWorkerCode: item.toWorkerCode, changedAt: item.changedAt, reason: item.reason, workItem: item.workItem, projectId: item.projectId })),
+    blockers: blockers.slice(0, 8),
+  };
   return {
     ready: true,
     period,
@@ -901,6 +977,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     },
     workers: workerSummary,
     contexts,
+    flowAnalytics,
     truncated: [worklog, audits, openTasks, completedTasks].some((result) => (result.data || []).length >= WEEKLY_SUMMARY_LIMIT),
     generatedAt: new Date().toISOString(),
     productionAccess: "DENY",

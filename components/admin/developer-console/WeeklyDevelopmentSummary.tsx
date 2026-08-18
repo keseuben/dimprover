@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, RefreshCw, RotateCcw, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, LockKeyhole, RefreshCw, RotateCcw, ShieldCheck, TimerReset, TriangleAlert, UsersRound, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WeeklyDevelopmentSummary as Summary } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -176,6 +176,28 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span><b>{summary.stats.completedTasks}</b> lezárt</span>
         <span data-alert={summary.stats.blockedTasks || summary.stats.errors ? "true" : "false"}><b>{summary.stats.blockedTasks}</b> blokkolt · <b>{summary.stats.errors}</b> hiba</span>
       </div>
+
+      <section className={styles.weeklyFlowAnalytics} data-testid="benjadmin-weekly-flow-analytics" data-scheduler-ready={summary.flowAnalytics.schedulerReady ? "true" : "false"}>
+        <header><Workflow size={12} /><strong>HETI FEJLESZTÉSI FOLYAMAT</strong><span>Scheduler + worker + 6/x</span></header>
+        <div className={styles.weeklyFlowMetrics}>
+          <article data-flow-kind="scheduler"><TimerReset size={13} /><div><span>Scheduler futás</span><strong>{summary.flowAnalytics.schedulerRuns.total}</strong><small>{summary.flowAnalytics.schedulerRuns.completed} kész · {summary.flowAnalytics.schedulerRuns.failed} hibás · {summary.flowAnalytics.schedulerRuns.retries} retry</small></div></article>
+          <article data-flow-kind="handoff"><ArrowRightLeft size={13} /><div><span>Worker átadás</span><strong>{summary.flowAnalytics.handoffs}</strong><small>azonos task / munkarész</small></div></article>
+          <article data-flow-kind="waiting" data-alert={summary.flowAnalytics.buildLockWaits || summary.flowAnalytics.waitingForWorker ? "true" : "false"}><LockKeyhole size={13} /><div><span>Várakozás</span><strong>{summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker}</strong><small>{summary.flowAnalytics.buildLockWaits} build lock · {summary.flowAnalytics.waitingForWorker} worker</small></div></article>
+          <article data-flow-kind="failure" data-alert={summary.flowAnalytics.taskFailures || summary.flowAnalytics.schedulerRuns.failed ? "true" : "false"}><TriangleAlert size={13} /><div><span>Elakadás</span><strong>{summary.flowAnalytics.taskFailures + summary.flowAnalytics.schedulerRuns.failed}</strong><small>{summary.flowAnalytics.taskFailures} task · {summary.flowAnalytics.schedulerRuns.failed} scheduler</small></div></article>
+        </div>
+        <div className={styles.weeklyFlowStages} data-testid="benjadmin-weekly-flow-stage">
+          <span>6/x lefedettség</span>
+          {[1, 2, 3, 4, 5, 6].map((stage) => <b key={stage} data-stage={stage} data-active={Number(summary.flowAnalytics.stageCounts[String(stage)] || 0) > 0 ? "true" : "false"}>6/{stage}<small>{summary.flowAnalytics.stageCounts[String(stage)] || 0}</small></b>)}
+        </div>
+        {summary.flowAnalytics.transitions.length ? <div className={styles.weeklyFlowTransitions} data-testid="benjadmin-weekly-flow-transitions">
+          <span>Átadások</span>
+          {summary.flowAnalytics.transitions.slice(0, 3).map((item, index) => <b key={item.changedAt + "-" + index}><strong>{item.fromWorkerCode}</strong><ArrowRightLeft size={9} /><strong>{item.toWorkerCode}</strong><small>{item.workItem}</small></b>)}
+        </div> : null}
+        {summary.flowAnalytics.blockers.length ? <div className={styles.weeklyFlowBlockers} data-testid="benjadmin-weekly-flow-blockers">
+          <header><TriangleAlert size={11} /><strong>Elakadási okok</strong><span>{summary.flowAnalytics.blockers.length}</span></header>
+          {summary.flowAnalytics.blockers.slice(0, 4).map((item, index) => <article key={item.kind + "-" + item.at + "-" + index} data-blocker-kind={item.kind}><b>{item.label}</b><span>{item.detail}</span><small>{item.workerCode || "RENDSZER"} · {shortTime(item.at)}</small></article>)}
+        </div> : null}
+      </section>
 
       <div className={styles.weeklyFilterRow} data-testid="benjadmin-weekly-summary-filters">
         <div className={styles.weeklyWorkerStrip}>

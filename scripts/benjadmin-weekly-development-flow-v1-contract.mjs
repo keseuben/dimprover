@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const read=(file)=>fs.readFileSync(file,"utf8");
+const backend=read("app/lib/dev-center/developer-console.ts");
+const panel=read("components/admin/developer-console/WeeklyDevelopmentSummary.tsx");
+const types=read("components/admin/developer-console/types.ts");
+const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+let passed=0;
+function check(name,fn){fn();passed+=1;console.log(`PASS ${String(passed).padStart(2,"0")} ${name}`);}
+check("Flow reuses scheduler snapshot",()=>assert.ok(backend.includes("getDevelopmentSchedulerSnapshot")&&backend.includes("schedulerSnapshot.runs")));
+check("Scheduler integration is fail soft",()=>assert.ok(backend.includes("try { schedulerSnapshot = await getDevelopmentSchedulerSnapshot(projectId); } catch { schedulerSnapshot = null; }")&&backend.includes("schedulerReady: Boolean(schedulerSnapshot?.ready)")));
+check("Flow uses exact scheduler statuses",()=>assert.ok(["completed","failed","ready_for_pull","worker_active","no_task","skipped"].every((value)=>backend.includes(`run.status === "${value}"`))));
+check("Flow counts scheduler retries",()=>assert.ok(backend.includes("attemptCount")&&backend.includes("retries:")));
+check("Flow reuses worker presence bridge history",()=>assert.ok(backend.includes('source) === "worker-presence-bridge"')&&backend.includes("mapWorkerPresenceRow")));
+check("Flow reuses shared handoff derivation",()=>assert.ok(backend.includes("deriveWorkerPresenceTransitions(history)")&&backend.includes("return deriveWorkerPresenceTransitions(history).slice(0, 30)")));
+check("Flow counts build lock waiting from structured presence metadata",()=>assert.ok(backend.includes("item.buildLockWaiting")&&backend.includes("BUILD_LOCK_WAIT")));
+check("Flow counts BenAI waiting audit action exactly",()=>assert.ok(backend.includes('action) === "TASK_BENAI_WAITING_FOR_WORKER"')&&backend.includes("WAITING_WORKER")));
+check("Flow counts failed task audit action exactly",()=>assert.ok(backend.includes('action) === "TASK_FAILED"')&&backend.includes("TASK_FAILED")));
+check("Flow scopes scheduler and transitions to selected week",()=>assert.ok(backend.includes("const inPeriod")&&backend.includes("inPeriod(run.slotAt")&&backend.includes("inPeriod(item.changedAt)")));
+check("Flow scopes data to selected project",()=>assert.ok(backend.includes("getDevelopmentSchedulerSnapshot(projectId)")&&backend.includes("!projectId || item.projectId === projectId")));
+check("Flow exposes six-stage coverage",()=>assert.ok(backend.includes("weeklyStageCounts")&&types.includes("stageCounts: Record<string, number>")));
+check("Flow analytics type is shared with frontend",()=>assert.ok(types.includes("flowAnalytics:")&&types.includes("schedulerRuns:")&&types.includes("blockers: Array")));
+check("Flow UI has scheduler handoff waiting and failure cards",()=>assert.ok(["scheduler","handoff","waiting","failure"].every((value)=>panel.includes(`data-flow-kind="${value}"`))));
+check("Flow UI renders 6/x coverage",()=>assert.ok(panel.includes('data-testid="benjadmin-weekly-flow-stage"')&&panel.includes("summary.flowAnalytics.stageCounts")));
+check("Flow UI renders recent handoffs",()=>assert.ok(panel.includes('data-testid="benjadmin-weekly-flow-transitions"')&&panel.includes("fromWorkerCode")&&panel.includes("toWorkerCode")));
+check("Flow UI renders blocker reasons only when present",()=>assert.ok(panel.includes('data-testid="benjadmin-weekly-flow-blockers"')&&panel.includes("summary.flowAnalytics.blockers.length")));
+check("Flow CSS is compact and responsive",()=>assert.ok(css.includes(".weeklyFlowMetrics")&&css.includes(".weeklyFlowStages")&&css.includes(".weeklyFlowBlockers")&&css.includes("@media (max-width: 700px)")));
+check("Flow keeps PROD denied through weekly summary",()=>assert.ok(backend.includes('productionAccess: "DENY"')&&panel.includes("PROD DENY")));
+check("Flow adds no migration or new table",()=>assert.ok(!backend.includes("weekly_flow")&&!backend.includes("weekly_analytics")&&!panel.includes("migration")));
+console.log(JSON.stringify({ok:true,passed,failed:0,contract:"BENJADMIN Weekly Development Flow V1"},null,2));

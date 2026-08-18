@@ -235,6 +235,17 @@ export type WeeklyDevelopmentSummary = {
   stats: { activities: number; workers: number; contexts: number; openTasks: number; completedTasks: number; blockedTasks: number; builds: number; tests: number; errors: number };
   workers: Array<{ code: string; name: string; activityCount: number; contextCount: number; latestAt: string; latestStage: number }>;
   contexts: Array<{ key: string; projectId: string; projectName: string; mainModule: string; moduleName: string; submoduleName: string; workItem: string; activityCount: number; workers: string[]; latestAt: string; latestStage: number; latestAction: string; stageCounts: Record<string, number> }>;
+  flowAnalytics: {
+    schedulerReady: boolean;
+    schedulerRuns: { total: number; completed: number; failed: number; readyForPull: number; workerActive: number; noTask: number; skipped: number; retries: number };
+    handoffs: number;
+    buildLockWaits: number;
+    waitingForWorker: number;
+    taskFailures: number;
+    stageCounts: Record<string, number>;
+    transitions: Array<{ fromWorkerCode: string; toWorkerCode: string; changedAt: string; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF"; workItem: string; projectId: string | null }>;
+    blockers: Array<{ kind: "TASK_FAILED" | "WAITING_WORKER" | "BUILD_LOCK_WAIT" | "SCHEDULER_FAILED"; label: string; detail: string; at: string; workerCode: string | null; taskId: string | null; projectId: string | null }>;
+  };
   truncated: boolean;
   generatedAt: string;
   productionAccess: "DENY";
