@@ -101,3 +101,22 @@
 - M0 Core + DB baseline: kb. 45%
 - M1 Product + Media + Inventory: kb. 15%
 - teljes Pilot: kb. 5%
+
+## KÖTELEZŐ KOMPATIBILITÁSI SZABÁLY — KÜLSŐ ÁRUTÉR → KÖZPONTI PÉNZTÁR
+
+A meglévő Árutér működés nem bontható le a Commerce Core átállás során.
+
+Kötelező üzleti folyamat:
+
+`külső Árutér / vásárlói kosár → közös Commerce rendelés/kosár → központi pénztári várólista → fizetve → kiadva`
+
+Elvárások:
+- a külső piactéren összeállított kosár/rendelés a belső központi pénztárban látható legyen;
+- a pénztáros ugyanazokat a tételsnapshotokat, mennyiséget, árat, vevői adatot és átvételi információt lássa;
+- a külső és belső értékesítési csatorna ne külön rendelési motort használjon, hanem egy közös Commerce Order/Checkout állapotgépre fusson be;
+- a forráscsatorna külön mezővel legyen azonosítható (pl. STOREFRONT / INTERNAL_COLLECTOR / POS / B2B), de a pénztári queue közös;
+- a jelenlegi `sent_to_cashier → paid → issued` viselkedés funkcionálisan megőrzendő;
+- a meglévő `app/aruter/*` és `components/aruter/*` felületek a kontrollált átállásig érintetlen compatibility layerként működjenek;
+- csak akkor köthető át új Commerce Order Engine-re, ha cross-surface acceptance bizonyítja, hogy a külső kosár megjelenik a központi pénztárban és végigvihető fizetett/kiadott állapotig.
+
+Ez M0/M1-ben regressziós kapu, még akkor is, ha a teljes Order Engine későbbi milestone.
