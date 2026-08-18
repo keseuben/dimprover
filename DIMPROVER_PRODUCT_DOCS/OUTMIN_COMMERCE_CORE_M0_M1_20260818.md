@@ -891,3 +891,23 @@ Tesztkapu DEV apply előtt:
 - DB/migration: 0.1.7 staged, még nincs DEV-re alkalmazva ebben a checkpointban;
 - következő lépés: coordinated DEV apply → runtime E2E → cashier bridge következő integrációs réteg;
 - PROD változatlan.
+
+### 2026-08-19 00:03 checkpoint — Legacy Árutér SKU resolution bridge
+
+Elkészült:
+- a legacy Árutér Order bridge opcionálisan Commerce Product/Variant azonosítást végez SKU alapján;
+- készletmapping csak akkor aktív, ha kontrollált `fulfillmentSourceId` is rendelkezésre áll;
+- forrás nélkül a legacy tétel snapshot-only / UNRESOLVED marad, így a jelenlegi pénztári láthatóság nem kerül veszélybe;
+- azonosításkor a matched identifier variant az elsődleges, majd aktív variant fallback;
+- map-elt order esetén a bridge a reserve műveletet a PAID/ISSUED státusz replay előtt futtatja;
+- DRAFT és CANCELLED legacy import nem kényszerít foglalást;
+- bridge válaszban mapped/unresolved darabszám és reservation eredmény is megjelenik.
+
+Tesztkapu:
+- legacy resolution contract: 16/16 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+A 0.1.7 Order Inventory Bridge DEV apply továbbra is a központi build lock felszabadulására vár. PROD változatlan.
