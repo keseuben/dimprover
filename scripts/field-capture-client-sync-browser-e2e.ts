@@ -77,7 +77,7 @@ async function main() {
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--host-resolver-rules=MAP drop.dev.dimpro.hu 127.0.0.1", "--unsafely-treat-insecure-origin-as-secure=http://drop.dev.dimpro.hu:3158", "--disable-web-security"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--host-resolver-rules=MAP drop.dev.dimpro.hu 127.0.0.1", `--unsafely-treat-insecure-origin-as-secure=${BASE}`, "--disable-web-security"],
   });
   try {
     const page = await browser.newPage();
