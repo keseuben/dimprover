@@ -13,7 +13,7 @@ const PRESENCE_RECORD = "WORKER_PRESENCE_V1";
 const ACTIVE_TTL_MS = Math.max(120_000, Number(process.env.BENJADMIN_WORKER_PRESENCE_TTL_MS || 5 * 60_000));
 const COMMIT_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_COMMIT_TTL_MS || 12 * 60_000));
 const SESSION_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_SESSION_TTL_MS || 10 * 60_000));
-const WORKTREE_SCAN_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_WORKTREE_SCAN_TTL_MS || 30 * 60_000));
+const WORKTREE_SCAN_TTL_MS = Math.max(ACTIVE_TTL_MS, Number(process.env.BENJADMIN_WORKER_WORKTREE_SCAN_TTL_MS || 120 * 60_000));
 
 function text(value) { return typeof value === "string" ? value.trim() : ""; }
 function record(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
@@ -308,6 +308,8 @@ export async function discoverRecentWorkerWorktrees(root, aliases, nowMs) {
   const raw = await git(root, ["worktree", "list", "--porcelain"], 2 * 1024 * 1024);
   if (!raw) return [];
   const primary = path.resolve(root);
+  const branchTipRaw = await git(root, ["for-each-ref", "--format=%(refname:short)%00%(committerdate:unix)", "refs/heads"], 2 * 1024 * 1024);
+  const branchTipMs = new Map(String(branchTipRaw || "").split("\n").map((line) => line.split("\0")).filter(([branch, seconds]) => branch && Number(seconds) > 0).map(([branch, seconds]) => [branch, Number(seconds) * 1000]));
   const discovered = [];
   for (const item of parseGitWorktreeList(raw)) {
     const worktree = path.resolve(text(item.worktree));
@@ -318,8 +320,10 @@ export async function discoverRecentWorkerWorktrees(root, aliases, nowMs) {
     if (!match) continue;
     let touchedMs = 0;
     try { touchedMs = (await stat(worktree)).mtimeMs; } catch { continue; }
-    if (!touchedMs || nowMs - touchedMs > WORKTREE_SCAN_TTL_MS) continue;
-    discovered.push({ root: worktree, workerCode: match.workerCode, branch: text(item.branch), touchedMs });
+    const branchActivityMs = Number(branchTipMs.get(text(item.branch)) || 0);
+    const activityMs = Math.max(touchedMs, branchActivityMs);
+    if (!activityMs || nowMs - activityMs > WORKTREE_SCAN_TTL_MS) continue;
+    discovered.push({ root: worktree, workerCode: match.workerCode, branch: text(item.branch), touchedMs, activityMs });
   }
   return discovered;
 }
