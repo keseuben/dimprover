@@ -1024,3 +1024,41 @@ Tesztkapu:
 - becsült aktív idő: build + smoke 1–2 óra; mirror E2E + reconciliation alap 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 01:10 checkpoint — 2df7b74 candidate build PASS
+
+A 2df7b74 legacy Árutér → Commerce fail-open mirror checkpoint teljes Next.js candidate buildje sikeresen elkészült.
+
+Build eredmény:
+- source commit: `2df7b7479edd885f99f587e9e2c56bc537640b3e`;
+- branch: `feature/outmin-commerce-core-m0-m1-20260818`;
+- build ID: `l4utaJJATPZ4Jzw7eu5RP`;
+- coordinated build exitCode: `0`;
+- build művelet: 2026-08-19 01:00:38–01:09:35 CEST;
+- standalone output: jelen van;
+- `.dimpro-release.json`: build ID, commit és branch egyezés ellenőrizve.
+
+Candidate manifest smoke:
+- `/aruter/penztar`: route manifestben PRESENT;
+- `/aruter/admin/penztar`: route manifestben PRESENT;
+- `/api/v1/commerce/orders`: route manifestben PRESENT;
+- `/api/v1/commerce/context`: route manifestben PRESENT.
+
+Regresszió/kapuk a build után:
+- legacy mirror contract: 22/22 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- elkészült: 2df7b74 candidate build + release meta + manifest smoke;
+- részben elkészült: külön, élő HTTP candidate runtime smoke még hátravan; shared DEV cutover nem történt;
+- hiányzik: DEV-only feature-flag mirror E2E, cashier böngészős E2E, tartós mirror reconciliation;
+- DB/migration: nincs új migráció, Commerce schema továbbra is 0.1.7 / 8;
+- API/UI: buildbe bekerült a feature-flagelt fail-open bridge, legacy pénztár változatlan;
+- ismert tech debt: mirror hibaállapot még szerverlog-alapú, tartós reconciliation státusz nincs;
+- következő blokk: kontrollált DEV mirror E2E előkészítése, majd reconciliation alap;
+- becsült aktív idő: mirror E2E 1–2 óra, reconciliation alap 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
