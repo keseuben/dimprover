@@ -506,3 +506,54 @@ Javítás a runtime E2E során:
 - a javítás után a valós inventory balance ellenőrzés zöld.
 
 PROD változatlan; shared DEV runtime cutover továbbra sem történt.
+
+### 2026-08-18 22:xx checkpoint — Media Management M1 DEV aktív
+
+Elkészült:
+- termékhez kapcsolt több média asset tenant-scoped listázása;
+- atomikus termékkép sorrend + elsődleges kép kijelölés;
+- adatbázis-szintű egy-elsődleges-kép invariáns aktív entity-linkenként;
+- advisory lockkal védett `commerce_media_set_product_order` service-only RPC;
+- sorrend/primary változás audit + outbox eseménnyel;
+- meglévő `commerce_media_overlays` motorra épülő non-destructive overlay CRUD;
+- engedélyezett overlay típusok: WATERMARK, LOGO, STAMP, ARROW, CIRCLE, TEXT, BLUR;
+- overlay create/update/soft-archive tenant + asset scope ellenőrzéssel;
+- API: `GET/PATCH /api/v1/commerce/media/products/[productId]`;
+- API: `POST /api/v1/commerce/media/assets/[assetId]/overlays`;
+- API: `PATCH/DELETE /api/v1/commerce/media/assets/[assetId]/overlays/[overlayId]`;
+- WEB/THUMBNAIL content URL-ok a média listában elérhetők.
+
+DEV migráció:
+- Commerce schema: `0.1.4`, migration count: 5;
+- migration SHA-256: `0c2760d8e84abaf60bf92ae28bd76c696cba2754c0c60c7421f38604c709bbea`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-media-management-m1/20260818T201012Z/supabase-dev-pre-commerce-media-management-m1.dump`;
+- backup SHA-256: `ebc512d4f42a8605e7bfb644bf701b50ac5fd909e36be4e6ed6043252e57263c`;
+- backup listing verify: PASS;
+- migration/security verify: PASS;
+- authenticated RPC: DENY; service-role RPC: ALLOW.
+
+Tesztkapu:
+- Media management contract: 20/20 PASS;
+- Media management DB transaction + rollback acceptance: 11/11 PASS;
+- valós DEV repository runtime E2E: 12/12 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- runtime QA cleanup: PASS.
+
+Részben elkészült / hiányzik:
+- a backend támogatja a többképes galériát, primary-t, sorrendet és overlay-ket, de a Termék inspector teljes galéria-kezelő UI-ja még nincs bekötve;
+- overlay render/export pipeline még nincs lezárva; az overlay jelenleg szerkeszthető, nem destruktív meta-réteg;
+- következő Media UI blokk: thumbnail galéria, primary kijelölés, sorrendmozgatás, alap overlay jelzések;
+- az eredeti fájl továbbra is alapértelmezetten nem marad meg, a meglévő Media Engine policy szerint.
+
+34. pont szerinti állapot:
+- elkészült: M0 Commerce context/DB baseline; Product CRUD + identifier resolver; Inventory ledger/balance; Reservation workflow; Pricing history/active price; Media upload/storage core; Media management backend; Termék admin grid + inspector alap + inline product edit;
+- részben elkészült: Media management UI; teljes variant edit; receiving; order/checkout bridge;
+- hiányzik: Receiving/GoodsReceipt workflow, Order/Checkout domain bridge, teljes pénztár-készletfoglalás integráció, lejáró reservation worker, pilot teljes E2E;
+- fő új fájlok: `app/lib/commerce/media/repository.ts`, `app/api/v1/commerce/media/products/[productId]/route.ts`, overlay API route-ok, Media management migration/gate/acceptance/runtime E2E;
+- ismert hiba: jelen checkpointban nincs nyitott backend Media management hiba; UI galéria hiány funkcionális backlog;
+- következő blokk: Termék inspector többképes galéria UI, utána Receiving alap;
+- becsült aktív fejlesztési idő: Media galéria UI 1.5–2.5 óra; Receiving M1 alap 4–7 óra; Order/Checkout bridge 6–10 óra.
+
+Kötelező környezeti állapot: PROD változatlan, PROD alkalmazásmódosítás nem történt, shared DEV runtime cutover nem történt.
