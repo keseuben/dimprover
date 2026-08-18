@@ -6,6 +6,8 @@ const ui=read("components/admin/developer-console/DevelopmentMapWorkspace.tsx");
 const repo=read("app/lib/dev-center/engine-repository.ts");
 const route=read("app/api/dev/console/development-map/[taskId]/route.ts");
 const model=read("app/lib/dev-center/development-map.ts");
+const runtimeAcceptance=read("scripts/benjadmin-development-map-v2-runtime-acceptance.mjs");
+const browserAcceptance=read("scripts/benjadmin-development-map-v2-browser-acceptance.mjs");
 check("Active technical archive layers", ui.includes('data-map-layer="active"')&&ui.includes('data-map-layer="technical"')&&ui.includes('data-map-layer="archive"'));
 check("Layer counts visible",ui.includes("layerCounts.active")&&ui.includes("layerCounts.technical")&&ui.includes("layerCounts.archive"));
 check("Previous placement history persisted",repo.includes("developmentMapHistory")&&repo.includes("historyEntry"));
@@ -19,4 +21,6 @@ check("No physical Git move",repo.includes("physicalGitMove: false")&&ui.include
 check("PROD deny remains explicit",repo.includes('productionAccess: "DENY"'));
 check("Taxonomy remains provisional",ui.includes("TAXONÓMIA: V1")&&ui.includes("EXCEL JÓVÁHAGYÁSRA VÁR"));
 check("No Excel taxonomy import invented",!model.includes("xlsx")&&!model.includes("Excel import"));
+check("Runtime acceptance uses live API instead of direct TS repository import",runtimeAcceptance.includes("/api/dev/console/development-map/")&&!runtimeAcceptance.includes("engine-repository.ts"));
+check("Browser acceptance covers V2 layers undo and responsive gate",browserAcceptance.includes("data-map-layer")&&browserAcceptance.includes("data-development-map-undo")&&browserAcceptance.includes("mobile overflow safe"));
 console.log(JSON.stringify({ok:f===0,passed:p,failed:f,total:p+f},null,2)); if(f)process.exit(1);

@@ -11,6 +11,7 @@ const drawer=read("components/admin/developer-console/WorkerActivityDrawer.tsx")
 const conversation=read("components/admin/developer-console/DeveloperConversation.tsx");
 const shell=read("components/admin/developer-console/DeveloperConsoleShell.tsx");
 const css=read("components/admin/developer-console/DeveloperConsole.module.css");
+const acceptance=read("scripts/benjadmin-common-chat-v2-runtime-browser-acceptance.mjs");
 check("Presence type has stable id",types.includes("id: string;") && types.includes("LiveWorkerPresence"));
 check("Presence type exposes lifecycle state",types.includes('lifecycleState: "ACTIVE" | "ENDED" | "STALE" | "UNKNOWN"'));
 check("Presence type exposes bridge key and timestamps",types.includes("presenceKey: string | null") && types.includes("detectedAt: string") && types.includes("endedAt: string | null"));
@@ -39,5 +40,9 @@ check("Shell passes transition data into common chat",shell.includes("workerTran
 check("SSE/poll merge stabilizes lifecycle arrays",shell.includes("workerPresenceHistory: stableMerge") && shell.includes("workerTransitions: stableMerge"));
 check("Lifecycle UI remains responsive",css.includes(".conversationTransitions > div { grid-template-columns: 1fr; }") && css.includes(".workerLifecycleFacts"));
 check("Worker presence remains PROD denied",backend.includes('productionAccess: "DENY"'));
+check("Runtime acceptance covers exact dedupe and worker switch",acceptance.includes("Exact ARMINAI repeat")&&acceptance.includes("Same summary under JAZMINAI")&&acceptance.includes("Same worker same summary in another context"));
+check("Runtime acceptance covers derived worker transition",acceptance.includes("Live API derives ARMINAI to JAZMINAI transition")&&acceptance.includes("benjadmin-worker-transition-strip"));
+check("Runtime acceptance covers cursor pagination",acceptance.includes("Cursor loads a non-overlapping older page")&&acceptance.includes("before=${encodeURIComponent"));
+check("Browser acceptance covers 7-day earlier archive and mobile",acceptance.includes("+3 day browser clock")&&acceptance.includes("+9 day browser clock")&&acceptance.includes("mobile overflow safe"));
 console.log(JSON.stringify({ok:failed===0,passed,failed},null,2));
 if(failed) process.exit(1);
