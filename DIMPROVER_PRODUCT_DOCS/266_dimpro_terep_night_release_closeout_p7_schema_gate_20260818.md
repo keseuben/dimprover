@@ -103,7 +103,7 @@ A korábbi `DIMPRO_FIELD_CAPTURE_P0_P4_SCHEMA_DRAFT.sql` közvetlen alkalmazása
 
 Új, verziózott P7 migráció:
 - `supabase/migrations/20260818074500_field_capture_p7_server_session_v010.sql`
-- SHA-256: `c77da0e0f55e987d4274d83904ff28ecc73615e79013fca2ec4843917f67d0fd`
+- SHA-256: `d38670aabc988dde326aa1c657f87cda550a4541dc224e36f9479344fc7c46a6`
 - 9 domain tábla + külön schema marker;
 - RLS minden Field Capture táblán;
 - `anon` és `authenticated` közvetlen táblajoga tiltva;

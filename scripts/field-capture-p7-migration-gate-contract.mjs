@@ -11,7 +11,7 @@ const tables=["field_capture_sessions","field_capture_items","field_capture_asse
 check("nine P7 domain tables",()=>tables.forEach(t=>assert.ok(migration.includes(`public.${t}`))));
 check("schema marker",()=>assert.ok(migration.includes("field_capture_schema_meta")&&migration.includes("field-capture-p7-v010-20260818")));
 check("project and Drive folder IDs use text",()=>{assert.match(migration,/project_id text null references public\.project_core_projects/);assert.match(migration,/folder_id text null/);});
-check("idempotent client identity",()=>{assert.ok(migration.includes("unique(user_id, client_session_id)"));assert.ok(migration.includes("unique(session_id, client_item_id)"));assert.ok(migration.includes("unique(session_id, device_local_id, operation)"));});
+check("idempotent client identity",()=>{assert.ok(migration.includes("unique(user_id, client_session_id)"));assert.ok(migration.includes("unique(session_id, client_item_id)"));assert.ok(migration.includes("unique(capture_item_id, variant)"));assert.ok(migration.includes("unique(session_id, device_local_id, operation)"));});
 check("structured sensitive records",()=>["latitude","heading_degrees","transcript_raw","payload_meta"].forEach(x=>assert.ok(migration.includes(x))));
 check("server-only RLS and grants",()=>{tables.forEach(t=>{assert.ok(migration.includes(`alter table public.${t} enable row level security`));assert.ok(migration.includes(`revoke all on public.${t} from anon, authenticated`));assert.ok(migration.includes(`grant select, insert, update, delete on public.${t} to service_role`));});});
 check("no browser direct policy",()=>{assert.ok(!/create policy/i.test(migration));assert.ok(!/grant .* to anon/i.test(migration));assert.ok(!/grant .* to authenticated/i.test(migration));});

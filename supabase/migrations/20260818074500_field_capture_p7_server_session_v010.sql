@@ -67,7 +67,8 @@ create table if not exists public.field_capture_asset_refs (
   optimized boolean not null default false,
   storage_status text not null default 'PENDING' check (storage_status in ('PENDING','UPLOADING','STORED','FAILED','REMOVED')),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique(capture_item_id, variant)
 );
 
 create table if not exists public.field_capture_locations (
