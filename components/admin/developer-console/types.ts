@@ -93,6 +93,13 @@ export type LiveWorkerPresence = {
   worktree: string | null;
   branch: string | null;
   target: string | null;
+  workStageIndex: number | null;
+  startedAt: string | null;
+  heartbeatAt: string | null;
+  nextStep: string | null;
+  buildLockWaiting: boolean;
+  schedulerRunId: string | null;
+  schedulerSlotAt: string | null;
   inferredBy: string;
   confidence: string;
   presenceKey: string | null;

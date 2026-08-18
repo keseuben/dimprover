@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ArrowRightLeft, BellRing, CheckCircle2, ClipboardCopy, Clock3, Code2, FlaskConical, GitCommitHorizontal, Hammer, History, Inbox, ListChecks, Play, Radio, ShieldCheck, UserRoundCog, XCircle } from "lucide-react";
 import { useEffect } from "react";
-import { resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
+import { DEVELOPMENT_STAGE_LABELS, resolveTaskDevelopmentContext } from "@/app/lib/dev-center/development-context";
 import BenjadminAvatar from "./BenjadminAvatar";
 import DevelopmentSchedulerPanel from "./DevelopmentSchedulerPanel";
 import type { ConsoleAuthor, ConsoleLiveState, LiveTask, RuntimeContext } from "./types";
@@ -48,11 +48,16 @@ function presenceStage(phase: string) {
 }
 
 function PresenceContext({ presence }: { presence: ConsoleLiveState["workerPresence"][number] }) {
-  const stage = presenceStage(presence.phase);
-  return <div className={styles.workerContextCompact} data-context-location="worker" data-work-stage={stage.index} data-auto-presence="true">
+  const inferred = presenceStage(presence.phase);
+  const stageIndex = presence.workStageIndex || inferred.index;
+  const stage = { index: stageIndex, label: DEVELOPMENT_STAGE_LABELS[stageIndex] || inferred.label };
+  return <div className={styles.workerContextCompact} data-context-location="worker" data-work-stage={stage.index} data-auto-presence="true" data-scheduler-run={presence.schedulerRunId || ""} data-build-lock-waiting={presence.buildLockWaiting ? "true" : "false"}>
     <span>{presence.mainModule || "Automatikus észlelés"} <b>›</b> {presence.moduleName || presence.phase.toUpperCase()} <b>›</b> {presence.submoduleName || presence.inferredBy}</span>
     <strong>6/{stage.index} · {stage.label}</strong>
     <small>{presence.workItem || presence.summary}</small>
+    {presence.schedulerRunId ? <small>Indult: {finishLabel(presence.startedAt)} · heartbeat: {finishLabel(presence.heartbeatAt || presence.lastSeenAt)}</small> : null}
+    {presence.nextStep ? <small>Következő: {presence.nextStep}</small> : null}
+    {presence.buildLockWaiting ? <small>BUILD LOCK · VÁRAKOZÁS</small> : null}
   </div>;
 }
 

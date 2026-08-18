@@ -115,6 +115,13 @@ function evidence(input) {
     worktree: input.worktree || null,
     branch: input.branch || null,
     target: input.target || null,
+    workStageIndex: Number.isFinite(Number(input.workStageIndex)) ? Math.max(1, Math.min(6, Math.round(Number(input.workStageIndex)))) : null,
+    startedAt: input.startedAt || null,
+    heartbeatAt: input.heartbeatAt || null,
+    nextStep: input.nextStep || null,
+    buildLockWaiting: input.buildLockWaiting === true,
+    schedulerRunId: input.schedulerRunId || null,
+    schedulerSlotAt: input.schedulerSlotAt || null,
     inferredBy: input.inferredBy || "unknown",
     confidence: input.confidence || "unknown",
     detectedAt: input.detectedAt || new Date().toISOString(),
@@ -190,6 +197,63 @@ async function collectSessionEvidence(client, nowMs) {
       projectId: text(task?.project_id) || null, mainModule: text(context.mainModule), moduleName: text(context.moduleName),
       submoduleName: text(context.submoduleName), workItem: text(context.workItem) || text(task?.title), worktree: text(session.worktree_path) || null,
       branch: text(session.branch_name) || null, inferredBy: "task-session", confidence: "explicit", detectedAt: heartbeatAt,
+    }));
+  }
+  return items;
+}
+
+async function collectSchedulerEvidence(client, coordinationRoot, nowMs) {
+  const runsResult = await client.from("dev_center_decision_memory")
+    .select("id,decision_key,metadata,created_at,updated_at")
+    .eq("category", "development_scheduler_run")
+    .order("updated_at", { ascending: false })
+    .limit(80);
+  if (runsResult.error) return [];
+  const candidates = (runsResult.data || []).map((row) => {
+    const meta = record(row.metadata);
+    return { row, meta, workerCode: normalizeWorker(meta.workerCode), status: text(meta.runStatus), taskId: text(meta.taskId) };
+  }).filter((item) => item.workerCode && ["running", "ready_for_pull", "worker_active"].includes(item.status));
+  if (!candidates.length) return [];
+  const taskIds = [...new Set(candidates.map((item) => item.taskId).filter(Boolean))];
+  let taskMap = new Map();
+  if (taskIds.length) {
+    const taskResult = await client.from("dev_center_tasks").select("id,project_id,title,status,metadata,updated_at").in("id", taskIds);
+    if (!taskResult.error) taskMap = new Map((taskResult.data || []).map((task) => [text(task.id), task]));
+  }
+  const operationState = await readJson(path.join(coordinationRoot, "active-development.json"));
+  const exclusiveBusy = Boolean(operationState && text(operationState.status).toLowerCase() === "running" && ["build", "restart", "migration", "release"].includes(text(operationState.operation).toLowerCase()));
+  const items = [];
+  for (const item of candidates) {
+    const updatedAt = text(item.row.updated_at || item.meta.startedAt || item.row.created_at);
+    const updatedMs = Date.parse(updatedAt);
+    if (!Number.isFinite(updatedMs) || nowMs - updatedMs > 90 * 60_000) continue;
+    const task = taskMap.get(item.taskId) || null;
+    const taskMeta = record(task?.metadata);
+    const context = record(taskMeta.developmentContext);
+    const stage = Number(context.workStageIndex || taskMeta.workStageIndex || (item.status === "worker_active" ? 2 : 1));
+    const buildLockWaiting = exclusiveBusy && normalizeWorker(operationState?.workerCode) !== item.workerCode;
+    const nextStep = buildLockWaiting
+      ? "Közös build lock felszabadulására vár."
+      : item.status === "ready_for_pull"
+        ? "ChatGPT pull / worker ébresztés felvétele."
+        : item.status === "worker_active"
+          ? "Az aktív fejlesztési task folytatása."
+          : "Scheduler routing és worker-kijelölés befejezése.";
+    const title = text(task?.title) || text(item.meta.summary) || "Éjszakai scheduler futás";
+    items.push(evidence({
+      workerCode: item.workerCode, score: 115,
+      presenceKey: `scheduler:${text(item.meta.scheduleId)}:${text(item.meta.slotAt)}:${item.workerCode}`,
+      phase: item.status === "worker_active" ? (text(task?.status) === "testing" ? "test" : "coding") : "planning",
+      summary: `${workerName(item.workerCode)} · SCHEDULER · ${title}`,
+      detail: `Éjszakai scheduler run: ${item.status}. Indulás: ${text(item.meta.startedAt) || text(item.row.created_at)}. Utolsó heartbeat: ${updatedAt}. Következő: ${nextStep}`,
+      taskId: item.taskId || null, projectId: text(task?.project_id) || null,
+      mainModule: text(context.mainModule) || "BENJADMIN",
+      moduleName: text(context.moduleName) || "Fejlesztési ütemező",
+      submoduleName: text(context.submoduleName) || "Éjszakai / órás futási lánc",
+      workItem: text(context.workItem) || title,
+      workStageIndex: stage, startedAt: text(item.meta.startedAt) || text(item.row.created_at), heartbeatAt: updatedAt, nextStep, buildLockWaiting,
+      schedulerRunId: text(item.row.id), schedulerSlotAt: text(item.meta.slotAt),
+      inferredBy: "scheduler-run", confidence: "explicit", detectedAt: updatedAt,
     }));
   }
   return items;
@@ -279,6 +343,7 @@ export async function collectWorkerPresenceEvidence({ client, root, coordination
   const chunks = await Promise.all([
     collectLeaseEvidence(coordinationRoot, now),
     collectSessionEvidence(client, now),
+    collectSchedulerEvidence(client, coordinationRoot, now),
     collectOperationEvidence(coordinationRoot, aliases, now),
     collectDirtyEvidence(root, aliases, now),
     collectRecentCommitEvidence(root, aliases, now),
@@ -316,6 +381,8 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
       recordType: PRESENCE_RECORD, kind: kindForPhase(item.phase), presenceState: "ACTIVE", presenceKey: item.presenceKey,
       lastSeenAt: new Date(now).toISOString(), detectedAt: item.detectedAt, inferredBy: item.inferredBy, confidence: item.confidence,
       operation: item.operation, owner: item.owner, worktree: item.worktree, branch: item.branch, target: item.target,
+      workStageIndex: item.workStageIndex, startedAt: item.startedAt, heartbeatAt: item.heartbeatAt, nextStep: item.nextStep,
+      buildLockWaiting: item.buildLockWaiting, schedulerRunId: item.schedulerRunId, schedulerSlotAt: item.schedulerSlotAt,
       projectId: item.projectId, mainModule: item.mainModule, moduleName: item.moduleName, submoduleName: item.submoduleName,
       workItem: item.workItem, workStageIndex: stageForPhase(item.phase), activityAction: item.summary,
       activityNarrative: item.detail || `A BENJADMIN automatikusan észlelte ${workerName(item.workerCode)} aktív fejlesztési munkáját.`,

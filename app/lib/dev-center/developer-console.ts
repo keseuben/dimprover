@@ -420,6 +420,13 @@ type WorkerPresenceView = {
   worktree: string | null;
   branch: string | null;
   target: string | null;
+  workStageIndex: number | null;
+  startedAt: string | null;
+  heartbeatAt: string | null;
+  nextStep: string | null;
+  buildLockWaiting: boolean;
+  schedulerRunId: string | null;
+  schedulerSlotAt: string | null;
   inferredBy: string;
   confidence: string;
   presenceKey: string | null;
@@ -482,6 +489,13 @@ function mapWorkerPresenceRow(row: Row, nowMs: number): WorkerPresenceView {
     worktree: text(metadata.worktree) || null,
     branch: text(metadata.branch) || null,
     target: text(metadata.target) || null,
+    workStageIndex: Number.isFinite(Number(metadata.workStageIndex)) ? Math.max(1, Math.min(6, Math.round(Number(metadata.workStageIndex)))) : null,
+    startedAt: text(metadata.startedAt) || null,
+    heartbeatAt: text(metadata.heartbeatAt) || null,
+    nextStep: text(metadata.nextStep) || null,
+    buildLockWaiting: metadata.buildLockWaiting === true,
+    schedulerRunId: text(metadata.schedulerRunId) || null,
+    schedulerSlotAt: text(metadata.schedulerSlotAt) || null,
     inferredBy: text(metadata.inferredBy),
     confidence: text(metadata.confidence),
     presenceKey: text(metadata.presenceKey) || null,
