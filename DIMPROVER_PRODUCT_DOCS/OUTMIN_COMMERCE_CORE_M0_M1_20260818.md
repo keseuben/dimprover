@@ -651,3 +651,14 @@ Tesztkapu:
 - git diff --check: PASS.
 
 A UI a 0.1.5 Receiving schema DEV alkalmazása után lesz runtime E2E-re kész. PROD változatlan.
+
+### 2026-08-18 22:54 Receiving media persistence gate javítás
+
+A staged Receiving ellenőrzésekor kiderült, hogy az alkalmazásoldali Media upload target bővítés önmagában nem elég: a korábbi `commerce_media_finalize_upload` adatbázis-RPC még csak PRODUCT és PRODUCT_VARIANT linkeket fogadott el. Ezt a 0.1.5 migráció most kontrolláltan bővíti `GOODS_RECEIPT` és `GOODS_RECEIPT_ITEM` célokra, tenant-scope ellenőrzéssel. A rollback a pre-Receiving Media finalizer definíciót állítja vissza.
+
+Frissített kapu:
+- Receiving contract: 28/28 PASS;
+- DB transaction + rollback acceptance: 17/17 PASS, benne receipt header + receipt item Media link finalization;
+- migration SHA-256: `20b6ab00df66796e0510045ebadfe43f461a0491ac52e03d8dc3f93ed047ad34`;
+- migration preflight: PASS;
+- DEV apply továbbra is a központi lock felszabadulására vár; PROD változatlan.

@@ -37,6 +37,8 @@ const checks=[
  ["24 post API requires idempotency-key support",postRoute.includes('request.headers.get("idempotency-key")')],
  ["25 receipt and receipt-item media targets are ticketed",mediaToken.includes('"GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM"')],
  ["26 media upload verifies receipt target tenant scope",mediaService.includes('targetType === "GOODS_RECEIPT"')&&mediaService.includes('"commerce_goods_receipts"')&&mediaService.includes('"commerce_goods_receipt_items"')],
+ ["27 DB media finalizer supports receipt header",sql.includes("v_link_type='GOODS_RECEIPT'")&&sql.includes("COMMERCE_MEDIA_RECEIPT_SCOPE_MISMATCH")],
+ ["28 DB media finalizer supports receipt item",sql.includes("v_link_type='GOODS_RECEIPT_ITEM'")&&sql.includes("COMMERCE_MEDIA_RECEIPT_ITEM_SCOPE_MISMATCH")],
 ];
 let pass=0;for(const [name,ok] of checks){console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)pass++;}
 console.log(`RESULT ${pass}/${checks.length} PASS`);assert.equal(pass,checks.length);
