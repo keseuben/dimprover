@@ -364,3 +364,20 @@ Tesztkapu:
 - célzott lint: PASS;
 - git diff --check: PASS;
 - QA rekordok cleanup után nem maradnak bent.
+
+### 2026-08-18 20:xx checkpoint — Product UI törzsadat + Variant integráció
+
+Elkészült:
+- Termékek oldal betölti az aktív kategória/márka/gyártó törzsadatokat;
+- új termék felvitelekor közvetlenül választható kategória, márka és gyártó;
+- inspector mutatja a termék törzsadat-kapcsolatait;
+- közvetlen „Törzsadatok” navigáció;
+- inspectorban látható a variant lista;
+- új variant név + SKU + egység gyorsfelvitel közvetlenül a termékből;
+- desktop és mobil terméklista változatlanul megmaradt.
+
+Tesztkapu:
+- Product catalog/variant UI contract: 14/14 PASS;
+- TypeScript: PASS;
+- lint: PASS;
+- diff-check: PASS.

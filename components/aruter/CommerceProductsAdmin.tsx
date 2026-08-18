@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Barcode, Boxes, ChevronRight, ImagePlus, Loader2, Package, Plus, RefreshCw, Search, SlidersHorizontal, Upload, X } from "lucide-react";
+import { AlertCircle, Barcode, Boxes, ChevronRight, ImagePlus, Layers3, Loader2, Package, Plus, RefreshCw, Search, SlidersHorizontal, Tags, Upload, X } from "lucide-react";
 import { uploadCommerceProductImage } from "./commerceMediaPreparation";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
 
@@ -33,15 +34,23 @@ type ProductDetail = Omit<ProductSummary, "defaultVariantId" | "sku" | "unit" | 
 
 type ApiResult<T> = { ok: boolean; data?: T; error?: string; code?: string };
 
+type CatalogOption = { id: string; name: string; parentId?: string | null };
+
 type CreateDraft = {
   name: string;
   typeModel: string;
   sku: string;
   unit: string;
   ean: string;
+  categoryId: string;
+  brandId: string;
+  manufacturerId: string;
 };
 
-const EMPTY_DRAFT: CreateDraft = { name: "", typeModel: "", sku: "", unit: "DB", ean: "" };
+type VariantDraft = { name: string; sku: string; unit: string };
+
+const EMPTY_DRAFT: CreateDraft = { name: "", typeModel: "", sku: "", unit: "DB", ean: "", categoryId: "", brandId: "", manufacturerId: "" };
+const EMPTY_VARIANT: VariantDraft = { name: "", sku: "", unit: "DB" };
 
 function statusLabel(status: ProductSummary["status"]) {
   if (status === "ACTIVE") return "Aktív";
@@ -86,6 +95,30 @@ export function CommerceProductsAdmin() {
   const [draft, setDraft] = useState<CreateDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [categories, setCategories] = useState<CatalogOption[]>([]);
+  const [brands, setBrands] = useState<CatalogOption[]>([]);
+  const [manufacturers, setManufacturers] = useState<CatalogOption[]>([]);
+  const [variantDraft, setVariantDraft] = useState<VariantDraft>(EMPTY_VARIANT);
+  const [addingVariant, setAddingVariant] = useState(false);
+  const [savingVariant, setSavingVariant] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch("/api/v1/commerce/catalog/categories?active=true", { cache: "no-store" }).then((response) => response.json() as Promise<ApiResult<CatalogOption[]>>),
+      fetch("/api/v1/commerce/catalog/brands?active=true", { cache: "no-store" }).then((response) => response.json() as Promise<ApiResult<CatalogOption[]>>),
+      fetch("/api/v1/commerce/catalog/manufacturers?active=true", { cache: "no-store" }).then((response) => response.json() as Promise<ApiResult<CatalogOption[]>>),
+    ]).then(([categoryResult, brandResult, manufacturerResult]) => {
+      if (!active) return;
+      setCategories(categoryResult.ok && categoryResult.data ? categoryResult.data : []);
+      setBrands(brandResult.ok && brandResult.data ? brandResult.data : []);
+      setManufacturers(manufacturerResult.ok && manufacturerResult.data ? manufacturerResult.data : []);
+    }).catch(() => {
+      if (!active) return;
+      setCategories([]); setBrands([]); setManufacturers([]);
+    });
+    return () => { active = false; };
+  }, []);
 
   const loadProducts = useCallback(async (search = "") => {
     setLoading(true);
@@ -134,6 +167,33 @@ export function CommerceProductsAdmin() {
 
   const selected = useMemo(() => products.find((item) => item.id === selectedId) ?? null, [products, selectedId]);
 
+  function catalogName(items: CatalogOption[], id: string | null | undefined) {
+    return id ? items.find((item) => item.id === id)?.name || null : null;
+  }
+
+  async function refreshDetail(productId = selectedId) {
+    if (!productId) return;
+    const response = await fetch(`/api/v1/commerce/products/${productId}`, { cache: "no-store" });
+    const result = await response.json() as ApiResult<ProductDetail>;
+    if (!response.ok || !result.ok || !result.data) throw new Error(result.error || "A termékadatok nem tölthetők újra.");
+    setDetail(result.data);
+  }
+
+  async function createVariant(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId || !variantDraft.name.trim()) return;
+    setSavingVariant(true); setError(null);
+    try {
+      const response = await fetch(`/api/v1/commerce/products/${selectedId}/variants`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: variantDraft.name.trim(), sku: variantDraft.sku.trim() || null, unit: variantDraft.unit, status: "ACTIVE", attributes: {} }),
+      });
+      const result = await response.json() as ApiResult<unknown>;
+      if (!response.ok || !result.ok) throw new Error(result.error || "A termékváltozat mentése sikertelen.");
+      setVariantDraft(EMPTY_VARIANT); setAddingVariant(false); await refreshDetail(selectedId); await loadProducts(query);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "A termékváltozat mentése sikertelen."); }
+    finally { setSavingVariant(false); }
+  }
 
   async function uploadProductImage(file: File | null) {
     if (!file || !selectedId) return;
@@ -163,6 +223,9 @@ export function CommerceProductsAdmin() {
         body: JSON.stringify({
           name: draft.name.trim(),
           typeModel: draft.typeModel.trim() || null,
+          categoryId: draft.categoryId || null,
+          brandId: draft.brandId || null,
+          manufacturerId: draft.manufacturerId || null,
           status: "ACTIVE",
           defaultVariant: { name: draft.name.trim(), sku: draft.sku.trim() || null, unit: draft.unit },
           identifiers,
@@ -194,13 +257,13 @@ export function CommerceProductsAdmin() {
                 <h1 className="text-xl font-black text-slate-900">Termékek</h1>
               </div>
             </div>
-            <button
+            <div className="flex items-center gap-2"><Link href="/aruter/admin/torzsadatok" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><Tags size={17} /> Törzsadatok</Link><button
               type="button"
               onClick={() => { setCreateMode(true); setSelectedId(null); setDraft(EMPTY_DRAFT); }}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 font-black text-white shadow-sm hover:bg-teal-800"
             >
               <Plus size={18} /> Új termék
-            </button>
+            </button></div>
           </div>
         </header>
 
@@ -269,6 +332,8 @@ export function CommerceProductsAdmin() {
                   <div className="space-y-4">
                     <label className="block"><span className="text-sm font-black">Termék neve *</span><input autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none focus:border-teal-400" /></label>
                     <label className="block"><span className="text-sm font-black">Típus / modell</span><input value={draft.typeModel} onChange={(e) => setDraft({ ...draft, typeModel:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none focus:border-teal-400" /></label>
+                    <label className="block"><span className="text-sm font-black">Kategória</span><select value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none"><option value="">Nincs megadva</option>{categories.map((item)=><option key={item.id} value={item.id}>{item.parentId ? "↳ " : ""}{item.name}</option>)}</select></label>
+                    <div className="grid grid-cols-2 gap-3"><label className="block"><span className="text-sm font-black">Márka</span><select value={draft.brandId} onChange={(e) => setDraft({ ...draft, brandId:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none"><option value="">Nincs</option>{brands.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="block"><span className="text-sm font-black">Gyártó</span><select value={draft.manufacturerId} onChange={(e) => setDraft({ ...draft, manufacturerId:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none"><option value="">Nincs</option>{manufacturers.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
                     <label className="block"><span className="text-sm font-black">Cikkszám / SKU</span><input value={draft.sku} onChange={(e) => setDraft({ ...draft, sku:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none focus:border-teal-400" /></label>
                     <div className="grid grid-cols-[1fr_110px] gap-3"><label className="block"><span className="text-sm font-black">EAN / GTIN</span><div className="mt-1.5 flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-3 focus-within:border-teal-400"><Barcode size={18} className="text-slate-400" /><input value={draft.ean} onChange={(e) => setDraft({ ...draft, ean:e.target.value })} className="min-w-0 flex-1 outline-none" /></div></label><label className="block"><span className="text-sm font-black">Egység</span><select value={draft.unit} onChange={(e) => setDraft({ ...draft, unit:e.target.value })} className="mt-1.5 h-12 w-full rounded-xl border border-slate-200 px-3 outline-none"><option>DB</option><option>KG</option><option>M</option><option>M2</option><option>M3</option><option>L</option><option>CSOMAG</option></select></label></div>
                   </div>
@@ -280,7 +345,8 @@ export function CommerceProductsAdmin() {
                 <div>
                   <div className="flex items-start gap-3"><span className="flex h-14 w-14 shrink-0 overflow-hidden items-center justify-center rounded-2xl bg-teal-50 text-teal-700">{selected?.primaryMediaAssetId ? <span aria-hidden className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(/api/v1/commerce/media/assets/${selected.primaryMediaAssetId}/content?kind=THUMBNAIL)` }} /> : <Package size={25} />}</span><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Termék adatai</p><h2 className="mt-1 truncate text-2xl font-black">{detail?.name || selected?.name}</h2><p className="mt-1 text-sm font-semibold text-slate-500">{detail?.typeModel || selected?.typeModel || "Nincs megadott típus/modell"}</p></div></div>
                   <div className="my-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Belső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.internalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black text-slate-400">Külső készlet</p><b className="mt-1 block text-xl">{formatQuantity(selected?.externalAvailableQuantity || "0", selected?.unit || detail?.variants[0]?.unit || null)}</b>{selected?.externalSyncStatus && <p className="mt-1 text-[11px] font-black text-slate-400">{selected.externalSyncStatus}</p>}</div></div>
-                  <div className="space-y-3 border-t border-slate-100 pt-4"><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">SKU</span><b className="text-right">{detail?.variants[0]?.sku || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Egység</span><b>{detail?.variants[0]?.unit || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Elsődleges azonosító</span><b className="max-w-[220px] truncate text-right">{detail?.identifiers.find((item) => item.primary)?.value || detail?.identifiers[0]?.value || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Státusz</span><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass((detail?.status || selected!.status))}`}>{statusLabel(detail?.status || selected!.status)}</span></div></div>
+                  <div className="space-y-3 border-t border-slate-100 pt-4"><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">SKU</span><b className="text-right">{detail?.variants[0]?.sku || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Egység</span><b>{detail?.variants[0]?.unit || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Elsődleges azonosító</span><b className="max-w-[220px] truncate text-right">{detail?.identifiers.find((item) => item.primary)?.value || detail?.identifiers[0]?.value || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Státusz</span><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass((detail?.status || selected!.status))}`}>{statusLabel(detail?.status || selected!.status)}</span></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Kategória</span><b className="text-right">{catalogName(categories, detail?.categoryId || selected?.categoryId) || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Márka</span><b className="text-right">{catalogName(brands, detail?.brandId || selected?.brandId) || <EmptyValue />}</b></div><div className="flex justify-between gap-4"><span className="text-sm font-semibold text-slate-500">Gyártó</span><b className="text-right">{catalogName(manufacturers, detail?.manufacturerId || selected?.manufacturerId) || <EmptyValue />}</b></div></div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Layers3 size={18} className="text-teal-700" /><b>Termékváltozatok</b></div><button type="button" onClick={()=>setAddingVariant((value)=>!value)} className="rounded-lg border border-teal-200 px-2.5 py-1.5 text-xs font-black text-teal-700"><Plus size={14} className="inline"/> Új</button></div><div className="mt-3 space-y-2">{detail?.variants.map((variant)=><div key={variant.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"><div className="min-w-0"><b className="block truncate text-sm">{variant.name}</b><span className="text-xs font-semibold text-slate-500">{variant.sku || "nincs SKU"} · {variant.unit}</span></div><span className="text-[11px] font-black text-slate-400">{variant.status}</span></div>)}</div>{addingVariant&&<form onSubmit={createVariant} className="mt-3 space-y-2 border-t border-slate-100 pt-3"><input autoFocus value={variantDraft.name} onChange={(e)=>setVariantDraft({...variantDraft,name:e.target.value})} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none" placeholder="Változat neve"/><div className="grid grid-cols-[1fr_100px] gap-2"><input value={variantDraft.sku} onChange={(e)=>setVariantDraft({...variantDraft,sku:e.target.value})} className="h-10 rounded-xl border border-slate-200 px-3 text-sm outline-none" placeholder="SKU / cikkszám"/><select value={variantDraft.unit} onChange={(e)=>setVariantDraft({...variantDraft,unit:e.target.value})} className="h-10 rounded-xl border border-slate-200 px-2 text-sm"><option>DB</option><option>KG</option><option>M</option><option>M2</option><option>M3</option><option>L</option><option>CSOMAG</option></select></div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setAddingVariant(false);setVariantDraft(EMPTY_VARIANT);}} className="h-10 rounded-xl border border-slate-200 text-sm font-black">Mégsem</button><button disabled={savingVariant||!variantDraft.name.trim()} className="h-10 rounded-xl bg-teal-700 text-sm font-black text-white disabled:bg-slate-300">{savingVariant?"Mentés...":"Változat mentése"}</button></div></form>}</div>
                   <div className="mt-5 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><ImagePlus size={18} className="text-teal-700" /><b>Termékkép</b></div><p className="mt-1 text-xs font-semibold text-slate-500">A rendszer webes és bélyegkép-változatot készít; az eredeti fájlt alapból nem őrzi meg.</p><label className={`mt-3 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 font-black text-teal-700 ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}><Upload size={17} /> {uploadingImage ? "Kép feltöltése..." : selected?.primaryMediaAssetId ? "Kép cseréje" : "Kép hozzáadása"}<input type="file" accept="image/*,.heic,.heif" className="hidden" disabled={uploadingImage} onChange={(event) => { const file=event.target.files?.[0]||null; event.currentTarget.value=""; void uploadProductImage(file); }} /></label></div><div className="mt-4 rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Boxes size={18} className="text-teal-700" /><b>Kereskedelmi összesítő</b></div><div className="mt-3 flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-500">Aktív ár</span><b>{selected ? formatPrice(selected) || <EmptyValue /> : <EmptyValue />}</b></div></div>
                 </div>
               ) : (
