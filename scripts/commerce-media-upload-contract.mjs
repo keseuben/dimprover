@@ -8,6 +8,7 @@ const uploadRoute=fs.readFileSync("app/api/v1/commerce/media/uploads/[assetId]/[
 const contentRoute=fs.readFileSync("app/api/v1/commerce/media/assets/[assetId]/content/route.ts","utf8");
 const products=fs.readFileSync("app/lib/commerce/product/repository.ts","utf8");
 const ui=fs.readFileSync("components/aruter/CommerceProductsAdmin.tsx","utf8");
+const gallery=fs.readFileSync("components/aruter/CommerceProductMediaGallery.tsx","utf8");
 const prep=fs.readFileSync("components/aruter/commerceMediaPreparation.ts","utf8");
 const checks=[
   ["01 Commerce-specific S3 config supported",config.includes("DIMPRO_COMMERCE_S3_ENDPOINT")&&config.includes("DIMPRO_COMMERCE_S3_BUCKET")],
@@ -26,8 +27,8 @@ const checks=[
   ["14 media read uses short signed GET redirect",storage.includes("createCommerceMediaSignedGetUrl")&&contentRoute.includes("NextResponse.redirect")],
   ["15 product summary returns primary media asset",products.includes("primaryMediaAssetId")&&products.includes("mediaByProduct")],
   ["16 client reuses shared optimizer before upload",prep.includes("prepareCommerceProductImages")&&prep.includes("uploadCommerceProductImage")],
-  ["17 admin UI supports image add/replace",ui.includes("Kép hozzáadása")&&ui.includes("Kép cseréje")],
-  ["18 UI states original is not retained by default",ui.includes("az eredeti fájlt alapból nem őrzi meg")],
+  ["17 admin UI supports image add/replace",ui.includes("CommerceProductMediaGallery")&&gallery.includes("Képek feltöltése vagy behúzása")&&gallery.includes("További képek hozzáadása")],
+  ["18 UI states original is not retained by default",gallery.includes("eredeti nagy fájl alapból nem marad meg")],
 ];
 let pass=0;for(const [name,ok] of checks){console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)pass++;}
 console.log(`RESULT ${pass}/${checks.length} PASS`);assert.equal(pass,checks.length);

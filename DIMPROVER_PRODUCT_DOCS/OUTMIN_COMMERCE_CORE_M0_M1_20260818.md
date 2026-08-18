@@ -557,3 +557,39 @@ Részben elkészült / hiányzik:
 - becsült aktív fejlesztési idő: Media galéria UI 1.5–2.5 óra; Receiving M1 alap 4–7 óra; Order/Checkout bridge 6–10 óra.
 
 Kötelező környezeti állapot: PROD változatlan, PROD alkalmazásmódosítás nem történt, shared DEV runtime cutover nem történt.
+
+### 2026-08-18 22:xx checkpoint — Termék többképes galéria UI
+
+Elkészült:
+- a Termék inspector korábbi egyképes feltöltője külön, újrahasznosítható `CommerceProductMediaGallery` komponensre váltott;
+- több kép egyidejű kiválasztása és sorozatos feltöltése;
+- PC/laptop drag & drop feltöltés;
+- fájlszintű csomag-progressz (`aktuális/összes`);
+- nagy WEB előnézet és vízszintes thumbnail-sáv;
+- elsődleges kép egyértelmű jelölése és egy kattintással történő cseréje;
+- képsorrend balra/jobbra mozgatással módosítható;
+- a sorrend és primary státusz a Media Management M1 atomi PATCH/RPC útvonalán mentődik;
+- az aktív non-destructive overlay-k képenként darabszámmal, a kijelölt képen pedig típuscímkékkel láthatók;
+- a meglévő közös képoptimalizáló maradt: WEB + THUMBNAIL, eredeti nagy fájl alapból nem marad meg;
+- média-változás után a Product summary újratöltődik, ezért a terméklista elsődleges thumbnailje is frissül.
+
+UX irány:
+- az inspector nem vált külön média-admin oldalra;
+- a gyakori képműveletek egy helyen, kis kattintásszámmal érhetők el;
+- mobilon/tableten a thumbnail-sáv vízszintesen görgethető;
+- desktopon drag & drop és többes fájlválasztás támogatott.
+
+Tesztkapu:
+- Product Media Gallery UI contract: 18/18 PASS;
+- Media upload regression: 18/18 PASS;
+- Media management backend regression: 20/20 PASS;
+- Product summary regression: 14/14 PASS;
+- Product inspector edit regression: 12/12 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+Megjegyzés:
+- a korábbi `768fb36` Media Management build első coordinated futása sikeresen lefutott; egy korábban sorba állt azonos második build később feleslegesen újraindult és hibával zárult, ezért a második futás eredménye nem release-jelölt. A forráskód tiszta checkpointból folytatódott.
+- shared DEV runtime cutover és PM2 restart továbbra sem történt; PROD változatlan.
