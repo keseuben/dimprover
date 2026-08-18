@@ -343,3 +343,24 @@ Következő biztonságos fejlesztési sorrend:
 6. csak ezután Receiving és közös Order/Checkout bridge a meglévő Árutér pénztári flow megtartásával.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-18 20:xx checkpoint — Catalog master data + Variant CRUD
+
+Elkészült:
+- Category / Brand / Manufacturer server repository és tenant-scoped CRUD API;
+- soft archive törzsadatokra, aktív termékhivatkozás esetén archiválási tiltás;
+- kategória parent scope guard, self/cycle/depth guard, aktív alkategória esetén archiválási tiltás;
+- ProductVariant create / update / archive API;
+- variant SKU uniqueness konfliktuskezelés;
+- készlethez kapcsolt variant archiválási tiltás;
+- új admin oldal: `/aruter/admin/torzsadatok` — kategória/márka/gyártó létrehozás, szerkesztés, archiválás;
+- kategória UI-ban szülőkategória-választás;
+- legacy Árutér oldalakhoz nem nyúltunk.
+
+Tesztkapu:
+- Catalog API contract: 16/16 PASS;
+- Catalog + Variant valós DEV runtime E2E: 12/12 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS;
+- QA rekordok cleanup után nem maradnak bent.

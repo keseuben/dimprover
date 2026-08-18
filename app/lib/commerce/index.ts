@@ -18,3 +18,5 @@ export * from "./inventory/repository";
 
 export * from "./media/uploadService";
 export * from "./media/repository";
+
+export * from "./catalog/repository";
