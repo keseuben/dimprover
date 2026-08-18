@@ -18,6 +18,7 @@ import type {
   DropCapabilityLinks,
   DropCreatePackageInput,
   DropCreatedPackage,
+  DropFileRecord,
   DropPackageListItem,
   DropPackageRecord,
   DropRawTokens,
@@ -608,6 +609,17 @@ export async function findDropPackageById(packageId: string) {
     .maybeSingle();
   if (error) databaseError("A Drop csomag betöltése sikertelen.", error);
   return (data || null) as DropPackageRecord | null;
+}
+
+export async function findDropFileById(fileId: string) {
+  const client = getDropSupabaseClient();
+  const { data, error } = await client
+    .from("drop_files")
+    .select("*")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (error) databaseError("A Drop fájl betöltése sikertelen.", error);
+  return (data || null) as DropFileRecord | null;
 }
 
 export async function transitionDropPackageStatusAtomic(input: {

@@ -5,7 +5,6 @@ import {
   calculateDriveObjectSha256,
   deleteDriveObject,
   headDriveObject,
-  putDriveObjectStream,
 } from "@/app/lib/drive-core/s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "@/app/lib/drive-core/storageConfig";
 import {
@@ -25,7 +24,8 @@ import {
   type DropFinalReportBundle,
   type DropReportRecord,
 } from "../report/dropReportRepository";
-import { headDropS3Object, openDropS3Object } from "../storage/dropS3Storage";
+import { headDropS3Object } from "../storage/dropS3Storage";
+import { copyDropObjectToDriveVerified } from "./dropDriveObjectCopy";
 import { getDropStorageConfig } from "../storage/dropStorageConfig";
 import type { DropFileRecord } from "../dropTypes";
 import { getDropPackageWorkflow } from "../public/dropPublicRepository";
@@ -240,27 +240,13 @@ async function copySourceToDrive(input: {
   driveStorageKey: string;
   expectedDriveBucket: string;
 }) {
-  const opened = await openDropS3Object({
-    storageKey: input.source.sourceStorageKey,
-    bucket: input.source.sourceBucket,
-  });
-  if (opened.contentLength !== input.source.sizeBytes) {
-    throw new DropDriveArchiveError(
-      `A forrásobjektum mérete eltér a rögzített mérettől: ${input.source.documentName}.`,
-      "DROP_DRIVE_ARCHIVE_SOURCE_SIZE_MISMATCH",
-      409,
-      false,
-    );
-  }
-  const body = opened.body as unknown as AsyncIterable<Uint8Array>;
-  if (!body || typeof body[Symbol.asyncIterator] !== "function") {
-    throw new DropDriveArchiveError("A Drop forrásobjektum nem streamelhető.", "DROP_DRIVE_ARCHIVE_STREAM_UNAVAILABLE");
-  }
-  const copied = await putDriveObjectStream({
-    storageKey: input.driveStorageKey,
-    body,
-    contentType: input.source.mimeType || opened.contentType,
-    contentLength: opened.contentLength,
+  return copyDropObjectToDriveVerified({
+    sourceBucket: input.source.sourceBucket,
+    sourceStorageKey: input.source.sourceStorageKey,
+    driveStorageKey: input.driveStorageKey,
+    expectedDriveBucket: input.expectedDriveBucket,
+    mimeType: input.source.mimeType,
+    sizeBytes: input.source.sizeBytes,
     metadata: {
       "drop-package-id": input.source.archiveKey.split(":")[1] || "package",
       "drop-source-type": input.source.sourceType,
@@ -268,15 +254,6 @@ async function copySourceToDrive(input: {
       ...(input.source.sha256 ? { "drop-sha256": input.source.sha256 } : {}),
     },
   });
-  if (copied.bucket !== input.expectedDriveBucket) {
-    throw new DropDriveArchiveError("A DRIVE célbucket eltér az archiválási konfigurációtól.", "DROP_DRIVE_ARCHIVE_BUCKET_MISMATCH", 409, false);
-  }
-  const verified = await headDriveObject({ storageKey: input.driveStorageKey, bucket: copied.bucket });
-  if (verified.contentLength !== input.source.sizeBytes) {
-    await deleteDriveObject({ storageKey: input.driveStorageKey, bucket: copied.bucket }).catch(() => undefined);
-    throw new DropDriveArchiveError("A DRIVE archívummásolat méretellenőrzése sikertelen.", "DROP_DRIVE_ARCHIVE_COPY_SIZE_MISMATCH");
-  }
-  return verified;
 }
 
 async function archiveSource(input: {

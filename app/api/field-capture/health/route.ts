@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getFieldCaptureFeatureState } from "@/app/lib/field-capture/featureFlags";
 import { getFieldCaptureServerSchemaReadiness } from "@/app/lib/field-capture/serverRepository";
 import { getFieldCaptureDropUploadReadiness } from "@/app/lib/field-capture/dropUploadAdapter";
+import { getFieldCaptureUserDriveReadiness } from "@/app/lib/field-capture/userDriveService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
   const feature = getFieldCaptureFeatureState();
-  const [schema, upload] = await Promise.all([
+  const [schema, upload, userDrive] = await Promise.all([
     getFieldCaptureServerSchemaReadiness().catch(() => ({
       ready: false,
       markerReady: false,
@@ -24,6 +25,18 @@ export async function GET() {
       chunkSizeBytes: 0,
       packageBindingMode: "EXISTING_ENTITLEMENT_PACKAGE" as const,
       rawTokenPersistence: false,
+    })),
+    getFieldCaptureUserDriveReadiness().catch(() => ({
+      ready: false,
+      contentCoreReady: false,
+      storageReady: false,
+      storageMode: "disabled" as const,
+      userDriveWriteEnabled: false,
+      bucketConfigured: false,
+      ownership: "USER" as const,
+      scope: "USER_ROOT" as const,
+      independentRetention: true,
+      requiresCleanDropObject: true,
     })),
   ]);
   return NextResponse.json({
@@ -45,10 +58,15 @@ export async function GET() {
       cameraVectorHeading: true,
       imageMarkupEditor: true,
       localWorkflow: true,
-      userDriveBinding: false,
+      userDriveBinding: schema.ready && upload.ready && userDrive.ready,
+      userDriveOwnership: "USER",
+      userDriveScope: "USER_ROOT",
+      userDriveIndependentRetention: true,
+      userDriveRequiresCleanDropObject: true,
       projectDriveBinding: false,
     },
     serverSchema: schema,
     serverUpload: upload,
+    userDrive,
   }, { status: feature.enabled ? 200 : 503 });
 }

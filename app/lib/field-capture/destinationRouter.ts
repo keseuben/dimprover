@@ -4,7 +4,7 @@ export function fieldCaptureDestinations(options: PreCaptureOptions): CaptureDes
   return [
     { target: "CAPTURE", enabled: true, ready: true, detail: "A terepi capture rekord mindig létrejön." },
     { target: "DEVICE", enabled: options.saveToDevice, ready: true, detail: "Az eredeti kép közvetlen eszközletöltéssel menthető." },
-    { target: "USER_DRIVE", enabled: options.saveToUserDrive, ready: false, detail: "Saját DIMPRO Drive binding a P8 fázisban aktiválódik." },
+    { target: "USER_DRIVE", enabled: options.saveToUserDrive, ready: false, detail: "Saját DIMPRO Drive backend kész; a kliensszinkron bekötése után aktiválódik." },
     { target: "PROJECT_DRIVE", enabled: options.saveToProjectDrive, ready: false, detail: "Projektkapu Drive ACL/binding a P9 fázisban aktiválódik." },
   ];
 }

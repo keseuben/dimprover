@@ -74,7 +74,7 @@ const tests = [
   ['Képenként saját opció snapshot', shell.includes('options: { ...options }')],
   ['Telefonra mentés közvetlen download', shell.includes('anchor.download = file.name') && !shell.includes('navigator.share') && shell.includes('file.originalFile')],
   ['Saját Drive és Projektkapu Drive külön cél', destinations.includes('USER_DRIVE') && destinations.includes('PROJECT_DRIVE')],
-  ['P8/P9 Drive binding még nincs késznek jelölve', destinations.includes('ready: false') && health.includes('userDriveBinding: false') && health.includes('projectDriveBinding: false')],
+  ["P8 Saját Drive backend kész, kliens és Projektkapu még nincs felengedve", destinations.includes("USER_DRIVE") && destinations.includes("backend kész; a kliensszinkron") && health.includes("userDriveBinding: schema.ready && upload.ready && userDrive.ready") && health.includes("projectDriveBinding: false")],
   ['Külön Terep IndexedDB queue', queue.includes('dimpro-field-capture-v1') && queue.includes('captureItems')],
   ['Offline queue nem tárol tokent/PIN-t', queue.includes('rawSessionTokenStored: false') && queue.includes('uploadCapabilityStored: false') && !queue.includes('sendCode: string')],
   ['LOCAL_ONLY offline-first induló állapot', shell.includes('status: "LOCAL_ONLY"') && types.includes('"LOCAL_ONLY"')],
