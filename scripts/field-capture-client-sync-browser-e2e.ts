@@ -13,7 +13,6 @@ const clientSessionId = `terep-browser-sync-${Date.now()}`;
 let serverSessionId = "";
 let stagingPackageId = "";
 
-await access(FIXTURE);
 
 async function cleanup() {
   const sessionResult = await db.from("field_capture_sessions")
@@ -68,6 +67,7 @@ async function visibleButton(page: Page, text: string) {
 }
 
 async function main() {
+  await access(FIXTURE);
   const context = await getDimproSendContextByEntitlementId(ENTITLEMENT_ID);
   assert.ok(context.user.id, "DEV Send user missing");
   assert.ok(context.entitlement.uploadRulesAcceptanceCount >= 3, "DEV rules acceptance count must be >= 3");
