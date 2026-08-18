@@ -45,8 +45,10 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId }: { select
   }, [load]);
 
   const topContexts = useMemo(() => summary?.contexts.slice(0, 6) || [], [summary]);
+  const summaryProjectId = summary?.projectId || "";
+  const readyForSelection = Boolean(summary?.ready && summaryProjectId === selectedProjectId);
 
-  return <section className={styles.weeklySummary} data-testid="benjadmin-weekly-development-summary" data-ready={summary?.ready ? "true" : "false"} data-expanded={expanded ? "true" : "false"} data-project-id={summary?.projectId || "all"}>
+  return <section className={styles.weeklySummary} data-testid="benjadmin-weekly-development-summary" data-ready={readyForSelection ? "true" : "false"} data-expanded={expanded ? "true" : "false"} data-project-id={summary?.projectId || "all"}>
     <header className={styles.weeklySummaryHeader}>
       <button type="button" className={styles.weeklySummaryToggle} data-testid="benjadmin-weekly-summary-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <BarChart3 size={15} />

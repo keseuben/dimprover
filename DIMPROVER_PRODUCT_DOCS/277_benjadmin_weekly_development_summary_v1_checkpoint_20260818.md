@@ -178,3 +178,9 @@ Javítás: a `silentFetch()` közvetlenül visszaadja a betöltött `ConsoleLive
 A candidate második futása megmutatta, hogy az első bootstrap snapshot sikertelensége után az SSE/polling által később megérkező projektlista már nem próbálta újra a mentett projekt feloldását. Emiatt a shell `Összes projekt` állapotban maradhatott.
 
 A `DeveloperConsoleShell` most a live projektlista változásakor is fail-safe módon visszaállítja a mentett projektet. Ha a tárolt projekt már nem létezik, egyetlen elérhető projektre áll át, több projekt esetén pedig biztonságosan az összes projekt nézetre esik vissza.
+
+### Projektváltás alatti stale-ready állapot
+
+A production candidate acceptance megmutatta, hogy a mentett projekt helyreállítása után a Weekly panel egy rövid ideig még az előző `all` summary-t jelölte `data-ready=true` állapotúnak, miközben az új projekt-specifikus kérés már futott.
+
+A panel readiness most request-scope-olt: csak akkor `ready=true`, ha a betöltött summary `projectId` értéke megegyezik az aktuális `selectedProjectId` értékkel. Így projektváltáskor nem tekinthető késznek a régi összesítés, és a UI/acceptance megvárja az új projektadatot.
