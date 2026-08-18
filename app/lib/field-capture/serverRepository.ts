@@ -1,0 +1,335 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getDimproIdentitySupabaseClient } from "@/app/lib/identity-core/repository";
+import { DimproIdentityError } from "@/app/lib/identity-core/types";
+
+type DbError = { code?: string | null; message?: string | null; details?: string | null } | null;
+type DbRow = Record<string, unknown>;
+
+export type FieldCaptureServerSession = {
+  id: string;
+  clientSessionId: string;
+  userId: string;
+  entitlementId: string;
+  projectId: string | null;
+  status: "ACTIVE" | "CLOSED" | "ARCHIVED";
+  startedAt: string;
+  updatedAt: string;
+};
+
+export type FieldCaptureServerItem = {
+  id: string;
+  sessionId: string;
+  clientItemId: string;
+  sequenceNo: number;
+  status: string;
+  capturedAt: string;
+  updatedAt: string;
+};
+
+export type FieldCaptureItemWrite = {
+  sessionId: string;
+  clientItemId: string;
+  sequenceNo: number;
+  capturedAt: string;
+  note: string;
+  captureOptions: Record<string, unknown>;
+  edited: boolean;
+  editRevision: number;
+  asset?: {
+    variant: "ORIGINAL" | "OPTIMIZED" | "THUMBNAIL";
+    originalName: string | null;
+    displayName: string;
+    mimeType: string;
+    originalSizeBytes: number | null;
+    storedSizeBytes: number | null;
+    width: number | null;
+    height: number | null;
+    checksumSha256: string | null;
+    optimized: boolean;
+  } | null;
+  location?: Record<string, unknown> | null;
+  orientation?: Record<string, unknown> | null;
+  voice?: Record<string, unknown> | null;
+  destinations: Array<{
+    target: "CAPTURE" | "DEVICE" | "USER_DRIVE" | "PROJECT_DRIVE";
+    folderId: string | null;
+    ownership: "CAPTURE" | "USER" | "PROJECT" | "DEVICE";
+    status: "PENDING" | "QUEUED" | "STORED" | "FAILED" | "REMOVED";
+    retainedIndependently: boolean;
+    detail: Record<string, unknown>;
+  }>;
+};
+
+const DOMAIN_TABLES = [
+  "field_capture_sessions",
+  "field_capture_items",
+  "field_capture_asset_refs",
+  "field_capture_locations",
+  "field_capture_orientations",
+  "field_capture_voice_notes",
+  "field_capture_destinations",
+  "field_capture_events",
+  "field_capture_sync_queue",
+] as const;
+
+function client(): SupabaseClient {
+  return getDimproIdentitySupabaseClient();
+}
+
+function text(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function nullableText(value: unknown) {
+  const valueText = text(value).trim();
+  return valueText || null;
+}
+
+function databaseError(message: string, error: DbError): never {
+  throw new DimproIdentityError(
+    message,
+    error?.code || "FIELD_CAPTURE_DATABASE_ERROR",
+    error?.code === "42501" ? 403 : 500,
+  );
+}
+
+function mapSession(row: DbRow): FieldCaptureServerSession {
+  return {
+    id: text(row.id),
+    clientSessionId: text(row.client_session_id),
+    userId: text(row.user_id),
+    entitlementId: text(row.entitlement_id),
+    projectId: nullableText(row.project_id),
+    status: text(row.status) as FieldCaptureServerSession["status"],
+    startedAt: text(row.started_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function mapItem(row: DbRow): FieldCaptureServerItem {
+  return {
+    id: text(row.id),
+    sessionId: text(row.session_id),
+    clientItemId: text(row.client_item_id),
+    sequenceNo: Number(row.sequence_no || 0),
+    status: text(row.status),
+    capturedAt: text(row.captured_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+export async function getFieldCaptureServerSchemaReadiness() {
+  const db = client();
+  const markerResult = await db
+    .from("field_capture_schema_meta")
+    .select("component,schema_version,migration_count,bootstrap_id")
+    .eq("component", "field-capture-core")
+    .maybeSingle();
+
+  const markerReady = !markerResult.error
+    && markerResult.data?.schema_version === "0.1.0"
+    && Number(markerResult.data?.migration_count) === 1
+    && markerResult.data?.bootstrap_id === "field-capture-p7-v010-20260818";
+
+  const checks = await Promise.all(DOMAIN_TABLES.map(async (table) => {
+    const result = await db.from(table).select("*", { head: true, count: "exact" }).limit(0);
+    return [table, !result.error] as const;
+  }));
+
+  return {
+    ready: markerReady && checks.every(([, ready]) => ready),
+    markerReady,
+    checks: Object.fromEntries(checks),
+  };
+}
+
+export async function resolveFieldCaptureProjectCoreId(dimproProjectId: string) {
+  const result = await client()
+    .from("project_core_projects")
+    .select("id,dimpro_project_id,status")
+    .eq("dimpro_project_id", dimproProjectId)
+    .maybeSingle();
+  if (result.error) databaseError("A projektkapcsolat feloldása sikertelen.", result.error);
+  if (!result.data || ["DELETED", "DELETION_SCHEDULED"].includes(text(result.data.status))) {
+    throw new DimproIdentityError(
+      "A kiválasztott projekthez nem található aktív Project Core kapcsolat.",
+      "FIELD_CAPTURE_PROJECT_CORE_LINK_MISSING",
+      409,
+    );
+  }
+  return text(result.data.id);
+}
+
+export async function upsertFieldCaptureServerSession(input: {
+  clientSessionId: string;
+  userId: string;
+  entitlementId: string;
+  projectCoreId: string | null;
+  defaults: Record<string, unknown>;
+}) {
+  const result = await client()
+    .from("field_capture_sessions")
+    .upsert({
+      client_session_id: input.clientSessionId,
+      user_id: input.userId,
+      entitlement_id: input.entitlementId,
+      project_id: input.projectCoreId,
+      context_module_code: "FIELD_CAPTURE",
+      defaults: input.defaults,
+      status: "ACTIVE",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,client_session_id" })
+    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,updated_at")
+    .single();
+  if (result.error) databaseError("A szerveres terepi munkamenet mentése sikertelen.", result.error);
+
+  const session = mapSession(result.data as DbRow);
+  const existingEvent = await client()
+    .from("field_capture_events")
+    .select("id")
+    .eq("session_id", session.id)
+    .eq("event_type", "SESSION_REGISTERED")
+    .limit(1)
+    .maybeSingle();
+  if (existingEvent.error) {
+    databaseError("A terepi munkamenet auditéllapotának ellenőrzése sikertelen.", existingEvent.error);
+  }
+  if (!existingEvent.data) {
+    const eventResult = await client().from("field_capture_events").insert({
+      session_id: session.id,
+      event_type: "SESSION_REGISTERED",
+      actor_user_id: input.userId,
+      payload: { source: "field-capture-p7-api" },
+    });
+    if (eventResult.error) databaseError("A terepi munkamenet auditnaplózása sikertelen.", eventResult.error);
+  }
+  return session;
+}
+
+export async function assertFieldCaptureSessionOwner(input: {
+  sessionId: string;
+  userId: string;
+  entitlementId: string;
+}) {
+  const result = await client()
+    .from("field_capture_sessions")
+    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,updated_at")
+    .eq("id", input.sessionId)
+    .eq("user_id", input.userId)
+    .eq("entitlement_id", input.entitlementId)
+    .maybeSingle();
+  if (result.error) databaseError("A terepi munkamenet ellenőrzése sikertelen.", result.error);
+  if (!result.data) {
+    throw new DimproIdentityError(
+      "A terepi munkamenet nem található vagy nem ehhez a felhasználóhoz tartozik.",
+      "FIELD_CAPTURE_SESSION_ACCESS_DENIED",
+      404,
+    );
+  }
+  return mapSession(result.data as DbRow);
+}
+
+export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite) {
+  const db = client();
+  const itemResult = await db
+    .from("field_capture_items")
+    .upsert({
+      session_id: input.sessionId,
+      client_item_id: input.clientItemId,
+      sequence_no: input.sequenceNo,
+      captured_at: input.capturedAt,
+      note: input.note,
+      status: input.asset ? "QUEUED" : "SERVER_STORED",
+      capture_options: input.captureOptions,
+      edited: input.edited,
+      edit_revision: input.editRevision,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "session_id,client_item_id" })
+    .select("id,session_id,client_item_id,sequence_no,status,captured_at,updated_at")
+    .single();
+  if (itemResult.error) databaseError("A terepi képtétel regisztrálása sikertelen.", itemResult.error);
+  const item = mapItem(itemResult.data as DbRow);
+
+  if (input.asset) {
+    const assetResult = await db.from("field_capture_asset_refs").upsert({
+      capture_item_id: item.id,
+      variant: input.asset.variant,
+      original_name: input.asset.originalName,
+      display_name: input.asset.displayName,
+      mime_type: input.asset.mimeType,
+      original_size_bytes: input.asset.originalSizeBytes,
+      stored_size_bytes: input.asset.storedSizeBytes,
+      width: input.asset.width,
+      height: input.asset.height,
+      checksum_sha256: input.asset.checksumSha256,
+      optimized: input.asset.optimized,
+      storage_status: "PENDING",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "capture_item_id,variant" });
+    if (assetResult.error) databaseError("A terepi asset metaadat mentése sikertelen.", assetResult.error);
+
+    const queueResult = await db.from("field_capture_sync_queue").upsert({
+      session_id: input.sessionId,
+      capture_item_id: item.id,
+      device_local_id: input.clientItemId,
+      operation: "UPLOAD_ASSET",
+      status: "QUEUED",
+      payload_meta: { variant: input.asset.variant, mimeType: input.asset.mimeType },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "session_id,device_local_id,operation" });
+    if (queueResult.error) databaseError("A terepi szinkronsor előkészítése sikertelen.", queueResult.error);
+  }
+
+  if (input.location) {
+    const result = await db.from("field_capture_locations").upsert({
+      capture_item_id: item.id,
+      ...input.location,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "capture_item_id" });
+    if (result.error) databaseError("A GPS metaadat mentése sikertelen.", result.error);
+  }
+
+  if (input.orientation) {
+    const result = await db.from("field_capture_orientations").upsert({
+      capture_item_id: item.id,
+      ...input.orientation,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "capture_item_id" });
+    if (result.error) databaseError("A kamerairány metaadat mentése sikertelen.", result.error);
+  }
+
+  if (input.voice) {
+    const result = await db.from("field_capture_voice_notes").upsert({
+      capture_item_id: item.id,
+      ...input.voice,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "capture_item_id" });
+    if (result.error) databaseError("A diktálás metaadat mentése sikertelen.", result.error);
+  }
+
+  if (input.destinations.length > 0) {
+    const rows = input.destinations.map((destination) => ({
+      capture_item_id: item.id,
+      target: destination.target,
+      folder_id: destination.folderId,
+      ownership: destination.ownership,
+      status: destination.status,
+      retained_independently: destination.retainedIndependently,
+      detail: destination.detail,
+      updated_at: new Date().toISOString(),
+    }));
+    const result = await db.from("field_capture_destinations")
+      .upsert(rows, { onConflict: "capture_item_id,target" });
+    if (result.error) databaseError("A terepi mentési célok rögzítése sikertelen.", result.error);
+  }
+
+  const eventResult = await db.from("field_capture_events").insert({
+    session_id: input.sessionId,
+    capture_item_id: item.id,
+    event_type: "ITEM_UPSERTED",
+    payload: { clientItemId: input.clientItemId, sequenceNo: input.sequenceNo },
+  });
+  if (eventResult.error) databaseError("A terepi képtétel auditnaplózása sikertelen.", eventResult.error);
+
+  return item;
+}
