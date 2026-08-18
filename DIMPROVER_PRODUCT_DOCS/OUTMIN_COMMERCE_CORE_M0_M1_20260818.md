@@ -982,3 +982,45 @@ Teljes célzott regresszió:
 - becsült aktív idő: candidate build + smoke 1–2 óra; legacy mirror 3–5 óra; cashier browser E2E 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 00:48 checkpoint — Legacy Árutér → Commerce fail-open mirror staged
+
+Elkészült a meglévő Árutér működését megőrző, kontrollált Commerce Order mirror első integrációs rétege.
+
+Működési szabály:
+- a legacy Árutér rendelés és státuszváltozás továbbra is ELŐSZÖR a meglévő repository-ban készül el;
+- a Commerce mirror csak feature flaggel kapcsolható be: `ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=1`;
+- alapállapotban kikapcsolva marad (`0`);
+- a Commerce mirror Next.js `after()` callbackben fut, ezért nem része a legacy API válasz kritikus útjának;
+- Commerce hiba esetén a legacy rendelés/pénztár eredménye nem fordul vissza és nem lesz hibás válasz;
+- mirror hiba strukturált `[ARUTER_COMMERCE_MIRROR]` szervernaplóval rögzül;
+- opcionális `ARUTER_COMMERCE_FULFILLMENT_SOURCE_ID` mellett SKU/Variant feloldás + készletfoglalás is kérhető;
+- fulfillment source nélkül a mirror nem kényszerít készletfoglalást, az unmapped legacy tétel továbbra is snapshotként megmarad;
+- create/reserve/status mirror műveletek stabil legacy order-alapú idempotency kulcsokat használnak.
+
+Érintett fő fájlok:
+- `app/lib/aruter/commerceMirror.ts`
+- `app/api/aruter/orders/route.ts`
+- `app/api/aruter/orders/[orderId]/status/route.ts`
+- `app/lib/aruter/aruter-env.example`
+- `scripts/commerce-legacy-mirror-contract.mjs`
+
+Tesztkapu:
+- fail-open mirror contract: 22/22 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott lint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- elkészült: feature-flagelt, post-response fail-open legacy → Commerce Order mirror alap;
+- részben elkészült: tényleges DEV flag-bekapcsolás és böngészős dual-write E2E még nincs végrehajtva;
+- hiányzik: tartós mirror health/admin státusz, retry/reconciliation queue, böngészős cashier mirror E2E;
+- DB/migration: nincs új DB migráció ebben a blokkban, Commerce továbbra is 0.1.7 / 8;
+- API: legacy create/status route adapterrel bővült, legacy válaszszerződés változatlan;
+- UI: nincs legacy UI-csere, `/aruter/penztar` változatlan;
+- ismert tech debt: a strukturált mirror failure jelenleg szerverlog alapú; tartós reconciliation státusz későbbi blokk;
+- következő blokk: candidate build/smoke, majd DEV-only feature flaggel kontrollált mirror E2E;
+- becsült aktív idő: build + smoke 1–2 óra; mirror E2E + reconciliation alap 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

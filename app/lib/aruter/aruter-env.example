@@ -15,3 +15,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=SAJAT-ANON-KULCS
 
 # Supabase service role kulcs, csak szerveren:
 SUPABASE_SERVICE_ROLE_KEY=SAJAT-SERVICE-ROLE-KULCS
+
+# Legacy Árutér → Commerce Order mirror (opt-in, alapból kikapcsolva)
+ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=0
+# Opcionális belső Commerce készletforrás. Üresen hagyva nincs automatikus készletfoglalás.
+ARUTER_COMMERCE_FULFILLMENT_SOURCE_ID=
