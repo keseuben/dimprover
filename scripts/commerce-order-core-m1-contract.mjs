@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 const sql=fs.readFileSync("supabase/migrations/20260818234500_dimpro_commerce_order_core_m1.sql","utf8");
+const conformance=fs.readFileSync("supabase/migrations/20260819104500_dimpro_commerce_schema_conformance_v019.sql","utf8");
 const repo=fs.readFileSync("app/lib/commerce/order/repository.ts","utf8");
 const types=fs.readFileSync("app/lib/commerce/order/types.ts","utf8");
 const bridge=fs.readFileSync("app/lib/commerce/order/legacyBridge.ts","utf8");
@@ -38,7 +39,7 @@ const checks=[
  ["26 status API supports idempotency-key",status.includes('request.headers.get("idempotency-key")')],
  ["27 cashier/pay/issuer permissions are separated",permissions.includes("CASHIER_PERMISSIONS")&&permissions.includes("WAREHOUSE_ISSUER_PERMISSIONS")&&permissions.includes("commerce.order.pay")&&permissions.includes("commerce.order.issue")],
  ["28 legacy bridge maps sent_to_cashier",bridge.includes('status==="sent_to_cashier"?"SENT_TO_CASHIER"')],
- ["29 legacy bridge maps current cart item snapshots",bridge.includes("priceNetMinor")&&bridge.includes("vatRateBasisPoints")&&bridge.includes("storageZone")],
+ ["29 legacy bridge maps canonical cart item snapshots",bridge.includes("priceNet:String")&&bridge.includes("vatRateBasisPoints")&&bridge.includes("storageZone")&&conformance.includes("price_net type numeric(19,4)")],
  ["30 legacy bridge route creates then replays paid/issued transitions",legacy.includes("legacyAruterOrderRequiredTransitions")&&legacy.includes("setCommerceOrderStatus")],
 ];
 let pass=0;for(const [name,ok] of checks){console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)pass++;}

@@ -24,20 +24,20 @@ async function main() {
     if (variant.error) throw variant.error;
     console.log("PASS 01 pricing runtime fixture created");
 
-    const first = await setCommerceActivePrice(context,{ variantId, currency:"HUF", amountMinor:"1000", vatRateBasisPoints:2700 });
-    if (String(first.amountMinor) !== "1000") throw new Error("PRICING_RUNTIME_FIRST_PRICE");
+    const first = await setCommerceActivePrice(context,{ variantId, currency:"HUF", amount:"1000", vatRateBasisPoints:2700 });
+    if (String(first.amount) !== "1000") throw new Error("PRICING_RUNTIME_FIRST_PRICE");
     console.log("PASS 02 first active price saved through repository RPC");
 
     await new Promise((resolve)=>setTimeout(resolve,20));
-    const second = await setCommerceActivePrice(context,{ variantId, currency:"HUF", amountMinor:"1250", vatRateBasisPoints:2700 });
-    if (String(second.amountMinor) !== "1250" || Number(second.previousDeactivated) !== 1) throw new Error("PRICING_RUNTIME_SECOND_PRICE");
+    const second = await setCommerceActivePrice(context,{ variantId, currency:"HUF", amount:"1250", vatRateBasisPoints:2700 });
+    if (String(second.amount) !== "1250" || Number(second.previousDeactivated) !== 1) throw new Error("PRICING_RUNTIME_SECOND_PRICE");
     console.log("PASS 03 second price deactivates previous");
 
     const history = await listCommercePrices(context,{ variantId, currency:"HUF", limit:10 });
     if (history.length !== 2) throw new Error(`PRICING_RUNTIME_HISTORY_COUNT_${history.length}`);
     const active = history.filter((item)=>item.status === "ACTIVE");
     const inactive = history.filter((item)=>item.status === "INACTIVE");
-    if (active.length !== 1 || inactive.length !== 1 || active[0]?.amountMinor !== "1250" || inactive[0]?.amountMinor !== "1000") throw new Error("PRICING_RUNTIME_HISTORY_STATE");
+    if (active.length !== 1 || inactive.length !== 1 || active[0]?.amount !== "1250" || inactive[0]?.amount !== "1000") throw new Error("PRICING_RUNTIME_HISTORY_STATE");
     console.log("PASS 04 pricing history preserves one inactive + one active price");
 
     const direct = await client.from("commerce_prices").update({ amount_minor:9999 }).eq("organization_id",orgId).eq("variant_id",variantId);

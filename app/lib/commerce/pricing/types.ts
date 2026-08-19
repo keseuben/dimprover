@@ -7,7 +7,7 @@ export type Price = OrganizationScoped & CommerceLifecycle & {
   id: CommerceEntityId;
   variantId: CommerceEntityId;
   currency: CurrencyCode;
-  amountMinor: string;
+  amount: string;
   vatRateBasisPoints: number;
   validFrom?: CommerceUtcTimestamp | null;
   validUntil?: CommerceUtcTimestamp | null;

@@ -1,5 +1,5 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { addDecimal, normalizeDecimal } from "../core/decimal";
+import { addDecimal, compareDecimal, normalizeDecimal, normalizeMoney } from "../core/decimal";
 import { createCommerceAdminClient } from "../core/server-db";
 import { hasCommercePermission } from "../core/permissions";
 import type { CommerceContext } from "../core/types";
@@ -28,7 +28,7 @@ export type CommerceProductListItem = CommerceProductRecord & {
   defaultVariantId: string | null;
   sku: string | null;
   unit: UnitOfMeasure | null;
-  priceMinor: string | null;
+  price: string | null;
   currency: string | null;
   internalAvailableQuantity: string;
   externalAvailableQuantity: string;
@@ -170,14 +170,14 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
   const variantIds = variants.map((variant) => variant.id);
   if (!variantIds.length) {
     return {
-      items: products.map((product) => ({ ...product, defaultVariantId:null, sku:null, unit:null, priceMinor:null, currency:null, internalAvailableQuantity:"0", externalAvailableQuantity:"0", externalSyncStatus:null, primaryMediaAssetId:null })),
+      items: products.map((product) => ({ ...product, defaultVariantId:null, sku:null, unit:null, price:null, currency:null, internalAvailableQuantity:"0", externalAvailableQuantity:"0", externalSyncStatus:null, primaryMediaAssetId:null })),
       total: result.count ?? 0, limit, offset,
     };
   }
 
   const [pricesResult, balancesResult, externalResult, mediaLinksResult] = await Promise.all([
     client.from("commerce_prices")
-      .select("variant_id,currency,amount_minor,valid_from,valid_until,status,created_at")
+      .select("variant_id,currency,amount,valid_from,valid_until,status,created_at")
       .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("status", "ACTIVE").is("archived_at", null).order("created_at", { ascending:false }),
     client.from("commerce_inventory_balances")
       .select("variant_id,available_quantity")
@@ -218,7 +218,7 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     if (!previous || (syncRank[status] || 99) > (syncRank[previous] || 99)) externalStatusByProduct.set(productId, status);
   }
   const now = Date.now();
-  const pricesByProduct = new Map<string, { priceMinor:string; currency:string }>();
+  const pricesByProduct = new Map<string, { price:string; currency:string }>();
   for (const row of (pricesResult.data || []) as Row[]) {
     const productId = productByVariant.get(text(row.variant_id));
     if (!productId) continue;
@@ -227,10 +227,10 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     if (from && Date.parse(from) > now) continue;
     if (until && Date.parse(until) < now) continue;
     const currency = text(row.currency) || "HUF";
-    const amountMinor = String(row.amount_minor ?? "0");
+    const amount = normalizeMoney(String(row.amount ?? "0"));
     const current = pricesByProduct.get(productId);
-    if (!current || (currency === "HUF" && current.currency !== "HUF") || (currency === current.currency && Number(amountMinor) < Number(current.priceMinor))) {
-      pricesByProduct.set(productId, { priceMinor:amountMinor, currency });
+    if (!current || (currency === "HUF" && current.currency !== "HUF") || (currency === current.currency && compareDecimal(amount, current.price, 4) < 0)) {
+      pricesByProduct.set(productId, { price:amount, currency });
     }
   }
 
@@ -250,7 +250,7 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
       defaultVariantId: defaultVariant?.id || null,
       sku: defaultVariant?.sku || null,
       unit: defaultVariant?.unit || null,
-      priceMinor: price?.priceMinor || null,
+      price: price?.price || null,
       currency: price?.currency || null,
       internalAvailableQuantity: internalByProduct.get(product.id) || "0",
       externalAvailableQuantity: externalByProduct.get(product.id) || "0",

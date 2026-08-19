@@ -1,5 +1,5 @@
 import type { PostgrestError } from "@supabase/supabase-js";
-import { compareDecimal, normalizeDecimal } from "../core/decimal";
+import { compareDecimal, normalizeQuantity } from "../core/decimal";
 import { hasCommercePermission } from "../core/permissions";
 import { createCommerceAdminClient } from "../core/server-db";
 import type { CommerceContext } from "../core/types";
@@ -77,9 +77,9 @@ export async function applyCommerceStockMovement(context: CommerceContext, input
   let reservedDelta: string;
   let incomingDelta: string;
   try {
-    physicalDelta = normalizeDecimal(text(input.physicalDelta) || "0");
-    reservedDelta = normalizeDecimal(text(input.reservedDelta) || "0");
-    incomingDelta = normalizeDecimal(text(input.incomingDelta) || "0");
+    physicalDelta = normalizeQuantity(text(input.physicalDelta) || "0");
+    reservedDelta = normalizeQuantity(text(input.reservedDelta) || "0");
+    incomingDelta = normalizeQuantity(text(input.incomingDelta) || "0");
   } catch {
     throw new CommerceInventoryError("A készletmozgás mennyisége legfeljebb 6 tizedesjegyű szám lehet.", "COMMERCE_MOVEMENT_QUANTITY_INVALID", 400);
   }
@@ -149,7 +149,7 @@ export async function listCommerceInventoryReservations(
 
 function reservationQuantity(value: unknown) {
   let quantity: string;
-  try { quantity = normalizeDecimal(text(value)); }
+  try { quantity = normalizeQuantity(text(value).replace(",",".")); }
   catch { throw new CommerceInventoryError("A foglalási mennyiség legfeljebb 6 tizedesjegyű szám lehet.", "COMMERCE_RESERVATION_QUANTITY_INVALID", 400); }
   if (compareDecimal(quantity,"0") <= 0) throw new CommerceInventoryError("A foglalási mennyiségnek pozitívnak kell lennie.", "COMMERCE_RESERVATION_QUANTITY_INVALID", 400);
   return quantity;

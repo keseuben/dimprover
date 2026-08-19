@@ -1,4 +1,4 @@
-import { compareDecimal, normalizeDecimal, subtractDecimal, type DecimalString } from "../core/decimal";
+import { compareDecimal, normalizeQuantity, subtractDecimal, type DecimalString } from "../core/decimal";
 
 export type InventoryQuantitySet = {
   physicalQuantity: DecimalString;
@@ -13,9 +13,9 @@ export function calculateInventoryQuantities(input: {
   incomingQuantity?: DecimalString;
   allowNegativeAvailable?: boolean;
 }): InventoryQuantitySet {
-  const physicalQuantity = normalizeDecimal(input.physicalQuantity);
-  const reservedQuantity = normalizeDecimal(input.reservedQuantity);
-  const incomingQuantity = normalizeDecimal(input.incomingQuantity ?? "0");
+  const physicalQuantity = normalizeQuantity(input.physicalQuantity);
+  const reservedQuantity = normalizeQuantity(input.reservedQuantity);
+  const incomingQuantity = normalizeQuantity(input.incomingQuantity ?? "0");
   if (compareDecimal(physicalQuantity, "0") < 0) throw new Error("Physical inventory cannot be negative.");
   if (compareDecimal(reservedQuantity, "0") < 0) throw new Error("Reserved inventory cannot be negative.");
   if (compareDecimal(incomingQuantity, "0") < 0) throw new Error("Incoming inventory cannot be negative.");

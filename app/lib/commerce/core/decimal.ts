@@ -45,3 +45,24 @@ export function compareDecimal(left: DecimalString, right: DecimalString, scale 
   const b = parse(right, scale);
   return a === b ? 0 : a > b ? 1 : -1;
 }
+
+function assertPrecision(value: DecimalString, precision: number, scale: number) {
+  const unsigned = value.startsWith("-") ? value.slice(1) : value;
+  const [whole = "0"] = unsigned.split(".");
+  const significantWhole = whole.replace(/^0+/, "") || "0";
+  if (significantWhole.length > precision - scale) {
+    throw new Error(`Commerce decimal ${value} exceeds precision ${precision}, scale ${scale}.`);
+  }
+}
+
+export function normalizeQuantity(value: DecimalString): DecimalString {
+  const normalized = normalizeDecimal(value, 6);
+  assertPrecision(normalized, 19, 6);
+  return normalized;
+}
+
+export function normalizeMoney(value: DecimalString): DecimalString {
+  const normalized = normalizeDecimal(value, 4);
+  assertPrecision(normalized, 19, 4);
+  return normalized;
+}

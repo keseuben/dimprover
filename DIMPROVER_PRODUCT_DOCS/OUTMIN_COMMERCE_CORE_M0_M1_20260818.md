@@ -1240,3 +1240,52 @@ A harness szerződéses ellenőrzése: 17/17 PASS.
 A tényleges HTTP E2E futtatás a legfrissebb Outmin candidate build elkészülte után történik, `ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=1` kizárólag a külön candidate processben.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 10:xx checkpoint — Commerce numerikus schema conformance v0.1.9 előkészítve
+
+A Commerce Core kötelező adatmodell-szabályainak auditja valós DEV `information_schema` alapján kimutatta, hogy a korábbi pilot migrációkban maradtak `NUMERIC(20,6)` mennyiségek és `bigint` alapú, `_minor` nevű pénzmezők. Ez ellentétes a rögzített Commerce hard rule-lal, ezért új funkció helyett előbb forward hardening migráció készült.
+
+Elkészült:
+- canonical money: `NUMERIC(19,4)`;
+- canonical quantity: `NUMERIC(19,6)`;
+- `commerce_prices.amount_minor` → `amount NUMERIC(19,4)`;
+- `commerce_goods_receipt_items.unit_cost_minor` → `unit_cost NUMERIC(19,4)`;
+- `commerce_order_items.price_net_minor` → `price_net NUMERIC(19,4)`;
+- inventory, reservation, receiving, order és external snapshot mennyiségek `NUMERIC(19,6)`;
+- generated `available_quantity` és `remaining_quantity` `NUMERIC(19,6)`;
+- exact TypeScript `normalizeMoney` / `normalizeQuantity` precision gate;
+- Pricing / Product summary / Receiving / Order repository és admin UI canonical mezőkre átállítva;
+- legacy input aliasok (`amountMinor`, `unitCostMinor`, `priceNetMinor`) átmenetileg csak bemeneti kompatibilitási fallbackként maradnak, új output és DB mező már canonical;
+- fresh bootstrap is a canonical `NUMERIC(19,4)` / `NUMERIC(19,6)` szabályt használja;
+- rollback fail-closed, ha a 0.1.9 után tört pénzérték kerül be, amelyet a régi bigint modell már nem tudna veszteség nélkül visszaállítani.
+
+Új fájlok:
+- `supabase/migrations/20260819104500_dimpro_commerce_schema_conformance_v019.sql`;
+- `supabase/rollback/DIMPRO_COMMERCE_SCHEMA_CONFORMANCE_V019_ROLLBACK.sql`;
+- `scripts/commerce-schema-conformance-v019-contract.mjs`;
+- `scripts/commerce-schema-conformance-v019-db-rollback-acceptance.mjs`;
+- `scripts/commerce-schema-conformance-v019-migration-gate.mjs`.
+
+QA:
+- schema conformance contract: 25/25 PASS;
+- forward → verify → rollback → outer rollback valós DEV DB acceptance: 15/15 PASS;
+- migration gate preflight: PASS;
+- Commerce statikus regresszió: minden futtatott Product/Catalog/Pricing/Inventory/Reservation/Media/Receiving/Order/Cashier/Mirror csomag PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: KÓDOLÁS ALATT, numerikus hardening release-candidate kész;
+- Modul: Commerce Core M0/M1 schema conformance;
+- Elkészült: kód + forward migráció + rollback + gate + statikus és tranzakciós acceptance;
+- Részben elkészült: DEV apply és post-migration runtime E2E még hátravan;
+- Még hiányzik: új candidate build + HTTP/session mirror E2E a 0.1.9 kóddal; reservation expiry/cleanup csak ezután;
+- DB/migration: jelen pillanatban a tényleges DEV továbbra is 0.1.8 / 9, a 0.1.9 / 10 migráció még nincs alkalmazva;
+- API/UI: canonical money mezőnevek stagingben elkészültek;
+- ismert tech debt: régi, már alkalmazott migrációs történet megőrzi a korabeli mezőneveket; a végállapotot forward conformance migráció korrigálja. A soft-delete `deleted_at` canonicalizálása külön hardening blokk marad, mert a jelenlegi Commerce pilot több helyen még `archived_at` kompatibilitási mezőt használ;
+- következő blokk: DEV backup + 0.1.9 apply + verify + Pricing/Inventory/Reservation/Receiving/Order/Mirror runtime regresszió + candidate build;
+- becsült következő aktív idő: 1–2 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

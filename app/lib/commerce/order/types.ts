@@ -40,7 +40,7 @@ export type CommerceOrderItem = OrganizationScoped & CommerceLifecycle & {
   sku?: string | null;
   unit: CommerceOrderUnit;
   quantity: DecimalString;
-  priceNetMinor: string;
+  priceNet: string;
   vatRateBasisPoints: number;
   storageZone?: string | null;
 };

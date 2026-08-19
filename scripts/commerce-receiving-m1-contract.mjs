@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 const sql=fs.readFileSync("supabase/migrations/20260818224000_dimpro_commerce_receiving_m1.sql","utf8");
+const conformance=fs.readFileSync("supabase/migrations/20260819104500_dimpro_commerce_schema_conformance_v019.sql","utf8");
 const repo=fs.readFileSync("app/lib/commerce/receiving/repository.ts","utf8");
 const types=fs.readFileSync("app/lib/commerce/receiving/types.ts","utf8");
 const permissions=fs.readFileSync("app/lib/commerce/core/permissions.ts","utf8");
@@ -16,9 +17,9 @@ const checks=[
  ["03 receipt state machine is draft/post/cancel",sql.includes("'DRAFT','POSTED','CANCELLED'")&&types.includes('"DRAFT" | "POSTED" | "CANCELLED"')],
  ["04 receipt number is tenant unique",sql.includes("unique (organization_id, receipt_number)")],
  ["05 receipt is warehouse + internal source scoped",sql.includes("warehouse_id uuid not null")&&sql.includes("source_id uuid not null")&&repo.includes("verifySourceWarehouse")],
- ["06 item quantity is positive decimal",sql.includes("quantity numeric(20,6) not null check (quantity > 0)")&&repo.includes("normalizeDecimal")],
+ ["06 item quantity is canonical NUMERIC(19,6)",conformance.includes("commerce_goods_receipt_items")&&conformance.includes("quantity type numeric(19,6)")&&repo.includes("normalizeQuantity")],
  ["07 item supports sellable/quarantine/damaged/outlet",types.includes('"SELLABLE" | "QUARANTINE" | "DAMAGED" | "OUTLET"')],
- ["08 item supports optional cost and currency",sql.includes("unit_cost_minor")&&sql.includes("currency text")],
+ ["08 item supports NUMERIC(19,4) cost and currency",conformance.includes("unit_cost type numeric(19,4)")&&sql.includes("currency text")&&repo.includes("unit_cost:cost")],
  ["09 item supports LOT metadata seed",sql.includes("lot_code")&&sql.includes("expiry_date")],
  ["10 posting RPC exists",sql.includes("commerce_goods_receipt_post")],
  ["11 posting RPC uses advisory transaction lock",sql.includes("pg_advisory_xact_lock")],

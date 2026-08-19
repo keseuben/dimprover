@@ -37,7 +37,7 @@ async function main(){
     const created=await createCommerceGoodsReceipt(context,{warehouseId,sourceId,receiptNumber,supplierName:"Runtime supplier",supplierDocumentNumber:"SZL-RT-001",notes:"Runtime QA"}); receiptId=created.id; if(created.status!=="DRAFT") throw new Error("RECEIVING_RUNTIME_CREATE");
     console.log("PASS 03 draft receipt created through repository");
 
-    const a=await createCommerceGoodsReceiptItem(context,receiptId,{variantId,quantity:"5",unit:"DB",stockStatus:"SELLABLE",unitCostMinor:"1250",currency:"HUF",lotCode:"LOT-RT-A"}); itemA=a.id;
+    const a=await createCommerceGoodsReceiptItem(context,receiptId,{variantId,quantity:"5",unit:"DB",stockStatus:"SELLABLE",unitCost:"1250",currency:"HUF",lotCode:"LOT-RT-A"}); itemA=a.id;
     const b=await createCommerceGoodsReceiptItem(context,receiptId,{variantId,quantity:"2",unit:"DB",stockStatus:"QUARANTINE",currency:"HUF",lotCode:"LOT-RT-B"}); itemB=b.id;
     console.log("PASS 04 sellable and quarantine receipt items created");
 

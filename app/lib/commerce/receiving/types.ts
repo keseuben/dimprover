@@ -28,7 +28,7 @@ export type GoodsReceiptItem = OrganizationScoped & CommerceLifecycle & {
   stockStatus: GoodsReceiptStockStatus;
   quantity: DecimalString;
   unit: UnitOfMeasure;
-  unitCostMinor?: string | null;
+  unitCost?: string | null;
   currency: ReceivingCurrency;
   lotCode?: string | null;
   expiryDate?: string | null;

@@ -141,7 +141,7 @@ create table if not exists public.commerce_prices (
   organization_id uuid not null references public.dimpro_organizations(id) on delete restrict,
   variant_id uuid not null references public.commerce_product_variants(id) on delete cascade,
   currency text not null default 'HUF' check (currency in ('HUF','EUR','USD')),
-  amount_minor bigint not null check (amount_minor >= 0),
+  amount numeric(19,4) not null check (amount >= 0),
   vat_rate_basis_points integer not null default 2700 check (vat_rate_basis_points between 0 and 10000),
   valid_from timestamptz null,
   valid_until timestamptz null,
@@ -210,7 +210,7 @@ create table if not exists public.commerce_external_inventory_snapshots (
   source_id uuid not null references public.commerce_inventory_sources(id) on delete cascade,
   variant_id uuid not null references public.commerce_product_variants(id) on delete cascade,
   external_product_id text not null,
-  quantity numeric(20,6) not null default 0,
+  quantity numeric(19,6) not null default 0,
   last_sync_at timestamptz not null,
   sync_status text not null check (sync_status in ('LIVE','FRESH','STALE','ERROR','OFFLINE')),
   created_at timestamptz not null default now(),
@@ -224,10 +224,10 @@ create table if not exists public.commerce_inventory_balances (
   warehouse_id uuid null references public.commerce_warehouses(id) on delete restrict,
   variant_id uuid not null references public.commerce_product_variants(id) on delete cascade,
   stock_status text not null default 'SELLABLE' check (stock_status in ('SELLABLE','RESERVED','QUARANTINE','DAMAGED','OUTLET','BLOCKED','IN_TRANSIT','RETURNED','SCRAP')),
-  physical_quantity numeric(20,6) not null default 0,
-  reserved_quantity numeric(20,6) not null default 0,
-  available_quantity numeric(20,6) generated always as (physical_quantity - reserved_quantity) stored,
-  incoming_quantity numeric(20,6) not null default 0,
+  physical_quantity numeric(19,6) not null default 0,
+  reserved_quantity numeric(19,6) not null default 0,
+  available_quantity numeric(19,6) generated always as (physical_quantity - reserved_quantity) stored,
+  incoming_quantity numeric(19,6) not null default 0,
   last_movement_at timestamptz null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -246,9 +246,9 @@ create table if not exists public.commerce_stock_movements (
   variant_id uuid not null references public.commerce_product_variants(id) on delete restrict,
   stock_status text not null default 'SELLABLE' check (stock_status in ('SELLABLE','RESERVED','QUARANTINE','DAMAGED','OUTLET','BLOCKED','IN_TRANSIT','RETURNED','SCRAP')),
   movement_type text not null check (movement_type in ('RECEIPT','SALE','RESERVATION_COMMIT','RESERVATION_RELEASE','TRANSFER_OUT','TRANSFER_IN','ADJUSTMENT','RETURN')),
-  physical_delta numeric(20,6) not null default 0,
-  reserved_delta numeric(20,6) not null default 0,
-  incoming_delta numeric(20,6) not null default 0,
+  physical_delta numeric(19,6) not null default 0,
+  reserved_delta numeric(19,6) not null default 0,
+  incoming_delta numeric(19,6) not null default 0,
   idempotency_key text not null,
   reference_type text null,
   reference_id uuid null,
@@ -425,9 +425,9 @@ declare
   v_existing public.commerce_stock_movements%rowtype;
   v_balance public.commerce_inventory_balances%rowtype;
   v_movement_id uuid;
-  v_physical numeric(20,6);
-  v_reserved numeric(20,6);
-  v_incoming numeric(20,6);
+  v_physical numeric(19,6);
+  v_reserved numeric(19,6);
+  v_incoming numeric(19,6);
 begin
   if nullif(btrim(p_idempotency_key),'') is null then raise exception 'COMMERCE_IDEMPOTENCY_KEY_REQUIRED'; end if;
   if upper(p_stock_status) not in ('SELLABLE','RESERVED','QUARANTINE','DAMAGED','OUTLET','BLOCKED','IN_TRANSIT','RETURNED','SCRAP') then raise exception 'COMMERCE_STOCK_STATUS_INVALID'; end if;

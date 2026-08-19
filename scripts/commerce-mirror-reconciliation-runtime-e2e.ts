@@ -30,7 +30,7 @@ async function main() {
     if(Number(secondPending.attemptCount)!==2||secondPending.state!=="PENDING")throw new Error("MIRROR_RUNTIME_RETRY_COUNT");
     console.log("PASS 04 retry PENDING increments attempt count to 2");
 
-    const created=await createCommerceOrder(context,{orderNumber:legacyOrder.orderNumber,sourceChannel:"EXTERNAL_MARKETPLACE",externalReference:`legacy-aruter:${legacyOrder.id}`,status:"SENT_TO_CASHIER",customerName:legacyOrder.customerName,customerType:"WALK_IN",recorderName:legacyOrder.recorderName,idempotencyKey:`legacy-aruter-create:${legacyOrder.id}`,items:[{productName:"Mirror legacy item",sku:`MIR-${marker}`,unit:"DB",quantity:"2",priceNetMinor:"1200",vatRateBasisPoints:2700,storageZone:"QA"}]});
+    const created=await createCommerceOrder(context,{orderNumber:legacyOrder.orderNumber,sourceChannel:"EXTERNAL_MARKETPLACE",externalReference:`legacy-aruter:${legacyOrder.id}`,status:"SENT_TO_CASHIER",customerName:legacyOrder.customerName,customerType:"WALK_IN",recorderName:legacyOrder.recorderName,idempotencyKey:`legacy-aruter-create:${legacyOrder.id}`,items:[{productName:"Mirror legacy item",sku:`MIR-${marker}`,unit:"DB",quantity:"2",priceNet:"1200",vatRateBasisPoints:2700,storageZone:"QA"}]});
     commerceOrderId=String(created.orderId||"");if(!commerceOrderId)throw new Error("MIRROR_RUNTIME_ORDER_CREATE");
     console.log("PASS 05 Commerce order is created with stable legacy idempotency key");
 

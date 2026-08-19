@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 const sql=fs.readFileSync("supabase/migrations/20260818203000_dimpro_commerce_pricing_m1.sql","utf8");
+const conformance=fs.readFileSync("supabase/migrations/20260819104500_dimpro_commerce_schema_conformance_v019.sql","utf8");
 const repo=fs.readFileSync("app/lib/commerce/pricing/repository.ts","utf8");
 const route=fs.readFileSync("app/api/v1/commerce/prices/route.ts","utf8");
 const ui=fs.readFileSync("components/aruter/CommerceProductsAdmin.tsx","utf8");
@@ -15,7 +16,7 @@ const checks=[
  ["08 pricing mutation writes audit",sql.includes("PRICE_SET_ACTIVE")],
  ["09 pricing mutation writes outbox",sql.includes("PRICE_CHANGED")],
  ["10 repository list is organization scoped",repo.includes('.eq("organization_id",context.organizationId)')],
- ["11 repository validates integer minor units",repo.includes('/^\\d+$/')&&repo.includes("BigInt")],
+ ["11 repository validates NUMERIC(19,4) money",repo.includes("normalizeMoney")&&repo.includes("compareDecimal")&&conformance.includes("amount type numeric(19,4)")],
  ["12 repository writes through RPC",repo.includes('client.rpc("commerce_price_set_active"')],
  ["13 API GET + POST use Commerce context",route.includes("export async function GET")&&route.includes("export async function POST")&&route.includes("resolveCommerceContext")],
  ["14 UI labels price as net HUF",ui.includes("Új nettó egységár (Ft)")&&ui.includes("27% ÁFA")],
