@@ -56,6 +56,10 @@ try {
   await page.setViewport({ width: 1536, height: 900, deviceScaleFactor: 1 });
   await page.goto(`${uiBase}/dev-console`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForSelector('[data-testid="benjadmin-weekly-report-actions"]', { timeout: 30_000 });
+  await page.waitForFunction(() => {
+    const buttons = [...document.querySelectorAll('[data-testid="benjadmin-weekly-report-actions"] button')];
+    return buttons.length === 4 && buttons.every((node) => !node.disabled);
+  }, { timeout: 30_000 });
   const desktop = await page.evaluate(() => ({
     formats: [...document.querySelectorAll('[data-testid="benjadmin-weekly-report-actions"] [data-report-format]')].map((node) => node.getAttribute("data-report-format")),
     share: Boolean(document.querySelector('[data-testid="benjadmin-weekly-report-actions"] [data-report-action="share"]')),
