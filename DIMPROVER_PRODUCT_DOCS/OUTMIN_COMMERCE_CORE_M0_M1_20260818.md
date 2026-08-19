@@ -2570,3 +2570,85 @@ QA kapuk:
 - systemd timer továbbra sincs shared DEV-en installálva/engedélyezve;
 - következő: production candidate build + 21/21 worker regresszió; utána dedikált technikai actor provisioning helper és DEV activation readiness;
 - PROD változatlan.
+
+### 2026-08-19 22:39 checkpoint — Shared DEV Storefront + durable Commerce queue ACTIVATED
+
+Shared DEV runtime:
+- source: `484a82e` (BENJADMIN V2.2 + Commerce integration);
+- release: `.next-benjadmin-weekly-flow-v22-commerce-release-484a82e`;
+- Build ID: `t8yLKhRRHfotpR_H1xmtS`;
+- `aruter.dev.dimpro.hu/` -> `app.dev.dimpro.hu/aruter/kovacs-kerteszet`;
+- live mobile browser smoke 390x844: HTTP 200, `Kosárba` + Smaragd tuja + Fenyőkéreg mulcs látható, horizontal overflow nincs.
+
+Live Storefront flag baseline:
+- `ARUTER_REPOSITORY_MODE=mock`;
+- Storefront Pilot ON;
+- order bridge ON;
+- multi-item checkout ON;
+- Storefront Commerce service queue ON;
+- trusted business slug: `kovacs-kerteszet`;
+- trusted Commerce organization: `45a3369d-a1b5-4106-bf9e-b539388e6ba8`;
+- közvetlen user-context Commerce mirror OFF.
+
+Dedicated worker:
+- technikai actor public code: `USR-26-ARUT-WKMR`;
+- actor user id: `e8e46399-6a58-4f97-8881-80a0cc5f9a7f`;
+- membership id: `4dca6947-c42c-45ad-9c67-8ef2bb645368`;
+- `auth_user_id=NULL`;
+- exact role: `COMMERCE_MIRROR_WORKER`;
+- provisioning helper checkpoint: `27a13f7`;
+- provisioning contract: 12/12 PASS.
+
+Systemd activation:
+- service: `dimpro-commerce-storefront-mirror-worker.service`;
+- timer: `dimpro-commerce-storefront-mirror-worker.timer`;
+- interval: ~1 perc + randomized delay;
+- env: `/etc/dimpro/commerce-storefront-mirror-worker.env`, mode 0600;
+- DEV-only `DIMPRO_APP_ROOT`;
+- first empty runs: requested=0, failed=0;
+- service Result=success / ExecMainStatus=0.
+
+Live acceptance:
+- live anonymous multi-item checkout HTTP 201;
+- legacy compatibility order: `api-ord-1787171684812-kkf87`;
+- order number: `AR-2026-260819203444812-0003-80F7C0`;
+- 2 line / 2 quantity / gross 9372.60;
+- `commerceQueued=true`;
+- queue attempt: `904b9dc2-9d87-43c5-af69-c46c4b3bba20`;
+- timer automatikusan 22:35:08-kor feldolgozta, kézi retry nélkül;
+- attempt state: SUCCEEDED, attempt_count=1, mapped=0, unresolved=2;
+- Commerce order: `5fa2a6d9-48ef-494a-9dcf-725ebd5571fd`;
+- Commerce status: SENT_TO_CASHIER;
+- source: EXTERNAL_MARKETPLACE;
+- created_by_user_id = dedikált technikai worker actor;
+- mindkét tétel explicit UNRESOLVED, mert fulfillment source még nincs konfigurálva;
+- következő timer körök requested=0 / failed=0.
+
+QA cleanup:
+- 2 Commerce order item soft-delete;
+- 1 Commerce order soft-delete;
+- 1 mirror attempt soft-delete;
+- audit/outbox változatlan, immutable nyom megmaradt;
+- azonos release-re coordinated PM2 restart törölte a mock processzmemória QA rendelését;
+- végső probe: dueJobs=0, activeQaAttempts=0, activeQaOrders=0, legacy QA absent;
+- live root redirect és mobil browser smoke továbbra is PASS.
+
+Backup / rollback pontok:
+- `/srv/dimpro-dev/backups/outmin-commerce-shared-cutover/20260819T220345`;
+- `/srv/dimpro-dev/backups/commerce-storefront-queue-live-enable/20260819T223343`;
+- `/srv/dimpro-dev/backups/commerce-storefront-worker-systemd/20260819T223240`;
+- `/srv/dimpro-dev/backups/commerce-storefront-worker-provision/20260819T223139/preapply.json`.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: STOREFRONT SERVICE QUEUE — DEV ACTIVATED / LIVE TESTED;
+- Modul: DIMPRO Árutér Storefront -> Commerce Core tartós queue;
+- Elkészült: shared DEV cutover, pilot root routing, multi-item UI, trusted queue, dedikált non-interactive worker actor, systemd worker/timer, live E2E;
+- Részben: termékek még mock katalógusból jönnek; fulfillment source nincs; Commerce itemek UNRESOLVED;
+- Még hiányzik: persistent public status/tracking, catalog ProductVariant mapping, fulfillment source/reservation, később external stock connector;
+- DB: Commerce 0.1.13 / 14;
+- UI: live `aruter.dev.dimpro.hu` új pilot Storefront aktív;
+- QA: live checkout -> timer -> Commerce cashier PASS, cleanup PASS, mobile browser PASS;
+- Known debt: legacy `aruter_*` schema fájl nem canonical és tényleges DEV DB-ben nincs telepítve; tudatosan nem aktiváljuk `database` repository módot és nem építünk párhuzamos tartós order engine-t;
+- Következő blokk: signed public checkout tracking/status -> persistent Commerce state -> UI státuszpanel;
+- Becsült következő aktív fejlesztés: 3-5 óra;
+- PROD változatlan.
