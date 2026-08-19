@@ -6,6 +6,14 @@ import type { WeeklyDevelopmentSummary as Summary } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 type WeeklyContext = Summary["contexts"][number];
+type FlowDetailKind = keyof Summary["flowAnalytics"]["drillDown"];
+
+const FLOW_DETAIL_LABELS: Record<FlowDetailKind, string> = {
+  scheduler: "Scheduler futások",
+  handoff: "Worker átadások",
+  waiting: "Várakozások",
+  failure: "Elakadások",
+};
 
 function adminHeaders() {
   const key = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
@@ -76,6 +84,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
   const [weekKey, setWeekKey] = useState(initial.week);
   const [workerFilter, setWorkerFilter] = useState(initial.worker);
   const [stageFilter, setStageFilter] = useState(initial.stage);
+  const [flowDetailKind, setFlowDetailKind] = useState<FlowDetailKind | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,6 +127,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
     });
   }, [stageFilter, summary, workerFilter]);
   const topContexts = filteredContexts.slice(0, 12);
+  const flowDetailItems = flowDetailKind && summary ? summary.flowAnalytics.drillDown[flowDetailKind] : [];
 
   const summaryProjectId = summary?.projectId || "";
   const readyForSelection = Boolean(summary?.ready
@@ -189,11 +199,20 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
       <section className={styles.weeklyFlowAnalytics} data-testid="benjadmin-weekly-flow-analytics" data-scheduler-ready={summary.flowAnalytics.schedulerReady ? "true" : "false"}>
         <header><Workflow size={12} /><strong>HETI FEJLESZTÉSI FOLYAMAT</strong><span>Scheduler + worker + 6/x</span></header>
         <div className={styles.weeklyFlowMetrics}>
-          <article data-flow-kind="scheduler"><TimerReset size={13} /><div><span>Scheduler futás</span><strong>{summary.flowAnalytics.schedulerRuns.total}</strong><small>{summary.flowAnalytics.schedulerRuns.completed} kész · {summary.flowAnalytics.schedulerRuns.failed} hibás · {summary.flowAnalytics.schedulerRuns.retries} retry</small></div></article>
-          <article data-flow-kind="handoff"><ArrowRightLeft size={13} /><div><span>Worker átadás</span><strong>{summary.flowAnalytics.handoffs}</strong><small>azonos task / munkarész</small></div></article>
-          <article data-flow-kind="waiting" data-alert={summary.flowAnalytics.buildLockWaits || summary.flowAnalytics.waitingForWorker ? "true" : "false"}><LockKeyhole size={13} /><div><span>Várakozás</span><strong>{summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker}</strong><small>{summary.flowAnalytics.buildLockWaits} build lock · {summary.flowAnalytics.waitingForWorker} worker</small></div></article>
-          <article data-flow-kind="failure" data-alert={summary.flowAnalytics.taskFailures || summary.flowAnalytics.schedulerRuns.failed ? "true" : "false"}><TriangleAlert size={13} /><div><span>Elakadás</span><strong>{summary.flowAnalytics.taskFailures + summary.flowAnalytics.schedulerRuns.failed}</strong><small>{summary.flowAnalytics.taskFailures} task · {summary.flowAnalytics.schedulerRuns.failed} scheduler</small></div></article>
+          <button type="button" data-flow-kind="scheduler" data-selected={flowDetailKind === "scheduler" ? "true" : "false"} aria-pressed={flowDetailKind === "scheduler"} onClick={() => setFlowDetailKind((current) => current === "scheduler" ? null : "scheduler")}><TimerReset size={13} /><div><span>Scheduler futás</span><strong>{summary.flowAnalytics.schedulerRuns.total}</strong><small>{summary.flowAnalytics.schedulerRuns.completed} kész · {summary.flowAnalytics.schedulerRuns.failed} hibás · {summary.flowAnalytics.schedulerRuns.retries} retry</small></div></button>
+          <button type="button" data-flow-kind="handoff" data-selected={flowDetailKind === "handoff" ? "true" : "false"} aria-pressed={flowDetailKind === "handoff"} onClick={() => setFlowDetailKind((current) => current === "handoff" ? null : "handoff")}><ArrowRightLeft size={13} /><div><span>Worker átadás</span><strong>{summary.flowAnalytics.handoffs}</strong><small>azonos task / munkarész</small></div></button>
+          <button type="button" data-flow-kind="waiting" data-selected={flowDetailKind === "waiting" ? "true" : "false"} aria-pressed={flowDetailKind === "waiting"} data-alert={summary.flowAnalytics.buildLockWaits || summary.flowAnalytics.waitingForWorker ? "true" : "false"} onClick={() => setFlowDetailKind((current) => current === "waiting" ? null : "waiting")}><LockKeyhole size={13} /><div><span>Várakozás</span><strong>{summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker}</strong><small>{summary.flowAnalytics.buildLockWaits} build lock · {summary.flowAnalytics.waitingForWorker} worker</small></div></button>
+          <button type="button" data-flow-kind="failure" data-selected={flowDetailKind === "failure" ? "true" : "false"} aria-pressed={flowDetailKind === "failure"} data-alert={summary.flowAnalytics.taskFailures || summary.flowAnalytics.schedulerRuns.failed ? "true" : "false"} onClick={() => setFlowDetailKind((current) => current === "failure" ? null : "failure")}><TriangleAlert size={13} /><div><span>Elakadás</span><strong>{summary.flowAnalytics.taskFailures + summary.flowAnalytics.schedulerRuns.failed}</strong><small>{summary.flowAnalytics.taskFailures} task · {summary.flowAnalytics.schedulerRuns.failed} scheduler</small></div></button>
         </div>
+        {flowDetailKind ? <section className={styles.weeklyFlowDrillDown} data-testid="benjadmin-weekly-flow-drilldown" data-detail-kind={flowDetailKind}>
+          <header><BarChart3 size={11} /><strong>{FLOW_DETAIL_LABELS[flowDetailKind]}</strong><span>{flowDetailItems.length} esemény</span><button type="button" aria-label="Flow részletek bezárása" onClick={() => setFlowDetailKind(null)}>×</button></header>
+          {flowDetailItems.length ? <div>
+            {flowDetailItems.map((item) => <article key={item.id} data-drilldown-event={item.kind}>
+              <b>{item.label}</b><span>{item.detail}</span>
+              <small>{item.fromWorkerCode && item.toWorkerCode ? `${item.fromWorkerCode} → ${item.toWorkerCode}` : item.workerCode || "RENDSZER"} · {shortTime(item.at)}{item.status ? ` · ${item.status}` : ""}{item.attemptCount && item.attemptCount > 1 ? ` · ${item.attemptCount}. próbálkozás` : ""}{item.workItem ? ` · ${item.workItem}` : ""}</small>
+            </article>)}
+          </div> : <p>Nincs rögzített esemény ebben a kategóriában.</p>}
+        </section> : null}
         <div className={styles.weeklyFlowStages} data-testid="benjadmin-weekly-flow-stage">
           <span>6/x lefedettség</span>
           {[1, 2, 3, 4, 5, 6].map((stage) => <b key={stage} data-flow-stage={stage} data-active={Number(summary.flowAnalytics.stageCounts[String(stage)] || 0) > 0 ? "true" : "false"}>6/{stage}<small>{summary.flowAnalytics.stageCounts[String(stage)] || 0}</small></b>)}

@@ -684,6 +684,23 @@ export async function getDeveloperConsoleWorkspaceActivitySource() {
   };
 }
 
+type WeeklyFlowDrillDownItem = {
+  id: string;
+  category: "scheduler" | "handoff" | "waiting" | "failure";
+  kind: "SCHEDULER_RUN" | "TASK_HANDOFF" | "CONTEXT_HANDOFF" | "BUILD_LOCK_WAIT" | "WAITING_WORKER" | "TASK_FAILED" | "SCHEDULER_FAILED";
+  label: string;
+  detail: string;
+  at: string;
+  workerCode: string | null;
+  taskId: string | null;
+  projectId: string | null;
+  status: string | null;
+  fromWorkerCode: string | null;
+  toWorkerCode: string | null;
+  workItem: string | null;
+  attemptCount: number | null;
+};
+
 export type DeveloperWeeklySummary = {
   ready: true;
   period: {
@@ -753,6 +770,7 @@ export type DeveloperWeeklySummary = {
       bottleneck: { kind: "HANDOFF_GAP" | "BUILD_LOCK" | null; label: string; minutes: number | null; workerCode: string | null; workItem: string | null };
       details: Array<{ fromWorkerCode: string; toWorkerCode: string; workItem: string; changedAt: string; gapMinutes: number; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF" }>;
     };
+    drillDown: { scheduler: WeeklyFlowDrillDownItem[]; handoff: WeeklyFlowDrillDownItem[]; waiting: WeeklyFlowDrillDownItem[]; failure: WeeklyFlowDrillDownItem[] };
   };
   truncated: boolean;
   generatedAt: string;
@@ -1033,6 +1051,62 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
         : "normal";
     return { code: worker.code, activityCount: worker.activityCount, contextCount: worker.contextCount, handoffCount, waitCount, blockerCount, loadSharePercent, signal, previousActivityCount: null, activityDelta: null };
   });
+  const blockerToDrillDown = (item: DeveloperWeeklySummary["flowAnalytics"]["blockers"][number], index: number, category: "waiting" | "failure"): WeeklyFlowDrillDownItem => ({
+    id: [item.kind, item.at, String(index)].join(":"),
+    category,
+    kind: item.kind,
+    label: item.label,
+    detail: item.detail,
+    at: item.at,
+    workerCode: item.workerCode,
+    taskId: item.taskId,
+    projectId: item.projectId,
+    status: null,
+    fromWorkerCode: null,
+    toWorkerCode: null,
+    workItem: null,
+    attemptCount: null,
+  });
+  const flowDrillDown: DeveloperWeeklySummary["flowAnalytics"]["drillDown"] = {
+    scheduler: [...schedulerRuns]
+      .sort((a, b) => (b.finishedAt || b.startedAt || b.slotAt || b.createdAt).localeCompare(a.finishedAt || a.startedAt || a.slotAt || a.createdAt))
+      .slice(0, 12)
+      .map((run) => ({
+        id: run.id || [run.scheduleId, run.slotAt].join(":"),
+        category: "scheduler" as const,
+        kind: "SCHEDULER_RUN" as const,
+        label: run.summary || "Scheduler futás",
+        detail: `Státusz: ${run.status} · trigger: ${run.triggerSource}`,
+        at: run.finishedAt || run.startedAt || run.slotAt || run.createdAt,
+        workerCode: run.workerCode || null,
+        taskId: run.taskId || null,
+        projectId,
+        status: run.status,
+        fromWorkerCode: null,
+        toWorkerCode: null,
+        workItem: null,
+        attemptCount: Math.max(1, Number(run.attemptCount || 1)),
+      })),
+    handoff: weeklyTransitions.slice(0, 12).map((item) => ({
+      id: item.id,
+      category: "handoff" as const,
+      kind: item.reason,
+      label: `${item.fromWorkerCode} → ${item.toWorkerCode}`,
+      detail: item.workItem || "Worker átadás",
+      at: item.changedAt,
+      workerCode: item.toWorkerCode || null,
+      taskId: item.taskId,
+      projectId: item.projectId,
+      status: null,
+      fromWorkerCode: item.fromWorkerCode,
+      toWorkerCode: item.toWorkerCode,
+      workItem: item.workItem || null,
+      attemptCount: null,
+    })),
+    waiting: blockers.filter((item) => item.kind === "BUILD_LOCK_WAIT" || item.kind === "WAITING_WORKER").slice(0, 12).map((item, index) => blockerToDrillDown(item, index, "waiting")),
+    failure: blockers.filter((item) => item.kind === "TASK_FAILED" || item.kind === "SCHEDULER_FAILED").slice(0, 12).map((item, index) => blockerToDrillDown(item, index, "failure")),
+  };
+
   const flowAnalytics: DeveloperWeeklySummary["flowAnalytics"] = {
     schedulerReady: Boolean(schedulerSnapshot?.ready),
     schedulerRuns: schedulerRunStats,
@@ -1057,6 +1131,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
       bottleneck,
       details: [...observedHandoffDetails].sort((a, b) => b.gapMinutes - a.gapMinutes || b.changedAt.localeCompare(a.changedAt)).slice(0, 6),
     },
+    drillDown: flowDrillDown,
   };
   const summary: DeveloperWeeklySummary = {
     ready: true,

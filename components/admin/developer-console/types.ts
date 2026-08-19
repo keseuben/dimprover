@@ -218,6 +218,23 @@ export type ResourceHealth = {
   driveTarget: string;
 };
 
+export type WeeklyFlowDrillDownItem = {
+  id: string;
+  category: "scheduler" | "handoff" | "waiting" | "failure";
+  kind: "SCHEDULER_RUN" | "TASK_HANDOFF" | "CONTEXT_HANDOFF" | "BUILD_LOCK_WAIT" | "WAITING_WORKER" | "TASK_FAILED" | "SCHEDULER_FAILED";
+  label: string;
+  detail: string;
+  at: string;
+  workerCode: string | null;
+  taskId: string | null;
+  projectId: string | null;
+  status: string | null;
+  fromWorkerCode: string | null;
+  toWorkerCode: string | null;
+  workItem: string | null;
+  attemptCount: number | null;
+};
+
 export type WeeklyDevelopmentSummary = {
   ready: true;
   period: {
@@ -263,6 +280,7 @@ export type WeeklyDevelopmentSummary = {
       bottleneck: { kind: "HANDOFF_GAP" | "BUILD_LOCK" | null; label: string; minutes: number | null; workerCode: string | null; workItem: string | null };
       details: Array<{ fromWorkerCode: string; toWorkerCode: string; workItem: string; changedAt: string; gapMinutes: number; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF" }>;
     };
+    drillDown: { scheduler: WeeklyFlowDrillDownItem[]; handoff: WeeklyFlowDrillDownItem[]; waiting: WeeklyFlowDrillDownItem[]; failure: WeeklyFlowDrillDownItem[] };
   };
   truncated: boolean;
   generatedAt: string;
