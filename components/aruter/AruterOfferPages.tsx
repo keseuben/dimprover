@@ -48,6 +48,10 @@ function ProductVisual({ tone, className = "" }: { tone: AruterPublicProduct["im
 }
 
 function PublicProductCard({ product, compact = false, onReserve }: { product: AruterPublicProduct; compact?: boolean; onReserve?: (product: AruterPublicProduct) => void }) {
+  const unavailable = product.stockStatus === "out_of_stock";
+  const stockLabel = unavailable ? "Nincs készleten" : product.stockStatus === "limited" ? "Korlátozott készlet" : "Készleten";
+  const stockClass = unavailable ? "text-rose-700" : product.stockStatus === "limited" ? "text-amber-700" : "text-emerald-700";
+
   if (compact) {
     return (
       <article className="grid grid-cols-[104px_1fr_112px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -56,9 +60,9 @@ function PublicProductCard({ product, compact = false, onReserve }: { product: A
           <h3 className="text-lg font-black text-slate-950">{product.name}</h3>
           <p className="text-sm font-semibold text-slate-500">{product.description}</p>
           <p className="mt-1 text-lg font-black text-teal-700">{currency(product.price)} / {product.unit}</p>
-          <p className="text-sm font-bold text-emerald-700">✓ Készleten</p>
+          <p className={`text-sm font-bold ${stockClass}`}>{unavailable ? "×" : "✓"} {stockLabel}</p>
         </div>
-        <button type="button" onClick={() => onReserve?.(product)} className="rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm">Foglalás</button>
+        <button type="button" onClick={() => onReserve?.(product)} disabled={unavailable} className="rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{unavailable ? "Elfogyott" : "Foglalás"}</button>
       </article>
     );
   }
@@ -70,8 +74,8 @@ function PublicProductCard({ product, compact = false, onReserve }: { product: A
         <h3 className="text-lg font-black text-slate-950">{product.name}</h3>
         <p className="text-sm font-semibold text-slate-500">{product.description}</p>
         <p className="mt-2 text-lg font-black text-slate-950">{currency(product.price)} / {product.unit}</p>
-        <p className="mt-1 text-sm font-bold text-emerald-700">● Készleten</p>
-        <button type="button" onClick={() => onReserve?.(product)} className="mt-4 w-full rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm">Foglalás</button>
+        <p className={`mt-1 text-sm font-bold ${stockClass}`}>{unavailable ? "×" : "●"} {stockLabel}</p>
+        <button type="button" onClick={() => onReserve?.(product)} disabled={unavailable} className="mt-4 w-full rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{unavailable ? "Nincs készleten" : "Foglalás"}</button>
       </div>
     </article>
   );
@@ -184,7 +188,7 @@ function ReservationSheet({ product, onClose, onReservationCreated }: { product:
 
             <label className="mt-4 flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
               <input type="checkbox" checked={acceptedPrivacy} onChange={(event) => setAcceptedPrivacy(event.target.checked)} className="mt-1 h-5 w-5 accent-teal-700" />
-              <span>Elfogadom, hogy a megadott adataimat a foglalás kezelése és az átvétel egyeztetése céljából kezeljék. Ez jelenleg demo működés.</span>
+              <span>Elfogadom, hogy a megadott adataimat a foglalás kezelése és az átvétel egyeztetése céljából kezeljék.</span>
             </label>
 
             <div className="mt-5 rounded-2xl bg-teal-50 p-4">
@@ -248,14 +252,31 @@ export function AruterPublicOfferPage() {
   const [selectedProduct, setSelectedProduct] = useState<AruterPublicProduct | null>(null);
   const [createdReservations, setCreatedReservations] = useState<AruterPublicReservation[]>([]);
   const business = aruterDemoBusiness;
+  const [products, setProducts] = useState<AruterPublicProduct[]>(business.products);
+  const [pilotCatalogEnabled, setPilotCatalogEnabled] = useState(false);
+  const [orderBridgeEnabled, setOrderBridgeEnabled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/aruter/public-products?businessSlug=${encodeURIComponent(business.slug)}`)
+      .then((response) => response.json())
+      .then((result: { ok: boolean; data?: { pilotEnabled: boolean; orderBridgeEnabled: boolean; products: AruterPublicProduct[] } }) => {
+        if (!active || !result.ok || !result.data) return;
+        setPilotCatalogEnabled(result.data.pilotEnabled);
+        setOrderBridgeEnabled(result.data.orderBridgeEnabled);
+        setProducts(result.data.pilotEnabled ? result.data.products : business.products);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [business.products, business.slug]);
 
   return (
     <AruterPageShell className="bg-white pb-8">
       <header className="border-b border-slate-200 bg-white px-4 py-4"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4"><AruterBrand compact /><nav className="flex items-center gap-4 text-sm font-black text-slate-700"><a className="hidden items-center gap-2 md:flex"><HelpCircle size={18} /> Hogyan működik?</a><a className="flex items-center gap-2"><LogIn size={18} /> Bejelentkezés</a></nav></div></header>
       <main className="mx-auto max-w-[1500px] px-4 py-5">
         <section className="relative overflow-hidden rounded-[30px] bg-slate-900 text-white shadow-[0_22px_80px_rgba(15,23,42,0.18)]"><div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_38%,rgba(244,114,182,.62),transparent_24%),radial-gradient(circle_at_72%_35%,rgba(132,204,22,.58),transparent_31%),radial-gradient(circle_at_48%_18%,rgba(255,255,255,.16),transparent_18%),linear-gradient(135deg,#14352d,#041915)]" /><div className="absolute inset-0 bg-black/38" /><div className="relative flex min-h-[330px] flex-col items-center justify-center px-6 py-10 text-center md:min-h-[300px] md:items-start md:px-24 md:text-left"><span className="mb-5 flex h-28 w-28 items-center justify-center rounded-3xl bg-white text-emerald-700 shadow-xl ring-8 ring-white/10"><Leaf size={58} /></span><h1 className="text-4xl font-black md:text-6xl">{business.name}</h1><p className="mt-3 text-xl font-semibold text-white/90">{business.tagline}</p><div className="mt-6 flex flex-wrap gap-3"><button className="rounded-xl bg-teal-700 px-5 py-3 font-black">Foglalás menete</button><button className="rounded-xl border border-white/70 px-5 py-3 font-black">Kapcsolat</button></div></div></section>
-        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]"><section><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><label className="flex h-14 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm"><Search size={18} /><input className="flex-1 outline-none" placeholder="Keresés termékre..." /></label><div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{business.categories.map((category) => <button key={category} className="shrink-0 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black hover:bg-teal-50">{category}</button>)}</div></div><div className="mb-5 rounded-2xl border border-lime-200 bg-lime-50 p-4 text-center"><p className="text-lg font-black text-emerald-800">Online foglalás · Előkészítés · Személyes átvétel</p><p className="mt-1 font-semibold text-slate-600">Foglaljon online, mi előkészítjük, Ön pedig a kiválasztott időpontban átveszi.</p></div><div className="hidden grid-cols-2 gap-4 md:grid lg:grid-cols-3 xl:grid-cols-4">{business.products.map((product) => <PublicProductCard key={product.id} product={product} onReserve={setSelectedProduct} />)}</div><div className="grid gap-3 md:hidden">{business.products.map((product) => <PublicProductCard key={product.id} product={product} compact onReserve={setSelectedProduct} />)}</div></section><aside className="space-y-4"><AruterCard className="p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-black"><CalendarDays className="text-teal-700" /> Mai átvételi idősávok</h2><p className="mb-4 text-sm font-semibold text-slate-500">Válasszon időpontot a mai átvételhez.</p><div className="grid grid-cols-4 gap-2 xl:grid-cols-2">{business.pickupSlots.map((slot, index) => <button key={slot.id} className={`rounded-xl border px-3 py-3 font-black ${index === 0 ? "border-teal-700 bg-teal-700 text-white" : "border-slate-200 bg-white"}`}>{slot.label}</button>)}</div><div className="mt-5 text-sm"><p className="font-black">Átvételi helyszín:</p><p className="font-semibold text-slate-600">{business.name}<br />{business.address}</p></div></AruterCard><AruterCard className="p-5"><h2 className="mb-4 text-xl font-black">Miért érdemes foglalni?</h2>{["Garantált termék elérhetőség", "Időmegtakarítás a helyszínen", "Elkerülheti a készlethiányt", "Ingyenes előkészítés"].map((item) => <p key={item} className="mb-3 flex items-center gap-2 font-semibold text-slate-600"><Check size={18} className="text-emerald-700" />{item}</p>)}</AruterCard></aside></div>
-        {createdReservations.length > 0 && <section className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="text-xl font-black text-emerald-800">Legutóbbi demo foglalás</h2><p className="mt-2 font-semibold text-slate-700">{createdReservations[0].customerName} · {createdReservations[0].quantity} {createdReservations[0].productUnit} {createdReservations[0].productName} · Átvétel: {createdReservations[0].pickupSlotLabel}</p></section>}
+        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]"><section><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><label className="flex h-14 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm"><Search size={18} /><input className="flex-1 outline-none" placeholder="Keresés termékre..." /></label><div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{business.categories.map((category) => <button key={category} className="shrink-0 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black hover:bg-teal-50">{category}</button>)}</div></div><div className="mb-5 rounded-2xl border border-lime-200 bg-lime-50 p-4 text-center"><p className="text-lg font-black text-emerald-800">Online foglalás · Előkészítés · Személyes átvétel</p><p className="mt-1 font-semibold text-slate-600">Foglaljon online, mi előkészítjük, Ön pedig a kiválasztott időpontban átveszi.</p>{pilotCatalogEnabled && <div className="mt-3 flex flex-wrap items-center justify-center gap-2"><span className="rounded-full bg-emerald-700 px-3 py-1 text-xs font-black text-white">Pilot katalógus · pénztári törzsadatból</span>{orderBridgeEnabled && <span className="rounded-full bg-blue-700 px-3 py-1 text-xs font-black text-white">Pénztári bridge aktív</span>}</div>}</div>{products.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center font-bold text-slate-500">A pilot katalógusban jelenleg nincs foglalható termék.</div> : <><div className="hidden grid-cols-2 gap-4 md:grid lg:grid-cols-3 xl:grid-cols-4">{products.map((product) => <PublicProductCard key={product.id} product={product} onReserve={setSelectedProduct} />)}</div><div className="grid gap-3 md:hidden">{products.map((product) => <PublicProductCard key={product.id} product={product} compact onReserve={setSelectedProduct} />)}</div></>}</section><aside className="space-y-4"><AruterCard className="p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-black"><CalendarDays className="text-teal-700" /> Mai átvételi idősávok</h2><p className="mb-4 text-sm font-semibold text-slate-500">Válasszon időpontot a mai átvételhez.</p><div className="grid grid-cols-4 gap-2 xl:grid-cols-2">{business.pickupSlots.map((slot, index) => <button key={slot.id} className={`rounded-xl border px-3 py-3 font-black ${index === 0 ? "border-teal-700 bg-teal-700 text-white" : "border-slate-200 bg-white"}`}>{slot.label}</button>)}</div><div className="mt-5 text-sm"><p className="font-black">Átvételi helyszín:</p><p className="font-semibold text-slate-600">{business.name}<br />{business.address}</p></div></AruterCard><AruterCard className="p-5"><h2 className="mb-4 text-xl font-black">Miért érdemes foglalni?</h2>{["Garantált termék elérhetőség", "Időmegtakarítás a helyszínen", "Elkerülheti a készlethiányt", "Ingyenes előkészítés"].map((item) => <p key={item} className="mb-3 flex items-center gap-2 font-semibold text-slate-600"><Check size={18} className="text-emerald-700" />{item}</p>)}</AruterCard></aside></div>
+        {createdReservations.length > 0 && <section className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="text-xl font-black text-emerald-800">{pilotCatalogEnabled ? "Legutóbbi pilot foglalás" : "Legutóbbi demo foglalás"}</h2><p className="mt-2 font-semibold text-slate-700">{createdReservations[0].customerName} · {createdReservations[0].quantity} {createdReservations[0].productUnit} {createdReservations[0].productName} · Átvétel: {createdReservations[0].pickupSlotLabel}</p></section>}
         <section className="mt-5 grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 md:grid-cols-4"><div><h3 className="flex items-center gap-2 font-black"><MapPin size={18} className="text-teal-700" /> Elérhetőség</h3><p className="mt-2 text-sm font-semibold text-slate-600">{business.address}<br />Bejárat a főút felől, ingyenes parkolás.</p></div><div><h3 className="flex items-center gap-2 font-black"><Clock3 size={18} className="text-teal-700" /> Nyitvatartás</h3>{business.openingHours.map((row) => <p key={row.label} className="mt-1 flex justify-between text-sm font-semibold text-slate-600"><span>{row.label}</span><span>{row.value}</span></p>)}</div><div><h3 className="flex items-center gap-2 font-black"><Phone size={18} className="text-teal-700" /> Kapcsolat</h3><p className="mt-2 text-sm font-semibold text-slate-600">{business.phone}<br />{business.email}</p></div><div className="rounded-2xl bg-[linear-gradient(135deg,#e2e8f0,#f8fafc)] p-5"><MapPin className="mx-auto text-teal-700" size={44} /><p className="text-center text-sm font-black text-slate-500">Térkép helye</p></div></section>
         <section className="mt-5 rounded-3xl bg-teal-50 p-6"><h2 className="mb-5 text-center text-2xl font-black text-teal-800">Hogyan működik?</h2><div className="grid gap-4 md:grid-cols-3">{[["1", "Foglalás", "Válassza ki a termékeket és a megfelelő átvételi idősávot online."], ["2", "Előkészítés", "Összekészítjük a rendelését, hogy gyorsan átvehesse."], ["3", "Átvétel", "Érkezzen a kiválasztott idősávban, és vegye át rendelését."]].map(([num, title, text]) => <div key={num} className="rounded-2xl bg-white p-5"><b className="text-2xl text-teal-700">{num}</b><h3 className="mt-2 text-xl font-black">{title}</h3><p className="mt-2 font-semibold text-slate-600">{text}</p></div>)}</div></section>
       </main>

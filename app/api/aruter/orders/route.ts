@@ -6,7 +6,7 @@ import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMi
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    data: getAruterRepository().listOrders(),
+    data: await getAruterRepository().listOrders(),
   });
 }
 

@@ -77,8 +77,46 @@ async function createPublicReservationStatusEvent(reservation: AruterPublicReser
 }
 
 export const aruterDatabaseRepository: AruterRepository = {
-  listProducts(): AruterProduct[] {
-    return [];
+  async listProducts(): Promise<AruterProduct[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("aruter_products")
+      .select("id,category_id,storage_zone_id,sku,barcode,name,description,template,unit,price_net,vat_rate,stock_quantity,is_public_offer,is_active")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("Árutér products lekérési hiba:", error.message);
+      return [];
+    }
+
+    const rows = data ?? [];
+    const categoryIds = [...new Set(rows.map((row) => row.category_id).filter(Boolean).map(String))];
+    const zoneIds = [...new Set(rows.map((row) => row.storage_zone_id).filter(Boolean).map(String))];
+    const [categories, zones] = await Promise.all([
+      categoryIds.length ? supabase.from("aruter_categories").select("id,name").in("id", categoryIds) : Promise.resolve({ data: [], error: null }),
+      zoneIds.length ? supabase.from("aruter_storage_zones").select("id,name").in("id", zoneIds) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (categories.error) console.error("Árutér categories lekérési hiba:", categories.error.message);
+    if (zones.error) console.error("Árutér storage zones lekérési hiba:", zones.error.message);
+    const categoryMap = new Map((categories.data ?? []).map((row) => [String(row.id), String(row.name)]));
+    const zoneMap = new Map((zones.data ?? []).map((row) => [String(row.id), String(row.name)]));
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      sku: String(row.sku),
+      name: String(row.name),
+      description: row.description ? String(row.description) : undefined,
+      category: row.category_id ? categoryMap.get(String(row.category_id)) ?? "Egyéb" : "Egyéb",
+      template: String(row.template) as AruterProduct["template"],
+      unit: String(row.unit) as AruterProduct["unit"],
+      priceNet: Number(row.price_net ?? 0),
+      vatRate: Number(row.vat_rate ?? 0),
+      stockQuantity: Number(row.stock_quantity ?? 0),
+      storageZone: row.storage_zone_id ? zoneMap.get(String(row.storage_zone_id)) ?? "" : "",
+      barcode: row.barcode ? String(row.barcode) : undefined,
+      isPublicOffer: Boolean(row.is_public_offer),
+      isActive: Boolean(row.is_active),
+    }));
   },
 
   listOrders(): AruterOrder[] {

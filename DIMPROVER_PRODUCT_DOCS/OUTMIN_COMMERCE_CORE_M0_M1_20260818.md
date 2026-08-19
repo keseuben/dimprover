@@ -1689,3 +1689,72 @@ A rollback-acceptance script létrehozását a platform biztonsági ellenőrzés
 Kötelező következő DB-lépés: rollback-acceptance engedélyezett futtatása → migration gate apply → verify → runtime regresszió.
 A DEV DB továbbra is `0.1.10 / 11`.
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 16:xx checkpoint — Storefront Pilot → központi pénztár foundation
+
+Elkészült az első feature-flagelt Storefront Pilot bridge úgy, hogy a jelenlegi nyilvános Árutér és legacy pénztár alapműködése flag OFF állapotban változatlan marad.
+
+Feature flagek, alapból OFF:
+- `ARUTER_STOREFRONT_PILOT_ENABLED=0`;
+- `ARUTER_STOREFRONT_ORDER_BRIDGE_ENABLED=0`;
+- opcionális `ARUTER_STOREFRONT_PILOT_TEMPLATE=`.
+
+Elkészült:
+- `app/lib/aruter/storefrontPilot.ts` szerveroldali pilot adapter;
+- új publikus `GET /api/aruter/public-products?businessSlug=...`;
+- pilot katalógus a közös Árutér repository terméktörzséből;
+- publikus bruttó ár kizárólag authoritative `priceNet + vatRate` alapján számolódik;
+- készletállapot a repository készletből készül;
+- reservation POST pilot módban szerveroldalon újra feloldja a terméket, ezért a kliens által küldött név/ár/egység nem hiteles adatforrás;
+- kért mennyiség nem haladhatja meg a repository készletet;
+- foglalás mentése elsődleges marad;
+- csak sikeres foglalás után, Next `after()` callbackben fut a fail-open pénztári bridge;
+- bridge stabil markerrel dolgozik: `[PUBLIC_RESERVATION:<id>]`;
+- újrapróbáláskor meglévő markerrel rendelkező rendelést újrahasznál, nem hoz létre második pénztári rendelést;
+- pénztári rendelés authoritative SKU, nettó ár, ÁFA, egység és storage zone snapshotból készül;
+- létrejövő rendelés a meglévő legacy `sent_to_cashier` láncba kerül;
+- ezt követően a már elkészült `mirrorAruterOrderToCommerceFailOpen` adapter használható, külön Commerce siker nem feltétele a foglalás sikerének;
+- reservation státuszok (`confirmed`, `preparing`, `ready`, `picked_up`) nincsenek hibásan fizetés/kiadás státuszra kötve;
+- kizárólag a reservation `cancelled` állapota próbálja a kapcsolt, még nem fizetett/kiadott pénztári rendelést törölni;
+- `paid` vagy `issued` rendelés reservation oldalról nem törölhető;
+- nyilvános UI pilot módban a `/api/aruter/public-products` adatot használja;
+- pilot módban üres repository esetén nincs csendes demo fallback;
+- készlethiányos termék UI-ból nem foglalható;
+- pilot katalógus és pénztári bridge aktív állapota vizuálisan jelzett;
+- az adatkezelési szövegből kikerült a félrevezető „demo működés” mondat.
+
+Legacy database repository előkészítés:
+- `AruterProduct` kapott `description?` és `isPublicOffer?` mezőt;
+- `databaseRepository.listProducts()` már kiolvassa az `aruter_products`, kategória és storage-zone adatokat, és nettó/ÁFA/készlet mezőket ad vissza;
+- a legacy products/orders/events API GET-ek már támogatják az async repository-t.
+
+Fontos jelenlegi infrastruktúra-korlát:
+- a DEV Supabase-ben jelenleg NINCS `aruter_shops`, `aruter_products`, `aruter_orders`, `aruter_order_items` tábla;
+- ezért `ARUTER_REPOSITORY_MODE=database` jelenleg nem runtime-ready;
+- `databaseRepository.createOrder()` és `updateOrderStatus()` továbbra sincs kész, mert nem építünk nem tranzakciós, részben menthető rendelést;
+- database módhoz később külön atomi order-persistence RPC/migráció szükséges;
+- jelenlegi DEV alap: `ARUTER_REPOSITORY_MODE=mock`, Storefront Pilot OFF, Storefront bridge OFF, Commerce mirror OFF.
+
+QA:
+- Storefront Pilot contract: 50/50 PASS;
+- TypeScript `npx tsc --noEmit`: PASS;
+- célzott ESLint: PASS;
+- `git diff --check`: PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- existing Commerce legacy mirror: 22/22 PASS;
+- legacy mirror HTTP E2E contract: 17/17 PASS.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / FEATURE FLAG MÖGÖTT / RUNTIME E2E KÖVETKEZIK;
+- Modul: Storefront Pilot → legacy cashier bridge;
+- Elkészült: authoritative catalog adapter, reservation normalizálás, fail-open cashier bridge, cancellation protection, pilot UI integration, env dokumentáció, DB product read előkészítés;
+- Részben elkészült: database repository order persistence;
+- Még hiányzik: mock pilot HTTP E2E; legacy Árutér DB schema atomi order persistence; Storefront többtételes kosár; valós Commerce fulfillment source; 0.1.11 soft-delete DB apply;
+- DB: Commerce marad `0.1.10 / 11`; Storefront blokk nem adott új Commerce DB migrációt;
+- API: új `/api/aruter/public-products`, meglévő public reservation POST/status bővítve;
+- UI: publikus ajánlatoldal feature-flagelt pilot katalógust kapott;
+- ismert tech debt: az első reservation workflow egytermékes; database repository legacy order írás nincs aktiválva;
+- következő blokk: mock pilot HTTP E2E, majd többtételes Storefront kosár alap;
+- becsült következő aktív idő: 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
