@@ -162,7 +162,7 @@ try {
   await page.click('[data-worker-code="ARMINAI"]');
 
   const currentWeekKey = await page.$eval('[data-testid="benjadmin-weekly-development-summary"]', (node) => node.getAttribute("data-week-key"));
-  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button:first-child');
+  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button[title="Előző hét"]');
   await page.waitForFunction((expected) => {
     const panel = document.querySelector('[data-testid="benjadmin-weekly-development-summary"]');
     return panel?.getAttribute("data-ready") === "true" && panel?.getAttribute("data-week-key") === expected;
@@ -173,7 +173,7 @@ try {
     search: window.location.search,
   }));
   check("V1.1 previous-week button reloads selected week", previousUi.week === previousWeekKey && !previousUi.text.includes(marker) && previousUi.search.includes(`week=${previousWeekKey}`), JSON.stringify(previousUi));
-  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button:last-child');
+  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button[title="Következő hét"]');
   await page.waitForFunction((expected) => document.querySelector('[data-testid="benjadmin-weekly-development-summary"]')?.getAttribute("data-week-key") === expected, { timeout: 30000 }, currentWeekKey);
   check("V1.1 next-week button returns to current week", true, currentWeekKey || "");
 
