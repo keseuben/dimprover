@@ -6,11 +6,12 @@ import { downloadGpsPhotoMapPdf, type GpsPhotoMapPdfPaperSize } from "@/app/lib/
 import { useState } from "react";
 import type { FieldCaptureItem } from "@/app/lib/field-capture/types";
 import SurveyNorthMark from "@/components/viewers/SurveyNorthMark";
+import GpsCalibrationPanel from "@/components/field-capture/GpsCalibrationPanel";
 
 const WIDTH = 760;
 const HEIGHT = 430;
 
-export default function GpsPhotoMapPanel({ items, projectName }: { items: FieldCaptureItem[]; projectName?: string | null }) {
+export default function GpsPhotoMapPanel({ items, projectName, sessionId }: { items: FieldCaptureItem[]; projectName?: string | null; sessionId?: string | null }) {
   const [exporting, setExporting] = useState<GpsPhotoMapPdfPaperSize | null>(null);
   const [exportMessage, setExportMessage] = useState("");
   const model = buildGpsPhotoMapModel(items);
@@ -54,6 +55,7 @@ export default function GpsPhotoMapPanel({ items, projectName }: { items: FieldC
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2"><div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600"><Route size={15} className="mt-0.5 shrink-0 text-cyan-700" /><span><strong className="text-slate-800">Sorrendi kapcsolat:</strong> fotók készítési sorrendje.</span></div><div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600"><Compass size={15} className="mt-0.5 shrink-0 text-orange-600" /><span><strong className="text-slate-800">Narancs nyíl:</strong> hátlapi kamera rögzített iránya.</span></div></div>
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold leading-5 text-amber-950">{model.disclaimer}</p>
+        <GpsCalibrationPanel sessionId={sessionId} />
       </div>
     </section>
   );
