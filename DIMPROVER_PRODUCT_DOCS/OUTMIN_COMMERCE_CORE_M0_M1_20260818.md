@@ -2245,3 +2245,36 @@ QA:
 - database legacy repository: továbbra sem runtime-ready order persistencere;
 - következő: production candidate build + 23/23 E2E standalone bundle-ből, majd kosár UI foundation;
 - PROD változatlan.
+
+### 2026-08-19 19:xx checkpoint — Multi-item Checkout Production Candidate
+
+Production candidate:
+- source: `f96553b0460b37ebfeee0d910d834f54067d8b63`;
+- dist: `.next-commerce-f96553b`;
+- Build ID: `eIhQkshgvebdAKheDVP7M`;
+- build exitCode: 0;
+- compile: 6.2 perc;
+- standalone assets: 254/254 VERIFIED.
+
+Candidate runtime az aktív Commerce `0.1.13 / 14` sémán:
+- Multi-item Checkout E2E: 23/23 PASS;
+- Storefront Queue Idempotency E2E: 26/26 PASS;
+- QA cleanup: due jobs 0, aktív QA attempt 0, aktív QA Commerce order 0;
+- candidate process leállítva;
+- 3306 port felszabadítva.
+
+DEV storage karbantartás a build előtt:
+- projekt saját retention script dry-run alapján;
+- csak régi build artifactok törölve;
+- dependency/backups/source nem érintett;
+- deleted builds: 15;
+- tárhely: 89% -> 82%;
+- szabad hely: 12.48 GB -> 20.22 GB.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: MULTI-ITEM CHECKOUT FOUNDATION — DEV KÉSZ / PRODUCTION CANDIDATE TESZTELT;
+- DB: 0.1.13 / 14;
+- Build: eIhQkshgvebdAKheDVP7M PASS;
+- Shared DEV cutover: NEM történt;
+- UI: következő blokkban kosár és checkout sheet;
+- PROD változatlan.
