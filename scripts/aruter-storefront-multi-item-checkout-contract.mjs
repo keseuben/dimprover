@@ -30,7 +30,7 @@ check("order snapshot uses authoritative net price",engine.includes("priceNet: p
 check("order snapshot uses authoritative VAT rate",engine.includes("vatRate: product.vatRate"));
 check("order snapshot uses authoritative storage zone",engine.includes("storageZone: product.storageZone"));
 check("existing checkout marker is searched before create",engine.indexOf("existingCheckoutOrder(marker)")<engine.indexOf("getAruterRepository().createOrder"));
-check("idempotent replay reuses existing legacy order",engine.includes("summarize(existing, true, queue.queued)"));
+check("idempotent replay reuses existing legacy order",engine.includes("summarize(existing, true, queue.queued, businessSlug)"));
 check("new checkout creates exactly one repository order call",(engine.match(/getAruterRepository\(\)\.createOrder/g)||[]).length===1);
 check("one order contains all normalized lines",engine.includes("items: lines.map"));
 check("checkout queues one legacy order to Commerce service queue",engine.includes("queueStorefrontCommerceMirrorFailOpen(businessSlug, created.data)"));

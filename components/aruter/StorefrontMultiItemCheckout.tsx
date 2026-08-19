@@ -17,6 +17,8 @@ export type StorefrontCheckoutSuccess = {
   grossTotal: number;
   reused: boolean;
   commerceQueued: boolean;
+  trackingToken?: string;
+  trackingExpiresAt?: string;
 };
 
 type Props = {
@@ -177,6 +179,7 @@ export function StorefrontMultiItemCheckout({
             <p className="mt-3 font-semibold text-slate-600">Rendelésszám: <b>{completed.orderNumber}</b></p>
             <p className="mt-1 font-semibold text-slate-600">{completed.lineCount} tétel · {completed.itemQuantity} egység · {currency(completed.grossTotal)}</p>
             {completed.reused && <p className="mx-auto mt-4 max-w-lg rounded-2xl bg-blue-50 p-3 text-sm font-bold text-blue-800">A korábbi sikeres beküldést találtuk meg, ezért nem készült második rendelés.</p>}
+            {completed.trackingToken && <p className="mx-auto mt-4 max-w-lg rounded-2xl bg-teal-50 p-3 text-sm font-bold text-teal-800">Az állapotkövetés aktív. A rendelés pénztári állapota a bezárás után automatikusan frissül ezen az oldalon.</p>}
             <button type="button" onClick={finish} className="mt-7 rounded-2xl bg-teal-700 px-8 py-4 font-black text-white">Rendben</button>
           </div>
         ) : (
