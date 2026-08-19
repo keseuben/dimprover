@@ -1532,3 +1532,57 @@ Worker aktiválási állapot:
 Következő kapu: a `K6dnQGYExr_346yR6V6Q1` candidate localhost HTTP expiry E2E, majd külön döntés a DEV timer aktiválásáról.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 14:xx checkpoint — Reservation Expiry candidate build + HTTP E2E zöld
+
+A `fae0805` Commerce candidate a szerver reboot után újraépült és teljes route-E2E kapun átment.
+
+Candidate build:
+- source commit: `fae08056236850c12dc8ac5e8cce3f2e89e02d31`;
+- dist: `.next-commerce-expiry-fae0805-r4`;
+- Build ID: `K6dnQGYExr_346yR6V6Q1`;
+- build exitCode: 0 / PASS;
+- standalone assets: 254 statikus chunk VERIFIED;
+- route manifest tartalmazza: `/api/v1/commerce/inventory/reservations/expire-due`;
+- build során 1 nem Commerce-specifikus Turbopack NFT warning maradt az `app/api/dev/engine/infrastructure-summary/route.ts` / `next.config.ts` import trace körül;
+- a build memória-throttling miatt lassú volt; a futó scope `MemoryHigh` ideiglenes 4.4 GiB-ra emelésével a TypeScript finalizálás sikeresen befejeződött;
+- a változtatás csak a transient build scope-ra vonatkozott, nem runtime konfigurációra.
+
+Candidate runtime:
+- localhost: `127.0.0.1:3291`;
+- shared DEV PM2/Nginx változatlan;
+- unauthenticated expiry route: 307 → `/login`;
+- authenticated expiry HTTP E2E: 16/16 PASS.
+
+HTTP E2E bizonyította:
+- SSR session cookie működik;
+- ADMIN context rendelkezik `commerce.inventory.move` + `commerce.inventory.adjust` joggal;
+- physical készlet ledgeren keresztül 5;
+- 2 egység rövid reservation;
+- pre-expiry: physical 5 / reserved 2 / available 3;
+- HTTP `POST /api/v1/commerce/inventory/reservations/expire-due` → 200;
+- pontosan 1 reservation feldolgozva, 2 egység released;
+- reservation `EXPIRED`, remaining 0;
+- post-expiry: physical 5 / reserved 0 / available 5;
+- ismételt HTTP POST processedCount=0;
+- pontosan 1 `EXPIRE` event StockMovement hivatkozással;
+- pontosan 1 audit + 1 outbox expiry esemény;
+- QA inventory nullára semlegesítve;
+- candidate process teszt után leállítva;
+- candidate log error scan: 0 találat;
+- aktív Expiry HTTP/Worker QA termék: 0.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: DEV KÉSZ / TESZTELT a Reservation Expiry blokkra;
+- Modul: Commerce Reservation Expiry + Worker foundation;
+- Elkészült: DB 0.1.10, manual admin/session API, worker runner, worker runtime E2E, candidate build, candidate HTTP E2E;
+- Részben elkészült: systemd worker telepítés még nincs;
+- Még hiányzik: timer aktiválás csak shared DEV integration/cutover után; canonical `deleted_at` soft-delete hardening; Storefront Pilot további integráció;
+- DB: 0.1.10 / 11;
+- API: expiry endpoint candidate-en teljes E2E zöld;
+- UI: külön expiry UI nem szükséges MVP-ben;
+- ismert tech debt: Commerce `archived_at` kompatibilitási soft-delete modell még eltér a canonical `deleted_at` szabálytól;
+- következő javasolt blokk: canonical soft-delete hardening vagy Storefront Pilot integration, integrációs prioritás szerint;
+- becsült aktív idő: soft-delete hardening 2–4 óra; Storefront Pilot következő bridge 4–8 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
