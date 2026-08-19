@@ -26,7 +26,7 @@ check("public price is calculated from repository net price and VAT",pilot.inclu
 check("stock status is derived from repository stock",pilot.includes('product.stockQuantity <= 0')&&pilot.includes('product.stockQuantity < 10'));
 check("reservation normalization resolves authoritative product by id",pilot.includes('item.id === productId')&&pilot.includes('normalizeStorefrontReservationInput'));
 check("reservation normalization overwrites client product name",pilot.includes('name: product.name'));
-check("reservation normalization overwrites client product price",pilot.includes('price: grossPrice(product)'));
+check("reservation normalization overwrites client product price",pilot.includes('price: getStorefrontGrossPrice(product)'));
 check("reservation normalization overwrites client product unit",pilot.includes('unit: product.unit'));
 check("reservation rejects unavailable product",pilot.includes('A kiválasztott termék nem érhető el a nyilvános ajánlatban.'));
 check("reservation rejects quantity above current stock",pilot.includes('quantity > product.stockQuantity'));

@@ -42,7 +42,7 @@ function storefrontCommerceQueueTarget(businessSlug: string) {
   return { organizationId };
 }
 
-async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string, order: AruterOrder) {
+export async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string, order: AruterOrder) {
   const target = storefrontCommerceQueueTarget(businessSlug);
   if (!target) return { enabled: isStorefrontCommerceQueueEnabled(), queued: false, reason: "NOT_CONFIGURED" as const };
   try {
@@ -59,19 +59,19 @@ async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string, order
   }
 }
 
-function configuredTemplate(businessSlug: string): AruterTemplate | null {
+export function resolveStorefrontTemplate(businessSlug: string): AruterTemplate | null {
   const explicit = process.env.ARUTER_STOREFRONT_PILOT_TEMPLATE?.trim() as AruterTemplate | undefined;
   if (explicit && TEMPLATE_VALUES.has(explicit)) return explicit;
   if (businessSlug === "kovacs-kerteszet") return "kertészet";
   return null;
 }
 
-async function repositoryProducts() {
+export async function getStorefrontRepositoryProducts() {
   const result = await Promise.resolve(getAruterRepository().listProducts());
   return Array.isArray(result) ? result : [];
 }
 
-function grossPrice(product: AruterProduct) {
+export function getStorefrontGrossPrice(product: AruterProduct) {
   const value = product.priceNet * (1 + product.vatRate / 100);
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -93,7 +93,7 @@ function publicProduct(product: AruterProduct): AruterPublicProduct {
     name: product.name,
     description: product.description || product.category,
     category: product.category,
-    price: grossPrice(product),
+    price: getStorefrontGrossPrice(product),
     unit: product.unit,
     stockStatus: product.stockQuantity <= 0 ? "out_of_stock" : product.stockQuantity < 10 ? "limited" : "in_stock",
     imageTone: imageTone(product),
@@ -105,8 +105,8 @@ export async function getStorefrontPilotCatalog(businessSlugInput: string): Prom
   if (!isStorefrontPilotEnabled()) {
     return { pilotEnabled: false, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), businessSlug, products: [] };
   }
-  const template = configuredTemplate(businessSlug);
-  const products = (await repositoryProducts())
+  const template = resolveStorefrontTemplate(businessSlug);
+  const products = (await getStorefrontRepositoryProducts())
     .filter((product) => product.isActive)
     .filter((product) => !template || product.template === template)
     .filter((product) => product.isPublicOffer !== false)
@@ -120,10 +120,10 @@ export async function normalizeStorefrontReservationInput(
 ): Promise<{ ok: true; input: Partial<CreateAruterPublicReservationInput> } | { ok: false; error: string }> {
   if (!isStorefrontPilotEnabled()) return { ok: true, input };
   const businessSlug = input.businessSlug?.trim() || "";
-  const template = configuredTemplate(businessSlug);
+  const template = resolveStorefrontTemplate(businessSlug);
   if (!businessSlug || !template) return { ok: false, error: "Ehhez az üzlethez a Storefront Pilot nincs konfigurálva." };
   const productId = input.product?.id?.trim() || "";
-  const product = (await repositoryProducts()).find((item) => item.id === productId && item.isActive && item.template === template && item.isPublicOffer !== false);
+  const product = (await getStorefrontRepositoryProducts()).find((item) => item.id === productId && item.isActive && item.template === template && item.isPublicOffer !== false);
   if (!product) return { ok: false, error: "A kiválasztott termék nem érhető el a nyilvános ajánlatban." };
   const quantity = Number(input.quantity || 0);
   if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "A mennyiség legyen pozitív szám." };
@@ -138,7 +138,7 @@ export async function normalizeStorefrontReservationInput(
         id: product.id,
         name: product.name,
         description: product.description || product.category,
-        price: grossPrice(product),
+        price: getStorefrontGrossPrice(product),
         unit: product.unit,
       },
     },
@@ -178,9 +178,9 @@ export async function bridgePublicReservationToCashierFailOpen(
       return { enabled: true, bridged: true, orderId: existing.id, orderNumber: existing.orderNumber, reused: true, commerceQueued: queue.queued };
     }
 
-    const template = configuredTemplate(reservation.businessSlug);
+    const template = resolveStorefrontTemplate(reservation.businessSlug);
     if (!template) throw new Error("STOREFRONT_TEMPLATE_NOT_CONFIGURED");
-    const product = (await repositoryProducts()).find((item) => item.id === reservation.productId && item.isActive && item.template === template && item.isPublicOffer !== false);
+    const product = (await getStorefrontRepositoryProducts()).find((item) => item.id === reservation.productId && item.isActive && item.template === template && item.isPublicOffer !== false);
     if (!product) throw new Error("STOREFRONT_PRODUCT_NOT_FOUND");
     if (!UNIT_VALUES.has(product.unit)) throw new Error("STOREFRONT_UNIT_NOT_SUPPORTED");
 

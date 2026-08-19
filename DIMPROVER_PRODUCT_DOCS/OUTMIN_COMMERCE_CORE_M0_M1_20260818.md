@@ -2167,3 +2167,81 @@ Regresszió:
 - Következő blokk: Storefront Multi-item Checkout Foundation;
 - Cél: egy publikus kosár -> egy legacy pénztári rendelés -> egy Commerce queue attempt, authoritative szerveroldali termék/ár/készlet ellenőrzéssel és checkout idempotency kulccsal;
 - PROD változatlan.
+
+### 2026-08-19 18:xx checkpoint — Storefront Multi-item Checkout Foundation
+
+Elkészült a feature-flagelt többtételes checkout szerveroldali alapja.
+
+Új feature flag:
+- `ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0` alapból OFF.
+
+Új API:
+- `POST /api/aruter/public-checkouts`;
+- kötelező `Idempotency-Key` header, 16–128 karakter;
+- új checkout: HTTP 201;
+- idempotent replay: HTTP 200;
+- eltérő payload ugyanazzal a kulccsal: HTTP 409.
+
+Üzleti logika:
+- 1–50 nyers tételsor, legfeljebb 25 különböző termék;
+- azonos productId sorok összevonódnak;
+- minden termék szerveroldali repository-ból újra feloldódik;
+- csak aktív, megfelelő template-ű, publikus ajánlati termék használható;
+- unit whitelist ellenőrzés;
+- aggregált mennyiség authoritative készlethez ellenőrzött;
+- legacy order snapshot authoritative név/SKU/nettó ár/ÁFA/storage zone mezőkből készül;
+- egy checkout pontosan egy legacy pénztári rendelést hoz létre;
+- az összes checkout tétel ugyanabban a rendelésben van;
+- a rendelés egyetlen Commerce service queue attemptbe kerül;
+- bruttó total a legacy authoritative snapshotból számolódik.
+
+Idempotencia:
+- a nyers Idempotency-Key nem kerül a rendelési megjegyzésbe;
+- `[PUBLIC_CHECKOUT:<sha256 token>]` marker az order lookuphoz;
+- külön `[CHECKOUT_PAYLOAD:<sha256 fingerprint>]` marker a payload-egyezéshez;
+- payload fingerprint canonicalizálja a terméksorok sorrendjét;
+- ugyanaz a kulcs + ugyanaz a logikai kosár eltérő sorrendben is replaynek számít;
+- ugyanaz a kulcs + eltérő mennyiség/customer/pickup/contact/note -> 409 mismatch.
+
+Runtime E2E: 23/23 PASS:
+- schema 0.1.13 / 14;
+- induláskor 0 idegen due job;
+- admin session fixture;
+- hiányzó idempotency key 400;
+- készlet feletti mennyiség 409;
+- új multi-item checkout 201;
+- duplikált terméksorok 2 order line-ra aggregálva;
+- teljes mennyiség 5;
+- authoritative gross total 25 717,50 Ft;
+- egy Commerce queue job;
+- egy legacy order két authoritative tétellel;
+- tuja mennyiség 3, mulcs mennyiség 2;
+- authoritative net price + VAT;
+- raw idempotency key nem került order note-ba;
+- egy PENDING attempt két legacy itemmel;
+- canonical-equivalent replay 200;
+- ugyanaz a legacy order ID;
+- nincs második legacy order;
+- nincs új queue audit/outbox replaykor;
+- eltérő payload ugyanazzal a kulccsal 409;
+- authenticated retry pontosan egy queue jobot dolgoz fel;
+- queue SUCCEEDED;
+- egy Commerce order két checkout tétellel.
+
+QA:
+- multi-item contract: 44/44 PASS;
+- HTTP E2E: 23/23 PASS;
+- TypeScript: PASS;
+- ESLint: PASS;
+- diff-check: PASS;
+- runtime error scan: 0;
+- QA cleanup: due jobs 0, aktív multi-item QA 0, aktív Commerce QA 0.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / SOURCE RUNTIME TESZTELT;
+- Modul: Storefront Multi-item Checkout Foundation;
+- DB: 0.1.13 / 14, ehhez a blokkhoz nem kellett új DB migráció;
+- UI: még nincs többtételes kosár UI, csak backend/API foundation;
+- database legacy repository: továbbra sem runtime-ready order persistencere;
+- következő: production candidate build + 23/23 E2E standalone bundle-ből, majd kosár UI foundation;
+- PROD változatlan.
