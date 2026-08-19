@@ -1393,3 +1393,59 @@ QA:
 - Következő blokk: backup → 0.1.10 apply → runtime E2E → regresszió → checkpoint.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 11:xx checkpoint — Reservation Expiry / Cleanup M1 DEV aktiválva
+
+A Reservation Expiry / Cleanup M1 ténylegesen aktiválva lett kizárólag DEV-en.
+
+DEV migráció:
+- Commerce schema: `0.1.10`;
+- migration count: `11`;
+- migration SHA-256: `d9930dbccffe7cbe7b356b64fe70c2d49e538e5d44b2a8bd8bf65508b8205a57`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-reservation-expiry-m1/20260819T092900Z`;
+- backup dump SHA-256: `6e21de8edea7eef5fd9bd8ecb30fce3a54193031819c02520f9295a7c0208bf1`;
+- backup méret: kb. 2.9 MB;
+- backup listingben ellenőrizve: reservation, reservation event, inventory balance és order item táblák;
+- post-apply verify: RPC létezik, authenticated EXECUTE=false, service_role EXECUTE=true, due index=true, EXPIRE action=true.
+
+Valós DEV runtime E2E: 13/13 PASS:
+- 10 egység fizikai készlet ledgeren keresztül létrehozva;
+- 4 egység rövid lejáratú + 2 egység jövőbeni reservation;
+- induló készlet: physical 10 / reserved 6 / available 4;
+- cleanup pontosan az egy lejárt reservationt dolgozta fel;
+- lejárt reservation: `EXPIRED`, remaining 0, released 4;
+- jövőbeni reservation változatlanul `ACTIVE`, remaining 2;
+- cleanup után physical 10 / reserved 2 / available 8;
+- ismételt cleanup: 0 tétel, tehát idempotens;
+- `EXPIRE` esemény StockMovement hivatkozással;
+- pontosan egy audit + egy outbox expiry esemény;
+- QA készlet nullára semlegesítve, fixture-ek archiválva.
+
+Kapcsolódó regresszió:
+- Reservation contract: 18/18 PASS;
+- Reservation Expiry contract: 27/27 PASS;
+- Order ↔ Inventory Bridge contract: 27/27 PASS;
+- Order ↔ Inventory runtime: 14/14 PASS;
+- Order Core: 30/30 PASS;
+- Cashier UI: 20/20 PASS;
+- legacy mirror: 22/22 PASS;
+- reconciliation: 26/26 PASS;
+- legacy Árutér → központi pénztár: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: DEV KÉSZ;
+- Modul: Commerce Inventory Reservation Expiry / Cleanup M1;
+- Elkészült: DB, rollback, repository, admin/session API, valós runtime E2E, regresszió;
+- Részben elkészült: automatikus időzített worker trigger még nincs; ugyanaz a service-only RPC készen áll worker használatra;
+- Még hiányzik: worker-auth/secret szerződés + ütemezés, illetve shared DEV release integráció;
+- DB: 0.1.10 / 11;
+- API: `POST /api/v1/commerce/inventory/reservations/expire-due`;
+- UI: nincs külön új felület; admin/session API kézi kontrollált indításra kész;
+- ismert tech debt: `archived_at` soft-delete kompatibilitási modell; canonical `deleted_at` hardening későbbi blokk;
+- következő blokk: legfrissebb Commerce candidate build + route smoke, majd worker trigger vagy Storefront Pilot integráció;
+- becsült aktív idő: candidate build/smoke 0.5–1 óra; worker trigger 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
