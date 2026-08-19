@@ -2383,3 +2383,38 @@ Standalone candidate regresszió:
 - Shared DEV cutover: NEM történt;
 - következő blokk: Storefront persistent queue automatikus service worker foundation;
 - PROD változatlan.
+
+### 2026-08-19 19:xx checkpoint — Storefront Cart UI Browser E2E
+
+A production candidate (`KP5B4BoAGgS4i7HXmPhDa`) valódi Puppeteer/Chromium böngészővel is tesztelve.
+
+Browser E2E: 20/20 PASS:
+- induláskor 0 idegen due queue job;
+- mobil Storefront multi-item capability hidratálódik;
+- single-item reservation modal nem nyílik cart módban;
+- termékkártyák kosárba tesznek és aggregálják a mennyiséget;
+- mobil sticky kosár CTA checkout sheetet nyit;
+- checkout sheet mobil horizontal overflow nélkül;
+- mennyiség + vezérlő működik;
+- checkout frissíti az összmennyiséget;
+- privacy checkbox működik;
+- submit csak kötelező mezők után aktív;
+- valódi browser POST HTTP 201;
+- egy két-tételes rendelés jön létre;
+- sikeres order confirmation megjelenik;
+- server order number látható;
+- egy PENDING service queue attempt létrejön;
+- queue snapshot két cart line-t tartalmaz;
+- Rendben után visszatérés és rendelési összefoglaló;
+- siker után látható kosár üres;
+- mobil completed oldal horizontal overflow nélkül;
+- desktop 1366x768 horizontal overflow nélkül.
+
+Cleanup:
+- QA queue attempt canonical soft-delete-tal archiválva;
+- due jobs 0;
+- aktív Browser QA attempt 0;
+- candidate 3309 leállítva;
+- runtime error scan 0.
+
+A korábbi „nincs valódi browser interaction E2E” hiány ezzel lezárva a Storefront kosár UI foundationre.
