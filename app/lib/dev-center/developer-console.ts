@@ -716,6 +716,12 @@ export type DeveloperWeeklySummary = {
     stageCounts: Record<string, number>;
     transitions: Array<{ fromWorkerCode: string; toWorkerCode: string; changedAt: string; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF"; workItem: string; projectId: string | null }>;
     blockers: Array<{ kind: "TASK_FAILED" | "WAITING_WORKER" | "BUILD_LOCK_WAIT" | "SCHEDULER_FAILED"; label: string; detail: string; at: string; workerCode: string | null; taskId: string | null; projectId: string | null }>;
+    trend: {
+      available: boolean;
+      previousWeekKey: string;
+      metrics: Array<{ key: "activities" | "completed" | "handoffs" | "waiting" | "errors"; label: string; current: number; previous: number; delta: number; deltaPercent: number | null; direction: "up" | "down" | "flat"; tone: "positive" | "negative" | "neutral" }>;
+    };
+    workerLoad: Array<{ code: string; activityCount: number; contextCount: number; handoffCount: number; waitCount: number; blockerCount: number; loadSharePercent: number; signal: "normal" | "watch" | "high"; previousActivityCount: number | null; activityDelta: number | null }>;
   };
   truncated: boolean;
   generatedAt: string;
@@ -797,7 +803,7 @@ function weeklyContextKey(message: ConsoleMessage) {
   });
 }
 
-export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string | null, weekInput?: string | null): Promise<DeveloperWeeklySummary> {
+export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string | null, weekInput?: string | null, includeComparison = true): Promise<DeveloperWeeklySummary> {
   const client = getClient();
   const projectId = text(projectIdInput) || null;
   const period = budapestWeek(weekInput);
@@ -949,6 +955,19 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     blockers.push({ kind: "SCHEDULER_FAILED", label: run.summary || "Scheduler futás hibázott", detail: "Scheduler run sikertelen · próbálkozás: " + String(run.attemptCount || 1), at: run.finishedAt || run.startedAt || run.slotAt, workerCode: run.workerCode || null, taskId: run.taskId, projectId });
   }
   blockers.sort((a, b) => b.at.localeCompare(a.at));
+  const totalWorkerActivities = workerSummary.reduce((sum, worker) => sum + worker.activityCount, 0);
+  const workerLoad: DeveloperWeeklySummary["flowAnalytics"]["workerLoad"] = workerSummary.map((worker) => {
+    const handoffCount = weeklyTransitions.filter((item) => item.fromWorkerCode === worker.code || item.toWorkerCode === worker.code).length;
+    const waitCount = buildLockWaits.filter((item) => item.workerCode === worker.code).length;
+    const blockerCount = blockers.filter((item) => item.workerCode === worker.code && item.kind !== "BUILD_LOCK_WAIT").length;
+    const loadSharePercent = totalWorkerActivities ? Math.round((worker.activityCount / totalWorkerActivities) * 100) : 0;
+    const signal = blockerCount >= 2 || waitCount >= 2 || (workerSummary.length >= 2 && loadSharePercent >= 60 && worker.activityCount >= 20)
+      ? "high"
+      : blockerCount > 0 || waitCount > 0 || handoffCount >= 3 || (workerSummary.length >= 2 && loadSharePercent >= 45)
+        ? "watch"
+        : "normal";
+    return { code: worker.code, activityCount: worker.activityCount, contextCount: worker.contextCount, handoffCount, waitCount, blockerCount, loadSharePercent, signal, previousActivityCount: null, activityDelta: null };
+  });
   const flowAnalytics: DeveloperWeeklySummary["flowAnalytics"] = {
     schedulerReady: Boolean(schedulerSnapshot?.ready),
     schedulerRuns: schedulerRunStats,
@@ -959,8 +978,10 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     stageCounts: weeklyStageCounts,
     transitions: weeklyTransitions.slice(0, 8).map((item) => ({ fromWorkerCode: item.fromWorkerCode, toWorkerCode: item.toWorkerCode, changedAt: item.changedAt, reason: item.reason, workItem: item.workItem, projectId: item.projectId })),
     blockers: blockers.slice(0, 8),
+    trend: { available: false, previousWeekKey: period.previousWeekKey, metrics: [] },
+    workerLoad,
   };
-  return {
+  const summary: DeveloperWeeklySummary = {
     ready: true,
     period,
     projectId,
@@ -982,6 +1003,39 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     generatedAt: new Date().toISOString(),
     productionAccess: "DENY",
   };
+  if (includeComparison) {
+    try {
+      const previous = await getDeveloperConsoleWeeklySummary(projectId, period.previousWeekKey, false);
+      const previousWorkers = new Map(previous.workers.map((worker) => [worker.code, worker.activityCount]));
+      summary.flowAnalytics.workerLoad = summary.flowAnalytics.workerLoad.map((worker) => {
+        const previousActivityCount = previousWorkers.get(worker.code) ?? 0;
+        return { ...worker, previousActivityCount, activityDelta: worker.activityCount - previousActivityCount };
+      });
+      const currentWaiting = flowAnalytics.buildLockWaits + flowAnalytics.waitingForWorker;
+      const previousWaiting = previous.flowAnalytics.buildLockWaits + previous.flowAnalytics.waitingForWorker;
+      const metric = (key: "activities" | "completed" | "handoffs" | "waiting" | "errors", label: string, current: number, prior: number, preference: "higher" | "lower" | "neutral") => {
+        const delta = current - prior;
+        const direction = delta > 0 ? "up" as const : delta < 0 ? "down" as const : "flat" as const;
+        const deltaPercent = prior > 0 ? Math.round((delta / prior) * 100) : current > 0 ? null : 0;
+        const tone = preference === "neutral" || delta === 0 ? "neutral" as const : preference === "higher" ? (delta > 0 ? "positive" as const : "negative" as const) : (delta < 0 ? "positive" as const : "negative" as const);
+        return { key, label, current, previous: prior, delta, deltaPercent, direction, tone };
+      };
+      summary.flowAnalytics.trend = {
+        available: true,
+        previousWeekKey: previous.period.weekKey,
+        metrics: [
+          metric("activities", "Aktivitás", summary.stats.activities, previous.stats.activities, "neutral"),
+          metric("completed", "Lezárt task", summary.stats.completedTasks, previous.stats.completedTasks, "higher"),
+          metric("handoffs", "Átadás", flowAnalytics.handoffs, previous.flowAnalytics.handoffs, "neutral"),
+          metric("waiting", "Várakozás", currentWaiting, previousWaiting, "lower"),
+          metric("errors", "Hiba", summary.stats.errors + flowAnalytics.taskFailures, previous.stats.errors + previous.flowAnalytics.taskFailures, "lower"),
+        ],
+      };
+    } catch {
+      summary.flowAnalytics.trend = { available: false, previousWeekKey: period.previousWeekKey, metrics: [] };
+    }
+  }
+  return summary;
 }
 
 export type DeveloperConsoleMessagePage = {

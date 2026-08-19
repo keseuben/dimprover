@@ -245,6 +245,12 @@ export type WeeklyDevelopmentSummary = {
     stageCounts: Record<string, number>;
     transitions: Array<{ fromWorkerCode: string; toWorkerCode: string; changedAt: string; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF"; workItem: string; projectId: string | null }>;
     blockers: Array<{ kind: "TASK_FAILED" | "WAITING_WORKER" | "BUILD_LOCK_WAIT" | "SCHEDULER_FAILED"; label: string; detail: string; at: string; workerCode: string | null; taskId: string | null; projectId: string | null }>;
+    trend: {
+      available: boolean;
+      previousWeekKey: string;
+      metrics: Array<{ key: "activities" | "completed" | "handoffs" | "waiting" | "errors"; label: string; current: number; previous: number; delta: number; deltaPercent: number | null; direction: "up" | "down" | "flat"; tone: "positive" | "negative" | "neutral" }>;
+    };
+    workerLoad: Array<{ code: string; activityCount: number; contextCount: number; handoffCount: number; waitCount: number; blockerCount: number; loadSharePercent: number; signal: "normal" | "watch" | "high"; previousActivityCount: number | null; activityDelta: number | null }>;
   };
   truncated: boolean;
   generatedAt: string;

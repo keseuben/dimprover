@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, LockKeyhole, RefreshCw, RotateCcw, ShieldCheck, TimerReset, TriangleAlert, UsersRound, Workflow } from "lucide-react";
+import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Gauge, LockKeyhole, Minus, RefreshCw, RotateCcw, ShieldCheck, TimerReset, TrendingDown, TrendingUp, TriangleAlert, UsersRound, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WeeklyDevelopmentSummary as Summary } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -197,6 +197,24 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
           <header><TriangleAlert size={11} /><strong>Elakadási okok</strong><span>{summary.flowAnalytics.blockers.length}</span></header>
           {summary.flowAnalytics.blockers.slice(0, 4).map((item, index) => <article key={item.kind + "-" + item.at + "-" + index} data-blocker-kind={item.kind}><b>{item.label}</b><span>{item.detail}</span><small>{item.workerCode || "RENDSZER"} · {shortTime(item.at)}</small></article>)}
         </div> : null}
+        {summary.flowAnalytics.trend.available ? <section className={styles.weeklyFlowTrend} data-testid="benjadmin-weekly-flow-trend" data-previous-week={summary.flowAnalytics.trend.previousWeekKey}>
+          <header><TrendingUp size={11} /><strong>Előző héthez képest</strong><span>{summary.flowAnalytics.trend.previousWeekKey}</span></header>
+          <div>
+            {summary.flowAnalytics.trend.metrics.map((item) => <article key={item.key} data-trend-key={item.key} data-direction={item.direction} data-tone={item.tone}>
+              <span>{item.label}</span><strong>{item.current}</strong><small>{item.direction === "up" ? <TrendingUp size={9} /> : item.direction === "down" ? <TrendingDown size={9} /> : <Minus size={9} />}{item.delta > 0 ? "+" : ""}{item.delta}{item.deltaPercent === null ? " · új" : ` · ${item.deltaPercent > 0 ? "+" : ""}${item.deltaPercent}%`}</small>
+            </article>)}
+          </div>
+        </section> : null}
+        {summary.flowAnalytics.workerLoad.length ? <section className={styles.weeklyWorkerLoad} data-testid="benjadmin-weekly-worker-load">
+          <header><Gauge size={11} /><strong>Worker terhelés</strong><span>aktivitásmegoszlás + elakadási jelzés</span></header>
+          <div>
+            {summary.flowAnalytics.workerLoad.slice(0, 6).map((worker) => <article key={worker.code} data-worker-load={worker.code} data-signal={worker.signal}>
+              <div><strong>{worker.code}</strong><b>{worker.loadSharePercent}%</b></div>
+              <progress max={100} value={worker.loadSharePercent} aria-label={`${worker.code} heti aktivitásmegoszlás`} />
+              <small>{worker.activityCount} akt · {worker.contextCount} rész · {worker.handoffCount} átadás · {worker.waitCount + worker.blockerCount} jelzés{worker.activityDelta === null ? "" : ` · előző héthez ${worker.activityDelta > 0 ? "+" : ""}${worker.activityDelta}`}</small>
+            </article>)}
+          </div>
+        </section> : null}
       </section>
 
       <div className={styles.weeklyFilterRow} data-testid="benjadmin-weekly-summary-filters">
