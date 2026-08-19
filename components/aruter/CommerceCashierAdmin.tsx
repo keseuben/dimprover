@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Banknote, CheckCircle2, CircleDollarSign, CreditCard, Loader2, PackageCheck, RefreshCw, ShoppingCart, Store, TriangleAlert } from "lucide-react";
+import { AlertCircle, Banknote, CheckCircle2, CircleDollarSign, CreditCard, Loader2, PackageCheck, RefreshCw, RotateCcw, ShoppingCart, Store, TriangleAlert } from "lucide-react";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
 
 type ApiResult<T>={ok:boolean;data?:T;error?:string;code?:string;context?:CommerceContext};
@@ -45,7 +45,7 @@ export function CommerceCashierAdmin(){
   async function issue(){if(!selectedId)return;await action(`/api/v1/commerce/orders/${selectedId}/status`,{status:"ISSUED",issuerName:issuerName.trim()||"Kiadó"},`cashier-issued-${selectedId}`);}
 
   return <AruterPageShell>
-    <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><AruterBrand compact/><span className="hidden h-10 w-px bg-slate-200 sm:block"/><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Commerce Core</p><h1 className="text-xl font-black text-slate-900">Központi pénztár</h1></div></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 md:inline-flex">{context?.roleCode||"—"}</span><Link href="/aruter/admin/termekek" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><Store size={17}/> Admin</Link></div></div></header>
+    <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><AruterBrand compact/><span className="hidden h-10 w-px bg-slate-200 sm:block"/><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Commerce Core</p><h1 className="text-xl font-black text-slate-900">Központi pénztár</h1></div></div><div className="flex items-center gap-2"><span className="hidden rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 md:inline-flex">{context?.roleCode||"—"}</span>{context?.permissions.includes("commerce.order.reconcile")&&<Link href="/aruter/admin/egyeztetes" className="hidden h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700 sm:inline-flex"><RotateCcw size={17}/> Egyeztetés</Link>}<Link href="/aruter/admin/termekek" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><Store size={17}/> Admin</Link></div></div></header>
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
       {error&&<div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><AlertCircle size={20}/><div><b>Pénztári állapot</b><p className="mt-1 text-sm font-semibold">{error}</p></div></div>}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">

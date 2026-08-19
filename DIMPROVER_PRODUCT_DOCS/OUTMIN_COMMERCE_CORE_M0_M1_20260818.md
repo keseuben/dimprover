@@ -1129,3 +1129,35 @@ Runtime E2E ellenőrizte:
 - becsült aktív következő idő: build/smoke 1–2 óra; feature-flag mirror E2E 1–3 óra; reconciliation admin UI 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 07:xx checkpoint — Mirror Reconciliation admin UI
+
+Elkészült a letisztult Commerce admin egyeztetési felület:
+- új oldal: `/aruter/admin/egyeztetes`;
+- FAILED / PENDING / SUCCEEDED összesítő kártyák;
+- szűrhető mirror eseménylista;
+- legacy rendelés státusz, próbálkozásszám, mapped/unresolved tételszám;
+- Commerce order kapcsolat, utolsó próbálkozás és következő retry időpont;
+- hiba kód + felhasználóbarát hibaüzenet;
+- jogosultságos kézi újrapróbálás;
+- sikeres attemptnél a retry gomb eltűnik és sikerállapot jelenik meg;
+- a központi pénztár fejlécében az `Egyeztetés` link csak `commerce.order.reconcile` jogosultsággal látható;
+- a felület külön jelzi, hogy a legacy Árutér működés elsődleges és a Commerce mirror hibája nem fordítja vissza a pénztári műveletet.
+
+Tesztkapuk:
+- reconciliation UI acceptance: 18/18 PASS;
+- reconciliation backend contract: 26/26 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- elkészült: reconciliation backend + admin UI + manuális retry;
+- részben elkészült: teljes böngészős feature-flag mirror E2E még hiányzik;
+- hiányzik: automatikus retry worker, teljes cashier browser E2E, Storefront Pilot Commerce átállás;
+- UI: `/aruter/admin/egyeztetes` új, pénztárból jogosultságosan elérhető;
+- következő blokk: legfrissebb candidate build + HTTP smoke, majd DEV-only feature-flag mirror E2E;
+- becsült aktív idő: 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
