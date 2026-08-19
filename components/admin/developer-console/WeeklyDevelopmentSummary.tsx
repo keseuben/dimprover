@@ -2,7 +2,7 @@
 
 import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Download, FileCode2, FileJson2, Gauge, LockKeyhole, Minus, RefreshCw, RotateCcw, Share2, ShieldCheck, TimerReset, TrendingDown, TrendingUp, TriangleAlert, UsersRound, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { WeeklyDevelopmentSummary as Summary, WeeklyTrendHistory } from "./types";
+import type { WeeklyDevelopmentSummary as Summary, WeeklyPortfolio, WeeklyTrendHistory } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 type WeeklyContext = Summary["contexts"][number];
@@ -75,9 +75,10 @@ function writeQuery(values: { week?: string; worker?: string; stage?: number }) 
   window.history.replaceState(window.history.state, "", url);
 }
 
-export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenContext }: {
+export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenContext, onSelectProject }: {
   selectedProjectId: string;
   onOpenContext?: (context: WeeklyContext, weekKey: string) => void;
+  onSelectProject?: (projectId: string) => void;
 }) {
   const initial = useMemo(() => readInitialQuery(), []);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -93,6 +94,9 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
   const [trendHistoryLoading, setTrendHistoryLoading] = useState(false);
   const [trendHistoryError, setTrendHistoryError] = useState("");
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("score");
+  const [portfolio, setPortfolio] = useState<WeeklyPortfolio | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +140,30 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
     const timer = window.setInterval(() => void loadTrendHistory(), 300_000);
     return () => window.clearInterval(timer);
   }, [loadTrendHistory]);
+
+  const loadPortfolio = useCallback(async () => {
+    setPortfolioLoading(true);
+    try {
+      const query = new URLSearchParams();
+      if (weekKey) query.set("week", weekKey);
+      const suffix = query.size ? "?" + query.toString() : "";
+      const response = await fetch("/api/dev/console/weekly-portfolio" + suffix, { headers: adminHeaders(), cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; portfolio?: WeeklyPortfolio; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.portfolio) throw new Error(payload?.error || "A heti fejlesztési portfólió nem tölthető be.");
+      setPortfolio(payload.portfolio);
+      setPortfolioError("");
+    } catch (caught) {
+      setPortfolioError(caught instanceof Error ? caught.message : "A heti fejlesztési portfólió nem tölthető be.");
+    } finally {
+      setPortfolioLoading(false);
+    }
+  }, [weekKey]);
+
+  useEffect(() => {
+    void loadPortfolio();
+    const timer = window.setInterval(() => void loadPortfolio(), 300_000);
+    return () => window.clearInterval(timer);
+  }, [loadPortfolio]);
 
   useEffect(() => {
     void load();
@@ -300,7 +328,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span><strong>HETI FEJLESZTÉSI ÖSSZESÍTŐ</strong><small>{summary?.period.label || "Naptári hét"}</small></span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
-      <button type="button" className={styles.weeklySummaryRefresh} title="Heti összesítő frissítése" disabled={loading || trendHistoryLoading} onClick={() => { void load(); void loadTrendHistory(); }}><RefreshCw size={13} /></button>
+      <button type="button" className={styles.weeklySummaryRefresh} title="Heti összesítő frissítése" disabled={loading || trendHistoryLoading || portfolioLoading} onClick={() => { void load(); void loadTrendHistory(); void loadPortfolio(); }}><RefreshCw size={13} /></button>
     </header>
 
     {expanded ? <div className={styles.weeklySummaryToolbar} data-testid="benjadmin-weekly-summary-toolbar">
@@ -326,6 +354,37 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span><b>{summary.stats.completedTasks}</b> lezárt</span>
         <span data-alert={summary.stats.blockedTasks || summary.stats.errors ? "true" : "false"}><b>{summary.stats.blockedTasks}</b> blokkolt · <b>{summary.stats.errors}</b> hiba</span>
       </div>
+
+      <section className={styles.weeklyPortfolio} data-testid="benjadmin-weekly-portfolio" data-ready={portfolio?.ready ? "true" : "false"} data-week-key={portfolio?.period.weekKey || summary.period.weekKey} data-project-count={portfolio?.totals.projects || 0}>
+        <header><BarChart3 size={12} /><strong>PROJEKTPORTFÓLIÓ · HETI ÖSSZEVETÉS</strong><span>{portfolio?.period.label || summary.period.label}{portfolioLoading ? " · frissítés…" : ""}</span></header>
+        {portfolio ? <div className={styles.weeklyPortfolioTotals}>
+          <article><span>Projekt</span><strong>{portfolio.totals.projects}</strong><small>{portfolio.totals.workers} aktív worker</small></article>
+          <article><span>Átlag score</span><strong>{portfolio.totals.averageScore}/100</strong><small>{portfolio.totals.stable} stabil</small></article>
+          <article data-alert={portfolio.totals.critical || portfolio.totals.watch ? "true" : "false"}><span>Figyelendő</span><strong>{portfolio.totals.watch}</strong><small>{portfolio.totals.critical} beavatkozás</small></article>
+          <article data-alert={portfolio.totals.errors || portfolio.totals.waiting ? "true" : "false"}><span>Jelzés</span><strong>{portfolio.totals.errors + portfolio.totals.waiting}</strong><small>{portfolio.totals.errors} hiba · {portfolio.totals.waiting} várakozás</small></article>
+          <article><span>Lezárt</span><strong>{portfolio.totals.completed}</strong><small>{portfolio.totals.activities} aktivitás</small></article>
+        </div> : null}
+        {portfolioError ? <p className={styles.weeklyPortfolioError}>{portfolioError}</p> : null}
+        {portfolio?.projects.length ? <div className={styles.weeklyPortfolioList}>
+          {portfolio.projects.map((project) => <button type="button" key={project.projectId} data-portfolio-project={project.projectId} data-rank={project.rank} data-status={project.managementStatus} data-selected={selectedProjectId === project.projectId ? "true" : "false"} onClick={() => onSelectProject?.(project.projectId)}>
+            <span className={styles.weeklyPortfolioRank}>{project.rank}</span>
+            <div className={styles.weeklyPortfolioProject}>
+              <strong>{project.projectName}</strong>
+              <span>{project.managementStatus === "critical" ? "BEAVATKOZÁS" : project.managementStatus === "watch" ? "FIGYELENDŐ" : "STABIL"} · {project.headline}</span>
+              <small>{project.primaryRisk || "Nincs kiemelt heti kockázat."}</small>
+            </div>
+            <b className={styles.weeklyPortfolioScore}>{project.score}<small>/100</small></b>
+            <div className={styles.weeklyPortfolioMetrics}>
+              <span><b>{project.activities}</b> akt.</span>
+              <span><b>{project.completed}</b> lezárt</span>
+              <span data-alert={project.blocked ? "true" : "false"}><b>{project.blocked}</b> blokkolt</span>
+              <span data-alert={project.waiting ? "true" : "false"}><b>{project.waiting}</b> vár.</span>
+              <span data-alert={project.errors ? "true" : "false"}><b>{project.errors}</b> hiba</span>
+              <span><b>{project.workers}</b> worker</span>
+            </div>
+          </button>)}
+        </div> : <p className={styles.weeklySummaryEmpty}>{portfolioLoading ? "A heti projektportfólió betöltése…" : "Nincs aktív projekt a heti portfólióban."}</p>}
+      </section>
 
       <section className={styles.weeklyManagementSummary} data-testid="benjadmin-weekly-management-summary" data-status={summary.managementSummary.status} data-score={summary.managementSummary.score}>
         <header>

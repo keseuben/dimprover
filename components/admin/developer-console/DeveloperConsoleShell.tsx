@@ -434,7 +434,7 @@ export default function DeveloperConsoleShell() {
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}
       <div className={styles.workspace}>
         <DeveloperConsoleProjectRail live={live} selectedProjectId={selectedProjectId} onSelectProject={changeProject} />
-        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} workerTransitions={live?.workerTransitions || []} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onOpenWeeklyContext={openWeeklyContext} />
+        <DeveloperConversation messages={messages} selectedProjectId={selectedProjectId} workerTransitions={live?.workerTransitions || []} hasOlder={hasOlderMessages} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onOpenWeeklyContext={openWeeklyContext} onSelectProject={changeProject} />
         <LiveWorkPanel live={live} now={now} context={context} selectedProjectId={selectedProjectId} focusedTaskId={focusedTaskId} busyTaskId={busyTaskId} onTaskAction={runTaskAction} onOpenTerminalHub={() => setTerminalHubOpen(true)} onOpenWorkerActivity={openWorkerActivity} />
       </div>
       <OutminPartnerBar live={live} messages={messages} />

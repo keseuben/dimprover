@@ -812,6 +812,32 @@ export type DeveloperWeeklyTrendHistory = {
   productionAccess: "DENY";
 };
 
+export type DeveloperWeeklyPortfolio = {
+  ready: true;
+  period: { weekKey: string; label: string; timezone: "Europe/Budapest"; isCurrentWeek: boolean };
+  projects: Array<{
+    rank: number;
+    projectId: string;
+    projectName: string;
+    projectStatus: string;
+    managementStatus: "stable" | "watch" | "critical";
+    score: number;
+    headline: string;
+    activities: number;
+    completed: number;
+    blocked: number;
+    waiting: number;
+    errors: number;
+    workers: number;
+    handoffs: number;
+    handoffGapMinutes: number | null;
+    primaryRisk: string | null;
+  }>;
+  totals: { projects: number; stable: number; watch: number; critical: number; averageScore: number; activities: number; completed: number; blocked: number; waiting: number; errors: number; workers: number };
+  generatedAt: string;
+  productionAccess: "DENY";
+};
+
 const WEEKLY_SUMMARY_TIMEZONE = "Europe/Budapest" as const;
 const WEEKLY_SUMMARY_LIMIT = 1000;
 const WEEKLY_WORKERS = new Set<ConsoleAuthor>(["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"]);
@@ -1353,6 +1379,66 @@ export async function getDeveloperConsoleWeeklyTrendHistory(projectIdInput?: str
     };
   });
   return { ready: true, projectId, anchorWeekKey: anchor.weekKey, weeks, points, generatedAt: new Date().toISOString(), productionAccess: "DENY" };
+}
+
+
+export async function getDeveloperConsoleWeeklyPortfolio(weekInput?: string | null): Promise<DeveloperWeeklyPortfolio> {
+  const client = getClient();
+  const period = budapestWeek(weekInput);
+  const projectsResult = await client.from("dev_center_projects")
+    .select("id,name,status,updated_at")
+    .eq("status", "active")
+    .order("name")
+    .limit(40);
+  if (projectsResult.error) throw new Error(projectsResult.error.message || "A fejlesztési portfólió projektlistája nem tölthető be.");
+  const projects = (projectsResult.data || []).filter((project) => text(project.id) && text(project.name));
+  const summaries: Array<{ project: { id: string; name: string; status?: string | null }; summary: DeveloperWeeklySummary }> = [];
+  const batchSize = 2;
+  for (let index = 0; index < projects.length; index += batchSize) {
+    const batch = projects.slice(index, index + batchSize);
+    const batchSummaries = await Promise.all(batch.map(async (project) => ({
+      project: { id: text(project.id), name: text(project.name), status: text(project.status) || "active" },
+      summary: await getDeveloperConsoleWeeklySummary(text(project.id), period.weekKey, true),
+    })));
+    summaries.push(...batchSummaries);
+  }
+  const severity = { critical: 0, watch: 1, stable: 2 } as const;
+  const rows = summaries.map(({ project, summary }) => {
+    const waiting = summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker;
+    const errors = summary.stats.errors + summary.flowAnalytics.taskFailures + summary.flowAnalytics.schedulerRuns.failed;
+    return {
+      rank: 0, projectId: project.id, projectName: project.name, projectStatus: project.status || "active",
+      managementStatus: summary.managementSummary.status, score: summary.managementSummary.score, headline: summary.managementSummary.headline,
+      activities: summary.stats.activities, completed: summary.stats.completedTasks, blocked: summary.stats.blockedTasks, waiting, errors,
+      workers: summary.stats.workers, handoffs: summary.flowAnalytics.handoffs, handoffGapMinutes: summary.flowAnalytics.handoffTiming.maxGapMinutes,
+      primaryRisk: summary.managementSummary.risks[0]?.label || null,
+    };
+  }).sort((a, b) => severity[a.managementStatus] - severity[b.managementStatus]
+    || a.score - b.score
+    || b.errors - a.errors
+    || b.waiting - a.waiting
+    || b.blocked - a.blocked
+    || a.projectName.localeCompare(b.projectName, "hu"))
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+  const totalWorkers = new Set<string>();
+  for (const { summary } of summaries) for (const worker of summary.workers) totalWorkers.add(worker.code);
+  const totals = rows.reduce((acc, row) => {
+    acc.projects += 1;
+    acc[row.managementStatus] += 1;
+    acc.activities += row.activities;
+    acc.completed += row.completed;
+    acc.blocked += row.blocked;
+    acc.waiting += row.waiting;
+    acc.errors += row.errors;
+    return acc;
+  }, { projects: 0, stable: 0, watch: 0, critical: 0, averageScore: 0, activities: 0, completed: 0, blocked: 0, waiting: 0, errors: 0, workers: 0 });
+  totals.averageScore = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.score, 0) / rows.length) : 0;
+  totals.workers = totalWorkers.size;
+  return {
+    ready: true,
+    period: { weekKey: period.weekKey, label: period.label, timezone: period.timezone, isCurrentWeek: period.isCurrentWeek },
+    projects: rows, totals, generatedAt: new Date().toISOString(), productionAccess: "DENY",
+  };
 }
 
 export type DeveloperConsoleMessagePage = {

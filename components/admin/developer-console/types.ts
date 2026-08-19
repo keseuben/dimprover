@@ -306,3 +306,12 @@ export type WeeklyTrendHistory = {
   generatedAt: string;
   productionAccess: "DENY";
 };
+
+export type WeeklyPortfolio = {
+  ready: true;
+  period: { weekKey: string; label: string; timezone: "Europe/Budapest"; isCurrentWeek: boolean };
+  projects: Array<{ rank: number; projectId: string; projectName: string; projectStatus: string; managementStatus: "stable" | "watch" | "critical"; score: number; headline: string; activities: number; completed: number; blocked: number; waiting: number; errors: number; workers: number; handoffs: number; handoffGapMinutes: number | null; primaryRisk: string | null }>;
+  totals: { projects: number; stable: number; watch: number; critical: number; averageScore: number; activities: number; completed: number; blocked: number; waiting: number; errors: number; workers: number };
+  generatedAt: string;
+  productionAccess: "DENY";
+};

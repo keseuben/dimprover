@@ -1890,6 +1890,47 @@
 }
 
 /* BENJADMIN Weekly Development Flow V1 — scheduler, handoff, wait and blocker analytics. */
+.weeklyPortfolio { min-width: 0; padding: 6px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 8px; display: grid; gap: 5px; background: color-mix(in srgb, var(--accent) 3%, var(--surface)); }
+.weeklyPortfolio > header { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--accent-strong); }
+.weeklyPortfolio > header strong { color: var(--text-soft); font-size: 9px; letter-spacing: .05em; }
+.weeklyPortfolio > header span { margin-left: auto; color: var(--muted); font-size: 7px; }
+.weeklyPortfolioTotals { min-width: 0; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 4px; }
+.weeklyPortfolioTotals article { min-width: 0; padding: 4px 5px; border: 1px solid var(--border); border-radius: 6px; display: grid; gap: 1px; background: var(--surface); }
+.weeklyPortfolioTotals article[data-alert="true"] { border-color: color-mix(in srgb, var(--amber) 38%, var(--border)); }
+.weeklyPortfolioTotals span { color: var(--muted); font-size: 7px; }
+.weeklyPortfolioTotals strong { color: var(--text); font-size: 11px; }
+.weeklyPortfolioTotals small { color: var(--muted2); font-size: 6px; overflow-wrap: anywhere; }
+.weeklyPortfolioList { min-width: 0; display: grid; gap: 3px; }
+.weeklyPortfolioList > button { min-width: 0; width: 100%; padding: 4px 5px; border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 6px; display: grid; grid-template-columns: auto minmax(160px,1fr) auto minmax(240px,360px); align-items: center; gap: 6px; color: inherit; background: var(--surface); text-align: left; font: inherit; cursor: pointer; }
+.weeklyPortfolioList > button[data-status="watch"] { border-left-color: var(--amber); }
+.weeklyPortfolioList > button[data-status="critical"] { border-left-color: var(--red); }
+.weeklyPortfolioList > button[data-selected="true"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.weeklyPortfolioList > button:hover { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); }
+.weeklyPortfolioList > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.weeklyPortfolioRank { min-width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 8px; font-weight: 900; }
+.weeklyPortfolioProject { min-width: 0; display: grid; gap: 1px; }
+.weeklyPortfolioProject strong { color: var(--text); font-size: 9px; overflow-wrap: anywhere; }
+.weeklyPortfolioProject span { color: var(--muted); font-size: 7px; line-height: 1.25; overflow-wrap: anywhere; }
+.weeklyPortfolioProject small { color: var(--muted2); font-size: 6px; line-height: 1.25; overflow-wrap: anywhere; }
+.weeklyPortfolioScore { min-width: 46px; color: var(--accent-strong); font-size: 14px; text-align: right; }
+.weeklyPortfolioScore small { color: var(--muted); font-size: 6px; }
+.weeklyPortfolioMetrics { min-width: 0; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 2px; }
+.weeklyPortfolioMetrics span { min-width: 0; padding: 2px 3px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font-size: 6px; white-space: nowrap; }
+.weeklyPortfolioMetrics span b { color: var(--text-soft); font-size: 7px; }
+.weeklyPortfolioMetrics span[data-alert="true"] { border-color: color-mix(in srgb, var(--amber) 36%, var(--border)); color: var(--amber); }
+.weeklyPortfolioError { margin: 0; padding: 4px 6px; border-radius: 5px; color: var(--red); background: color-mix(in srgb, var(--red) 5%, var(--surface)); font-size: 7px; }
+@media (max-width: 1050px) {
+  .weeklyPortfolioTotals { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .weeklyPortfolioList > button { grid-template-columns: auto minmax(0,1fr) auto; }
+  .weeklyPortfolioMetrics { grid-column: 2 / -1; }
+}
+@media (max-width: 700px) {
+  .weeklyPortfolio > header { align-items: flex-start; flex-wrap: wrap; }
+  .weeklyPortfolio > header span { width: 100%; margin-left: 17px; }
+  .weeklyPortfolioTotals { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .weeklyPortfolioList > button { gap: 4px; }
+  .weeklyPortfolioMetrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
 .weeklyManagementSummary { min-width: 0; padding: 6px; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: 8px; display: grid; gap: 5px; background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 .weeklyManagementSummary[data-status="watch"] { border-color: color-mix(in srgb, var(--amber) 38%, var(--border)); background: color-mix(in srgb, var(--amber) 4%, var(--surface)); }
 .weeklyManagementSummary[data-status="critical"] { border-color: color-mix(in srgb, var(--red) 42%, var(--border)); background: color-mix(in srgb, var(--red) 4%, var(--surface)); }
