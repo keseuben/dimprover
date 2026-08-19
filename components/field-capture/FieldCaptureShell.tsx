@@ -19,14 +19,15 @@ import GpsPhotoMapPanel from "./GpsPhotoMapPanel";
 import OfflineQueueIndicator from "./OfflineQueueIndicator";
 import PreCaptureOptionsSheet from "./PreCaptureOptionsSheet";
 import DimproImageMarkupEditor, { type DimproImageMarkupSaveResult } from "@/components/image-editor/DimproImageMarkupEditor";
-import { closeAndCreateFieldCaptureLocalSession, loadFieldCaptureDefaults, loadOrCreateFieldCaptureLocalSession, resetFieldCaptureDefaults, saveFieldCaptureDefaults } from "@/app/lib/field-capture/captureSessionService";
+import { closeAndCreateFieldCaptureLocalSession, closeFieldCaptureLocalSession, loadFieldCaptureDefaults, loadOrCreateFieldCaptureLocalSession, resetFieldCaptureDefaults, saveFieldCaptureDefaults } from "@/app/lib/field-capture/captureSessionService";
 import { prepareFieldCaptureFiles } from "@/app/lib/field-capture/captureImageEngine";
 import { captureFieldLocation, captureFieldOrientation, captureFieldSensors } from "@/app/lib/field-capture/captureSensors";
 import { clearFieldCaptureSession, patchFieldCaptureItem, persistFieldCaptureItem, removeFieldCaptureItem, requestFieldCapturePersistentStorage, restoreFieldCaptureItems } from "@/app/lib/field-capture/offlineQueue";
 import { DEFAULT_PRE_CAPTURE_OPTIONS, FIELD_CAPTURE_MAX_ITEMS, FIELD_CAPTURE_VERSION, type FieldCaptureItem, type FieldCaptureLocalSession, type PreCaptureOptions } from "@/app/lib/field-capture/types";
 import DropUploadRulesDialog, { DropRulesButton } from "@/components/drop/DropUploadRulesDialog";
 import { DROP_UPLOAD_RULES_VERSION, isDropUploadRulesAcceptanceFresh } from "@/app/lib/drop/dropUploadRules";
-import { syncFieldCaptureSession, type FieldCaptureClientSyncPatch } from "@/app/lib/field-capture/clientSyncService";
+import { syncFieldCaptureSession, type FieldCaptureClientSyncPatch, type FieldCaptureClientSyncResult } from "@/app/lib/field-capture/clientSyncService";
+import { finalizeFieldCaptureSession, getFieldCaptureFinalizeReadiness } from "@/app/lib/field-capture/captureFinalizeService";
 
 function randomId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -60,7 +61,7 @@ type WorkflowStep = 1 | 2 | 3;
 const WORKFLOW = [
   { step: 1 as const, label: "Rögzítés" },
   { step: 2 as const, label: "Ellenőrzés" },
-  { step: 3 as const, label: "Mentés" },
+  { step: 3 as const, label: "Mentés és megosztás" },
 ];
 
 export default function FieldCaptureShell({ identity }: { identity?: TerepIdentityContext }) {
@@ -83,10 +84,12 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
   const [rulesConsentChecked, setRulesConsentChecked] = useState(initialRulesFresh);
   const [rulesSaving, setRulesSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
 
   useEffect(() => {
     const current = loadOrCreateFieldCaptureLocalSession();
     setSession(current);
+    if (current.status === "CLOSED") setWorkflowStep(3);
     const storedDefaults = loadFieldCaptureDefaults();
     setDefaults(storedDefaults);
     pendingOptionsRef.current = storedDefaults;
@@ -119,8 +122,20 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
     setItems((current) => current.map((item) => item.id === itemId ? { ...item, ...patch } : item));
   }
 
+  async function syncCurrentSession(): Promise<FieldCaptureClientSyncResult> {
+    if (!identity || !session || !items.length || !rulesAcceptedAt) throw new Error("A szerveres szinkron előfeltételei hiányoznak.");
+    return syncFieldCaptureSession({
+      identity: { sessionToken: identity.sessionToken },
+      session,
+      items,
+      rulesVersion: DROP_UPLOAD_RULES_VERSION,
+      rulesAcceptedAt,
+      onPatch: applySyncPatch,
+    });
+  }
+
   async function runServerSync() {
-    if (!identity || !session || !items.length || syncing) return;
+    if (!identity || !session || !items.length || syncing || finalizing || session.status === "CLOSED") return;
     if (!online) {
       setMessage("Nincs hálózati kapcsolat. A képek biztonságosan a helyi sorban maradnak; szinkronizálás később indítható.");
       return;
@@ -133,14 +148,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
     setSyncing(true);
     setMessage("DIMPRO szerveres szinkron indítása…");
     try {
-      const result = await syncFieldCaptureSession({
-        identity: { sessionToken: identity.sessionToken },
-        session,
-        items,
-        rulesVersion: DROP_UPLOAD_RULES_VERSION,
-        rulesAcceptedAt,
-        onPatch: applySyncPatch,
-      });
+      const result = await syncCurrentSession();
       const pending = result.pendingDestinations ? " · " + result.pendingDestinations + " kép célhelye vírusellenőrzésre vár" : "";
       const failed = result.failed ? " · " + result.failed + " hiba" : "";
       setMessage("Szerveres szinkron kész: " + result.synced + "/" + items.length + " kép" + pending + failed + ".");
@@ -151,13 +159,69 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
     }
   }
 
+  async function finalizeCurrentSession() {
+    if (!identity || !session || !items.length || finalizing || syncing) return;
+    if (session.status === "CLOSED") {
+      setMessage("A terepi munkamenet már le van zárva.");
+      return;
+    }
+    if (!online) {
+      setMessage("A lezáráshoz szerveres visszaigazolás szükséges. A helyi képek offline is biztonságban maradnak; kapcsolódás után próbáld újra.");
+      return;
+    }
+    const readiness = getFieldCaptureFinalizeReadiness(items);
+    if (readiness.projectDriveBlockedCount > 0) {
+      setMessage(readiness.reason || "A Projektkapu Drive mentési cél még nem zárható le.");
+      return;
+    }
+    if (!readiness.ready && (!rulesAccepted || !rulesAcceptedAt)) {
+      setRulesDialogOpen(true);
+      setMessage("A hiányzó szerveres szinkron előtt fogadd el a feltöltési szabályokat.");
+      return;
+    }
+
+    setFinalizing(true);
+    try {
+      if (!readiness.ready) {
+        setSyncing(true);
+        setMessage("A lezárás előtt a DIMPRO szerveres mentés ellenőrzése és szinkronizálása folyamatban…");
+        const syncResult = await syncCurrentSession();
+        setSyncing(false);
+        if (syncResult.failed > 0) {
+          throw new Error(`${syncResult.failed} képtétel szinkronja sikertelen. A munkamenet nem lett lezárva; a helyi adatok megmaradtak.`);
+        }
+        if (syncResult.pendingDestinations > 0 || syncResult.synced !== items.length) {
+          throw new Error("Van még várakozó mentési cél. A munkamenet nem lett lezárva; a szerveres/Drive státusz rendezése után próbáld újra.");
+        }
+      }
+
+      setMessage("A terepi munkamenet szerveres lezárása…");
+      const finalized = await finalizeFieldCaptureSession({
+        identity: { sessionToken: identity.sessionToken },
+        session,
+        expectedItemCount: items.length,
+      });
+      const closed = closeFieldCaptureLocalSession(session, finalized.serverSessionId, finalized.closedAt);
+      setSession(closed);
+      setWorkflowStep(3);
+      setMessage(`A munkamenet lezárva: ${finalized.itemCount} kép biztonságosan mentve. A helyi példányok az új munkamenet indításáig megmaradnak.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A munkamenet lezárása sikertelen. A helyi adatok változatlanul megmaradtak.");
+    } finally {
+      setSyncing(false);
+      setFinalizing(false);
+    }
+  }
+
   function goToStep(step: WorkflowStep) {
+    if (session?.status === "CLOSED" && step !== 3) return;
     if (step > 1 && !items.length) return;
     setWorkflowStep(step);
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 30);
   }
 
   const chooseSource = (options: PreCaptureOptions, source: "camera" | "gallery") => {
+    if (session?.status === "CLOSED") return;
     pendingOptionsRef.current = options;
     if (options.rememberForSession) { saveFieldCaptureDefaults(options); setDefaults(options); }
     if (source === "camera") launcherRef.current?.openCamera();
@@ -166,7 +230,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
   };
 
   const onFiles = useCallback(async (files: File[]) => {
-    if (!session || preparing) return;
+    if (!session || preparing || session.status === "CLOSED") return;
     const remaining = FIELD_CAPTURE_MAX_ITEMS - items.length;
     if (remaining <= 0) { setMessage(`Egy terepi munkamenetben legfeljebb ${FIELD_CAPTURE_MAX_ITEMS} kép rögzíthető.`); return; }
     const selected = files.slice(0, remaining);
@@ -269,11 +333,11 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
   const newSession = async () => {
     if (!session) return;
-    if (items.length && !window.confirm("Az aktuális helyi terepi munkamenet képei törlődnek erről az eszközről. Biztosan új munkamenetet indít?")) return;
+    if (session.status === "ACTIVE" && items.length && !window.confirm("Az aktuális munkamenet még nincs lezárva. Az új munkamenet indítása törli ennek a sessionnek a helyi képeit erről az eszközről. Biztosan folytatod?")) return;
     items.forEach((item) => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
     await clearFieldCaptureSession(session.id).catch(() => undefined);
     const next = closeAndCreateFieldCaptureLocalSession();
-    setSession(next); setItems([]); setWorkflowStep(1); setMessage("Új terepi munkamenet indult.");
+    setSession(next); setItems([]); setWorkflowStep(1); setFinalizing(false); setMessage("Új terepi munkamenet indult.");
   };
 
   const resetDefaults = () => {
@@ -286,6 +350,13 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
   const noteCount = items.filter((item) => item.note.trim()).length;
   const gpsCount = items.filter((item) => item.location.status === "READY" || item.location.status === "LOW_ACCURACY").length;
   const orientationCount = items.filter((item) => item.orientation.headingDegrees !== null).length;
+  const serverStoredCount = items.filter((item) => ["SERVER_STORED", "DESTINATION_PENDING", "SYNCED"].includes(item.status)).length;
+  const userDriveRequestedCount = items.filter((item) => item.options.saveToUserDrive).length;
+  const userDriveStoredCount = items.filter((item) => item.options.saveToUserDrive && item.status === "SYNCED").length;
+  const failedCount = items.filter((item) => item.status === "ERROR").length;
+  const pendingCount = items.filter((item) => ["LOCAL_ONLY", "QUEUED", "UPLOADING", "DESTINATION_PENDING"].includes(item.status) || (item.options.saveToUserDrive && item.status === "SERVER_STORED")).length;
+  const sessionClosed = session?.status === "CLOSED";
+  const finalizeReadiness = getFieldCaptureFinalizeReadiness(items);
 
   return (
     <main className="min-h-[100dvh] bg-[#f3f8f8] pb-[calc(7rem+env(safe-area-inset-bottom))] text-slate-900">
@@ -303,7 +374,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
             {WORKFLOW.map(({ step, label }) => {
               const active = workflowStep === step;
               const done = workflowStep > step;
-              const enabled = step === 1 || items.length > 0;
+              const enabled = sessionClosed ? step === 3 : step === 1 || items.length > 0;
               return <button key={step} type="button" disabled={!enabled} onClick={() => goToStep(step)} className={`min-h-14 rounded-xl px-2 text-center disabled:opacity-35 ${active ? "bg-cyan-800 text-white shadow" : done ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}><span className="block text-[10px] font-black uppercase tracking-[.08em]">{step}. lépés</span><span className="mt-0.5 block text-xs font-black">{label}</span></button>;
             })}
           </div>
@@ -319,11 +390,62 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
         {workflowStep === 2 ? <section className="mt-3 rounded-[1.8rem] border border-cyan-200 bg-cyan-50/70 p-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-cyan-800">2. Ellenőrzés</p><h2 className="mt-1 text-lg font-black text-slate-950">Nézze át és egészítse ki a képeket</h2><p className="mt-1 text-sm leading-6 text-slate-600">Itt írhat megjegyzést, diktálhat, újramérheti a GPS-t vagy a kamera irányát, és a képet közvetlenül meg is jelölheti.</p></section> : null}
 
-        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4"><div className="flex items-start gap-3"><CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés</p><h2 className="mt-1 text-lg font-black text-slate-950">A helyi terepi munkamenet mentve van</h2><p className="mt-1 text-sm leading-6 text-slate-600">A képek az IndexedDB offline tárban maradnak. A P7 szerveres DIMPRO szinkron külön fejlesztési kapu lesz; addig a rendszer nem állítja, hogy a képek felhőbe kerültek.</p></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-4"><Summary value={items.length} label="kép" /><Summary value={noteCount} label="megjegyzés" /><Summary value={editedCount} label="szerkesztett" /><Summary value={gpsCount} label="GPS" /></div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3 text-xs leading-5 text-slate-700"><div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="block text-slate-950">Feltöltési szabályok</strong><span>{rulesAccepted && rulesAcceptedAt ? "Központilag elfogadva: " + new Date(rulesAcceptedAt).toLocaleString("hu-HU") : "A szerveres feltöltés előtt elfogadás szükséges."}</span></div><DropRulesButton accepted={rulesAccepted} onClick={() => setRulesDialogOpen(true)} label="Szabályok" /></div>{!rulesAccepted ? <button type="button" onClick={() => setRulesDialogOpen(true)} className="mt-3 w-full rounded-xl bg-amber-700 px-4 py-3 font-black text-white">Feltöltési szabályok megnyitása</button> : null}</div><div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3">
-          <div className="flex items-start gap-2 text-xs leading-5 text-cyan-950"><CloudUpload size={16} className="mt-0.5 shrink-0 text-cyan-700" /><div><strong className="block">DIMPRO szerveres szinkron</strong><span>{online ? "Privát staging + folytatható Drop feltöltés." : "Offline · a helyi sor megmarad."} Kamerairány-adat: {orientationCount}/{items.length} kép.</span></div></div>
-          <button data-terep-sync-button type="button" onClick={() => void runServerSync()} disabled={syncing || !online || !rulesAccepted || !rulesAcceptedAt || !items.length} className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-cyan-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{syncing ? <LoaderCircle size={18} className="animate-spin" /> : <CloudUpload size={18} />}{syncing ? "Szinkronizálás…" : "Szinkronizálás a DIMPRO szerverre"}</button>
-          {!online ? <p className="mt-2 text-[11px] font-bold text-amber-800">Hálózat nélkül nem indul szerveres művelet; a képek az IndexedDB-ben maradnak.</p> : null}
-        </div></section> : null}
+        {workflowStep === 3 ? <section className="mt-3 rounded-[1.8rem] border border-emerald-200 bg-emerald-50/80 p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={25} className="mt-0.5 shrink-0 text-emerald-700" />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[.14em] text-emerald-800">3. Mentés és megosztás</p>
+              <h2 className="mt-1 text-lg font-black text-slate-950">{sessionClosed ? "A terepi munkamenet lezárva" : "A terepi munkamenet helyben mentve van"}</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                {sessionClosed
+                  ? "A szerveres lezárás visszaigazolva. A helyi példányok az új munkamenet indításáig ezen az eszközön is megmaradnak."
+                  : "Minden kép az eszköz offline tárában van. A DIMPRO szerveres szinkron működik; az alábbi státuszok mutatják, mi került már biztonságosan szerverre vagy a kiválasztott mentési célba."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <StatusSummary value={`${items.length}/${items.length}`} label="Helyben mentve" detail="IndexedDB" state="ok" />
+            <StatusSummary value={`${serverStoredCount}/${items.length}`} label="DIMPRO szerveren" detail="igazolt tárolás" state={serverStoredCount === items.length ? "ok" : "neutral"} />
+            <StatusSummary value={userDriveRequestedCount ? `${userDriveStoredCount}/${userDriveRequestedCount}` : "—"} label="Saját DIMPRO Drive" detail={userDriveRequestedCount ? "kért cél" : "nincs kérve"} state={userDriveRequestedCount && userDriveStoredCount < userDriveRequestedCount ? "warn" : "neutral"} />
+            <StatusSummary value={pendingCount} label="Várakozó" detail="szinkron / célhely" state={pendingCount ? "warn" : "ok"} />
+            <StatusSummary value={failedCount} label="Sikertelen" detail="újrapróbálható" state={failedCount ? "error" : "ok"} />
+            <StatusSummary value={sessionClosed ? "Lezárva" : "Aktív"} label="Munkamenet" detail={sessionClosed && session?.closedAt ? new Date(session.closedAt).toLocaleString("hu-HU") : "szerkeszthető"} state={sessionClosed ? "ok" : "neutral"} />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <Summary value={items.length} label="kép" />
+            <Summary value={noteCount} label="megjegyzés" />
+            <Summary value={gpsCount} label="GPS-pont" />
+            <Summary value={orientationCount} label="kamerairány" />
+          </div>
+          {editedCount > 0 ? <p className="mt-2 text-[11px] font-semibold text-slate-500">Képjelölővel szerkesztve: {editedCount} kép.</p> : null}
+
+          {!sessionClosed ? <>
+            <div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3 text-xs leading-5 text-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><strong className="block text-slate-950">Feltöltési szabályok</strong><span>{rulesAccepted && rulesAcceptedAt ? "Központilag elfogadva: " + new Date(rulesAcceptedAt).toLocaleString("hu-HU") : "A szerveres feltöltés előtt elfogadás szükséges."}</span></div>
+                <DropRulesButton accepted={rulesAccepted} onClick={() => setRulesDialogOpen(true)} label="Szabályok" />
+              </div>
+              {!rulesAccepted ? <button type="button" onClick={() => setRulesDialogOpen(true)} className="mt-3 w-full rounded-xl bg-amber-700 px-4 py-3 font-black text-white">Feltöltési szabályok megnyitása</button> : null}
+            </div>
+
+            <div className="mt-3 rounded-xl border border-cyan-200 bg-white p-3">
+              <div className="flex items-start gap-2 text-xs leading-5 text-cyan-950"><CloudUpload size={16} className="mt-0.5 shrink-0 text-cyan-700" /><div><strong className="block">DIMPRO szerveres szinkron</strong><span>{online ? "Privát staging + folytatható Drop feltöltés." : "Offline · a helyi sor megmarad."} Szerveren: {serverStoredCount}/{items.length} kép.</span></div></div>
+              <button data-terep-sync-button type="button" onClick={() => void runServerSync()} disabled={syncing || finalizing || !online || !rulesAccepted || !rulesAcceptedAt || !items.length} className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-cyan-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{syncing ? <LoaderCircle size={18} className="animate-spin" /> : <CloudUpload size={18} />}{syncing ? "Szinkronizálás…" : failedCount || pendingCount ? "Szinkronizálás / újrapróbálás" : "Szinkronizálás a DIMPRO szerverre"}</button>
+              {!online ? <p className="mt-2 text-[11px] font-bold text-amber-800">Hálózat nélkül nem indul szerveres művelet; a képek az IndexedDB-ben maradnak.</p> : null}
+            </div>
+
+            <div className={`mt-3 rounded-xl border p-3 text-xs leading-5 ${finalizeReadiness.ready ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+              <strong className="block">Mentés és befejezés</strong>
+              <span>{finalizeReadiness.ready ? "Minden kiválasztott mentési cél kész. A munkamenet biztonságosan lezárható." : finalizeReadiness.reason || "A lezárás előtt még szerveres mentés szükséges."}</span>
+              {!finalizeReadiness.ready && finalizeReadiness.needsServerSync ? <span className="mt-1 block font-bold">A befejezés gomb először megpróbálja a hiányzó szerveres szinkront.</span> : null}
+            </div>
+          </> : <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3 text-xs leading-5 text-emerald-950">
+            <strong className="block">Lezárási állapot</strong>
+            <span>A session lezárt. Új rögzítéshez indíts új munkamenetet; a lezárt session helyi adatai csak ekkor kerülnek eltávolításra erről az eszközről.</span>
+          </div>}
+        </section> : null}
 
         {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} projectName={session?.projectName} sessionId={session?.id} /> : null}
 
@@ -337,8 +459,10 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
         <section className="mt-4 rounded-[1.5rem] border border-slate-200 bg-white p-3"><div className="flex items-start gap-2"><ShieldCheck size={17} className="mt-0.5 shrink-0 text-emerald-700" /><div><strong className="text-xs text-slate-800">Terep biztonsági alapelv</strong><p className="mt-1 text-[11px] leading-5 text-slate-500">A helyi queue nem tárol Drop Send-kódot, PIN-t vagy nyers upload capability tokent. A GPS és kamerairány külön strukturált capture rekord, nem EXIF.</p></div></div></section>
 
         {items.length ? <div data-terep-workflow-actions className="sticky z-[130] mt-4 grid grid-cols-2 gap-2 rounded-[1.25rem] border border-cyan-100 bg-[#f3f8f8]/95 p-2 shadow-[0_-10px_30px_rgba(15,23,42,.08)] backdrop-blur md:static md:border-0 md:bg-transparent md:p-0 md:shadow-none" style={{ bottom: "calc(84px + env(safe-area-inset-bottom))" }}>
-          {workflowStep > 1 ? <button type="button" onClick={() => goToStep((workflowStep - 1) as WorkflowStep)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700"><ArrowLeft size={18} /> Vissza</button> : <button type="button" onClick={() => setSheetOpen(true)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-white px-3 text-sm font-black text-cyan-900"><Plus size={18} /> Még kép</button>}
-          {workflowStep < 3 ? <button type="button" onClick={() => goToStep((workflowStep + 1) as WorkflowStep)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-cyan-800 px-3 text-sm font-black text-white">{workflowStep === 1 ? "Tovább az ellenőrzéshez" : "Tovább a mentéshez"} <ArrowRight size={18} /></button> : <button type="button" onClick={() => void newSession()} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-teal-800 px-3 text-sm font-black text-white"><RotateCcw size={17} /> Új munkamenet</button>}
+          {workflowStep === 3 && sessionClosed ? <button data-terep-new-session-after-close type="button" onClick={() => void newSession()} className="col-span-2 inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-teal-800 px-3 text-sm font-black text-white"><RotateCcw size={17} /> Új munkamenet</button> : <>
+            {workflowStep > 1 ? <button type="button" onClick={() => goToStep((workflowStep - 1) as WorkflowStep)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700"><ArrowLeft size={18} /> Vissza</button> : <button type="button" onClick={() => setSheetOpen(true)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl border border-cyan-200 bg-white px-3 text-sm font-black text-cyan-900"><Plus size={18} /> Még kép</button>}
+            {workflowStep < 3 ? <button type="button" onClick={() => goToStep((workflowStep + 1) as WorkflowStep)} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-cyan-800 px-3 text-sm font-black text-white">{workflowStep === 1 ? "Tovább az ellenőrzéshez" : "Tovább a mentéshez"} <ArrowRight size={18} /></button> : <button data-terep-finalize-button type="button" onClick={() => void finalizeCurrentSession()} disabled={finalizing || syncing || !online || !items.length} className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-teal-800 px-3 text-sm font-black text-white disabled:bg-slate-300">{finalizing || syncing ? <LoaderCircle size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}{finalizing ? "Lezárás…" : syncing ? "Szinkronizálás…" : "Mentés és befejezés"}</button>}
+          </>}
         </div> : null}
       </div>
 
@@ -352,4 +476,25 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
 function Summary({ value, label }: { value: number; label: string }) {
   return <div className="rounded-xl border border-emerald-100 bg-white p-2"><strong className="block text-lg text-emerald-800">{value}</strong><span className="text-[10px] font-black uppercase text-slate-500">{label}</span></div>;
+}
+
+function StatusSummary({
+  value,
+  label,
+  detail,
+  state,
+}: {
+  value: number | string;
+  label: string;
+  detail: string;
+  state: "ok" | "warn" | "error" | "neutral";
+}) {
+  const stateClass = state === "ok"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+    : state === "warn"
+      ? "border-amber-200 bg-amber-50 text-amber-900"
+      : state === "error"
+        ? "border-rose-200 bg-rose-50 text-rose-900"
+        : "border-slate-200 bg-white text-slate-800";
+  return <div className={`rounded-xl border p-2.5 text-center ${stateClass}`}><strong className="block text-lg">{value}</strong><span className="block text-[10px] font-black uppercase tracking-[.04em]">{label}</span><span className="mt-0.5 block text-[9px] font-semibold opacity-70">{detail}</span></div>;
 }

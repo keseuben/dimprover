@@ -89,7 +89,7 @@ const tests = [
   ['Schema draft nincs automatikus migrációként deklarálva', schema.includes('NEM FUT LE AUTOMATIKUSAN')],
   ['GPS/heading source of truth nem EXIF', schema.includes('accuracy_meters') && schema.includes('heading_degrees') && shell.includes('nem EXIF')],
   ['Háromlépéses Terep workflow', shell.includes('Rögzítés') && shell.includes('Ellenőrzés') && shell.includes('Mentés') && shell.includes('Tovább az ellenőrzéshez') && shell.includes('Tovább a mentéshez')],
-  ['Mentés lépés nem állít hamis szerveres szinkront', shell.includes('P7 szerveres DIMPRO szinkron') && shell.includes('nem állítja, hogy a képek felhőbe kerültek')],
+  ['Mentés lépés valós szerveres státuszt mutat', shell.includes('DIMPRO szerveren') && shell.includes('serverStoredCount') && shell.includes('Sikertelen') && !shell.includes('P7 szerveres DIMPRO szinkron külön fejlesztési kapu')],
   ['Közös DIMPRO Képjelölő komponens', editor.includes('DIMPRO Képjelölő') && editor.includes('pen') && editor.includes('arrow') && editor.includes('crop')],
   ['Terep képkártyán szerkesztés elérhető', card.includes('Kép szerkesztése / jelölése') && shell.includes('DimproImageMarkupEditor')],
   ['Szerkesztett munkapéldány újra optimalizálódik', shell.includes('saveEditedImage') && shell.includes('prepareFieldCaptureFiles([result.file]') && shell.includes('edited: true')],

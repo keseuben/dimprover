@@ -1,4 +1,4 @@
-export const FIELD_CAPTURE_VERSION = "0.3.0-dev";
+export const FIELD_CAPTURE_VERSION = "0.4.0-dev";
 export const FIELD_CAPTURE_MAX_ITEMS = 200;
 
 export type FieldCaptureTranscriptMode = "raw" | "cleaned";
@@ -66,6 +66,8 @@ export type FieldCaptureLocalSession = {
   projectId: string | null;
   projectName: string | null;
   status: "ACTIVE" | "CLOSED";
+  closedAt: string | null;
+  serverSessionId: string | null;
 };
 
 export type FieldCaptureItem = {

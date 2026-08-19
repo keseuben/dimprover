@@ -4,7 +4,7 @@ import { uploadDropInitialized, type DropInitializedUpload } from "@/components/
 import { dropFetchWithRetry } from "@/components/drop/dropNetworkClient";
 import { DROP_UPLOAD_RULES_VERSION, isDropUploadRulesAcceptanceFresh } from "@/app/lib/drop/dropUploadRules";
 import { patchFieldCaptureItem } from "./offlineQueue";
-import type { FieldCaptureItem, FieldCaptureLocalSession, FieldCaptureSyncState } from "./types";
+import { FIELD_CAPTURE_VERSION, type FieldCaptureItem, type FieldCaptureLocalSession, type FieldCaptureSyncState } from "./types";
 
 export type FieldCaptureClientSyncPatch = {
   status?: FieldCaptureSyncState;
@@ -106,7 +106,7 @@ export async function syncFieldCaptureSession(input: {
   const sessionPayload = await requestJson("/api/field-capture/sessions", input.identity.sessionToken, {
     clientSessionId: input.session.id,
     projectId: input.session.projectId,
-    defaults: { projectName: input.session.projectName, clientVersion: "0.3.0-dev" },
+    defaults: { projectName: input.session.projectName, clientVersion: FIELD_CAPTURE_VERSION },
   }, input.signal);
   const serverSessionId = String((sessionPayload.session as { id?: unknown } | undefined)?.id || "");
   if (!serverSessionId) throw new Error("A szerveres terepi munkamenet nem jött létre.");

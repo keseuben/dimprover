@@ -13,6 +13,7 @@ export type FieldCaptureServerSession = {
   projectId: string | null;
   status: "ACTIVE" | "CLOSED" | "ARCHIVED";
   startedAt: string;
+  closedAt: string | null;
   updatedAt: string;
 };
 
@@ -102,6 +103,7 @@ function mapSession(row: DbRow): FieldCaptureServerSession {
     projectId: nullableText(row.project_id),
     status: text(row.status) as FieldCaptureServerSession["status"],
     startedAt: text(row.started_at),
+    closedAt: nullableText(row.closed_at),
     updatedAt: text(row.updated_at),
   };
 }
@@ -176,10 +178,9 @@ export async function upsertFieldCaptureServerSession(input: {
       project_id: input.projectCoreId,
       context_module_code: "FIELD_CAPTURE",
       defaults: input.defaults,
-      status: "ACTIVE",
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id,client_session_id" })
-    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,updated_at")
+    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,closed_at,updated_at")
     .single();
   if (result.error) databaseError("A szerveres terepi munkamenet mentése sikertelen.", result.error);
 
@@ -213,7 +214,7 @@ export async function assertFieldCaptureSessionOwner(input: {
 }) {
   const result = await client()
     .from("field_capture_sessions")
-    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,updated_at")
+    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,closed_at,updated_at")
     .eq("id", input.sessionId)
     .eq("user_id", input.userId)
     .eq("entitlement_id", input.entitlementId)
@@ -227,6 +228,157 @@ export async function assertFieldCaptureSessionOwner(input: {
     );
   }
   return mapSession(result.data as DbRow);
+}
+
+export async function finalizeFieldCaptureServerSession(input: {
+  sessionId: string;
+  userId: string;
+  entitlementId: string;
+  expectedItemCount: number;
+}) {
+  const db = client();
+  const session = await assertFieldCaptureSessionOwner({
+    sessionId: input.sessionId,
+    userId: input.userId,
+    entitlementId: input.entitlementId,
+  });
+
+  if (!Number.isSafeInteger(input.expectedItemCount) || input.expectedItemCount <= 0 || input.expectedItemCount > 200) {
+    throw new DimproIdentityError(
+      "A lezárandó terepi munkamenet tételszáma érvénytelen.",
+      "FIELD_CAPTURE_FINALIZE_ITEM_COUNT_INVALID",
+      400,
+    );
+  }
+
+  const itemsResult = await db
+    .from("field_capture_items")
+    .select("id,client_item_id,sequence_no,status")
+    .eq("session_id", input.sessionId)
+    .order("sequence_no", { ascending: true });
+  if (itemsResult.error) databaseError("A terepi munkamenet lezárási állapota nem olvasható.", itemsResult.error);
+  const items = (itemsResult.data || []) as DbRow[];
+
+  if (items.length !== input.expectedItemCount) {
+    throw new DimproIdentityError(
+      `A szerveren ${items.length}, a helyi munkamenetben ${input.expectedItemCount} tétel van. A lezárás előtt szinkronizálni kell.`,
+      "FIELD_CAPTURE_FINALIZE_ITEM_COUNT_MISMATCH",
+      409,
+    );
+  }
+
+  const incompleteItems = items.filter((row) => text(row.status) !== "SERVER_STORED");
+  if (incompleteItems.length > 0) {
+    throw new DimproIdentityError(
+      `${incompleteItems.length} terepi képtétel még nincs biztonságosan a DIMPRO szerveren.`,
+      "FIELD_CAPTURE_FINALIZE_ITEMS_NOT_STORED",
+      409,
+    );
+  }
+
+  const itemIds = items.map((row) => text(row.id)).filter(Boolean);
+  const destinationsResult = await db
+    .from("field_capture_destinations")
+    .select("capture_item_id,target,status")
+    .in("capture_item_id", itemIds);
+  if (destinationsResult.error) databaseError("A terepi mentési célok lezárási állapota nem olvasható.", destinationsResult.error);
+  const destinations = (destinationsResult.data || []) as DbRow[];
+  const destinationRowsByItem = new Map<string, DbRow[]>();
+  for (const row of destinations) {
+    const itemId = text(row.capture_item_id);
+    const rows = destinationRowsByItem.get(itemId) || [];
+    rows.push(row);
+    destinationRowsByItem.set(itemId, rows);
+  }
+
+  const pendingDestinations: string[] = [];
+  for (const item of items) {
+    const itemId = text(item.id);
+    const sequenceNo = Number(item.sequence_no || 0);
+    const rows = destinationRowsByItem.get(itemId) || [];
+    const capture = rows.find((row) => text(row.target) === "CAPTURE");
+    if (!capture || text(capture.status) !== "STORED") {
+      pendingDestinations.push(`#${sequenceNo} DIMPRO szerver`);
+    }
+    for (const target of ["USER_DRIVE", "PROJECT_DRIVE"] as const) {
+      const destination = rows.find((row) => text(row.target) === target);
+      if (destination && text(destination.status) !== "STORED") {
+        pendingDestinations.push(`#${sequenceNo} ${target === "USER_DRIVE" ? "Saját Drive" : "Projektkapu Drive"}`);
+      }
+    }
+  }
+  if (pendingDestinations.length > 0) {
+    throw new DimproIdentityError(
+      `A lezárás előtt még ${pendingDestinations.length} mentési cél várakozik: ${pendingDestinations.slice(0, 6).join(", ")}${pendingDestinations.length > 6 ? "…" : ""}`,
+      "FIELD_CAPTURE_FINALIZE_DESTINATIONS_PENDING",
+      409,
+    );
+  }
+
+  const ensureClosedEvent = async () => {
+    const existingEvent = await db
+      .from("field_capture_events")
+      .select("id")
+      .eq("session_id", input.sessionId)
+      .eq("event_type", "SESSION_CLOSED")
+      .limit(1)
+      .maybeSingle();
+    if (existingEvent.error) databaseError("A terepi lezárási audit ellenőrzése sikertelen.", existingEvent.error);
+    if (existingEvent.data) return;
+    const eventResult = await db.from("field_capture_events").insert({
+      session_id: input.sessionId,
+      event_type: "SESSION_CLOSED",
+      actor_user_id: input.userId,
+      payload: {
+        expectedItemCount: input.expectedItemCount,
+        itemCount: items.length,
+        source: "field-capture-f2-finalize",
+      },
+    });
+    if (eventResult.error) databaseError("A terepi munkamenet lezárása nem naplózható.", eventResult.error);
+  };
+
+  if (session.status === "CLOSED") {
+    await ensureClosedEvent();
+    return { session, reused: true, itemCount: items.length };
+  }
+  if (session.status !== "ACTIVE") {
+    throw new DimproIdentityError(
+      "A terepi munkamenet már archivált, ezért nem zárható újra.",
+      "FIELD_CAPTURE_FINALIZE_SESSION_NOT_ACTIVE",
+      409,
+    );
+  }
+
+  const now = new Date().toISOString();
+  const closeResult = await db
+    .from("field_capture_sessions")
+    .update({ status: "CLOSED", closed_at: now, updated_at: now })
+    .eq("id", input.sessionId)
+    .eq("user_id", input.userId)
+    .eq("entitlement_id", input.entitlementId)
+    .eq("status", "ACTIVE")
+    .select("id,client_session_id,user_id,entitlement_id,project_id,status,started_at,closed_at,updated_at")
+    .maybeSingle();
+  if (closeResult.error) databaseError("A terepi munkamenet lezárása sikertelen.", closeResult.error);
+
+  if (!closeResult.data) {
+    const concurrent = await assertFieldCaptureSessionOwner({
+      sessionId: input.sessionId,
+      userId: input.userId,
+      entitlementId: input.entitlementId,
+    });
+    if (concurrent.status === "CLOSED") return { session: concurrent, reused: true, itemCount: items.length };
+    throw new DimproIdentityError(
+      "A terepi munkamenet állapota közben megváltozott; a lezárást újra kell próbálni.",
+      "FIELD_CAPTURE_FINALIZE_STATE_CHANGED",
+      409,
+    );
+  }
+
+  const closedSession = mapSession(closeResult.data as DbRow);
+  await ensureClosedEvent();
+  return { session: closedSession, reused: false, itemCount: items.length };
 }
 
 export async function upsertFieldCaptureServerItem(input: FieldCaptureItemWrite) {
