@@ -2652,3 +2652,65 @@ Backup / rollback pontok:
 - Következő blokk: signed public checkout tracking/status -> persistent Commerce state -> UI státuszpanel;
 - Becsült következő aktív fejlesztés: 3-5 óra;
 - PROD változatlan.
+
+### 2026-08-19 22:5x checkpoint — Signed Public Storefront Order Tracking
+
+Új nyilvános rendeléskövetés:
+- opt-in `ARUTER_STOREFRONT_TRACKING_ENABLED`;
+- legalább 32 karakteres, csak szerveroldali HMAC secret;
+- HMAC-SHA256 + timing-safe signature verify;
+- v1 bearer token;
+- token payload kizárólag businessSlug, legacy orderId, orderNumber, issuedAt, expiry;
+- nincs név, telefon, e-mail vagy Commerce belső order id;
+- TTL 1 óra és 90 nap között, alap 30 nap;
+- lejárt vagy manipulált token fail-closed.
+
+Publikus státusz API:
+- `POST /api/aruter/public-checkouts/status`;
+- token request bodyban, NEM URL queryben;
+- `Cache-Control: no-store`;
+- trusted server-side businessSlug -> organization mapping;
+- organization + legacyOrderId + orderNumber scope;
+- soft-deleted attempt/order kizárva;
+- publikus állapotok: RECEIVED, QUEUED, PROCESSING, AT_CASHIER, PAID, ISSUED, CANCELLED;
+- belső queue hibaüzenet és PII nincs publikálva.
+
+Storefront UI:
+- checkout response opcionálisan `trackingToken` + `trackingExpiresAt`;
+- token issuance fail-open, tehát tracking konfigurációhiba nem teszi sikertelenné a már rögzített rendelést;
+- success modal jelzi az aktív állapotkövetést;
+- külön `StorefrontOrderTrackingCard`;
+- 4 lépcső: Fogadva -> Pénztár -> Fizetve -> Kiadva;
+- nem terminális státusz 5 másodpercenként pollol;
+- átmeneti hiba 10 másodperces backoff;
+- tracking token localStorage-ban megőrződik az adott businessSlughoz, hogy teljes oldalfrissítés után a státuszkártya visszaálljon;
+- lejárt local token automatikusan törlődik;
+- token soha nem kerül tracking request URL-be.
+
+QA:
+- tracking contract: 39/39 PASS;
+- Storefront Pilot: 62/62 PASS;
+- multi-item checkout: 44/44 PASS;
+- cart UI: 56/56 PASS;
+- queue idempotency: 25/25 PASS;
+- mirror worker: 54/54 PASS;
+- legacy compatibility: 10/10 PASS;
+- TypeScript: PASS;
+- targeted ESLint: PASS;
+- diff-check: PASS;
+- HTTP tracking E2E: 19/19 PASS;
+- browser tracking E2E: 14/14 PASS;
+- E2E bizonyította: checkout -> signed token -> real systemd worker -> AT_CASHIER -> PAID -> ISSUED;
+- browser bizonyította: tracking card, automatic cashier state, token not in URL, reload persistence, no mobile overflow;
+- QA cleanup: dueJobs=0, activeTrackingQaOrders=0, temp tracking secret removed, port 3314 closed.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: SIGNED PUBLIC ORDER TRACKING — SOURCE DEV KÉSZ / RUNTIME TESZTELT;
+- Modul: DIMPRO Árutér Storefront rendeléskövetés;
+- Elkészült: signed token engine, public status endpoint, persistent browser tracking card, queue/Commerce status mapping;
+- Részben: még nincs shared DEV release-be integrálva és live tracking secret nincs beállítva;
+- Még hiányzik: candidate build, shared integration/cutover, később vevői saját rendeléslista/account;
+- DB: nincs új migráció, Commerce 0.1.13 / 14;
+- Known debt: ProductVariant/fulfillment mapping továbbra sincs, ezért a pilot queue items UNRESOLVED;
+- Következő: production candidate build -> shared DEV integration -> tracking secret provision -> live browser E2E;
+- PROD változatlan.

@@ -33,6 +33,11 @@ ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG=
 ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID=
 # Storefront többtételes checkout API (opt-in, alapból kikapcsolva)
 ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0
+# Nyilvános, aláírt rendeléskövetés. A secret legalább 32 karakter, Gitbe valódi érték nem kerülhet.
+ARUTER_STOREFRONT_TRACKING_ENABLED=0
+ARUTER_STOREFRONT_TRACKING_SECRET=
+# 1 óra - 90 nap; alapérték: 30 nap.
+ARUTER_STOREFRONT_TRACKING_TTL_SECONDS=2592000
 # Commerce Storefront persistent mirror queue automatikus worker (opt-in)
 DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ENABLED=0
 # Dedikált technikai DIMPRO user ID: auth_user_id=NULL és COMMERCE_MIRROR_WORKER aktív membership szükséges.

@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const page=fs.readFileSync("components/aruter/AruterOfferPages.tsx","utf8");
 const sheet=fs.readFileSync("components/aruter/StorefrontMultiItemCheckout.tsx","utf8");
+const trackingCard=fs.readFileSync("components/aruter/StorefrontOrderTrackingCard.tsx","utf8");
 const pilot=fs.readFileSync("app/lib/aruter/storefrontPilot.ts","utf8");
 const checks=[];
 function check(name,ok){checks.push([name,Boolean(ok)]);console.log(`${ok?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`);}
@@ -34,7 +35,7 @@ check("24 legacy ReservationSheet is disabled only during multi mode",page.inclu
 check("25 checkout sheet is gated by multi mode and open state",page.includes("open={multiItemCheckoutEnabled && checkoutOpen}"));
 check("26 checkout completion records result",page.includes("setLastCheckout(result)"));
 check("27 checkout completion clears cart",page.includes("setCartLines([])"));
-check("28 successful order summary is visible on page",page.includes("Rendelés elküldve")&&page.includes("lastCheckout.orderNumber"));
+check("28 successful order summary is visible on page",page.includes("<StorefrontOrderTrackingCard checkout={lastCheckout}")&&trackingCard.includes("Rendelés elküldve")&&trackingCard.includes("checkout.orderNumber"));
 check("29 banner visibly identifies multi-item mode",page.includes("Többtételes kosár aktív"));
 
 check("30 checkout sheet is a client component",sheet.startsWith('"use client"'));

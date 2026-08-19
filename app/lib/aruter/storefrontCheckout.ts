@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { getAruterRepository } from "./repositoryFactory";
 import type { AruterOrder, AruterProduct, AruterUnit } from "./types";
+import { issueStorefrontTrackingToken } from "./storefrontTracking";
 import {
   getStorefrontRepositoryProducts,
   isStorefrontMultiItemCheckoutEnabled,
@@ -38,6 +39,8 @@ export type StorefrontCheckoutResult = {
   grossTotal: number;
   reused: boolean;
   commerceQueued: boolean;
+  trackingToken?: string;
+  trackingExpiresAt?: string;
 };
 
 type CheckoutError = { ok: false; status: number; code: string; error: string };
@@ -103,7 +106,23 @@ function orderItem(product: AruterProduct, quantity: number, marker: string) {
   };
 }
 
-function summarize(order: AruterOrder, reused: boolean, commerceQueued: boolean): StorefrontCheckoutResult {
+function safeTracking(businessSlug: string, order: AruterOrder) {
+  try {
+    return issueStorefrontTrackingToken(businessSlug, order);
+  } catch (error) {
+    console.info("[ARUTER_STOREFRONT_TRACKING]", JSON.stringify({
+      event: "TOKEN_ISSUE_FAILED_FAIL_OPEN",
+      businessSlug,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      code: error instanceof Error ? error.name : "UNKNOWN",
+    }));
+    return null;
+  }
+}
+
+function summarize(order: AruterOrder, reused: boolean, commerceQueued: boolean, businessSlug: string): StorefrontCheckoutResult {
+  const tracking = safeTracking(businessSlug, order);
   return {
     orderId: order.id,
     orderNumber: order.orderNumber,
@@ -112,6 +131,7 @@ function summarize(order: AruterOrder, reused: boolean, commerceQueued: boolean)
     grossTotal: money(order.items.reduce((sum, item) => sum + item.quantity * item.priceNet * (1 + item.vatRate / 100), 0)),
     reused,
     commerceQueued,
+    ...(tracking ? { trackingToken: tracking.token, trackingExpiresAt: tracking.expiresAt } : {}),
   };
 }
 
@@ -155,7 +175,7 @@ export async function createStorefrontMultiItemCheckout(
   if (existing) {
     if (!existing.note?.includes(payloadMarker)) return fail(409, "STOREFRONT_CHECKOUT_IDEMPOTENCY_PAYLOAD_MISMATCH", "Az Idempotency-Key már egy eltérő checkout kéréshez tartozik.");
     const queue = await queueStorefrontCommerceMirrorFailOpen(businessSlug, existing);
-    return { ok: true, data: summarize(existing, true, queue.queued) };
+    return { ok: true, data: summarize(existing, true, queue.queued, businessSlug) };
   }
 
   const noteParts = [
@@ -177,5 +197,5 @@ export async function createStorefrontMultiItemCheckout(
   if (!created.ok || !created.data) return fail(503, "STOREFRONT_CHECKOUT_ORDER_CREATE_FAILED", created.error || "A rendelés létrehozása nem sikerült.");
 
   const queue = await queueStorefrontCommerceMirrorFailOpen(businessSlug, created.data);
-  return { ok: true, data: summarize(created.data, false, queue.queued) };
+  return { ok: true, data: summarize(created.data, false, queue.queued, businessSlug) };
 }

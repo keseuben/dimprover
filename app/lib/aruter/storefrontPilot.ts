@@ -38,13 +38,18 @@ export function isStorefrontMultiItemCheckoutEnabled() {
   return process.env.ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED?.trim() === "1";
 }
 
-function storefrontCommerceQueueTarget(businessSlug: string) {
-  if (!isStorefrontCommerceQueueEnabled()) return null;
+export function resolveStorefrontCommerceTarget(businessSlugInput: string) {
+  const businessSlug = businessSlugInput.trim();
   const configuredSlug = process.env.ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG?.trim() || "";
   const organizationId = process.env.ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID?.trim() || "";
   if (!configuredSlug || !organizationId || businessSlug !== configuredSlug) return null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) return null;
   return { organizationId };
+}
+
+function storefrontCommerceQueueTarget(businessSlug: string) {
+  if (!isStorefrontCommerceQueueEnabled()) return null;
+  return resolveStorefrontCommerceTarget(businessSlug);
 }
 
 export async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string, order: AruterOrder) {
