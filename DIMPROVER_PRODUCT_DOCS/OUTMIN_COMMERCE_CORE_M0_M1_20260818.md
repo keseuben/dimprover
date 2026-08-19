@@ -1797,3 +1797,44 @@ Következő fejlesztési irány:
 - Commerce soft-delete 0.1.11 apply továbbra is külön DB kapu.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Storefront Pilot production candidate zöld
+
+Production candidate build:
+- source commit: `51aff475493cb40a70cdd07c825b4e736c46ff60`;
+- dist: `.next-commerce-storefront-51aff47`;
+- Build ID: `oqNXC7sDL8hhF5Kcwawiq`;
+- build exitCode: 0 / PASS;
+- compile: 6.2 perc;
+- build profile: 1 CPU, MemoryHigh 4.4 GiB, MemoryMax 5 GiB, swap max 512 MiB;
+- standalone assets: 254 chunk VERIFIED;
+- route manifest tartalmazza:
+  - `/api/aruter/public-products`;
+  - `/api/aruter/public-reservations`;
+  - `/api/aruter/public-reservations/[reservationId]/status`;
+- egy meglévő, nem Commerce-specifikus Turbopack NFT warning maradt az `app/api/dev/engine/infrastructure-summary/route.ts` / `next.config.ts` import trace körül.
+
+Production candidate runtime:
+- localhost port: 3295;
+- shared DEV PM2/Nginx változatlan;
+- Build ID indításkor ellenőrizve: `oqNXC7sDL8hhF5Kcwawiq`;
+- Storefront Pilot ON csak candidate processben;
+- cashier bridge ON csak candidate processben;
+- Commerce mirror OFF;
+- ugyanaz a Storefront HTTP E2E: 17/17 PASS;
+- runtime log uncaught/unhandled/fatal/error találat: 0;
+- candidate process teszt után leállítva;
+- 3295 port felszabadítva.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: STOREFRONT PILOT FOUNDATION — DEV KÉSZ / TESZTELT CANDIDATE;
+- Kód: 51aff47 buildforrás + későbbi dokumentációs checkpoint;
+- Build: PASS;
+- Candidate smoke/E2E: PASS 17/17;
+- Shared DEV cutover: NEM történt;
+- Feature flagek shared DEV-en: NEM lettek bekapcsolva;
+- Commerce DB: továbbra is 0.1.10 / 11;
+- Soft-delete 0.1.11 apply: továbbra is rollback-acceptance kapura vár;
+- Következő Storefront blokk: közös többtételes checkout/fulfillment adatmodell megtervezése és szerveroldali alap, anélkül hogy több külön pénztári rendelés keletkezne.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
