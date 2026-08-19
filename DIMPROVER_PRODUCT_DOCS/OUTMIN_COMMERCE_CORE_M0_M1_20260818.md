@@ -1928,3 +1928,60 @@ A sikertelen mirror E2E által létrehozott egyetlen `HTTP Mirror QA` FAILED rec
 Következő kapu: új production candidate build és teljes legacy mirror HTTP lifecycle ismétlés.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Commerce 14b6f0f full candidate regression zöld
+
+Friss production candidate:
+- source commit: `14b6f0fd9086f95f6d5eb24f6d6f601763ac1540`;
+- dist: `.next-commerce-14b6f0f`;
+- Build ID: `K9u8wmMKModsgM4iIfQTX`;
+- compile: 6.0 perc;
+- build exitCode: 0;
+- standalone assets: 254/254 VERIFIED;
+- build profile: 1 CPU, MemoryHigh 4.4 GiB, MemoryMax 5 GiB.
+
+Candidate runtime regresszió az aktív Commerce `0.1.11 / 12` sémán:
+- authenticated soft-delete HTTP smoke: 15/15 PASS;
+- legacy Árutér → Commerce mirror lifecycle: 18/18 PASS;
+- Reservation Expiry HTTP E2E: 16/16 PASS;
+- Storefront Pilot → legacy cashier HTTP E2E: 17/17 PASS;
+- Reservation Expiry worker runtime korábban: 14/14 PASS;
+- legacy Árutér compatibility contract: 10/10 PASS;
+- mock order-number contract: 14/14 PASS.
+
+Legacy mirror lifecycle bizonyított:
+- authenticated Commerce context;
+- legacy order HTTP 201;
+- Next `after()` reconciliation SUCCEEDED;
+- unresolved item nem blokkol;
+- Commerce cashier queue láthatóság;
+- PAID ugyanazon Commerce orderen;
+- ISSUED ugyanazon Commerce orderen;
+- terminal order kikerül a cashier queue-ból;
+- reconciliation final snapshot `issued`;
+- admin reconciliation UI HTTP 200;
+- legacy cashier route elérhető.
+
+QA cleanup:
+- aktív `HTTP Mirror QA` reconciliation fixture: 0;
+- aktív `Expiry HTTP QA` termék fixture: 0;
+- candidate localhost processzek leállítva;
+- 3298 és 3299 port felszabadítva;
+- candidate runtime error scan: 0 uncaught/unhandled/fatal/error.
+
+Fontos Storefront architektúra-megállapítás:
+- a publikus Storefront request nem rendelkezik Commerce user-contexttel;
+- ezért a publikus requestből közvetlen `mirrorAruterOrderToCommerceFailOpen()` nem tekinthető teljes értékű Commerce bridge-nek, ha a globális mirror flag aktív;
+- MVP-ben a legacy központi pénztár marad elsődleges és teljesen működő;
+- a publikus Storefront → Commerce közvetlen átvezetéshez később szervezethez kötött service/outbox bridge szükséges, nem publikus user-context imitáció.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: M0/M1 CORE + STOREFRONT PILOT FOUNDATION — DEV KÉSZ, CANDIDATE TESZTELT;
+- Commerce DB: 0.1.11 / 12;
+- Build: K9u8wmMKModsgM4iIfQTX PASS;
+- Shared DEV cutover: NEM történt;
+- PROD: változatlan;
+- következő blokk: Storefront service/outbox bridge foundation vagy többtételes checkout/fulfillment modell, service identity kialakításával összhangban;
+- becsült következő aktív idő: 3–6 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
