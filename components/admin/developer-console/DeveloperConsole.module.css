@@ -1926,6 +1926,43 @@
   .weeklyManagementSummary > header { align-items: flex-start; flex-wrap: wrap; }
   .weeklyManagementSummary > header span { margin-left: 0; }
 }
+.weeklyTrendHistory { min-width: 0; padding: 6px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 5px; background: var(--surface); }
+.weeklyTrendHistory > header { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--accent-strong); }
+.weeklyTrendHistory > header strong { color: var(--text-soft); font-size: 9px; letter-spacing: .04em; }
+.weeklyTrendHistory > header span { margin-left: auto; color: var(--muted); font-size: 7px; }
+.weeklyTrendMetricTabs { min-width: 0; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.weeklyTrendMetricTabs button { min-height: 23px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 7px; font-weight: 800; cursor: pointer; }
+.weeklyTrendMetricTabs button[data-active="true"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.weeklyTrendMetricTabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.weeklyTrendHistoryError { margin: 0; padding: 4px 6px; border-radius: 5px; color: var(--red); background: color-mix(in srgb, var(--red) 5%, var(--surface)); font-size: 7px; }
+.weeklyTrendChartWrap { min-width: 0; display: grid; gap: 4px; overflow: hidden; }
+.weeklyTrendChart { width: 100%; min-width: 520px; height: auto; overflow: visible; }
+.weeklyTrendChart line[data-grid-line="true"] { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.weeklyTrendChart polyline[data-trend-line="true"] { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.weeklyTrendChart circle { fill: var(--surface); stroke: var(--accent-strong); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.weeklyTrendChart g[data-status="watch"] circle { stroke: var(--amber); }
+.weeklyTrendChart g[data-status="critical"] circle { stroke: var(--red); }
+.weeklyTrendChart g[data-current="true"] circle { fill: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.weeklyTrendChart text { fill: var(--muted); font-size: 7px; }
+.weeklyTrendPointGrid { min-width: 0; display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 3px; }
+.weeklyTrendPointGrid article { min-width: 0; padding: 3px 4px; border: 1px solid var(--border); border-radius: 5px; display: grid; gap: 1px; background: var(--surface); }
+.weeklyTrendPointGrid article[data-current="true"] { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); }
+.weeklyTrendPointGrid article[data-status="watch"] { border-bottom-color: var(--amber); }
+.weeklyTrendPointGrid article[data-status="critical"] { border-bottom-color: var(--red); }
+.weeklyTrendPointGrid span { color: var(--muted); font-size: 6px; }
+.weeklyTrendPointGrid strong { color: var(--text); font-size: 9px; }
+.weeklyTrendPointGrid small { min-width: 0; color: var(--muted2); font-size: 6px; line-height: 1.25; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .weeklyTrendChartWrap { overflow-x: auto; }
+  .weeklyTrendChart { width: 640px; }
+  .weeklyTrendPointGrid { min-width: 640px; }
+}
+@media (max-width: 560px) {
+  .weeklyTrendHistory > header { align-items: flex-start; flex-wrap: wrap; }
+  .weeklyTrendHistory > header span { width: 100%; margin-left: 17px; }
+  .weeklyTrendMetricTabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .weeklyTrendMetricTabs button { justify-content: center; }
+}
 .weeklyFlowAnalytics { min-width: 0; padding: 6px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: 8px; display: grid; gap: 5px; background: color-mix(in srgb, var(--accent) 3%, var(--surface)); }
 .weeklyFlowAnalytics > header { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--accent-strong); }
 .weeklyFlowAnalytics > header strong { color: var(--text-soft); font-size: 9px; letter-spacing: .05em; }

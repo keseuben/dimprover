@@ -2,11 +2,12 @@
 
 import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Download, FileCode2, FileJson2, Gauge, LockKeyhole, Minus, RefreshCw, RotateCcw, Share2, ShieldCheck, TimerReset, TrendingDown, TrendingUp, TriangleAlert, UsersRound, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { WeeklyDevelopmentSummary as Summary } from "./types";
+import type { WeeklyDevelopmentSummary as Summary, WeeklyTrendHistory } from "./types";
 import styles from "./DeveloperConsole.module.css";
 
 type WeeklyContext = Summary["contexts"][number];
 type FlowDetailKind = keyof Summary["flowAnalytics"]["drillDown"];
+type TrendMetric = "score" | "activities" | "completed" | "waiting" | "errors";
 
 const FLOW_DETAIL_LABELS: Record<FlowDetailKind, string> = {
   scheduler: "Scheduler futások",
@@ -14,6 +15,8 @@ const FLOW_DETAIL_LABELS: Record<FlowDetailKind, string> = {
   waiting: "Várakozások",
   failure: "Elakadások",
 };
+
+const TREND_METRIC_LABELS: Record<TrendMetric, string> = { score: "Flow-score", activities: "Aktivitás", completed: "Lezárt", waiting: "Várakozás", errors: "Hiba" };
 
 function adminHeaders() {
   const key = localStorage.getItem("dimproLicenseAdminKey")?.trim() || "";
@@ -86,6 +89,10 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
   const [stageFilter, setStageFilter] = useState(initial.stage);
   const [flowDetailKind, setFlowDetailKind] = useState<FlowDetailKind | null>(null);
   const [reportExporting, setReportExporting] = useState<"" | "pdf" | "html" | "json" | "share">("");
+  const [trendHistory, setTrendHistory] = useState<WeeklyTrendHistory | null>(null);
+  const [trendHistoryLoading, setTrendHistoryLoading] = useState(false);
+  const [trendHistoryError, setTrendHistoryError] = useState("");
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("score");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +112,30 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
       setLoading(false);
     }
   }, [selectedProjectId, weekKey]);
+
+  const loadTrendHistory = useCallback(async () => {
+    setTrendHistoryLoading(true);
+    try {
+      const query = new URLSearchParams({ weeks: "8" });
+      if (selectedProjectId) query.set("projectId", selectedProjectId);
+      if (weekKey) query.set("week", weekKey);
+      const response = await fetch(`/api/dev/console/weekly-trend-history?${query.toString()}`, { headers: adminHeaders(), cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; history?: WeeklyTrendHistory; error?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.history) throw new Error(payload?.error || "A többhetes fejlesztési trend nem tölthető be.");
+      setTrendHistory(payload.history);
+      setTrendHistoryError("");
+    } catch (caught) {
+      setTrendHistoryError(caught instanceof Error ? caught.message : "A többhetes fejlesztési trend nem tölthető be.");
+    } finally {
+      setTrendHistoryLoading(false);
+    }
+  }, [selectedProjectId, weekKey]);
+
+  useEffect(() => {
+    void loadTrendHistory();
+    const timer = window.setInterval(() => void loadTrendHistory(), 300_000);
+    return () => window.clearInterval(timer);
+  }, [loadTrendHistory]);
 
   useEffect(() => {
     void load();
@@ -129,6 +160,26 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
   }, [stageFilter, summary, workerFilter]);
   const topContexts = filteredContexts.slice(0, 12);
   const flowDetailItems = flowDetailKind && summary ? summary.flowAnalytics.drillDown[flowDetailKind] : [];
+  const trendChart = useMemo(() => {
+    const points = trendHistory?.points || [];
+    const values = points.map((point) => point[trendMetric]);
+    const maxValue = trendMetric === "score" ? 100 : Math.max(1, ...values);
+    const width = 640;
+    const height = 150;
+    const left = 32;
+    const right = 12;
+    const top = 14;
+    const bottom = 24;
+    const chartWidth = width - left - right;
+    const chartHeight = height - top - bottom;
+    const coordinates = points.map((point, index) => {
+      const value = point[trendMetric];
+      const x = points.length <= 1 ? left + chartWidth / 2 : left + (index / (points.length - 1)) * chartWidth;
+      const y = top + (1 - Math.min(maxValue, Math.max(0, value)) / maxValue) * chartHeight;
+      return { ...point, value, x, y };
+    });
+    return { width, height, left, top, bottom, chartHeight, maxValue, coordinates, polyline: coordinates.map((point) => `${point.x},${point.y}`).join(" ") };
+  }, [trendHistory, trendMetric]);
 
   const summaryProjectId = summary?.projectId || "";
   const readyForSelection = Boolean(summary?.ready
@@ -249,7 +300,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span><strong>HETI FEJLESZTÉSI ÖSSZESÍTŐ</strong><small>{summary?.period.label || "Naptári hét"}</small></span>
         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
-      <button type="button" className={styles.weeklySummaryRefresh} title="Heti összesítő frissítése" disabled={loading} onClick={() => void load()}><RefreshCw size={13} /></button>
+      <button type="button" className={styles.weeklySummaryRefresh} title="Heti összesítő frissítése" disabled={loading || trendHistoryLoading} onClick={() => { void load(); void loadTrendHistory(); }}><RefreshCw size={13} /></button>
     </header>
 
     {expanded ? <div className={styles.weeklySummaryToolbar} data-testid="benjadmin-weekly-summary-toolbar">
@@ -306,6 +357,31 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
             {summary.managementSummary.nextActions.map((item, index) => <p key={`action-${index}`}>{index + 1}. {item}</p>)}
           </section>
         </div>
+      </section>
+
+      <section className={styles.weeklyTrendHistory} data-testid="benjadmin-weekly-trend-history" data-ready={trendHistory?.ready ? "true" : "false"} data-weeks={trendHistory?.weeks || 8} data-anchor-week={trendHistory?.anchorWeekKey || summary.period.weekKey} data-metric={trendMetric}>
+        <header><TrendingUp size={12} /><strong>8 HETES VEZETŐI TREND</strong><span>{trendHistory?.anchorWeekKey || summary.period.weekKey}{trendHistoryLoading ? " · frissítés…" : ""}</span></header>
+        <div className={styles.weeklyTrendMetricTabs} role="group" aria-label="Többhetes trend mutató">
+          {(Object.keys(TREND_METRIC_LABELS) as TrendMetric[]).map((metric) => <button type="button" key={metric} data-trend-metric={metric} data-active={trendMetric === metric ? "true" : "false"} aria-pressed={trendMetric === metric} onClick={() => setTrendMetric(metric)}>{TREND_METRIC_LABELS[metric]}</button>)}
+        </div>
+        {trendHistoryError ? <p className={styles.weeklyTrendHistoryError}>{trendHistoryError}</p> : null}
+        {trendHistory?.points.length ? <div className={styles.weeklyTrendChartWrap}>
+          <svg className={styles.weeklyTrendChart} viewBox={`0 0 ${trendChart.width} ${trendChart.height}`} role="img" aria-label={`${TREND_METRIC_LABELS[trendMetric]} nyolchetes trendgrafikon`}>
+            {[0, 0.5, 1].map((ratio) => <line key={ratio} x1={trendChart.left} x2={trendChart.width - 12} y1={trendChart.top + ratio * trendChart.chartHeight} y2={trendChart.top + ratio * trendChart.chartHeight} data-grid-line="true" />)}
+            <text x={2} y={trendChart.top + 4}>{trendChart.maxValue}</text>
+            <text x={8} y={trendChart.top + trendChart.chartHeight + 4}>0</text>
+            <polyline points={trendChart.polyline} data-trend-line="true" />
+            {trendChart.coordinates.map((point) => <g key={point.weekKey} data-week-point={point.weekKey} data-status={point.status} data-current={point.isCurrentWeek ? "true" : "false"}>
+              <circle cx={point.x} cy={point.y} r={point.isCurrentWeek ? 5 : 4}><title>{point.label}: {point.value}</title></circle>
+              <text x={point.x} y={trendChart.height - 5} textAnchor="middle">{point.weekKey.slice(5)}</text>
+            </g>)}
+          </svg>
+          <div className={styles.weeklyTrendPointGrid}>
+            {trendChart.coordinates.map((point) => <article key={point.weekKey} data-status={point.status} data-current={point.isCurrentWeek ? "true" : "false"}>
+              <span>{point.weekKey.slice(5)}</span><strong>{point.value}</strong><small>{point.score}/100 · {point.activities} akt · {point.errors} hiba</small>
+            </article>)}
+          </div>
+        </div> : <p className={styles.weeklySummaryEmpty}>{trendHistoryLoading ? "A többhetes trend betöltése…" : "Nincs többhetes trendadat."}</p>}
       </section>
 
       <section className={styles.weeklyFlowAnalytics} data-testid="benjadmin-weekly-flow-analytics" data-scheduler-ready={summary.flowAnalytics.schedulerReady ? "true" : "false"}>

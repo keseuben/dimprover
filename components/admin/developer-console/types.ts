@@ -296,3 +296,13 @@ export type WeeklyDevelopmentSummary = {
   generatedAt: string;
   productionAccess: "DENY";
 };
+
+export type WeeklyTrendHistory = {
+  ready: true;
+  projectId: string | null;
+  anchorWeekKey: string;
+  weeks: number;
+  points: Array<{ weekKey: string; label: string; isCurrentWeek: boolean; score: number; status: "stable" | "watch" | "critical"; activities: number; completed: number; handoffs: number; waiting: number; errors: number; workers: number; tests: number; builds: number; handoffGapMinutes: number | null }>;
+  generatedAt: string;
+  productionAccess: "DENY";
+};

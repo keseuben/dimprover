@@ -787,6 +787,31 @@ export type DeveloperWeeklySummary = {
   productionAccess: "DENY";
 };
 
+export type DeveloperWeeklyTrendHistory = {
+  ready: true;
+  projectId: string | null;
+  anchorWeekKey: string;
+  weeks: number;
+  points: Array<{
+    weekKey: string;
+    label: string;
+    isCurrentWeek: boolean;
+    score: number;
+    status: "stable" | "watch" | "critical";
+    activities: number;
+    completed: number;
+    handoffs: number;
+    waiting: number;
+    errors: number;
+    workers: number;
+    tests: number;
+    builds: number;
+    handoffGapMinutes: number | null;
+  }>;
+  generatedAt: string;
+  productionAccess: "DENY";
+};
+
 const WEEKLY_SUMMARY_TIMEZONE = "Europe/Budapest" as const;
 const WEEKLY_SUMMARY_LIMIT = 1000;
 const WEEKLY_WORKERS = new Set<ConsoleAuthor>(["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"]);
@@ -927,6 +952,43 @@ function budapestWeek(weekInput?: string | null, now = new Date()) {
     : current;
   const selected = requested.weekKey > current.weekKey ? current : requested;
   return { ...selected, currentWeekKey: current.weekKey, isCurrentWeek: selected.weekKey === current.weekKey };
+}
+
+function shiftWeeklyDateKey(weekKey: string, weeks: number) {
+  const match = weekKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return weekKey;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() + Math.round(weeks) * 7);
+  return localDateKey(date);
+}
+
+function applyWeeklyComparison(summary: DeveloperWeeklySummary, previous: DeveloperWeeklySummary) {
+  const previousWorkers = new Map(previous.workers.map((worker) => [worker.code, worker.activityCount]));
+  summary.flowAnalytics.workerLoad = summary.flowAnalytics.workerLoad.map((worker) => {
+    const previousActivityCount = previousWorkers.get(worker.code) ?? 0;
+    return { ...worker, previousActivityCount, activityDelta: worker.activityCount - previousActivityCount };
+  });
+  const currentWaiting = summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker;
+  const previousWaiting = previous.flowAnalytics.buildLockWaits + previous.flowAnalytics.waitingForWorker;
+  const metric = (key: "activities" | "completed" | "handoffs" | "waiting" | "errors", label: string, current: number, prior: number, preference: "higher" | "lower" | "neutral") => {
+    const delta = current - prior;
+    const direction = delta > 0 ? "up" as const : delta < 0 ? "down" as const : "flat" as const;
+    const deltaPercent = prior > 0 ? Math.round((delta / prior) * 100) : current > 0 ? null : 0;
+    const tone = preference === "neutral" || delta === 0 ? "neutral" as const : preference === "higher" ? (delta > 0 ? "positive" as const : "negative" as const) : (delta < 0 ? "positive" as const : "negative" as const);
+    return { key, label, current, previous: prior, delta, deltaPercent, direction, tone };
+  };
+  summary.flowAnalytics.trend = {
+    available: true,
+    previousWeekKey: previous.period.weekKey,
+    metrics: [
+      metric("activities", "Aktivitás", summary.stats.activities, previous.stats.activities, "neutral"),
+      metric("completed", "Lezárt task", summary.stats.completedTasks, previous.stats.completedTasks, "higher"),
+      metric("handoffs", "Átadás", summary.flowAnalytics.handoffs, previous.flowAnalytics.handoffs, "neutral"),
+      metric("waiting", "Várakozás", currentWaiting, previousWaiting, "lower"),
+      metric("errors", "Hiba", summary.stats.errors + summary.flowAnalytics.taskFailures, previous.stats.errors + previous.flowAnalytics.taskFailures, "lower"),
+    ],
+  };
+  summary.managementSummary = deriveWeeklyManagementSummary(summary);
 }
 
 function weeklyContextKey(message: ConsoleMessage) {
@@ -1247,37 +1309,50 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   if (includeComparison) {
     try {
       const previous = await getDeveloperConsoleWeeklySummary(projectId, period.previousWeekKey, false);
-      const previousWorkers = new Map(previous.workers.map((worker) => [worker.code, worker.activityCount]));
-      summary.flowAnalytics.workerLoad = summary.flowAnalytics.workerLoad.map((worker) => {
-        const previousActivityCount = previousWorkers.get(worker.code) ?? 0;
-        return { ...worker, previousActivityCount, activityDelta: worker.activityCount - previousActivityCount };
-      });
-      const currentWaiting = flowAnalytics.buildLockWaits + flowAnalytics.waitingForWorker;
-      const previousWaiting = previous.flowAnalytics.buildLockWaits + previous.flowAnalytics.waitingForWorker;
-      const metric = (key: "activities" | "completed" | "handoffs" | "waiting" | "errors", label: string, current: number, prior: number, preference: "higher" | "lower" | "neutral") => {
-        const delta = current - prior;
-        const direction = delta > 0 ? "up" as const : delta < 0 ? "down" as const : "flat" as const;
-        const deltaPercent = prior > 0 ? Math.round((delta / prior) * 100) : current > 0 ? null : 0;
-        const tone = preference === "neutral" || delta === 0 ? "neutral" as const : preference === "higher" ? (delta > 0 ? "positive" as const : "negative" as const) : (delta < 0 ? "positive" as const : "negative" as const);
-        return { key, label, current, previous: prior, delta, deltaPercent, direction, tone };
-      };
-      summary.flowAnalytics.trend = {
-        available: true,
-        previousWeekKey: previous.period.weekKey,
-        metrics: [
-          metric("activities", "Aktivitás", summary.stats.activities, previous.stats.activities, "neutral"),
-          metric("completed", "Lezárt task", summary.stats.completedTasks, previous.stats.completedTasks, "higher"),
-          metric("handoffs", "Átadás", flowAnalytics.handoffs, previous.flowAnalytics.handoffs, "neutral"),
-          metric("waiting", "Várakozás", currentWaiting, previousWaiting, "lower"),
-          metric("errors", "Hiba", summary.stats.errors + flowAnalytics.taskFailures, previous.stats.errors + previous.flowAnalytics.taskFailures, "lower"),
-        ],
-      };
+      applyWeeklyComparison(summary, previous);
     } catch {
       summary.flowAnalytics.trend = { available: false, previousWeekKey: period.previousWeekKey, metrics: [] };
     }
   }
   summary.managementSummary = deriveWeeklyManagementSummary(summary);
   return summary;
+}
+
+
+export async function getDeveloperConsoleWeeklyTrendHistory(projectIdInput?: string | null, weekInput?: string | null, weeksInput = 8): Promise<DeveloperWeeklyTrendHistory> {
+  const projectId = text(projectIdInput) || null;
+  const anchor = budapestWeek(weekInput);
+  const weeks = Math.max(4, Math.min(12, Math.round(Number(weeksInput) || 8)));
+  const weekKeys = Array.from({ length: weeks + 1 }, (_, index) => shiftWeeklyDateKey(anchor.weekKey, index - weeks));
+  const summaries: DeveloperWeeklySummary[] = [];
+  const batchSize = 3;
+  for (let index = 0; index < weekKeys.length; index += batchSize) {
+    const batch = weekKeys.slice(index, index + batchSize);
+    summaries.push(...await Promise.all(batch.map((weekKey) => getDeveloperConsoleWeeklySummary(projectId, weekKey, false))));
+  }
+  const points = summaries.slice(1).map((summary, index) => {
+    const previous = summaries[index];
+    applyWeeklyComparison(summary, previous);
+    const waiting = summary.flowAnalytics.buildLockWaits + summary.flowAnalytics.waitingForWorker;
+    const errors = summary.stats.errors + summary.flowAnalytics.taskFailures + summary.flowAnalytics.schedulerRuns.failed;
+    return {
+      weekKey: summary.period.weekKey,
+      label: summary.period.label,
+      isCurrentWeek: summary.period.isCurrentWeek,
+      score: summary.managementSummary.score,
+      status: summary.managementSummary.status,
+      activities: summary.stats.activities,
+      completed: summary.stats.completedTasks,
+      handoffs: summary.flowAnalytics.handoffs,
+      waiting,
+      errors,
+      workers: summary.stats.workers,
+      tests: summary.stats.tests,
+      builds: summary.stats.builds,
+      handoffGapMinutes: summary.flowAnalytics.handoffTiming.maxGapMinutes,
+    };
+  });
+  return { ready: true, projectId, anchorWeekKey: anchor.weekKey, weeks, points, generatedAt: new Date().toISOString(), productionAccess: "DENY" };
 }
 
 export type DeveloperConsoleMessagePage = {
