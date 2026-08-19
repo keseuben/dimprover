@@ -1449,3 +1449,50 @@ Kapcsolódó regresszió:
 - becsült aktív idő: candidate build/smoke 0.5–1 óra; worker trigger 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 14:xx checkpoint — Reservation Expiry Worker foundation
+
+A már DEV-aktivált `commerce_inventory_expire_due_reservations` RPC-re elkészült az automatikus worker alap úgy, hogy nem kellett a közös `proxy.ts` fájlhoz nyúlni.
+
+Elkészült:
+- közvetlen service-role worker: `scripts/run-commerce-reservation-expiry-worker.mjs`;
+- explicit engedélyezési kapu: `DIMPRO_COMMERCE_EXPIRY_WORKER_ENABLED=true`;
+- alapból tiltott állapot; tiltva már adatbázis-hozzáférés előtt leáll;
+- Commerce schema minimum: `0.1.10 / 11`;
+- kizárólag aktív szervezetek feldolgozása;
+- alapértelmezett szervezeti batch: 200, hard max: 1000;
+- reservation batch szervezetenként: alap 50, hard max 100;
+- opcionális `DIMPRO_COMMERCE_EXPIRY_WORKER_ORGANIZATION_ID` kontrollált teszt-/célfuttatáshoz;
+- szervezetek szekvenciális feldolgozása, egy szervezet hibája nem rejti el a többi eredményt;
+- service secret soha nem kerül a worker outputba; `secretsExposed:false`;
+- readiness: `scripts/commerce-reservation-expiry-worker-readiness.mjs`;
+- systemd service/timer sablonok az `ops/systemd` mappában;
+- timer terv: boot után 3 perc, utána 2 percenként, 15 mp jitter, persistent;
+- service hardening: oneshot, UMask 0077, NoNewPrivileges, PrivateTmp, ProtectSystem/Kernel/ControlGroups, 300 mp timeout;
+- `DIMPRO_APP_ROOT` segítségével DEV/PROD telepítési gyökér külön konfigurálható.
+
+QA:
+- worker contract: 28/28 PASS;
+- worker disabled-path runtime: PASS, exit code 2, DB access előtt;
+- readiness DEV: schema 0.1.10 / 11, 1 aktív szervezet, service-role környezet elérhető;
+- readiness szerint worker enabled=false;
+- serviceInstalled=false;
+- timerInstalled=false;
+- `systemd-analyze verify`: PASS;
+- Node syntax: PASS;
+- ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / NEM AKTIVÁLT;
+- Modul: Commerce Reservation Expiry Worker foundation;
+- Elkészült: runner, readiness, systemd service/timer template, contract;
+- Részben elkészült: valós worker runtime csak kontrollált fixture-rel futtatandó;
+- Még hiányzik: DEV service/timer telepítés és enable/start; ezt shared release/integráció előtt nem kapcsoljuk be;
+- DB: nem igényel új migrációt, a 0.1.10 service-only RPC-t használja;
+- API/UI: nem vezet be új publikus API-t vagy UI-t;
+- ismert tech debt: a timer telepítése az aktív release gyökérhez kötött activation stepet igényel;
+- következő blokk: candidate localhost expiry HTTP E2E, majd kontrollált worker runtime fixture;
+- becsült következő aktív idő: 1–2 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
