@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import CameraLauncher, { type CameraLauncherHandle } from "./CameraLauncher";
 import CapturePreviewCard from "./CapturePreviewCard";
+import GpsPhotoMapPanel from "./GpsPhotoMapPanel";
 import OfflineQueueIndicator from "./OfflineQueueIndicator";
 import PreCaptureOptionsSheet from "./PreCaptureOptionsSheet";
 import DimproImageMarkupEditor, { type DimproImageMarkupSaveResult } from "@/components/image-editor/DimproImageMarkupEditor";
@@ -323,6 +324,8 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
           <button data-terep-sync-button type="button" onClick={() => void runServerSync()} disabled={syncing || !online || !rulesAccepted || !rulesAcceptedAt || !items.length} className="mt-3 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-cyan-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">{syncing ? <LoaderCircle size={18} className="animate-spin" /> : <CloudUpload size={18} />}{syncing ? "Szinkronizálás…" : "Szinkronizálás a DIMPRO szerverre"}</button>
           {!online ? <p className="mt-2 text-[11px] font-bold text-amber-800">Hálózat nélkül nem indul szerveres művelet; a képek az IndexedDB-ben maradnak.</p> : null}
         </div></section> : null}
+
+        {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} /> : null}
 
         {message ? <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-950">{message}</div> : null}
 

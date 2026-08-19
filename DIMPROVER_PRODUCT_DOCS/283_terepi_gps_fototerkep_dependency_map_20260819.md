@@ -99,3 +99,23 @@ Tiszta, UI-független `gpsPhotoMap` engine:
 4. Heading normalizálás.
 5. Kalibrációs típusok előkészítése.
 6. Célzott numerikus acceptance tesztek.
+
+## 2026-08-19 – Blokk B/C implementációs checkpoint
+
+Elkészült a UI-független GPS fotótérkép engine és az első Terep UI.
+
+- : helyi méterkoordináta-vetítés, bounding box, sorrendi szegmensek, heading normalizálás, viewport-fit.
+- : az Ingatlan felmérő korábbi északi nyíl geometriája közös komponenssé emelve.
+- : a közös északi nyilat használja; az Ingatlan felmérő vizuális megjelenése nem kap külön új implementációt.
+- : Terepi GPS fotótérkép SVG nézet, sorszám/fájlnév, GPS pontosság, kamera irány, szaggatott készítési sorrend, kötelező disclaimer.
+- : a Mentés lépésben jelenik meg, ha legalább egy használható GPS-fotópont van.
+
+Acceptance:
+- GPS geometry contract: 14/14 PASS.
+- GPS map UI contract: 11/11 PASS.
+- Terep P0-P6 regresszió: 66/66 PASS.
+- célzott ESLint: PASS.
+- TypeScript: PASS.
+- git diff --check: PASS.
+
+PDF-export és kalibrációs GPS-mintagyűjtés külön következő blokk, nincs még DEV cutover.

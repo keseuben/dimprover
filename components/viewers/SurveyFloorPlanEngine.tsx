@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Camera, Compass, Fan, Grid3X3, LocateFixed, Maximize2, Minus, Move, PencilRuler, Plus, RotateCcw, Ruler, Scaling, X } from "lucide-react";
 import PlanHexMarker from "@/components/viewers/PlanHexMarker";
+import SurveyNorthMark from "@/components/viewers/SurveyNorthMark";
 import { resolveSurveyRoomDimensions, type SurveyRoomDimensionSource } from "@/components/property-survey/propertySurveyRoomDimensions";
 import {
   getPaperDimensionsMm,
@@ -1379,16 +1380,7 @@ export function SurveyFloorPlanEngine({
                 </g>;
               })() : null}
 
-              <g data-survey-north-mark="true" transform={`translate(${paperFrame.x + paperFrame.width - 48} ${paperFrame.y + 58})`} pointerEvents="none">
-                <polygon points="0,-31 26,-16 26,16 0,31 -26,16 -26,-16" fill="#ecfeff" fillOpacity="0.94" stroke="#0891b2" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-                <g data-survey-north-pointer="true" transform={`rotate(${northAngle})`}>
-                  <polygon points="0,-24 14,-7 11,10 0,20 -11,10 -14,-7" fill="#0f3d46" stroke="#14b8a6" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                  <path d="M 0 -18 L 0 14" fill="none" stroke="#5eead4" strokeWidth="1.5" strokeLinecap="round" opacity="0.58" vectorEffect="non-scaling-stroke" />
-                  <path data-survey-north-mini-arrow="true" d="M -3.5 -12.5 L 0 -18 L 3.5 -12.5" fill="none" stroke="#5eead4" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.92" vectorEffect="non-scaling-stroke" />
-                </g>
-                <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="950">É</text>
-                <text x="0" y="43" textAnchor="middle" fill="#0e7490" fontSize="8" fontWeight="950">DIMPRO</text>
-              </g>
+              <SurveyNorthMark northAngle={northAngle} x={paperFrame.x + paperFrame.width - 48} y={paperFrame.y + 58} />
 
               {orientationControlsOpen ? surveyCompassDirections.map((direction) => {
                 const screenAngle = normalizeAngle360(direction.azimuth + northAngle);
