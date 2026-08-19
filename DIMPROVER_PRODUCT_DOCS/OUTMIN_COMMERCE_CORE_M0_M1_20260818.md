@@ -2133,3 +2133,37 @@ Migráció:
 - Modul: Storefront Queue Idempotency M1;
 - Következő: backup → apply → verify → runtime duplicate/requeue E2E;
 - PROD változatlan.
+
+### 2026-08-19 18:xx checkpoint — Storefront Queue Idempotency M1 DEV ACTIVATED
+
+DB:
+- Commerce schema: `0.1.13 / 14`;
+- migration SHA: `28987671904417b6c37e9b73e33e1f12848188804da5fc7aab8d484a7ab96e07`;
+- rollback SHA: `81d0cd0576aab6b512583dffd99ca5ba3758cfadce721facef610090d783e3e4`;
+- backup: `/srv/dimpro-dev/backups/commerce-storefront-queue-idempotency-m1/20260819T163054Z/supabase-dev-pre-commerce-storefront-queue-idempotency-m1.dump`;
+- backup SHA: `f41b7735c524dd931bbf81bbb61d1ecc4c4df354e15c303b429e06ee4f828bda`;
+- backup listing: VERIFIED.
+
+Runtime E2E: 26/26 PASS.
+Újonnan bizonyított idempotencia:
+- azonos SUCCEEDED snapshot enqueue -> `queued=false`, `duplicate=true`;
+- SUCCEEDED state és attempt_count változatlan;
+- nincs új `LEGACY_ORDER_MIRROR_QUEUED` audit/outbox;
+- cancellation statusváltozás ugyanazt az attemptet újra PENDING-be teszi;
+- azonos PENDING cancellation snapshot újraküldése no-op;
+- PENDING replay nem ír új queue audit/outbox eseményt;
+- későbbi authenticated retry ugyanazt a Commerce ordert CANCELLED állapotba viszi.
+
+Regresszió:
+- Reservation Expiry worker: 14/14 PASS;
+- schema verify: PASS;
+- runtime error scan: 0;
+- QA cleanup: due jobs 0, aktív queue QA 0, aktív Commerce QA order 0.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: DEV KÉSZ / RUNTIME TESZTELT;
+- Modul: Storefront Queue Idempotency M1;
+- DB: 0.1.13 / 14;
+- Következő blokk: Storefront Multi-item Checkout Foundation;
+- Cél: egy publikus kosár -> egy legacy pénztári rendelés -> egy Commerce queue attempt, authoritative szerveroldali termék/ár/készlet ellenőrzéssel és checkout idempotency kulccsal;
+- PROD változatlan.

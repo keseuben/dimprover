@@ -26,7 +26,7 @@ async function attempt(){const r=await admin.from("commerce_order_mirror_attempt
 
 try{
   const meta=await admin.from("commerce_schema_meta").select("schema_version,migration_count").eq("component","commerce-core").single();if(meta.error)throw meta.error;
-  pass("Commerce queue schema is 0.1.12 / 13",meta.data.schema_version==="0.1.12"&&Number(meta.data.migration_count)===13,JSON.stringify(meta.data));
+  pass("Commerce queue schema is 0.1.13 / 14",meta.data.schema_version==="0.1.13"&&Number(meta.data.migration_count)===14,JSON.stringify(meta.data));
   const org=await admin.from("dimpro_organizations").select("id").eq("status","active").limit(1).maybeSingle();if(org.error||!org.data)throw org.error||new Error("Aktív DEV organization hiányzik");organizationId=String(org.data.id);
   const dueBefore=await admin.from("commerce_order_mirror_attempts").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).is("deleted_at",null).in("state",["PENDING","FAILED"]).lte("next_retry_at",new Date().toISOString());if(dueBefore.error)throw dueBefore.error;
   pass("queue E2E starts with zero foreign due jobs",(dueBefore.count||0)===0,String(dueBefore.count||0));
@@ -68,10 +68,35 @@ try{
   const commerce=await api(`/api/v1/commerce/orders/${commerceOrderId}`,{cookie});
   pass("queued Storefront order becomes Commerce cashier order",commerce.status===200&&commerce.json?.data?.status==="SENT_TO_CASHIER",`${commerce.status} ${commerce.raw.slice(0,600)}`);
 
+  const queueAuditBeforeSucceededReplay=await admin.from("commerce_audit_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("action","LEGACY_ORDER_MIRROR_QUEUED").eq("entity_id",attemptId);
+  const queueOutboxBeforeSucceededReplay=await admin.from("commerce_outbox_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("event_type","LEGACY_ORDER_MIRROR_QUEUED").eq("aggregate_id",attemptId);
+  if(queueAuditBeforeSucceededReplay.error)throw queueAuditBeforeSucceededReplay.error;if(queueOutboxBeforeSucceededReplay.error)throw queueOutboxBeforeSucceededReplay.error;
+  const succeededReplay=await admin.rpc("commerce_order_mirror_enqueue",{p_organization_id:organizationId,p_legacy_order_id:succeeded.legacy_order_id,p_order_number:succeeded.order_number,p_legacy_status:succeeded.legacy_status,p_legacy_order_payload:succeeded.legacy_order_payload});
+  if(succeededReplay.error)throw succeededReplay.error;
+  pass("identical SUCCEEDED snapshot is a queue no-op",succeededReplay.data?.queued===false&&succeededReplay.data?.duplicate===true,JSON.stringify(succeededReplay.data));
+  const afterSucceededReplay=await attempt();
+  pass("SUCCEEDED replay preserves succeeded state and attempt count",afterSucceededReplay?.state==="SUCCEEDED"&&Number(afterSucceededReplay?.attempt_count)===1,JSON.stringify(afterSucceededReplay));
+  const queueAuditAfterSucceededReplay=await admin.from("commerce_audit_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("action","LEGACY_ORDER_MIRROR_QUEUED").eq("entity_id",attemptId);
+  const queueOutboxAfterSucceededReplay=await admin.from("commerce_outbox_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("event_type","LEGACY_ORDER_MIRROR_QUEUED").eq("aggregate_id",attemptId);
+  if(queueAuditAfterSucceededReplay.error)throw queueAuditAfterSucceededReplay.error;if(queueOutboxAfterSucceededReplay.error)throw queueOutboxAfterSucceededReplay.error;
+  pass("SUCCEEDED replay emits no extra queue audit or outbox",queueAuditAfterSucceededReplay.count===queueAuditBeforeSucceededReplay.count&&queueOutboxAfterSucceededReplay.count===queueOutboxBeforeSucceededReplay.count,`${queueAuditBeforeSucceededReplay.count}/${queueAuditAfterSucceededReplay.count} ${queueOutboxBeforeSucceededReplay.count}/${queueOutboxAfterSucceededReplay.count}`);
+
   const cancelled=await api(`/api/aruter/public-reservations/${reservationId}/status`,{method:"PATCH",body:{status:"cancelled"}});
   pass("public cancellation remains HTTP success",cancelled.status===200&&cancelled.json?.data?.status==="cancelled",`${cancelled.status} ${cancelled.raw.slice(0,400)}`);
   const requeued=await waitFor("cancel requeue",async()=>{const row=await attempt();return{ok:row?.state==="PENDING"&&row?.legacy_status==="cancelled",value:row};});
   pass("cancellation requeues same attempt with latest status",String(requeued.id)===attemptId&&String(requeued.commerce_order_id)===commerceOrderId&&Number(requeued.attempt_count)===1&&requeued.last_attempt_at===null,JSON.stringify(requeued));
+  const queueAuditBeforePendingReplay=await admin.from("commerce_audit_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("action","LEGACY_ORDER_MIRROR_QUEUED").eq("entity_id",attemptId);
+  const queueOutboxBeforePendingReplay=await admin.from("commerce_outbox_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("event_type","LEGACY_ORDER_MIRROR_QUEUED").eq("aggregate_id",attemptId);
+  if(queueAuditBeforePendingReplay.error)throw queueAuditBeforePendingReplay.error;if(queueOutboxBeforePendingReplay.error)throw queueOutboxBeforePendingReplay.error;
+  const replayCancel=await api(`/api/aruter/public-reservations/${reservationId}/status`,{method:"PATCH",body:{status:"cancelled"}});
+  pass("identical cancellation replay remains HTTP success",replayCancel.status===200&&replayCancel.json?.ok===true,`${replayCancel.status}`);
+  await new Promise(resolve=>setTimeout(resolve,300));
+  const afterPendingReplay=await attempt();
+  pass("identical PENDING cancellation snapshot remains one pending attempt",afterPendingReplay?.state==="PENDING"&&Number(afterPendingReplay?.attempt_count)===1&&String(afterPendingReplay?.id)===attemptId,JSON.stringify(afterPendingReplay));
+  const queueAuditAfterPendingReplay=await admin.from("commerce_audit_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("action","LEGACY_ORDER_MIRROR_QUEUED").eq("entity_id",attemptId);
+  const queueOutboxAfterPendingReplay=await admin.from("commerce_outbox_events").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).eq("event_type","LEGACY_ORDER_MIRROR_QUEUED").eq("aggregate_id",attemptId);
+  if(queueAuditAfterPendingReplay.error)throw queueAuditAfterPendingReplay.error;if(queueOutboxAfterPendingReplay.error)throw queueOutboxAfterPendingReplay.error;
+  pass("PENDING replay emits no extra queue audit or outbox",queueAuditAfterPendingReplay.count===queueAuditBeforePendingReplay.count&&queueOutboxAfterPendingReplay.count===queueOutboxBeforePendingReplay.count,`${queueAuditBeforePendingReplay.count}/${queueAuditAfterPendingReplay.count} ${queueOutboxBeforePendingReplay.count}/${queueOutboxAfterPendingReplay.count}`);
 
   const retryCancel=await api("/api/v1/commerce/mirror/reconciliation/retry-due",{method:"POST",cookie,body:{limit:10}});
   pass("authenticated retry processes cancellation queue",retryCancel.status===200&&retryCancel.json?.ok===true&&Number(retryCancel.json?.data?.requested)===1&&Number(retryCancel.json?.data?.succeeded)===1,`${retryCancel.status} ${retryCancel.raw.slice(0,800)}`);
