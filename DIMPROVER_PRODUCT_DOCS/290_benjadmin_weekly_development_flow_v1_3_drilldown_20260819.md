@@ -2,7 +2,7 @@
 
 **Dátum:** 2026-08-19
 **Környezet:** kizárólag DEV
-**Állapot:** feature candidate · runtime release gate előtt · PROD DENY
+**Állapot:** DEV AKTÍV · 2026-08-19 16:11:13 CEST · PROD DENY
 
 ## Cél
 
@@ -90,7 +90,24 @@ A részletpanel:
 - `scripts/benjadmin-weekly-development-flow-v13-contract.mjs`;
 - `scripts/benjadmin-weekly-development-flow-v13-runtime-browser-acceptance.mjs`.
 
-## Jelenlegi source gate
+## Release és validáció
+
+- Feature / runtime source commit: **`7ed6930240d0b75e3e21a2d6524053577e715548`** (`7ed6930`);
+- canonical operator és `integration/benjadmin-dev` a runtime aktiváláskor: **`7ed6930`**;
+- aktív DEV release: **`.next-benjadmin-weekly-flow-v13-release-7ed6930`**;
+- BUILD_ID: **`TwDPrqnZZFAROJcAJ87f2`**;
+- előző aktív release: `.next-benjadmin-weekly-flow-v12-release-b5d6735`;
+- DEV cutover: **2026-08-19 16:11:05–16:11:13 CEST**, exit 0;
+- cutover backup: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v13-cutover-20260819T161104+0200`;
+- artifact promotion backup: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v13-artifact-promotion-20260819T160918+0200`.
+
+### Build megjegyzés
+
+Az első candidate build a `5769f1c` checkpointból CSS szintaktikai hiba miatt biztonságosan megállt: a responsive blokkban egy hibás selector `Unclosed block` PostCSS hibát okozott. A hiba még integráció előtt javításra került, a feature commit amend után új source hash lett: **`7ed6930`**.
+
+Az exact `7ed6930` candidate build 2026-08-19 15:56:34–16:02:23 CEST között sikeresen elkészült, standalone ellenőrzéssel és 248 statikus chunk validációval. A már teljesen validált exact artifact hardlink-alapú, tárhelytakarékos promotionnel kapta meg a canonical release nevet; a build tartalma és BUILD_ID változatlan maradt.
+
+### Source és statikus kapuk
 
 - Flow V1 contract: **21/21 PASS**;
 - Flow V1.1 contract: **19/19 PASS**;
@@ -100,22 +117,42 @@ A részletpanel:
 - build-lock timing unit: **12/12 PASS**;
 - `npx tsc --noEmit`: **PASS**;
 - célzott ESLint: **PASS**;
-- `git diff --check`: **PASS**;
-- PROD access: **DENY**.
+- teljes `npm run lint`: **0 error / 103 meglévő warning**;
+- `git diff --check`: **PASS**.
 
-## Függő release gate
+### Runtime/browser acceptance
 
-A feature commit után még kötelező:
+- exact candidate V1.3: **50/50 PASS**;
+- promoted canonical release, temp runtime: **50/50 PASS**;
+- aktív 3100-as DEV PM2 runtime post-cutover: **50/50 PASS**;
+- scheduler drill-down: **PASS**;
+- handoff drill-down: **PASS**;
+- waiting drill-down: **PASS**;
+- failure drill-down: **PASS**;
+- kiválasztott kártya ismételt kattintásos bezárása: **PASS**;
+- desktop overflow: **PASS**;
+- mobil drill-down + overflow: **PASS**.
 
-- exact candidate build;
-- V1.3 API + browser runtime acceptance;
-- V1/V1.1/V1.2 és kapcsolódó regressziók;
-- canonical állapot újraellenőrzése;
-- integráció;
-- DEV release artifact;
-- PM2 cutover és smoke;
-- teljes lint;
-- dokumentációs closeout.
+### Élő regressziók
+
+- Weekly Flow V1.2 runtime/browser: **40/40 PASS**;
+- Weekly Flow V1.1 runtime/browser: **34/34 PASS**;
+- Weekly Summary V1 runtime/browser: **25/25 PASS**;
+- Weekly Summary V1.1 runtime/browser: **35/35 PASS**;
+- Common Chat V2 runtime/browser: **30/30 PASS**;
+- Overnight Scheduler runtime: **30/30 PASS**;
+- Overnight Scheduler browser: **14/14 PASS**.
+
+### Post-cutover smoke
+
+- PM2 `dimpro-benjadmin-operator-ui-v2-dev`: **online**;
+- `NEXT_DIST_DIR`: `.next-benjadmin-weekly-flow-v13-release-7ed6930`;
+- `/admin/dev-console`: **PASS**;
+- `/terep`: **PASS**;
+- `/api/field-capture/health`: **PASS**;
+- `/api/dev/console/weekly-summary`: **PASS**;
+- `flowAnalytics.drillDown`: **elérhető**;
+- `productionAccess`: **DENY**.
 
 ## Biztonság
 
