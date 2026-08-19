@@ -234,3 +234,8 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `281_benjadmin_weekly_development_flow_v1_dev_activation_20260819.md` – Weekly Development Flow V1 DEV aktiválás: scheduler-run/handoff/wait/failure + 6/x analitika; selector-safe `b86f3a1`, 28/28 live Flow, 35/35 Weekly V1.1, 30/30 Common Chat, 30/30 Scheduler runtime, exact build és PROD DENY.
 
 - `282_dimpro_terep_client_sync_dev_activation_20260819.md` – Terepi Gyorsrögzítő kliensszinkron DEV aktiválás: privát staging + upload-rules gate + resumable Drop upload + reconcile, 6/6 + 14/14 + 14/14 + 14/14 + 14/14 + 66/66 + 44/44 PASS; candidate és live mobil browser E2E `SERVER_STORED`, aktív build `4sxAAl-wWLIzrwbUOxEv6`, PROD változatlan.
+
+- `283_terepi_gps_fototerkep_dependency_map_20260819.md` – Terepi GPS fotótérkép dependency map: meglévő Terep GPS/tájolás, Ingatlan felmérő északjel és PDF motor újrahasznosítási terve.
+- `284_terepi_gps_fototerkep_pdf_export_checkpoint_20260819.md` – Terepi GPS fotótérkép A4/A3 PDF export checkpoint, közös északi nyíllal és műszaki disclaimerrel.
+- `285_terepi_gps_fototerkep_kalibracios_pont_foundation_20260819.md` – minimum 3 pontos GPS kalibrációs foundation: 5–10 s többmintás rögzítés, ponttípusok és accuracy metaadatok.
+- `286_terepi_gps_fototerkep_dev_activation_20260819.md` – Terepi GPS fotótérkép A–E DEV aktiválás: geometry/UI/PDF/calibration, 34/34 candidate + live mobil gate és teljes kliensszinkron E2E PASS; aktív build `JZWHdY79muoXk59R06jdM`.
