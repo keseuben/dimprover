@@ -2099,3 +2099,37 @@ QA cleanup:
 - becsült következő aktív idő: 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 18:xx checkpoint — Storefront Queue Idempotency M1 PRE-APPLY
+
+Cél: változatlan Storefront queue snapshot ismételt enqueue-ja ne termeljen új auditot/outboxot és ne indítson felesleges retry-t.
+
+Új 0.1.13 szabály:
+- azonos PENDING snapshot: no-op;
+- azonos SUCCEEDED snapshot: no-op;
+- FAILED azonos snapshot: újra PENDING-be tehető;
+- megváltozott status/payload: ugyanaz az attempt újra PENDING;
+- commerce_order_id requeue esetén megmarad;
+- requeue törli a korábbi error/last_attempt/succeeded mezőket;
+- next_retry_at azonnal esedékes;
+- audit/outbox csak valódi enqueue/requeue esetén;
+- outbox idempotency key tartalmaz payload hash-t és attempt_countot;
+- RPC visszaadja a `queued` és `duplicate` jelzőt.
+
+QA:
+- idempotency contract: 25/25 PASS;
+- migration preflight: PASS;
+- transaction rollback-test: PASS;
+- rollback után DB: 0.1.12 / 13;
+- TypeScript/lint/diff-check: PASS.
+
+Migráció:
+- forward SHA: `28987671904417b6c37e9b73e33e1f12848188804da5fc7aab8d484a7ab96e07`;
+- rollback SHA: `81d0cd0576aab6b512583dffd99ca5ba3758cfadce721facef610090d783e3e4`;
+- cél DB: 0.1.13 / 14.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: PRE-APPLY;
+- Modul: Storefront Queue Idempotency M1;
+- Következő: backup → apply → verify → runtime duplicate/requeue E2E;
+- PROD változatlan.
