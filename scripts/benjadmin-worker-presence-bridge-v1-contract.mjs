@@ -22,6 +22,8 @@ check("Bridge has recent commit source",bridge.includes("collectRecentCommitEvid
 check("Evidence is scored and fail-closed",bridge.includes("if (!match) return []") && bridge.includes("score:"));
 check("Presence rows are PROD denied",bridge.includes("productionAccess: \"DENY\""));
 check("Same presence key updates instead of spam",bridge.includes("presenceKey") && bridge.includes(".update({"));
+check("Build lock timing survives presence updates",bridge.includes("buildLockWaitStartedAt") && bridge.includes("buildLockWaitTotalMs") && bridge.includes("buildLockWaitObservationCount"));
+check("Presence close accumulates active build lock wait",bridge.includes("closeBuildLockTiming") && bridge.includes("...closeBuildLockTiming"));
 check("Stale presence is ended",bridge.includes("presenceState: \"ENDED\""));
 check("Monitor invokes presence sync",monitor.includes("syncWorkerPresence") && monitor.includes("workerPresence"));
 check("Coordination state includes workerCode",op.includes("WORKER_CODE") && op.includes("workerCode:"));

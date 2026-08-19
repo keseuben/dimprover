@@ -18,6 +18,15 @@ function shortTime(value: string) {
   return new Intl.DateTimeFormat("hu-HU", { weekday: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function durationLabel(minutes: number | null) {
+  if (minutes === null || !Number.isFinite(minutes)) return "—";
+  const safe = Math.max(0, Math.round(minutes));
+  if (safe < 60) return `${safe} p`;
+  const hours = Math.floor(safe / 60);
+  const rest = safe % 60;
+  return rest ? `${hours} ó ${rest} p` : `${hours} ó`;
+}
+
 function mondayDateKey(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return "";
@@ -193,6 +202,21 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
           <span>Átadások</span>
           {summary.flowAnalytics.transitions.slice(0, 3).map((item, index) => <b key={item.changedAt + "-" + index}><strong>{item.fromWorkerCode}</strong><ArrowRightLeft size={9} /><strong>{item.toWorkerCode}</strong><small>{item.workItem}</small></b>)}
         </div> : null}
+        {summary.flowAnalytics.handoffTiming.available ? <section className={styles.weeklyHandoffTiming} data-testid="benjadmin-weekly-handoff-timing">
+          <header><Clock3 size={11} /><strong>Átadási idő / lead time</strong><span>megfigyelt jelenléti ablakok</span></header>
+          <div className={styles.weeklyHandoffTimingMetrics}>
+            <article data-handoff-timing="average"><span>Átlagos átadási rés</span><strong>{durationLabel(summary.flowAnalytics.handoffTiming.averageGapMinutes)}</strong><small>{summary.flowAnalytics.handoffTiming.observedHandoffs} mért átadás</small></article>
+            <article data-handoff-timing="median"><span>Medián átadási rés</span><strong>{durationLabel(summary.flowAnalytics.handoffTiming.medianGapMinutes)}</strong><small>{summary.flowAnalytics.handoffTiming.zeroGapCount} azonnali / átfedő</small></article>
+            <article data-handoff-timing="maximum"><span>Leghosszabb átadási rés</span><strong>{durationLabel(summary.flowAnalytics.handoffTiming.maxGapMinutes)}</strong><small>worker → worker</small></article>
+            <article data-handoff-timing="build-lock"><span>Build-lock várakozás</span><strong>{durationLabel(summary.flowAnalytics.handoffTiming.buildLockWaitMinutes)}</strong><small>{summary.flowAnalytics.handoffTiming.buildLockWaitEvents} mért ablak</small></article>
+          </div>
+          {summary.flowAnalytics.handoffTiming.bottleneck.kind ? <aside data-bottleneck-kind={summary.flowAnalytics.handoffTiming.bottleneck.kind}>
+            <TriangleAlert size={10} /><div><strong>{summary.flowAnalytics.handoffTiming.bottleneck.label}</strong><span>{durationLabel(summary.flowAnalytics.handoffTiming.bottleneck.minutes)} · {summary.flowAnalytics.handoffTiming.bottleneck.workerCode || "RENDSZER"}{summary.flowAnalytics.handoffTiming.bottleneck.workItem ? ` · ${summary.flowAnalytics.handoffTiming.bottleneck.workItem}` : ""}</span></div>
+          </aside> : null}
+          {summary.flowAnalytics.handoffTiming.details.length ? <div className={styles.weeklyHandoffTimingDetails}>
+            {summary.flowAnalytics.handoffTiming.details.slice(0, 4).map((item, index) => <b key={item.changedAt + "-" + index} data-handoff-gap={item.gapMinutes}><strong>{item.fromWorkerCode}</strong><ArrowRightLeft size={9} /><strong>{item.toWorkerCode}</strong><span>{durationLabel(item.gapMinutes)}</span><small>{item.workItem}</small></b>)}
+          </div> : null}
+        </section> : null}
         {summary.flowAnalytics.blockers.length ? <div className={styles.weeklyFlowBlockers} data-testid="benjadmin-weekly-flow-blockers">
           <header><TriangleAlert size={11} /><strong>Elakadási okok</strong><span>{summary.flowAnalytics.blockers.length}</span></header>
           {summary.flowAnalytics.blockers.slice(0, 4).map((item, index) => <article key={item.kind + "-" + item.at + "-" + index} data-blocker-kind={item.kind}><b>{item.label}</b><span>{item.detail}</span><small>{item.workerCode || "RENDSZER"} · {shortTime(item.at)}</small></article>)}

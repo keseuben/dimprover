@@ -251,6 +251,18 @@ export type WeeklyDevelopmentSummary = {
       metrics: Array<{ key: "activities" | "completed" | "handoffs" | "waiting" | "errors"; label: string; current: number; previous: number; delta: number; deltaPercent: number | null; direction: "up" | "down" | "flat"; tone: "positive" | "negative" | "neutral" }>;
     };
     workerLoad: Array<{ code: string; activityCount: number; contextCount: number; handoffCount: number; waitCount: number; blockerCount: number; loadSharePercent: number; signal: "normal" | "watch" | "high"; previousActivityCount: number | null; activityDelta: number | null }>;
+    handoffTiming: {
+      available: boolean;
+      observedHandoffs: number;
+      averageGapMinutes: number | null;
+      medianGapMinutes: number | null;
+      maxGapMinutes: number | null;
+      zeroGapCount: number;
+      buildLockWaitEvents: number;
+      buildLockWaitMinutes: number;
+      bottleneck: { kind: "HANDOFF_GAP" | "BUILD_LOCK" | null; label: string; minutes: number | null; workerCode: string | null; workItem: string | null };
+      details: Array<{ fromWorkerCode: string; toWorkerCode: string; workItem: string; changedAt: string; gapMinutes: number; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF" }>;
+    };
   };
   truncated: boolean;
   generatedAt: string;

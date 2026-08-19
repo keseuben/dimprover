@@ -415,6 +415,32 @@ export async function collectWorkerPresenceEvidence({ client, root, coordination
 
 function mergeMetadata(existing, patch) { return { ...record(existing), ...patch }; }
 
+function nonNegativeNumber(value) { const number = Number(value); return Number.isFinite(number) ? Math.max(0, number) : 0; }
+export function buildLockTimingPatch(metaInput, waiting, nowMs, samePresence) {
+  const meta = record(metaInput);
+  const nowIso = new Date(nowMs).toISOString();
+  const previousWaiting = samePresence && meta.buildLockWaiting === true;
+  let totalMs = samePresence ? nonNegativeNumber(meta.buildLockWaitTotalMs) : 0;
+  let startedAt = samePresence ? text(meta.buildLockWaitStartedAt) : "";
+  let observationCount = samePresence ? Math.max(0, Math.round(nonNegativeNumber(meta.buildLockWaitObservationCount))) : 0;
+  let lastEndedAt = samePresence ? text(meta.buildLockWaitLastEndedAt) : "";
+  if (waiting && (!previousWaiting || !startedAt)) { startedAt = nowIso; observationCount += 1; }
+  if (!waiting && previousWaiting && startedAt) {
+    const startedMs = Date.parse(startedAt);
+    if (Number.isFinite(startedMs)) totalMs += Math.max(0, nowMs - startedMs);
+    startedAt = ""; lastEndedAt = nowIso;
+  }
+  return { buildLockWaiting: waiting, buildLockWaitStartedAt: startedAt || null, buildLockWaitTotalMs: Math.round(totalMs), buildLockWaitObservationCount: observationCount, buildLockWaitLastEndedAt: lastEndedAt || null };
+}
+export function closeBuildLockTiming(metaInput, nowMs) {
+  const meta = record(metaInput);
+  const nowIso = new Date(nowMs).toISOString();
+  let totalMs = nonNegativeNumber(meta.buildLockWaitTotalMs);
+  const startedAt = text(meta.buildLockWaitStartedAt);
+  if (meta.buildLockWaiting === true && startedAt) { const startedMs = Date.parse(startedAt); if (Number.isFinite(startedMs)) totalMs += Math.max(0, nowMs - startedMs); }
+  return { buildLockWaiting: false, buildLockWaitStartedAt: null, buildLockWaitTotalMs: Math.round(totalMs), buildLockWaitObservationCount: Math.max(0, Math.round(nonNegativeNumber(meta.buildLockWaitObservationCount))), buildLockWaitLastEndedAt: meta.buildLockWaiting === true ? nowIso : text(meta.buildLockWaitLastEndedAt) || null };
+}
+
 export async function syncWorkerPresence({ client, root, coordinationRoot, now = Date.now() }) {
   const [detected, releasedPresenceKeys] = await Promise.all([
     collectWorkerPresenceEvidence({ client, root, coordinationRoot, now }),
@@ -434,18 +460,19 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
   for (const item of detected) {
     const latest = latestByWorker.get(item.workerCode);
     const latestMeta = record(latest?.metadata);
+    const samePresence = Boolean(latest && text(latestMeta.presenceKey) === item.presenceKey && text(latestMeta.presenceState) === "ACTIVE");
     const nextMeta = {
       recordType: PRESENCE_RECORD, kind: kindForPhase(item.phase), presenceState: "ACTIVE", presenceKey: item.presenceKey,
       lastSeenAt: new Date(now).toISOString(), detectedAt: item.detectedAt, inferredBy: item.inferredBy, confidence: item.confidence,
       operation: item.operation, owner: item.owner, worktree: item.worktree, branch: item.branch, target: item.target,
       workStageIndex: item.workStageIndex || stageForPhase(item.phase), startedAt: item.startedAt, heartbeatAt: item.heartbeatAt, nextStep: item.nextStep,
-      buildLockWaiting: item.buildLockWaiting, schedulerRunId: item.schedulerRunId, schedulerSlotAt: item.schedulerSlotAt,
+      ...buildLockTimingPatch(latestMeta, item.buildLockWaiting === true, now, samePresence), schedulerRunId: item.schedulerRunId, schedulerSlotAt: item.schedulerSlotAt,
       projectId: item.projectId, mainModule: item.mainModule, moduleName: item.moduleName, submoduleName: item.submoduleName,
       workItem: item.workItem, activityAction: item.summary,
       activityNarrative: item.detail || `A BENJADMIN automatikusan észlelte ${workerName(item.workerCode)} aktív fejlesztési munkáját.`,
       productionAccess: "DENY",
     };
-    if (latest && text(latestMeta.presenceKey) === item.presenceKey && text(latestMeta.presenceState) === "ACTIVE") {
+    if (samePresence) {
       const result = await client.from("dev_center_live_worklog").update({
         phase: item.phase, summary: item.summary, detail: item.detail, metadata: mergeMetadata(latestMeta, nextMeta),
       }).eq("id", latest.id);
@@ -453,7 +480,7 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
       updated++;
     } else {
       if (latest && text(latestMeta.presenceState) === "ACTIVE") {
-        const close = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(latestMeta, { presenceState: "ENDED", endedAt: new Date(now).toISOString() }) }).eq("id", latest.id);
+        const close = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(latestMeta, { presenceState: "ENDED", endedAt: new Date(now).toISOString(), ...closeBuildLockTiming(latestMeta, now) }) }).eq("id", latest.id);
         if (!close.error) ended++;
       }
       const result = await client.from("dev_center_live_worklog").insert({
@@ -469,14 +496,14 @@ export async function syncWorkerPresence({ client, root, coordinationRoot, now =
     if (text(meta.presenceState) !== "ACTIVE") continue;
     const presenceKey = text(meta.presenceKey);
     if (releasedPresenceKeys.has(presenceKey)) {
-      const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString(), endReason: "LEASE_RELEASED" }) }).eq("id", latest.id);
+      const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString(), endReason: "LEASE_RELEASED", ...closeBuildLockTiming(meta, now) }) }).eq("id", latest.id);
       if (!result.error) ended++;
       continue;
     }
     if (detectedCodes.has(code)) continue;
     const lastSeenMs = Date.parse(text(meta.lastSeenAt || latest.created_at));
     if (Number.isFinite(lastSeenMs) && now - lastSeenMs < ACTIVE_TTL_MS) continue;
-    const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString() }) }).eq("id", latest.id);
+    const result = await client.from("dev_center_live_worklog").update({ metadata: mergeMetadata(meta, { presenceState: "ENDED", endedAt: new Date(now).toISOString(), ...closeBuildLockTiming(meta, now) }) }).eq("id", latest.id);
     if (!result.error) ended++;
   }
   return { ok: true, detected: detected.map((item) => ({ workerCode: item.workerCode, phase: item.phase, inferredBy: item.inferredBy, presenceKey: item.presenceKey })), inserted, updated, ended, productionAccess: "DENY" };

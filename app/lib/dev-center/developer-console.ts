@@ -426,6 +426,10 @@ type WorkerPresenceView = {
   heartbeatAt: string | null;
   nextStep: string | null;
   buildLockWaiting: boolean;
+  buildLockWaitStartedAt: string | null;
+  buildLockWaitTotalMs: number;
+  buildLockWaitObservationCount: number;
+  buildLockWaitLastEndedAt: string | null;
   schedulerRunId: string | null;
   schedulerSlotAt: string | null;
   inferredBy: string;
@@ -446,6 +450,8 @@ type WorkerPresenceTransitionView = {
   fromWorkerCode: string;
   toWorkerCode: string;
   changedAt: string;
+  fromLastSeenAt: string;
+  gapMinutes: number | null;
   reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF";
   taskId: string | null;
   projectId: string | null;
@@ -495,6 +501,10 @@ function mapWorkerPresenceRow(row: Row, nowMs: number): WorkerPresenceView {
     heartbeatAt: text(metadata.heartbeatAt) || null,
     nextStep: text(metadata.nextStep) || null,
     buildLockWaiting: metadata.buildLockWaiting === true,
+    buildLockWaitStartedAt: text(metadata.buildLockWaitStartedAt) || null,
+    buildLockWaitTotalMs: Number.isFinite(Number(metadata.buildLockWaitTotalMs)) ? Math.max(0, Number(metadata.buildLockWaitTotalMs)) : 0,
+    buildLockWaitObservationCount: Number.isFinite(Number(metadata.buildLockWaitObservationCount)) ? Math.max(0, Math.round(Number(metadata.buildLockWaitObservationCount))) : 0,
+    buildLockWaitLastEndedAt: text(metadata.buildLockWaitLastEndedAt) || null,
     schedulerRunId: text(metadata.schedulerRunId) || null,
     schedulerSlotAt: text(metadata.schedulerSlotAt) || null,
     inferredBy: text(metadata.inferredBy),
@@ -528,12 +538,21 @@ function deriveWorkerPresenceTransitions(history: WorkerPresenceView[]): WorkerP
     if (!contextKey || !current.workerCode) continue;
     const previous = lastByContext.get(contextKey);
     if (previous && previous.workerCode !== current.workerCode) {
+      const fromLastSeenAt = previous.endedAt || previous.lastSeenAt || previous.detectedAt || previous.createdAt;
+      const changedAt = current.detectedAt || current.createdAt;
+      const fromMs = Date.parse(fromLastSeenAt);
+      const changedMs = Date.parse(changedAt);
+      const gapMinutes = Number.isFinite(fromMs) && Number.isFinite(changedMs)
+        ? Math.max(0, Math.round((changedMs - fromMs) / 60_000))
+        : null;
       transitions.push({
         id: previous.id + ":" + current.id,
         contextKey,
         fromWorkerCode: previous.workerCode,
         toWorkerCode: current.workerCode,
-        changedAt: current.detectedAt || current.createdAt,
+        changedAt,
+        fromLastSeenAt,
+        gapMinutes,
         reason: current.taskId ? "TASK_HANDOFF" : "CONTEXT_HANDOFF",
         taskId: current.taskId,
         projectId: current.projectId,
@@ -722,6 +741,18 @@ export type DeveloperWeeklySummary = {
       metrics: Array<{ key: "activities" | "completed" | "handoffs" | "waiting" | "errors"; label: string; current: number; previous: number; delta: number; deltaPercent: number | null; direction: "up" | "down" | "flat"; tone: "positive" | "negative" | "neutral" }>;
     };
     workerLoad: Array<{ code: string; activityCount: number; contextCount: number; handoffCount: number; waitCount: number; blockerCount: number; loadSharePercent: number; signal: "normal" | "watch" | "high"; previousActivityCount: number | null; activityDelta: number | null }>;
+    handoffTiming: {
+      available: boolean;
+      observedHandoffs: number;
+      averageGapMinutes: number | null;
+      medianGapMinutes: number | null;
+      maxGapMinutes: number | null;
+      zeroGapCount: number;
+      buildLockWaitEvents: number;
+      buildLockWaitMinutes: number;
+      bottleneck: { kind: "HANDOFF_GAP" | "BUILD_LOCK" | null; label: string; minutes: number | null; workerCode: string | null; workItem: string | null };
+      details: Array<{ fromWorkerCode: string; toWorkerCode: string; workItem: string; changedAt: string; gapMinutes: number; reason: "TASK_HANDOFF" | "CONTEXT_HANDOFF" }>;
+    };
   };
   truncated: boolean;
   generatedAt: string;
@@ -931,7 +962,41 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   const weeklyTransitions = deriveWorkerPresenceTransitions(weeklyPresenceHistory)
     .filter((item) => inPeriod(item.changedAt))
     .filter((item) => !projectId || item.projectId === projectId);
-  const buildLockWaits = weeklyPresenceHistory.filter((item) => item.buildLockWaiting);
+  const buildLockWaits = weeklyPresenceHistory.filter((item) => item.buildLockWaiting || item.buildLockWaitTotalMs > 0 || item.buildLockWaitObservationCount > 0);
+  const weeklyObservationEndMs = Math.min(Date.now(), Math.max(0, Date.parse(period.endAt) - 1));
+  const observedPresenceMinutes = (item: WorkerPresenceView) => {
+    let totalMs = item.buildLockWaitTotalMs;
+    const waitStartedMs = Date.parse(item.buildLockWaitStartedAt || "");
+    if (item.buildLockWaiting && Number.isFinite(waitStartedMs)) totalMs += Math.max(0, weeklyObservationEndMs - waitStartedMs);
+    if (totalMs > 0) return Math.max(0, Math.round(totalMs / 60_000));
+    if (!item.buildLockWaiting) return 0;
+    const startMs = Date.parse(item.detectedAt || item.createdAt);
+    const endMs = Date.parse(item.endedAt || item.lastSeenAt || item.detectedAt || item.createdAt);
+    return Number.isFinite(startMs) && Number.isFinite(endMs) ? Math.max(0, Math.round((endMs - startMs) / 60_000)) : 0;
+  };
+  const buildLockWaitEventCount = buildLockWaits.reduce((sum, item) => sum + Math.max(1, item.buildLockWaitObservationCount || 0), 0);
+  const observedHandoffDetails = weeklyTransitions
+    .filter((item): item is WorkerPresenceTransitionView & { gapMinutes: number } => item.gapMinutes !== null)
+    .map((item) => ({ fromWorkerCode: item.fromWorkerCode, toWorkerCode: item.toWorkerCode, workItem: item.workItem, changedAt: item.changedAt, gapMinutes: item.gapMinutes, reason: item.reason }));
+  const handoffGaps = observedHandoffDetails.map((item) => item.gapMinutes).sort((a, b) => a - b);
+  const averageHandoffGapMinutes = handoffGaps.length ? Math.round(handoffGaps.reduce((sum, value) => sum + value, 0) / handoffGaps.length) : null;
+  const medianHandoffGapMinutes = handoffGaps.length
+    ? handoffGaps.length % 2
+      ? handoffGaps[Math.floor(handoffGaps.length / 2)]
+      : Math.round((handoffGaps[handoffGaps.length / 2 - 1] + handoffGaps[handoffGaps.length / 2]) / 2)
+    : null;
+  const maxHandoffGapMinutes = handoffGaps.length ? handoffGaps[handoffGaps.length - 1] : null;
+  const buildLockWindows = buildLockWaits.map((item) => ({ item, minutes: observedPresenceMinutes(item) }));
+  const buildLockWaitMinutes = buildLockWindows.reduce((sum, item) => sum + item.minutes, 0);
+  const longestBuildLock = [...buildLockWindows].sort((a, b) => b.minutes - a.minutes)[0] || null;
+  const slowestHandoff = [...observedHandoffDetails].sort((a, b) => b.gapMinutes - a.gapMinutes)[0] || null;
+  const handoffBottleneckMinutes = slowestHandoff?.gapMinutes ?? null;
+  const buildLockBottleneckMinutes = longestBuildLock?.minutes ?? null;
+  const bottleneck = buildLockBottleneckMinutes !== null && (handoffBottleneckMinutes === null || buildLockBottleneckMinutes > handoffBottleneckMinutes)
+    ? { kind: "BUILD_LOCK" as const, label: "Leghosszabb build-lock várakozás", minutes: buildLockBottleneckMinutes, workerCode: longestBuildLock?.item.workerCode || null, workItem: longestBuildLock?.item.workItem || null }
+    : handoffBottleneckMinutes !== null
+      ? { kind: "HANDOFF_GAP" as const, label: "Leghosszabb worker-átadási rés", minutes: handoffBottleneckMinutes, workerCode: slowestHandoff?.toWorkerCode || null, workItem: slowestHandoff?.workItem || null }
+      : { kind: null, label: "Nincs mért időbeli szűk keresztmetszet", minutes: null, workerCode: null, workItem: null };
   const relevantAudits = (audits.data || []).filter((raw) => {
     const row = raw as Row;
     return !projectId || text(row.project_id) === projectId;
@@ -958,7 +1023,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
   const totalWorkerActivities = workerSummary.reduce((sum, worker) => sum + worker.activityCount, 0);
   const workerLoad: DeveloperWeeklySummary["flowAnalytics"]["workerLoad"] = workerSummary.map((worker) => {
     const handoffCount = weeklyTransitions.filter((item) => item.fromWorkerCode === worker.code || item.toWorkerCode === worker.code).length;
-    const waitCount = buildLockWaits.filter((item) => item.workerCode === worker.code).length;
+    const waitCount = buildLockWaits.filter((item) => item.workerCode === worker.code).reduce((sum, item) => sum + Math.max(1, item.buildLockWaitObservationCount || 0), 0);
     const blockerCount = blockers.filter((item) => item.workerCode === worker.code && item.kind !== "BUILD_LOCK_WAIT").length;
     const loadSharePercent = totalWorkerActivities ? Math.round((worker.activityCount / totalWorkerActivities) * 100) : 0;
     const signal = blockerCount >= 2 || waitCount >= 2 || (workerSummary.length >= 2 && loadSharePercent >= 60 && worker.activityCount >= 20)
@@ -972,7 +1037,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     schedulerReady: Boolean(schedulerSnapshot?.ready),
     schedulerRuns: schedulerRunStats,
     handoffs: weeklyTransitions.length,
-    buildLockWaits: buildLockWaits.length,
+    buildLockWaits: buildLockWaitEventCount,
     waitingForWorker: waitingAudits.length,
     taskFailures: failedAudits.length,
     stageCounts: weeklyStageCounts,
@@ -980,6 +1045,18 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     blockers: blockers.slice(0, 8),
     trend: { available: false, previousWeekKey: period.previousWeekKey, metrics: [] },
     workerLoad,
+    handoffTiming: {
+      available: observedHandoffDetails.length > 0 || buildLockWaits.length > 0,
+      observedHandoffs: observedHandoffDetails.length,
+      averageGapMinutes: averageHandoffGapMinutes,
+      medianGapMinutes: medianHandoffGapMinutes,
+      maxGapMinutes: maxHandoffGapMinutes,
+      zeroGapCount: handoffGaps.filter((value) => value === 0).length,
+      buildLockWaitEvents: buildLockWaitEventCount,
+      buildLockWaitMinutes,
+      bottleneck,
+      details: [...observedHandoffDetails].sort((a, b) => b.gapMinutes - a.gapMinutes || b.changedAt.localeCompare(a.changedAt)).slice(0, 6),
+    },
   };
   const summary: DeveloperWeeklySummary = {
     ready: true,
