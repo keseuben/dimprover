@@ -209,6 +209,8 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
     return { width, height, left, top, bottom, chartHeight, maxValue, coordinates, polyline: coordinates.map((point) => `${point.x},${point.y}`).join(" ") };
   }, [trendHistory, trendMetric]);
 
+  const portfolioTargetWeek = weekKey || summary?.period.weekKey || "";
+  const portfolioReadyForSelection = Boolean(portfolio?.ready && (!portfolioTargetWeek || portfolio.period.weekKey === portfolioTargetWeek));
   const summaryProjectId = summary?.projectId || "";
   const readyForSelection = Boolean(summary?.ready
     && summaryProjectId === selectedProjectId
@@ -355,9 +357,9 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span data-alert={summary.stats.blockedTasks || summary.stats.errors ? "true" : "false"}><b>{summary.stats.blockedTasks}</b> blokkolt · <b>{summary.stats.errors}</b> hiba</span>
       </div>
 
-      <section className={styles.weeklyPortfolio} data-testid="benjadmin-weekly-portfolio" data-ready={portfolio?.ready ? "true" : "false"} data-week-key={portfolio?.period.weekKey || summary.period.weekKey} data-project-count={portfolio?.totals.projects || 0}>
+      <section className={styles.weeklyPortfolio} data-testid="benjadmin-weekly-portfolio" data-ready={portfolioReadyForSelection ? "true" : "false"} data-week-key={portfolioReadyForSelection ? portfolio?.period.weekKey || summary.period.weekKey : portfolioTargetWeek || summary.period.weekKey} data-project-count={portfolio?.totals.projects || 0}>
         <header><BarChart3 size={12} /><strong>PROJEKTPORTFÓLIÓ · HETI ÖSSZEVETÉS</strong><span>{portfolio?.period.label || summary.period.label}{portfolioLoading ? " · frissítés…" : ""}</span></header>
-        {portfolio ? <div className={styles.weeklyPortfolioTotals}>
+        {portfolioReadyForSelection && portfolio ? <div className={styles.weeklyPortfolioTotals}>
           <article><span>Projekt</span><strong>{portfolio.totals.projects}</strong><small>{portfolio.totals.workers} aktív worker</small></article>
           <article><span>Átlag score</span><strong>{portfolio.totals.averageScore}/100</strong><small>{portfolio.totals.stable} stabil</small></article>
           <article data-alert={portfolio.totals.critical || portfolio.totals.watch ? "true" : "false"}><span>Figyelendő</span><strong>{portfolio.totals.watch}</strong><small>{portfolio.totals.critical} beavatkozás</small></article>
@@ -365,7 +367,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
           <article><span>Lezárt</span><strong>{portfolio.totals.completed}</strong><small>{portfolio.totals.activities} aktivitás</small></article>
         </div> : null}
         {portfolioError ? <p className={styles.weeklyPortfolioError}>{portfolioError}</p> : null}
-        {portfolio?.projects.length ? <div className={styles.weeklyPortfolioList}>
+        {portfolioReadyForSelection && portfolio?.projects.length ? <div className={styles.weeklyPortfolioList}>
           {portfolio.projects.map((project) => <button type="button" key={project.projectId} data-portfolio-project={project.projectId} data-rank={project.rank} data-status={project.managementStatus} data-selected={selectedProjectId === project.projectId ? "true" : "false"} onClick={() => onSelectProject?.(project.projectId)}>
             <span className={styles.weeklyPortfolioRank}>{project.rank}</span>
             <div className={styles.weeklyPortfolioProject}>
@@ -383,7 +385,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
               <span><b>{project.workers}</b> worker</span>
             </div>
           </button>)}
-        </div> : <p className={styles.weeklySummaryEmpty}>{portfolioLoading ? "A heti projektportfólió betöltése…" : "Nincs aktív projekt a heti portfólióban."}</p>}
+        </div> : <p className={styles.weeklySummaryEmpty}>{portfolioLoading || !portfolioReadyForSelection ? "A heti projektportfólió betöltése…" : "Nincs aktív projekt a heti portfólióban."}</p>}
       </section>
 
       <section className={styles.weeklyManagementSummary} data-testid="benjadmin-weekly-management-summary" data-status={summary.managementSummary.status} data-score={summary.managementSummary.score}>
