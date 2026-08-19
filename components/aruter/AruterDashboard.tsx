@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { aruterFeatureFlags, aruterOrders, aruterProducts, aruterRealtimeEvents } from "@/app/lib/aruter/mockData";
 import type { AruterCartItem, AruterOrder, AruterOrderStatus, AruterProduct, AruterRealtimeEvent, AruterTemplate } from "@/app/lib/aruter/types";
+import { createMockAruterOrderNumber } from "@/app/lib/aruter/mockOrderNumber";
 
 const templates: Array<{ key: AruterTemplate; label: string; description: string }> = [
   { key: "kertészet", label: "Kertészet", description: "külső árutér, növény, zsákos és raklapos áruk" },
@@ -123,7 +124,7 @@ export default function AruterDashboard() {
 
   function sendCartToCashier() {
     if (cartItems.length === 0) return;
-    const orderNumber = `AR-2026-${String(orders.length + 1).padStart(4, "0")}`;
+    const orderNumber = createMockAruterOrderNumber(orders.length);
     const order: AruterOrder = {
       id: `ord-${Date.now()}`,
       orderNumber,

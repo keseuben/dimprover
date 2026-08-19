@@ -1900,3 +1900,31 @@ A legacy mirror teljes HTTP E2E egy külön mock-infrastruktúra problémát tá
 - következő hardening: régi SQL indexek/RPC-k fokozatos `deleted_at` átírása csak későbbi takarításként, nem blokkolja az MVP-t.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Restart-safe mock Árutér order number
+
+A legacy mirror runtime során talált QA/DEV sorszámütközés javítva a forrásnál.
+
+Korábbi mock működés:
+- minden új server/browser mock session az aktuális `orders.length + 1` alapján generált;
+- új Next processzben a baseline 2 demo rendelés miatt ismét `AR-2026-0003` jött létre;
+- Commerce audit-szintű order-number unique szabály helyesen elutasította az ismételt sorszámot.
+
+Új mock működés:
+- közös helper: `app/lib/aruter/mockOrderNumber.ts`;
+- `AR-<UTC év>-<UTC timestamp>-<sequence>-<entropy>` formátum;
+- `crypto.randomUUID()` entropy elsődlegesen, browser-safe fallbackkel;
+- serverRepository, Zustand mock store és AruterDashboard ugyanazt a helpert használja;
+- production/database order-number sequence szabályhoz nem nyúltunk.
+
+QA:
+- mock order-number contract: 14/14 PASS;
+- TypeScript: PASS;
+- ESLint: PASS;
+- diff-check: PASS.
+
+A sikertelen mirror E2E által létrehozott egyetlen `HTTP Mirror QA` FAILED reconciliation rekord guardolt ellenőrzés után `deleted_at` soft-delete-tal archiválva lett; hard delete nem történt.
+
+Következő kapu: új production candidate build és teljes legacy mirror HTTP lifecycle ismétlés.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
