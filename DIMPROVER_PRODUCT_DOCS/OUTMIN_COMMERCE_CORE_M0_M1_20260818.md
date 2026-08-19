@@ -2418,3 +2418,87 @@ Cleanup:
 - runtime error scan 0.
 
 A korábbi „nincs valódi browser interaction E2E” hiány ezzel lezárva a Storefront kosár UI foundationre.
+
+### 2026-08-19 20:xx checkpoint — Storefront Mirror Automatic Worker Foundation
+
+Elkészült az automatikus Storefront Commerce mirror queue worker foundation, shared DEV aktiválás nélkül.
+
+Service context:
+- új `app/lib/commerce/core/service-context.ts`;
+- explicit organizationId + DIMPRO userId szükséges;
+- csak valós, aktív `dimpro_users` rekord;
+- csak aktív `dimpro_organizations` rekord;
+- csak pontos organization/user aktív membership;
+- lejárt membership elutasítva;
+- role alapján a meglévő `resolveCommercePermissions()` ad jogosultságot;
+- a worker előre ellenőrzi az összes szükséges Commerce permissiont.
+
+Worker:
+- `scripts/run-commerce-storefront-mirror-worker.mjs`;
+- opt-in: `DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ENABLED=0` alapból;
+- trusted organization: meglévő `ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID`;
+- explicit valódi actor: `DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ACTOR_USER_ID`;
+- batch limit 1–25, alap 10;
+- fulfillment source esetén plusz `commerce.inventory.move` permission;
+- alap required permissions: product.read, order.write, order.pay, order.issue, order.reconcile;
+- `--check` mód csak contextet és due countot ellenőriz, nem dolgoz fel;
+- normál mód a meglévő `listDueCommerceMirrorAttempts()` + `retryDueAruterOrderCommerceMirrors()` domain logikát használja;
+- nincs párhuzamos Commerce mirror implementáció;
+- részleges batch hiba esetén non-zero exit;
+- output nem tartalmaz env dumpot vagy service secretet.
+
+TS modul újrahasznosítás:
+- a projektben már meglévő `jiti` runtime loader használva, új dependency nélkül;
+- worker-only `scripts/server-only-worker-noop.cjs` alias;
+- az alkalmazás `import "server-only"` védelme változatlanul megmaradt;
+- a no-op shim kizárólag trusted CLI worker importkörben aktív.
+
+Systemd template, csak forrásként:
+- `ops/systemd/dimpro-commerce-storefront-mirror-worker.service`;
+- `ops/systemd/dimpro-commerce-storefront-mirror-worker.timer`;
+- oneshot service, külön `/etc/dimpro/commerce-storefront-mirror-worker.env`;
+- 1 perces timer, 10 mp randomized delay;
+- NoNewPrivileges / ProtectSystem / ProtectHome / kernel/control-group hardening;
+- `systemd-analyze verify`: PASS;
+- NEM történt systemd install/enable/start.
+
+Runtime:
+- valós DEV ADMIN membershippel worker `--check`: PASS, dueCount=0;
+- Worker contract: 35/35 PASS;
+- Worker runtime E2E: 19/19 PASS.
+
+Worker runtime E2E bizonyította:
+- Commerce 0.1.13 / 14;
+- induláskor 0 idegen due job;
+- ideiglenes valós DIMPRO USER actor fixture;
+- USER worker `--check` COMMERCE_SERVICE_PERMISSION_DENIED hibával elutasítva;
+- ugyanaz az actor ADMIN membershipre emelve pozitív tesztre;
+- PENDING service queue fixture attempt_count=0;
+- azonnal due, last_attempt_at NULL;
+- worker process exit 0;
+- pontosan 1 due job feldolgozva, 1 siker, 0 hiba;
+- outputban nincs service-role secret;
+- attempt SUCCEEDED, attempt_count=1;
+- last error NULL;
+- egy aktív EXTERNAL_MARKETPLACE / SENT_TO_CASHIER Commerce order;
+- order created_by_user_id = worker actor;
+- unresolved tétel explicit UNRESOLVED;
+- mirror success audit actor = worker actor;
+- második worker run exit 0, requested=0;
+- replay után ugyanaz az egy SUCCEEDED attempt marad.
+
+QA cleanup:
+- due jobs 0;
+- aktív Worker QA attempts 0;
+- aktív Worker QA orders 0;
+- aktív Worker QA users 0.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: AUTOMATIC MIRROR WORKER FOUNDATION — KÓD KÉSZ / RUNTIME TESZTELT;
+- Modul: Storefront persistent Commerce queue worker;
+- DB: 0.1.13 / 14, ehhez a blokkhoz nincs új migráció;
+- UI: nincs új UI;
+- worker timer: csak template, shared DEV-en NINCS aktiválva;
+- ismert hiány: deployment/enable workflow és dedicated technikai actor létrehozási/admin folyamata még nincs release-re kész állapotban;
+- következő: production candidate build + worker regresszió, majd dedicated worker actor provisioning/activation terv vagy legacy database order persistence;
+- PROD változatlan.
