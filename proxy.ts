@@ -246,7 +246,9 @@ export async function proxy(request: NextRequest) {
     url.protocol = "https:";
     url.hostname = isDevEnvironment ? "app.dev.dimpro.hu" : "app.dimpro.hu";
     url.port = "";
-    url.pathname = pathname === "/" ? "/aruter" : pathname;
+    url.pathname = pathname === "/"
+      ? (isDevEnvironment ? "/aruter/kovacs-kerteszet" : "/aruter")
+      : pathname;
     return NextResponse.redirect(url);
   }
 
