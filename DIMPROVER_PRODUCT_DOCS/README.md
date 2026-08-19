@@ -239,3 +239,5 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `284_terepi_gps_fototerkep_pdf_export_checkpoint_20260819.md` – Terepi GPS fotótérkép A4/A3 PDF export checkpoint, közös északi nyíllal és műszaki disclaimerrel.
 - `285_terepi_gps_fototerkep_kalibracios_pont_foundation_20260819.md` – minimum 3 pontos GPS kalibrációs foundation: 5–10 s többmintás rögzítés, ponttípusok és accuracy metaadatok.
 - `286_terepi_gps_fototerkep_dev_activation_20260819.md` – Terepi GPS fotótérkép A–E DEV aktiválás: geometry/UI/PDF/calibration, 34/34 candidate + live mobil gate és teljes kliensszinkron E2E PASS; aktív build `JZWHdY79muoXk59R06jdM`.
+
+- `288_benjadmin_weekly_development_flow_v1_1_dev_activation_20260819.md` – Weekly Development Flow V1.1 DEV aktiválás: előző heti trendek + worker terhelés; feature `81e7111`, combined runtime `395e490`, 19/19 contract + 34/34 live PASS, tsc PASS, lint 0 error / 103 warning, PROD DENY.
