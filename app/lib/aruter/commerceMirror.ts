@@ -162,7 +162,7 @@ export async function retryDueAruterOrderCommerceMirrors(context: CommerceContex
         attemptId: attempt.id,
         orderNumber: attempt.orderNumber,
         mirrored: result.mirrored,
-        errorCode: result.mirrored ? null : result.errorCode,
+        errorCode: "errorCode" in result ? result.errorCode : null,
       });
     } catch (error) {
       results.push({ attemptId: attempt.id, orderNumber: attempt.orderNumber, mirrored: false, errorCode: errorCode(error) });

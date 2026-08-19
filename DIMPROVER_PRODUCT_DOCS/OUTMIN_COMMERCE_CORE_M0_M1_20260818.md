@@ -1192,3 +1192,32 @@ Tesztkapuk:
 - következő blokk: candidate build/smoke, majd DEV-only feature-flag mirror E2E.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 07:xx checkpoint — Legacy mirror lifecycle runtime E2E
+
+A tényleges mirror service lifecycle valós DEV adatbázison végigtesztelve:
+- `sent_to_cashier` → Commerce `SENT_TO_CASHIER`;
+- ugyanazon legacy rendelés `paid` frissítése ugyanazt a Commerce ordert használja és `CARD` fizetést rögzít;
+- `issued` frissítés ugyanazt a Commerce ordert viszi `ISSUED` állapotba;
+- a nem azonosított legacy tétel `UNRESOLVED` marad és nem blokkolja a pénztári életciklust;
+- három lifecycle mirror hívásból pontosan egy aktív Commerce order jön létre;
+- reconciliation állapot `SUCCEEDED`, attemptCount=3, legfrissebb legacy snapshot=`issued`;
+- PAID/ISSUED státuszesemények, mirror audit és outbox események rögzülnek;
+- terminális ISSUED rendelés kikerül az aktív cashier queue-ból;
+- hibás tenanttal kiváltott Commerce hiba strukturált fail-open eredményt ad és nem dob kezeletlen kivételt;
+- QA attempt és QA Commerce order a teszt végén archiválva.
+
+Valós DEV runtime E2E: 14/14 PASS.
+
+Kiegészítő javítás:
+- a due-batch result TypeScript union kezelése explicit `errorCode in result` guardot kapott, így standalone/egyedi TS fordításban is típusbiztos.
+
+34. pont szerinti állapot:
+- elkészült: service-level teljes legacy mirror lifecycle E2E;
+- részben elkészült: HTTP/session/Next `after()` feature-flag E2E candidate runtime-on még hátravan;
+- hiányzik: shared DEV feature flag tartós aktiválása — ezt továbbra sem kapcsoljuk be a candidate bizonyítás előtt;
+- DB: 0.1.8 / 9 változatlan;
+- teszt: `scripts/commerce-legacy-mirror-runtime-e2e.ts` 14/14 PASS;
+- következő lépés: `c6a68ca` utáni legfrissebb commit candidate build + külön HTTP smoke.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
