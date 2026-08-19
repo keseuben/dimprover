@@ -2,7 +2,7 @@
 
 **Dátum:** 2026-08-19
 **Környezet:** kizárólag DEV
-**Állapot:** source gate zöld · runtime release gate előtt · PROD DENY
+**Állapot:** DEV AKTÍV · 2026-08-19 18:42:03 CEST · PROD DENY
 
 ## Cél
 
@@ -95,24 +95,116 @@ Responsive:
 - `scripts/benjadmin-weekly-development-flow-v21-trend-contract.mjs`;
 - `scripts/benjadmin-weekly-development-flow-v21-trend-runtime-browser-acceptance.mjs`.
 
-## Jelenlegi kapuk
+## Release és validáció
+
+### Source és canonical állapot
+
+- termékfunkció exact source commit: **`c92240a6d6cbd5ec62aba8b4a5f63da37c831977`** (`c92240a`);
+- navigációs acceptance-bővítés: **`291623bfd664fb0bea984c6086b2ebb797e1b5db`** (`291623b`);
+- canonical operator és `integration/benjadmin-dev` a cutoverkor: **`291623b`**;
+- a `291623b` commit kizárólag runtime/browser acceptance tesztet bővít, ezért az aktív Next artifact exact termék-source commitja `c92240a` marad.
+
+### Build és release artifact
+
+- exact candidate build: **2026-08-19 18:22:08–18:27:57 CEST**, exit 0;
+- BUILD_ID: **`vD_5lQneV9pW7XQbj6qoA`**;
+- standalone ellenőrzés: **PASS**;
+- 248 statikus chunk ellenőrizve;
+- aktív DEV release: **`.next-benjadmin-weekly-flow-v21-trends-release-c92240a`**;
+- előző rollback release: `.next-benjadmin-weekly-flow-v20-report-release-cecb103`;
+- promotion hardlink-alapú, újrafordítás nélkül.
+
+### Teljesítmény
+
+A candidate runtime-on a `GET /api/dev/console/weekly-trend-history?weeks=8` mérés:
+
+- HTTP 200;
+- **1,349 s** teljes válaszidő;
+- 8 megjelenített heti pont;
+- 9 nyers heti snapshot, legfeljebb 3-as batch-ekben;
+- `productionAccess: DENY`.
+
+### DEV cutover
+
+- cutover: **2026-08-19 18:41:54–18:42:03 CEST**;
+- központi koordinátor: `restart · ARMINAI`;
+- exit code: **0**;
+- PM2 PID: `247362`;
+- PM2 státusz: **online**;
+- `NEXT_DIST_DIR`: `.next-benjadmin-weekly-flow-v21-trends-release-c92240a`;
+- trend smoke: **8 hét / 8 pont / PROD DENY**;
+- V2.0 report smoke: **BENJADMIN_WEEKLY_REPORT_V2_0 / PROD DENY**.
+
+Backupok:
+
+- integration: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v21-integration-20260819T183558+0200`;
+- artifact promotion: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v21-artifact-promotion-20260819T184059+0200`;
+- cutover: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v21-cutover-20260819T184154+0200`;
+- docs closeout: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v21-doc-closeout-20260819T184700+0200`.
+
+### Statikus kapuk
 
 - V2.1 contract: **24/24 PASS**;
+- V2.0 report contract: **23/23 PASS**;
+- V1.4 contract: **34/34 PASS**;
 - célzott ESLint: **PASS**;
 - `npx tsc --noEmit`: **PASS**;
+- teljes `npm run lint`: **0 error / 103 meglévő warning**;
 - `git diff --check`: **PASS**;
-- PROD access: **DENY**.
+- új DB migráció: **nincs**.
 
-## Függő release gate
+### Candidate runtime acceptance
 
-- feature commit;
-- exact candidate build;
-- trend API + browser runtime acceptance;
-- V2.0 report regresszió;
-- V1.4 Flow regresszió;
-- Weekly Summary / Common Chat / Scheduler regresszió;
-- canonical integráció;
-- teljes lint;
-- release artifact;
-- DEV PM2 cutover + smoke;
-- dokumentációs closeout.
+Az exact `c92240a` artifacton:
+
+- V2.1 multi-week trend: **19/19 PASS**;
+- V2.0 report export: **21/21 PASS**;
+- V1.4 Flow: **58/58 PASS**;
+- Weekly Summary V1.1: **35/35 PASS**;
+- Common Chat V2: **30/30 PASS**;
+- Overnight Scheduler runtime: **30/30 PASS**;
+- Overnight Scheduler browser: **14/14 PASS**.
+
+A V2.1 acceptance külön igazolja, hogy:
+
+- 8 heti pont érkezik időrendben;
+- minden score 0–100 közé esik;
+- az öt metrikaváltó működik;
+- az aktuális hét jelölve van;
+- korábbi hétre navigálva a trend anchor követi a kiválasztott hetet (`2026-08-10`), majd visszatér az aktuális hétre (`2026-08-17`);
+- desktopon nincs oldal-overflow;
+- mobilon a chart saját belső vízszintes scrollt használ.
+
+### Élő post-cutover acceptance
+
+Az aktív 3100-as DEV runtime-on:
+
+- V2.1 multi-week trend: **19/19 PASS**;
+- V2.0 report export: **21/21 PASS**;
+- V1.4 Flow: **58/58 PASS**;
+- Weekly Summary V1.1: **35/35 PASS**;
+- Common Chat V2: **30/30 PASS**;
+- Overnight Scheduler runtime: **30/30 PASS**;
+- Overnight Scheduler browser: **14/14 PASS**;
+- `productionAccess`: **DENY**.
+
+A Common Chat V2 első post-cutover futása a 23. ellenőrzés után egyszeri Puppeteer 10 másodperces UI-wait timeouttal megszakadt. Ugyanazon, változatlan live runtime-on az azonnali újrafutás **30/30 PASS** eredményt adott, ezért nem reprodukálható browser-acceptance időzítési jelenségként lett rögzítve.
+
+### Post-cutover operáció
+
+- `/admin/dev-console`: **PASS**;
+- `/terep`: **PASS**;
+- `/api/field-capture/health`: **PASS**;
+- trend-history endpoint: **PASS**;
+- V2.0 report endpoint: **PASS**;
+- PM2 error log utolsó módosítása: **2026-08-19 17:42:45 CEST**, tehát a V2.1 18:42-es cutover után nem keletkezett új PM2 error-log bejegyzés;
+- DEV tárhely a closeout ellenőrzéskor: **89%**, kb. **13 GB** szabad;
+- swap: **509 MiB / 509 MiB** használatban, ezért további nagy buildkör előtt erőforrás-karbantartás javasolt.
+
+## Biztonság
+
+- kizárólag DEV módosult;
+- PROD write/build/restart nem történt;
+- új adatbázis-migráció nincs;
+- minden új API DEV-center auth mögött marad;
+- a history response és a hozzá kapcsolódó release metadata `productionAccess: DENY` állapotú.
