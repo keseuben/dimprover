@@ -49,4 +49,10 @@ check("timer runs at minute cadence",timer.includes("OnUnitActiveSec=1min"));
 check("timer has randomized delay",timer.includes("RandomizedDelaySec=10"));
 check("worker env docs actor id",env.includes("DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ACTOR_USER_ID="));
 check("worker env docs bounded limit",env.includes("DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_LIMIT=10"));
+
+check("systemd env example is DEV-only and contains no secret value",systemdEnv.includes("DEV-only minta")&&!/SUPABASE_SERVICE_ROLE_KEY=\S+/.test(systemdEnv));
+check("systemd env example keeps worker disabled",systemdEnv.includes("DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ENABLED=0"));
+check("systemd env example requires organization mapping",systemdEnv.includes("ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID="));
+check("systemd env example requires explicit worker actor",systemdEnv.includes("DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ACTOR_USER_ID="));
+check("systemd env example documents bounded default batch",systemdEnv.includes("DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_LIMIT=10"));
 const failed=checks.filter(([,ok])=>!ok);console.log(`RESULT ${checks.length-failed.length}/${checks.length} PASS`);assert.equal(failed.length,0,failed.map(([n])=>n).join(", "));
