@@ -76,6 +76,10 @@ check("env example keeps Commerce queue disabled by default",envExample.includes
 check("env example documents trusted business slug mapping",envExample.includes("ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG="));
 check("env example documents trusted organization mapping",envExample.includes("ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID="));
 
+
+check("multi-item checkout flag is explicit opt-in",pilot.includes("ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED")&&pilot.includes('=== "1"'));
+check("disabled pilot never exposes multi-item UI",pilot.includes("multiItemCheckoutEnabled: false"));
+check("enabled catalog exposes multi-item checkout capability",pilot.includes("multiItemCheckoutEnabled: isStorefrontMultiItemCheckoutEnabled()"));
 const failed=checks.filter((item)=>!item.condition);
 console.log(`RESULT ${checks.length-failed.length}/${checks.length} PASS`);
 assert.equal(failed.length,0,failed.map((item)=>item.name).join(", "));

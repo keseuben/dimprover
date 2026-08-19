@@ -12,6 +12,7 @@ const UNIT_VALUES = new Set<AruterUnit>(["db", "kg", "m", "m2", "m3", "raklap", 
 export type StorefrontPilotCatalog = {
   pilotEnabled: boolean;
   orderBridgeEnabled: boolean;
+  multiItemCheckoutEnabled: boolean;
   businessSlug: string;
   products: AruterPublicProduct[];
 };
@@ -31,6 +32,10 @@ export function isStorefrontOrderBridgeEnabled() {
 
 export function isStorefrontCommerceQueueEnabled() {
   return process.env.ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED?.trim() === "1";
+}
+
+export function isStorefrontMultiItemCheckoutEnabled() {
+  return process.env.ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED?.trim() === "1";
 }
 
 function storefrontCommerceQueueTarget(businessSlug: string) {
@@ -103,7 +108,7 @@ function publicProduct(product: AruterProduct): AruterPublicProduct {
 export async function getStorefrontPilotCatalog(businessSlugInput: string): Promise<StorefrontPilotCatalog> {
   const businessSlug = businessSlugInput.trim();
   if (!isStorefrontPilotEnabled()) {
-    return { pilotEnabled: false, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), businessSlug, products: [] };
+    return { pilotEnabled: false, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), multiItemCheckoutEnabled: false, businessSlug, products: [] };
   }
   const template = resolveStorefrontTemplate(businessSlug);
   const products = (await getStorefrontRepositoryProducts())
@@ -112,7 +117,7 @@ export async function getStorefrontPilotCatalog(businessSlugInput: string): Prom
     .filter((product) => product.isPublicOffer !== false)
     .slice(0, 100)
     .map(publicProduct);
-  return { pilotEnabled: true, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), businessSlug, products };
+  return { pilotEnabled: true, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), multiItemCheckoutEnabled: isStorefrontMultiItemCheckoutEnabled(), businessSlug, products };
 }
 
 export async function normalizeStorefrontReservationInput(

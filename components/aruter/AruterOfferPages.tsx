@@ -29,6 +29,7 @@ import {
 import { aruterDemoBusiness, aruterTodayPreparations, type AruterPublicProduct } from "@/app/lib/aruter/publicOfferData";
 import type { AruterPublicReservation } from "@/app/lib/aruter/publicReservation";
 import { AruterBrand, AruterCard, AruterPageShell } from "./AruterShared";
+import { StorefrontMultiItemCheckout, type StorefrontCartLine, type StorefrontCheckoutSuccess } from "./StorefrontMultiItemCheckout";
 
 function currency(value: number) {
   return new Intl.NumberFormat("hu-HU", { style: "currency", currency: "HUF", maximumFractionDigits: 0 }).format(value);
@@ -47,10 +48,26 @@ function ProductVisual({ tone, className = "" }: { tone: AruterPublicProduct["im
   return <div className={`overflow-hidden rounded-2xl bg-gradient-to-br ${toneClasses[tone]} ${className}`}><div className="h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.55),transparent_22%),radial-gradient(circle_at_80%_35%,rgba(255,255,255,.20),transparent_18%),linear-gradient(135deg,transparent,rgba(0,0,0,.20))]" /></div>;
 }
 
-function PublicProductCard({ product, compact = false, onReserve }: { product: AruterPublicProduct; compact?: boolean; onReserve?: (product: AruterPublicProduct) => void }) {
+function PublicProductCard({
+  product,
+  compact = false,
+  onReserve,
+  multiItemMode = false,
+  cartQuantity = 0,
+  onAddToCart,
+}: {
+  product: AruterPublicProduct;
+  compact?: boolean;
+  onReserve?: (product: AruterPublicProduct) => void;
+  multiItemMode?: boolean;
+  cartQuantity?: number;
+  onAddToCart?: (product: AruterPublicProduct) => void;
+}) {
   const unavailable = product.stockStatus === "out_of_stock";
   const stockLabel = unavailable ? "Nincs készleten" : product.stockStatus === "limited" ? "Korlátozott készlet" : "Készleten";
   const stockClass = unavailable ? "text-rose-700" : product.stockStatus === "limited" ? "text-amber-700" : "text-emerald-700";
+  const actionLabel = unavailable ? "Elfogyott" : multiItemMode ? (cartQuantity > 0 ? `+ Kosárba (${cartQuantity})` : "Kosárba") : "Foglalás";
+  const handleAction = () => multiItemMode ? onAddToCart?.(product) : onReserve?.(product);
 
   if (compact) {
     return (
@@ -62,7 +79,7 @@ function PublicProductCard({ product, compact = false, onReserve }: { product: A
           <p className="mt-1 text-lg font-black text-teal-700">{currency(product.price)} / {product.unit}</p>
           <p className={`text-sm font-bold ${stockClass}`}>{unavailable ? "×" : "✓"} {stockLabel}</p>
         </div>
-        <button type="button" onClick={() => onReserve?.(product)} disabled={unavailable} className="rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{unavailable ? "Elfogyott" : "Foglalás"}</button>
+        <button type="button" onClick={handleAction} disabled={unavailable} className="rounded-xl bg-teal-700 px-3 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{actionLabel}</button>
       </article>
     );
   }
@@ -75,7 +92,7 @@ function PublicProductCard({ product, compact = false, onReserve }: { product: A
         <p className="text-sm font-semibold text-slate-500">{product.description}</p>
         <p className="mt-2 text-lg font-black text-slate-950">{currency(product.price)} / {product.unit}</p>
         <p className={`mt-1 text-sm font-bold ${stockClass}`}>{unavailable ? "×" : "●"} {stockLabel}</p>
-        <button type="button" onClick={() => onReserve?.(product)} disabled={unavailable} className="mt-4 w-full rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{unavailable ? "Nincs készleten" : "Foglalás"}</button>
+        <button type="button" onClick={handleAction} disabled={unavailable} className="mt-4 w-full rounded-xl bg-teal-700 px-4 py-3 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300">{unavailable ? "Nincs készleten" : actionLabel}</button>
       </div>
     </article>
   );
@@ -255,32 +272,58 @@ export function AruterPublicOfferPage() {
   const [products, setProducts] = useState<AruterPublicProduct[]>(business.products);
   const [pilotCatalogEnabled, setPilotCatalogEnabled] = useState(false);
   const [orderBridgeEnabled, setOrderBridgeEnabled] = useState(false);
+  const [multiItemCheckoutEnabled, setMultiItemCheckoutEnabled] = useState(false);
+  const [cartLines, setCartLines] = useState<StorefrontCartLine[]>([]);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [lastCheckout, setLastCheckout] = useState<StorefrontCheckoutSuccess | null>(null);
 
   useEffect(() => {
     let active = true;
     fetch(`/api/aruter/public-products?businessSlug=${encodeURIComponent(business.slug)}`)
       .then((response) => response.json())
-      .then((result: { ok: boolean; data?: { pilotEnabled: boolean; orderBridgeEnabled: boolean; products: AruterPublicProduct[] } }) => {
+      .then((result: { ok: boolean; data?: { pilotEnabled: boolean; orderBridgeEnabled: boolean; multiItemCheckoutEnabled: boolean; products: AruterPublicProduct[] } }) => {
         if (!active || !result.ok || !result.data) return;
         setPilotCatalogEnabled(result.data.pilotEnabled);
         setOrderBridgeEnabled(result.data.orderBridgeEnabled);
+        setMultiItemCheckoutEnabled(result.data.multiItemCheckoutEnabled);
+        if (!result.data.multiItemCheckoutEnabled) setCartLines([]);
         setProducts(result.data.pilotEnabled ? result.data.products : business.products);
       })
       .catch(() => undefined);
     return () => { active = false; };
   }, [business.products, business.slug]);
 
+  const cartQuantity = cartLines.reduce((sum, line) => sum + line.quantity, 0);
+  const cartGrossTotal = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const cartQuantityFor = (productId: string) => cartLines.find((line) => line.product.id === productId)?.quantity ?? 0;
+  const addToCart = (product: AruterPublicProduct) => {
+    setSelectedProduct(null);
+    setLastCheckout(null);
+    setCartLines((lines) => {
+      const existing = lines.find((line) => line.product.id === product.id);
+      if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line);
+      return [...lines, { product, quantity: 1 }];
+    });
+  };
+  const updateCartQuantity = (productId: string, quantity: number) => {
+    setCartLines((lines) => quantity <= 0 ? lines.filter((line) => line.product.id !== productId) : lines.map((line) => line.product.id === productId ? { ...line, quantity } : line));
+  };
+  const removeFromCart = (productId: string) => setCartLines((lines) => lines.filter((line) => line.product.id !== productId));
+
   return (
     <AruterPageShell className="bg-white pb-8">
       <header className="border-b border-slate-200 bg-white px-4 py-4"><div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4"><AruterBrand compact /><nav className="flex items-center gap-4 text-sm font-black text-slate-700"><a className="hidden items-center gap-2 md:flex"><HelpCircle size={18} /> Hogyan működik?</a><a className="flex items-center gap-2"><LogIn size={18} /> Bejelentkezés</a></nav></div></header>
       <main className="mx-auto max-w-[1500px] px-4 py-5">
         <section className="relative overflow-hidden rounded-[30px] bg-slate-900 text-white shadow-[0_22px_80px_rgba(15,23,42,0.18)]"><div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_38%,rgba(244,114,182,.62),transparent_24%),radial-gradient(circle_at_72%_35%,rgba(132,204,22,.58),transparent_31%),radial-gradient(circle_at_48%_18%,rgba(255,255,255,.16),transparent_18%),linear-gradient(135deg,#14352d,#041915)]" /><div className="absolute inset-0 bg-black/38" /><div className="relative flex min-h-[330px] flex-col items-center justify-center px-6 py-10 text-center md:min-h-[300px] md:items-start md:px-24 md:text-left"><span className="mb-5 flex h-28 w-28 items-center justify-center rounded-3xl bg-white text-emerald-700 shadow-xl ring-8 ring-white/10"><Leaf size={58} /></span><h1 className="text-4xl font-black md:text-6xl">{business.name}</h1><p className="mt-3 text-xl font-semibold text-white/90">{business.tagline}</p><div className="mt-6 flex flex-wrap gap-3"><button className="rounded-xl bg-teal-700 px-5 py-3 font-black">Foglalás menete</button><button className="rounded-xl border border-white/70 px-5 py-3 font-black">Kapcsolat</button></div></div></section>
-        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]"><section><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><label className="flex h-14 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm"><Search size={18} /><input className="flex-1 outline-none" placeholder="Keresés termékre..." /></label><div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{business.categories.map((category) => <button key={category} className="shrink-0 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black hover:bg-teal-50">{category}</button>)}</div></div><div className="mb-5 rounded-2xl border border-lime-200 bg-lime-50 p-4 text-center"><p className="text-lg font-black text-emerald-800">Online foglalás · Előkészítés · Személyes átvétel</p><p className="mt-1 font-semibold text-slate-600">Foglaljon online, mi előkészítjük, Ön pedig a kiválasztott időpontban átveszi.</p>{pilotCatalogEnabled && <div className="mt-3 flex flex-wrap items-center justify-center gap-2"><span className="rounded-full bg-emerald-700 px-3 py-1 text-xs font-black text-white">Pilot katalógus · pénztári törzsadatból</span>{orderBridgeEnabled && <span className="rounded-full bg-blue-700 px-3 py-1 text-xs font-black text-white">Pénztári bridge aktív</span>}</div>}</div>{products.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center font-bold text-slate-500">A pilot katalógusban jelenleg nincs foglalható termék.</div> : <><div className="hidden grid-cols-2 gap-4 md:grid lg:grid-cols-3 xl:grid-cols-4">{products.map((product) => <PublicProductCard key={product.id} product={product} onReserve={setSelectedProduct} />)}</div><div className="grid gap-3 md:hidden">{products.map((product) => <PublicProductCard key={product.id} product={product} compact onReserve={setSelectedProduct} />)}</div></>}</section><aside className="space-y-4"><AruterCard className="p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-black"><CalendarDays className="text-teal-700" /> Mai átvételi idősávok</h2><p className="mb-4 text-sm font-semibold text-slate-500">Válasszon időpontot a mai átvételhez.</p><div className="grid grid-cols-4 gap-2 xl:grid-cols-2">{business.pickupSlots.map((slot, index) => <button key={slot.id} className={`rounded-xl border px-3 py-3 font-black ${index === 0 ? "border-teal-700 bg-teal-700 text-white" : "border-slate-200 bg-white"}`}>{slot.label}</button>)}</div><div className="mt-5 text-sm"><p className="font-black">Átvételi helyszín:</p><p className="font-semibold text-slate-600">{business.name}<br />{business.address}</p></div></AruterCard><AruterCard className="p-5"><h2 className="mb-4 text-xl font-black">Miért érdemes foglalni?</h2>{["Garantált termék elérhetőség", "Időmegtakarítás a helyszínen", "Elkerülheti a készlethiányt", "Ingyenes előkészítés"].map((item) => <p key={item} className="mb-3 flex items-center gap-2 font-semibold text-slate-600"><Check size={18} className="text-emerald-700" />{item}</p>)}</AruterCard></aside></div>
+        <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]"><section><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><label className="flex h-14 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm"><Search size={18} /><input className="flex-1 outline-none" placeholder="Keresés termékre..." /></label><div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{business.categories.map((category) => <button key={category} className="shrink-0 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black hover:bg-teal-50">{category}</button>)}</div></div><div className="mb-5 rounded-2xl border border-lime-200 bg-lime-50 p-4 text-center"><p className="text-lg font-black text-emerald-800">Online foglalás · Előkészítés · Személyes átvétel</p><p className="mt-1 font-semibold text-slate-600">Foglaljon online, mi előkészítjük, Ön pedig a kiválasztott időpontban átveszi.</p>{pilotCatalogEnabled && <div className="mt-3 flex flex-wrap items-center justify-center gap-2"><span className="rounded-full bg-emerald-700 px-3 py-1 text-xs font-black text-white">Pilot katalógus · pénztári törzsadatból</span>{orderBridgeEnabled && <span className="rounded-full bg-blue-700 px-3 py-1 text-xs font-black text-white">Pénztári bridge aktív</span>}{multiItemCheckoutEnabled && <span className="rounded-full bg-violet-700 px-3 py-1 text-xs font-black text-white">Többtételes kosár aktív</span>}</div>}</div>{products.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center font-bold text-slate-500">A pilot katalógusban jelenleg nincs foglalható termék.</div> : <><div className="hidden grid-cols-2 gap-4 md:grid lg:grid-cols-3 xl:grid-cols-4">{products.map((product) => <PublicProductCard key={product.id} product={product} onReserve={setSelectedProduct} multiItemMode={multiItemCheckoutEnabled} cartQuantity={cartQuantityFor(product.id)} onAddToCart={addToCart} />)}</div><div className="grid gap-3 md:hidden">{products.map((product) => <PublicProductCard key={product.id} product={product} compact onReserve={setSelectedProduct} multiItemMode={multiItemCheckoutEnabled} cartQuantity={cartQuantityFor(product.id)} onAddToCart={addToCart} />)}</div></>}</section><aside className="space-y-4">{multiItemCheckoutEnabled && <AruterCard className="p-5"><div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-xl font-black"><ShoppingBag className="text-teal-700" /> Kosár</h2><span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-black text-teal-700">{cartQuantity} egység</span></div>{cartLines.length === 0 ? <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">A kosár üres. Tegyen bele több terméket, majd egy rendelésként küldje el.</p> : <><div className="mt-4 space-y-2">{cartLines.slice(0, 4).map((line) => <div key={line.product.id} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate font-bold text-slate-700">{line.quantity} × {line.product.name}</span><b className="shrink-0 text-slate-900">{currency(line.product.price * line.quantity)}</b></div>)}</div>{cartLines.length > 4 && <p className="mt-2 text-xs font-bold text-slate-400">+ {cartLines.length - 4} további termék</p>}<div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4"><span className="font-black text-slate-600">Összesen</span><b className="text-xl text-teal-700">{currency(cartGrossTotal)}</b></div><button type="button" onClick={() => setCheckoutOpen(true)} className="mt-4 w-full rounded-2xl bg-teal-700 py-3 font-black text-white">Tovább a rendeléshez</button></>}</AruterCard>}<AruterCard className="p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-black"><CalendarDays className="text-teal-700" /> Mai átvételi idősávok</h2><p className="mb-4 text-sm font-semibold text-slate-500">Válasszon időpontot a mai átvételhez.</p><div className="grid grid-cols-4 gap-2 xl:grid-cols-2">{business.pickupSlots.map((slot, index) => <button key={slot.id} className={`rounded-xl border px-3 py-3 font-black ${index === 0 ? "border-teal-700 bg-teal-700 text-white" : "border-slate-200 bg-white"}`}>{slot.label}</button>)}</div><div className="mt-5 text-sm"><p className="font-black">Átvételi helyszín:</p><p className="font-semibold text-slate-600">{business.name}<br />{business.address}</p></div></AruterCard><AruterCard className="p-5"><h2 className="mb-4 text-xl font-black">Miért érdemes foglalni?</h2>{["Garantált termék elérhetőség", "Időmegtakarítás a helyszínen", "Elkerülheti a készlethiányt", "Ingyenes előkészítés"].map((item) => <p key={item} className="mb-3 flex items-center gap-2 font-semibold text-slate-600"><Check size={18} className="text-emerald-700" />{item}</p>)}</AruterCard></aside></div>
+        {lastCheckout && <section className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="text-xl font-black text-emerald-800">Rendelés elküldve</h2><p className="mt-2 font-semibold text-slate-700">{lastCheckout.orderNumber} · {lastCheckout.lineCount} tétel · {lastCheckout.itemQuantity} egység · {currency(lastCheckout.grossTotal)}</p></section>}
         {createdReservations.length > 0 && <section className="mt-5 rounded-3xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="text-xl font-black text-emerald-800">{pilotCatalogEnabled ? "Legutóbbi pilot foglalás" : "Legutóbbi demo foglalás"}</h2><p className="mt-2 font-semibold text-slate-700">{createdReservations[0].customerName} · {createdReservations[0].quantity} {createdReservations[0].productUnit} {createdReservations[0].productName} · Átvétel: {createdReservations[0].pickupSlotLabel}</p></section>}
         <section className="mt-5 grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 md:grid-cols-4"><div><h3 className="flex items-center gap-2 font-black"><MapPin size={18} className="text-teal-700" /> Elérhetőség</h3><p className="mt-2 text-sm font-semibold text-slate-600">{business.address}<br />Bejárat a főút felől, ingyenes parkolás.</p></div><div><h3 className="flex items-center gap-2 font-black"><Clock3 size={18} className="text-teal-700" /> Nyitvatartás</h3>{business.openingHours.map((row) => <p key={row.label} className="mt-1 flex justify-between text-sm font-semibold text-slate-600"><span>{row.label}</span><span>{row.value}</span></p>)}</div><div><h3 className="flex items-center gap-2 font-black"><Phone size={18} className="text-teal-700" /> Kapcsolat</h3><p className="mt-2 text-sm font-semibold text-slate-600">{business.phone}<br />{business.email}</p></div><div className="rounded-2xl bg-[linear-gradient(135deg,#e2e8f0,#f8fafc)] p-5"><MapPin className="mx-auto text-teal-700" size={44} /><p className="text-center text-sm font-black text-slate-500">Térkép helye</p></div></section>
         <section className="mt-5 rounded-3xl bg-teal-50 p-6"><h2 className="mb-5 text-center text-2xl font-black text-teal-800">Hogyan működik?</h2><div className="grid gap-4 md:grid-cols-3">{[["1", "Foglalás", "Válassza ki a termékeket és a megfelelő átvételi idősávot online."], ["2", "Előkészítés", "Összekészítjük a rendelését, hogy gyorsan átvehesse."], ["3", "Átvétel", "Érkezzen a kiválasztott idősávban, és vegye át rendelését."]].map(([num, title, text]) => <div key={num} className="rounded-2xl bg-white p-5"><b className="text-2xl text-teal-700">{num}</b><h3 className="mt-2 text-xl font-black">{title}</h3><p className="mt-2 font-semibold text-slate-600">{text}</p></div>)}</div></section>
       </main>
-      <ReservationSheet product={selectedProduct} onClose={() => setSelectedProduct(null)} onReservationCreated={(reservation) => setCreatedReservations((items) => [reservation, ...items])} />
+      <ReservationSheet product={multiItemCheckoutEnabled ? null : selectedProduct} onClose={() => setSelectedProduct(null)} onReservationCreated={(reservation) => setCreatedReservations((items) => [reservation, ...items])} />
+      <StorefrontMultiItemCheckout open={multiItemCheckoutEnabled && checkoutOpen} businessSlug={business.slug} pickupSlots={business.pickupSlots} lines={cartLines} onClose={() => setCheckoutOpen(false)} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onCompleted={(result) => { setLastCheckout(result); setCartLines([]); }} />
+      {multiItemCheckoutEnabled && cartQuantity > 0 && !checkoutOpen && <button type="button" onClick={() => setCheckoutOpen(true)} className="fixed bottom-4 left-4 right-4 z-40 flex items-center justify-between rounded-2xl bg-teal-700 px-5 py-4 font-black text-white shadow-2xl md:hidden"><span className="flex items-center gap-2"><ShoppingBag size={20} /> Kosár · {cartQuantity}</span><span>{currency(cartGrossTotal)}</span></button>}
     </AruterPageShell>
   );
 }

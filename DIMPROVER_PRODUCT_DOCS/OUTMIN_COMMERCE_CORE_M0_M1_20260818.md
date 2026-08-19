@@ -2278,3 +2278,71 @@ DEV storage karbantartás a build előtt:
 - Shared DEV cutover: NEM történt;
 - UI: következő blokkban kosár és checkout sheet;
 - PROD változatlan.
+
+### 2026-08-19 19:xx checkpoint — Storefront Multi-item Cart UI Foundation
+
+Elkészült a feature-flagelt publikus többtételes kosár és checkout UI foundation úgy, hogy a meglévő egytermékes foglalás flag OFF állapotban változatlan marad.
+
+Katalógus capability:
+- `StorefrontPilotCatalog.multiItemCheckoutEnabled`;
+- pilot OFF esetén mindig false;
+- pilot ON + `ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=1` esetén true;
+- a backend checkout és a publikus catalog ugyanazt a közös feature flag helpert használja.
+
+Publikus ajánlatoldal:
+- flag OFF: termékkártya továbbra is `Foglalás`, meglévő `ReservationSheet` működik;
+- flag ON: termékkártya `Kosárba` / `+ Kosárba (n)` működésre vált;
+- azonos termék újbóli hozzáadása növeli a mennyiséget;
+- kosár jobb oldali összesítővel, tétel/mennyiség/bruttó összesítéssel;
+- üres kosár explicit állapot;
+- checkout CTA csak nem üres kosárnál;
+- mobilon fix alsó kosár CTA;
+- siker után rendelési összefoglaló jelenik meg;
+- siker után kosár ürül;
+- out-of-stock termék továbbra sem kezelhető.
+
+Új kliens komponens:
+- `components/aruter/StorefrontMultiItemCheckout.tsx`;
+- mobilon bottom-sheet, desktopon középre igazított modal;
+- kosársor mennyiség +/- és törlés;
+- átvételi idősáv választás, unavailable slot tiltva;
+- név, telefon, e-mail, megjegyzés, adatkezelési elfogadás;
+- kliensoldali bruttó preview;
+- szerver által visszaadott order number/gross total jelenik meg siker esetén;
+- replay esetén külön üzenet jelzi, hogy nem készült második rendelés.
+
+Kliensoldali retry-idempotencia:
+- `useRef` őrzi a body-fingerprint + Idempotency-Key párt;
+- elsődleges kulcs: `crypto.randomUUID()`;
+- canonical fingerprint terméksorokat productId szerint rendezi;
+- változatlan body hálózati újrapróbáláskor ugyanaz a kulcs;
+- módosított kosár/customer/pickup/form esetén új kulcs;
+- raw Idempotency-Key nem jelenik meg UI-ban;
+- sikeres lezárás után retry key törlődik;
+- siker után customer name/phone/email/note/privacy state törlődik.
+
+QA:
+- Storefront Pilot contract: 62/62 PASS;
+- Multi-item backend contract: 44/44 PASS;
+- Cart UI contract: 56/56 PASS;
+- Queue Idempotency contract: 25/25 PASS;
+- Retry-due contract: 15/15 PASS;
+- legacy Árutér compatibility: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- diff-check: PASS;
+- source runtime: public-products `multiItemCheckoutEnabled=true`;
+- source runtime: `/aruter/kovacs-kerteszet` HTTP 200;
+- source runtime error scan: 0;
+- 3307 source process leállítva, port szabad.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / SOURCE RUNTIME SMOKE TESZTELT;
+- Modul: Storefront Multi-item Cart UI Foundation;
+- DB: 0.1.13 / 14, ebben a UI blokkban nincs új migráció;
+- API: public-products capability bővült, public-checkouts változatlan backend contracttal;
+- UI: kosár, checkout sheet, mobil sticky CTA, sikeres rendelési visszajelzés;
+- ismert hiány: valódi browser interaction E2E nincs külön automatizálva; database legacy repository order persistence továbbra sem runtime-ready;
+- következő: production candidate build + standalone API/page smoke + multi-item backend E2E regresszió;
+- becsült következő aktív idő: 1–2 óra;
+- PROD változatlan.

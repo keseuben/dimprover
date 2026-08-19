@@ -5,6 +5,7 @@ import { getAruterRepository } from "./repositoryFactory";
 import type { AruterOrder, AruterProduct, AruterUnit } from "./types";
 import {
   getStorefrontRepositoryProducts,
+  isStorefrontMultiItemCheckoutEnabled,
   queueStorefrontCommerceMirrorFailOpen,
   resolveStorefrontTemplate,
 } from "./storefrontPilot";
@@ -41,10 +42,6 @@ export type StorefrontCheckoutResult = {
 
 type CheckoutError = { ok: false; status: number; code: string; error: string };
 type CheckoutSuccess = { ok: true; data: StorefrontCheckoutResult };
-
-export function isStorefrontMultiItemCheckoutEnabled() {
-  return process.env.ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED?.trim() === "1";
-}
 
 function checkoutMarker(businessSlug: string, idempotencyKey: string) {
   const digest = createHash("sha256").update(`${businessSlug}|${idempotencyKey}`).digest("hex").slice(0, 24);

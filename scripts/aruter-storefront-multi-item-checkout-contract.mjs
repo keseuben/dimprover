@@ -6,7 +6,7 @@ const pilot=fs.readFileSync("app/lib/aruter/storefrontPilot.ts","utf8");
 const env=fs.readFileSync("app/lib/aruter/aruter-env.example","utf8");
 const checks=[];
 function check(name,ok){checks.push([name,Boolean(ok)]);console.log(`${ok?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`);}
-check("multi-item checkout is explicit opt-in",engine.includes("ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED")&&engine.includes('=== "1"'));
+check("multi-item checkout is explicit opt-in",pilot.includes("ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED")&&pilot.includes('=== "1"')&&engine.includes("isStorefrontMultiItemCheckoutEnabled"));
 check("env example defaults multi-item checkout off",env.includes("ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0"));
 check("checkout requires Idempotency-Key header",route.includes('request.headers.get("idempotency-key")'));
 check("idempotency key requires at least 16 characters",engine.includes("{16,128}"));
