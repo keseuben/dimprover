@@ -1221,3 +1221,22 @@ Kiegészítő javítás:
 - következő lépés: `c6a68ca` utáni legfrissebb commit candidate build + külön HTTP smoke.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 07:xx checkpoint — HTTP/session mirror E2E harness staged
+
+Elkészült a candidate runtime-ra szánt teljes HTTP/session E2E harness:
+- ideiglenes DEV Supabase auth user + DIMPRO identity + ADMIN organization membership;
+- valós SSR auth cookie előállítás;
+- Commerce context + `commerce.order.reconcile` ellenőrzés;
+- legacy `POST /api/aruter/orders` → Next `after()` → Commerce reconciliation polling;
+- külső rendelés megjelenése a Commerce cashier queue-ban;
+- legacy `paid` és `issued` státusz API-k végigvezetése;
+- ugyanazon Commerce order újrahasználata és `UNRESOLVED` tétel non-blocking ellenőrzése;
+- terminális rendelés cashier queue-ból kikerülése;
+- `/aruter/admin/egyeztetes` és legacy `/aruter/penztar` route ellenőrzés;
+- Commerce QA rekordok archiválása és ideiglenes identity/auth fixture törlése.
+
+A harness szerződéses ellenőrzése: 17/17 PASS.
+A tényleges HTTP E2E futtatás a legfrissebb Outmin candidate build elkészülte után történik, `ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=1` kizárólag a külön candidate processben.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
