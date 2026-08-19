@@ -1,24 +1,41 @@
 "use client";
 
-import { Compass, MapPinned, Route } from "lucide-react";
+import { Compass, Download, LoaderCircle, MapPinned, Route } from "lucide-react";
 import { buildGpsPhotoMapModel, fitGpsPhotoMapToViewport } from "@/app/lib/field-capture/gpsPhotoMap";
+import { downloadGpsPhotoMapPdf, type GpsPhotoMapPdfPaperSize } from "@/app/lib/field-capture/gpsPhotoMapPdf";
+import { useState } from "react";
 import type { FieldCaptureItem } from "@/app/lib/field-capture/types";
 import SurveyNorthMark from "@/components/viewers/SurveyNorthMark";
 
 const WIDTH = 760;
 const HEIGHT = 430;
 
-export default function GpsPhotoMapPanel({ items }: { items: FieldCaptureItem[] }) {
+export default function GpsPhotoMapPanel({ items, projectName }: { items: FieldCaptureItem[]; projectName?: string | null }) {
+  const [exporting, setExporting] = useState<GpsPhotoMapPdfPaperSize | null>(null);
+  const [exportMessage, setExportMessage] = useState("");
   const model = buildGpsPhotoMapModel(items);
   if (!model) return null;
   const points = fitGpsPhotoMapToViewport(model, { width: WIDTH, height: HEIGHT, padding: 64 });
   const byId = new Map(points.map((point) => [point.id, point]));
 
+  async function exportPdf(paperSize: GpsPhotoMapPdfPaperSize) {
+    setExporting(paperSize);
+    setExportMessage("");
+    try {
+      const result = await downloadGpsPhotoMapPdf({ items, paperSize, orientation: "landscape", projectName });
+      setExportMessage(`${result.paperSize} PDF elkészült · ${result.pointCount} GPS-fotópont`);
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : "A GPS fotótérkép PDF exportja nem sikerült.");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <section data-terep-gps-photo-map="true" className="mt-3 overflow-hidden rounded-[1.6rem] border border-cyan-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cyan-100 bg-cyan-50/70 p-4">
         <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-800 text-white"><MapPinned size={19} /></span><div><p className="text-[10px] font-black uppercase tracking-[.12em] text-cyan-800">Terepi GPS fotótérkép</p><h3 className="mt-1 text-base font-black text-slate-950">{model.points.length} GPS-fotópont</h3><p className="mt-1 text-xs leading-5 text-slate-600">A szaggatott vonal a fotók készítési sorrendjét jelöli, nem a tényleges bejárt útvonalat.</p></div></div>
-        <div className="rounded-xl border border-cyan-200 bg-white px-3 py-2 text-right text-[10px] font-bold text-slate-600"><strong className="block text-cyan-900">Helyszíni kiterjedés</strong>{model.bounds.widthMeters.toFixed(1)} × {model.bounds.heightMeters.toFixed(1)} m</div>
+        <div className="flex flex-col items-end gap-2"><div className="rounded-xl border border-cyan-200 bg-white px-3 py-2 text-right text-[10px] font-bold text-slate-600"><strong className="block text-cyan-900">Helyszíni kiterjedés</strong>{model.bounds.widthMeters.toFixed(1)} × {model.bounds.heightMeters.toFixed(1)} m</div><div className="flex gap-2"><button type="button" data-gps-photo-map-export="A4" disabled={exporting !== null} onClick={() => void exportPdf("A4")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-cyan-300 bg-white px-3 text-[10px] font-black text-cyan-900 disabled:opacity-50">{exporting === "A4" ? <LoaderCircle size={13} className="animate-spin" /> : <Download size={13} />} A4 PDF</button><button type="button" data-gps-photo-map-export="A3" disabled={exporting !== null} onClick={() => void exportPdf("A3")} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-cyan-300 bg-white px-3 text-[10px] font-black text-cyan-900 disabled:opacity-50">{exporting === "A3" ? <LoaderCircle size={13} className="animate-spin" /> : <Download size={13} />} A3 PDF</button></div>{exportMessage ? <p data-gps-photo-map-export-message className="max-w-[260px] text-right text-[10px] font-bold text-slate-600">{exportMessage}</p> : null}</div>
       </div>
       <div className="p-3 sm:p-4">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">

@@ -325,7 +325,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
           {!online ? <p className="mt-2 text-[11px] font-bold text-amber-800">Hálózat nélkül nem indul szerveres művelet; a képek az IndexedDB-ben maradnak.</p> : null}
         </div></section> : null}
 
-        {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} /> : null}
+        {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} projectName={session?.projectName} /> : null}
 
         {message ? <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-950">{message}</div> : null}
 

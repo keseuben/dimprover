@@ -12,6 +12,7 @@ import { getSurveyThermalBoundarySegments } from "@/components/property-survey/p
 import { getSurveySectionInternalWallPositions, getSurveySectionLengthMeters, surveyRoofShapeLabels, surveySectionKindLabels, type SurveySectionLine } from "@/components/property-survey/propertySurveySectionModel";
 import type { PropertySurveyDraft, PropertySurveyProject } from "@/components/property-survey/propertySurveyWorkspaceTypes";
 import type { SurveyRoom } from "@/components/viewers/SurveyFloorPlanEngine";
+import { drawSurveyNorthMarkPdf } from "@/components/viewers/drawSurveyNorthMarkPdf";
 
 const MM_TO_PT = 72 / 25.4;
 const SURVEY_SHEET_FRAME_INSET_MM = 5;
@@ -80,60 +81,6 @@ function drawTextBlock(input: { page: PDFPage; text: string; x: number; y: numbe
   const lines = wrapText(input.text, input.font, input.size, input.width).slice(0, input.maxLines || 100);
   lines.forEach((line, index) => input.page.drawText(line, { x: input.x, y: input.y - index * lineHeight, size: input.size, font: input.boldFont || input.font, color: input.color }));
   return input.y - lines.length * lineHeight;
-}
-
-function hexagonPoints(centerX: number, centerY: number, radius: number) {
-  return Array.from({ length: 6 }, (_, index) => {
-    const angle = Math.PI / 3 * index - Math.PI / 6;
-    return { x: centerX + Math.cos(angle) * radius, y: centerY + Math.sin(angle) * radius };
-  });
-}
-
-function rotatePdfPoint(point: { x: number; y: number }, center: { x: number; y: number }, degrees: number) {
-  const radians = degrees * Math.PI / 180;
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-  return {
-    x: center.x + dx * Math.cos(radians) - dy * Math.sin(radians),
-    y: center.y + dx * Math.sin(radians) + dy * Math.cos(radians),
-  };
-}
-
-function drawPdfPolygon(input: { page: PDFPage; points: Array<{ x: number; y: number }>; color: PdfColor; borderColor: PdfColor; borderWidth: number }) {
-  const pageHeight = input.page.getHeight();
-  const [first, ...rest] = input.points;
-  const path = [`M ${first.x.toFixed(3)} ${(pageHeight - first.y).toFixed(3)}`, ...rest.map((point) => `L ${point.x.toFixed(3)} ${(pageHeight - point.y).toFixed(3)}`), "Z"].join(" ");
-  input.page.drawSvgPath(path, { x: 0, y: pageHeight, scale: 1, color: input.color, borderColor: input.borderColor, borderWidth: input.borderWidth });
-}
-
-function drawNorthMark(input: { page: PDFPage; centerX: number; centerY: number; northAngle: number; font: PDFFont; bold: PDFFont; rgb: PdfLibRuntime["rgb"] }) {
-  const dark = input.rgb(0.04, 0.18, 0.2);
-  const cyan = input.rgb(0.02, 0.55, 0.61);
-  const mint = input.rgb(0.37, 0.92, 0.83);
-  const outerPoints = hexagonPoints(input.centerX, input.centerY, 25);
-  drawPdfPolygon({ page: input.page, points: outerPoints, color: input.rgb(0.93, 1, 0.99), borderColor: cyan, borderWidth: 2.4 });
-
-  const center = { x: input.centerX, y: input.centerY };
-  const localPointer = [
-    { x: input.centerX, y: input.centerY + 24 },
-    { x: input.centerX + 14, y: input.centerY + 7 },
-    { x: input.centerX + 11, y: input.centerY - 10 },
-    { x: input.centerX, y: input.centerY - 20 },
-    { x: input.centerX - 11, y: input.centerY - 10 },
-    { x: input.centerX - 14, y: input.centerY + 7 },
-  ];
-  const pointerPoints = localPointer.map((point) => rotatePdfPoint(point, center, -input.northAngle));
-  drawPdfPolygon({ page: input.page, points: pointerPoints, color: dark, borderColor: mint, borderWidth: 1.5 });
-
-  const spineStart = rotatePdfPoint({ x: input.centerX, y: input.centerY + 18 }, center, -input.northAngle);
-  const spineEnd = rotatePdfPoint({ x: input.centerX, y: input.centerY - 14 }, center, -input.northAngle);
-  const miniArrowLeft = rotatePdfPoint({ x: input.centerX - 3.5, y: input.centerY + 12.5 }, center, -input.northAngle);
-  const miniArrowRight = rotatePdfPoint({ x: input.centerX + 3.5, y: input.centerY + 12.5 }, center, -input.northAngle);
-  input.page.drawLine({ start: spineStart, end: spineEnd, thickness: 1.1, color: mint, opacity: 0.58 });
-  input.page.drawLine({ start: miniArrowLeft, end: spineStart, thickness: 1.4, color: mint, opacity: 0.92 });
-  input.page.drawLine({ start: miniArrowRight, end: spineStart, thickness: 1.4, color: mint, opacity: 0.92 });
-  input.page.drawText("É", { x: input.centerX - 3.2, y: input.centerY - 3, size: 9, font: input.bold, color: input.rgb(1, 1, 1) });
-  input.page.drawText("DIMPRO", { x: input.centerX - 17, y: input.centerY - 36, size: 6.8, font: input.bold, color: cyan });
 }
 
 function getLevelRooms(draft: PropertySurveyDraft, levelId: string) {
@@ -527,7 +474,7 @@ function drawCover(input: { pdf: PDFDocument; draft: PropertySurveyDraft; projec
   page.drawText("DIMPRO", { x: 45, y: page.getHeight() - 70, size: 30, font: input.bold, color: input.rgb(0.58, 0.96, 0.89) });
   page.drawText("FELMERESI DOKUMENTUMCSOMAG", { x: 45, y: page.getHeight() - 102, size: 13, font: input.bold, color: input.rgb(1, 1, 1) });
   page.drawText("v0.8.0 - terepi energetikai es felujitasi csomag", { x: 45, y: page.getHeight() - 121, size: 8.5, font: input.font, color: input.rgb(0.78, 0.89, 0.9) });
-  drawNorthMark({ page, centerX: page.getWidth() - 82, centerY: page.getHeight() - 78, northAngle: input.draft.northAngle, font: input.font, bold: input.bold, rgb: input.rgb });
+  drawSurveyNorthMarkPdf({ page, centerX: page.getWidth() - 82, centerY: page.getHeight() - 78, northAngle: input.draft.northAngle, bold: input.bold, rgb: input.rgb });
   let y = page.getHeight() - 205;
   page.drawText(safePdfText(input.draft.surveyName), { x: 45, y, size: 20, font: input.bold, color: dark, maxWidth: page.getWidth() - 90 });
   y -= 38;
@@ -1006,7 +953,7 @@ export async function createSurveyBuildingVectorPdf(input: {
     const transform = createTransform(bounds, page, rooms.length > 0);
     if (isIndustrial) drawIndustrialPlan({ page, draft: input.draft, level, transform, font, bold, rgb });
     else drawGeneralPlan({ page, draft: input.draft, level, rooms, issues: input.issues, transform, font, bold, rgb });
-    drawNorthMark({ page, centerX: page.getWidth() - 78, centerY: page.getHeight() - 92, northAngle: input.draft.northAngle, font, bold, rgb });
+    drawSurveyNorthMarkPdf({ page, centerX: page.getWidth() - 78, centerY: page.getHeight() - 92, northAngle: input.draft.northAngle, bold, rgb });
     drawSurveySheetFrame({ page, rgb });
     drawTitleBlock({
       page,
