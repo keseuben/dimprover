@@ -59,6 +59,14 @@ try {
   check("Trend UI anchor matches API anchor", desktop.anchor === history.anchorWeekKey, `${desktop.anchor} / ${history.anchorWeekKey}`);
   check("Trend UI desktop overflow safe", desktop.overflow === false, JSON.stringify(desktop));
 
+  const previousWeekKey = history.points.at(-2)?.weekKey;
+  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button[title="Előző hét"]');
+  await page.waitForFunction((weekKey) => document.querySelector('[data-testid="benjadmin-weekly-trend-history"]')?.getAttribute("data-anchor-week") === weekKey, { timeout: 60_000 }, previousWeekKey);
+  check("Trend anchor follows previous-week navigation", await page.$eval('[data-testid="benjadmin-weekly-trend-history"]', (node) => node.getAttribute("data-anchor-week")) === previousWeekKey, String(previousWeekKey));
+  await page.click('[data-testid="benjadmin-weekly-summary-toolbar"] > button[title="Következő hét"]');
+  await page.waitForFunction((weekKey) => document.querySelector('[data-testid="benjadmin-weekly-trend-history"]')?.getAttribute("data-anchor-week") === weekKey, { timeout: 60_000 }, history.anchorWeekKey);
+  check("Trend anchor returns to current week", await page.$eval('[data-testid="benjadmin-weekly-trend-history"]', (node) => node.getAttribute("data-anchor-week")) === history.anchorWeekKey, history.anchorWeekKey);
+
   await page.click('[data-trend-metric="errors"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="benjadmin-weekly-trend-history"]')?.getAttribute("data-metric") === "errors");
   const errorsMetric = await page.evaluate(() => ({
