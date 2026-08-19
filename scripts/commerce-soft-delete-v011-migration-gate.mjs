@@ -8,6 +8,9 @@ const root=process.cwd();
 const mode=(process.argv[2]||"preflight").trim().toLowerCase();
 const migrationRel="supabase/migrations/20260819143000_dimpro_commerce_soft_delete_conformance_v011.sql";
 const migration=join(root,migrationRel);
+const rollbackRel="supabase/rollback/DIMPRO_COMMERCE_SOFT_DELETE_CONFORMANCE_V011_ROLLBACK.sql";
+const rollback=join(root,rollbackRel);
+const expectedRollbackSha="8873442eb91adeb0b310d4bba1f445ede04b404de792904db21756e3bcc265ec";
 const expectedSha="ddafd28288829e4e63359978bee06cfd0019b104bd117aa3a17538705c13443b";
 const approvalPhrase="DEV_ONLY_COMMERCE_SOFT_DELETE_V011_APPLY_APPROVED";
 const approval=(process.env.COMMERCE_SOFT_DELETE_V011_MIGRATION_APPROVED||"").trim();
@@ -45,16 +48,26 @@ function isBaseline(p){return p.version==="0.1.10"&&Number(p.count)===11&&Number
 function assertReady(p){if(p.version!=="0.1.11"||Number(p.count)!==12||Number(p.deletedColumns)!==21||Number(p.archivedColumns)!==21||Number(p.syncTriggers)!==21||Number(p.syncChecks)!==21||!p.syncFunction||Number(p.mismatches)!==0)fail("SOFT_DELETE_SCHEMA_NOT_READY","A Commerce 0.1.11 soft-delete schema nem teljes.",{probe:p});return p;}
 function stamp(){return new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");}
 
-if(!["preflight","apply","verify"].includes(mode))fail("SOFT_DELETE_MODE_INVALID","Használat: preflight | apply | verify");
+if(!["preflight","rollback-test","apply","verify"].includes(mode))fail("SOFT_DELETE_MODE_INVALID","Használat: preflight | rollback-test | apply | verify");
 const pgpassStat=statSync("/root/.pgpass");
 if((pgpassStat.mode&0o777)!==0o600)fail("SOFT_DELETE_PGPASS_MODE","A /root/.pgpass jogosultsága nem 0600.");
 const actualSha=sha(migration);
+const actualRollbackSha=sha(rollback);
 if(actualSha!==expectedSha)fail("SOFT_DELETE_SHA_MISMATCH","A soft-delete migráció SHA eltér.",{expectedSha,actualSha});
+if(actualRollbackSha!==expectedRollbackSha)fail("SOFT_DELETE_ROLLBACK_SHA_MISMATCH","A soft-delete rollback SHA eltér.",{expectedRollbackSha,actualRollbackSha});
 const before=probe();
 if(mode==="verify"){console.log(JSON.stringify({ok:true,mode,probe:assertReady(before)},null,2));process.exit(0);}
 if(before.version==="0.1.11"){console.log(JSON.stringify({ok:true,mode,alreadyApplied:true,probe:assertReady(before)},null,2));process.exit(0);}
 if(!isBaseline(before))fail("SOFT_DELETE_BASELINE_MISMATCH","A 0.1.11 migráció csak Commerce 0.1.10 / 11 baseline-ról alkalmazható.",{probe:before});
-if(mode==="preflight"){console.log(JSON.stringify({ok:true,mode,readyForApply:true,migration:migrationRel,migrationSha256:actualSha,tableCount:tables.length,requiredApproval:approvalPhrase},null,2));process.exit(0);}
+if(mode==="preflight"){console.log(JSON.stringify({ok:true,mode,readyForApply:true,migration:migrationRel,migrationSha256:actualSha,rollback:rollbackRel,rollbackSha256:actualRollbackSha,tableCount:tables.length,requiredApproval:approvalPhrase},null,2));process.exit(0);}
+if(mode==="rollback-test"){
+  const test=run("psql",psqlArgs(["-1","-f",migration,"-f",rollback]));
+  if(!test.ok)fail("SOFT_DELETE_ROLLBACK_TEST_FAILED","A forward + rollback tranzakciós próba sikertelen; a teljes tranzakció visszagördült.",{status:test.status,stderr:test.stderr.slice(-1800)});
+  const restored=probe();
+  if(!isBaseline(restored))fail("SOFT_DELETE_ROLLBACK_BASELINE_NOT_RESTORED","A rollback-test után nem állt vissza a 0.1.10 / 11 baseline.",{probe:restored});
+  console.log(JSON.stringify({ok:true,mode,transactional:true,migration:migrationRel,migrationSha256:actualSha,rollback:rollbackRel,rollbackSha256:actualRollbackSha,restoredBaseline:restored},null,2));
+  process.exit(0);
+}
 if(approval!==approvalPhrase)fail("SOFT_DELETE_APPROVAL_REQUIRED","Explicit DEV-only migration approval szükséges.",{requiredApproval:approvalPhrase});
 
 const dir=join(backupRoot,stamp());mkdirSync(dir,{recursive:true,mode:0o700});

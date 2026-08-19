@@ -1838,3 +1838,28 @@ Production candidate runtime:
 - Következő Storefront blokk: közös többtételes checkout/fulfillment adatmodell megtervezése és szerveroldali alap, anélkül hogy több külön pénztári rendelés keletkezne.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Soft-delete rollback gate zöld
+
+A `commerce-soft-delete-v011-migration-gate.mjs` új `rollback-test` módot kapott.
+
+Biztonsági kapu:
+- forward migration SHA ellenőrzött;
+- rollback SHA ellenőrzött;
+- teljes forward + rollback egyetlen PostgreSQL tranzakcióban fut;
+- hiba esetén a teljes tranzakció visszagördül;
+- siker után külön schema probe igazolja az eredeti baseline-t.
+
+Rollback-test eredmény: PASS.
+Végállapot:
+- Commerce schema: `0.1.10 / 11`;
+- `deleted_at` oszlopok: 0;
+- legacy `archived_at` oszlopok: 21;
+- compatibility sync trigger: 0;
+- sync check: 0;
+- sync function: nincs.
+
+Ezzel a v0.1.11 tényleges DEV apply előtti rollback acceptance kapu teljesült.
+Következő lépés: migration gate `apply`, amely saját teljes pg_dump backupot és backup-listing ellenőrzést készít az alkalmazás előtt.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
