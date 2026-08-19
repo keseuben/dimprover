@@ -1758,3 +1758,42 @@ QA:
 - becsült következő aktív idő: 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 16:xx checkpoint — Storefront Pilot mock HTTP E2E zöld
+
+A Storefront Pilot foundation külön localhost Next dev processzen lefutott, shared DEV PM2/Nginx módosítása nélkül.
+
+Izolált runtime:
+- localhost port: 3294;
+- `ARUTER_REPOSITORY_MODE=mock`;
+- `ARUTER_STOREFRONT_PILOT_ENABLED=1`;
+- `ARUTER_STOREFRONT_ORDER_BRIDGE_ENABLED=1`;
+- `ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=0`;
+- teszt után process leállítva, 3294 port felszabadítva;
+- runtime logban uncaught/unhandled/fatal/error találat: 0.
+
+HTTP E2E: 17/17 PASS:
+- public-products API 200;
+- izolált runtime-ban pilot katalógus + pénztári bridge aktív;
+- authoritative shared termék megjelenik;
+- bruttó ár nettó + ÁFA alapján számolódik;
+- public reservation HTTP 201 marad az elsődleges siker;
+- szándékosan hamis kliens terméknév szerveroldalon felülírva;
+- szándékosan hamis kliensár és egység szerveroldalon felülírva;
+- foglalásból pontosan egy legacy pénztári rendelés készül;
+- pénztári order authoritative SKU/nettó ár/ÁFA/storage zone snapshotot kap;
+- mennyiség megmarad;
+- reservation `confirmed` workflow független marad;
+- `confirmed` nem állítja hibásan PAID/ISSUED állapotra a pénztári ordert;
+- reservation `cancelled` sikeres;
+- nem terminális pénztári order cancellation szinkronizálódik;
+- cancellation replay HTTP sikeres;
+- replay nem duplikálja a pénztári ordert;
+- public reservation terminal `cancelled` állapotban továbbra is lekérhető.
+
+Következő fejlesztési irány:
+- Storefront többtételes kosár és egyetlen reservation/order csomag;
+- database-mode előtt atomi legacy order persistence;
+- Commerce soft-delete 0.1.11 apply továbbra is külön DB kapu.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
