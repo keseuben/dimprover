@@ -2033,3 +2033,69 @@ Migráció:
 - becsült következő aktív idő: 1–2 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Storefront Commerce Service Queue M1 DEV ACTIVATED
+
+A publikus Storefront → Commerce persistent service queue ténylegesen aktiválva és runtime E2E-vel igazolva DEV-en.
+
+DB aktiválás:
+- Commerce schema: `0.1.12 / 13`;
+- forward SHA: `8248076ed8d36c140eae3c6cccdeae7015bef1f122c0e5b4a13a482182017507`;
+- rollback SHA: `700cf6e224a0dc024543129e82fb2dd0f737fa134b42a15008f6db2c548be120`;
+- backup: `/srv/dimpro-dev/backups/commerce-storefront-mirror-queue-m1/20260819T154636Z/supabase-dev-pre-commerce-storefront-mirror-queue-m1.dump`;
+- backup SHA: `85d12664a40de120b6ec5f54377d4b5739852b7765849a38107b705a64685e8f`;
+- backup listing: VERIFIED;
+- enqueue RPC: aktív;
+- anon EXECUTE: false;
+- authenticated EXECUTE: false;
+- service_role EXECUTE: true;
+- retry index: `deleted_at IS NULL` + `PENDING/FAILED`.
+
+Runtime E2E: 20/20 PASS:
+- Commerce queue schema 0.1.12 / 13;
+- induláskor 0 idegen due mirror job;
+- admin SSR session fixture elkészült;
+- publikus Storefront katalógus Commerce session nélkül elérhető;
+- publikus foglalás HTTP 201;
+- foglalásból legacy központi pénztári order;
+- orderből persistent PENDING Commerce queue attempt;
+- új queue attempt: attempt_count=0, last_attempt_at=NULL;
+- next_retry_at azonnal esedékes;
+- authoritative cashier snapshot került a queue-ba;
+- null-actor audit event;
+- persistent outbox queue event;
+- authenticated admin retry-due feldolgozza a PENDING jobot;
+- attempt SUCCEEDED, attempt_count=1;
+- Commerce order SENT_TO_CASHIER;
+- publikus cancellation sikeres;
+- ugyanaz az attempt újra PENDING, ugyanaz a Commerce order ID megmarad;
+- authenticated retry feldolgozza a cancellation snapshotot;
+- ugyanaz az attempt másodszor SUCCEEDED, attempt_count=2;
+- ugyanaz a Commerce order CANCELLED.
+
+Biztonsági modell:
+- publikus request NEM kap Commerce user-contextet;
+- tenant kizárólag trusted server env businessSlug → organizationId mappingből jön;
+- queue service-role RPC csak szerverről hívható;
+- tényleges Commerce order feldolgozás authenticated admin/worker retry útvonalon történik;
+- legacy foglalás és pénztár queue hiba esetén továbbra is fail-open.
+
+QA cleanup:
+- source runtime 3301 leállítva;
+- 3301 port szabad;
+- runtime error scan: 0;
+- aktív QA due job: 0;
+- aktív Storefront Queue QA attempt: 0;
+- aktív Storefront Queue QA Commerce order: 0.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: DEV KÉSZ / RUNTIME TESZTELT;
+- Modul: Storefront Commerce Service Queue M1;
+- DB: 0.1.12 / 13;
+- API: publikus Storefront továbbra is legacy reservation/cashier API; Commerce queue belső service RPC;
+- UI: nincs új kötelező UI ebben a blokkban;
+- ismert tech debt: automatikus service worker még nincs a Storefront queue-hoz, jelenleg admin retry-due képes feldolgozni; azonos snapshot ismételt enqueue auditja később tovább hardenítható;
+- következő blokk: production candidate build + queue E2E ugyanabból a bundle-ből, majd Storefront multi-item checkout foundation;
+- becsült következő aktív idő: 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
