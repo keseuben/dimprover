@@ -1289,3 +1289,66 @@ QA:
 - becsült következő aktív idő: 1–2 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 11:xx checkpoint — Commerce 0.1.9 DEV aktiválva + teljes mirror candidate E2E zöld
+
+A numerikus schema conformance ténylegesen aktiválva lett kizárólag DEV-en.
+
+DEV migráció:
+- Commerce schema: `0.1.9`;
+- migration count: `10`;
+- migration SHA-256: `b98323c7f0826b69b6f837ff1f8707f3958bb1fbfbce881dce926654e601d396`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-schema-conformance-v019/20260819T090240Z`;
+- backup dump SHA-256: `e8e6a6bf93b23ade92c0edb3761b4764a553683d940e44e30e62ca8d7ab4a30f`;
+- backup listing: VERIFIED;
+- post-apply gate verify: PASS;
+- canonical monetary mezők: `amount`, `unit_cost`, `price_net` → `NUMERIC(19,4)`;
+- ellenőrzött készlet/rendelés mennyiségek → `NUMERIC(19,6)`;
+- régi `_minor` DB oszlopok: nincsenek a 0.1.9 végállapotban.
+
+Post-migration runtime regresszió:
+- Pricing: 8/8 PASS, beleértve tört `NUMERIC(19,4)` értéket és direct service mutation tiltást;
+- Inventory Reservation: 11/11 PASS;
+- Receiving: 12/12 PASS;
+- Order Core: 14/14 PASS;
+- Order ↔ Inventory Bridge: 14/14 PASS;
+- Mirror Reconciliation: 13/13 PASS;
+- legacy mirror lifecycle: 14/14 PASS.
+
+Candidate build:
+- source commit: `a664b8d`;
+- dist: `.next-commerce-schema-v019-a664b8d`;
+- Build ID: `Fnzq-woxoq3dHHKruTtoV`;
+- Next.js build exitCode: 0 / PASS;
+- külön localhost candidate runtime: `127.0.0.1:3288`;
+- a mirror feature flag csak ebben a külön candidate processzben volt `1`;
+- candidate process a teszt után leállítva; 3288 port felszabadítva;
+- candidate logban uncaught/unhandled/fatal/error találat: 0.
+
+Teljes HTTP/session mirror E2E candidate runtime-on: 18/18 PASS:
+- ideiglenes hitelesített DIMPRO session;
+- legacy order HTTP 201;
+- Next `after()` mirror → reconciliation `SUCCEEDED`;
+- external marketplace order látható a Commerce cashier queue-ban;
+- legacy `paid` → ugyanazon Commerce order `PAID`;
+- legacy `issued` → ugyanazon Commerce order `ISSUED`;
+- `UNRESOLVED` legacy tétel látható marad és nem blokkolja a kiadást;
+- ISSUED után a rendelés kikerül az aktív cashier queue-ból;
+- reconciliation admin HTTP 200;
+- legacy `/aruter/penztar` továbbra is elérhető.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: DEV KÉSZ a numerikus schema hardening és a feature-flagged mirror candidate bizonyítására;
+- Modul: Commerce Core M0/M1 + legacy Árutér mirror/reconciliation;
+- Elkészült: schema 0.1.9 apply, backup, verify, runtime regresszió, candidate build, teljes HTTP/session mirror E2E;
+- Részben elkészült: a mirror shared DEV feature flag továbbra is OFF, kontrollált cutover külön döntési kapu;
+- Még hiányzik: reservation expiry/cleanup worker, soft-delete canonical `deleted_at` hardening, Storefront Pilot következő integrációs lépései;
+- DB/migration: 0.1.9 / 10 tényleges DEV állapot;
+- API/UI: canonical monetary output aktív a 0.1.9-re épülő candidate-ben;
+- ismert tech debt: `archived_at` kompatibilitási modell több Commerce táblában; canonical `deleted_at` külön migrációt igényel;
+- következő blokk: Reservation expiry/cleanup service-only, idempotens RELEASE + audit/outbox;
+- becsült következő aktív idő: 2–4 óra.
+
+Shared DEV runtime mirror flag nem lett tartósan bekapcsolva. Shared DEV PM2 cutover nem történt ebből a Commerce candidate-ből.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
