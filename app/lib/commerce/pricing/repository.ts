@@ -24,11 +24,11 @@ export async function listCommercePrices(context:CommerceContext,input:{variantI
   const client=createCommerceAdminClient();
   const variantId=text(input.variantId);
   if(!variantId)throw new CommercePricingError("A termékváltozat azonosítója kötelező.","COMMERCE_PRICE_VARIANT_REQUIRED",400);
-  const variant=await client.from("commerce_product_variants").select("id").eq("organization_id",context.organizationId).eq("id",variantId).is("archived_at",null).maybeSingle();
+  const variant=await client.from("commerce_product_variants").select("id").eq("organization_id",context.organizationId).eq("id",variantId).is("deleted_at",null).maybeSingle();
   if(variant.error)dbError("A termékváltozat nem ellenőrizhető.",variant.error);
   if(!variant.data)throw new CommercePricingError("A termékváltozat nem található.","COMMERCE_PRICE_VARIANT_NOT_FOUND",404);
   let query=client.from("commerce_prices").select("id,organization_id,variant_id,currency,amount,vat_rate_basis_points,valid_from,valid_until,status,created_at,updated_at")
-    .eq("organization_id",context.organizationId).eq("variant_id",variantId).is("archived_at",null).order("valid_from",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false}).limit(Math.max(1,Math.min(100,Math.floor(input.limit||25))));
+    .eq("organization_id",context.organizationId).eq("variant_id",variantId).is("deleted_at",null).order("valid_from",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false}).limit(Math.max(1,Math.min(100,Math.floor(input.limit||25))));
   const currency=text(input.currency).toUpperCase();
   if(currency){if(!CURRENCIES.has(currency as CurrencyCode))throw new CommercePricingError("Ismeretlen pénznem.","COMMERCE_PRICE_CURRENCY_INVALID",400);query=query.eq("currency",currency);}
   const result=await query;

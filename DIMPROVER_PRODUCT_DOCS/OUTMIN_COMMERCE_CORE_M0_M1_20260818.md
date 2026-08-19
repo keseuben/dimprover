@@ -1586,3 +1586,86 @@ HTTP E2E bizonyította:
 - becsült aktív idő: soft-delete hardening 2–4 óra; Storefront Pilot következő bridge 4–8 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 15:xx checkpoint — Canonical soft-delete hardening v0.1.11 PRE-APPLY
+
+A Commerce canonical soft-delete átállás kód- és migrációs oldala elkészült, de a DEV adatbázisra még NEM lett alkalmazva.
+
+Cél:
+- canonical soft-delete mező: `deleted_at timestamptz NULL`;
+- a korábbi `archived_at` csak átmeneti, deprecated compatibility alias;
+- forward migrációval történő átállás, már alkalmazott migrációk módosítása nélkül.
+
+Elkészült:
+- forward migráció: `supabase/migrations/20260819143000_dimpro_commerce_soft_delete_conformance_v011.sql`;
+- rollback: `supabase/rollback/DIMPRO_COMMERCE_SOFT_DELETE_CONFORMANCE_V011_ROLLBACK.sql`;
+- 21 soft-deletable Commerce tábla `deleted_at` előkészítése;
+- meglévő `archived_at` értékek backfillje `deleted_at`-ba;
+- kétirányú compatibility trigger: `deleted_at ↔ archived_at`;
+- eltérő kettős timestamp írás fail-closed: `COMMERCE_SOFT_DELETE_TIMESTAMP_MISMATCH`;
+- táblánként check constraint: `deleted_at is not distinct from archived_at`;
+- rollback mismatch esetén fail-closed;
+- Commerce alkalmazásréteg aktív DB-hozzáféréseiben 0 db közvetlen `archived_at` hivatkozás;
+- 73 canonical `deleted_at` alkalmazásoldali hivatkozás;
+- új soft-delete műveletek `deleted_at` mezőt írnak;
+- `CommerceLifecycle.deletedAt` canonical mező;
+- `archivedAt` átmenetileg deprecated API-kompatibilitási alias, ugyanabból a `deleted_at` értékből;
+- Order, Receiving és Reservation map-ek canonical `deletedAt` értéket publikálnak;
+- QA/E2E cleanupok és aktuális repository contractok `deleted_at` szabályra frissítve.
+
+Migrációs SHA-256:
+- `ddafd28288829e4e63359978bee06cfd0019b104bd117aa3a17538705c13443b`.
+
+QA:
+- soft-delete conformance contract: 25/25 PASS;
+- TypeScript `tsc --noEmit`: PASS;
+- célzott ESLint: PASS;
+- `git diff --check`: PASS;
+- teljes statikus Commerce regresszió: 25/25 tesztcsomag PASS;
+- Product API 14/14;
+- Catalog 16/16;
+- Product Catalog UI 14/14;
+- Product Inspector 12/12;
+- Product Summary 14/14;
+- Pricing 16/16;
+- Inventory 16/16;
+- Reservation 18/18;
+- Reservation Expiry 27/27;
+- Media 16/16;
+- Media Management 20/20;
+- Media Upload 18/18;
+- Media Gallery UI 18/18;
+- Receiving 28/28;
+- Receiving UI 16/16;
+- Receiving Media UI 16/16;
+- Order Core 30/30;
+- Order Inventory Bridge 27/27;
+- Legacy Mirror 22/22;
+- Legacy Order Resolution 16/16;
+- Mirror Reconciliation 26/26;
+- Mirror Retry Due 15/15;
+- Cashier UI 20/20;
+- legacy Árutér compatibility 10/10;
+- Soft Delete 25/25.
+
+Migrációs végrehajtási állapot:
+- aktuális DEV DB továbbra is `0.1.10 / 11`;
+- a connector olvasási `psql` műveleteket enged, de a forward→rollback write-migráció futtatását biztonsági policy blokkolta;
+- ezt a védelmet nem kerültük meg;
+- emiatt DB backup/apply/runtime E2E még NINCS készre jelentve.
+
+34. pont szerinti állapot:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / PRE-APPLY;
+- Modul: Commerce Canonical Soft Delete Hardening v0.1.11;
+- Elkészült: forward migration, rollback, compatibility trigger, application repository átállás, lifecycle mapping, contract- és regressziós frissítések;
+- Részben elkészült: DB aktiválás előkészítve;
+- Még hiányzik: DEV backup → transaction rollback gate → 0.1.11 apply → schema verify → runtime regresszió → új candidate build;
+- DB jelenlegi állapot: 0.1.10 / 11;
+- cél DB állapot: 0.1.11 / 12;
+- API: külső szerződés kompatibilis marad, `deletedAt` új canonical lifecycle mező, `archivedAt` deprecated alias;
+- UI: nincs szükséges felületi változás;
+- ismert tech debt: a korábbi SQL RPC-k/indexek egy része még `archived_at` kompatibilitási aliasra épül; a trigger miatt szemantikailag szinkronban maradnak, későbbi tisztításban átírhatók `deleted_at`-ra;
+- következő blokk: DB apply gate, majd Storefront Pilot folytatás;
+- becsült aktív idő a DB aktiválás + runtime gate-re: 1–2 óra, amint a migrációs write művelet engedélyezetten futtatható.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

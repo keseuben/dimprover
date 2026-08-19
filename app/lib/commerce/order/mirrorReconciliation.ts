@@ -82,7 +82,7 @@ export async function recordCommerceMirrorAttempt(
 export async function listCommerceMirrorAttempts(context: CommerceContext, input: { state?: unknown; limit?: number } = {}) {
   requireReconcile(context);
   const client = createCommerceAdminClient();
-  let query = client.from("commerce_order_mirror_attempts").select("*").eq("organization_id", context.organizationId).is("archived_at", null).order("updated_at", { ascending: false }).limit(Math.max(1, Math.min(200, Math.floor(input.limit || 50))));
+  let query = client.from("commerce_order_mirror_attempts").select("*").eq("organization_id", context.organizationId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(Math.max(1, Math.min(200, Math.floor(input.limit || 50))));
   const state = text(input.state).toUpperCase();
   if (state) {
     if (!["PENDING", "SUCCEEDED", "FAILED"].includes(state)) throw new CommerceOrderError("Ismeretlen mirror állapot.", "COMMERCE_MIRROR_STATE_INVALID", 400);
@@ -102,7 +102,7 @@ export async function listDueCommerceMirrorAttempts(context: CommerceContext, in
     .select("*")
     .eq("organization_id", context.organizationId)
     .eq("state", "FAILED")
-    .is("archived_at", null)
+    .is("deleted_at", null)
     .lte("next_retry_at", now)
     .order("next_retry_at", { ascending: true })
     .order("updated_at", { ascending: true })
@@ -116,7 +116,7 @@ export async function getCommerceMirrorAttempt(context: CommerceContext, attempt
   const attemptId = text(attemptIdInput);
   if (!attemptId) throw new CommerceOrderError("A mirror attempt azonosító kötelező.", "COMMERCE_MIRROR_ATTEMPT_ID_REQUIRED", 400);
   const client = createCommerceAdminClient();
-  const result = await client.from("commerce_order_mirror_attempts").select("*").eq("organization_id", context.organizationId).eq("id", attemptId).is("archived_at", null).maybeSingle();
+  const result = await client.from("commerce_order_mirror_attempts").select("*").eq("organization_id", context.organizationId).eq("id", attemptId).is("deleted_at", null).maybeSingle();
   if (result.error) dbError("A rendelés-tükrözési állapot nem olvasható.", result.error);
   if (!result.data) throw new CommerceOrderError("A mirror attempt nem található.", "COMMERCE_MIRROR_ATTEMPT_NOT_FOUND", 404);
   return mapAttempt(result.data as Row);

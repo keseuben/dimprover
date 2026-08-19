@@ -23,7 +23,7 @@ export async function getCommerceMediaContentUrl(context: CommerceContext, asset
     .eq("organization_id",context.organizationId)
     .eq("asset_id",assetId)
     .eq("variant_kind",kind)
-    .is("archived_at",null)
+    .is("deleted_at",null)
     .maybeSingle();
   if(result.error) dbError("A média változat nem olvasható.",result.error);
   if(!result.data) throw new CommerceMediaUploadError("A média változat nem található.","COMMERCE_MEDIA_VARIANT_NOT_FOUND",404);
@@ -51,19 +51,19 @@ export async function listCommerceLinkedMedia(context: CommerceContext, linkType
   const entityId=text(entityIdInput);
   if(!entityId||!LINK_TARGET_TABLES[linkType]) throw new CommerceMediaUploadError("Érvényes média célobjektum szükséges.","COMMERCE_MEDIA_TARGET_REQUIRED",400);
   const client=createCommerceAdminClient();
-  const target=await client.from(LINK_TARGET_TABLES[linkType]).select("id").eq("organization_id",context.organizationId).eq("id",entityId).is("archived_at",null).maybeSingle();
+  const target=await client.from(LINK_TARGET_TABLES[linkType]).select("id").eq("organization_id",context.organizationId).eq("id",entityId).is("deleted_at",null).maybeSingle();
   if(target.error) dbError("A média célobjektuma nem ellenőrizhető.",target.error);
   if(!target.data) throw new CommerceMediaUploadError("A média célobjektuma nem található ebben a szervezetben.","COMMERCE_MEDIA_TARGET_SCOPE_MISMATCH",404);
   const links=await client.from("commerce_media_links")
     .select("id,asset_id,sort_order,is_primary,created_at")
-    .eq("organization_id",context.organizationId).eq("link_type",linkType).eq("linked_entity_id",entityId).is("archived_at",null)
+    .eq("organization_id",context.organizationId).eq("link_type",linkType).eq("linked_entity_id",entityId).is("deleted_at",null)
     .order("sort_order",{ascending:true}).order("created_at",{ascending:true});
   if(links.error) dbError("A kapcsolt média nem olvasható.",links.error);
   const assetIds=(links.data||[]).map((row)=>text((row as Row).asset_id)).filter(Boolean);
   if(!assetIds.length) return [];
   const [assets,overlays]=await Promise.all([
-    client.from("commerce_media_assets").select("id,mime_type,width,height,size_bytes,visibility,processing_status,created_at").eq("organization_id",context.organizationId).in("id",assetIds).is("archived_at",null),
-    client.from("commerce_media_overlays").select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").eq("organization_id",context.organizationId).in("asset_id",assetIds).is("archived_at",null).order("sort_order",{ascending:true}),
+    client.from("commerce_media_assets").select("id,mime_type,width,height,size_bytes,visibility,processing_status,created_at").eq("organization_id",context.organizationId).in("id",assetIds).is("deleted_at",null),
+    client.from("commerce_media_overlays").select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").eq("organization_id",context.organizationId).in("asset_id",assetIds).is("deleted_at",null).order("sort_order",{ascending:true}),
   ]);
   if(assets.error) dbError("A média assetek nem olvashatók.",assets.error);
   if(overlays.error) dbError("A média overlay-k nem olvashatók.",overlays.error);
@@ -81,23 +81,23 @@ export async function listCommerceProductMedia(context: CommerceContext, product
   const productId=text(productIdInput);
   if (!productId) throw new CommerceMediaUploadError("A termékazonosító kötelező.","COMMERCE_PRODUCT_ID_REQUIRED",400);
   const client=createCommerceAdminClient();
-  const product=await client.from("commerce_products").select("id").eq("organization_id",context.organizationId).eq("id",productId).is("archived_at",null).maybeSingle();
+  const product=await client.from("commerce_products").select("id").eq("organization_id",context.organizationId).eq("id",productId).is("deleted_at",null).maybeSingle();
   if(product.error) dbError("A termék nem ellenőrizhető.",product.error);
   if(!product.data) throw new CommerceMediaUploadError("A termék nem található.","COMMERCE_PRODUCT_NOT_FOUND",404);
   const links=await client.from("commerce_media_links")
     .select("id,asset_id,sort_order,is_primary,created_at")
-    .eq("organization_id",context.organizationId).eq("link_type","PRODUCT").eq("linked_entity_id",productId).is("archived_at",null)
+    .eq("organization_id",context.organizationId).eq("link_type","PRODUCT").eq("linked_entity_id",productId).is("deleted_at",null)
     .order("sort_order",{ascending:true}).order("created_at",{ascending:true});
   if(links.error) dbError("A termék képlistája nem olvasható.",links.error);
   const assetIds=(links.data||[]).map((row)=>text((row as Row).asset_id)).filter(Boolean);
   if(!assetIds.length) return [];
   const assets=await client.from("commerce_media_assets")
     .select("id,mime_type,width,height,size_bytes,visibility,processing_status,created_at")
-    .eq("organization_id",context.organizationId).in("id",assetIds).is("archived_at",null);
+    .eq("organization_id",context.organizationId).in("id",assetIds).is("deleted_at",null);
   if(assets.error) dbError("A média assetek nem olvashatók.",assets.error);
   const overlays=await client.from("commerce_media_overlays")
     .select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at")
-    .eq("organization_id",context.organizationId).in("asset_id",assetIds).is("archived_at",null)
+    .eq("organization_id",context.organizationId).in("asset_id",assetIds).is("deleted_at",null)
     .order("sort_order",{ascending:true});
   if(overlays.error) dbError("A média overlay-k nem olvashatók.",overlays.error);
   const assetMap=new Map((assets.data||[]).map((row)=>[text((row as Row).id),row as Row]));
@@ -131,7 +131,7 @@ export async function createCommerceMediaOverlay(context: CommerceContext, asset
   const payload=input.payload&&typeof input.payload==="object"&&!Array.isArray(input.payload)?input.payload:{};
   const sortOrder=Number.isFinite(Number(input.sortOrder))?Math.max(0,Math.floor(Number(input.sortOrder))):0;
   const client=createCommerceAdminClient();
-  const asset=await client.from("commerce_media_assets").select("id").eq("organization_id",context.organizationId).eq("id",assetId).is("archived_at",null).maybeSingle();
+  const asset=await client.from("commerce_media_assets").select("id").eq("organization_id",context.organizationId).eq("id",assetId).is("deleted_at",null).maybeSingle();
   if(asset.error) dbError("A média asset nem ellenőrizhető.",asset.error);
   if(!asset.data) throw new CommerceMediaUploadError("A média asset nem található.","COMMERCE_MEDIA_ASSET_NOT_FOUND",404);
   const result=await client.from("commerce_media_overlays").insert({organization_id:context.organizationId,asset_id:assetId,overlay_type:type,payload,sort_order:sortOrder,active:input.active!==false}).select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").single();
@@ -149,7 +149,7 @@ export async function updateCommerceMediaOverlay(context: CommerceContext, asset
   if(input.sortOrder!==undefined)patch.sort_order=Math.max(0,Math.floor(Number(input.sortOrder)||0));
   if(input.active!==undefined)patch.active=Boolean(input.active);
   const client=createCommerceAdminClient();
-  const result=await client.from("commerce_media_overlays").update(patch).eq("organization_id",context.organizationId).eq("asset_id",assetId).eq("id",overlayId).is("archived_at",null).select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").maybeSingle();
+  const result=await client.from("commerce_media_overlays").update(patch).eq("organization_id",context.organizationId).eq("asset_id",assetId).eq("id",overlayId).is("deleted_at",null).select("id,asset_id,overlay_type,payload,sort_order,active,created_at,updated_at").maybeSingle();
   if(result.error) dbError("Az overlay módosítása sikertelen.",result.error);
   if(!result.data) throw new CommerceMediaUploadError("Az overlay nem található.","COMMERCE_MEDIA_OVERLAY_NOT_FOUND",404);
   const row=result.data as Row;return{id:text(row.id),assetId:text(row.asset_id),type:text(row.overlay_type),payload:row.payload,sortOrder:Number(row.sort_order||0),active:Boolean(row.active),createdAt:text(row.created_at),updatedAt:text(row.updated_at)};
@@ -159,7 +159,7 @@ export async function archiveCommerceMediaOverlay(context: CommerceContext, asse
   requireMediaWrite(context);
   const assetId=text(assetIdInput),overlayId=text(overlayIdInput);
   const client=createCommerceAdminClient();
-  const result=await client.from("commerce_media_overlays").update({active:false,archived_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("asset_id",assetId).eq("id",overlayId).is("archived_at",null).select("id").maybeSingle();
+  const result=await client.from("commerce_media_overlays").update({active:false,deleted_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("asset_id",assetId).eq("id",overlayId).is("deleted_at",null).select("id").maybeSingle();
   if(result.error) dbError("Az overlay archiválása sikertelen.",result.error);
   if(!result.data) throw new CommerceMediaUploadError("Az overlay nem található.","COMMERCE_MEDIA_OVERLAY_NOT_FOUND",404);
   return{id:overlayId,archived:true};

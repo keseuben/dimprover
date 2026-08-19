@@ -22,7 +22,7 @@ const checks=[
  ["14 overlay types are allowlisted",repo.includes("OVERLAY_TYPES")&&repo.includes("WATERMARK")&&repo.includes("BLUR")],
  ["15 overlay create verifies asset tenant scope",repo.includes("createCommerceMediaOverlay")&&repo.includes("organization_id")],
  ["16 overlay update is asset scoped",repo.includes("updateCommerceMediaOverlay")&&repo.includes("asset_id")],
- ["17 overlay archive is soft delete",repo.includes("archiveCommerceMediaOverlay")&&repo.includes("archived_at")],
+ ["17 overlay archive is soft delete",repo.includes("archiveCommerceMediaOverlay")&&repo.includes("deleted_at")],
  ["18 product media API supports GET+PATCH",productRoute.includes("export async function GET")&&productRoute.includes("export async function PATCH")],
  ["19 overlay API supports POST",overlayRoute.includes("export async function POST")],
  ["20 overlay item API supports PATCH+DELETE",overlayItem.includes("export async function PATCH")&&overlayItem.includes("export async function DELETE")],

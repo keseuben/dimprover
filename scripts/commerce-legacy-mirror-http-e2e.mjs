@@ -90,8 +90,8 @@ try{
   console.log(`RESULT ${checks.length}/${checks.length} PASS`);
 } finally {
   const now=new Date().toISOString();
-  if(attemptId)await admin.from("commerce_order_mirror_attempts").update({archived_at:now}).eq("organization_id",organizationId).eq("id",attemptId);
-  if(commerceOrderId)await admin.from("commerce_orders").update({archived_at:now}).eq("organization_id",organizationId).eq("id",commerceOrderId);
+  if(attemptId)await admin.from("commerce_order_mirror_attempts").update({deleted_at:now}).eq("organization_id",organizationId).eq("id",attemptId);
+  if(commerceOrderId)await admin.from("commerce_orders").update({deleted_at:now}).eq("organization_id",organizationId).eq("id",commerceOrderId);
   if(membershipId)await admin.from("dimpro_organization_memberships").delete().eq("id",membershipId);
   if(dimproUserId)await admin.from("dimpro_users").delete().eq("id",dimproUserId);
   if(authUserId)await admin.auth.admin.deleteUser(authUserId).catch(()=>undefined);

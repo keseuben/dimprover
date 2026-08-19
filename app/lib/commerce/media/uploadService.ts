@@ -50,7 +50,7 @@ async function verifyMediaTarget(context: CommerceContext, targetType: "PRODUCT"
     : targetType === "PRODUCT_VARIANT" ? "commerce_product_variants"
       : targetType === "GOODS_RECEIPT" ? "commerce_goods_receipts"
         : "commerce_goods_receipt_items";
-  const result = await client.from(table).select("id").eq("organization_id", context.organizationId).eq("id", targetId).is("archived_at", null).maybeSingle();
+  const result = await client.from(table).select("id").eq("organization_id", context.organizationId).eq("id", targetId).is("deleted_at", null).maybeSingle();
   if (result.error) dbError("A média célobjektuma nem ellenőrizhető.", result.error);
   if (!result.data) throw new CommerceMediaUploadError("A média célobjektuma nem található ebben a szervezetben.", "COMMERCE_MEDIA_TARGET_SCOPE_MISMATCH", 404);
 }

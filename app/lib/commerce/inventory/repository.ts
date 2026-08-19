@@ -48,7 +48,7 @@ export async function listCommerceInventory(context: CommerceContext, input: { v
   let query = client.from("commerce_inventory_balances")
     .select("id,organization_id,source_id,warehouse_id,variant_id,stock_status,physical_quantity,reserved_quantity,available_quantity,incoming_quantity,last_movement_at,created_at,updated_at")
     .eq("organization_id", context.organizationId)
-    .is("archived_at", null)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   if (text(input.variantId)) query = query.eq("variant_id", text(input.variantId));
   if (text(input.sourceId)) query = query.eq("source_id", text(input.sourceId));
@@ -128,9 +128,9 @@ export async function listCommerceInventoryReservations(
   requireRead(context);
   const client = createCommerceAdminClient();
   let query = client.from("commerce_inventory_reservations")
-    .select("id,organization_id,source_id,warehouse_id,variant_id,stock_status,requested_quantity,released_quantity,consumed_quantity,remaining_quantity,status,reference_type,reference_id,idempotency_key,expires_at,created_at,updated_at,archived_at")
+    .select("id,organization_id,source_id,warehouse_id,variant_id,stock_status,requested_quantity,released_quantity,consumed_quantity,remaining_quantity,status,reference_type,reference_id,idempotency_key,expires_at,created_at,updated_at,deleted_at")
     .eq("organization_id", context.organizationId)
-    .is("archived_at", null)
+    .is("deleted_at", null)
     .order("created_at", { ascending:false })
     .limit(Math.max(1, Math.min(200, Math.floor(Number(input.limit) || 50))));
   if (text(input.variantId)) query = query.eq("variant_id", text(input.variantId));
@@ -149,7 +149,7 @@ export async function listCommerceInventoryReservations(
     variantId:text(row.variant_id), stockStatus:text(row.stock_status), requestedQuantity:text(row.requested_quantity),
     releasedQuantity:text(row.released_quantity), consumedQuantity:text(row.consumed_quantity), remainingQuantity:text(row.remaining_quantity),
     status:text(row.status), referenceType:nullableText(row.reference_type), referenceId:nullableText(row.reference_id),
-    idempotencyKey:text(row.idempotency_key), expiresAt:nullableText(row.expires_at), createdAt:text(row.created_at), updatedAt:text(row.updated_at), archivedAt:nullableText(row.archived_at),
+    idempotencyKey:text(row.idempotency_key), expiresAt:nullableText(row.expires_at), createdAt:text(row.created_at), updatedAt:text(row.updated_at), deletedAt:nullableText(row.deleted_at), archivedAt:nullableText(row.deleted_at),
   }));
 }
 

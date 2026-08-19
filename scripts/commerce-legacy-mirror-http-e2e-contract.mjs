@@ -17,7 +17,7 @@ const checks=[
  ["13 E2E verifies terminal order leaves queue",source.includes("issued mirrored order leaves Commerce cashier queue")],
  ["14 E2E verifies reconciliation UI route",source.includes('"/aruter/admin/egyeztetes"')],
  ["15 E2E verifies legacy cashier route",source.includes('"/aruter/penztar"')],
- ["16 E2E archives Commerce QA fixtures",source.includes('from("commerce_order_mirror_attempts").update({archived_at:now})')&&source.includes('from("commerce_orders").update({archived_at:now})')],
+ ["16 E2E archives Commerce QA fixtures",source.includes('from("commerce_order_mirror_attempts").update({deleted_at:now})')&&source.includes('from("commerce_orders").update({deleted_at:now})')],
  ["17 E2E deletes identity/auth fixtures",source.includes('from("dimpro_users").delete()')&&source.includes("admin.auth.admin.deleteUser")],
 ];
 let pass=0;for(const [name,ok] of checks){console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)pass++;}

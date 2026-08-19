@@ -24,7 +24,7 @@ function runWorker(){
 try{
   const org=await admin.from("dimpro_organizations").select("id").eq("status","active").limit(1).maybeSingle();
   if(org.error||!org.data)throw org.error||new Error("Aktív DEV organization hiányzik");organizationId=String(org.data.id);
-  const preexisting=await admin.from("commerce_inventory_reservations").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).is("archived_at",null).in("status",["ACTIVE","PARTIAL"]).lte("expires_at",new Date().toISOString()).gt("remaining_quantity",0);
+  const preexisting=await admin.from("commerce_inventory_reservations").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).is("deleted_at",null).in("status",["ACTIVE","PARTIAL"]).lte("expires_at",new Date().toISOString()).gt("remaining_quantity",0);
   if(preexisting.error)throw preexisting.error;
   pass("worker E2E starts only with zero foreign due reservations",(preexisting.count||0)===0,String(preexisting.count||0));
 
@@ -69,9 +69,9 @@ try{
   console.log(`RESULT ${checks.length}/${checks.length} PASS`);
 } finally {
   const now=new Date().toISOString();
-  if(organizationId&&variantId)await admin.from("commerce_inventory_reservations").update({archived_at:now}).eq("organization_id",organizationId).eq("variant_id",variantId).is("archived_at",null);
-  if(organizationId&&variantId)await admin.from("commerce_product_variants").update({archived_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",variantId);
-  if(organizationId&&productId)await admin.from("commerce_products").update({archived_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",productId);
-  if(organizationId&&sourceId)await admin.from("commerce_inventory_sources").update({archived_at:now,active:false}).eq("organization_id",organizationId).eq("id",sourceId);
-  if(organizationId&&warehouseId)await admin.from("commerce_warehouses").update({archived_at:now,active:false}).eq("organization_id",organizationId).eq("id",warehouseId);
+  if(organizationId&&variantId)await admin.from("commerce_inventory_reservations").update({deleted_at:now}).eq("organization_id",organizationId).eq("variant_id",variantId).is("deleted_at",null);
+  if(organizationId&&variantId)await admin.from("commerce_product_variants").update({deleted_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",variantId);
+  if(organizationId&&productId)await admin.from("commerce_products").update({deleted_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",productId);
+  if(organizationId&&sourceId)await admin.from("commerce_inventory_sources").update({deleted_at:now,active:false}).eq("organization_id",organizationId).eq("id",sourceId);
+  if(organizationId&&warehouseId)await admin.from("commerce_warehouses").update({deleted_at:now,active:false}).eq("organization_id",organizationId).eq("id",warehouseId);
 }

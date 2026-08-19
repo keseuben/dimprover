@@ -34,7 +34,7 @@ const checks=[
  ["20 repository mutations require receiving permission",repo.includes("requireWrite(context)")&&repo.includes("requirePost(context)")],
  ["21 repository queries remain organization scoped",(repo.match(/\.eq\("organization_id",context\.organizationId\)/g)||[]).length>=10],
  ["22 API list/create resolves Commerce context",rootRoute.includes("resolveCommerceContext")&&rootRoute.includes("export async function GET")&&rootRoute.includes("export async function POST")],
- ["23 item API supports patch + soft delete",itemRoute.includes("export async function PATCH")&&itemRoute.includes("export async function DELETE")&&repo.includes("archived_at:new Date().toISOString()")],
+ ["23 item API supports patch + soft delete",itemRoute.includes("export async function PATCH")&&itemRoute.includes("export async function DELETE")&&repo.includes("deleted_at:new Date().toISOString()")],
  ["24 post API requires idempotency-key support",postRoute.includes('request.headers.get("idempotency-key")')],
  ["25 receipt and receipt-item media targets are ticketed",mediaToken.includes('"GOODS_RECEIPT" | "GOODS_RECEIPT_ITEM"')],
  ["26 media upload verifies receipt target tenant scope",mediaService.includes('targetType === "GOODS_RECEIPT"')&&mediaService.includes('"commerce_goods_receipts"')&&mediaService.includes('"commerce_goods_receipt_items"')],

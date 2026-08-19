@@ -7,7 +7,7 @@ const checks=[
  ["01 due list requires reconciliation permission",repo.includes("listDueCommerceMirrorAttempts")&&repo.includes("requireReconcile(context)")],
  ["02 due list is tenant scoped",repo.includes('.eq("organization_id", context.organizationId)')],
  ["03 due list only selects FAILED",repo.includes('.eq("state", "FAILED")')],
- ["04 due list ignores archived attempts",repo.includes('.is("archived_at", null)')],
+ ["04 due list ignores archived attempts",repo.includes('.is("deleted_at", null)')],
  ["05 due list requires next retry at or before now",repo.includes('.lte("next_retry_at", now)')],
  ["06 due list orders oldest retry first",repo.includes('.order("next_retry_at", { ascending: true })')],
  ["07 due list has bounded batch max 25",repo.includes("Math.min(25")],

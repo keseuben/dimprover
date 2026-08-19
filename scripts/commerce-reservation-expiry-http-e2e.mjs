@@ -96,11 +96,11 @@ try{
   console.log(`RESULT ${checks.length}/${checks.length} PASS`);
 } finally {
   const now=new Date().toISOString();
-  if(organizationId&&variantId)await admin.from("commerce_inventory_reservations").update({archived_at:now}).eq("organization_id",organizationId).eq("variant_id",variantId).is("archived_at",null);
-  if(organizationId&&variantId)await admin.from("commerce_product_variants").update({archived_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",variantId);
-  if(organizationId&&productId)await admin.from("commerce_products").update({archived_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",productId);
-  if(organizationId&&sourceId)await admin.from("commerce_inventory_sources").update({archived_at:now,active:false}).eq("organization_id",organizationId).eq("id",sourceId);
-  if(organizationId&&warehouseId)await admin.from("commerce_warehouses").update({archived_at:now,active:false}).eq("organization_id",organizationId).eq("id",warehouseId);
+  if(organizationId&&variantId)await admin.from("commerce_inventory_reservations").update({deleted_at:now}).eq("organization_id",organizationId).eq("variant_id",variantId).is("deleted_at",null);
+  if(organizationId&&variantId)await admin.from("commerce_product_variants").update({deleted_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",variantId);
+  if(organizationId&&productId)await admin.from("commerce_products").update({deleted_at:now,status:"ARCHIVED"}).eq("organization_id",organizationId).eq("id",productId);
+  if(organizationId&&sourceId)await admin.from("commerce_inventory_sources").update({deleted_at:now,active:false}).eq("organization_id",organizationId).eq("id",sourceId);
+  if(organizationId&&warehouseId)await admin.from("commerce_warehouses").update({deleted_at:now,active:false}).eq("organization_id",organizationId).eq("id",warehouseId);
   if(membershipId)await admin.from("dimpro_organization_memberships").delete().eq("id",membershipId);
   if(dimproUserId)await admin.from("dimpro_users").delete().eq("id",dimproUserId);
   if(authUserId)await admin.auth.admin.deleteUser(authUserId).catch(()=>undefined);

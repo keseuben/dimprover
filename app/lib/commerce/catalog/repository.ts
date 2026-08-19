@@ -54,7 +54,7 @@ async function verifyCategoryParent(
     if (visited.has(cursor)) throw new CommerceCatalogError("A kategóriahierarchia körkörös hivatkozást tartalmaz.", "COMMERCE_CATEGORY_PARENT_CYCLE", 409);
     visited.add(cursor);
     if (cursor === currentId) throw new CommerceCatalogError("A szülőkategória körkörös hivatkozást hozna létre.", "COMMERCE_CATEGORY_PARENT_CYCLE", 400);
-    const result = await client.from("commerce_categories").select("id,parent_id").eq("organization_id", context.organizationId).eq("id", cursor).is("archived_at", null).maybeSingle();
+    const result = await client.from("commerce_categories").select("id,parent_id").eq("organization_id", context.organizationId).eq("id", cursor).is("deleted_at", null).maybeSingle();
     if (result.error) dbError("A szülőkategória nem ellenőrizhető.", result.error);
     if (!result.data) throw new CommerceCatalogError("A szülőkategória nem található ebben a szervezetben.", "COMMERCE_CATEGORY_PARENT_SCOPE_MISMATCH", 400);
     cursor = nullableText((result.data as Row).parent_id);
@@ -76,7 +76,7 @@ export async function listCommerceCatalog(context:CommerceContext,kind:CommerceC
   const client=createCommerceAdminClient();
   const table=TABLES[kind];
   let query=client.from(table).select("*")
-    .eq("organization_id",context.organizationId).is("archived_at",null).order(kind === "categories" ? "sort_order" : "name",{ascending:true});
+    .eq("organization_id",context.organizationId).is("deleted_at",null).order(kind === "categories" ? "sort_order" : "name",{ascending:true});
   const search=text(input.query).replace(/[%_,().]/g,"");
   if(search) query=query.ilike("name",`%${search}%`);
   if(typeof input.active === "boolean") query=query.eq("active",input.active);
@@ -127,12 +127,12 @@ export async function updateCommerceCatalogItem(context:CommerceContext,kind:Com
     }
   }
   if(!Object.keys(patch).length) {
-    const current=await client.from(TABLES[kind]).select("*").eq("organization_id",context.organizationId).eq("id",itemId).is("archived_at",null).maybeSingle();
+    const current=await client.from(TABLES[kind]).select("*").eq("organization_id",context.organizationId).eq("id",itemId).is("deleted_at",null).maybeSingle();
     if(current.error) dbError("A Commerce törzsadat nem olvasható.",current.error);
     if(!current.data) throw new CommerceCatalogError("A Commerce törzsadat nem található.","COMMERCE_CATALOG_NOT_FOUND",404);
     return mapCatalog(kind,current.data as Row);
   }
-  const result=await client.from(TABLES[kind]).update(patch).eq("organization_id",context.organizationId).eq("id",itemId).is("archived_at",null)
+  const result=await client.from(TABLES[kind]).update(patch).eq("organization_id",context.organizationId).eq("id",itemId).is("deleted_at",null)
     .select("*").maybeSingle();
   if(result.error) {
     if(result.error.code === "23505") throw new CommerceCatalogError("Ilyen Commerce törzsadat már létezik.","COMMERCE_CATALOG_DUPLICATE",409,result.error.code);
@@ -148,15 +148,15 @@ export async function archiveCommerceCatalogItem(context:CommerceContext,kind:Co
   const itemId=text(itemIdInput);
   if(!itemId) throw new CommerceCatalogError("A törzsadat azonosítója kötelező.","COMMERCE_CATALOG_ID_REQUIRED",400);
   const productColumn = kind === "categories" ? "category_id" : kind === "brands" ? "brand_id" : "manufacturer_id";
-  const inUse=await client.from("commerce_products").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq(productColumn,itemId).is("archived_at",null);
+  const inUse=await client.from("commerce_products").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq(productColumn,itemId).is("deleted_at",null);
   if(inUse.error) dbError("A törzsadat használata nem ellenőrizhető.",inUse.error);
   if((inUse.count||0)>0) throw new CommerceCatalogError("A törzsadat aktív termékhez van rendelve, ezért nem archiválható.","COMMERCE_CATALOG_IN_USE",409);
   if(kind === "categories") {
-    const children=await client.from("commerce_categories").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq("parent_id",itemId).is("archived_at",null);
+    const children=await client.from("commerce_categories").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq("parent_id",itemId).is("deleted_at",null);
     if(children.error) dbError("Az alkategóriák használata nem ellenőrizhető.",children.error);
     if((children.count||0)>0) throw new CommerceCatalogError("A kategóriának aktív alkategóriája van, ezért nem archiválható.","COMMERCE_CATEGORY_HAS_CHILDREN",409);
   }
-  const result=await client.from(TABLES[kind]).update({active:false,archived_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("id",itemId).is("archived_at",null).select("id").maybeSingle();
+  const result=await client.from(TABLES[kind]).update({active:false,deleted_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("id",itemId).is("deleted_at",null).select("id").maybeSingle();
   if(result.error) dbError("A Commerce törzsadat archiválása sikertelen.",result.error);
   if(!result.data) throw new CommerceCatalogError("A Commerce törzsadat nem található.","COMMERCE_CATALOG_NOT_FOUND",404);
   return {id:itemId,archived:true};
@@ -169,7 +169,7 @@ function mapVariant(row:Row) {
 
 async function requireProduct(context:CommerceContext,productId:string) {
   const client=createCommerceAdminClient();
-  const product=await client.from("commerce_products").select("id,status").eq("organization_id",context.organizationId).eq("id",productId).is("archived_at",null).maybeSingle();
+  const product=await client.from("commerce_products").select("id,status").eq("organization_id",context.organizationId).eq("id",productId).is("deleted_at",null).maybeSingle();
   if(product.error) dbError("A termék nem ellenőrizhető.",product.error);
   if(!product.data) throw new CommerceCatalogError("A termék nem található.","COMMERCE_PRODUCT_NOT_FOUND",404);
   return client;
@@ -206,7 +206,7 @@ export async function updateCommerceVariant(context:CommerceContext,productIdInp
   if(input.unit !== undefined){const unit=text(input.unit).toUpperCase() as UnitOfMeasure;if(!UNIT_VALUES.has(unit))throw new CommerceCatalogError("Ismeretlen mértékegység.","COMMERCE_VARIANT_UNIT_INVALID",400);patch.unit=unit;}
   if(input.status !== undefined){const status=text(input.status).toUpperCase() as ProductStatus;if(!STATUS_VALUES.has(status))throw new CommerceCatalogError("Ismeretlen változatállapot.","COMMERCE_VARIANT_STATUS_INVALID",400);patch.status=status;}
   if(input.attributes !== undefined){if(!input.attributes||typeof input.attributes!=="object"||Array.isArray(input.attributes))throw new CommerceCatalogError("Az attribútumok objektum formátumúak legyenek.","COMMERCE_VARIANT_ATTRIBUTES_INVALID",400);patch.attributes=input.attributes;}
-  const result=await client.from("commerce_product_variants").update(patch).eq("organization_id",context.organizationId).eq("product_id",productId).eq("id",variantId).is("archived_at",null).select("id,organization_id,product_id,name,sku,unit,status,attributes,created_at,updated_at").maybeSingle();
+  const result=await client.from("commerce_product_variants").update(patch).eq("organization_id",context.organizationId).eq("product_id",productId).eq("id",variantId).is("deleted_at",null).select("id,organization_id,product_id,name,sku,unit,status,attributes,created_at,updated_at").maybeSingle();
   if(result.error){if(result.error.code==="23505")throw new CommerceCatalogError("Ez a cikkszám már használatban van.","COMMERCE_VARIANT_SKU_DUPLICATE",409,result.error.code);dbError("A termékváltozat módosítása sikertelen.",result.error);}
   if(!result.data)throw new CommerceCatalogError("A termékváltozat nem található.","COMMERCE_VARIANT_NOT_FOUND",404);
   return mapVariant(result.data as Row);
@@ -217,10 +217,10 @@ export async function archiveCommerceVariant(context:CommerceContext,productIdIn
   const productId=text(productIdInput),variantId=text(variantIdInput);
   if(!productId||!variantId)throw new CommerceCatalogError("A termék- és változatazonosító kötelező.","COMMERCE_VARIANT_ID_REQUIRED",400);
   const client=await requireProduct(context,productId);
-  const balance=await client.from("commerce_inventory_balances").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq("variant_id",variantId).is("archived_at",null);
+  const balance=await client.from("commerce_inventory_balances").select("id",{count:"exact",head:true}).eq("organization_id",context.organizationId).eq("variant_id",variantId).is("deleted_at",null);
   if(balance.error)dbError("A változat készlete nem ellenőrizhető.",balance.error);
   if((balance.count||0)>0)throw new CommerceCatalogError("Készlethez kapcsolódó változat nem archiválható.","COMMERCE_VARIANT_INVENTORY_IN_USE",409);
-  const result=await client.from("commerce_product_variants").update({status:"ARCHIVED",archived_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("product_id",productId).eq("id",variantId).is("archived_at",null).select("id").maybeSingle();
+  const result=await client.from("commerce_product_variants").update({status:"ARCHIVED",deleted_at:new Date().toISOString()}).eq("organization_id",context.organizationId).eq("product_id",productId).eq("id",variantId).is("deleted_at",null).select("id").maybeSingle();
   if(result.error)dbError("A termékváltozat archiválása sikertelen.",result.error);
   if(!result.data)throw new CommerceCatalogError("A termékváltozat nem található.","COMMERCE_VARIANT_NOT_FOUND",404);
   return {id:variantId,archived:true};

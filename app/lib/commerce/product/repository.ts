@@ -146,7 +146,7 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
   let query = client.from("commerce_products")
     .select("id,organization_id,name,slug,description,type_model,category_id,brand_id,manufacturer_id,status,created_at,updated_at", { count: "exact" })
     .eq("organization_id", context.organizationId)
-    .is("archived_at", null)
+    .is("deleted_at", null)
     .order("name", { ascending: true })
     .range(offset, offset + limit - 1);
   const search = text(input.query).replace(/[%_,().]/g, "");
@@ -163,7 +163,7 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
     .select("id,organization_id,product_id,name,sku,unit,attributes,status,created_at,updated_at")
     .eq("organization_id", context.organizationId)
     .in("product_id", productIds)
-    .is("archived_at", null)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (variantsResult.error) dbError("A terméklista változatai nem tölthetők be.", variantsResult.error);
   const variants = ((variantsResult.data || []) as Row[]).map(mapVariant);
@@ -178,16 +178,16 @@ export async function listCommerceProducts(context: CommerceContext, input: { qu
   const [pricesResult, balancesResult, externalResult, mediaLinksResult] = await Promise.all([
     client.from("commerce_prices")
       .select("variant_id,currency,amount,valid_from,valid_until,status,created_at")
-      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("status", "ACTIVE").is("archived_at", null).order("created_at", { ascending:false }),
+      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("status", "ACTIVE").is("deleted_at", null).order("created_at", { ascending:false }),
     client.from("commerce_inventory_balances")
       .select("variant_id,available_quantity")
-      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("stock_status", "SELLABLE").is("archived_at", null),
+      .eq("organization_id", context.organizationId).in("variant_id", variantIds).eq("stock_status", "SELLABLE").is("deleted_at", null),
     client.from("commerce_external_inventory_snapshots")
       .select("variant_id,quantity,sync_status,last_sync_at")
       .eq("organization_id", context.organizationId).in("variant_id", variantIds),
     client.from("commerce_media_links")
       .select("asset_id,linked_entity_id,is_primary,sort_order")
-      .eq("organization_id", context.organizationId).eq("link_type", "PRODUCT").in("linked_entity_id", productIds).is("archived_at", null)
+      .eq("organization_id", context.organizationId).eq("link_type", "PRODUCT").in("linked_entity_id", productIds).is("deleted_at", null)
       .order("is_primary", { ascending:false }).order("sort_order", { ascending:true }),
   ]);
   if (pricesResult.error) dbError("A termékárak összesítése sikertelen.", pricesResult.error);
@@ -269,13 +269,13 @@ export async function getCommerceProduct(context: CommerceContext, productIdInpu
   const [productResult, variantResult, identifierResult] = await Promise.all([
     client.from("commerce_products")
       .select("id,organization_id,name,slug,description,type_model,category_id,brand_id,manufacturer_id,status,created_at,updated_at")
-      .eq("organization_id", context.organizationId).eq("id", productId).is("archived_at", null).maybeSingle(),
+      .eq("organization_id", context.organizationId).eq("id", productId).is("deleted_at", null).maybeSingle(),
     client.from("commerce_product_variants")
       .select("id,organization_id,product_id,name,sku,unit,attributes,status,created_at,updated_at")
-      .eq("organization_id", context.organizationId).eq("product_id", productId).is("archived_at", null).order("created_at"),
+      .eq("organization_id", context.organizationId).eq("product_id", productId).is("deleted_at", null).order("created_at"),
     client.from("commerce_product_identifiers")
       .select("id,organization_id,product_id,variant_id,identifier_type,value,normalized_value,is_primary")
-      .eq("organization_id", context.organizationId).eq("product_id", productId).is("archived_at", null).order("created_at"),
+      .eq("organization_id", context.organizationId).eq("product_id", productId).is("deleted_at", null).order("created_at"),
   ]);
   if (productResult.error) dbError("A termék lekérése sikertelen.", productResult.error);
   if (!productResult.data) throw new CommerceProductError("A termék nem található.", "COMMERCE_PRODUCT_NOT_FOUND", 404);
@@ -371,7 +371,7 @@ export async function updateCommerceProduct(context: CommerceContext, productIdI
   const productId = text(productIdInput);
   if (!productId) throw new CommerceProductError("A termékazonosító kötelező.", "COMMERCE_PRODUCT_ID_REQUIRED", 400);
   const client = createCommerceAdminClient();
-  const current = await client.from("commerce_products").select("id,name,slug").eq("organization_id", context.organizationId).eq("id", productId).is("archived_at", null).maybeSingle();
+  const current = await client.from("commerce_products").select("id,name,slug").eq("organization_id", context.organizationId).eq("id", productId).is("deleted_at", null).maybeSingle();
   if (current.error) dbError("A termék ellenőrzése sikertelen.", current.error);
   if (!current.data) throw new CommerceProductError("A termék nem található.", "COMMERCE_PRODUCT_NOT_FOUND", 404);
   const patch: Record<string, unknown> = {};
@@ -422,7 +422,7 @@ export async function resolveCommerceProductByCode(context: CommerceContext, cod
     .select("id,organization_id,product_id,variant_id,identifier_type,value,normalized_value,is_primary")
     .eq("organization_id", context.organizationId)
     .in("normalized_value", normalizedValues)
-    .is("archived_at", null);
+    .is("deleted_at", null);
   if (result.error) dbError("A termékazonosító keresése sikertelen.", result.error);
   const matches = ((result.data || []) as Row[]).map(mapIdentifier)
     .sort((a, b) => (IDENTIFIER_PRIORITY[a.type] ?? 99) - (IDENTIFIER_PRIORITY[b.type] ?? 99));

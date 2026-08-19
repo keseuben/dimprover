@@ -37,5 +37,7 @@ export type OrganizationScoped = {
 export type CommerceLifecycle = {
   createdAt: CommerceUtcTimestamp;
   updatedAt: CommerceUtcTimestamp;
+  deletedAt?: CommerceUtcTimestamp | null;
+  /** @deprecated Compatibility alias during deleted_at migration. */
   archivedAt?: CommerceUtcTimestamp | null;
 };
