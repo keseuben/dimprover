@@ -20,7 +20,7 @@ const idempotencyKey=`tracking-e2e-${randomUUID()}`;
 let attemptId="",commerceOrderId="";
 let checks=0;
 function pass(name,ok=true,detail=""){checks++;if(!ok)throw new Error(`FAIL ${String(checks).padStart(2,"0")} ${name}${detail?`: ${detail}`:""}`);console.log(`PASS ${String(checks).padStart(2,"0")} ${name}`)}
-async function api(path,{method="POST",body}={}){const r=await fetch(`${BASE}${path}`,{method,headers:{"content-type":"application/json",host:"app.dev.dimpro.hu","x-forwarded-host":"app.dev.dimpro.hu"},body:body?JSON.stringify(body):undefined,redirect:"manual"});const raw=await r.text();let json=null;try{json=JSON.parse(raw)}catch{}return{status:r.status,raw,json};}
+async function api(path,{method="POST",body}={}){const r=await fetch(`${BASE}${path}`,{method,headers:{"content-type":"application/json",host:"app.dev.dimpro.hu","x-forwarded-host":"app.dev.dimpro.hu"},body:body?JSON.stringify(body):undefined,redirect:"manual"});const raw=await r.text();let json=null;try{json=JSON.parse(raw)}catch{}return{status:r.status,raw,json,cacheControl:r.headers.get("cache-control")||""};}
 async function waitFor(label,fn,timeout=100000){const end=Date.now()+timeout;let last;while(Date.now()<end){last=await fn();if(last?.ok)return last.value;await new Promise(r=>setTimeout(r,2000));}throw new Error(`${label} timeout: ${JSON.stringify(last)}`)}
 async function status(token){return api("/api/aruter/public-checkouts/status",{body:{trackingToken:token}})}
 
@@ -51,7 +51,7 @@ try{
   const tampered=`${data.trackingToken.slice(0,-1)}${data.trackingToken.endsWith("A")?"B":"A"}`;
   const invalid=await status(tampered);
   pass("tampered tracking token is rejected generically",invalid.status===404&&invalid.json?.code==="STOREFRONT_TRACKING_TOKEN_INVALID",`${invalid.status} ${invalid.raw.slice(0,300)}`);
-  pass("tracking endpoint response disables cache",String(invalid.raw).length>=0);
+  pass("tracking endpoint response disables cache",invalid.cacheControl.toLowerCase().includes("no-store"),invalid.cacheControl);
 
   const first=await status(data.trackingToken);
   pass("valid tracking token is accepted",first.status===200&&first.json?.ok===true,`${first.status} ${first.raw.slice(0,500)}`);
