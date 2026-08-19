@@ -2,7 +2,7 @@
 
 **Dátum:** 2026-08-19
 **Környezet:** kizárólag DEV
-**Állapot:** release gate előtt · source validáció folyamatban · PROD DENY
+**Állapot:** DEV AKTÍV · 2026-08-19 15:24:03 CEST · PROD DENY
 
 ## Cél
 
@@ -76,36 +76,70 @@ A felirat külön jelzi, hogy megfigyelt jelenléti ablakokról van szó.
 - `scripts/benjadmin-weekly-development-flow-v12-runtime-browser-acceptance.mjs`;
 - `scripts/benjadmin-weekly-development-flow-v12-timing-unit.mjs`.
 
-## Jelenlegi source gate
+## Release és validáció
+
+- Feature / runtime source commit: **`b5d673522022b4e9285080647377ce6b90e6cbf4`** (`b5d6735`);
+- canonical operator és `integration/benjadmin-dev` a runtime aktiváláskor: **`b5d6735`**;
+- aktív DEV release: **`.next-benjadmin-weekly-flow-v12-release-b5d6735`**;
+- BUILD_ID: **`6t8qQsOz3jTUOSkn2Tpy2`**;
+- korábbi aktív release: `.next-terep-save-share-release-395e490`;
+- DEV cutover: **2026-08-19 15:23:56–15:24:03 CEST**, exit 0;
+- cutover backup: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v12-cutover-20260819T152355+0200`;
+- artifact promotion backup: `/srv/dimpro-dev/backups/benjadmin-weekly-flow-v12-artifact-promotion-20260819T152144+0200`.
+
+### Build megjegyzés
+
+Az exact `b5d6735` source-ból az izolált V1.2 candidate build 2026-08-19 14:10:01–14:15:50 CEST között sikeresen elkészült, standalone ellenőrzéssel és 248 statikus chunk validációval. A canonical operator worktree-ben indított második release build 2026-08-19 14:22:33–14:49:43 CEST között `exit 143` értékkel megszakadt még `compile` fázisban, ezért a részleges artifact nem került használatba.
+
+Mivel a sikeres candidate artifact **ugyanabból az exact `b5d6735` commitból** készült, és candidate + canonical-root runtime acceptance alatt is zöld volt, a hibás 1,1 MB-os partial release félretételre került, a validált candidate artifact pedig hardlink-alapú, tárhelytakarékos promotionnel kapta meg a canonical release nevet. A `.dimpro-release.json` canonical branch mezőre lett állítva, a build tartalma és BUILD_ID változatlan maradt.
+
+### Source és statikus kapuk
 
 - Flow V1 contract: **21/21 PASS**;
 - Flow V1.1 contract: **19/19 PASS**;
 - Flow V1.2 contract: **22/22 PASS**;
 - Worker Presence bridge contract: **37/37 PASS**;
 - build-lock timing unit: **12/12 PASS**;
+- `npx tsc --noEmit`: **PASS**;
 - célzott ESLint: **PASS**;
-- `git diff --check`: **PASS**;
-- PROD access: **DENY**.
+- teljes `npm run lint`: **0 error / 103 meglévő warning**;
+- `git diff --check`: **PASS**.
 
-## Függő release gate
+### Runtime/browser acceptance
 
-A következők csak a központi build-zár felszabadulása után futnak:
+- exact candidate V1.2: **40/40 PASS**;
+- promoted canonical release, temp runtime: **40/40 PASS**;
+- aktív 3100-as DEV PM2 runtime post-cutover: **40/40 PASS**;
+- kontrollált handoff fixture: **7 perc**;
+- kontrollált lezárt build-lock fixture: **4 perc**;
+- bottleneck fixture eredmény: **`HANDOFF_GAP`**;
+- desktop overflow: **PASS**;
+- mobil overflow: **PASS**.
 
-- `npx tsc --noEmit`;
-- feature commit;
-- exact candidate build;
-- V1.2 runtime/browser acceptance;
-- kapcsolódó regressziók;
-- canonical integráció;
-- combined release build és DEV cutover;
-- teljes lint és végső smoke.
+### Élő regressziók
 
-A jelen dokumentum a release gate sikeres lezárásakor frissítendő exact commit-, release- és build-azonosítókkal.
+- Weekly Flow V1.1 runtime/browser: **34/34 PASS**;
+- Weekly Summary V1 runtime/browser: **25/25 PASS**;
+- Weekly Summary V1.1 runtime/browser: **35/35 PASS**;
+- Common Chat V2 runtime/browser: **30/30 PASS**;
+- Overnight Scheduler runtime: **30/30 PASS**;
+- Overnight Scheduler browser: **14/14 PASS**.
+
+### Post-cutover smoke
+
+- PM2 `dimpro-benjadmin-operator-ui-v2-dev`: **online**;
+- `NEXT_DIST_DIR`: `.next-benjadmin-weekly-flow-v12-release-b5d6735`;
+- `/admin/dev-console`: **PASS**;
+- `/terep`: **PASS**;
+- `/api/field-capture/health`: **PASS**;
+- `/api/dev/console/weekly-summary`: **PASS**;
+- `productionAccess`: **DENY**.
 
 ## Biztonság
 
-- csak DEV környezet módosul;
-- PROD build/write/restart nem engedélyezett;
-- `productionAccess: DENY` megmarad;
+- csak DEV környezet módosult;
+- PROD build/write/restart nem történt;
+- `productionAccess: DENY` megmaradt;
 - nincs új SQL migráció;
-- a runtime acceptance izolált fixture adatokat használ és cleanupot futtat.
+- a runtime acceptance izolált fixture adatokat használ és cleanupot futtat;
+- a cutover rollback útvonala megőrzi a korábbi `.next-terep-save-share-release-395e490` release-t.

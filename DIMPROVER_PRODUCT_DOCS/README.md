@@ -241,3 +241,4 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - `286_terepi_gps_fototerkep_dev_activation_20260819.md` – Terepi GPS fotótérkép A–E DEV aktiválás: geometry/UI/PDF/calibration, 34/34 candidate + live mobil gate és teljes kliensszinkron E2E PASS; aktív build `JZWHdY79muoXk59R06jdM`.
 
 - `288_benjadmin_weekly_development_flow_v1_1_dev_activation_20260819.md` – Weekly Development Flow V1.1 DEV aktiválás: előző heti trendek + worker terhelés; feature `81e7111`, combined runtime `395e490`, 19/19 contract + 34/34 live PASS, tsc PASS, lint 0 error / 103 warning, PROD DENY.
+- `289_benjadmin_weekly_development_flow_v1_2_dev_activation_20260819.md` – Weekly Development Flow V1.2 DEV aktiválás: handoff/lead-time, build-lock időmérés és bottleneck; runtime `b5d6735`, BUILD_ID `6t8qQsOz3jTUOSkn2Tpy2`, 22/22 contract + 40/40 live PASS, tsc PASS, lint 0 error / 103 warning, PROD DENY.
