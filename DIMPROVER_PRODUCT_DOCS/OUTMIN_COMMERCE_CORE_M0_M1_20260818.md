@@ -2346,3 +2346,40 @@ QA:
 - következő: production candidate build + standalone API/page smoke + multi-item backend E2E regresszió;
 - becsült következő aktív idő: 1–2 óra;
 - PROD változatlan.
+
+### 2026-08-19 19:xx checkpoint — Storefront Cart UI Production Candidate
+
+Production candidate:
+- source commit: `5d2550de48085d77927cd68c6689c76360c94a0e`;
+- dist: `.next-commerce-5d2550d`;
+- Build ID: `KP5B4BoAGgS4i7HXmPhDa`;
+- compile: 6.0 perc;
+- build exitCode: 0;
+- standalone assets: 255/255 VERIFIED;
+- route manifest: `/api/aruter/public-checkouts` + `/aruter/[businessSlug]` jelen van.
+
+Standalone candidate smoke:
+- public-products HTTP 200;
+- `pilotEnabled=true`;
+- `multiItemCheckoutEnabled=true`;
+- pilot product count: 2;
+- `/aruter/kovacs-kerteszet` HTTP 200.
+
+Standalone candidate regresszió:
+- Multi-item Checkout E2E: 23/23 PASS;
+- Queue Idempotency E2E: 26/26 PASS;
+- runtime error scan: 0;
+- due jobs: 0;
+- aktív QA attempts: 0;
+- aktív QA Commerce orders: 0;
+- candidate process leállítva;
+- 3308 port szabad.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: STOREFRONT MULTI-ITEM CART UI — DEV KÉSZ / PRODUCTION CANDIDATE TESZTELT;
+- DB: 0.1.13 / 14;
+- Build: KP5B4BoAGgS4i7HXmPhDa PASS;
+- UI contract: 56/56 PASS;
+- Shared DEV cutover: NEM történt;
+- következő blokk: Storefront persistent queue automatikus service worker foundation;
+- PROD változatlan.
