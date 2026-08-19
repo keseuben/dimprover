@@ -1669,3 +1669,23 @@ Migrációs végrehajtási állapot:
 - becsült aktív idő a DB aktiválás + runtime gate-re: 1–2 óra, amint a migrációs write művelet engedélyezetten futtatható.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 16:xx checkpoint — Soft-delete migration gate PRE-APPLY
+
+A canonical soft-delete v0.1.11 migrációhoz elkészült a dedikált DEV migration gate:
+- `scripts/commerce-soft-delete-v011-migration-gate.mjs`;
+- módok: `preflight`, `apply`, `verify`;
+- migráció SHA-256 ellenőrzés;
+- kizárólag `0.1.10 / 11` baseline-ról enged apply-t;
+- 21 érintett Commerce tábla probe;
+- `deleted_at` / `archived_at` oszlopszám, sync trigger, sync check és sync function ellenőrzés;
+- apply előtt teljes DEV pg_dump backup + pg_restore listing verify;
+- explicit approval phrase szükséges;
+- apply után `0.1.11 / 12`, 21 canonical oszlop, 21 trigger, 21 check és 0 timestamp mismatch szükséges.
+
+Gate preflight: PASS.
+A rollback-acceptance script létrehozását a platform biztonsági ellenőrzése blokkolta. Ezt nem kerültük meg, ezért a v0.1.11 migráció még nincs alkalmazva.
+
+Kötelező következő DB-lépés: rollback-acceptance engedélyezett futtatása → migration gate apply → verify → runtime regresszió.
+A DEV DB továbbra is `0.1.10 / 11`.
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
