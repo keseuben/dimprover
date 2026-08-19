@@ -15,3 +15,30 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=SAJAT-ANON-KULCS
 
 # Supabase service role kulcs, csak szerveren:
 SUPABASE_SERVICE_ROLE_KEY=SAJAT-SERVICE-ROLE-KULCS
+
+# Legacy Árutér → Commerce Order mirror (opt-in, alapból kikapcsolva)
+ARUTER_COMMERCE_ORDER_MIRROR_ENABLED=0
+# Opcionális belső Commerce készletforrás. Üresen hagyva nincs automatikus készletfoglalás.
+ARUTER_COMMERCE_FULFILLMENT_SOURCE_ID=
+# Nyilvános Storefront Pilot katalógus (opt-in, alapból kikapcsolva)
+ARUTER_STOREFRONT_PILOT_ENABLED=0
+# A mentett nyilvános foglalás fail-open átvezetése a legacy központi pénztári rendelésbe.
+ARUTER_STOREFRONT_ORDER_BRIDGE_ENABLED=0
+# Opcionális pilot sablon. Üresen a businessSlug ismert alapértelmezése használható.
+ARUTER_STOREFRONT_PILOT_TEMPLATE=
+
+# Public Storefront -> Commerce persistent mirror queue (opt-in, trusted server config only)
+ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED=0
+ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG=
+ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID=
+# Storefront többtételes checkout API (opt-in, alapból kikapcsolva)
+ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0
+# Commerce Storefront persistent mirror queue automatikus worker (opt-in)
+DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ENABLED=0
+# Dedikált technikai DIMPRO user ID: auth_user_id=NULL és COMMERCE_MIRROR_WORKER aktív membership szükséges.
+DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ACTOR_USER_ID=
+# Egy futásban legfeljebb 1-25 due attempt; alap: 10.
+DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_LIMIT=10
+
+# DEV worker process gyökér; systemd worker csak /srv/dimpro-dev alól indulhat.
+DIMPRO_APP_ROOT=/srv/dimpro-dev/worktrees/outmin-commerce-core-m0-m1

@@ -4,6 +4,6 @@ import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    data: getAruterRepository().listProducts(),
+    data: await getAruterRepository().listProducts(),
   });
 }

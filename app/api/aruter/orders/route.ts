@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
 import type { AruterOrder } from "@/app/lib/aruter/types";
+import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMirror";
 
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    data: getAruterRepository().listOrders(),
+    data: await getAruterRepository().listOrders(),
   });
 }
 
@@ -32,6 +33,13 @@ export async function POST(request: Request) {
 
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
+  }
+
+  if (result.data) {
+    const order = result.data;
+    after(async () => {
+      await mirrorAruterOrderToCommerceFailOpen(request, order);
+    });
   }
 
   return NextResponse.json(result, { status: 201 });

@@ -1,6 +1,7 @@
 import { aruterOrders, aruterProducts, aruterRealtimeEvents } from "./mockData";
 import { createPublicReservation, validatePublicReservationInput, type AruterPublicReservation, type AruterPublicReservationStatus, type CreateAruterPublicReservationInput } from "./publicReservation";
 import type { AruterOrder, AruterOrderStatus, AruterProduct, AruterRealtimeEvent } from "./types";
+import { createMockAruterOrderNumber } from "./mockOrderNumber";
 
 export type AruterApiResult<T> = {
   ok: boolean;
@@ -28,10 +29,6 @@ function createEvent(input: Omit<AruterRealtimeEvent, "id" | "createdAt">): Arut
     id: `api-evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     createdAt: new Date().toISOString(),
   };
-}
-
-function nextOrderNumber(orderCount: number) {
-  return `AR-2026-${String(orderCount + 1).padStart(4, "0")}`;
 }
 
 function getStatusEventType(status: AruterOrderStatus): AruterRealtimeEvent["type"] {
@@ -114,7 +111,7 @@ export const aruterRepository = {
       return { ok: false, error: "A rendelés legalább egy tételt tartalmazzon." };
     }
 
-    const orderNumber = nextOrderNumber(serverState.orders.length);
+    const orderNumber = createMockAruterOrderNumber(serverState.orders.length);
     const order: AruterOrder = {
       id: `api-ord-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       orderNumber,

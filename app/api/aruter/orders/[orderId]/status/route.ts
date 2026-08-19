@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
 import type { AruterOrderStatus } from "@/app/lib/aruter/types";
+import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMirror";
 
 const allowedStatuses: AruterOrderStatus[] = ["draft", "sent_to_cashier", "paid", "issued", "cancelled"];
 
@@ -22,6 +23,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (!result.ok) {
     return NextResponse.json(result, { status: 404 });
+  }
+
+  if (result.data) {
+    const order = result.data;
+    after(async () => {
+      await mirrorAruterOrderToCommerceFailOpen(request, order);
+    });
   }
 
   return NextResponse.json(result);

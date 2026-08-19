@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { aruterOrders, aruterProducts, aruterRealtimeEvents } from "./mockData";
 import type { AruterCartItem, AruterOrder, AruterOrderStatus, AruterProduct, AruterRealtimeEvent, AruterTemplate } from "./types";
+import { createMockAruterOrderNumber } from "./mockOrderNumber";
 
 type AruterStore = {
   selectedTemplate: AruterTemplate;
@@ -60,10 +61,6 @@ function createEvent(input: Omit<AruterRealtimeEvent, "id" | "createdAt">): Arut
   };
 }
 
-function nextOrderNumber(orderCount: number) {
-  return `AR-2026-${String(orderCount + 1).padStart(4, "0")}`;
-}
-
 export const useAruterStore = create<AruterStore>()(
   persist(
     (set, get) => ({
@@ -108,7 +105,7 @@ export const useAruterStore = create<AruterStore>()(
         const state = get();
         if (state.cartItems.length === 0) return null;
 
-        const orderNumber = nextOrderNumber(state.orders.length);
+        const orderNumber = createMockAruterOrderNumber(state.orders.length);
         const order: AruterOrder = {
           id: `ord-${Date.now()}`,
           orderNumber,

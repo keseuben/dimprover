@@ -22,6 +22,7 @@ export type AruterProduct = {
   id: string;
   sku: string;
   name: string;
+  description?: string;
   category: string;
   template: AruterTemplate;
   unit: AruterUnit;
@@ -30,6 +31,7 @@ export type AruterProduct = {
   stockQuantity: number;
   storageZone: string;
   barcode?: string;
+  isPublicOffer?: boolean;
   isActive: boolean;
 };
 
