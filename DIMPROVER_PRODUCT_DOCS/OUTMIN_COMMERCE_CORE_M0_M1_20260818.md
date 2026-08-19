@@ -1352,3 +1352,44 @@ Teljes HTTP/session mirror E2E candidate runtime-on: 18/18 PASS:
 Shared DEV runtime mirror flag nem lett tartósan bekapcsolva. Shared DEV PM2 cutover nem történt ebből a Commerce candidate-ből.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 11:xx checkpoint — Reservation Expiry / Cleanup M1 előkészítve
+
+Új blokk: lejárt `ACTIVE` / `PARTIAL` készletfoglalások kontrollált felszabadítása.
+
+Elkészült:
+- új service-only RPC: `commerce_inventory_expire_due_reservations`;
+- tenant-scoped, max. 100 foglalás/ciklus;
+- organization-szintű advisory lock + `FOR UPDATE SKIP LOCKED`;
+- csak `expires_at <= now()`, nem archivált, pozitív remaining foglalás dolgozható fel;
+- expiry során csak a reserved készlet csökken, physical készlet változatlan;
+- foglalás státusz `EXPIRED`, remaining = 0;
+- `EXPIRE` reservation event stabil idempotency kulccsal;
+- immutable StockMovement `RESERVATION_RELEASE` stabil reservation-alapú kulccsal;
+- kapcsolt Commerce order item `RESERVED` → `RELEASED`, hogy újrafoglalható legyen és ne lehessen lejárt reservationből kiadni;
+- audit + transactional outbox `INVENTORY_RESERVATION_EXPIRED`;
+- repository szinten `commerce.inventory.move` + `commerce.inventory.adjust` együttes jogosultság szükséges;
+- új admin/session API: `POST /api/v1/commerce/inventory/reservations/expire-due`, limit 1–100;
+- automatikus scheduler később ugyanazt a service-only RPC-t használhatja; külön worker-secret szerződés még nincs tartósan bekötve.
+
+DB terv:
+- target schema: 0.1.10 / 11;
+- forward: `supabase/migrations/20260819112500_dimpro_commerce_reservation_expiry_m1.sql`;
+- rollback: `supabase/rollback/DIMPRO_COMMERCE_RESERVATION_EXPIRY_M1_ROLLBACK.sql`;
+- migration SHA-256: `d9930dbccffe7cbe7b356b64fe70c2d49e538e5d44b2a8bd8bf65508b8205a57`;
+- forward → rollback tranzakciós acceptance: PASS, DEV végállapot 0.1.9 / 10 maradt.
+
+QA:
+- expiry contract: 27/27 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: KÓDOLÁS ALATT, migration-ready;
+- Elkészült: DB/API/repository/runtime-test kód;
+- Részben elkészült: DEV apply és valós expiry runtime E2E;
+- Még hiányzik: automatikus ütemezett worker trigger és shared DEV release integráció;
+- Következő blokk: backup → 0.1.10 apply → runtime E2E → regresszió → checkpoint.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

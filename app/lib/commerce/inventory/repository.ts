@@ -36,6 +36,12 @@ function requireMovement(context: CommerceContext, type: StockMovementType) {
   if (type === "ADJUSTMENT" && !hasCommercePermission(context.permissions, "commerce.inventory.adjust")) throw new CommerceInventoryError("Készletkorrekcióhoz magasabb jogosultság szükséges.", "COMMERCE_INVENTORY_ADJUST_PERMISSION_DENIED", 403);
 }
 
+function requireReservationCleanup(context: CommerceContext) {
+  if (!hasCommercePermission(context.permissions, "commerce.inventory.move") || !hasCommercePermission(context.permissions, "commerce.inventory.adjust")) {
+    throw new CommerceInventoryError("Lejárt készletfoglalások felszabadításához adminisztrátori készletjogosultság szükséges.", "COMMERCE_RESERVATION_CLEANUP_PERMISSION_DENIED", 403);
+  }
+}
+
 export async function listCommerceInventory(context: CommerceContext, input: { variantId?: string; sourceId?: string; warehouseId?: string; stockStatus?: string } = {}) {
   requireRead(context);
   const client = createCommerceAdminClient();
@@ -217,5 +223,29 @@ export async function applyCommerceInventoryReservationAction(
   });
   if (result.error) throwReservationRpcError(result.error);
   if (!result.data || typeof result.data!=="object" || Array.isArray(result.data)) throw new CommerceInventoryError("A foglalási művelet válasza érvénytelen.", "COMMERCE_RESERVATION_RESPONSE_INVALID", 500);
+  return result.data as Row;
+}
+
+export async function expireDueCommerceInventoryReservations(
+  context: CommerceContext,
+  input: { limit?: number } = {},
+) {
+  requireReservationCleanup(context);
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(input.limit) || 50)));
+  const client = createCommerceAdminClient();
+  const result = await client.rpc("commerce_inventory_expire_due_reservations", {
+    p_organization_id: context.organizationId,
+    p_limit: limit,
+  });
+  if (result.error) {
+    const message = result.error.message || "";
+    if (message.includes("COMMERCE_ORGANIZATION_NOT_ACTIVE")) {
+      throw new CommerceInventoryError("A szervezet nem aktív.", "COMMERCE_ORGANIZATION_NOT_ACTIVE", 409, result.error.code);
+    }
+    dbError("A lejárt készletfoglalások felszabadítása sikertelen.", result.error);
+  }
+  if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+    throw new CommerceInventoryError("A foglalás-cleanup válasza érvénytelen.", "COMMERCE_RESERVATION_CLEANUP_RESPONSE_INVALID", 500);
+  }
   return result.data as Row;
 }
