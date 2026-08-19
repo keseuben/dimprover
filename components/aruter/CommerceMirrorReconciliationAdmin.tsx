@@ -58,6 +58,21 @@ export function CommerceMirrorReconciliationAdmin() {
   const visible = useMemo(() => filter === "ALL" ? attempts : attempts.filter(item => item.state === filter), [attempts, filter]);
   const selected = useMemo(() => attempts.find(item => item.id === selectedId) || null, [attempts, selectedId]);
 
+  async function retryDue() {
+    if (busyId) return;
+    setBusyId("BULK"); setError(null); setNotice(null);
+    try {
+      const response = await fetch("/api/v1/commerce/mirror/reconciliation/retry-due", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ limit: 10 }) });
+      const result = await response.json() as ApiResult<{ requested: number; succeeded: number; failed: number }>;
+      if (![200, 207].includes(response.status) || !result.data) throw new Error(result.error || "Az esedékes újrapróbálás sikertelen.");
+      setNotice(`Kötegelt újrapróbálás: ${result.data.requested} tétel, ${result.data.succeeded} sikeres, ${result.data.failed} sikertelen.`);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Az esedékes újrapróbálás sikertelen.");
+      await load();
+    } finally { setBusyId(null); }
+  }
+
   async function retry(attempt: MirrorAttempt) {
     if (busyId) return;
     setBusyId(attempt.id); setError(null); setNotice(null);
@@ -80,7 +95,7 @@ export function CommerceMirrorReconciliationAdmin() {
   ];
 
   return <AruterPageShell>
-    <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><AruterBrand compact/><span className="hidden h-10 w-px bg-slate-200 sm:block"/><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Commerce Core</p><h1 className="text-xl font-black text-slate-900">Rendelés-egyeztetés</h1></div></div><div className="flex gap-2"><Link href="/aruter/admin/penztar" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><ArrowLeft size={17}/> Pénztár</Link><button type="button" onClick={()=>void load()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 font-black text-white"><RefreshCw size={17}/> Frissítés</button></div></div></header>
+    <header className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><AruterBrand compact/><span className="hidden h-10 w-px bg-slate-200 sm:block"/><div><p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Commerce Core</p><h1 className="text-xl font-black text-slate-900">Rendelés-egyeztetés</h1></div></div><div className="flex flex-wrap gap-2"><Link href="/aruter/admin/penztar" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 font-black text-slate-700"><ArrowLeft size={17}/> Pénztár</Link><button type="button" disabled={busyId!==null||summary.FAILED===0} onClick={()=>void retryDue()} className="hidden h-11 items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 font-black text-teal-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:inline-flex">{busyId==="BULK"?<Loader2 size={17} className="animate-spin"/>:<RotateCcw size={17}/>} Esedékesek újrapróbálása</button><button type="button" onClick={()=>void load()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-700 px-4 font-black text-white"><RefreshCw size={17}/> Frissítés</button></div></div></header>
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
       <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 p-4"><div className="flex gap-3 text-sky-900"><ShieldCheck size={21} className="shrink-0"/><div><b>Biztonságos legacy → Commerce átmenet</b><p className="mt-1 text-sm font-semibold text-sky-800">A meglévő Árutér rendelés marad az elsődleges folyamat. A Commerce tükrözés hibája nem fordítja vissza a pénztári rendelést; az eltérések itt ellenőrizhetők és jogosultsággal újrapróbálhatók.</p></div></div></div>
       {error&&<div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><AlertCircle size={20}/><div><b>Egyeztetési állapot</b><p className="mt-1 text-sm font-semibold">{error}</p></div></div>}

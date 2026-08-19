@@ -22,6 +22,8 @@ const checks=[
  ["16 loading and busy states have spinner feedback",ui.includes("Loader2")&&ui.includes("animate-spin")],
  ["17 API errors remain visible to user",ui.includes("Egyeztetési állapot")&&ui.includes("setError")],
  ["18 retry success produces explicit notice",ui.includes("Sikeres újrapróbálás")&&ui.includes("setNotice")],
+ ["19 UI exposes bounded due batch retry",ui.includes("/retry-due")&&ui.includes("limit: 10")&&ui.includes("Esedékesek újrapróbálása")],
+ ["20 bulk retry reports requested success and failure counts",ui.includes("result.data.requested")&&ui.includes("result.data.succeeded")&&ui.includes("result.data.failed")],
 ];
 let pass=0;for(const [name,ok] of checks){console.log(`${ok?"PASS":"FAIL"} ${name}`);if(ok)pass++;}
 console.log(`RESULT ${pass}/${checks.length} PASS`);assert.equal(pass,checks.length);

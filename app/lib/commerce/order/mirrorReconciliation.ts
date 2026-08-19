@@ -93,6 +93,24 @@ export async function listCommerceMirrorAttempts(context: CommerceContext, input
   return ((result.data || []) as Row[]).map(mapAttempt);
 }
 
+export async function listDueCommerceMirrorAttempts(context: CommerceContext, input: { limit?: number } = {}) {
+  requireReconcile(context);
+  const client = createCommerceAdminClient();
+  const now = new Date().toISOString();
+  const result = await client
+    .from("commerce_order_mirror_attempts")
+    .select("*")
+    .eq("organization_id", context.organizationId)
+    .eq("state", "FAILED")
+    .is("archived_at", null)
+    .lte("next_retry_at", now)
+    .order("next_retry_at", { ascending: true })
+    .order("updated_at", { ascending: true })
+    .limit(Math.max(1, Math.min(25, Math.floor(input.limit || 10))));
+  if (result.error) dbError("Az esedékes rendelés-tükrözések nem olvashatók.", result.error);
+  return ((result.data || []) as Row[]).map(mapAttempt);
+}
+
 export async function getCommerceMirrorAttempt(context: CommerceContext, attemptIdInput: unknown) {
   requireReconcile(context);
   const attemptId = text(attemptIdInput);

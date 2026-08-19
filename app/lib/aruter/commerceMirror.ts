@@ -3,7 +3,7 @@ import "server-only";
 import type { AruterOrder } from "./types";
 import { resolveCommerceContext } from "../commerce/core/server-context";
 import type { CommerceContext } from "../commerce/core/types";
-import { getCommerceMirrorAttempt, recordCommerceMirrorAttempt } from "../commerce/order/mirrorReconciliation";
+import { getCommerceMirrorAttempt, listDueCommerceMirrorAttempts, recordCommerceMirrorAttempt } from "../commerce/order/mirrorReconciliation";
 import { legacyAruterOrderRequiredTransitions, resolveLegacyAruterOrderForCommerce } from "../commerce/order/legacyBridge";
 import { CommerceOrderError, createCommerceOrder, reserveCommerceOrderInventory, setCommerceOrderStatus } from "../commerce/order/repository";
 
@@ -150,4 +150,28 @@ export async function retryAruterOrderCommerceMirror(context: CommerceContext, a
     }
   }
   return mirrorAruterOrderWithCommerceContext(context, attempt.legacyOrderPayload);
+}
+
+export async function retryDueAruterOrderCommerceMirrors(context: CommerceContext, input: { limit?: number } = {}) {
+  const attempts = await listDueCommerceMirrorAttempts(context, { limit: input.limit });
+  const results: Array<{ attemptId: string; orderNumber: string; mirrored: boolean; errorCode: string | null }> = [];
+  for (const attempt of attempts) {
+    try {
+      const result = await retryAruterOrderCommerceMirror(context, attempt.id);
+      results.push({
+        attemptId: attempt.id,
+        orderNumber: attempt.orderNumber,
+        mirrored: result.mirrored,
+        errorCode: result.mirrored ? null : result.errorCode,
+      });
+    } catch (error) {
+      results.push({ attemptId: attempt.id, orderNumber: attempt.orderNumber, mirrored: false, errorCode: errorCode(error) });
+    }
+  }
+  return {
+    requested: attempts.length,
+    succeeded: results.filter(item => item.mirrored).length,
+    failed: results.filter(item => !item.mirrored).length,
+    results,
+  };
 }

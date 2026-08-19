@@ -1161,3 +1161,34 @@ Tesztkapuk:
 - becsült aktív idő: 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 07:xx checkpoint — Esedékes mirror retry admin batch
+
+Elkészült az egyeztetési modul kontrollált kötegelt újrapróbálása:
+- tenant-scoped `FAILED` attempt lekérdezés;
+- csak `next_retry_at <= now()` tételek kerülnek a kötegbe;
+- legrégebbi retry időpont szerinti sorrend;
+- maximum 25 tételes backend limit, admin UI alapból 10 tételt kér;
+- ugyanazt az idempotens single-retry útvonalat használja minden tételhez;
+- egy sikertelen elem nem szakítja meg a teljes köteget;
+- részleges siker esetén HTTP 207 + requested/succeeded/failed összesítő;
+- új admin gomb: `Esedékesek újrapróbálása`;
+- a művelet Commerce session + `commerce.order.reconcile` jogosultság mögött marad.
+
+Tesztkapuk:
+- due retry contract: 15/15 PASS;
+- reconciliation admin UI: 20/20 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+34. pont szerinti állapot:
+- elkészült: kézi egyedi és kötegelt reconciliation retry;
+- részben elkészült: automatikus service worker még nincs, mert külön worker-identitás/secret szerződést kell rögzíteni;
+- hiányzik: teljes feature-flag browser E2E és automatikus retry scheduler/worker;
+- DB: nem igényelt új migrációt, schema marad 0.1.8 / 9;
+- API: új `POST /api/v1/commerce/mirror/reconciliation/retry-due`;
+- UI: az egyeztetési fejlécből indítható a max. 10 esedékes tétel kontrollált újrapróbálása;
+- következő blokk: candidate build/smoke, majd DEV-only feature-flag mirror E2E.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
