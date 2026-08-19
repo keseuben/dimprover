@@ -76,6 +76,38 @@ function metadataText(task: LiveTask, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function workPickedUpAt(task: LiveTask | null, session?: ConsoleLiveState["sessions"][number] | null) {
+  if (!task) return session?.opened_at || null;
+  const plusPulledAt = metadataText(task, "plusBridgeFirstPulledAt");
+  const bridgeRunningAt = metadataText(task, "bridgeRunningAt");
+  if (plusPulledAt || bridgeRunningAt) return plusPulledAt || bridgeRunningAt;
+  if (metadataText(task, "bridgeMode") === "MANUAL_CHATGPT_BRIDGE") return null;
+  return task.started_at || session?.opened_at || null;
+}
+
+function workReturnedAt(task: LiveTask | null) {
+  if (!task) return null;
+  return metadataText(task, "bridgeFinishedAt")
+    || metadataText(task, "finishedAt")
+    || task.completed_at
+    || (task.status === "blocked" ? task.updated_at || null : null);
+}
+
+function workDurationLabel(start: string | null, end: string | null) {
+  if (!start || !end) return "—";
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return "—";
+  return durationLabel(Math.max(1, Math.round((endMs - startMs) / 60000)));
+}
+
+function isRecentReturn(task: LiveTask, now: number) {
+  const returnedAt = workReturnedAt(task);
+  if (!returnedAt) return false;
+  const time = new Date(returnedAt).getTime();
+  return Number.isFinite(time) && now - time <= 36 * 60 * 60 * 1000;
+}
+
 
 function metadataRecord(task: LiveTask, key: string) {
   const value = task.metadata?.[key];
@@ -207,21 +239,40 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
           const task = session?.task_id
             ? tasks.find((candidate) => candidate.id === session.task_id) || null
             : tasks.find((candidate) => (candidate.assigned_worker_id === worker?.id || candidate.requested_worker_id === worker?.id) && ["queued", "ready", "blocked"].includes(candidate.status)) || null;
-          const build = builds.find((candidate) => candidate.task_id === task?.id || (session?.id && candidate.session_id === session.id));
+          const recentTask = !task && worker
+            ? [...tasks]
+                .filter((candidate) => (candidate.assigned_worker_id === worker.id || candidate.requested_worker_id === worker.id) && ["completed", "blocked"].includes(candidate.status) && isRecentReturn(candidate, now))
+                .sort((a, b) => String(workReturnedAt(b) || b.updated_at || "").localeCompare(String(workReturnedAt(a) || a.updated_at || "")))[0] || null
+            : null;
+          const displayTask = task || recentTask;
+          const build = builds.find((candidate) => candidate.task_id === displayTask?.id || (session?.id && candidate.session_id === session.id));
           const presence = live?.workerPresence?.find((candidate) => candidate.workerCode === item.code && candidate.active) || null;
           const presenceHistory = (live?.workerPresenceHistory || []).filter((candidate) => candidate.workerCode === item.code).slice(0, 8);
           const latestPresence = presenceHistory[0] || null;
           const transitions = (live?.workerTransitions || []).filter((candidate) => candidate.fromWorkerCode === item.code || candidate.toWorkerCode === item.code).slice(0, 8);
-          const state = workerStatus(task, presence);
+          const state = task || presence
+            ? workerStatus(task, presence)
+            : recentTask?.status === "blocked"
+              ? { status: "blocked" as const, label: "BLOKKOLVA · VISSZAADVA" }
+              : recentTask
+                ? { status: "idle" as const, label: "VISSZAADVA" }
+                : workerStatus(null, null);
+          const pickedUpAt = workPickedUpAt(displayTask, session);
+          const returnedAt = workReturnedAt(displayTask);
           return (
             <article key={item.code} data-worker-code={item.code} data-auto-presence={presence && !task ? "true" : "false"} className={`${styles.workerCard} ${state.status === "blocked" ? styles.workerBlocked : ""}`}>
               <div className={styles.workerHead}><BenjadminAvatar member={item.author} size="task" status={state.status} eager /><div><strong>{worker?.name || item.fallbackName}</strong><span>{state.label} {session ? `· ${elapsed(now, session.opened_at)}` : presence?.lastSeenAt ? `· ${elapsed(now, presence.lastSeenAt)}` : ""}</span></div></div>
-              <p>{task?.title || presence?.summary || "Nincs aktív feladat."}</p>
-              {presence?.schedulerRunId ? <PresenceContext presence={presence} /> : task ? <CompactTaskContext task={task} location="worker" /> : presence ? <PresenceContext presence={presence} /> : null}
+              <p>{displayTask?.title || presence?.summary || "Nincs aktív feladat."}</p>
+              {pickedUpAt ? <div className={styles.workerTimeLedger} data-work-returned={returnedAt ? "true" : "false"}>
+                <span><Clock3 size={11} /> <b>Felvette:</b> {finishLabel(pickedUpAt)}</span>
+                {returnedAt ? <span><CheckCircle2 size={11} /> <b>Visszaadta:</b> {finishLabel(returnedAt)}</span> : <span><Radio size={11} /> <b>Fut:</b> {elapsed(now, pickedUpAt)}</span>}
+                <strong>{returnedAt ? `Munkaidő: ${workDurationLabel(pickedUpAt, returnedAt)}` : "MUNKA FOLYAMATBAN"}</strong>
+              </div> : null}
+              {presence?.schedulerRunId ? <PresenceContext presence={presence} /> : displayTask ? <CompactTaskContext task={displayTask} location="worker" /> : presence ? <PresenceContext presence={presence} /> : null}
               <div className={styles.workerFacts}>
                 <span><Clock3 size={13} /> {session?.handshake_stage || (presence ? `AUTO · ${presence.phase.toUpperCase()}` : "Nincs aktív session")}</span>
                 <span><Hammer size={13} /> {build ? (build.run_type || "build") + ": " + build.status : presence?.operation ? `${presence.operation}: aktív` : "Build: nincs"}</span>
-                <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : task?.branch_name || presence?.branch || presence?.inferredBy || "Git: —"}</span>
+                <span><GitCommitHorizontal size={13} /> {build?.git_commit ? build.git_commit.slice(0, 10) : displayTask?.branch_name || presence?.branch || presence?.inferredBy || "Git: —"}</span>
               </div>
               <div className={styles.workerLifecycleFacts} data-presence-history-count={presenceHistory.length} data-worker-transition-count={transitions.length}>
                 <span><History size={11} /> {presenceHistory.length} presence esemény</span>
@@ -271,6 +322,8 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             const suggestedWorker = metadataRecord(task, "coordinatorSuggestedWorker");
             const preferenceState = metadataText(task, "coordinatorPreferenceState");
             const plusPulledAt = metadataText(task, "plusBridgePulledAt");
+            const workStart = workPickedUpAt(task, null);
+            const workEnd = workReturnedAt(task);
             const plusWorkerName = metadataText(task, "plusBridgeWorkerName");
             const plusSessionId = metadataText(task, "plusBridgeSessionId");
             const plusPullCount = metadataNumber(task, "plusBridgePullCount");
@@ -292,6 +345,11 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
                 </div>
                 {chainState === "READY_FOR_PLUS_PULL" && chainPreparedAt && !plusPulledAt ? <div className={styles.aiNextTaskState} data-testid="benjadmin-next-task-state"><strong><ListChecks size={11} /> ChatGPT pullra kész</strong><span>{finishLabel(chainPreparedAt)}</span>{chainWorkerName ? <span>{chainWorkerName}</span> : null}<small>Folytasd. → felvétel</small></div> : null}
                 {plusPulledAt ? <div className={styles.aiPlusPullState} data-testid="benjadmin-plus-pull-state"><strong><Radio size={11} /> ChatGPT felvette</strong><span>{finishLabel(plusPulledAt)}</span>{plusWorkerName ? <span>{plusWorkerName}</span> : null}{plusSessionId ? <code>{plusSessionId.slice(0, 18)}</code> : null}{plusPullCount && plusPullCount > 1 ? <small>{plusPullCount}. pull</small> : null}</div> : null}
+                {workStart ? <div className={styles.aiWorkTimeLedger} data-testid="benjadmin-work-time-ledger" data-work-returned={workEnd ? "true" : "false"}>
+                  <span><b>MUNKAFELVÉTEL</b> {finishLabel(workStart)}</span>
+                  {workEnd ? <span><b>MUNKA VISSZAADVA</b> {finishLabel(workEnd)}</span> : <span><b>ELTELT</b> {elapsed(now, workStart)}</span>}
+                  {workEnd ? <strong>{workDurationLabel(workStart, workEnd)}</strong> : null}
+                </div> : null}
                 {handoffSanitized ? <p className={styles.aiDeveloperTaskWarning}>Az átadó prompt érzékeny adatot észlelt és maszkolta. Nyers titkot ne adj át AI-nak.</p> : null}
                 {task.blocked_reason ? <p className={styles.aiDeveloperTaskError}>{task.blocked_reason}</p> : null}
                 {preferenceState && preferenceState !== "PREFERRED_ACCEPTED" ? <div className={styles.aiCoordinatorSuggestion} data-testid="benjadmin-worker-suggestion"><strong>Ben-AI</strong><span>{preferenceState === "PREFERRED_BUSY" ? "A választott kódoló jelenleg foglalt." : "A választott kódoló most nem választható."}</span>{suggestedWorker?.workerName ? <><small>Javasolt következő kódoló: {String(suggestedWorker.workerName)}</small><button type="button" disabled={busy} onClick={() => void onTaskAction(task.id, "ACCEPT_SUGGESTION")}>Javaslat elfogadása</button></> : <small>Nincs jelenleg szabad és jogosult alternatíva.</small>}</div> : null}

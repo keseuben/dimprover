@@ -56,6 +56,8 @@ const workerMap: Record<string, { id: string; code: string; name: string } | nul
   ARMINAI: { id: "worker_arminai", code: "ARMINAI", name: "Ármin-AI" },
   JAZMINAI: { id: "worker_jazminai", code: "JAZMINAI", name: "Jázmin-AI" },
   OUTMINAI: { id: "worker_outminai", code: "OUTMINAI", name: "Outmin-AI" },
+  MFORGE: { id: "worker_mforge", code: "MFORGE", name: "M.Forge-AI" },
+  VGUARD: { id: "worker_vguard", code: "VGUARD", name: "V.Guard-AI" },
   EVERYONE: null,
 };
 

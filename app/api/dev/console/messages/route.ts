@@ -3,6 +3,7 @@ import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { autoRouteDevEngineTaskByAvailability, createDevEngineTask } from "@/app/lib/dev-center/engine-repository";
 import { createBenAiConsoleMessage, createBenjadminConsoleMessage, listDeveloperConsoleMessagesPage, resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { buildBenAiDispatch, estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
+import { createExternalAiWorkerTask } from "@/app/lib/dev-center/ai-worker/v1";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,7 +42,27 @@ export async function POST(request: NextRequest) {
     if (!instruction) return json({ ok: false, error: "Az utasítás nem lehet üres." }, 400);
     let task: { id?: string } | null = null;
     let autoRouting: Awaited<ReturnType<typeof autoRouteDevEngineTaskByAvailability>> | null = null;
-    if (body.createTask && body.projectId) {
+    let externalTaskCreated = false;
+    if (body.createTask && target === "VGUARD") {
+      return json({
+        ok: false,
+        error: "V.Guard-AI review-only worker: új kódolási taskot nem kaphat. Küldj neki chatüzenetet, vagy az AI Workerek panelen válassz meglévő M.Forge eredményt független review-ra.",
+        code: "DEV_CONSOLE_VGUARD_REVIEW_ONLY",
+      }, 409);
+    }
+    if (body.createTask && body.projectId && target === "MFORGE") {
+      const title = instruction.split(/\r?\n/)[0].slice(0, 180);
+      const created = await createExternalAiWorkerTask({
+        projectId: body.projectId,
+        title,
+        goal: instruction,
+        launchMode: "WORKER",
+        modelPreference: "AUTO",
+      });
+      if (!created.ok) return json({ ok: false, error: created.error || "Az M.Forge külső AI worker task nem hozható létre." }, 400);
+      task = created.task;
+      externalTaskCreated = true;
+    } else if (body.createTask && body.projectId) {
       const requestedWorkerId = Object.prototype.hasOwnProperty.call(workerMap, target) ? workerMap[target] : null;
       const title = instruction.split(/\r?\n/)[0].slice(0, 180);
       const repositoryId = await resolveDeveloperConsoleRepositoryId(body.projectId);
@@ -86,6 +107,20 @@ export async function POST(request: NextRequest) {
     });
     const dispatchTarget = autoRouting?.routed && autoRouting.worker?.code ? autoRouting.worker.code : target;
     const dispatch = buildBenAiDispatch({ text: instruction, target: dispatchTarget, taskId: task?.id || null, projectId: body.projectId || null });
+    if (externalTaskCreated) {
+      dispatch.stage = "TASK_ASSIGNED";
+      dispatch.selectedWorkerId = "worker_mforge";
+      dispatch.selectedWorkerCode = "MFORGE";
+      dispatch.selectedWorkerName = "M.Forge-AI";
+      dispatch.summary = "M.Forge-AI külső fejlesztési task létrejött DRAFT állapotban.";
+      dispatch.nextStep = "Következő kapuk: technikai scope → preflight → Safe Context Pack → provider prompt → M.Forge run. A külső modell csak konfigurált provider és engedélyezett execution gate mellett indul.";
+    } else if (!task?.id && target === "MFORGE") {
+      dispatch.summary = "Az üzenet M.Forge-AI részére bekerült a közös fejlesztői beszélgetésbe; task nem készült.";
+      dispatch.nextStep = "Ez chat-címzés. Külső modellválasz csak konfigurált provider-kapcsolattal indítható; végrehajtható munkához kapcsold be a Külső fejlesztési task létrehozását és válassz projektet.";
+    } else if (!task?.id && target === "VGUARD") {
+      dispatch.summary = "Az üzenet V.Guard-AI részére bekerült a közös fejlesztői beszélgetésbe; review task nem készült.";
+      dispatch.nextStep = "V.Guard review-only. Kérdés/címzés rögzíthető itt; független review-t meglévő M.Forge eredményre az AI Workerek workflow indít.";
+    }
     if (autoRouting?.routed && autoRouting.worker) {
       dispatch.stage = "TASK_ASSIGNED";
       dispatch.selectedWorkerId = autoRouting.worker.id;

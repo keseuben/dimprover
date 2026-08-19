@@ -12,7 +12,7 @@ import { buildDevelopmentContextKey, DEVELOPMENT_STAGE_LABELS, resolveTaskDevelo
 
 const execFileAsync = promisify(execFile);
 
-export type ConsoleTarget = "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "EVERYONE";
+export type ConsoleTarget = "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" | "EVERYONE";
 export type ConsoleAuthor = "BENJADMIN" | "BENAI" | "ARMINAI" | "JAZMINAI" | "OUTMINAI" | "MFORGE" | "VGUARD" | "SYSTEM";
 export type ConsoleMessageKind = "MESSAGE" | "INSTRUCTION" | "TASK_ASSIGNMENT" | "TASK_UPDATE" | "DECISION" | "APPROVAL_REQUEST" | "CODE_ACTIVITY" | "FILE_CHANGE" | "DIFF" | "TERMINAL_ACTIVITY" | "BUILD_EVENT" | "TEST_RESULT" | "ERROR" | "WARNING" | "COMMIT" | "RELEASE" | "ARCHIVE_SUMMARY" | "SYSTEM";
 
@@ -123,7 +123,7 @@ function level(value: unknown): ConsoleMessage["level"] {
 
 function targetFromMetadata(metadata: Record<string, unknown>) {
   const value = text(metadata.target).toUpperCase();
-  return (["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "EVERYONE"] as const).includes(value as ConsoleTarget)
+  return (["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD", "EVERYONE"] as const).includes(value as ConsoleTarget)
     ? value as ConsoleTarget
     : null;
 }
@@ -359,7 +359,7 @@ export async function createBenjadminConsoleMessage(input: { text: string; targe
   const summary = text(input.text).slice(0, 4000);
   if (!summary) throw new Error("Az üzenet nem lehet üres.");
   const targetRaw = text(input.target).toUpperCase() || "BENAI";
-  const target = (["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "EVERYONE"] as const).includes(targetRaw as ConsoleTarget) ? targetRaw as ConsoleTarget : "BENAI";
+  const target = (["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD", "EVERYONE"] as const).includes(targetRaw as ConsoleTarget) ? targetRaw as ConsoleTarget : "BENAI";
   const kind = input.kind || "INSTRUCTION";
   const client = getClient();
   const result = await client.from("dev_center_live_worklog").insert({

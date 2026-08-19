@@ -290,6 +290,11 @@
 .workerHead strong { color: var(--text); font-size: 12px; }
 .workerHead span { color: var(--green); font-size: 11px; font-weight: 950; letter-spacing: .05em; }
 .workerCard p { margin: 7px 0; color: var(--text-soft); font-size: 11px; line-height: 1.45; }
+.workerTimeLedger { margin: 6px 0; padding: 6px 7px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 7px; display: grid; gap: 3px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); font-variant-numeric: tabular-nums; }
+.workerTimeLedger[data-work-returned="true"] { border-color: color-mix(in srgb, var(--green) 36%, var(--border)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); }
+.workerTimeLedger span { display: inline-flex; align-items: center; gap: 4px; color: var(--text-soft); font-size: 12px; }
+.workerTimeLedger strong { color: var(--accent-strong); font-size: 11px; letter-spacing: .04em; }
+.workerTimeLedger[data-work-returned="true"] strong { color: var(--green); }
 .workerFacts { display: grid; gap: 3px; }
 .workerFacts span { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workerLifecycleFacts { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -329,13 +334,21 @@
 
 .composer { min-width: 0; padding: 7px 10px 9px; border-top: 1px solid var(--border); background: var(--panel); z-index: 3; }
 .composerOptions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.targetGroups { min-width: 0; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.targetGroup { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.targetGroup + .targetGroup { padding-left: 7px; border-left: 1px solid var(--border); }
+.targetGroup > span { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 950; letter-spacing: .07em; }
+.externalTargetGroup > span { color: var(--violet); }
 .targetButtons { display: flex; flex-wrap: wrap; gap: 3px; }
 .targetButtons button, .composerControls button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: 11px; font-weight: 850; }
 .targetButtons button:hover, .composerControls button:hover { border-color: var(--accent); }
 .targetButtons .activeTarget { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.targetButtons button[data-external-worker] { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 34%, var(--border)); }
+.targetButtons button[data-external-worker].activeTarget { border-color: var(--violet); color: var(--violet); background: color-mix(in srgb, var(--violet) 10%, var(--surface)); }
 .composerControls { display: flex; align-items: center; gap: 5px; }
 .composerControls label { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-soft); background: var(--surface); font-size: 11px; font-weight: 800; }
 .composerControls input { accent-color: var(--accent); }
+.composerControls label:has(input:disabled) { opacity: .72; border-style: dashed; }
 .composerControls select { min-height: 28px; max-width: 220px; padding: 0 7px; border: 1px solid var(--border); border-radius: 7px; color: var(--text); background: var(--surface); font-size: 10px; }
 .composerControls .decisionActive { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
 .composerInputRow { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
@@ -501,7 +514,10 @@
   .outminSummary { grid-column: 1 / -1; }
   .outminBar > a { grid-column: 2; grid-row: 1; font-size: 0; width: 32px; padding: 0; justify-content: center; }
   .composer { padding: 5px 6px 7px; }
-  .targetButtons { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .targetGroups { width: 100%; align-items: stretch; flex-direction: column; gap: 4px; }
+  .targetGroup, .targetGroup + .targetGroup { width: 100%; padding-left: 0; border-left: 0; }
+  .targetGroup > span { width: 46px; }
+  .targetButtons { min-width: 0; flex: 1; overflow-x: auto; flex-wrap: nowrap; }
   .targetButtons button { white-space: nowrap; }
   .composerControls label { flex: 1; min-width: 180px; }
   .composerControls select { flex: 1; max-width: none; }
@@ -1440,6 +1456,10 @@
 .aiPlusPullState strong { display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; }
 .aiPlusPullState span, .aiPlusPullState code, .aiPlusPullState small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .aiPlusPullState code { padding: 1px 4px; border-radius: 4px; background: var(--panel); }
+.aiWorkTimeLedger { margin: 5px 0 6px; padding: 6px 7px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border)); border-radius: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); color: var(--text-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+.aiWorkTimeLedger[data-work-returned="true"] { border-color: color-mix(in srgb, var(--green) 38%, var(--border)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); }
+.aiWorkTimeLedger b { color: var(--accent-strong); font-size: 11px; letter-spacing: .035em; }
+.aiWorkTimeLedger[data-work-returned="true"] b, .aiWorkTimeLedger[data-work-returned="true"] strong { color: var(--green); }
 
 .aiDeveloperTaskWarning { margin: 5px 0; padding: 5px 6px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius: 6px; color: var(--amber); background: var(--amber-soft); font-size: 11px; line-height: 1.4; }
 .aiDeveloperTaskActions .aiBridgeHandoffButton { border-color: color-mix(in srgb, var(--blue) 55%, var(--border)); color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--surface)); }
