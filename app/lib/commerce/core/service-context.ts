@@ -24,6 +24,8 @@ export async function resolveCommerceServiceActorContext(input: {
   organizationId: unknown;
   userId: unknown;
   requiredPermissions?: readonly CommercePermission[];
+  requiredRoleCodes?: readonly string[];
+  requireNonInteractiveActor?: boolean;
 }): Promise<CommerceContext> {
   const organizationId = uuid(input.organizationId);
   const userId = uuid(input.userId);
@@ -32,7 +34,7 @@ export async function resolveCommerceServiceActorContext(input: {
 
   const admin = createCommerceAdminClient();
   const [userResult, organizationResult, membershipResult] = await Promise.all([
-    admin.from("dimpro_users").select("id,status").eq("id", userId).eq("status", "active").maybeSingle(),
+    admin.from("dimpro_users").select("id,status,auth_user_id").eq("id", userId).eq("status", "active").maybeSingle(),
     admin.from("dimpro_organizations").select("id,display_name,legal_name,status").eq("id", organizationId).eq("status", "active").maybeSingle(),
     admin.from("dimpro_organization_memberships")
       .select("id,organization_id,user_id,role_code,status,access_ends_at")
@@ -44,6 +46,9 @@ export async function resolveCommerceServiceActorContext(input: {
 
   if (userResult.error) throw new CommerceServiceContextError("A worker actor nem ellenőrizhető.", "COMMERCE_SERVICE_ACTOR_LOOKUP_FAILED");
   if (!userResult.data) throw new CommerceServiceContextError("A worker actor nem aktív DIMPRO felhasználó.", "COMMERCE_SERVICE_ACTOR_NOT_ACTIVE");
+  if (input.requireNonInteractiveActor && text((userResult.data as Row).auth_user_id)) {
+    throw new CommerceServiceContextError("A worker actor nem lehet bejelentkezésre használható felhasználó.", "COMMERCE_SERVICE_ACTOR_INTERACTIVE");
+  }
   if (organizationResult.error) throw new CommerceServiceContextError("A worker szervezet nem ellenőrizhető.", "COMMERCE_SERVICE_ORGANIZATION_LOOKUP_FAILED");
   if (!organizationResult.data) throw new CommerceServiceContextError("A worker szervezet nem aktív.", "COMMERCE_SERVICE_ORGANIZATION_NOT_ACTIVE");
   if (membershipResult.error) throw new CommerceServiceContextError("A worker szervezeti tagsága nem ellenőrizhető.", "COMMERCE_SERVICE_MEMBERSHIP_LOOKUP_FAILED");
@@ -56,6 +61,10 @@ export async function resolveCommerceServiceActorContext(input: {
   }
 
   const roleCode = text(membership.role_code) || "MEMBER";
+  const requiredRoleCodes = (input.requiredRoleCodes || []).map((value) => text(value).toUpperCase()).filter(Boolean);
+  if (requiredRoleCodes.length && !requiredRoleCodes.includes(roleCode.toUpperCase())) {
+    throw new CommerceServiceContextError("A worker actor szerepköre nem engedélyezett ehhez a szolgáltatáshoz.", "COMMERCE_SERVICE_ROLE_DENIED");
+  }
   const permissions = resolveCommercePermissions(roleCode);
   const missing = (input.requiredPermissions || []).filter((permission) => !permissions.includes(permission));
   if (missing.length) {

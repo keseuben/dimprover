@@ -2502,3 +2502,71 @@ QA cleanup:
 - ismert hiány: deployment/enable workflow és dedicated technikai actor létrehozási/admin folyamata még nincs release-re kész állapotban;
 - következő: production candidate build + worker regresszió, majd dedicated worker actor provisioning/activation terv vagy legacy database order persistence;
 - PROD változatlan.
+
+### 2026-08-19 20:xx checkpoint — Dedicated Commerce Mirror Worker Role Hardening
+
+Az automatikus Storefront mirror worker többé nem igényel és nem fogad el teljes ADMIN vagy interaktív emberi fiókot.
+
+Új Commerce szerepkör:
+- `COMMERCE_MIRROR_WORKER`;
+- permissionök: `commerce.context.read`, `commerce.product.read`, `commerce.inventory.move`, `commerce.order.read`, `commerce.order.write`, `commerce.order.pay`, `commerce.order.issue`, `commerce.order.reconcile`;
+- NINCS `commerce.inventory.adjust`;
+- NINCS product/media/receiving write/post jogosultság;
+- a role_code használható a meglévő `dimpro_organization_memberships` táblában, DB schema módosítás nélkül.
+
+Technikai actor szabály:
+- aktív `dimpro_users` rekord szükséges;
+- `auth_user_id` kötelezően NULL a workerhez;
+- tehát a worker actor nem használható interaktív bejelentkezésre;
+- aktív membership szükséges a pontos target organizationben;
+- role_code kötelezően `COMMERCE_MIRROR_WORKER`;
+- lejárt membership továbbra is tiltott;
+- a role permissionjeit a közös `resolveCommercePermissions()` adja.
+
+Worker context hardening:
+- `requiredRoleCodes` támogatás;
+- `requireNonInteractiveActor` támogatás;
+- új hibák: `COMMERCE_SERVICE_ROLE_DENIED`, `COMMERCE_SERVICE_ACTOR_INTERACTIVE`;
+- a worker explicit `COMMERCE_MIRROR_WORKER` role-t és non-interactive actort kér;
+- required permission list kibővítve `commerce.context.read` + `commerce.order.read` elemekkel is.
+
+Runtime E2E: 21/21 PASS:
+- Commerce 0.1.13 / 14;
+- induláskor 0 idegen due job;
+- auth nélküli technikai DIMPRO actor létrejön;
+- USER membership role-gate miatt elutasított;
+- ugyanaz a technikai actor `COMMERCE_MIRROR_WORKER` role-lal readiness PASS;
+- PENDING queue fixture feldolgozva;
+- worker exit 0;
+- pontosan 1 due job -> 1 success;
+- service secret nincs outputban;
+- attempt SUCCEEDED, attempt_count=1;
+- egy EXTERNAL_MARKETPLACE / SENT_TO_CASHIER Commerce order;
+- created_by_user_id = technikai worker actor;
+- unresolved tétel explicit UNRESOLVED;
+- mirror success audit actor = technikai worker actor;
+- második worker run requested=0;
+- replay után ugyanaz az egy SUCCEEDED attempt marad.
+
+QA kapuk:
+- Worker contract: 54/54 PASS;
+- Storefront Pilot: 62/62 PASS;
+- Multi-item checkout: 44/44 PASS;
+- Cart UI: 56/56 PASS;
+- Queue idempotency: 25/25 PASS;
+- Due retry: 15/15 PASS;
+- Legacy Árutér compatibility: 10/10 PASS;
+- TypeScript: PASS;
+- ESLint: PASS;
+- systemd-analyze verify: PASS;
+- diff-check: PASS;
+- cleanup: dueJobs=0, activeWorkerQa=0, activeCommerceQa=0, activeWorkerUsers=0.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: DEDICATED WORKER ROLE — KÓD KÉSZ / RUNTIME TESZTELT;
+- Modul: Commerce Storefront Mirror Worker Security Hardening;
+- DB: 0.1.13 / 14, nincs új migráció;
+- UI: nincs változás;
+- systemd timer továbbra sincs shared DEV-en installálva/engedélyezve;
+- következő: production candidate build + 21/21 worker regresszió; utána dedikált technikai actor provisioning helper és DEV activation readiness;
+- PROD változatlan.

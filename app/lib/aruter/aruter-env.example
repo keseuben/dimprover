@@ -35,7 +35,7 @@ ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID=
 ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0
 # Commerce Storefront persistent mirror queue automatikus worker (opt-in)
 DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ENABLED=0
-# Valódi aktív DIMPRO user ID, aktív membershippel a fenti organizationben.
+# Dedikált technikai DIMPRO user ID: auth_user_id=NULL és COMMERCE_MIRROR_WORKER aktív membership szükséges.
 DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_ACTOR_USER_ID=
 # Egy futásban legfeljebb 1-25 due attempt; alap: 10.
 DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORKER_LIMIT=10

@@ -9,11 +9,10 @@ const SERVICE_KEY=required("SUPABASE_SERVICE_ROLE_KEY");
 const admin=createClient(SUPABASE_URL,SERVICE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const marker=`${Date.now()}-${randomBytes(3).toString("hex")}`;
 const email=`storefront-worker-${marker}@example.invalid`;
-const password=`Sw!${randomBytes(18).toString("base64url")}9Q`;
 const alphabet="23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const codePart=()=>Array.from(randomBytes(4),byte=>alphabet[byte%alphabet.length]).join("");
 const publicCode=`USR-26-${codePart()}-${codePart()}`;
-let organizationId="",authUserId="",dimproUserId="",membershipId="",attemptId="",commerceOrderId="";
+let organizationId="",dimproUserId="",membershipId="",attemptId="",commerceOrderId="";
 const checks=[];
 function pass(name,condition,detail=""){assert.ok(condition,`${name}${detail?`: ${detail}`:""}`);checks.push(name);console.log(`PASS ${String(checks.length).padStart(2,"0")} ${name}`);}
 function runWorker(actorUserId,{check=false}={}){
@@ -36,14 +35,16 @@ try{
   const dueBefore=await admin.from("commerce_order_mirror_attempts").select("id",{count:"exact",head:true}).eq("organization_id",organizationId).is("deleted_at",null).in("state",["PENDING","FAILED"]).lte("next_retry_at",new Date().toISOString());if(dueBefore.error)throw dueBefore.error;
   pass("worker E2E starts with zero foreign due jobs",(dueBefore.count||0)===0,String(dueBefore.count||0));
 
-  const auth=await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{purpose:"STOREFRONT_MIRROR_WORKER_E2E"}});if(auth.error||!auth.data.user)throw auth.error||new Error("Auth QA user create failed");authUserId=auth.data.user.id;
-  const user=await admin.from("dimpro_users").insert({public_user_code:publicCode,auth_user_id:authUserId,full_name:"Storefront Mirror Worker QA",email,email_normalized:email.toLowerCase(),email_verified_at:new Date().toISOString(),status:"active"}).select("id").single();if(user.error||!user.data)throw user.error||new Error("DIMPRO QA user create failed");dimproUserId=String(user.data.id);
+  const user=await admin.from("dimpro_users").insert({public_user_code:publicCode,auth_user_id:null,full_name:"Storefront Mirror Worker QA",email,email_normalized:email.toLowerCase(),email_verified_at:new Date().toISOString(),status:"active"}).select("id,auth_user_id").single();if(user.error||!user.data)throw user.error||new Error("DIMPRO technical QA user create failed");dimproUserId=String(user.data.id);
+  pass("temporary non-interactive DIMPRO technical actor created",Boolean(dimproUserId)&&user.data.auth_user_id===null,JSON.stringify(user.data));
   const membership=await admin.from("dimpro_organization_memberships").insert({user_id:dimproUserId,organization_id:organizationId,role_code:"USER",role_label:"Storefront Mirror Worker QA",status:"active",is_primary:false}).select("id").single();if(membership.error||!membership.data)throw membership.error||new Error("QA membership create failed");membershipId=String(membership.data.id);
-  pass("temporary real DIMPRO USER actor fixture created",Boolean(dimproUserId&&membershipId));
+  pass("technical actor starts with underprivileged USER membership",Boolean(dimproUserId&&membershipId));
   const denied=runWorker(dimproUserId,{check:true});
-  pass("underprivileged USER worker check is rejected",denied.status===1&&denied.json?.ok===false&&denied.json?.code==="COMMERCE_SERVICE_PERMISSION_DENIED",`${denied.status} ${denied.stderr.slice(0,500)}`);
-  const promoted=await admin.from("dimpro_organization_memberships").update({role_code:"ADMIN",role_label:"Storefront Mirror Worker QA ADMIN"}).eq("id",membershipId).select("id,role_code").single();if(promoted.error)throw promoted.error;
-  pass("same QA actor promoted to ADMIN for positive worker path",String(promoted.data.role_code).toUpperCase()==="ADMIN",JSON.stringify(promoted.data));
+  pass("underprivileged USER worker check is rejected by dedicated role gate",denied.status===1&&denied.json?.ok===false&&denied.json?.code==="COMMERCE_SERVICE_ROLE_DENIED",`${denied.status} ${denied.stderr.slice(0,500)}`);
+  const promoted=await admin.from("dimpro_organization_memberships").update({role_code:"COMMERCE_MIRROR_WORKER",role_label:"Commerce Mirror Worker"}).eq("id",membershipId).select("id,role_code").single();if(promoted.error)throw promoted.error;
+  pass("same technical actor receives dedicated mirror worker role",String(promoted.data.role_code).toUpperCase()==="COMMERCE_MIRROR_WORKER",JSON.stringify(promoted.data));
+  const readiness=runWorker(dimproUserId,{check:true});
+  pass("dedicated non-interactive worker actor passes read-only readiness",readiness.status===0&&readiness.json?.ok===true&&readiness.json?.checkOnly===true&&readiness.json?.roleCode==="COMMERCE_MIRROR_WORKER"&&Number(readiness.json?.dueCount)===0,`${readiness.status} ${readiness.stdout.slice(0,500)} ${readiness.stderr.slice(0,300)}`);
 
   const orderNumber=`AR-WORKER-${Date.now()}-${randomBytes(2).toString("hex").toUpperCase()}`;
   const legacyOrder={
@@ -92,5 +93,4 @@ try{
   if(attemptId)await admin.from("commerce_order_mirror_attempts").update({deleted_at:now}).eq("organization_id",organizationId).eq("id",attemptId).is("deleted_at",null);
   if(membershipId)await admin.from("dimpro_organization_memberships").delete().eq("id",membershipId);
   if(dimproUserId)await admin.from("dimpro_users").delete().eq("id",dimproUserId);
-  if(authUserId)await admin.auth.admin.deleteUser(authUserId).catch(()=>undefined);
 }

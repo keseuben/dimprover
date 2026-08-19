@@ -25,7 +25,9 @@ const requestedLimit = Number(process.env.DIMPRO_COMMERCE_STOREFRONT_MIRROR_WORK
 const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(25, Math.floor(requestedLimit))) : 10;
 
 const requiredPermissions = [
+  "commerce.context.read",
   "commerce.product.read",
+  "commerce.order.read",
   "commerce.order.write",
   "commerce.order.pay",
   "commerce.order.issue",
@@ -49,6 +51,8 @@ async function main() {
     organizationId,
     userId: actorUserId,
     requiredPermissions,
+    requiredRoleCodes: ["COMMERCE_MIRROR_WORKER"],
+    requireNonInteractiveActor: true,
   });
   const due = await listDueCommerceMirrorAttempts(context, { limit });
 

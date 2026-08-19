@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const context=fs.readFileSync("app/lib/commerce/core/service-context.ts","utf8");
+const permissions=fs.readFileSync("app/lib/commerce/core/permissions.ts","utf8");
 const worker=fs.readFileSync("scripts/run-commerce-storefront-mirror-worker.mjs","utf8");
 const shim=fs.readFileSync("scripts/server-only-worker-noop.cjs","utf8");
 const service=fs.readFileSync("ops/systemd/dimpro-commerce-storefront-mirror-worker.service","utf8");
@@ -9,6 +10,15 @@ const systemdEnv=fs.readFileSync("ops/systemd/dimpro-commerce-storefront-mirror-
 const env=fs.readFileSync("app/lib/aruter/aruter-env.example","utf8");
 const checks=[];
 function check(name,ok){checks.push([name,Boolean(ok)]);console.log(`${ok?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`);}
+check("dedicated mirror worker role exists",permissions.includes('case "COMMERCE_MIRROR_WORKER"')&&permissions.includes("MIRROR_WORKER_PERMISSIONS"));
+check("mirror worker role can read Commerce context and products",permissions.includes('"commerce.context.read"')&&permissions.includes('"commerce.product.read"'));
+check("mirror worker role can move inventory but cannot adjust it",permissions.includes('const MIRROR_WORKER_PERMISSIONS')&&permissions.includes('"commerce.inventory.move"')&&!permissions.split('const MIRROR_WORKER_PERMISSIONS')[1].split('];')[0].includes('"commerce.inventory.adjust"'));
+check("mirror worker role has order read write pay issue reconcile",["commerce.order.read","commerce.order.write","commerce.order.pay","commerce.order.issue","commerce.order.reconcile"].every((value)=>permissions.split('const MIRROR_WORKER_PERMISSIONS')[1].split('];')[0].includes(`"${value}"`)));
+check("mirror worker role has no product media receiving write privileges",["commerce.product.write","commerce.media.write","commerce.receiving.write","commerce.receiving.post"].every((value)=>!permissions.split('const MIRROR_WORKER_PERMISSIONS')[1].split('];')[0].includes(`"${value}"`)));
+check("service context can require non-interactive actor",context.includes("requireNonInteractiveActor")&&context.includes("COMMERCE_SERVICE_ACTOR_INTERACTIVE")&&context.includes("auth_user_id"));
+check("service context can require exact role",context.includes("requiredRoleCodes")&&context.includes("COMMERCE_SERVICE_ROLE_DENIED"));
+check("worker requires dedicated role code",worker.includes('requiredRoleCodes: ["COMMERCE_MIRROR_WORKER"]'));
+check("worker rejects interactive actors",worker.includes("requireNonInteractiveActor: true"));
 check("service context requires explicit organization id",context.includes("COMMERCE_SERVICE_ORGANIZATION_INVALID"));
 check("service context requires explicit actor user id",context.includes("COMMERCE_SERVICE_ACTOR_INVALID"));
 check("service context validates active dimpro user",context.includes('.from("dimpro_users")')&&context.includes('.eq("status", "active")'));
