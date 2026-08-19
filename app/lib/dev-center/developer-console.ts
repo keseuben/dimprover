@@ -742,6 +742,16 @@ export type DeveloperWeeklySummary = {
     latestAction: string;
     stageCounts: Record<string, number>;
   }>;
+  managementSummary: {
+    status: "stable" | "watch" | "critical";
+    score: number;
+    headline: string;
+    narrative: string;
+    positives: string[];
+    risks: Array<{ kind: "failure" | "waiting" | "load" | "handoff" | "trend"; severity: "watch" | "high"; label: string; detail: string }>;
+    nextActions: string[];
+    indicators: { completed: number; failures: number; waiting: number; activeWorkers: number; handoffGapMinutes: number | null };
+  };
   flowAnalytics: {
     schedulerReady: boolean;
     schedulerRuns: { total: number; completed: number; failed: number; readyForPull: number; workerActive: number; noTask: number; skipped: number; retries: number };
@@ -780,6 +790,84 @@ export type DeveloperWeeklySummary = {
 const WEEKLY_SUMMARY_TIMEZONE = "Europe/Budapest" as const;
 const WEEKLY_SUMMARY_LIMIT = 1000;
 const WEEKLY_WORKERS = new Set<ConsoleAuthor>(["BENAI", "ARMINAI", "JAZMINAI", "OUTMINAI", "MFORGE", "VGUARD"]);
+
+
+function deriveWeeklyManagementSummary(summary: DeveloperWeeklySummary): DeveloperWeeklySummary["managementSummary"] {
+  const flow = summary.flowAnalytics;
+  const failures = summary.stats.errors + flow.taskFailures + flow.schedulerRuns.failed;
+  const waiting = flow.buildLockWaits + flow.waitingForWorker;
+  const highWorkers = flow.workerLoad.filter((worker) => worker.signal === "high");
+  const watchWorkers = flow.workerLoad.filter((worker) => worker.signal === "watch");
+  const negativeTrend = flow.trend.metrics.filter((metric) => metric.tone === "negative");
+  const positiveTrend = flow.trend.metrics.filter((metric) => metric.tone === "positive");
+  const handoffGapMinutes = flow.handoffTiming.maxGapMinutes;
+  let penalty = Math.min(36, failures * 12) + Math.min(24, waiting * 6) + Math.min(20, summary.stats.blockedTasks * 10) + Math.min(20, highWorkers.length * 10) + Math.min(15, negativeTrend.length * 5);
+  if (summary.stats.activities === 0) penalty += 20;
+  if (handoffGapMinutes !== null && handoffGapMinutes >= 60) penalty += 12;
+  else if (handoffGapMinutes !== null && handoffGapMinutes >= 30) penalty += 8;
+  else if (handoffGapMinutes !== null && handoffGapMinutes >= 15) penalty += 4;
+  const score = Math.max(0, Math.min(100, 100 - penalty));
+  const status = failures >= 3 || summary.stats.blockedTasks >= 2 || score < 60
+    ? "critical" as const
+    : score < 85 || failures > 0 || waiting > 0 || highWorkers.length > 0 || negativeTrend.length > 0 || summary.stats.activities === 0
+      ? "watch" as const
+      : "stable" as const;
+
+  const positives: string[] = [];
+  if (summary.stats.completedTasks > 0) positives.push(`${summary.stats.completedTasks} task lezárva a héten.`);
+  if (summary.stats.tests > 0) positives.push(`${summary.stats.tests} teszteredmény rögzítve.`);
+  if (flow.schedulerReady && flow.schedulerRuns.failed === 0) positives.push("A Scheduler nem jelzett hibás futást.");
+  if (failures === 0) positives.push("Nincs rögzített fejlesztési hiba vagy task-elakadás.");
+  for (const metric of positiveTrend.slice(0, 2)) positives.push(`${metric.label}: kedvező heti irány (${metric.delta > 0 ? "+" : ""}${metric.delta}).`);
+  if (!positives.length) positives.push("A heti fejlesztési adatok és a 6/x folyamatjelek rendelkezésre állnak.");
+
+  const risks: DeveloperWeeklySummary["managementSummary"]["risks"] = [];
+  const nextActions: string[] = [];
+  if (failures > 0) {
+    risks.push({ kind: "failure", severity: failures >= 2 ? "high" : "watch", label: `${failures} hiba / elakadás`, detail: `${flow.taskFailures} task- és ${flow.schedulerRuns.failed} scheduler-elakadás, ${summary.stats.errors} activity hiba.` });
+    nextActions.push("Nyisd meg az Elakadás drill-down részleteit, és rendelj felelőst a nyitott hibákhoz.");
+  }
+  if (waiting > 0) {
+    risks.push({ kind: "waiting", severity: waiting >= 3 ? "high" : "watch", label: `${waiting} várakozási jelzés`, detail: `${flow.buildLockWaits} build-lock és ${flow.waitingForWorker} worker-várakozás.` });
+    nextActions.push("Ellenőrizd a Várakozás drill-downban a build-lock és worker-kapacitás okokat.");
+  }
+  if (highWorkers.length > 0) {
+    risks.push({ kind: "load", severity: "high", label: "Magas worker-terhelés", detail: highWorkers.map((worker) => `${worker.code} ${worker.loadSharePercent}%`).join(" · ") });
+    nextActions.push("Egyenlítsd ki a worker-terhelést vagy bontsd kisebb átadható munkarészekre a koncentrált feladatokat.");
+  } else if (watchWorkers.length > 0) {
+    risks.push({ kind: "load", severity: "watch", label: "Figyelendő worker-terhelés", detail: watchWorkers.slice(0, 3).map((worker) => `${worker.code} ${worker.loadSharePercent}%`).join(" · ") });
+  }
+  if (handoffGapMinutes !== null && handoffGapMinutes >= 15) {
+    risks.push({ kind: "handoff", severity: handoffGapMinutes >= 60 ? "high" : "watch", label: "Hosszú worker-átadási rés", detail: `${handoffGapMinutes} perc volt a leghosszabb megfigyelt átadási rés.` });
+    nextActions.push("Vizsgáld meg a Worker átadás drill-downban a leghosszabb átadási rést és az érintett munkarészt.");
+  }
+  for (const metric of negativeTrend.slice(0, 2)) {
+    risks.push({ kind: "trend", severity: metric.key === "errors" ? "high" : "watch", label: `${metric.label} kedvezőtlen trend`, detail: `${metric.previous} → ${metric.current}${metric.deltaPercent === null ? "" : ` (${metric.deltaPercent > 0 ? "+" : ""}${metric.deltaPercent}%)`}.` });
+  }
+  if (summary.stats.activities === 0) {
+    risks.push({ kind: "trend", severity: "watch", label: "Nincs heti aktivitás", detail: "A kiválasztott hétre nem érkezett fejlesztési aktivitás." });
+    nextActions.push("Ellenőrizd a hét- és projektszűrőt, illetve hogy a worker activity naplózás aktív-e.");
+  }
+  if (!nextActions.length) nextActions.push("Tartsd fenn a jelenlegi flow-t, és a következő heti összevetésnél ellenőrizd a trendeket.");
+
+  const headline = status === "critical"
+    ? "Beavatkozást igénylő fejlesztési hét"
+    : status === "watch"
+      ? "Figyelmet igénylő, kontrollált fejlesztési hét"
+      : "Stabil fejlesztési hét";
+  const narrative = `${summary.stats.activities} aktivitás, ${summary.stats.completedTasks} lezárt task és ${summary.stats.workers} aktív worker. ${failures ? `${failures} hiba/elakadás` : "Nincs rögzített hiba/elakadás"}; ${waiting ? `${waiting} várakozási jelzés` : "nincs rögzített várakozás"}.`;
+
+  return {
+    status,
+    score,
+    headline,
+    narrative,
+    positives: positives.slice(0, 4),
+    risks: risks.slice(0, 5),
+    nextActions: [...new Set(nextActions)].slice(0, 4),
+    indicators: { completed: summary.stats.completedTasks, failures, waiting, activeWorkers: summary.stats.workers, handoffGapMinutes },
+  };
+}
 
 function timezoneParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -1150,6 +1238,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
     },
     workers: workerSummary,
     contexts,
+    managementSummary: { status: "stable", score: 100, headline: "Heti összegzés", narrative: "", positives: [], risks: [], nextActions: [], indicators: { completed: 0, failures: 0, waiting: 0, activeWorkers: 0, handoffGapMinutes: null } },
     flowAnalytics,
     truncated: [worklog, audits, openTasks, completedTasks].some((result) => (result.data || []).length >= WEEKLY_SUMMARY_LIMIT),
     generatedAt: new Date().toISOString(),
@@ -1187,6 +1276,7 @@ export async function getDeveloperConsoleWeeklySummary(projectIdInput?: string |
       summary.flowAnalytics.trend = { available: false, previousWeekKey: period.previousWeekKey, metrics: [] };
     }
   }
+  summary.managementSummary = deriveWeeklyManagementSummary(summary);
   return summary;
 }
 

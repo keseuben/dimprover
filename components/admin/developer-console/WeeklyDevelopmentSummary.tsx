@@ -196,6 +196,38 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
         <span data-alert={summary.stats.blockedTasks || summary.stats.errors ? "true" : "false"}><b>{summary.stats.blockedTasks}</b> blokkolt · <b>{summary.stats.errors}</b> hiba</span>
       </div>
 
+      <section className={styles.weeklyManagementSummary} data-testid="benjadmin-weekly-management-summary" data-status={summary.managementSummary.status} data-score={summary.managementSummary.score}>
+        <header>
+          <Gauge size={12} /><strong>VEZETŐI HETI ÖSSZEFOGLALÓ</strong>
+          <span data-management-status={summary.managementSummary.status}>{summary.managementSummary.status === "critical" ? "BEAVATKOZÁS" : summary.managementSummary.status === "watch" ? "FIGYELENDŐ" : "STABIL"} · {summary.managementSummary.score}/100</span>
+        </header>
+        <div className={styles.weeklyManagementHeadline}>
+          <div><strong>{summary.managementSummary.headline}</strong><p>{summary.managementSummary.narrative}</p></div>
+          <progress max={100} value={summary.managementSummary.score} aria-label={`Heti fejlesztési flow score: ${summary.managementSummary.score} / 100`} />
+        </div>
+        <div className={styles.weeklyManagementIndicators} data-testid="benjadmin-weekly-management-indicators">
+          <span><b>{summary.managementSummary.indicators.completed}</b> lezárt</span>
+          <span data-alert={summary.managementSummary.indicators.failures ? "true" : "false"}><b>{summary.managementSummary.indicators.failures}</b> hiba</span>
+          <span data-alert={summary.managementSummary.indicators.waiting ? "true" : "false"}><b>{summary.managementSummary.indicators.waiting}</b> várakozás</span>
+          <span><b>{summary.managementSummary.indicators.activeWorkers}</b> worker</span>
+          <span><b>{durationLabel(summary.managementSummary.indicators.handoffGapMinutes)}</b> max átadás</span>
+        </div>
+        <div className={styles.weeklyManagementColumns}>
+          <section data-management-group="positive">
+            <header><ShieldCheck size={10} /><strong>Pozitívumok</strong></header>
+            {summary.managementSummary.positives.map((item, index) => <p key={`positive-${index}`}>{item}</p>)}
+          </section>
+          <section data-management-group="risk">
+            <header><TriangleAlert size={10} /><strong>Figyelmet igényel</strong></header>
+            {summary.managementSummary.risks.length ? summary.managementSummary.risks.map((item, index) => <article key={`${item.kind}-${index}`} data-risk-kind={item.kind} data-severity={item.severity}><b>{item.label}</b><span>{item.detail}</span></article>) : <p>Nincs kiemelt heti kockázati jelzés.</p>}
+          </section>
+          <section data-management-group="action">
+            <header><TrendingUp size={10} /><strong>Következő vezetői teendő</strong></header>
+            {summary.managementSummary.nextActions.map((item, index) => <p key={`action-${index}`}>{index + 1}. {item}</p>)}
+          </section>
+        </div>
+      </section>
+
       <section className={styles.weeklyFlowAnalytics} data-testid="benjadmin-weekly-flow-analytics" data-scheduler-ready={summary.flowAnalytics.schedulerReady ? "true" : "false"}>
         <header><Workflow size={12} /><strong>HETI FEJLESZTÉSI FOLYAMAT</strong><span>Scheduler + worker + 6/x</span></header>
         <div className={styles.weeklyFlowMetrics}>

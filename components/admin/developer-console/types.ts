@@ -252,6 +252,16 @@ export type WeeklyDevelopmentSummary = {
   stats: { activities: number; workers: number; contexts: number; openTasks: number; completedTasks: number; blockedTasks: number; builds: number; tests: number; errors: number };
   workers: Array<{ code: string; name: string; activityCount: number; contextCount: number; latestAt: string; latestStage: number }>;
   contexts: Array<{ key: string; projectId: string; projectName: string; mainModule: string; moduleName: string; submoduleName: string; workItem: string; activityCount: number; workers: string[]; latestAt: string; latestStage: number; latestAction: string; stageCounts: Record<string, number> }>;
+  managementSummary: {
+    status: "stable" | "watch" | "critical";
+    score: number;
+    headline: string;
+    narrative: string;
+    positives: string[];
+    risks: Array<{ kind: "failure" | "waiting" | "load" | "handoff" | "trend"; severity: "watch" | "high"; label: string; detail: string }>;
+    nextActions: string[];
+    indicators: { completed: number; failures: number; waiting: number; activeWorkers: number; handoffGapMinutes: number | null };
+  };
   flowAnalytics: {
     schedulerReady: boolean;
     schedulerRuns: { total: number; completed: number; failed: number; readyForPull: number; workerActive: number; noTask: number; skipped: number; retries: number };
