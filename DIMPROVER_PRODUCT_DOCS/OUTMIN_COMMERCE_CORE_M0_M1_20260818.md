@@ -2714,3 +2714,66 @@ QA:
 - Known debt: ProductVariant/fulfillment mapping továbbra sincs, ezért a pilot queue items UNRESOLVED;
 - Következő: production candidate build -> shared DEV integration -> tracking secret provision -> live browser E2E;
 - PROD változatlan.
+
+### 2026-08-20 00:32 checkpoint — Signed Public Order Tracking SHARED DEV LIVE
+
+Canonical / runtime:
+- canonical integration code commit before docs-only closeout: `02455f3`;
+- operator source: `02455f3`;
+- live release dir: `.next-benjadmin-v22-commerce-tracking-release-02455f3`;
+- live Build ID: `r7682Aue5iu8_PTTu0FvB`;
+- Commerce DB: `0.1.13 / 14`;
+- `aruter.dev.dimpro.hu/` -> `https://app.dev.dimpro.hu/aruter/kovacs-kerteszet`;
+- live page: HTTP 200.
+
+Tracking live config:
+- `ARUTER_STOREFRONT_TRACKING_ENABLED=1`;
+- TTL: 2592000 sec / 30 nap;
+- tracking HMAC secret: 64 karakteres DEV-only secret, csak `.env.local`, érték dokumentációba/Gitbe nem került;
+- public tracking endpoint: `POST /api/aruter/public-checkouts/status`;
+- invalid token: generic 404 `STOREFRONT_TRACKING_TOKEN_INVALID`;
+- `Cache-Control: no-store` live HTTPS-en igazolva.
+
+Shared DEV live QA:
+- combined candidate: `02455f3`, Build ID `wKrUxyZ1JmZ1vdiobDfBJ`, 254/254 assets VERIFIED;
+- operator release: Build ID `r7682Aue5iu8_PTTu0FvB`, 254/254 assets VERIFIED;
+- candidate HTTP tracking E2E: 19/19 PASS;
+- candidate mobile browser tracking E2E: 14/14 PASS;
+- live HTTPS HTTP tracking E2E: 19/19 PASS;
+- live HTTPS mobile browser tracking E2E: 14/14 PASS;
+- flow bizonyított: checkout -> signed token -> PENDING queue -> automatic systemd worker -> AT_CASHIER -> PAID -> ISSUED;
+- token nem kerül URL-be;
+- tracking card teljes oldalfrissítés után localStorage-ból visszaáll;
+- 390 px mobilon nincs horizontal overflow;
+- PII és belső Commerce order id nem kerül a public tracking response-ba;
+- tampered token elutasítva;
+- no-store header tényleges HTTP headerként ellenőrizve.
+
+Runtime / worker:
+- PM2 process: `dimpro-benjadmin-operator-ui-v2-dev`, port 3100, online;
+- PM2 `NEXT_DIST_DIR=.next-benjadmin-v22-commerce-tracking-release-02455f3`;
+- active release pointer ugyanarra a release-re mutat;
+- `dimpro-commerce-storefront-mirror-worker.timer`: active + enabled;
+- service Result=success, ExecMainStatus=0;
+- cleanup után `dueJobs=0`, `activeTrackingQaOrders=0`;
+- final same-release restart törölte a mock QA compatibility state-et.
+
+Rollback / backup:
+- integration rollback branch: `backup/integration-pre-tracking-20260820T001348`;
+- live cutover backup root: `/srv/dimpro-dev/backups/commerce-tracking-live-cutover/20260820T001430`;
+- backup tartalmazza a pre-tracking `.env.local`-t, operator HEAD-et és régi PM2 release célt;
+- korábbi live release: `.next-benjadmin-weekly-flow-v22-commerce-release-484a82e`.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: SIGNED PUBLIC ORDER TRACKING — SHARED DEV LIVE / TESZTELT;
+- Modul: DIMPRO Árutér Storefront -> Commerce Core -> nyilvános rendeléskövetés;
+- Elkészült: shared integration, production build, DEV HMAC provisioning, PM2 cutover, live HTTP/browser E2E, systemd queue worker integráció, cleanup;
+- Részben: terméktételek még mock katalógusból és legacy SKU snapshotból indulnak;
+- Még hiányzik: ProductVariant/Commerce catalog mapping, fulfillment source kiválasztás, valódi készletfoglalás, későbbi external stock/NaturaSoft connector;
+- DB: nincs új tracking migráció; Commerce 0.1.13 / 14;
+- UI: `aruter.dev.dimpro.hu` alatt új kosár/checkout + rendelés tracking card live;
+- Tesztek: tracking 39/39, Storefront 62/62, multi-item 44/44, cart 56/56, queue idempotency 25/25, worker 54/54, legacy 10/10, HTTP 19/19, browser 14/14, TypeScript PASS, teljes lint 0 error;
+- Known debt: ProductVariant/fulfillment mapping hiányában a pilot rendelések tételszinten `UNRESOLVED` állapotúak;
+- Következő fő blokk: ProductVariant + fulfillment source mapping -> reserve inventory -> cashier issuance guard;
+- Becsült következő aktív fejlesztés: 4-8 óra az első belső készletfoglalásos pilotig;
+- PROD változatlan.
