@@ -1819,6 +1819,19 @@
 .weeklySummaryBody footer { min-width: 0; display: flex; justify-content: space-between; gap: 6px; color: var(--muted2); font-size: 8px; }
 .weeklySummaryBody footer span { min-width: 0; display: inline-flex; align-items: center; gap: 3px; overflow-wrap: anywhere; }
 .weeklySummaryError, .weeklySummaryEmpty { margin: 0; padding: 5px 6px; color: var(--muted); font-size: 9px; }
+.weeklyReportActions { margin-left: auto; min-width: 0; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.weeklyReportActions button { min-height: 25px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; display: inline-flex; align-items: center; gap: 3px; color: var(--text-soft); background: var(--surface); font-size: 7px; font-weight: 800; cursor: pointer; }
+.weeklyReportActions button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent-strong); }
+.weeklyReportActions button[data-report-format="pdf"] { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); }
+.weeklyReportActions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.weeklyReportActions button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 900px) {
+  .weeklyReportActions { width: 100%; margin-left: 0; }
+}
+@media (max-width: 560px) {
+  .weeklyReportActions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .weeklyReportActions button { justify-content: center; }
+}
 .weeklySummaryError { color: var(--red); }
 @media (max-width: 1050px) {
   .weeklySummaryStats { grid-template-columns: repeat(3, minmax(0, 1fr)); }

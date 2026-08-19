@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Gauge, LockKeyhole, Minus, RefreshCw, RotateCcw, ShieldCheck, TimerReset, TrendingDown, TrendingUp, TriangleAlert, UsersRound, Workflow } from "lucide-react";
+import { ArrowRightLeft, BarChart3, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Download, FileCode2, FileJson2, Gauge, LockKeyhole, Minus, RefreshCw, RotateCcw, Share2, ShieldCheck, TimerReset, TrendingDown, TrendingUp, TriangleAlert, UsersRound, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WeeklyDevelopmentSummary as Summary } from "./types";
 import styles from "./DeveloperConsole.module.css";
@@ -85,6 +85,7 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
   const [workerFilter, setWorkerFilter] = useState(initial.worker);
   const [stageFilter, setStageFilter] = useState(initial.stage);
   const [flowDetailKind, setFlowDetailKind] = useState<FlowDetailKind | null>(null);
+  const [reportExporting, setReportExporting] = useState<"" | "pdf" | "html" | "json" | "share">("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -159,6 +160,79 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
     writeQuery({ stage: next });
   }
 
+  function reportExportUrl(format: "pdf" | "html" | "json") {
+    const query = new URLSearchParams({ format });
+    if (selectedProjectId) query.set("projectId", selectedProjectId);
+    const reportWeek = summary?.period.weekKey || weekKey;
+    if (reportWeek) query.set("week", reportWeek);
+    return `/api/dev/console/weekly-report-export?${query.toString()}`;
+  }
+
+  function reportFileName(response: Response, fallback: string) {
+    const disposition = response.headers.get("content-disposition") || "";
+    const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    if (utf8) {
+      try { return decodeURIComponent(utf8); } catch { return fallback; }
+    }
+    return disposition.match(/filename="([^"]+)"/i)?.[1] || fallback;
+  }
+
+  function downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
+  async function fetchReport(format: "pdf" | "html" | "json") {
+    const response = await fetch(reportExportUrl(format), { headers: adminHeaders(), cache: "no-store" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || "A heti vezetői riport exportja nem sikerült.");
+    }
+    return response;
+  }
+
+  async function exportReport(format: "pdf" | "html" | "json") {
+    setReportExporting(format);
+    try {
+      const response = await fetchReport(format);
+      const blob = await response.blob();
+      const fallback = `BENJADMIN-heti-riport-${summary?.period.weekKey || weekKey || "aktualis"}.${format}`;
+      downloadBlob(blob, reportFileName(response, fallback));
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A heti vezetői riport exportja nem sikerült.");
+    } finally {
+      setReportExporting("");
+    }
+  }
+
+  async function shareReport() {
+    setReportExporting("share");
+    try {
+      const response = await fetchReport("pdf");
+      const blob = await response.blob();
+      const fileName = reportFileName(response, `BENJADMIN-heti-riport-${summary?.period.weekKey || weekKey || "aktualis"}.pdf`);
+      const file = new File([blob], fileName, { type: "application/pdf" });
+      if (typeof navigator.share === "function" && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ title: "BENJADMIN heti vezetői riport", text: summary?.managementSummary.headline || "Heti fejlesztési vezetői riport", files: [file] });
+      } else {
+        downloadBlob(blob, fileName);
+      }
+      setError("");
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setError(caught instanceof Error ? caught.message : "A heti vezetői riport megosztása nem sikerült.");
+    } finally {
+      setReportExporting("");
+    }
+  }
+
   return <section
     className={styles.weeklySummary}
     data-testid="benjadmin-weekly-development-summary"
@@ -183,6 +257,12 @@ export default function WeeklyDevelopmentSummary({ selectedProjectId, onOpenCont
       <label title="Válassz egy napot; a rendszer az adott hét hétfőjére igazítja."><CalendarRange size={12} /><input type="date" aria-label="Heti összesítő hét kiválasztása" value={summary?.period.weekKey || weekKey} onChange={(event) => selectWeek(event.target.value)} /></label>
       <button type="button" className={styles.weeklyCurrentButton} data-active={summary?.period.isCurrentWeek ? "true" : "false"} disabled={!summary?.period || summary.period.isCurrentWeek} onClick={goCurrentWeek}><RotateCcw size={11} /> Aktuális hét</button>
       <button type="button" title="Következő hét" disabled={!summary || summary.period.isCurrentWeek} onClick={() => summary && selectWeek(summary.period.nextWeekKey)}><ChevronRight size={13} /></button>
+      <div className={styles.weeklyReportActions} data-testid="benjadmin-weekly-report-actions">
+        <button type="button" title="Vezetői heti riport letöltése PDF-ben" disabled={!summary || Boolean(reportExporting)} data-report-format="pdf" onClick={() => void exportReport("pdf")}><Download size={11} /> PDF</button>
+        <button type="button" title="Vezetői heti riport letöltése HTML-ben" disabled={!summary || Boolean(reportExporting)} data-report-format="html" onClick={() => void exportReport("html")}><FileCode2 size={11} /> HTML</button>
+        <button type="button" title="Vezetői heti riport adatainak letöltése JSON-ban" disabled={!summary || Boolean(reportExporting)} data-report-format="json" onClick={() => void exportReport("json")}><FileJson2 size={11} /> JSON</button>
+        <button type="button" title="Vezetői heti riport megosztása" disabled={!summary || Boolean(reportExporting)} data-report-action="share" onClick={() => void shareReport()}><Share2 size={11} /> {reportExporting === "share" ? "Megosztás…" : "Megosztás"}</button>
+      </div>
     </div> : null}
 
     {error ? <p className={styles.weeklySummaryError}>{error}</p> : null}
