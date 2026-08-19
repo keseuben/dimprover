@@ -14,6 +14,7 @@ const queue = read('app/lib/field-capture/offlineQueue.ts');
 const destinations = read('app/lib/field-capture/destinationRouter.ts');
 const launcher = read('components/field-capture/CameraLauncher.tsx');
 const sheet = read('components/field-capture/PreCaptureOptionsSheet.tsx');
+const saveTargets = read('components/field-capture/CaptureSaveTargets.tsx');
 const shell = read('components/field-capture/FieldCaptureShell.tsx');
 const card = read('components/field-capture/CapturePreviewCard.tsx');
 const voice = read('components/field-capture/VoiceNotePanel.tsx');
@@ -74,14 +75,14 @@ const tests = [
   ['Képenként saját opció snapshot', shell.includes('options: { ...options }')],
   ['Telefonra mentés közvetlen download', shell.includes('anchor.download = file.name') && !shell.includes('navigator.share') && shell.includes('file.originalFile')],
   ['Saját Drive és Projektkapu Drive külön cél', destinations.includes('USER_DRIVE') && destinations.includes('PROJECT_DRIVE')],
-  ["P8 Saját Drive backend kész, kliens és Projektkapu még nincs felengedve", destinations.includes("USER_DRIVE") && destinations.includes("backend kész; a kliensszinkron") && health.includes("userDriveBinding: schema.ready && upload.ready && userDrive.ready") && health.includes("projectDriveBinding: false")],
+  ["P8 Saját Drive UI aktív, Projektkapu P9 kikapcsolva", destinations.includes("USER_DRIVE") && destinations.includes("P8 aktív") && health.includes("userDriveBinding: schema.ready && upload.ready && userDrive.ready") && health.includes("projectDriveBinding: false") && saveTargets.includes('badge="P8 aktív"') && saveTargets.includes('disabled badge="P9"')],
   ['Külön Terep IndexedDB queue', queue.includes('dimpro-field-capture-v1') && queue.includes('captureItems')],
   ['Offline queue nem tárol tokent/PIN-t', queue.includes('rawSessionTokenStored: false') && queue.includes('uploadCapabilityStored: false') && !queue.includes('sendCode: string')],
   ['LOCAL_ONLY offline-first induló állapot', shell.includes('status: "LOCAL_ONLY"') && types.includes('"LOCAL_ONLY"')],
   ['Közös DIMPRO A-verziós Voice session', voice.includes('DimproBrowserVoiceSession') && voice.includes('@/components/drop/dropBrowserVoiceSession')],
   ['Mikrofonengedély shared helper', voice.includes('requestDropMicrophonePermission')],
   ['Képenként szerkeszthető megjegyzés', card.includes('Megjegyzés a képhez') && card.includes('onNoteChange')],
-  ['Health P0-P6 és szenzor readiness true', flags.includes('phase: "P0-P6"') && health.includes('gpsAdapter: true') && health.includes('orientationAdapter: true')],
+  ['Health P0-P8 és szenzor readiness true', flags.includes('phase: "P0-P8"') && health.includes('gpsAdapter: true') && health.includes('orientationAdapter: true')],
   ['Field Capture/Terep health Drop hoston is publikus', dropPublicApiBlock.includes('pathname === "/api/field-capture/health"') && generalPublicApiBlock.includes('pathname === "/api/field-capture/health"')],
   ["P7 session/item API Drop hoston elérhető", dropPublicApiBlock.includes(`pathname === "/api/field-capture/sessions"`) && dropPublicApiBlock.includes(`pathname.startsWith("/api/field-capture/sessions/")`) && generalPublicApiBlock.includes(`pathname === "/api/field-capture/sessions"`)],
   ["Drop GPS Permissions-Policy csak same-origin", proxy.includes("geolocation=(self)") && !proxy.includes("geolocation=()")],
