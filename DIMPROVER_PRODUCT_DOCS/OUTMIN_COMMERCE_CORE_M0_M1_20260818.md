@@ -1863,3 +1863,40 @@ Ezzel a v0.1.11 tényleges DEV apply előtti rollback acceptance kapu teljesült
 Következő lépés: migration gate `apply`, amely saját teljes pg_dump backupot és backup-listing ellenőrzést készít az alkalmazás előtt.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Canonical soft-delete v0.1.11 DEV ACTIVATED
+
+A canonical `deleted_at` soft-delete migráció a rollback-test kapu után ténylegesen alkalmazva lett DEV-en.
+
+Migration apply:
+- schema: `0.1.11 / 12`;
+- migration SHA: `ddafd28288829e4e63359978bee06cfd0019b104bd117aa3a17538705c13443b`;
+- rollback SHA: `8873442eb91adeb0b310d4bba1f445ede04b404de792904db21756e3bcc265ec`;
+- backup: `/srv/dimpro-dev/backups/commerce-soft-delete-v011/20260819T150647Z/supabase-dev-pre-commerce-soft-delete-v011.dump`;
+- backup SHA: `57b703e81b0e092e7d874e20544553bff188130e6ba32d4d1597cedf2eefcf27`;
+- backup listing: VERIFIED;
+- `deleted_at` canonical oszlop: 21;
+- `archived_at` compatibility oszlop: 21;
+- sync trigger: 21;
+- equality check: 21;
+- sync function: aktív;
+- timestamp mismatch: 0.
+
+Post-migration runtime:
+- Reservation Expiry worker E2E: 14/14 PASS;
+- authenticated soft-delete HTTP smoke: 15/15 PASS;
+- HTTP smoke által bizonyított repository-k: Product, Category, Brand, Manufacturer, Inventory, Reservation, Receiving, Receiving Options, Order, Reconciliation;
+- Commerce context és tenant feloldás: PASS.
+
+A legacy mirror teljes HTTP E2E egy külön mock-infrastruktúra problémát tárt fel: process restart után a mock order-number generator ismét `AR-2026-0003` értéket adott, amely egy korábban archivált Commerce order audit-sorszámával ütközött. A Commerce order-number unique szabályt nem lazítottuk; a mock sorszámgenerátort javítjuk a forrásnál.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: SOFT-DELETE HARDENING — DEV KÉSZ / TESZTELT;
+- DB: 0.1.11 / 12;
+- rollback: tranzakciósan tesztelt;
+- backup: ellenőrzött;
+- API/repository runtime: zöld;
+- ismert kompatibilitási alias: `archived_at` továbbra is triggerrel szinkronban marad a korábbi SQL RPC-k miatt;
+- következő hardening: régi SQL indexek/RPC-k fokozatos `deleted_at` átírása csak későbbi takarításként, nem blokkolja az MVP-t.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
