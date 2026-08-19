@@ -17,6 +17,7 @@ const ALL_PERMISSIONS: CommercePermission[] = [
   "commerce.order.write",
   "commerce.order.pay",
   "commerce.order.issue",
+  "commerce.order.reconcile",
 ];
 
 const MANAGER_PERMISSIONS: CommercePermission[] = ALL_PERMISSIONS.filter(

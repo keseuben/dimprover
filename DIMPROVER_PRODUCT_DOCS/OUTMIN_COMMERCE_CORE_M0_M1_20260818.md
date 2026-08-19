@@ -1062,3 +1062,70 @@ Regresszió/kapuk a build után:
 - becsült aktív idő: mirror E2E 1–2 óra, reconciliation alap 2–4 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 07:xx checkpoint — Mirror Reconciliation M1 DEV aktív
+
+A legacy Árutér → Commerce Order fail-open mirror tartós health/reconciliation rétege elkészült és DEV adatbázisban aktiválva lett.
+
+Elkészült:
+- új tenant-scoped `commerce_order_mirror_attempts` tábla;
+- PENDING / SUCCEEDED / FAILED állapotmodell;
+- próbálkozásszám, utolsó hiba, következő retry időpont, Commerce order kapcsolat, mapped/unresolved darabszám;
+- legacy order snapshot tárolása kontrollált újrapróbáláshoz;
+- service-only `commerce_order_mirror_record` RPC advisory transaction lockkal;
+- sikertelen és sikeres mirror esemény audit + transactional outbox;
+- külön `commerce.order.reconcile` jogosultság; OWNER / ADMIN / MANAGER / STORE_MANAGER kapja meg;
+- tenant-scoped reconciliation lista API: `GET /api/v1/commerce/mirror/reconciliation`;
+- explicit retry API: `POST /api/v1/commerce/mirror/reconciliation/:attemptId/retry`;
+- már sikeres attempt újrapróbálása tiltott;
+- friss PENDING attempt 2 perces párhuzamos retry-védelemmel rendelkezik;
+- automatikus legacy mirror a Commerce művelet előtt PENDING állapotot rögzít, majd SUCCEEDED/FAILED állapotot;
+- a mirror továbbra is fail-open: a Commerce/reconciliation hiba nem ronthatja el a legacy Árutér API válaszát.
+
+DEV adatbázis:
+- Commerce schema: `0.1.8`;
+- migration count: `9`;
+- migráció: `supabase/migrations/20260819073000_dimpro_commerce_order_mirror_reconciliation_m1.sql`;
+- rollback: `supabase/rollback/DIMPRO_COMMERCE_ORDER_MIRROR_RECONCILIATION_M1_ROLLBACK.sql`;
+- migration SHA-256: `c9cd46b8b9757c13a23da3a319bd3c0d5d70d09db5c93eb060d21eda95653b2a`;
+- pre-migration backup: `/srv/dimpro-dev/backups/commerce-order-mirror-reconciliation-m1/20260819T052926Z/supabase-dev-pre-commerce-order-mirror-reconciliation-m1.dump`;
+- backup listing verify: PASS;
+- schema/security verify: authenticated table access DENY, authenticated RPC EXECUTE DENY, service-role table/RPC ALLOW.
+
+Tesztkapuk:
+- mirror reconciliation contract: 26/26 PASS;
+- migration/rollback acceptance: 17/17 PASS;
+- valós DEV repository/DB runtime E2E: 13/13 PASS;
+- legacy mirror contract: 22/22 PASS;
+- legacy Árutér → központi pénztár regresszió: 10/10 PASS;
+- TypeScript: PASS;
+- célzott ESLint: PASS;
+- git diff --check: PASS.
+
+Runtime E2E ellenőrizte:
+- PENDING persistálás és attemptCount=1;
+- FAILED állapot + retry időpont;
+- tenant-scoped FAILED lista;
+- új retry attemptCount növelés;
+- stable legacy idempotency kulcsos Commerce Order létrehozás;
+- SUCCEEDED → Commerce Order kapcsolat;
+- hiba/backoff mezők törlése siker után;
+- tenant isolation;
+- FAILED + SUCCEEDED audit;
+- FAILED + SUCCEEDED outbox;
+- final state replay nem növeli tévesen az attemptCount értéket;
+- QA attempt archiválás.
+
+34. pont szerinti állapot:
+- elkészült: tartós mirror health/reconciliation backend, DB schema, API és manuális retry foundation;
+- részben elkészült: tényleges böngészős legacy → Commerce feature-flag mirror E2E még hátravan;
+- hiányzik: reconciliation admin UI, automatikus retry worker, teljes cashier browser E2E, Storefront Pilot Commerce átállás;
+- fő fájlok: `app/lib/aruter/commerceMirror.ts`, `app/lib/commerce/order/mirrorReconciliation.ts`, mirror reconciliation API route-ok, 0.1.8 migráció/gate/acceptance/runtime E2E;
+- DB/migration: 0.1.8 / 9, backup + rollback rendelkezésre áll;
+- API: reconciliation list + retry elkészült;
+- UI: ebben a blokkban nem változott;
+- ismert tech debt: context resolution előtti mirror hiba továbbra is csak strukturált szerverlogban rögzíthető, mert még nincs hitelesített organization context;
+- következő blokk: teljes candidate build + HTTP smoke, majd kontrollált DEV feature-flag mirror browser/API E2E;
+- becsült aktív következő idő: build/smoke 1–2 óra; feature-flag mirror E2E 1–3 óra; reconciliation admin UI 2–4 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

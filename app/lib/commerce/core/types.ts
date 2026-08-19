@@ -17,7 +17,8 @@ export type CommercePermission =
   | "commerce.order.read"
   | "commerce.order.write"
   | "commerce.order.pay"
-  | "commerce.order.issue";
+  | "commerce.order.issue"
+  | "commerce.order.reconcile";
 
 export type CommerceContext = {
   userId: CommerceEntityId;
