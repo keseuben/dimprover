@@ -1985,3 +1985,51 @@ Fontos Storefront architektúra-megállapítás:
 - becsült következő aktív idő: 3–6 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 17:xx checkpoint — Storefront Commerce service queue M1 PRE-APPLY
+
+Cél: a publikus Storefront kérés ne Commerce user-context imitációval tükrözzön, hanem trusted server config alapján persistent PENDING egyeztetési sorba állítsa a legacy pénztári rendelést.
+
+Elkészült:
+- Commerce 0.1.12 forward migration + rollback;
+- service-only `commerce_order_mirror_enqueue` RPC;
+- új queue rekord: PENDING, attempt_count=0, last_attempt_at=NULL, next_retry_at=NOW();
+- requeue ugyanazt az attemptet használja, megőrzi a commerce_order_id-t, frissíti a legacy status/payload snapshotot;
+- queue audit: `LEGACY_ORDER_MIRROR_QUEUED`, actor=NULL, source=`STOREFRONT_SERVICE_QUEUE`;
+- idempotens outbox queue event payload hash alapján;
+- retry index canonical `deleted_at` + PENDING/FAILED;
+- due retry repository PENDING + FAILED állapotot kezel;
+- Storefront tenant mapping kizárólag szerver env-ből: businessSlug exact match + UUID organizationId;
+- publikus request organization paraméter nem használható tenant kiválasztásra;
+- Storefront közvetlen Commerce user-mirror hívás megszüntetve;
+- create/reuse/cancel order snapshot persistent queue-ba kerül, ha a queue flag aktív;
+- queue hiba továbbra is fail-open a legacy foglalás/pénztár irányába.
+
+Feature flags, alapból OFF:
+- `ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED=0`;
+- `ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG=`;
+- `ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID=`.
+
+QA:
+- Storefront Pilot contract: 59/59 PASS;
+- due retry contract: 15/15 PASS;
+- Storefront Mirror Queue M1 contract: 44/44 PASS;
+- TypeScript: PASS;
+- ESLint: PASS;
+- diff-check: PASS;
+- migration gate preflight: PASS;
+- migration gate rollback-test: PASS, baseline visszaállt 0.1.11 / 12-re.
+
+Migráció:
+- forward SHA: `8248076ed8d36c140eae3c6cccdeae7015bef1f122c0e5b4a13a482182017507`;
+- rollback SHA: `700cf6e224a0dc024543129e82fb2dd0f737fa134b42a15008f6db2c548be120`;
+- cél DB: 0.1.12 / 13.
+
+34. pont:
+- FEJLESZTÉSI ÁLLAPOT: KÓD KÉSZ / PRE-APPLY;
+- Modul: Storefront Commerce Service Queue M1;
+- DB jelenleg: 0.1.11 / 12;
+- Következő: backup → apply → verify → valós public reservation queue E2E → authenticated retry-due → Commerce order lifecycle ellenőrzés;
+- becsült következő aktív idő: 1–2 óra.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.

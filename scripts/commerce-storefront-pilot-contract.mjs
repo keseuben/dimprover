@@ -38,7 +38,7 @@ check("bridge order uses authoritative SKU",pilot.includes('sku: product.sku'));
 check("bridge order uses authoritative net price",pilot.includes('priceNet: product.priceNet'));
 check("bridge order uses authoritative VAT rate",pilot.includes('vatRate: product.vatRate'));
 check("bridge order uses authoritative storage zone",pilot.includes('storageZone: product.storageZone'));
-check("bridge feeds existing Commerce fail-open mirror",pilot.includes('mirrorAruterOrderToCommerceFailOpen(request, created.data)'));
+check("bridge enqueues Commerce through trusted service queue",pilot.includes("queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, created.data)"));
 check("bridge errors remain fail-open",pilot.includes('FAILED_FAIL_OPEN')&&pilot.includes('bridged: false'));
 check("public reservation is persisted before bridge after callback",reservations.indexOf('createPublicReservation(normalized.input)')<reservations.indexOf('after(async ()'));
 check("reservation route normalizes input server-side before persistence",reservations.indexOf('normalizeStorefrontReservationInput(body)')<reservations.indexOf('createPublicReservation(normalized.input)'));
@@ -46,7 +46,7 @@ check("reservation bridge runs in Next after callback",reservations.includes('af
 check("reservation cancellation sync only runs for cancelled",reservationStatus.includes('result.data?.status === "cancelled"'));
 check("paid or issued cashier order cannot be cancelled by reservation",pilot.includes('existing.status === "paid" || existing.status === "issued"'));
 check("cancellation reuses existing legacy order status flow",pilot.includes('updateOrderStatus(existing.id, "cancelled")'));
-check("cancellation feeds existing Commerce mirror",pilot.includes('mirrorAruterOrderToCommerceFailOpen(request, updated.data)'));
+check("cancellation requeues latest order snapshot",pilot.includes("queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, updated.data)"));
 check("public products API requires businessSlug",publicProducts.includes('Hiányzik az üzlet azonosítója.'));
 check("public products API exposes pilot catalog",publicProducts.includes('getStorefrontPilotCatalog'));
 check("database repository implements async product loading",databaseRepo.includes('async listProducts(): Promise<AruterProduct[]>'));
@@ -65,6 +65,16 @@ check("UI visibly identifies cashier bridge when enabled",ui.includes('Pénztár
 check("env example documents storefront pilot disabled by default",envExample.includes("ARUTER_STOREFRONT_PILOT_ENABLED=0"));
 check("env example documents cashier bridge disabled by default",envExample.includes("ARUTER_STOREFRONT_ORDER_BRIDGE_ENABLED=0"));
 check("env example documents optional pilot template",envExample.includes("ARUTER_STOREFRONT_PILOT_TEMPLATE="));
+
+check("storefront Commerce queue is explicit opt-in",pilot.includes("ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED")&&pilot.includes('=== "1"'));
+check("queue tenant comes only from server environment",pilot.includes("ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID")&&!pilot.includes("searchParams.get(\"organizationId\")"));
+check("queue business slug is exact-match server configuration",pilot.includes("businessSlug !== configuredSlug"));
+check("queue validates configured organization UUID",pilot.includes("[0-9a-f]{8}-[0-9a-f]{4}"));
+check("queue uses service repository enqueue function",pilot.includes("enqueueCommerceMirrorAttemptForOrganization"));
+check("queue failure remains fail-open",pilot.includes("QUEUE_FAILED_FAIL_OPEN"));
+check("env example keeps Commerce queue disabled by default",envExample.includes("ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED=0"));
+check("env example documents trusted business slug mapping",envExample.includes("ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG="));
+check("env example documents trusted organization mapping",envExample.includes("ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID="));
 
 const failed=checks.filter((item)=>!item.condition);
 console.log(`RESULT ${checks.length-failed.length}/${checks.length} PASS`);

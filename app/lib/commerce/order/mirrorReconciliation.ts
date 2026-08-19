@@ -55,6 +55,21 @@ function mapAttempt(row: Row): CommerceMirrorAttempt {
   };
 }
 
+export async function enqueueCommerceMirrorAttemptForOrganization(organizationIdInput: unknown, order: AruterOrder) {
+  const organizationId = text(organizationIdInput);
+  if (!organizationId) throw new CommerceOrderError("A Storefront Commerce szervezet azonosítója hiányzik.", "COMMERCE_STOREFRONT_QUEUE_ORGANIZATION_REQUIRED", 503);
+  const client = createCommerceAdminClient();
+  const result = await client.rpc("commerce_order_mirror_enqueue", {
+    p_organization_id: organizationId,
+    p_legacy_order_id: order.id,
+    p_order_number: order.orderNumber,
+    p_legacy_status: order.status,
+    p_legacy_order_payload: order,
+  });
+  if (result.error) dbError("A Storefront rendelés Commerce sorba állítása sikertelen.", result.error);
+  return result.data as Row;
+}
+
 export async function recordCommerceMirrorAttempt(
   context: CommerceContext,
   order: AruterOrder,
@@ -101,7 +116,7 @@ export async function listDueCommerceMirrorAttempts(context: CommerceContext, in
     .from("commerce_order_mirror_attempts")
     .select("*")
     .eq("organization_id", context.organizationId)
-    .eq("state", "FAILED")
+    .in("state", ["PENDING", "FAILED"])
     .is("deleted_at", null)
     .lte("next_retry_at", now)
     .order("next_retry_at", { ascending: true })

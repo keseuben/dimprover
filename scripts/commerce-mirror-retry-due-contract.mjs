@@ -6,7 +6,7 @@ const route=fs.readFileSync("app/api/v1/commerce/mirror/reconciliation/retry-due
 const checks=[
  ["01 due list requires reconciliation permission",repo.includes("listDueCommerceMirrorAttempts")&&repo.includes("requireReconcile(context)")],
  ["02 due list is tenant scoped",repo.includes('.eq("organization_id", context.organizationId)')],
- ["03 due list only selects FAILED",repo.includes('.eq("state", "FAILED")')],
+ ["03 due list selects queued PENDING and retryable FAILED",repo.includes('.in("state", ["PENDING", "FAILED"])')],
  ["04 due list ignores archived attempts",repo.includes('.is("deleted_at", null)')],
  ["05 due list requires next retry at or before now",repo.includes('.lte("next_retry_at", now)')],
  ["06 due list orders oldest retry first",repo.includes('.order("next_retry_at", { ascending: true })')],

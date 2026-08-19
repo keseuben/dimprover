@@ -4,7 +4,7 @@ import type { AruterPublicProduct } from "./publicOfferData";
 import type { AruterPublicReservation, CreateAruterPublicReservationInput } from "./publicReservation";
 import { getAruterRepository } from "./repositoryFactory";
 import type { AruterOrder, AruterProduct, AruterTemplate, AruterUnit } from "./types";
-import { mirrorAruterOrderToCommerceFailOpen } from "./commerceMirror";
+import { enqueueCommerceMirrorAttemptForOrganization } from "../commerce/order/mirrorReconciliation";
 
 const TEMPLATE_VALUES = new Set<AruterTemplate>(["kertészet", "tüzép", "húsbolt", "egyedi"]);
 const UNIT_VALUES = new Set<AruterUnit>(["db", "kg", "m", "m2", "m3", "raklap", "csomag", "zsák", "láda"]);
@@ -18,7 +18,7 @@ export type StorefrontPilotCatalog = {
 
 export type StorefrontBridgeResult =
   | { enabled: false; bridged: false; reason: "DISABLED" }
-  | { enabled: true; bridged: true; orderId: string; orderNumber: string; reused: boolean }
+  | { enabled: true; bridged: true; orderId: string; orderNumber: string; reused: boolean; commerceQueued: boolean }
   | { enabled: true; bridged: false; reason: "FAILED"; code: string };
 
 export function isStorefrontPilotEnabled() {
@@ -27,6 +27,36 @@ export function isStorefrontPilotEnabled() {
 
 export function isStorefrontOrderBridgeEnabled() {
   return process.env.ARUTER_STOREFRONT_ORDER_BRIDGE_ENABLED?.trim() === "1";
+}
+
+export function isStorefrontCommerceQueueEnabled() {
+  return process.env.ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED?.trim() === "1";
+}
+
+function storefrontCommerceQueueTarget(businessSlug: string) {
+  if (!isStorefrontCommerceQueueEnabled()) return null;
+  const configuredSlug = process.env.ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG?.trim() || "";
+  const organizationId = process.env.ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID?.trim() || "";
+  if (!configuredSlug || !organizationId || businessSlug !== configuredSlug) return null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) return null;
+  return { organizationId };
+}
+
+async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string, order: AruterOrder) {
+  const target = storefrontCommerceQueueTarget(businessSlug);
+  if (!target) return { enabled: isStorefrontCommerceQueueEnabled(), queued: false, reason: "NOT_CONFIGURED" as const };
+  try {
+    const queued = await enqueueCommerceMirrorAttemptForOrganization(target.organizationId, order);
+    console.info("[ARUTER_STOREFRONT_COMMERCE_QUEUE]", JSON.stringify({
+      event: "QUEUED", businessSlug, organizationId: target.organizationId, legacyOrderId: order.id, orderNumber: order.orderNumber, legacyStatus: order.status, attemptId: String(queued.attemptId || ""),
+    }));
+    return { enabled: true, queued: true, attemptId: String(queued.attemptId || "") };
+  } catch (error) {
+    console.info("[ARUTER_STOREFRONT_COMMERCE_QUEUE]", JSON.stringify({
+      event: "QUEUE_FAILED_FAIL_OPEN", businessSlug, organizationId: target.organizationId, legacyOrderId: order.id, orderNumber: order.orderNumber, legacyStatus: order.status, code: errorCode(error),
+    }));
+    return { enabled: true, queued: false, reason: "FAILED" as const };
+  }
 }
 
 function configuredTemplate(businessSlug: string): AruterTemplate | null {
@@ -136,16 +166,16 @@ function logBridge(event: string, reservation: AruterPublicReservation, details:
 }
 
 export async function bridgePublicReservationToCashierFailOpen(
-  request: Request,
+  _request: Request,
   reservation: AruterPublicReservation,
 ): Promise<StorefrontBridgeResult> {
   if (!isStorefrontOrderBridgeEnabled()) return { enabled: false, bridged: false, reason: "DISABLED" };
   try {
     const existing = await findOrderForReservation(reservation.id);
     if (existing) {
-      await mirrorAruterOrderToCommerceFailOpen(request, existing);
-      logBridge("REUSED", reservation, { orderId: existing.id, orderNumber: existing.orderNumber });
-      return { enabled: true, bridged: true, orderId: existing.id, orderNumber: existing.orderNumber, reused: true };
+      const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, existing);
+      logBridge("REUSED", reservation, { orderId: existing.id, orderNumber: existing.orderNumber, commerceQueued: queue.queued });
+      return { enabled: true, bridged: true, orderId: existing.id, orderNumber: existing.orderNumber, reused: true, commerceQueued: queue.queued };
     }
 
     const template = configuredTemplate(reservation.businessSlug);
@@ -175,9 +205,9 @@ export async function bridgePublicReservationToCashierFailOpen(
       }],
     }));
     if (!created.ok || !created.data) throw new Error("STOREFRONT_ORDER_CREATE_FAILED");
-    await mirrorAruterOrderToCommerceFailOpen(request, created.data);
-    logBridge("CREATED", reservation, { orderId: created.data.id, orderNumber: created.data.orderNumber });
-    return { enabled: true, bridged: true, orderId: created.data.id, orderNumber: created.data.orderNumber, reused: false };
+    const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, created.data);
+    logBridge("CREATED", reservation, { orderId: created.data.id, orderNumber: created.data.orderNumber, commerceQueued: queue.queued });
+    return { enabled: true, bridged: true, orderId: created.data.id, orderNumber: created.data.orderNumber, reused: false, commerceQueued: queue.queued };
   } catch (error) {
     const code = errorCode(error);
     logBridge("FAILED_FAIL_OPEN", reservation, { code });
@@ -186,7 +216,7 @@ export async function bridgePublicReservationToCashierFailOpen(
 }
 
 export async function syncPublicReservationCancellationFailOpen(
-  request: Request,
+  _request: Request,
   reservation: AruterPublicReservation,
 ): Promise<StorefrontBridgeResult> {
   if (!isStorefrontOrderBridgeEnabled()) return { enabled: false, bridged: false, reason: "DISABLED" };
@@ -200,9 +230,9 @@ export async function syncPublicReservationCancellationFailOpen(
     }
     const updated = await Promise.resolve(getAruterRepository().updateOrderStatus(existing.id, "cancelled"));
     if (!updated.ok || !updated.data) throw new Error("STOREFRONT_ORDER_CANCEL_FAILED");
-    await mirrorAruterOrderToCommerceFailOpen(request, updated.data);
-    logBridge("CANCELLED", reservation, { orderId: updated.data.id, orderNumber: updated.data.orderNumber });
-    return { enabled: true, bridged: true, orderId: updated.data.id, orderNumber: updated.data.orderNumber, reused: true };
+    const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, updated.data);
+    logBridge("CANCELLED", reservation, { orderId: updated.data.id, orderNumber: updated.data.orderNumber, commerceQueued: queue.queued });
+    return { enabled: true, bridged: true, orderId: updated.data.id, orderNumber: updated.data.orderNumber, reused: true, commerceQueued: queue.queued };
   } catch (error) {
     const code = errorCode(error);
     logBridge("CANCEL_FAILED_FAIL_OPEN", reservation, { code });
