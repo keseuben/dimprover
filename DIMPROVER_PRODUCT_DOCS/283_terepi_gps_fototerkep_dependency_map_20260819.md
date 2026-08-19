@@ -104,11 +104,11 @@ Tiszta, UI-független `gpsPhotoMap` engine:
 
 Elkészült a UI-független GPS fotótérkép engine és az első Terep UI.
 
-- : helyi méterkoordináta-vetítés, bounding box, sorrendi szegmensek, heading normalizálás, viewport-fit.
-- : az Ingatlan felmérő korábbi északi nyíl geometriája közös komponenssé emelve.
-- : a közös északi nyilat használja; az Ingatlan felmérő vizuális megjelenése nem kap külön új implementációt.
-- : Terepi GPS fotótérkép SVG nézet, sorszám/fájlnév, GPS pontosság, kamera irány, szaggatott készítési sorrend, kötelező disclaimer.
-- : a Mentés lépésben jelenik meg, ha legalább egy használható GPS-fotópont van.
+- `app/lib/field-capture/gpsPhotoMap.ts`: helyi méterkoordináta-vetítés, bounding box, sorrendi szegmensek, heading normalizálás, viewport-fit.
+- `components/viewers/SurveyNorthMark.tsx`: az Ingatlan felmérő korábbi északi nyíl geometriája közös komponenssé emelve.
+- `components/viewers/SurveyFloorPlanEngine.tsx`: a közös északi nyilat használja; az Ingatlan felmérő vizuális megjelenése nem kap külön új implementációt.
+- `components/field-capture/GpsPhotoMapPanel.tsx`: Terepi GPS fotótérkép SVG nézet, sorszám/fájlnév, GPS pontosság, kamera irány, szaggatott készítési sorrend, kötelező disclaimer.
+- `components/field-capture/FieldCaptureShell.tsx`: a Mentés lépésben jelenik meg, ha legalább egy használható GPS-fotópont van.
 
 Acceptance:
 - GPS geometry contract: 14/14 PASS.
