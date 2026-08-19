@@ -1496,3 +1496,39 @@ QA:
 - becsült következő aktív idő: 1–2 óra.
 
 PROD változatlan, nem történt PROD alkalmazásmódosítás.
+
+### 2026-08-19 14:xx checkpoint — Reservation Expiry Worker runtime E2E zöld
+
+A worker foundation kontrollált DEV runtime E2E-je lefutott.
+
+Biztonsági precondition:
+- a kiválasztott aktív szervezetben a teszt előtt 0 idegen, lejárt `ACTIVE/PARTIAL` reservation volt;
+- csak ezután jött létre a QA fixture;
+- worker futás kizárólag `DIMPRO_COMMERCE_EXPIRY_WORKER_ORGANIZATION_ID` filterrel történt.
+
+Runtime E2E: 14/14 PASS:
+- fixture létrejött;
+- fizikai készlet ledgeren keresztül 5;
+- rövid lejáratú 2 egységes reservation;
+- induló balance: physical 5 / reserved 2 / available 3;
+- worker exit 0;
+- organization filter aktív, organizationCount=1;
+- pontosan 1 reservation feldolgozva, 2 egység released;
+- worker output secretet nem tartalmaz;
+- reservation `EXPIRED`, remaining 0;
+- cleanup után physical 5 / reserved 0 / available 5;
+- második worker futás processedCount=0, tehát idempotens;
+- pontosan 1 audit + 1 outbox expiry esemény;
+- QA készlet nullára semlegesítve;
+- QA fixture-ek archiválva.
+
+Worker aktiválási állapot:
+- kód: KÉSZ;
+- valós DEV runtime: TESZTELT;
+- systemd service telepítve: NEM;
+- systemd timer telepítve/engedélyezve: NEM;
+- automatikus periodikus futás: NEM AKTÍV.
+
+Következő kapu: a `K6dnQGYExr_346yR6V6Q1` candidate localhost HTTP expiry E2E, majd külön döntés a DEV timer aktiválásáról.
+
+PROD változatlan, nem történt PROD alkalmazásmódosítás.
