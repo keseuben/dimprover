@@ -77,12 +77,12 @@ function metadataText(task: LiveTask, key: string) {
 }
 
 function workPickedUpAt(task: LiveTask | null, session?: ConsoleLiveState["sessions"][number] | null) {
-  if (!task) return session?.opened_at || null;
+  if (!task) return session?.status !== "closed" ? session?.opened_at || null : null;
   const plusPulledAt = metadataText(task, "plusBridgeFirstPulledAt");
   const bridgeRunningAt = metadataText(task, "bridgeRunningAt");
   if (plusPulledAt || bridgeRunningAt) return plusPulledAt || bridgeRunningAt;
-  if (metadataText(task, "bridgeMode") === "MANUAL_CHATGPT_BRIDGE") return null;
-  return task.started_at || session?.opened_at || null;
+  if (session?.status !== "closed" && session?.task_id === task.id && session?.opened_at) return session.opened_at;
+  return null;
 }
 
 function workReturnedAt(task: LiveTask | null) {
@@ -322,7 +322,8 @@ export default function LiveWorkPanel({ live, now, context, selectedProjectId, f
             const suggestedWorker = metadataRecord(task, "coordinatorSuggestedWorker");
             const preferenceState = metadataText(task, "coordinatorPreferenceState");
             const plusPulledAt = metadataText(task, "plusBridgePulledAt");
-            const workStart = workPickedUpAt(task, null);
+            const taskSession = sessions.find((candidate) => candidate.task_id === task.id && candidate.status !== "closed") || null;
+            const workStart = workPickedUpAt(task, taskSession);
             const workEnd = workReturnedAt(task);
             const plusWorkerName = metadataText(task, "plusBridgeWorkerName");
             const plusSessionId = metadataText(task, "plusBridgeSessionId");

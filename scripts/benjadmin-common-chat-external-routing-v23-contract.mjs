@@ -41,7 +41,8 @@ check("handoff states BenjAdmin authority", bridge.includes("BenjAdmin a") && br
 check("handoff requires pickup marker", bridge.includes("MUNKAFELV") && bridge.includes("Europe/Budapest"));
 check("handoff requires handback marker", bridge.includes("MUNKA VISSZAAD") && bridge.includes("Ne maradjon csendben"));
 check("pickup uses Plus first-pull timestamp", live.includes('metadataText(task, "plusBridgeFirstPulledAt")'));
-check("manual bridge does not use operator start as pickup", live.includes('metadataText(task, "bridgeMode") === "MANUAL_CHATGPT_BRIDGE") return null') && !live.includes('|| metadataText(task, "operatorStartedAt")'));
+check("legacy task start is never used as worker pickup", !live.includes("return task.started_at") && !live.includes("|| task.started_at"));
+check("only active bound session may backfill pickup", live.includes('session?.status !== "closed"') && live.includes('session?.task_id === task.id') && live.includes('candidate.status !== "closed"'));
 check("worker card has time ledger", live.includes("workerTimeLedger") && live.includes("pickedUpAt") && live.includes("returnedAt"));
 check("task card has time ledger", live.includes('data-testid="benjadmin-work-time-ledger"') && live.includes("workStart") && live.includes("workEnd"));
 check("recent returned work remains visible", live.includes("isRecentReturn") && live.includes("36 * 60 * 60 * 1000"));

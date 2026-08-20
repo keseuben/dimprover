@@ -22,7 +22,7 @@ A külső provider adapterek és M.Forge/V.Guard workflow-k készek, de a DEV-en
 
 ## Munkafelvétel és visszaadás
 
-ChatGPT/MCP workernél a mérvadó munkafelvétel az első tényleges Plus/MCP pull (`plusBridgeFirstPulledAt`), nem a task előkészítése. Kézi bridge-nél csak a tényleges RUNNING idő számít.
+ChatGPT/MCP workernél a mérvadó munkafelvétel az első tényleges Plus/MCP pull (`plusBridgeFirstPulledAt`), nem a task előkészítése. Kézi bridge-nél csak a tényleges RUNNING idő számít. Aktív, ugyanahhoz a taskhoz kötött worker session `opened_at` értéke használható kiegészítő forrásként. Legacy task `started_at` és lezárt régi session nem minősül munkafelvételnek.
 
 A worker- és taskkártyák mutatják a `MUNKAFELVÉTEL`, `ELTELT`, `MUNKA VISSZAADVA` adatokat és a teljes munkaidőt. A legutóbbi completed/blocked visszaadás 36 órán át látható marad aktív task nélkül is.
 
