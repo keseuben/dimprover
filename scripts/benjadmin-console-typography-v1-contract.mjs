@@ -6,6 +6,7 @@ check("readable typography tokens exist",["--type-micro: 11px","--type-small: 12
 check("legacy 6-10px explicit font sizes removed",!/(?:font-size\s*:\s*)(?:6|7|8|9|10)px\b/.test(css));
 check("weekly summary uses typography tokens",/\.weeklySummaryToggle strong[^}]*font-size:\s*var\(--type-small\)/s.test(css) && /\.weeklyPortfolioMetrics span[^}]*font-size:\s*var\(--type-micro\)/s.test(css));
 check("weekly chart labels are at least micro token",/\.weeklyTrendChart text[^}]*font-size:\s*var\(--type-micro\)/s.test(css));
+check("nested weekly small labels stay at micro token",/\.weeklyFlowTransitions > b small[^}]*font-size:\s*var\(--type-micro\)/s.test(css) && /\.weeklyHandoffTimingDetails > b small[^}]*font-size:\s*var\(--type-micro\)/s.test(css));
 check("worker panel uses readable tokens",/\.workerHead strong[^}]*font-size:\s*var\(--type-body\)/s.test(css) && /\.workerCard p[^}]*font-size:\s*var\(--type-small\)/s.test(css));
 check("composer input uses strong token",/\.composerInputRow textarea[^}]*font-size:\s*var\(--type-strong\)/s.test(css));
 check("topbar controls use body token",/\.topbarActions > button[^}]*font-size:\s*var\(--type-body\)/s.test(css));

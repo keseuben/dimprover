@@ -17,6 +17,7 @@ A Fejlesztői Konzol 1920×1080-as asztali használatban túl sok 6–10 px-es o
 - title: 16 px — nagyobb vezetői címekhez fenntartva.
 
 A korábbi explicit 6–10 px-es fontméretek megszűnnek a `DeveloperConsole.module.css` modulban. A betűméret-emelés mellett a Weekly Summary és worker kártyák sűrűsége enyhén lazul, hogy a nagyobb szöveg ne torlódjon össze.
+A natív HTML `<small>` elemeknél is explicit minimum 11 px szabály szükséges, mert a böngésző alapértelmezett 80%-os skálázása egyébként 8,8 px-es tényleges méretet eredményezhet.
 
 ## Elfogadási feltételek
 

@@ -2067,7 +2067,7 @@
 .weeklyFlowTransitions > span { color: var(--muted); font-size: var(--type-micro); font-weight: 850; }
 .weeklyFlowTransitions > b { min-width: 0; max-width: 280px; padding: 2px 5px; border: 1px solid var(--border); border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); background: var(--surface); font-size: var(--type-micro); }
 .weeklyFlowTransitions > b strong { color: var(--text-soft); font-size: var(--type-micro); }
-.weeklyFlowTransitions > b small { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.weeklyFlowTransitions > b small { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--type-micro); text-overflow: ellipsis; white-space: nowrap; }
 .weeklyHandoffTiming { min-width: 0; padding-top: 2px; display: grid; gap: 4px; }
 .weeklyHandoffTiming > header { min-width: 0; display: flex; align-items: center; gap: 4px; color: var(--accent-strong); }
 .weeklyHandoffTiming > header strong { color: var(--text-soft); font-size: var(--type-micro); }
@@ -2085,7 +2085,7 @@
 .weeklyHandoffTimingDetails > b { min-width: 0; max-width: 320px; padding: 2px 5px; border: 1px solid var(--border); border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); background: var(--surface); font-size: var(--type-micro); }
 .weeklyHandoffTimingDetails > b strong { color: var(--text-soft); font-size: var(--type-micro); }
 .weeklyHandoffTimingDetails > b span { color: var(--accent-strong); font-size: var(--type-micro); font-weight: 850; }
-.weeklyHandoffTimingDetails > b small { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.weeklyHandoffTimingDetails > b small { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--type-micro); text-overflow: ellipsis; white-space: nowrap; }
 .weeklyFlowBlockers { min-width: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; }
 .weeklyFlowBlockers > header { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; color: var(--amber); }
 .weeklyFlowBlockers > header strong { color: var(--text-soft); font-size: var(--type-micro); }
