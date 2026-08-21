@@ -10,7 +10,7 @@ export function getFieldCaptureFeatureState() {
     ok: true as const,
     version: FIELD_CAPTURE_VERSION,
     enabled: featureEnabled,
-    phase: "P0-P6" as const,
+    phase: "P0-P8" as const,
     route: "/terep",
     separateContextModule: true,
     sharedEngines: {

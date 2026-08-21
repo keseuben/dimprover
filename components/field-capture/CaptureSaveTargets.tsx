@@ -16,11 +16,11 @@ export default function CaptureSaveTargets({ value, onChange }: { value: PreCapt
         <p className="mt-1 text-xs leading-5 text-slate-600">A kép először a helyi terepi munkamenetbe kerül, hálózat nélkül is.</p>
       </div>
       <CaptureToggleRow title="Mentés a telefonra is" description="Az eredeti kameraképet külön letöltési művelettel megőrzi ezen az eszközön." checked={value.saveToDevice} onChange={(checked) => onChange({ ...value, saveToDevice: checked })} />
-      <CaptureToggleRow title="Saját DIMPRO Drive" description="A külön felhasználói ownership és célmappa a P8 fázisban aktiválódik." checked={value.saveToUserDrive} onChange={(checked) => onChange({ ...value, saveToUserDrive: checked })} disabled badge="P8" />
+      <CaptureToggleRow title="Saját DIMPRO Drive" description="A kép a szerveres mentés és biztonsági ellenőrzés után a saját DIMPRO Drive gyökerébe kerül, külön USER ownership-pal." checked={value.saveToUserDrive} onChange={(checked) => onChange({ ...value, saveToUserDrive: checked })} badge="P8 aktív" />
       <CaptureToggleRow title="Projektkapu Drive" description="Projekt ACL-lel és külön lifecycle-lal a P9 fázisban aktiválódik." checked={value.saveToProjectDrive} onChange={(checked) => onChange({ ...value, saveToProjectDrive: checked })} disabled badge="P9" />
       <div className="flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-[11px] leading-5 text-slate-500">
         <Cloud size={16} className="mt-0.5 shrink-0" />
-        A Drive-célok külön referenciát kapnak majd; egyik cél törlése nem törölheti a másik példányát.
+        A Saját DIMPRO Drive külön USER referenciát és független megőrzést kap. A Projektkapu Drive továbbra is P9 és kikapcsolva marad.
       </div>
     </div>
   );

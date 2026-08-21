@@ -57,6 +57,15 @@ const tests = [
     assert.match(sync, /FIELD_CAPTURE_USER_DRIVE_SCAN_PENDING/);
     assert.match(sync, /status: "DESTINATION_PENDING"/);
   }],
+  ["user Drive P8 is opt-in and enabled in client UI", () => {
+    const userStart = saveTargets.indexOf('title="Saját DIMPRO Drive"');
+    const projectStart = saveTargets.indexOf('title="Projektkapu Drive"');
+    assert.ok(userStart >= 0 && projectStart > userStart);
+    const userRow = saveTargets.slice(userStart, projectStart);
+    assert.doesNotMatch(userRow, /disabled/);
+    assert.match(userRow, /badge="P8 aktív"/);
+    assert.match(sync, /\/user-drive/);
+  }],
   ["project Drive stays disabled in client UI", () => {
     assert.match(saveTargets, /title="Projektkapu Drive"/);
     assert.match(saveTargets, /disabled badge="P9"/);
