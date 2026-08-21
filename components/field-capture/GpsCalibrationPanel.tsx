@@ -62,7 +62,7 @@ export default function GpsCalibrationPanel({ sessionId }: { sessionId?: string 
         <div>
           <p className="text-[9px] font-black uppercase tracking-[.12em] text-violet-700">Tervillesztési előkészítés</p>
           <h4 className="mt-1 text-sm font-black text-slate-950">Kalibrációs pontok</h4>
-          <p className="mt-1 max-w-2xl text-[11px] font-semibold leading-5 text-slate-600">Minimum 3 helyszíni sarok-, kitűzési vagy referencia pont szükséges. A rendszer most csak a terepi GPS referenciákat rögzíti; PDF/DXF tervillesztést még nem végez.</p>
+          <p className="mt-1 max-w-2xl text-[11px] font-semibold leading-5 text-slate-600">Minimum 3 helyszíni sarok-, kitűzési vagy referencia pont szükséges. A rögzített R pontokat az alábbi Tervlap-kalibráció panelben ugyanazon fizikai pont tervlapi helyéhez kell párosítani.</p>
         </div>
         <div data-gps-calibration-readiness={readiness.readyForPlanAlignment ? "ready" : "pending"} className={`rounded-xl border px-3 py-2 text-right text-[10px] font-black ${readiness.readyForPlanAlignment ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-violet-200 bg-white text-violet-800"}`}>
           <strong className="block text-base">{readiness.count}/3</strong>

@@ -162,3 +162,59 @@ export async function ensureUserContentRef(input: {
   }
   dbError("A Saját Drive referencia nem menthető.", result.error);
 }
+
+export async function findProjectContentRef(input: { projectId: string; sourceSystem: string; sourceRef: string }) {
+  const result = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_refs")
+    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
+    .eq("owner_type", "PROJECT")
+    .eq("owner_project_id", input.projectId)
+    .eq("source_system", input.sourceSystem)
+    .eq("source_ref", input.sourceRef)
+    .eq("status", "ACTIVE")
+    .maybeSingle();
+  if (result.error) dbError("A Projektkapu Drive referencia nem olvasható.", result.error);
+  return (result.data || null) as ContentRefRow | null;
+}
+
+export async function ensureProjectContentRef(input: {
+  contentObjectId: string;
+  projectId: string;
+  folderId?: string | null;
+  actorUserId: string;
+  sourceSystem: "FIELD_CAPTURE" | "DROP" | "DRIVE" | "IMPORT";
+  sourceRef: string;
+  displayName: string;
+}) {
+  const existing = await findProjectContentRef({ projectId: input.projectId, sourceSystem: input.sourceSystem, sourceRef: input.sourceRef });
+  if (existing) {
+    if (existing.content_object_id !== input.contentObjectId) {
+      throw new DimproIdentityError("A Projektkapu Drive forráshivatkozás másik tartalomobjektumhoz tartozik.", "CONTENT_CORE_PROJECT_REF_OBJECT_MISMATCH", 409);
+    }
+    return existing;
+  }
+  const result = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_refs")
+    .insert({
+      content_object_id: input.contentObjectId,
+      owner_type: "PROJECT",
+      owner_user_id: null,
+      owner_project_id: input.projectId,
+      folder_id: input.folderId || null,
+      source_system: input.sourceSystem,
+      source_ref: input.sourceRef,
+      display_name: input.displayName,
+      retained_independently: true,
+      status: "ACTIVE",
+      created_by_user_id: input.actorUserId,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
+    .single();
+  if (!result.error) return result.data as ContentRefRow;
+  if (result.error.code === "23505") {
+    const raced = await findProjectContentRef({ projectId: input.projectId, sourceSystem: input.sourceSystem, sourceRef: input.sourceRef });
+    if (raced && raced.content_object_id === input.contentObjectId) return raced;
+  }
+  dbError("A Projektkapu Drive referencia nem menthető.", result.error);
+}

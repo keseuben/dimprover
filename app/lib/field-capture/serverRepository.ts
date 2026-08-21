@@ -936,3 +936,127 @@ export async function markFieldCaptureUserDriveStored(input: {
   });
   if (event.error) databaseError("A Saját Drive mentés nem naplózható.", event.error);
 }
+
+export async function getFieldCaptureProjectDriveDestination(input: {
+  itemId: string;
+}) {
+  const result = await client().from("field_capture_destinations")
+    .select("id,capture_item_id,target,folder_id,ownership,status,asset_ref_id,retained_independently,detail")
+    .eq("capture_item_id", input.itemId)
+    .eq("target", "PROJECT_DRIVE")
+    .maybeSingle();
+  if (result.error) databaseError("A Projektkapu Drive mentési cél nem olvasható.", result.error);
+  if (!result.data) {
+    throw new DimproIdentityError(
+      "A képtételhez nincs Projektkapu Drive mentési cél kérve.",
+      "FIELD_CAPTURE_PROJECT_DRIVE_NOT_REQUESTED",
+      409,
+    );
+  }
+  if (text(result.data.ownership) !== "PROJECT") {
+    throw new DimproIdentityError(
+      "A Projektkapu Drive mentési cél ownership beállítása érvénytelen.",
+      "FIELD_CAPTURE_PROJECT_DRIVE_OWNERSHIP_INVALID",
+      409,
+    );
+  }
+  return {
+    id: text(result.data.id),
+    status: text(result.data.status),
+    folderId: nullableText(result.data.folder_id),
+    assetRefId: nullableText(result.data.asset_ref_id),
+    retainedIndependently: Boolean(result.data.retained_independently),
+    detail: result.data.detail && typeof result.data.detail === "object"
+      ? result.data.detail as Record<string, unknown>
+      : {},
+  };
+}
+
+export async function markFieldCaptureProjectDriveContentStored(input: {
+  sessionId: string;
+  itemId: string;
+  clientItemId: string;
+  assetId: string;
+  projectId: string;
+  contentObjectId: string;
+  contentRefId: string;
+  driveBucket: string;
+  driveStorageKey: string;
+  sha256: string;
+  sizeBytes: number;
+}) {
+  const db = client();
+  const now = new Date().toISOString();
+  const existing = await getFieldCaptureProjectDriveDestination({ itemId: input.itemId });
+  const detail = {
+    ...existing.detail,
+    projectId: input.projectId,
+    contentObjectId: input.contentObjectId,
+    contentRefId: input.contentRefId,
+    storageProvider: "S3",
+    storageBucket: input.driveBucket,
+    storageKey: input.driveStorageKey,
+    sha256: input.sha256,
+    sizeBytes: input.sizeBytes,
+    scope: "PROJECT_ROOT",
+    projectContentBound: true,
+    projectDriveTreeBound: false,
+    p9Stage: "P9.1",
+  };
+  const destination = await db.from("field_capture_destinations")
+    .update({
+      folder_id: null,
+      ownership: "PROJECT",
+      status: "STORED",
+      asset_ref_id: input.assetId,
+      retained_independently: true,
+      detail,
+      updated_at: now,
+    })
+    .eq("id", existing.id)
+    .eq("capture_item_id", input.itemId)
+    .eq("target", "PROJECT_DRIVE");
+  if (destination.error) databaseError("A Projektkapu Drive mentési cél nem frissíthető.", destination.error);
+
+  const queue = await db.from("field_capture_sync_queue").upsert({
+    session_id: input.sessionId,
+    capture_item_id: input.itemId,
+    device_local_id: input.clientItemId,
+    operation: "SYNC_PROJECT_DRIVE_CONTENT",
+    status: "DONE",
+    payload_meta: {
+      projectId: input.projectId,
+      contentObjectId: input.contentObjectId,
+      contentRefId: input.contentRefId,
+      storageProvider: "S3",
+      storageBucket: input.driveBucket,
+      storageKey: input.driveStorageKey,
+      sha256: input.sha256,
+      sizeBytes: input.sizeBytes,
+      scope: "PROJECT_ROOT",
+      retainedIndependently: true,
+      projectDriveTreeBound: false,
+      rawTokenPersisted: false,
+    },
+    last_error: null,
+    updated_at: now,
+  }, { onConflict: "session_id,device_local_id,operation" });
+  if (queue.error) databaseError("A Projektkapu Drive content szinkronállapot nem menthető.", queue.error);
+
+  const event = await db.from("field_capture_events").insert({
+    session_id: input.sessionId,
+    capture_item_id: input.itemId,
+    event_type: "PROJECT_DRIVE_CONTENT_STORED",
+    payload: {
+      projectId: input.projectId,
+      contentObjectId: input.contentObjectId,
+      contentRefId: input.contentRefId,
+      scope: "PROJECT_ROOT",
+      retainedIndependently: true,
+      projectDriveTreeBound: false,
+      p9Stage: "P9.1",
+      rawTokenPersisted: false,
+    },
+  });
+  if (event.error) databaseError("A Projektkapu Drive content mentés nem naplózható.", event.error);
+}

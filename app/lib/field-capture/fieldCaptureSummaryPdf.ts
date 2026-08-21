@@ -1,5 +1,8 @@
 import type { FieldCaptureItem, FieldCaptureLocalSession } from "./types";
 import type { FieldCaptureReportMetadata } from "./reportMetadata";
+import { GPS_PHOTO_MAP_DISCLAIMER, buildGpsPhotoMapModel, calculateGpsPhotoMapBounds, projectWgs84ToLocalMeters, type GpsPhotoMapCalibrationPoint } from "./gpsPhotoMap";
+import { drawSurveyNorthMarkPdf } from "@/components/viewers/drawSurveyNorthMarkPdf";
+import { buildConsecutiveGpsPlanDistanceSegments, buildGpsPlanCalibrationModel, buildGpsPlanPhotoPoints, type GpsPlanAnchor } from "./gpsPlanCalibration";
 import type { PDFDocument as PdfLibDocument, PDFImage, PDFPage, PDFFont, RGB } from "pdf-lib";
 
 const MM_TO_PT = 72 / 25.4;
@@ -32,6 +35,15 @@ export type CreateFieldCaptureSummaryPdfInput = {
   organizationName?: string | null;
   generatedAt?: Date;
   includePhotoAnnex?: boolean;
+  gpsCalibrationPoints?: GpsPhotoMapCalibrationPoint[];
+  gpsPlanCalibration?: {
+    fileName: string;
+    pageNumber: number;
+    pageCount: number;
+    anchors: GpsPlanAnchor[];
+    pdfBytes: Uint8Array;
+    updatedAt?: string;
+  } | null;
 };
 
 function safeText(value: unknown) {
@@ -141,6 +153,64 @@ function fitImage(image: PDFImage, maxWidth: number, maxHeight: number) {
   const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
   return { width: image.width * scale, height: image.height * scale };
 }
+
+type GpsSummaryProjectedPoint = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  eastMeters: number;
+  northMeters: number;
+};
+
+function calibrationTypeLabel(type: GpsPhotoMapCalibrationPoint["type"]) {
+  if (type === "CORNER") return "Sarokpont";
+  if (type === "SETTING_OUT") return "Kituzesi pont";
+  return "Egyedi referencia";
+}
+
+function usableCalibrationPoints(points: GpsPhotoMapCalibrationPoint[]) {
+  return points.filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude) && point.latitude >= -90 && point.latitude <= 90 && point.longitude >= -180 && point.longitude <= 180);
+}
+
+function buildGpsSummaryOverview(items: FieldCaptureItem[], calibrationPoints: GpsPhotoMapCalibrationPoint[]) {
+  const photoModel = buildGpsPhotoMapModel(items);
+  const photos = photoModel?.points ?? [];
+  const references = usableCalibrationPoints(calibrationPoints);
+  const rawPoints = [
+    ...photos.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+    ...references.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+  ];
+  if (!rawPoints.length) return null;
+  const referenceLatitude = rawPoints.reduce((sum, point) => sum + point.latitude, 0) / rawPoints.length;
+  const referenceLongitude = rawPoints.reduce((sum, point) => sum + point.longitude, 0) / rawPoints.length;
+  const photoProjected = photos.map((point) => ({
+    ...point,
+    ...projectWgs84ToLocalMeters({ latitude: point.latitude, longitude: point.longitude, referenceLatitude, referenceLongitude }),
+  }));
+  const referenceProjected = references.map((point, index) => ({
+    ...point,
+    mapLabel: `R${index + 1}`,
+    ...projectWgs84ToLocalMeters({ latitude: point.latitude, longitude: point.longitude, referenceLatitude, referenceLongitude }),
+  }));
+  const bounds = calculateGpsPhotoMapBounds([...(photoProjected as GpsSummaryProjectedPoint[]), ...(referenceProjected as GpsSummaryProjectedPoint[])]);
+  return { referenceLatitude, referenceLongitude, photos: photoProjected, references: referenceProjected, bounds };
+}
+
+function fitGpsSummaryPoint(input: { eastMeters: number; northMeters: number }, bounds: ReturnType<typeof calculateGpsPhotoMapBounds>, viewport: { width: number; height: number; padding: number }) {
+  const innerWidth = Math.max(1, viewport.width - viewport.padding * 2);
+  const innerHeight = Math.max(1, viewport.height - viewport.padding * 2);
+  const sourceWidth = Math.max(bounds.widthMeters, 1);
+  const sourceHeight = Math.max(bounds.heightMeters, 1);
+  const scale = Math.min(innerWidth / sourceWidth, innerHeight / sourceHeight);
+  const contentWidth = bounds.widthMeters * scale;
+  const contentHeight = bounds.heightMeters * scale;
+  const offsetX = viewport.padding + (innerWidth - contentWidth) / 2;
+  const offsetY = viewport.padding + (innerHeight - contentHeight) / 2;
+  return {
+    x: offsetX + (input.eastMeters - bounds.minEastMeters) * scale,
+    y: viewport.height - (offsetY + (input.northMeters - bounds.minNorthMeters) * scale),
+  };
+}
 export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSummaryPdfInput) {
   if (!input.items.length) throw new Error("Nincs PDF-be exportálható terepi tétel.");
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
@@ -149,6 +219,7 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const generatedAt = input.generatedAt ?? new Date();
   const summary = summarizeFieldCaptureReport(input.items);
+  const gpsCalibrationPoints = usableCalibrationPoints(input.gpsCalibrationPoints ?? []);
   const contentTop = A4.height - MARGIN - HEADER_H;
   const contentBottom = MARGIN + FOOTER_H;
 
@@ -213,7 +284,8 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
   const metrics: Array<[string, string | number]> = [
     ["Rogzitett kep", summary.itemCount],
     ["Megjegyzes", summary.noteCount],
-    ["GPS-pont", summary.gpsCount],
+    ["GPS-fotopont", summary.gpsCount],
+    ["GPS referencia", gpsCalibrationPoints.length],
     ["Kamerairany", summary.orientationCount],
     ["Szerkesztett", summary.editedCount],
     ["DIMPRO szerveren", `${summary.serverStoredCount}/${summary.itemCount}`],
@@ -231,7 +303,7 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     page.drawText(safeText(value), { x: x + 6, y: boxY - 13, size: 12, font: bold, color: colors.cyan });
     page.drawText(safeText(label), { x: x + 6, y: boxY - 25, size: 5.6, font: bold, color: colors.slate, maxWidth: boxW - 12 });
   });
-  y -= 94;
+  y -= Math.ceil(metrics.length / 4) * 43 + 8;
 
   page.drawRectangle({ x: MARGIN, y: y - 49, width: A4.width - MARGIN * 2, height: 55, color: colors.amber, borderColor: rgb(0.85, 0.66, 0.18), borderWidth: 0.6 });
   page.drawText("FELMERESI ERVENYESSEG", { x: MARGIN + 8, y: y - 11, size: 7, font: bold, color: colors.amberText });
@@ -259,6 +331,170 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     drawWrappedText({ page, text: item.note || item.voiceTranscript || "Nincs megjegyzes.", x: tableX + 35, y: y - 30, width: tableW - 43, font: regular, size: 5.8, lineHeight: 7, color: colors.slate, maxLines: 2 });
     y -= rowHeight + 4;
   }
+  const gpsOverview = buildGpsSummaryOverview(input.items, gpsCalibrationPoints);
+  const gpsPlanModel = input.gpsPlanCalibration
+    ? buildGpsPlanCalibrationModel({ calibrationPoints: gpsCalibrationPoints, anchors: input.gpsPlanCalibration.anchors, pageNumber: input.gpsPlanCalibration.pageNumber })
+    : null;
+  const gpsPlanPhotoPoints = gpsPlanModel ? buildGpsPlanPhotoPoints(input.items, gpsPlanModel) : [];
+  const gpsPlanDistanceSegments = buildConsecutiveGpsPlanDistanceSegments(gpsPlanPhotoPoints);
+  let gpsPageCount = 0;
+  let gpsPlanPageCount = 0;
+  if (gpsPlanModel && input.gpsPlanCalibration) {
+    const LANDSCAPE = { width: A4.height, height: A4.width };
+    page = pdf.addPage([LANDSCAPE.width, LANDSCAPE.height]);
+    page.drawRectangle({ x: 0, y: 0, width: LANDSCAPE.width, height: LANDSCAPE.height, color: colors.white });
+    page.drawText("DIMPRO - Tervlap - GPS fotopontok es referenciapontok", { x: MARGIN, y: LANDSCAPE.height - MARGIN - 4, size: 12, font: bold, color: colors.navy });
+    page.drawText(safeText(`${input.gpsPlanCalibration.fileName} | ${input.gpsPlanCalibration.pageNumber}/${input.gpsPlanCalibration.pageCount}. oldal`), { x: MARGIN, y: LANDSCAPE.height - MARGIN - 19, size: 6.6, font: regular, color: colors.slate, maxWidth: LANDSCAPE.width - MARGIN * 2 - 160 });
+    const qualityText = gpsPlanModel.verificationAvailable
+      ? `Illesztes: ${gpsPlanModel.quality} | atlagos elteres +/-${(gpsPlanModel.averageResidualMeters ?? 0).toFixed(2)} m | max. +/-${(gpsPlanModel.maxResidualMeters ?? 0).toFixed(2)} m | ${gpsPlanModel.anchorCount} R pont`
+      : `Illesztes: 3 pontos, ellenorzo tartalekpont nelkul | ${gpsPlanModel.anchorCount} R pont`;
+    page.drawText(safeText(qualityText), { x: MARGIN, y: LANDSCAPE.height - MARGIN - 31, size: 6.2, font: bold, color: gpsPlanModel.quality === "WEAK" ? rgb(0.7, 0.1, 0.12) : colors.cyan, maxWidth: LANDSCAPE.width - MARGIN * 2 - 160 });
+
+    const [embeddedPlan] = await pdf.embedPdf(input.gpsPlanCalibration.pdfBytes, [Math.max(0, input.gpsPlanCalibration.pageNumber - 1)]);
+    const planBoxX = MARGIN;
+    const planBoxY = MARGIN + FOOTER_H + 19;
+    const planBoxW = LANDSCAPE.width - MARGIN * 2;
+    const planBoxH = LANDSCAPE.height - planBoxY - MARGIN - 42;
+    const planScale = Math.min(planBoxW / embeddedPlan.width, planBoxH / embeddedPlan.height);
+    const planW = embeddedPlan.width * planScale;
+    const planH = embeddedPlan.height * planScale;
+    const planX = planBoxX + (planBoxW - planW) / 2;
+    const planY = planBoxY + (planBoxH - planH) / 2;
+    page.drawRectangle({ x: planX - 2, y: planY - 2, width: planW + 4, height: planH + 4, color: colors.white, borderColor: colors.line, borderWidth: 0.6 });
+    page.drawPage(embeddedPlan, { x: planX, y: planY, width: planW, height: planH });
+    const toPdfPoint = (point: { xPercent: number; yPercent: number }) => ({ x: planX + planW * point.xPercent / 100, y: planY + planH * (1 - point.yPercent / 100) });
+
+    for (const segment of gpsPlanDistanceSegments.filter((item) => item.from.insidePlan && item.to.insidePlan)) {
+      const from = toPdfPoint(segment.from);
+      const to = toPdfPoint(segment.to);
+      page.drawLine({ start: from, end: to, thickness: 1.15, color: colors.cyan, dashArray: [5, 4], opacity: 0.72 });
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      const label = safeText(segment.displayLabel);
+      const labelW = bold.widthOfTextAtSize(label, 6.4) + 8;
+      page.drawRectangle({ x: midX - labelW / 2, y: midY - 5, width: labelW, height: 12, color: colors.white, borderColor: rgb(0.4, 0.82, 0.88), borderWidth: 0.5, opacity: 0.94 });
+      page.drawText(label, { x: midX - labelW / 2 + 4, y: midY - 1, size: 6.4, font: bold, color: colors.navy });
+    }
+
+    const calibrationIndex = new Map(gpsCalibrationPoints.map((point, index) => [point.id, index]));
+    for (const anchor of input.gpsPlanCalibration.anchors.filter((item) => item.pageNumber === input.gpsPlanCalibration!.pageNumber)) {
+      if (!calibrationIndex.has(anchor.calibrationPointId)) continue;
+      const point = toPdfPoint(anchor);
+      const label = `R${(calibrationIndex.get(anchor.calibrationPointId) ?? 0) + 1}`;
+      page.drawRectangle({ x: point.x - 7, y: point.y - 7, width: 14, height: 14, color: rgb(0.95, 0.93, 1), borderColor: rgb(0.42, 0.16, 0.72), borderWidth: 1.8 });
+      page.drawText(label, { x: point.x - 5.4, y: point.y - 2.4, size: 6.2, font: bold, color: rgb(0.29, 0.08, 0.52) });
+    }
+
+    for (const photo of gpsPlanPhotoPoints.filter((item) => item.insidePlan)) {
+      const point = toPdfPoint(photo);
+      if (photo.headingPlanDegrees !== null) {
+        const radians = photo.headingPlanDegrees * Math.PI / 180;
+        const length = 22;
+        const end = { x: point.x + Math.sin(radians) * length, y: point.y + Math.cos(radians) * length };
+        page.drawLine({ start: point, end, thickness: 1.8, color: rgb(0.92, 0.34, 0.04) });
+        const left = { x: end.x - Math.sin(radians - Math.PI / 5) * 7, y: end.y - Math.cos(radians - Math.PI / 5) * 7 };
+        const right = { x: end.x - Math.sin(radians + Math.PI / 5) * 7, y: end.y - Math.cos(radians + Math.PI / 5) * 7 };
+        page.drawLine({ start: left, end, thickness: 1.5, color: rgb(0.92, 0.34, 0.04) });
+        page.drawLine({ start: right, end, thickness: 1.5, color: rgb(0.92, 0.34, 0.04) });
+      }
+      page.drawCircle({ x: point.x, y: point.y, size: 8, color: colors.white, borderColor: photo.accuracyMeters !== null && photo.accuracyMeters > 50 ? rgb(0.85, 0.47, 0.04) : colors.cyan, borderWidth: 2 });
+      const serial = String(photo.sequence);
+      page.drawText(serial, { x: point.x - bold.widthOfTextAtSize(serial, 6.5) / 2, y: point.y - 2.4, size: 6.5, font: bold, color: colors.navy });
+    }
+
+    drawSurveyNorthMarkPdf({ page, centerX: LANDSCAPE.width - MARGIN - 32, centerY: LANDSCAPE.height - MARGIN - 26, northAngle: gpsPlanModel.northAngleDegrees, bold, rgb, scale: 0.72 });
+    page.drawText(safeText("Kek kor: GPS-fotopont | narancs nyil: kamera iranya | lila negyzet: R referencia | szaggatott vonal: egymast koveto fotok tavolsaga"), { x: MARGIN, y: MARGIN + 27, size: 5.7, font: bold, color: colors.slate, maxWidth: LANDSCAPE.width - MARGIN * 2 });
+    drawWrappedText({ page, text: GPS_PHOTO_MAP_DISCLAIMER, x: MARGIN, y: MARGIN + 15, width: LANDSCAPE.width - MARGIN * 2, font: regular, size: 5.5, lineHeight: 6.7, color: colors.amberText, maxLines: 2 });
+    gpsPageCount += 1;
+    gpsPlanPageCount += 1;
+  }
+  if (gpsOverview) {
+    if (!gpsPlanModel) {
+      page = addPage("GPS helyszinrajz es fotopontok");
+    gpsPageCount += 1;
+    const mapX = MARGIN;
+    const mapY = contentBottom + 58;
+    const mapW = A4.width - MARGIN * 2;
+    const mapH = contentTop - mapY - 4;
+    page.drawRectangle({ x: mapX, y: mapY, width: mapW, height: mapH, color: colors.light, borderColor: colors.line, borderWidth: 0.7 });
+    for (let grid = 1; grid < 8; grid += 1) page.drawLine({ start: { x: mapX + mapW * grid / 8, y: mapY }, end: { x: mapX + mapW * grid / 8, y: mapY + mapH }, thickness: 0.35, color: colors.line, dashArray: [3, 6], opacity: 0.55 });
+    for (let grid = 1; grid < 6; grid += 1) page.drawLine({ start: { x: mapX, y: mapY + mapH * grid / 6 }, end: { x: mapX + mapW, y: mapY + mapH * grid / 6 }, thickness: 0.35, color: colors.line, dashArray: [3, 6], opacity: 0.55 });
+    const photoFitted = gpsOverview.photos.map((point) => ({ ...point, ...fitGpsSummaryPoint(point, gpsOverview.bounds, { width: mapW, height: mapH, padding: 42 }) }));
+    const photoById = new Map(photoFitted.map((point) => [point.id, point]));
+    const orderedPhotoIds = [...gpsOverview.photos].sort((a, b) => a.sequence - b.sequence).map((point) => point.id);
+    for (let index = 1; index < orderedPhotoIds.length; index += 1) {
+      const from = photoById.get(orderedPhotoIds[index - 1]);
+      const to = photoById.get(orderedPhotoIds[index]);
+      if (!from || !to) continue;
+      page.drawLine({ start: { x: mapX + from.x, y: mapY + (mapH - from.y) }, end: { x: mapX + to.x, y: mapY + (mapH - to.y) }, thickness: 1.1, color: colors.cyan, dashArray: [5, 4], opacity: 0.6 });
+    }
+    for (const point of photoFitted) {
+      const x = mapX + point.x;
+      const yPoint = mapY + (mapH - point.y);
+      const weak = point.accuracyMeters !== null && point.accuracyMeters > 50;
+      page.drawCircle({ x, y: yPoint, size: 7.5, color: colors.white, borderColor: weak ? rgb(0.85, 0.47, 0.04) : colors.cyan, borderWidth: 2 });
+      page.drawText(String(point.sequence), { x: x - 2.7, y: yPoint - 2.5, size: 6.5, font: bold, color: colors.navy });
+      if (point.headingDegrees !== null) {
+        const radians = (90 - point.headingDegrees) * Math.PI / 180;
+        const end = { x: x + Math.cos(radians) * 20, y: yPoint + Math.sin(radians) * 20 };
+        page.drawLine({ start: { x, y: yPoint }, end, thickness: 1.8, color: rgb(0.92, 0.34, 0.04) });
+      }
+      page.drawText(safeText(`#${point.sequence} ${point.displayName.slice(0, 26)}`), { x: x + 10, y: yPoint + 4, size: 5.7, font: bold, color: colors.navy, maxWidth: 150 });
+      page.drawText(safeText(`GPS ${point.accuracyMeters === null ? "pontossag n/a" : `+/-${Math.round(point.accuracyMeters)} m`}${point.directionLabel ? ` | kamera ${point.directionLabel}` : ""}`), { x: x + 10, y: yPoint - 5, size: 5.2, font: regular, color: colors.slate, maxWidth: 150 });
+    }
+    const referenceFitted = gpsOverview.references.map((point) => ({ ...point, ...fitGpsSummaryPoint(point, gpsOverview.bounds, { width: mapW, height: mapH, padding: 42 }) }));
+    for (const point of referenceFitted) {
+      const x = mapX + point.x;
+      const yPoint = mapY + (mapH - point.y);
+      page.drawRectangle({ x: x - 6, y: yPoint - 6, width: 12, height: 12, color: rgb(0.95, 0.93, 1), borderColor: rgb(0.45, 0.22, 0.75), borderWidth: 1.8 });
+      page.drawText(point.mapLabel, { x: x - 5, y: yPoint - 2, size: 5.6, font: bold, color: rgb(0.3, 0.12, 0.55) });
+      page.drawText(safeText(`${point.mapLabel} ${point.label.slice(0, 28)}`), { x: x + 10, y: yPoint + 3, size: 5.7, font: bold, color: rgb(0.3, 0.12, 0.55), maxWidth: 150 });
+      page.drawText(safeText(`${calibrationTypeLabel(point.type)}${point.accuracyMeters === null ? "" : ` | +/-${Math.round(point.accuracyMeters)} m`}`), { x: x + 10, y: yPoint - 6, size: 5.2, font: regular, color: colors.slate, maxWidth: 150 });
+    }
+    drawSurveyNorthMarkPdf({ page, centerX: mapX + mapW - 38, centerY: mapY + mapH - 38, northAngle: 0, bold, rgb, scale: 0.78 });
+    page.drawText(safeText(`Helyszini kiterjedes: ${gpsOverview.bounds.widthMeters.toFixed(1)} x ${gpsOverview.bounds.heightMeters.toFixed(1)} m`), { x: MARGIN, y: contentBottom + 43, size: 6.2, font: bold, color: colors.cyan });
+    page.drawText(safeText(`Kek kor: GPS-fotopont | narancs vonal: kamera iranya | lila negyzet: kulon rogzitett GPS referencia/kalibracios pont`), { x: MARGIN, y: contentBottom + 31, size: 5.8, font: bold, color: colors.slate, maxWidth: A4.width - MARGIN * 2 });
+    drawWrappedText({ page, text: GPS_PHOTO_MAP_DISCLAIMER, x: MARGIN, y: contentBottom + 18, width: A4.width - MARGIN * 2, font: regular, size: 5.7, lineHeight: 7, color: colors.amberText, maxLines: 2 });
+    }
+
+    const photoCoordinates = [...gpsOverview.photos].sort((a, b) => a.sequence - b.sequence);
+    const referenceCoordinates = gpsOverview.references;
+    page = addPage("GPS koordinatak");
+    gpsPageCount += 1;
+    y = contentTop - 8;
+    const coordW = A4.width - MARGIN * 2;
+    const startCoordinatePage = (label: string) => { page = addPage(label); gpsPageCount += 1; y = contentTop - 8; };
+    const ensureCoordinateSpace = (height: number) => { if (y - height < contentBottom) startCoordinatePage("GPS koordinatak - folytatas"); };
+    const drawCoordinateSection = (label: string) => { ensureCoordinateSpace(24); page.drawText(safeText(label), { x: MARGIN, y, size: 9, font: bold, color: colors.cyan }); y -= 18; };
+    const drawCoordinateRow = (title: string, line1: string, line2: string, note?: string) => {
+      const rowH = note ? 48 : 39;
+      ensureCoordinateSpace(rowH + 5);
+      page.drawRectangle({ x: MARGIN, y: y - rowH + 5, width: coordW, height: rowH, color: colors.white, borderColor: colors.line, borderWidth: 0.45 });
+      page.drawText(safeText(title), { x: MARGIN + 7, y: y - 10, size: 6.8, font: bold, color: colors.navy, maxWidth: coordW - 14 });
+      page.drawText(safeText(line1), { x: MARGIN + 7, y: y - 21, size: 5.7, font: regular, color: colors.slate, maxWidth: coordW - 14 });
+      page.drawText(safeText(line2), { x: MARGIN + 7, y: y - 31, size: 5.7, font: regular, color: colors.slate, maxWidth: coordW - 14 });
+      if (note) page.drawText(safeText(`Megjegyzes: ${note}`), { x: MARGIN + 7, y: y - 41, size: 5.5, font: regular, color: colors.slate, maxWidth: coordW - 14 });
+      y -= rowH + 5;
+    };
+    if (photoCoordinates.length) {
+      drawCoordinateSection(`GPS-fotopontok (${photoCoordinates.length})`);
+      for (const point of photoCoordinates) drawCoordinateRow(
+        `#${point.sequence} FOTO - ${point.displayName}`,
+        `${point.latitude.toFixed(7)}, ${point.longitude.toFixed(7)} | pontossag ${point.accuracyMeters === null ? "n/a" : `+/-${Math.round(point.accuracyMeters)} m`} | ${formatDateTime(point.capturedAt)}`,
+        point.headingDegrees === null ? "Kamerairany: nincs rogzitve" : `Kamerairany: ${point.directionLabel || "-"} / ${Math.round(point.headingDegrees)} fok`,
+      );
+    }
+    if (referenceCoordinates.length) {
+      drawCoordinateSection(`Kulon rogzitett GPS referencia/kalibracios pontok (${referenceCoordinates.length})`);
+      for (const point of referenceCoordinates) drawCoordinateRow(
+        `${point.mapLabel} ${calibrationTypeLabel(point.type)} - ${point.label}`,
+        `${point.latitude.toFixed(7)}, ${point.longitude.toFixed(7)} | pontossag ${point.accuracyMeters === null ? "n/a" : `+/-${Math.round(point.accuracyMeters)} m`} | ${formatDateTime(point.capturedAt)}`,
+        `${point.sampleCount} GPS-minta | mintagyujtes ${(point.samplingDurationMs / 1000).toFixed(1)} mp`,
+        point.note || undefined,
+      );
+    }
+  }
+
   let photoCount = 0;
   if (input.includePhotoAnnex !== false) {
     const sorted = [...input.items].sort((a, b) => a.sequence - b.sequence);
@@ -316,10 +552,11 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
 
   const pages = pdf.getPages();
   pages.forEach((current, index) => {
-    current.drawLine({ start: { x: MARGIN, y: MARGIN + 17 }, end: { x: A4.width - MARGIN, y: MARGIN + 17 }, thickness: 0.45, color: colors.line });
+    const pageWidth = current.getWidth();
+    current.drawLine({ start: { x: MARGIN, y: MARGIN + 17 }, end: { x: pageWidth - MARGIN, y: MARGIN + 17 }, thickness: 0.45, color: colors.line });
     current.drawText(safeText(`DIMPRO Terepi Gyorsrogzito | ${input.session.id.slice(0, 24)}`), { x: MARGIN, y: MARGIN + 6, size: 5.5, font: regular, color: colors.slate });
     const pageLabel = `${index + 1}/${pages.length}`;
-    current.drawText(pageLabel, { x: A4.width - MARGIN - bold.widthOfTextAtSize(pageLabel, 5.7), y: MARGIN + 6, size: 5.7, font: bold, color: colors.slate });
+    current.drawText(pageLabel, { x: pageWidth - MARGIN - bold.widthOfTextAtSize(pageLabel, 5.7), y: MARGIN + 6, size: 5.7, font: bold, color: colors.slate });
   });
 
   const safeSession = input.session.id.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 28);
@@ -329,6 +566,12 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     pageCount: pages.length,
     itemCount: input.items.length,
     photoCount,
+    gpsPageCount,
+    gpsPhotoPointCount: gpsOverview?.photos.length ?? 0,
+    gpsReferencePointCount: gpsCalibrationPoints.length,
+    gpsPlanPageCount,
+    gpsDistanceSegmentCount: gpsPlanDistanceSegments.length,
+    gpsPlanCalibrated: Boolean(gpsPlanModel),
     summary,
     metadata: input.metadata,
   };
