@@ -6,7 +6,7 @@ import {
   updateCommerceStorefrontDefaultFulfillmentSource,
 } from "@/app/lib/commerce/storefront/repository";
 import { getAruterRepositoryMode } from "@/app/lib/aruter/repositoryFactory";
-import { getStorefrontRepositoryProducts, resolveStorefrontTemplate } from "@/app/lib/aruter/storefrontPilot";
+import { getStorefrontCatalogMode, getStorefrontCatalogProducts, resolveStorefrontTemplate } from "@/app/lib/aruter/storefrontPilot";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const context = await resolveCommerceContext(organizationId(request));
     const data = await getCommerceStorefrontAdminState(context, { storefrontSlug: slug });
     const template = resolveStorefrontTemplate(slug);
-    const externalProducts = (await getStorefrontRepositoryProducts())
+    const externalProducts = (await getStorefrontCatalogProducts(slug, { activeOnly: false }))
       .filter((product) => product.isActive)
       .filter((product) => !template || product.template === template)
       .filter((product) => product.isPublicOffer !== false)
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       ok: true,
       data: {
         ...data,
-        externalCatalog: { repositoryMode: getAruterRepositoryMode(), products: externalProducts },
+        externalCatalog: { repositoryMode: getAruterRepositoryMode(), catalogMode: getStorefrontCatalogMode(), products: externalProducts },
       },
     }, { headers: { "cache-control": "no-store" } });
   } catch (error) {

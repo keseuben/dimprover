@@ -18,7 +18,7 @@ check("checkout limits unique products",engine.includes("requested.size > 25"));
 check("duplicate product lines are aggregated",engine.includes("quantities.set(productId, (quantities.get(productId) || 0) + quantity)"));
 check("non-positive quantities are rejected",engine.includes("quantity <= 0"));
 check("storefront business template is server resolved",engine.includes("resolveStorefrontTemplate(businessSlug)"));
-check("products are loaded from authoritative repository",engine.includes("getStorefrontRepositoryProducts()"));
+check("products are loaded from authoritative repository",engine.includes("getStorefrontCatalogProducts(businessSlug)"));
 check("inactive products are excluded",engine.includes("product.isActive"));
 check("wrong template products are excluded",engine.includes("product.template === template"));
 check("non-public products are excluded",engine.includes("product.isPublicOffer !== false"));
@@ -43,7 +43,7 @@ check("route returns 201 for new checkout",route.includes("result.data.reused ? 
 check("route returns 200 for idempotent replay",route.includes("result.data.reused ? 200 : 201"));
 check("route does not accept Commerce organization id",!route.includes("organizationId")&&!engine.includes("input.organizationId"));
 check("shared storefront helper exports server template resolver",pilot.includes("export function resolveStorefrontTemplate"));
-check("shared storefront helper exports authoritative products",pilot.includes("export async function getStorefrontRepositoryProducts"));
+check("shared storefront helper exports authoritative products",pilot.includes("export async function getStorefrontCatalogProducts"));
 check("shared storefront helper exports service queue function",pilot.includes("export async function queueStorefrontCommerceMirrorFailOpen"));
 
 check("checkout payload fingerprint uses SHA-256",engine.includes("checkoutPayloadMarker")&&engine.includes('createHash("sha256")'));

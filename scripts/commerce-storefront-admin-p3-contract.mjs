@@ -19,14 +19,14 @@ check("default source validates INTERNAL source",repo.includes("COMMERCE_STOREFR
 check("admin API GET exists",route.includes("export async function GET"));
 check("admin API PATCH exists",route.includes("export async function PATCH"));
 check("admin API resolves Commerce session context",route.includes("resolveCommerceContext"));
-check("admin API exposes authoritative Aruter catalog",route.includes("getStorefrontRepositoryProducts"));
+check("admin API exposes authoritative Aruter catalog",route.includes("getStorefrontCatalogProducts"));
 check("admin API exposes repository mode",route.includes("getAruterRepositoryMode"));
 check("UI uses existing mapping endpoint",ui.includes("/api/v1/commerce/storefront-mappings"));
 check("UI can save Storefront default source",ui.includes('method: "PATCH"')&&ui.includes("defaultFulfillmentSourceId"));
 check("UI supports per-product fulfillment override",ui.includes("Termékszintű fulfillment forrás"));
 check("UI exposes mapping active toggle",ui.includes("Kapcsolat aktív"));
 check("UI shows mapping coverage",ui.includes("Aktív kapcsolatok"));
-check("UI distinguishes mock and database catalog",ui.includes('repositoryMode === "database"'));
+check("UI distinguishes repository and Commerce catalog",ui.includes('catalogMode === "commerce"')&&ui.includes('repositoryMode === "database"'));
 check("admin page mounts Storefront admin",page.includes("CommerceStorefrontAdmin"));
 check("product admin links to Storefront admin",products.includes('href="/aruter/admin/storefront"'));
 check("P3 has no schema migration",!fs.existsSync(new URL("../supabase/migrations/20260821161500_dimpro_commerce_storefront_admin_p3.sql",import.meta.url)));

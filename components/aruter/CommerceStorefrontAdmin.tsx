@@ -16,7 +16,7 @@ type AdminState = {
   sources: Source[];
   products: Product[];
   mappings: Mapping[];
-  externalCatalog: { repositoryMode: "mock" | "database"; products: ExternalProduct[] };
+  externalCatalog: { repositoryMode: "mock" | "database"; catalogMode: "repository" | "commerce"; products: ExternalProduct[] };
 };
 type Draft = { productId: string; variantId: string; fulfillmentSourceId: string; active: boolean };
 const EMPTY_DRAFT: Draft = { productId: "", variantId: "", fulfillmentSourceId: "", active: true };
@@ -78,7 +78,7 @@ export function CommerceStorefrontAdmin({ storefrontSlug = "kovacs-kerteszet" }:
     try {
       const response = await fetch("/api/v1/commerce/storefront-mappings", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ storefrontSlug, externalProductId: selectedExternal.id, externalSku: selectedExternal.sku, productId: draft.productId, variantId: draft.variantId, fulfillmentSourceId: draft.fulfillmentSourceId || null, active: draft.active, metadata: { source: "commerce-storefront-admin-p3", repositoryMode: state?.externalCatalog.repositoryMode || null } }),
+        body: JSON.stringify({ storefrontSlug, externalProductId: selectedExternal.id, externalSku: selectedExternal.sku, productId: draft.productId, variantId: draft.variantId, fulfillmentSourceId: draft.fulfillmentSourceId || null, active: draft.active, metadata: { source: "commerce-storefront-admin-p3", repositoryMode: state?.externalCatalog.repositoryMode || null, catalogMode: state?.externalCatalog.catalogMode || null } }),
       });
       const result = await response.json() as ApiResult<Mapping>;
       if (!response.ok || !result.ok) throw new Error(result.error || "A Storefront kapcsolat mentése sikertelen.");
@@ -108,7 +108,7 @@ export function CommerceStorefrontAdmin({ storefrontSlug = "kovacs-kerteszet" }:
       </header>
 
       <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-500">Árutér admin › Commerce Core › Storefront</p><h2 className="mt-1 text-3xl font-black">Kovács Kertészet pilot kapcsolat</h2><p className="mt-1 max-w-3xl font-semibold text-slate-500">A nyilvános Árutér termékeit itt kapcsolhatja a Commerce terméktörzshöz és a kiszolgáló készletforráshoz.</p></div>{state && <span className={`rounded-full border px-4 py-2 text-xs font-black ${state.externalCatalog.repositoryMode === "database" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>Árutér forrás: {state.externalCatalog.repositoryMode === "database" ? "adatbázis" : "pilot / mock"}</span>}</div>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-500">Árutér admin › Commerce Core › Storefront</p><h2 className="mt-1 text-3xl font-black">Kovács Kertészet pilot kapcsolat</h2><p className="mt-1 max-w-3xl font-semibold text-slate-500">A nyilvános Árutér termékeit itt kapcsolhatja a Commerce terméktörzshöz és a kiszolgáló készletforráshoz.</p></div>{state && <span className={`rounded-full border px-4 py-2 text-xs font-black ${state.externalCatalog.catalogMode === "commerce" || state.externalCatalog.repositoryMode === "database" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>Katalógus: {state.externalCatalog.catalogMode === "commerce" ? "Commerce DB" : state.externalCatalog.repositoryMode === "database" ? "repository DB" : "pilot / mock"}</span>}</div>
         {error && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800"><AlertCircle size={20} /><div><b>Storefront admin hiba</b><p className="mt-1 text-sm font-semibold">{error}</p></div></div>}
         {notice && <div className="mb-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800"><CheckCircle2 size={20} /><div><b>Sikeres mentés</b><p className="mt-1 text-sm font-semibold">{notice}</p></div></div>}
 

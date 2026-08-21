@@ -3,6 +3,7 @@ import "server-only";
 import type { AruterPublicProduct } from "./publicOfferData";
 import type { AruterPublicReservation, CreateAruterPublicReservationInput } from "./publicReservation";
 import { getAruterRepository } from "./repositoryFactory";
+import { getStorefrontCatalogMode, listCommerceStorefrontCatalogProducts } from "./storefrontCommerceCatalog";
 import type { AruterOrder, AruterProduct, AruterTemplate, AruterUnit } from "./types";
 import { enqueueCommerceMirrorAttemptForOrganization } from "../commerce/order/mirrorReconciliation";
 
@@ -92,6 +93,21 @@ export async function getStorefrontRepositoryProducts() {
   return Array.isArray(result) ? result : [];
 }
 
+export { getStorefrontCatalogMode } from "./storefrontCommerceCatalog";
+
+export async function getStorefrontCatalogProducts(
+  businessSlugInput: string,
+  options: { activeOnly?: boolean } = {},
+) {
+  const businessSlug = businessSlugInput.trim();
+  if (getStorefrontCatalogMode() === "commerce") {
+    const template = resolveStorefrontTemplate(businessSlug);
+    if (!template) return [];
+    return listCommerceStorefrontCatalogProducts({ businessSlug, template, activeOnly: options.activeOnly });
+  }
+  return getStorefrontRepositoryProducts();
+}
+
 export function getStorefrontGrossPrice(product: AruterProduct) {
   const value = product.priceNet * (1 + product.vatRate / 100);
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -127,7 +143,7 @@ export async function getStorefrontPilotCatalog(businessSlugInput: string): Prom
     return { pilotEnabled: false, orderBridgeEnabled: isStorefrontOrderBridgeEnabled(), multiItemCheckoutEnabled: false, businessSlug, products: [] };
   }
   const template = resolveStorefrontTemplate(businessSlug);
-  const products = (await getStorefrontRepositoryProducts())
+  const products = (await getStorefrontCatalogProducts(businessSlug))
     .filter((product) => product.isActive)
     .filter((product) => !template || product.template === template)
     .filter((product) => product.isPublicOffer !== false)
@@ -144,7 +160,7 @@ export async function normalizeStorefrontReservationInput(
   const template = resolveStorefrontTemplate(businessSlug);
   if (!businessSlug || !template) return { ok: false, error: "Ehhez az üzlethez a Storefront Pilot nincs konfigurálva." };
   const productId = input.product?.id?.trim() || "";
-  const product = (await getStorefrontRepositoryProducts()).find((item) => item.id === productId && item.isActive && item.template === template && item.isPublicOffer !== false);
+  const product = (await getStorefrontCatalogProducts(businessSlug)).find((item) => item.id === productId && item.isActive && item.template === template && item.isPublicOffer !== false);
   if (!product) return { ok: false, error: "A kiválasztott termék nem érhető el a nyilvános ajánlatban." };
   const quantity = Number(input.quantity || 0);
   if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "A mennyiség legyen pozitív szám." };
@@ -201,7 +217,7 @@ export async function bridgePublicReservationToCashierFailOpen(
 
     const template = resolveStorefrontTemplate(reservation.businessSlug);
     if (!template) throw new Error("STOREFRONT_TEMPLATE_NOT_CONFIGURED");
-    const product = (await getStorefrontRepositoryProducts()).find((item) => item.id === reservation.productId && item.isActive && item.template === template && item.isPublicOffer !== false);
+    const product = (await getStorefrontCatalogProducts(reservation.businessSlug)).find((item) => item.id === reservation.productId && item.isActive && item.template === template && item.isPublicOffer !== false);
     if (!product) throw new Error("STOREFRONT_PRODUCT_NOT_FOUND");
     if (!UNIT_VALUES.has(product.unit)) throw new Error("STOREFRONT_UNIT_NOT_SUPPORTED");
 

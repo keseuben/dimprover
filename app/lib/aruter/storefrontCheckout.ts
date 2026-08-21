@@ -5,7 +5,7 @@ import { getAruterRepository } from "./repositoryFactory";
 import type { AruterOrder, AruterProduct, AruterUnit } from "./types";
 import { issueStorefrontTrackingToken } from "./storefrontTracking";
 import {
-  getStorefrontRepositoryProducts,
+  getStorefrontCatalogProducts,
   isStorefrontMultiItemCheckoutEnabled,
   queueStorefrontCommerceMirrorFailOpen,
   resolveStorefrontTemplate,
@@ -155,7 +155,7 @@ export async function createStorefrontMultiItemCheckout(
   const requested = aggregateItems(input.items as StorefrontCheckoutRequestItem[]);
   if (!requested || requested.size < 1 || requested.size > 25) return fail(400, "STOREFRONT_CHECKOUT_ITEMS_INVALID", "A kosár legfeljebb 25 különböző terméket tartalmazhat pozitív mennyiséggel.");
 
-  const products = await getStorefrontRepositoryProducts();
+  const products = await getStorefrontCatalogProducts(businessSlug);
   const authoritative = new Map(
     products
       .filter((product) => product.isActive && product.template === template && product.isPublicOffer !== false)
