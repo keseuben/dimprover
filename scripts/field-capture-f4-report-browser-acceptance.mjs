@@ -105,14 +105,20 @@ try {
   await page.select("[data-terep-report-survey-nature]", "Célzott munkaterületi ellenőrzés");
   await page.$eval("[data-terep-report-coverage]", (el) => {
     const input = el;
-    input.value = "45";
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setter) throw new Error("Range native value setter hiányzik.");
+    setter.call(input, "45");
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  const title = await page.$("[data-terep-report-title]");
-  assert.ok(title);
-  await title.click({ clickCount: 3 });
-  await title.type("F4 browser terepi riport", { delay: 2 });
+  await page.$eval("[data-terep-report-title]", (el) => {
+    const input = el;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setter) throw new Error("Text input native value setter hiányzik.");
+    setter.call(input, "F4 browser terepi riport");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 
   pass("Rögzítés jellege módosítható", await page.$eval("[data-terep-report-survey-nature]", (el) => el.value === "Célzott munkaterületi ellenőrzés"));
   pass("Lefedettség 45%-ra módosítható", await page.$eval("[data-terep-report-coverage]", (el) => el.value === "45"));
