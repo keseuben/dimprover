@@ -2,6 +2,7 @@ import type { FieldCaptureItem, FieldCaptureLocalSession } from "./types";
 import type { FieldCaptureReportMetadata } from "./reportMetadata";
 import { GPS_PHOTO_MAP_DISCLAIMER, buildGpsPhotoMapModel, calculateGpsPhotoMapBounds, projectWgs84ToLocalMeters, type GpsPhotoMapCalibrationPoint } from "./gpsPhotoMap";
 import { drawSurveyNorthMarkPdf } from "@/components/viewers/drawSurveyNorthMarkPdf";
+import { buildConsecutiveGpsPlanDistanceSegments, buildGpsPlanCalibrationModel, buildGpsPlanPhotoPoints, type GpsPlanAnchor } from "./gpsPlanCalibration";
 import type { PDFDocument as PdfLibDocument, PDFImage, PDFPage, PDFFont, RGB } from "pdf-lib";
 
 const MM_TO_PT = 72 / 25.4;
@@ -35,6 +36,14 @@ export type CreateFieldCaptureSummaryPdfInput = {
   generatedAt?: Date;
   includePhotoAnnex?: boolean;
   gpsCalibrationPoints?: GpsPhotoMapCalibrationPoint[];
+  gpsPlanCalibration?: {
+    fileName: string;
+    pageNumber: number;
+    pageCount: number;
+    anchors: GpsPlanAnchor[];
+    pdfBytes: Uint8Array;
+    updatedAt?: string;
+  } | null;
 };
 
 function safeText(value: unknown) {
@@ -323,9 +332,85 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     y -= rowHeight + 4;
   }
   const gpsOverview = buildGpsSummaryOverview(input.items, gpsCalibrationPoints);
+  const gpsPlanModel = input.gpsPlanCalibration
+    ? buildGpsPlanCalibrationModel({ calibrationPoints: gpsCalibrationPoints, anchors: input.gpsPlanCalibration.anchors, pageNumber: input.gpsPlanCalibration.pageNumber })
+    : null;
+  const gpsPlanPhotoPoints = gpsPlanModel ? buildGpsPlanPhotoPoints(input.items, gpsPlanModel) : [];
+  const gpsPlanDistanceSegments = buildConsecutiveGpsPlanDistanceSegments(gpsPlanPhotoPoints);
   let gpsPageCount = 0;
+  let gpsPlanPageCount = 0;
+  if (gpsPlanModel && input.gpsPlanCalibration) {
+    const LANDSCAPE = { width: A4.height, height: A4.width };
+    page = pdf.addPage([LANDSCAPE.width, LANDSCAPE.height]);
+    page.drawRectangle({ x: 0, y: 0, width: LANDSCAPE.width, height: LANDSCAPE.height, color: colors.white });
+    page.drawText("DIMPRO - Tervlap - GPS fotopontok es referenciapontok", { x: MARGIN, y: LANDSCAPE.height - MARGIN - 4, size: 12, font: bold, color: colors.navy });
+    page.drawText(safeText(`${input.gpsPlanCalibration.fileName} | ${input.gpsPlanCalibration.pageNumber}/${input.gpsPlanCalibration.pageCount}. oldal`), { x: MARGIN, y: LANDSCAPE.height - MARGIN - 19, size: 6.6, font: regular, color: colors.slate, maxWidth: LANDSCAPE.width - MARGIN * 2 - 160 });
+    const qualityText = gpsPlanModel.verificationAvailable
+      ? `Illesztes: ${gpsPlanModel.quality} | atlagos elteres +/-${(gpsPlanModel.averageResidualMeters ?? 0).toFixed(2)} m | max. +/-${(gpsPlanModel.maxResidualMeters ?? 0).toFixed(2)} m | ${gpsPlanModel.anchorCount} R pont`
+      : `Illesztes: 3 pontos, ellenorzo tartalekpont nelkul | ${gpsPlanModel.anchorCount} R pont`;
+    page.drawText(safeText(qualityText), { x: MARGIN, y: LANDSCAPE.height - MARGIN - 31, size: 6.2, font: bold, color: gpsPlanModel.quality === "WEAK" ? rgb(0.7, 0.1, 0.12) : colors.cyan, maxWidth: LANDSCAPE.width - MARGIN * 2 - 160 });
+
+    const [embeddedPlan] = await pdf.embedPdf(input.gpsPlanCalibration.pdfBytes, [Math.max(0, input.gpsPlanCalibration.pageNumber - 1)]);
+    const planBoxX = MARGIN;
+    const planBoxY = MARGIN + FOOTER_H + 19;
+    const planBoxW = LANDSCAPE.width - MARGIN * 2;
+    const planBoxH = LANDSCAPE.height - planBoxY - MARGIN - 42;
+    const planScale = Math.min(planBoxW / embeddedPlan.width, planBoxH / embeddedPlan.height);
+    const planW = embeddedPlan.width * planScale;
+    const planH = embeddedPlan.height * planScale;
+    const planX = planBoxX + (planBoxW - planW) / 2;
+    const planY = planBoxY + (planBoxH - planH) / 2;
+    page.drawRectangle({ x: planX - 2, y: planY - 2, width: planW + 4, height: planH + 4, color: colors.white, borderColor: colors.line, borderWidth: 0.6 });
+    page.drawPage(embeddedPlan, { x: planX, y: planY, width: planW, height: planH });
+    const toPdfPoint = (point: { xPercent: number; yPercent: number }) => ({ x: planX + planW * point.xPercent / 100, y: planY + planH * (1 - point.yPercent / 100) });
+
+    for (const segment of gpsPlanDistanceSegments.filter((item) => item.from.insidePlan && item.to.insidePlan)) {
+      const from = toPdfPoint(segment.from);
+      const to = toPdfPoint(segment.to);
+      page.drawLine({ start: from, end: to, thickness: 1.15, color: colors.cyan, dashArray: [5, 4], opacity: 0.72 });
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      const label = safeText(segment.displayLabel);
+      const labelW = bold.widthOfTextAtSize(label, 6.4) + 8;
+      page.drawRectangle({ x: midX - labelW / 2, y: midY - 5, width: labelW, height: 12, color: colors.white, borderColor: rgb(0.4, 0.82, 0.88), borderWidth: 0.5, opacity: 0.94 });
+      page.drawText(label, { x: midX - labelW / 2 + 4, y: midY - 1, size: 6.4, font: bold, color: colors.navy });
+    }
+
+    const calibrationIndex = new Map(gpsCalibrationPoints.map((point, index) => [point.id, index]));
+    for (const anchor of input.gpsPlanCalibration.anchors.filter((item) => item.pageNumber === input.gpsPlanCalibration!.pageNumber)) {
+      if (!calibrationIndex.has(anchor.calibrationPointId)) continue;
+      const point = toPdfPoint(anchor);
+      const label = `R${(calibrationIndex.get(anchor.calibrationPointId) ?? 0) + 1}`;
+      page.drawRectangle({ x: point.x - 7, y: point.y - 7, width: 14, height: 14, color: rgb(0.95, 0.93, 1), borderColor: rgb(0.42, 0.16, 0.72), borderWidth: 1.8 });
+      page.drawText(label, { x: point.x - 5.4, y: point.y - 2.4, size: 6.2, font: bold, color: rgb(0.29, 0.08, 0.52) });
+    }
+
+    for (const photo of gpsPlanPhotoPoints.filter((item) => item.insidePlan)) {
+      const point = toPdfPoint(photo);
+      if (photo.headingPlanDegrees !== null) {
+        const radians = photo.headingPlanDegrees * Math.PI / 180;
+        const length = 22;
+        const end = { x: point.x + Math.sin(radians) * length, y: point.y + Math.cos(radians) * length };
+        page.drawLine({ start: point, end, thickness: 1.8, color: rgb(0.92, 0.34, 0.04) });
+        const left = { x: end.x - Math.sin(radians - Math.PI / 5) * 7, y: end.y - Math.cos(radians - Math.PI / 5) * 7 };
+        const right = { x: end.x - Math.sin(radians + Math.PI / 5) * 7, y: end.y - Math.cos(radians + Math.PI / 5) * 7 };
+        page.drawLine({ start: left, end, thickness: 1.5, color: rgb(0.92, 0.34, 0.04) });
+        page.drawLine({ start: right, end, thickness: 1.5, color: rgb(0.92, 0.34, 0.04) });
+      }
+      page.drawCircle({ x: point.x, y: point.y, size: 8, color: colors.white, borderColor: photo.accuracyMeters !== null && photo.accuracyMeters > 50 ? rgb(0.85, 0.47, 0.04) : colors.cyan, borderWidth: 2 });
+      const serial = String(photo.sequence);
+      page.drawText(serial, { x: point.x - bold.widthOfTextAtSize(serial, 6.5) / 2, y: point.y - 2.4, size: 6.5, font: bold, color: colors.navy });
+    }
+
+    drawSurveyNorthMarkPdf({ page, centerX: LANDSCAPE.width - MARGIN - 32, centerY: LANDSCAPE.height - MARGIN - 26, northAngle: gpsPlanModel.northAngleDegrees, bold, rgb, scale: 0.72 });
+    page.drawText(safeText("Kek kor: GPS-fotopont | narancs nyil: kamera iranya | lila negyzet: R referencia | szaggatott vonal: egymast koveto fotok tavolsaga"), { x: MARGIN, y: MARGIN + 27, size: 5.7, font: bold, color: colors.slate, maxWidth: LANDSCAPE.width - MARGIN * 2 });
+    drawWrappedText({ page, text: GPS_PHOTO_MAP_DISCLAIMER, x: MARGIN, y: MARGIN + 15, width: LANDSCAPE.width - MARGIN * 2, font: regular, size: 5.5, lineHeight: 6.7, color: colors.amberText, maxLines: 2 });
+    gpsPageCount += 1;
+    gpsPlanPageCount += 1;
+  }
   if (gpsOverview) {
-    page = addPage("GPS helyszinrajz es fotopontok");
+    if (!gpsPlanModel) {
+      page = addPage("GPS helyszinrajz es fotopontok");
     gpsPageCount += 1;
     const mapX = MARGIN;
     const mapY = contentBottom + 58;
@@ -370,6 +455,7 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     page.drawText(safeText(`Helyszini kiterjedes: ${gpsOverview.bounds.widthMeters.toFixed(1)} x ${gpsOverview.bounds.heightMeters.toFixed(1)} m`), { x: MARGIN, y: contentBottom + 43, size: 6.2, font: bold, color: colors.cyan });
     page.drawText(safeText(`Kek kor: GPS-fotopont | narancs vonal: kamera iranya | lila negyzet: kulon rogzitett GPS referencia/kalibracios pont`), { x: MARGIN, y: contentBottom + 31, size: 5.8, font: bold, color: colors.slate, maxWidth: A4.width - MARGIN * 2 });
     drawWrappedText({ page, text: GPS_PHOTO_MAP_DISCLAIMER, x: MARGIN, y: contentBottom + 18, width: A4.width - MARGIN * 2, font: regular, size: 5.7, lineHeight: 7, color: colors.amberText, maxLines: 2 });
+    }
 
     const photoCoordinates = [...gpsOverview.photos].sort((a, b) => a.sequence - b.sequence);
     const referenceCoordinates = gpsOverview.references;
@@ -466,10 +552,11 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
 
   const pages = pdf.getPages();
   pages.forEach((current, index) => {
-    current.drawLine({ start: { x: MARGIN, y: MARGIN + 17 }, end: { x: A4.width - MARGIN, y: MARGIN + 17 }, thickness: 0.45, color: colors.line });
+    const pageWidth = current.getWidth();
+    current.drawLine({ start: { x: MARGIN, y: MARGIN + 17 }, end: { x: pageWidth - MARGIN, y: MARGIN + 17 }, thickness: 0.45, color: colors.line });
     current.drawText(safeText(`DIMPRO Terepi Gyorsrogzito | ${input.session.id.slice(0, 24)}`), { x: MARGIN, y: MARGIN + 6, size: 5.5, font: regular, color: colors.slate });
     const pageLabel = `${index + 1}/${pages.length}`;
-    current.drawText(pageLabel, { x: A4.width - MARGIN - bold.widthOfTextAtSize(pageLabel, 5.7), y: MARGIN + 6, size: 5.7, font: bold, color: colors.slate });
+    current.drawText(pageLabel, { x: pageWidth - MARGIN - bold.widthOfTextAtSize(pageLabel, 5.7), y: MARGIN + 6, size: 5.7, font: bold, color: colors.slate });
   });
 
   const safeSession = input.session.id.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 28);
@@ -482,6 +569,9 @@ export async function createFieldCaptureSummaryPdf(input: CreateFieldCaptureSumm
     gpsPageCount,
     gpsPhotoPointCount: gpsOverview?.photos.length ?? 0,
     gpsReferencePointCount: gpsCalibrationPoints.length,
+    gpsPlanPageCount,
+    gpsDistanceSegmentCount: gpsPlanDistanceSegments.length,
+    gpsPlanCalibrated: Boolean(gpsPlanModel),
     summary,
     metadata: input.metadata,
   };

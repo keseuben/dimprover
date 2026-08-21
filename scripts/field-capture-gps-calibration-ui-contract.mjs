@@ -18,7 +18,7 @@ const tests = [
   ["session namespaced storage is used", () => { assert.match(store, /gpsCalibration\.v1\./); assert.match(store, /PREFIX \+ sessionId/); }],
   ["session id flows from shell to calibration panel", () => { assert.match(shell, /sessionId=\{session\?\.id\}/); assert.match(mapPanel, /<GpsCalibrationPanel sessionId=\{sessionId\}/); }],
   ["calibration point keeps note and timestamp presentation", () => { assert.match(panel, /point\.note/); assert.match(panel, /point\.capturedAt/); }],
-  ["foundation explicitly does not align PDF or DXF yet", () => assert.match(panel, /PDF\/DXF tervillesztést még nem végez/)],
+  ["calibration UI hands reference points to the plan calibration workflow", () => assert.match(panel, /Tervlap-kalibráció panelben ugyanazon fizikai pont tervlapi helyéhez kell párosítani/)],
 ];
 let passed = 0;
 for (const [name, fn] of tests) { fn(); passed += 1; console.log(`PASS ${passed}: ${name}`); }

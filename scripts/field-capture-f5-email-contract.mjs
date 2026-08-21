@@ -21,7 +21,7 @@ function check(name, condition) {
   console.log(`PASS ${checks.length}: ${name}`);
 }
 
-check("GPS riport increments client version to 0.4.6-dev", version.includes('FIELD_CAPTURE_VERSION = "0.4.6-dev"'));
+check("F10.1 increments client version to 0.4.7-dev", version.includes('FIELD_CAPTURE_VERSION = "0.4.7-dev"'));
 check("central DIMPRO Drop profile is reused", mail.includes('REPORT_MAIL_PROFILE = "drop"') && mail.includes("sendDimproMail"));
 check("SMTP credentials never appear in F5 client panel", !/SMTP_(HOST|USER|PASS)|smtpHost|smtpPort|password/i.test(panel));
 check("report-email route requires Field Capture bearer authorization", route.includes("authorizeFieldCaptureRequest(request)"));

@@ -7,7 +7,7 @@ const panel=fs.readFileSync("components/field-capture/FieldCaptureReportPanel.ts
 const types=fs.readFileSync("app/lib/field-capture/types.ts","utf8");
 const finalize=fs.readFileSync("app/api/field-capture/sessions/[sessionId]/finalize/route.ts","utf8");
 const checks=[
- ["GPS riport version 0.4.6-dev",/FIELD_CAPTURE_VERSION = "0\.4\.6-dev"/.test(types)],
+ ["F10.1 version 0.4.7-dev",/FIELD_CAPTURE_VERSION = "0\.4\.7-dev"/.test(types)],
  ["server-only delivery table exists",migration.includes("field_capture_report_email_deliveries")&&migration.includes("enable row level security")],
  ["anon/authenticated access revoked",migration.includes("revoke all on table public.field_capture_report_email_deliveries from anon")&&migration.includes("from authenticated")],
  ["unique session + idempotency hash",migration.includes("unique (session_id, idempotency_key_hash)")],

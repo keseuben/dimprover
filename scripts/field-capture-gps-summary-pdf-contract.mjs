@@ -21,8 +21,10 @@ const checks = [
   ["report panel loads per-session calibration points", () => assert.match(panel, /loadGpsCalibrationPoints\(session\?\.id\)/)],
   ["downloaded summary receives calibration points", () => assert.match(panel, /gpsCalibrationPoints: currentGpsCalibrationPoints\(\)/)],
   ["email fingerprint includes calibration points", () => assert.match(panel, /gpsCalibrationPoints: currentGpsCalibrationPoints\(\),[\s\S]*items:/)],
-  ["emailed PDF uses the same GPS-enhanced summary engine", () => assert.match(panel, /createFieldCaptureSummaryPdf\(\{ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true, gpsCalibrationPoints: currentGpsCalibrationPoints\(\) \}\)/)],
-  ["UI describes GPS site plan and separate GPS list", () => assert.match(panel, /GPS-helyszínrajz számozott fotópontokkal[\s\S]*külön GPS referencia-\/kalibrációs pontlista/)],
+  ["emailed PDF uses the same GPS-enhanced summary engine", () => assert.match(panel, /createFieldCaptureSummaryPdf\(\{ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true, gpsCalibrationPoints: currentGpsCalibrationPoints\(\), gpsPlanCalibration \}\)/)],
+  ["summary report can embed calibrated PDF plan", () => assert.match(pdf, /gpsPlanCalibration\?:/)],
+  ["relative GPS map remains fallback only", () => assert.match(pdf, /if \(!gpsPlanModel\)/)],
+  ["UI describes calibrated plan, reference points and distances", () => assert.match(panel, /kalibrált PDF tervlap R referencia-pontokkal[\s\S]*két tizedesjegyes távolságokkal/)],
   ["GPS map disclaimer remains non-geodetic", () => assert.match(pdf, /GPS_PHOTO_MAP_DISCLAIMER/)],
   ["result reports both GPS point counts", () => { assert.match(pdf, /gpsPhotoPointCount/); assert.match(pdf, /gpsReferencePointCount/); }],
 ];
