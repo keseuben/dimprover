@@ -3,7 +3,7 @@
 **Dátum:** 2026-08-21
 **Környezet:** kizárólag DEV
 **Baseline:** `65c1d1a` – lezárt F5 DEV release
-**Állapot:** F6 SOURCE CANDIDATE – DB rollback/apply, build és browser acceptance előtt
+**Állapot:** AKTÍV DEV RELEASE – VALIDÁLT
 
 ## 1. Cél
 
@@ -76,17 +76,53 @@ Rollback SHA-256:
 
 A migrációs gate kötelező sorrendje: preflight → rollback-test → teljes DEV pg_dump backup + listing verify → explicit DEV approval → apply → verify → runtime E2E.
 
-## 8. Jelenlegi source acceptance
+## 8. DEV acceptance és release
+
+Forrás- és adatbázis-kapuk:
 
 - F6 idempotencia contract: `18/18 PASS`;
 - F5 e-mail contract: `16/16 PASS`;
 - F5 recipient/PDF service E2E: `9/9 PASS`;
+- F4 riport contract: `11/11 PASS`;
+- F4 PDF E2E: `12/12 PASS`;
+- P8 backend: `14/14 PASS`;
+- P8 UI contract: `12/12 PASS`;
+- client sync contract: `15/15 PASS`;
+- finalize contract: `11/11 PASS`;
+- Terep statikus acceptance: `66/66 PASS`;
 - TypeScript: PASS;
 - célzott ESLint: PASS;
-- migration preflight: PASS;
 - `git diff --check`: PASS.
 
-A DB runtime E2E csak az F6 migráció sikeres DEV apply-ja után futtatható.
+DB release:
+
+- migration preflight: PASS;
+- forward + rollback tranzakciós teszt: PASS;
+- teljes DEV `pg_dump` + listing verify: PASS;
+- migration apply: PASS;
+- RLS / grant / unique idempotencia constraint verify: PASS;
+- F6 delivery ledger runtime E2E: `6/6 PASS`;
+- runtime E2E cleanup: `0` maradvány.
+
+Izolált browser candidate acceptance a `3158` porton:
+
+- F6 e-mail/idempotencia browser: `22/22 PASS`;
+- F5 kompatibilitási browser: `17/17 PASS`;
+- F4 riport browser: `16/16 PASS`;
+- P8 UI browser: `13/13 PASS`;
+- Terep mobil browser: `28/28 PASS`;
+- client-sync browser E2E: PASS;
+- browser pageerror / console error: `0`.
+
+Live DEV acceptance a `https://drop.dev.dimpro.hu` címen:
+
+- F6 e-mail/idempotencia browser: `22/22 PASS`;
+- F4 riport browser: `16/16 PASS`;
+- P8 UI browser: `13/13 PASS`;
+- Terep mobil browser: `28/28 PASS`;
+- client-sync browser E2E: PASS;
+- browser pageerror / console error: `0`;
+- client-sync cleanup: `capture=0`, `package=0`.
 
 ## 9. Release korlátok
 
@@ -97,3 +133,31 @@ A DB runtime E2E csak az F6 migráció sikeres DEV apply-ja után futtatható.
 - PROD módosítás tilos.
 
 **PROD DENY – éles környezet változatlan.**
+
+## 10. Aktív DEV runtime
+
+Shared release source commit:
+`a7f7c8a584d700ba1daea338e18bf10b3a635093`
+
+A shared commit tartalmazza:
+
+- Terep F6 source commit: `6ee4c8f48dd08a82be443630b81268297ac9eb0b`;
+- Commerce P4 source commit: `e86e609762f9a01fdc5d62825eef88bd1458cdb7`.
+
+Build ID:
+`mmO9zrxVG5Hw4xA6jjf-V`
+
+Aktív artifact:
+`/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2/.next-terep-f6-commerce-p4-shared-a7f7c8a`
+
+Shared cutover backup:
+`/srv/dimpro-dev/backups/terep-f6-commerce-p4-shared/20260821T185622+0200`
+
+F6 adatbázis pre-migration backup:
+`/srv/dimpro-dev/backups/field-capture-report-email-f6-v010/20260821T155246Z`
+
+A shared cutover 2026-08-21 18:56-kor koordinált release lock alatt sikeresen megtörtént. A Commerce P4 live lifecycle acceptance külön PASS eredménnyel zárt. A runtime és a Git operator/integration refek `a7f7c8a` commitra igazítva vannak.
+
+A live Terep health állapot: `0.4.4-dev`, `P0-P8`, Saját DIMPRO Drive aktív, Projectkapu Drive P9 kikapcsolva.
+
+**F6 RELEASE LEZÁRVA DEV-EN. PROD DENY.**
