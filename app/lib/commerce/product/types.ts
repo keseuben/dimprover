@@ -2,7 +2,7 @@ import type { CommerceEntityId, CommerceLifecycle, OrganizationScoped } from "..
 
 export type ProductStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 export type ProductIdentifierType = "EAN_GTIN" | "DIMPRO_QR" | "DIMPRO_BARCODE" | "SKU" | "SUPPLIER_SKU";
-export type UnitOfMeasure = "DB" | "KG" | "G" | "M" | "M2" | "M3" | "FM" | "L" | "CSOMAG" | "PAR" | "KESZLET";
+export type UnitOfMeasure = "DB" | "KG" | "G" | "M" | "M2" | "M3" | "FM" | "L" | "CSOMAG" | "PAR" | "KESZLET" | "RAKLAP" | "ZSAK" | "LADA";
 
 export type Category = OrganizationScoped & CommerceLifecycle & {
   id: CommerceEntityId;

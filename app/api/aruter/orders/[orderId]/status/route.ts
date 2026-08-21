@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
 import type { AruterOrderStatus } from "@/app/lib/aruter/types";
 import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMirror";
+import { queueStorefrontCommerceMirrorFailOpen, resolveStorefrontCommerceBusinessSlugForOrder } from "@/app/lib/aruter/storefrontPilot";
 
 const allowedStatuses: AruterOrderStatus[] = ["draft", "sent_to_cashier", "paid", "issued", "cancelled"];
 
@@ -28,6 +29,11 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (result.data) {
     const order = result.data;
     after(async () => {
+      const storefrontBusinessSlug = resolveStorefrontCommerceBusinessSlugForOrder(order);
+      if (storefrontBusinessSlug) {
+        await queueStorefrontCommerceMirrorFailOpen(storefrontBusinessSlug, order);
+        return;
+      }
       await mirrorAruterOrderToCommerceFailOpen(request, order);
     });
   }

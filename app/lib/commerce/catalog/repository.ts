@@ -17,7 +17,7 @@ export class CommerceCatalogError extends Error {
 }
 
 const STATUS_VALUES = new Set<ProductStatus>(["DRAFT","ACTIVE","INACTIVE","ARCHIVED"]);
-const UNIT_VALUES = new Set<UnitOfMeasure>(["DB","KG","G","M","M2","M3","FM","L","CSOMAG","PAR","KESZLET"]);
+const UNIT_VALUES = new Set<UnitOfMeasure>(["DB","KG","G","M","M2","M3","FM","L","CSOMAG","PAR","KESZLET","RAKLAP","ZSAK","LADA"]);
 const TABLES: Record<CommerceCatalogKind,string> = {
   categories: "commerce_categories",
   brands: "commerce_brands",
