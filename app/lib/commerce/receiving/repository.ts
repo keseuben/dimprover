@@ -10,7 +10,7 @@ type Row = Record<string,unknown>;
 const RECEIPT_STATUSES=new Set<GoodsReceiptStatus>(["DRAFT","POSTED","CANCELLED"]);
 const STOCK_STATUSES=new Set<GoodsReceiptStockStatus>(["SELLABLE","QUARANTINE","DAMAGED","OUTLET"]);
 const CURRENCIES=new Set<ReceivingCurrency>(["HUF","EUR","USD"]);
-const UNITS=new Set<UnitOfMeasure>(["DB","KG","G","M","M2","M3","FM","L","CSOMAG","PAR","KESZLET"]);
+const UNITS=new Set<UnitOfMeasure>(["DB","KG","G","M","M2","M3","FM","L","CSOMAG","PAR","KESZLET","RAKLAP","ZSAK","LADA"]);
 
 export class CommerceReceivingError extends Error {
   constructor(message:string,public readonly code:string,public readonly status:number,public readonly causeCode?:string){super(message);}

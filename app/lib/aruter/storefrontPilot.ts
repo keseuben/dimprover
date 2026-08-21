@@ -76,6 +76,17 @@ export function resolveStorefrontTemplate(businessSlug: string): AruterTemplate 
   return null;
 }
 
+export function resolveStorefrontCommerceBusinessSlugForOrder(order: Pick<AruterOrder, "note" | "template">) {
+  const note = order.note || "";
+  const storefrontOrigin = note.includes("[PUBLIC_CHECKOUT:") || note.includes("[PUBLIC_RESERVATION:");
+  if (!storefrontOrigin) return null;
+  const businessSlug = process.env.ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG?.trim() || "";
+  if (!businessSlug) return null;
+  const template = resolveStorefrontTemplate(businessSlug);
+  if (!template || template !== order.template) return null;
+  return businessSlug;
+}
+
 export async function getStorefrontRepositoryProducts() {
   const result = await Promise.resolve(getAruterRepository().listProducts());
   return Array.isArray(result) ? result : [];
