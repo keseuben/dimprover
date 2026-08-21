@@ -103,7 +103,7 @@ try {
   const response = await page.goto(`${BASE}/terep`, { waitUntil: "networkidle2", timeout: 60000 });
   pass("Terep route HTTP 200", response?.status() === 200, String(response?.status()));
   await authenticate();
-  pass("P9.1 kliensverzió 0.4.5-dev", await page.evaluate(() => (document.body.textContent || "").includes("V0.4.5-dev")));
+  pass("GPS riport kliensverzió 0.4.6-dev", await page.evaluate(() => (document.body.textContent || "").includes("V0.4.6-dev")));
 
   const newPhoto = await visibleButton(page, "Új terepi kép");
   assert.ok(newPhoto); await newPhoto.click();

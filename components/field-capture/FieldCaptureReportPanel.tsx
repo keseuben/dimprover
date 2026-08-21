@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp, Download, FileText, LoaderCircle, Mail, Send, ShieldAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldCaptureItem, FieldCaptureLocalSession } from "@/app/lib/field-capture/types";
+import { loadGpsCalibrationPoints } from "@/app/lib/field-capture/gpsPhotoMapCalibrationStore";
 import {
   DEFAULT_FIELD_CAPTURE_REPORT_METADATA,
   FIELD_CAPTURE_SURVEY_NATURES,
@@ -84,6 +85,7 @@ export default function FieldCaptureReportPanel({
   const [emailSending, setEmailSending] = useState(false);
   const emailRetryRef = useRef<EmailRetryCache | null>(null);
   const summary = useMemo(() => summarizeFieldCaptureReport(items), [items]);
+  const currentGpsCalibrationPoints = () => loadGpsCalibrationPoints(session?.id);
 
   useEffect(() => {
     const loaded = loadFieldCaptureReportMetadata(session?.id);
@@ -116,8 +118,9 @@ export default function FieldCaptureReportPanel({
         recorderName,
         organizationName,
         includePhotoAnnex: true,
+        gpsCalibrationPoints: currentGpsCalibrationPoints(),
       });
-      setMessage(`PDF elkészült · ${result.pageCount} oldal · ${result.photoCount} fotó`);
+      setMessage(`PDF elkészült · ${result.pageCount} oldal · ${result.photoCount} fotó · ${result.gpsPhotoPointCount} GPS-fotópont · ${result.gpsReferencePointCount} külön GPS-pont`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "A terepi összesítő PDF exportja nem sikerült.");
     } finally {
@@ -167,6 +170,7 @@ export default function FieldCaptureReportPanel({
       message: emailBody.trim(),
       recorderName: recorderName || "",
       organizationName: organizationName || "",
+      gpsCalibrationPoints: currentGpsCalibrationPoints(),
       items: items.map((item) => ({
         id: item.id,
         sequence: item.sequence,
@@ -197,7 +201,7 @@ export default function FieldCaptureReportPanel({
       const fingerprint = currentEmailFingerprint();
       let retry = emailRetryRef.current;
       if (!retry || retry.fingerprint !== fingerprint) {
-        const pdf = await createFieldCaptureSummaryPdf({ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true });
+        const pdf = await createFieldCaptureSummaryPdf({ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true, gpsCalibrationPoints: currentGpsCalibrationPoints() });
         const bytes = Uint8Array.from(pdf.bytes);
         const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
         retry = { fingerprint, idempotencyKey: createEmailIdempotencyKey(), fileName: pdf.fileName, buffer };
@@ -284,7 +288,7 @@ export default function FieldCaptureReportPanel({
         </div>
 
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] font-semibold leading-5 text-slate-600">
-          <strong className="text-slate-800">A PDF tartalma:</strong> munkamenet-adatok, rögzítési jelleg, lefedettség, tárolási státuszok, tétellista, GPS/kamerairány, képjelölési állapot, megjegyzések és sorszámozott fotómelléklet.
+          <strong className="text-slate-800">A PDF tartalma:</strong> munkamenet-adatok, rögzítési jelleg, lefedettség, tárolási státuszok, tétellista, GPS-helyszínrajz számozott fotópontokkal és kamerairányokkal, külön GPS referencia-/kalibrációs pontlista, képjelölési állapot, megjegyzések és sorszámozott fotómelléklet.
         </div>
 
         <button data-terep-summary-pdf-export type="button" disabled={!session || !items.length || exporting} onClick={() => void exportPdf()} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300">
