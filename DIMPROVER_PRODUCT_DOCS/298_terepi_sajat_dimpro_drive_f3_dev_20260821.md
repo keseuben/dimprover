@@ -1,8 +1,9 @@
 # DIMPRO Terepi Gyorsrögzítő – F3 Saját DIMPRO Drive UI aktiválás
 
-**Dátum:** 2026-08-19  
-**Környezet:** kizárólag DEV  
-**Állapot:** SOURCE CANDIDATE
+**Forrás candidate:** 2026-08-19 (`5613bae`)
+**Release ellenőrzés:** 2026-08-21
+**Környezet:** kizárólag DEV
+**Állapot:** F3 RELEASE CANDIDATE – acceptance folyamatban
 
 ## 1. Cél
 
