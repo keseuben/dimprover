@@ -109,10 +109,9 @@ try {
   assert.ok(newPhoto); await newPhoto.click();
   const gallery = await visibleButton(page, "Galéria");
   assert.ok(gallery);
-  const chooserPromise = page.waitForFileChooser({ timeout: 10000 });
-  await gallery.click();
-  const chooser = await chooserPromise;
-  await chooser.accept([FIXTURE]);
+  const galleryInput = await page.$("[data-field-capture-gallery-input]");
+  assert.ok(galleryInput, "Galéria input hiányzik");
+  await galleryInput.uploadFile(FIXTURE);
   await page.waitForFunction(() => document.querySelectorAll("[data-field-capture-item]").length === 1, { timeout: 60000 });
 
   await page.evaluate((serverSessionId) => {
