@@ -86,7 +86,7 @@ try {
   const response = await page.goto(`${BASE}/terep`, { waitUntil: "networkidle2", timeout: 60000 });
   pass("Terep route HTTP 200", response?.status() === 200, String(response?.status()));
   await authenticate();
-  pass("F3 kliensverzió 0.4.1-dev", await page.evaluate(() => (document.body.textContent || "").includes("V0.4.1-dev")));
+  pass("F4 kliensverzió 0.4.2-dev", await page.evaluate(() => (document.body.textContent || "").includes("V0.4.2-dev")));
 
   const newPhoto = await visibleButton(page, "Új terepi kép");
   assert.ok(newPhoto); await newPhoto.click();

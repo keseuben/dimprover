@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CameraLauncher, { type CameraLauncherHandle } from "./CameraLauncher";
 import CapturePreviewCard from "./CapturePreviewCard";
 import GpsPhotoMapPanel from "./GpsPhotoMapPanel";
+import FieldCaptureReportPanel from "./FieldCaptureReportPanel";
 import OfflineQueueIndicator from "./OfflineQueueIndicator";
 import PreCaptureOptionsSheet from "./PreCaptureOptionsSheet";
 import DimproImageMarkupEditor, { type DimproImageMarkupSaveResult } from "@/components/image-editor/DimproImageMarkupEditor";
@@ -446,6 +447,8 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
             <span>A session lezárt. Új rögzítéshez indíts új munkamenetet; a lezárt session helyi adatai csak ekkor kerülnek eltávolításra erről az eszközről.</span>
           </div>}
         </section> : null}
+
+        {workflowStep === 3 ? <FieldCaptureReportPanel items={items} session={session} recorderName={identity?.user.fullName} organizationName={identity?.user.organizationName} /> : null}
 
         {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} projectName={session?.projectName} sessionId={session?.id} /> : null}
 
