@@ -29,6 +29,8 @@ const checks = [
   ["Drop persists via map API", mapUi.includes("/api/dev/console/development-map/") && mapUi.includes('method: "PATCH"')],
   ["Hierarchy is group-project-module-context", mapModel.includes("groupName") && mapModel.includes("projectName") && mapModel.includes("moduleName") && mapModel.includes("contextModuleName")],
   ["BENJADMIN own project taxonomy exists", mapModel.includes("BENJADMIN Fejlesztői Konzol")],
+  ["ChatGrid Desktop has explicit BENJADMIN map node", mapModel.includes('id: "benjadmin-chatgrid"') && mapModel.includes('moduleName: "ChatGrid Desktop"')],
+  ["External Review Room has explicit BENJADMIN map node", mapModel.includes('id: "benjadmin-external-review-room"') && mapModel.includes("M.Forge / V.Guard review thread")],
   ["Drop and Drive are separate map projects", mapModel.includes('projectName: "DIMPRO Drop"') && mapModel.includes('projectName: "DIMPRO Drive"')],
   ["Existing task context is reused", mapModel.includes("resolveTaskDevelopmentContext")],
   ["Explicit developmentMap placement wins", mapModel.includes("metadata.developmentMap") || mapModel.includes("meta.developmentMap")],
