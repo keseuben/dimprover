@@ -9,6 +9,8 @@ await access(FIXTURE);
 
 const checks = [];
 const emailRequests = [];
+let postCount = 0;
+let firstKey = "";
 const pass = (name, ok, detail = "") => {
   assert.ok(ok, `${name}${detail ? `: ${detail}` : ""}`);
   checks.push(name);
@@ -61,10 +63,10 @@ try {
     if (url.includes("/api/dimpro-identity/send/verify")) {
       void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({
         ok: true,
-        user: { fullName: "F5 UI Teszt", email: "f5-ui@example.invalid", publicCode: "USR-F5UI", organizationName: "DIMPRO DEV" },
-        entitlement: { id: "55555555-5555-4555-8555-555555555554", canUseStandardSend: true, canUseQuickImageSend: true },
+        user: { fullName: "F6 UI Teszt", email: "f6-ui@example.invalid", publicCode: "USR-F6UI", organizationName: "DIMPRO DEV" },
+        entitlement: { id: "66666666-6666-4666-8666-666666666664", canUseStandardSend: true, canUseQuickImageSend: true },
         projects: [],
-        sendSession: { token: "dss1.f5.test.payload", expiresAt: new Date(Date.now() + 900000).toISOString(), entitlementId: "55555555-5555-4555-8555-555555555554" },
+        sendSession: { token: "dss1.f6.test.payload", expiresAt: new Date(Date.now() + 900000).toISOString(), entitlementId: "66666666-6666-4666-8666-666666666664" },
       }) });
       return;
     }
@@ -79,9 +81,13 @@ try {
         return;
       }
       if (request.method() === "POST") {
+        postCount += 1;
+        const key = request.headers()["idempotency-key"] || "";
+        if (postCount === 1) firstKey = key;
+        const duplicate = postCount === 2 && key === firstKey;
         void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({
           ok: true,
-          result: { messageId: "f5-browser-test-message", recipients: ["terep-ui-test@example.com"], recipientCount: 1, attachmentName: "DIMPRO_Terepi_osszesito_F5.pdf", subject: "F5 browser riport", duplicate: false, attemptCount: 1, deliveryId: "f5-browser-delivery" },
+          result: { messageId: duplicate ? "f6-browser-test-message" : `f6-browser-test-message-${postCount}`, recipients: ["terep-ui-test@example.com"], recipientCount: 1, attachmentName: "DIMPRO_Terepi_osszesito_F6.pdf", subject: "F6 browser riport", duplicate, attemptCount: duplicate ? 1 : postCount, deliveryId: duplicate ? "f6-browser-delivery" : `f6-browser-delivery-${postCount}` },
         }) });
         return;
       }
@@ -90,14 +96,14 @@ try {
   });
 
   async function authenticate() {
-    if (await page.evaluate(() => (document.body.textContent || "").includes("F5 UI Teszt"))) return;
+    if (await page.evaluate(() => (document.body.textContent || "").includes("F6 UI Teszt"))) return;
     const code = await page.$('input[placeholder="ABCD-123-456"]');
     assert.ok(code, "Send-kód mező hiányzik");
     await code.type("TEST123456", { delay: 2 });
     const open = await visibleButton(page, "Terepi Gyorsrögzítő megnyitása");
     assert.ok(open, "Terep megnyitás gomb hiányzik");
     await open.click();
-    await page.waitForFunction(() => (document.body.textContent || "").includes("F5 UI Teszt"), { timeout: 10000 });
+    await page.waitForFunction(() => (document.body.textContent || "").includes("F6 UI Teszt"), { timeout: 10000 });
   }
 
   const response = await page.goto(`${BASE}/terep`, { waitUntil: "networkidle2", timeout: 60000 });
@@ -143,26 +149,40 @@ try {
   pass("Kísérőszöveg mező látható", await page.$("[data-terep-report-email-body]") !== null);
 
   await setInput(page, "[data-terep-report-email-recipients]", "terep-ui-test@example.com");
-  await setInput(page, "[data-terep-report-email-subject]", "F5 browser riport");
-  await setInput(page, "[data-terep-report-email-body]", "F5 böngészős acceptance kísérőszöveg.");
+  await setInput(page, "[data-terep-report-email-subject]", "F6 browser riport");
+  await setInput(page, "[data-terep-report-email-body]", "F6 böngészős acceptance kísérőszöveg.");
   const sendButton = await page.$("[data-terep-report-email-send]");
   assert.ok(sendButton);
   pass("Külön e-mail küldés gomb aktív", await sendButton.evaluate((el) => !el.disabled));
   await sendButton.click();
   await page.waitForFunction(() => (document.body.textContent || "").includes("E-mail elküldve"), { timeout: 30000 });
-  pass("PDF-generálás után e-mail sikerállapot megjelenik", true);
+  pass("Első PDF-generálás után e-mail sikerállapot megjelenik", true);
+
+  await sendButton.click();
+  await page.waitForFunction(() => (document.body.textContent || "").includes("Korábban már elküldve"), { timeout: 30000 });
+  pass("Változatlan ismételt küldés duplikáció nélkül leáll", true);
+
+  await setInput(page, "[data-terep-report-email-body]", "F6 megváltozott kísérőszöveg új deliveryhez.");
+  await sendButton.click();
+  await page.waitForFunction(() => (document.body.textContent || "").includes("E-mail elküldve"), { timeout: 30000 });
+  pass("Megváltozott payload új küldésként kezelhető", true);
 
   const getRequest = emailRequests.find((item) => item.method === "GET");
-  const postRequest = emailRequests.find((item) => item.method === "POST");
-  pass("E-mail státusz GET Bearer tokennel megy", Boolean(getRequest?.headers?.authorization?.startsWith("Bearer dss1.f5.test")));
-  pass("E-mail POST Bearer tokennel megy", Boolean(postRequest?.headers?.authorization?.startsWith("Bearer dss1.f5.test")));
+  const posts = emailRequests.filter((item) => item.method === "POST");
+  const postRequest = posts[0];
+  const keys = posts.map((item) => item.headers?.["idempotency-key"] || "");
+  pass("E-mail státusz GET Bearer tokennel megy", Boolean(getRequest?.headers?.authorization?.startsWith("Bearer dss1.f6.test")));
+  pass("E-mail POST Bearer tokennel megy", Boolean(postRequest?.headers?.authorization?.startsWith("Bearer dss1.f6.test")));
   pass("E-mail POST multipart PDF-kérés", Boolean(postRequest?.headers?.["content-type"]?.includes("multipart/form-data")));
-  pass("SMTP titok nem kerül a kliens POST-ba", !/smtp|password|DIMPRO_SMTP_PASS/i.test(postRequest?.postData || ""));
+  pass("Idempotency-Key minden POST-ban jelen van", posts.length === 3 && keys.every((key) => key.length >= 16));
+  pass("Változatlan retry ugyanazt az idempotency kulcsot használja", keys[0] === keys[1]);
+  pass("Megváltozott payload új idempotency kulcsot kap", keys[2] !== keys[1]);
+  pass("SMTP titok nem kerül a kliens POST-ba", posts.every((item) => !/smtp|password|DIMPRO_SMTP_PASS/i.test(item.postData || "")));
   pass("Mobil UI nem lóg ki", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   pass("Browser pageerror 0", pageErrors.length === 0, pageErrors.join(" | "));
   pass("Browser console error 0", consoleErrors.length === 0, consoleErrors.join(" | "));
 
-  console.log(JSON.stringify({ ok: true, checks: checks.length, names: checks, emailRequestCount: emailRequests.length, base: BASE }, null, 2));
+  console.log(JSON.stringify({ ok: true, checks: checks.length, names: checks, emailRequestCount: emailRequests.length, postCount, base: BASE }, null, 2));
 } finally {
   await browser.close();
 }

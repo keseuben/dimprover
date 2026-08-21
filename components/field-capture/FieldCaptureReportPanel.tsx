@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Download, FileText, LoaderCircle, Mail, Send, ShieldAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldCaptureItem, FieldCaptureLocalSession } from "@/app/lib/field-capture/types";
 import {
   DEFAULT_FIELD_CAPTURE_REPORT_METADATA,
@@ -20,6 +20,8 @@ import {
 
 type ReportEmailStatus = {
   configured: boolean;
+  deliveryReady: boolean;
+  maxAttempts: number;
   from: string;
   profileId: string;
   recipientMode: "locked_default" | "approved_list" | "free_entry";
@@ -30,9 +32,31 @@ type ReportEmailStatus = {
 type ReportEmailResponse = {
   ok?: boolean;
   error?: string;
+  code?: string;
   status?: ReportEmailStatus;
-  result?: { messageId?: string | null; recipients?: string[]; attachmentName?: string; subject?: string };
+  result?: {
+    messageId?: string | null;
+    recipients?: string[];
+    recipientCount?: number;
+    attachmentName?: string;
+    subject?: string;
+    duplicate?: boolean;
+    attemptCount?: number;
+    deliveryId?: string;
+  };
 };
+
+type EmailRetryCache = {
+  fingerprint: string;
+  idempotencyKey: string;
+  fileName: string;
+  buffer: ArrayBuffer;
+};
+
+function createEmailIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `terep-report-${crypto.randomUUID()}`;
+  return `terep-report-${Date.now()}-${Math.random().toString(36).slice(2, 18)}`;
+}
 
 export default function FieldCaptureReportPanel({
   items,
@@ -58,6 +82,7 @@ export default function FieldCaptureReportPanel({
   const [emailBody, setEmailBody] = useState("Csatoltan küldöm a DIMPRO Terepi Gyorsrögzítő összesítő riportját.");
   const [emailMessage, setEmailMessage] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const emailRetryRef = useRef<EmailRetryCache | null>(null);
   const summary = useMemo(() => summarizeFieldCaptureReport(items), [items]);
 
   useEffect(() => {
@@ -70,6 +95,7 @@ export default function FieldCaptureReportPanel({
     setEmailSubject(`DIMPRO Terepi összesítő – ${session?.projectName || loaded.reportTitle}`);
     setEmailBody("Csatoltan küldöm a DIMPRO Terepi Gyorsrögzítő összesítő riportját.");
     setEmailMessage("");
+    emailRetryRef.current = null;
   }, [session?.id, session?.projectName]);
 
   function updateMetadata(patch: Partial<FieldCaptureReportMetadata>) {
@@ -117,6 +143,7 @@ export default function FieldCaptureReportPanel({
       setEmailStatus(payload.status);
       setEmailRecipients((current) => current.trim() ? current : payload.status!.suggestedRecipients.join(", "));
       if (!payload.status.configured) setEmailMessage("A DIMPRO Drop SMTP-profil nincs teljesen beállítva.");
+      else if (!payload.status.deliveryReady) setEmailMessage("A biztonságos Terep e-mail delivery/idempotencia még nincs aktiválva.");
     } catch (error) {
       setEmailStatus(null);
       setEmailMessage(error instanceof Error ? error.message : "Az e-mail küldési állapot lekérése sikertelen.");
@@ -131,35 +158,75 @@ export default function FieldCaptureReportPanel({
     if (next) void loadEmailStatus();
   }
 
+  function currentEmailFingerprint() {
+    return JSON.stringify({
+      sessionId: session?.serverSessionId || session?.id || "",
+      metadata,
+      recipients: emailRecipients.split(/[;,\n]+/g).map((value) => value.trim().toLowerCase()).filter(Boolean).sort(),
+      subject: emailSubject.trim(),
+      message: emailBody.trim(),
+      recorderName: recorderName || "",
+      organizationName: organizationName || "",
+      items: items.map((item) => ({
+        id: item.id,
+        sequence: item.sequence,
+        capturedAt: item.capturedAt,
+        displayName: item.displayName,
+        uploadSize: item.uploadSize,
+        status: item.status,
+        note: item.note,
+        voiceTranscript: item.voiceTranscript,
+        edited: item.edited,
+        editRevision: item.editRevision,
+        options: item.options,
+        location: item.location,
+        orientation: item.orientation,
+      })),
+    });
+  }
+
   async function sendEmail() {
     if (!session?.serverSessionId || !sessionToken || !items.length || emailSending) return;
-    if (!emailStatus?.configured) {
-      setEmailMessage("A DIMPRO Drop SMTP-profil nem használható.");
+    if (!emailStatus?.configured || !emailStatus.deliveryReady) {
+      setEmailMessage("A DIMPRO Drop e-mail profil vagy a biztonságos delivery/idempotencia nem használható.");
       return;
     }
     setEmailSending(true);
-    setEmailMessage("Terepi összesítő PDF készítése és e-mail előkészítése…");
+    setEmailMessage("Terepi összesítő PDF készítése és biztonságos e-mail előkészítése…");
     try {
-      const pdf = await createFieldCaptureSummaryPdf({ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true });
-      const bytes = Uint8Array.from(pdf.bytes);
-      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const fingerprint = currentEmailFingerprint();
+      let retry = emailRetryRef.current;
+      if (!retry || retry.fingerprint !== fingerprint) {
+        const pdf = await createFieldCaptureSummaryPdf({ items, session, metadata, recorderName, organizationName, includePhotoAnnex: true });
+        const bytes = Uint8Array.from(pdf.bytes);
+        const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+        retry = { fingerprint, idempotencyKey: createEmailIdempotencyKey(), fileName: pdf.fileName, buffer };
+        emailRetryRef.current = retry;
+      }
       const form = new FormData();
       form.append("recipients", JSON.stringify(emailRecipients.split(/[;,\n]+/g).map((value) => value.trim()).filter(Boolean)));
       form.append("subject", emailSubject);
       form.append("message", emailBody);
       form.append("reportTitle", metadata.reportTitle);
-      form.append("report", new Blob([buffer], { type: "application/pdf" }), pdf.fileName);
+      form.append("report", new Blob([retry.buffer], { type: "application/pdf" }), retry.fileName);
       const response = await fetch(`/api/field-capture/sessions/${encodeURIComponent(session.serverSessionId)}/report-email`, {
         method: "POST",
-        headers: { authorization: `Bearer ${sessionToken}` },
+        headers: { authorization: `Bearer ${sessionToken}`, "Idempotency-Key": retry.idempotencyKey },
         body: form,
       });
       const payload = await response.json().catch(() => ({})) as ReportEmailResponse;
-      if (!response.ok || !payload.ok || !payload.result) throw new Error(payload.error || "A Terepi összesítő e-mail küldése sikertelen.");
-      const count = payload.result.recipients?.length || 0;
-      setEmailMessage(`E-mail elküldve · ${count} címzett · ${payload.result.attachmentName || pdf.fileName}`);
+      if (!response.ok || !payload.ok || !payload.result) {
+        if (payload.code === "FIELD_CAPTURE_REPORT_EMAIL_IDEMPOTENCY_PAYLOAD_MISMATCH") emailRetryRef.current = null;
+        throw new Error(payload.error || "A Terepi összesítő e-mail küldése sikertelen.");
+      }
+      const count = payload.result.recipientCount ?? payload.result.recipients?.length ?? 0;
+      if (payload.result.duplicate) {
+        setEmailMessage(`Korábban már elküldve · ${count} címzett · új levél nem indult.`);
+      } else {
+        setEmailMessage(`E-mail elküldve · ${count} címzett · ${payload.result.attachmentName || retry.fileName}${(payload.result.attemptCount || 1) > 1 ? ` · ${payload.result.attemptCount}. próbálkozás` : ""}`);
+      }
     } catch (error) {
-      setEmailMessage(error instanceof Error ? error.message : "A Terepi összesítő e-mail küldése sikertelen.");
+      setEmailMessage(error instanceof Error ? `${error.message} Változatlan tartalommal a Küldés gomb biztonságosan újrapróbálható.` : "A Terepi összesítő e-mail küldése sikertelen.");
     } finally {
       setEmailSending(false);
     }
@@ -176,7 +243,7 @@ export default function FieldCaptureReportPanel({
       <div className="flex items-start gap-3 border-b border-cyan-100 bg-cyan-50/70 p-4">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-800 text-white"><FileText size={19} /></span>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[.12em] text-cyan-800">F5 · Terepi összesítő / PDF + e-mail</p>
+          <p className="text-[10px] font-black uppercase tracking-[.12em] text-cyan-800">F6 · Terepi összesítő / PDF + biztonságos e-mail</p>
           <h3 className="mt-1 text-base font-black text-slate-950">Munkamenet-összesítő és fotómelléklet</h3>
           <p className="mt-1 text-xs leading-5 text-slate-600">A riport a jelen munkamenet rögzített tételeit dokumentálja. A PDF letölthető, illetve külön jóváhagyással e-mailben is elküldhető.</p>
         </div>
@@ -235,7 +302,7 @@ export default function FieldCaptureReportPanel({
             <strong className="block text-xs text-slate-800">Kézi e-mail küldés</strong>
             <span>Nem automatikus. A rendszer csak az alábbi külön küldés gomb megnyomásakor készíti el és küldi el a PDF-et.</span>
             {emailLoading ? <span className="mt-1 flex items-center gap-1 font-bold text-cyan-800"><LoaderCircle size={12} className="animate-spin" /> E-mail profil ellenőrzése…</span> : null}
-            {emailStatus ? <span data-terep-report-email-status className="mt-1 block">Feladó: <strong>{emailStatus.from || "—"}</strong> · {recipientPolicy} · max. {emailStatus.maxRecipients} címzett</span> : null}
+            {emailStatus ? <span data-terep-report-email-status className="mt-1 block">Feladó: <strong>{emailStatus.from || "—"}</strong> · {recipientPolicy} · max. {emailStatus.maxRecipients} címzett · {emailStatus.deliveryReady ? "idempotencia aktív" : "idempotencia nem kész"}</span> : null}
           </div>
 
           <label className="mt-3 block">
@@ -253,9 +320,9 @@ export default function FieldCaptureReportPanel({
             <textarea data-terep-report-email-body rows={4} maxLength={5000} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[14px] font-medium leading-5 text-slate-800 outline-none focus:border-cyan-500" />
           </label>
 
-          <button data-terep-report-email-send type="button" disabled={emailSending || emailLoading || !emailStatus?.configured || !session?.serverSessionId} onClick={() => void sendEmail()} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-800 px-4 text-sm font-black text-white disabled:bg-slate-300">
+          <button data-terep-report-email-send type="button" disabled={emailSending || emailLoading || !emailStatus?.configured || !emailStatus?.deliveryReady || !session?.serverSessionId} onClick={() => void sendEmail()} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-800 px-4 text-sm font-black text-white disabled:bg-slate-300">
             {emailSending ? <LoaderCircle size={17} className="animate-spin" /> : <Send size={17} />}
-            {emailSending ? "PDF készítése és küldése…" : "PDF elkészítése és e-mail küldése"}
+            {emailSending ? "PDF készítése és biztonságos küldése…" : "PDF elkészítése és e-mail küldése"}
           </button>
           {!session?.serverSessionId ? <p className="mt-2 text-[10px] font-bold leading-5 text-amber-800">Előbb mentsd/szinkronizáld a munkamenetet a DIMPRO szerverre. A PDF letöltése ettől függetlenül működik.</p> : null}
           {emailMessage ? <p data-terep-report-email-message className="mt-2 text-center text-[10px] font-bold leading-5 text-slate-700">{emailMessage}</p> : null}
