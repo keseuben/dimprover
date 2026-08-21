@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { DimproSendEntitlement, DimproSendRecipient, DimproSendUser } from "@/app/lib/identity-core/types";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 import { getMailProfilesSafeConfig, sendDimproMail } from "@/app/lib/license/mail-profiles";
@@ -105,7 +106,24 @@ export function validateFieldCaptureReportPdf(bytes: Uint8Array, fileName: strin
   return safeFileName(fileName);
 }
 
-export async function sendFieldCaptureReportEmail(input: {
+export type PreparedFieldCaptureReportEmail = {
+  recipients: string[];
+  attachmentName: string;
+  subject: string;
+  message: string;
+  reportTitle: string;
+  sessionLabel: string;
+  sender: string;
+  pdfBytes: Uint8Array;
+  payloadSha256: string;
+  context: RecipientPolicyContext;
+};
+
+function digestHex(value: string | Uint8Array) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export async function prepareFieldCaptureReportEmail(input: {
   context: RecipientPolicyContext;
   requestedRecipients: unknown[];
   subject: string;
@@ -114,8 +132,7 @@ export async function sendFieldCaptureReportEmail(input: {
   reportTitle: string;
   pdfFileName: string;
   pdfBytes: Uint8Array;
-  sendMail?: SendMail;
-}) {
+}): Promise<PreparedFieldCaptureReportEmail> {
   const status = await getFieldCaptureReportEmailStatus(input.context);
   if (!status.configured) {
     throw new DimproIdentityError("A DIMPRO Drop e-mail profil nincs teljesen beállítva.", "FIELD_CAPTURE_REPORT_EMAIL_SMTP_NOT_CONFIGURED", 503);
@@ -128,21 +145,49 @@ export async function sendFieldCaptureReportEmail(input: {
     || "Csatoltan küldöm a DIMPRO Terepi Gyorsrögzítő összesítő riportját.";
   const reportTitle = input.reportTitle.normalize("NFKC").trim().slice(0, 200) || "Terepi összesítő";
   const sender = input.context.user.fullName || input.context.user.email;
-  const mail = input.sendMail || sendDimproMail;
+  const pdfSha256 = digestHex(input.pdfBytes);
+  const payloadSha256 = digestHex(JSON.stringify({
+    profileId: REPORT_MAIL_PROFILE,
+    recipients: [...recipients].sort(),
+    subject,
+    message,
+    reportTitle,
+    sessionLabel: input.sessionLabel,
+    attachmentName,
+    pdfSha256,
+  }));
+  return { recipients, attachmentName, subject, message, reportTitle, sessionLabel: input.sessionLabel, sender, pdfBytes: input.pdfBytes, payloadSha256, context: input.context };
+}
 
+export async function sendPreparedFieldCaptureReportEmail(prepared: PreparedFieldCaptureReportEmail, sendMail: SendMail = sendDimproMail) {
   try {
-    const result = await mail({
+    const result = await sendMail({
       profileId: REPORT_MAIL_PROFILE,
-      to: recipients,
-      replyTo: input.context.user.email,
-      subject,
-      text: [message, "", `Riport: ${reportTitle}`, `Munkamenet: ${input.sessionLabel}`, `Küldte: ${sender}`, "", "A PDF a rögzített terepi munkamenet összesítője; önmagában nem igazolja a teljes projekt készültségi fokát."].join("\n"),
-      html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55;max-width:720px;margin:auto"><h2 style="color:#0e7490">DIMPRO Terepi Gyorsrögzítő</h2><p>${escapeHtml(message)}</p><div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:14px;padding:14px"><strong>${escapeHtml(reportTitle)}</strong><br><span style="color:#475569">Munkamenet: ${escapeHtml(input.sessionLabel)}</span></div><p style="font-size:12px;color:#64748b">A csatolt PDF csak a rögzített és megtekintett munkaterületekre vonatkozik; nem minősül a teljes projekt készültségi igazolásának.</p><hr><small>DIMPRO · Küldte: ${escapeHtml(sender)}</small></div>`,
-      attachments: [{ filename: attachmentName, content: Buffer.from(input.pdfBytes), contentType: "application/pdf", contentDisposition: "attachment" }],
+      to: prepared.recipients,
+      replyTo: prepared.context.user.email,
+      subject: prepared.subject,
+      text: [prepared.message, "", `Riport: ${prepared.reportTitle}`, `Munkamenet: ${prepared.sessionLabel}`, `Küldte: ${prepared.sender}`, "", "A PDF a rögzített terepi munkamenet összesítője; önmagában nem igazolja a teljes projekt készültségi fokát."].join("\n"),
+      html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55;max-width:720px;margin:auto"><h2 style="color:#0e7490">DIMPRO Terepi Gyorsrögzítő</h2><p>${escapeHtml(prepared.message)}</p><div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:14px;padding:14px"><strong>${escapeHtml(prepared.reportTitle)}</strong><br><span style="color:#475569">Munkamenet: ${escapeHtml(prepared.sessionLabel)}</span></div><p style="font-size:12px;color:#64748b">A csatolt PDF csak a rögzített és megtekintett munkaterületekre vonatkozik; nem minősül a teljes projekt készültségi igazolásának.</p><hr><small>DIMPRO · Küldte: ${escapeHtml(prepared.sender)}</small></div>`,
+      attachments: [{ filename: prepared.attachmentName, content: Buffer.from(prepared.pdfBytes), contentType: "application/pdf", contentDisposition: "attachment" }],
     });
-    return { messageId: result.messageId || "", profileId: result.profileId, from: result.from, recipients, attachmentName, subject };
+    return { messageId: result.messageId || "", profileId: result.profileId, from: result.from, recipients: prepared.recipients, attachmentName: prepared.attachmentName, subject: prepared.subject };
   } catch (error) {
     if (error instanceof DimproIdentityError) throw error;
-    throw new DimproIdentityError("A Terepi összesítő e-mail küldése sikertelen. Ellenőrizd a DIMPRO e-mail beállításokat és próbáld újra.", "FIELD_CAPTURE_REPORT_EMAIL_SEND_FAILED", 502);
+    throw new DimproIdentityError("A Terepi összesítő e-mail küldése sikertelen. A változatlan kérés biztonságosan újrapróbálható.", "FIELD_CAPTURE_REPORT_EMAIL_SEND_FAILED", 502);
   }
+}
+
+export async function sendFieldCaptureReportEmail(input: {
+  context: RecipientPolicyContext;
+  requestedRecipients: unknown[];
+  subject: string;
+  message: string;
+  sessionLabel: string;
+  reportTitle: string;
+  pdfFileName: string;
+  pdfBytes: Uint8Array;
+  sendMail?: SendMail;
+}) {
+  const prepared = await prepareFieldCaptureReportEmail(input);
+  return sendPreparedFieldCaptureReportEmail(prepared, input.sendMail || sendDimproMail);
 }

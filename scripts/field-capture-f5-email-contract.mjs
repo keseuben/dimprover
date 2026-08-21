@@ -21,7 +21,7 @@ function check(name, condition) {
   console.log(`PASS ${checks.length}: ${name}`);
 }
 
-check("F5 increments client version to 0.4.3-dev", version.includes('FIELD_CAPTURE_VERSION = "0.4.3-dev"'));
+check("F6 increments client version to 0.4.4-dev", version.includes('FIELD_CAPTURE_VERSION = "0.4.4-dev"'));
 check("central DIMPRO Drop profile is reused", mail.includes('REPORT_MAIL_PROFILE = "drop"') && mail.includes("sendDimproMail"));
 check("SMTP credentials never appear in F5 client panel", !/SMTP_(HOST|USER|PASS)|smtpHost|smtpPort|password/i.test(panel));
 check("report-email route requires Field Capture bearer authorization", route.includes("authorizeFieldCaptureRequest(request)"));
@@ -29,7 +29,7 @@ check("report-email route verifies session ownership", route.includes("assertFie
 check("recipient policy supports locked approved and free modes", ["locked_default","approved_list","free_entry"].every((mode) => mail.includes(mode)));
 check("recipient count is server-side limited", mail.includes("maxRecipients") && mail.includes("FIELD_CAPTURE_REPORT_EMAIL_RECIPIENT_LIMIT"));
 check("PDF attachment is limited to 15 MB and validated by PDF signature", mail.includes("15 * 1024 * 1024") && mail.includes('header !== "%PDF-"'));
-check("sent and failed e-mail attempts are audit events", route.includes('eventType: "REPORT_EMAIL_SENT"') && route.includes('eventType: "REPORT_EMAIL_FAILED"') && repo.includes("recordFieldCaptureEvent"));
+check("sent retry and failed e-mail attempts are audit events", route.includes("REPORT_EMAIL_SENT") && route.includes("REPORT_EMAIL_RETRY_SENT") && route.includes("REPORT_EMAIL_FAILED") && repo.includes("recordFieldCaptureEvent"));
 check("audit payload does not persist message body or SMTP secrets", !route.includes("payload: { message:") && !route.includes("smtpHost") && !route.includes("smtpPass"));
 check("client reuses existing F4 PDF engine", panel.includes("createFieldCaptureSummaryPdf") && panel.includes("downloadFieldCaptureSummaryPdf"));
 check("e-mail is explicit manual action", panel.includes("Nem automatikus") && panel.includes("PDF elkészítése és e-mail küldése") && panel.includes("data-terep-report-email-send"));
