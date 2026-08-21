@@ -56,7 +56,7 @@ export async function queueStorefrontCommerceMirrorFailOpen(businessSlug: string
   const target = storefrontCommerceQueueTarget(businessSlug);
   if (!target) return { enabled: isStorefrontCommerceQueueEnabled(), queued: false, reason: "NOT_CONFIGURED" as const };
   try {
-    const queued = await enqueueCommerceMirrorAttemptForOrganization(target.organizationId, order);
+    const queued = await enqueueCommerceMirrorAttemptForOrganization(target.organizationId, order, { storefrontSlug: businessSlug });
     console.info("[ARUTER_STOREFRONT_COMMERCE_QUEUE]", JSON.stringify({
       event: "QUEUED", businessSlug, organizationId: target.organizationId, legacyOrderId: order.id, orderNumber: order.orderNumber, legacyStatus: order.status, attemptId: String(queued.attemptId || ""),
     }));

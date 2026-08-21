@@ -16,7 +16,7 @@ const checks=[
  ["09 tenant context is resolved from request",mirror.includes("resolveCommerceContext(requestedOrganizationId(request))")],
  ["10 Commerce order uses existing legacy resolver",mirror.includes("resolveLegacyAruterOrderForCommerce")],
  ["11 fulfillment source is separately feature configured",mirror.includes("ARUTER_COMMERCE_FULFILLMENT_SOURCE_ID")],
- ["12 inventory resolution only activates with fulfillment source",mirror.includes("resolveInventory: Boolean(fulfillmentSourceId)")],
+ ["12 inventory resolution activates for explicit source, Storefront mapping or opt-in auto resolve",mirror.includes("resolveInventory: Boolean(explicitSourceId || orderStorefrontSlug || sourceAutoResolve)")],
  ["13 non-draft/non-cancelled mirror may reserve",mirror.includes('order.status !== "draft" && order.status !== "cancelled"')],
  ["14 reserve idempotency is stable per legacy order",mirror.includes("legacy-aruter-reserve:${order.id}")],
  ["15 legacy paid/issued transitions are replayed",mirror.includes("legacyAruterOrderRequiredTransitions(order)")],

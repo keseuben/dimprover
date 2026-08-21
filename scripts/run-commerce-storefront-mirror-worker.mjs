@@ -27,13 +27,14 @@ const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(25, Math.fl
 const requiredPermissions = [
   "commerce.context.read",
   "commerce.product.read",
+  "commerce.inventory.read",
+  "commerce.inventory.move",
   "commerce.order.read",
   "commerce.order.write",
   "commerce.order.pay",
   "commerce.order.issue",
   "commerce.order.reconcile",
 ];
-if (fulfillmentSourceId) requiredPermissions.push("commerce.inventory.move");
 
 function safeCode(error) {
   return error && typeof error === "object" && typeof error.code === "string"

@@ -5,6 +5,12 @@ import { createCommerceAdminClient } from "../core/server-db";
 import type { CommerceContext } from "../core/types";
 import { CommerceOrderError } from "./repository";
 
+export type CommerceMirrorLegacyOrderPayload = AruterOrder & {
+  commerceContext?: {
+    storefrontSlug?: string | null;
+  };
+};
+
 export type CommerceMirrorAttemptState = "PENDING" | "SUCCEEDED" | "FAILED";
 export type CommerceMirrorAttempt = {
   id: string;
@@ -19,7 +25,7 @@ export type CommerceMirrorAttempt = {
   unresolvedItemCount: number;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
-  legacyOrderPayload: AruterOrder;
+  legacyOrderPayload: CommerceMirrorLegacyOrderPayload;
   lastAttemptAt: string | null;
   nextRetryAt: string | null;
   succeededAt: string | null;
@@ -37,11 +43,11 @@ function requireReconcile(context: CommerceContext) {
   }
 }
 
-function parseLegacyOrder(value: unknown): AruterOrder {
+function parseLegacyOrder(value: unknown): CommerceMirrorLegacyOrderPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new CommerceOrderError("A tárolt legacy rendelés hibás.", "COMMERCE_MIRROR_PAYLOAD_INVALID", 500);
-  const order = value as Partial<AruterOrder>;
+  const order = value as Partial<CommerceMirrorLegacyOrderPayload>;
   if (!order.id || !order.orderNumber || !order.status || !Array.isArray(order.items)) throw new CommerceOrderError("A tárolt legacy rendelés hiányos.", "COMMERCE_MIRROR_PAYLOAD_INVALID", 500);
-  return order as AruterOrder;
+  return order as CommerceMirrorLegacyOrderPayload;
 }
 
 function mapAttempt(row: Row): CommerceMirrorAttempt {
@@ -55,16 +61,24 @@ function mapAttempt(row: Row): CommerceMirrorAttempt {
   };
 }
 
-export async function enqueueCommerceMirrorAttemptForOrganization(organizationIdInput: unknown, order: AruterOrder) {
+export async function enqueueCommerceMirrorAttemptForOrganization(
+  organizationIdInput: unknown,
+  order: AruterOrder,
+  options: { storefrontSlug?: string | null } = {},
+) {
   const organizationId = text(organizationIdInput);
   if (!organizationId) throw new CommerceOrderError("A Storefront Commerce szervezet azonosítója hiányzik.", "COMMERCE_STOREFRONT_QUEUE_ORGANIZATION_REQUIRED", 503);
+  const storefrontSlug = text(options.storefrontSlug);
+  const payload: CommerceMirrorLegacyOrderPayload = storefrontSlug
+    ? { ...order, commerceContext: { storefrontSlug } }
+    : order;
   const client = createCommerceAdminClient();
   const result = await client.rpc("commerce_order_mirror_enqueue", {
     p_organization_id: organizationId,
     p_legacy_order_id: order.id,
     p_order_number: order.orderNumber,
     p_legacy_status: order.status,
-    p_legacy_order_payload: order,
+    p_legacy_order_payload: payload,
   });
   if (result.error) dbError("A Storefront rendelés Commerce sorba állítása sikertelen.", result.error);
   return result.data as Row;
@@ -72,7 +86,7 @@ export async function enqueueCommerceMirrorAttemptForOrganization(organizationId
 
 export async function recordCommerceMirrorAttempt(
   context: CommerceContext,
-  order: AruterOrder,
+  order: CommerceMirrorLegacyOrderPayload,
   input: { state: CommerceMirrorAttemptState; commerceOrderId?: string | null; mappedItemCount?: number; unresolvedItemCount?: number; errorCode?: string | null; errorMessage?: string | null },
 ) {
   const client = createCommerceAdminClient();

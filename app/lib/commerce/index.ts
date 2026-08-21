@@ -29,3 +29,5 @@ export * from "./order/types";
 export * from "./order/repository";
 
 export * from "./order/legacyBridge";
+export * from "./storefront/types";
+export * from "./storefront/repository";

@@ -3,9 +3,16 @@ import "server-only";
 import type { AruterOrder } from "./types";
 import { resolveCommerceContext } from "../commerce/core/server-context";
 import type { CommerceContext } from "../commerce/core/types";
-import { getCommerceMirrorAttempt, listDueCommerceMirrorAttempts, recordCommerceMirrorAttempt } from "../commerce/order/mirrorReconciliation";
+import {
+  getCommerceMirrorAttempt,
+  listDueCommerceMirrorAttempts,
+  recordCommerceMirrorAttempt,
+  type CommerceMirrorLegacyOrderPayload,
+} from "../commerce/order/mirrorReconciliation";
 import { legacyAruterOrderRequiredTransitions, resolveLegacyAruterOrderForCommerce } from "../commerce/order/legacyBridge";
 import { CommerceOrderError, createCommerceOrder, reserveCommerceOrderInventory, setCommerceOrderStatus } from "../commerce/order/repository";
+import { resolveCommerceStorefrontFulfillmentSource } from "../commerce/storefront/repository";
+import type { CommerceFulfillmentSourceSelection } from "../commerce/storefront/types";
 
 type MirrorResult =
   | { enabled: false; mirrored: false; reason: "DISABLED" }
@@ -28,6 +35,14 @@ function requestedOrganizationId(request: Request) {
 
 function configuredSourceId() {
   return process.env.ARUTER_COMMERCE_FULFILLMENT_SOURCE_ID?.trim() || null;
+}
+
+function autoFulfillmentResolveEnabled() {
+  return process.env.ARUTER_COMMERCE_AUTO_FULFILLMENT_RESOLVE_ENABLED?.trim() === "1";
+}
+
+function storefrontSlug(order: CommerceMirrorLegacyOrderPayload) {
+  return order.commerceContext?.storefrontSlug?.trim() || null;
 }
 
 function errorCode(error: unknown) {
@@ -54,7 +69,7 @@ function logMirror(event: string, order: AruterOrder, details: Record<string, un
 
 async function persistMirrorState(
   context: CommerceContext,
-  order: AruterOrder,
+  order: CommerceMirrorLegacyOrderPayload,
   input: Parameters<typeof recordCommerceMirrorAttempt>[2],
 ) {
   try {
@@ -66,17 +81,69 @@ async function persistMirrorState(
   }
 }
 
-export async function mirrorAruterOrderWithCommerceContext(context: CommerceContext, order: AruterOrder): Promise<Exclude<MirrorResult, { enabled: false }>> {
+function configuredSelection(sourceId: string): CommerceFulfillmentSourceSelection {
+  return {
+    sourceId,
+    sourceCode: null,
+    sourceName: null,
+    selectedBy: "CONFIGURED",
+    reservationReady: true,
+    reason: "SELECTED",
+    shortages: [],
+  };
+}
+
+function assertFulfillmentSelection(selection: CommerceFulfillmentSourceSelection) {
+  if (selection.reason === "MAPPING_SOURCE_CONFLICT") {
+    throw new CommerceOrderError(
+      "A Storefront tételek eltérő fulfillment forrást igényelnek.",
+      "COMMERCE_STOREFRONT_FULFILLMENT_SOURCE_CONFLICT",
+      409,
+    );
+  }
+  if (selection.sourceId && !selection.reservationReady) {
+    throw new CommerceOrderError(
+      "A kiválasztott Storefront fulfillment forrás készlete nem elegendő.",
+      "COMMERCE_STOREFRONT_FULFILLMENT_NOT_READY",
+      409,
+    );
+  }
+}
+
+export async function mirrorAruterOrderWithCommerceContext(
+  context: CommerceContext,
+  order: CommerceMirrorLegacyOrderPayload,
+): Promise<Exclude<MirrorResult, { enabled: false }>> {
   let commerceOrderId: string | null = null;
   let mappedItemCount = 0;
   let unresolvedItemCount = order.items.length;
   await persistMirrorState(context, order, { state: "PENDING", mappedItemCount, unresolvedItemCount });
 
   try {
-    const fulfillmentSourceId = configuredSourceId();
-    const resolved = await resolveLegacyAruterOrderForCommerce(context, order, { resolveInventory: Boolean(fulfillmentSourceId) });
+    const explicitSourceId = configuredSourceId();
+    const sourceAutoResolve = autoFulfillmentResolveEnabled();
+    const orderStorefrontSlug = storefrontSlug(order);
+    const resolved = await resolveLegacyAruterOrderForCommerce(context, order, {
+      resolveInventory: Boolean(explicitSourceId || orderStorefrontSlug || sourceAutoResolve),
+      storefrontSlug: orderStorefrontSlug,
+    });
     mappedItemCount = resolved.mappedItemCount;
     unresolvedItemCount = resolved.unresolvedItemCount;
+
+    let fulfillmentSelection: CommerceFulfillmentSourceSelection | null = explicitSourceId
+      ? configuredSelection(explicitSourceId)
+      : null;
+    if (!fulfillmentSelection && resolved.fulfillmentRequirements.length > 0 && (orderStorefrontSlug || sourceAutoResolve)) {
+      fulfillmentSelection = await resolveCommerceStorefrontFulfillmentSource(context, {
+        storefrontSlug: orderStorefrontSlug,
+        preferredSourceIds: resolved.preferredFulfillmentSourceIds,
+        requirements: resolved.fulfillmentRequirements,
+        autoSelect: sourceAutoResolve,
+      });
+      assertFulfillmentSelection(fulfillmentSelection);
+    }
+    const fulfillmentSourceId = fulfillmentSelection?.sourceId || null;
+
     const created = await createCommerceOrder(context, resolved.payload);
     commerceOrderId = String(created.orderId || "");
     if (!commerceOrderId) throw new CommerceOrderError("A Commerce mirror rendelésazonosító hiányzik.", "COMMERCE_LEGACY_MIRROR_ORDER_ID_MISSING", 503);
@@ -104,9 +171,15 @@ export async function mirrorAruterOrderWithCommerceContext(context: CommerceCont
     logMirror("MIRRORED", order, {
       organizationId: context.organizationId,
       commerceOrderId,
+      storefrontSlug: orderStorefrontSlug,
       mappedItemCount,
+      storefrontMappedItemCount: resolved.storefrontMappedItemCount,
       unresolvedItemCount,
-      fulfillmentSourceConfigured: Boolean(fulfillmentSourceId),
+      fulfillmentSourceConfigured: Boolean(explicitSourceId),
+      fulfillmentSourceId,
+      fulfillmentSelectedBy: fulfillmentSelection?.selectedBy || "NONE",
+      fulfillmentResolutionReason: fulfillmentSelection?.reason || "NO_SELECTION",
+      autoFulfillmentResolveEnabled: sourceAutoResolve,
       healthPersisted,
     });
     return { enabled: true, mirrored: true, commerceOrderId, mappedItemCount, unresolvedItemCount, healthPersisted };

@@ -44,6 +44,7 @@ const WAREHOUSE_ISSUER_PERMISSIONS: CommercePermission[] = ["commerce.context.re
 const MIRROR_WORKER_PERMISSIONS: CommercePermission[] = [
   "commerce.context.read",
   "commerce.product.read",
+  "commerce.inventory.read",
   "commerce.inventory.move",
   "commerce.order.read",
   "commerce.order.write",
