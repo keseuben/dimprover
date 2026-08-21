@@ -1,0 +1,12 @@
+[Unit]
+Description=Run DIMPRO DEV storage retention daily
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Europe/Budapest
+RandomizedDelaySec=10min
+AccuracySec=1min
+Persistent=true
+Unit=dimpro-dev-storage-retention.service
+
+[Install]
+WantedBy=timers.target

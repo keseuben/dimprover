@@ -1,0 +1,23 @@
+[Unit]
+Description=DIMPRO DEV daily storage retention
+After=local-fs.target
+ConditionPathIsDirectory=/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/bin/bash -lc 'set -euo pipefail; ROOT=/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2; REPORT_DIR=/srv/dimpro-dev/artifacts/storage-retention; mkdir -p "$REPORT_DIR"; exec "$ROOT/scripts/dimpro-dev-storage-retention.sh" --prune-dependencies --quiet --report-file="$REPORT_DIR/daily-$(date -u +%%Y%%m%%dT%%H%%M%%SZ).json"'
+TimeoutStartSec=1800
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

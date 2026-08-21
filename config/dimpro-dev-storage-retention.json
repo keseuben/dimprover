@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "warningUsedPercent": 85,
-  "criticalUsedPercent": 92,
-  "emergencyUsedPercent": 97,
-  "targetFreeGiB": 20,
+  "warningUsedPercent": 78,
+  "criticalUsedPercent": 85,
+  "emergencyUsedPercent": 90,
+  "targetFreeGiB": 30,
   "builds": {
-    "keepNewestPerWorktree": 3,
-    "minAgeHours": 24,
-    "criticalMinAgeHours": 6,
-    "emergencyMinAgeHours": 2,
+    "keepNewestPerWorktree": 1,
+    "minAgeHours": 12,
+    "criticalMinAgeHours": 4,
+    "emergencyMinAgeHours": 1,
     "protectedNames": [
       ".next"
     ]
   },
   "dependencies": {
-    "minInactiveHours": 72,
+    "minInactiveHours": 48,
     "requireCleanWorktree": true,
     "requireMergedIntoAnyRef": [
       "integration/benjadmin-dev",
@@ -25,7 +25,7 @@
   "worktrees": {
     "reportOnly": true,
     "minInactiveHours": 168,
-    "retireRegenerablesAfterHours": 24,
+    "retireRegenerablesAfterHours": 12,
     "requireMergedIntoAnyRef": [
       "integration/benjadmin-dev",
       "feat/benjadmin-operator-ui-v2"
@@ -36,5 +36,6 @@
   },
   "artifacts": {
     "autoDelete": false
-  }
+  },
+  "preBuildHardMinFreeGiB": 15
 }

@@ -37,6 +37,12 @@ MEMORY_MAX="${DIMPRO_BUILD_MEMORY_MAX:-$DEFAULT_MEMORY_MAX}"
 MEMORY_SWAP_MAX="${DIMPRO_BUILD_MEMORY_SWAP_MAX:-$DEFAULT_MEMORY_SWAP_MAX}"
 UNIT_NAME="dimpro-build-$(date +%s)-$$"
 
+DEV_STORAGE_GUARD=0
+if [[ "$ROOT" == /srv/dimpro-dev/* ]]; then
+  DEV_STORAGE_GUARD=1
+  "$ROOT/scripts/dimpro-dev-storage-prebuild.sh"
+fi
+
 exec "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
   systemd-run --scope --quiet --unit="$UNIT_NAME" \
     -p CPUQuota="$CPU_QUOTA" \
@@ -45,5 +51,5 @@ exec "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
     -p MemorySwapMax="$MEMORY_SWAP_MAX" \
     -p IOWeight=10 \
     nice -n 10 ionice -c2 -n7 \
-    bash -lc 'cd "$1" && export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" && npx next build && node scripts/ensure-next-standalone-assets.cjs --force && if [[ "${DIMPRO_AUTO_STORAGE_RETENTION:-1}" = "1" ]]; then node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet || echo "[DIMPRO retention] FIGYELMEZTETÉS: post-build retention nem futott le; a build ettől még érvényes." >&2; fi' \
-    _ "$ROOT" "$SOURCE_COMMIT" "$SOURCE_BRANCH"
+    bash -lc 'cd "$1" && export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" && npx next build && node scripts/ensure-next-standalone-assets.cjs --force && if [[ "$4" = "1" ]]; then node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet; fi' \
+    _ "$ROOT" "$SOURCE_COMMIT" "$SOURCE_BRANCH" "$DEV_STORAGE_GUARD"

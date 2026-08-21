@@ -344,8 +344,8 @@ const manifest = {
   buildCandidates: buildCandidates.map((item) => ({ ...item, bytesHuman: human(item.bytes || 0) })),
   dependencyCandidates: dependencyCandidates.map((item) => ({ ...item, bytesHuman: human(item.bytes || 0) })),
   notes: [
-    "Backup és artifact könyvtárak V1-ben soha nem törlődnek automatikusan.",
-    "Worktree könyvtár V1-ben soha nem törlődik automatikusan.",
+    "Backup és artifact könyvtárak V2-ben soha nem törlődnek automatikusan.",
+    "Worktree könyvtár V2-ben soha nem törlődik automatikusan.",
     "node_modules csak explicit --prune-dependencies módban és clean+merged+inactive gate után törölhető.",
     "Post-build automata kizárólag régi .next* build outputokat takarít, ha a lemezhasználat eléri a warning küszöböt.",
     "Clean + integrált + inaktív + processz/PM2-mentes retired worktree esetén a newest/protected-name buildvédelem nem tart meg regenerálható buildet örökre."
