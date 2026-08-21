@@ -73,6 +73,7 @@ try {
   });
 
   async function authenticate() {
+    if (await page.evaluate(() => (document.body.textContent || "").includes("P8 UI Teszt"))) return;
     const code = await page.$('input[placeholder="ABCD-123-456"]');
     assert.ok(code, "Send-kód mező hiányzik");
     await code.type("TEST123456", { delay: 2 });

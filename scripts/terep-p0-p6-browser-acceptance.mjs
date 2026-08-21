@@ -20,7 +20,7 @@ const visibleButton = async (page, text) => {
   return null;
 };
 
-const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--host-resolver-rules=MAP drop.dev.dimpro.hu 127.0.0.1', `--unsafely-treat-insecure-origin-as-secure=${BASE}`] });
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -200,9 +200,9 @@ try {
   const toSave = await visibleButton(page, 'Tovább a mentéshez');
   assert.ok(toSave, 'Tovább a mentéshez gomb hiányzik');
   await toSave.click();
-  await page.waitForFunction(() => (document.body.textContent || '').includes('3. Mentés') && (document.body.textContent || '').includes('helyi terepi munkamenet mentve'), { timeout: 5000 });
-  pass('Ellenőrzésből Mentés lépésre tovább lehet menni', true);
-  pass('Mentés lépés nem állít szerveres szinkront', await page.evaluate(() => (document.body.textContent || '').includes('P7 szerveres DIMPRO szinkron')));
+  await page.waitForFunction(() => (document.body.textContent || '').includes('3. Mentés és megosztás') && (document.body.textContent || '').includes('DIMPRO szerveres szinkron'), { timeout: 5000 });
+  pass('Ellenőrzésből Mentés és megosztás lépésre tovább lehet menni', true);
+  pass('Mentés lépés szerveres szinkron státuszt mutat', await page.evaluate(() => (document.body.textContent || '').includes('DIMPRO szerveres szinkron')));
 
   await page.reload({ waitUntil: 'networkidle2', timeout: 60_000 });
   await page.waitForFunction(() => document.querySelectorAll('[data-field-capture-item]').length === 1, { timeout: 10_000 });
