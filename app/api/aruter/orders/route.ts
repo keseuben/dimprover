@@ -1,13 +1,14 @@
 import { after, NextResponse } from "next/server";
 import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
+import { listConfiguredStorefrontOrders } from "@/app/lib/aruter/storefrontOrderRepository";
 import type { AruterOrder } from "@/app/lib/aruter/types";
 import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMirror";
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    data: await getAruterRepository().listOrders(),
-  });
+  const base = await Promise.resolve(getAruterRepository().listOrders());
+  const persisted = await listConfiguredStorefrontOrders();
+  const merged = [...persisted, ...(Array.isArray(base) ? base : []).filter((order) => !persisted.some((item) => item.id === order.id))];
+  return NextResponse.json({ ok: true, data: merged });
 }
 
 export async function POST(request: Request) {

@@ -35,7 +35,7 @@ check("status endpoint does not log token",!route.match(/console\.(log|info|erro
 check("checkout result can return tracking token",checkout.includes("trackingToken?: string")&&checkout.includes("trackingExpiresAt?: string"));
 check("checkout token issuing is fail-open",checkout.includes("TOKEN_ISSUE_FAILED_FAIL_OPEN")&&checkout.includes("return null"));
 check("idempotent replay receives tracking too",checkout.includes("summarize(existing, true, queue.queued, businessSlug)"));
-check("new checkout receives tracking too",checkout.includes("summarize(created.data, false, queue.queued, businessSlug)"));
+check("new or atomically reused checkout receives tracking too",checkout.includes("summarize(created.data, Boolean(created.reused), queue.queued, businessSlug)"));
 check("client success type carries tracking token",modal.includes("trackingToken?: string")&&modal.includes("trackingExpiresAt?: string"));
 check("modal explains active tracking",modal.includes("Az állapotkövetés aktív"));
 check("tracking card uses POST body",card.includes('method: "POST"')&&card.includes("JSON.stringify({ trackingToken: checkout.trackingToken })"));

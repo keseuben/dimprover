@@ -35,6 +35,8 @@ ARUTER_STOREFRONT_PILOT_TEMPLATE=
 ARUTER_STOREFRONT_COMMERCE_QUEUE_ENABLED=0
 ARUTER_STOREFRONT_COMMERCE_BUSINESS_SLUG=
 ARUTER_STOREFRONT_COMMERCE_ORGANIZATION_ID=
+# Storefront order shell tárolás: repository (legacy/in-memory alap) vagy database (Commerce service-role persistent P5).
+ARUTER_STOREFRONT_ORDER_MODE=repository
 # Storefront többtételes checkout API (opt-in, alapból kikapcsolva)
 ARUTER_STOREFRONT_MULTI_ITEM_CHECKOUT_ENABLED=0
 # Nyilvános, aláírt rendeléskövetés. A secret legalább 32 karakter, Gitbe valódi érték nem kerülhet.

@@ -5,6 +5,7 @@ import type { AruterPublicReservation, CreateAruterPublicReservationInput } from
 import { getAruterRepository } from "./repositoryFactory";
 import { getStorefrontCatalogMode, listCommerceStorefrontCatalogProducts } from "./storefrontCommerceCatalog";
 import type { AruterOrder, AruterProduct, AruterTemplate, AruterUnit } from "./types";
+import { createStorefrontOrder, findStorefrontOrderByTransactionKey, updateStorefrontOrderStatus } from "./storefrontOrderRepository";
 import { enqueueCommerceMirrorAttemptForOrganization } from "../commerce/order/mirrorReconciliation";
 
 const TEMPLATE_VALUES = new Set<AruterTemplate>(["kertészet", "tüzép", "húsbolt", "egyedi"]);
@@ -186,11 +187,8 @@ function marker(reservationId: string) {
   return `[PUBLIC_RESERVATION:${reservationId}]`;
 }
 
-async function findOrderForReservation(reservationId: string): Promise<AruterOrder | null> {
-  const orders = await Promise.resolve(getAruterRepository().listOrders());
-  if (!Array.isArray(orders)) return null;
-  const token = marker(reservationId);
-  return orders.find((order) => order.note?.includes(token)) || null;
+async function findOrderForReservation(reservation: AruterPublicReservation): Promise<AruterOrder | null> {
+  return findStorefrontOrderByTransactionKey(reservation.businessSlug, marker(reservation.id));
 }
 
 function errorCode(error: unknown) {
@@ -208,7 +206,7 @@ export async function bridgePublicReservationToCashierFailOpen(
 ): Promise<StorefrontBridgeResult> {
   if (!isStorefrontOrderBridgeEnabled()) return { enabled: false, bridged: false, reason: "DISABLED" };
   try {
-    const existing = await findOrderForReservation(reservation.id);
+    const existing = await findOrderForReservation(reservation);
     if (existing) {
       const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, existing);
       logBridge("REUSED", reservation, { orderId: existing.id, orderNumber: existing.orderNumber, commerceQueued: queue.queued });
@@ -223,24 +221,30 @@ export async function bridgePublicReservationToCashierFailOpen(
 
     const token = marker(reservation.id);
     const noteParts = [token, `Átvétel: ${reservation.pickupSlotLabel}`, reservation.note].filter(Boolean);
-    const created = await Promise.resolve(getAruterRepository().createOrder({
-      template: product.template,
-      customerName: reservation.customerName,
-      customerType: "walk_in",
-      recorderName: "Nyilvános Árutér",
-      note: noteParts.join(" · "),
-      items: [{
-        id: `public-res-item-${reservation.id}`,
-        productId: product.id,
-        productName: product.name,
-        sku: product.sku,
-        unit: product.unit,
-        quantity: reservation.quantity,
-        priceNet: product.priceNet,
-        vatRate: product.vatRate,
-        storageZone: product.storageZone,
-      }],
-    }));
+    const created = await createStorefrontOrder(
+      reservation.businessSlug,
+      "PUBLIC_RESERVATION",
+      token,
+      token,
+      {
+        template: product.template,
+        customerName: reservation.customerName,
+        customerType: "walk_in",
+        recorderName: "Nyilvános Árutér",
+        note: noteParts.join(" · "),
+        items: [{
+          id: "public-res-item-" + reservation.id,
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          unit: product.unit,
+          quantity: reservation.quantity,
+          priceNet: product.priceNet,
+          vatRate: product.vatRate,
+          storageZone: product.storageZone,
+        }],
+      },
+    );
     if (!created.ok || !created.data) throw new Error("STOREFRONT_ORDER_CREATE_FAILED");
     const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, created.data);
     logBridge("CREATED", reservation, { orderId: created.data.id, orderNumber: created.data.orderNumber, commerceQueued: queue.queued });
@@ -259,13 +263,13 @@ export async function syncPublicReservationCancellationFailOpen(
   if (!isStorefrontOrderBridgeEnabled()) return { enabled: false, bridged: false, reason: "DISABLED" };
   if (reservation.status !== "cancelled") return { enabled: true, bridged: false, reason: "FAILED", code: "NO_ORDER_STATUS_CHANGE_REQUIRED" };
   try {
-    const existing = await findOrderForReservation(reservation.id);
+    const existing = await findOrderForReservation(reservation);
     if (!existing) return { enabled: true, bridged: false, reason: "FAILED", code: "STOREFRONT_ORDER_NOT_FOUND" };
     if (existing.status === "paid" || existing.status === "issued") {
       logBridge("CANCEL_SKIPPED_TERMINAL", reservation, { orderId: existing.id, orderStatus: existing.status });
       return { enabled: true, bridged: false, reason: "FAILED", code: "STOREFRONT_ORDER_ALREADY_TERMINAL" };
     }
-    const updated = await Promise.resolve(getAruterRepository().updateOrderStatus(existing.id, "cancelled"));
+    const updated = await updateStorefrontOrderStatus(reservation.businessSlug, existing.id, "cancelled");
     if (!updated.ok || !updated.data) throw new Error("STOREFRONT_ORDER_CANCEL_FAILED");
     const queue = await queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, updated.data);
     logBridge("CANCELLED", reservation, { orderId: updated.data.id, orderNumber: updated.data.orderNumber, commerceQueued: queue.queued });

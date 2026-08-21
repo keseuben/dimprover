@@ -1,0 +1,21 @@
+select json_build_object(
+  'version',(select schema_version from public.commerce_schema_meta where component='commerce-core'),
+  'count',(select migration_count from public.commerce_schema_meta where component='commerce-core'),
+  'bootstrap',(select bootstrap_id from public.commerce_schema_meta where component='commerce-core'),
+  'ordersTable',to_regclass('public.commerce_storefront_orders') is not null,
+  'numberSequence',to_regclass('public.commerce_storefront_order_number_seq') is not null,
+  'createRpc',to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)') is not null,
+  'statusRpc',to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)') is not null,
+  'rls',coalesce((select relrowsecurity from pg_class where oid=to_regclass('public.commerce_storefront_orders')),false),
+  'anonSelect',case when to_regclass('public.commerce_storefront_orders') is null then false else has_table_privilege('anon','public.commerce_storefront_orders','SELECT') end,
+  'authSelect',case when to_regclass('public.commerce_storefront_orders') is null then false else has_table_privilege('authenticated','public.commerce_storefront_orders','SELECT') end,
+  'serviceSelect',case when to_regclass('public.commerce_storefront_orders') is null then false else has_table_privilege('service_role','public.commerce_storefront_orders','SELECT') end,
+  'anonCreateExec',case when to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)') is null then false else has_function_privilege('anon','public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)','EXECUTE') end,
+  'authCreateExec',case when to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)') is null then false else has_function_privilege('authenticated','public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)','EXECUTE') end,
+  'serviceCreateExec',case when to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)') is null then false else has_function_privilege('service_role','public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)','EXECUTE') end,
+  'anonStatusExec',case when to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)') is null then false else has_function_privilege('anon','public.commerce_storefront_order_set_status(uuid,text,text)','EXECUTE') end,
+  'authStatusExec',case when to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)') is null then false else has_function_privilege('authenticated','public.commerce_storefront_order_set_status(uuid,text,text)','EXECUTE') end,
+  'serviceStatusExec',case when to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)') is null then false else has_function_privilege('service_role','public.commerce_storefront_order_set_status(uuid,text,text)','EXECUTE') end,
+  'createHasAdvisoryLock',case when to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)') is null then false else position('pg_advisory_xact_lock' in pg_get_functiondef(to_regprocedure('public.commerce_storefront_order_create(uuid,text,text,text,text,jsonb)')))>0 end,
+  'statusHasTransitionGuard',case when to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)') is null then false else position('COMMERCE_STOREFRONT_ORDER_STATUS_TRANSITION_INVALID' in pg_get_functiondef(to_regprocedure('public.commerce_storefront_order_set_status(uuid,text,text)')))>0 end
+)::text;

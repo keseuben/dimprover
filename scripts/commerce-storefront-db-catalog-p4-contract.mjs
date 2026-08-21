@@ -27,7 +27,7 @@ check("public pilot catalog uses selected catalog helper",pilot.includes("getSto
 check("reservation normalization uses selected catalog helper",pilot.includes("getStorefrontCatalogProducts(businessSlug)).find"));
 check("reservation bridge uses selected catalog helper",pilot.includes("getStorefrontCatalogProducts(reservation.businessSlug)"));
 check("multi-item checkout uses selected catalog helper",checkout.includes("getStorefrontCatalogProducts(businessSlug)"));
-check("order transaction repository remains separate",checkout.includes("getAruterRepository().createOrder"));
+check("order transaction layer remains separate from catalog mode",checkout.includes("createStorefrontOrder(")&&!checkout.includes("ARUTER_REPOSITORY_MODE"));
 check("P3 admin renders selected Storefront catalog including inactive mappings",adminRoute.includes("getStorefrontCatalogProducts(slug, { activeOnly: false })"));
 check("P3 admin exposes catalog mode",adminRoute.includes("catalogMode: getStorefrontCatalogMode()")&&adminUi.includes('catalogMode: "repository" | "commerce"'));
 check("P3 admin visibly labels Commerce DB mode",adminUi.includes("Commerce DB"));

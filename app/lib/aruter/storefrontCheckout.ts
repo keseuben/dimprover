@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { getAruterRepository } from "./repositoryFactory";
 import type { AruterOrder, AruterProduct, AruterUnit } from "./types";
+import { createStorefrontOrder, findStorefrontOrderByTransactionKey } from "./storefrontOrderRepository";
 import { issueStorefrontTrackingToken } from "./storefrontTracking";
 import {
   getStorefrontCatalogProducts,
@@ -86,12 +86,6 @@ function aggregateItems(items: StorefrontCheckoutRequestItem[]) {
   return quantities;
 }
 
-async function existingCheckoutOrder(marker: string): Promise<AruterOrder | null> {
-  const orders = await Promise.resolve(getAruterRepository().listOrders());
-  if (!Array.isArray(orders)) return null;
-  return orders.find((order) => order.note?.includes(marker)) || null;
-}
-
 function orderItem(product: AruterProduct, quantity: number, marker: string) {
   return {
     id: `public-checkout-${marker.replace(/[^a-z0-9]/gi, "").slice(-24)}-${product.id}`,
@@ -171,7 +165,7 @@ export async function createStorefrontMultiItemCheckout(
 
   const marker = checkoutMarker(businessSlug, idempotencyKey);
   const payloadMarker = checkoutPayloadMarker(input, requested);
-  const existing = await existingCheckoutOrder(marker);
+  const existing = await findStorefrontOrderByTransactionKey(businessSlug, marker);
   if (existing) {
     if (!existing.note?.includes(payloadMarker)) return fail(409, "STOREFRONT_CHECKOUT_IDEMPOTENCY_PAYLOAD_MISMATCH", "Az Idempotency-Key már egy eltérő checkout kéréshez tartozik.");
     const queue = await queueStorefrontCommerceMirrorFailOpen(businessSlug, existing);
@@ -186,16 +180,22 @@ export async function createStorefrontMultiItemCheckout(
     input.email?.trim() ? `E-mail: ${input.email.trim()}` : null,
     input.note?.trim() || null,
   ].filter(Boolean);
-  const created = await Promise.resolve(getAruterRepository().createOrder({
-    template,
-    customerName: input.customerName.trim(),
-    customerType: "walk_in",
-    recorderName: "Nyilvános Árutér · többtételes checkout",
-    note: noteParts.join(" · "),
-    items: lines.map(({ product, quantity }) => orderItem(product, quantity, marker)),
-  }));
+  const created = await createStorefrontOrder(
+    businessSlug,
+    "MULTI_ITEM_CHECKOUT",
+    marker,
+    payloadMarker,
+    {
+      template,
+      customerName: input.customerName.trim(),
+      customerType: "walk_in",
+      recorderName: "Nyilvános Árutér · többtételes checkout",
+      note: noteParts.join(" · "),
+      items: lines.map(({ product, quantity }) => orderItem(product, quantity, marker)),
+    },
+  );
   if (!created.ok || !created.data) return fail(503, "STOREFRONT_CHECKOUT_ORDER_CREATE_FAILED", created.error || "A rendelés létrehozása nem sikerült.");
 
   const queue = await queueStorefrontCommerceMirrorFailOpen(businessSlug, created.data);
-  return { ok: true, data: summarize(created.data, false, queue.queued, businessSlug) };
+  return { ok: true, data: summarize(created.data, Boolean(created.reused), queue.queued, businessSlug) };
 }

@@ -31,9 +31,9 @@ check("reservation normalization overwrites client product unit",pilot.includes(
 check("reservation rejects unavailable product",pilot.includes('A kiválasztott termék nem érhető el a nyilvános ajánlatban.'));
 check("reservation rejects quantity above current stock",pilot.includes('quantity > product.stockQuantity'));
 check("cashier bridge uses stable public reservation marker",pilot.includes('[PUBLIC_RESERVATION:${reservationId}]'));
-check("cashier bridge searches existing order before creating",pilot.indexOf('findOrderForReservation(reservation.id)')<pilot.indexOf('getAruterRepository().createOrder'));
+check("cashier bridge searches existing order before creating",pilot.indexOf("findOrderForReservation(reservation)")<pilot.indexOf("createStorefrontOrder("));
 check("reused bridge order is not duplicated",pilot.includes('event: "REUSED"')||pilot.includes('logBridge("REUSED"'));
-check("bridge creates normal legacy cashier order",pilot.includes('getAruterRepository().createOrder')&&pilot.includes('customerType: "walk_in"')&&pilot.includes('recorderName: "Nyilvános Árutér"'));
+check("bridge creates normal Storefront cashier order shell",pilot.includes("createStorefrontOrder(")&&pilot.includes("customerType")&&pilot.includes("walk_in")&&pilot.includes("recorderName")&&pilot.includes("Nyilvános Árutér"));
 check("bridge order uses authoritative SKU",pilot.includes('sku: product.sku'));
 check("bridge order uses authoritative net price",pilot.includes('priceNet: product.priceNet'));
 check("bridge order uses authoritative VAT rate",pilot.includes('vatRate: product.vatRate'));
@@ -45,7 +45,7 @@ check("reservation route normalizes input server-side before persistence",reserv
 check("reservation bridge runs in Next after callback",reservations.includes('after(async ()')&&reservations.includes('bridgePublicReservationToCashierFailOpen'));
 check("reservation cancellation sync only runs for cancelled",reservationStatus.includes('result.data?.status === "cancelled"'));
 check("paid or issued cashier order cannot be cancelled by reservation",pilot.includes('existing.status === "paid" || existing.status === "issued"'));
-check("cancellation reuses existing legacy order status flow",pilot.includes('updateOrderStatus(existing.id, "cancelled")'));
+check("cancellation reuses persistent-aware order status flow",pilot.includes("updateStorefrontOrderStatus(reservation.businessSlug, existing.id")&&pilot.includes("cancelled"));
 check("cancellation requeues latest order snapshot",pilot.includes("queueStorefrontCommerceMirrorFailOpen(reservation.businessSlug, updated.data)"));
 check("public products API requires businessSlug",publicProducts.includes('Hiányzik az üzlet azonosítója.'));
 check("public products API exposes pilot catalog",publicProducts.includes('getStorefrontPilotCatalog'));
@@ -54,7 +54,7 @@ check("database product query includes authoritative pricing and stock",database
 check("database product mapping includes category and storage zone",databaseRepo.includes('categoryMap')&&databaseRepo.includes('zoneMap'));
 check("AruterProduct supports public offer flag",types.includes('isPublicOffer?: boolean'));
 check("legacy product GET awaits async repository",productRoute.includes('data: await getAruterRepository().listProducts()'));
-check("legacy order GET awaits async repository",orderRoute.includes('data: await getAruterRepository().listOrders()'));
+check("legacy order GET merges configured persistent Storefront orders",orderRoute.includes("listConfiguredStorefrontOrders")&&orderRoute.includes("getAruterRepository().listOrders()"));
 check("legacy event GET awaits async repository",eventsRoute.includes('data: await getAruterRepository().listEvents()'));
 check("public UI loads pilot products from public API",ui.includes('/api/aruter/public-products?businessSlug='));
 check("UI uses pilot result products without demo fallback when enabled",ui.includes('result.data.pilotEnabled ? result.data.products : business.products'));

@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { getAruterRepository } from "@/app/lib/aruter/repositoryFactory";
 import type { AruterOrderStatus } from "@/app/lib/aruter/types";
+import { findConfiguredStorefrontOrderById, updateStorefrontOrderStatus } from "@/app/lib/aruter/storefrontOrderRepository";
 import { mirrorAruterOrderToCommerceFailOpen } from "@/app/lib/aruter/commerceMirror";
 import { queueStorefrontCommerceMirrorFailOpen, resolveStorefrontCommerceBusinessSlugForOrder } from "@/app/lib/aruter/storefrontPilot";
 
@@ -20,7 +21,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "Érvénytelen rendelés státusz." }, { status: 400 });
   }
 
-  const result = await getAruterRepository().updateOrderStatus(orderId, body.status);
+  const persisted = await findConfiguredStorefrontOrderById(orderId);
+  const result = persisted
+    ? await updateStorefrontOrderStatus(persisted.businessSlug, orderId, body.status)
+    : await getAruterRepository().updateOrderStatus(orderId, body.status);
 
   if (!result.ok) {
     return NextResponse.json(result, { status: 404 });
@@ -29,7 +33,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (result.data) {
     const order = result.data;
     after(async () => {
-      const storefrontBusinessSlug = resolveStorefrontCommerceBusinessSlugForOrder(order);
+      const storefrontBusinessSlug = persisted?.businessSlug || resolveStorefrontCommerceBusinessSlugForOrder(order);
       if (storefrontBusinessSlug) {
         await queueStorefrontCommerceMirrorFailOpen(storefrontBusinessSlug, order);
         return;
