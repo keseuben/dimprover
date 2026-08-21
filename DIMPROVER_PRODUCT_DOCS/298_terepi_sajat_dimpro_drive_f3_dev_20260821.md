@@ -3,7 +3,7 @@
 **Forrás candidate:** 2026-08-19 (`5613bae`)
 **Release ellenőrzés:** 2026-08-21
 **Környezet:** kizárólag DEV
-**Állapot:** F3 RELEASE CANDIDATE – acceptance folyamatban
+**Állapot:** AKTÍV DEV RELEASE – VALIDÁLT
 
 ## 1. Cél
 
@@ -84,3 +84,60 @@ F3 csak akkor kerülhet DEV cutoverre, ha legalább az alábbiak zöldek:
 - User Drive választás és státuszmegjelenítés acceptance.
 
 **PROD változatlan marad.**
+
+## 8. 2026-08-21 – F3 DEV release lezárás
+
+Az F3 shared release a `release/jazmin-terep-f3-shared-20260821` ágon készült el úgy, hogy egyszerre megőrzi az aktuális Commerce integration, a BENJADMIN operator és a Terep F3 történetét.
+
+### Release identity
+
+- runtime source commit: `ef77d4832b01ef50fd67e010a2383c95685da324`;
+- release: `.next-terep-f3-shared-ef77d48`;
+- BUILD_ID: `3sC-DdpF28XJFcx-no46D`;
+- aktiválás ideje: `2026-08-21T13:00:00+02:00`;
+- előző release: `.next-chatgrid-pairing-v023-release3-a82d2bf`;
+- rollback backup: `/srv/dimpro-dev/backups/shared-ef77d48-cutover/20260821T125953+0200`.
+
+Az első shared cutover-kísérlet automatikusan rollbackelt, mert az operatorba másolt standalone artifact `.dimprover` symlinkje még nem a kanonikus operator adattárra mutatott. A symlink javítása után a második, koordinált cutover sikeresen lefutott.
+
+### Exact shared candidate gate
+
+- P8 backend contract: `14/14 PASS`;
+- P8 UI activation contract: `12/12 PASS`;
+- client-sync contract: `15/15 PASS`;
+- Terep statikus acceptance: `66/66 PASS`;
+- TypeScript: PASS;
+- `git diff --check`: PASS;
+- izolált F3 mobil UI browser acceptance: `13/13 PASS`;
+- izolált Terep P0–P6 mobil regresszió: `28/28 PASS`;
+- izolált teljes kliensszinkron browser E2E: PASS;
+- server status: `SERVER_STORED`;
+- asset storage: `STORED`;
+- staging private: true;
+- raw capability persistence: false;
+- browser page error: 0;
+- browser console error: 0;
+- E2E cleanup: capture 0 / package 0.
+
+### Live DEV gate
+
+A `https://drop.dev.dimpro.hu` aktív DEV domainen:
+
+- F3 mobil UI browser acceptance: `13/13 PASS`;
+- Terep P0–P6 mobil regresszió: `28/28 PASS`;
+- teljes kliensszinkron browser E2E: PASS;
+- health: `0.4.1-dev`;
+- phase: `P0-P8`;
+- Saját DIMPRO Drive: READY;
+- Projektkapu Drive: továbbra is P9 / kikapcsolva;
+- browser page error: 0;
+- browser console error: 0;
+- E2E cleanup: capture 0 / package 0.
+
+### Záró állapot
+
+**F3 – Saját DIMPRO Drive UI: AKTÍV DEV RELEASE / VALIDÁLT.**
+
+A runtime artifact forrása továbbra is az `ef77d48` commit. Az ezt követő dokumentációs closeout commit nem módosít runtime kódot, ezért új build nem szükséges.
+
+**PROD változatlan.**
