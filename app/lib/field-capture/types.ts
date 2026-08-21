@@ -1,4 +1,4 @@
-export const FIELD_CAPTURE_VERSION = "0.4.4-dev";
+export const FIELD_CAPTURE_VERSION = "0.4.5-dev";
 export const FIELD_CAPTURE_MAX_ITEMS = 200;
 
 export type FieldCaptureTranscriptMode = "raw" | "cleaned";
