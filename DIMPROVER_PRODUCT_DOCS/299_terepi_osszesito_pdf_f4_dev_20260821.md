@@ -148,6 +148,6 @@ Az első külső Commerce live E2E próbán a `aruter.dev.dimpro.hu` nginx 307 r
 
 **F4 – Terepi összesítő / PDF riport: AKTÍV DEV RELEASE / VALIDÁLT.**
 
-A következő külön fejlesztési blokk az **F5 – Terepi riport e-mail küldés**, amely a központi DIMPRO Értesítések mail-profilt és szerveroldali `sendDimproMail()` motort használja. Az F5 nem automatikus küldést jelent: a felhasználó explicit művelettel választ címzettet, tárgyat és kísérőszöveget, majd a Terepi összesítő PDF csatolmányként kerül kiküldésre.
+A következő külön fejlesztési blokk az **F5 – Terepi riport e-mail küldés**, amely a központi DIMPRO Drop mail-profilt és szerveroldali `sendDimproMail()` motort használja. Az F5 nem automatikus küldést jelent: a felhasználó explicit művelettel választ címzettet, tárgyat és kísérőszöveget, majd a Terepi összesítő PDF csatolmányként kerül kiküldésre.
 
 **PROD DENY – éles környezet változatlan.**

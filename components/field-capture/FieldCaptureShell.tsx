@@ -20,7 +20,7 @@ import FieldCaptureReportPanel from "./FieldCaptureReportPanel";
 import OfflineQueueIndicator from "./OfflineQueueIndicator";
 import PreCaptureOptionsSheet from "./PreCaptureOptionsSheet";
 import DimproImageMarkupEditor, { type DimproImageMarkupSaveResult } from "@/components/image-editor/DimproImageMarkupEditor";
-import { closeAndCreateFieldCaptureLocalSession, closeFieldCaptureLocalSession, loadFieldCaptureDefaults, loadOrCreateFieldCaptureLocalSession, resetFieldCaptureDefaults, saveFieldCaptureDefaults } from "@/app/lib/field-capture/captureSessionService";
+import { bindFieldCaptureServerSession, closeAndCreateFieldCaptureLocalSession, closeFieldCaptureLocalSession, loadFieldCaptureDefaults, loadOrCreateFieldCaptureLocalSession, resetFieldCaptureDefaults, saveFieldCaptureDefaults } from "@/app/lib/field-capture/captureSessionService";
 import { prepareFieldCaptureFiles } from "@/app/lib/field-capture/captureImageEngine";
 import { captureFieldLocation, captureFieldOrientation, captureFieldSensors } from "@/app/lib/field-capture/captureSensors";
 import { clearFieldCaptureSession, patchFieldCaptureItem, persistFieldCaptureItem, removeFieldCaptureItem, requestFieldCapturePersistentStorage, restoreFieldCaptureItems } from "@/app/lib/field-capture/offlineQueue";
@@ -125,7 +125,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
 
   async function syncCurrentSession(): Promise<FieldCaptureClientSyncResult> {
     if (!identity || !session || !items.length || !rulesAcceptedAt) throw new Error("A szerveres szinkron előfeltételei hiányoznak.");
-    return syncFieldCaptureSession({
+    const result = await syncFieldCaptureSession({
       identity: { sessionToken: identity.sessionToken },
       session,
       items,
@@ -133,6 +133,9 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
       rulesAcceptedAt,
       onPatch: applySyncPatch,
     });
+    const bound = bindFieldCaptureServerSession(session, result.serverSessionId);
+    setSession(bound);
+    return result;
   }
 
   async function runServerSync() {
@@ -448,7 +451,7 @@ export default function FieldCaptureShell({ identity }: { identity?: TerepIdenti
           </div>}
         </section> : null}
 
-        {workflowStep === 3 ? <FieldCaptureReportPanel items={items} session={session} recorderName={identity?.user.fullName} organizationName={identity?.user.organizationName} /> : null}
+        {workflowStep === 3 ? <FieldCaptureReportPanel items={items} session={session} recorderName={identity?.user.fullName} organizationName={identity?.user.organizationName} sessionToken={identity?.sessionToken} /> : null}
 
         {workflowStep === 3 && gpsCount > 0 ? <GpsPhotoMapPanel items={items} projectName={session?.projectName} sessionId={session?.id} /> : null}
 
