@@ -52,3 +52,37 @@ export type CommerceFulfillmentSourceSelection = {
     | "NO_ELIGIBLE_SOURCE";
   shortages: Array<{ variantId: CommerceEntityId; required: string; available: string }>;
 };
+
+export type CommerceStorefrontAdminSource = {
+  id: CommerceEntityId;
+  code: string;
+  name: string;
+};
+
+export type CommerceStorefrontAdminVariant = {
+  id: CommerceEntityId;
+  productId: CommerceEntityId;
+  name: string;
+  sku: string | null;
+  unit: string;
+  status: string;
+};
+
+export type CommerceStorefrontAdminProduct = {
+  id: CommerceEntityId;
+  name: string;
+  status: string;
+  variants: CommerceStorefrontAdminVariant[];
+};
+
+export type CommerceStorefrontAdminState = {
+  storefront: {
+    id: CommerceEntityId;
+    slug: string;
+    status: string;
+    defaultFulfillmentSourceId: CommerceEntityId | null;
+  };
+  sources: CommerceStorefrontAdminSource[];
+  products: CommerceStorefrontAdminProduct[];
+  mappings: CommerceStorefrontProductMapping[];
+};

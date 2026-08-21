@@ -453,3 +453,113 @@ export async function resolveCommerceStorefrontFulfillmentSource(
   }
   return firstInsufficient || emptySelection("NO_ELIGIBLE_SOURCE");
 }
+
+export async function getCommerceStorefrontAdminState(
+  context: CommerceContext,
+  input: { storefrontSlug: string },
+) {
+  requireRead(context);
+  requireInventoryRead(context);
+  const storefront = await requireStorefront(context, input.storefrontSlug);
+  const client = createCommerceAdminClient();
+  const [sourcesResult, productsResult, variantsResult, mappings] = await Promise.all([
+    client.from("commerce_inventory_sources")
+      .select("id,code,name")
+      .eq("organization_id", context.organizationId)
+      .eq("source_type", "INTERNAL")
+      .eq("active", true)
+      .is("deleted_at", null)
+      .order("code", { ascending: true }),
+    client.from("commerce_products")
+      .select("id,name,status")
+      .eq("organization_id", context.organizationId)
+      .eq("status", "ACTIVE")
+      .is("deleted_at", null)
+      .order("name", { ascending: true }),
+    client.from("commerce_product_variants")
+      .select("id,product_id,name,sku,unit,status")
+      .eq("organization_id", context.organizationId)
+      .eq("status", "ACTIVE")
+      .is("deleted_at", null)
+      .order("name", { ascending: true }),
+    listCommerceStorefrontProductMappings(context, { storefrontSlug: input.storefrontSlug, activeOnly: false }),
+  ]);
+  if (sourcesResult.error) dbError("A Storefront fulfillment források nem olvashatók.", sourcesResult.error);
+  if (productsResult.error) dbError("A Storefront Commerce termékek nem olvashatók.", productsResult.error);
+  if (variantsResult.error) dbError("A Storefront Commerce termékváltozatok nem olvashatók.", variantsResult.error);
+
+  const variants = ((variantsResult.data || []) as Row[]).map((row) => ({
+    id: text(row.id),
+    productId: text(row.product_id),
+    name: text(row.name),
+    sku: nullableText(row.sku),
+    unit: text(row.unit),
+    status: text(row.status),
+  }));
+  const variantsByProduct = new Map<string, typeof variants>();
+  for (const variant of variants) {
+    const list = variantsByProduct.get(variant.productId) || [];
+    list.push(variant);
+    variantsByProduct.set(variant.productId, list);
+  }
+
+  return {
+    storefront: {
+      id: storefront.id,
+      slug: storefront.slug,
+      status: storefront.status,
+      defaultFulfillmentSourceId: storefront.defaultFulfillmentSourceId,
+    },
+    sources: ((sourcesResult.data || []) as Row[]).map((row) => ({ id: text(row.id), code: text(row.code), name: text(row.name) })),
+    products: ((productsResult.data || []) as Row[]).map((row) => ({
+      id: text(row.id),
+      name: text(row.name),
+      status: text(row.status),
+      variants: variantsByProduct.get(text(row.id)) || [],
+    })),
+    mappings,
+  };
+}
+
+export async function updateCommerceStorefrontDefaultFulfillmentSource(
+  context: CommerceContext,
+  input: { storefrontSlug: string; defaultFulfillmentSourceId?: string | null },
+) {
+  requireWrite(context);
+  requireInventoryRead(context);
+  const storefront = await requireStorefront(context, input.storefrontSlug);
+  const sourceId = nullableText(input.defaultFulfillmentSourceId);
+  const client = createCommerceAdminClient();
+  if (sourceId) {
+    const sourceResult = await client.from("commerce_inventory_sources")
+      .select("id,source_type,active")
+      .eq("organization_id", context.organizationId)
+      .eq("id", sourceId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (sourceResult.error) dbError("A Storefront alapértelmezett forrása nem ellenőrizhető.", sourceResult.error);
+    if (!sourceResult.data || text(sourceResult.data.source_type) !== "INTERNAL" || !Boolean(sourceResult.data.active)) {
+      throw new CommerceStorefrontError(
+        "A Storefront alapértelmezett fulfillment forrása csak aktív belső készletforrás lehet.",
+        "COMMERCE_STOREFRONT_DEFAULT_SOURCE_INVALID",
+        400,
+      );
+    }
+  }
+
+  const result = await client.from("commerce_storefronts")
+    .update({ default_fulfillment_source_id: sourceId })
+    .eq("organization_id", context.organizationId)
+    .eq("id", storefront.id)
+    .is("deleted_at", null)
+    .select("id,organization_id,slug,status,default_fulfillment_source_id")
+    .single();
+  if (result.error) dbError("A Storefront alapértelmezett fulfillment forrása nem menthető.", result.error);
+  const updated = mapStorefront(result.data as Row);
+  return {
+    id: updated.id,
+    slug: updated.slug,
+    status: updated.status,
+    defaultFulfillmentSourceId: updated.defaultFulfillmentSourceId,
+  };
+}
