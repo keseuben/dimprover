@@ -230,6 +230,29 @@ export async function assertFieldCaptureSessionOwner(input: {
   return mapSession(result.data as DbRow);
 }
 
+export async function recordFieldCaptureEvent(input: {
+  sessionId: string;
+  actorUserId: string | null;
+  eventType: string;
+  payload?: Record<string, unknown>;
+}) {
+  const eventType = input.eventType.trim().slice(0, 120);
+  if (!eventType) {
+    throw new DimproIdentityError(
+      "A terepi audit eseménytípus hiányzik.",
+      "FIELD_CAPTURE_EVENT_TYPE_REQUIRED",
+      400,
+    );
+  }
+  const result = await client().from("field_capture_events").insert({
+    session_id: input.sessionId,
+    event_type: eventType,
+    actor_user_id: input.actorUserId,
+    payload: input.payload || {},
+  });
+  if (result.error) databaseError("A terepi audit esemény rögzítése sikertelen.", result.error);
+}
+
 export async function finalizeFieldCaptureServerSession(input: {
   sessionId: string;
   userId: string;

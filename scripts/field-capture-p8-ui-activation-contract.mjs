@@ -27,7 +27,7 @@ const tests = [
   ["P8 health remains backend-readiness gated", () => { assert.match(health, /userDriveBinding: schema\.ready && upload\.ready && userDrive\.ready/); }],
   ["Projectkapu P9 stays disabled", () => { assert.match(projectRow, /disabled badge="P9"/); assert.match(health, /projectDriveBinding: false/); assert.doesNotMatch(sync, /\/project-drive/); }],
   ["Terep health phase reports P0-P8", () => { assert.match(flags, /phase: "P0-P8"/); }],
-  ["F4 increments client version", () => { assert.match(types, /FIELD_CAPTURE_VERSION = "0\.4\.2-dev"/); }],
+  ["F5 increments client version", () => { assert.match(types, /FIELD_CAPTURE_VERSION = "0\.4\.3-dev"/); }],
   ["Drive lifecycle text is no longer future tense", () => { assert.doesNotMatch(targets, /külön referenciát kapnak majd/); assert.match(targets, /független megőrzést kap/); }],
 ];
 

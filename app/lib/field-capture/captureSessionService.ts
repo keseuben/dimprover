@@ -48,6 +48,12 @@ export function loadOrCreateFieldCaptureLocalSession() {
   return createFieldCaptureLocalSession();
 }
 
+export function bindFieldCaptureServerSession(session: FieldCaptureLocalSession, serverSessionId: string) {
+  const normalized = serverSessionId.trim();
+  if (!normalized) return persistSession(session);
+  return persistSession({ ...session, serverSessionId: normalized });
+}
+
 export function closeFieldCaptureLocalSession(session: FieldCaptureLocalSession, serverSessionId: string, closedAt?: string | null) {
   if (session.status === "CLOSED") return persistSession(session);
   return persistSession({
