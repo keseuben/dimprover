@@ -14,6 +14,7 @@ export type DevelopmentHandoff = {
   module: string;
   contextModule: string;
   developmentArea: string;
+  fileAreaKey: string;
   taskId: string;
   taskTitle: string;
   liveNextTaskId: string;
@@ -89,7 +90,7 @@ function canonicalFileName(input: Record<string, unknown>, workerCode: string, c
     budapestStamp(createdAt),
     fileToken(input.mainProject, "DIMPRO", 64),
     fileToken(input.module, "Modul", 64),
-    fileToken(input.developmentArea || input.contextModule || input.taskTitle, "Fejlesztes", 72),
+    fileToken(input.fileAreaKey || input.developmentArea || input.contextModule || input.taskTitle, "Fejlesztes", 48),
     "atado.md",
   ].join("_");
 }
@@ -152,7 +153,7 @@ async function acquireWriteLock() {
 export async function listDevelopmentHandoffs(filters: Record<string, string> = {}) {
   let items = await readIndex();
   const query = text(filters.query, 240).toLocaleLowerCase("hu-HU");
-  if (query) items = items.filter((item) => `${item.fileName || ""} ${item.chatSessionId} ${item.chatTitle} ${item.workerCode} ${item.mainProject} ${item.project} ${item.module} ${item.contextModule} ${item.developmentArea || ""} ${item.taskId} ${item.taskTitle} ${item.liveNextTaskId || ""} ${item.liveNextTaskTitle || ""} ${item.summary} ${(item.tags || []).join(" ")}`.toLocaleLowerCase("hu-HU").includes(query));
+  if (query) items = items.filter((item) => `${item.fileName || ""} ${item.chatSessionId} ${item.chatTitle} ${item.workerCode} ${item.mainProject} ${item.project} ${item.module} ${item.contextModule} ${item.developmentArea || ""} ${item.fileAreaKey || ""} ${item.taskId} ${item.taskTitle} ${item.liveNextTaskId || ""} ${item.liveNextTaskTitle || ""} ${item.summary} ${(item.tags || []).join(" ")}`.toLocaleLowerCase("hu-HU").includes(query));
   for (const [key, field] of [["worker", "workerCode"], ["project", "project"], ["module", "module"], ["status", "status"], ["chat", "chatSessionId"]] as const) {
     const expected = text(filters[key], 160).toLowerCase();
     if (expected) items = items.filter((item) => String(item[field] || "").toLowerCase() === expected);
@@ -192,7 +193,7 @@ export async function saveDevelopmentHandoff(input: Record<string, unknown>) {
   const front = [
     "---", `schemaVersion: ${schemaVersion}`, `handoffId: ${q(id)}`, `fileName: ${q(fileName)}`, `chatSessionId: ${q(input.chatSessionId)}`, `chatTitle: ${q(input.chatTitle)}`,
     `workerCode: ${q(workerCode)}`, `mainProject: ${q(input.mainProject)}`, `project: ${q(input.project)}`, `module: ${q(input.module)}`, `contextModule: ${q(input.contextModule)}`,
-    `developmentArea: ${q(input.developmentArea)}`, `taskId: ${q(input.taskId)}`, `taskTitle: ${q(input.taskTitle)}`, `liveNextTaskId: ${q(input.liveNextTaskId)}`, `liveNextTaskTitle: ${q(input.liveNextTaskTitle)}`,
+    `developmentArea: ${q(input.developmentArea)}`, `fileAreaKey: ${q(input.fileAreaKey)}`, `taskId: ${q(input.taskId)}`, `taskTitle: ${q(input.taskTitle)}`, `liveNextTaskId: ${q(input.liveNextTaskId)}`, `liveNextTaskTitle: ${q(input.liveNextTaskTitle)}`,
     `startedAt: ${q(startedAt)}`, `finishedAt: ${q(finishedAt)}`, `durationMinutes: ${durationMinutes}`,
     `status: ${q(status)}`, `branch: ${q(input.branch)}`, `worktree: ${q(input.worktree)}`, `startCommit: ${q(input.startCommit)}`, `endCommit: ${q(input.endCommit)}`,
     `testsSummary: ${q(input.testsSummary)}`, `buildRelease: ${q(input.buildRelease)}`, `productionAccess: "DENY"`, `tags: ${JSON.stringify(tags(input.tags))}`, "---", "", body, "",
@@ -209,6 +210,7 @@ export async function saveDevelopmentHandoff(input: Record<string, unknown>) {
     module: text(input.module, 160),
     contextModule: text(input.contextModule, 160),
     developmentArea: text(input.developmentArea, 220),
+    fileAreaKey: fileToken(input.fileAreaKey || input.developmentArea, "Fejlesztes", 48),
     taskId: text(input.taskId, 180),
     taskTitle: text(input.taskTitle, 500),
     liveNextTaskId: text(input.liveNextTaskId, 180),
