@@ -97,7 +97,16 @@ export function inferPathRule(relativePath, aliases) {
   return null;
 }
 
+export function inferEvidenceDevelopmentContext(input) {
+  const haystack = [input.summary, input.detail, input.workItem, input.operation, input.owner, input.worktree, input.branch, input.target]
+    .map(text).filter(Boolean).join(" ").toLocaleLowerCase("hu-HU");
+  const health = /(dimpro[\s_-]*one[^\n]{0,100}(?:health|egészség|egeszseg)|(?:health|egészség|egeszseg)[^\n]{0,100}dimpro[\s_-]*one|one\.dev\.dimpro\.hu\/egeszseg|health_private|dimpro-one-health)/i.test(haystack);
+  if (health) return { mainModule: "DIMPRO ONE", moduleName: "Egészség", submoduleName: "Health MVP" };
+  return { mainModule: "", moduleName: "", submoduleName: "" };
+}
+
 function evidence(input) {
+  const inferredContext = inferEvidenceDevelopmentContext(input);
   return {
     workerCode: input.workerCode,
     score: input.score,
@@ -108,9 +117,9 @@ function evidence(input) {
     detail: input.detail || "",
     taskId: input.taskId || null,
     projectId: input.projectId || null,
-    mainModule: input.mainModule || "",
-    moduleName: input.moduleName || "",
-    submoduleName: input.submoduleName || "",
+    mainModule: input.mainModule || inferredContext.mainModule,
+    moduleName: input.moduleName || inferredContext.moduleName,
+    submoduleName: input.submoduleName || inferredContext.submoduleName,
     workItem: input.workItem || input.summary || "Aktív fejlesztés",
     operation: input.operation || null,
     owner: input.owner || null,
@@ -143,7 +152,11 @@ async function collectLeaseEvidence(coordinationRoot, nowMs) {
     const lease = await readJson(path.join(dir, name));
     const code = normalizeWorker(lease?.workerCode);
     const expiresAt = Date.parse(text(lease?.expiresAt));
-    if (!code || !Number.isFinite(expiresAt) || expiresAt <= nowMs) continue;
+    const heartbeatAt = Date.parse(text(lease?.heartbeatAt) || text(lease?.startedAt));
+    const activeState = text(lease?.state).toUpperCase() === "ACTIVE";
+    const validExpiry = Number.isFinite(expiresAt) && expiresAt > nowMs;
+    const freshNoExpiry = !Number.isFinite(expiresAt) && activeState && Number.isFinite(heartbeatAt) && nowMs - heartbeatAt <= ACTIVE_TTL_MS;
+    if (!code || (!validExpiry && !freshNoExpiry)) continue;
     items.push(evidence({
       workerCode: code, score: 110, presenceKey: `lease:${code}:${text(lease?.leaseId) || name}`,
       phase: text(lease?.phase) || "coding", summary: text(lease?.summary) || `${workerName(code)} aktív fejlesztési lease`,

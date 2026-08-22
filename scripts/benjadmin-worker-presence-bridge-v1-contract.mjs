@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { inferEvidenceDevelopmentContext } from "./benjadmin-worker-presence-bridge.mjs";
 const root=process.cwd(); let n=0;
 function read(f){return fs.readFileSync(path.join(root,f),"utf8")}
 function check(name,ok,detail=""){if(!ok){console.error(`FAIL ${String(n+1).padStart(2,"0")} ${name}${detail?` :: ${detail}`:""}`);process.exitCode=1;return;}n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}${detail?` :: ${detail}`:""}`)}
@@ -14,7 +15,15 @@ const panel=read("components/admin/developer-console/LiveWorkPanel.tsx");
 const team=read("components/admin/developer-console/TeamQuickDrawer.tsx");
 const drawer=read("components/admin/developer-console/WorkerActivityDrawer.tsx");
 const lease=read("scripts/benjadmin-worker-presence.mjs");
+const healthContext=inferEvidenceDevelopmentContext({summary:"ÁrminAI · BUILD · DIMPRO ONE Health V0.1.0 heap3400 candidate build"});
+check("Health inference functional DIMPRO ONE",healthContext.mainModule==="DIMPRO ONE"&&healthContext.moduleName==="Egészség"&&healthContext.submoduleName==="Health MVP",JSON.stringify(healthContext));
+const healthBranchContext=inferEvidenceDevelopmentContext({branch:"feature/dimpro-one-health-v1-20260821"});
+check("Health inference functional branch",healthBranchContext.mainModule==="DIMPRO ONE"&&healthBranchContext.moduleName==="Egészség",JSON.stringify(healthBranchContext));
+const unrelatedHealth=inferEvidenceDevelopmentContext({summary:"Generic API health check"});
+check("Generic health does not become DIMPRO ONE",unrelatedHealth.mainModule===""&&unrelatedHealth.moduleName==="",JSON.stringify(unrelatedHealth));
 check("Bridge has explicit lease source",bridge.includes("collectLeaseEvidence"));
+check("Health context inference covers DIMPRO ONE Egészség",bridge.includes("inferEvidenceDevelopmentContext") && bridge.includes('mainModule: "DIMPRO ONE"') && bridge.includes('moduleName: "Egészség"'));
+check("No-expiry ACTIVE lease requires fresh heartbeat",bridge.includes("freshNoExpiry") && bridge.includes("ACTIVE_TTL_MS"));
 check("Bridge has task/session source",bridge.includes("collectSessionEvidence"));
 check("Bridge has coordination operation source",bridge.includes("collectOperationEvidence"));
 check("Bridge has recent file source",bridge.includes("collectDirtyEvidence"));
