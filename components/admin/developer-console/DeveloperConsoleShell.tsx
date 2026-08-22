@@ -428,7 +428,7 @@ export default function DeveloperConsoleShell() {
   }
 
   return (
-    <main className={styles.console} data-console-theme={theme} data-testid="benjadmin-developer-console">
+    <main className={styles.console} data-console-theme={theme} data-resources-open={resourcesOpen ? "true" : "false"} data-testid="benjadmin-developer-console">
       <DeveloperConsoleTopbar theme={theme} onThemeChange={changeTheme} connection={connection} lastUpdate={lastUpdate} now={now} context={context} onCommands={() => setCommandsOpen(true)} onResources={() => setResourcesOpen(true)} onAiWorkers={() => setAiWorkersOpen(true)} onInstall={() => setInstallOpen(true)} onTeam={() => setTeamOpen(true)} onPrivacy={requestPrivacy} />
       {error ? <div className={styles.alertBar}><AlertTriangle size={15} /><span>{error}</span><button type="button" onClick={() => void silentFetch()}><RefreshCw size={14} /> Újrapróbálás</button></div> : null}
       {notice ? <div className={styles.noticeBar}>{notice}</div> : null}

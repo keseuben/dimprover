@@ -2194,3 +2194,34 @@
 .handoffCard small { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: var(--type-small); }
 @media (max-width: 1150px) { .resourceFilterBar { grid-template-columns: minmax(220px,1fr) repeat(2,minmax(120px,.5fr)); } .resourceFilterBar button { grid-column: auto; } }
 @media (max-width: 760px) { .resourceFilterBar { grid-template-columns: 1fr; } .handoffCardTop { flex-direction: column; } }
+
+
+/* BENJADMIN Handoff & Context Workspace V1.1 — visible tabs/actions + non-overlay desktop split. */
+.resourceTabs { min-height: 56px; padding: 7px 9px; gap: 8px; background: color-mix(in srgb, var(--panel) 92%, var(--accent-soft)); }
+.resourceTabs button { flex: 1 1 0; min-width: 0; min-height: 42px; padding: 0 13px; border: 1px solid var(--border-strong); border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: var(--text); background: var(--surface); font-size: var(--type-strong); font-weight: 950; letter-spacing: .035em; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+.resourceTabs button:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.resourceTabs button[data-active="true"] { border-color: var(--accent); color: #fff; background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
+.resourceTabs button[data-active="true"] svg { color: currentColor; }
+.resourceTabs button b { min-width: 24px; padding: 2px 7px; border-radius: 999px; color: var(--text-soft); background: var(--surface2); font-size: var(--type-small); text-align: center; }
+.resourceTabs button[data-active="true"] b { color: var(--accent-strong); background: #fff; }
+.resourceActions { max-width: 330px; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+.resourceActions a, .resourceActions button { width: auto; min-width: 38px; height: 34px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-color: var(--border-strong); color: var(--text-soft); background: var(--panel); font-size: var(--type-small); font-weight: 850; white-space: nowrap; }
+.resourceActions button span { display: inline; }
+.resourceActions a:hover, .resourceActions button:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+@media (min-width: 1300px) {
+  .console[data-resources-open="true"] { grid-template-columns: minmax(0, 1fr) clamp(540px, 36vw, 620px); }
+  .console[data-resources-open="true"] > :not(.drawerLayer) { grid-column: 1; }
+  .console[data-resources-open="true"] > .drawerLayer { position: relative; inset: auto; grid-column: 2; grid-row: 1 / -1; z-index: 12; min-width: 0; min-height: 0; display: block; border-left: 1px solid var(--border-strong); background: var(--panel); }
+  .console[data-resources-open="true"] > .drawerLayer .drawerBackdrop { display: none; }
+  .console[data-resources-open="true"] > .drawerLayer .drawer, .console[data-resources-open="true"] > .drawerLayer .drawerExtraWide { width: 100%; max-width: none; height: 100%; min-height: 0; border-left: 0; box-shadow: none; animation: none; }
+  .console[data-resources-open="true"] .workspace { grid-template-columns: minmax(185px,205px) minmax(0,1fr) minmax(235px,265px); }
+  .console[data-resources-open="true"] .topbar { grid-template-columns: auto minmax(0,1fr); }
+  .console[data-resources-open="true"] .topbarCenter { justify-content: flex-end; }
+  .console[data-resources-open="true"] .topbarActions { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; padding-top: 2px; }
+  .console[data-resources-open="true"] .resourceFormGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .console[data-resources-open="true"] .resourceHealth { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .console[data-resources-open="true"] .resourceFilterBar { grid-template-columns: minmax(200px,1fr) repeat(2,minmax(115px,.55fr)); }
+  .console[data-resources-open="true"] .resourceList article { grid-template-columns: auto minmax(0,1fr); }
+  .console[data-resources-open="true"] .resourceActions { grid-column: 1 / -1; max-width: none; justify-content: flex-end; }
+}
+@media (max-width: 1299px) { .resourceActions button span { display: none; } .resourceActions a, .resourceActions button { width: 34px; min-width: 34px; padding: 0; } }
