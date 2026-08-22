@@ -369,7 +369,7 @@
 
 .drawerLayer { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: flex-end; }
 .drawerBackdrop { position: absolute; inset: 0; border: 0; background: rgba(2, 6, 23, .48); cursor: default; }
-.drawer { position: relative; width: min(620px, calc(100vw - 30px)); height: 100%; border-left: 1px solid var(--border); display: grid; grid-template-rows: auto minmax(0,1fr); color: var(--text); background: var(--panel); box-shadow: var(--shadow); animation: drawerIn .18s ease-out both; }
+.drawer { position: relative; width: min(620px, calc(100vw - 30px)); height: 100%; min-height: 0; border-left: 1px solid var(--border); display: grid; grid-template-rows: auto auto minmax(0,1fr); overflow: hidden; color: var(--text); background: var(--panel); box-shadow: var(--shadow); animation: drawerIn .18s ease-out both; }
 .drawerWide { width: min(840px, calc(100vw - 30px)); }
 .drawerExtraWide { width: min(980px, calc(100vw - 30px)); }
 .drawerHeader { min-height: 58px; padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -2196,7 +2196,7 @@
 @media (max-width: 760px) { .resourceFilterBar { grid-template-columns: 1fr; } .handoffCardTop { flex-direction: column; } }
 
 
-/* BENJADMIN Handoff & Context Workspace V1.1 — visible tabs/actions + non-overlay desktop split. */
+/* BENJADMIN Handoff & Context Workspace V1.2 — overlay drawer + fixed tabs + collapsible upload metadata. */
 .resourceTabs { min-height: 56px; padding: 7px 9px; gap: 8px; background: color-mix(in srgb, var(--panel) 92%, var(--accent-soft)); }
 .resourceTabs button { flex: 1 1 0; min-width: 0; min-height: 42px; padding: 0 13px; border: 1px solid var(--border-strong); border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: var(--text); background: var(--surface); font-size: var(--type-strong); font-weight: 950; letter-spacing: .035em; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
 .resourceTabs button:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
@@ -2208,20 +2208,9 @@
 .resourceActions a, .resourceActions button { width: auto; min-width: 38px; height: 34px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-color: var(--border-strong); color: var(--text-soft); background: var(--panel); font-size: var(--type-small); font-weight: 850; white-space: nowrap; }
 .resourceActions button span { display: inline; }
 .resourceActions a:hover, .resourceActions button:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
-@media (min-width: 1300px) {
-  .console[data-resources-open="true"] { grid-template-columns: minmax(0, 1fr) clamp(540px, 36vw, 620px); }
-  .console[data-resources-open="true"] > :not(.drawerLayer) { grid-column: 1; }
-  .console[data-resources-open="true"] > .drawerLayer { position: relative; inset: auto; grid-column: 2; grid-row: 1 / -1; z-index: 12; min-width: 0; min-height: 0; display: block; border-left: 1px solid var(--border-strong); background: var(--panel); }
-  .console[data-resources-open="true"] > .drawerLayer .drawerBackdrop { display: none; }
-  .console[data-resources-open="true"] > .drawerLayer .drawer, .console[data-resources-open="true"] > .drawerLayer .drawerExtraWide { width: 100%; max-width: none; height: 100%; min-height: 0; border-left: 0; box-shadow: none; animation: none; }
-  .console[data-resources-open="true"] .workspace { grid-template-columns: minmax(185px,205px) minmax(0,1fr) minmax(235px,265px); }
-  .console[data-resources-open="true"] .topbar { grid-template-columns: auto minmax(0,1fr); }
-  .console[data-resources-open="true"] .topbarCenter { justify-content: flex-end; }
-  .console[data-resources-open="true"] .topbarActions { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; padding-top: 2px; }
-  .console[data-resources-open="true"] .resourceFormGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .console[data-resources-open="true"] .resourceHealth { grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .console[data-resources-open="true"] .resourceFilterBar { grid-template-columns: minmax(200px,1fr) repeat(2,minmax(115px,.55fr)); }
-  .console[data-resources-open="true"] .resourceList article { grid-template-columns: auto minmax(0,1fr); }
-  .console[data-resources-open="true"] .resourceActions { grid-column: 1 / -1; max-width: none; justify-content: flex-end; }
-}
+.resourceUploadToggle { margin-top: 8px; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.resourceUploadToggle button { min-height: 38px; padding: 0 11px; border: 1px solid var(--accent); border-radius: 8px; display: inline-flex; align-items: center; gap: 7px; color: var(--accent-strong); background: var(--accent-soft); cursor: pointer; font-size: var(--type-body); font-weight: 950; }
+.resourceUploadToggle button:hover { background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface)); }
+.resourceUploadToggle small { min-width: 0; color: var(--muted); font-size: var(--type-small); line-height: 1.35; text-align: right; }
 @media (max-width: 1299px) { .resourceActions button span { display: none; } .resourceActions a, .resourceActions button { width: 34px; min-width: 34px; padding: 0; } }
+@media (max-width: 700px) { .resourceUploadToggle { align-items: stretch; flex-direction: column; } .resourceUploadToggle small { text-align: left; } }
