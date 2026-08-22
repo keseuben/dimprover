@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promise
 import path from "node:path";
 
 export type DevelopmentResourcePriority = "normal" | "important" | "critical";
+export type DevelopmentResourceDocumentType = "specification" | "concept" | "coding_guide" | "reference" | "handoff" | "other";
 export type DevelopmentResource = {
   id: string;
   module: string;
@@ -19,6 +20,7 @@ export type DevelopmentResource = {
   source: string;
   version: string;
   requiredBeforeDevelopment: boolean;
+  documentType: DevelopmentResourceDocumentType;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -52,6 +54,25 @@ function normalizePriority(value: unknown): DevelopmentResourcePriority {
   return value === "critical" || value === "important" ? value : "normal";
 }
 
+function normalizeDocumentType(value: unknown): DevelopmentResourceDocumentType {
+  return ["specification", "concept", "coding_guide", "reference", "handoff", "other"].includes(String(value || ""))
+    ? String(value) as DevelopmentResourceDocumentType
+    : "reference";
+}
+
+export function validateDevelopmentResourceMetadata(input: { module: string; title?: string; description?: string; tags?: string | string[]; version?: string; documentType?: DevelopmentResourceDocumentType }) {
+  const tags = normalizeTags(input.tags);
+  const missing = [
+    !String(input.module || "").trim() ? "Modul" : "",
+    !String(input.title || "").trim() ? "Cím" : "",
+    !String(input.version || "").trim() ? "Verzió" : "",
+    !String(input.description || "").trim() ? "Leírás" : "",
+    tags.length === 0 ? "Címkék" : "",
+    !String(input.documentType || "").trim() ? "Dokumentumtípus" : "",
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`A feltöltés előtt töltsd ki a kötelező adatokat: ${missing.join(", ")}.`);
+}
+
 async function ensureStore() {
   await mkdir(resourceRoot, { recursive: true, mode: 0o700 });
   await chmod(resourceRoot, 0o700).catch(() => undefined);
@@ -80,6 +101,7 @@ function migrateResource(item: unknown): DevelopmentResource | null {
     source: typeof row.source === "string" ? row.source : "BENJADMIN_UPLOAD",
     version: typeof row.version === "string" ? row.version : "",
     requiredBeforeDevelopment: typeof row.requiredBeforeDevelopment === "boolean" ? row.requiredBeforeDevelopment : Boolean(row.activeContext),
+    documentType: normalizeDocumentType(row.documentType),
     archivedAt: typeof row.archivedAt === "string" ? row.archivedAt : null,
     createdAt,
     updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : createdAt,
@@ -119,6 +141,7 @@ export async function saveDevelopmentResource(input: {
   source?: string;
   version?: string;
   requiredBeforeDevelopment?: boolean;
+  documentType?: DevelopmentResourceDocumentType;
   file: File;
 }) {
   const originalName = safeFileBase(input.file.name);
@@ -158,6 +181,7 @@ export async function saveDevelopmentResource(input: {
     source: (input.source?.trim() || "BENJADMIN_UPLOAD").slice(0, 120),
     version: (input.version?.trim() || "").slice(0, 80),
     requiredBeforeDevelopment: Boolean(input.requiredBeforeDevelopment),
+    documentType: normalizeDocumentType(input.documentType),
     archivedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -168,7 +192,7 @@ export async function saveDevelopmentResource(input: {
   return resource;
 }
 
-export async function updateDevelopmentResource(id: string, patch: Partial<Pick<DevelopmentResource, "title" | "description" | "tags" | "priority" | "source" | "version" | "requiredBeforeDevelopment">> & { archived?: boolean }) {
+export async function updateDevelopmentResource(id: string, patch: Partial<Pick<DevelopmentResource, "title" | "description" | "tags" | "priority" | "source" | "version" | "requiredBeforeDevelopment" | "documentType">> & { archived?: boolean }) {
   const resources = await readIndex();
   const index = resources.findIndex((item) => item.id === id);
   if (index < 0) throw new Error("A fejlesztési segédanyag nem található.");
@@ -182,6 +206,7 @@ export async function updateDevelopmentResource(id: string, patch: Partial<Pick<
     source: typeof patch.source === "string" ? patch.source.trim().slice(0, 120) : current.source,
     version: typeof patch.version === "string" ? patch.version.trim().slice(0, 80) : current.version,
     requiredBeforeDevelopment: typeof patch.requiredBeforeDevelopment === "boolean" ? patch.requiredBeforeDevelopment : current.requiredBeforeDevelopment,
+    documentType: patch.documentType ? normalizeDocumentType(patch.documentType) : current.documentType,
     archivedAt: typeof patch.archived === "boolean" ? patch.archived ? new Date().toISOString() : null : current.archivedAt,
     updatedAt: new Date().toISOString(),
   };

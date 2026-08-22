@@ -202,6 +202,7 @@ export type DevelopmentResource = {
   source: string;
   version: string;
   requiredBeforeDevelopment: boolean;
+  documentType: "specification" | "concept" | "coding_guide" | "reference" | "handoff" | "other";
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;

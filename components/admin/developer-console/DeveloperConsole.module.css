@@ -2128,3 +2128,69 @@
   .weeklyHandoffTimingMetrics { grid-template-columns: minmax(0,1fr); }
   .weeklyHandoffTimingDetails > b { max-width: 100%; }
 }
+
+/* BENJADMIN Handoff & Context Workspace V1 */
+.resourceTabs { min-height: 42px; padding: 5px 9px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; background: var(--surface2); }
+.resourceTabs button { min-height: 31px; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: var(--type-body); font-weight: 950; }
+.resourceTabs button[data-active="true"] { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.resourceTabs b { margin-left: 5px; }
+.dropZoneDisabled { border-color: var(--border) !important; color: var(--muted) !important; background: var(--surface2) !important; cursor: not-allowed !important; opacity: .72; }
+.resourceFilterBar { margin: 9px 0; display: grid; grid-template-columns: minmax(240px,1.7fr) repeat(3,minmax(120px,.55fr)) auto; gap: 6px; }
+.resourceFilterBar label { min-width: 0; min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; gap: 6px; background: var(--surface); }
+.resourceFilterBar input, .resourceFilterBar select { min-width: 0; width: 100%; min-height: 34px; padding: 0 7px; border: 1px solid var(--border); border-radius: 8px; outline: none; color: var(--text); background: var(--surface); font-size: var(--type-body); }
+.resourceFilterBar label input { border: 0; background: transparent; }
+.resourceFilterBar button { min-height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: var(--type-body); font-weight: 900; }
+.handoffGroups { display: grid; gap: 10px; }
+.handoffGroups > section { display: grid; gap: 6px; }
+.handoffGroups > section > header { min-height: 34px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface2); }
+.handoffGroups > section > header strong { color: var(--text); font-size: var(--type-strong); }
+.handoffGroups > section > header span { color: var(--muted); font-size: var(--type-body); }
+.handoffCard { padding: 9px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 6px; background: var(--surface); cursor: grab; }
+.handoffCard:active { cursor: grabbing; }
+.handoffCardTop { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.handoffCardTop > div { min-width: 0; display: grid; gap: 2px; }
+.handoffCardTop strong { color: var(--text); font-size: var(--type-strong); }
+.handoffCardTop span { color: var(--muted); font-size: var(--type-body); }
+.handoffCardTop > b { padding: 3px 7px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: var(--type-body); white-space: nowrap; }
+.handoffCardTop > b[data-status="BLOCKED"], .handoffCardTop > b[data-status="FAILED"] { color: var(--red); background: var(--red-soft); }
+.handoffCardTop > b[data-status="PARTIAL"] { color: var(--amber); background: var(--amber-soft); }
+.handoffFacts { display: flex; flex-wrap: wrap; gap: 5px; }
+.handoffFacts span, .handoffFacts strong { padding: 3px 6px; border-radius: 6px; color: var(--text-soft); background: var(--surface2); font-size: var(--type-body); }
+.handoffFacts strong { color: var(--accent-strong); }
+.handoffCard p { margin: 0; color: var(--text-soft); font-size: var(--type-body); line-height: 1.45; }
+.handoffCard small { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: var(--type-small); }
+@media (max-width: 1150px) { .resourceFilterBar { grid-template-columns: minmax(220px,1fr) repeat(2,minmax(120px,.5fr)); } .resourceFilterBar button { grid-column: auto; } }
+@media (max-width: 760px) { .resourceFilterBar { grid-template-columns: 1fr; } .handoffCardTop { flex-direction: column; } }
+
+/* BENJADMIN Handoff & Context Workspace V1 */
+.resourceTabs { min-height: 42px; padding: 5px 9px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; background: var(--surface2); }
+.resourceTabs button { min-height: 31px; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: var(--type-body); font-weight: 950; }
+.resourceTabs button[data-active="true"] { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.resourceTabs b { margin-left: 5px; }
+.dropZoneDisabled { border-color: var(--border) !important; color: var(--muted) !important; background: var(--surface2) !important; cursor: not-allowed !important; opacity: .72; }
+.resourceFilterBar { margin: 9px 0; display: grid; grid-template-columns: minmax(240px,1.7fr) repeat(3,minmax(120px,.55fr)) auto; gap: 6px; }
+.resourceFilterBar label { min-width: 0; min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; gap: 6px; background: var(--surface); }
+.resourceFilterBar input, .resourceFilterBar select { min-width: 0; width: 100%; min-height: 34px; padding: 0 7px; border: 1px solid var(--border); border-radius: 8px; outline: none; color: var(--text); background: var(--surface); font-size: var(--type-body); }
+.resourceFilterBar label input { border: 0; background: transparent; }
+.resourceFilterBar button { min-height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: var(--text-soft); background: var(--surface); cursor: pointer; font-size: var(--type-body); font-weight: 900; }
+.handoffGroups { display: grid; gap: 10px; }
+.handoffGroups > section { display: grid; gap: 6px; }
+.handoffGroups > section > header { min-height: 34px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface2); }
+.handoffGroups > section > header strong { color: var(--text); font-size: var(--type-strong); }
+.handoffGroups > section > header span { color: var(--muted); font-size: var(--type-body); }
+.handoffCard { padding: 9px; border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 6px; background: var(--surface); cursor: grab; }
+.handoffCard:active { cursor: grabbing; }
+.handoffCardTop { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.handoffCardTop > div { min-width: 0; display: grid; gap: 2px; }
+.handoffCardTop strong { color: var(--text); font-size: var(--type-strong); }
+.handoffCardTop span { color: var(--muted); font-size: var(--type-body); }
+.handoffCardTop > b { padding: 3px 7px; border-radius: 999px; color: var(--green); background: var(--green-soft); font-size: var(--type-body); white-space: nowrap; }
+.handoffCardTop > b[data-status="BLOCKED"], .handoffCardTop > b[data-status="FAILED"] { color: var(--red); background: var(--red-soft); }
+.handoffCardTop > b[data-status="PARTIAL"] { color: var(--amber); background: var(--amber-soft); }
+.handoffFacts { display: flex; flex-wrap: wrap; gap: 5px; }
+.handoffFacts span, .handoffFacts strong { padding: 3px 6px; border-radius: 6px; color: var(--text-soft); background: var(--surface2); font-size: var(--type-body); }
+.handoffFacts strong { color: var(--accent-strong); }
+.handoffCard p { margin: 0; color: var(--text-soft); font-size: var(--type-body); line-height: 1.45; }
+.handoffCard small { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: var(--type-small); }
+@media (max-width: 1150px) { .resourceFilterBar { grid-template-columns: minmax(220px,1fr) repeat(2,minmax(120px,.5fr)); } .resourceFilterBar button { grid-column: auto; } }
+@media (max-width: 760px) { .resourceFilterBar { grid-template-columns: 1fr; } .handoffCardTop { flex-direction: column; } }
