@@ -16,7 +16,7 @@ function check(name, ok, detail = "") { if (!ok) throw new Error(`${name}: ${det
 
 const saved = await handoff.saveDevelopmentHandoff({
   id: "handoff-contract-001", chatSessionId: "260822_3", chatTitle: "260822_3 ÁrminAI – fejlesztés", workerCode: "ARMINAI",
-  mainProject: "DIMPRO", project: "BENJADMIN", module: "ChatGrid", contextModule: "External Review Room", taskId: "task-contract", taskTitle: "Contract task",
+  schemaVersion: 2, mainProject: "DIMPRO", project: "BENJADMIN", module: "ChatGrid", contextModule: "External Review Room", developmentArea: "Handoff V2", taskId: "task-contract", taskTitle: "Contract task", liveNextTaskId: "next-task", liveNextTaskTitle: "Next task",
   startedAt: "2026-08-22T14:10:00+02:00", finishedAt: "2026-08-22T14:33:00+02:00", status: "BLOCKED", branch: "feature/test", worktree: "/srv/dimpro-dev/worktrees/test",
   startCommit: "a".repeat(40), endCommit: "b".repeat(40), testsSummary: "144/144 PASS", buildRelease: "NONE", tags: ["chatgrid", "handoff"], summary: "Átadási contract teszt.", body: "# Átadó\n\nTeljes munkaszakasz összefoglaló.\n"
 });
@@ -24,18 +24,23 @@ check("handoff duration is server-derived", saved.durationMinutes === 23, `durat
 check("handoff PROD is always DENY", saved.productionAccess === "DENY");
 check("immutable history markdown created", fs.existsSync(saved.filePath), saved.filePath);
 check("worker LATEST created", fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, "workers", "ARMINAI_LATEST.md")));
-check("module LATEST created", fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, "modules", "external-review-room", "LATEST.md")));
+check("hierarchical module LATEST created", fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, "modules", "dimpro__benjadmin__chatgrid__external-review-room", "LATEST.md")));
+check("handoff V2 metadata persists", saved.schemaVersion === 2 && saved.developmentArea === "Handoff V2" && saved.liveNextTaskId === "next-task");
+check("canonical handoff filename follows chat_worker_time_project_module_area pattern", /^260822_3_ArminAI_\d{6}_\d{4}_DIMPRO_ChatGrid_Handoff_V2_atado\.md$/.test(saved.fileName), saved.fileName);
 const listed = await handoff.listDevelopmentHandoffs({ worker: "ARMINAI", module: "ChatGrid", chat: "260822_3" });
 check("handoff structured filters work", listed.length === 1 && listed[0].id === saved.id, `count=${listed.length}`);
+const filenameSearch = await handoff.listDevelopmentHandoffs({ query: saved.fileName });
+check("handoff canonical filename is searchable", filenameSearch.length === 1 && filenameSearch[0].id === saved.id);
 let duplicateDenied = false; try { await handoff.saveDevelopmentHandoff({ ...saved, body: "duplicate" }); } catch { duplicateDenied = true; }
 check("immutable handoff overwrite denied", duplicateDenied);
 const readBack = await handoff.readDevelopmentHandoff(saved.id);
 check("handoff SHA integrity verified", readBack.item.sha256 === saved.sha256 && readBack.content.includes("260822_3"));
+check("handoff markdown front matter contains canonical filename and V2 fields", readBack.content.includes(`fileName: ${JSON.stringify(saved.fileName)}`) && readBack.content.includes('schemaVersion: 2') && readBack.content.includes('developmentArea: "Handoff V2"'));
 
 const parallelWorkers = ["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI"];
 await Promise.all(parallelWorkers.map((workerCode, index) => handoff.saveDevelopmentHandoff({
   id: `handoff-parallel-${index + 1}`, chatSessionId: `260822_${index + 1}`, chatTitle: `Parallel ${workerCode}`, workerCode,
-  mainProject: "DIMPRO", project: "BENJADMIN", module: "ChatGrid", contextModule: "Parallel Handoff", taskId: `parallel-task-${index + 1}`, taskTitle: "Concurrent save contract",
+  schemaVersion: 2, mainProject: "DIMPRO", project: "BENJADMIN", module: "ChatGrid", contextModule: "Parallel Handoff", developmentArea: `Parallel ${workerCode}`, taskId: `parallel-task-${index + 1}`, taskTitle: "Concurrent save contract", liveNextTaskId: "", liveNextTaskTitle: "",
   startedAt: "2026-08-22T15:00:00+02:00", finishedAt: `2026-08-22T15:0${index + 1}:00+02:00`, status: "COMPLETED", branch: `feature/${workerCode.toLowerCase()}`, worktree: `/tmp/${workerCode.toLowerCase()}`,
   startCommit: "c".repeat(40), endCommit: "d".repeat(40), testsSummary: "PASS", buildRelease: "NONE", tags: ["parallel", workerCode.toLowerCase()], summary: `Parallel ${workerCode} handoff.`, body: `# ${workerCode} átadó\n\nMUNKA VISSZAADVA: 2026.08.22. 15:0${index + 1}\n`
 })));
@@ -43,6 +48,19 @@ const afterParallel = await handoff.listDevelopmentHandoffs({});
 check("concurrent four-worker handoff writes preserve every index entry", parallelWorkers.every((_, index) => afterParallel.some((item) => item.id === `handoff-parallel-${index + 1}`)), `count=${afterParallel.length}`);
 check("handoff cross-process write lock released after concurrent saves", !fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, ".handoff-write.lock")));
 check("concurrent worker LATEST files all exist", parallelWorkers.every((worker) => fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, "workers", `${worker}_LATEST.md`))));
+
+
+const storeSource = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../app/lib/dev-center/handoff-store.ts"), "utf8");
+const chatGridDownloadRoute = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../app/api/dev/chatgrid/context-workspace/handoffs/[handoffId]/route.ts"), "utf8");
+const consoleDownloadRoute = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../app/api/dev/console/handoffs/[handoffId]/route.ts"), "utf8");
+check("handoff store canonical filename is server-generated", storeSource.includes("canonicalFileName") && storeSource.includes("workerFileLabels"));
+check("ChatGrid handoff download route is device-authenticated and attachment-safe", chatGridDownloadRoute.includes("isChatGridDeviceAuthorized") && chatGridDownloadRoute.includes("content-disposition") && chatGridDownloadRoute.includes("x-benjadmin-handoff-sha256"));
+check("Developer Console handoff download route uses admin auth", consoleDownloadRoute.includes("isDevCenterAuthorized") && consoleDownloadRoute.includes("content-disposition"));
+const drawerSource = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/admin/developer-console/DevelopmentResourcesDrawer.tsx"), "utf8");
+const drawerCss = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/admin/developer-console/DeveloperConsole.module.css"), "utf8");
+check("Developer Console ÁTADÁSOK card displays canonical filename", drawerSource.includes("handoffFileName") && drawerSource.includes("item.fileName"));
+check("Developer Console ÁTADÁSOK card exposes Letöltés .MD action", drawerSource.includes("downloadStoredHandoff") && drawerSource.includes("Letöltés .MD"));
+check("Developer Console canonical filename wraps on narrow drawer", drawerCss.includes(".handoffFileName") && drawerCss.includes("overflow-wrap: anywhere"));
 
 const sampleFile = new File(["# sample"], "sample.md", { type: "text/markdown" });
 let metadataDenied = false;

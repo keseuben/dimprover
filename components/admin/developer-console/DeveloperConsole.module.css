@@ -2214,3 +2214,34 @@
 .resourceUploadToggle small { min-width: 0; color: var(--muted); font-size: var(--type-small); line-height: 1.35; text-align: right; }
 @media (max-width: 1299px) { .resourceActions button span { display: none; } .resourceActions a, .resourceActions button { width: 34px; min-width: 34px; padding: 0; } }
 @media (max-width: 700px) { .resourceUploadToggle { align-items: stretch; flex-direction: column; } .resourceUploadToggle small { text-align: left; } }
+
+/* BENJADMIN Handoff V2 — canonical filename + download */
+.handoffFileName {
+  display: block;
+  min-width: 0;
+  color: var(--accent-strong);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: var(--type-body);
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.handoffCardActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.handoffCardActions button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: var(--type-body);
+  font-weight: 850;
+  cursor: pointer;
+}
+.handoffCardActions button:hover:not(:disabled) { border-color: var(--accent); filter: brightness(1.04); }
+.handoffCardActions button:disabled { opacity: .58; cursor: wait; }
