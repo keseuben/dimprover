@@ -167,7 +167,17 @@ try {
   await page.reload({ waitUntil: "networkidle2", timeout: 60000 });
   await authenticate();
   await page.waitForFunction(() => document.querySelectorAll("[data-field-capture-item]").length === 2, { timeout: 15000 });
-  const saveStep = await visibleButton(page, "Mentés és megosztás");
+  const saveStep = await (async () => {
+    for (const button of await page.$$("nav[aria-label=\"Terep munkafolyamat\"] button")) {
+      const state = await button.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return { text: (el.textContent || "").replace(/\s+/g, " ").trim(), visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" };
+      });
+      if (state.visible && state.text.includes("Mentés és megosztás")) return button;
+    }
+    return null;
+  })();
   assert.ok(saveStep, "Mentés és megosztás step hiányzik");
   await saveStep.click();
   await page.waitForSelector('[data-terep-gps-photo-map="true"]', { timeout: 15000 });
@@ -184,10 +194,15 @@ try {
     const button = await page.$(`[data-gps-plan-reference="${references[index].id}"]`);
     assert.ok(button, `R${index + 1} referencia gomb hiányzik`);
     await button.click();
+    await page.waitForFunction((id) => {
+      const el = document.querySelector(`[data-gps-plan-reference="${id}"]`);
+      return Boolean(el && String(el.className).includes("border-indigo-500"));
+    }, { timeout: 10000 }, references[index].id);
+    await page.waitForSelector("[data-gps-plan-overlay]", { timeout: 30000 });
     const [east, north] = referenceLocals[index];
     const position = plan(east, north);
     await clickPlanPercent(page, position.xPercent, position.yPercent);
-    await page.waitForFunction((id) => document.querySelector(`[data-gps-plan-anchor="${id}"]`), { timeout: 10000 }, references[index].id);
+    await page.waitForFunction((id) => document.querySelector(`[data-gps-plan-anchor="${id}"]`), { timeout: 30000 }, references[index].id);
   }
   pass("Négy R referencia-pont ugyanazon tervlapon rögzíthető", await page.$$eval("[data-gps-plan-anchor]", (els) => els.length === 4));
   pass("4 referencia-pont után ellenőrzött illesztés látható", await page.evaluate(() => (document.body.textContent || "").includes("Illesztés: jó") && (document.body.textContent || "").includes("Átlagos eltérés")));

@@ -11,7 +11,6 @@ import {
 } from "@/app/lib/field-capture/gpsPlanCalibration";
 import {
   clearGpsPlanCalibration,
-  GPS_PLAN_CALIBRATION_CHANGED_EVENT,
   loadGpsPlanCalibrationRecord,
   saveGpsPlanAnchors,
   saveGpsPlanDocument,
@@ -41,9 +40,12 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
   const [rendering, setRendering] = useState(false);
   const [message, setMessage] = useState("");
   const [canvasReady, setCanvasReady] = useState(false);
+  const [planRenderRecord, setPlanRenderRecord] = useState<GpsPlanCalibrationRecord | null>(null);
 
   const reloadRecord = useCallback(async () => {
-    setRecord(await loadGpsPlanCalibrationRecord(sessionId));
+    const loaded = await loadGpsPlanCalibrationRecord(sessionId);
+    setRecord(loaded);
+    setPlanRenderRecord(loaded);
   }, [sessionId]);
 
   useEffect(() => {
@@ -61,16 +63,9 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
       setCalibrationPoints(next);
       setSelectedPointId((current) => current && next.some((point) => point.id === current) ? current : "");
     }
-    function handlePlanChanged(event: Event) {
-      const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
-      if (detail?.sessionId && detail.sessionId !== sessionId) return;
-      void reloadRecord();
-    }
     window.addEventListener(GPS_CALIBRATION_POINTS_CHANGED_EVENT, handleCalibrationChanged);
-    window.addEventListener(GPS_PLAN_CALIBRATION_CHANGED_EVENT, handlePlanChanged);
     return () => {
       window.removeEventListener(GPS_CALIBRATION_POINTS_CHANGED_EVENT, handleCalibrationChanged);
-      window.removeEventListener(GPS_PLAN_CALIBRATION_CHANGED_EVENT, handlePlanChanged);
     };
   }, [sessionId, reloadRecord]);
 
@@ -78,13 +73,14 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
     let cancelled = false;
     async function renderPlan() {
       const canvas = canvasRef.current;
-      if (!canvas || !record) { setCanvasReady(false); return; }
+      const renderRecord = planRenderRecord;
+      if (!canvas || !renderRecord) { setCanvasReady(false); return; }
       setRendering(true);
       setCanvasReady(false);
       try {
-        const source = new Uint8Array(await record.pdfBlob.arrayBuffer());
+        const source = new Uint8Array(await renderRecord.pdfBlob.arrayBuffer());
         const doc = await loadSharedPdfDocument(source);
-        const page = await doc.getPage(record.pageNumber);
+        const page = await doc.getPage(renderRecord.pageNumber);
         await renderSharedPdfPage({ page, canvas, scale: 1.35, maximumPixelDimension: 2600 });
         await doc.destroy?.();
         if (!cancelled) setCanvasReady(true);
@@ -96,7 +92,7 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
     }
     void renderPlan();
     return () => { cancelled = true; };
-  }, [record]);
+  }, [planRenderRecord]);
 
   const anchors = useMemo(() => record?.anchors ?? [], [record?.anchors]);
   const model = useMemo(() => buildGpsPlanCalibrationModel({ calibrationPoints, anchors, pageNumber: record?.pageNumber }), [calibrationPoints, anchors, record?.pageNumber]);
@@ -120,6 +116,7 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
       await doc.destroy?.();
       const saved = await saveGpsPlanDocument({ sessionId, file, pageCount, pageNumber: 1 });
       setRecord(saved);
+      setPlanRenderRecord(saved);
       setSelectedPointId(calibrationPoints[0]?.id || "");
       setMessage(`${saved.fileName} betöltve · ${saved.pageCount} oldal. Jelöld meg ugyanazokat az R pontokat a tervlapon.`);
     } catch (error) {
@@ -162,6 +159,7 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
     if (!sessionId) return;
     const saved = await setGpsPlanPage(sessionId, pageNumber);
     setRecord(saved);
+    setPlanRenderRecord(saved);
     setSelectedPointId(calibrationPoints[0]?.id || "");
     setMessage("Tervlapoldal váltva. A referencia-pontokat ezen az oldalon újra meg kell jelölni.");
   }
@@ -170,6 +168,7 @@ export default function GpsPlanCalibrationPanel({ items, sessionId }: { items: F
     if (!sessionId) return;
     await clearGpsPlanCalibration(sessionId);
     setRecord(null);
+    setPlanRenderRecord(null);
     setSelectedPointId("");
     setCanvasReady(false);
     setMessage("Tervlap-kalibráció törölve.");
