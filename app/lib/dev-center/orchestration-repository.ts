@@ -133,7 +133,7 @@ export async function claimTaskAtomic(input: { sessionId: string; workerId: stri
   }
   if (!input.taskId && input.workerId === OUTMINAI_WORKER_ID) {
     throw new DevCenterOrchestrationError(
-      "OutminAI csak explicit kiosztott partner taskot claimelhet; automatikus next-task claim tiltott.",
+      "OutminAI csak explicit kiosztott taskot claimelhet; automatikus next-task claim tiltott.",
       "PARTNER_OUTMIN_EXPLICIT_TASK_REQUIRED",
       403,
     );

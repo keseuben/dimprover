@@ -83,14 +83,9 @@ export async function assertWorkerProjectIsolation(db: SupabaseClient, input: { 
   const [worker, planeInfo] = await Promise.all([workerRow(db, input.workerId), resolveDevelopmentPlane(db, input.projectId)]);
 
   if (planeInfo.plane === "INTERNAL") {
-    if (worker.code === OUTMINAI_WORKER_CODE || worker.id === OUTMINAI_WORKER_ID) {
-      throw new PartnerIsolationPolicyError(
-        "OutminAI belső DIMPRO projekthez nem rendelhető. A Partner Development Plane default-deny szabály aktív.",
-        "PARTNER_OUTMIN_INTERNAL_DENIED",
-        403,
-        { workerId: worker.id, projectId: input.projectId, plane: planeInfo.plane },
-      );
-    }
+    // OutminAI dual-role policy (2026-08-22): internal DEV explicit assignment is allowed.
+    // Automatic next-task claim remains denied in orchestration; partner-plane isolation remains strict.
+    // PROD access is not granted by this rule.
     if (isExternalAiWorkerCode(worker.code)) {
       const metadata = worker.metadata && typeof worker.metadata === "object" ? worker.metadata : {};
       if (metadata.layer !== "EXTERNAL_AI" || metadata.productionAccess !== "DENY") {
