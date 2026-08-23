@@ -37,6 +37,17 @@ const readBack = await handoff.readDevelopmentHandoff(saved.id);
 check("handoff SHA integrity verified", readBack.item.sha256 === saved.sha256 && readBack.content.includes("260822_3"));
 check("handoff markdown front matter contains canonical filename and V2 fields", readBack.content.includes(`fileName: ${JSON.stringify(saved.fileName)}`) && readBack.content.includes('schemaVersion: 2') && readBack.content.includes('developmentArea: "Long human readable handoff area"') && readBack.content.includes('fileAreaKey: "OTP_auth"'));
 
+const unknownStart = await handoff.saveDevelopmentHandoff({
+  id: "handoff-contract-unknown-start", chatSessionId: "260823_1", chatTitle: "260823_1 BenAI", workerCode: "BENAI",
+  schemaVersion: 2, mainProject: "DIMPRO", project: "project_dimprover", module: "ChatGrid", contextModule: "Handoff V2",
+  developmentArea: "Unknown start contract", fileAreaKey: "handoff_unknown_start", taskId: "chat-benai-260823_1", taskTitle: "Unknown start handoff",
+  liveNextTaskId: "", liveNextTaskTitle: "", startedAt: "", finishedAt: "2026-08-23T01:40:00+02:00", status: "PARTIAL",
+  branch: "", worktree: "", startCommit: "", endCommit: "", testsSummary: "PASS", buildRelease: "NINCS", tags: ["chatgrid", "handoff"],
+  summary: "Ismeretlen kezdési idejű átadó.", body: "# Ismeretlen kezdés\n\nMUNKAFELVÉTEL: NINCS HITELESÍTETT ADAT\nPROD DENY\n"
+});
+check("Handoff V2 unknown startedAt is accepted", unknownStart.startedAt === "");
+check("Handoff V2 unknown startedAt duration is zero", unknownStart.durationMinutes === 0, `duration=${unknownStart.durationMinutes}`);
+
 const parallelWorkers = ["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI"];
 await Promise.all(parallelWorkers.map((workerCode, index) => handoff.saveDevelopmentHandoff({
   id: `handoff-parallel-${index + 1}`, chatSessionId: `260822_${index + 1}`, chatTitle: `Parallel ${workerCode}`, workerCode,

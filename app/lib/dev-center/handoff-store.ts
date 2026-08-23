@@ -161,7 +161,7 @@ export async function listDevelopmentHandoffs(filters: Record<string, string> = 
   const from = Date.parse(text(filters.from, 100));
   if (Number.isFinite(from)) items = items.filter((item) => Date.parse(item.finishedAt) >= from);
   const to = Date.parse(text(filters.to, 100));
-  if (Number.isFinite(to)) items = items.filter((item) => Date.parse(item.startedAt) <= to);
+  if (Number.isFinite(to)) items = items.filter((item) => !item.startedAt || Date.parse(item.startedAt) <= to);
   return items.sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
 }
 
@@ -171,13 +171,13 @@ export async function saveDevelopmentHandoff(input: Record<string, unknown>) {
   const startedAt = iso(input.startedAt);
   const finishedAt = iso(input.finishedAt);
   const status = text(input.status, 30).toUpperCase() as HandoffStatus;
-  if (!startedAt || !finishedAt || Date.parse(finishedAt) < Date.parse(startedAt)) throw new Error("Érvénytelen munkakezdés / visszaadás időpont.");
+  if (!finishedAt || (startedAt && Date.parse(finishedAt) < Date.parse(startedAt))) throw new Error("Érvénytelen munkakezdés / visszaadás időpont.");
   if (!["COMPLETED", "PARTIAL", "BLOCKED", "FAILED"].includes(status)) throw new Error("Érvénytelen átadási állapot.");
   const required = ["chatSessionId", "chatTitle", "mainProject", "project", "module", "taskId", "taskTitle", "summary", "body"];
   const missing = required.filter((key) => !text(input[key], key === "body" ? 200_000 : 500));
   if (missing.length) throw new Error(`Hiányzó átadási adatok: ${missing.join(", ")}.`);
 
-  const durationMinutes = Math.max(0, Math.round((Date.parse(finishedAt) - Date.parse(startedAt)) / 60000));
+  const durationMinutes = startedAt ? Math.max(0, Math.round((Date.parse(finishedAt) - Date.parse(startedAt)) / 60000)) : 0;
   const id = text(input.id, 180) || `handoff-${workerCode.toLowerCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const moduleKey = moduleLatestKey(input);
   const date = new Date(finishedAt);
