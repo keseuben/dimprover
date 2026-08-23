@@ -41,12 +41,13 @@ export type DevelopmentHandoff = {
 const root = process.env.DIMPRO_DEV_HANDOFF_ROOT?.trim() || "/srv/dimpro-dev/handoffs";
 const indexPath = path.join(root, "handoff-index.json");
 const writeLockPath = path.join(root, ".handoff-write.lock");
-const workers = new Set(["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI"]);
+const workers = new Set(["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI", "BENJADMIN"]);
 const workerFileLabels: Record<string, string> = {
   BENAI: "BenAI",
   OUTMINAI: "OutminAI",
   ARMINAI: "ArminAI",
   JAZMINAI: "JazminAI",
+  BENJADMIN: "BenjAdmin",
 };
 const LOCK_WAIT_MS = 50;
 const LOCK_TIMEOUT_MS = 8_000;
@@ -162,7 +163,7 @@ export async function listDevelopmentHandoffs(filters: Record<string, string> = 
   if (Number.isFinite(from)) items = items.filter((item) => Date.parse(item.finishedAt) >= from);
   const to = Date.parse(text(filters.to, 100));
   if (Number.isFinite(to)) items = items.filter((item) => !item.startedAt || Date.parse(item.startedAt) <= to);
-  return items.sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
+  return items.sort((a, b) => String(b.createdAt || b.finishedAt || "").localeCompare(String(a.createdAt || a.finishedAt || "")));
 }
 
 export async function saveDevelopmentHandoff(input: Record<string, unknown>) {

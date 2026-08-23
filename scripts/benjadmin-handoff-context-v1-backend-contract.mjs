@@ -48,7 +48,7 @@ const unknownStart = await handoff.saveDevelopmentHandoff({
 check("Handoff V2 unknown startedAt is accepted", unknownStart.startedAt === "");
 check("Handoff V2 unknown startedAt duration is zero", unknownStart.durationMinutes === 0, `duration=${unknownStart.durationMinutes}`);
 
-const parallelWorkers = ["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI"];
+const parallelWorkers = ["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI", "BENJADMIN"];
 await Promise.all(parallelWorkers.map((workerCode, index) => handoff.saveDevelopmentHandoff({
   id: `handoff-parallel-${index + 1}`, chatSessionId: `260822_${index + 1}`, chatTitle: `Parallel ${workerCode}`, workerCode,
   schemaVersion: 2, mainProject: "DIMPRO", project: "BENJADMIN", module: "ChatGrid", contextModule: "Parallel Handoff", developmentArea: `Parallel ${workerCode}`, fileAreaKey: `Parallel_${workerCode}`, taskId: `parallel-task-${index + 1}`, taskTitle: "Concurrent save contract", liveNextTaskId: "", liveNextTaskTitle: "",
@@ -56,9 +56,12 @@ await Promise.all(parallelWorkers.map((workerCode, index) => handoff.saveDevelop
   startCommit: "c".repeat(40), endCommit: "d".repeat(40), testsSummary: "PASS", buildRelease: "NONE", tags: ["parallel", workerCode.toLowerCase()], summary: `Parallel ${workerCode} handoff.`, body: `# ${workerCode} átadó\n\nMUNKA VISSZAADVA: 2026.08.22. 15:0${index + 1}\n`
 })));
 const afterParallel = await handoff.listDevelopmentHandoffs({});
-check("concurrent four-worker handoff writes preserve every index entry", parallelWorkers.every((_, index) => afterParallel.some((item) => item.id === `handoff-parallel-${index + 1}`)), `count=${afterParallel.length}`);
+check("concurrent five-actor handoff writes preserve every index entry", parallelWorkers.every((_, index) => afterParallel.some((item) => item.id === `handoff-parallel-${index + 1}`)), `count=${afterParallel.length}`);
 check("handoff cross-process write lock released after concurrent saves", !fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, ".handoff-write.lock")));
 check("concurrent worker LATEST files all exist", parallelWorkers.every((worker) => fs.existsSync(path.join(process.env.DIMPRO_DEV_HANDOFF_ROOT, "workers", `${worker}_LATEST.md`))));
+const benjadminParallel = afterParallel.find((item) => item.id === "handoff-parallel-5");
+check("BENJADMIN planning actor canonical filename uses BenjAdmin label", Boolean(benjadminParallel?.fileName?.includes("_BenjAdmin_")), benjadminParallel?.fileName || "missing");
+check("handoff list is newest-save-first by createdAt", afterParallel.every((item, index) => index === 0 || String(afterParallel[index - 1].createdAt || "") >= String(item.createdAt || "")));
 
 
 const storeSource = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../app/lib/dev-center/handoff-store.ts"), "utf8");
