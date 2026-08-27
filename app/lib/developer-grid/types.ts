@@ -147,6 +147,7 @@ export type DeveloperGridFoundation = {
   sourceProvenance: SourceProvenance;
   releaseRuntimeProvenance: ReleaseRuntimeProvenance;
   buildNodes: BuildNodeDefinition[];
+  buildExecutor: { kind: "REMOTE_BUILD_NODE" | "CANONICAL_DEV_SERVER"; node: BuildNodeDefinition | null; reason: string };
   realtime: {
     mode: "DELTA_EVENT";
     fullSnapshotPollingAllowed: false;

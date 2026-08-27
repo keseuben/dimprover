@@ -1,4 +1,5 @@
 import { listBuildNodes } from "./build-nodes";
+import { resolveBuildExecutor } from "./build-orchestrator";
 import { verifyReleaseRuntimeProvenance } from "./release-provenance";
 import { verifySourceProvenance } from "./source-provenance";
 import type { DeveloperGridFoundation } from "./types";
@@ -84,6 +85,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
       expectedBuildId: null,
     }),
     buildNodes: listBuildNodes(),
+    buildExecutor: resolveBuildExecutor(listBuildNodes()),
     realtime: {
       mode: "DELTA_EVENT",
       fullSnapshotPollingAllowed: false,

@@ -28,6 +28,9 @@ const context = fs.readFileSync(path.join(root, "app/lib/developer-grid/developm
 const events = fs.readFileSync(path.join(root, "app/lib/developer-grid/events.ts"), "utf8");
 const release = fs.readFileSync(path.join(root, "app/lib/developer-grid/release-provenance.ts"), "utf8");
 const build = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-nodes.ts"), "utf8");
+const orchestrator = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-orchestrator.ts"), "utf8");
+const stateStore = fs.readFileSync(path.join(root, "app/lib/developer-grid/state-store.ts"), "utf8");
+const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-bridge.ts"), "utf8");
 const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/DeveloperGridShell.tsx"), "utf8");
 
 const checks = [
@@ -42,6 +45,9 @@ const checks = [
   [release.includes("RELEASE_STATE_MISMATCH"), "release fail-closed"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
+  [orchestrator.includes("CANONICAL_DEV_SERVER") && orchestrator.includes("exclusiveLockHeld"), "canonical DEV build executor"],
+  [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],
+  [bridge.includes("presenceAuthoritative: false") && bridge.includes("TASK_SESSION_PROVENANCE"), "Developer Console bridge context policy"],
   [shell.includes("05 DevminAI") && shell.includes("01 ÁrminAI") === false, "shell uses registry-driven fixed cells"],
 ];
 
