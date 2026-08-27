@@ -159,3 +159,66 @@ export type DeveloperGridFoundation = {
   };
   generatedAt: string;
 };
+
+export type GridWorkflowState = "DRAFT" | "READY" | "RUNNING" | "WAITING" | "BLOCKED" | "REVIEW" | "COMPLETED" | "CANCELLED";
+
+export type GridWorkflow = {
+  id: string;
+  taskId: string;
+  state: GridWorkflowState;
+  currentStep: string;
+  assignedWorkers: WorkerCode[];
+  startedAt: string | null;
+  finishedAt: string | null;
+  blockCode?: string | null;
+};
+
+export type DevelopmentDocumentRef = {
+  id: string;
+  source: "DEVELOPMENT_LIBRARY" | "HANDOFF_STORE" | "TASK_ARTIFACT" | "REPOSITORY";
+  title: string;
+  canonicalPath: string;
+  contentHash?: string | null;
+  readOnly: boolean;
+  provenanceVerifiedAt?: string | null;
+};
+
+export type GridBuildRun = {
+  id: string;
+  taskId: string;
+  nodeId: BuildNodeDefinition["id"];
+  sourceHead: string;
+  sourceBranch: string;
+  status: "QUEUED" | "RUNNING" | "PASS" | "FAIL" | "BLOCKED";
+  exclusiveLockRequired: true;
+  buildId?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+};
+
+export type GridReview = {
+  id: string;
+  taskId: string;
+  reviewer: WorkerCode | "VGUARD" | "HUMAN";
+  status: "PENDING" | "PASS" | "PASS_WITH_NOTES" | "FAIL";
+  findings: Array<{ severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"; code: string; summary: string }>;
+  sourceHead: string;
+  createdAt: string;
+};
+
+export type GridTelemetry = {
+  taskId: string;
+  workerCode?: WorkerCode | null;
+  wallClockMs: number;
+  activeRuntimeMs: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cachedTokens?: number | null;
+  apiCostMinor?: number | null;
+  queryCount?: number | null;
+  payloadBytes?: number | null;
+  egressBytes?: number | null;
+  cacheHitCount?: number | null;
+  reconnectCount?: number | null;
+  recordedAt: string;
+};

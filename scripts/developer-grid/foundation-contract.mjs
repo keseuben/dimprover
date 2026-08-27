@@ -32,6 +32,9 @@ const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/D
 
 const checks = [
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
+  [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
+  [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
+  [types.includes("export type GridBuildRun =") && types.includes("export type GridReview =") && types.includes("export type GridTelemetry ="), "build/review/telemetry contracts"],
   [source.includes("SOURCE_BASELINE_MISMATCH"), "source fail-closed"],
   [context.includes("PRESENCE_IS_AUTHORITATIVE_CONTEXT = false"), "presence non-authoritative"],
   [events.includes('DEVELOPER_GRID_REALTIME_MODE = "DELTA_EVENT"'), "delta/event realtime"],
