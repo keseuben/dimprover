@@ -67,6 +67,45 @@ export type DeveloperGridEvent = {
   metadata: Record<string, unknown>;
 };
 
+export type DeveloperGridTaskState = {
+  id: string;
+  projectId: string;
+  title: string;
+  status: string;
+  developmentContext: DeveloperGridContext;
+  sourceProvenance: DeveloperGridSourceProvenance | null;
+  updatedAt: string;
+};
+
+export type DeveloperGridSessionState = {
+  id: string;
+  taskId: string;
+  workerCode: DeveloperGridAgentCode;
+  status: string;
+  branch: string;
+  worktree: string;
+  head: string;
+  openedAt: string | null;
+  heartbeatAt: string | null;
+  updatedAt: string;
+};
+
+export type DeveloperGridStateChange = {
+  revision: number;
+  kind: "task-upsert" | "session-upsert" | "session-close";
+  entityId: string;
+  taskId: string;
+  createdAt: string;
+};
+
+export type DeveloperGridStateSnapshot = {
+  schemaVersion: 1;
+  revision: number;
+  tasks: DeveloperGridTaskState[];
+  sessions: DeveloperGridSessionState[];
+  changes: DeveloperGridStateChange[];
+};
+
 export type DeveloperGridBuildNode = {
   id: "canonical-dev" | "build01" | "build02";
   hostname: string;
