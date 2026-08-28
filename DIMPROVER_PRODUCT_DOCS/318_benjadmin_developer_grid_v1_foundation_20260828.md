@@ -52,3 +52,16 @@ A build01/build02 még lehet `NOT_CONNECTED`; ez önmagában nem blokkoló. Ilye
 - Worker cellák élő task/context/source státuszának megjelenítése full-snapshot polling nélkül.
 - Release/runtime provenance tényleges DEV runtime adaptere.
 - Build orchestrator node health/SSH readiness adapter későbbi bekötése.
+## 2026-08-28 reggeli canonical reconciliation
+
+A `.24` worker és a `.32` canonical oldalon párhuzamosan létrejött két Developer Grid Core implementáció közül a task eredeti scope-jának megfelelő struktúra marad kanonikus:
+
+- `app/lib/developer-grid`
+- `app/api/dev/grid`
+- `app/admin/developer-grid`
+- `components/admin/developer-grid`
+- `scripts/developer-grid`
+
+A párhuzamos `app/lib/dev-center/developer-grid` + `app/api/dev/console/developer-grid` implementáció kivezetésre került. A két korábbi HEAD külön backup refen megőrzött, így rollback lehetséges. A canonical branch története összevezetésre kerül, majd egyetlen Developer Grid Core marad.
+
+A megtartott implementáció okai: persistent append-only JSONL event store, cross-process mutation lock, idempotens aktív-session reuse, külön `/admin/developer-grid` UI shell, task-scope szerinti elhelyezés és a canonical DEV build-executor fallback már ebben a vonalban szerepel.
