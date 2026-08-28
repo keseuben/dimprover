@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="hu" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>BENJADMIN Context Workspace</title>
+  <link rel="stylesheet" href="../renderer/styles.css" />
+</head>
+<body class="context-workspace-window" data-context-workspace-window="detached">
+  <header class="context-workspace-window-header">
+    <div><strong>BENJADMIN · CONTEXT WORKSPACE</strong><span>Fejlesztési Tár · Átadások · Context Pack · AI Fejlesztésirányítási Központ</span></div>
+    <div class="context-workspace-window-actions">
+      <button type="button" data-context-action="zoom-out" title="Kicsinyítés">−</button>
+      <button type="button" data-context-action="zoom-reset" class="context-zoom-value" title="100%-ra visszaállítás">100%</button>
+      <button type="button" data-context-action="zoom-in" title="Nagyítás">+</button>
+      <button type="button" data-context-action="dock">VISSZADOKKOLÁS</button>
+    </div>
+  </header>
+  <main id="contextWorkspaceRoot"></main>
+  <script src="../renderer/context-workspace.js"></script>
+</body>
+</html>

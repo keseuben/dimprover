@@ -1,0 +1,43 @@
+{
+  "name": "@dimpro/benjadmin-developer-grid-desktop",
+  "version": "0.1.1",
+  "private": true,
+  "description": "BENJADMIN Developer Grid – AI Engineering Control Center / AI Fejlesztésirányítási Központ",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/acceptance.mjs",
+    "dist:win": "electron-builder --win portable --x64",
+    "package:dev": "bash scripts/package-dev-release.sh"
+  },
+  "devDependencies": {
+    "electron": "43.3.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "hu.dimpro.benjadmin.developergrid",
+    "productName": "BENJADMIN Developer Grid",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "README.md",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "BENJADMIN-Developer-Grid-${version}-Windows-x64.${ext}"
+    },
+    "artifactName": "BENJADMIN-Developer-Grid-${version}-Windows-x64.${ext}"
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>BENJADMIN – Működési és használati szabályzat</title>
+  <link rel="stylesheet" href="./guide.css" />
+</head>
+<body>
+  <main class="guide-shell">
+    <header class="guide-titlebar">
+      <div>
+        <span class="guide-kicker">BENJADMIN CHATGRID</span>
+        <strong>Működési és használati szabályzat</strong>
+      </div>
+      <div class="guide-title-actions">
+        <span class="shortcut">Ctrl+Alt+9</span>
+        <button id="closeButton" type="button" title="Bezárás" aria-label="Bezárás">×</button>
+      </div>
+    </header>
+    <section class="guide-toolbar">
+      <button id="editButton" class="primary" type="button">Szerkesztés</button>
+      <button id="saveButton" class="primary is-hidden" type="button">Mentés</button>
+      <button id="cancelButton" class="secondary is-hidden" type="button">Mégse</button>
+      <button id="resetButton" class="secondary is-hidden" type="button">Alap visszaállítása</button>
+      <label class="autoshow"><input id="showOnUnlock" type="checkbox" checked /> Belépéskor automatikusan jelenjen meg</label>
+    </section>
+    <div id="notice" class="notice" aria-live="polite"></div>
+    <section id="preview" class="guide-content" tabindex="0"></section>
+    <textarea id="editor" class="guide-editor is-hidden" spellcheck="true" aria-label="Szabályzat szerkesztése"></textarea>
+    <footer>DEV · PROD DENY · A módosítások helyben, a ChatGrid konfigurációban tárolódnak.</footer>
+  </main>
+  <script src="./guide.js"></script>
+</body>
+</html>

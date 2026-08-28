@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src &#39;self&#39;; script-src &#39;self&#39;; style-src &#39;self&#39;; img-src &#39;self&#39; data:; media-src &#39;self&#39; blob:; connect-src &#39;none&#39;; object-src &#39;none&#39;; base-uri &#39;none&#39;; form-action &#39;none&#39;" />
+  <title>BENJADMIN Developer Grid — AI Engineering Control Center</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="titlebar" aria-label="BENJADMIN Developer Grid fejléc">
+    <div class="titlebar__brand">
+      <span class="brand-mark" aria-hidden="true">B</span>
+      <strong>BENJADMIN</strong>
+      <span>Developer Grid</span><small class="product-subtitle" title="AI Fejlesztésirányítási Központ">AI Engineering Control Center</small><span id="appVersionLabel" class="app-version-label" title="Futó Developer Grid verzió">v—</span>
+      <button id="layoutModeButton" class="titlebar-mini-button no-drag" type="button" title="4 / 2 cellás nézet (Ctrl+Alt+6)" aria-label="4 / 2 cellás nézet" disabled>▦</button>
+      <div id="splitControls" class="split-controls no-drag is-hidden" aria-label="Kétcellás nézet kiválasztása">
+        <label>Bal <select id="splitLeftSelect" aria-label="Bal oldali csevegő"></select></label>
+        <label>Jobb <select id="splitRightSelect" aria-label="Jobb oldali csevegő"></select></label>
+      </div>
+    </div>
+    <div class="titlebar__center">
+      <span class="environment-badge">DEV · PROD DENY</span>
+      <span id="connectionDot" class="connection-dot is-offline" aria-hidden="true"></span>
+      <span id="connectionLabel">Zárolva</span>
+      <span id="workerSummaryLabel" class="worker-summary">0 dolgozik · 0 vár rád</span><span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
+    </div>
+    <div class="titlebar__tools no-drag">
+      <button id="dailyStartButton" class="daily-start-button" type="button" title="Napi fejlesztési indítás BenAI-val" aria-label="Napi fejlesztési indítás" disabled>▶ NAPI INDÍTÁS</button>
+      <button id="contextWorkspaceButton" class="context-workspace-button" type="button" title="BENJADMIN Fejlesztői Vezérlőpult · Central Core" aria-label="Context Workspace" disabled>▤ VEZÉRLŐPULT</button>
+      <button id="reviewButton" class="review-button" type="button" title="External Review Room · M.Forge-AI + V.Guard-AI" aria-label="External Review Room" disabled>
+        <span class="review-button__avatars" aria-hidden="true"><img src="../assets/team/mforge.webp" alt="" /><img src="../assets/team/vguard.webp" alt="" /></span>
+        <span class="review-button__label">REVIEW</span>
+        <b id="reviewCount" class="review-button__count">0</b>
+      </button>
+      <div class="workspace-zoom" aria-label="Közös ChatGPT zoom">
+        <button id="workspaceZoomOut" class="icon-button" type="button" title="Összes csevegő kicsinyítése" aria-label="Összes csevegő kicsinyítése" disabled>−</button>
+        <button id="workspaceZoomValue" class="zoom-readout" type="button" title="01–05 közös ChatGPT zoom · kattintás: visszaállítás 100%-ra" aria-label="01–05 közös ChatGPT zoom visszaállítása" disabled>100%</button>
+        <button id="workspaceZoomIn" class="icon-button" type="button" title="Összes csevegő nagyítása" aria-label="Összes csevegő nagyítása" disabled>+</button>
+      </div>
+      <button id="themeButton" class="icon-button" type="button" title="Világos / sötét mód" aria-label="Világos / sötét mód" disabled>☀</button>
+      <button id="settingsButton" class="global-settings-button" type="button" title="Globális Developer Grid-beállítások · 01–05" aria-label="Globális Developer Grid-beállítások" disabled><span aria-hidden="true">⚙</span><span class="global-settings-button__label">BEÁLLÍTÁSOK</span></button>
+      <button id="lockButton" class="icon-button" type="button" title="Munkatér zárolása" aria-label="Zárolás" disabled>🔒</button>
+      <span class="window-divider" aria-hidden="true"></span>
+      <button class="window-button" data-window-action="minimize" type="button" title="Kis méret" aria-label="Kis méret">—</button>
+      <button class="window-button" data-window-action="toggle-maximize" type="button" title="Teljes méret / visszaállítás" aria-label="Teljes méret / visszaállítás">□</button>
+      <button class="window-button window-button--close" data-window-action="close" type="button" title="Bezárás" aria-label="Bezárás">×</button>
+    </div>
+  </header>
+
+  <main id="grid" class="chat-grid" aria-label="Négy ChatGPT fejlesztői munkafelület">
+    <section class="chat-cell" data-cell-id="cell-1" data-worker-code="ARMINAI">
+      <header class="cell-header no-drag">
+        <div class="cell-header__top">
+          <div class="worker-title"><span class="worker-number">01</span><button type="button" class="worker-avatar-wrap" data-worker-profile title="ÁrminAI avatar nagyítása · kattintás: munkaköri profil" aria-label="ÁrminAI munkaköri profil"><img data-role="worker-avatar" class="worker-avatar" src="../assets/team/arminai.webp" alt="ÁrminAI avatar" /><span class="worker-dot"></span></button><strong data-role="worker-label">ÁrminAI</strong><span data-role="status" class="status-pill is-idle">INAKTÍV</span><span data-role="module-badge" class="module-pill">NINCS AKTÍV MODUL</span></div>
+          <div class="cell-actions">
+            <button type="button" data-cell-action="settings" title="Cella beállításai" aria-label="Cella beállításai">⚙</button>
+            <button type="button" data-cell-action="microphone" title="ChatGPT mikrofon / hangbevitel" aria-label="ChatGPT mikrofon">🎙</button>
+            <button type="button" data-cell-action="reload" title="ChatGPT újratöltése" aria-label="Újratöltés">↻</button>
+            <button type="button" data-cell-action="toggle-maximize" title="Cella nagyítása / visszaállítása" aria-label="Cella nagyítása / visszaállítása">□</button>
+            <button type="button" data-cell-action="close" title="Cella bezárása" aria-label="Cella bezárása">×</button>
+          </div>
+        </div>
+        <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+      </header>
+      <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
+      <div class="completion-pulse" aria-hidden="true"></div>
+    </section>
+
+    <section class="chat-cell" data-cell-id="cell-2" data-worker-code="OUTMINAI">
+      <header class="cell-header no-drag">
+        <div class="cell-header__top">
+          <div class="worker-title"><span class="worker-number">02</span><button type="button" class="worker-avatar-wrap" data-worker-profile title="OutminAI avatar nagyítása · kattintás: munkaköri profil" aria-label="OutminAI munkaköri profil"><img data-role="worker-avatar" class="worker-avatar" src="../assets/team/outminai.webp" alt="OutminAI avatar" /><span class="worker-dot"></span></button><strong data-role="worker-label">OutminAI</strong><span data-role="status" class="status-pill is-idle">INAKTÍV</span><span data-role="module-badge" class="module-pill">NINCS AKTÍV MODUL</span></div>
+          <div class="cell-actions">
+            <button type="button" data-cell-action="settings" title="Cella beállításai" aria-label="Cella beállításai">⚙</button>
+            <button type="button" data-cell-action="microphone" title="ChatGPT mikrofon / hangbevitel" aria-label="ChatGPT mikrofon">🎙</button>
+            <button type="button" data-cell-action="reload" title="ChatGPT újratöltése" aria-label="Újratöltés">↻</button>
+            <button type="button" data-cell-action="toggle-maximize" title="Cella nagyítása / visszaállítása" aria-label="Cella nagyítása / visszaállítása">□</button>
+            <button type="button" data-cell-action="close" title="Cella bezárása" aria-label="Cella bezárása">×</button>
+          </div>
+        </div>
+        <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+      </header>
+      <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
+      <div class="completion-pulse" aria-hidden="true"></div>
+    </section>
+
+    <section class="chat-cell" data-cell-id="cell-3" data-worker-code="BENAI">
+      <header class="cell-header no-drag">
+        <div class="cell-header__top">
+          <div class="worker-title"><span class="worker-number">03</span><button type="button" class="worker-avatar-wrap" data-worker-profile title="BenjáminAI avatar nagyítása · kattintás: munkaköri profil" aria-label="BenjáminAI munkaköri profil"><img data-role="worker-avatar" class="worker-avatar" src="../assets/team/benai.webp" alt="BenjáminAI avatar" /><span class="worker-dot"></span></button><strong data-role="worker-label">BenjáminAI</strong><span data-role="status" class="status-pill is-idle">INAKTÍV</span><span data-role="module-badge" class="module-pill">NINCS AKTÍV MODUL</span></div>
+          <div class="cell-actions">
+            <button type="button" data-cell-action="settings" title="Cella beállításai" aria-label="Cella beállításai">⚙</button>
+            <button type="button" data-cell-action="microphone" title="ChatGPT mikrofon / hangbevitel" aria-label="ChatGPT mikrofon">🎙</button>
+            <button type="button" data-cell-action="reload" title="ChatGPT újratöltése" aria-label="Újratöltés">↻</button>
+            <button type="button" data-cell-action="toggle-maximize" title="Cella nagyítása / visszaállítása" aria-label="Cella nagyítása / visszaállítása">□</button>
+            <button type="button" data-cell-action="close" title="Cella bezárása" aria-label="Cella bezárása">×</button>
+          </div>
+        </div>
+        <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+      </header>
+      <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
+      <div class="completion-pulse" aria-hidden="true"></div>
+    </section>
+
+    <section class="chat-cell" data-cell-id="cell-4" data-worker-code="JAZMINAI">
+      <header class="cell-header no-drag">
+        <div class="cell-header__top">
+          <div class="worker-title"><span class="worker-number">04</span><button type="button" class="worker-avatar-wrap" data-worker-profile title="JázminAI avatar nagyítása · kattintás: munkaköri profil" aria-label="JázminAI munkaköri profil"><img data-role="worker-avatar" class="worker-avatar" src="../assets/team/jazminai.webp" alt="JázminAI avatar" /><span class="worker-dot"></span></button><strong data-role="worker-label">JázminAI</strong><span data-role="status" class="status-pill is-idle">INAKTÍV</span><span data-role="module-badge" class="module-pill">NINCS AKTÍV MODUL</span></div>
+          <div class="cell-actions">
+            <button type="button" data-cell-action="settings" title="Cella beállításai" aria-label="Cella beállításai">⚙</button>
+            <button type="button" data-cell-action="microphone" title="ChatGPT mikrofon / hangbevitel" aria-label="ChatGPT mikrofon">🎙</button>
+            <button type="button" data-cell-action="reload" title="ChatGPT újratöltése" aria-label="Újratöltés">↻</button>
+            <button type="button" data-cell-action="toggle-maximize" title="Cella nagyítása / visszaállítása" aria-label="Cella nagyítása / visszaállítása">□</button>
+            <button type="button" data-cell-action="close" title="Cella bezárása" aria-label="Cella bezárása">×</button>
+          </div>
+        </div>
+        <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+      </header>
+      <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
+      <div class="completion-pulse" aria-hidden="true"></div>
+    </section>
+
+    <aside id="contextWorkspace" class="context-workspace is-hidden" aria-label="BENJADMIN Context Workspace">
+      <header class="context-workspace__header">
+        <div><strong>BENJADMIN FEJLESZTŐI VEZÉRLŐPULT</strong><span>Central Core · Fejlesztési Tár · Átadások · Context Pack</span></div>
+        <div class="context-workspace__window-actions">
+          <button type="button" data-context-action="zoom-out" title="Context Workspace kicsinyítése" aria-label="Context Workspace kicsinyítése">−</button>
+          <button type="button" data-context-action="zoom-reset" class="context-zoom-value" title="Context Workspace nagyítás visszaállítása" aria-label="Context Workspace nagyítás visszaállítása">100%</button>
+          <button type="button" data-context-action="zoom-in" title="Context Workspace nagyítása" aria-label="Context Workspace nagyítása">+</button>
+          <button type="button" data-context-action="detach" title="Kiemelés külön ablakba">↗</button>
+          <button type="button" data-context-action="close" title="Bezárás">×</button>
+        </div>
+      </header>
+      <div id="contextWorkspaceRoot" class="context-workspace__body"></div>
+      <div id="contextWorkspaceResize" class="context-workspace__resize" role="separator" aria-orientation="vertical" aria-label="Context Workspace szélességének módosítása"></div>
+    </aside>
+  </main>
+
+
+  <section id="centralPanel" class="central-panel is-hidden" style="display:none !important" aria-hidden="true">
+    <header class="central-header no-drag">
+      <div class="central-header__title"><span class="worker-number">05</span><img class="central-avatar" src="../assets/team/devminai.svg" alt="" /><strong id="centralLabel">DevminAI</strong><span class="shortcut-badge">Ctrl+Alt+5</span></div>
+      <div class="cell-actions">
+        <button type="button" data-central-action="microphone" title="ChatGPT mikrofon / hangbevitel" aria-label="ChatGPT mikrofon">🎙</button>
+        <button type="button" data-central-action="reload" title="Újratöltés" aria-label="Újratöltés">↻</button>
+        <button type="button" data-central-action="close" title="Központi csevegő elrejtése" aria-label="Elrejtés">×</button>
+      </div>
+    </header>
+  </section>
+
+  <div id="authGate" class="auth-gate">
+    <section class="auth-card" aria-labelledby="authTitle">
+      <div class="auth-logo" aria-hidden="true">B</div>
+      <p class="eyebrow">BENJADMIN CHATGRID</p>
+      <h1 id="authTitle">Munkatér feloldása</h1>
+      <p id="authDescription" class="auth-description">A Developer Grid öt ChatGPT felülete csak a helyi jelszó megadása után jelenik meg.</p>
+      <form id="authForm" autocomplete="off">
+        <label for="passwordInput">Jelszó</label>
+        <input id="passwordInput" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="256" required autofocus />
+        <div id="confirmGroup" class="field-group is-hidden">
+          <label for="passwordConfirmInput">Jelszó ismét</label>
+          <input id="passwordConfirmInput" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="256" />
+        </div>
+        <p id="authError" class="form-error" role="alert"></p>
+        <button id="authSubmit" class="primary-button" type="submit">Feloldás</button>
+      </form>
+      <p class="auth-footnote">Nincs alapértelmezett jelszó. Első indításkor te állítod be.</p>
+    </section>
+  </div>
+
+  <div id="workerProfileLayer" class="worker-profile-layer is-hidden" role="presentation">
+    <button id="workerProfileBackdrop" class="worker-profile-backdrop" type="button" aria-label="Munkaköri profil bezárása"></button>
+    <section class="worker-profile-card" role="dialog" aria-modal="true" aria-labelledby="workerProfileName" data-testid="chatgrid-worker-profile-card">
+      <button id="workerProfileClose" class="worker-profile-close" type="button" aria-label="Profil bezárása">×</button>
+      <div class="worker-profile-visual">
+        <img id="workerProfileAvatar" src="../assets/team/benai.webp" alt="" />
+        <span id="workerProfileCategory">AI koordináció</span>
+      </div>
+      <div class="worker-profile-copy">
+        <header>
+          <span id="workerProfileCode">BENAI</span>
+          <h2 id="workerProfileName">Ben-AI</h2>
+          <p id="workerProfileTitle">Fejlesztésirányító AI · koordinátor</p>
+        </header>
+        <strong id="workerProfileShort"></strong>
+        <p id="workerProfileDetail"></p>
+        <div class="worker-profile-live">
+          <span>AKTUÁLIS CHATGRID ÁLLAPOT</span>
+          <div><b id="workerProfileStatus">INAKTÍV</b><em id="workerProfileModule">NINCS AKTÍV MODUL</em></div>
+          <p id="workerProfileTask">Nincs aktív BENJADMIN feladat.</p>
+        </div>
+        <div class="worker-profile-responsibilities">
+          <span>FŐ FELADATKÖRÖK</span>
+          <ul id="workerProfileResponsibilities"></ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="reviewLayer" class="review-layer is-hidden" role="presentation">
+    <button id="reviewBackdrop" class="review-backdrop" type="button" aria-label="External Review Room bezárása"></button>
+    <section class="review-room-panel" role="dialog" aria-modal="true" aria-labelledby="reviewRoomTitle" data-testid="chatgrid-external-review-room">
+      <header class="review-room-header">
+        <div class="review-room-title">
+          <span class="eyebrow">BENJADMIN · EXTERNAL AI</span>
+          <h2 id="reviewRoomTitle">External Review Room</h2>
+          <p>M.Forge-AI · BenAI · V.Guard-AI · BenjAdmin számára látható auditált review tér.</p>
+        </div>
+        <div class="review-room-tools">
+          <span class="review-mode-badge">READ ONLY</span>
+          <span class="review-prod-badge">PROD DENY</span>
+          <select id="reviewTaskSelect" aria-label="Külső AI review task"></select>
+          <button id="reviewRefresh" class="secondary-button" type="button">Frissítés</button>
+          <button id="reviewClose" class="icon-button" type="button" aria-label="Review Room bezárása">×</button>
+        </div>
+      </header>
+      <div class="review-room-grid">
+        <aside class="review-worker-card review-worker-card--forge" aria-label="M.Forge-AI állapot">
+          <div class="review-worker-identity"><img src="../assets/team/mforge.webp" alt="M.Forge-AI avatar" /><div><span>MFORGE</span><strong>M.Forge-AI</strong><small>Coding Worker · külső AI</small></div></div>
+          <div class="review-worker-state"><span>ÁLLAPOT</span><b id="reviewForgeState">VÁRAKOZIK</b></div>
+          <dl>
+            <div><dt>Provider / modell</dt><dd id="reviewForgeProvider">—</dd></div>
+            <div><dt>Result commit</dt><dd id="reviewForgeCommit">—</dd></div>
+            <div><dt>Módosított fájl</dt><dd id="reviewForgeFiles">0</dd></div>
+            <div><dt>Jogosultság</dt><dd><span class="review-permission">READ ONLY</span></dd></div>
+          </dl>
+          <div id="reviewForgePaths" class="review-path-list"></div>
+        </aside>
+
+        <main class="review-thread-panel">
+          <header><div><span>KÖZÖS REVIEW THREAD</span><strong id="reviewThreadTitle">Összes külső AI esemény</strong></div><small id="reviewGeneratedAt">—</small></header>
+          <div id="reviewThread" class="review-thread" role="log" aria-live="polite"></div>
+          <footer class="review-thread-readonly"><strong>V0.1 · READ ONLY REVIEW</strong><span>Az emberi hozzászólás és scoped DEV write approval a következő explicit műveleti kapu.</span></footer>
+        </main>
+
+        <aside class="review-worker-card review-worker-card--guard" aria-label="V.Guard-AI állapot">
+          <div class="review-worker-identity"><img src="../assets/team/vguard.webp" alt="V.Guard-AI avatar" /><div><span>VGUARD</span><strong>V.Guard-AI</strong><small>Review & Quality Worker</small></div></div>
+          <div class="review-worker-state"><span>VERDICT</span><b id="reviewGuardResult">NINCS REVIEW</b></div>
+          <dl>
+            <div><dt>Provider / modell</dt><dd id="reviewGuardProvider">—</dd></div>
+            <div><dt>Review állapot</dt><dd id="reviewGuardState">—</dd></div>
+            <div><dt>Finding</dt><dd id="reviewGuardFindings">0</dd></div>
+            <div><dt>Jogosultság</dt><dd><span class="review-permission">REVIEW ONLY</span></dd></div>
+          </dl>
+          <p id="reviewGuardSummary" class="review-guard-summary">Még nincs V.Guard összefoglaló.</p>
+          <div id="reviewGuardFindingList" class="review-finding-list"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="settingsLayer" class="modal-layer is-hidden" role="presentation">
+    <button id="settingsBackdrop" class="modal-backdrop" type="button" aria-label="Beállítások bezárása"></button>
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <header>
+        <div><p class="eyebrow">BENJADMIN DEVELOPER GRID · 01–05</p><h2 id="settingsTitle">Globális Developer Grid-beállítások</h2></div>
+        <button id="settingsClose" class="icon-button" type="button" aria-label="Bezárás">×</button>
+      </header>
+      <div class="settings-scroll">
+        <section class="settings-section">
+          <h3>BENJADMIN élő státuszkapcsolat</h3>
+          <label for="baseUrlInput">DEV szerver</label>
+          <input id="baseUrlInput" type="url" autocomplete="off" />
+
+          <div class="connection-status-card">
+            <div><span id="connectionModeBadge" class="connection-mode-badge">NINCS PÁROSÍTVA</span><strong id="connectionDeviceLabel">ChatGrid eszköz</strong></div>
+            <p id="reporterState" class="settings-note">Az élő worker-státuszhoz egyszer párosítsd ezt a Windows gépet a BENJADMIN-nal.</p>
+          </div>
+
+          <div class="pairing-workflow">
+            <div class="pairing-step"><span>1</span><div><strong>Nyisd meg a BENJADMIN párosítási oldalt</strong><small>Ott egy egyszer használatos kódot kapsz.</small></div></div>
+            <button id="pairingPageButton" class="secondary-button pairing-wide-button" type="button">BENJADMIN párosítás megnyitása</button>
+            <div class="pairing-step"><span>2</span><div><strong>Illeszd be az egyszer használatos kódot</strong><small>A kód 10 percig használható.</small></div></div>
+            <label for="pairingActivationInput">Párosítási kód</label>
+            <input id="pairingActivationInput" type="text" autocomplete="off" spellcheck="false" placeholder="pairing-id#XXXXX-XXXXX" />
+            <div class="pairing-actions">
+              <button id="pairingStartButton" class="primary-button" type="button">Párosítás indítása</button>
+              <button id="pairingCancelButton" class="secondary-button is-hidden" type="button">Megszakítás</button>
+              <button id="forgetDeviceButton" class="secondary-button is-hidden" type="button">Eszközkapcsolat törlése</button>
+            </div>
+            <p id="pairingState" class="settings-note">Nincs folyamatban párosítás.</p>
+          </div>
+
+          <details class="advanced-connection">
+            <summary>Speciális / régi reporter kulcs</summary>
+            <p class="settings-note">Csak kompatibilitási tartalék. Normál használatnál az eszközpárosítást használd.</p>
+            <label for="reporterKeyInput">Reporter kulcs</label>
+            <input id="reporterKeyInput" type="password" autocomplete="new-password" placeholder="••••••••••••••••" />
+          </details>
+        </section>
+
+        <section class="settings-section">
+          <h3>Megjelenés</h3>
+          <label for="appearanceInput">Developer Grid téma</label>
+          <select id="appearanceInput">
+            <option value="dark">Sötét mód</option>
+            <option value="light">Világos mód</option>
+          </select>
+          <p class="settings-note">A Developer Grid keret témája. A ChatGPT saját témája a ChatGPT beállítását követi.</p>
+          <label class="toggle-row"><span><strong>Avatárok megjelenítése</strong><small>01–05 csapattag avatárja a ChatGrid fejlécekben.</small></span><input id="showAvatarsInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Háttér-vízjel megjelenítése</strong><small>Halvány csapattag-vízjel a ChatGPT munkafelület fölött, kattintást nem akadályozva.</small></span><input id="showAvatarWatermarksInput" type="checkbox" /></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Hangbevitel</h3>
+          <label class="toggle-row"><span><strong>ChatGPT mikrofon engedélyezése</strong><small>Kizárólag a chatgpt.com audio mikrofon-hozzáférését engedi. Kamera/videó nem kap engedélyt.</small></span><input id="microphoneEnabledInput" type="checkbox" /></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Windows indítás</h3>
+          <label class="toggle-row"><span><strong>Developer Grid automatikus indítása</strong><small>Windows bejelentkezéskor elindul, de a 4 felület a jelszó megadásáig zárva marad.</small></span><input id="launchAtLoginInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Legutóbbi csevegések megjegyzése</strong><small>Cellánként visszatölti a legutóbb megnyitott ChatGPT beszélgetést; a worker cellák a YYMMDD_sorszám_név mintát is megpróbálják a legfrissebbre igazítani.</small></span><input id="rememberLastConversationInput" type="checkbox" /></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>Globális értesítések · 01–05</h3>
+          <p class="settings-note">Ezek a ChatGrid teljes munkaterére érvényesek. A munkahelyi / néma mód minden hallható jelzést azonnal letilt, a vizuális értesítések ettől függetlenül bekapcsolva maradhatnak.</p>
+          <label class="toggle-row notification-master"><span><strong>Munkahelyi / néma mód</strong><small>Sem hangjelzés, sem magyar felolvasás nem szólal meg. Windows toast és tálcavillogás külön továbbra is használható.</small></span><input id="quietModeInput" type="checkbox" /></label>
+          <label class="toggle-row" data-audible-notification><span><strong>Hangjelzés kész feladatnál</strong><small>Külön, erősebb kész-jelzés a teljes task lezárásakor.</small></span><input id="completionSoundInput" type="checkbox" /></label>
+          <label class="toggle-row" data-audible-notification><span><strong>Hangjelzés fejlesztési rész elkészültekor</strong><small>Külön rövid hang, amikor a worker a következő 1/6–6/6 fázisra lép.</small></span><input id="stageSoundInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Windows értesítés</strong><small>Kattintásra a ChatGrid előtérbe kerül.</small></span><input id="windowsToastInput" type="checkbox" /></label>
+          <div class="notification-diagnostic-card">
+            <div class="notification-diagnostic-head">
+              <div><strong>Értesítési diagnosztika</strong><small>A ChatGrid Windows értesítése és a ChatGPT webes értesítése két külön rendszer.</small></div>
+              <button id="notificationDiagnosticsButton" type="button" class="secondary-button">Állapot ellenőrzése</button>
+            </div>
+            <div class="notification-diagnostic-grid">
+              <div><span>ChatGrid Windows</span><b id="notificationWindowsStatus">ELLENŐRZÉSRE VÁR</b><small id="notificationWindowsDetail">A worker-riasztások saját Electron/Windows csatornája.</small></div>
+              <div><span>ChatGPT webes</span><b id="notificationWebStatus">ELLENŐRZÉSRE VÁR</b><small id="notificationWebDetail">A chatgpt.com saját web-push / böngészős értesítése.</small></div>
+            </div>
+            <div class="notification-diagnostic-actions">
+              <button id="requestWebNotificationButton" type="button" class="secondary-button">ChatGPT webes értesítés engedélyezése</button>
+            </div>
+            <p id="notificationDiagnosticNote" class="settings-note">A ChatGrid saját Windows értesítése akkor is működhet, ha a ChatGPT webes értesítése Electronban nem elérhető.</p>
+          </div>
+          <label class="toggle-row" data-audible-notification><span><strong>Kész munka felolvasása</strong><small>Magyar TTS: „Ármin AI befejezte a munkát.”</small></span><input id="spokenCompletionInput" type="checkbox" /></label>
+          <label class="toggle-row" data-audible-notification><span><strong>Fejlesztési rész felolvasása</strong><small>Magyar TTS jelzi, melyik 1/6–6/6 szakasz készült el.</small></span><input id="spokenStageInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Tálca villogtatása</strong><small>Másik monitoron végzett munka esetén.</small></span><input id="flashTaskbarInput" type="checkbox" /></label>
+          <div class="notification-test-row">
+            <span>Teszt:</span>
+            <button type="button" class="secondary-button" data-notification-test="completed">✓ Kész</button>
+            <button type="button" class="secondary-button" data-notification-test="stage_completed">2/6 Rész</button>
+            <button type="button" class="secondary-button" data-notification-test="blocked">! Blokkolt</button>
+            <button type="button" class="secondary-button" data-notification-test="failed">× Hiba</button>
+          </div>
+          <p class="settings-note">A teszt a valódi worker-eseményhez hasonlóan meghajtja a hangot, Windows értesítést, tálcavillogást és – ha engedélyezett – a bemondást.</p>
+        </section>
+
+        <section class="settings-section">
+          <h3>05 BenjAdmin – központi csevegő</h3>
+          <label for="centralLabelInput">Megjelenített név</label>
+          <input id="centralLabelInput" type="text" maxlength="60" autocomplete="off" />
+          <label for="centralUrlInput">ChatGPT csevegés URL</label>
+          <input id="centralUrlInput" type="url" autocomplete="off" />
+          <p class="settings-note">Ctrl+Alt+5: megjelenítés / elrejtés. A panel középen, teljes magasságban nyílik meg, miközben a bal és jobb szélső munkaterület látható marad.</p>
+        </section>
+
+        <section class="settings-section">
+          <h3>Gyorsbillentyűk</h3>
+          <div class="shortcut-list">
+            <span><kbd>Ctrl+Alt+Space</kbd> Teljes Developer Grid tálcára / vissza</span>
+            <span><kbd>Ctrl+Alt+Z</kbd> Munkatér azonnali zárolása</span>
+            <span><kbd>Ctrl+Alt+5</kbd> Központi csevegő</span>
+            <span><kbd>Ctrl+Alt+6</kbd> 4 / 2 cellás nézet</span>
+            <span><kbd>Ctrl+Alt+N</kbd> Munkahelyi / néma mód</span>
+            <span><kbd>Ctrl+Alt+0</kbd> Fenntartva későbbre</span>
+            <span><kbd>Ctrl+Alt+1</kbd> BenAI</span>
+            <span><kbd>Ctrl+Alt+2</kbd> OutminAI</span>
+            <span><kbd>Ctrl+Alt+3</kbd> ÁrminAI</span>
+            <span><kbd>Ctrl+Alt+4</kbd> JázminAI</span>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>4 fejlesztői cella – cellánkénti beállítások</h3>
+          <p class="settings-note">A cellafejléc ⚙ gombja közvetlenül az adott kódmérnök beállításához ugrik.</p>
+          <div id="cellSettings" class="cell-settings"></div>
+        </section>
+
+
+      </div>
+      <footer>
+        <p id="settingsError" class="form-error" role="alert"></p>
+        <button id="settingsCancel" type="button" class="secondary-button">Mégse</button>
+        <button id="settingsSave" type="button" class="primary-button">Mentés</button>
+      </footer>
+    </section>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="./renderer.js"></script>
+  <script src="./context-workspace.js"></script>
+</body>
+</html>
