@@ -39,7 +39,7 @@ const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-b
 const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/DeveloperGridShell.tsx"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.0-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.1-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
@@ -54,6 +54,7 @@ const checks = [
   [foundation.includes("resolveDeveloperGridRuntimeProvenance") && foundation.includes("expectedSourceCommit"), "foundation binds runtime to source provenance"],
   [foundationRoute.includes('releaseRuntimeProvenance.state !== "BLOCKED"'), "foundation API blocks release/runtime mismatch"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
+  [build.includes("probeBuildNodes") && build.includes("BatchMode=yes") && build.includes("StrictHostKeyChecking=yes"), "build node SSH readiness probe"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
   [orchestrator.includes("CANONICAL_DEV_SERVER") && orchestrator.includes("exclusiveLockHeld"), "canonical DEV build executor"],
   [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],

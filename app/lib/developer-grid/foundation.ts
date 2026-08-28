@@ -1,4 +1,4 @@
-import { listBuildNodes } from "./build-nodes";
+import { probeBuildNodes } from "./build-nodes";
 import { resolveBuildExecutor } from "./build-orchestrator";
 import { resolveDeveloperGridRuntimeProvenance } from "./runtime-provenance";
 import { verifySourceProvenance } from "./source-provenance";
@@ -55,6 +55,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
   });
   const provenanceBlocked = sourceProvenance.sourceState !== "VERIFIED"
     || releaseRuntimeProvenance.state === "BLOCKED";
+  const buildNodes = await probeBuildNodes();
 
   return {
     schemaVersion: DEVELOPER_GRID_SCHEMA_VERSION,
@@ -85,8 +86,8 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
     },
     sourceProvenance,
     releaseRuntimeProvenance,
-    buildNodes: listBuildNodes(),
-    buildExecutor: resolveBuildExecutor(listBuildNodes()),
+    buildNodes,
+    buildExecutor: resolveBuildExecutor(buildNodes),
     realtime: {
       mode: "DELTA_EVENT",
       fullSnapshotPollingAllowed: false,

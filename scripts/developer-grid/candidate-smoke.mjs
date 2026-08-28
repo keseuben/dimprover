@@ -32,10 +32,20 @@ check(foundation.response.status === 200, "Foundation API reporter auth", `HTTP 
 check(foundation.json?.foundation?.sourceProvenance?.sourceState === "VERIFIED", "Source provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.state === "VERIFIED", "Release/runtime provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.blockCode === null, "Release/runtime blockCode empty");
-check(foundation.json?.foundation?.version === "0.1.0-dev", "Developer Grid version v0.1.0 DEV");
+check(foundation.json?.foundation?.version === "0.1.1-dev", "Developer Grid version v0.1.1 DEV");
 check(Boolean(foundation.json?.foundation?.releaseRuntimeProvenance?.buildId), "Runtime BUILD_ID exposed");
 check(/^[0-9a-f]{40}$/.test(String(foundation.json?.foundation?.releaseRuntimeProvenance?.sourceCommit || "")), "Runtime source commit exposed");
 check(foundation.json?.foundation?.productionAccess === "DENY", "PROD access DENY");
+const buildNodes = foundation.json?.foundation?.buildNodes || [];
+check(Array.isArray(buildNodes) && buildNodes.length === 2, "Two build nodes exposed");
+check(buildNodes.every((node) => Boolean(node.lastVerifiedAt)), "Build node SSH readiness timestamps exposed");
+const hasReadyBuildNode = buildNodes.some((node) => node.state === "READY");
+check(
+  hasReadyBuildNode
+    ? foundation.json?.foundation?.buildExecutor?.kind === "REMOTE_BUILD_NODE"
+    : foundation.json?.foundation?.buildExecutor?.kind === "CANONICAL_DEV_SERVER",
+  "Build executor follows readiness state",
+);
 check(foundation.json?.foundation?.realtime?.mode === "DELTA_EVENT", "Realtime mode DELTA_EVENT");
 check(foundation.json?.foundation?.realtime?.fullSnapshotPollingAllowed === false, "Full snapshot polling forbidden");
 
