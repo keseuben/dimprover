@@ -75,3 +75,25 @@ A megtartott implementáció okai: persistent append-only JSONL event store, cro
 - A négy worker cella az authoritative sessionből mutatja a WORKING állapotot, workItemet, stage-et, context source-t és source provenance HEAD-et. Presence nem írja felül ezt.
 - A középső panel megjeleníti a state revisiont, a DELTA LIVE kapcsolatot és a legutóbbi SANITIZED activity eseményeket.
 - Full-snapshot polling továbbra is tiltott.
+
+## 2026-08-28 esti v0.1.1 DEV release checkpoint
+
+- Befagyasztott release ref és tag: `release/benjadmin-developer-grid-v0.1.1-dev` / `benjadmin-developer-grid-v0.1.1-dev`.
+- Release HEAD: `5b9f44619b8a087d45d470524a732d968dad577e`.
+- Build ID: `r4QkVYeaLFdxxHWUtHft-`.
+- Runtime candidate smoke: 25/25 PASS.
+- Publikus DEV API smoke az `admin.dev.dimpro.hu/api/dev/grid/*` útvonalon: 15/15 PASS.
+- Desktop acceptance: 52/52 PASS; native desktop delta contract: 19/19 PASS.
+- Windows EXE és DEV ZIP külön artifact manifest + SHA-256 ellenőrzéssel staged.
+- A publikus Developer Grid API külön `dimpro-developer-grid-v011-dev` PM2 runtime-on fut, az aktív régi BENJADMIN operator/ChatGrid runtime módosítása nélkül.
+- PROD hozzáférés továbbra is tiltott.
+- A v0.1.1 teljes felhasználói acceptance csak a Windows kézi próba után zárható le.
+
+## v0.1.2 DEV stabilizációs kör
+
+A v0.1.1 release checkpoint változatlanul visszahozható. A feature branch következő köre nem módosítja a befagyasztott artifactot. Fókusz:
+
+- `electron-builder` és kapcsolódó build-tool dependency security hardening;
+- a native `DELTA_EVENT` / `DELTA_STATE` működés dokumentációs konzisztenciája;
+- a Windows kézi acceptance visszajelzéseinek célzott javítása;
+- új v0.1.2 artifact csak teljes contract + runtime + Windows packaging ellenőrzés után készülhet.

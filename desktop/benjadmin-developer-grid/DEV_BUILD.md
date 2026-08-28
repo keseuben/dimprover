@@ -1,8 +1,13 @@
-# BENJADMIN Developer Grid v0.1.1 DEV build
+# BENJADMIN Developer Grid v0.1.2 DEV build
 
 Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference alapként használja, de külön package/appId/userData/EXE identitással fut, ezért nem írja felül a ChatGridet.
 
-A `v0.1.1` fő eltérései:
+A `v0.1.2` stabilizációs kör fő eltérései:
+- `electron-builder` dependency/security hardening;
+- a native delta működés dokumentációjának konzisztenssé tétele;
+- a befagyasztott v0.1.1 Windows acceptance visszajelzéseinek fogadása és célzott javítása.
+
+A v0.1.1-ben elkészült alapok továbbra is érvényesek:
 - fix 01 ÁrminAI / 02 OutminAI / 03 BenjáminAI / 04 JázminAI elrendezés;
 - középre dokkolt BENJADMIN Fejlesztői Vezérlőpult;
 - 05 DevminAI külön központi ChatGPT ablak;

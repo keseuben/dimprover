@@ -1,6 +1,6 @@
 {
   "name": "@dimpro/benjadmin-developer-grid-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "BENJADMIN Developer Grid – AI Engineering Control Center / AI Fejlesztésirányítási Központ",
   "main": "src/main.cjs",
@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "electron": "43.3.0",
-    "electron-builder": "26.0.12"
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "hu.dimpro.benjadmin.developergrid",

@@ -56,7 +56,7 @@ export NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf '%s' "${DEV_PUBLIC_ENV[1]}" | bas
 [[ -n "$NEXT_PUBLIC_SUPABASE_URL" && -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
 
 export DIMPRO_OPERATION_OWNER="${DIMPRO_OPERATION_OWNER:-OutminAI}"
-export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.1 canonical webpack candidate}"
+export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.2 canonical webpack candidate}"
 export DIMPRO_WORKER_CODE="OUTMINAI"
 
 "$ROOT/scripts/dimpro-dev-storage-prebuild.sh"

@@ -19,4 +19,4 @@ A Developer Grid saját DEV verziósorozatot használ a ChatGrid v0.3.x fallback
 
 A `build01` és `build02` node státusza nem kézi READY flag: a foundation betöltésekor rövid, fail-closed SSH readiness probe fut a szerveren konfigurált `build01` / `build02` SSH aliasokra. Kötelező: batch mód, 3 másodperces connect timeout, egyetlen connection attempt és strict host-key ellenőrzés. READY csak az explicit `DIMPRO_BUILD_NODE_READY` marker pontos visszaadása után lehet. Minden más eredmény `NOT_CONNECTED`, ilyenkor a canonical DEV szerver marad a hivatalos executor az exclusive build gate alatt.
 
-A következő ellenőrzési pont `v0.1.1 DEV`: dinamikus build01/build02 SSH readiness probe és a build-node állapot részletes megjelenítése.
+A `v0.1.1 DEV` ellenőrzési pontban elkészült a dinamikus build01/build02 SSH readiness probe, a native delta desktop kapcsolat, a külön Windows EXE/DEV ZIP és a publikus DEV API staging. A következő `v0.1.2 DEV` stabilizációs kör fókusza a dependency/security hardening, dokumentációs konzisztencia és a v0.1.1 Windows kézi acceptance visszajelzéseinek javítása.
