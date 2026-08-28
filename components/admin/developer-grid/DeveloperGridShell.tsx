@@ -208,7 +208,7 @@ export default function DeveloperGridShell() {
           <div className={styles.subtitle}>AI Fejlesztésirányítási Központ · foundation · ChatGrid fallback/reference érintetlen</div>
         </div>
         <div className={styles.badges}>
-          <span className={`${styles.badge} ${styles.versionBadge}`}>{foundation?.version ? `v${foundation.version.replace("-dev", "")} DEV` : "v0.1.3 DEV"}</span>
+          <span className={`${styles.badge} ${styles.versionBadge}`}>{foundation?.version ? `v${foundation.version.replace("-dev", "")} DEV` : "v0.1.4 DEV"}</span>
           <span className={styles.badge}>DEV ONLY</span>
           <span className={styles.badge}>PROD DENY</span>
           <span className={`${styles.badge} ${connection === "DELTA_LIVE" ? styles.liveBadge : connection === "DEGRADED" ? styles.degradedBadge : ""}`}>{connection === "DELTA_LIVE" ? "DELTA LIVE" : connection}</span>
@@ -268,7 +268,7 @@ export default function DeveloperGridShell() {
             <div className={styles.panel}>
               <h3>Release / Runtime</h3>
               <p className={foundation?.releaseRuntimeProvenance.state === "VERIFIED" ? styles.ok : foundation?.releaseRuntimeProvenance.state === "BLOCKED" ? styles.blocked : ""}>{foundation?.releaseRuntimeProvenance.state || "NOT_CONFIGURED"}</p>
-              <p>Verzió: {foundation?.version ? `v${foundation.version.replace("-dev", "")} DEV` : "v0.1.3 DEV"}</p>
+              <p>Verzió: {foundation?.version ? `v${foundation.version.replace("-dev", "")} DEV` : "v0.1.4 DEV"}</p>
               <p>Build ID: {foundation?.releaseRuntimeProvenance.buildId || "–"}</p>
               <p>Commit: {foundation?.releaseRuntimeProvenance.sourceCommit ? foundation.releaseRuntimeProvenance.sourceCommit.slice(0, 12) : "–"}</p>
               <p>Branch: {foundation?.releaseRuntimeProvenance.sourceBranch || "–"}</p>

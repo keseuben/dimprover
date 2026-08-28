@@ -20,6 +20,9 @@ const required = [
   "scripts/developer-grid/candidate-smoke.mjs",
   "scripts/developer-grid/build-candidate.sh",
   "scripts/developer-grid/build-candidate-contract.mjs",
+  "scripts/developer-grid/release-artifact-engine.mjs",
+  "scripts/developer-grid/release-artifact-contract.mjs",
+  "scripts/developer-grid/release-artifacts.sh",
 ];
 
 const failures = [];
@@ -42,9 +45,11 @@ const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-b
 const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/DeveloperGridShell.tsx"), "utf8");
 const readAuth = fs.readFileSync(path.join(root, "app/lib/developer-grid/read-auth.ts"), "utf8");
 const candidateBuild = fs.readFileSync(path.join(root, "scripts/developer-grid/build-candidate.sh"), "utf8");
+const releaseArtifactEngine = fs.readFileSync(path.join(root, "scripts/developer-grid/release-artifact-engine.mjs"), "utf8");
+const releaseArtifactWrapper = fs.readFileSync(path.join(root, "scripts/developer-grid/release-artifacts.sh"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.3-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.4-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
@@ -74,6 +79,9 @@ const checks = [
   [shell.includes("Build ID:") && shell.includes("foundation?.version"), "UI exposes version/build identity"],
   [readAuth.includes("isChatGridDeviceAuthorized") && readAuth.includes("isDevCenterAuthorized"), "desktop device read-only grid auth bridge"],
   [candidateBuild.includes("next build --webpack") && candidateBuild.includes("dimpro-coordinated-operation.sh") && candidateBuild.includes("PROD_DENY"), "canonical low-memory Developer Grid candidate build"],
+  [releaseArtifactWrapper.includes("dimpro-coordinated-operation.sh\" release") && releaseArtifactWrapper.includes("DIMPRO_RELEASE_COORDINATED=1"), "release artifact engine runs under exclusive release lock"],
+  [releaseArtifactEngine.includes("ARTIFACT_IMMUTABILITY_VIOLATION") && releaseArtifactEngine.includes("DEV_ZIP_FORBIDDEN_CONTENT"), "release artifact immutability and ZIP safety fail closed"],
+  [releaseArtifactEngine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH") && releaseArtifactEngine.includes("PUBLIC_PRODUCTION_ACCESS_MISMATCH"), "public staging verifies full artifact hash and PROD DENY"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 

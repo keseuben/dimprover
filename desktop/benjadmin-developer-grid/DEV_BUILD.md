@@ -1,4 +1,4 @@
-# BENJADMIN Developer Grid v0.1.3 DEV build
+# BENJADMIN Developer Grid v0.1.4 DEV build
 
 Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference alapként használja, de külön package/appId/userData/EXE identitással fut, ezért nem írja felül a ChatGridet.
 
@@ -43,3 +43,13 @@ A desktop elsődleges élő állapotforrása már a Developer Grid saját `DELTA
 - immutable release worktree esetén a source worktree / branch / repository elvárás explicit DEV runtime env-ből scope-olható, miközben a tényleges Git provenance ellenőrzés továbbra is fail-closed;
 - a candidate smoke zárósora a tényleges foundation verzióból készül, ezért nem maradhat benne régi verziófelirat;
 - a v0.1.2 befagyasztott release-tag és artifactok változatlanok maradnak.
+
+## v0.1.4 Release Artifact Engine
+
+A kiadási sorrend a Windows EXE és a DEV ZIP elkészítése után:
+
+```bash
+scripts/developer-grid/release-artifacts.sh --stage --verify-public
+```
+
+A wrapper a központi `release` exclusive lockot használja. A release engine fail-closed ellenőrzi a Git HEAD/branch/worktree/repository azonosságot, a Next.js `BUILD_ID` + `.dimpro-release.json` egyezést, az EXE/ZIP meglétét, a DEV ZIP tiltott tartalmát, az immutable artifact tárat, majd opcionálisan a publikus DEV staging teljes visszatöltési hashét. PROD staging nem engedélyezett.

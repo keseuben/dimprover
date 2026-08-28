@@ -113,3 +113,17 @@ A v0.1.1 release checkpoint változatlanul visszahozható. A feature branch köv
 - A future immutable release worktree-k source-provenance elvárása explicit DEV runtime env-ből scope-olható, de nem lazíthatja a fail-closed Git ellenőrzést.
 - A candidate smoke verziófelirata a tényleges foundation verzióból származik.
 - A v0.1.2 release checkpoint és artifactok változatlanok maradnak.
+
+## v0.1.3 DEV release checkpoint
+
+- Befagyasztott release ref/tag: `release/benjadmin-developer-grid-v0.1.3-dev` / `benjadmin-developer-grid-v0.1.3-dev`.
+- Release HEAD: `4605e925a26546becffd716160fba0fb630402b7`.
+- Build ID: `KUISsz_alRIw0hRtOZ1g_`.
+- Candidate smoke: 24/24 PASS, a smoke záró verziófelirata már a tényleges foundation verzióból származik.
+- Desktop acceptance: 53/53 PASS; native delta contract: 19/19 PASS; npm audit: 0 sérülékenység.
+- Windows EXE és DEV ZIP publikus DEV stagingen, teljes visszatöltési SHA-256 ellenőrzéssel.
+- A v0.1.3 felhasználói acceptance Windows kézi próbára vár.
+
+## v0.1.4 DEV Release Artifact Engine
+
+A kiadási artifactfolyamot ismételhető, fail-closed motor végzi. Kötelező kapuk: canonical DEV host/worktree/branch/repository; tiszta Git állapot; HEAD + `.next/BUILD_ID` + `.next/.dimpro-release.json` egyezés; standalone runtime megléte; Windows EXE és DEV ZIP megléte; ZIP titok- és build-output szűrés; immutable artifact tár; központi exclusive `release` lock; publikus staging esetén teljes EXE/ZIP visszatöltési SHA-256 és `DEV` + `PROD DENY` HTTP header ellenőrzés. Ugyanazon verzió/név eltérő artifacttal nem írható felül.
