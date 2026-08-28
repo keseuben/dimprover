@@ -17,7 +17,7 @@ check("package version 0.1.1",()=>assert.equal(pkg.version,"0.1.1"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
-check("custom DIMPRO Windows icon configured",()=>{assert.equal(pkg.build.win.icon,"src/assets/app-icon.ico");assert.equal(fs.existsSync(path.join(root,pkg.build.win.icon)),true)});
+check("custom DIMPRO Windows icon configured",()=>{assert.equal(pkg.build.win.icon,"src/assets/app-icon.ico");const iconPath=path.join(root,pkg.build.win.icon);assert.equal(fs.existsSync(iconPath),true);const ico=fs.readFileSync(iconPath);const count=ico.readUInt16LE(4);let has256=false;for(let i=0;i<count;i+=1){const pos=6+i*16;const w=ico[pos]||256;const h=ico[pos+1]||256;if(w===256&&h===256)has256=true}assert.equal(has256,true)});
 check("exactly four primary cells",()=>assert.equal(config.cells.length,4));
 check("fixed visual worker order",()=>assert.deepEqual(config.cells.map(x=>x.workerCode),["ARMINAI","OUTMINAI","BENAI","JAZMINAI"]));
 check("fixed visual labels",()=>assert.deepEqual(config.cells.map(x=>x.label),["ÁrminAI","OutminAI","BenjáminAI","JázminAI"]));
