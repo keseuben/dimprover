@@ -1,0 +1,29 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const file = path.join(root, "scripts/developer-grid/build-candidate.sh");
+const source = fs.readFileSync(file, "utf8");
+let n = 0;
+function check(ok, label) {
+  n += 1;
+  if (!ok) throw new Error(`FAIL ${String(n).padStart(2, "0")} ${label}`);
+  console.log(`PASS ${String(n).padStart(2, "0")} ${label}`);
+}
+check(source.includes('EXPECTED_HOST="dimpro-dev"'), "canonical DEV host fixed");
+check(source.includes('/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827'), "canonical worktree fixed");
+check(source.includes('EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"'), "canonical branch fixed");
+check(source.includes('/srv/dimpro-dev/repositories/dimprover.git'), "canonical repository fixed");
+check(source.includes('SOURCE_BASELINE_MISMATCH'), "source mismatch fail-closed");
+check(source.includes('SOURCE_WORKTREE_DIRTY'), "dirty source fail-closed");
+check(source.includes('PROD_DENY'), "PROD denied");
+check(source.includes('NEXT_DIST_DIR="$TARGET"'), "stale inherited distDir overridden");
+check(source.includes('TARGET=".next"'), "default distDir avoids tsconfig custom-target mutation");
+check(source.includes('next build --webpack'), "webpack low-memory build engine explicit");
+check(source.includes('NEXT_BUILD_CPUS=1'), "single build CPU");
+check(source.includes('--max-old-space-size=3400'), "bounded node heap");
+check(source.includes('dimpro-coordinated-operation.sh" build'), "central exclusive build lock used");
+check(source.includes('dimpro-dev-storage-prebuild.sh'), "storage preflight used");
+check(source.includes('ensure-next-standalone-assets.cjs --force'), "standalone assets materialized");
+check(!source.includes('build:raw'), "raw build forbidden");
+console.log(`Developer Grid candidate build contract PASS · ${n}/${n}`);

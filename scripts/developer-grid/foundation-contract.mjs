@@ -18,6 +18,8 @@ const required = [
   "app/lib/developer-grid/read-auth.ts",
   "components/admin/developer-grid/DeveloperGridShell.tsx",
   "scripts/developer-grid/candidate-smoke.mjs",
+  "scripts/developer-grid/build-candidate.sh",
+  "scripts/developer-grid/build-candidate-contract.mjs",
 ];
 
 const failures = [];
@@ -39,6 +41,7 @@ const stateStore = fs.readFileSync(path.join(root, "app/lib/developer-grid/state
 const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-bridge.ts"), "utf8");
 const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/DeveloperGridShell.tsx"), "utf8");
 const readAuth = fs.readFileSync(path.join(root, "app/lib/developer-grid/read-auth.ts"), "utf8");
+const candidateBuild = fs.readFileSync(path.join(root, "scripts/developer-grid/build-candidate.sh"), "utf8");
 
 const checks = [
   [types.includes('DEVELOPER_GRID_VERSION = "0.1.1-dev"'), "versioned DEV candidate contract"],
@@ -69,6 +72,7 @@ const checks = [
   [shell.includes("DELTA_LIVE") && shell.includes("Full snapshot polling: TILTVA"), "UI exposes delta live status"],
   [shell.includes("Build ID:") && shell.includes("foundation?.version"), "UI exposes version/build identity"],
   [readAuth.includes("isChatGridDeviceAuthorized") && readAuth.includes("isDevCenterAuthorized"), "desktop device read-only grid auth bridge"],
+  [candidateBuild.includes("next build --webpack") && candidateBuild.includes("dimpro-coordinated-operation.sh") && candidateBuild.includes("PROD_DENY"), "canonical low-memory Developer Grid candidate build"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 
