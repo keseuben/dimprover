@@ -26,4 +26,10 @@ check(source.includes('dimpro-coordinated-operation.sh" build'), "central exclus
 check(source.includes('dimpro-dev-storage-prebuild.sh'), "storage preflight used");
 check(source.includes('ensure-next-standalone-assets.cjs --force'), "standalone assets materialized");
 check(!source.includes('build:raw'), "raw build forbidden");
+
+check(source.includes("NEXT_PUBLIC_SUPABASE_URL") && source.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY"), "required DEV public Supabase env explicit");
+check(source.includes("dimpro-benjadmin-operator-ui-v2-dev") && source.includes("DEV_PUBLIC_ENV_UNAVAILABLE"), "DEV public env resolved fail-closed");
+check(!source.includes("SUPABASE_SERVICE_ROLE_KEY") && !source.includes("DATABASE_URL"), "no privileged Supabase or database secret requested");
+check(source.includes("MemoryHigh=4800M") && source.includes("MemoryMax=5500M"), "memory pressure ceiling tuned for canonical DEV");
+
 console.log(`Developer Grid candidate build contract PASS · ${n}/${n}`);
