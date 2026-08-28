@@ -21,4 +21,3 @@ A régi ChatGrid tapasztalata alapján a Developer Grid worker fejléc nem mutat
 - 6/6 LEZÁRÁS: V2 mentés / MD letöltés / új átadó / lezárás
 
 Aktív vagy helyreállítandó handoff mindig látható marad fail-closed okból. A stage érték egyetlen authoritative cella-adatból származik, ezért ugyanaz a `2/6 · FEJLESZTÉS` nem jelenhet meg kétszer a jobb oldali vezérlősávban.
-
