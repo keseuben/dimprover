@@ -76,3 +76,19 @@
   .control, .tl, .tr, .bl, .br { grid-column: 1; }
   .sections { grid-template-columns: 1fr; }
 }
+.liveBadge { color: #62e6ad; border-color: rgba(98, 230, 173, .32); }
+.degradedBadge { color: #ff997d; border-color: rgba(255, 153, 125, .32); }
+.stateWorking { color: #62e6ad; border-color: rgba(98, 230, 173, .32); }
+.cardBody { display: grid; gap: 5px; }
+.cardBody strong { color: #dcecff; font-size: 12px; }
+.cardBody span { display: block; }
+.activityPanel { grid-column: 1 / -1; }
+.activityRow { display: grid; grid-template-columns: 88px 130px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(86,139,192,.1); }
+.activityRow:first-of-type { border-top: 0; }
+.activityRow b { color: #8ccdf7; font-size: 10px; }
+.activityRow span, .activityRow small, .activityRow time { color: #7f98b0; font-size: 10px; }
+.activityRow small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 680px) {
+  .activityRow { grid-template-columns: 80px 1fr auto; }
+  .activityRow small { grid-column: 1 / -1; }
+}

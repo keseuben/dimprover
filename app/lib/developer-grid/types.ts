@@ -68,6 +68,35 @@ export type WorkerSession = {
   endedAt: string | null;
 };
 
+export type GridStateChangeKind = "task-upsert" | "session-upsert" | "session-close";
+
+export type GridStateChange = {
+  revision: number;
+  kind: GridStateChangeKind;
+  entityId: string;
+  taskId: string;
+  timestamp: string;
+};
+
+export type DeveloperGridRuntimeState = {
+  schemaVersion: 1;
+  revision: number;
+  task: DeveloperGridTask | null;
+  sessions: WorkerSession[];
+  changes: GridStateChange[];
+  lastSequence: number;
+  updatedAt: string;
+};
+
+export type GridStateDelta = {
+  mode: "DELTA_STATE";
+  cursor: number;
+  hasMore: boolean;
+  changes: GridStateChange[];
+  task: DeveloperGridTask | null;
+  sessions: WorkerSession[];
+};
+
 export type GridActivityEvent = {
   id: string;
   sequence: number;

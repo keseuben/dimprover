@@ -5,19 +5,22 @@ import { appendFile, mkdir, open, readFile, rename, unlink, writeFile } from "no
 import { setTimeout as sleep } from "node:timers/promises";
 import path from "node:path";
 import { paginateEvents } from "./events";
-import type { DeveloperGridTask, GridActivityEvent, WorkerSession } from "./types";
+import type { DeveloperGridRuntimeState, DeveloperGridTask, GridActivityEvent, GridStateChange, GridStateChangeKind, GridStateDelta, WorkerSession } from "./types";
 
 export const DEFAULT_DEVELOPER_GRID_STATE_ROOT = "/srv/dimpro-dev/coordination/developer-grid";
+const MAX_STATE_CHANGES = 1000;
 
-export type GridPersistentState = {
-  schemaVersion: 1;
-  task: DeveloperGridTask | null;
-  sessions: WorkerSession[];
-  lastSequence: number;
-  updatedAt: string;
+export type GridPersistentState = DeveloperGridRuntimeState;
+
+const emptyState: GridPersistentState = {
+  schemaVersion: 1,
+  revision: 0,
+  task: null,
+  sessions: [],
+  changes: [],
+  lastSequence: 0,
+  updatedAt: "",
 };
-
-const emptyState: GridPersistentState = { schemaVersion: 1, task: null, sessions: [], lastSequence: 0, updatedAt: "" };
 
 function files(root = DEFAULT_DEVELOPER_GRID_STATE_ROOT) {
   const base = path.resolve(root);
@@ -63,29 +66,40 @@ async function serializeMutation<T>(root: string, operation: () => Promise<T>): 
   }
 }
 
+function normalizeState(parsed: Partial<GridPersistentState>): GridPersistentState {
+  return {
+    schemaVersion: 1,
+    revision: Math.max(0, Math.trunc(Number(parsed.revision) || 0)),
+    task: parsed.task || null,
+    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+    changes: Array.isArray(parsed.changes) ? parsed.changes.slice(-MAX_STATE_CHANGES) : [],
+    lastSequence: Math.max(0, Number(parsed.lastSequence) || 0),
+    updatedAt: parsed.updatedAt || "",
+  };
+}
+
+function bumpStateChange(state: GridPersistentState, kind: GridStateChangeKind, entityId: string, taskId: string, timestamp = new Date().toISOString()) {
+  const revision = state.revision + 1;
+  const change: GridStateChange = { revision, kind, entityId, taskId, timestamp };
+  const changes = [...state.changes, change].slice(-MAX_STATE_CHANGES);
+  return { ...state, revision, changes, updatedAt: timestamp };
+}
+
 export async function readGridState(root = DEFAULT_DEVELOPER_GRID_STATE_ROOT): Promise<GridPersistentState> {
   const target = files(root);
   await ensureRoot(target.root);
   try {
-    const parsed = JSON.parse(await readFile(target.state, "utf8")) as GridPersistentState;
-    return {
-      schemaVersion: 1,
-      task: parsed.task || null,
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      lastSequence: Math.max(0, Number(parsed.lastSequence) || 0),
-      updatedAt: parsed.updatedAt || "",
-    };
+    return normalizeState(JSON.parse(await readFile(target.state, "utf8")) as Partial<GridPersistentState>);
   } catch {
-    return { ...emptyState };
+    return { ...emptyState, sessions: [], changes: [] };
   }
 }
 
 export async function upsertGridTask(task: DeveloperGridTask, root = DEFAULT_DEVELOPER_GRID_STATE_ROOT) {
   return serializeMutation(root, async () => {
     const target = files(root);
-    await ensureRoot(target.root);
     const state = await readGridState(root);
-    const next = { ...state, task: { ...task }, updatedAt: new Date().toISOString() };
+    const next = bumpStateChange({ ...state, task: { ...task } }, "task-upsert", task.id, task.id);
     await atomic(target.state, next);
     return next;
   });
@@ -94,11 +108,10 @@ export async function upsertGridTask(task: DeveloperGridTask, root = DEFAULT_DEV
 export async function upsertWorkerSession(session: WorkerSession, root = DEFAULT_DEVELOPER_GRID_STATE_ROOT) {
   return serializeMutation(root, async () => {
     const target = files(root);
-    await ensureRoot(target.root);
     const state = await readGridState(root);
     const sessions = state.sessions.filter((item) => item.id !== session.id && !(item.workerCode === session.workerCode && item.endedAt === null));
     sessions.push({ ...session });
-    const next = { ...state, sessions, updatedAt: new Date().toISOString() };
+    const next = bumpStateChange({ ...state, sessions }, "session-upsert", session.id, session.taskId);
     await atomic(target.state, next);
     return next;
   });
@@ -107,7 +120,6 @@ export async function upsertWorkerSession(session: WorkerSession, root = DEFAULT
 export async function materializeGridTaskSession(input: { task: DeveloperGridTask; session: WorkerSession }, root = DEFAULT_DEVELOPER_GRID_STATE_ROOT) {
   return serializeMutation(root, async () => {
     const target = files(root);
-    await ensureRoot(target.root);
     const state = await readGridState(root);
     const existingActive = state.sessions.find((item) => item.workerCode === input.session.workerCode && item.endedAt === null);
     const canonicalSession = existingActive?.taskId === input.session.taskId
@@ -115,12 +127,8 @@ export async function materializeGridTaskSession(input: { task: DeveloperGridTas
       : input.session;
     const sessions = state.sessions.filter((item) => item.id !== canonicalSession.id && !(item.workerCode === canonicalSession.workerCode && item.endedAt === null));
     sessions.push(canonicalSession);
-    const next: GridPersistentState = {
-      ...state,
-      task: { ...input.task },
-      sessions,
-      updatedAt: new Date().toISOString(),
-    };
+    let next = bumpStateChange({ ...state, task: { ...input.task }, sessions }, "task-upsert", input.task.id, input.task.id);
+    next = bumpStateChange(next, "session-upsert", canonicalSession.id, canonicalSession.taskId);
     await atomic(target.state, next);
     return { state: next, session: canonicalSession, reusedActiveSession: Boolean(existingActive?.taskId === input.session.taskId) };
   });
@@ -130,13 +138,31 @@ export async function getActiveWorkerSession(workerCode: WorkerSession["workerCo
   return (await readGridState(root)).sessions.find((session) => session.workerCode === workerCode && session.endedAt === null) || null;
 }
 
+export async function getGridStateDelta(input: { after?: number; limit?: number; root?: string } = {}): Promise<GridStateDelta> {
+  const state = await readGridState(input.root || DEFAULT_DEVELOPER_GRID_STATE_ROOT);
+  const after = Math.max(0, Math.trunc(Number(input.after) || 0));
+  const limit = Math.max(1, Math.min(200, Math.trunc(Number(input.limit) || 50)));
+  const pending = state.changes.filter((change) => change.revision > after);
+  const changes = pending.slice(0, limit);
+  const cursor = changes.at(-1)?.revision ?? after;
+  const sessionIds = new Set(changes.filter((change) => change.kind !== "task-upsert").map((change) => change.entityId));
+  const taskTouched = Boolean(state.task && changes.some((change) => change.taskId === state.task?.id));
+  return {
+    mode: "DELTA_STATE",
+    cursor,
+    hasMore: pending.length > changes.length,
+    changes,
+    task: taskTouched ? state.task : null,
+    sessions: state.sessions.filter((session) => sessionIds.has(session.id)),
+  };
+}
+
 export async function appendGridEvent(
   event: Omit<GridActivityEvent, "id" | "sequence" | "timestamp"> & Partial<Pick<GridActivityEvent, "id" | "timestamp">>,
   root = DEFAULT_DEVELOPER_GRID_STATE_ROOT,
 ) {
   return serializeMutation(root, async () => {
     const target = files(root);
-    await ensureRoot(target.root);
     const state = await readGridState(root);
     const sequence = state.lastSequence + 1;
     const record: GridActivityEvent = {

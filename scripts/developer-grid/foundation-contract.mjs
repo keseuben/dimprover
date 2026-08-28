@@ -49,8 +49,11 @@ const checks = [
   [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],
   [stateStore.includes("mutation.lock") && stateStore.includes("DEVELOPER_GRID_STATE_LOCK_TIMEOUT"), "cross-process state mutation lock"],
   [stateStore.includes("materializeGridTaskSession") && fs.existsSync(path.join(root, "app/lib/developer-grid/task-session-materializer.ts")), "idempotent task/session materialization"],
+  [stateStore.includes("getGridStateDelta") && types.includes("export type GridStateDelta ="), "revision based state delta"],
   [bridge.includes("presenceAuthoritative: false") && bridge.includes("TASK_SESSION_PROVENANCE"), "Developer Console bridge context policy"],
   [shell.includes("05 DevminAI") && shell.includes("01 ÁrminAI") === false, "shell uses registry-driven fixed cells"],
+  [shell.includes("/api/dev/grid/state?after=") && shell.includes("eventCursorRef.current"), "UI consumes state/activity deltas"],
+  [shell.includes("DELTA_LIVE") && shell.includes("Full snapshot polling: TILTVA"), "UI exposes delta live status"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 

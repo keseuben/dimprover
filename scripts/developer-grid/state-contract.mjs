@@ -28,6 +28,12 @@ check(second.reusedActiveSession === true, "existing active session is reused");
 check(second.session.id === "session-a", "session id is stable");
 check(second.session.startedAt === session.startedAt, "session start is stable");
 check(second.state.sessions.filter((s)=>s.workerCode==="OUTMINAI" && s.endedAt===null).length === 1, "no duplicate active worker session");
+check(second.state.revision === 4, "task/session materialization advances state revision");
+const delta1 = await store.getGridStateDelta({after:0,limit:3,root:stateRoot});
+check(delta1.changes.length === 3 && delta1.hasMore === true && delta1.cursor === 3, "state delta is revision bounded");
+const delta2 = await store.getGridStateDelta({after:delta1.cursor,limit:3,root:stateRoot});
+check(delta2.changes.length === 1 && delta2.hasMore === false && delta2.cursor === 4, "state delta cursor completes without snapshot polling");
+check(delta2.sessions.length === 1 && delta2.sessions[0].id === "session-a", "state delta returns changed authoritative session");
 const events = await Promise.all(Array.from({length:12},(_,i)=>store.appendGridEvent({kind:i%2?"coding":"analysis",origin:"LIVE",workerCode:"OUTMINAI",taskId:"task-1",projectId:"project_dimprover",productionAccess:"DENY",delta:{i}},stateRoot)));
 check(new Set(events.map((e)=>e.sequence)).size === 12, "parallel event sequences are unique");
 check(Math.min(...events.map((e)=>e.sequence)) === 1 && Math.max(...events.map((e)=>e.sequence)) === 12, "parallel event sequences are contiguous");
@@ -42,4 +48,4 @@ check(page3.events.length === 2 && page3.hasMore === false, "final history page 
 check((await fs.stat(path.join(stateRoot,"state.json"))).isFile(), "state is persisted atomically");
 check((await fs.readFile(path.join(stateRoot,"events.jsonl"),"utf8")).trim().split("\n").length === 12, "event log is append-only JSONL");
 await fs.rm(tmp,{recursive:true,force:true});
-console.log(`Developer Grid state contract PASS · ${n}/13`);
+console.log(`Developer Grid state contract PASS · ${n}/17`);

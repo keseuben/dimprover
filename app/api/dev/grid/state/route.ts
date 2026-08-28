@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevCenterMutationSubject, isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
 import { materializeCurrentDeveloperGridTaskSession } from "@/app/lib/developer-grid/task-session-materializer";
-import { readGridState } from "@/app/lib/developer-grid/state-store";
+import { getGridStateDelta, readGridState } from "@/app/lib/developer-grid/state-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,6 +12,13 @@ function json(payload: unknown, status = 200) {
 
 export async function GET(request: NextRequest) {
   if (!(await isDevCenterAuthorized(request.headers, true))) return json({ ok: false, error: "Nincs jogosultság a Developer Grid state-hez." }, 401);
+  if (request.nextUrl.searchParams.has("after")) {
+    const delta = await getGridStateDelta({
+      after: Number(request.nextUrl.searchParams.get("after") || 0),
+      limit: Number(request.nextUrl.searchParams.get("limit") || 50),
+    });
+    return json({ ok: true, delta });
+  }
   return json({ ok: true, state: await readGridState() });
 }
 

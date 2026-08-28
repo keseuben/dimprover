@@ -65,3 +65,13 @@ A `.24` worker és a `.32` canonical oldalon párhuzamosan létrejött két Deve
 A párhuzamos `app/lib/dev-center/developer-grid` + `app/api/dev/console/developer-grid` implementáció kivezetésre került. A két korábbi HEAD külön backup refen megőrzött, így rollback lehetséges. A canonical branch története összevezetésre kerül, majd egyetlen Developer Grid Core marad.
 
 A megtartott implementáció okai: persistent append-only JSONL event store, cross-process mutation lock, idempotens aktív-session reuse, külön `/admin/developer-grid` UI shell, task-scope szerinti elhelyezés és a canonical DEV build-executor fallback már ebben a vonalban szerepel.
+
+## Reconciliation utáni élő UI blokk
+
+- A Central Core state `revision` + bounded `changes` naplót kapott.
+- `GET /api/dev/grid/state?after=<revision>` csak state deltát ad vissza; a teljes state snapshot csak induláskor töltődik be.
+- Az activity továbbra is cursoros `/api/dev/grid/events?cursor=...` delta.
+- A `/admin/developer-grid` UI induláskor egyszer materializálja/olvassa az authoritative task/session state-et, utána 3 másodpercenként csak state- és activity-deltát kér.
+- A négy worker cella az authoritative sessionből mutatja a WORKING állapotot, workItemet, stage-et, context source-t és source provenance HEAD-et. Presence nem írja felül ezt.
+- A középső panel megjeleníti a state revisiont, a DELTA LIVE kapcsolatot és a legutóbbi SANITIZED activity eseményeket.
+- Full-snapshot polling továbbra is tiltott.
