@@ -1764,7 +1764,7 @@ function startLiveClient() {
     onSnapshot(snapshot) {
       latestLiveSnapshot = snapshot;
       send("live:snapshot", enrichSnapshotWithTaskLaunch(snapshot));
-      send("live:connection", { kind: "benjadmin", ok: true, configured: true, mode: credential.mode, at: snapshot.generatedAt });
+      send("live:connection", { kind: "benjadmin", ok: true, configured: true, mode: credential.mode, transport: snapshot.transport || "UNKNOWN", realtimeMode: snapshot.realtimeMode || "UNKNOWN", fullSnapshotPolling: snapshot.fullSnapshotPolling === true, at: snapshot.generatedAt });
     },
     onEvent(event) {
       handleWorkerEvent(event);

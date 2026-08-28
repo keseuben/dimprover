@@ -43,7 +43,8 @@ check("local password uses scrypt",()=>{const r=createPasswordRecord("DeveloperG
 check("foreign ChatGPT host rejected",()=>{const x=sanitizeConfig({cells:[{url:"https://example.com/x"}]});assert.equal(x.cells[0].url,"https://chatgpt.com/")});
 check("DEV BENJADMIN HTTPS default",()=>assert.equal(config.benjadminBaseUrl,"https://admin.dev.dimpro.hu"));
 check("PROD text remains deny",()=>assert.match(html,/DEV · PROD DENY/));
-check("legacy live compatibility remains read-only endpoint",()=>{const x=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");assert.match(x,/\/api\/dev\/chatgrid\/live/)});
+check("native Developer Grid delta is primary live transport",()=>{const x=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");assert.match(x,/\/api\/dev\/grid\/foundation/);assert.match(x,/state\?after=/);assert.match(x,/events\?limit=100/);assert.match(x,/fullSnapshotPollingAllowed !== false/)});
+check("legacy ChatGrid snapshot is one-shot fallback only",()=>{const x=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");assert.equal((x.match(/\/api\/dev\/chatgrid\/live/g)||[]).length,1);assert.match(x,/legacyBootstrapUsed/)});
 check("central workspace renderer is present",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.ok(x.length>1000)});
 check("ChatGrid source product not overwritten by package identity",()=>assert.ok(!pkg.name.includes("chatgrid")));
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");

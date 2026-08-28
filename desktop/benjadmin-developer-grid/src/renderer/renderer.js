@@ -1403,9 +1403,11 @@ function bindIpc() {
     state.connection.configured = connection.configured === true;
     if (connection.mode) state.connection.mode = connection.mode;
     if (!state.security?.unlocked) return;
-    if (connection.ok) setConnectionUi("BENJADMIN élő kapcsolat", "online");
+    if (connection.ok && connection.transport === "GRID_DELTA_NATIVE") setConnectionUi("BENJADMIN · DELTA LIVE", "online");
+    else if (connection.ok && connection.transport === "LEGACY_BOOTSTRAP_ONCE") setConnectionUi("BENJADMIN · COMPATIBILITY SNAPSHOT", "warning");
+    else if (connection.ok) setConnectionUi("BENJADMIN kapcsolat", "online");
     else if (!connection.configured) setConnectionUi("BENJADMIN élő státuszkapcsolat nincs párosítva", "warning");
-    else setConnectionUi("BENJADMIN élő státuszkapcsolat megszakadt", "warning");
+    else setConnectionUi("BENJADMIN delta kapcsolat várakozik", "warning");
     renderConnectionSettings();
   });
   api.onWorkerEvent(handleWorkerEvent);

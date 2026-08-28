@@ -21,3 +21,13 @@ A régi ChatGrid tapasztalata alapján a Developer Grid worker fejléc nem mutat
 - 6/6 LEZÁRÁS: V2 mentés / MD letöltés / új átadó / lezárás
 
 Aktív vagy helyreállítandó handoff mindig látható marad fail-closed okból. A stage érték egyetlen authoritative cella-adatból származik, ezért ugyanaz a `2/6 · FEJLESZTÉS` nem jelenhet meg kétszer a jobb oldali vezérlősávban.
+
+## Native Developer Grid realtime
+
+A desktop elsődleges élő állapotforrása már a Developer Grid saját `DELTA_EVENT` / `DELTA_STATE` API-ja:
+
+- bootstrap: `/api/dev/grid/foundation`, `/api/dev/grid/state`, `/api/dev/grid/events`;
+- folytatás: revision-alapú state delta és cursoros event delta;
+- `BACKFILL` esemény nem írhatja felül az élő worker állapotot;
+- a régi ChatGrid full snapshot endpoint legfeljebb egyszeri kompatibilitási bootstrapként használható, ha az új DEV runtime még nem teszi elérhetővé a Grid API-t;
+- periodikus legacy full-snapshot polling nincs.

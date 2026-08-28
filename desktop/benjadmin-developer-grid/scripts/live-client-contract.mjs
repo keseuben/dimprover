@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+const require=createRequire(import.meta.url); const here=path.dirname(fileURLToPath(import.meta.url)); const root=path.resolve(here,"..");
+const clientSource=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");
+const {normalizeWorkerCode,normalizeGridState,mergeGridState,applyLiveEvents,synthesizeGridSnapshot}=require(path.join(root,"src/live/benjadmin-live-client.cjs"));
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const foundation={realtime:{mode:"DELTA_EVENT",fullSnapshotPollingAllowed:false},workers:[
+ {code:"ARMINAI",label:"ÁrminAI",state:"READY"},{code:"OUTMINAI",label:"OutminAI",state:"WORKING"},{code:"BENJAMINAI",label:"BenjáminAI",state:"READY"},{code:"JAZMINAI",label:"JázminAI",state:"READY"},{code:"DEVMINAI",label:"DevminAI",state:"IDLE"}
+]};
+const session={id:"s1",workerCode:"OUTMINAI",taskId:"t1",startedAt:"2026-08-28T10:00:00Z",endedAt:null,developmentContext:{projectId:"p1",mainModule:"BENJADMIN",moduleName:"Developer Grid V1",submoduleName:"desktop",workItem:"Delta client",workStageIndex:2},sourceProvenance:{branch:"feature/grid",worktree:"/srv/grid",verifiedAt:"2026-08-28T10:00:00Z"}};
+const state=normalizeGridState({revision:4,task:{id:"t1",projectId:"p1",title:"Grid",priority:98,status:"RUNNING",acceptance:["delta"]},sessions:[session],updatedAt:"2026-08-28T10:02:00Z"});
+check("BENJAMINAI maps to desktop BENAI",()=>assert.equal(normalizeWorkerCode("BENJAMINAI"),"BENAI"));
+check("DevminAI is not a primary desktop worker code",()=>assert.equal(normalizeWorkerCode("DEVMINAI"),""));
+check("native foundation endpoint present",()=>assert.match(clientSource,/\/api\/dev\/grid\/foundation/));
+check("native state bootstrap endpoint present",()=>assert.match(clientSource,/\/api\/dev\/grid\/state/));
+check("state delta uses after cursor",()=>assert.match(clientSource,/state\?after=\$\{after\}/));
+check("event delta uses cursor",()=>assert.match(clientSource,/events\?limit=100.*cursor=/s));
+check("native contract rejects full snapshot polling",()=>assert.match(clientSource,/fullSnapshotPollingAllowed !== false/));
+check("legacy fallback is explicitly one-shot",()=>assert.match(clientSource,/legacyBootstrapUsed/));
+check("legacy endpoint occurs only as compatibility bootstrap",()=>assert.equal((clientSource.match(/\/api\/dev\/chatgrid\/live/g)||[]).length,1));
+const events=new Map(); applyLiveEvents(events,[{origin:"BACKFILL",workerCode:"OUTMINAI",sequence:99,taskId:"t1",delta:{workStageIndex:6}},{origin:"LIVE",workerCode:"OUTMINAI",sequence:5,taskId:"t1",timestamp:"2026-08-28T10:03:00Z",kind:"coding",delta:{workStageIndex:3,workItem:"Targeted tests"}}]);
+check("BACKFILL is ignored for live state",()=>assert.equal(events.get("OUTMINAI").sequence,5));
+const snap=synthesizeGridSnapshot({foundation,state,liveEventsByWorker:events,generatedAt:"2026-08-28T10:04:00Z"});
+check("snapshot exposes exactly four primary workers",()=>assert.deepEqual(snap.workers.map(x=>x.code),["ARMINAI","OUTMINAI","BENAI","JAZMINAI"]));
+check("task is assigned from active authoritative session",()=>assert.equal(snap.tasks[0].assignedWorkerId,"OUTMINAI"));
+check("session developmentContext produces presence",()=>assert.equal(snap.workerPresence[0].moduleName,"Developer Grid V1"));
+check("latest LIVE event advances stage",()=>assert.equal(snap.workerPresence[0].workStageIndex,3));
+check("latest LIVE event advances work item",()=>assert.equal(snap.workerPresence[0].workItem,"Targeted tests"));
+check("synthesized transport is delta and not full snapshot",()=>{assert.equal(snap.realtimeMode,"DELTA_EVENT");assert.equal(snap.fullSnapshotPolling,false)});
+const merged=mergeGridState(state,{mode:"DELTA_STATE",cursor:7,changes:[{kind:"session-upsert",entityId:"s1"}],task:null,sessions:[{...session,developmentContext:{...session.developmentContext,workStageIndex:4}}]});
+check("state delta advances revision",()=>assert.equal(merged.revision,7));
+check("state delta replaces changed session",()=>assert.equal(merged.sessions[0].developmentContext.workStageIndex,4));
+const closed=mergeGridState(merged,{mode:"DELTA_STATE",cursor:8,changes:[{kind:"session-close",entityId:"s1"}],task:null,sessions:[]});
+check("session-close delta removes absent closed session",()=>assert.equal(closed.sessions.length,0));
+console.log(`Developer Grid desktop live delta contract PASS · ${n}/${n}`);
