@@ -8,9 +8,19 @@ import { listDeveloperGridWorkers } from "./worker-registry";
 
 export const DEVELOPER_GRID_TASK_ID = "dev-task-benjadmin-developer-grid-v1-night-20260827";
 export const DEVELOPER_GRID_PROJECT_ID = "project_dimprover";
-export const DEVELOPER_GRID_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
-export const DEVELOPER_GRID_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
-export const DEVELOPER_GRID_REPOSITORY = "/srv/dimpro-dev/repositories/dimprover.git";
+
+const DEFAULT_DEVELOPER_GRID_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
+const DEFAULT_DEVELOPER_GRID_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
+const DEFAULT_DEVELOPER_GRID_REPOSITORY = "/srv/dimpro-dev/repositories/dimprover.git";
+
+function runtimeExpectation(name: string, fallback: string) {
+  const value = process.env[name]?.trim();
+  return value || fallback;
+}
+
+export const DEVELOPER_GRID_BRANCH = runtimeExpectation("DIMPRO_DEVELOPER_GRID_SOURCE_BRANCH", DEFAULT_DEVELOPER_GRID_BRANCH);
+export const DEVELOPER_GRID_WORKTREE = runtimeExpectation("DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE", DEFAULT_DEVELOPER_GRID_WORKTREE);
+export const DEVELOPER_GRID_REPOSITORY = runtimeExpectation("DIMPRO_DEVELOPER_GRID_SOURCE_REPOSITORY", DEFAULT_DEVELOPER_GRID_REPOSITORY);
 
 const CENTRAL_CORE_DOMAINS = [
   "Task / Workflow",

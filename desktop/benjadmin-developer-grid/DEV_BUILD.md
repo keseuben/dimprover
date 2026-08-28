@@ -1,4 +1,4 @@
-# BENJADMIN Developer Grid v0.1.2 DEV build
+# BENJADMIN Developer Grid v0.1.3 DEV build
 
 Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference alapként használja, de külön package/appId/userData/EXE identitással fut, ezért nem írja felül a ChatGridet.
 
@@ -37,3 +37,9 @@ A desktop elsődleges élő állapotforrása már a Developer Grid saját `DELTA
 - `BACKFILL` esemény nem írhatja felül az élő worker állapotot;
 - a régi ChatGrid full snapshot endpoint legfeljebb egyszeri kompatibilitási bootstrapként használható, ha az új DEV runtime még nem teszi elérhetővé a Grid API-t;
 - periodikus legacy full-snapshot polling nincs.
+
+## v0.1.3 release/runtime hardening
+
+- immutable release worktree esetén a source worktree / branch / repository elvárás explicit DEV runtime env-ből scope-olható, miközben a tényleges Git provenance ellenőrzés továbbra is fail-closed;
+- a candidate smoke zárósora a tényleges foundation verzióból készül, ezért nem maradhat benne régi verziófelirat;
+- a v0.1.2 befagyasztott release-tag és artifactok változatlanok maradnak.

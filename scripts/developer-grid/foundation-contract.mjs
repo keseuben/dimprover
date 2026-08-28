@@ -44,7 +44,7 @@ const readAuth = fs.readFileSync(path.join(root, "app/lib/developer-grid/read-au
 const candidateBuild = fs.readFileSync(path.join(root, "scripts/developer-grid/build-candidate.sh"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.2-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.3-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
@@ -57,6 +57,7 @@ const checks = [
   [runtime.includes(".dimpro-release.json") && runtime.includes(".dimpro-assets-build-id"), "immutable runtime release metadata adapter"],
   [runtime.includes("active-next-release") && runtime.includes("NEXT_DIST_DIR"), "runtime release identity resolution"],
   [foundation.includes("resolveDeveloperGridRuntimeProvenance") && foundation.includes("expectedSourceCommit"), "foundation binds runtime to source provenance"],
+  [foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_BRANCH") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_REPOSITORY"), "immutable runtime provenance expectations are explicit and scopeable"],
   [foundationRoute.includes('releaseRuntimeProvenance.state !== "BLOCKED"'), "foundation API blocks release/runtime mismatch"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
   [build.includes("probeBuildNodes") && build.includes("BatchMode=yes") && build.includes("StrictHostKeyChecking=yes"), "build node SSH readiness probe"],

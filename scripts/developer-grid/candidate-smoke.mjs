@@ -32,7 +32,7 @@ check(foundation.response.status === 200, "Foundation API reporter auth", `HTTP 
 check(foundation.json?.foundation?.sourceProvenance?.sourceState === "VERIFIED", "Source provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.state === "VERIFIED", "Release/runtime provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.blockCode === null, "Release/runtime blockCode empty");
-check(foundation.json?.foundation?.version === "0.1.2-dev", "Developer Grid version v0.1.2 DEV");
+check(foundation.json?.foundation?.version === "0.1.3-dev", "Developer Grid version v0.1.3 DEV");
 check(Boolean(foundation.json?.foundation?.releaseRuntimeProvenance?.buildId), "Runtime BUILD_ID exposed");
 check(/^[0-9a-f]{40}$/.test(String(foundation.json?.foundation?.releaseRuntimeProvenance?.sourceCommit || "")), "Runtime source commit exposed");
 check(foundation.json?.foundation?.productionAccess === "DENY", "PROD access DENY");
@@ -75,4 +75,4 @@ if (adminKey) {
   console.log("SKIP task/session materialization · DEVELOPER_GRID_CANDIDATE_ADMIN_KEY nincs megadva");
 }
 
-console.log(`Developer Grid V0.1.0 candidate smoke PASS · ${checks} checks · ${base}`);
+console.log(`Developer Grid ${foundation.json?.foundation?.version || "unknown"} candidate smoke PASS · ${checks} checks · ${base}`);

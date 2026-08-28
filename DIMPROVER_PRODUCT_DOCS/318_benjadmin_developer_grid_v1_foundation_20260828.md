@@ -97,3 +97,19 @@ A v0.1.1 release checkpoint változatlanul visszahozható. A feature branch köv
 - a native `DELTA_EVENT` / `DELTA_STATE` működés dokumentációs konzisztenciája;
 - a Windows kézi acceptance visszajelzéseinek célzott javítása;
 - új v0.1.2 artifact csak teljes contract + runtime + Windows packaging ellenőrzés után készülhet.
+
+## v0.1.2 DEV release checkpoint
+
+- Befagyasztott release ref/tag: `release/benjadmin-developer-grid-v0.1.2-dev` / `benjadmin-developer-grid-v0.1.2-dev`.
+- Release HEAD: `d59ab40ddf9fb4a4c1aee5c1c1b2c6fb94901a19`.
+- Build ID: `zZnBtYCJeGjRoNhkoqG0r`.
+- Candidate smoke: 24/24 PASS.
+- Desktop acceptance: 53/53 PASS; native delta contract: 19/19 PASS; npm audit: 0 sérülékenység.
+- Windows EXE + DEV ZIP + manifest + checklist publikus DEV stagingen, teljes visszatöltési SHA-256 ellenőrzéssel.
+- A v0.1.2 felhasználói acceptance Windows kézi próbára vár.
+
+## v0.1.3 DEV release/runtime hardening
+
+- A future immutable release worktree-k source-provenance elvárása explicit DEV runtime env-ből scope-olható, de nem lazíthatja a fail-closed Git ellenőrzést.
+- A candidate smoke verziófelirata a tényleges foundation verzióból származik.
+- A v0.1.2 release checkpoint és artifactok változatlanok maradnak.
