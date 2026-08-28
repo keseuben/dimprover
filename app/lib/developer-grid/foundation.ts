@@ -3,7 +3,7 @@ import { resolveBuildExecutor } from "./build-orchestrator";
 import { resolveDeveloperGridRuntimeProvenance } from "./runtime-provenance";
 import { verifySourceProvenance } from "./source-provenance";
 import type { DeveloperGridFoundation } from "./types";
-import { DEVELOPER_GRID_SCHEMA_VERSION } from "./types";
+import { DEVELOPER_GRID_SCHEMA_VERSION, DEVELOPER_GRID_VERSION } from "./types";
 import { listDeveloperGridWorkers } from "./worker-registry";
 
 export const DEVELOPER_GRID_TASK_ID = "dev-task-benjadmin-developer-grid-v1-night-20260827";
@@ -59,6 +59,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
   return {
     schemaVersion: DEVELOPER_GRID_SCHEMA_VERSION,
     product: "BENJADMIN Developer Grid V1",
+    version: DEVELOPER_GRID_VERSION,
     environment: "DEV",
     productionAccess: "DENY",
     task: {

@@ -1,4 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
+export const DEVELOPER_GRID_VERSION = "0.1.0-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ProductionAccess = "DENY";
@@ -171,6 +172,7 @@ export type GridHandoff = {
 export type DeveloperGridFoundation = {
   schemaVersion: typeof DEVELOPER_GRID_SCHEMA_VERSION;
   product: "BENJADMIN Developer Grid V1";
+  version: typeof DEVELOPER_GRID_VERSION;
   environment: GridEnvironment;
   productionAccess: ProductionAccess;
   task: DeveloperGridTask;

@@ -78,6 +78,7 @@
 }
 .liveBadge { color: #62e6ad; border-color: rgba(98, 230, 173, .32); }
 .degradedBadge { color: #ff997d; border-color: rgba(255, 153, 125, .32); }
+.versionBadge { color: #d7ff6e; border-color: rgba(215, 255, 110, .35); background: rgba(42, 58, 20, .68); }
 .stateWorking { color: #62e6ad; border-color: rgba(98, 230, 173, .32); }
 .cardBody { display: grid; gap: 5px; }
 .cardBody strong { color: #dcecff; font-size: 12px; }
