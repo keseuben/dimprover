@@ -125,8 +125,14 @@ export type ReleaseRuntimeProvenance = {
   activeReleasePointer: string | null;
   pm2NextDistDir: string | null;
   runtimeCwd: string | null;
+  runtimeRelease: string | null;
   buildId: string | null;
   expectedBuildId: string | null;
+  metadataReady: boolean;
+  sourceCommit: string | null;
+  expectedSourceCommit: string | null;
+  sourceBranch: string | null;
+  expectedSourceBranch: string | null;
   state: ReleaseState;
   blockCode: "RELEASE_STATE_MISMATCH" | null;
   reasons: string[];

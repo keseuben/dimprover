@@ -11,10 +11,12 @@ const required = [
   "app/lib/developer-grid/development-context.ts",
   "app/lib/developer-grid/events.ts",
   "app/lib/developer-grid/release-provenance.ts",
+  "app/lib/developer-grid/runtime-provenance.ts",
   "app/lib/developer-grid/build-nodes.ts",
   "app/lib/developer-grid/exclusive-lock.ts",
   "app/lib/developer-grid/handoff.ts",
   "components/admin/developer-grid/DeveloperGridShell.tsx",
+  "scripts/developer-grid/candidate-smoke.mjs",
 ];
 
 const failures = [];
@@ -27,6 +29,9 @@ const source = fs.readFileSync(path.join(root, "app/lib/developer-grid/source-pr
 const context = fs.readFileSync(path.join(root, "app/lib/developer-grid/development-context.ts"), "utf8");
 const events = fs.readFileSync(path.join(root, "app/lib/developer-grid/events.ts"), "utf8");
 const release = fs.readFileSync(path.join(root, "app/lib/developer-grid/release-provenance.ts"), "utf8");
+const runtime = fs.readFileSync(path.join(root, "app/lib/developer-grid/runtime-provenance.ts"), "utf8");
+const foundation = fs.readFileSync(path.join(root, "app/lib/developer-grid/foundation.ts"), "utf8");
+const foundationRoute = fs.readFileSync(path.join(root, "app/api/dev/grid/foundation/route.ts"), "utf8");
 const build = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-nodes.ts"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-orchestrator.ts"), "utf8");
 const stateStore = fs.readFileSync(path.join(root, "app/lib/developer-grid/state-store.ts"), "utf8");
@@ -43,6 +48,10 @@ const checks = [
   [events.includes('DEVELOPER_GRID_REALTIME_MODE = "DELTA_EVENT"'), "delta/event realtime"],
   [events.includes("FULL_SNAPSHOT_POLLING_ALLOWED = false"), "full snapshot polling forbidden"],
   [release.includes("RELEASE_STATE_MISMATCH"), "release fail-closed"],
+  [runtime.includes(".dimpro-release.json") && runtime.includes(".dimpro-assets-build-id"), "immutable runtime release metadata adapter"],
+  [runtime.includes("active-next-release") && runtime.includes("NEXT_DIST_DIR"), "runtime release identity resolution"],
+  [foundation.includes("resolveDeveloperGridRuntimeProvenance") && foundation.includes("expectedSourceCommit"), "foundation binds runtime to source provenance"],
+  [foundationRoute.includes('releaseRuntimeProvenance.state !== "BLOCKED"'), "foundation API blocks release/runtime mismatch"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
   [orchestrator.includes("CANONICAL_DEV_SERVER") && orchestrator.includes("exclusiveLockHeld"), "canonical DEV build executor"],

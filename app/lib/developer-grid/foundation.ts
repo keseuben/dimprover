@@ -1,6 +1,6 @@
 import { listBuildNodes } from "./build-nodes";
 import { resolveBuildExecutor } from "./build-orchestrator";
-import { verifyReleaseRuntimeProvenance } from "./release-provenance";
+import { resolveDeveloperGridRuntimeProvenance } from "./runtime-provenance";
 import { verifySourceProvenance } from "./source-provenance";
 import type { DeveloperGridFoundation } from "./types";
 import { DEVELOPER_GRID_SCHEMA_VERSION } from "./types";
@@ -48,6 +48,13 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
     taskId: DEVELOPER_GRID_TASK_ID,
     sessionId: `foundation-${DEVELOPER_GRID_TASK_ID}`,
   });
+  const releaseRuntimeProvenance = await resolveDeveloperGridRuntimeProvenance({
+    projectRoot: DEVELOPER_GRID_WORKTREE,
+    expectedSourceCommit: sourceProvenance.head || null,
+    expectedSourceBranch: DEVELOPER_GRID_BRANCH,
+  });
+  const provenanceBlocked = sourceProvenance.sourceState !== "VERIFIED"
+    || releaseRuntimeProvenance.state === "BLOCKED";
 
   return {
     schemaVersion: DEVELOPER_GRID_SCHEMA_VERSION,
@@ -61,7 +68,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
       priority: 98,
       environment: "DEV",
       productionAccess: "DENY",
-      status: sourceProvenance.sourceState === "VERIFIED" ? "RUNNING" : "BLOCKED",
+      status: provenanceBlocked ? "BLOCKED" : "RUNNING",
       acceptance: [...FOUNDATION_ACCEPTANCE],
     },
     workers: listDeveloperGridWorkers(),
@@ -76,14 +83,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
       ],
     },
     sourceProvenance,
-    releaseRuntimeProvenance: verifyReleaseRuntimeProvenance({
-      declaredRelease: null,
-      activeReleasePointer: null,
-      pm2NextDistDir: null,
-      runtimeCwd: null,
-      buildId: null,
-      expectedBuildId: null,
-    }),
+    releaseRuntimeProvenance,
     buildNodes: listBuildNodes(),
     buildExecutor: resolveBuildExecutor(listBuildNodes()),
     realtime: {
