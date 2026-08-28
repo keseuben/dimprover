@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { isDeveloperGridReadAuthorized } from "@/app/lib/developer-grid/read-auth";
 import { getDeveloperGridFoundation } from "@/app/lib/developer-grid/foundation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) {
+  if (!(await isDeveloperGridReadAuthorized(request.headers))) {
     return NextResponse.json({ ok: false, error: "Nincs jogosultság a BENJADMIN Developer Gridhez." }, { status: 401, headers: { "cache-control": "no-store" } });
   }
   try {

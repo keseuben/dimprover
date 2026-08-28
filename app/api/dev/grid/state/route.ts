@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDevCenterMutationSubject, isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { isDeveloperGridReadAuthorized } from "@/app/lib/developer-grid/read-auth";
+import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import { materializeCurrentDeveloperGridTaskSession } from "@/app/lib/developer-grid/task-session-materializer";
 import { getGridStateDelta, readGridState } from "@/app/lib/developer-grid/state-store";
 
@@ -11,7 +12,7 @@ function json(payload: unknown, status = 200) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) return json({ ok: false, error: "Nincs jogosultság a Developer Grid state-hez." }, 401);
+  if (!(await isDeveloperGridReadAuthorized(request.headers))) return json({ ok: false, error: "Nincs jogosultság a Developer Grid state-hez." }, 401);
   if (request.nextUrl.searchParams.has("after")) {
     const delta = await getGridStateDelta({
       after: Number(request.nextUrl.searchParams.get("after") || 0),

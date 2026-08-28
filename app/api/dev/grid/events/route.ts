@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDevCenterMutationSubject, isDevCenterAuthorized } from "@/app/lib/dev-center/auth";
+import { isDeveloperGridReadAuthorized } from "@/app/lib/developer-grid/read-auth";
+import { getDevCenterMutationSubject } from "@/app/lib/dev-center/auth";
 import { appendGridEvent, listGridEvents } from "@/app/lib/developer-grid/state-store";
 import type { GridEventKind, GridEventOrigin, WorkerCode } from "@/app/lib/developer-grid/types";
 
@@ -14,7 +15,7 @@ const clean = (value: unknown, max = 2000) => String(value || "").replace(/\r\n/
 function json(payload: unknown, status = 200) { return NextResponse.json(payload, { status, headers: { "cache-control": "no-store" } }); }
 
 export async function GET(request: NextRequest) {
-  if (!(await isDevCenterAuthorized(request.headers, true))) return json({ ok: false, error: "Nincs jogosultság a Developer Grid eseményekhez." }, 401);
+  if (!(await isDeveloperGridReadAuthorized(request.headers))) return json({ ok: false, error: "Nincs jogosultság a Developer Grid eseményekhez." }, 401);
   return json({ ok: true, mode: "DELTA_EVENT", page: await listGridEvents({ cursor: request.nextUrl.searchParams.get("cursor"), limit: Number(request.nextUrl.searchParams.get("limit") || 50) }) });
 }
 

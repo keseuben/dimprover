@@ -15,6 +15,7 @@ const required = [
   "app/lib/developer-grid/build-nodes.ts",
   "app/lib/developer-grid/exclusive-lock.ts",
   "app/lib/developer-grid/handoff.ts",
+  "app/lib/developer-grid/read-auth.ts",
   "components/admin/developer-grid/DeveloperGridShell.tsx",
   "scripts/developer-grid/candidate-smoke.mjs",
 ];
@@ -37,6 +38,7 @@ const orchestrator = fs.readFileSync(path.join(root, "app/lib/developer-grid/bui
 const stateStore = fs.readFileSync(path.join(root, "app/lib/developer-grid/state-store.ts"), "utf8");
 const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-bridge.ts"), "utf8");
 const shell = fs.readFileSync(path.join(root, "components/admin/developer-grid/DeveloperGridShell.tsx"), "utf8");
+const readAuth = fs.readFileSync(path.join(root, "app/lib/developer-grid/read-auth.ts"), "utf8");
 
 const checks = [
   [types.includes('DEVELOPER_GRID_VERSION = "0.1.1-dev"'), "versioned DEV candidate contract"],
@@ -66,6 +68,7 @@ const checks = [
   [shell.includes("/api/dev/grid/state?after=") && shell.includes("eventCursorRef.current"), "UI consumes state/activity deltas"],
   [shell.includes("DELTA_LIVE") && shell.includes("Full snapshot polling: TILTVA"), "UI exposes delta live status"],
   [shell.includes("Build ID:") && shell.includes("foundation?.version"), "UI exposes version/build identity"],
+  [readAuth.includes("isChatGridDeviceAuthorized") && readAuth.includes("isDevCenterAuthorized"), "desktop device read-only grid auth bridge"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 
