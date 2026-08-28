@@ -12,7 +12,7 @@ function ensureDevBase(baseUrl) {
 }
 function headers(deviceToken, json = false) {
   const token = String(deviceToken || "").trim();
-  if (!token) throw new Error("A Context Workspace használatához párosított ChatGrid eszköz szükséges.");
+  if (!token) throw new Error("A BENJADMIN Fejlesztői Vezérlőpult használatához párosított Developer Grid eszköz szükséges.");
   return { "x-benjadmin-chatgrid-device-token": token, ...(json ? { "content-type": "application/json" } : {}), accept: "application/json" };
 }
 function sanitizeResource(value) {

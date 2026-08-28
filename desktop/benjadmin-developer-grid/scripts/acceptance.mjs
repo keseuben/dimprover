@@ -48,6 +48,8 @@ check("PROD text remains deny",()=>assert.match(html,/DEV · PROD DENY/));
 check("native Developer Grid delta is primary live transport",()=>{const x=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");assert.match(x,/\/api\/dev\/grid\/foundation/);assert.match(x,/state\?after=/);assert.match(x,/events\?limit=100/);assert.match(x,/fullSnapshotPollingAllowed !== false/)});
 check("legacy ChatGrid snapshot is one-shot fallback only",()=>{const x=fs.readFileSync(path.join(root,"src/live/benjadmin-live-client.cjs"),"utf8");assert.equal((x.match(/\/api\/dev\/chatgrid\/live/g)||[]).length,1);assert.match(x,/legacyBootstrapUsed/)});
 check("central workspace renderer is present",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.ok(x.length>1000)});
+check("central workspace renders immediately before remote context fetch",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/render\(\);\s*setNotice\("Vezérlőpult kapcsolódás/)});
+check("central workspace renders pairing error instead of blank body",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/contextErrorMessage/);assert.match(x,/párosítsd a Developer Gridet/);assert.match(x,/if\(!result\?\.ok\)\{state\.notice=contextErrorMessage\(result\?\.error\);render\(\)/)});
 check("ChatGrid source product not overwritten by package identity",()=>assert.ok(!pkg.name.includes("chatgrid")));
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 check("header handoff is stage-aware",()=>assert.match(contextWorkspaceSource,/idleStageAllowsHandoff=stageIndex===2\|\|stageIndex===6/));
