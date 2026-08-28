@@ -4,6 +4,7 @@ Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference a
 
 A `v0.1.2` stabilizációs kör fő eltérései:
 - `electron-builder` dependency/security hardening;
+- Windows DEV EXE: a kódaláírás ki van kapcsolva, de a `resedit` erőforrás-szerkesztés aktív marad, így a DIMPRO ikon és Windows verziómeta bekerül;
 - a native delta működés dokumentációjának konzisztenssé tétele;
 - a befagyasztott v0.1.1 Windows acceptance visszajelzéseinek fogadása és célzott javítása.
 

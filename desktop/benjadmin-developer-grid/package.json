@@ -35,9 +35,9 @@
           ]
         }
       ],
-      "signAndEditExecutable": false,
       "artifactName": "BENJADMIN-Developer-Grid-${version}-Windows-x64.${ext}",
-      "icon": "src/assets/app-icon.ico"
+      "icon": "src/assets/app-icon.ico",
+      "signExecutable": false
     },
     "artifactName": "BENJADMIN-Developer-Grid-${version}-Windows-x64.${ext}"
   }
