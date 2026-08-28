@@ -17,6 +17,7 @@ check("package version 0.1.1",()=>assert.equal(pkg.version,"0.1.1"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
+check("custom DIMPRO Windows icon configured",()=>{assert.equal(pkg.build.win.icon,"src/assets/app-icon.ico");assert.equal(fs.existsSync(path.join(root,pkg.build.win.icon)),true)});
 check("exactly four primary cells",()=>assert.equal(config.cells.length,4));
 check("fixed visual worker order",()=>assert.deepEqual(config.cells.map(x=>x.workerCode),["ARMINAI","OUTMINAI","BENAI","JAZMINAI"]));
 check("fixed visual labels",()=>assert.deepEqual(config.cells.map(x=>x.label),["ÁrminAI","OutminAI","BenjáminAI","JázminAI"]));
@@ -62,4 +63,9 @@ const stagePrompt=fs.readFileSync(path.join(root,"src/stage-actions-prompt-build
 check("checkpoint prompt is DEV only",()=>assert.match(stagePrompt,/DEV ONLY · PROD DENY/));
 check("build prompt forbids raw build",()=>assert.match(stagePrompt,/build:raw és kerülő\/párhuzamos build tilos/));
 check("stage action IPC is exposed",()=>{const preload=fs.readFileSync(path.join(root,"src/preload.cjs"),"utf8");assert.match(preload,/prepareStageAction/);assert.match(main,/stage-action:prepare/)});
+const guideSource=fs.readFileSync(path.join(root,"src/guide/default-guide.cjs"),"utf8");
+check("guide uses Developer Grid product name",()=>{assert.match(guideSource,/BENJADMIN DEVELOPER GRID/);assert.doesNotMatch(guideSource,/BENJADMIN CHATGRID/)});
+check("guide fixed shortcut layout matches cells",()=>{assert.match(guideSource,/Ctrl\+Alt\+1 — ÁrminAI cella/);assert.match(guideSource,/Ctrl\+Alt\+3 — BenjáminAI cella/)});
+check("05 is DevminAI not human BenjAdmin",()=>{assert.match(guideSource,/05 DevminAI/);assert.match(fs.readFileSync(path.join(root,"src/renderer/central.html"),"utf8"),/Nem emberi döntéshozó/)});
+check("visible shell and guide use Developer Grid branding",()=>{assert.doesNotMatch(html,/BENJADMIN CHATGRID/);assert.doesNotMatch(fs.readFileSync(path.join(root,"src/renderer/guide.html"),"utf8"),/BENJADMIN CHATGRID/)});
 console.log(`BENJADMIN Developer Grid Desktop v0.1.1 acceptance PASS · ${n}/${n}`);

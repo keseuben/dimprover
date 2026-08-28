@@ -1,19 +1,19 @@
 "use strict";
 
-const DEFAULT_USAGE_GUIDE = `BENJADMIN CHATGRID — MŰKÖDÉSI ÉS HASZNÁLATI SZABÁLYZAT
+const DEFAULT_USAGE_GUIDE = `BENJADMIN DEVELOPER GRID — MŰKÖDÉSI ÉS HASZNÁLATI SZABÁLYZAT
 
 CÉL
-A ChatGrid a DIMPRO / DIMPROVER fejlesztési munkatere. A négy worker-cella a fejlesztő AI-khoz tartozik, az 05 BenjAdmin ablak a saját központi ChatGPT-csevegésed. A végső döntés mindig a BenjAdminé.
+A Developer Grid a DIMPRO / DIMPROVER fejlesztési munkatere. A négy worker-cella a fejlesztő AI-khoz tartozik, a középső BENJADMIN Fejlesztői Vezérlőpult a központi munkatér, az 05 DevminAI pedig külön segédagent. A végső döntés mindig a BenjAdminé.
 
 1. BELÉPÉS UTÁN
-- Írd be a ChatGrid helyi jelszavát.
+- Írd be a Developer Grid helyi jelszavát.
 - A négy fejlesztői cella betöltődik.
 - Ez az útmutató automatikusan megjelenik középen. X-szel bezárható; Ctrl+Alt+9-cel bármikor visszahozható vagy elrejthető.
 - Nézd meg a cellafejléceket: státusz, főmodul/modul, aktuális munkarész és fejlesztési fázis.
 - Ha a BENJADMIN élő kapcsolat nincs párosítva, a Beállításokban párosítsd az eszközt.
 
 2. MIT ÍRJAK A BENAI-NAK?
-A BenAI a fejlesztés koordinátora. Elsőként neki írj, ha új munkát akarsz indítani, prioritást szeretnél változtatni, állapotot kérsz vagy nem tudod, melyik workerhez tartozik a feladat.
+A BenjáminAI a fejlesztés koordinátora. Elsőként neki írj, ha új munkát akarsz indítani, prioritást szeretnél változtatni, állapotot kérsz vagy nem tudod, melyik workerhez tartozik a feladat.
 
 Napi indítás minta:
 „Indítsd a mai fejlesztési munkát. Ellenőrizd a DEV állapotot, az aktív és várakozó taskokat, a worktree-ket, scope-lockokat és a build-lockot. PROD DENY. Adj rövid prioritási sorrendet, majd jelezd, melyik workernek mit kell folytatnia.”
@@ -31,17 +31,17 @@ Leállítás / szüneteltetés minta:
 „Szüneteltesd a(z) [worker/feladat] fejlesztését. Ne induljon új munka, amíg külön nem engedélyezem.”
 
 3. MIKOR ÍRJAK KÖZVETLENÜL A WORKERNEK?
-Normál esetben BenAI osztja ki és koordinálja a feladatot. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a ChatGrid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
+Normál esetben BenjáminAI osztja ki és koordinálja a feladatot. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a Developer Grid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
 
 Ha kézzel kell írnod:
 „Folytasd a BENJADMIN által kiosztott feladatot. Először ellenőrizd a pontos taskot, scope-ot, worktree-t és DEV állapotot. PROD DENY. Felvételkor jelezd: MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM. Visszaadáskor: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM + commit + tesztek + blokkolók.”
 
 4. WORKEREK SZEREPE
-- BenAI: koordináció, feladatbontás, prioritás, scope, worktree, acceptance, build/review sorrend.
+- BenjáminAI: koordináció, feladatbontás, prioritás, scope, worktree, acceptance, build/review sorrend.
 - OutminAI: kijelölt külső/partner vagy külön leválasztott fejlesztési scope kódmérnöke; csak a kiosztott területen dolgozzon.
 - ÁrminAI: belső frontend, komponensek, reszponzív UI és kliensoldali alkalmazáslogika.
 - JázminAI: belső backend, API, adatmodell, integráció, migrációs és backend tesztfeladatok.
-- 05 BenjAdmin: a saját központi ChatGPT-ablakod általános döntésekhez, összefoglaláshoz és olyan kérdésekhez, amelyek nem egyetlen worker munkacellájához tartoznak.
+- 05 DevminAI: külön fejlesztési tervező/segédagent explicit taskhoz, kontextus-előkészítéshez és kiegészítő DEV munkához. Nem emberi döntéshozó; a végső döntés BenjAdminé.
 
 5. STÁTUSZOK JELENTÉSE
 - INAKTÍV: nincs igazolt aktív munka.
@@ -54,14 +54,14 @@ Ha kézzel kell írnod:
 Fontos: „kiosztva” nem ugyanaz, mint „dolgozik”. A valódi munkafelvételt task/session/presence jel igazolja.
 
 6. NAPI AJÁNLOTT MUNKAMENET
-1) Jelszó → ChatGrid megnyitás.
+1) Jelszó → Developer Grid megnyitás.
 2) Olvasd el a középső útmutatót, ha szükséges.
-3) Kattints a „NAPI INDÍTÁS” gombra vagy írj a BenAI-nak napi indítási kérést.
+3) Kattints a „NAPI INDÍTÁS” gombra vagy írj a BenjáminAI-nak napi indítási kérést.
 4) Ellenőrizd a négy fejléc státuszát és modulját.
 5) Az „INDÍTÁSRA VÁR” worker(ek)nél készítsd elő és kézzel küldd el a promptot.
 6) Fejlesztés közben a cellafejlécből kövesd a munkarészt és az 1/6–6/6 fázist.
-7) Ha blokk van, először BenAI-nak írj; ő mondja meg, kell-e döntésed.
-8) Kész munka után ellenőrizd a commit/teszt/build eredményt és kérj BenAI összefoglalót.
+7) Ha blokk van, először BenjáminAI-nak írj; ő mondja meg, kell-e döntésed.
+8) Kész munka után ellenőrizd a commit/teszt/build eredményt és kérj BenjáminAI összefoglalót.
 9) PROD művelet csak külön, egyértelmű BenjAdmin engedéllyel történhet.
 
 7. BIZTONSÁGI ÉS FEJLESZTÉSI ALAPSZABÁLYOK
@@ -72,25 +72,25 @@ Fontos: „kiosztva” nem ugyanaz, mint „dolgozik”. A valódi munkafelvéte
 - Shared build, release, migráció, restart és cutover csak központi exclusive lock alatt fusson.
 - Stale státuszt ne tekints aktuális munkafelvételnek.
 - Fizikai Windows E2E-t csak akkor tekints PASS-nak, ha valóban végig lett próbálva.
-- Ha bizonytalan vagy, ne találgass: kérj BenAI-tól állapotellenőrzést.
+- Ha bizonytalan vagy, ne találgass: kérj BenjáminAI-tól állapotellenőrzést.
 
 8. HASZNOS GYORSBILLENTYŰK
-Ctrl+Alt+1 — BenAI cella
+Ctrl+Alt+1 — ÁrminAI cella
 Ctrl+Alt+2 — OutminAI cella
-Ctrl+Alt+3 — ÁrminAI cella
+Ctrl+Alt+3 — BenjáminAI cella
 Ctrl+Alt+4 — JázminAI cella
-Ctrl+Alt+5 — 05 BenjAdmin központi csevegő
+Ctrl+Alt+5 — 05 DevminAI segédagent
 Ctrl+Alt+6 — 4 / 2 cellás nézet
 Ctrl+Alt+9 — Szabályzat és használati útmutató nyitása / bezárása
 Ctrl+Alt+N — Munkahelyi / néma mód ki- és bekapcsolása
-Ctrl+Alt+Z — ChatGrid zárolása
-Ctrl+Alt+Space — teljes ChatGrid tálcára / vissza
+Ctrl+Alt+Z — Developer Grid zárolása
+Ctrl+Alt+Space — teljes Developer Grid tálcára / vissza
 Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 
 9. GLOBÁLIS BEÁLLÍTÁSOK ÉS MUNKAHELYI / NÉMA MÓD
-- A fő ChatGrid fejléc ⚙ gombja és a 05 BenjAdmin ablak ⚙ gombja ugyanazt a globális beállításpanelt nyitja.
+- A fő Developer Grid fejléc ⚙ gombja és a 05 DevminAI ablak ⚙ gombja ugyanazt a globális beállításpanelt nyitja.
 - A globális beállítások a teljes 01–05 munkaterületre vonatkoznak.
-- A „Munkahelyi / néma mód” minden hallható ChatGrid-jelzést letilt: nincs hangjelzés és nincs magyar felolvasás.
+- A „Munkahelyi / néma mód” minden hallható Developer Grid-jelzést letilt: nincs hangjelzés és nincs magyar felolvasás.
 - A Windows értesítés, vizuális toast és tálcavillogás ettől külön továbbra is bekapcsolva maradhat.
 - Ha a néma mód aktív, a fejlécben „NÉMA MÓD” jelzés látható.
 - Az egyedi hang- és felolvasási kapcsolók beállítása megmarad, így a néma mód kikapcsolásakor nem kell őket újra beállítani.
@@ -136,7 +136,7 @@ Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 - A lezárás után a task/presence/lock állapotnak is konzisztensnek kell lennie.
 
 11. SAJÁT MEGJEGYZÉSEK
-Ezt a dokumentumot a „Szerkesztés” gombbal bármikor kiegészítheted. A „Mentés” a helyi ChatGrid konfigurációban tárolja a módosított szöveget. Az „Alap visszaállítása” az eredeti BENJADMIN útmutatót tölti vissza; csak mentés után válik véglegessé.
+Ezt a dokumentumot a „Szerkesztés” gombbal bármikor kiegészítheted. A „Mentés” a helyi Developer Grid konfigurációban tárolja a módosított szöveget. Az „Alap visszaállítása” az eredeti BENJADMIN útmutatót tölti vissza; csak mentés után válik véglegessé.
 `;
 
 module.exports = { DEFAULT_USAGE_GUIDE };

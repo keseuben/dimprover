@@ -24,7 +24,7 @@ const WORKER_AVATAR_PATHS = {
 };
 const BENJADMIN_PROFILES = {
   BENAI: {
-    code: "BENAI", name: "Ben-AI", title: "Fejlesztésirányító AI · koordinátor", category: "AI koordináció", image: "../assets/team/benai.webp",
+    code: "BENAI", name: "Benjámin-AI", title: "Fejlesztésirányító AI · koordinátor", category: "AI koordináció", image: "../assets/team/benai.webp",
     shortDescription: "A BENJADMIN fejlesztési feladatainak központi AI koordinátora.",
     detailedDescription: "A BenjAdmin terméknyelvű utasításait technikai fejlesztési feladatokká bontja, automatikus scope-ot készít, workert választ, figyeli a task/session/worktree/scope-lock láncot, és összefogja az acceptance, build, review és dokumentációs kapukat. Nem helyettesíti az emberi végső döntést.",
     responsibilities: ["Feladatbontás és worker-kiosztás", "Scope, worktree és fejlesztési sorrend koordináció", "Acceptance, build és quality gate összefogása"]
@@ -508,7 +508,7 @@ function renderConnectionSettings() {
   badge.classList.toggle("is-active", mode === "device" || mode === "reporter");
   if (mode === "device") {
     badge.textContent = state.connection.benjadmin ? "ÉLŐ · PÁROSÍTVA" : "ESZKÖZ PÁROSÍTVA";
-    deviceLabel.textContent = state.connection.device?.deviceLabel || "BENJADMIN ChatGrid eszköz";
+    deviceLabel.textContent = state.connection.device?.deviceLabel || "BENJADMIN Developer Grid eszköz";
     note.textContent = state.connection.benjadmin
       ? "A worker-státuszok élőben érkeznek. A kész / blokkolt / hibás események értesítése aktív."
       : "Az eszköz párosítva van; az élő kapcsolat ellenőrzése folyamatban vagy átmenetileg megszakadt.";
@@ -518,7 +518,7 @@ function renderConnectionSettings() {
     note.textContent = "Régi reporter kulcsos kapcsolat. Javasolt áttérni az eszközpárosításra.";
   } else {
     badge.textContent = "NINCS PÁROSÍTVA";
-    deviceLabel.textContent = "ChatGrid eszköz";
+    deviceLabel.textContent = "Developer Grid eszköz";
     note.textContent = "Az élő worker-státuszhoz egyszer párosítsd ezt a Windows gépet a BENJADMIN-nal.";
   }
 
@@ -531,7 +531,7 @@ function renderConnectionSettings() {
   forgetButton.classList.toggle("is-hidden", mode !== "device");
   startButton.disabled = mode === "device" || ["claiming", "pending_approval"].includes(pairing.status);
   if (pairing.status === "claiming") pairingNote.textContent = "Párosítási igény küldése a BENJADMIN-nak…";
-  else if (pairing.status === "pending_approval") pairingNote.textContent = "A Windows gép regisztrálva. A BENJADMIN weboldalon nyomd meg a Jóváhagyás gombot; a ChatGrid utána automatikusan aktiválódik.";
+  else if (pairing.status === "pending_approval") pairingNote.textContent = "A Windows gép regisztrálva. A BENJADMIN weboldalon nyomd meg a Jóváhagyás gombot; a Developer Grid utána automatikusan aktiválódik.";
   else if (pairing.status === "active") pairingNote.textContent = "Párosítás kész. Az élő státuszkapcsolat indul.";
   else if (pairing.status === "error") pairingNote.textContent = pairing.error || "A párosítás sikertelen.";
   else pairingNote.textContent = mode === "device" ? "A gép párosítva van." : "Nincs folyamatban párosítás.";
@@ -661,10 +661,10 @@ function renderNotificationDiagnostics(diagnostics) {
   }
   if (diagnostics.windows?.supported && diagnostics.windows?.enabled) {
     setDiagnosticStatus(windowsStatus, "MŰKÖDŐ FALLBACK");
-    windowsDetail.textContent = "A ChatGrid saját Windows toast csatornája támogatott és be van kapcsolva.";
+    windowsDetail.textContent = "A Developer Grid saját Windows toast csatornája támogatott és be van kapcsolva.";
   } else if (diagnostics.windows?.supported) {
     setDiagnosticStatus(windowsStatus, "KIKAPCSOLVA", "is-warning");
-    windowsDetail.textContent = "A Windows toast támogatott, de a ChatGrid beállításban ki van kapcsolva.";
+    windowsDetail.textContent = "A Windows toast támogatott, de a Developer Grid beállításban ki van kapcsolva.";
   } else {
     setDiagnosticStatus(windowsStatus, "NEM TÁMOGATOTT", "is-error");
     windowsDetail.textContent = "Az Electron ezen a rendszeren nem támogat natív Windows értesítést.";
@@ -686,10 +686,10 @@ function renderNotificationDiagnostics(diagnostics) {
     : "Nincs megnyitott chatgpt.com nézet, ezért a webes jogosultság nem mérhető.";
   if (requestButton) requestButton.disabled = viewCount === 0 || web.status === "GRANTED";
   if (note) {
-    if (web.status === "GRANTED") note.textContent = "A ChatGPT webes értesítés jogosultsága engedélyezett. A ChatGrid saját Windows worker-riasztása ettől független fallbackként továbbra is aktív.";
-    else if (web.status === "GRANTED_LIMITED") note.textContent = "A Notification jogosultság engedélyezett, de a teljes web-push lánc (Service Worker / Push API) nem minden nézetben áll készen. A ChatGrid saját Windows értesítése marad a megbízható fallback.";
+    if (web.status === "GRANTED") note.textContent = "A ChatGPT webes értesítés jogosultsága engedélyezett. A Developer Grid saját Windows worker-riasztása ettől független fallbackként továbbra is aktív.";
+    else if (web.status === "GRANTED_LIMITED") note.textContent = "A Notification jogosultság engedélyezett, de a teljes web-push lánc (Service Worker / Push API) nem minden nézetben áll készen. A Developer Grid saját Windows értesítése marad a megbízható fallback.";
     else if (web.status === "DENIED") note.textContent = "A beágyazott ChatGPT nézet a webes értesítést tiltottként látja. Az Engedélyezés gomb felhasználói műveletként újrakéri a Chromium jogosultságot.";
-    else note.textContent = "A ChatGPT webes értesítése külön böngészős csatorna; a ChatGrid saját Windows worker-riasztása ettől függetlenül működik.";
+    else note.textContent = "A ChatGPT webes értesítése külön böngészős csatorna; a Developer Grid saját Windows worker-riasztása ettől függetlenül működik.";
   }
 }
 
@@ -713,8 +713,8 @@ async function requestWebNotificationPermission() {
     renderNotificationDiagnostics(result.diagnostics);
     const status = result.diagnostics?.web?.status;
     if (status === "GRANTED") showToast("ChatGPT webes értesítés", "A megnyitott ChatGPT nézetek Notification jogosultsága engedélyezve.");
-    else if (status === "GRANTED_LIMITED") showToast("ChatGPT webes értesítés", "A jogosultság megvan, de a web-push lánc Electronban korlátozott lehet. A ChatGrid Windows értesítése aktív fallback.");
-    else showToast("ChatGPT webes értesítés", "A webes jogosultság nem lett teljesen engedélyezett. A ChatGrid Windows értesítése ettől függetlenül használható.");
+    else if (status === "GRANTED_LIMITED") showToast("ChatGPT webes értesítés", "A jogosultság megvan, de a web-push lánc Electronban korlátozott lehet. A Developer Grid Windows értesítése aktív fallback.");
+    else showToast("ChatGPT webes értesítés", "A webes jogosultság nem lett teljesen engedélyezett. A Developer Grid Windows értesítése ettől függetlenül használható.");
   } catch (error) {
     showToast("ChatGPT webes értesítés", error instanceof Error ? error.message : "Az engedélykérés sikertelen.");
   } finally {
@@ -817,7 +817,7 @@ async function saveSettings() {
     }
     renderConfig();
     await closeSettings();
-    showToast("Beállítások mentve", "A ChatGrid konfiguráció frissült.");
+    showToast("Beállítások mentve", "A Developer Grid konfiguráció frissült.");
   } catch (err) {
     error.textContent = err instanceof Error ? err.message : "A beállítások mentése sikertelen.";
   } finally {
@@ -943,7 +943,7 @@ function showToast(title, detail) {
 function handleWorkerEvent(event) {
   if (!event || !["assigned", "stage_completed", "completed", "blocked", "failed"].includes(event.type)) return;
   const configCell = cellForWorker(event.workerCode);
-  if (!configCell) return; // csak a négy ChatGrid worker adjon hangot/értesítést
+  if (!configCell) return; // csak a négy Developer Grid worker adjon hangot/értesítést
   const label = configCell.label || WORKER_DEFAULT_LABELS[event.workerCode] || event.workerCode || "Kódmérnök";
   playWorkerTone(event.type);
   if (event.type === "assigned") {
@@ -1007,7 +1007,7 @@ function applyWorkspaceZoomResult(result) {
 async function changeWorkspaceZoom(action) {
   const result = await api.workspaceAction(action);
   if (!result?.ok) {
-    if (result?.error) showToast("ChatGrid zoom", result.error);
+    if (result?.error) showToast("Developer Grid zoom", result.error);
     return result;
   }
   applyWorkspaceZoomResult(result);
@@ -1021,7 +1021,7 @@ async function handleCellAction(button) {
   if (!cellId || !action) return;
   if (action === "settings") { await openSettings(cellId); return; }
   const result = await api.cellAction(cellId, action);
-  if (!result?.ok && result?.error) showToast("ChatGrid művelet", result.error);
+  if (!result?.ok && result?.error) showToast("Developer Grid művelet", result.error);
   else if (action === "microphone" && result?.microphoneAttempted && !result?.microphoneButtonFound) {
     showToast("Mikrofon engedélyezve", "A ChatGPT saját mikrofon gombja nem volt automatikusan felismerhető; használd a csevegés alsó mikrofon ikonját.");
   }

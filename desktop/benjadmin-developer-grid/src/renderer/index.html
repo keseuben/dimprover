@@ -156,7 +156,7 @@
   <div id="authGate" class="auth-gate">
     <section class="auth-card" aria-labelledby="authTitle">
       <div class="auth-logo" aria-hidden="true">B</div>
-      <p class="eyebrow">BENJADMIN CHATGRID</p>
+      <p class="eyebrow">BENJADMIN DEVELOPER GRID</p>
       <h1 id="authTitle">Munkatér feloldása</h1>
       <p id="authDescription" class="auth-description">A Developer Grid öt ChatGPT felülete csak a helyi jelszó megadása után jelenik meg.</p>
       <form id="authForm" autocomplete="off">
@@ -268,7 +268,7 @@
           <input id="baseUrlInput" type="url" autocomplete="off" />
 
           <div class="connection-status-card">
-            <div><span id="connectionModeBadge" class="connection-mode-badge">NINCS PÁROSÍTVA</span><strong id="connectionDeviceLabel">ChatGrid eszköz</strong></div>
+            <div><span id="connectionModeBadge" class="connection-mode-badge">NINCS PÁROSÍTVA</span><strong id="connectionDeviceLabel">Developer Grid eszköz</strong></div>
             <p id="reporterState" class="settings-note">Az élő worker-státuszhoz egyszer párosítsd ezt a Windows gépet a BENJADMIN-nal.</p>
           </div>
 
@@ -302,7 +302,7 @@
             <option value="light">Világos mód</option>
           </select>
           <p class="settings-note">A Developer Grid keret témája. A ChatGPT saját témája a ChatGPT beállítását követi.</p>
-          <label class="toggle-row"><span><strong>Avatárok megjelenítése</strong><small>01–05 csapattag avatárja a ChatGrid fejlécekben.</small></span><input id="showAvatarsInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Avatárok megjelenítése</strong><small>01–05 csapattag avatárja a Developer Grid fejlécekben.</small></span><input id="showAvatarsInput" type="checkbox" /></label>
           <label class="toggle-row"><span><strong>Háttér-vízjel megjelenítése</strong><small>Halvány csapattag-vízjel a ChatGPT munkafelület fölött, kattintást nem akadályozva.</small></span><input id="showAvatarWatermarksInput" type="checkbox" /></label>
         </section>
 
@@ -319,24 +319,24 @@
 
         <section class="settings-section">
           <h3>Globális értesítések · 01–05</h3>
-          <p class="settings-note">Ezek a ChatGrid teljes munkaterére érvényesek. A munkahelyi / néma mód minden hallható jelzést azonnal letilt, a vizuális értesítések ettől függetlenül bekapcsolva maradhatnak.</p>
+          <p class="settings-note">Ezek a Developer Grid teljes munkaterére érvényesek. A munkahelyi / néma mód minden hallható jelzést azonnal letilt, a vizuális értesítések ettől függetlenül bekapcsolva maradhatnak.</p>
           <label class="toggle-row notification-master"><span><strong>Munkahelyi / néma mód</strong><small>Sem hangjelzés, sem magyar felolvasás nem szólal meg. Windows toast és tálcavillogás külön továbbra is használható.</small></span><input id="quietModeInput" type="checkbox" /></label>
           <label class="toggle-row" data-audible-notification><span><strong>Hangjelzés kész feladatnál</strong><small>Külön, erősebb kész-jelzés a teljes task lezárásakor.</small></span><input id="completionSoundInput" type="checkbox" /></label>
           <label class="toggle-row" data-audible-notification><span><strong>Hangjelzés fejlesztési rész elkészültekor</strong><small>Külön rövid hang, amikor a worker a következő 1/6–6/6 fázisra lép.</small></span><input id="stageSoundInput" type="checkbox" /></label>
-          <label class="toggle-row"><span><strong>Windows értesítés</strong><small>Kattintásra a ChatGrid előtérbe kerül.</small></span><input id="windowsToastInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><strong>Windows értesítés</strong><small>Kattintásra a Developer Grid előtérbe kerül.</small></span><input id="windowsToastInput" type="checkbox" /></label>
           <div class="notification-diagnostic-card">
             <div class="notification-diagnostic-head">
-              <div><strong>Értesítési diagnosztika</strong><small>A ChatGrid Windows értesítése és a ChatGPT webes értesítése két külön rendszer.</small></div>
+              <div><strong>Értesítési diagnosztika</strong><small>A Developer Grid Windows értesítése és a ChatGPT webes értesítése két külön rendszer.</small></div>
               <button id="notificationDiagnosticsButton" type="button" class="secondary-button">Állapot ellenőrzése</button>
             </div>
             <div class="notification-diagnostic-grid">
-              <div><span>ChatGrid Windows</span><b id="notificationWindowsStatus">ELLENŐRZÉSRE VÁR</b><small id="notificationWindowsDetail">A worker-riasztások saját Electron/Windows csatornája.</small></div>
+              <div><span>Developer Grid Windows</span><b id="notificationWindowsStatus">ELLENŐRZÉSRE VÁR</b><small id="notificationWindowsDetail">A worker-riasztások saját Electron/Windows csatornája.</small></div>
               <div><span>ChatGPT webes</span><b id="notificationWebStatus">ELLENŐRZÉSRE VÁR</b><small id="notificationWebDetail">A chatgpt.com saját web-push / böngészős értesítése.</small></div>
             </div>
             <div class="notification-diagnostic-actions">
               <button id="requestWebNotificationButton" type="button" class="secondary-button">ChatGPT webes értesítés engedélyezése</button>
             </div>
-            <p id="notificationDiagnosticNote" class="settings-note">A ChatGrid saját Windows értesítése akkor is működhet, ha a ChatGPT webes értesítése Electronban nem elérhető.</p>
+            <p id="notificationDiagnosticNote" class="settings-note">A Developer Grid saját Windows értesítése akkor is működhet, ha a ChatGPT webes értesítése Electronban nem elérhető.</p>
           </div>
           <label class="toggle-row" data-audible-notification><span><strong>Kész munka felolvasása</strong><small>Magyar TTS: „Ármin AI befejezte a munkát.”</small></span><input id="spokenCompletionInput" type="checkbox" /></label>
           <label class="toggle-row" data-audible-notification><span><strong>Fejlesztési rész felolvasása</strong><small>Magyar TTS jelzi, melyik 1/6–6/6 szakasz készült el.</small></span><input id="spokenStageInput" type="checkbox" /></label>
@@ -352,7 +352,7 @@
         </section>
 
         <section class="settings-section">
-          <h3>05 BenjAdmin – központi csevegő</h3>
+          <h3>05 DevminAI – fejlesztési segédagent</h3>
           <label for="centralLabelInput">Megjelenített név</label>
           <input id="centralLabelInput" type="text" maxlength="60" autocomplete="off" />
           <label for="centralUrlInput">ChatGPT csevegés URL</label>
@@ -365,13 +365,13 @@
           <div class="shortcut-list">
             <span><kbd>Ctrl+Alt+Space</kbd> Teljes Developer Grid tálcára / vissza</span>
             <span><kbd>Ctrl+Alt+Z</kbd> Munkatér azonnali zárolása</span>
-            <span><kbd>Ctrl+Alt+5</kbd> Központi csevegő</span>
+            <span><kbd>Ctrl+Alt+5</kbd> 05 DevminAI segédagent</span>
             <span><kbd>Ctrl+Alt+6</kbd> 4 / 2 cellás nézet</span>
             <span><kbd>Ctrl+Alt+N</kbd> Munkahelyi / néma mód</span>
             <span><kbd>Ctrl+Alt+0</kbd> Fenntartva későbbre</span>
-            <span><kbd>Ctrl+Alt+1</kbd> BenAI</span>
+            <span><kbd>Ctrl+Alt+1</kbd> ÁrminAI</span>
             <span><kbd>Ctrl+Alt+2</kbd> OutminAI</span>
-            <span><kbd>Ctrl+Alt+3</kbd> ÁrminAI</span>
+            <span><kbd>Ctrl+Alt+3</kbd> BenjáminAI</span>
             <span><kbd>Ctrl+Alt+4</kbd> JázminAI</span>
           </div>
         </section>
