@@ -90,6 +90,7 @@ const checks = [
   [candidateBuild.includes("BUILD_ENV_FILE") && candidateBuild.includes("umask 077") && !candidateBuild.includes('"$NEXT_PUBLIC_SUPABASE_URL" "$NEXT_PUBLIC_SUPABASE_ANON_KEY"'), "canonical build keeps DEV public env values out of operation command history"],
   [releaseArtifactWrapper.includes("dimpro-coordinated-operation.sh\" release") && releaseArtifactWrapper.includes("DIMPRO_RELEASE_COORDINATED=1"), "release artifact engine runs under exclusive release lock"],
   [releaseArtifactEngine.includes("ARTIFACT_IMMUTABILITY_VIOLATION") && releaseArtifactEngine.includes("DEV_ZIP_FORBIDDEN_CONTENT"), "release artifact immutability and ZIP safety fail closed"],
+  [releaseArtifactEngine.includes("WINDOWS_ARTIFACT_MARKER_MISSING") && releaseArtifactEngine.includes('windowsArtifactProvenance: "VERIFIED"') , "release artifact requires exact Windows package marker"],
   [releaseArtifactEngine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH") && releaseArtifactEngine.includes("PUBLIC_PRODUCTION_ACCESS_MISMATCH"), "public staging verifies full artifact hash and PROD DENY"],
   [operationReconcile.includes("MATCHING_OPERATION_ACTIVE") && operationReconcile.includes("DO_NOT_REPEAT") && operationReconcile.includes("SAFE_TO_START_AFTER_PREFLIGHT"), "timeout reconciliation prevents duplicate long operations"],
   [operationReconcile.includes("SAFE_OPERATION_FIELDS") && !operationReconcile.includes("SAFE_OPERATION_FIELDS = [\"command\""), "operation reconciliation output excludes stored command secrets"],

@@ -6,6 +6,7 @@ import {
   isForbiddenZipEntry,
   assertPathWithin,
   validateReleaseMetadata,
+  validateWindowsArtifactMarker,
   validatePublicHeaders,
   validateSha256Sidecar,
   writeImmutableBuffer,
@@ -58,6 +59,25 @@ check(throwsCode(() => validateReleaseMetadata({ ...matching, releaseMeta: { ...
 check(throwsCode(() => validateReleaseMetadata({ ...matching, releaseMeta: { ...matching.releaseMeta, gitCommit: "b".repeat(40) } }), "RELEASE_STATE_MISMATCH"), "commit mismatch blocked");
 check(throwsCode(() => validateReleaseMetadata({ ...matching, releaseMeta: { ...matching.releaseMeta, gitBranch: "other" } }), "RELEASE_STATE_MISMATCH"), "branch mismatch blocked");
 
+const windowsMarkerBase = {
+  schemaVersion: 1,
+  product: "BENJADMIN Developer Grid",
+  version: "0.1.6",
+  gitCommit: "c".repeat(40),
+  gitBranch: "feature/test",
+  buildId: "build-win",
+  environment: "DEV",
+  productionAccess: "DENY",
+  exe: { file: "BENJADMIN-Developer-Grid-0.1.6-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234, signed: false },
+};
+const windowsMarkerArgs = { marker: windowsMarkerBase, version: "0.1.6", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.6-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234 };
+check(validateWindowsArtifactMarker(windowsMarkerArgs) === true, "matching Windows artifact marker accepted");
+check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: null }), "WINDOWS_ARTIFACT_MARKER_MISSING"), "missing Windows artifact marker blocked");
+check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, gitCommit: "e".repeat(40) } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker commit mismatch blocked");
+check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, buildId: "other" } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker Build ID mismatch blocked");
+check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, exe: { ...windowsMarkerBase.exe, sha256: "f".repeat(64) } } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker EXE hash mismatch blocked");
+check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, productionAccess: "ALLOW" } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker PROD access mismatch blocked");
+
 const goodHeaders = new Headers({ "x-dimpro-environment": "DEV", "x-dimpro-production-access": "DENY" });
 check(validatePublicHeaders(goodHeaders) === true, "public DEV DENY headers accepted");
 check(throwsCode(() => validatePublicHeaders(new Headers({ "x-dimpro-environment": "PROD", "x-dimpro-production-access": "DENY" })), "PUBLIC_ENVIRONMENT_MISMATCH"), "public PROD header rejected");
@@ -87,5 +107,6 @@ check(engine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH"), "public full-download ha
 check(engine.includes("PUBLIC_MANIFEST_HASH_MISMATCH"), "public manifest full-download hash mismatch blocks");
 check(engine.includes("PUBLIC_SHA256_SIDECAR_HASH_MISMATCH"), "public sha256 sidecar mismatch blocks");
 check(engine.includes("SOURCE_BASELINE_MISMATCH") && engine.includes("SOURCE_WORKTREE_DIRTY"), "source provenance gates present");
+check(engine.includes("WINDOWS_ARTIFACT_MARKER_MISSING") && engine.includes("WINDOWS_ARTIFACT_MARKER_MISMATCH") && engine.includes('windowsArtifactProvenance: "VERIFIED"'), "release engine requires exact Windows artifact provenance marker");
 
 console.log(`Developer Grid release artifact contract PASS · ${n}/${n}`);

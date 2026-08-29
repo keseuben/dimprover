@@ -81,6 +81,32 @@ export function validateReleaseMetadata({ buildId, head, branch, releaseMeta }) 
   return true;
 }
 
+
+export function validateWindowsArtifactMarker({ marker, version, head, branch, buildId, exeFile, exeHash, exeBytes }) {
+  if (!marker || typeof marker !== "object") {
+    fail("WINDOWS_ARTIFACT_MARKER_MISSING", ".dimpro-windows-artifact.json hiányzik vagy érvénytelen.");
+  }
+  if (Number(marker.schemaVersion) !== 1 || marker.product !== "BENJADMIN Developer Grid") {
+    fail("WINDOWS_ARTIFACT_MARKER_INVALID", "Marker schema/product eltérés.");
+  }
+  const checks = [
+    [text(marker.version), text(version), "version"],
+    [text(marker.gitCommit), text(head), "commit"],
+    [text(marker.gitBranch), text(branch), "branch"],
+    [text(marker.buildId), text(buildId), "buildId"],
+    [text(marker.environment).toUpperCase(), "DEV", "environment"],
+    [text(marker.productionAccess).toUpperCase(), "DENY", "productionAccess"],
+    [text(marker.exe?.file), path.basename(exeFile), "exe.file"],
+    [text(marker.exe?.sha256).toLowerCase(), text(exeHash).toLowerCase(), "exe.sha256"],
+    [String(marker.exe?.bytes ?? ""), String(exeBytes), "exe.bytes"],
+  ];
+  for (const [actual, expected, field] of checks) {
+    if (actual !== expected) fail("WINDOWS_ARTIFACT_MARKER_MISMATCH", `${field}: ${actual || "NINCS"} != ${expected}`);
+  }
+  if (marker.exe?.signed !== false) fail("WINDOWS_ARTIFACT_MARKER_MISMATCH", "exe.signed != false");
+  return true;
+}
+
 export function validatePublicHeaders(headers) {
   const env = text(headers?.get?.("x-dimpro-environment")).toUpperCase();
   const prod = text(headers?.get?.("x-dimpro-production-access")).toUpperCase();
@@ -259,6 +285,10 @@ async function inspectRelease(root) {
   const zipFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist-dev", names.zip), "DEV_ZIP_MISSING");
   const zipSafety = verifyZip(zipFile, version, identity, buildId);
   const [exeHash, zipHash] = await Promise.all([sha256File(exeFile), sha256File(zipFile)]);
+  const exeBytes = fs.statSync(exeFile).size;
+  const windowsMarkerFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist/.dimpro-windows-artifact.json"), "WINDOWS_ARTIFACT_MARKER_MISSING");
+  const windowsMarker = readJson(windowsMarkerFile, "WINDOWS_ARTIFACT_MARKER_INVALID");
+  validateWindowsArtifactMarker({ marker: windowsMarker, version, head: identity.head, branch: identity.branch, buildId, exeFile, exeHash, exeBytes });
   return {
     schemaVersion: RELEASE_ENGINE_SCHEMA_VERSION,
     product: "BENJADMIN Developer Grid",
@@ -274,7 +304,9 @@ async function inspectRelease(root) {
     buildGeneratedAt: text(releaseMeta.generatedAt) || null,
     releaseMetadata: "VERIFIED",
     standalone: "VERIFIED",
-    exe: { file: names.exe, source: exeFile, sha256: exeHash, bytes: fs.statSync(exeFile).size, signed: false },
+    windowsArtifactProvenance: "VERIFIED",
+    windowsArtifactMarker: windowsMarkerFile,
+    exe: { file: names.exe, source: exeFile, sha256: exeHash, bytes: exeBytes, signed: false },
     devZip: { file: names.zip, source: zipFile, sha256: zipHash, bytes: fs.statSync(zipFile).size, safety: "PASS", entries: zipSafety.entries },
     manifestFile: names.manifest,
     verifiedAt: new Date().toISOString(),
@@ -303,6 +335,7 @@ async function materializeRelease(inspection, artifactRoot) {
     releaseEngine: "Developer Grid Release Artifact Engine",
     releaseMetadata: inspection.releaseMetadata,
     standalone: inspection.standalone,
+    windowsArtifactProvenance: inspection.windowsArtifactProvenance,
     exe: { file: inspection.exe.file, sha256: inspection.exe.sha256, bytes: inspection.exe.bytes, signed: false },
     devZip: { file: inspection.devZip.file, sha256: inspection.devZip.sha256, bytes: inspection.devZip.bytes, forbiddenContentCheck: "PASS", files: inspection.devZip.entries },
     generatedAt: inspection.buildGeneratedAt,
