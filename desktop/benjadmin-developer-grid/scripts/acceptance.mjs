@@ -50,6 +50,8 @@ check("legacy ChatGrid snapshot is one-shot fallback only",()=>{const x=fs.readF
 check("central workspace renderer is present",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.ok(x.length>1000)});
 check("central workspace renders immediately before remote context fetch",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/render\(\);\s*setNotice\("Vezérlőpult kapcsolódás/)});
 check("central workspace renders pairing error instead of blank body",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/contextErrorMessage/);assert.match(x,/párosítsd a Developer Gridet/);assert.match(x,/if\(!result\?\.ok\)\{state\.notice=contextErrorMessage\(result\?\.error\);render\(\)/)});
+check("daily work-start composer visible",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/Mit fejlesszünk\?/);assert.match(x,/MUNKA INDÍTÁSA/);assert.match(x,/workStartPrompt/)});
+check("daily work-start preserves draft and uses explicit submit",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/workStartDraft/);assert.match(x,/e\.ctrlKey/);assert.match(x,/if\(state\.workStartBusy\)return/)});
 check("ChatGrid source product not overwritten by package identity",()=>assert.ok(!pkg.name.includes("chatgrid")));
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 check("header handoff is stage-aware",()=>assert.match(contextWorkspaceSource,/idleStageAllowsHandoff=stageIndex===2\|\|stageIndex===6/));

@@ -11,7 +11,7 @@ const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { buildBenAiDailyStartPrompt } = require("./daily-start/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
@@ -2176,6 +2176,19 @@ function registerIpc() {
   ipcMain.handle("context:get", async (_event, filters) => {
     try { return { ok: true, context: await getContextWorkspacePayload(filters || {}) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Context Workspace nem tölthető be." }; }
+  });
+  ipcMain.handle("work-start:get", async () => {
+    if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+    try { return { ok: true, activeWork: await fetchDeveloperGridActiveWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken() }) }; }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Az aktív munka nem tölthető be." }; }
+  });
+  ipcMain.handle("work-start:create", async (_event, payload) => {
+    if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+    try {
+      const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
+      send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
+      return { ok: true, work };
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
   ipcMain.handle("context:mode", (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };

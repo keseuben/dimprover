@@ -1,0 +1,31 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+let n = 0;
+function check(ok, label) { n += 1; if (!ok) throw new Error(`FAIL ${label}`); console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
+const types = fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),"utf8");
+const engine = fs.readFileSync(path.join(root,"app/lib/developer-grid/work-start.ts"),"utf8");
+const route = fs.readFileSync(path.join(root,"app/api/dev/grid/work-start/route.ts"),"utf8");
+const ui = fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/renderer/context-workspace.js"),"utf8");
+const client = fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/context-workspace/context-workspace-client.cjs"),"utf8");
+const preload = fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/preload.cjs"),"utf8");
+const main = fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+check(types.includes("sourcePrompt?: string | null"), "developmentContext stores sourcePrompt");
+check(engine.includes("WORK_START_MIN_LENGTH = 12") && engine.includes("DEVELOPER_GRID_WORK_PROMPT_TOO_SHORT"), "empty/short input rejected");
+check(engine.includes("idempotencyKey") && engine.includes("workStartTaskId") && engine.includes("DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT"), "idempotent task creation");
+check(engine.includes("sourcePromptPreserved: true") && engine.includes("sourcePrompt: input.sourcePrompt"), "original prompt preserved verbatim");
+check(engine.includes("sourceProvenance.sourceState !== \"VERIFIED\"") && engine.includes("SOURCE_BASELINE_MISMATCH"), "source provenance fail closed");
+check(engine.includes("createDevEngineTask") && engine.includes("autoRouteDevEngineTaskByAvailability"), "existing authoritative task engine reused");
+check(engine.includes("materializeGridTaskSession") && engine.includes("source: \"EXPLICIT_TASK\""), "task/session and explicit developmentContext materialized");
+check(route.includes("isChatGridDeviceAuthorized") && route.includes("productionAccess: \"DENY\""), "paired device DEV-only write adapter");
+check(route.includes("export async function GET") && route.includes("getDeveloperGridActiveWork"), "reconnect active work bootstrap");
+check(client.includes("startDeveloperGridWork") && client.includes("fetchDeveloperGridActiveWork"), "desktop client work-start API");
+check(preload.includes("startDeveloperGridWork") && preload.includes("getDeveloperGridActiveWork"), "preload exposes work-start IPC");
+check(main.includes('ipcMain.handle("work-start:create"') && main.includes('ipcMain.handle("work-start:get"'), "main process gates work-start IPC");
+check(ui.includes("Mit fejlesszünk?") && ui.includes("MUNKA INDÍTÁSA") && ui.includes("workStartPrompt"), "visible control panel composer");
+check(ui.includes("ctrlKey") && ui.includes("Enter") && ui.includes("preventDefault"), "Ctrl+Enter explicit submit");
+check(ui.includes("if(state.workStartBusy)return") && ui.includes("state.workStartBusy||!valid"), "double-submit guarded client-side");
+check(ui.includes("state.workStartDraft") && ui.includes("contextErrorMessage"), "draft retained on backend/auth failure");
+check(!ui.includes("api/dev/chatgrid/live"), "composer does not add ChatGrid snapshot mutation path");
+console.log(`Developer Grid work-start contract PASS · ${n}/${n}`);

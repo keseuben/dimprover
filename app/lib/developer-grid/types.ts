@@ -31,6 +31,7 @@ export type DevelopmentContext = {
   workItem: string;
   workStageIndex?: number | null;
   taskId: string;
+  sourcePrompt?: string | null;
   source: "ACTIVE_SESSION" | "EXPLICIT_TASK" | "TASK_PROVENANCE" | "ACTIVITY" | "GIT" | "PRESENCE" | "HEURISTIC";
   resolvedAt: string;
 };

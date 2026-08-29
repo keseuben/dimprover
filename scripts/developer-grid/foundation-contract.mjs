@@ -6,6 +6,9 @@ const required = [
   "app/admin/developer-grid/page.tsx",
   "app/api/dev/grid/foundation/route.ts",
   "app/api/dev/grid/events/route.ts",
+  "app/api/dev/grid/work-start/route.ts",
+  "app/lib/developer-grid/work-start.ts",
+  "scripts/developer-grid/work-start-contract.mjs",
   "app/lib/developer-grid/types.ts",
   "app/lib/developer-grid/source-provenance.ts",
   "app/lib/developer-grid/development-context.ts",
@@ -55,6 +58,8 @@ const releaseArtifactWrapper = fs.readFileSync(path.join(root, "scripts/develope
 const operationReconcile = fs.readFileSync(path.join(root, "scripts/developer-grid/operation-reconcile.mjs"), "utf8");
 const windowsPackage = fs.readFileSync(path.join(root, "scripts/developer-grid/package-windows.sh"), "utf8");
 const windowsMarker = fs.readFileSync(path.join(root, "scripts/developer-grid/write-windows-artifact-marker.mjs"), "utf8");
+const workStart = fs.readFileSync(path.join(root, "app/lib/developer-grid/work-start.ts"), "utf8");
+const workStartRoute = fs.readFileSync(path.join(root, "app/api/dev/grid/work-start/route.ts"), "utf8");
 
 const checks = [
   [types.includes('DEVELOPER_GRID_VERSION = "0.1.5-dev"'), "versioned DEV candidate contract"],
@@ -96,6 +101,8 @@ const checks = [
   [operationReconcile.includes("SAFE_OPERATION_FIELDS") && !operationReconcile.includes("SAFE_OPERATION_FIELDS = [\"command\""), "operation reconciliation output excludes stored command secrets"],
   [windowsPackage.includes("dimpro-coordinated-operation.sh\" build") && windowsPackage.includes("write-windows-artifact-marker.mjs"), "Windows packaging uses coordinated build lock and exact artifact marker"],
   [windowsMarker.includes("WINDOWS_MARKER_BUILD_PROVENANCE_MISMATCH") && operationReconcile.includes("WINDOWS_ARTIFACT_MARKER_VERIFIED"), "Windows artifact marker is provenance-verified and consumed by reconciliation"],
+  [workStart.includes("createDevEngineTask") && workStart.includes("materializeGridTaskSession") && workStart.includes("sourcePromptPreserved: true"), "daily work-start uses authoritative task engine and preserves source prompt"],
+  [workStartRoute.includes("isChatGridDeviceAuthorized") && workStartRoute.includes("x-dimpro-production-access") && workStart.includes("SOURCE_BASELINE_MISMATCH"), "daily work-start is paired-device DEV-only and source fail-closed"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 

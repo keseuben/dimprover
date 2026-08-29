@@ -103,4 +103,15 @@ async function uploadResources({ baseUrl, deviceToken, metadata, files }) {
   return list(payload.resources, 20).map(sanitizeResource);
 }
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, sanitizeSnapshot };
+async function fetchDeveloperGridActiveWork({ baseUrl, deviceToken }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "GET", headers: headers(deviceToken) });
+  return payload.activeWork || { task: null, sessions: [], revision: 0, updatedAt: "" };
+}
+async function startDeveloperGridWork({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 20000);
+  return payload.work || null;
+}
+
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, sanitizeSnapshot };
