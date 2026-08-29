@@ -133,11 +133,24 @@ async function sha256ResponseBody(response) {
   return { sha256: hash.digest("hex"), bytes };
 }
 
-function assertPathWithin(candidate, allowedRoot, code) {
+export function assertPathWithin(candidate, allowedRoot, code = "PATH_DENIED") {
   const resolved = path.resolve(candidate);
   const root = path.resolve(allowedRoot);
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
     fail(code, `${resolved} nincs az engedélyezett ${root} alatt.`);
+  }
+  if (fs.existsSync(root)) {
+    const realRoot = fs.realpathSync.native(root);
+    if (realRoot !== root) fail(`${code}_SYMLINK_ESCAPE`, `Az engedélyezett root szimbolikus linken keresztül oldódik fel: ${root} -> ${realRoot}`);
+  }
+  const relative = path.relative(root, resolved);
+  let current = root;
+  for (const part of relative ? relative.split(path.sep) : []) {
+    current = path.join(current, part);
+    if (!fs.existsSync(current)) break;
+    if (fs.lstatSync(current).isSymbolicLink()) {
+      fail(`${code}_SYMLINK_ESCAPE`, `Szimbolikus link tiltott release útvonalban: ${current}`);
+    }
   }
   return resolved;
 }

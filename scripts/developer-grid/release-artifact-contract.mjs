@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   isForbiddenZipEntry,
+  assertPathWithin,
   validateReleaseMetadata,
   validatePublicHeaders,
   validateSha256Sidecar,
@@ -36,6 +37,20 @@ check(isForbiddenZipEntry("x/certs/signing.key"), "private key file forbidden");
 check(isForbiddenZipEntry("x/config/service-account.json"), "service account file forbidden");
 check(isForbiddenZipEntry("x/config/credentials.json"), "credentials file forbidden");
 check(!isForbiddenZipEntry("x/app/lib/developer-grid/types.ts"), "normal source allowed");
+
+const pathTmp = fs.mkdtempSync(path.join(os.tmpdir(), "developer-grid-path-contract-"));
+try {
+  const allowed = path.join(pathTmp, "allowed");
+  const outside = path.join(pathTmp, "outside");
+  fs.mkdirSync(allowed);
+  fs.mkdirSync(outside);
+  check(assertPathWithin(path.join(allowed, "release", "file.zip"), allowed, "ARTIFACT_ROOT_DENIED").startsWith(allowed), "artifact path inside root accepted");
+  check(throwsCode(() => assertPathWithin(path.join(outside, "file.zip"), allowed, "ARTIFACT_ROOT_DENIED"), "ARTIFACT_ROOT_DENIED"), "artifact lexical root escape blocked");
+  fs.symlinkSync(outside, path.join(allowed, "escape"));
+  check(throwsCode(() => assertPathWithin(path.join(allowed, "escape", "file.zip"), allowed, "ARTIFACT_ROOT_DENIED"), "ARTIFACT_ROOT_DENIED_SYMLINK_ESCAPE"), "artifact symlink escape blocked");
+} finally {
+  fs.rmSync(pathTmp, { recursive: true, force: true });
+}
 
 const matching = { buildId: "build-1", head: "a".repeat(40), branch: "feature/test", releaseMeta: { buildId: "build-1", gitCommit: "a".repeat(40), gitBranch: "feature/test" } };
 check(validateReleaseMetadata(matching) === true, "matching release metadata accepted");
