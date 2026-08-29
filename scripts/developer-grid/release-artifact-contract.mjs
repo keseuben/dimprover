@@ -28,6 +28,13 @@ check(isForbiddenZipEntry("x/.next/BUILD_ID"), ".next forbidden");
 check(isForbiddenZipEntry("x/.git/config"), ".git forbidden");
 check(isForbiddenZipEntry("x/admin-key.txt"), "admin key forbidden");
 check(isForbiddenZipEntry("x/SUPABASE_SERVICE_ROLE_KEY.txt"), "service role marker forbidden");
+check(isForbiddenZipEntry("x/.npmrc"), ".npmrc forbidden");
+check(isForbiddenZipEntry("x/.netrc"), ".netrc forbidden");
+check(isForbiddenZipEntry("x/.ssh/id_ed25519"), ".ssh private key path forbidden");
+check(isForbiddenZipEntry("x/config/client.pem"), "PEM credential material forbidden");
+check(isForbiddenZipEntry("x/certs/signing.key"), "private key file forbidden");
+check(isForbiddenZipEntry("x/config/service-account.json"), "service account file forbidden");
+check(isForbiddenZipEntry("x/config/credentials.json"), "credentials file forbidden");
 check(!isForbiddenZipEntry("x/app/lib/developer-grid/types.ts"), "normal source allowed");
 
 const matching = { buildId: "build-1", head: "a".repeat(40), branch: "feature/test", releaseMeta: { buildId: "build-1", gitCommit: "a".repeat(40), gitBranch: "feature/test" } };

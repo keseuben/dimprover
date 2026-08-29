@@ -14,7 +14,7 @@ export const DEFAULT_ARTIFACT_ROOT = "/srv/dimpro-dev/artifacts/benjadmin-develo
 export const DEFAULT_PUBLIC_ROOT = "/var/www/developer-grid-download";
 export const DEFAULT_PUBLIC_BASE = "https://admin.dev.dimpro.hu/downloads/benjadmin-developer-grid";
 
-const FORBIDDEN_ZIP_ENTRY = /(^|\/)(node_modules|\.next|\.git)(\/|$)|(^|\/)\.env(?:\.|\/|$)|admin-key|reporter-key|device-token|SUPABASE_SERVICE_ROLE/i;
+const FORBIDDEN_ZIP_ENTRY = /(^|\/)(node_modules|\.next|\.git|\.ssh)(\/|$)|(^|\/)(?:\.env(?:\.|\/|$)|\.npmrc$|\.netrc$)|(^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|credentials(?:\.[^/]+)?|service-account(?:\.[^/]+)?|[^/]+\.(?:pem|key|p12|pfx))$|admin-key|reporter-key|device-token|SUPABASE_SERVICE_ROLE/i;
 
 function fail(code, message) {
   const error = new Error(`${code}: ${message}`);
