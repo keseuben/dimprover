@@ -65,7 +65,7 @@ const workStart = fs.readFileSync(path.join(root, "app/lib/developer-grid/work-s
 const workStartRoute = fs.readFileSync(path.join(root, "app/api/dev/grid/work-start/route.ts"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.5-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.6-rc-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
