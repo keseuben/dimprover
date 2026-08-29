@@ -31,5 +31,9 @@ check(source.includes("NEXT_PUBLIC_SUPABASE_URL") && source.includes("NEXT_PUBLI
 check(source.includes("dimpro-benjadmin-operator-ui-v2-dev") && source.includes("DEV_PUBLIC_ENV_UNAVAILABLE"), "DEV public env resolved fail-closed");
 check(!source.includes("SUPABASE_SERVICE_ROLE_KEY") && !source.includes("DATABASE_URL"), "no privileged Supabase or database secret requested");
 check(source.includes("MemoryHigh=4800M") && source.includes("MemoryMax=5500M"), "memory pressure ceiling tuned for canonical DEV");
+check(source.includes("MemAvailable:") && source.includes("MIN_MEM_AVAILABLE_KIB"), "available memory preflight is explicit");
+check(source.includes("SwapTotal:") && source.includes("MAX_SWAP_USED_PERCENT=85"), "swap pressure preflight is explicit");
+check(source.includes("RESOURCE_MEMORY_PRESSURE") && source.includes("RESOURCE_SWAP_PRESSURE"), "resource pressure blocks fail-closed");
+check(source.indexOf("RESOURCE_SWAP_PRESSURE") < source.indexOf('if [[ "${1:-}" == "--preflight-only" ]]'), "resource gate runs before preflight PASS");
 
 console.log(`Developer Grid candidate build contract PASS · ${n}/${n}`);

@@ -23,6 +23,26 @@ HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 [[ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]] || fail "SOURCE_WORKTREE_DIRTY" 45
 [[ "$ROOT" == /srv/dimpro-dev/* ]] || fail "PROD_DENY" 46
 
+# A canonical Next build csak akkor indulhat, ha a gépen ténylegesen van
+# elegendő szabad memória és a swap nincs tartós nyomás alatt. Ez külön kapu
+# a storage preflight mellett, hogy az éjszakai automata se indítson buildet
+# egy már memória-nyomásos DEV hoston.
+MEM_AVAILABLE_KIB="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+SWAP_TOTAL_KIB="$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)"
+SWAP_FREE_KIB="$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)"
+[[ "$MEM_AVAILABLE_KIB" =~ ^[0-9]+$ ]] || fail "RESOURCE_MEMORY_PREFLIGHT_UNAVAILABLE" 48
+[[ "$SWAP_TOTAL_KIB" =~ ^[0-9]+$ && "$SWAP_FREE_KIB" =~ ^[0-9]+$ ]] || fail "RESOURCE_SWAP_PREFLIGHT_UNAVAILABLE" 49
+MIN_MEM_AVAILABLE_KIB=$((3 * 1024 * 1024))
+MAX_SWAP_USED_PERCENT=85
+SWAP_USED_PERCENT=0
+if (( SWAP_TOTAL_KIB > 0 )); then
+  SWAP_USED_PERCENT=$(( (SWAP_TOTAL_KIB - SWAP_FREE_KIB) * 100 / SWAP_TOTAL_KIB ))
+fi
+printf 'RESOURCE_PREFLIGHT memAvailableMiB=%s swapUsedPercent=%s maxSwapUsedPercent=%s
+' "$((MEM_AVAILABLE_KIB / 1024))" "$SWAP_USED_PERCENT" "$MAX_SWAP_USED_PERCENT"
+(( MEM_AVAILABLE_KIB >= MIN_MEM_AVAILABLE_KIB )) || fail "RESOURCE_MEMORY_PRESSURE" 50
+(( SWAP_USED_PERCENT < MAX_SWAP_USED_PERCENT )) || fail "RESOURCE_SWAP_PRESSURE" 51
+
 if [[ "${1:-}" == "--preflight-only" ]]; then
   printf 'DEVELOPER_GRID_BUILD_PREFLIGHT=PASS\nHOST=%s\nROOT=%s\nBRANCH=%s\nHEAD=%s\nTARGET=%s\nPROD=DENY\n' \
     "$EXPECTED_HOST" "$ROOT" "$EXPECTED_BRANCH" "$HEAD" "$TARGET"
