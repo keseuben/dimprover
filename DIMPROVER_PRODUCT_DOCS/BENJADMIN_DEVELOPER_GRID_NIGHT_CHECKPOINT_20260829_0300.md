@@ -7,6 +7,8 @@
 - Branch: `feature/benjadmin-developer-grid-v1-20260827`
 - Start HEAD: `c8e29b8d60274164206e4809fc39c93945eaca45`
 - Fejezet kód-checkpoint: `9fad9b3fa9d291debeaa1ebca2df8648e15955bc`
+- Checkpoint dokumentációs HEAD: `6b0ac7e2ef43211a04237f67b894c2bc982411b2`
+- `.24/.32` fast-forward szinkron: PASS ezen a HEAD-en
 - Előző stabil release: v0.1.4 DEV, Build ID `psf_XLVinrvF5AaSDqpaf`
 - DevminAI felület változatlan, elfogadott.
 
