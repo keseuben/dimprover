@@ -37,7 +37,7 @@ check("separate ChatGPT partition",()=>assert.match(main,/persist:benjadmin-deve
 check("separate LocalAppData executable",()=>assert.match(main,/BENJADMIN Developer Grid.*BENJADMIN-Developer-Grid\.exe/));
 check("separate local config file",()=>assert.match(main,/developer-grid-config\.json/));
 check("DevminAI central title",()=>assert.match(main,/05 DevminAI/));
-check("DevminAI generic asset used",()=>assert.match(main,/devminai\.svg/));
+check("DevminAI uploaded PNG asset used",()=>{assert.match(main,/devminai\.png/);assert.equal(fs.existsSync(path.join(root,"src/assets/team/devminai.png")),true)});
 check("ChatGPT views sandboxed",()=>{assert.match(main,/nodeIntegration: false/);assert.match(main,/contextIsolation: true/);assert.match(main,/sandbox: true/);assert.match(main,/webSecurity: true/)});
 check("workspace lock destroys chat views",()=>assert.match(main,/destroyChatViews\(\)/));
 check("Windows screen lock hook",()=>assert.match(main,/powerMonitor\.on\("lock-screen"/));
@@ -70,5 +70,9 @@ const guideSource=fs.readFileSync(path.join(root,"src/guide/default-guide.cjs"),
 check("guide uses Developer Grid product name",()=>{assert.match(guideSource,/BENJADMIN DEVELOPER GRID/);assert.doesNotMatch(guideSource,/BENJADMIN CHATGRID/)});
 check("guide fixed shortcut layout matches cells",()=>{assert.match(guideSource,/Ctrl\+Alt\+1 — ÁrminAI cella/);assert.match(guideSource,/Ctrl\+Alt\+3 — BenjáminAI cella/)});
 check("05 is DevminAI not human BenjAdmin",()=>{assert.match(guideSource,/05 DevminAI/);assert.match(fs.readFileSync(path.join(root,"src/renderer/central.html"),"utf8"),/Nem emberi döntéshozó/)});
+const centralHtml=fs.readFileSync(path.join(root,"src/renderer/central.html"),"utf8");
+const centralCss=fs.readFileSync(path.join(root,"src/renderer/central.css"),"utf8");
+check("DevminAI avatar opens centered profile card",()=>{assert.match(centralHtml,/central-profile-card/);assert.match(centralHtml,/profileBackdrop/);assert.match(centralCss,/place-items:center/);assert.doesNotMatch(centralCss,/\.central-profile \{ position:fixed; inset:52px 0 0/)});
+check("DevminAI chat watermark uses uploaded PNG",()=>{assert.match(main,/DEVMINAI: path\.join\(__dirname, "assets", "team", "devminai\.png"\)/);assert.match(main,/cell\.id === "central".*AVATAR_ASSETS\.DEVMINAI/s);assert.match(main,/extension === "\.png" \? "image\/png"/)});
 check("visible shell and guide use Developer Grid branding",()=>{assert.doesNotMatch(html,/BENJADMIN CHATGRID/);assert.doesNotMatch(fs.readFileSync(path.join(root,"src/renderer/guide.html"),"utf8"),/BENJADMIN CHATGRID/)});
 console.log(`BENJADMIN Developer Grid Desktop v0.1.5 acceptance PASS · ${n}/${n}`);

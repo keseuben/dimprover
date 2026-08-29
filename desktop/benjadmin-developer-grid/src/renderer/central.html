@@ -5,23 +5,26 @@
 <link rel="stylesheet" href="./central.css" /><title>05 DevminAI</title></head>
 <body>
 <header class="central-titlebar">
-  <div class="central-identity"><span class="number">05</span><button id="avatarButton" class="avatar-button" type="button" title="DevminAI"><img id="avatar" src="../assets/team/devminai.svg" alt="DevminAI" /></button><div><strong id="label">DevminAI</strong><span>FEJLESZTÉSI TERVEZŐ / SEGÉDAGENT · 05</span></div><b id="centralQuietBadge" class="quiet-badge is-hidden">NÉMA MÓD</b><em>Ctrl+Alt+5</em></div>
+  <div class="central-identity"><span class="number">05</span><button id="avatarButton" class="avatar-button" type="button" title="DevminAI"><img id="avatar" src="../assets/team/devminai.png" alt="DevminAI" /></button><div><strong id="label">DevminAI</strong><span>FEJLESZTÉSI TERVEZŐ / SEGÉDAGENT · 05</span></div><b id="centralQuietBadge" class="quiet-badge is-hidden">NÉMA MÓD</b><em>Ctrl+Alt+5</em></div>
   <div class="central-actions">
     <button id="globalSettingsButton" title="Globális Developer Grid-beállítások · 01–05">⚙</button><button data-cell-action="microphone" title="Mikrofon">🎙</button><button data-cell-action="reload" title="Újratöltés">↻</button>
     <i></i><button data-window-action="minimize" title="Kis méret">—</button><button data-window-action="toggle-maximize" title="Teljes méret / vissza">□</button><button class="close" data-window-action="close" title="Bezárás">×</button>
   </div>
 </header>
-<section id="profilePanel" class="central-profile is-hidden" aria-label="DevminAI profil">
-  <button id="profileClose" class="profile-close" type="button" aria-label="Profil bezárása">×</button>
-  <div class="profile-visual"><img src="../assets/team/devminai.svg" alt="DevminAI" /><span>FEJLESZTÉSI SEGÉDAGENT</span></div>
-  <div class="profile-copy">
-    <span class="code">DEVMINAI</span>
-    <h1>DevminAI</h1>
-    <h2>Fejlesztési tervező · segédagent · 05</h2>
-    <p class="lead">A Developer Grid külön segédagent-helye fejlesztési tervezéshez, előkészítéshez és ellenőrzött kiegészítő munkához.</p>
-    <p>Nem emberi döntéshozó és nem kap automatikus PROD jogosultságot. Csak explicit task, developmentContext és ellenőrzött source provenance alapján dolgozhat; az emberi végső döntés BenjAdminnál marad.</p>
-    <h3>FŐ FELADATKÖRÖK</h3>
-    <ul><li>Fejlesztési terv és technikai előkészítés</li><li>Kontextus- és acceptance-előkészítés</li><li>DEV-only segédmunka explicit scope alatt</li></ul>
-  </div>
-</section>
+<div id="profilePanel" class="central-profile-layer is-hidden" role="presentation">
+  <button id="profileBackdrop" class="central-profile-backdrop" type="button" aria-label="DevminAI profil bezárása"></button>
+  <section class="central-profile-card" role="dialog" aria-modal="true" aria-labelledby="devminProfileName">
+    <button id="profileClose" class="profile-close" type="button" aria-label="Profil bezárása">×</button>
+    <div class="profile-visual"><img src="../assets/team/devminai.png" alt="DevminAI avatar" /><span>FEJLESZTÉSI SEGÉDAGENT</span></div>
+    <div class="profile-copy">
+      <span class="code">DEVMINAI</span>
+      <h1 id="devminProfileName">DevminAI</h1>
+      <h2>Fejlesztési tervező · segédagent · 05</h2>
+      <p class="lead">A Developer Grid külön segédagent-helye fejlesztési tervezéshez, előkészítéshez és ellenőrzött kiegészítő munkához.</p>
+      <p>Nem emberi döntéshozó és nem kap automatikus PROD jogosultságot. Csak explicit task, developmentContext és ellenőrzött source provenance alapján dolgozhat; az emberi végső döntés BenjAdminnál marad.</p>
+      <h3>FŐ FELADATKÖRÖK</h3>
+      <ul><li>Fejlesztési terv és technikai előkészítés</li><li>Kontextus- és acceptance-előkészítés</li><li>DEV-only segédmunka explicit scope alatt</li></ul>
+    </div>
+  </section>
+</div>
 <script src="./central.js"></script></body></html>

@@ -30,7 +30,7 @@ const AVATAR_ASSETS = Object.freeze({
   ARMINAI: path.join(__dirname, "assets", "team", "arminai.webp"),
   JAZMINAI: path.join(__dirname, "assets", "team", "jazminai.webp"),
   BENJADMIN: path.join(__dirname, "assets", "team", "benjadmin.webp"),
-  DEVMINAI: path.join(__dirname, "assets", "team", "devminai.svg")
+  DEVMINAI: path.join(__dirname, "assets", "team", "devminai.png")
 });
 
 let shellWindow = null;
@@ -578,7 +578,9 @@ function avatarAssetForChat(cell) {
 function avatarDataUri(assetPath) {
   if (!assetPath || !fs.existsSync(assetPath)) return "";
   if (avatarDataUriCache.has(assetPath)) return avatarDataUriCache.get(assetPath);
-  const data = `data:image/webp;base64,${fs.readFileSync(assetPath).toString("base64")}`;
+  const extension = path.extname(assetPath).toLowerCase();
+  const mime = extension === ".png" ? "image/png" : extension === ".svg" ? "image/svg+xml" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : "image/webp";
+  const data = `data:${mime};base64,${fs.readFileSync(assetPath).toString("base64")}`;
   avatarDataUriCache.set(assetPath, data);
   return data;
 }

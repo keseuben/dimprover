@@ -13,6 +13,7 @@ for (const b of document.querySelectorAll("[data-window-action]")) b.addEventLis
 document.querySelector("#avatarButton").addEventListener("click", async () => { await api.toggleProfile(); });
 document.querySelector("#globalSettingsButton").addEventListener("click", async () => { await api.openGlobalSettings(); });
 document.querySelector("#profileClose").addEventListener("click", async () => { await api.closeProfile(); });
+document.querySelector("#profileBackdrop").addEventListener("click", async () => { await api.closeProfile(); });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") void api.closeProfile(); });
 api.onState(apply);
 void api.getState().then((r) => { if (r?.ok) apply(r.state); });
