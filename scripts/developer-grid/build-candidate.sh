@@ -43,27 +43,15 @@ printf 'RESOURCE_PREFLIGHT memAvailableMiB=%s swapUsedPercent=%s maxSwapUsedPerc
 (( MEM_AVAILABLE_KIB >= MIN_MEM_AVAILABLE_KIB )) || fail "RESOURCE_MEMORY_PRESSURE" 50
 (( SWAP_USED_PERCENT < MAX_SWAP_USED_PERCENT )) || fail "RESOURCE_SWAP_PRESSURE" 51
 
-BUILD_CPUS=1
-CPU_QUOTA_PERCENT=100
-# A canonical DEV host 4 fizikai CPU-val rendelkezik. Ha legalább 5 GiB
-# ténylegesen elérhető memória van és legalább 2 CPU látható, a webpack
-# fordítás két CPU-t használhat. A memória- és swap-korlát változatlanul
-# fail-closed marad, így a gyorsítás nem írja felül a resource gate-et.
-if (( MEM_AVAILABLE_KIB >= 5 * 1024 * 1024 )) && (( $(nproc) >= 2 )); then
-  BUILD_CPUS=2
-  CPU_QUOTA_PERCENT=200
-fi
-printf 'BUILD_PROFILE cpus=%s cpuQuotaPercent=%s memAvailableMiB=%s\n' "$BUILD_CPUS" "$CPU_QUOTA_PERCENT" "$((MEM_AVAILABLE_KIB / 1024))"
-
 if [[ "${1:-}" == "--preflight-only" ]]; then
-  printf 'DEVELOPER_GRID_BUILD_PREFLIGHT=PASS\nHOST=%s\nROOT=%s\nBRANCH=%s\nHEAD=%s\nTARGET=%s\nBUILD_CPUS=%s\nPROD=DENY\n' \
-    "$EXPECTED_HOST" "$ROOT" "$EXPECTED_BRANCH" "$HEAD" "$TARGET" "$BUILD_CPUS"
+  printf 'DEVELOPER_GRID_BUILD_PREFLIGHT=PASS\nHOST=%s\nROOT=%s\nBRANCH=%s\nHEAD=%s\nTARGET=%s\nPROD=DENY\n' \
+    "$EXPECTED_HOST" "$ROOT" "$EXPECTED_BRANCH" "$HEAD" "$TARGET"
   exit 0
 fi
 
 export NEXT_DIST_DIR="$TARGET"
 export NEXT_SAFE_BUILD=1
-export NEXT_BUILD_CPUS="$BUILD_CPUS"
+export NEXT_BUILD_CPUS=1
 export NODE_OPTIONS="--max-old-space-size=3400"
 
 # A canonical DEV buildhez csak a prerender által kötelező két publikus Supabase
@@ -114,12 +102,12 @@ export DIMPRO_WORKER_CODE="OUTMINAI"
 UNIT="dimpro-developer-grid-build-$(date +%s)-$$"
 "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
   systemd-run --scope --quiet --unit="$UNIT" \
-    -p CPUQuota="${CPU_QUOTA_PERCENT}%" \
+    -p CPUQuota=100% \
     -p MemoryHigh=4300M \
     -p MemoryMax=5000M \
     -p MemorySwapMax=512M \
     -p RuntimeMaxSec=2700s \
     -p IOWeight=10 \
     nice -n 10 ionice -c2 -n7 \
-    bash -lc 'set -Eeuo pipefail; cd "$1"; BUILD_ENV_FILE="$5"; mapfile -t PUBLIC_ENV_B64 < "$BUILD_ENV_FILE"; [[ "${#PUBLIC_ENV_B64[@]}" -eq 2 ]]; export NEXT_PUBLIC_SUPABASE_URL="$(printf "%s" "${PUBLIC_ENV_B64[0]}" | base64 -d)" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf "%s" "${PUBLIC_ENV_B64[1]}" | base64 -d)"; unset PUBLIC_ENV_B64; export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" NEXT_DIST_DIR="$4" NEXT_SAFE_BUILD=1 NEXT_BUILD_CPUS="$6" NODE_OPTIONS="--max-old-space-size=3400"; ./node_modules/.bin/next build --webpack && NEXT_DIST_DIR="$4" node scripts/ensure-next-standalone-assets.cjs --force && node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet' \
-    _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$TARGET" "$BUILD_ENV_FILE" "$BUILD_CPUS"
+    bash -lc 'set -Eeuo pipefail; cd "$1"; BUILD_ENV_FILE="$5"; mapfile -t PUBLIC_ENV_B64 < "$BUILD_ENV_FILE"; [[ "${#PUBLIC_ENV_B64[@]}" -eq 2 ]]; export NEXT_PUBLIC_SUPABASE_URL="$(printf "%s" "${PUBLIC_ENV_B64[0]}" | base64 -d)" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf "%s" "${PUBLIC_ENV_B64[1]}" | base64 -d)"; unset PUBLIC_ENV_B64; export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" NEXT_DIST_DIR="$4" NEXT_SAFE_BUILD=1 NEXT_BUILD_CPUS=1 NODE_OPTIONS="--max-old-space-size=3400"; ./node_modules/.bin/next build --webpack && NEXT_DIST_DIR="$4" node scripts/ensure-next-standalone-assets.cjs --force && node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet' \
+    _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$TARGET" "$BUILD_ENV_FILE"
