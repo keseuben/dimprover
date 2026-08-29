@@ -1,4 +1,4 @@
-# BENJADMIN Developer Grid v0.1.4 DEV build
+# BENJADMIN Developer Grid v0.1.5 DEV build
 
 Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference alapként használja, de külön package/appId/userData/EXE identitással fut, ezért nem írja felül a ChatGridet.
 
@@ -53,3 +53,10 @@ scripts/developer-grid/release-artifacts.sh --stage --verify-public
 ```
 
 A wrapper a központi `release` exclusive lockot használja. A release engine fail-closed ellenőrzi a Git HEAD/branch/worktree/repository azonosságot, a Next.js `BUILD_ID` + `.dimpro-release.json` egyezést, az EXE/ZIP meglétét, a DEV ZIP tiltott tartalmát, az immutable artifact tárat, majd opcionálisan a publikus DEV staging teljes visszatöltési hashét. PROD staging nem engedélyezett.
+
+## v0.1.5 Public artifact integrity hardening
+
+- A publikus EXE és DEV ZIP teljes letöltési SHA-256 ellenőrzése mellett a `.sha256` sidecar fájl is kötelezően ellenőrzött.
+- Az `ARTIFACT_MANIFEST_v<version>.json` teljes bájtszintű SHA-256 hash-e és saját sidecarja is fail-closed kapu.
+- Hibás sidecar fájlnév, hash, manifest hash vagy DEV/PROD fejléc esetén a release ellenőrzés blokkol.
+- DEV ONLY · PROD DENY.

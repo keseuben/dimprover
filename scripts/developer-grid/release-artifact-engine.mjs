@@ -89,6 +89,17 @@ export function validatePublicHeaders(headers) {
   return true;
 }
 
+export function validateSha256Sidecar(content, fileName, expectedHash) {
+  const line = String(content || "").trim();
+  const match = line.match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+  if (!match) fail("PUBLIC_SHA256_SIDECAR_INVALID", fileName);
+  const actualHash = match[1].toLowerCase();
+  const actualFile = path.basename(match[2].trim());
+  if (actualFile !== path.basename(fileName)) fail("PUBLIC_SHA256_SIDECAR_FILE_MISMATCH", `${actualFile} != ${path.basename(fileName)}`);
+  if (actualHash !== String(expectedHash || "").toLowerCase()) fail("PUBLIC_SHA256_SIDECAR_HASH_MISMATCH", fileName);
+  return true;
+}
+
 export function writeImmutableBuffer(file, content) {
   const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
   if (fs.existsSync(file)) {
@@ -319,15 +330,32 @@ async function verifyPublicRelease(materialized, publicBase) {
     const actual = await sha256ResponseBody(response);
     if (actual.sha256 !== expectedHash) fail("PUBLIC_ARTIFACT_HASH_MISMATCH", file);
     if (actual.bytes !== expectedBytes) fail("PUBLIC_ARTIFACT_SIZE_MISMATCH", `${file}: ${actual.bytes} != ${expectedBytes}`);
-    verified.push({ file, sha256: actual.sha256, bytes: actual.bytes });
+    const sidecarName = `${file}.sha256`;
+    const sidecarResponse = await fetch(`${base}/${encodeURIComponent(sidecarName)}`, { redirect: "manual" });
+    if (sidecarResponse.status !== 200) fail("PUBLIC_SHA256_SIDECAR_FAILED", `${sidecarName}: HTTP ${sidecarResponse.status}`);
+    validatePublicHeaders(sidecarResponse.headers);
+    validateSha256Sidecar(await sidecarResponse.text(), file, expectedHash);
+    verified.push({ file, sha256: actual.sha256, bytes: actual.bytes, sidecar: "VERIFIED" });
   }
-  const manifestResponse = await fetch(`${base}/${encodeURIComponent(materialized.manifestFile || `ARTIFACT_MANIFEST_v${materialized.manifest.version?.split(" ")[0]}.json`)}`, { redirect: "manual" });
+  const manifestFile = materialized.manifestFile || `ARTIFACT_MANIFEST_v${materialized.manifest.version?.split(" ")[0]}.json`;
+  const manifestResponse = await fetch(`${base}/${encodeURIComponent(manifestFile)}`, { redirect: "manual" });
   if (manifestResponse.status !== 200) fail("PUBLIC_MANIFEST_FAILED", `HTTP ${manifestResponse.status}`);
   validatePublicHeaders(manifestResponse.headers);
-  const publicManifest = await manifestResponse.json();
+  const manifestBytes = Buffer.from(await manifestResponse.arrayBuffer());
+  const manifestHash = crypto.createHash("sha256").update(manifestBytes).digest("hex");
+  if (manifestHash !== materialized.manifestHash) fail("PUBLIC_MANIFEST_HASH_MISMATCH", manifestFile);
+  let publicManifest;
+  try { publicManifest = JSON.parse(manifestBytes.toString("utf8")); }
+  catch { fail("PUBLIC_MANIFEST_INVALID_JSON", manifestFile); }
   if (publicManifest.gitCommit !== materialized.manifest.gitCommit || publicManifest.buildId !== materialized.manifest.buildId || publicManifest.productionAccess !== "DENY") {
     fail("PUBLIC_MANIFEST_PROVENANCE_MISMATCH", "A publikus manifest provenance eltér.");
   }
+  const manifestSidecar = `${manifestFile}.sha256`;
+  const manifestSidecarResponse = await fetch(`${base}/${encodeURIComponent(manifestSidecar)}`, { redirect: "manual" });
+  if (manifestSidecarResponse.status !== 200) fail("PUBLIC_SHA256_SIDECAR_FAILED", `${manifestSidecar}: HTTP ${manifestSidecarResponse.status}`);
+  validatePublicHeaders(manifestSidecarResponse.headers);
+  validateSha256Sidecar(await manifestSidecarResponse.text(), manifestFile, materialized.manifestHash);
+  verified.push({ file: manifestFile, sha256: manifestHash, bytes: manifestBytes.length, sidecar: "VERIFIED" });
   return verified;
 }
 

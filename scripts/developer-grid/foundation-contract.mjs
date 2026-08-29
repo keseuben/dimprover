@@ -49,7 +49,7 @@ const releaseArtifactEngine = fs.readFileSync(path.join(root, "scripts/developer
 const releaseArtifactWrapper = fs.readFileSync(path.join(root, "scripts/developer-grid/release-artifacts.sh"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.4-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.5-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],

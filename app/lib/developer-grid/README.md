@@ -28,3 +28,10 @@ Az immutable DEV release worktree-khez a foundation source-provenance elvárása
 ## v0.1.4 Release Artifact Engine
 
 A Developer Grid DEV kiadási artifactfolyam külön fail-closed release motorra kerül. A motor csak a canonical DEV host/worktree/branch tiszta forrásából dolgozhat, és megköveteli, hogy a `.next/BUILD_ID`, a `.next/.dimpro-release.json`, a Git HEAD és a branch egyezzen. Ellenőrzi a Windows EXE-t és a DEV ZIP-et, a ZIP-ben tiltja többek között a `.env`, `.git`, `.next`, `node_modules`, admin/reporter/device token és service-role jelöléseket. Az artifact tár immutable: azonos név eltérő tartalommal nem írható felül. Publikus staging csak központi `release` exclusive lock alatt engedélyezett, és a teljes EXE/ZIP visszatöltési SHA-256, valamint a `DEV` / `PROD DENY` HTTP fejlécek is kötelezően ellenőrzöttek.
+
+## v0.1.5 Public artifact integrity hardening
+
+- A publikus EXE és DEV ZIP teljes letöltési SHA-256 ellenőrzése mellett a `.sha256` sidecar fájl is kötelezően ellenőrzött.
+- Az `ARTIFACT_MANIFEST_v<version>.json` teljes bájtszintű SHA-256 hash-e és saját sidecarja is fail-closed kapu.
+- Hibás sidecar fájlnév, hash, manifest hash vagy DEV/PROD fejléc esetén a release ellenőrzés blokkol.
+- DEV ONLY · PROD DENY.

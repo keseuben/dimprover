@@ -13,7 +13,7 @@ const css=fs.readFileSync(path.join(root,"src/renderer/styles.css"),"utf8");
 const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.4",()=>assert.equal(pkg.version,"0.1.4"));
+check("package version 0.1.5",()=>assert.equal(pkg.version,"0.1.5"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -71,4 +71,4 @@ check("guide uses Developer Grid product name",()=>{assert.match(guideSource,/BE
 check("guide fixed shortcut layout matches cells",()=>{assert.match(guideSource,/Ctrl\+Alt\+1 — ÁrminAI cella/);assert.match(guideSource,/Ctrl\+Alt\+3 — BenjáminAI cella/)});
 check("05 is DevminAI not human BenjAdmin",()=>{assert.match(guideSource,/05 DevminAI/);assert.match(fs.readFileSync(path.join(root,"src/renderer/central.html"),"utf8"),/Nem emberi döntéshozó/)});
 check("visible shell and guide use Developer Grid branding",()=>{assert.doesNotMatch(html,/BENJADMIN CHATGRID/);assert.doesNotMatch(fs.readFileSync(path.join(root,"src/renderer/guide.html"),"utf8"),/BENJADMIN CHATGRID/)});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.4 acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.5 acceptance PASS · ${n}/${n}`);
