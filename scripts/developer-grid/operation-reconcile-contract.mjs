@@ -43,6 +43,22 @@ check("build provenance mismatch does not claim completion", () => {
   assert.notEqual(r.state, "COMPLETED");
 });
 
+check("exact Windows marker proves packaging before release manifest", () => {
+  const base = temp(); const desktop = path.join(base, "desktop", "benjadmin-developer-grid", "dist"); fs.mkdirSync(desktop, { recursive: true });
+  const exe = path.join(desktop, "BENJADMIN-Developer-Grid-0.1.5-Windows-x64.exe"); fs.writeFileSync(exe, "exe-marker");
+  writeJson(path.join(desktop, ".dimpro-windows-artifact.json"), { version: "0.1.5", gitCommit: commit, gitBranch: branch, buildId: "build-marker", environment: "DEV", productionAccess: "DENY", exe: { file: path.basename(exe), sha256: hash(exe), bytes: fs.statSync(exe).size } });
+  const r = reconcileOperation({ kind: "windows", version: "0.1.5", expectedCommit: commit, expectedBranch: branch, root: base, coordinationRoot: path.join(base, "coord"), artifactRoot: path.join(base, "artifacts") });
+  assert.equal(r.state, "COMPLETED"); assert.equal(r.reason, "WINDOWS_ARTIFACT_MARKER_VERIFIED"); assert.equal(r.proof.buildId, "build-marker");
+});
+
+check("stale Windows marker cannot prove another commit", () => {
+  const base = temp(); const desktop = path.join(base, "desktop", "benjadmin-developer-grid", "dist"); fs.mkdirSync(desktop, { recursive: true });
+  const exe = path.join(desktop, "BENJADMIN-Developer-Grid-0.1.5-Windows-x64.exe"); fs.writeFileSync(exe, "exe-marker");
+  writeJson(path.join(desktop, ".dimpro-windows-artifact.json"), { version: "0.1.5", gitCommit: "b".repeat(40), gitBranch: branch, environment: "DEV", productionAccess: "DENY", exe: { file: path.basename(exe), sha256: hash(exe) } });
+  const r = reconcileOperation({ kind: "windows", version: "0.1.5", expectedCommit: commit, expectedBranch: branch, root: base, coordinationRoot: path.join(base, "coord"), artifactRoot: path.join(base, "artifacts") });
+  assert.notEqual(r.reason, "WINDOWS_ARTIFACT_MARKER_VERIFIED");
+});
+
 check("successful Windows history plus EXE prevents duplicate packaging", () => {
   const base = temp(); const coordination = path.join(base, "coord"); fs.mkdirSync(coordination, { recursive: true });
   const dist = path.join(base, "desktop", "benjadmin-developer-grid", "dist"); fs.mkdirSync(dist, { recursive: true });

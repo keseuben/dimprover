@@ -15,8 +15,9 @@ A reconciler a következő bizonyítékokat vizsgálja:
 1. `active-development.json` — csak sanitizált mezők, élő PID ellenőrzéssel;
 2. `development-operations.jsonl` — csak sanitizált státuszmezők, a tárolt `command` mező soha nem kerül a kimenetbe;
 3. canonical `.next/BUILD_ID` + `.next/.dimpro-release.json` + standalone runtime;
-4. Windows EXE megléte + sikeres koordinált operation history;
-5. Release Artifact Engine manifest + EXE/DEV ZIP teljes SHA-256 egyezés.
+4. Windows EXE saját `.dimpro-windows-artifact.json` provenance marker + teljes SHA-256;
+5. régebbi kiadásnál kompatibilitási fallbackként Windows EXE megléte + sikeres koordinált operation history;
+6. Release Artifact Engine manifest + EXE/DEV ZIP teljes SHA-256 egyezés.
 
 ## Állapotok
 - `RUNNING / WAIT` — ugyanaz a hosszú művelet ténylegesen fut; újraindítás tilos.

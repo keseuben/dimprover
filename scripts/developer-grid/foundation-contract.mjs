@@ -25,6 +25,9 @@ const required = [
   "scripts/developer-grid/release-artifacts.sh",
   "scripts/developer-grid/operation-reconcile.mjs",
   "scripts/developer-grid/operation-reconcile-contract.mjs",
+  "scripts/developer-grid/package-windows.sh",
+  "scripts/developer-grid/package-windows-contract.mjs",
+  "scripts/developer-grid/write-windows-artifact-marker.mjs",
 ];
 
 const failures = [];
@@ -50,6 +53,8 @@ const candidateBuild = fs.readFileSync(path.join(root, "scripts/developer-grid/b
 const releaseArtifactEngine = fs.readFileSync(path.join(root, "scripts/developer-grid/release-artifact-engine.mjs"), "utf8");
 const releaseArtifactWrapper = fs.readFileSync(path.join(root, "scripts/developer-grid/release-artifacts.sh"), "utf8");
 const operationReconcile = fs.readFileSync(path.join(root, "scripts/developer-grid/operation-reconcile.mjs"), "utf8");
+const windowsPackage = fs.readFileSync(path.join(root, "scripts/developer-grid/package-windows.sh"), "utf8");
+const windowsMarker = fs.readFileSync(path.join(root, "scripts/developer-grid/write-windows-artifact-marker.mjs"), "utf8");
 
 const checks = [
   [types.includes('DEVELOPER_GRID_VERSION = "0.1.5-dev"'), "versioned DEV candidate contract"],
@@ -88,6 +93,8 @@ const checks = [
   [releaseArtifactEngine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH") && releaseArtifactEngine.includes("PUBLIC_PRODUCTION_ACCESS_MISMATCH"), "public staging verifies full artifact hash and PROD DENY"],
   [operationReconcile.includes("MATCHING_OPERATION_ACTIVE") && operationReconcile.includes("DO_NOT_REPEAT") && operationReconcile.includes("SAFE_TO_START_AFTER_PREFLIGHT"), "timeout reconciliation prevents duplicate long operations"],
   [operationReconcile.includes("SAFE_OPERATION_FIELDS") && !operationReconcile.includes("SAFE_OPERATION_FIELDS = [\"command\""), "operation reconciliation output excludes stored command secrets"],
+  [windowsPackage.includes("dimpro-coordinated-operation.sh\" build") && windowsPackage.includes("write-windows-artifact-marker.mjs"), "Windows packaging uses coordinated build lock and exact artifact marker"],
+  [windowsMarker.includes("WINDOWS_MARKER_BUILD_PROVENANCE_MISMATCH") && operationReconcile.includes("WINDOWS_ARTIFACT_MARKER_VERIFIED"), "Windows artifact marker is provenance-verified and consumed by reconciliation"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 

@@ -69,6 +69,29 @@ function verifyBuildProof(root, expectedCommit, expectedBranch) {
   return { ok: true, reason: "BUILD_PROVENANCE_VERIFIED", buildId };
 }
 
+function verifyWindowsMarkerProof(root, version, expectedCommit, expectedBranch) {
+  const markerFile = path.join(root, "desktop", "benjadmin-developer-grid", "dist", ".dimpro-windows-artifact.json");
+  const marker = readJson(markerFile);
+  if (!marker) return { ok: false, reason: "WINDOWS_ARTIFACT_MARKER_MISSING", markerFile };
+  if (marker.version !== version || marker.gitCommit !== expectedCommit || marker.gitBranch !== expectedBranch || marker.environment !== "DEV" || marker.productionAccess !== "DENY") {
+    return { ok: false, reason: "WINDOWS_ARTIFACT_MARKER_PROVENANCE_MISMATCH", markerFile };
+  }
+  if (!marker.exe?.file || !/^[0-9a-f]{64}$/.test(String(marker.exe.sha256 || ""))) {
+    return { ok: false, reason: "WINDOWS_ARTIFACT_MARKER_INVALID", markerFile };
+  }
+  const exeFile = path.join(root, "desktop", "benjadmin-developer-grid", "dist", marker.exe.file);
+  if (!fs.existsSync(exeFile)) return { ok: false, reason: "WINDOWS_ARTIFACT_MARKER_EXE_MISSING", markerFile, file: marker.exe.file };
+  const actual = sha256(exeFile);
+  if (actual !== marker.exe.sha256) return { ok: false, reason: "WINDOWS_ARTIFACT_MARKER_HASH_MISMATCH", markerFile, file: marker.exe.file };
+  return {
+    ok: true,
+    reason: "WINDOWS_ARTIFACT_MARKER_VERIFIED",
+    markerFile,
+    buildId: marker.buildId || null,
+    exe: { file: marker.exe.file, sha256: marker.exe.sha256, bytes: marker.exe.bytes },
+  };
+}
+
 function verifyManifestProof(artifactRoot, version, expectedCommit, expectedBranch, kind) {
   const dir = artifactDir(artifactRoot, version, expectedCommit);
   const manifestFile = path.join(dir, `ARTIFACT_MANIFEST_v${version}.json`);
@@ -140,7 +163,10 @@ export function reconcileOperation({
 
   let proof;
   if (kind === "build") proof = verifyBuildProof(root, expectedCommit, expectedBranch);
-  else proof = verifyManifestProof(artifactRoot, version, expectedCommit, expectedBranch, kind);
+  else if (kind === "windows") {
+    const markerProof = verifyWindowsMarkerProof(root, version, expectedCommit, expectedBranch);
+    proof = markerProof.ok ? markerProof : verifyManifestProof(artifactRoot, version, expectedCommit, expectedBranch, kind);
+  } else proof = verifyManifestProof(artifactRoot, version, expectedCommit, expectedBranch, kind);
   if (proof.ok) {
     return { state: "COMPLETED", decision: "DO_NOT_REPEAT", reason: proof.reason, expectedCommit, expectedBranch, version: version || null, proof };
   }
