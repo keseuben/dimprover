@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.6-rc-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.6-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ProductionAccess = "DENY";
