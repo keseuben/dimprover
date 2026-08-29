@@ -82,6 +82,28 @@ export function validateReleaseMetadata({ buildId, head, branch, releaseMeta }) 
 }
 
 
+
+export function validatePackageSessionMarker({ marker, version, head, branch, buildId, exeFile, exeHash, exeBytes, zipFile, zipHash, zipBytes }) {
+  if (!marker || typeof marker !== "object") fail("PACKAGE_SESSION_MARKER_INVALID", "Hiányzó package session marker.");
+  if (Number(marker.schemaVersion) !== 1 || marker.product !== "BENJADMIN Developer Grid") fail("PACKAGE_SESSION_MARKER_INVALID", "Érvénytelen package session marker.");
+  const pairs = [
+    [text(marker.version), text(version), "version"],
+    [text(marker.gitCommit), text(head), "commit"],
+    [text(marker.gitBranch), text(branch), "branch"],
+    [text(marker.buildId), text(buildId), "buildId"],
+    [text(marker.environment).toUpperCase(), "DEV", "environment"],
+    [text(marker.productionAccess).toUpperCase(), "DENY", "productionAccess"],
+    [text(marker.exe?.file), path.basename(exeFile), "exe.file"],
+    [text(marker.exe?.sha256).toLowerCase(), text(exeHash).toLowerCase(), "exe.sha256"],
+    [String(marker.exe?.bytes ?? ""), String(exeBytes), "exe.bytes"],
+    [text(marker.devZip?.file), path.basename(zipFile), "devZip.file"],
+    [text(marker.devZip?.sha256).toLowerCase(), text(zipHash).toLowerCase(), "devZip.sha256"],
+    [String(marker.devZip?.bytes ?? ""), String(zipBytes), "devZip.bytes"],
+  ];
+  for (const [actual, expected, label] of pairs) if (actual !== expected) fail("PACKAGE_SESSION_MARKER_MISMATCH", `${label}: ${actual || "NINCS"} != ${expected}`);
+  if (!/^[0-9a-f]{64}$/.test(text(marker.packageSessionId))) fail("PACKAGE_SESSION_MARKER_INVALID", "Érvénytelen packageSessionId.");
+  return true;
+}
 export function validateWindowsArtifactMarker({ marker, version, head, branch, buildId, exeFile, exeHash, exeBytes }) {
   if (!marker || typeof marker !== "object") {
     fail("WINDOWS_ARTIFACT_MARKER_MISSING", ".dimpro-windows-artifact.json hiányzik vagy érvénytelen.");
@@ -286,9 +308,13 @@ async function inspectRelease(root) {
   const zipSafety = verifyZip(zipFile, version, identity, buildId);
   const [exeHash, zipHash] = await Promise.all([sha256File(exeFile), sha256File(zipFile)]);
   const exeBytes = fs.statSync(exeFile).size;
+  const zipBytes = fs.statSync(zipFile).size;
   const windowsMarkerFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist/.dimpro-windows-artifact.json"), "WINDOWS_ARTIFACT_MARKER_MISSING");
   const windowsMarker = readJson(windowsMarkerFile, "WINDOWS_ARTIFACT_MARKER_INVALID");
   validateWindowsArtifactMarker({ marker: windowsMarker, version, head: identity.head, branch: identity.branch, buildId, exeFile, exeHash, exeBytes });
+  const packageSessionMarkerFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist-dev/.dimpro-package-session.json"), "PACKAGE_SESSION_MARKER_MISSING");
+  const packageSessionMarker = readJson(packageSessionMarkerFile, "PACKAGE_SESSION_MARKER_INVALID");
+  validatePackageSessionMarker({ marker: packageSessionMarker, version, head: identity.head, branch: identity.branch, buildId, exeFile, exeHash, exeBytes, zipFile, zipHash, zipBytes });
   return {
     schemaVersion: RELEASE_ENGINE_SCHEMA_VERSION,
     product: "BENJADMIN Developer Grid",
@@ -306,8 +332,11 @@ async function inspectRelease(root) {
     standalone: "VERIFIED",
     windowsArtifactProvenance: "VERIFIED",
     windowsArtifactMarker: windowsMarkerFile,
+    packageSessionProvenance: "VERIFIED",
+    packageSessionId: text(packageSessionMarker.packageSessionId),
+    packageSessionMarker: packageSessionMarkerFile,
     exe: { file: names.exe, source: exeFile, sha256: exeHash, bytes: exeBytes, signed: false },
-    devZip: { file: names.zip, source: zipFile, sha256: zipHash, bytes: fs.statSync(zipFile).size, safety: "PASS", entries: zipSafety.entries },
+    devZip: { file: names.zip, source: zipFile, sha256: zipHash, bytes: zipBytes, safety: "PASS", entries: zipSafety.entries },
     manifestFile: names.manifest,
     verifiedAt: new Date().toISOString(),
   };
@@ -336,6 +365,8 @@ async function materializeRelease(inspection, artifactRoot) {
     releaseMetadata: inspection.releaseMetadata,
     standalone: inspection.standalone,
     windowsArtifactProvenance: inspection.windowsArtifactProvenance,
+    packageSessionProvenance: inspection.packageSessionProvenance,
+    packageSessionId: inspection.packageSessionId,
     exe: { file: inspection.exe.file, sha256: inspection.exe.sha256, bytes: inspection.exe.bytes, signed: false },
     devZip: { file: inspection.devZip.file, sha256: inspection.devZip.sha256, bytes: inspection.devZip.bytes, forbiddenContentCheck: "PASS", files: inspection.devZip.entries },
     generatedAt: inspection.buildGeneratedAt,

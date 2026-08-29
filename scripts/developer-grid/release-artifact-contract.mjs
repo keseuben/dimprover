@@ -7,6 +7,7 @@ import {
   assertPathWithin,
   validateReleaseMetadata,
   validateWindowsArtifactMarker,
+  validatePackageSessionMarker,
   validatePublicHeaders,
   validateSha256Sidecar,
   writeImmutableBuffer,
@@ -78,6 +79,29 @@ check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, mar
 check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, exe: { ...windowsMarkerBase.exe, sha256: "f".repeat(64) } } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker EXE hash mismatch blocked");
 check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, productionAccess: "ALLOW" } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker PROD access mismatch blocked");
 
+const packageSessionBase = {
+  schemaVersion: 1,
+  product: "BENJADMIN Developer Grid",
+  packageSessionId: "a".repeat(64),
+  version: "0.1.6",
+  gitCommit: "c".repeat(40),
+  gitBranch: "feature/test",
+  buildId: "build-win",
+  environment: "DEV",
+  productionAccess: "DENY",
+  exe: { file: "BENJADMIN-Developer-Grid-0.1.6-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234 },
+  devZip: { file: "BENJADMIN-Developer-Grid-v0.1.6-DEV.zip", sha256: "e".repeat(64), bytes: 5678 },
+};
+const packageSessionArgs = { marker: packageSessionBase, version: "0.1.6", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.6-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234, zipFile: "/tmp/BENJADMIN-Developer-Grid-v0.1.6-DEV.zip", zipHash: "e".repeat(64), zipBytes: 5678 };
+check(validatePackageSessionMarker(packageSessionArgs) === true, "matching package session marker accepted");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: null }), "PACKAGE_SESSION_MARKER_INVALID"), "missing package session marker blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, gitCommit: "f".repeat(40) } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session commit mismatch blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, buildId: "other" } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session Build ID mismatch blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, exe: { ...packageSessionBase.exe, sha256: "0".repeat(64) } } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session EXE hash mismatch blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, devZip: { ...packageSessionBase.devZip, sha256: "0".repeat(64) } } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session ZIP hash mismatch blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, packageSessionId: "bad" } }), "PACKAGE_SESSION_MARKER_INVALID"), "invalid package session id blocked");
+check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, productionAccess: "ALLOW" } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session PROD access mismatch blocked");
+
 const goodHeaders = new Headers({ "x-dimpro-environment": "DEV", "x-dimpro-production-access": "DENY" });
 check(validatePublicHeaders(goodHeaders) === true, "public DEV DENY headers accepted");
 check(throwsCode(() => validatePublicHeaders(new Headers({ "x-dimpro-environment": "PROD", "x-dimpro-production-access": "DENY" })), "PUBLIC_ENVIRONMENT_MISMATCH"), "public PROD header rejected");
@@ -108,5 +132,6 @@ check(engine.includes("PUBLIC_MANIFEST_HASH_MISMATCH"), "public manifest full-do
 check(engine.includes("PUBLIC_SHA256_SIDECAR_HASH_MISMATCH"), "public sha256 sidecar mismatch blocks");
 check(engine.includes("SOURCE_BASELINE_MISMATCH") && engine.includes("SOURCE_WORKTREE_DIRTY"), "source provenance gates present");
 check(engine.includes("WINDOWS_ARTIFACT_MARKER_MISSING") && engine.includes("WINDOWS_ARTIFACT_MARKER_MISMATCH") && engine.includes('windowsArtifactProvenance: "VERIFIED"'), "release engine requires exact Windows artifact provenance marker");
+check(engine.includes("PACKAGE_SESSION_MARKER_MISSING") && engine.includes("PACKAGE_SESSION_MARKER_MISMATCH") && engine.includes('packageSessionProvenance: "VERIFIED"'), "release engine requires exact EXE + DEV ZIP package session marker");
 
 console.log(`Developer Grid release artifact contract PASS · ${n}/${n}`);

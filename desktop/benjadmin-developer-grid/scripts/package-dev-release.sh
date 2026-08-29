@@ -33,5 +33,10 @@ with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
             z.write(file, file.relative_to(stage.parent))
 PYZIP
 sha256sum "$OUT_DIR/${NAME}.zip" > "$OUT_DIR/${NAME}.zip.sha256"
+HEAD="$(git -C "$REPO" rev-parse HEAD)"
+BRANCH="$(git -C "$REPO" branch --show-current)"
+BUILD_ID="$(cat "$REPO/.next/BUILD_ID" 2>/dev/null || true)"
+[[ -n "$BUILD_ID" ]] || { echo "BLOCKED · BUILD_ID_MISSING" >&2; exit 48; }
+node "$REPO/scripts/developer-grid/write-package-session-marker.mjs" --root="$REPO" --expected-commit="$HEAD" --expected-branch="$BRANCH" --version="$VERSION" --build-id="$BUILD_ID" --zip-file="$OUT_DIR/${NAME}.zip"
 echo "$OUT_DIR/${NAME}.zip"
 cat "$OUT_DIR/${NAME}.zip.sha256"
