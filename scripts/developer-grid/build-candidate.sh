@@ -103,9 +103,10 @@ UNIT="dimpro-developer-grid-build-$(date +%s)-$$"
 "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
   systemd-run --scope --quiet --unit="$UNIT" \
     -p CPUQuota=100% \
-    -p MemoryHigh=4800M \
-    -p MemoryMax=5500M \
+    -p MemoryHigh=4300M \
+    -p MemoryMax=5000M \
     -p MemorySwapMax=512M \
+    -p RuntimeMaxSec=2700s \
     -p IOWeight=10 \
     nice -n 10 ionice -c2 -n7 \
     bash -lc 'set -Eeuo pipefail; cd "$1"; BUILD_ENV_FILE="$5"; mapfile -t PUBLIC_ENV_B64 < "$BUILD_ENV_FILE"; [[ "${#PUBLIC_ENV_B64[@]}" -eq 2 ]]; export NEXT_PUBLIC_SUPABASE_URL="$(printf "%s" "${PUBLIC_ENV_B64[0]}" | base64 -d)" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf "%s" "${PUBLIC_ENV_B64[1]}" | base64 -d)"; unset PUBLIC_ENV_B64; export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" NEXT_DIST_DIR="$4" NEXT_SAFE_BUILD=1 NEXT_BUILD_CPUS=1 NODE_OPTIONS="--max-old-space-size=3400"; ./node_modules/.bin/next build --webpack && NEXT_DIST_DIR="$4" node scripts/ensure-next-standalone-assets.cjs --force && node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet' \
