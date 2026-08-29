@@ -538,6 +538,34 @@ function rememberChatNavigation(chatId, url) {
   return true;
 }
 
+
+function captureWorkerConversationGuards() {
+  return (config?.cells || []).flatMap((cell) => {
+    const view = chatViews.get(cell.id);
+    if (!view || view.webContents.isDestroyed()) return [];
+    const url = view.webContents.getURL();
+    return isChatConversationUrl(url) ? [{ cellId: cell.id, url }] : [];
+  });
+}
+
+function restoreWorkerConversationGuard(guard) {
+  const view = chatViews.get(guard?.cellId);
+  if (!view || view.webContents.isDestroyed() || !isChatConversationUrl(guard?.url || "")) return false;
+  const current = view.webContents.getURL();
+  if (current === guard.url || isChatConversationUrl(current) || !isChatGptUrl(current)) return false;
+  void view.webContents.loadURL(guard.url).catch(() => null);
+  return true;
+}
+
+function preserveWorkerConversationsAfterWorkStart(guards) {
+  const safeGuards = Array.isArray(guards) ? guards : [];
+  for (const delay of [0, 350, 1200]) {
+    setTimeout(() => {
+      for (const guard of safeGuards) restoreWorkerConversationGuard(guard);
+    }, delay);
+  }
+}
+
 async function selectLatestNamedConversation(cell, view) {
   if (!config?.rememberLastConversation || !cell || latestWorkerConversationScanned.has(cell.id)) return false;
   latestWorkerConversationScanned.add(cell.id);
@@ -966,6 +994,7 @@ async function insertLargeClipboardText(view, sourceText) {
   const literal = JSON.stringify(value);
   const chunkSize = LARGE_PASTE_CHUNK;
   return view.webContents.executeJavaScript(`(() => {
+    const startedAt = performance.now();
     const text = ${literal};
     const chunkSize = ${chunkSize};
     const selectors = [
@@ -994,7 +1023,7 @@ async function insertLargeClipboardText(view, sourceText) {
       const caret = start + text.length;
       try { composer.setSelectionRange(caret, caret); } catch {}
       composer.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: null }));
-      return { ok: String(composer.value || '').length === next.length, chars: text.length, totalChars: next.length, mode: 'textarea' };
+      return { ok: String(composer.value || '').length === next.length, chars: text.length, totalChars: next.length, mode: 'textarea', elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) };
     }
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || !composer.contains(selection.anchorNode)) {
@@ -1025,7 +1054,7 @@ async function insertLargeClipboardText(view, sourceText) {
       insertedChars += chunk.length;
     }
     const currentLength = String(composer.innerText || composer.textContent || '').length;
-    return { ok: insertedChars === text.length, chars: insertedChars, totalChars: currentLength, mode: 'contenteditable' };
+    return { ok: insertedChars === text.length, chars: insertedChars, totalChars: currentLength, mode: 'contenteditable', elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)) };
   })()`, true).catch((error) => ({ ok: false, error: error?.message || "A nagy beillesztés végrehajtása sikertelen." }));
 }
 
@@ -1049,6 +1078,7 @@ function handleLargePasteShortcut(event, input, view, cell) {
       ok: result?.ok === true,
       chars: Number(result?.chars || value.length),
       totalChars: Number(result?.totalChars || 0),
+      elapsedMs: Number(result?.elapsedMs || 0),
       error: result?.error || ""
     });
   });
@@ -1270,7 +1300,7 @@ async function uploadContextWorkspaceFiles(metadata, files) {
 }
 
 function contextWorkspaceDocked() {
-  return Boolean(config?.contextWorkspace?.visible && config?.contextWorkspace?.detached !== true && !maximizedCellId && config?.layoutMode !== "split2");
+  return Boolean(config?.contextWorkspace?.visible && config?.contextWorkspace?.detached !== true && !maximizedCellId);
 }
 
 async function prepareWorkerHandoff(workerCode) {
@@ -1574,6 +1604,16 @@ function getSplitRect(side, width, height) {
   return { x, y: APP_BAR_HEIGHT, width: Math.max(0, width - x), height: gridHeight };
 }
 
+
+function getSplitDockedContextRect(side, width, height, requestedPanelWidth) {
+  const gridHeight = Math.max(0, height - APP_BAR_HEIGHT);
+  const panelWidth = Math.max(320, Math.min(Number(requestedPanelWidth) || 500, Math.max(320, width - 640 - (GRID_GAP * 2))));
+  const sideWidth = Math.floor((width - panelWidth - (GRID_GAP * 2)) / 2);
+  if (side === "left") return { x: 0, y: APP_BAR_HEIGHT, width: Math.max(0, sideWidth), height: gridHeight, panelWidth };
+  const x = sideWidth + GRID_GAP + panelWidth + GRID_GAP;
+  return { x, y: APP_BAR_HEIGHT, width: Math.max(0, width - x), height: gridHeight, panelWidth };
+}
+
 function updateViewBounds() {
   if (!shellWindow || shellWindow.isDestroyed()) return;
   if (uiOverlayVisible) {
@@ -1601,6 +1641,7 @@ function updateViewBounds() {
     view.setVisible(true);
     let rect;
     if (maximizedCellId === cell.id) rect = { x: 0, y: APP_BAR_HEIGHT, width, height: Math.max(0, height - APP_BAR_HEIGHT) };
+    else if (splitMode && dockedContext) { rect = getSplitDockedContextRect(cell.id === splitLeft ? "left" : "right", width, height, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
     else if (splitMode) rect = getSplitRect(cell.id === splitLeft ? "left" : "right", width, height);
     else if (dockedContext) { rect = getDockedContextCellRect(index, width, height, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
     else rect = getCellRect(index, width, height);
@@ -2184,8 +2225,10 @@ function registerIpc() {
   });
   ipcMain.handle("work-start:create", async (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+    const conversationGuards = captureWorkerConversationGuards();
     try {
       const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
+      preserveWorkerConversationsAfterWorkStart(conversationGuards);
       send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
       return { ok: true, work };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
@@ -2365,6 +2408,7 @@ app.whenReady().then(() => {
   chatSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) => {
     const origin = requestingOrigin || details?.requestingUrl || details?.securityOrigin || "";
     if (permission === "notifications") return isChatGptUrl(origin);
+    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") return isChatGptUrl(origin);
     if (permission === "fileSystem") {
       return isChatGptUrl(origin) && details?.fileAccessType !== "writable" && details?.isDirectory !== true;
     }
@@ -2375,6 +2419,7 @@ app.whenReady().then(() => {
   chatSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
     const requestUrl = details?.requestingUrl || details?.requestingOrigin || "";
     if (permission === "notifications") { callback(isChatGptUrl(requestUrl)); return; }
+    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") { callback(isChatGptUrl(requestUrl)); return; }
     if (permission === "fileSystem") {
       callback(isChatGptUrl(requestUrl) && details?.fileAccessType !== "writable" && details?.isDirectory !== true);
       return;

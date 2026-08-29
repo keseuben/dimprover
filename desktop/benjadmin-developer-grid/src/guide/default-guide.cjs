@@ -13,7 +13,7 @@ A Developer Grid a DIMPRO / DIMPROVER fejlesztési munkatere. A négy worker-cel
 - Ha a BENJADMIN élő kapcsolat nincs párosítva, a Beállításokban párosítsd az eszközt.
 
 2. MIT ÍRJAK A BENAI-NAK?
-A BenjáminAI a fejlesztés koordinátora. Elsőként neki írj, ha új munkát akarsz indítani, prioritást szeretnél változtatni, állapotot kérsz vagy nem tudod, melyik workerhez tartozik a feladat.
+A BenjáminAI teljes értékű integrált AI kódmérnök. A napi munka központi indítása, prioritása és worker-kiosztása a BENJADMIN Central Core / Grid Orchestrator feladata.
 
 Napi indítás minta:
 „Indítsd a mai fejlesztési munkát. Ellenőrizd a DEV állapotot, az aktív és várakozó taskokat, a worktree-ket, scope-lockokat és a build-lockot. PROD DENY. Adj rövid prioritási sorrendet, majd jelezd, melyik workernek mit kell folytatnia.”
@@ -31,13 +31,13 @@ Leállítás / szüneteltetés minta:
 „Szüneteltesd a(z) [worker/feladat] fejlesztését. Ne induljon új munka, amíg külön nem engedélyezem.”
 
 3. MIKOR ÍRJAK KÖZVETLENÜL A WORKERNEK?
-Normál esetben BenjáminAI osztja ki és koordinálja a feladatot. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a Developer Grid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
+Normál esetben a BENJADMIN Central Core / Grid Orchestrator osztja ki és koordinálja a feladatot. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a Developer Grid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
 
 Ha kézzel kell írnod:
 „Folytasd a BENJADMIN által kiosztott feladatot. Először ellenőrizd a pontos taskot, scope-ot, worktree-t és DEV állapotot. PROD DENY. Felvételkor jelezd: MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM. Visszaadáskor: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM + commit + tesztek + blokkolók.”
 
 4. WORKEREK SZEREPE
-- BenjáminAI: koordináció, feladatbontás, prioritás, scope, worktree, acceptance, build/review sorrend.
+- BenjáminAI: integrált kódmérnök; full-stack, rendszerintegráció, hibajavítás, teszt, build/release-gate feladatok.
 - OutminAI: kijelölt külső/partner vagy külön leválasztott fejlesztési scope kódmérnöke; csak a kiosztott területen dolgozzon.
 - ÁrminAI: belső frontend, komponensek, reszponzív UI és kliensoldali alkalmazáslogika.
 - JázminAI: belső backend, API, adatmodell, integráció, migrációs és backend tesztfeladatok.

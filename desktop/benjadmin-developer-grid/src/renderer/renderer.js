@@ -22,12 +22,18 @@ const WORKER_AVATAR_PATHS = {
   ARMINAI: "../assets/team/arminai.webp",
   JAZMINAI: "../assets/team/jazminai.webp"
 };
+const WORKER_ROLE_LABELS = Object.freeze({
+  ARMINAI: "BELSŐ KÓDMÉRNÖK",
+  OUTMINAI: "PARTNER KÓDMÉRNÖK",
+  BENAI: "INTEGRÁLT KÓDMÉRNÖK",
+  JAZMINAI: "BELSŐ KÓDMÉRNÖK"
+});
 const BENJADMIN_PROFILES = {
   BENAI: {
-    code: "BENAI", name: "Benjámin-AI", title: "Fejlesztésirányító AI · koordinátor", category: "AI koordináció", image: "../assets/team/benai.webp",
-    shortDescription: "A BENJADMIN fejlesztési feladatainak központi AI koordinátora.",
-    detailedDescription: "A BenjAdmin terméknyelvű utasításait technikai fejlesztési feladatokká bontja, automatikus scope-ot készít, workert választ, figyeli a task/session/worktree/scope-lock láncot, és összefogja az acceptance, build, review és dokumentációs kapukat. Nem helyettesíti az emberi végső döntést.",
-    responsibilities: ["Feladatbontás és worker-kiosztás", "Scope, worktree és fejlesztési sorrend koordináció", "Acceptance, build és quality gate összefogása"]
+    code: "BENAI", name: "Benjámin-AI", title: "Integrált AI kódmérnök · full-stack / rendszerintegráció", category: "Integrált kódmérnök", image: "../assets/team/benai.webp",
+    shortDescription: "Full-stack, rendszerintegrációs és több modult összekapcsoló fejlesztési feladatok integrált AI kódmérnöke.",
+    detailedDescription: "A BENJADMIN Central Core által kiosztott teljes értékű DEV fejlesztési feladatokon dolgozik. Full-stack implementációt, rendszerintegrációt, hibajavítást, API- és Windows/desktop fejlesztést, tesztelést, acceptance és build/release-gate feladatokat is végezhet a saját task/session/worktree scope-ján belül. A központi koordináció a BENJADMIN Central Core / Grid Orchestrator feladata.",
+    responsibilities: ["Full-stack implementáció és hibajavítás", "Rendszerintegráció, API és Windows/desktop fejlesztés", "Teszt, acceptance, build és release-gate feladatok"]
   },
   OUTMINAI: {
     code: "OUTMINAI", name: "Outmin-AI", title: "Külső kódmérnök · partner fejlesztési sík", category: "Partner kódmérnök", image: "../assets/team/outminai.webp",
@@ -228,9 +234,13 @@ function deriveVisualStatus(presence, task) {
   // Így nem fordulhat elő, hogy IN_PROGRESS task mellett a fejléc INAKTÍV állapotot mutat.
   const taskIsActive = new Set(["claimed", "in_progress", "testing", "ready"]).has(taskStatus);
   if (taskIsActive || presence?.active) {
-    if (taskStatus === "testing" || presence?.workStageIndex === 3) return { label: "TESZTEL", tone: "testing", cellClass: "is-active" };
-    if (presence?.workStageIndex === 5) return { label: "BUILD", tone: "testing", cellClass: "is-active" };
-    if (presence?.workStageIndex === 6) return { label: "LEZÁRÁS", tone: "active", cellClass: "is-active" };
+    const stageIndex = Number(presence?.workStageIndex || 0);
+    if (stageIndex === 1) return { label: "ELEMZÉS", tone: "active", cellClass: "is-active" };
+    if (stageIndex === 2) return { label: "FEJLESZT", tone: "active", cellClass: "is-active" };
+    if (taskStatus === "testing" || stageIndex === 3) return { label: "TESZTEL", tone: "testing", cellClass: "is-active" };
+    if (stageIndex === 4) return { label: "ELLENŐRIZ", tone: "testing", cellClass: "is-active" };
+    if (stageIndex === 5) return { label: "BUILD", tone: "testing", cellClass: "is-active" };
+    if (stageIndex === 6) return { label: "LEZÁRÁS", tone: "active", cellClass: "is-active" };
     return { label: taskIsActive ? "AKTÍV" : "DOLGOZIK", tone: "active", cellClass: "is-active" };
   }
   return { label: "INAKTÍV", tone: "idle", cellClass: "" };
@@ -287,6 +297,11 @@ function renderConfig() {
       const profileName = BENJADMIN_PROFILES[cellConfig.workerCode]?.name || cellConfig.label || cellConfig.workerCode;
       avatarButton.title = `${profileName} avatar nagyítása · kattintás: munkaköri profil`;
       avatarButton.setAttribute("aria-label", `${profileName} munkaköri profil`);
+    }
+    const roleBadge = $("[data-role=worker-role]", cell);
+    if (roleBadge) {
+      roleBadge.textContent = WORKER_ROLE_LABELS[cellConfig.workerCode] || "KÓDMÉRNÖK";
+      roleBadge.title = BENJADMIN_PROFILES[cellConfig.workerCode]?.title || roleBadge.textContent;
     }
     cell.classList.toggle("is-disabled", cellConfig.enabled === false);
   }
@@ -1394,7 +1409,10 @@ function bindIpc() {
   api.onLiveConnection((connection) => {
     if (connection?.kind === "large-paste") {
       const label = WORKER_DEFAULT_LABELS[connection.workerCode] || connection.workerCode || "ChatGPT";
-      if (connection.ok) showToast(`${label}: nagy beillesztés kész`, `${Number(connection.chars || 0).toLocaleString("hu-HU")} karakter bekerült a csevegőbe. Küldés előtt ellenőrizd.`);
+      if (connection.ok) {
+        const elapsed = Number(connection.elapsedMs || 0);
+        showToast(`${label}: nagy beillesztés kész`, `${Number(connection.chars || 0).toLocaleString("hu-HU")} karakter bekerült${elapsed > 0 ? ` · ${elapsed.toLocaleString("hu-HU")} ms` : ""}. Küldés előtt ellenőrizd.`);
+      }
       else showToast(`${label}: nagy beillesztés sikertelen`, connection.error || "A hosszú tartalom nem illeszthető be biztonságosan.");
       return;
     }
