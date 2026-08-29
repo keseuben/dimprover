@@ -36,4 +36,7 @@ check(source.includes("SwapTotal:") && source.includes("MAX_SWAP_USED_PERCENT=85
 check(source.includes("RESOURCE_MEMORY_PRESSURE") && source.includes("RESOURCE_SWAP_PRESSURE"), "resource pressure blocks fail-closed");
 check(source.indexOf("RESOURCE_SWAP_PRESSURE") < source.indexOf('if [[ "${1:-}" == "--preflight-only" ]]'), "resource gate runs before preflight PASS");
 
+check(source.includes("BUILD_ENV_FILE") && source.includes("umask 077") && source.includes("chmod 600 \"$BUILD_ENV_FILE\"") && source.includes("trap cleanup_build_env EXIT"), "DEV public build env uses short-lived mode-600 file");
+check(source.includes("envb64") && source.includes("mapfile -t PUBLIC_ENV_B64") && source.includes("base64 -d"), "build child resolves public env from protected file");
+check(!source.includes('"$NEXT_PUBLIC_SUPABASE_URL" "$NEXT_PUBLIC_SUPABASE_ANON_KEY"'), "public DEV values are not coordinator command arguments");
 console.log(`Developer Grid candidate build contract PASS · ${n}/${n}`);

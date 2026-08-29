@@ -82,6 +82,7 @@ const checks = [
   [shell.includes("Build ID:") && shell.includes("foundation?.version"), "UI exposes version/build identity"],
   [readAuth.includes("isChatGridDeviceAuthorized") && readAuth.includes("isDevCenterAuthorized"), "desktop device read-only grid auth bridge"],
   [candidateBuild.includes("next build --webpack") && candidateBuild.includes("dimpro-coordinated-operation.sh") && candidateBuild.includes("PROD_DENY"), "canonical low-memory Developer Grid candidate build"],
+  [candidateBuild.includes("BUILD_ENV_FILE") && candidateBuild.includes("umask 077") && !candidateBuild.includes('"$NEXT_PUBLIC_SUPABASE_URL" "$NEXT_PUBLIC_SUPABASE_ANON_KEY"'), "canonical build keeps DEV public env values out of operation command history"],
   [releaseArtifactWrapper.includes("dimpro-coordinated-operation.sh\" release") && releaseArtifactWrapper.includes("DIMPRO_RELEASE_COORDINATED=1"), "release artifact engine runs under exclusive release lock"],
   [releaseArtifactEngine.includes("ARTIFACT_IMMUTABILITY_VIOLATION") && releaseArtifactEngine.includes("DEV_ZIP_FORBIDDEN_CONTENT"), "release artifact immutability and ZIP safety fail closed"],
   [releaseArtifactEngine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH") && releaseArtifactEngine.includes("PUBLIC_PRODUCTION_ACCESS_MISMATCH"), "public staging verifies full artifact hash and PROD DENY"],

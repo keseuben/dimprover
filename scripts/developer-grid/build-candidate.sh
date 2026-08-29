@@ -71,9 +71,27 @@ for (const key of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"])
 NODE
 ) || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
 [[ "${#DEV_PUBLIC_ENV[@]}" -eq 2 ]] || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
-export NEXT_PUBLIC_SUPABASE_URL="$(printf '%s' "${DEV_PUBLIC_ENV[0]}" | base64 -d)"
-export NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf '%s' "${DEV_PUBLIC_ENV[1]}" | base64 -d)"
-[[ -n "$NEXT_PUBLIC_SUPABASE_URL" && -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
+for encoded in "${DEV_PUBLIC_ENV[@]}"; do
+  [[ -n "$encoded" ]] || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
+  printf '%s' "$encoded" | base64 -d >/dev/null 2>&1 || fail "DEV_PUBLIC_ENV_UNAVAILABLE" 47
+done
+
+# A publikus DEV build-változókat nem adjuk tovább command-line argumentumként,
+# mert a központi koordinátor a parancsot audit history-ba írja. Ehelyett egy
+# kizárólag root által olvasható, rövid életű base64 env-fájlt használunk.
+BUILD_ENV_DIR="${DIMPRO_COORDINATION_ROOT:-/srv/dimpro-dev/coordination}/secrets"
+umask 077
+mkdir -p "$BUILD_ENV_DIR"
+chmod 700 "$BUILD_ENV_DIR"
+BUILD_ENV_FILE="$BUILD_ENV_DIR/developer-grid-build-${HEAD:0:12}-$$.envb64"
+printf '%s\n%s\n' "${DEV_PUBLIC_ENV[0]}" "${DEV_PUBLIC_ENV[1]}" > "$BUILD_ENV_FILE"
+chmod 600 "$BUILD_ENV_FILE"
+unset DEV_PUBLIC_ENV
+cleanup_build_env() { rm -f "$BUILD_ENV_FILE"; }
+trap cleanup_build_env EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 export DIMPRO_OPERATION_OWNER="${DIMPRO_OPERATION_OWNER:-OutminAI}"
 export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.5 canonical webpack candidate}"
@@ -82,7 +100,7 @@ export DIMPRO_WORKER_CODE="OUTMINAI"
 "$ROOT/scripts/dimpro-dev-storage-prebuild.sh"
 
 UNIT="dimpro-developer-grid-build-$(date +%s)-$$"
-exec "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
+"$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
   systemd-run --scope --quiet --unit="$UNIT" \
     -p CPUQuota=100% \
     -p MemoryHigh=4800M \
@@ -90,5 +108,5 @@ exec "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
     -p MemorySwapMax=512M \
     -p IOWeight=10 \
     nice -n 10 ionice -c2 -n7 \
-    bash -lc 'cd "$1" && export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" NEXT_DIST_DIR="$4" NEXT_SAFE_BUILD=1 NEXT_BUILD_CPUS=1 NODE_OPTIONS="--max-old-space-size=3400" NEXT_PUBLIC_SUPABASE_URL="$5" NEXT_PUBLIC_SUPABASE_ANON_KEY="$6" && ./node_modules/.bin/next build --webpack && NEXT_DIST_DIR="$4" node scripts/ensure-next-standalone-assets.cjs --force && node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet' \
-    _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$TARGET" "$NEXT_PUBLIC_SUPABASE_URL" "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    bash -lc 'set -Eeuo pipefail; cd "$1"; BUILD_ENV_FILE="$5"; mapfile -t PUBLIC_ENV_B64 < "$BUILD_ENV_FILE"; [[ "${#PUBLIC_ENV_B64[@]}" -eq 2 ]]; export NEXT_PUBLIC_SUPABASE_URL="$(printf "%s" "${PUBLIC_ENV_B64[0]}" | base64 -d)" NEXT_PUBLIC_SUPABASE_ANON_KEY="$(printf "%s" "${PUBLIC_ENV_B64[1]}" | base64 -d)"; unset PUBLIC_ENV_B64; export DIMPRO_RELEASE_SOURCE_COMMIT="$2" DIMPRO_RELEASE_SOURCE_BRANCH="$3" NEXT_DIST_DIR="$4" NEXT_SAFE_BUILD=1 NEXT_BUILD_CPUS=1 NODE_OPTIONS="--max-old-space-size=3400"; ./node_modules/.bin/next build --webpack && NEXT_DIST_DIR="$4" node scripts/ensure-next-standalone-assets.cjs --force && node scripts/dimpro-dev-storage-retention.mjs --post-build --apply-builds --quiet' \
+    _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$TARGET" "$BUILD_ENV_FILE"
