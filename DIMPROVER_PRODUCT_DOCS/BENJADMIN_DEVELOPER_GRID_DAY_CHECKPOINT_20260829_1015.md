@@ -52,3 +52,8 @@ A `dimpro-developer-grid-v015-candidate` izolált PM2 candidate runtime a releas
 A v0.1.5 release elkészült. Következő körben először candidate cleanup + resource/lock preflight, majd egyetlen kis Developer Grid V1 desktop/runtime vagy context/handoff UX stabilizációs blokk indítható. Nagy refaktor, DB/auth/licenc/PROD változtatás nem indulhat automatikusan.
 
 **DEV ONLY · PROD DENY**
+
+## Candidate cleanup — utólag lezárva
+- `dimpro-developer-grid-v015-candidate`: STOPPED
+- Leállítás: központi coordinated `restart` lock alatt `pm2 stop`
+- Nincs PROD művelet.
