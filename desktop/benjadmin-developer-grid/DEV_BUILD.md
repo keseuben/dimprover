@@ -1,4 +1,4 @@
-# BENJADMIN Developer Grid v0.1.6 RC DEV build
+# BENJADMIN Developer Grid v0.1.7 RC DEV build
 
 Első Windows desktop preview. A ChatGrid v0.3.x forrását fallback/reference alapként használja, de külön package/appId/userData/EXE identitással fut, ezért nem írja felül a ChatGridet.
 

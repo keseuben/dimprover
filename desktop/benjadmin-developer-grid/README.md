@@ -1,4 +1,4 @@
-# BENJADMIN Developer Grid Desktop v0.1.6 RC DEV
+# BENJADMIN Developer Grid Desktop v0.1.7 RC DEV
 
 Új, a ChatGrid v0.3.x-től elkülönített Developer Grid Windows desktop preview.
 

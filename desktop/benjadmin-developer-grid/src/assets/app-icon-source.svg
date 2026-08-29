@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>
+ <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b3a30"/><stop offset="1" stop-color="#03100d"/></linearGradient>
+ <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#73ffd6"/><stop offset="1" stop-color="#11b98b"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<polygon points="128,8 226,64 226,192 128,248 30,192 30,64" fill="#0b745b" opacity=".24"/>
+<polygon points="128,15 219,67 219,189 128,241 37,189 37,67" fill="url(#shell)" stroke="url(#edge)" stroke-width="10" filter="url(#glow)"/>
+<polygon points="128,31 204,75 204,181 128,225 52,181 52,75" fill="#07352b" stroke="#b8ffe9" stroke-opacity=".65" stroke-width="3"/>
+<g stroke="#40d9ad" stroke-opacity=".18" stroke-width="2"><path d="M82 84h92M82 107h92M82 130h92M82 153h92M82 176h92"/><path d="M82 84v92M105 84v92M128 84v92M151 84v92M174 84v92"/></g>
+<text x="124" y="168" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="116" font-weight="900" fill="#f2fff9" stroke="#08795c" stroke-width="3">B</text>
+<g fill="#2be1ad" stroke="#e6fff7" stroke-width="1"><rect x="165" y="163" width="11" height="11" rx="2"/><rect x="183" y="163" width="11" height="11" rx="2"/><rect x="165" y="181" width="11" height="11" rx="2"/><rect x="183" y="181" width="11" height="11" rx="2"/></g>
+</svg>
