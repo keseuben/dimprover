@@ -403,3 +403,51 @@ Debounce kötelező.
 10. release/handoff.
 
 **Alapelv:** a System Health gyors döntéstámogató vezérlőréteg; a btop-szintű mélydiagnosztika marad a Terminal Hub/terminál feladata.
+
+## 19. Health Core V2 implementációs checkpoint – 2026-08-30 este
+
+A System Health Integration V1 első kódolási blokkja elkészült backend foundation szinten.
+
+Megvalósított fájlok:
+- `app/lib/developer-grid/system-health-model.ts`
+- `app/lib/developer-grid/system-health-registry.ts`
+- `app/lib/developer-grid/system-health-severity.ts`
+- `app/lib/developer-grid/system-health-adapters.ts`
+- `app/lib/developer-grid/system-health.ts` V2 kompatibilitási facade
+- `scripts/developer-grid/system-health-v2-contract.mjs`
+
+Megvalósított működés:
+- normalizált `InfrastructureHealthNode` modell DEV / BUILD / PROD / DATABASE / STORAGE / AI típusokra;
+- közös READY / BUSY / DEGRADED / BLOCKED / NOT_CONNECTED / OFFLINE / UNKNOWN / PLANNED state készlet;
+- OK / INFO / WARNING / CRITICAL severity;
+- LIVE / CACHED / PARTIAL / STALE / REGISTRY_ONLY / UNKNOWN quality;
+- `sampledAt`, `staleAfterMs`, `stale`, `readOnly`, `source`, `capabilities` mezők;
+- backend severity engine RAM / swap / disk / memory PSI küszöbökkel;
+- stale READY node automatikusan DEGRADED + STALE minőségre vált;
+- PROD/DB availability kiesés CRITICAL;
+- BUILD node kapcsolat hiánya INFO, nem hamis kritikus állapot;
+- overall aggregáció és WARNING/CRITICAL alert lista;
+- DEV Linux memory PSI beolvasás `/proc/pressure/memory` forrásból;
+- PROD/DB latency külön normalizált metrika;
+- registry: DEV, BUILD01, BUILD02, PROD, DB, DEV ROOT;
+- előkészített STORAGE placeholder: Drive, Drop, backup, artifact/release;
+- előkészített DIMPROMIN node-ok: `dimpromin-ai-01`, `dimpromin-ai-02`;
+- SANITIZED `DimprominAiHealthAdapter` interface a későbbi GPU/engine agent bekötéséhez;
+- DIMPROMIN agent nélkül `PLANNED`, `REGISTRY_ONLY`, explicit null GPU/VRAM/model/queue mezőkkel;
+- PROD/DB node-ok `readOnly=true`;
+- secret, prompt, conversation, token, env és connection string nem része a health modellnek;
+- nincs új Supabase health polling;
+- cache változatlan: DEV/BUILD 30 s, PROD/DB 60 s, disk 60 s, storage 300 s, AI base 30 s.
+
+Kompatibilitás:
+- a health payload `schemaVersion: 2`;
+- az új `nodes`, `overall`, `alerts` mellett a legacy `servers` és `storage` mezők továbbra is megmaradnak;
+- emiatt a v0.1.11 desktop System Health renderer változtatás nélkül tovább működik;
+- System Health UI V2 és Central Core `RENDSZERÁLLAPOT` blokk külön következő fejlesztési fázis.
+
+Ellenőrzések a checkpointnál:
+- Health Core V2 contract: 35/35 PASS;
+- Developer Grid foundation: 34 required files / 49 invariants PASS;
+- legacy System Health / UI contract: 19/19 PASS;
+- `npx tsc --noEmit`: PASS;
+- `git diff --check`: PASS.

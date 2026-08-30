@@ -19,6 +19,11 @@ const required = [
   "app/lib/developer-grid/exclusive-lock.ts",
   "app/lib/developer-grid/handoff.ts",
   "app/lib/developer-grid/read-auth.ts",
+  "app/lib/developer-grid/system-health-model.ts",
+  "app/lib/developer-grid/system-health-registry.ts",
+  "app/lib/developer-grid/system-health-severity.ts",
+  "app/lib/developer-grid/system-health-adapters.ts",
+  "scripts/developer-grid/system-health-v2-contract.mjs",
   "components/admin/developer-grid/DeveloperGridShell.tsx",
   "scripts/developer-grid/candidate-smoke.mjs",
   "scripts/developer-grid/build-candidate.sh",
@@ -63,9 +68,14 @@ const packageSessionMarker = fs.readFileSync(path.join(root, "scripts/developer-
 const devZipPackage = fs.readFileSync(path.join(root, "desktop/benjadmin-developer-grid/scripts/package-dev-release.sh"), "utf8");
 const workStart = fs.readFileSync(path.join(root, "app/lib/developer-grid/work-start.ts"), "utf8");
 const workStartRoute = fs.readFileSync(path.join(root, "app/api/dev/grid/work-start/route.ts"), "utf8");
+const healthModel = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-model.ts"), "utf8");
+const healthRegistry = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-registry.ts"), "utf8");
+const healthSeverity = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-severity.ts"), "utf8");
+const healthAdapters = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-adapters.ts"), "utf8");
+const healthFacade = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health.ts"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.11-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.12-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],
@@ -108,6 +118,11 @@ const checks = [
   [windowsMarker.includes("WINDOWS_MARKER_BUILD_PROVENANCE_MISMATCH") && operationReconcile.includes("WINDOWS_ARTIFACT_MARKER_VERIFIED"), "Windows artifact marker is provenance-verified and consumed by reconciliation"],
   [workStart.includes("createDevEngineTask") && workStart.includes("materializeGridTaskSession") && workStart.includes("sourcePromptPreserved: true"), "daily work-start uses authoritative task engine and preserves source prompt"],
   [workStartRoute.includes("isChatGridDeviceAuthorized") && workStartRoute.includes("x-dimpro-production-access") && workStart.includes("SOURCE_BASELINE_MISMATCH"), "daily work-start is paired-device DEV-only and source fail-closed"],
+  [healthModel.includes("InfrastructureHealthNode") && healthModel.includes("InfrastructureHealthOverall") && healthModel.includes("schemaVersion: 2"), "Health Core V2 normalized schema contract"],
+  [healthRegistry.includes("dimpromin-ai-01") && healthRegistry.includes("dimpromin-ai-02") && healthRegistry.includes('kind: "AI"'), "Health Core V2 DIMPROMIN registry"],
+  [healthSeverity.includes("evaluateInfrastructureNode") && healthSeverity.includes("aggregateInfrastructureHealth") && healthSeverity.includes("isNodeStale"), "Health Core V2 severity and stale engine"],
+  [healthAdapters.includes("normalizeInfrastructureNodes") && healthAdapters.includes("plannedInfrastructureNodes"), "Health Core V2 legacy adapter and planned-node bridge"],
+  [healthFacade.includes("schemaVersion: 2") && healthFacade.includes("servers, storage") && healthFacade.includes("AI_TTL_MS = 30_000"), "Health Core V2 facade keeps V1 compatibility and cache policy"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
 
