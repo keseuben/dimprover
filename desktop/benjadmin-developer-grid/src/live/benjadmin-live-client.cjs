@@ -246,7 +246,12 @@ function synthesizeGridSnapshot({ foundation, state, liveEventsByWorker, generat
     chatConversationId: taskSession?.developmentContext?.chatConversationId || null,
     chatConversationUrl: taskSession?.developmentContext?.chatConversationUrl || null,
     chatConversationTitle: taskSession?.developmentContext?.chatConversationTitle || null,
-    chatConversationConfirmedAt: taskSession?.developmentContext?.chatConversationConfirmedAt || null
+    chatConversationConfirmedAt: taskSession?.developmentContext?.chatConversationConfirmedAt || null,
+    continuityPreviousTaskId: taskSession?.developmentContext?.continuityPreviousTaskId || null,
+    continuityPreviousWorkerCode: taskSession?.developmentContext?.continuityPreviousWorkerCode || null,
+    continuityHandoffId: taskSession?.developmentContext?.continuityHandoffId || null,
+    continuityHandoffSummary: taskSession?.developmentContext?.continuityHandoffSummary || null,
+    continuityRouting: taskSession?.developmentContext?.continuityRouting || null
   }] : [];
   const workerPresence = activeSessions.map((session) => {
     const code = normalizeWorkerCode(session?.workerCode);
@@ -313,7 +318,12 @@ function sanitizeSnapshot(live) {
     startedAt: item?.started_at ? String(item.started_at) : (item?.startedAt ? String(item.startedAt) : null),
     completedAt: item?.completed_at ? String(item.completed_at) : (item?.completedAt ? String(item.completedAt) : null),
     createdAt: item?.created_at ? String(item.created_at) : (item?.createdAt ? String(item.createdAt) : null),
-    updatedAt: item?.updated_at ? String(item.updated_at) : (item?.updatedAt ? String(item.updatedAt) : null)
+    updatedAt: item?.updated_at ? String(item.updated_at) : (item?.updatedAt ? String(item.updatedAt) : null),
+    continuityPreviousTaskId: item?.metadata?.continuityPreviousTaskId ? String(item.metadata.continuityPreviousTaskId) : null,
+    continuityPreviousWorkerCode: item?.metadata?.continuityPreviousWorkerCode ? String(item.metadata.continuityPreviousWorkerCode) : null,
+    continuityHandoffId: item?.metadata?.continuityHandoffId ? String(item.metadata.continuityHandoffId) : null,
+    continuityHandoffSummary: item?.metadata?.continuityHandoffSummary ? String(item.metadata.continuityHandoffSummary).slice(0,1200) : null,
+    continuityRouting: item?.metadata?.continuityRouting ? String(item.metadata.continuityRouting) : null
   })) : [];
   const normalizePresence = (item) => ({
     workerCode: String(item?.workerCode || "").toUpperCase(), active: item?.active === true,

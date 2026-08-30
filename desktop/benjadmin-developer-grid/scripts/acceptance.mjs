@@ -13,7 +13,7 @@ const css=fs.readFileSync(path.join(root,"src/renderer/styles.css"),"utf8");
 const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.10",()=>assert.equal(pkg.version,"0.1.10"));
+check("package version 0.1.11",()=>assert.equal(pkg.version,"0.1.11"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -89,4 +89,4 @@ check("BenjáminAI profile is integrated code engineer",()=>{assert.match(render
 check("all four worker headers expose code-engineer role badge",()=>{assert.equal((html.match(/data-role="worker-role"/g)||[]).length,4);assert.match(html,/INTEGRÁLT KÓDMÉRNÖK/);assert.match(renderer,/WORKER_ROLE_LABELS/);});
 check("Central Core owns coordination wording",()=>{assert.match(contextWorkspaceSource,/Central Core koordináció/);assert.doesNotMatch(contextWorkspaceSource,/BenAI koordináció/);assert.match(guideSource,/Central Core \/ Grid Orchestrator/);});
 check("worker headers expose engineering phase status",()=>{for(const label of ["ELEMZÉS","FEJLESZT","TESZTEL","ELLENŐRIZ","BUILD","LEZÁRÁS"])assert.match(renderer,new RegExp(label));});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.10 RC acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.11 RC acceptance PASS · ${n}/${n}`);

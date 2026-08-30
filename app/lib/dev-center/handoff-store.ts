@@ -41,9 +41,10 @@ export type DevelopmentHandoff = {
 const root = process.env.DIMPRO_DEV_HANDOFF_ROOT?.trim() || "/srv/dimpro-dev/handoffs";
 const indexPath = path.join(root, "handoff-index.json");
 const writeLockPath = path.join(root, ".handoff-write.lock");
-const workers = new Set(["BENAI", "OUTMINAI", "ARMINAI", "JAZMINAI", "BENJADMIN"]);
+const workers = new Set(["BENAI", "BENJAMINAI", "OUTMINAI", "ARMINAI", "JAZMINAI", "BENJADMIN"]);
 const workerFileLabels: Record<string, string> = {
-  BENAI: "BenAI",
+  BENAI: "BenjaminAI",
+  BENJAMINAI: "BenjaminAI",
   OUTMINAI: "OutminAI",
   ARMINAI: "ArminAI",
   JAZMINAI: "JazminAI",

@@ -9,7 +9,6 @@ const { createPasswordRecord, verifyPassword, loadPasswordRecord, savePasswordRe
 const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = require("./config/defaults.cjs");
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
-const { buildBenAiDailyStartPrompt } = require("./daily-start/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
 const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
@@ -1234,38 +1233,6 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
   })()`, true).catch(() => ({ inserted: false, reason: "execute-failed", existingKind: "NONE" }));
 }
 
-async function prepareBenAiDailyStart() {
-  if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
-  try {
-    if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Napi fejlesztési indítás kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
-  } catch { return { ok: false, error: "Érvénytelen BENJADMIN DEV kapcsolat." }; }
-  const cell = config?.cells?.find((item) => item.workerCode === "BENAI" && item.enabled !== false);
-  if (!cell) return { ok: false, error: "BenAI nincs aktív ChatGrid cellához rendelve." };
-  let view = chatViews.get(cell.id);
-  if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
-  if (!view) return { ok: false, error: "A BenAI ChatGPT felülete nem nyitható meg." };
-  if (shellWindow) {
-    if (shellWindow.isMinimized()) shellWindow.restore();
-    shellWindow.show();
-    shellWindow.focus();
-  }
-  if (maximizedCellId && maximizedCellId !== cell.id) maximizedCellId = null;
-  if (config.layoutMode === "split2" && ![config.splitView?.left, config.splitView?.right].includes(cell.id)) config.layoutMode = "grid4";
-  updateViewBounds();
-  view.webContents.focus();
-  const prompt = buildBenAiDailyStartPrompt(new Date());
-  const insertion = await insertWorkerTaskPrompt(view, prompt);
-  let mode = "inserted";
-  if (insertion?.inserted !== true) { clipboard.writeText(prompt); mode = "clipboard"; }
-  return {
-    ok: true,
-    mode,
-    message: mode === "inserted"
-      ? "A napi koordinációs prompt BenAI ChatGPT mezőjében van. Ellenőrizd, majd kézzel küldd el."
-      : "A napi koordinációs prompt a vágólapra került. Illeszd be BenAI-nál, majd kézzel küldd el."
-  };
-}
-
 async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null } = {}) {
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
@@ -2390,10 +2357,6 @@ function registerIpc() {
     return { ok: true };
   });
 
-  ipcMain.handle("daily:prepare-start", async () => {
-    try { return await prepareBenAiDailyStart(); }
-    catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A napi BenAI indítás előkészítése sikertelen." }; }
-  });
 
   ipcMain.handle("task:bind-conversation", async (_event, payload) => {
     try {

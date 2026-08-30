@@ -1,11 +1,12 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.10-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.11-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
 export type ProductionAccess = "DENY";
 export type WorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI";
 export type CoreWorkerCode = Exclude<WorkerCode, "DEVMINAI">;
+export type RoutableWorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI";
 export type GridWorkerState = "IDLE" | "READY" | "WORKING" | "BLOCKED" | "OFFLINE";
 export type GridEventKind = "analysis" | "coding" | "file-change" | "diff" | "test" | "build" | "commit" | "release" | "handoff";
 export type GridEventOrigin = "LIVE" | "BACKFILL";
@@ -34,6 +35,12 @@ export type DevelopmentContext = {
   taskId: string;
   sourcePrompt?: string | null;
   chatLaunchMode?: ChatLaunchMode | null;
+  preferredWorkerCode?: RoutableWorkerCode | null;
+  continuityPreviousTaskId?: string | null;
+  continuityPreviousWorkerCode?: RoutableWorkerCode | null;
+  continuityHandoffId?: string | null;
+  continuityHandoffSummary?: string | null;
+  continuityRouting?: "SAME_WORKER" | "FALLBACK_WORKER" | "NO_HISTORY" | null;
   chatPreviousConversationId?: string | null;
   chatConversationId?: string | null;
   chatConversationUrl?: string | null;

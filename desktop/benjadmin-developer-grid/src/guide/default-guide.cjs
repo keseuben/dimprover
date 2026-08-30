@@ -12,7 +12,7 @@ A Developer Grid a DIMPRO / DIMPROVER fejlesztési munkatere. A négy worker-cel
 - Nézd meg a cellafejléceket: státusz, főmodul/modul, aktuális munkarész és fejlesztési fázis.
 - Ha a BENJADMIN élő kapcsolat nincs párosítva, a Beállításokban párosítsd az eszközt.
 
-2. MIT ÍRJAK A BENAI-NAK?
+2. HOGYAN INDÍTSAM A FEJLESZTÉST?
 A BenjáminAI teljes értékű integrált AI kódmérnök. A napi munka központi indítása, prioritása és worker-kiosztása a BENJADMIN Central Core / Grid Orchestrator feladata.
 
 Napi indítás minta:
@@ -31,7 +31,7 @@ Leállítás / szüneteltetés minta:
 „Szüneteltesd a(z) [worker/feladat] fejlesztését. Ne induljon új munka, amíg külön nem engedélyezem.”
 
 3. MIKOR ÍRJAK KÖZVETLENÜL A WORKERNEK?
-Normál esetben a BENJADMIN Central Core / Grid Orchestrator osztja ki és koordinálja a feladatot. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a Developer Grid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
+Normál esetben a BENJADMIN Central Core / Grid Orchestrator osztja ki és követi a feladatot; BenjAdmin emberként bármikor felülbírálhatja a kiosztást. A worker ChatGPT-csevegését azonban ténylegesen el kell indítani. Ha a fejlécben „INDÍTÁSRA VÁR” jelenik meg, kattints az „Indítás” gombra: a Developer Grid előkészíti a kiosztási promptot, de az elküldés továbbra is a te kézi kattintásod.
 
 Ha kézzel kell írnod:
 „Folytasd a BENJADMIN által kiosztott feladatot. Először ellenőrizd a pontos taskot, scope-ot, worktree-t és DEV állapotot. PROD DENY. Felvételkor jelezd: MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM. Visszaadáskor: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM + commit + tesztek + blokkolók.”

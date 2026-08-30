@@ -42,7 +42,6 @@ contextBridge.exposeInMainWorld("chatGrid", {
   windowAction: (action) => ipcRenderer.invoke("window:action", action),
   workspaceAction: (action, payload = {}) => ipcRenderer.invoke("workspace:action", { action, ...payload }),
   cellAction: (cellId, action) => ipcRenderer.invoke("cell:action", { cellId, action }),
-  prepareDailyStart: () => ipcRenderer.invoke("daily:prepare-start"),
   prepareTaskLaunch: (workerCode, taskId) => ipcRenderer.invoke("task:prepare-launch", { workerCode, taskId }),
   prepareStageAction: (workerCode, action) => ipcRenderer.invoke("stage-action:prepare", { workerCode, action }),
   onSecurityState: (callback) => ipcRenderer.on("security:state", (_event, payload) => callback(payload)),

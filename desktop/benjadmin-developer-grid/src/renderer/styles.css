@@ -1299,7 +1299,9 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 .cw-work-prompt textarea:focus { border-color:rgba(67,217,255,.55); box-shadow:0 0 0 2px rgba(67,217,255,.08); }
 .cw-work-meta { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
 .cw-work-meta label { display:grid; gap:3px; font-size:8px; font-weight:800; color:#7893a2; }
-.cw-work-meta input { width:100%; min-height:30px; padding:5px 7px; border:1px solid rgba(148,163,184,.18); border-radius:6px; background:#071019; color:#d5e5ed; font-size:9px; }
+.cw-work-meta input,.cw-work-meta select { width:100%; min-height:30px; padding:5px 7px; border:1px solid rgba(148,163,184,.18); border-radius:6px; background:#071019; color:#d5e5ed; font-size:9px; }
+.cw-work-worker { grid-column:1/-1; }
+.cw-work-worker small { font-size:7px; font-weight:600; color:#647f8d; line-height:1.25; }
 .cw-work-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .cw-work-actions small { color:#607b8a; font-size:7px; line-height:1.35; }
 .cw-work-actions button { min-height:34px; padding:0 14px; border:1px solid rgba(67,217,255,.4); border-radius:7px; background:rgba(0,152,200,.16); color:#b8f2ff; font-size:9px; font-weight:950; cursor:pointer; }
@@ -1310,7 +1312,7 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 .cw-active-work small { color:#718b98; font-size:7px; }
 :root[data-theme="light"] .cw-work-start { background:#fff; border-color:rgba(11,112,146,.24); }
 :root[data-theme="light"] .cw-work-start > header strong,:root[data-theme="light"] .cw-work-prompt textarea { color:#173747; }
-:root[data-theme="light"] .cw-work-prompt textarea,:root[data-theme="light"] .cw-work-meta input { background:#fff; color:#173747; }
+:root[data-theme="light"] .cw-work-prompt textarea,:root[data-theme="light"] .cw-work-meta input,:root[data-theme="light"] .cw-work-meta select { background:#fff; color:#173747; }
 
 
 /* Developer Grid v0.1.7 RC polish — Central Core, split2 docking, readable controls */

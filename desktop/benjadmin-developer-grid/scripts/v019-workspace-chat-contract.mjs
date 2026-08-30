@@ -17,6 +17,7 @@ const live = read("desktop/benjadmin-developer-grid/src/live/benjadmin-live-clie
 const types = read("app/lib/developer-grid/types.ts");
 const workStart = read("app/lib/developer-grid/work-start.ts");
 const route = read("app/api/dev/grid/work-start/route.ts");
+const taskPrompt = read("desktop/benjadmin-developer-grid/src/task-launch/prompt-builder.cjs");
 let checks = 0;
 function check(ok,label){checks+=1;if(!ok)throw new Error(`FAIL ${String(checks).padStart(2,"0")} ${label}`);console.log(`PASS ${String(checks).padStart(2,"0")} ${label}`)}
 
@@ -42,6 +43,13 @@ check(renderer.includes('"CSEVEGÉS RÖGZÍTÉSE"') && renderer.includes('datase
 check(main.includes("TASK_CHAT_CONVERSATION_MISMATCH"),"task launch fails closed on wrong current conversation");
 check(renderer.includes("explicitChatPlan") && main.includes("launchProbe"),"chat-planned READY task remains launchable despite session startedAt");
 check(live.includes("chatConversationConfirmedAt") && main.includes("authoritative = task?.chatLaunchMode"),"conversation binding survives desktop restart through authoritative state");
+check(workspace.includes("Automatikus · Central Core választ") && !workspace.includes("Automatikus · BenAI koordinátor választ"),"work-start automatic routing is owned by Central Core, not BenAI");
+check(workspace.includes(">ÁrminAI<") && workspace.includes(">OutminAI<") && workspace.includes(">BenjáminAI<") && workspace.includes(">JázminAI<"),"all four coding engineers are explicitly selectable");
+check(renderer.includes('api.contextWorkspaceMode?.("open")') && !renderer.includes("api.prepareDailyStart();"),"daily start opens Central Core control panel instead of a worker chat");
+check(!main.includes("prepareBenAiDailyStart") && !main.includes('daily:prepare-start') && !preload.includes("prepareDailyStart"),"legacy BenAI coordinator daily-start IPC is removed, not merely hidden");
+check(live.includes("continuityPreviousWorkerCode") && live.includes("continuityHandoffId"),"continuity metadata survives authoritative live adapter");
+check(taskPrompt.includes("FOLYTATÁSI KONTEXTUS – CENTRAL CORE") && taskPrompt.includes("Legfrissebb hiteles handoff ID"),"worker task prompt carries continuity handoff context");
+check(taskPrompt.includes("Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát"),"worker is required to report work segments to central state");
 
 check(main.includes("async function applyWorkspaceStandbyLock"),"workspace standby lock has native controller");
 check(main.includes("__benjadmin_workspace_standby__"),"standby overlay is injected into ChatGPT WebContents");

@@ -102,6 +102,27 @@ async function requireClient() {
   return getDatabaseClient();
 }
 
+export async function ensureDeveloperGridCodingWorkerRegistry() {
+  const client = await requireClient();
+  const { data, error } = await client.from("dev_center_workers").select("id,code,status").eq("id", "worker_benjaminai").maybeSingle();
+  if (error) databaseError("A BenjáminAI worker registry ellenőrzése sikertelen.", error);
+  if (data) return { ok: true as const, created: false as const, workerId: "worker_benjaminai", workerCode: "BENJAMINAI" as const };
+  const created = await client.from("dev_center_workers").insert({
+    id: "worker_benjaminai",
+    code: "BENJAMINAI",
+    name: "BenjáminAI",
+    role: "Integrált kódmérnök worker",
+    status: "ready",
+    capabilities: ["code","ui","api","test","review"],
+    metadata: { layer: "INTERNAL_AI", productionAccess: "DENY", origin: "BENJADMIN_DEVELOPER_GRID" },
+  }).select("id,code").single();
+  if (created.error) {
+    if (created.error.code === "23505") return { ok: true as const, created: false as const, workerId: "worker_benjaminai", workerCode: "BENJAMINAI" as const };
+    databaseError("A BenjáminAI worker registry létrehozása sikertelen.", created.error, 409);
+  }
+  return { ok: true as const, created: true as const, workerId: "worker_benjaminai", workerCode: "BENJAMINAI" as const };
+}
+
 async function addAudit(client: SupabaseClient, input: { action: string; entityType: string; entityId?: string | null; sessionId?: string | null; taskId?: string | null; projectId?: string | null; summary?: string; metadata?: JsonRecord; actorId?: string | null }) {
   const { error } = await client.from("dev_center_audit_events").insert({
     id: `dev-audit-${randomUUID().slice(0, 12)}`, actor_type: "system", actor_id: text(input.actorId) || "BenAI", action: input.action,
@@ -516,6 +537,7 @@ const CONSOLE_ROUTABLE_WORKERS: Record<string, string> = {
   ARMINAI: "worker_arminai",
   JAZMINAI: "worker_jazminai",
   OUTMINAI: "worker_outminai",
+  BENJAMINAI: "worker_benjaminai",
 };
 
 function clampEstimateMinutes(value: unknown) {
@@ -592,18 +614,20 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
   return { ok: true as const, task: mapTask(data as JsonRecord), worker: mapWorker(worker as JsonRecord) };
 }
 
-export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null; prepareForPlusPull?: boolean; chainSource?: string | null }) {
+export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null; preferencePolicy?: "STRICT" | "SOFT"; orchestrationSource?: "CENTRAL_CORE"; prepareForPlusPull?: boolean; chainSource?: string | null }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
   if (!["queued", "ready"].includes(task.status) || task.assignedWorkerId || task.claimedBySessionId) {
-    throw new DevCenterEngineError("Ben-AI automatikus routing csak várakozó taskon futtatható.", "DEV_CENTER_AUTO_ROUTE_STATE_DENIED", 409, { taskId: task.id, status: task.status });
+    throw new DevCenterEngineError("Central Core automatikus routing csak várakozó taskon futtatható.", "DEV_CENTER_AUTO_ROUTE_STATE_DENIED", 409, { taskId: task.id, status: task.status });
   }
   const preferredWorkerCode = text(input.preferredWorkerCode).toUpperCase();
+  const preferencePolicy = input.preferencePolicy === "SOFT" ? "SOFT" : "STRICT";
+  const orchestrationSource = input.orchestrationSource === "CENTRAL_CORE" ? "CENTRAL_CORE" : "CENTRAL_CORE";
   if (preferredWorkerCode && !Object.prototype.hasOwnProperty.call(CONSOLE_ROUTABLE_WORKERS, preferredWorkerCode)) {
     throw new DevCenterEngineError("A kézi worker preferencia ismeretlen.", "DEV_CENTER_TASK_WORKER_INVALID", 400, { preferredWorkerCode });
   }
-  const workerResult = await client.from("dev_center_workers").select("id,code,name,status,updated_at").in("code", ["ARMINAI", "JAZMINAI", "OUTMINAI"]);
-  if (workerResult.error) databaseError("A Ben-AI worker pool nem olvasható.", workerResult.error);
+  const workerResult = await client.from("dev_center_workers").select("id,code,name,status,updated_at").in("code", ["ARMINAI", "JAZMINAI", "OUTMINAI", "BENJAMINAI"]);
+  if (workerResult.error) databaseError("A Central Core worker pool nem olvasható.", workerResult.error);
   const sessionResult = await client.from("dev_center_worker_sessions").select("worker_id,task_id,status").neq("status", "closed");
   if (sessionResult.error) databaseError("A worker session terhelés nem olvasható.", sessionResult.error);
   const taskResult = await client.from("dev_center_tasks").select("id,status,requested_worker_id,assigned_worker_id").in("status", ["queued", "ready", "claimed", "in_progress", "testing"]);
@@ -659,11 +683,13 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
   const preferredUnavailable = Boolean(preferredWorkerCode && (!preferredWorker || preferredBusy || preferredRejected));
   const suggestedWorker = eligibleFree.find((worker) => worker.code !== preferredWorkerCode) || null;
 
-  if (preferredUnavailable) {
+  const softFallback = Boolean(preferencePolicy === "SOFT" && preferredUnavailable && suggestedWorker);
+  if (preferredUnavailable && !softFallback) {
     const now = nowIso();
     const metadata = {
       ...task.metadata,
-      coordinator: "BENAI",
+      orchestrator: orchestrationSource,
+      coordinator: "CENTRAL_CORE",
       coordinatorAutoRouted: false,
       coordinatorManualPreference: preferredWorkerCode,
       coordinatorPreferenceState: preferredRejected ? "PREFERRED_NOT_AUTHORIZED" : preferredBusy ? "PREFERRED_BUSY" : "PREFERRED_UNAVAILABLE",
@@ -673,7 +699,7 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       coordinatorRejected: rejected,
     };
     const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
-    if (waiting.error) databaseError("A Ben-AI preferencia-visszajelzés nem menthető.", waiting.error, 409);
+    if (waiting.error) databaseError("A Central Core preferencia-visszajelzés nem menthető.", waiting.error, 409);
     await addAudit(client, {
       action: "TASK_BENAI_PREFERRED_WORKER_UNAVAILABLE",
       entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId,
@@ -683,26 +709,29 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
     return { ok: true as const, routed: false as const, reason: "PREFERRED_UNAVAILABLE" as const, task: mapTask(waiting.data as JsonRecord), worker: null, preferredWorker, suggestedWorker, candidates, rejected };
   }
 
-  const chosen = preferredWorkerCode ? eligibleFree.find((worker) => worker.code === preferredWorkerCode) || null : eligibleFree[0] || null;
+  const chosen = softFallback ? suggestedWorker : preferredWorkerCode ? eligibleFree.find((worker) => worker.code === preferredWorkerCode) || null : eligibleFree[0] || null;
   if (chosen) {
     const routed = await routeDevEngineTask({
       taskId: task.id,
       workerCode: chosen.code,
       estimateMinutes: input.estimateMinutes,
-      note: text(input.note).slice(0, 500) || (preferredWorkerCode ? "Ben-AI által ellenőrzött kézi worker preferencia" : "Ben-AI automatikus kapacitásalapú kiosztás"),
+      note: text(input.note).slice(0, 500) || (preferredWorkerCode ? "Central Core worker preferencia" : "Central Core automatikus kapacitásalapú kiosztás"),
     });
     const now = nowIso();
     const currentMetadata = jsonRecord(routed.task.metadata);
     const metadata = {
       ...currentMetadata,
-      coordinator: "BENAI",
-      coordinatorAutoRouted: !preferredWorkerCode,
+      orchestrator: orchestrationSource,
+      coordinator: "CENTRAL_CORE",
+      coordinatorAutoRouted: !preferredWorkerCode || softFallback,
       coordinatorManualPreference: preferredWorkerCode || null,
-      coordinatorPreferenceState: preferredWorkerCode ? "PREFERRED_ACCEPTED" : null,
+      coordinatorPreferenceState: softFallback ? "CONTINUITY_FALLBACK" : preferredWorkerCode ? "PREFERRED_ACCEPTED" : null,
       coordinatorQueueState: null,
       coordinatorSuggestedWorker: null,
       coordinatorRejected: [],
       coordinatorRoutedAt: now,
+      routingPreferencePolicy: preferencePolicy,
+      continuityFallback: softFallback,
       coordinatorSelection: { workerCode: chosen.code, activeSessions: chosen.activeSessions, activeTasks: chosen.activeTasks, queuedTasks: chosen.queuedTasks },
       ...(input.prepareForPlusPull ? {
         coordinatorChainState: "READY_FOR_PLUS_PULL",
@@ -715,11 +744,11 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       } : {}),
     };
     const updated = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
-    if (updated.error) databaseError("A Ben-AI routing metadata nem menthető.", updated.error, 409);
+    if (updated.error) databaseError("A Central Core routing metadata nem menthető.", updated.error, 409);
     await addAudit(client, {
       action: preferredWorkerCode ? "TASK_BENAI_PREFERRED_WORKER_ROUTED" : "TASK_BENAI_AUTO_ROUTED",
       entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId,
-      summary: `${task.title} → ${routed.worker.name} · ${preferredWorkerCode ? "kézi preferencia Ben-AI ellenőrzéssel" : "Ben-AI automatikus kiosztás"}.`,
+      summary: `${task.title} → ${routed.worker.name} · ${softFallback ? "folytonossági fallback" : preferredWorkerCode ? "explicit/folytonossági preferencia" : "Central Core automatikus kiosztás"}.`,
       metadata: { workerId: routed.worker.id, workerCode: routed.worker.code, preferredWorkerCode: preferredWorkerCode || null, productionAccess: "DENY", selection: metadata.coordinatorSelection },
     });
     if (input.prepareForPlusPull) {
@@ -730,13 +759,14 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
         metadata: { workerCode: routed.worker.code, productionAccess: "DENY", preparedAt: now, chainSource: text(input.chainSource) || "BENJADMIN_COMMAND" },
       });
     }
-    return { ok: true as const, routed: true as const, reason: preferredWorkerCode ? "PREFERRED_ACCEPTED" as const : "AUTO_ROUTED" as const, task: mapTask(updated.data as JsonRecord), worker: routed.worker, preferredWorker, suggestedWorker: null, candidates, rejected };
+    return { ok: true as const, routed: true as const, reason: softFallback ? "CONTINUITY_FALLBACK" as const : preferredWorkerCode ? "PREFERRED_ACCEPTED" as const : "AUTO_ROUTED" as const, task: mapTask(updated.data as JsonRecord), worker: routed.worker, preferredWorker, suggestedWorker: null, candidates, rejected };
   }
 
   const now = nowIso();
   const metadata = {
     ...task.metadata,
-    coordinator: "BENAI",
+    orchestrator: orchestrationSource,
+    coordinator: "CENTRAL_CORE",
     coordinatorAutoRouted: false,
     coordinatorQueueState: "WAITING_FOR_FREE_WORKER",
     coordinatorCheckedAt: now,
@@ -744,8 +774,8 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
     coordinatorRejected: rejected,
   };
   const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
-  if (waiting.error) databaseError("A Ben-AI várakozási állapot nem menthető.", waiting.error, 409);
-  await addAudit(client, { action: "TASK_BENAI_WAITING_FOR_WORKER", entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId, summary: `${task.title} · nincs szabad, jogosult worker; Ben-AI várólistán.`, metadata: { productionAccess: "DENY", rejected } });
+  if (waiting.error) databaseError("A Central Core várakozási állapot nem menthető.", waiting.error, 409);
+  await addAudit(client, { action: "TASK_BENAI_WAITING_FOR_WORKER", entityType: "task", entityId: task.id, taskId: task.id, projectId: task.projectId, summary: `${task.title} · nincs szabad, jogosult worker; Central Core várólistán.`, metadata: { productionAccess: "DENY", rejected } });
   return { ok: true as const, routed: false as const, reason: "NO_FREE_WORKER" as const, task: mapTask(waiting.data as JsonRecord), worker: null, preferredWorker, suggestedWorker: null, candidates, rejected };
 }
 

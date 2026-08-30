@@ -1,12 +1,13 @@
 "server-only";
 
 import { createHash } from "node:crypto";
-import { autoRouteDevEngineTaskByAvailability, createDevEngineTask, getDevCenterEngineState } from "@/app/lib/dev-center/engine-repository";
+import { autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState } from "@/app/lib/dev-center/engine-repository";
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
+import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
-import { appendGridEvent, materializeGridTaskSession, readGridState, upsertWorkerSession } from "./state-store";
-import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, WorkerSession } from "./types";
+import { appendGridEvent, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
+import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, WorkerSession } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
 export const WORK_START_MAX_LENGTH = 12000;
@@ -22,6 +23,15 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();
+  const preferredWorkerCode: RoutableWorkerCode | null = rawPreferredWorkerCode && rawPreferredWorkerCode !== "AUTO"
+    ? (["ARMINAI", "OUTMINAI", "BENJAMINAI", "JAZMINAI"].includes(rawPreferredWorkerCode) ? rawPreferredWorkerCode as RoutableWorkerCode : null)
+    : null;
+  if (rawPreferredWorkerCode && rawPreferredWorkerCode !== "AUTO" && !preferredWorkerCode) {
+    const error = new Error("A kiválasztott Developer Grid worker nem routolható.");
+    Object.assign(error, { code: "DEVELOPER_GRID_WORKER_PREFERENCE_INVALID", status: 400 });
+    throw error;
+  }
   if (sourcePrompt.length < WORK_START_MIN_LENGTH) {
     const error = new Error(`A fejlesztési utasítás legalább ${WORK_START_MIN_LENGTH} karakter legyen.`);
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_PROMPT_TOO_SHORT", status: 400 });
@@ -32,7 +42,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, preferredWorkerCode };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -43,11 +53,70 @@ export function workStartTitle(sourcePrompt: string) {
   return sourcePrompt.split(/\r?\n/).map((line) => line.trim()).find(Boolean)?.slice(0, 180) || "Új fejlesztési feladat";
 }
 
-function coreWorkerCode(value: unknown): CoreWorkerCode {
+function routableWorkerCode(value: unknown): RoutableWorkerCode | null {
   const code = String(value || "").trim().toUpperCase();
-  if (code === "ARMINAI" || code === "OUTMINAI" || code === "JAZMINAI" || code === "BENJAMINAI") return code;
+  if (code === "ARMINAI" || code === "OUTMINAI" || code === "BENJAMINAI" || code === "JAZMINAI") return code;
+  return null;
+}
+
+function routedWorkerCodeFromTask(task: Record<string, unknown>, metadata: Record<string, unknown>): RoutableWorkerCode | null {
+  const selection = metadata.coordinatorSelection && typeof metadata.coordinatorSelection === "object" ? metadata.coordinatorSelection as Record<string, unknown> : {};
+  const selectedLegacy = metadata.coordinatorSelectedWorker && typeof metadata.coordinatorSelectedWorker === "object" ? metadata.coordinatorSelectedWorker as Record<string, unknown> : {};
+  const byMetadata = routableWorkerCode(selection.workerCode || selectedLegacy.workerCode || metadata.coordinatorSelectedWorkerCode || metadata.coordinatorChainWorkerCode);
+  if (byMetadata) return byMetadata;
+  const requestedWorkerId = String(task.requestedWorkerId || "").trim().toLowerCase();
+  if (requestedWorkerId === "worker_arminai") return "ARMINAI";
+  if (requestedWorkerId === "worker_outminai") return "OUTMINAI";
+  if (requestedWorkerId === "worker_benjaminai") return "BENJAMINAI";
+  if (requestedWorkerId === "worker_jazminai") return "JAZMINAI";
+  return null;
+}
+
+function workerCodeFromWorkerId(value: unknown): RoutableWorkerCode | null {
+  const id = String(value || "").trim().toLowerCase();
+  if (id === "worker_arminai") return "ARMINAI";
+  if (id === "worker_outminai") return "OUTMINAI";
+  if (id === "worker_benjaminai") return "BENJAMINAI";
+  if (id === "worker_jazminai") return "JAZMINAI";
+  return null;
+}
+
+function normalizedHandoffWorkerCode(value: unknown): RoutableWorkerCode | null {
+  const code = String(value || "").trim().toUpperCase();
   if (code === "BENAI") return "BENJAMINAI";
-  return "BENJAMINAI";
+  return routableWorkerCode(code);
+}
+
+async function resolveContinuityContext(engineState: Awaited<ReturnType<typeof getDevCenterEngineState>>, input: ReturnType<typeof normalizeWorkStartInput>, currentTaskId: string) {
+  const candidates = engineState.tasks
+    .filter((task) => task.id !== currentTaskId && task.projectId === input.projectId)
+    .filter((task) => !["queued", "ready"].includes(String(task.status || "").toLowerCase()))
+    .filter((task) => {
+      const meta = task.metadata && typeof task.metadata === "object" ? task.metadata as Record<string, unknown> : {};
+      const sameModule = String(meta.moduleName || "").trim().toLowerCase() === input.moduleName.trim().toLowerCase();
+      const expectedSub = String(input.submoduleName || "").trim().toLowerCase();
+      const actualSub = String(meta.submoduleName || "").trim().toLowerCase();
+      return sameModule && (!expectedSub || !actualSub || actualSub === expectedSub);
+    })
+    .sort((a, b) => Date.parse(String(b.updatedAt || b.completedAt || b.createdAt || "")) - Date.parse(String(a.updatedAt || a.completedAt || a.createdAt || "")));
+  const previousTask = candidates[0] || null;
+  const previousWorkerCode = previousTask ? workerCodeFromWorkerId(previousTask.assignedWorkerId || previousTask.requestedWorkerId) : null;
+  let handoff = null as Awaited<ReturnType<typeof listDevelopmentHandoffs>>[number] | null;
+  try {
+    const handoffs = await listDevelopmentHandoffs();
+    handoff = (previousTask ? handoffs.find((item) => item.taskId === previousTask.id) : null)
+      || handoffs.find((item) => item.project.trim().toLowerCase() === input.projectId.trim().toLowerCase()
+        && item.module.trim().toLowerCase() === input.moduleName.trim().toLowerCase()
+        && (!input.submoduleName || !item.contextModule || item.contextModule.trim().toLowerCase() === input.submoduleName.trim().toLowerCase()))
+      || null;
+  } catch { handoff = null; }
+  const handoffWorkerCode = handoff ? normalizedHandoffWorkerCode(handoff.workerCode) : null;
+  return {
+    previousTaskId: handoff?.taskId || previousTask?.id || null,
+    previousWorkerCode: handoffWorkerCode || previousWorkerCode,
+    handoffId: handoff?.id || null,
+    handoffSummary: handoff?.summary || null,
+  };
 }
 
 function strictCoreWorkerCode(value: unknown): CoreWorkerCode {
@@ -92,12 +161,18 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   }
 
   const taskId = workStartTaskId(input.idempotencyKey);
+  await ensureDeveloperGridCodingWorkerRegistry();
   const engineState = await getDevCenterEngineState();
+  const continuity = await resolveContinuityContext(engineState, input, taskId);
+  const routingPreference = input.preferredWorkerCode || continuity.previousWorkerCode;
+  const routingPreferenceSource = input.preferredWorkerCode ? "BENJADMIN_EXPLICIT" : continuity.previousWorkerCode ? "CONTINUITY" : "CAPACITY";
   let engineTask = engineState.tasks.find((task) => task.id === taskId) || null;
   let reused = Boolean(engineTask);
   if (engineTask) {
     const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
-    if (String(metadata.sourcePrompt || "") !== input.sourcePrompt || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode) {
+    if (String(metadata.sourcePrompt || "") !== input.sourcePrompt
+      || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
+      || String(metadata.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")) {
       const error = new Error("Az idempotencyKey már más tartalmú munkaindításhoz tartozik.");
       Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT", status: 409 });
       throw error;
@@ -125,6 +200,12 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
           sourcePrompt: input.sourcePrompt,
           sourcePromptPreserved: true,
           chatLaunchMode: input.chatLaunchMode,
+          preferredWorkerCode: input.preferredWorkerCode,
+          routingPreferenceSource,
+          continuityPreviousTaskId: continuity.previousTaskId,
+          continuityPreviousWorkerCode: continuity.previousWorkerCode,
+          continuityHandoffId: continuity.handoffId,
+          continuityHandoffSummary: continuity.handoffSummary,
           idempotencyKey: input.idempotencyKey,
           mainModule: "BENJADMIN",
           moduleName: input.moduleName,
@@ -146,7 +227,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       const afterConflict = await getDevCenterEngineState();
       const existing = afterConflict.tasks.find((task) => task.id === taskId) || null;
       const existingMeta = existing?.metadata && typeof existing.metadata === "object" ? existing.metadata as Record<string, unknown> : {};
-      if (!existing || String(existingMeta.sourcePrompt || "") !== input.sourcePrompt || String(existingMeta.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode) throw createError;
+      if (!existing || String(existingMeta.sourcePrompt || "") !== input.sourcePrompt
+        || String(existingMeta.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode
+        || String(existingMeta.preferredWorkerCode || "") !== String(input.preferredWorkerCode || "")) throw createError;
       engineTask = existing;
       reused = true;
     }
@@ -158,7 +241,14 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       const routed = await autoRouteDevEngineTaskByAvailability({
       taskId,
       estimateMinutes: estimate.minutes,
-      note: "Developer Grid Vezérlőpult · BenAI automatikus kapacitásalapú kiosztás",
+      preferredWorkerCode: routingPreference,
+      preferencePolicy: input.preferredWorkerCode ? "STRICT" : "SOFT",
+      orchestrationSource: "CENTRAL_CORE",
+      note: input.preferredWorkerCode
+        ? `Developer Grid Vezérlőpult · BenjAdmin explicit worker: ${input.preferredWorkerCode}`
+        : continuity.previousWorkerCode
+          ? `Developer Grid Central Core · continuity preference: ${continuity.previousWorkerCode}`
+          : "Developer Grid Central Core · kapacitásalapú kiosztás",
       prepareForPlusPull: true,
       chainSource: "DEVELOPER_GRID_WORK_START",
     });
@@ -168,7 +258,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   }
 
   const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
-  const routedCode = coreWorkerCode((metadata.coordinatorSelectedWorker as Record<string, unknown> | undefined)?.workerCode || metadata.coordinatorSelectedWorkerCode || "BENJAMINAI");
+  const routedCode = routedWorkerCodeFromTask(engineTask as unknown as Record<string, unknown>, metadata);
   const developmentContext: DevelopmentContext = {
     projectId: input.projectId,
     mainModule: "BENJADMIN",
@@ -179,10 +269,46 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     taskId,
     sourcePrompt: input.sourcePrompt,
     chatLaunchMode: input.chatLaunchMode,
+    preferredWorkerCode: input.preferredWorkerCode,
+    continuityPreviousTaskId: continuity.previousTaskId,
+    continuityPreviousWorkerCode: continuity.previousWorkerCode,
+    continuityHandoffId: continuity.handoffId,
+    continuityHandoffSummary: continuity.handoffSummary,
+    continuityRouting: routedCode && continuity.previousWorkerCode ? (routedCode === continuity.previousWorkerCode ? "SAME_WORKER" : "FALLBACK_WORKER") : "NO_HISTORY",
     source: "EXPLICIT_TASK",
     resolvedAt: new Date().toISOString(),
   };
   const task = gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+  if (!routedCode) {
+    const waitingState = await upsertGridTask(task);
+    await appendGridEvent({
+      kind: "analysis",
+      origin: "LIVE",
+      workerCode: input.preferredWorkerCode || continuity.previousWorkerCode || "BENJAMINAI",
+      taskId,
+      projectId: input.projectId,
+      developmentContext,
+      productionAccess: "DENY",
+      delta: {
+        summary: input.preferredWorkerCode
+          ? `${input.preferredWorkerCode} worker jelenleg nem routolható; task várakozik, session nem materializálható.`
+          : "Nincs ténylegesen routolt worker; task várakozik, hamis BenjáminAI session nem materializálható.",
+        preferredWorkerCode: input.preferredWorkerCode,
+        routingState: "WAITING_FOR_WORKER",
+      },
+    });
+    return {
+      task: waitingState.task,
+      session: null,
+      stateRevision: waitingState.revision,
+      reused,
+      sourcePrompt: input.sourcePrompt,
+      chatLaunchMode: input.chatLaunchMode,
+      preferredWorkerCode: input.preferredWorkerCode,
+      routingState: "WAITING_FOR_WORKER" as const,
+      productionAccess: "DENY" as const,
+    };
+  }
   const session: WorkerSession = {
     id: `grid-work-${taskId}-${routedCode.toLowerCase()}`,
     workerCode: routedCode,
@@ -205,6 +331,8 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     reused,
     sourcePrompt: input.sourcePrompt,
     chatLaunchMode: input.chatLaunchMode,
+    preferredWorkerCode: input.preferredWorkerCode,
+    routingState: "ROUTED" as const,
     productionAccess: "DENY" as const,
   };
 }

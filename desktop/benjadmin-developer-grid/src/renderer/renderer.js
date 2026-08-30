@@ -1452,9 +1452,9 @@ function bindUi() {
   $("#systemHealthButton").addEventListener("click", () => void setSystemHealthMode(state.systemHealth.mode === "expanded" ? "closed" : "expanded"));
   $("#systemHealthClose").addEventListener("click", () => void setSystemHealthMode("closed"));
   $("#dailyStartButton").addEventListener("click", async () => {
-    const result = await api.prepareDailyStart();
-    if (!result?.ok) showToast("Napi indítás", result?.error || "A BenAI napi indítás nem készíthető elő.");
-    else showToast(result.mode === "inserted" ? "BenAI napi indítás előkészítve" : "Napi indítás a vágólapon", result.message || "Ellenőrizd, majd kézzel küldd el.");
+    const result = await api.contextWorkspaceMode?.("open");
+    if (!result?.ok) showToast("Napi indítás", result?.error || "A Central Core Vezérlőpult nem nyitható meg.");
+    else showToast("Central Core", "A Fejlesztői Vezérlőpult megnyílt. Add meg a feladatot és válaszd ki a kódmérnököt.");
   });
   $("#reviewButton").addEventListener("click", () => void openReviewRoom());
   $("#reviewClose").addEventListener("click", () => void closeReviewRoom());

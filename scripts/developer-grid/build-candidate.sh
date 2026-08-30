@@ -94,7 +94,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 export DIMPRO_OPERATION_OWNER="${DIMPRO_OPERATION_OWNER:-OutminAI}"
-export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.10 RC canonical webpack candidate}"
+export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.11 RC canonical webpack candidate}"
 export DIMPRO_WORKER_CODE="OUTMINAI"
 
 "$ROOT/scripts/dimpro-dev-storage-prebuild.sh"

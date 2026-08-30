@@ -63,6 +63,20 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   if (priority) lines.push(`PRIORITÁS: ${priority}`);
   if (projectId) lines.push(`PROJECT ID: ${projectId}`);
   if (context) lines.push(`BENJADMIN KONTEXTUS: ${context}`);
+  const continuityWorker = cleanText(task?.continuityPreviousWorkerCode, 80);
+  const continuityTask = cleanText(task?.continuityPreviousTaskId, 220);
+  const continuityHandoff = cleanText(task?.continuityHandoffId, 220);
+  const continuitySummary = cleanText(task?.continuityHandoffSummary, 1200);
+  const continuityRouting = cleanText(task?.continuityRouting, 80);
+  if (continuityWorker || continuityTask || continuityHandoff || continuitySummary) {
+    lines.push("", "FOLYTATÁSI KONTEXTUS – CENTRAL CORE:");
+    if (continuityWorker) lines.push(`Előző kódmérnök: ${continuityWorker}`);
+    if (continuityTask) lines.push(`Előző task: ${continuityTask}`);
+    if (continuityHandoff) lines.push(`Legfrissebb hiteles handoff ID: ${continuityHandoff}`);
+    if (continuityRouting) lines.push(`Routing: ${continuityRouting}`);
+    if (continuitySummary) lines.push(`Átadó összefoglaló: ${continuitySummary}`);
+    lines.push("A folytatás előtt ellenőrizd a legfrissebb hiteles handoffot és a hozzárendelt Context Packot. Ha eltérés van a jelenlegi utasítással, jelöld: SOURCE_CONFLICT / BENJADMIN DECISION REQUIRED.");
+  }
   lines.push(`ENGEDÉLYEZETT SCOPE: ${scope}`);
   if (branch) lines.push(`BRANCH: ${branch}`);
   if (worktree) lines.push(`WORKTREE: ${worktree}`);
@@ -74,8 +88,9 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
     "PROD DENY: production hozzáférés, módosítás, deploy, restart vagy adatváltoztatás tilos.",
     "Más worker scope-ját és fájljait ne módosítsd. Shared build/release/migration/restart/cutover csak központi koordinációs lock alatt történhet.",
     "",
-    "Ez TASK_LAUNCH prompt. Csak explicit BenjAdmin/BenAI INDÍTÁS után használható; ÁTADÁS folyamatból soha nem indulhat automatikusan.",
+    "Ez TASK_LAUNCH prompt. Csak explicit BenjAdmin / Central Core INDÍTÁS után használható; ÁTADÁS folyamatból soha nem indulhat automatikusan.",
     "Munkakezdéskor az első státuszsor pontosan: MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
+    "Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát: mit végeztél, mely fájlokon/területen, milyen teszt/commit/build eredménnyel és mi a következő lépés. Ne csak a munka végén legyen központi nyoma.",
     "Munka végén: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM; add meg az eltelt időt és az állapotot is.",
     `Lezáráskor frissítsd a worker tartós handoffját is: /srv/dimpro-dev/handoffs/${cleanText(workerCode, 40) || "WORKER"}_LATEST.md`,
     "A LATEST handoff tartalmazza: task, branch/worktree, HEAD commit, tesztek, blokkolók, aktuális állapot és következő lépés.",
