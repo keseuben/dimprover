@@ -54,6 +54,8 @@ let systemHealthMode = "closed";
 let centralWindow = null;
 const registeredGlobalShortcutActions = new Set();
 let shortcutRegistrationState = [];
+const shortcutDispatchTimestamps = new Map();
+const SHORTCUT_DEDUPE_MS = 220;
 let centralProfileVisible = false;
 let guideWindow = null;
 let contextWorkspaceWindow = null;
@@ -743,18 +745,18 @@ async function applyWorkspaceStandbyLock(cell, view, shouldLock) {
     overlay.setAttribute("data-benjadmin-workspace-standby", "true");
     Object.assign(overlay.style, {
       position:"fixed", inset:"0", zIndex:"2147483647", display:"grid", placeItems:"center",
-      background:"linear-gradient(145deg, rgba(${accent.rgb},0.34), rgba(5,14,22,0.48))",
-      backdropFilter:"blur(1px) saturate(78%) brightness(82%)", WebkitBackdropFilter:"blur(1px) saturate(78%) brightness(82%)",
+      background:"linear-gradient(145deg, rgba(${accent.rgb},0.20), rgba(8,18,26,0.24))",
+      backdropFilter:"blur(.6px) saturate(72%) brightness(94%)", WebkitBackdropFilter:"blur(.6px) saturate(72%) brightness(94%)",
       pointerEvents:"auto", userSelect:"none"
     });
     const wrap = document.createElement("div");
     Object.assign(wrap.style,{display:"grid",placeItems:"center",gap:"14px",textAlign:"center",fontFamily:"Inter,Segoe UI,Arial,sans-serif"});
     const button = document.createElement("button");
     button.type="button"; button.title="Munkatér feloldása"; button.setAttribute("aria-label","${label.replace('"','')} munkatér feloldása");
-    Object.assign(button.style,{width:"min(26vw,190px)",height:"min(26vw,190px)",minWidth:"118px",minHeight:"118px",border:"1px solid rgba(${accent.edge},0.78)",borderRadius:"32px",background:"rgba(3,11,17,0.38)",boxShadow:"0 22px 70px rgba(0,0,0,.28),0 0 42px rgba(${accent.rgb},.20)",cursor:"pointer",display:"grid",placeItems:"center",padding:"12px"});
-    const img=document.createElement("img"); img.src=${JSON.stringify(dataUri)}; img.alt="${label.replace('"','')}"; Object.assign(img.style,{width:"100%",height:"100%",objectFit:"contain",opacity:".80",filter:"saturate(112%) contrast(105%)"}); button.appendChild(img);
-    const title=document.createElement("strong"); title.textContent="MUNKATÉR KÉSZENLÉTBEN"; Object.assign(title.style,{fontSize:"clamp(14px,1.25vw,23px)",letterSpacing:".09em",color:"rgba(255,255,255,.92)",textShadow:"0 2px 12px rgba(0,0,0,.35)"});
-    const hint=document.createElement("span"); hint.textContent="${label.replace('"','')} · kattints az avatárra a munkatér használatához"; Object.assign(hint.style,{fontSize:"clamp(10px,.8vw,15px)",fontWeight:"650",color:"rgba(255,255,255,.76)"});
+    Object.assign(button.style,{width:"min(26vw,190px)",height:"min(26vw,190px)",minWidth:"118px",minHeight:"118px",border:"1px solid rgba(${accent.edge},0.78)",borderRadius:"32px",background:"rgba(3,11,17,0.24)",boxShadow:"0 18px 54px rgba(0,0,0,.18),0 0 30px rgba(${accent.rgb},.14)",cursor:"pointer",display:"grid",placeItems:"center",padding:"12px"});
+    const img=document.createElement("img"); img.src=${JSON.stringify(dataUri)}; img.alt="${label.replace('"','')}"; Object.assign(img.style,{width:"100%",height:"100%",objectFit:"contain",opacity:".72",filter:"saturate(104%) contrast(102%)"}); button.appendChild(img);
+    const title=document.createElement("strong"); title.textContent="MUNKATÉR KÉSZENLÉTBEN"; Object.assign(title.style,{fontSize:"clamp(14px,1.25vw,23px)",letterSpacing:".09em",color:"rgba(255,255,255,.86)",textShadow:"0 2px 12px rgba(0,0,0,.35)"});
+    const hint=document.createElement("span"); hint.textContent="${label.replace('"','')} · kattints az avatárra a munkatér használatához"; Object.assign(hint.style,{fontSize:"clamp(10px,.8vw,15px)",fontWeight:"650",color:"rgba(255,255,255,.66)"});
     button.addEventListener("click",()=>{ try { sessionStorage.setItem(key,"1"); } catch {} overlay.animate([{opacity:1},{opacity:0}],{duration:180,easing:"ease-out"}).finished.finally(()=>overlay.remove()); });
     wrap.append(button,title,hint); overlay.appendChild(wrap); document.documentElement.appendChild(overlay);
     return {locked:true,reason:"created"};
@@ -806,11 +808,22 @@ function toggleQuietMode() {
   return config.notifications.quietMode === true;
 }
 
+function dispatchShortcutAction(action, source = "local") {
+  if (!action) return false;
+  const now = Date.now();
+  const previous = Number(shortcutDispatchTimestamps.get(action) || 0);
+  if (now - previous < SHORTCUT_DEDUPE_MS) return false;
+  shortcutDispatchTimestamps.set(action, now);
+  handleChatGridShortcut(action);
+  send("shortcuts:runtime", { action, source, handledAt: new Date(now).toISOString() });
+  return true;
+}
+
 function handleLocalShortcutInput(event, input) {
   const action = shortcutActionFromInput(input);
-  if (!action || registeredGlobalShortcutActions.has(action)) return false;
+  if (!action) return false;
   event.preventDefault();
-  handleChatGridShortcut(action);
+  dispatchShortcutAction(action, "local");
   return true;
 }
 
@@ -1915,7 +1928,7 @@ function registerGlobalShortcuts() {
   for (const definition of SHORTCUT_DEFINITIONS) {
     let registered = false;
     try {
-      registered = globalShortcut.register(definition.accelerator, () => handleChatGridShortcut(definition.action)) === true;
+      registered = globalShortcut.register(definition.accelerator, () => dispatchShortcutAction(definition.action, "global")) === true;
       registered = registered && globalShortcut.isRegistered(definition.accelerator);
     } catch { registered = false; }
     if (registered) registeredGlobalShortcutActions.add(definition.action);

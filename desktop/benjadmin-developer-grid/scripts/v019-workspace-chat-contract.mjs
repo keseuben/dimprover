@@ -45,11 +45,12 @@ check(live.includes("chatConversationConfirmedAt") && main.includes("authoritati
 
 check(main.includes("async function applyWorkspaceStandbyLock"),"workspace standby lock has native controller");
 check(main.includes("__benjadmin_workspace_standby__"),"standby overlay is injected into ChatGPT WebContents");
-check(main.includes('opacity:".80"'),"standby avatar uses requested 80 percent opacity");
+check(main.includes('opacity:".72"'),"standby avatar is visually softened to preserve active-worker focus");
+check(main.includes('rgba(${accent.rgb},0.20)') && main.includes('brightness(94%)'),"standby overlay uses lighter low-emphasis glass");
 check(main.includes("workerVisualAccent(cell)"),"standby overlay follows worker avatar accent");
 check(main.includes("sessionStorage.setItem(key,\"1\")"),"avatar click unlock persists for current app tab session");
 check(main.includes("syncWorkspaceStandbyLocks(snapshot)"),"live snapshot automatically unlocks assigned worker");
 check(main.includes('cell.id === "central"'),"DevminAI central view excluded from primary workspace standby lock");
 check(!main.includes('NEW_PROJECT_CHAT") await view.webContents.loadURL'),"Developer Grid does not auto-create external ChatGPT project chats");
 
-console.log(`Developer Grid v0.1.9 workspace/chat contract PASS · ${checks}/${checks}`);
+console.log(`Developer Grid workspace/chat regression contract PASS · ${checks}/${checks}`);

@@ -30,8 +30,20 @@ check("main verifies globalShortcut registration", () => {
   assert.match(main, /globalShortcut\.register\(definition\.accelerator/);
   assert.match(main, /globalShortcut\.isRegistered\(definition\.accelerator\)/);
 });
-check("local fallback skips globally registered action", () => assert.match(main, /registeredGlobalShortcutActions\.has\(action\)/));
+check("local handler remains active even when global shortcut reports registered", () => {
+  assert.doesNotMatch(main, /registeredGlobalShortcutActions\.has\(action\).*return false/);
+  assert.match(main, /dispatchShortcutAction\(action, "local"\)/);
+});
 check("renderer does not execute Ctrl+Alt shortcut action", () => assert.doesNotMatch(renderer, /if \(localShortcutAction\(event\)\) return/));
+check("local shortcut rejects keyUp to prevent double toggle", () => {
+  assert.equal(shortcutActionFromInput({ type: "keyUp", control: true, alt: true, key: "1", code: "Digit1" }), "");
+  assert.equal(shortcutActionFromInput({ type: "keyDown", control: true, alt: true, key: "1", code: "Digit1" }), "cell-1");
+});
+check("global and local shortcut delivery is deduplicated", () => {
+  assert.match(main, /SHORTCUT_DEDUPE_MS = 220/);
+  assert.match(main, /shortcutDispatchTimestamps/);
+  assert.match(main, /dispatchShortcutAction\(definition\.action, "global"\)/);
+});
 check("05 DevminAI header plus exists", () => assert.match(html, /id="devminButton"[\s\S]*Ctrl\+Alt\+5/));
 check("old four-cell intersection plus overlay removed", () => assert.doesNotMatch(main, /createPlusOverlayWindow|plus:click|plusWindow/));
 console.log(`Developer Grid shortcut contract PASS · ${n}/${n}`);

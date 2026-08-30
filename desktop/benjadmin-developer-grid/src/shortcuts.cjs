@@ -19,7 +19,8 @@ for (const definition of SHORTCUT_DEFINITIONS) {
 }
 
 function shortcutActionFromInput(input) {
-  if (!input?.control || !input?.alt) return "";
+  if (!input || (input.type && input.type !== "keyDown")) return "";
+  if (!input.control || !input.alt) return "";
   const key = String(input.key || "");
   const code = String(input.code || "");
   return INPUT_TO_ACTION.get(key) || INPUT_TO_ACTION.get(code) || "";

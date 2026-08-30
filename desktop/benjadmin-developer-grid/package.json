@@ -1,6 +1,6 @@
 {
   "name": "@dimpro/benjadmin-developer-grid-desktop",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "description": "BENJADMIN Developer Grid – AI Engineering Control Center / AI Fejlesztésirányítási Központ",
   "main": "src/main.cjs",
