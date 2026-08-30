@@ -13,24 +13,21 @@
       <span class="brand-mark" aria-hidden="true">B</span>
       <strong>BENJADMIN</strong>
       <span>Developer Grid</span><small class="product-subtitle" title="AI Fejlesztésirányítási Központ">AI Engineering Control Center</small><span id="appVersionLabel" class="app-version-label" title="Futó Developer Grid verzió">v—</span>
-      <button id="layoutModeButton" class="titlebar-mini-button no-drag" type="button" title="4 / 2 cellás nézet (Ctrl+Alt+6)" aria-label="4 / 2 cellás nézet" disabled>▦</button>
+      <button id="devminButton" class="titlebar-mini-button devmin-header-button no-drag" type="button" title="05 DevminAI megjelenítése / elrejtése (Ctrl+Alt+5)" aria-label="05 DevminAI megjelenítése / elrejtése" disabled>+</button><button id="layoutModeButton" class="titlebar-mini-button no-drag" type="button" title="4 / 2 cellás nézet (Ctrl+Alt+6)" aria-label="4 / 2 cellás nézet" disabled>▦</button>
       <div id="splitControls" class="split-controls no-drag is-hidden" aria-label="Kétcellás nézet kiválasztása">
         <label>Bal <select id="splitLeftSelect" aria-label="Bal oldali csevegő"></select></label>
         <label>Jobb <select id="splitRightSelect" aria-label="Jobb oldali csevegő"></select></label>
       </div>
     </div>
     <div class="titlebar__center">
-      <span class="environment-badge">DEV · PROD DENY</span>
-      <span id="connectionDot" class="connection-dot is-offline" aria-hidden="true"></span>
-      <span id="connectionLabel">Zárolva</span>
-      <span id="workerSummaryLabel" class="worker-summary">0 dolgozik · 0 vár rád</span><span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
+      <span id="headerContextLabel" class="header-context-label">Nincs aktív fejlesztési feladat</span>
+      <span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
     </div>
     <div class="titlebar__tools no-drag">
-      <button id="dailyStartButton" class="daily-start-button" type="button" title="Napi fejlesztési indítás BenAI-val" aria-label="Napi fejlesztési indítás" disabled>▶ NAPI INDÍTÁS</button>
-      <button id="contextWorkspaceButton" class="context-workspace-button" type="button" title="BENJADMIN Fejlesztői Vezérlőpult · Central Core" aria-label="Context Workspace" disabled>▤ VEZÉRLŐPULT</button>
+      <button id="dailyStartButton" class="daily-start-button" type="button" title="Napi fejlesztési indítás BenAI-val" aria-label="Napi fejlesztési indítás" disabled>▶</button>
+      <button id="contextWorkspaceButton" class="context-workspace-button" type="button" title="BENJADMIN Fejlesztői Vezérlőpult · Central Core" aria-label="Context Workspace" disabled>▤</button>
       <button id="reviewButton" class="review-button" type="button" title="External Review Room · M.Forge-AI + V.Guard-AI" aria-label="External Review Room" disabled>
         <span class="review-button__avatars" aria-hidden="true"><img src="../assets/team/mforge.webp" alt="" /><img src="../assets/team/vguard.webp" alt="" /></span>
-        <span class="review-button__label">REVIEW</span>
         <b id="reviewCount" class="review-button__count">0</b>
       </button>
       <div class="workspace-zoom" aria-label="Közös ChatGPT zoom">
@@ -39,7 +36,7 @@
         <button id="workspaceZoomIn" class="icon-button" type="button" title="Összes csevegő nagyítása" aria-label="Összes csevegő nagyítása" disabled>+</button>
       </div>
       <button id="themeButton" class="icon-button" type="button" title="Világos / sötét mód" aria-label="Világos / sötét mód" disabled>☀</button>
-      <button id="settingsButton" class="global-settings-button" type="button" title="Globális Developer Grid-beállítások · 01–05" aria-label="Globális Developer Grid-beállítások" disabled><span aria-hidden="true">⚙</span><span class="global-settings-button__label">BEÁLLÍTÁSOK</span></button>
+      <button id="settingsButton" class="global-settings-button icon-only-header" type="button" title="Globális Developer Grid-beállítások · 01–05" aria-label="Globális Developer Grid-beállítások" disabled><span aria-hidden="true">⚙</span></button>
       <button id="lockButton" class="icon-button" type="button" title="Munkatér zárolása" aria-label="Zárolás" disabled>🔒</button>
       <span class="window-divider" aria-hidden="true"></span>
       <button class="window-button" data-window-action="minimize" type="button" title="Kis méret" aria-label="Kis méret">—</button>
@@ -62,7 +59,7 @@
           </div>
         </div>
         <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
-        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><div data-role="stage-timeline" class="stage-timeline" aria-label="Fejlesztési folyamat"><span data-stage-step="1">ELEMZÉS</span><span data-stage-step="2">FEJLESZT</span><span data-stage-step="3">TESZTEL</span><span data-stage-step="4">ELLENŐRIZ</span><span data-stage-step="5">BUILD</span><span data-stage-step="6">LEZÁR</span></div><span data-role="stage" class="stage-label is-hidden">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
       </header>
       <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
       <div class="completion-pulse" aria-hidden="true"></div>
@@ -81,7 +78,7 @@
           </div>
         </div>
         <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
-        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><div data-role="stage-timeline" class="stage-timeline" aria-label="Fejlesztési folyamat"><span data-stage-step="1">ELEMZÉS</span><span data-stage-step="2">FEJLESZT</span><span data-stage-step="3">TESZTEL</span><span data-stage-step="4">ELLENŐRIZ</span><span data-stage-step="5">BUILD</span><span data-stage-step="6">LEZÁR</span></div><span data-role="stage" class="stage-label is-hidden">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
       </header>
       <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
       <div class="completion-pulse" aria-hidden="true"></div>
@@ -100,7 +97,7 @@
           </div>
         </div>
         <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
-        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><div data-role="stage-timeline" class="stage-timeline" aria-label="Fejlesztési folyamat"><span data-stage-step="1">ELEMZÉS</span><span data-stage-step="2">FEJLESZT</span><span data-stage-step="3">TESZTEL</span><span data-stage-step="4">ELLENŐRIZ</span><span data-stage-step="5">BUILD</span><span data-stage-step="6">LEZÁR</span></div><span data-role="stage" class="stage-label is-hidden">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
       </header>
       <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
       <div class="completion-pulse" aria-hidden="true"></div>
@@ -119,7 +116,7 @@
           </div>
         </div>
         <div data-role="context-path" class="context-path">Nincs aktív BENJADMIN kontextus</div>
-        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><span data-role="stage" class="stage-label">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
+        <div class="cell-header__bottom"><span data-role="work-item" class="work-item">Várakozik</span><div class="cell-task-actions"><div data-role="stage-timeline" class="stage-timeline" aria-label="Fejlesztési folyamat"><span data-stage-step="1">ELEMZÉS</span><span data-stage-step="2">FEJLESZT</span><span data-stage-step="3">TESZTEL</span><span data-stage-step="4">ELLENŐRIZ</span><span data-stage-step="5">BUILD</span><span data-stage-step="6">LEZÁR</span></div><span data-role="stage" class="stage-label is-hidden">—</span><div data-role="stage-actions" class="stage-actions"></div><button type="button" class="handoff-button" data-handoff-action="prepare">ÁTADÁS</button><button type="button" class="task-launch-button is-hidden" data-task-launch-action="prepare">Indítás</button></div></div>
       </header>
       <div class="cell-empty" data-role="empty-state"><strong>A ChatGPT felület zárva.</strong><button type="button" data-cell-action="reopen">Megnyitás</button></div>
       <div class="completion-pulse" aria-hidden="true"></div>
@@ -140,6 +137,25 @@
       <div id="contextWorkspaceResize" class="context-workspace__resize" role="separator" aria-orientation="vertical" aria-label="Context Workspace szélességének módosítása"></div>
     </aside>
   </main>
+
+  <section id="systemHealthDrawer" class="system-health-drawer is-hidden" aria-label="Developer Grid System Health részletes panel">
+    <div class="system-health-drawer__head"><div><strong>SYSTEM HEALTH</strong><span id="systemHealthUpdated">Frissítésre vár</span></div><button id="systemHealthClose" type="button" title="System Health panel bezárása" aria-label="System Health panel bezárása">×</button></div>
+    <div id="systemHealthColumns" class="system-health-columns"></div>
+  </section>
+  <div id="systemHealthPeek" class="system-health-peek is-hidden" role="status"></div>
+  <footer id="developerStatusBar" class="developer-status-bar no-drag" aria-label="Developer Grid élő státuszsáv">
+    <span class="footer-status footer-env">DEV · PROD DENY</span>
+    <span class="footer-status"><i id="footerChatDot" class="footer-dot"></i><b>ChatGPT</b><em id="footerChatStatus">—</em></span>
+    <span class="footer-status"><i id="footerDeltaDot" class="footer-dot"></i><b>DELTA</b><em id="footerDeltaStatus">—</em></span>
+    <span class="footer-status"><i class="footer-dot is-online"></i><b>AI</b><em id="footerAiStatus">0 dolgozik · 0 vár</em></span>
+    <span class="footer-status"><i id="footerBuild01Dot" class="footer-dot"></i><b>BUILD01</b><em id="footerBuild01Status">—</em></span>
+    <span class="footer-status"><i id="footerBuild02Dot" class="footer-dot"></i><b>BUILD02</b><em id="footerBuild02Status">—</em></span>
+    <span class="footer-status"><i id="footerDevDot" class="footer-dot"></i><b>DEV VPS</b><em id="footerDevStatus">—</em></span>
+    <span class="footer-status"><i id="footerProdDot" class="footer-dot"></i><b>PROD</b><em id="footerProdStatus">—</em></span>
+    <span class="footer-status"><i id="footerDbDot" class="footer-dot"></i><b>DB</b><em id="footerDbStatus">—</em></span>
+    <span class="footer-status"><i id="footerStorageDot" class="footer-dot"></i><b>TÁRHELY</b><em id="footerStorageStatus">—</em></span>
+    <button id="systemHealthButton" class="system-health-button" type="button" title="System Health · hover: gyors állapot · kattintás: részletes panel" aria-label="System Health részletes panel"><span class="system-health-hex">B</span></button>
+  </footer>
 
 
   <section id="centralPanel" class="central-panel is-hidden" style="display:none !important" aria-hidden="true">

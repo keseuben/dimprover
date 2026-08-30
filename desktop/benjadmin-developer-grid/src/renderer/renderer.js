@@ -87,7 +87,10 @@ const state = {
   setupMode: false,
   lockoutTimer: null,
   review: { snapshot: null, selectedTaskId: null, loading: false, lastFetchedAt: 0, timer: null },
-  notificationDiagnostics: null
+  notificationDiagnostics: null,
+  shortcutDiagnostics: null,
+  chatConnections: {},
+  systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false }
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -105,11 +108,26 @@ function cellForWorker(workerCode) {
   return state.config?.cells?.find((cell) => cell.workerCode === workerCode) || null;
 }
 
+function setFooterDot(id, tone = "offline") {
+  const dot = $(id);
+  if (!dot) return;
+  dot.classList.remove("is-online", "is-warning", "is-error");
+  if (tone === "online") dot.classList.add("is-online");
+  else if (tone === "warning") dot.classList.add("is-warning");
+  else if (tone === "error") dot.classList.add("is-error");
+}
+
 function setConnectionUi(label, tone = "offline") {
   const dot = $("#connectionDot");
-  dot.classList.remove("is-online", "is-warning", "is-offline");
-  dot.classList.add(tone === "online" ? "is-online" : tone === "warning" ? "is-warning" : "is-offline");
-  $("#connectionLabel").textContent = label;
+  if (dot) {
+    dot.classList.remove("is-online", "is-warning", "is-offline");
+    dot.classList.add(tone === "online" ? "is-online" : tone === "warning" ? "is-warning" : "is-offline");
+  }
+  const labelNode = $("#connectionLabel");
+  if (labelNode) labelNode.textContent = label;
+  setFooterDot("#footerDeltaDot", tone === "online" ? "online" : tone === "warning" ? "warning" : "offline");
+  const footer = $("#footerDeltaStatus");
+  if (footer) footer.textContent = tone === "online" ? "AKTÍV" : tone === "warning" ? "VÁR" : "OFFLINE";
 }
 
 function renderSecurity(security) {
@@ -123,6 +141,7 @@ function renderSecurity(security) {
   $("#reviewButton").disabled = !unlocked;
   $("#lockButton").disabled = !unlocked;
   $("#layoutModeButton").disabled = !unlocked;
+  $("#devminButton").disabled = !unlocked;
   $("#workspaceZoomOut").disabled = !unlocked;
   $("#workspaceZoomValue").disabled = !unlocked;
   $("#workspaceZoomIn").disabled = !unlocked;
@@ -136,6 +155,7 @@ function renderSecurity(security) {
   $("#workerProfileLayer")?.classList.add("is-hidden");
   $("#reviewLayer")?.classList.add("is-hidden");
   stopReviewPolling();
+  stopSystemHealthPolling();
   state.setupMode = !security?.hasPassword;
   $("#authTitle").textContent = state.setupMode ? "Developer Grid jelszó létrehozása" : "Munkatér feloldása";
   $("#authDescription").textContent = state.setupMode
@@ -183,6 +203,8 @@ async function loadUnlockedState() {
   if (!state.connection.configured) setConnectionUi("BENJADMIN élő státuszkapcsolat nincs párosítva", "warning");
   renderConnectionSettings();
   startReviewPolling();
+  startSystemHealthPolling();
+  state.shortcutDiagnostics = await api.getShortcutStatus?.();
 }
 
 function activeTaskForWorker(workerCode) {
@@ -389,6 +411,19 @@ async function handleStageAction(cell, action, task, moduleContext, workItem) {
   }
 }
 
+function renderStageTimeline(cell, stageIndex, task) {
+  const host = cell.querySelector("[data-role=stage-timeline]");
+  if (!host) return;
+  const blocked = ["blocked", "failed"].includes(String(task?.status || "").toLowerCase());
+  for (const step of host.querySelectorAll("[data-stage-step]")) {
+    const index = Number(step.dataset.stageStep || 0);
+    step.classList.remove("is-complete", "is-active", "is-blocked");
+    if (stageIndex > 0 && index < stageIndex) step.classList.add("is-complete");
+    if (stageIndex > 0 && index === stageIndex) step.classList.add(blocked ? "is-blocked" : "is-active");
+    if (stageIndex === 6 && String(task?.status || "").toLowerCase() === "completed") step.classList.add("is-complete");
+  }
+}
+
 function renderStageActions(cell, stageIndex, task, moduleContext, workItem) {
   const host = cell.querySelector("[data-role=stage-actions]");
   if (!host) return;
@@ -476,10 +511,20 @@ function renderLive() {
     cell.dataset.workStageIndex = String(stageIndex || 0);
     cell.dataset.currentTaskTitle = String(task?.title || "").slice(0, 500);
     $("[data-role=stage]", cell).textContent = stage;
+    renderStageTimeline(cell, stageIndex, task);
     renderStageActions(cell, stageIndex, task, moduleContext, workItem);
   }
   const summary = $("#workerSummaryLabel");
   if (summary) summary.textContent = `${workingCount} dolgozik · ${needsAttentionCount} vár rád`;
+  const footerAi = $("#footerAiStatus");
+  if (footerAi) footerAi.textContent = `${workingCount} dolgozik · ${needsAttentionCount} vár`;
+  const activeTasks = (state.live?.tasks || []).filter((task) => ["ready","claimed","in_progress","testing","blocked"].includes(String(task?.status || "").toLowerCase()));
+  const headerContext = $("#headerContextLabel");
+  if (headerContext) {
+    const first = activeTasks[0];
+    headerContext.textContent = first ? `${activeTasks.length > 1 ? `${activeTasks.length} aktív · ` : ""}${first.title || "Aktív fejlesztési feladat"}` : "Nincs aktív fejlesztési feladat";
+    headerContext.title = headerContext.textContent;
+  }
   const openProfileCode = $("#workerProfileLayer")?.dataset.workerCode;
   if (openProfileCode && !$("#workerProfileLayer").classList.contains("is-hidden")) {
     const live = workerProfileLive(openProfileCode);
@@ -487,6 +532,89 @@ function renderLive() {
     $("#workerProfileModule").textContent = live.module;
     $("#workerProfileTask").textContent = live.task;
   }
+}
+
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  const units = ["B","KB","MB","GB","TB"]; let n = bytes; let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+  return `${n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${units[i]}`;
+}
+
+function metricText(value, suffix = "%") {
+  const n = Number(value); return Number.isFinite(n) ? `${Math.round(n * 10) / 10}${suffix}` : "—";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+}
+
+function healthServer(id) { return state.systemHealth.data?.servers?.find((server) => server.id === id) || null; }
+
+function renderSystemHealth() {
+  const health = state.systemHealth.data;
+  const serverStatus = (id, dotId, textId, formatter) => {
+    const server = healthServer(id); const ready = server?.state === "READY";
+    setFooterDot(dotId, ready ? "online" : server ? "warning" : "offline");
+    const text = $(textId); if (text) text.textContent = server ? formatter(server) : "—";
+  };
+  serverStatus("build01", "#footerBuild01Dot", "#footerBuild01Status", (s) => s.state === "READY" ? "READY" : "NINCS KAPCS.");
+  serverStatus("build02", "#footerBuild02Dot", "#footerBuild02Status", (s) => s.state === "READY" ? "READY" : "NINCS KAPCS.");
+  serverStatus("dev-vps", "#footerDevDot", "#footerDevStatus", (s) => Number.isFinite(Number(s.metrics?.diskPercent)) ? `${metricText(s.metrics.diskPercent)} disk` : s.state);
+  serverStatus("prod-vps", "#footerProdDot", "#footerProdStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
+  serverStatus("db-vps", "#footerDbDot", "#footerDbStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
+  const storage = health?.storage?.[0] || null;
+  setFooterDot("#footerStorageDot", storage?.state === "READY" ? "online" : storage ? "warning" : "offline");
+  if ($("#footerStorageStatus")) $("#footerStorageStatus").textContent = storage && Number.isFinite(Number(storage.percent)) ? metricText(storage.percent) : "—";
+
+  const columns = $("#systemHealthColumns");
+  if (columns && health) {
+    const serverColumn = (server) => {
+      const m = server?.metrics || {}; const ready = server?.state === "READY";
+      return `<article class="health-column"><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${ready ? "is-ready" : "is-warning"}">${escapeHtml(server?.state || "UNKNOWN")}</span><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${metricText(m.cpuPercent)}</dd><dt>RAM</dt><dd>${metricText(m.memoryPercent)}</dd><dt>Swap</dt><dd>${m.swapTotalBytes ? `${formatBytes(m.swapUsedBytes)} / ${formatBytes(m.swapTotalBytes)}` : "—"}</dd><dt>Tárhely</dt><dd>${metricText(m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds)/3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
+    };
+    const ordered = ["dev-vps","build01","build02","prod-vps","db-vps"].map(healthServer).filter(Boolean);
+    const storageHtml = (health.storage || []).map((item) => `<article class="health-column"><h4>${escapeHtml(item.label)}</h4><span class="health-state ${item.state === "READY" ? "is-ready" : "is-warning"}">${escapeHtml(item.state)}</span><dl><dt>Használt</dt><dd>${formatBytes(item.usedBytes)}</dd><dt>Kapacitás</dt><dd>${formatBytes(item.totalBytes)}</dd><dt>Foglaltság</dt><dd>${metricText(item.percent)}</dd></dl><p>Frissítve: ${escapeHtml(item.refreshedAt || "—")}</p></article>`).join("");
+    const connectionHtml = `<article class="health-column"><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-warning"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
+    columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + connectionHtml;
+    const updated = $("#systemHealthUpdated"); if (updated) updated.textContent = `Frissítve: ${health.generatedAt || "—"} · 30/60/300 mp cache`;
+  }
+  const peek = $("#systemHealthPeek");
+  if (peek) {
+    const alerts = (health?.servers || []).filter((s) => s.state !== "READY").map((s) => `${s.label}: ${s.state}`);
+    peek.innerHTML = `<strong>SYSTEM HEALTH · GYORSNÉZET</strong><p>${alerts.length ? escapeHtml(alerts.join(" · ")) : "Minden elérhető rendszer rendben."}<br>DEV: ${escapeHtml($("#footerDevStatus")?.textContent || "—")} · PROD: ${escapeHtml($("#footerProdStatus")?.textContent || "—")} · DB: ${escapeHtml($("#footerDbStatus")?.textContent || "—")}</p>`;
+  }
+}
+
+async function refreshSystemHealth(force = false) {
+  if (!state.security?.unlocked || state.systemHealth.loading) return;
+  if (!force && Date.now() - state.systemHealth.lastFetchedAt < 28_000) return;
+  state.systemHealth.loading = true;
+  try { const result = await api.getSystemHealth?.(); if (result?.ok && result.health) { state.systemHealth.data = result.health; state.systemHealth.lastFetchedAt = Date.now(); renderSystemHealth(); } }
+  finally { state.systemHealth.loading = false; }
+}
+
+function startSystemHealthPolling() {
+  if (state.systemHealth.timer) window.clearInterval(state.systemHealth.timer);
+  void refreshSystemHealth(true);
+  state.systemHealth.timer = window.setInterval(() => void refreshSystemHealth(false), 30_000);
+}
+
+function stopSystemHealthPolling() { if (state.systemHealth.timer) window.clearInterval(state.systemHealth.timer); state.systemHealth.timer = null; }
+
+async function setSystemHealthMode(mode) {
+  state.systemHealth.mode = mode;
+  await api.workspaceAction("system-health-mode", { mode });
+  if (mode !== "closed") void refreshSystemHealth(false);
+}
+
+function renderChatFooter() {
+  const configured = (state.config?.cells || []).filter((cell) => cell.enabled !== false);
+  const online = configured.filter((cell) => state.chatConnections[cell.id] === true).length;
+  const total = configured.length;
+  setFooterDot("#footerChatDot", total > 0 && online === total ? "online" : online > 0 ? "warning" : "offline");
+  if ($("#footerChatStatus")) $("#footerChatStatus").textContent = total ? `${online}/${total} online` : "—";
 }
 
 function renderLayout() {
@@ -507,6 +635,13 @@ function renderLayout() {
   }
   document.body.classList.toggle("has-maximized-cell", Boolean(state.layout.maximizedCellId));
   document.body.classList.toggle("has-split2", layoutMode === "split2" && !state.layout.maximizedCellId);
+  const healthMode = state.layout.systemHealthMode || state.systemHealth.mode || "closed";
+  state.systemHealth.mode = healthMode;
+  document.body.classList.toggle("has-health-peek", healthMode === "peek");
+  document.body.classList.toggle("has-health-drawer", healthMode === "expanded");
+  $("#systemHealthPeek")?.classList.toggle("is-hidden", healthMode !== "peek");
+  $("#systemHealthDrawer")?.classList.toggle("is-hidden", healthMode !== "expanded");
+  if (Number.isFinite(Number(state.layout.systemHealthDrawerHeight))) document.documentElement.style.setProperty("--health-drawer-h", `${Number(state.layout.systemHealthDrawerHeight)}px`);
   if (state.config) {
     state.config.layoutMode = layoutMode;
     state.config.splitView = split;
@@ -1067,29 +1202,6 @@ async function handleTaskLaunch(button) {
   }
 }
 
-function localShortcutAction(event) {
-  if (!event.ctrlKey || !event.altKey || !state.security?.unlocked) return false;
-  const map = {
-    "1": "cell-1",
-    "2": "cell-2",
-    "3": "cell-3",
-    "4": "cell-4",
-    "5": "central",
-    "6": "layout-toggle",
-    "9": "guide",
-    "n": "quiet-toggle",
-    "N": "quiet-toggle",
-    "z": "lock",
-    "Z": "lock",
-    " ": "shell-toggle"
-  };
-  const shortcut = map[event.key];
-  if (!shortcut) return false;
-  event.preventDefault();
-  void api.workspaceAction("shortcut", { shortcut });
-  return true;
-}
-
 
 function reviewTaskAttentionCount(snapshot) {
   const attention = new Set(["WORKER_DONE", "APPROVED", "HUMAN_DECISION_REQUIRED"]);
@@ -1320,6 +1432,12 @@ function bindUi() {
     setConnectionUi("BENJADMIN élő státuszkapcsolat nincs párosítva", "warning");
     showToast("Helyi kapcsolat törölve", "Szükség esetén a BENJADMIN párosítási oldalon vond vissza a régi eszközt is.");
   });
+  $("#devminButton").addEventListener("click", () => void api.workspaceAction("central-toggle"));
+  $("#systemHealthButton").addEventListener("mouseenter", () => { if (state.systemHealth.mode !== "expanded") void setSystemHealthMode("peek"); });
+  $("#systemHealthButton").addEventListener("mouseleave", () => window.setTimeout(() => { if (state.systemHealth.mode === "peek" && !$("#systemHealthButton").matches(":hover") && !$("#systemHealthPeek").matches(":hover")) void setSystemHealthMode("closed"); }, 90));
+  $("#systemHealthPeek").addEventListener("mouseleave", () => { if (state.systemHealth.mode === "peek") void setSystemHealthMode("closed"); });
+  $("#systemHealthButton").addEventListener("click", () => void setSystemHealthMode(state.systemHealth.mode === "expanded" ? "closed" : "expanded"));
+  $("#systemHealthClose").addEventListener("click", () => void setSystemHealthMode("closed"));
   $("#dailyStartButton").addEventListener("click", async () => {
     const result = await api.prepareDailyStart();
     if (!result?.ok) showToast("Napi indítás", result?.error || "A BenAI napi indítás nem készíthető elő.");
@@ -1382,7 +1500,6 @@ function bindUi() {
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (localShortcutAction(event)) return;
     if (event.key === "Escape" && !$("#reviewLayer").classList.contains("is-hidden")) { void closeReviewRoom(); return; }
     if (event.key === "Escape" && !$("#workerProfileLayer").classList.contains("is-hidden")) { void closeWorkerProfile(); return; }
     if (event.key === "Escape" && !$("#settingsLayer").classList.contains("is-hidden")) void closeSettings();
@@ -1404,6 +1521,7 @@ function bindIpc() {
     state.config = config;
     if (Number.isFinite(Number(config?.workspaceZoomPercent))) state.layout.workspaceZoomPercent = Number(config.workspaceZoomPercent);
     renderConfig();
+    renderChatFooter();
   });
   api.onLiveState((live) => { state.live = live; renderLive(); });
   api.onLiveConnection((connection) => {
@@ -1416,10 +1534,16 @@ function bindIpc() {
       else showToast(`${label}: nagy beillesztés sikertelen`, connection.error || "A hosszú tartalom nem illeszthető be biztonságosan.");
       return;
     }
+    if (connection?.kind === "chat") {
+      state.chatConnections[connection.cellId] = connection.ok === true;
+      renderChatFooter();
+      return;
+    }
     if (connection?.kind !== "benjadmin") return;
     state.connection.benjadmin = connection.ok === true;
     state.connection.configured = connection.configured === true;
     if (connection.mode) state.connection.mode = connection.mode;
+    if (connection.transport) state.connection.transport = connection.transport;
     if (!state.security?.unlocked) return;
     if (connection.ok && connection.transport === "GRID_DELTA_NATIVE") setConnectionUi("BENJADMIN · DELTA LIVE", "online");
     else if (connection.ok && connection.transport === "LEGACY_BOOTSTRAP_ONCE") setConnectionUi("BENJADMIN · COMPATIBILITY SNAPSHOT", "warning");

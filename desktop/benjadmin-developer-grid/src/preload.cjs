@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("chatGrid", {
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
+  getShortcutStatus: () => ipcRenderer.invoke("shortcuts:get-status"),
+  getSystemHealth: () => ipcRenderer.invoke("system-health:get"),
   getSecurityState: () => ipcRenderer.invoke("security:get-state"),
   setupPassword: (password) => ipcRenderer.invoke("security:setup", { password }),
   unlock: (password) => ipcRenderer.invoke("security:unlock", { password }),

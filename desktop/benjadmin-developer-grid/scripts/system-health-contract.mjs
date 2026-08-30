@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const desktop = path.resolve(here, "..");
+const repo = path.resolve(desktop, "../..");
+const html = fs.readFileSync(path.join(desktop, "src/renderer/index.html"), "utf8");
+const css = fs.readFileSync(path.join(desktop, "src/renderer/styles.css"), "utf8");
+const renderer = fs.readFileSync(path.join(desktop, "src/renderer/renderer.js"), "utf8");
+const main = fs.readFileSync(path.join(desktop, "src/main.cjs"), "utf8");
+const preload = fs.readFileSync(path.join(desktop, "src/preload.cjs"), "utf8");
+const health = fs.readFileSync(path.join(repo, "app/lib/developer-grid/system-health.ts"), "utf8");
+const route = fs.readFileSync(path.join(repo, "app/api/dev/grid/system-health/route.ts"), "utf8");
+let n = 0;
+const check = (label, fn) => { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); };
+
+check("footer is one persistent row", () => { assert.match(html, /id="developerStatusBar"/); assert.match(css, /\.developer-status-bar[\s\S]*height:var\(--developer-footer-h\)/); });
+check("footer contains required health domains", () => { for (const id of ["footerChatStatus","footerDeltaStatus","footerAiStatus","footerBuild01Status","footerBuild02Status","footerDevStatus","footerProdStatus","footerDbStatus","footerStorageStatus"]) assert.match(html, new RegExp(id)); });
+check("footer keeps DEV PROD DENY", () => assert.match(html, /DEV · PROD DENY/));
+check("System Health hex entry point in lower right footer", () => { assert.match(html, /id="systemHealthButton"/); assert.match(html, /system-health-hex/); assert.match(css, /\.system-health-button[\s\S]*margin-left:auto/); });
+check("hover uses compact peek only", () => { assert.match(renderer, /mouseenter[\s\S]*setSystemHealthMode\("peek"\)/); assert.match(html, /id="systemHealthPeek"/); });
+check("click opens full-width expanded drawer", () => { assert.match(renderer, /systemHealthButton[\s\S]*"expanded"/); assert.match(css, /\.system-health-drawer[\s\S]*left:0; right:0/); });
+check("health drawer height is responsive not fixed 5x", () => { assert.match(main, /Math\.max\(180, Math\.min\(320/); assert.match(renderer, /--health-drawer-h/); });
+check("native ChatGPT bounds reserve footer and health panel", () => { assert.match(main, /systemHealthReserveHeight/); assert.match(main, /workspaceHeight/); assert.match(main, /DEVELOPER_FOOTER_HEIGHT/); });
+check("health endpoint uses Developer Grid read auth", () => assert.match(route, /isDeveloperGridReadAuthorized/));
+check("health telemetry does not query Supabase", () => { assert.doesNotMatch(health, /@supabase|createClient\(|\.from\(/i); assert.match(health, /SERVER_CACHE_NO_SUPABASE_POLLING/); });
+check("cache policy is 30s DEV-build 60s PROD-DB-disk 5min storage", () => { assert.match(health, /SERVER_TTL_MS = 30_000/); assert.match(health, /PROTECTED_SERVER_TTL_MS = 60_000/); assert.match(health, /DISK_TTL_MS = 60_000/); assert.match(health, /STORAGE_TTL_MS = 300_000/); });
+check("PROD monitoring is read-only HTTPS probe", () => { assert.match(health, /prod-vps/); assert.match(health, /probeHttp\(PROD_URL\)/); assert.doesNotMatch(health, /ssh-prod|restart|POST|PUT|DELETE/); });
+check("DB monitoring is read-only TCP probe", () => { assert.match(health, /db-vps/); assert.match(health, /probeTcp\(DB_HOST, DB_PORT\)/); });
+check("PROD and DB can consume existing control snapshot", () => { assert.match(health, /BENJADMIN_INFRA_SNAPSHOT_FILE/); assert.match(health, /benjadmin-infrastructure-snapshot\.json/); });
+check("desktop health IPC uses paired read credential", () => { assert.match(main, /x-benjadmin-chatgrid-device-token/); assert.match(main, /api\/dev\/grid\/system-health/); assert.match(preload, /getSystemHealth/); });
+check("all four worker headers have six-step timeline", () => { assert.equal((html.match(/data-role="stage-timeline"/g) || []).length, 4); assert.equal((html.match(/data-stage-step="6"/g) || []).length, 4); });
+check("timeline is driven by authoritative stage index", () => { assert.match(renderer, /renderStageTimeline\(cell, stageIndex, task\)/); assert.match(renderer, /cell\.dataset\.workStageIndex/); });
+check("header center no longer duplicates footer health status", () => { const center = html.match(/<div class="titlebar__center">([\s\S]*?)<\/div>/)?.[1] || ""; assert.match(center, /headerContextLabel/); assert.doesNotMatch(center, /DELTA|PROD DENY|dolgozik|connectionLabel/); });
+check("header primary action buttons are icon-only", () => { assert.doesNotMatch(html, />▶ NAPI INDÍTÁS</); assert.doesNotMatch(html, />▤ VEZÉRLŐPULT</); assert.doesNotMatch(html, />BEÁLLÍTÁSOK</); assert.doesNotMatch(html, />REVIEW</); });
+console.log(`Developer Grid System Health / UI contract PASS · ${n}/${n}`);

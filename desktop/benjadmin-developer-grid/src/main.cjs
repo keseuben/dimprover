@@ -15,11 +15,14 @@ const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fe
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
+const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
 const APP_BAR_HEIGHT = 38;
-const CELL_HEADER_HEIGHT = 84;
+const CELL_HEADER_HEIGHT = 108;
+const DEVELOPER_FOOTER_HEIGHT = 30;
+const SYSTEM_HEALTH_PEEK_HEIGHT = 82;
 const CENTRAL_HEADER_HEIGHT = 52;
 const GRID_GAP = 2;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -47,8 +50,10 @@ let lockedUntil = 0;
 let maximizedCellId = null;
 let uiOverlayVisible = false;
 let centralVisible = false;
-let plusWindow = null;
+let systemHealthMode = "closed";
 let centralWindow = null;
+const registeredGlobalShortcutActions = new Set();
+let shortcutRegistrationState = [];
 let centralProfileVisible = false;
 let guideWindow = null;
 let contextWorkspaceWindow = null;
@@ -496,13 +501,13 @@ function lockWorkspace(reason = "manual") {
   unlocked = false;
   maximizedCellId = null;
   centralVisible = false;
+  systemHealthMode = "closed";
   uiOverlayVisible = false;
   stopLiveClient();
   cancelChatGridPairing();
   destroyChatViews();
   if (centralWindow && !centralWindow.isDestroyed()) centralWindow.hide();
   if (guideWindow && !guideWindow.isDestroyed()) guideWindow.hide();
-  updatePlusOverlay();
   send("layout:state", { maximizedCellId: null, openCellIds: [] });
   send("security:state", { ...securityState(), reason });
 }
@@ -715,25 +720,8 @@ function toggleQuietMode() {
 }
 
 function handleLocalShortcutInput(event, input) {
-  if (!input?.control || !input?.alt) return false;
-  const key = String(input.key || "");
-  const map = {
-    "1": "cell-1",
-    "2": "cell-2",
-    "3": "cell-3",
-    "4": "cell-4",
-    "5": "central",
-    "6": "layout-toggle",
-    "9": "guide",
-    "n": "quiet-toggle",
-    "N": "quiet-toggle",
-    "z": "lock",
-    "Z": "lock",
-    " ": "shell-toggle",
-    "Space": "shell-toggle"
-  };
-  const action = map[key];
-  if (!action) return false;
+  const action = shortcutActionFromInput(input);
+  if (!action || registeredGlobalShortcutActions.has(action)) return false;
   event.preventDefault();
   handleChatGridShortcut(action);
   return true;
@@ -780,19 +768,7 @@ function createUsageGuideWindow() {
     }
   });
   guideWindow.loadFile(path.join(__dirname, "renderer", "guide.html"));
-  guideWindow.webContents.on("before-input-event", (event, input) => {
-    if (!input?.control || !input?.alt) return;
-    const key = String(input.key || "");
-    if (key === "9" || key === "Digit9") {
-      event.preventDefault();
-      toggleUsageGuide(false);
-      return;
-    }
-    if (["n", "N", "KeyN"].includes(key)) {
-      event.preventDefault();
-      toggleQuietMode();
-    }
-  });
+  guideWindow.webContents.on("before-input-event", (event, input) => { handleLocalShortcutInput(event, input); });
   guideWindow.on("close", (event) => {
     if (!appQuitting) { event.preventDefault(); guideWindow.hide(); }
   });
@@ -1571,6 +1547,23 @@ function closeChatView(cellId) {
   updateViewBounds();
 }
 
+function systemHealthDrawerHeight(height) {
+  return Math.max(180, Math.min(320, Math.round(Number(height || 0) * 0.26)));
+}
+
+function systemHealthReserveHeight(height) {
+  if (systemHealthMode === "expanded") return DEVELOPER_FOOTER_HEIGHT + systemHealthDrawerHeight(height);
+  if (systemHealthMode === "peek") return DEVELOPER_FOOTER_HEIGHT + SYSTEM_HEALTH_PEEK_HEIGHT;
+  return DEVELOPER_FOOTER_HEIGHT;
+}
+
+function setSystemHealthMode(mode) {
+  const next = ["closed", "peek", "expanded"].includes(String(mode || "")) ? String(mode) : "closed";
+  if (systemHealthMode === next) return;
+  systemHealthMode = next;
+  updateViewBounds();
+}
+
 function getCellRect(index, width, height) {
   const gridHeight = Math.max(0, height - APP_BAR_HEIGHT);
   const halfW = Math.floor((width - GRID_GAP) / 2);
@@ -1621,6 +1614,8 @@ function updateViewBounds() {
     return;
   }
   const [width, height] = shellWindow.getContentSize();
+  const reservedBottom = systemHealthReserveHeight(height);
+  const workspaceHeight = Math.max(APP_BAR_HEIGHT + CELL_HEADER_HEIGHT + 20, height - reservedBottom);
   const splitMode = config.layoutMode === "split2";
   const dockedContext = contextWorkspaceDocked();
   const requestedContextWidth = Number(config?.contextWorkspace?.width) || 500;
@@ -1640,11 +1635,11 @@ function updateViewBounds() {
     }
     view.setVisible(true);
     let rect;
-    if (maximizedCellId === cell.id) rect = { x: 0, y: APP_BAR_HEIGHT, width, height: Math.max(0, height - APP_BAR_HEIGHT) };
-    else if (splitMode && dockedContext) { rect = getSplitDockedContextRect(cell.id === splitLeft ? "left" : "right", width, height, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
-    else if (splitMode) rect = getSplitRect(cell.id === splitLeft ? "left" : "right", width, height);
-    else if (dockedContext) { rect = getDockedContextCellRect(index, width, height, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
-    else rect = getCellRect(index, width, height);
+    if (maximizedCellId === cell.id) rect = { x: 0, y: APP_BAR_HEIGHT, width, height: Math.max(0, workspaceHeight - APP_BAR_HEIGHT) };
+    else if (splitMode && dockedContext) { rect = getSplitDockedContextRect(cell.id === splitLeft ? "left" : "right", width, workspaceHeight, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
+    else if (splitMode) rect = getSplitRect(cell.id === splitLeft ? "left" : "right", width, workspaceHeight);
+    else if (dockedContext) { rect = getDockedContextCellRect(index, width, workspaceHeight, requestedContextWidth); effectiveContextWidth = rect.panelWidth; }
+    else rect = getCellRect(index, width, workspaceHeight);
     view.setBounds({
       x: rect.x,
       y: rect.y + CELL_HEADER_HEIGHT,
@@ -1660,9 +1655,11 @@ function updateViewBounds() {
     splitView: config.splitView,
     workspaceZoomPercent: config.workspaceZoomPercent,
     openCellIds: [...chatViews.keys()].filter((id) => id !== "central"),
-    contextWorkspace: { ...config.contextWorkspace, docked: dockedContext, effectiveWidth: effectiveContextWidth }
+    contextWorkspace: { ...config.contextWorkspace, docked: dockedContext, effectiveWidth: effectiveContextWidth },
+    systemHealthMode,
+    systemHealthDrawerHeight: systemHealthDrawerHeight(height),
+    developerFooterHeight: DEVELOPER_FOOTER_HEIGHT
   });
-  updatePlusOverlay();
 }
 
 function toggleCentralChat(force) {
@@ -1680,7 +1677,6 @@ function toggleCentralChat(force) {
     win.hide();
   }
   centralVisible = shouldShow;
-  updatePlusOverlay();
   send("layout:state", { centralVisible, maximizedCellId, layoutMode: config.layoutMode, splitView: config.splitView });
 }
 
@@ -1764,20 +1760,16 @@ function handleChatGridShortcut(accelerator) {
 }
 
 function registerGlobalShortcuts() {
-  const shortcuts = [
-    ["CommandOrControl+Alt+Space", "shell-toggle"],
-    ["CommandOrControl+Alt+Z", "lock"],
-    ["CommandOrControl+Alt+5", "central"],
-    ["CommandOrControl+Alt+6", "layout-toggle"],
-    ["CommandOrControl+Alt+9", "guide"],
-    ["CommandOrControl+Alt+N", "quiet-toggle"],
-    ["CommandOrControl+Alt+1", "cell-1"],
-    ["CommandOrControl+Alt+2", "cell-2"],
-    ["CommandOrControl+Alt+3", "cell-3"],
-    ["CommandOrControl+Alt+4", "cell-4"]
-  ];
-  for (const [key, action] of shortcuts) {
-    try { globalShortcut.register(key, () => handleChatGridShortcut(action)); } catch { /* shortcut unavailable */ }
+  registeredGlobalShortcutActions.clear();
+  shortcutRegistrationState = [];
+  for (const definition of SHORTCUT_DEFINITIONS) {
+    let registered = false;
+    try {
+      registered = globalShortcut.register(definition.accelerator, () => handleChatGridShortcut(definition.action)) === true;
+      registered = registered && globalShortcut.isRegistered(definition.accelerator);
+    } catch { registered = false; }
+    if (registered) registeredGlobalShortcutActions.add(definition.action);
+    shortcutRegistrationState.push({ accelerator: definition.accelerator, action: definition.action, registered, localFallback: !registered });
   }
 }
 
@@ -1933,68 +1925,6 @@ function handleWorkerEvent(event) {
   }
 }
 
-function shouldShowPlusOverlay() {
-  return Boolean(
-    shellWindow && !shellWindow.isDestroyed() &&
-    plusWindow && !plusWindow.isDestroyed() &&
-    unlocked && !uiOverlayVisible && !maximizedCellId &&
-    config?.layoutMode !== "split2" && shellWindow.isVisible() && !shellWindow.isMinimized()
-  );
-}
-
-function positionPlusOverlay() {
-  if (!shellWindow || shellWindow.isDestroyed() || !plusWindow || plusWindow.isDestroyed()) return;
-  const bounds = shellWindow.getContentBounds();
-  const size = 24;
-  const gridHeight = Math.max(0, bounds.height - APP_BAR_HEIGHT);
-  const intersectionX = bounds.x + bounds.width / 2;
-  const intersectionY = bounds.y + APP_BAR_HEIGHT + gridHeight / 2;
-
-  // A 24×24 px overlay vizuális közepe pontosan a négy cella geometriai
-  // metszéspontjára kerül; a cellákból nem vesz el helyet.
-  const x = Math.round(intersectionX - size / 2);
-  const y = Math.round(intersectionY - size / 2);
-  plusWindow.setBounds({ x, y, width: size, height: size }, false);
-}
-
-function updatePlusOverlay() {
-  if (!plusWindow || plusWindow.isDestroyed()) return;
-  positionPlusOverlay();
-  if (shouldShowPlusOverlay()) plusWindow.showInactive();
-  else plusWindow.hide();
-}
-
-function createPlusOverlayWindow() {
-  if (!shellWindow || shellWindow.isDestroyed() || plusWindow) return;
-  plusWindow = new BrowserWindow({
-    parent: shellWindow,
-    width: 24,
-    height: 24,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: false,
-    minimizable: false,
-    maximizable: false,
-    closable: false,
-    skipTaskbar: true,
-    show: false,
-    hasShadow: false,
-    backgroundColor: "#00000000",
-    webPreferences: {
-      preload: path.join(__dirname, "plus-preload.cjs"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true
-    }
-  });
-  plusWindow.setMenuBarVisibility(false);
-  plusWindow.loadFile(path.join(__dirname, "renderer", "plus.html"));
-  plusWindow.on("closed", () => { plusWindow = null; });
-  plusWindow.webContents.once("did-finish-load", updatePlusOverlay);
-}
-
 function createShellWindow() {
   shellWindow = new BrowserWindow({
     title: APP_TITLE,
@@ -2015,14 +1945,13 @@ function createShellWindow() {
     }
   });
   shellWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+  shellWindow.webContents.on("before-input-event", (event, input) => { handleLocalShortcutInput(event, input); });
   shellWindow.once("ready-to-show", () => {
     shellWindow.maximize();
     shellWindow.show();
-    createPlusOverlayWindow();
-    updatePlusOverlay();
-  });
-  shellWindow.on("resize", () => { updateViewBounds(); updatePlusOverlay(); positionUsageGuideWindow(); });
-  shellWindow.on("move", () => { updatePlusOverlay(); positionUsageGuideWindow(); });
+    });
+  shellWindow.on("resize", () => { updateViewBounds(); positionUsageGuideWindow(); });
+  shellWindow.on("move", () => { positionUsageGuideWindow(); });
   shellWindow.on("maximize", () => send("layout:state", { maximizedCellId, windowMaximized: true, openCellIds: [...chatViews.keys()] }));
   shellWindow.on("unmaximize", () => send("layout:state", { maximizedCellId, windowMaximized: false, openCellIds: [...chatViews.keys()] }));
   shellWindow.on("focus", () => shellWindow?.flashFrame(false));
@@ -2030,8 +1959,6 @@ function createShellWindow() {
     stopLiveClient();
     cancelChatGridPairing();
     destroyChatViews();
-    if (plusWindow && !plusWindow.isDestroyed()) plusWindow.destroy();
-    plusWindow = null;
     if (centralWindow && !centralWindow.isDestroyed()) centralWindow.destroy();
     centralWindow = null;
     if (guideWindow && !guideWindow.isDestroyed()) guideWindow.destroy();
@@ -2042,12 +1969,27 @@ function createShellWindow() {
   });
 }
 
+async function fetchDeveloperGridSystemHealth() {
+  if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+  const credential = liveCredential();
+  if (!credential.token) return { ok: false, error: "A Developer Grid nincs párosítva." };
+  const headers = credential.mode === "device"
+    ? { "x-benjadmin-chatgrid-device-token": credential.token, accept: "application/json" }
+    : { "x-dimpro-dev-reporter-key": credential.token, accept: "application/json" };
+  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`${config.benjadminBaseUrl}/api/dev/grid/system-health`, { method: "GET", headers, cache: "no-store", signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) return { ok: false, error: payload?.error || `System Health HTTP ${response.status}` };
+    return { ok: true, health: payload.health };
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "System Health kapcsolat sikertelen." }; }
+  finally { clearTimeout(timer); }
+}
+
 function registerIpc() {
   ipcMain.handle("app:get-version", () => ({ ok: true, version: app.getVersion() }));
-  ipcMain.on("plus:click", (event) => {
-    if (!plusWindow || plusWindow.isDestroyed() || event.sender.id !== plusWindow.webContents.id || !unlocked) return;
-    toggleCentralChat();
-  });
+  ipcMain.handle("shortcuts:get-status", () => ({ ok: true, shortcuts: shortcutRegistrationState.map((item) => ({ ...item })) }));
+  ipcMain.handle("system-health:get", () => fetchDeveloperGridSystemHealth());
   ipcMain.handle("security:get-state", () => securityState());
   ipcMain.handle("security:setup", (_event, payload) => {
     if (loadPasswordRecord(userDataPath())) return { ok: false, error: "A jelszó már be van állítva." };
@@ -2344,6 +2286,7 @@ function registerIpc() {
     else if (action === "set-split") {
       if (!setSplitSlot(payload?.side, payload?.chatId)) return { ok: false, error: "A kétcellás nézet bal és jobb oldala nem lehet ugyanaz a csevegő." };
     } else if (action === "central-toggle") toggleCentralChat();
+    else if (action === "system-health-mode") setSystemHealthMode(payload?.mode);
     else if (action === "shortcut") handleChatGridShortcut(payload?.shortcut);
     else if (action === "shell-toggle") toggleShellTaskbar();
     else return { ok: false, error: "Ismeretlen munkatér-művelet." };
