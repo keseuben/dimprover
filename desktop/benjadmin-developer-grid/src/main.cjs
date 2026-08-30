@@ -11,7 +11,7 @@ const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { buildBenAiDailyStartPrompt } = require("./daily-start/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
@@ -20,8 +20,8 @@ const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.c
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
 const APP_BAR_HEIGHT = 38;
-const CELL_HEADER_HEIGHT = 108;
-const DEVELOPER_FOOTER_HEIGHT = 30;
+const CELL_HEADER_HEIGHT = 96;
+const DEVELOPER_FOOTER_HEIGHT = 34;
 const SYSTEM_HEALTH_PEEK_HEIGHT = 82;
 const CENTRAL_HEADER_HEIGHT = 52;
 const GRID_GAP = 2;
@@ -148,22 +148,25 @@ function loadTaskLaunchRecords() {
   return taskLaunchRecords;
 }
 
-function saveTaskLaunchRecord(task, workerCode, mode) {
+function saveTaskLaunchPatch(task, workerCode, patch = {}) {
   const records = loadTaskLaunchRecords();
-  const preparedAt = new Date().toISOString();
-  records[String(task.id)] = {
-    taskId: String(task.id), workerCode: String(workerCode || "").toUpperCase(),
-    taskTitle: String(task.title || "").slice(0, 500), preparedAt,
-    mode: mode === "inserted" ? "inserted" : "clipboard"
+  const taskId = String(task?.id || patch?.taskId || "");
+  if (!taskId) throw new Error("TASK_LAUNCH_RECORD_TASK_ID_MISSING");
+  const previous = records[taskId] || {};
+  records[taskId] = {
+    ...previous, ...patch, taskId,
+    workerCode: String(workerCode || patch?.workerCode || previous?.workerCode || "").toUpperCase(),
+    taskTitle: String(task?.title || patch?.taskTitle || previous?.taskTitle || "").slice(0, 500),
+    updatedAt: new Date().toISOString(),
   };
-  const entries = Object.values(records).sort((a, b) => String(b.preparedAt || "").localeCompare(String(a.preparedAt || ""))).slice(0, 120);
+  const entries = Object.values(records).sort((a, b) => String(b.updatedAt || b.preparedAt || "").localeCompare(String(a.updatedAt || a.preparedAt || ""))).slice(0, 120);
   taskLaunchRecords = Object.fromEntries(entries.map((item) => [item.taskId, item]));
-  fs.mkdirSync(userDataPath(), { recursive: true });
-  const file = taskLaunchStatePath();
-  const temp = `${file}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify({ version: 1, records: taskLaunchRecords }, null, 2), { mode: 0o600 });
-  fs.renameSync(temp, file);
-  return taskLaunchRecords[String(task.id)];
+  persistJsonAtomic(taskLaunchStatePath(), { version: 3, records: taskLaunchRecords });
+  return taskLaunchRecords[taskId];
+}
+
+function saveTaskLaunchRecord(task, workerCode, mode) {
+  return saveTaskLaunchPatch(task, workerCode, { preparedAt: new Date().toISOString(), mode: mode === "inserted" ? "inserted" : "clipboard" });
 }
 
 function handoffRecordKey(workerCode, chatSessionId) {
@@ -282,7 +285,16 @@ function contextPackPromptForWorker(workerCode) {
 function enrichSnapshotWithTaskLaunch(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.tasks)) return snapshot;
   const records = loadTaskLaunchRecords();
-  return { ...snapshot, tasks: snapshot.tasks.map((task) => ({ ...task, chatLaunch: records[String(task.id)] || null })) };
+  return { ...snapshot, tasks: snapshot.tasks.map((task) => {
+    const authoritative = task?.chatLaunchMode ? {
+      chatLaunchMode: task.chatLaunchMode, previousConversationId: task.chatPreviousConversationId || null,
+      conversationBound: Boolean(task.chatConversationId), chatSessionId: task.chatConversationId || null,
+      chatConversationUrl: task.chatConversationUrl || null, chatTitle: task.chatConversationTitle || null,
+      chatConversationConfirmedAt: task.chatConversationConfirmedAt || null,
+    } : null;
+    const local = records[String(task.id)] || null;
+    return { ...task, chatLaunch: authoritative || local ? { ...(authoritative || {}), ...(local || {}) } : null };
+  }) };
 }
 
 function readReporterKey() {
@@ -533,6 +545,14 @@ function isChatConversationUrl(value) {
   } catch { return false; }
 }
 
+function chatConversationIdFromUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!isChatGptUrl(url.href)) return "";
+    return url.pathname.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/)?.[1] || "";
+  } catch { return ""; }
+}
+
 function rememberChatNavigation(chatId, url) {
   if (!config?.rememberLastConversation || !isChatConversationUrl(url)) return false;
   const target = chatConfigById(chatId);
@@ -680,6 +700,73 @@ function applyAllChatWatermarks() {
   for (const [chatId, view] of chatViews.entries()) {
     const cell = chatConfigById(chatId);
     if (cell) void applyChatWatermark(cell, view);
+  }
+}
+
+function normalizeDesktopWorkerCode(value) {
+  const code = String(value || "").toUpperCase();
+  return code === "BENJAMINAI" ? "BENAI" : code;
+}
+
+function workerHasAssignedDevelopment(snapshot, workerCode) {
+  const code = normalizeDesktopWorkerCode(workerCode);
+  const activePresence = (snapshot?.workerPresence || []).some((item) => normalizeDesktopWorkerCode(item?.workerCode) === code && item?.active !== false && String(item?.lifecycleState || "").toUpperCase() !== "COMPLETED");
+  if (activePresence) return true;
+  return (snapshot?.tasks || []).some((task) => {
+    const assigned = normalizeDesktopWorkerCode(task?.assignedWorkerId || task?.requestedWorkerId);
+    const status = String(task?.status || "").toLowerCase();
+    return assigned === code && !["completed", "closed", "cancelled", "canceled", "failed"].includes(status);
+  });
+}
+
+async function applyWorkspaceStandbyLock(cell, view, shouldLock) {
+  if (!cell || cell.id === "central" || !view || view.webContents.isDestroyed()) return;
+  const dataUri = avatarDataUri(avatarAssetForChat(cell));
+  if (!dataUri) return;
+  const accent = workerVisualAccent(cell);
+  const key = `benjadmin-workspace-unlocked:${cell.id}`;
+  const label = String(cell.label || cell.workerCode || "Kódmérnök");
+  const script = `(() => {
+    const id = "__benjadmin_workspace_standby__";
+    const existing = document.getElementById(id);
+    const key = ${JSON.stringify(key)};
+    const shouldLock = ${shouldLock ? "true" : "false"};
+    if (!shouldLock) {
+      try { sessionStorage.setItem(key, "1"); } catch {}
+      existing?.remove();
+      return { locked:false, reason:"active-task" };
+    }
+    try { if (sessionStorage.getItem(key) === "1") { existing?.remove(); return { locked:false, reason:"manual-unlock" }; } } catch {}
+    if (existing) return { locked:true, reason:"already-present" };
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.setAttribute("data-benjadmin-workspace-standby", "true");
+    Object.assign(overlay.style, {
+      position:"fixed", inset:"0", zIndex:"2147483647", display:"grid", placeItems:"center",
+      background:"linear-gradient(145deg, rgba(${accent.rgb},0.34), rgba(5,14,22,0.48))",
+      backdropFilter:"blur(1px) saturate(78%) brightness(82%)", WebkitBackdropFilter:"blur(1px) saturate(78%) brightness(82%)",
+      pointerEvents:"auto", userSelect:"none"
+    });
+    const wrap = document.createElement("div");
+    Object.assign(wrap.style,{display:"grid",placeItems:"center",gap:"14px",textAlign:"center",fontFamily:"Inter,Segoe UI,Arial,sans-serif"});
+    const button = document.createElement("button");
+    button.type="button"; button.title="Munkatér feloldása"; button.setAttribute("aria-label","${label.replace('"','')} munkatér feloldása");
+    Object.assign(button.style,{width:"min(26vw,190px)",height:"min(26vw,190px)",minWidth:"118px",minHeight:"118px",border:"1px solid rgba(${accent.edge},0.78)",borderRadius:"32px",background:"rgba(3,11,17,0.38)",boxShadow:"0 22px 70px rgba(0,0,0,.28),0 0 42px rgba(${accent.rgb},.20)",cursor:"pointer",display:"grid",placeItems:"center",padding:"12px"});
+    const img=document.createElement("img"); img.src=${JSON.stringify(dataUri)}; img.alt="${label.replace('"','')}"; Object.assign(img.style,{width:"100%",height:"100%",objectFit:"contain",opacity:".80",filter:"saturate(112%) contrast(105%)"}); button.appendChild(img);
+    const title=document.createElement("strong"); title.textContent="MUNKATÉR KÉSZENLÉTBEN"; Object.assign(title.style,{fontSize:"clamp(14px,1.25vw,23px)",letterSpacing:".09em",color:"rgba(255,255,255,.92)",textShadow:"0 2px 12px rgba(0,0,0,.35)"});
+    const hint=document.createElement("span"); hint.textContent="${label.replace('"','')} · kattints az avatárra a munkatér használatához"; Object.assign(hint.style,{fontSize:"clamp(10px,.8vw,15px)",fontWeight:"650",color:"rgba(255,255,255,.76)"});
+    button.addEventListener("click",()=>{ try { sessionStorage.setItem(key,"1"); } catch {} overlay.animate([{opacity:1},{opacity:0}],{duration:180,easing:"ease-out"}).finished.finally(()=>overlay.remove()); });
+    wrap.append(button,title,hint); overlay.appendChild(wrap); document.documentElement.appendChild(overlay);
+    return {locked:true,reason:"created"};
+  })()`;
+  try { await view.webContents.executeJavaScript(script, true); } catch { /* készenléti vizuál nem blokkolhatja a runtime-ot */ }
+}
+
+function syncWorkspaceStandbyLocks(snapshot = latestLiveSnapshot) {
+  for (const cell of config?.cells || []) {
+    const view = chatViews.get(cell.id);
+    if (!view || view.webContents.isDestroyed()) continue;
+    void applyWorkspaceStandbyLock(cell, view, !workerHasAssignedDevelopment(snapshot, cell.workerCode));
   }
 }
 
@@ -922,6 +1009,7 @@ function createChatView(cell) {
   view.webContents.on("did-finish-load", () => {
     applyWorkspaceZoom();
     void applyChatWatermark(cell, view);
+    if (cell.id !== "central") void applyWorkspaceStandbyLock(cell, view, !workerHasAssignedDevelopment(latestLiveSnapshot, cell.workerCode));
     send("live:connection", { kind: "chat", cellId: cell.id, ok: true });
     setTimeout(() => void selectLatestNamedConversation(cell, view), 1400);
   });
@@ -1165,6 +1253,61 @@ async function prepareBenAiDailyStart() {
   };
 }
 
+async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null } = {}) {
+  if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+  const code = String(workerCode || "").toUpperCase();
+  const id = String(taskId || "");
+  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
+  const task = taskOverride || latestLiveSnapshot?.tasks?.find((item) => String(item.id) === id);
+  if (!task) return { ok: false, error: "A BENJADMIN task nem érhető el az élő állapotban." };
+  let view = chatViews.get(cell.id);
+  if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
+  if (!view || view.webContents.isDestroyed()) return { ok: false, error: "A worker ChatGPT felülete nem nyitható meg." };
+  const url = view.webContents.getURL();
+  const conversationId = chatConversationIdFromUrl(url);
+  if (!conversationId) return { ok: false, code: "TASK_CHAT_CONVERSATION_REQUIRED", error: "Nyisd meg a használni kívánt ChatGPT csevegést (/c/...), majd rögzítsd újra." };
+  const record = loadTaskLaunchRecords()[id] || {};
+  const chatLaunchMode = String(record.chatLaunchMode || task.chatLaunchMode || "EXISTING_CHAT").toUpperCase() === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  const previousConversationId = String(record.previousConversationId || "");
+  if (chatLaunchMode === "NEW_PROJECT_CHAT" && previousConversationId && conversationId === previousConversationId) {
+    return { ok: false, code: "TASK_NEW_PROJECT_CHAT_REQUIRED", error: "Még a korábbi csevegés van nyitva. Hozz létre egy új csevegést a megfelelő ChatGPT Projektben, majd kattints ismét a CSEVEGÉS RÖGZÍTÉSE gombra." };
+  }
+  const info = await getConversationInfo(view, cell, config.cells || []);
+  const binding = await bindDeveloperGridConversation({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: {
+    taskId: id, workerCode: code, chatLaunchMode, chatPreviousConversationId: previousConversationId || null,
+    chatConversationId: conversationId, chatConversationUrl: url, chatConversationTitle: info.chatTitle || "",
+  }});
+  const chatLaunch = saveTaskLaunchPatch(task, code, {
+    chatLaunchMode, previousConversationId: previousConversationId || null, conversationBound: true,
+    chatSessionId: conversationId, chatConversationUrl: url, chatTitle: info.chatTitle || "",
+    chatConversationConfirmedAt: binding?.chatConversationConfirmedAt || new Date().toISOString(), automatic: automatic === true,
+  });
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  return { ok: true, binding, chatLaunch, message: chatLaunchMode === "NEW_PROJECT_CHAT" ? "Az új projektcsevegés rögzítve. A feladat most indítható." : "A meglévő csevegés rögzítve. A feladat most indítható." };
+}
+
+function assignedWorkerCodeFromWork(work) {
+  const raw = String(work?.session?.workerCode || "").toUpperCase();
+  return raw === "BENJAMINAI" ? "BENAI" : raw;
+}
+
+async function initializeTaskChatPlan(work, requestedMode, conversationGuards = []) {
+  const task = work?.task;
+  const code = assignedWorkerCodeFromWork(work);
+  if (!task?.id || !code) return null;
+  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const guard = cell ? conversationGuards.find((item) => item.cellId === cell.id) : null;
+  const previousConversationId = chatConversationIdFromUrl(guard?.url || "");
+  const chatLaunchMode = String(requestedMode || "EXISTING_CHAT").toUpperCase() === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  let record = saveTaskLaunchPatch(task, code, { chatLaunchMode, previousConversationId: previousConversationId || null, conversationBound: false, preparedAt: null, mode: null });
+  if (chatLaunchMode === "EXISTING_CHAT" && previousConversationId) {
+    const bound = await bindCurrentTaskConversation(code, task.id, { automatic: true, taskOverride: task }).catch((error) => ({ ok: false, error: error.message }));
+    if (bound?.ok) record = bound.chatLaunch;
+  }
+  return record;
+}
+
 async function prepareWorkerTaskLaunch(workerCode, taskId) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
   try {
@@ -1180,14 +1323,21 @@ async function prepareWorkerTaskLaunch(workerCode, taskId) {
   if (!worker || !task) return { ok: false, error: "A BENJADMIN task már nem érhető el az élő állapotban." };
   const assignedWorkerId = task.assignedWorkerId || task.requestedWorkerId;
   if (assignedWorkerId !== worker.id) return { ok: false, error: "A task nem ehhez a workerhez van kiosztva." };
-  if (!isTaskAwaitingChatLaunch(task)) return { ok: false, error: "A task már nem vár ChatGPT indításra." };
+  const launchRecord = loadTaskLaunchRecords()[id] || {};
+  const launchProbe = { ...task, chatLaunchMode: task.chatLaunchMode || launchRecord.chatLaunchMode || null };
+  if (!isTaskAwaitingChatLaunch(launchProbe)) return { ok: false, error: "A task már nem vár ChatGPT indításra." };
   const launchGate = taskLaunchGate(task);
   if (!launchGate.ok) return { ok: false, code: launchGate.code, error: launchGate.error };
+  if (launchRecord.chatLaunchMode && launchRecord.conversationBound !== true) {
+    return { ok: false, code: "TASK_CHAT_NOT_BOUND", error: launchRecord.chatLaunchMode === "NEW_PROJECT_CHAT" ? "Előbb hozd létre a megfelelő ChatGPT Projektben az új csevegést, majd használd a CSEVEGÉS RÖGZÍTÉSE gombot." : "Előbb rögzítsd a használni kívánt meglévő csevegést." };
+  }
 
   let view = chatViews.get(cell.id);
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
   if (!view) return { ok: false, error: "A worker ChatGPT felülete nem nyitható meg." };
   const launchConversation = await getConversationInfo(view, cell, config.cells || []);
+  const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+  if (launchRecord.chatSessionId && currentConversationId !== launchRecord.chatSessionId) return { ok: false, code: "TASK_CHAT_CONVERSATION_MISMATCH", error: "Nem a taskhoz rögzített ChatGPT csevegés van nyitva. Nyisd vissza a rögzített beszélgetést, vagy rögzíts új csevegést a taskhoz." };
   if (handoffBlocksTaskLaunch(code, launchConversation.chatSessionId)) return { ok: false, error: "Ebben a csevegésben az ÁTADÁS folyamat aktív vagy helyreállítást igényel. Task indítás tiltva." };
   if (shellWindow) {
     if (shellWindow.isMinimized()) shellWindow.restore();
@@ -1798,6 +1948,7 @@ function startLiveClient() {
     pollIntervalMs: config.pollIntervalMs,
     onSnapshot(snapshot) {
       latestLiveSnapshot = snapshot;
+      syncWorkspaceStandbyLocks(snapshot);
       send("live:snapshot", enrichSnapshotWithTaskLaunch(snapshot));
       send("live:connection", { kind: "benjadmin", ok: true, configured: true, mode: credential.mode, transport: snapshot.transport || "UNKNOWN", realtimeMode: snapshot.realtimeMode || "UNKNOWN", fullSnapshotPolling: snapshot.fullSnapshotPolling === true, at: snapshot.generatedAt });
     },
@@ -2171,8 +2322,9 @@ function registerIpc() {
     try {
       const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
       preserveWorkerConversationsAfterWorkStart(conversationGuards);
+      const chatPlan = await initializeTaskChatPlan(work, payload?.chatLaunchMode, conversationGuards);
       send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
-      return { ok: true, work };
+      return { ok: true, work, chatPlan };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
   ipcMain.handle("context:mode", (_event, payload) => {
@@ -2228,6 +2380,13 @@ function registerIpc() {
   ipcMain.handle("daily:prepare-start", async () => {
     try { return await prepareBenAiDailyStart(); }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A napi BenAI indítás előkészítése sikertelen." }; }
+  });
+
+  ipcMain.handle("task:bind-conversation", async (_event, payload) => {
+    try {
+      const code = String(payload?.workerCode || "").toUpperCase();
+      return await bindCurrentTaskConversation(code, payload?.taskId);
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A worker ChatGPT csevegés rögzítése sikertelen." }; }
   });
 
   ipcMain.handle("task:prepare-launch", async (_event, payload) => {

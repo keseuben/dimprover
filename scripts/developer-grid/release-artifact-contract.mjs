@@ -63,15 +63,15 @@ check(throwsCode(() => validateReleaseMetadata({ ...matching, releaseMeta: { ...
 const windowsMarkerBase = {
   schemaVersion: 1,
   product: "BENJADMIN Developer Grid",
-  version: "0.1.8",
+  version: "0.1.9",
   gitCommit: "c".repeat(40),
   gitBranch: "feature/test",
   buildId: "build-win",
   environment: "DEV",
   productionAccess: "DENY",
-  exe: { file: "BENJADMIN-Developer-Grid-0.1.8-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234, signed: false },
+  exe: { file: "BENJADMIN-Developer-Grid-0.1.9-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234, signed: false },
 };
-const windowsMarkerArgs = { marker: windowsMarkerBase, version: "0.1.8", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.8-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234 };
+const windowsMarkerArgs = { marker: windowsMarkerBase, version: "0.1.9", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.9-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234 };
 check(validateWindowsArtifactMarker(windowsMarkerArgs) === true, "matching Windows artifact marker accepted");
 check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: null }), "WINDOWS_ARTIFACT_MARKER_MISSING"), "missing Windows artifact marker blocked");
 check(throwsCode(() => validateWindowsArtifactMarker({ ...windowsMarkerArgs, marker: { ...windowsMarkerBase, gitCommit: "e".repeat(40) } }), "WINDOWS_ARTIFACT_MARKER_MISMATCH"), "Windows marker commit mismatch blocked");
@@ -83,16 +83,16 @@ const packageSessionBase = {
   schemaVersion: 1,
   product: "BENJADMIN Developer Grid",
   packageSessionId: "a".repeat(64),
-  version: "0.1.8",
+  version: "0.1.9",
   gitCommit: "c".repeat(40),
   gitBranch: "feature/test",
   buildId: "build-win",
   environment: "DEV",
   productionAccess: "DENY",
-  exe: { file: "BENJADMIN-Developer-Grid-0.1.8-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234 },
-  devZip: { file: "BENJADMIN-Developer-Grid-v0.1.8-DEV.zip", sha256: "e".repeat(64), bytes: 5678 },
+  exe: { file: "BENJADMIN-Developer-Grid-0.1.9-Windows-x64.exe", sha256: "d".repeat(64), bytes: 1234 },
+  devZip: { file: "BENJADMIN-Developer-Grid-v0.1.9-DEV.zip", sha256: "e".repeat(64), bytes: 5678 },
 };
-const packageSessionArgs = { marker: packageSessionBase, version: "0.1.8", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.8-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234, zipFile: "/tmp/BENJADMIN-Developer-Grid-v0.1.8-DEV.zip", zipHash: "e".repeat(64), zipBytes: 5678 };
+const packageSessionArgs = { marker: packageSessionBase, version: "0.1.9", head: "c".repeat(40), branch: "feature/test", buildId: "build-win", exeFile: "/tmp/BENJADMIN-Developer-Grid-0.1.9-Windows-x64.exe", exeHash: "d".repeat(64), exeBytes: 1234, zipFile: "/tmp/BENJADMIN-Developer-Grid-v0.1.9-DEV.zip", zipHash: "e".repeat(64), zipBytes: 5678 };
 check(validatePackageSessionMarker(packageSessionArgs) === true, "matching package session marker accepted");
 check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: null }), "PACKAGE_SESSION_MARKER_INVALID"), "missing package session marker blocked");
 check(throwsCode(() => validatePackageSessionMarker({ ...packageSessionArgs, marker: { ...packageSessionBase, gitCommit: "f".repeat(40) } }), "PACKAGE_SESSION_MARKER_MISMATCH"), "package session commit mismatch blocked");

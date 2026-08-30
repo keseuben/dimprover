@@ -5,8 +5,8 @@ import { autoRouteDevEngineTaskByAvailability, createDevEngineTask, getDevCenter
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
-import { materializeGridTaskSession, readGridState } from "./state-store";
-import type { CoreWorkerCode, DevelopmentContext, DeveloperGridTask, WorkerSession } from "./types";
+import { appendGridEvent, materializeGridTaskSession, readGridState, upsertWorkerSession } from "./state-store";
+import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, WorkerSession } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
 export const WORK_START_MAX_LENGTH = 12000;
@@ -20,6 +20,8 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const moduleName = text(input.moduleName, 180) || "Developer Grid V1";
   const submoduleName = text(input.submoduleName, 180) || null;
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
+  const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
+  const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   if (sourcePrompt.length < WORK_START_MIN_LENGTH) {
     const error = new Error(`A fejlesztési utasítás legalább ${WORK_START_MIN_LENGTH} karakter legyen.`);
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_PROMPT_TOO_SHORT", status: 400 });
@@ -30,7 +32,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -46,6 +48,15 @@ function coreWorkerCode(value: unknown): CoreWorkerCode {
   if (code === "ARMINAI" || code === "OUTMINAI" || code === "JAZMINAI" || code === "BENJAMINAI") return code;
   if (code === "BENAI") return "BENJAMINAI";
   return "BENJAMINAI";
+}
+
+function strictCoreWorkerCode(value: unknown): CoreWorkerCode {
+  const code = String(value || "").trim().toUpperCase();
+  if (code === "ARMINAI" || code === "OUTMINAI" || code === "JAZMINAI" || code === "BENJAMINAI") return code;
+  if (code === "BENAI") return "BENJAMINAI";
+  const error = new Error("Ismeretlen Developer Grid worker; conversation binding tiltva.");
+  Object.assign(error, { code: "DEVELOPER_GRID_CHAT_WORKER_INVALID", status: 400 });
+  throw error;
 }
 
 function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
@@ -86,7 +97,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   let reused = Boolean(engineTask);
   if (engineTask) {
     const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
-    if (String(metadata.sourcePrompt || "") !== input.sourcePrompt) {
+    if (String(metadata.sourcePrompt || "") !== input.sourcePrompt || String(metadata.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode) {
       const error = new Error("Az idempotencyKey már más tartalmú munkaindításhoz tartozik.");
       Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT", status: 409 });
       throw error;
@@ -113,6 +124,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
           origin: "BENJADMIN_DEVELOPER_GRID_WORK_START",
           sourcePrompt: input.sourcePrompt,
           sourcePromptPreserved: true,
+          chatLaunchMode: input.chatLaunchMode,
           idempotencyKey: input.idempotencyKey,
           mainModule: "BENJADMIN",
           moduleName: input.moduleName,
@@ -134,7 +146,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       const afterConflict = await getDevCenterEngineState();
       const existing = afterConflict.tasks.find((task) => task.id === taskId) || null;
       const existingMeta = existing?.metadata && typeof existing.metadata === "object" ? existing.metadata as Record<string, unknown> : {};
-      if (!existing || String(existingMeta.sourcePrompt || "") !== input.sourcePrompt) throw createError;
+      if (!existing || String(existingMeta.sourcePrompt || "") !== input.sourcePrompt || String(existingMeta.chatLaunchMode || "EXISTING_CHAT") !== input.chatLaunchMode) throw createError;
       engineTask = existing;
       reused = true;
     }
@@ -166,6 +178,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     workStageIndex: 1,
     taskId,
     sourcePrompt: input.sourcePrompt,
+    chatLaunchMode: input.chatLaunchMode,
     source: "EXPLICIT_TASK",
     resolvedAt: new Date().toISOString(),
   };
@@ -191,6 +204,81 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     stateRevision: materialized.state.revision,
     reused,
     sourcePrompt: input.sourcePrompt,
+    chatLaunchMode: input.chatLaunchMode,
     productionAccess: "DENY" as const,
+  };
+}
+
+function conversationIdFromUrl(value: unknown) {
+  const raw = text(value, 1000);
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || !["chatgpt.com", "www.chatgpt.com"].includes(url.hostname)) return "";
+    const match = url.pathname.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/);
+    return match?.[1] || "";
+  } catch { return ""; }
+}
+
+export async function bindDeveloperGridConversation(rawInput: Record<string, unknown>) {
+  const taskId = text(rawInput.taskId, 220);
+  const workerCode = strictCoreWorkerCode(rawInput.workerCode);
+  const chatConversationUrl = text(rawInput.chatConversationUrl, 1000);
+  const chatConversationId = text(rawInput.chatConversationId, 180) || conversationIdFromUrl(chatConversationUrl);
+  const chatConversationTitle = text(rawInput.chatConversationTitle, 500);
+  const chatPreviousConversationId = text(rawInput.chatPreviousConversationId, 180) || null;
+  const requestedMode = text(rawInput.chatLaunchMode, 40).toUpperCase();
+  const chatLaunchMode: ChatLaunchMode = requestedMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  const confirmedBy = chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
+  if (!taskId || !chatConversationId || conversationIdFromUrl(chatConversationUrl) !== chatConversationId) {
+    const error = new Error("A taskhoz csak igazolt ChatGPT /c/... csevegés rögzíthető.");
+    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_CONVERSATION_INVALID", status: 400 });
+    throw error;
+  }
+  if (chatLaunchMode === "NEW_PROJECT_CHAT" && chatPreviousConversationId && chatPreviousConversationId === chatConversationId) {
+    const error = new Error("Az új projektcsevegés nem egyezhet a korábbi csevegéssel.");
+    Object.assign(error, { code: "DEVELOPER_GRID_NEW_CHAT_REQUIRED", status: 409 });
+    throw error;
+  }
+  const state = await readGridState();
+  if (!state.task || String(state.task.id) !== taskId) {
+    const error = new Error("A conversation binding task nem authoritative aktuális task.");
+    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_TASK_MISMATCH", status: 409 });
+    throw error;
+  }
+  const session = state.sessions.find((item) => item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
+  if (!session) {
+    const error = new Error("A taskhoz tartozó aktív worker session nem található.");
+    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_SESSION_MISSING", status: 409 });
+    throw error;
+  }
+  const existingMode = session.developmentContext.chatLaunchMode || chatLaunchMode;
+  if (existingMode !== chatLaunchMode) {
+    const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
+    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_MODE_MISMATCH", status: 409 });
+    throw error;
+  }
+  const confirmedAt = new Date().toISOString();
+  const updated: WorkerSession = {
+    ...session,
+    developmentContext: {
+      ...session.developmentContext,
+      chatLaunchMode,
+      chatPreviousConversationId,
+      chatConversationId,
+      chatConversationUrl,
+      chatConversationTitle,
+      chatConversationConfirmedAt: confirmedAt,
+      chatConversationConfirmedBy: confirmedBy,
+      resolvedAt: confirmedAt,
+    },
+  };
+  const next = await upsertWorkerSession(updated);
+  await appendGridEvent({
+    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
+    delta: { summary: `ChatGPT csevegés rögzítve · ${chatLaunchMode}`, workItem: updated.developmentContext.workItem, workStageIndex: updated.developmentContext.workStageIndex || 1 },
+  });
+  return {
+    taskId, workerCode, chatLaunchMode, chatConversationId, chatConversationUrl, chatConversationTitle,
+    chatConversationConfirmedAt: confirmedAt, chatConversationConfirmedBy: confirmedBy, revision: next.revision, productionAccess: "DENY" as const,
   };
 }

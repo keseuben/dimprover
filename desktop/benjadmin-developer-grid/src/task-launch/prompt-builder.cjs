@@ -39,7 +39,8 @@ function taskLaunchGate(task) {
 function isTaskAwaitingChatLaunch(task) {
   if (!task || typeof task !== "object") return false;
   const status = cleanText(task.status, 40).toLowerCase();
-  return LAUNCHABLE_TASK_STATUSES.has(status) && !cleanText(task.startedAt, 80);
+  const explicitChatPlan = Boolean(cleanText(task.chatLaunchMode ?? task.chatLaunch?.chatLaunchMode, 40));
+  return LAUNCHABLE_TASK_STATUSES.has(status) && (explicitChatPlan || !cleanText(task.startedAt, 80));
 }
 
 function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {

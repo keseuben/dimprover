@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   getContextWorkspace: (filters = {}) => ipcRenderer.invoke("context:get", filters),
   getDeveloperGridActiveWork: () => ipcRenderer.invoke("work-start:get"),
   startDeveloperGridWork: (input = {}) => ipcRenderer.invoke("work-start:create", input),
+  bindTaskConversation: (workerCode, taskId) => ipcRenderer.invoke("task:bind-conversation", { workerCode, taskId }),
   contextWorkspaceMode: (action, payload = {}) => ipcRenderer.invoke("context:mode", { action, ...payload }),
   bindContext: (workerCode, item) => ipcRenderer.invoke("context:bind", { workerCode, item }),
   clearContext: (workerCode) => ipcRenderer.invoke("context:clear", { workerCode }),

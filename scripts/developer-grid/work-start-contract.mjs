@@ -28,4 +28,10 @@ check(ui.includes("ctrlKey") && ui.includes("Enter") && ui.includes("preventDefa
 check(ui.includes("if(state.workStartBusy)return") && ui.includes("state.workStartBusy||!valid"), "double-submit guarded client-side");
 check(ui.includes("state.workStartDraft") && ui.includes("contextErrorMessage"), "draft retained on backend/auth failure");
 check(!ui.includes("api/dev/chatgrid/live"), "composer does not add ChatGrid snapshot mutation path");
+check(types.includes('ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT"') && engine.includes("chatLaunchMode: input.chatLaunchMode"), "chat strategy stored in authoritative developmentContext");
+check(route.includes("export async function PATCH") && engine.includes("bindDeveloperGridConversation"), "conversation binding has paired DEV API");
+check(engine.includes("DEVELOPER_GRID_NEW_CHAT_REQUIRED") && engine.includes("chatPreviousConversationId"), "new project chat must differ from previous conversation");
+check(engine.includes("DEVELOPER_GRID_CHAT_WORKER_INVALID") && engine.includes("strictCoreWorkerCode"), "conversation binding rejects unknown worker fail closed");
+check(client.includes("bindDeveloperGridConversation") && preload.includes("bindTaskConversation") && main.includes('ipcMain.handle("task:bind-conversation"'), "desktop conversation binding chain complete");
+check(ui.includes("MEGLÉVŐ CSEVEGÉS FOLYTATÁSA") && ui.includes("ÚJ PROJEKTCSEVEGÉS"), "control center exposes explicit chat strategy choice");
 console.log(`Developer Grid work-start contract PASS · ${n}/${n}`);

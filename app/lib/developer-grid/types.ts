@@ -1,7 +1,8 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.8-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.9-dev" as const;
 
 export type GridEnvironment = "DEV";
+export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
 export type ProductionAccess = "DENY";
 export type WorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI";
 export type CoreWorkerCode = Exclude<WorkerCode, "DEVMINAI">;
@@ -32,6 +33,13 @@ export type DevelopmentContext = {
   workStageIndex?: number | null;
   taskId: string;
   sourcePrompt?: string | null;
+  chatLaunchMode?: ChatLaunchMode | null;
+  chatPreviousConversationId?: string | null;
+  chatConversationId?: string | null;
+  chatConversationUrl?: string | null;
+  chatConversationTitle?: string | null;
+  chatConversationConfirmedAt?: string | null;
+  chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | null;
   source: "ACTIVE_SESSION" | "EXPLICIT_TASK" | "TASK_PROVENANCE" | "ACTIVITY" | "GIT" | "PRESENCE" | "HEURISTIC";
   resolvedAt: string;
 };

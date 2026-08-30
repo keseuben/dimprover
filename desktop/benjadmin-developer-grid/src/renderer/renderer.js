@@ -111,10 +111,13 @@ function cellForWorker(workerCode) {
 function setFooterDot(id, tone = "offline") {
   const dot = $(id);
   if (!dot) return;
+  const segment = dot.closest(".footer-status");
   dot.classList.remove("is-online", "is-warning", "is-error");
-  if (tone === "online") dot.classList.add("is-online");
-  else if (tone === "warning") dot.classList.add("is-warning");
-  else if (tone === "error") dot.classList.add("is-error");
+  segment?.classList.remove("is-online", "is-warning", "is-error", "is-offline");
+  if (tone === "online") { dot.classList.add("is-online"); segment?.classList.add("is-online"); }
+  else if (tone === "warning") { dot.classList.add("is-warning"); segment?.classList.add("is-warning"); }
+  else if (tone === "error") { dot.classList.add("is-error"); segment?.classList.add("is-error"); }
+  else segment?.classList.add("is-offline");
 }
 
 function setConnectionUi(label, tone = "offline") {
@@ -126,6 +129,7 @@ function setConnectionUi(label, tone = "offline") {
   const labelNode = $("#connectionLabel");
   if (labelNode) labelNode.textContent = label;
   setFooterDot("#footerDeltaDot", tone === "online" ? "online" : tone === "warning" ? "warning" : "offline");
+  setFooterDot("#footerAiDot", tone === "online" ? "online" : tone === "warning" ? "warning" : "offline");
   const footer = $("#footerDeltaStatus");
   if (footer) footer.textContent = tone === "online" ? "AKTÍV" : tone === "warning" ? "VÁR" : "OFFLINE";
 }
@@ -240,7 +244,9 @@ function presenceForWorker(workerCode) {
 
 function isTaskAwaitingChatLaunch(task) {
   if (!task) return false;
-  return ["ready", "claimed"].includes(String(task.status || "").toLowerCase()) && !task.startedAt;
+  const launchable = ["ready", "claimed"].includes(String(task.status || "").toLowerCase());
+  const explicitChatPlan = Boolean(task?.chatLaunchMode || task?.chatLaunch?.chatLaunchMode);
+  return launchable && (explicitChatPlan || !task.startedAt);
 }
 
 function deriveVisualStatus(presence, task) {
@@ -486,16 +492,21 @@ function renderLive() {
     const handoffBlocksLaunch = ["HANDOFF_PROMPT_INSERTED", "HANDOFF_RESPONSE_READY", "RECOVERY_REQUIRED", "RECOVERY_PREPARE_REQUIRED"].includes(handoffState);
     const launchButton = $("[data-task-launch-action=prepare]", cell);
     if (launchButton) {
+      const chatPlan = task?.chatLaunch || null;
+      const needsConversationBinding = Boolean(awaitingLaunch && chatPlan?.chatLaunchMode && chatPlan?.conversationBound !== true);
       launchButton.classList.toggle("is-hidden", !awaitingLaunch || handoffBlocksLaunch);
       launchButton.disabled = handoffBlocksLaunch;
       launchButton.dataset.taskId = awaitingLaunch ? String(task?.id || "") : "";
       launchButton.dataset.workerCode = cellConfig.workerCode;
-      launchButton.textContent = task?.chatLaunch?.preparedAt ? "Újra" : "Indítás";
+      launchButton.dataset.launchAction = needsConversationBinding ? "bind" : "prepare";
+      launchButton.textContent = needsConversationBinding ? "CSEVEGÉS RÖGZÍTÉSE" : (task?.chatLaunch?.preparedAt ? "Újra" : "Indítás");
       launchButton.title = handoffBlocksLaunch
         ? "Task indítás tiltva az aktív/helyreállítandó ÁTADÁS alatt"
-        : (task?.chatLaunch?.preparedAt
-            ? "A kiosztási prompt újbóli előkészítése a worker ChatGPT-ben"
-            : "A kiosztási prompt előkészítése a worker ChatGPT-ben; elküldés csak kézzel");
+        : needsConversationBinding
+          ? (chatPlan?.chatLaunchMode === "NEW_PROJECT_CHAT" ? "Hozd létre a megfelelő ChatGPT Projektben az új csevegést, majd kattints ide a jelenlegi /c/... beszélgetés taskhoz rögzítéséhez." : "A jelenleg megnyitott ChatGPT csevegés taskhoz rögzítése.")
+          : (task?.chatLaunch?.preparedAt
+              ? "A kiosztási prompt újbóli előkészítése a worker ChatGPT-ben"
+              : "A kiosztási prompt előkészítése a rögzített worker ChatGPT csevegésben; elküldés csak kézzel");
     }
     const taskStatus = String(task?.status || "").toLowerCase();
     const stageIndex = awaitingLaunch
@@ -518,6 +529,7 @@ function renderLive() {
   if (summary) summary.textContent = `${workingCount} dolgozik · ${needsAttentionCount} vár rád`;
   const footerAi = $("#footerAiStatus");
   if (footerAi) footerAi.textContent = `${workingCount} dolgozik · ${needsAttentionCount} vár`;
+  setFooterDot("#footerAiDot", state.connection.benjadmin ? "online" : "warning");
   const activeTasks = (state.live?.tasks || []).filter((task) => ["ready","claimed","in_progress","testing","blocked"].includes(String(task?.status || "").toLowerCase()));
   const headerContext = $("#headerContextLabel");
   if (headerContext) {
@@ -1185,17 +1197,18 @@ async function handleTaskLaunch(button) {
   if (!workerCode || !taskId) return;
   button.disabled = true;
   try {
-    const result = await api.prepareTaskLaunch(workerCode, taskId);
+    const bindingMode = button.dataset.launchAction === "bind";
+    const result = bindingMode ? await api.bindTaskConversation(workerCode, taskId) : await api.prepareTaskLaunch(workerCode, taskId);
     if (!result?.ok) {
-      showToast("Worker indítás", result?.error || "A ChatGPT indítás nem készíthető elő.");
+      showToast(bindingMode ? "Csevegés rögzítése" : "Worker indítás", result?.error || (bindingMode ? "A jelenlegi ChatGPT csevegés nem rögzíthető." : "A ChatGPT indítás nem készíthető elő."));
       return;
     }
     const task = activeTaskForWorker(workerCode);
     if (task && task.id === taskId && result.chatLaunch) task.chatLaunch = result.chatLaunch;
     renderLive();
     showToast(
-      result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon",
-      result.message || "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el."
+      bindingMode ? "Csevegés rögzítve" : (result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon"),
+      result.message || (bindingMode ? "A task most már a jelenlegi ChatGPT csevegéshez kötődik." : "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el.")
     );
   } finally {
     button.disabled = false;

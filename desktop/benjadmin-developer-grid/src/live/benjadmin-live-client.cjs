@@ -240,7 +240,13 @@ function synthesizeGridSnapshot({ foundation, state, liveEventsByWorker, generat
     startedAt: taskSession?.startedAt || null,
     completedAt: String(task.status || "").toUpperCase() === "COMPLETED" ? (state?.updatedAt || generatedAt || null) : null,
     createdAt: taskSession?.startedAt || null,
-    updatedAt: state?.updatedAt || generatedAt || null
+    updatedAt: state?.updatedAt || generatedAt || null,
+    chatLaunchMode: taskSession?.developmentContext?.chatLaunchMode || null,
+    chatPreviousConversationId: taskSession?.developmentContext?.chatPreviousConversationId || null,
+    chatConversationId: taskSession?.developmentContext?.chatConversationId || null,
+    chatConversationUrl: taskSession?.developmentContext?.chatConversationUrl || null,
+    chatConversationTitle: taskSession?.developmentContext?.chatConversationTitle || null,
+    chatConversationConfirmedAt: taskSession?.developmentContext?.chatConversationConfirmedAt || null
   }] : [];
   const workerPresence = activeSessions.map((session) => {
     const code = normalizeWorkerCode(session?.workerCode);
