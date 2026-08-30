@@ -21,9 +21,9 @@ const check = (label, fn) => { fn(); n += 1; console.log(`PASS ${String(n).padSt
 
 function loadSeverityModule() {
   const js = ts.transpileModule(severitySource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const module = { exports: {} };
-  new Function("exports", "module", "require", js)(module.exports, module, require);
-  return module.exports;
+  const cjsModule = { exports: {} };
+  new Function("exports", "module", "require", js)(cjsModule.exports, cjsModule, require);
+  return cjsModule.exports;
 }
 
 const severity = loadSeverityModule();
