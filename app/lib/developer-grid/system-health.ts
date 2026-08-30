@@ -4,9 +4,11 @@ import net from "node:net";
 import path from "node:path";
 import { probeBuildNodes } from "./build-nodes";
 import type { BuildNodeDefinition } from "./types";
-import type { DeveloperGridSystemHealthV2, LegacyHealthMetric, LegacyHealthServer, LegacyHealthStorage } from "./system-health-model";
+import type { DeveloperGridSystemHealthV2, DimprominAiHealthAdapter, LegacyHealthMetric, LegacyHealthServer, LegacyHealthStorage } from "./system-health-model";
 import { normalizeInfrastructureNodes } from "./system-health-adapters";
 import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./system-health-severity";
+import { applyDimprominAiAdapter } from "./system-health-ai";
+import { getInfrastructureOperationalContext } from "./system-health-operations";
 
 const SERVER_TTL_MS = 30_000;
 const PROTECTED_SERVER_TTL_MS = 60_000;
@@ -155,7 +157,7 @@ async function refreshServers(disk: ReturnType<typeof localDiskMetric>) {
   return [await localServer(disk), ...nodes.map(buildServer)];
 }
 
-export async function getDeveloperGridSystemHealth(): Promise<DeveloperGridSystemHealth> {
+export async function getDeveloperGridSystemHealth(aiAdapter: DimprominAiHealthAdapter | null = null): Promise<DeveloperGridSystemHealth> {
   const now = Date.now();
   if (!diskCache.value || diskCache.expiresAt <= now) { diskCache.value = localDiskMetric(); diskCache.expiresAt = now + DISK_TTL_MS; }
   if (!serverCache.value || serverCache.expiresAt <= now) { serverCache.value = await refreshServers(diskCache.value); serverCache.expiresAt = now + SERVER_TTL_MS; }
@@ -166,10 +168,12 @@ export async function getDeveloperGridSystemHealth(): Promise<DeveloperGridSyste
   }
   const servers = [...serverCache.value, ...protectedServerCache.value].map((server) => ({ ...server, metrics: { ...server.metrics } }));
   const storage = storageCache.value.map((item) => ({ ...item }));
-  const nodes = normalizeInfrastructureNodes(servers, storage, now);
+  const normalizedNodes = normalizeInfrastructureNodes(servers, storage, now);
+  const nodes = await applyDimprominAiAdapter(normalizedNodes, aiAdapter, now);
+  const operations = await getInfrastructureOperationalContext();
   return {
     schemaVersion: 2, environment: "DEV", productionAccess: "DENY", generatedAt: new Date().toISOString(),
     refreshPolicy: { serversMs: SERVER_TTL_MS, protectedServersMs: PROTECTED_SERVER_TTL_MS, diskMs: DISK_TTL_MS, storageMs: STORAGE_TTL_MS, aiMs: AI_TTL_MS, source: "SERVER_CACHE_NO_SUPABASE_POLLING" },
-    nodes, overall: aggregateInfrastructureHealth(nodes), alerts: infrastructureHealthAlerts(nodes), servers, storage,
+    nodes, overall: aggregateInfrastructureHealth(nodes), alerts: infrastructureHealthAlerts(nodes), operations, servers, storage,
   };
 }

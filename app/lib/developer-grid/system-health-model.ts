@@ -123,6 +123,19 @@ export type DimprominAiHealthAdapter = {
   sample(nodeId: string): Promise<DimprominAiHealthSample | null>;
 };
 
+export type SafeInfrastructureOperation = Partial<Record<
+  "status" | "operation" | "owner" | "task" | "target" | "workerCode" | "host" | "startedAt" | "finishedAt" | "event",
+  string | number | null
+>> & { pid?: number | null; exitCode?: number | null };
+
+export type InfrastructureOperationalContext = {
+  sampledAt: string;
+  centralLock: "FREE" | "HELD" | "UNKNOWN";
+  activeOperation: SafeInfrastructureOperation | null;
+  lastOperation: SafeInfrastructureOperation | null;
+  devRuntimes: Array<{ id: string; label: string; state: "READY" | "OFFLINE"; latencyMs: number | null }>;
+};
+
 export type DeveloperGridSystemHealthV2 = {
   schemaVersion: 2;
   environment: "DEV";
@@ -139,6 +152,7 @@ export type DeveloperGridSystemHealthV2 = {
   nodes: InfrastructureHealthNode[];
   overall: InfrastructureHealthOverall;
   alerts: InfrastructureHealthAlert[];
+  operations: InfrastructureOperationalContext;
   servers: LegacyHealthServer[];
   storage: LegacyHealthStorage[];
 };

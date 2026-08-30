@@ -23,6 +23,8 @@ const required = [
   "app/lib/developer-grid/system-health-registry.ts",
   "app/lib/developer-grid/system-health-severity.ts",
   "app/lib/developer-grid/system-health-adapters.ts",
+  "app/lib/developer-grid/system-health-ai.ts",
+  "app/lib/developer-grid/system-health-operations.ts",
   "scripts/developer-grid/system-health-v2-contract.mjs",
   "components/admin/developer-grid/DeveloperGridShell.tsx",
   "scripts/developer-grid/candidate-smoke.mjs",
@@ -72,6 +74,8 @@ const healthModel = fs.readFileSync(path.join(root, "app/lib/developer-grid/syst
 const healthRegistry = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-registry.ts"), "utf8");
 const healthSeverity = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-severity.ts"), "utf8");
 const healthAdapters = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-adapters.ts"), "utf8");
+const healthAi = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-ai.ts"), "utf8");
+const healthOperations = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-operations.ts"), "utf8");
 const healthFacade = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health.ts"), "utf8");
 
 const checks = [
@@ -122,6 +126,8 @@ const checks = [
   [healthRegistry.includes("dimpromin-ai-01") && healthRegistry.includes("dimpromin-ai-02") && healthRegistry.includes('kind: "AI"'), "Health Core V2 DIMPROMIN registry"],
   [healthSeverity.includes("evaluateInfrastructureNode") && healthSeverity.includes("aggregateInfrastructureHealth") && healthSeverity.includes("isNodeStale"), "Health Core V2 severity and stale engine"],
   [healthAdapters.includes("normalizeInfrastructureNodes") && healthAdapters.includes("plannedInfrastructureNodes"), "Health Core V2 legacy adapter and planned-node bridge"],
+  [healthAi.includes("sanitizeDimprominMetrics") && healthAi.includes("AI_METRIC_KEYS"), "Health Core V2 sanitized DIMPROMIN adapter"],
+  [healthOperations.includes("SAFE_OPERATION_FIELDS") && !healthOperations.includes('"command"'), "Health Core V2 safe operational context"],
   [healthFacade.includes("schemaVersion: 2") && healthFacade.includes("servers, storage") && healthFacade.includes("AI_TTL_MS = 30_000"), "Health Core V2 facade keeps V1 compatibility and cache policy"],
   [!fs.existsSync(path.join(root, "app/lib/dev-center/developer-grid")) && !fs.existsSync(path.join(root, "app/api/dev/console/developer-grid")), "single canonical Developer Grid core path"],
 ];
