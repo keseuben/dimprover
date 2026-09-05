@@ -254,7 +254,7 @@ export default function DeveloperGridShell() {
             <div className={styles.panel}>
               <h3>Build nodes</h3>
               <ul>{(foundation?.buildNodes || []).map((node) => <li key={node.id}>{node.hostname} · {node.state}{node.lastVerifiedAt ? ` · ${new Date(node.lastVerifiedAt).toLocaleTimeString("hu-HU")}` : ""}<br /><small>{node.reason}</small></li>)}</ul>
-              <p>Executor: {foundation?.buildExecutor.kind === "CANONICAL_DEV_SERVER" ? "Canonical DEV szerver" : foundation?.buildExecutor.node?.hostname || "–"}</p>
+              <p>Executor: {foundation?.buildExecutor.kind === "REMOTE_BUILD_NODE" ? foundation.buildExecutor.node?.hostname || "Remote build node" : "Build várólista"}</p>
               <p>Nem hitelesített alternatív / párhuzamos build: TILOS</p>
             </div>
             <div className={styles.panel}>
