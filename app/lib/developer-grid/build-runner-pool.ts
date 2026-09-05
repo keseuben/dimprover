@@ -2,7 +2,7 @@ import type { BuildNodeSnapshot } from "./build-nodes";
 import type { BuildNodeDefinition, GridBuildRun, WorkerCode } from "./types";
 
 export const BUILD_RUNNER_POOL_SCHEMA_VERSION = 1 as const;
-export const BUILD_RUNNER_LOCAL_LOCK_FILE = "/var/lock/dimpro-build-runner/full-build.lock" as const;
+export const BUILD_RUNNER_LOCAL_LOCK_FILE = "/srv/dimpro-build/state/full-build.lock" as const;
 export const BUILD_RUNNER_LOCAL_LOCK_MECHANISM = "flock" as const;
 
 export type BuildRunnerDeniedOperation = "DEPLOY" | "MIGRATION" | "RESTART" | "CUTOVER" | "CANDIDATE";

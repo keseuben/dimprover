@@ -106,7 +106,7 @@ check(registry.length === 2 && registry[0].id === "build01" && registry[1].id ==
 check(registry[0].priority === 1 && registry[1].priority === 2, "BUILD-01 has primary scheduler priority");
 check(registry.every((item) => item.maxConcurrentFullBuilds === 1), "one FULL BUILD slot per runner");
 check(registry.every((item) => item.localLock.mechanism === "flock" && item.localLock.nonBlocking === true), "runner lock mechanism is local non-blocking flock");
-check(registry.every((item) => item.localLock.file === "/var/lock/dimpro-build-runner/full-build.lock"), "runner lock path is canonical and host-local");
+check(registry.every((item) => item.localLock.file === "/srv/dimpro-build/state/full-build.lock"), "runner lock path matches hardened BUILD node state lock");
 check(registry.every((item) => ["DEPLOY","MIGRATION","RESTART","CUTOVER","CANDIDATE"].every((op) => item.deniedOperations.includes(op))), "build runners deny deploy migration restart cutover candidate");
 check(pool.GLOBAL_DEV_SERIAL_OPERATIONS.join(",") === "CANDIDATE,MIGRATION,RELEASE,RESTART,CUTOVER", "candidate migration release restart cutover remain global DEV serial operations");
 check(pool.validateBuildRunIdentity(request()).length === 0, "commit task session worker run identity accepted");

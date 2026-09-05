@@ -35,3 +35,9 @@ A Developer Grid DEV kiadási artifactfolyam külön fail-closed release motorra
 - Az `ARTIFACT_MANIFEST_v<version>.json` teljes bájtszintű SHA-256 hash-e és saját sidecarja is fail-closed kapu.
 - Hibás sidecar fájlnév, hash, manifest hash vagy DEV/PROD fejléc esetén a release ellenőrzés blokkol.
 - DEV ONLY · PROD DENY.
+
+## Remote Build Executor V1
+
+A BUILD-01 és BUILD-02 node-ok FULL BUILD végrehajtása fail-closed remote executoron keresztül történik. A DEV gateway kizárólag sanitizált health snapshotot ír a `/srv/dimpro-dev/coordination/health-snapshots/build-nodes.json` fájlba; a scheduler csak friss `READY + LIVE + FREE`, `toolchainReady=true`, `SAFE/WATCH` storage és legalább 4 GiB swap mellett rendelhet run-t.
+
+A runner helyi kizárólagos lockja a hardened node-konfigurációval egyezően `/srv/dimpro-build/state/full-build.lock`. A forrás teljes Git commit SHA + branch provenance alapján Git bundle-ben érkezik, a runner `npm ci` után kizárólag a canonical `npm run build:raw` műveletet futtatja. A build node-on deploy, migration, restart, cutover és candidate művelet tiltott. Az artifact csak DEV standalone buildből, `BUILD_ID`-ből és `.dimpro-release.json` provenance-ből készül; visszaadás után SHA-256 és runner/source metadata kötelezően ellenőrzött. PROD hozzáférés minden ponton `DENY`.
