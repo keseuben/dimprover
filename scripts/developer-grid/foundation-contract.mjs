@@ -16,6 +16,9 @@ const required = [
   "app/lib/developer-grid/release-provenance.ts",
   "app/lib/developer-grid/runtime-provenance.ts",
   "app/lib/developer-grid/build-nodes.ts",
+  "app/lib/developer-grid/build-runner-pool.ts",
+  "app/lib/developer-grid/build-runner-scheduler.ts",
+  "app/lib/developer-grid/build-orchestrator.ts",
   "app/lib/developer-grid/exclusive-lock.ts",
   "app/lib/developer-grid/handoff.ts",
   "app/lib/developer-grid/read-auth.ts",
@@ -29,6 +32,7 @@ const required = [
   "components/admin/developer-grid/DeveloperGridShell.tsx",
   "scripts/developer-grid/candidate-smoke.mjs",
   "scripts/developer-grid/build-candidate.sh",
+  "scripts/developer-grid/build-runner-pool-contract.mjs",
   "scripts/developer-grid/build-candidate-contract.mjs",
   "scripts/developer-grid/release-artifact-engine.mjs",
   "scripts/developer-grid/release-artifact-contract.mjs",
@@ -55,6 +59,8 @@ const runtime = fs.readFileSync(path.join(root, "app/lib/developer-grid/runtime-
 const foundation = fs.readFileSync(path.join(root, "app/lib/developer-grid/foundation.ts"), "utf8");
 const foundationRoute = fs.readFileSync(path.join(root, "app/api/dev/grid/foundation/route.ts"), "utf8");
 const build = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-nodes.ts"), "utf8");
+const runnerPool = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-runner-pool.ts"), "utf8");
+const runnerScheduler = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-runner-scheduler.ts"), "utf8");
 const orchestrator = fs.readFileSync(path.join(root, "app/lib/developer-grid/build-orchestrator.ts"), "utf8");
 const stateStore = fs.readFileSync(path.join(root, "app/lib/developer-grid/state-store.ts"), "utf8");
 const bridge = fs.readFileSync(path.join(root, "app/lib/developer-grid/console-bridge.ts"), "utf8");
@@ -95,9 +101,12 @@ const checks = [
   [foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_BRANCH") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_REPOSITORY"), "immutable runtime provenance expectations are explicit and scopeable"],
   [foundationRoute.includes('releaseRuntimeProvenance.state !== "BLOCKED"'), "foundation API blocks release/runtime mismatch"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
+  [runnerPool.includes('priority: 1') && runnerPool.includes('priority: 2') && runnerPool.includes('maxConcurrentFullBuilds: 1'), "runner pool registry fixes BUILD-01 priority and one slot per runner"],
+  [runnerPool.includes('mechanism: BUILD_RUNNER_LOCAL_LOCK_MECHANISM') && runnerPool.includes('full-build.lock') && runnerPool.includes('deniedOperations: ["DEPLOY", "MIGRATION", "RESTART", "CUTOVER", "CANDIDATE"]'), "runner pool uses local flock and denies deployment operations"],
+  [runnerScheduler.includes('decision: "QUEUED"') && runnerScheduler.includes('scheduleBuildRun') && !runnerScheduler.includes('execFile') && !runnerScheduler.includes('spawn'), "runner scheduler exposes queue foundation without executing builds"],
   [build.includes("probeBuildNodes") && build.includes("BENJADMIN_BUILD_NODE_SNAPSHOT_FILE") && build.includes("DIMPRO_MCP_SSH_GATEWAY") && !build.includes('"/usr/bin/ssh"'), "build node MCP gateway snapshot adapter"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
-  [orchestrator.includes("CANONICAL_DEV_SERVER") && orchestrator.includes("exclusiveLockHeld"), "canonical DEV build executor"],
+  [orchestrator.includes("BUILD_QUEUE") && orchestrator.includes("RUNNER_LOCAL_FLOCK_REQUIRED") && !orchestrator.includes("CANONICAL_DEV_SERVER"), "remote runner pool is canonical FULL BUILD path and queue is fail-closed"],
   [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],
   [stateStore.includes("mutation.lock") && stateStore.includes("DEVELOPER_GRID_STATE_LOCK_TIMEOUT"), "cross-process state mutation lock"],
   [stateStore.includes("materializeGridTaskSession") && fs.existsSync(path.join(root, "app/lib/developer-grid/task-session-materializer.ts")), "idempotent task/session materialization"],

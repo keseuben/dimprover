@@ -1,18 +1,30 @@
-import type { BuildNodeDefinition } from "./types";
+import type { BuildNodeSnapshot } from "./build-nodes";
+import { listBuildRunnerRegistry, runnerSnapshotUsability } from "./build-runner-pool";
 
 export type BuildExecutor =
-  | { kind: "REMOTE_BUILD_NODE"; node: BuildNodeDefinition; reason: string }
-  | { kind: "CANONICAL_DEV_SERVER"; node: null; reason: string };
+  | { kind: "REMOTE_BUILD_NODE"; node: BuildNodeSnapshot; reason: string }
+  | { kind: "BUILD_QUEUE"; node: null; reason: string };
 
-export function resolveBuildExecutor(nodes: BuildNodeDefinition[]): BuildExecutor {
-  const remote = nodes.find((node) => node.state === "READY") || null;
-  if (remote) return { kind: "REMOTE_BUILD_NODE", node: remote, reason: `${remote.hostname} hitelesített READY build node.` };
-  return { kind: "CANONICAL_DEV_SERVER", node: null, reason: "build01/build02 még nem READY; a canonical DEV szerver a hivatalos build executor központi exclusive lock alatt." };
+export function resolveBuildExecutor(nodes: BuildNodeSnapshot[]): BuildExecutor {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  for (const runner of listBuildRunnerRegistry()) {
+    const node = nodeMap.get(runner.id);
+    if (!node) continue;
+    const usability = runnerSnapshotUsability(node);
+    if (usability.usable) return { kind: "REMOTE_BUILD_NODE", node, reason: `${runner.hostname} READY és FREE build runner.` };
+  }
+  return { kind: "BUILD_QUEUE", node: null, reason: "Nincs READY és FREE remote build runner; FULL BUILD csak QUEUED lehet." };
 }
 
-export function assertBuildExecutionAllowed(executor: BuildExecutor, input: { exclusiveLockHeld: boolean; storagePreflightPassed: boolean; memoryPreflightPassed: boolean; productionAccess: "DENY" }) {
+export function assertBuildExecutionAllowed(executor: BuildExecutor, input: {
+  runnerLocalLockHeld: boolean;
+  storagePreflightPassed: boolean;
+  memoryPreflightPassed: boolean;
+  productionAccess: "DENY";
+}) {
   const reasons: string[] = [];
-  if (!input.exclusiveLockHeld) reasons.push("EXCLUSIVE_COORDINATION_LOCK_REQUIRED");
+  if (executor.kind !== "REMOTE_BUILD_NODE") reasons.push("REMOTE_BUILD_RUNNER_REQUIRED");
+  if (!input.runnerLocalLockHeld) reasons.push("RUNNER_LOCAL_FLOCK_REQUIRED");
   if (!input.storagePreflightPassed) reasons.push("STORAGE_PREFLIGHT_REQUIRED");
   if (!input.memoryPreflightPassed) reasons.push("MEMORY_PREFLIGHT_REQUIRED");
   if (input.productionAccess !== "DENY") reasons.push("PROD_DENY_REQUIRED");

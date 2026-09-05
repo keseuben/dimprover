@@ -205,7 +205,7 @@ export type DeveloperGridFoundation = {
   sourceProvenance: SourceProvenance;
   releaseRuntimeProvenance: ReleaseRuntimeProvenance;
   buildNodes: BuildNodeDefinition[];
-  buildExecutor: { kind: "REMOTE_BUILD_NODE" | "CANONICAL_DEV_SERVER"; node: BuildNodeDefinition | null; reason: string };
+  buildExecutor: { kind: "REMOTE_BUILD_NODE" | "BUILD_QUEUE"; node: BuildNodeDefinition | null; reason: string };
   realtime: {
     mode: "DELTA_EVENT";
     fullSnapshotPollingAllowed: false;
@@ -245,14 +245,21 @@ export type DevelopmentDocumentRef = {
 export type GridBuildRun = {
   id: string;
   taskId: string;
-  nodeId: BuildNodeDefinition["id"];
-  sourceHead: string;
+  sessionId: string;
+  workerCode: WorkerCode;
+  nodeId: BuildNodeDefinition["id"] | null;
+  sourceCommit: string;
   sourceBranch: string;
-  status: "QUEUED" | "RUNNING" | "PASS" | "FAIL" | "BLOCKED";
-  exclusiveLockRequired: true;
-  buildId?: string | null;
-  startedAt?: string | null;
-  finishedAt?: string | null;
+  status: "QUEUED" | "ASSIGNED" | "RUNNING" | "PASS" | "FAIL" | "BLOCKED";
+  retryOfRunId: string | null;
+  runnerLocalLockRequired: true;
+  productionAccess: "DENY";
+  buildId: string | null;
+  artifactSha256: string | null;
+  queuedAt: string;
+  assignedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
 };
 
 export type GridReview = {

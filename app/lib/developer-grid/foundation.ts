@@ -45,6 +45,8 @@ const FOUNDATION_ACCEPTANCE = [
   "Realtime delta/event; history explicit/paginált.",
   "Release/runtime provenance fail-closed mismatch esetén.",
   "Build node abstraction; kerülő build tilos.",
+  "FULL BUILD runner pool: BUILD-01 priority, BUILD-02 fallback, különben QUEUED.",
+  "Runnerenként 1 FULL BUILD; runner-local flock; deploy/migration/restart/cutover DENY.",
   "Build/restart/shared release csak exclusive coordination lock alatt.",
 ] as const;
 
