@@ -41,6 +41,9 @@ const required = [
   "scripts/developer-grid/build-candidate.sh",
   "scripts/developer-grid/build-runner-pool-contract.mjs",
   "scripts/developer-grid/refresh-build-gateway-snapshot.mjs",
+  "scripts/developer-grid/build-gateway-client.mjs",
+  "ops/developer-grid/build-gateway/server.mjs",
+  "ops/developer-grid/build-gateway/worker.mjs",
   "scripts/developer-grid/build-runner-executor-v1.sh",
   "scripts/developer-grid/remote-build-dispatch.mjs",
   "scripts/developer-grid/remote-build-executor-contract.mjs",
@@ -94,6 +97,10 @@ const healthAdapters = fs.readFileSync(path.join(root, "app/lib/developer-grid/s
 const healthAi = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-ai.ts"), "utf8");
 const healthOperations = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-operations.ts"), "utf8");
 const healthFacade = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health.ts"), "utf8");
+const buildGatewayClient = fs.readFileSync(path.join(root, "scripts/developer-grid/build-gateway-client.mjs"), "utf8");
+const buildGatewayRefresh = fs.readFileSync(path.join(root, "scripts/developer-grid/refresh-build-gateway-snapshot.mjs"), "utf8");
+const buildGatewayServer = fs.readFileSync(path.join(root, "ops/developer-grid/build-gateway/server.mjs"), "utf8");
+const buildGatewayWorker = fs.readFileSync(path.join(root, "ops/developer-grid/build-gateway/worker.mjs"), "utf8");
 const evidence = fs.readFileSync(path.join(root, "app/lib/developer-grid/evidence.ts"), "utf8");
 const evidenceIngest = fs.readFileSync(path.join(root, "app/lib/developer-grid/evidence-ingest.ts"), "utf8");
 const reviewGate = fs.readFileSync(path.join(root, "app/lib/developer-grid/review-gate.ts"), "utf8");
@@ -120,6 +127,10 @@ const checks = [
   [runnerPool.includes('mechanism: BUILD_RUNNER_LOCAL_LOCK_MECHANISM') && runnerPool.includes('full-build.lock') && runnerPool.includes('deniedOperations: ["DEPLOY", "MIGRATION", "RESTART", "CUTOVER", "CANDIDATE"]'), "runner pool uses local flock and denies deployment operations"],
   [runnerScheduler.includes('decision: "QUEUED"') && runnerScheduler.includes('scheduleBuildRun') && !runnerScheduler.includes('execFile') && !runnerScheduler.includes('spawn'), "runner scheduler exposes queue foundation without executing builds"],
   [build.includes("probeBuildNodes") && build.includes("BENJADMIN_BUILD_NODE_SNAPSHOT_FILE") && build.includes("DIMPRO_MCP_SSH_GATEWAY") && !build.includes('"/usr/bin/ssh"'), "build node MCP gateway snapshot adapter"],
+  [buildGatewayClient.includes("https://mcp.dimprover.hu/build-gateway/v1") && buildGatewayClient.includes("BUILD_GATEWAY_URL_INSECURE"), "canonical DEV build transport uses MCP gateway HTTPS"],
+  [buildGatewayRefresh.includes("getBuildGatewayNodes") && !buildGatewayRefresh.includes("/usr/bin/ssh") && !buildGatewayRefresh.includes("BatchMode=yes"), "DEV health refresh has no direct BUILD SSH"],
+  [buildGatewayServer.includes("SOURCE_BUNDLE_HEAD_MISMATCH") && buildGatewayServer.includes("x-dimpro-build-gateway-proxy") && buildGatewayServer.includes('productionAccess:"DENY"'), "MCP build transport gateway validates bundle and remains PROD DENY"],
+  [buildGatewayWorker.includes("dimpro-build01") && buildGatewayWorker.includes("dimpro-build02") && buildGatewayWorker.includes("/srv/dimpro-dev/artifacts/build-runs"), "gateway worker owns BUILD SSH and returns artifact to canonical DEV"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
   [orchestrator.includes("BUILD_QUEUE") && orchestrator.includes("RUNNER_LOCAL_FLOCK_REQUIRED") && !orchestrator.includes("CANONICAL_DEV_SERVER"), "remote runner pool is canonical FULL BUILD path and queue is fail-closed"],
   [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],

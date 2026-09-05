@@ -92,3 +92,28 @@ A Developer Grid négy ChatGPT-cellás munkaterét és a középső BENJADMIN Fe
 A repository-szintű TypeScript futás előtt a canonical `package.json` / `package-lock.json` által már deklarált Monaco/XTerm csomagok hiányoztak a közösen használt DEV `node_modules` cache-ből. Ezek DEV dependency-hidratálása után a teljes TypeScript ellenőrzés zöld. Forrás dependency-verzió vagy lockfile emiatt nem módosult ebben a branchben.
 
 A külső V.Guard provider live futás **nem történt meg**. A jelenlegi `dimprover-dev` runtime-ban nincs konfigurált OpenAI/Anthropic provider secret + model + HUF pricing + execution gate, ezért a V.Guard explicit indítása helyesen fail-closed marad. Ennek engedélyezése külön, tudatos DEV konfigurációs lépés.
+
+
+## MCP Build Transport Gateway V1 – 2026-09-05
+
+A BUILD01/BUILD02 infrastruktúra ellenőrzése során kiderült, hogy a canonical `dimpro-dev` VPS a build node-okat közvetlenül nem éri el, miközben az MCP VPS mindkettőhöz hitelesített és működő SSH útvonallal rendelkezik. A Developer Grid ezért nem kapott új közvetlen DEV→BUILD SSH kerülőutat. Helyette elkészült a külön, korlátozott **MCP Build Transport Gateway V1**.
+
+Adatút:
+
+`Developer Grid / canonical DEV → HTTPS mcp.dimprover.hu/build-gateway/v1 → MCP VPS gateway → BUILD01 vagy BUILD02 → MCP VPS → canonical DEV artifact store`
+
+Fő szabályok:
+
+- a Developer Grid kliens és a `refresh-build-gateway-snapshot.mjs` nem tartalmaz BUILD SSH/SCP végrehajtást;
+- a canonical DEV csak domainalapú HTTPS kapcsolaton kommunikál a gatewayjel;
+- a gateway process csak loopback címen figyel, az Nginx ingress csak a canonical DEV VPS-t engedi;
+- a gateway API kizárólag node-health, exact bundle dispatch és run-status műveletekre korlátozott;
+- általános command/terminal/deploy/migration/restart/cutover API nincs;
+- az exact Git bundle külön bare verify repositoryban ellenőrzött, a branch ref HEAD = requested sourceCommit követelmény fail-closed;
+- a runner a dispatch elfogadásakor és a worker indulásakor is újraellenőrzött;
+- BUILD01 elsődleges, BUILD02 fallback a schedulerben, de a gateway a már kijelölt runner helyett nem választ rejtetten másikat;
+- a gateway worker ellenőrzi a runner resultot, BUILD_ID-t, metadata provenance-t és artifact SHA-256-ot;
+- PASS után az artifact + metadata + result atomikusan visszakerül a canonical DEV `/srv/dimpro-dev/artifacts/build-runs/<runId>` tárba;
+- PROD hozzáférés és PROD művelet minden rétegben `DENY`.
+
+A gateway szolgáltatás forrása verziózott az `ops/developer-grid/build-gateway/` könyvtárban. A telepített gateway service neve `dimpro-build-gateway.service`; a runtime port csak localhoston `8791`. A publikus alkalmazáskapcsolat továbbra is domainalapú, a konkrét DEV VPS IP csak az Nginx hálózati allowlist része.

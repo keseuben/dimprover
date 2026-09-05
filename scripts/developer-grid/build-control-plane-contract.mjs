@@ -20,7 +20,7 @@ check(control.includes('sourceState !== "VERIFIED"') && control.includes("SOURCE
 check(store.includes("createBuildRunIfTaskIdle") && store.includes("claimBuildRunDispatch") && store.includes("claimQueuedBuildRun"), "build store has atomic duplicate/queue/dispatch claims");
 check(control.includes("BUILD_QUEUED") && control.includes("BUILD_ASSIGNED") && control.includes("BUILD_STARTED") && control.includes("BUILD_RESULT"), "build lifecycle emits evidence events");
 check(job.includes('productionAccess:"DENY"') && job.includes("artifactSha256") && job.includes("outputSha256"), "detached build job writes DEV PROD-DENY evidence hashes");
-check(dispatch.includes('args["runner-id"]') && dispatch.includes("ASSIGNED_BUILD_RUNNER_NOT_READY") && dispatch.includes("chooseNode(snapshot, requestedRunnerId)"), "remote dispatcher honors exact scheduler runner fail-closed");
+check(dispatch.includes('args["runner-id"]') && dispatch.includes("ASSIGNED_BUILD_RUNNER_NOT_READY") && dispatch.includes("chooseNode(snapshot,requestedRunnerId)"), "remote dispatcher honors exact scheduler runner fail-closed");
 check(client.includes("fetchDeveloperGridBuildRuns") && client.includes("requestDeveloperGridFullBuild"), "desktop DEV client exposes build-run API");
 check(preload.includes("getDeveloperGridBuildRuns") && preload.includes("requestDeveloperGridFullBuild") && main.includes('ipcMain.handle("build-runs:request"'), "desktop IPC chain exposes build control");
 check(ui.includes("FULL BUILD INDÍTÁSA") && ui.includes('bootAckState==="VALIDATED"') && ui.includes("BUILD01 elsődleges · BUILD02 fallback"), "central control panel gates and renders real Runner Pool");

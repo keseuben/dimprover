@@ -1,0 +1,21 @@
+[Unit]
+Description=DIMPRO Build Transport Gateway V1
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dimpro-build-gateway
+Environment=DIMPRO_BUILD_GATEWAY_HOST=127.0.0.1
+Environment=DIMPRO_BUILD_GATEWAY_PORT=8791
+Environment=DIMPRO_BUILD_GATEWAY_TOKEN_FILE=/etc/dimpro-build-gateway/token
+Environment=DIMPRO_BUILD_GATEWAY_RUN_ROOT=/srv/dimpro-build-gateway/runs
+ExecStart=/usr/bin/node /opt/dimpro-build-gateway/server.mjs
+Restart=always
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

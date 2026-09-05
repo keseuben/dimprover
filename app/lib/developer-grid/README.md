@@ -61,3 +61,9 @@ A Review Gate három célállapotot értékel: `REVIEW`, `BUILD`, `CLOSURE`. Min
 A V.Guard-AI indítása explicit felhasználói művelet. Automatikus provider-költség nincs. A review read-only: clean commitolt diffet vizsgál `baseHead → currentHead` tartományban; fájlírás, patch, deploy, restart, migration, cutover és PROD hozzáférés tiltott. Külső provider csak READY secret + model + HUF pricing + global execution gate és budget gate mellett futhat. Sensitive path vagy secret scanner találat fail-closed. A provider teljes nyers kimenete nem kerül Diagnostic Evidence-be; csak a strict parserrel elfogadott review státusz, technikai azonosítók és használati metrikák.
 
 A BUILD vezérlés a current authoritative HEAD-et újraellenőrzi és clean worktree-t követel. A worker chatből FULL BUILD nem indítható; a Central Core Runner Pool az egyetlen FULL BUILD útvonal.
+
+## v0.1.13 MCP Build Transport Gateway V1
+
+A BUILD01/BUILD02 végrehajtási adatút a v0.1.13-ban külön MCP VPS transport gatewayen halad. A canonical DEV VPS nem SSH-zik közvetlenül a build node-okra. A DEV oldali `build-gateway-client.mjs` kizárólag a `https://mcp.dimprover.hu/build-gateway/v1` HTTPS végpontot használja; a health refresh és a FULL BUILD dispatch ugyanazon korlátozott gateway API-n történik.
+
+A gateway csak négy műveletet ismer: service health, sanitizált node-health, exact Git-bundle dispatch és run-status. Nincs általános shell/terminal végpont. A feltöltött bundle branch/head egyezése külön bare Git verify repositoryban ellenőrzött, a kijelölt runner közvetlenül futás előtt újra READY/LIVE/FREE validációt kap. A tényleges SSH/SCP csak az MCP VPS gateway workerben létezik, és csak BUILD01/BUILD02 felé. Artifact PASS esetén a gateway BUILD_ID + metadata + SHA-256 ellenőrzés után visszaszinkronizál a canonical DEV artifact store-ba. A DEV alkalmazásszerver FULL BUILD fallbackje továbbra is tiltott; PROD DENY változatlan.
