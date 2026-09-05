@@ -1,0 +1,18 @@
+[Unit]
+Description=DIMPRO Developer Grid BUILD health snapshot refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905
+ExecStart=/usr/bin/node /srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905/scripts/developer-grid/refresh-build-gateway-snapshot.mjs
+Environment=BENJADMIN_BUILD_NODE_SNAPSHOT_FILE=/srv/dimpro-dev/coordination/health-snapshots/build-nodes.json
+Environment=DIMPRO_BUILD_GATEWAY_BASE_URL=https://mcp.dimprover.hu/build-gateway/v1
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/dimpro-dev/coordination/health-snapshots

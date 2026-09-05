@@ -16,6 +16,8 @@ const runner = read("scripts/developer-grid/build-runner-executor-v1.sh");
 const dispatch = read("scripts/developer-grid/remote-build-dispatch.mjs");
 const gatewayServer = read("ops/developer-grid/build-gateway/server.mjs");
 const gatewayWorker = read("ops/developer-grid/build-gateway/worker.mjs");
+const healthRefreshService = read("ops/developer-grid/build-gateway/dimpro-build-health-refresh.service");
+const healthRefreshTimer = read("ops/developer-grid/build-gateway/dimpro-build-health-refresh.timer");
 
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
@@ -32,6 +34,7 @@ check("gateway validates exact Git bundle HEAD before worker spawn",()=>{assert.
 check("gateway revalidates assigned runner immediately before execution",()=>{assert.match(gatewayServer,/ASSIGNED_BUILD_RUNNER_NOT_READY/);assert.match(gatewayWorker,/ASSIGNED_BUILD_RUNNER_NOT_READY/);assert.match(gatewayWorker,/queryRunner\(runnerId\)/);});
 check("gateway worker uses only build01/build02 SSH aliases",()=>{assert.match(gatewayWorker,/dimpro-build01/);assert.match(gatewayWorker,/dimpro-build02/);assert.match(gatewayWorker,/\^\(build01\|build02\)\$/);});
 check("gateway worker returns artifact to canonical DEV store",()=>{assert.match(gatewayWorker,/\/srv\/dimpro-dev\/artifacts\/build-runs/);assert.match(gatewayWorker,/copyToDev/);assert.match(gatewayWorker,/build-artifact\.tar\.gz/);assert.match(gatewayWorker,/metadata\.json/);});
+check("DEV BUILD health snapshot has a 30 second systemd refresh timer",()=>{assert.match(healthRefreshTimer,/OnUnitActiveSec=30s/);assert.match(healthRefreshTimer,/dimpro-build-health-refresh\.service/);assert.match(healthRefreshService,/refresh-build-gateway-snapshot\.mjs/);assert.match(healthRefreshService,/mcp\.dimprover\.hu\/build-gateway\/v1/);assert.match(healthRefreshService,/ReadWritePaths=\/srv\/dimpro-dev\/coordination\/health-snapshots/);assert.doesNotMatch(healthRefreshService,/\/usr\/bin\/ssh|BatchMode=yes/);});
 check("runner verifies exact execution identity",()=>{for(const marker of ["dimproadmin","hostname -s","SOURCE_COMMIT_INVALID","SOURCE_BRANCH_INVALID","WORKER_CODE_INVALID"])assert.ok(runner.includes(marker));});
 check("runner uses hardened host-local flock",()=>{assert.match(runner,/STATE_ROOT.*full-build\.lock/);assert.match(runner,/flock -n 9/);});
 check("runner sources pinned toolchain",()=>{assert.match(runner,/toolchains\/node\.env/);for(const marker of ["v22.23.2","10.9.8","2.43.0"])assert.ok(runner.includes(marker));});

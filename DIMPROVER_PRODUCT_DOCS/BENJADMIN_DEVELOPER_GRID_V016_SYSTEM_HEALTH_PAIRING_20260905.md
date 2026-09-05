@@ -25,6 +25,8 @@ A fennmaradó blokk nem BUILD-node vagy System Health UI hiba, hanem hitelesít�
 
 A fizikai E2E során az `admin.dev.dimpro.hu/api/dev/grid/*` Nginx útvonal még a régi v0.1.11 immutable runtime-ra (`127.0.0.1:3295`) mutatott. A v0.1.16 kiadás része ezért az exact current-HEAD Developer Grid API runtime külön candidate smoke-ja és csak sikeres ellenőrzés után a DEV `/api/dev/grid/` upstream átvezetése. PROD változatlanul DENY.
 
+A BUILD01/BUILD02 health snapshot frissítése korábban csak explicit gateway refresh/build műveletekhez kötődött, ezért normál desktop használat közben a 60 másodperces freshness kapu után `STALE / NOT_CONNECTED` állapot jelent meg. A v0.1.16 DEV infrastruktúra ezért külön systemd timerrel 30 másodpercenként frissíti a sanitizált MCP gateway snapshotot. A timer nem használ közvetlen DEV→BUILD SSH-t; kizárólag a HTTPS MCP Build Transport Gatewayt hívja.
+
 ## Kötelező ellenőrzések
 
 - Desktop/System Health/workspace/chat contract PASS.
