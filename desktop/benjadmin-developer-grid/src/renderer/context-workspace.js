@@ -10,7 +10,7 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:""}, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workStartBusy:false, workStartKey:"", workStartStatus:"KÉSZ", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:""}, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workStartBusy:false, workStartKey:"", workStartStatus:"KÉSZ", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
   const fmtDuration = m => { const n=Math.max(0,Number(m)||0), h=Math.floor(n/60); return h ? `${h} ó ${n%60} p` : `${n} p`; };
@@ -62,6 +62,23 @@
     state.notice=baseNotice+continuityNote;render();
   }
   function setNotice(message, tone="info") { state.notice=message||""; const el=root.querySelector("[data-context-notice]"); if (el) { el.textContent=state.notice; el.dataset.tone=tone; el.hidden=!state.notice; } }
+  function diagnosticsView() {
+    const task=state.activeWork?.task||null;
+    const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
+    const summary=state.evidence?.summary||null;
+    const counts=summary?.counts||{};
+    const gate=state.reviewGate||null, buildGate=state.buildGate||null, closure=state.closureGate||null;
+    const providerReady=state.vguard?.providerReady===true;
+    const readyProviders=(state.vguard?.providers||[]).filter(p=>p?.ready&&p?.provider!=="mock");
+    const canReview=Boolean(task&&session&&gate?.ready&&providerReady&&!state.reviewBusy);
+    const currentHead=gate?.sourceHead||session?.sourceProvenance?.head||"";
+    const baseHead=gate?.baseHead||session?.sourceProvenance?.baseHead||"";
+    const countCard=(kind,label)=>`<article data-evidence-kind="${kind}"><strong>${esc(label)}</strong><b>${Number(counts[kind])||0}</b></article>`;
+    const gateCard=(value,label)=>{const ok=value?.ready===true;const failed=(value?.checks||[]).filter(x=>x.required&&!x.pass);return `<article data-gate-state="${ok?"PASS":"BLOCKED"}"><div><strong>${esc(label)}</strong><b>${ok?"PASS":"BLOCKED"}</b></div><small>${ok?"Minden kötelező kapu teljesült.":esc(failed.slice(0,3).map(x=>x.label).join(" · ")||"Nincs elegendő evidence.")}</small></article>`;};
+    const providerText=providerReady?readyProviders.map(p=>`${p.label}${p.modelId?` / ${p.modelId}`:""}`).join(" · "):"Nincs READY külső V.Guard provider; review indítás fail-closed.";
+    return `<section class="cw-diagnostics"><header><div><strong>DIAGNOSTIC EVIDENCE ENGINE</strong><span>Sanitizált technikai evidence · current HEAD alapú kapuk · append-only</span></div><b>${summary?.unresolvedBlockers?.length?`${summary.unresolvedBlockers.length} BLOCKER`:"PROD DENY"}</b></header><div class="cw-evidence-grid">${countCard("FILE","FILE")}${countCard("TEST","TEST")}${countCard("ERROR","ERROR")}${countCard("REVIEW","REVIEW")}${countCard("BUILD","BUILD")}${countCard("HANDOFF","HANDOFF")}${countCard("BOOT_ACK","BOOT ACK")}</div><div class="cw-source-line"><strong>HEAD</strong><span>${esc(currentHead?String(currentHead).slice(0,12):"—")}</span><strong>BASE</strong><span>${esc(baseHead?String(baseHead).slice(0,12):"—")}</span><strong>STAGE</strong><span>${Number(session?.developmentContext?.workStageIndex)||0}/6</span></div><div class="cw-gate-grid">${gateCard(gate,"REVIEW READINESS")}${gateCard(buildGate,"BUILD GATE")}${gateCard(closure,"CLOSURE / HANDOFF")}</div><div class="cw-vguard-actions"><div><strong>V.GUARD-AI</strong><span>${esc(providerText)}</span></div><button id="vguardReviewButton" type="button" ${canReview?"":"disabled"}>${state.reviewBusy?"REVIEW FUT…":"FÜGGETLEN REVIEW INDÍTÁSA"}</button></div></section>`;
+  }
+
   function runnerPoolView() {
     const servers=state.systemHealth?.servers||[];
     const node=(id)=>servers.find(x=>x.id===id)||null;
@@ -71,10 +88,12 @@
     const task=state.activeWork?.task||null;
     const session=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
     const ackOk=session?.developmentContext?.bootAckState==="VALIDATED";
-    const canBuild=Boolean(task&&session&&ackOk&&!active&&!state.buildBusy);
+    const stage=Number(session?.developmentContext?.workStageIndex||1);
+    const stageReviewOk=stage<5||state.buildGate?.ready===true;
+    const canBuild=Boolean(task&&session&&ackOk&&stageReviewOk&&!active&&!state.buildBusy);
     const card=(id,label)=>{const n=node(id);const status=n?.state||"NINCS ADAT";const metrics=n?.metrics||{};const lock=metrics.buildLockHeld===true?"LOCK FOGLALT":metrics.buildLockHeld===false?"LOCK SZABAD":"LOCK —";const governor=metrics.storageGovernor||"—";const run=runs.find(x=>x.nodeId===id&&["ASSIGNED","RUNNING"].includes(String(x.status||"").toUpperCase()));return `<article data-runner-id="${id}" data-runner-state="${esc(status)}"><div><strong>${label}</strong><span>${esc(n?.hostname||`${id}.dimpro.hu`)}</span></div><b>${esc(run?.status||status)}</b><small>${esc(lock)} · STORAGE ${esc(governor)}</small><em>${run?`RUN ${esc(run.id)} · ${esc(String(run.sourceCommit||"").slice(0,8))}`:esc(n?.reason||"MCP gateway health adatra vár.")}</em></article>`;};
     const runLine=latest?`<div class="cw-build-run" data-status="${esc(latest.status)}"><strong>${esc(latest.status)}</strong><span>${esc(latest.id)} · ${esc(latest.nodeId?latest.nodeId.toUpperCase():"QUEUE")} · ${esc(String(latest.sourceCommit||"").slice(0,8))}</span><small>${latest.buildId?`BUILD_ID ${esc(latest.buildId)} · `:""}${latest.artifactSha256?`SHA ${esc(String(latest.artifactSha256).slice(0,16))}… · `:""}${esc(latest.failureCode||"")}</small></div>`:"";
-    const gateText=!task?"Nincs aktív task":!session?"Nincs aktív worker session":!ackOk?"BOOT ACK nincs validálva":active?`Aktív build: ${active.status}`:"Build gate READY";
+    const gateText=!task?"Nincs aktív task":!session?"Nincs aktív worker session":!ackOk?"BOOT ACK nincs validálva":stage>=5&&!state.buildGate?.ready?"5/6 BUILD előtt a Review Gate BLOCKED":active?`Aktív build: ${active.status}`:"Build gate READY";
     return `<section class="cw-runner-pool"><header><div><strong>BUILD RUNNER POOL</strong><span>BUILD01 elsődleges · BUILD02 fallback · queue · evidence</span></div><b>PROD DENY</b></header><div class="cw-runner-grid">${card("build01","BUILD01")}${card("build02","BUILD02")}</div>${runLine}<div class="cw-build-actions"><small>${esc(gateText)}</small><button id="fullBuildButton" type="button" ${canBuild?"":"disabled"}>${state.buildBusy?"BUILD KÉRÉS…":"FULL BUILD INDÍTÁSA"}</button></div></section>`;
   }
   async function requestFullBuild(){
@@ -83,6 +102,18 @@
     state.buildBusy=true;render();const result=await api.requestDeveloperGridFullBuild?.({taskId:task.id,sessionId:session.id});state.buildBusy=false;
     if(!result?.ok){setNotice(result?.error||"A FULL BUILD indítása sikertelen.","error");render();return;}
     state.notice=result.build?.run?.status==="QUEUED"?"A FULL BUILD várólistára került; a Central Core automatikusan kiosztja az első felszabaduló runnerre.":`FULL BUILD kiosztva: ${String(result.build?.run?.nodeId||"runner").toUpperCase()}.`;await refresh(false);
+  }
+  async function requestVGuardReview(){
+    if(state.reviewBusy)return;
+    const task=state.activeWork?.task||null;
+    if(!task||state.reviewGate?.ready!==true||state.vguard?.providerReady!==true){setNotice("A V.Guard review csak zöld REVIEW READINESS és READY külső provider mellett indítható.","error");return;}
+    state.reviewBusy=true;render();
+    const result=await api.requestDeveloperGridVGuardReview?.({taskId:task.id,modelPreference:"AUTO"});
+    state.reviewBusy=false;
+    if(!result?.ok){setNotice(result?.error||"A V.Guard review sikertelen vagy blokkolt.","error");render();return;}
+    const review=result.review||null;
+    state.notice=review?.review?.result?`V.Guard review: ${review.review.result} · ${Number(review.review.findings?.length)||0} finding.`:"V.Guard review befejezve.";
+    await refresh(false);
   }
   function packView() { return `<section class="cw-pack"><header><div><strong>CONTEXT PACK</strong><span>Workerhez rendelt fejlesztési kontextus</span></div><b>PROD DENY</b></header><div class="cw-pack-grid">${WORKERS.map(w=>{const list=state.snapshot.bindings?.[w]||[]; return `<article><strong>${w}</strong><span>${list.length} elem</span><button type="button" data-clear-worker="${w}" title="${w} Context Pack ürítése">×</button><small>${list.slice(0,3).map(x=>esc(x.title||x.id)).join(" · ")||"Nincs hozzárendelt kontextus"}</small></article>`}).join("")}</div></section>`; }
   function bindButtons(type,item) { const title=item.title||item.chatTitle||item.id; return `<div class="cw-bind-buttons">${WORKERS.map(w=>`<button type="button" data-bind-worker="${w}" data-bind-type="${type}" data-bind-id="${esc(item.id)}" data-bind-title="${esc(title)}" title="Hozzárendelés: ${w}">${w.replace("AI","")}</button>`).join("")}</div>`; }
@@ -96,7 +127,7 @@
   }
   function groupHandoffs(items) { const map=new Map(); for (const x of items) { const key=state.group==="project"?`${x.mainProject} / ${x.project}`:state.group==="worker"?x.workerCode:state.group==="chat"?`${x.chatSessionId} · ${x.chatTitle}`:state.group==="status"?x.status:state.group==="date"?new Date(x.finishedAt).toLocaleDateString("hu-HU"):`${x.module}${x.contextModule?` / ${x.contextModule}`:""}`; const k=key||"Nincs besorolás"; if(!map.has(k))map.set(k,[]); map.get(k).push(x); } return [...map.entries()]; }
   function handoffsView() { const groups=groupHandoffs(filteredHandoffs()); return `<div class="cw-filters cw-filters-handoff"><label class="cw-search">⌕<input id="cwQuery" value="${esc(state.query)}" placeholder="Keresés csevegésben, workerben, modulban, taskban…"></label><select id="cwWorker"><option value="all">Minden worker</option>${WORKERS.map(w=>`<option ${state.worker===w?"selected":""}>${w}</option>`).join("")}</select><select id="cwStatus"><option value="all">Minden állapot</option>${["COMPLETED","PARTIAL","BLOCKED","FAILED"].map(v=>`<option ${state.status===v?"selected":""}>${v}</option>`).join("")}</select><select id="cwGroup"><option value="module" ${state.group==="module"?"selected":""}>Csoport: modul</option><option value="project" ${state.group==="project"?"selected":""}>Csoport: projekt</option><option value="worker" ${state.group==="worker"?"selected":""}>Csoport: worker</option><option value="chat" ${state.group==="chat"?"selected":""}>Csoport: csevegés</option><option value="date" ${state.group==="date"?"selected":""}>Csoport: dátum</option><option value="status" ${state.group==="status"?"selected":""}>Csoport: állapot</option></select></div><div class="cw-groups">${groups.map(([k,list])=>`<section><header><strong>${esc(k)}</strong><span>${list.length} átadó</span></header>${list.map(handoffCard).join("")}</section>`).join("")||'<div class="cw-empty">Még nincs a szűrésnek megfelelő átadó.</div>'}</div>`; }
-  function render() { root.innerHTML=`${workStartView()}${runnerPoolView()}${packView()}<nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
+  function render() { root.innerHTML=`${workStartView()}${diagnosticsView()}${runnerPoolView()}${packView()}<nav class="cw-tabs"><button data-cw-tab="resources" data-active="${state.tab==="resources"}">SEGÉDANYAGOK <b>${state.snapshot.resources?.length||0}</b></button><button data-cw-tab="handoffs" data-active="${state.tab==="handoffs"}">ÁTADÁSOK <b>${state.snapshot.handoffs?.length||0}</b></button><button id="cwRefresh" type="button">↻</button></nav><div data-context-notice class="cw-notice" ${state.notice?"":"hidden"}>${esc(state.notice)}</div>${state.tab==="resources"?resourcesView():handoffsView()}`; bindRenderedUi(); }
   function bindRenderedUi() {
     const workPrompt=root.querySelector("#workStartPrompt");
     workPrompt?.addEventListener("input",()=>{state.workStartDraft=workPrompt.value;state.workStartKey="";const b=root.querySelector("#workStartButton");if(b)b.disabled=state.workStartBusy||state.workStartDraft.trim().length<12;});
@@ -107,6 +138,7 @@
     root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";render();}));
     root.querySelector("#workStartButton")?.addEventListener("click",()=>void startWork());
     root.querySelector("#fullBuildButton")?.addEventListener("click",()=>void requestFullBuild());
+    root.querySelector("#vguardReviewButton")?.addEventListener("click",()=>void requestVGuardReview());
     root.querySelectorAll("[data-cw-tab]").forEach(b=>b.addEventListener("click",()=>{state.tab=b.dataset.cwTab;state.query="";render();})); root.querySelector("#cwRefresh")?.addEventListener("click",()=>void refresh());
     const q=root.querySelector("#cwQuery"); q?.addEventListener("input",()=>{state.query=q.value;render();const next=root.querySelector("#cwQuery");next?.focus();next?.setSelectionRange(next.value.length,next.value.length);});
     [["#cwModule","module"],["#cwDocType","documentType"],["#cwRequired","required"],["#cwPriority","priority"],["#cwWorker","worker"],["#cwStatus","status"],["#cwGroup","group"]].forEach(([sel,key])=>root.querySelector(sel)?.addEventListener("change",e=>{state[key]=e.target.value;render();}));
@@ -132,6 +164,14 @@
     if(workResult?.ok&&workResult.activeWork)state.activeWork=workResult.activeWork;
     if(healthResult?.ok&&healthResult.health)state.systemHealth=healthResult.health;
     if(buildResult?.ok&&buildResult.buildRuns)state.buildRuns=buildResult.buildRuns;
+    const taskId=state.activeWork?.task?.id||"";
+    if(taskId){
+      const [evidenceResult,reviewResult,buildGateResult,closureResult]=await Promise.all([api.getDeveloperGridEvidence?.(taskId),api.getDeveloperGridReviewGate?.(taskId,"REVIEW"),api.getDeveloperGridReviewGate?.(taskId,"BUILD"),api.getDeveloperGridReviewGate?.(taskId,"CLOSURE")]);
+      if(evidenceResult?.ok)state.evidence={evidence:evidenceResult.evidence||[],summary:evidenceResult.summary||null};
+      if(reviewResult?.ok){state.reviewGate=reviewResult.gate||null;state.vguard=reviewResult.vguard||null;}
+      if(buildGateResult?.ok)state.buildGate=buildGateResult.gate||null;
+      if(closureResult?.ok)state.closureGate=closureResult.gate||null;
+    }else{state.evidence={evidence:[],summary:null};state.reviewGate=null;state.buildGate=null;state.closureGate=null;state.vguard=null;}
     state.workStartStatus=state.activeWork?.task?"AKTÍV":"KÉSZ"; state.notice=""; render();
   }
   function applyLayout(layout) { const zoom=Math.max(50,Math.min(150,Number(layout?.zoomPercent)||100)); document.documentElement.style.setProperty("--context-workspace-zoom",String(zoom/100)); document.querySelectorAll('[data-context-action="zoom-reset"]').forEach(b=>{b.textContent=`${zoom}%`;}); if(detached)return; const visible=Boolean(layout?.visible&&layout?.detached!==true&&layout?.docked!==false); host?.classList.toggle("is-hidden",!visible); document.body.classList.toggle("has-context-workspace",visible); const width=Number(layout?.effectiveWidth||layout?.width||500);document.documentElement.style.setProperty("--context-workspace-width",`${Math.max(380,Math.min(760,width))}px`); toolbarButton?.classList.toggle("is-active",visible); }

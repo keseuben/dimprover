@@ -111,7 +111,7 @@ function migrateUsageGuideV9(content) {
 2/6 · FEJLESZTÉS — tényleges DEV forráskód-/konfigurációmódosítás a kijelölt scope-ban; PROD DENY.
 3/6 · TESZTELÉS — syntax/lint/typecheck, unit/contract/acceptance, regresszió és szükség szerint API/browser/Windows E2E.
 4/6 · ELLENŐRZÉS — diff, kódminőség, security, scope és független V.Guard/M.Forge review; szükség szerint javítás-visszakör.
-5/6 · BUILD / KIADÁS — shared build/release/migráció/restart csak központi exclusive lock alatt; artifact, hash és smoke ellenőrzés.
+5/6 · BUILD / KIADÁS — FULL BUILD csak Central Core Runner Poolon (BUILD01 → BUILD02 → QUEUED); release/restart külön központi gate; artifact, hash és smoke evidence.
 6/6 · LEZÁRÁS — commitok, tesztek, hash-ek, handoff, MUNKA VISSZAADVA, nyitott blokkolók és következő lépés rögzítése.`);
   }
   if (!additions.length) return next.slice(0, 100_000);

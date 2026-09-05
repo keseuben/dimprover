@@ -133,5 +133,31 @@ async function requestDeveloperGridFullBuild({ baseUrl, deviceToken, input }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/build-runs`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 20000);
   return payload.build || null;
 }
+async function submitDeveloperGridEvidence({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/evidence`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 20000);
+  return payload.result || null;
+}
+async function fetchDeveloperGridEvidence({ baseUrl, deviceToken, taskId = "", limit = 100 }) {
+  const base = ensureDevBase(baseUrl);
+  const url = new URL(`${base}/api/dev/grid/evidence`);
+  if (String(taskId || "").trim()) url.searchParams.set("taskId", String(taskId));
+  url.searchParams.set("limit", String(Math.max(1, Math.min(500, Number(limit) || 100))));
+  const payload = await jsonRequest(url.href, { method: "GET", headers: headers(deviceToken) }, 15000);
+  return { evidence: payload.evidence || [], summary: payload.summary || null };
+}
+async function fetchDeveloperGridReviewGate({ baseUrl, deviceToken, taskId = "", target = "REVIEW" }) {
+  const base = ensureDevBase(baseUrl);
+  const url = new URL(`${base}/api/dev/grid/review-gate`);
+  if (String(taskId || "").trim()) url.searchParams.set("taskId", String(taskId));
+  url.searchParams.set("target", String(target || "REVIEW").toUpperCase());
+  const payload = await jsonRequest(url.href, { method: "GET", headers: headers(deviceToken) }, 20000);
+  return { gate: payload.gate || null, vguard: payload.vguard || null };
+}
+async function requestDeveloperGridVGuardReview({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/review-gate`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 360000);
+  return payload.review || null;
+}
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, sanitizeSnapshot };

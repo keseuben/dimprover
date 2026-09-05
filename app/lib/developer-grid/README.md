@@ -4,7 +4,7 @@ A Developer Grid V1 külön rendszerstruktúra; a ChatGrid v0.3.x fallback/refer
 
 A runtime state alapértelmezett helye `/srv/dimpro-dev/coordination/developer-grid`. A state atomikus JSON, az event log append-only JSONL; history cursoros/paginált, a realtime mód `DELTA_EVENT`, full-snapshot polling tiltott. Source mismatch: `SOURCE_BASELINE_MISMATCH`; release/runtime mismatch: `RELEASE_STATE_MISMATCH`.
 
-A `build01.dimpro.hu` és `build02.dimpro.hu` remote node. Amíg egyik sincs SSH-val hitelesítve és READY állapotban, a canonical DEV szerver a hivatalos build executor. Ehhez exclusive coordination lock, storage és memory preflight, valamint PROD DENY szükséges. Nem hitelesített alternatív vagy párhuzamos build tilos.
+A `build01.dimpro.hu` és `build02.dimpro.hu` remote FULL BUILD node. BUILD01 az elsődleges, BUILD02 a fallback. Ha egyik sem friss `READY + LIVE + FREE`, a FULL BUILD `QUEUED`; a DEV alkalmazásszerver nem használható rejtett FULL BUILD fallbackként. Nem hitelesített alternatív vagy párhuzamos build tilos.
 
 A Developer Console bridge read-only módon olvassa a meglévő BENJADMIN task/session/worker állapotot, de a presence nem írhatja felül a Task + Session + Provenance kontextust.
 
@@ -49,3 +49,15 @@ A központi Fejlesztői Vezérlőpult FULL BUILD művelete csak explicit felhasz
 A scheduler BUILD01-et választja elsőként, BUILD02-t fallbackként. A kiosztott node-azonosítót a remote dispatcher explicit `runner-id` formában kapja; ha a kijelölt runner az indítás pillanatában már nem READY/FREE, a végrehajtás fail-closed, és nem vált át rejtetten másik runnerre. Várólistás buildet a control plane később újraütemezhet, mert az eredeti build-kérés már authoritative módon rögzített.
 
 A hosszú build nem a HTTP kérésben fut. Egy detached DEV build-job indítja a remote dispatchert, amely a build állapotáról külön evidence fájlt ír. A control plane a `QUEUED → ASSIGNED → RUNNING → PASS/FAIL/BLOCKED` állapotokat reconciliálja, és `BUILD_QUEUED`, `BUILD_ASSIGNED`, `BUILD_STARTED`, `BUILD_RESULT` eseményt ír. PASS esetén BUILD_ID, artifact SHA-256 és evidence hivatkozás kerül vissza a felületre; FAIL/BLOCKED esetén failure code, exit code és output SHA-256. PROD minden ponton DENY.
+
+## v0.1.13 Diagnostic Evidence Engine / Review Gate
+
+A Developer Grid külön append-only `evidence.jsonl` rétegben tárolja a fejlesztési bizonyítékokat. Az evidence kizárólag sanitizált technikai adatot őriz: task/session/worker azonosító, időpont, branch/worktree/current HEAD, FILE/TEST/ERROR/HANDOFF/BUILD/BOOT_ACK/REVIEW kategória, státusz, severity, technikai path/test/error/build/handoff/review azonosító és SHA-256 lenyomatok. Tetszőleges chat-válasz, provider-válasz, üzleti dokumentumtartalom, secret, token vagy `.env` érték nem kerülhet evidence-be. Érzékeny mintánál a tartalom redacted, érzékeny path esetén a path maszkolt.
+
+A worker stage action a normál emberi összefoglaló mellett kötelező `BENJADMIN_STAGE_REPORT_V1` gépi blokkot kér. A desktop ezt automatikusan felismeri, a worker/task/session/current HEAD azonosságot ellenőrzi, majd a paired DEV evidence API-n FILE/TEST/ERROR evidence-ként rögzíti. A stage csak monoton haladhat 1/6 → 6/6 irányban. Ha checkpoint commit készült, a bejelentett current HEAD csak szerveroldali Git ellenőrzés után válhat authoritative head-dé: a branch/worktree/repository ténylegesen egyezzen, és az új HEAD a base/prior HEAD fast-forward leszármazottja legyen.
+
+A Review Gate három célállapotot értékel: `REVIEW`, `BUILD`, `CLOSURE`. Minden kapu current-HEAD alapú, ezért egy régi commit hibája nem blokkolhat korlátlanul egy későbbi, igazolt HEAD-et. Kötelező az aktív session, VALIDATED BOOT ACK, verified source és current-HEAD PASS teszt evidence. Az 5/6 BUILD fázisban a FULL BUILD csak V.Guard PASS/PASS_WITH_NOTES után engedélyezett. A 6/6 CLOSURE ezen felül current-HEAD PASS BUILD és COMPLETED HANDOFF evidence-et igényel.
+
+A V.Guard-AI indítása explicit felhasználói művelet. Automatikus provider-költség nincs. A review read-only: clean commitolt diffet vizsgál `baseHead → currentHead` tartományban; fájlírás, patch, deploy, restart, migration, cutover és PROD hozzáférés tiltott. Külső provider csak READY secret + model + HUF pricing + global execution gate és budget gate mellett futhat. Sensitive path vagy secret scanner találat fail-closed. A provider teljes nyers kimenete nem kerül Diagnostic Evidence-be; csak a strict parserrel elfogadott review státusz, technikai azonosítók és használati metrikák.
+
+A BUILD vezérlés a current authoritative HEAD-et újraellenőrzi és clean worktree-t követel. A worker chatből FULL BUILD nem indítható; a Central Core Runner Pool az egyetlen FULL BUILD útvonal.

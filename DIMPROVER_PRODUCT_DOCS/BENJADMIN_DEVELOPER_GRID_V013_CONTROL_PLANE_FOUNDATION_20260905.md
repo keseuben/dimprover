@@ -42,11 +42,26 @@ A Developer Grid négy ChatGPT-cellás munkaterét és a középső BENJADMIN Fe
 - A felület BUILD01/BUILD02 health mellett megjeleníti az aktív run-t, commitot és a legutóbbi build eredményét.
 - Automatikus queue reconciliation csak már explicit módon kért buildet indíthat el.
 
+## Diagnostic Evidence Engine / Review Gate – elkészült control-plane alap
+
+- Új append-only, sanitizált `GridEvidence` réteg készült: FILE / TEST / ERROR / HANDOFF / BUILD / BOOT_ACK / REVIEW.
+- A bizonyíték csak technikai mezőket és SHA-256 lenyomatokat tárol; arbitrary chat/provider/document body nincs. Secret és érzékeny path maszkolt.
+- A stage-action prompt kötelező `BENJADMIN_STAGE_REPORT_V1` gépi blokkot kér; a desktop a worker válaszából ezt automatikusan felismeri és paired DEV API-n evidence-ként rögzíti.
+- A stage 1–6 között monoton haladhat; visszalépés fail-closed.
+- Javítva lett egy kritikus provenance-rés: az induló Launch HEAD külön `baseHead`, a fejlesztés aktuális commitja külön authoritative `head`. Új HEAD csak branch/worktree/repository ellenőrzés és fast-forward ancestry után fogadható el.
+- FULL BUILD és V.Guard a current authoritative HEAD-et újraellenőrzi; buildhez clean worktree kötelező.
+- Három kapu készült: REVIEW READINESS, BUILD GATE, CLOSURE / HANDOFF. A blokkerek current-HEAD alapon értékeltek.
+- 5/6 BUILD fázisban a FULL BUILD V.Guard PASS/PASS_WITH_NOTES evidence nélkül blokkol.
+- 6/6 LEZÁRÁS current-HEAD PASS BUILD + COMPLETED HANDOFF evidence-et igényel.
+- V.Guard explicit gombos, review-only futás: sensitive diff/path fail-closed, külső provider csak READY execution/pricing/secret/model és budget gate mellett használható. Automatikus provider-költés nincs.
+- A központi Vezérlőpulton megjelenik az evidence darabszám, current/base HEAD, stage, a három gate és a V.Guard provider readiness.
+
 ## Következő fejlesztési blokk
 
-- Diagnostic Evidence Engine esemény- és evidence-séma teljes bekötése a HANDOFF/TEST/FILE/ERROR eseményekhez;
-- Review/V.Guard kapu és handoff completeness gate szigorítása;
-- Windows natív v0.1.13 candidate E2E, majd valós BUILD01/BUILD02 candidate validáció.
+- A Diagnostic Evidence panel vizuális/native Windows E2E ellenőrzése;
+- v0.1.13 Windows candidate csomag elkészítése;
+- valós BUILD01 candidate build és artifact evidence visszaellenőrzés; szükség esetén BUILD02 fallback acceptance;
+- csak külön konfiguráció/jóváhagyás mellett külső V.Guard provider live próba.
 
 ## Biztonsági invariantok
 
@@ -55,4 +70,25 @@ A Developer Grid négy ChatGPT-cellás munkaterét és a középső BENJADMIN Fe
 - Source/worktree/HEAD fail-closed.
 - Handoff/context nem írhatja felül az authoritative task-routolást.
 - Build végrehajtás csak központi gate és READY runner mellett.
-- A BUILD01/BUILD02 UI health-adat read-only; a tényleges executor bekötése külön következő blokk.
+- A BUILD01/BUILD02 health-adat read-only; a tényleges FULL BUILD executor kizárólag a központi Runner Pool gate-en keresztül indítható.
+
+## Validáció – Diagnostic Evidence / Review Gate blokk
+
+- repository-szintű `npx tsc --noEmit`: **PASS**;
+- teljes `npm run lint`: **0 error**; a repository meglévő warningjai megmaradtak, a Diagnostic Evidence blokk saját új lint warningja nincs;
+- Desktop acceptance: **76/76 PASS**;
+- Workspace/chat regresszió: **37/37 PASS**;
+- BOOT ACK: **8/8 PASS**;
+- Work-start: **38/38 PASS**;
+- Health Core V2: **41/41 PASS**;
+- Build node gateway: **22/22 PASS**;
+- Build Runner Pool: **33/33 PASS**;
+- Remote Build Executor V1: **25/25 PASS**;
+- Build Control Plane: **14/14 PASS**;
+- Diagnostic Evidence contract: **22/22 PASS**;
+- Foundation: **51 required files / 59 invariants PASS**;
+- `git diff --check`: **PASS**.
+
+A repository-szintű TypeScript futás előtt a canonical `package.json` / `package-lock.json` által már deklarált Monaco/XTerm csomagok hiányoztak a közösen használt DEV `node_modules` cache-ből. Ezek DEV dependency-hidratálása után a teljes TypeScript ellenőrzés zöld. Forrás dependency-verzió vagy lockfile emiatt nem módosult ebben a branchben.
+
+A külső V.Guard provider live futás **nem történt meg**. A jelenlegi `dimprover-dev` runtime-ban nincs konfigurált OpenAI/Anthropic provider secret + model + HUF pricing + execution gate, ezért a V.Guard explicit indítása helyesen fail-closed marad. Ennek engedélyezése külön, tudatos DEV konfigurációs lépés.

@@ -5,6 +5,7 @@ import { appendFile, mkdir, open, readFile, rename, unlink, writeFile } from "no
 import { setTimeout as sleep } from "node:timers/promises";
 import path from "node:path";
 import { paginateEvents } from "./events";
+import { appendEvidenceFromGridEvent } from "./evidence";
 import type { DeveloperGridRuntimeState, DeveloperGridTask, GridActivityEvent, GridStateChange, GridStateChangeKind, GridStateDelta, WorkerSession } from "./types";
 
 export const DEFAULT_DEVELOPER_GRID_STATE_ROOT = "/srv/dimpro-dev/coordination/developer-grid";
@@ -161,20 +162,25 @@ export async function appendGridEvent(
   event: Omit<GridActivityEvent, "id" | "sequence" | "timestamp"> & Partial<Pick<GridActivityEvent, "id" | "timestamp">>,
   root = DEFAULT_DEVELOPER_GRID_STATE_ROOT,
 ) {
-  return serializeMutation(root, async () => {
+  const record = await serializeMutation(root, async () => {
     const target = files(root);
     const state = await readGridState(root);
     const sequence = state.lastSequence + 1;
-    const record: GridActivityEvent = {
+    const nextRecord: GridActivityEvent = {
       ...event,
       id: event.id || `grid-event-${randomUUID()}`,
       sequence,
       timestamp: event.timestamp || new Date().toISOString(),
     };
-    await appendFile(target.events, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-    await atomic(target.state, { ...state, lastSequence: sequence, updatedAt: record.timestamp });
-    return record;
+    await appendFile(target.events, `${JSON.stringify(nextRecord)}\n`, { mode: 0o600 });
+    await atomic(target.state, { ...state, lastSequence: sequence, updatedAt: nextRecord.timestamp });
+    return nextRecord;
   });
+  try { await appendEvidenceFromGridEvent(record, root); }
+  catch (error) {
+    console.error("[DeveloperGridEvidence] event evidence persistence failed", { eventId: record.id, kind: record.kind, code: error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "UNKNOWN" });
+  }
+  return record;
 }
 
 export async function listGridEvents(input: { cursor?: string | null; limit?: number; root?: string } = {}) {

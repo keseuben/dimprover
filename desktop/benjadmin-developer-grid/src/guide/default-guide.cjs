@@ -122,11 +122,12 @@ Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 - Ha a reviewer maga javította a kódot, azon a változáson új független ellenőrzés szükséges.
 
 5/6 · BUILD / KIADÁS
-- Shared build, release, migráció, restart vagy cutover csak a központi exclusive-operation.lock alatt indulhat.
-- Elkészülnek a build artifactok, EXE/ZIP/csomagok vagy szerver release könyvtárak.
-- Kötelező a build eredményének, méretének, hashének és szükség szerinti smoke checkjének visszaellenőrzése.
+- FULL BUILD kizárólag a Central Core BUILD Runner Pool kapuján indulhat: BUILD01 elsődleges, BUILD02 fallback, egyébként QUEUED.
+- A worker ChatGPT-cella nem indíthat build:raw, közvetlen Next buildet vagy DEV-host FULL BUILD fallbacket.
+- Release, migráció, restart vagy cutover külön központi exclusive-operation gate; ezek nem a build runner feladatai.
+- Kötelező a BUILD_ID, artifact/hash és szükség szerinti smoke evidence visszaellenőrzése.
 - Párhuzamos build vagy lock-megkerülés tilos.
-- PROD kiadás továbbra is csak külön BenjAdmin engedéllyel történhet.
+- PROD továbbra is DENY; a Developer Grid v0.1.13 ebből a folyamatból PROD-műveletet nem indít.
 
 6/6 · LEZÁRÁS
 - Commit(ok), teszteredmények, build/hash adatok, handoff és dokumentáció rögzítése.

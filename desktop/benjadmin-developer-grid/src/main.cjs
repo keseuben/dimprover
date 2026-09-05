@@ -10,11 +10,12 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
+const { STAGE_REPORT_START, parseDeveloperGridStageReport } = require("./task-launch/stage-report.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
@@ -72,6 +73,7 @@ const latestWorkerConversationScanned = new Set();
 const watermarkCssKeys = new Map();
 const chatRefreshCells = new Map();
 const pendingChatRefreshReasons = new Map();
+const stageReportMonitorKeys = new Set();
 let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 const avatarDataUriCache = new Map();
@@ -1660,6 +1662,38 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   };
 }
 
+async function monitorWorkerStageReport({ view, workerCode, task, baselineResponseSha256 = "" }) {
+  const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
+  const monitorKey = `${backendWorkerCode}:${task?.id || ""}:${task?.sessionId || ""}`;
+  if (!task?.id || !task?.sessionId || !view || view.webContents.isDestroyed() || stageReportMonitorKeys.has(monitorKey)) return;
+  stageReportMonitorKeys.add(monitorKey);
+  const deadline = Date.now() + 15 * 60_000;
+  try {
+    while (Date.now() < deadline && view && !view.webContents.isDestroyed()) {
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      const capture = await captureLatestAssistantText(view);
+      if (!capture?.ok || capture.generating) continue;
+      const body = String(capture.text || "");
+      if (!body.includes(STAGE_REPORT_START)) continue;
+      const responseSha256 = createHash("sha256").update(body).digest("hex");
+      if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) continue;
+      const parsed = parseDeveloperGridStageReport(body);
+      if (!parsed?.ok || !parsed.report) continue;
+      const report = parsed.report;
+      if (report.workerCode !== backendWorkerCode || report.taskId !== String(task.id) || report.sessionId !== String(task.sessionId)) {
+        send("context:refresh", { reason:"stage-report-identity-blocked", taskId:task.id, workerCode:backendWorkerCode });
+        return;
+      }
+      const result = await submitDeveloperGridEvidence({
+        baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
+        input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, entries:report.evidence },
+      }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
+      send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
+      return;
+    }
+  } finally { stageReportMonitorKeys.delete(monitorKey); }
+}
+
 async function prepareWorkerStageAction(workerCode, action) {
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   try {
@@ -1670,6 +1704,7 @@ async function prepareWorkerStageAction(workerCode, action) {
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
   const { presence, task } = liveContextForWorker(code);
   if (!task) return { ok: false, error: "Nincs authoritative aktuális task ehhez a workerhez." };
+  if (!task.sessionId || !/^[0-9a-f]{40}$/i.test(String(task.sourceHead || ""))) return { ok:false, error:"A stage actionhoz authoritative sessionId és 40 karakteres source HEAD szükséges." };
   const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task, presence });
   let view = chatViews.get(cell.id);
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
@@ -1679,11 +1714,14 @@ async function prepareWorkerStageAction(workerCode, action) {
     shellWindow.show();
     shellWindow.focus();
   }
+  const baselineCapture = await captureLatestAssistantText(view);
+  const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   view.webContents.focus();
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {
-    return { ok: true, mode: "inserted", message: "A stage action prompt a worker ChatGPT mezőjében van. Ellenőrizd, majd kézzel küldd el." };
+    void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
+    return { ok: true, mode: "inserted", message: "A stage action prompt a worker ChatGPT mezőjében van. Küldés után a BENJADMIN_STAGE_REPORT_V1 választ a desktop automatikusan evidence-ként rögzíti." };
   }
   clipboard.writeText(prompt);
   return { ok: true, mode: "clipboard", message: "A ChatGPT mező nem volt biztonságosan felülírható; a stage action prompt a vágólapra került." };
@@ -2618,6 +2656,24 @@ function registerIpc() {
       send("context:refresh", { reason:"build-requested", runId:build?.run?.id || null });
       return { ok:true, build };
     } catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A FULL BUILD indítása sikertelen." }; }
+  });
+  ipcMain.handle("evidence:get", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, ...(await fetchDeveloperGridEvidence({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId || ""), limit:160 })) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Diagnostic Evidence nem tölthető be." }; }
+  });
+  ipcMain.handle("review-gate:get", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, ...(await fetchDeveloperGridReviewGate({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId || ""), target:String(payload?.target || "REVIEW") })) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Review Gate nem tölthető be." }; }
+  });
+  ipcMain.handle("review-gate:run", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const review = await requestDeveloperGridVGuardReview({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:payload || {} });
+      send("context:refresh", { reason:"vguard-review-completed", taskId:review?.taskId || payload?.taskId || null });
+      return { ok:true, review };
+    } catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A V.Guard review sikertelen." }; }
   });
   ipcMain.handle("work-start:create", async (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };

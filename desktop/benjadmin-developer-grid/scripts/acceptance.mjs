@@ -57,6 +57,8 @@ check("daily work-start preserves draft and uses explicit submit",()=>{const x=f
 check("header exposes ChatGPT refresh lifecycle",()=>{assert.match(html,/headerChatStatus/);assert.match(html,/headerChatUpdated/);assert.match(html,/headerChatVersion/);assert.match(html,/headerChatRefreshButton/);assert.match(renderer,/formatChatRefreshFullTime/);});
 check("control workspace is forced closed at app startup",()=>assert.match(main,/contextWorkspace = \{ \.\.\.config\.contextWorkspace, visible: false, detached: false \}/));
 check("control center shows BUILD01 and BUILD02 runner health",()=>{assert.match(contextWorkspaceSource,/BUILD RUNNER POOL/);assert.match(contextWorkspaceSource,/build01/);assert.match(contextWorkspaceSource,/build02/);assert.match(contextWorkspaceSource,/getSystemHealth/);});
+check("control center shows Diagnostic Evidence and review gates",()=>{assert.match(contextWorkspaceSource,/DIAGNOSTIC EVIDENCE ENGINE/);assert.match(contextWorkspaceSource,/REVIEW READINESS/);assert.match(contextWorkspaceSource,/BUILD GATE/);assert.match(contextWorkspaceSource,/CLOSURE \/ HANDOFF/);});
+check("control center exposes explicit VGuard review without automatic provider spend",()=>{assert.match(contextWorkspaceSource,/FÜGGETLEN REVIEW INDÍTÁSA/);assert.match(contextWorkspaceSource,/requestDeveloperGridVGuardReview/);assert.doesNotMatch(contextWorkspaceSource,/setInterval\([^)]*requestDeveloperGridVGuardReview/);});
 check("work-start requires explicit coding worker",()=>{assert.doesNotMatch(contextWorkspaceSource,/Automatikus · Central Core választ/);assert.match(contextWorkspaceSource,/Válassz kódmérnököt/);assert.match(contextWorkspaceSource,/Automatikus worker-kiosztás nincs/);});
 const taskLaunchPrompt=fs.readFileSync(path.join(root,"src/task-launch/prompt-builder.cjs"),"utf8");
 check("Task Launch V3 carries authoritative launch packet and BOOT ACK",()=>{assert.match(taskLaunchPrompt,/TASK_LAUNCH_V3/);assert.match(taskLaunchPrompt,/LAUNCH PACKET · AUTHORITATIVE/);assert.match(taskLaunchPrompt,/BOOT ACKNOWLEDGEMENT/);assert.match(taskLaunchPrompt,/SOURCE_BASELINE_MISMATCH/);});
@@ -73,7 +75,7 @@ check("stage 5 actions build runtime checkpoint",()=>assert.match(renderer,/5: \
 check("stage 6 leaves header to handoff controls",()=>assert.match(renderer,/6: \[\]/));
 const stagePrompt=fs.readFileSync(path.join(root,"src/stage-actions-prompt-builder.cjs"),"utf8");
 check("checkpoint prompt is DEV only",()=>assert.match(stagePrompt,/DEV ONLY · PROD DENY/));
-check("build prompt forbids raw build",()=>assert.match(stagePrompt,/build:raw és kerülő\/párhuzamos build tilos/));
+check("build prompt forbids raw build and DEV-host fallback",()=>{assert.match(stagePrompt,/build:raw/);assert.match(stagePrompt,/DEV-host FULL BUILD fallback/);assert.match(stagePrompt,/FULL BUILD-et a worker NEM indíthat/);});
 check("stage action IPC is exposed",()=>{const preload=fs.readFileSync(path.join(root,"src/preload.cjs"),"utf8");assert.match(preload,/prepareStageAction/);assert.match(main,/stage-action:prepare/)});
 const guideSource=fs.readFileSync(path.join(root,"src/guide/default-guide.cjs"),"utf8");
 check("guide uses Developer Grid product name",()=>{assert.match(guideSource,/BENJADMIN DEVELOPER GRID/);assert.doesNotMatch(guideSource,/BENJADMIN CHATGRID/)});

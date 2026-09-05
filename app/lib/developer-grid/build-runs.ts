@@ -5,6 +5,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { probeBuildNodes } from "./build-nodes";
+import { verifyCurrentSourceExecutionState } from "./source-provenance";
+import { evaluateDeveloperGridReviewGate } from "./review-gate";
 import { scheduleBuildRun } from "./build-runner-scheduler";
 import { appendGridEvent, readGridState } from "./state-store";
 import { claimBuildRunDispatch, claimQueuedBuildRun, createBuildRunIfTaskIdle, patchBuildRun, readBuildJobEvidence, readBuildRunStore } from "./build-run-store";
@@ -128,6 +130,15 @@ export async function requestDeveloperGridFullBuild(input: Record<string, unknow
   if (session.developmentContext.bootAckState !== "VALIDATED" || !session.developmentContext.bootAckValidatedAt) errorWith("BUILD_BOOT_ACK_REQUIRED", "FULL BUILD csak validált BOOT ACK után indítható.");
   if (session.sourceProvenance.sourceState !== "VERIFIED" || session.sourceProvenance.blockCode) errorWith("SOURCE_BASELINE_MISMATCH", "A source provenance nem VERIFIED; build fail-closed.");
   if (!/^[0-9a-f]{40}$/i.test(session.sourceProvenance.head)) errorWith("BUILD_SOURCE_HEAD_INVALID", "A buildhez teljes 40 karakteres source HEAD szükséges.");
+  try { await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:true }); }
+  catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as {code?:unknown}).code || "SOURCE_EXECUTION_STATE_INVALID") : "SOURCE_EXECUTION_STATE_INVALID";
+    errorWith(code, error instanceof Error ? error.message : "A FULL BUILD source execution state nem igazolható.");
+  }
+  if (Number(session.developmentContext.workStageIndex || 1) >= 5) {
+    const gate = await evaluateDeveloperGridReviewGate({ taskId, target:"BUILD" });
+    if (!gate.ready) errorWith("BUILD_REVIEW_GATE_BLOCKED", `A 5/6 BUILD fázis előtt a Review Gate kötelező: ${gate.checks.filter((item) => item.required && !item.pass).map((item) => item.label).join(" · ") || "BLOCKED"}.`);
+  }
   const store = await reconcileDeveloperGridBuildRuns();
   const duplicateActive = store.runs.find((run) => run.taskId === taskId && !TERMINAL.has(run.status));
   if (duplicateActive) return { reused: true, run: duplicateActive, revision: store.revision, productionAccess: "DENY" as const };

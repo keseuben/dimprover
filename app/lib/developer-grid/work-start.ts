@@ -403,6 +403,7 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
     delta: {
       eventType: validated ? "BOOT_ACK_VALIDATED" : "BOOT_ACK_BLOCKED",
       summary: validated ? "BOOT ACK validálva; a worker fejlesztési futása engedélyezhető." : `BOOT ACK blokkolva: ${uniqueMismatches.join(", ") || "ismeretlen eltérés"}`,
+      status: validated ? "PASS" : "BLOCKED", severity: validated ? "INFO" : "HIGH", sessionId,
       responseSha256, codingAllowed, mismatches: uniqueMismatches, workStageIndex: 1,
     },
   });

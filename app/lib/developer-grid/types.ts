@@ -8,7 +8,7 @@ export type WorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "D
 export type CoreWorkerCode = Exclude<WorkerCode, "DEVMINAI">;
 export type RoutableWorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI";
 export type GridWorkerState = "IDLE" | "READY" | "WORKING" | "BLOCKED" | "OFFLINE";
-export type GridEventKind = "analysis" | "coding" | "file-change" | "diff" | "test" | "build" | "commit" | "release" | "handoff";
+export type GridEventKind = "analysis" | "coding" | "file-change" | "diff" | "test" | "build" | "commit" | "release" | "handoff" | "error" | "review";
 export type GridEventOrigin = "LIVE" | "BACKFILL";
 export type SourceState = "VERIFIED" | "BLOCKED";
 export type ReleaseState = "VERIFIED" | "BLOCKED" | "NOT_CONFIGURED";
@@ -60,6 +60,7 @@ export type SourceProvenance = {
   repository: string;
   worktree: string;
   branch: string;
+  baseHead?: string;
   head: string;
   worker: WorkerCode;
   taskId: string;
@@ -140,6 +141,52 @@ export type GridEventPage = {
   events: GridActivityEvent[];
   nextCursor: string | null;
   hasMore: boolean;
+};
+
+export type GridEvidenceKind = "FILE" | "TEST" | "ERROR" | "HANDOFF" | "BUILD" | "BOOT_ACK" | "REVIEW";
+export type GridEvidenceStatus = "RECORDED" | "PASS" | "FAIL" | "BLOCKED" | "COMPLETED" | "PARTIAL" | "PENDING" | "PASS_WITH_NOTES";
+export type GridEvidenceSeverity = "INFO" | "WARNING" | "HIGH" | "CRITICAL";
+
+export type GridEvidence = {
+  schemaVersion: 1;
+  id: string;
+  environment: "DEV";
+  productionAccess: "DENY";
+  sanitized: true;
+  taskId: string;
+  projectId: string;
+  workerCode: WorkerCode;
+  sessionId: string | null;
+  eventId: string | null;
+  kind: GridEvidenceKind;
+  status: GridEvidenceStatus;
+  severity: GridEvidenceSeverity;
+  source: "GRID_EVENT" | "BUILD_RUNNER" | "HANDOFF_STORE" | "WORKER_STAGE_REPORT" | "REVIEW_GATE" | "SYSTEM";
+  summary: string;
+  branch: string | null;
+  worktree: string | null;
+  head: string | null;
+  attributes: {
+    path: string | null;
+    changeType: string | null;
+    testName: string | null;
+    durationMs: number | null;
+    errorCode: string | null;
+    exitCode: number | null;
+    buildRunId: string | null;
+    buildId: string | null;
+    handoffId: string | null;
+    reviewId: string | null;
+    contentSha256: string | null;
+    artifactSha256: string | null;
+    outputSha256: string | null;
+    resolvesFingerprint: string | null;
+    reviewResult: string | null;
+    handoffStatus: string | null;
+  };
+  fingerprintSha256: string;
+  occurredAt: string;
+  createdAt: string;
 };
 
 export type ReleaseRuntimeProvenance = {

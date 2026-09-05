@@ -61,6 +61,7 @@ export async function verifySourceProvenance(expectation: SourceProvenanceExpect
     repository: expectedRepository,
     worktree: expectedWorktree,
     branch: expectation.branch,
+    baseHead: actualHead || expectation.expectedHead || "",
     head: actualHead || expectation.expectedHead || "",
     worker: expectation.worker,
     taskId: expectation.taskId,
@@ -79,4 +80,51 @@ export function assertVerifiedSource(provenance: SourceProvenance): SourceProven
     throw error;
   }
   return provenance;
+}
+
+export async function verifySourceHeadAdvance(provenance: SourceProvenance, reportedHead: string) {
+  const nextHead = String(reportedHead || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(nextHead)) {
+    const error = new Error("A source HEAD advance teljes 40 karakteres Git SHA-t igényel.");
+    Object.assign(error, { code: "SOURCE_HEAD_INVALID" });
+    throw error;
+  }
+  const currentHead = String(provenance.head || "").toLowerCase();
+  const baseHead = String(provenance.baseHead || provenance.head || "").toLowerCase();
+  const verified = await verifySourceProvenance({
+    repository: provenance.repository, worktree: provenance.worktree, branch: provenance.branch, expectedHead: nextHead,
+    worker: provenance.worker, taskId: provenance.taskId, sessionId: provenance.sessionId,
+  });
+  assertVerifiedSource(verified);
+  for (const ancestor of [baseHead, currentHead].filter(Boolean)) {
+    try {
+      await execFileAsync("git", ["-C", provenance.worktree, "merge-base", "--is-ancestor", ancestor, nextHead], { encoding: "utf8", timeout: 10_000 });
+    } catch {
+      const error = new Error(`A source HEAD nem előrehaladó leszármazott: ${ancestor.slice(0, 12)} → ${nextHead.slice(0, 12)}.`);
+      Object.assign(error, { code: "SOURCE_HEAD_NON_FAST_FORWARD", previousHead: ancestor, reportedHead: nextHead });
+      throw error;
+    }
+  }
+  return { ...verified, baseHead: baseHead || verified.baseHead, head: nextHead, verifiedAt: new Date().toISOString() };
+}
+
+export async function verifyCurrentSourceExecutionState(provenance: SourceProvenance, options: { requireClean?: boolean } = {}) {
+  const verified = await verifySourceProvenance({
+    repository: provenance.repository, worktree: provenance.worktree, branch: provenance.branch, expectedHead: provenance.head,
+    worker: provenance.worker, taskId: provenance.taskId, sessionId: provenance.sessionId,
+  });
+  assertVerifiedSource(verified);
+  let dirty = false;
+  try { dirty = Boolean(await git(provenance.worktree, ["status", "--porcelain", "--untracked-files=normal"])); }
+  catch (error) {
+    const failure = new Error(error instanceof Error ? `Git status nem olvasható: ${error.message}` : "Git status nem olvasható.");
+    Object.assign(failure, { code: "SOURCE_WORKTREE_STATUS_UNAVAILABLE" });
+    throw failure;
+  }
+  if (options.requireClean && dirty) {
+    const error = new Error("A source worktree nem tiszta; FULL BUILD/review csak commitolt állapotból indulhat.");
+    Object.assign(error, { code: "SOURCE_WORKTREE_DIRTY" });
+    throw error;
+  }
+  return { ...verified, baseHead: provenance.baseHead || verified.baseHead, head: provenance.head, dirty };
 }

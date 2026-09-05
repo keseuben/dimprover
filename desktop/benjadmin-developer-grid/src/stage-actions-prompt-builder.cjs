@@ -8,7 +8,7 @@ const ACTIONS = Object.freeze({
       "Ellenőrizd a source/worktree/branch/HEAD/provenance állapotot és a git status-t.",
       "Futtasd a releváns gyors minőségi kapukat (git diff --check + célzott teszt/acceptance; szükség szerint tsc/lint).",
       "Ha a módosítás koherens és zöld, készíts checkpoint commitot; ha nem, ne commitolj félkész vagy hibás állapotot.",
-      "Buildet csak akkor indíts, ha az adott mérföldkőhöz valóban indokolt, és csak a központi exclusive lock alatt.",
+      "FULL BUILD-et ebből a worker-csevegésből ne indíts; azt kizárólag a Central Core FULL BUILD INDÍTÁSA kapuja kérheti BUILD01/BUILD02 runneren.",
       "A végén add meg röviden: HEAD, commit, tesztek, blocker, következő lépés."
     ]
   },
@@ -26,11 +26,11 @@ const ACTIONS = Object.freeze({
     title: "BUILD / RUNTIME DEV KAPU",
     body: [
       "Ellenőrizd, hogy az aktuális task valóban elérte-e az indokolt build/runtime mérföldkövet.",
-      "Build előtt kötelező: source provenance, git status, df/free/swap, aktív műveletek és központi exclusive lock ellenőrzése.",
-      "build01/build02 csak tényleges SSH READY állapotban használható; egyébként a canonical DEV szerver a hivatalos executor.",
-      "Kizárólag a canonical koordinált build útvonalat használd; build:raw és kerülő/párhuzamos build tilos.",
-      "Release/restart csak akkor történjen, ha a task explicit megköveteli és a release/runtime provenance zöld.",
-      "PROD DENY. A végén add meg a build ID-t, release/runtime állapotot és smoke eredményt, ha build történt."
+      "A worker csak a source readiness-t ellenőrizze: branch/worktree/current HEAD, git status és szükséges célzott tesztek legyenek rendben.",
+      "FULL BUILD-et a worker NEM indíthat. A Central Core BUILD Runner Pool kizárólag BUILD01-et használ elsődlegesen, BUILD02-t fallbackként; ha egyik sem READY + FREE, a kérés QUEUED marad.",
+      "build:raw, közvetlen next build, DEV-host FULL BUILD fallback és kerülő/párhuzamos build tilos.",
+      "Release/restart/cutover külön központi, globális DEV gate; a worker ezeket nem hajthatja végre ebből a promptból.",
+      "PROD DENY. A végén csak a build-readiness és esetleges blocker állapotot jelentsd; BUILD_ID-t csak a Central Core build evidence adhat."
     ]
   }
 });
@@ -57,10 +57,21 @@ function buildStageActionPrompt({ action, workerCode, workerLabel, task, presenc
     `MUNKARÉSZ: ${clean(presence?.workItem || presence?.summary || task?.description, 1200) || "NINCS"}`,
     `BRANCH: ${clean(presence?.branch || task?.branchName, 500) || "NINCS"}`,
     `WORKTREE: ${clean(presence?.worktree || task?.worktreePath, 800) || "NINCS"}`,
+    `SESSION ID: ${clean(task?.sessionId, 240) || "NINCS"}`,
+    `INDULÓ/UTOLSÓ AUTHORITATIVE HEAD: ${clean(task?.sourceHead, 80) || "NINCS"}`,
     "",
     ...spec.body.map((line) => `- ${line}`),
     "",
-    "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet."
+    "KÖTELEZŐ GÉPI STAGE REPORT",
+    "A normál rövid összefoglaló után pontosan add vissza az alábbi két marker közötti EGYETLEN JSON objektumot. Markdown code fence tilos.",
+    "A head mezőbe a művelet VÉGÉN futtatott git rev-parse HEAD teljes 40 karakteres értéke kerüljön. Ha checkpoint commit készült, ez már az új commit legyen.",
+    "Evidence-be csak technikai, sanitizált tény kerüljön; secret, .env érték, token, jelszó, üzleti dokumentumtartalom tilos.",
+    "FILE: path/changeType/contentSha256; TEST: testName/status/durationMs/outputSha256; ERROR: errorCode/status/severity. Legalább egy evidence kötelező.",
+    "BENJADMIN_STAGE_REPORT_V1",
+    JSON.stringify({ schemaVersion:1, workerCode:clean(workerCode,40), taskId:clean(task?.id,220), sessionId:clean(task?.sessionId,240), head:"REPLACE_WITH_CURRENT_40_CHAR_HEAD", stage:stage||1, result:"PASS", summary:"technikai stage összesítés", evidence:[{kind:"TEST",status:"PASS",severity:"INFO",summary:"célzott ellenőrzés",attributes:{testName:"git diff --check",durationMs:0,outputSha256:null}}] }),
+    "BENJADMIN_STAGE_REPORT_END",
+    "",
+    "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
   ];
   return lines.join("\n");
 }

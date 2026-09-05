@@ -961,6 +961,39 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 .context-workspace__body { min-width: 0; min-height: 0; overflow: auto; padding: 8px; display: grid; align-content: start; gap: 8px; }
 .context-workspace__resize { position: absolute; z-index: 20; top: 0; bottom: 0; left: -4px; width: 8px; cursor: ew-resize; }
 .context-workspace__resize:hover { background: rgba(67,217,255,.13); }
+.cw-diagnostics { padding:7px; border:1px solid rgba(114,224,255,.22); border-radius:8px; display:grid; gap:6px; background:rgba(8,32,45,.34); }
+.cw-diagnostics > header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.cw-diagnostics > header > div { display:grid; gap:1px; min-width:0; }
+.cw-diagnostics > header strong { color:#d7edf5; font-size:9px; }
+.cw-diagnostics > header span { color:#78929f; font-size:8px; }
+.cw-diagnostics > header b { color:#ff9aa8; font-size:8px; }
+.cw-evidence-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+.cw-evidence-grid article { min-width:0; display:grid; place-items:center; gap:2px; padding:5px 3px; border:1px solid rgba(148,163,184,.14); border-radius:6px; background:rgba(255,255,255,.018); }
+.cw-evidence-grid strong { color:#78909d; font-size:7px; text-align:center; }
+.cw-evidence-grid b { color:#bfe8f3; font-size:10px; }
+.cw-source-line { display:flex; flex-wrap:wrap; align-items:center; gap:4px 7px; padding:5px 6px; border:1px solid rgba(148,163,184,.12); border-radius:6px; background:rgba(0,0,0,.12); }
+.cw-source-line strong { color:#78909d; font-size:7px; }
+.cw-source-line span { color:#c0dce5; font-size:8px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+.cw-gate-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+.cw-gate-grid article { min-width:0; padding:6px; border:1px solid rgba(255,99,116,.18); border-radius:6px; background:rgba(255,76,96,.035); display:grid; gap:3px; }
+.cw-gate-grid article > div { display:flex; align-items:center; justify-content:space-between; gap:5px; }
+.cw-gate-grid strong { color:#d4e9f2; font-size:7px; }
+.cw-gate-grid b { color:#ff9aa8; font-size:7px; }
+.cw-gate-grid small { color:#758d99; font-size:7px; overflow-wrap:anywhere; }
+.cw-gate-grid article[data-gate-state="PASS"] { border-color:rgba(80,227,164,.2); background:rgba(80,227,164,.035); }
+.cw-gate-grid article[data-gate-state="PASS"] b { color:#9af0c7; }
+.cw-vguard-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.cw-vguard-actions > div { display:grid; gap:1px; min-width:0; }
+.cw-vguard-actions strong { color:#c7e8f3; font-size:8px; }
+.cw-vguard-actions span { color:#78909d; font-size:7px; overflow-wrap:anywhere; }
+.cw-vguard-actions button { flex:0 0 auto; min-height:27px; padding:0 10px; border:1px solid rgba(109,179,255,.38); border-radius:6px; background:rgba(109,179,255,.08); color:#b8d9ff; font-size:8px; font-weight:900; cursor:pointer; }
+.cw-vguard-actions button:disabled { opacity:.38; cursor:default; }
+:root[data-theme="light"] .cw-diagnostics { background:#f4fafc; border-color:#9dc5d4; }
+:root[data-theme="light"] .cw-diagnostics > header strong,:root[data-theme="light"] .cw-gate-grid strong { color:#173d4d; }
+:root[data-theme="light"] .cw-evidence-grid article,:root[data-theme="light"] .cw-source-line,:root[data-theme="light"] .cw-gate-grid article { background:#fff; border-color:#bfd2db; }
+:root[data-theme="light"] .cw-evidence-grid b,:root[data-theme="light"] .cw-source-line span { color:#075b77; }
+:root[data-theme="light"] .cw-vguard-actions button { border-color:#287da7; background:#e8f4fb; color:#084f70; }
+
 .cw-runner-pool { padding:7px; border:1px solid rgba(67,217,255,.18); border-radius:8px; display:grid; gap:6px; background:rgba(13,49,64,.18); }
 .cw-runner-pool > header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .cw-runner-pool > header > div { display:grid; gap:1px; }
@@ -1166,6 +1199,9 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 :root[data-theme="light"] .cw-empty { color: #55717d; border-color: #a9c1ca; }
 
 @media (max-width: 560px) {
+  .cw-evidence-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .cw-gate-grid { grid-template-columns:1fr; }
+  .cw-vguard-actions { align-items:flex-start; flex-direction:column; }
   .cw-pack-grid,
   .cw-upload-grid,
   .cw-filters,

@@ -7,8 +7,15 @@ const required = [
   "app/api/dev/grid/foundation/route.ts",
   "app/api/dev/grid/events/route.ts",
   "app/api/dev/grid/work-start/route.ts",
+  "app/api/dev/grid/evidence/route.ts",
+  "app/api/dev/grid/review-gate/route.ts",
   "app/lib/developer-grid/work-start.ts",
+  "app/lib/developer-grid/evidence.ts",
+  "app/lib/developer-grid/evidence-ingest.ts",
+  "app/lib/developer-grid/review-gate.ts",
+  "app/lib/developer-grid/vguard-review.ts",
   "scripts/developer-grid/work-start-contract.mjs",
+  "scripts/developer-grid/diagnostic-evidence-contract.mjs",
   "app/lib/developer-grid/types.ts",
   "app/lib/developer-grid/source-provenance.ts",
   "app/lib/developer-grid/development-context.ts",
@@ -87,6 +94,10 @@ const healthAdapters = fs.readFileSync(path.join(root, "app/lib/developer-grid/s
 const healthAi = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-ai.ts"), "utf8");
 const healthOperations = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health-operations.ts"), "utf8");
 const healthFacade = fs.readFileSync(path.join(root, "app/lib/developer-grid/system-health.ts"), "utf8");
+const evidence = fs.readFileSync(path.join(root, "app/lib/developer-grid/evidence.ts"), "utf8");
+const evidenceIngest = fs.readFileSync(path.join(root, "app/lib/developer-grid/evidence-ingest.ts"), "utf8");
+const reviewGate = fs.readFileSync(path.join(root, "app/lib/developer-grid/review-gate.ts"), "utf8");
+const vguardReview = fs.readFileSync(path.join(root, "app/lib/developer-grid/vguard-review.ts"), "utf8");
 
 const checks = [
   [types.includes('DEVELOPER_GRID_VERSION = "0.1.13-dev"'), "versioned DEV candidate contract"],
@@ -121,6 +132,11 @@ const checks = [
   [shell.includes("DELTA_LIVE") && shell.includes("Full snapshot polling: TILTVA"), "UI exposes delta live status"],
   [shell.includes("Build ID:") && shell.includes("foundation?.version"), "UI exposes version/build identity"],
   [readAuth.includes("isChatGridDeviceAuthorized") && readAuth.includes("isDevCenterAuthorized"), "desktop device read-only grid auth bridge"],
+  [types.includes("export type GridEvidence =") && types.includes('"FILE" | "TEST" | "ERROR" | "HANDOFF" | "BUILD" | "BOOT_ACK" | "REVIEW"'), "diagnostic evidence contract"],
+  [evidence.includes('productionAccess: "DENY"') && evidence.includes("fingerprintSha256") && evidence.includes("scanSensitiveText"), "evidence is sanitized technical DEV data"],
+  [evidenceIngest.includes("DEVELOPER_GRID_STAGE_REGRESSION_BLOCKED") && evidenceIngest.includes("verifySourceHeadAdvance"), "stage report advances source HEAD monotonically"],
+  [reviewGate.includes('target === "CLOSURE"') && reviewGate.includes('item.kind === "HANDOFF" && item.status === "COMPLETED"'), "closure gate requires completed handoff evidence"],
+  [vguardReview.includes('resolveWorkerModelAdapter(pref,"VGUARD")') && vguardReview.includes("evaluateExternalAiBudget") && vguardReview.includes("parseVGuardReviewOutput"), "Developer Grid VGuard review is provider budget and strict-parser gated"],
   [candidateBuild.includes("next build --webpack") && candidateBuild.includes("dimpro-coordinated-operation.sh") && candidateBuild.includes("PROD_DENY"), "canonical low-memory Developer Grid candidate build"],
   [candidateBuild.includes("BUILD_ENV_FILE") && candidateBuild.includes("umask 077") && !candidateBuild.includes('"$NEXT_PUBLIC_SUPABASE_URL" "$NEXT_PUBLIC_SUPABASE_ANON_KEY"'), "canonical build keeps DEV public env values out of operation command history"],
   [releaseArtifactWrapper.includes("dimpro-coordinated-operation.sh\" release") && releaseArtifactWrapper.includes("DIMPRO_RELEASE_COORDINATED=1"), "release artifact engine runs under exclusive release lock"],
