@@ -151,6 +151,8 @@ const branchRef = `refs/heads/${sourceBranch}`;
 const actualHead = execText(GIT_BIN, [`--git-dir=${REPO}`, "rev-parse", `${branchRef}^{commit}`]);
 if (actualHead !== sourceCommit) fail("SOURCE_BASELINE_MISMATCH", `Canonical branch HEAD ${actualHead} != ${sourceCommit}.`);
 
+fs.mkdirSync(LOCAL_ROOT, { recursive: true, mode: 0o750 });
+fs.chmodSync(LOCAL_ROOT, 0o750);
 const localDir = path.join(LOCAL_ROOT, runId);
 if (fs.existsSync(localDir)) fail("LOCAL_RUN_ALREADY_EXISTS", "Ehhez a runId-hez már létezik lokális build run könyvtár.");
 fs.mkdirSync(localDir, { recursive: false, mode: 0o750 });

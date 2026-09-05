@@ -77,6 +77,10 @@ check("runner artifact has SHA-256 and runner metadata", () => {
 check("runner exposes no deploy migration restart or cutover execution", () => {
   for (const forbidden of ["pm2 restart","systemctl restart","psql ","supabase db","DEPLOY_COMMAND","CUTOVER_COMMAND"]) assert.ok(!runner.includes(forbidden));
 });
+check("dispatcher creates canonical local artifact root before run directory", () => {
+  assert.match(dispatch, /mkdirSync\(LOCAL_ROOT, \{ recursive: true, mode: 0o750 \}\)/);
+  assert.match(dispatch, /chmodSync\(LOCAL_ROOT, 0o750\)/);
+});
 check("dispatcher validates canonical branch head before transfer", () => {
   assert.match(dispatch, /SOURCE_BASELINE_MISMATCH/);
   assert.match(dispatch, /rev-parse/);
