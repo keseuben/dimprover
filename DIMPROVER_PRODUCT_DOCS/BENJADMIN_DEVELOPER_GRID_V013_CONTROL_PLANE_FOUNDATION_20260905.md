@@ -117,3 +117,10 @@ Fő szabályok:
 - PROD hozzáférés és PROD művelet minden rétegben `DENY`.
 
 A gateway szolgáltatás forrása verziózott az `ops/developer-grid/build-gateway/` könyvtárban. A telepített gateway service neve `dimpro-build-gateway.service`; a runtime port csak localhoston `8791`. A publikus alkalmazáskapcsolat továbbra is domainalapú, a konkrét DEV VPS IP csak az Nginx hálózati allowlist része.
+
+
+## v0.1.13 release provenance hardening – 2026-09-05
+
+Az MCP Build Transport Gateway első valós BUILD01 futása sikeresen lezárult az `d78a5c7d5a354cb510c736a48d3cc6f3c7409d9a` commiton. Run: `v013-mcp-build01-20260905-1734`; BUILD_ID: `gaugmFlD3HgzF9Mc7w0aw`; artifact SHA-256: `391fb4eed8028a4e32f1b8afe6c762a967a5d3e03302c6e4d388e602950422aa`. A futás a `DEV → HTTPS MCP gateway → BUILD01 → gateway → canonical DEV artifact store` útvonalon ment végig, PROD hozzáférés nélkül.
+
+A Windows candidate és release wrapper-ek korábbi v0.1.12 / 2026-08-27 canonical worktree kötéseit a v0.1.13 canonical forrásra frissítettük. Az érintett kapuk továbbra is fail-closed módon ellenőrzik a `dimpro-dev` hostot, a `/srv/dimpro-dev/repositories/dimprover.git` közös repositoryt, az explicit v0.1.13 worktree-t és branch-et, a tiszta Git állapotot, a pontos HEAD-et, a `.next/BUILD_ID` + `.dimpro-release.json` provenance-t, valamint a `DEV ONLY · PROD DENY` szabályt. A DEV ZIP-be a Build Transport Gateway verziózott `ops/developer-grid` forrása is bekerül.

@@ -11,8 +11,8 @@ function check(ok, label) {
   console.log(`PASS ${String(n).padStart(2, "0")} ${label}`);
 }
 check(source.includes('EXPECTED_HOST="dimpro-dev"'), "canonical DEV host fixed");
-check(source.includes('/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827'), "canonical worktree fixed");
-check(source.includes('EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"'), "canonical branch fixed");
+check(source.includes('/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905'), "canonical worktree fixed");
+check(source.includes('EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"'), "canonical branch fixed");
 check(source.includes('/srv/dimpro-dev/repositories/dimprover.git'), "canonical repository fixed");
 check(source.includes('SOURCE_BASELINE_MISMATCH'), "source mismatch fail-closed");
 check(source.includes('SOURCE_WORKTREE_DIRTY'), "dirty source fail-closed");

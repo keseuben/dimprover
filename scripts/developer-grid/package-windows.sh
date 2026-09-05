@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827"
-EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"
+EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905"
+EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"
 EXPECTED_COMMON="/srv/dimpro-dev/repositories/dimprover.git"
 EXPECTED_HOST="dimpro-dev"
 DESKTOP="$ROOT/desktop/benjadmin-developer-grid"

@@ -10,7 +10,7 @@ trap 'rm -rf "$TMP"' EXIT
 STAGE="$TMP/$NAME"
 mkdir -p "$STAGE/desktop/benjadmin-developer-grid" "$OUT_DIR"
 tar -C "$ROOT" --exclude=node_modules --exclude=dist --exclude=dist-dev --exclude='*.log' -cf - . | tar -C "$STAGE/desktop/benjadmin-developer-grid" -xf -
-for rel in app/admin/developer-grid app/api/dev/grid app/lib/developer-grid components/admin/developer-grid scripts/developer-grid; do
+for rel in app/admin/developer-grid app/api/dev/grid app/lib/developer-grid components/admin/developer-grid scripts/developer-grid ops/developer-grid; do
   mkdir -p "$STAGE/$(dirname "$rel")"
   cp -a "$REPO/$rel" "$STAGE/$rel"
 done

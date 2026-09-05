@@ -60,3 +60,16 @@ A wrapper a központi `release` exclusive lockot használja. A release engine fa
 - Az `ARTIFACT_MANIFEST_v<version>.json` teljes bájtszintű SHA-256 hash-e és saját sidecarja is fail-closed kapu.
 - Hibás sidecar fájlnév, hash, manifest hash vagy DEV/PROD fejléc esetén a release ellenőrzés blokkol.
 - DEV ONLY · PROD DENY.
+
+
+## v0.1.13 canonical build / package provenance
+
+A v0.1.13 Windows candidate csak a canonical DEV worktree-ből készülhet:
+
+- host: `dimpro-dev`;
+- worktree: `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905`;
+- branch: `feature/benjadmin-developer-grid-v013-outminai-20260905`;
+- Git common repository: `/srv/dimpro-dev/repositories/dimprover.git`;
+- PROD: DENY.
+
+A Windows csomagolás előtt kötelező az exact web build proof: `.next/BUILD_ID`, `.next/.dimpro-release.json` és a Git HEAD/branch egyezése. A BUILD01/BUILD02 remote FULL BUILD artifactja csak akkor használható candidate provenance-ként, ha commit/branch/buildId/SHA-256 egyezése ellenőrzött. A régi v0.1.12 canonical wrapper-pathok nem használhatók v0.1.13 kiadáshoz.

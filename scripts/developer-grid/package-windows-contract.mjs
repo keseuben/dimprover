@@ -8,8 +8,8 @@ let n = 0;
 function check(ok, label) { n += 1; if (!ok) throw new Error(`FAIL ${String(n).padStart(2, "0")} ${label}`); console.log(`PASS ${String(n).padStart(2, "0")} ${label}`); }
 
 check(wrapper.includes('EXPECTED_HOST="dimpro-dev"'), "canonical host fixed");
-check(wrapper.includes('EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827"'), "canonical worktree fixed");
-check(wrapper.includes('EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"'), "canonical branch fixed");
+check(wrapper.includes('EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905"'), "canonical worktree fixed");
+check(wrapper.includes('EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"'), "canonical branch fixed");
 check(wrapper.includes('SOURCE_BASELINE_MISMATCH') && wrapper.includes('SOURCE_WORKTREE_DIRTY'), "source gates fail closed");
 check(wrapper.includes('PROD_DENY'), "PROD denied");
 check(wrapper.includes('.dimpro-release.json') && wrapper.includes('BUILD_ID'), "web build provenance required before Windows package");

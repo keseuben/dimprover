@@ -3,8 +3,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-export const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
-export const CANONICAL_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
+export const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
+export const CANONICAL_BRANCH = "feature/benjadmin-developer-grid-v013-outminai-20260905";
 export const DEFAULT_COORDINATION_ROOT = "/srv/dimpro-dev/coordination";
 export const DEFAULT_ARTIFACT_ROOT = "/srv/dimpro-dev/artifacts/benjadmin-developer-grid";
 

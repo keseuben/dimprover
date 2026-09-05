@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827"
-EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"
+EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905"
+EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"
 EXPECTED_COMMON="/srv/dimpro-dev/repositories/dimprover.git"
 EXPECTED_HOST="dimpro-dev"
 TARGET=".next"
@@ -94,7 +94,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 export DIMPRO_OPERATION_OWNER="${DIMPRO_OPERATION_OWNER:-OutminAI}"
-export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.12 RC canonical webpack candidate}"
+export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v0.1.13 canonical DEV candidate}"
 export DIMPRO_WORKER_CODE="OUTMINAI"
 
 "$ROOT/scripts/dimpro-dev-storage-prebuild.sh"

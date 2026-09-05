@@ -3,8 +3,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 
-const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
-const CANONICAL_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
+const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
+const CANONICAL_BRANCH = "feature/benjadmin-developer-grid-v013-outminai-20260905";
 
 function fail(code, detail = "") { const error = new Error(detail || code); error.code = code; throw error; }
 function arg(name) { const prefix = `--${name}=`; const hit = process.argv.slice(2).find((v) => v.startsWith(prefix)); return hit ? hit.slice(prefix.length) : ""; }

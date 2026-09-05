@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827"
+EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905"
 EXPECTED_HOST="dimpro-dev"
-EXPECTED_BRANCH="feature/benjadmin-developer-grid-v1-20260827"
+EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"
 
 [[ "$(hostname)" == "$EXPECTED_HOST" ]] || { echo "RELEASE_HOST_MISMATCH" >&2; exit 41; }
 [[ "$ROOT" == "$EXPECTED_ROOT" ]] || { echo "SOURCE_BASELINE_MISMATCH · worktree" >&2; exit 42; }

@@ -7,8 +7,8 @@ import { pathToFileURL } from "node:url";
 
 export const RELEASE_ENGINE_SCHEMA_VERSION = 1;
 export const EXPECTED_HOST = "dimpro-dev";
-export const EXPECTED_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
-export const EXPECTED_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
+export const EXPECTED_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
+export const EXPECTED_BRANCH = "feature/benjadmin-developer-grid-v013-outminai-20260905";
 export const EXPECTED_REPOSITORY = "/srv/dimpro-dev/repositories/dimprover.git";
 export const DEFAULT_ARTIFACT_ROOT = "/srv/dimpro-dev/artifacts/benjadmin-developer-grid";
 export const DEFAULT_PUBLIC_ROOT = "/var/www/developer-grid-download";
