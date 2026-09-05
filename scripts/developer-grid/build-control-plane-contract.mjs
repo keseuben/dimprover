@@ -1,0 +1,31 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const route = read("app/api/dev/grid/build-runs/route.ts");
+const control = read("app/lib/developer-grid/build-runs.ts");
+const store = read("app/lib/developer-grid/build-run-store.ts");
+const job = read("scripts/developer-grid/build-run-job.mjs");
+const dispatch = read("scripts/developer-grid/remote-build-dispatch.mjs");
+const preload = read("desktop/benjadmin-developer-grid/src/preload.cjs");
+const main = read("desktop/benjadmin-developer-grid/src/main.cjs");
+const client = read("desktop/benjadmin-developer-grid/src/context-workspace/context-workspace-client.cjs");
+const ui = read("desktop/benjadmin-developer-grid/src/renderer/context-workspace.js");
+let n=0;
+function check(ok,name){if(!ok)throw new Error(`FAIL ${name}`);n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`);}
+check(route.includes("isChatGridDeviceAuthorized") && route.includes("requestDeveloperGridFullBuild"), "paired DEV API gates FULL BUILD request");
+check(control.includes('bootAckState !== "VALIDATED"') && control.includes("BUILD_BOOT_ACK_REQUIRED"), "FULL BUILD requires authoritative validated BOOT ACK");
+check(control.includes('sourceState !== "VERIFIED"') && control.includes("SOURCE_BASELINE_MISMATCH"), "FULL BUILD requires verified source provenance");
+check(store.includes("createBuildRunIfTaskIdle") && store.includes("claimBuildRunDispatch") && store.includes("claimQueuedBuildRun"), "build store has atomic duplicate/queue/dispatch claims");
+check(control.includes("BUILD_QUEUED") && control.includes("BUILD_ASSIGNED") && control.includes("BUILD_STARTED") && control.includes("BUILD_RESULT"), "build lifecycle emits evidence events");
+check(job.includes('productionAccess:"DENY"') && job.includes("artifactSha256") && job.includes("outputSha256"), "detached build job writes DEV PROD-DENY evidence hashes");
+check(dispatch.includes('args["runner-id"]') && dispatch.includes("ASSIGNED_BUILD_RUNNER_NOT_READY") && dispatch.includes("chooseNode(snapshot, requestedRunnerId)"), "remote dispatcher honors exact scheduler runner fail-closed");
+check(client.includes("fetchDeveloperGridBuildRuns") && client.includes("requestDeveloperGridFullBuild"), "desktop DEV client exposes build-run API");
+check(preload.includes("getDeveloperGridBuildRuns") && preload.includes("requestDeveloperGridFullBuild") && main.includes('ipcMain.handle("build-runs:request"'), "desktop IPC chain exposes build control");
+check(ui.includes("FULL BUILD INDÍTÁSA") && ui.includes('bootAckState==="VALIDATED"') && ui.includes("BUILD01 elsődleges · BUILD02 fallback"), "central control panel gates and renders real Runner Pool");
+check(ui.includes("artifactSha256") && ui.includes("failureCode") && ui.includes("buildId"), "central panel renders build result evidence");
+check(control.includes("reconcileDeveloperGridBuildRuns") && control.includes("scheduleQueuedRun"), "queued explicit build requests are reconciled to first free runner");
+check(control.includes("detached: true") && job.includes("remote-build-dispatch.mjs"), "HTTP request delegates long build to detached durable job");
+check(!control.includes("npm run build") && !control.includes("next build"), "control plane has no DEV-host raw build fallback");
+console.log(`Developer Grid Build Control Plane contract PASS · ${n}/${n}`);

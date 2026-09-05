@@ -258,8 +258,13 @@ export type GridBuildRun = {
   artifactSha256: string | null;
   queuedAt: string;
   assignedAt: string | null;
+  dispatchStartedAt?: string | null;
   startedAt: string | null;
   finishedAt: string | null;
+  evidenceRef?: string | null;
+  resultSha256?: string | null;
+  failureCode?: string | null;
+  exitCode?: number | null;
 };
 
 export type GridReview = {

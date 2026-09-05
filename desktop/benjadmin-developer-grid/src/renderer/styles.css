@@ -975,6 +975,18 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 .cw-runner-grid b { align-self:start; padding:2px 5px; border-radius:999px; background:rgba(244,201,93,.1); color:#ffe49a; font-size:7px; }
 .cw-runner-grid article[data-runner-state="READY"] b { background:rgba(80,227,164,.1); color:#9af0c7; }
 .cw-runner-grid small,.cw-runner-grid em { grid-column:1 / -1; }
+.cw-build-run { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 7px; padding:6px 7px; border:1px solid rgba(148,163,184,.15); border-radius:7px; background:rgba(3,14,20,.22); }
+.cw-build-run strong { font-size:8px; color:#a9e8f7; }
+.cw-build-run span,.cw-build-run small { min-width:0; color:#78909d; font-size:7px; overflow-wrap:anywhere; }
+.cw-build-run small { grid-column:1 / -1; }
+.cw-build-run[data-status="PASS"] strong { color:#9af0c7; }
+.cw-build-run[data-status="FAIL"] strong,.cw-build-run[data-status="BLOCKED"] strong { color:#ff9aa8; }
+.cw-build-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.cw-build-actions small { color:#78909d; font-size:7px; }
+.cw-build-actions button { min-height:27px; padding:0 10px; border:1px solid rgba(80,227,164,.38); border-radius:6px; background:rgba(80,227,164,.08); color:#9af0c7; font-size:8px; font-weight:900; cursor:pointer; }
+.cw-build-actions button:disabled { opacity:.38; cursor:default; }
+:root[data-theme="light"] .cw-build-run { background:#fff; border-color:#bfd2db; }
+:root[data-theme="light"] .cw-build-run strong { color:#08728c; }
 :root[data-theme="light"] .cw-runner-pool { background:#f5fbfd; border-color:#9dc5d4; }
 :root[data-theme="light"] .cw-runner-pool > header strong,:root[data-theme="light"] .cw-runner-grid strong { color:#173d4d; }
 :root[data-theme="light"] .cw-runner-grid article { background:#fff; border-color:#bfd2db; }

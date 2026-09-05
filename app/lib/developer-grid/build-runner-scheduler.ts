@@ -50,8 +50,13 @@ function buildRunFromRequest(request: BuildRunRequest, nodeId: GridBuildRun["nod
     artifactSha256: null,
     queuedAt: request.requestedAt,
     assignedAt: status === "ASSIGNED" ? request.requestedAt : null,
+    dispatchStartedAt: null,
     startedAt: null,
     finishedAt: null,
+    evidenceRef: null,
+    resultSha256: null,
+    failureCode: null,
+    exitCode: null,
   };
 }
 

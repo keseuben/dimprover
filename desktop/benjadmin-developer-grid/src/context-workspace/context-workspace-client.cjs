@@ -123,5 +123,15 @@ async function recordDeveloperGridBootAck({ baseUrl, deviceToken, input }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "PUT", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 15000);
   return payload.bootAck || null;
 }
+async function fetchDeveloperGridBuildRuns({ baseUrl, deviceToken }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/build-runs`, { method: "GET", headers: headers(deviceToken) }, 20000);
+  return payload.buildRuns || { schemaVersion:1, revision:0, runs:[], updatedAt:"" };
+}
+async function requestDeveloperGridFullBuild({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/build-runs`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 20000);
+  return payload.build || null;
+}
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, sanitizeSnapshot };

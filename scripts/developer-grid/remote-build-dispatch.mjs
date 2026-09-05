@@ -45,6 +45,12 @@ function safeWorker(value) {
   return value;
 }
 
+function safeRunner(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (!RUNNER_PRIORITY.includes(value)) fail("RUNNER_ID_INVALID", "runnerId érvénytelen.");
+  return value;
+}
+
 function safeCommit(value) {
   if (!/^[0-9a-f]{40}$/i.test(value || "")) fail("SOURCE_COMMIT_INVALID", "sourceCommit nem teljes Git SHA.");
   return value.toLowerCase();
@@ -105,11 +111,13 @@ function usable(node) {
   return true;
 }
 
-function chooseNode(snapshot) {
-  for (const id of RUNNER_PRIORITY) {
+function chooseNode(snapshot, requestedRunnerId = null) {
+  const ids = requestedRunnerId ? [requestedRunnerId] : RUNNER_PRIORITY;
+  for (const id of ids) {
     const node = snapshot.nodes.find((item) => item?.id === id);
     if (usable(node)) return node;
   }
+  if (requestedRunnerId) fail("ASSIGNED_BUILD_RUNNER_NOT_READY", `A kijelölt ${requestedRunnerId} runner már nem READY/FREE.`);
   fail("NO_READY_BUILD_RUNNER", "Nincs READY és FREE BUILD-01/BUILD-02 runner.");
 }
 
@@ -146,6 +154,7 @@ const sessionId = safeId(args["session-id"], "sessionId");
 const workerCode = safeWorker(args["worker-code"]);
 const sourceCommit = safeCommit(args["source-commit"]);
 const sourceBranch = safeBranch(args["source-branch"]);
+const requestedRunnerId = safeRunner(args["runner-id"]);
 
 const branchRef = `refs/heads/${sourceBranch}`;
 const actualHead = execText(GIT_BIN, [`--git-dir=${REPO}`, "rev-parse", `${branchRef}^{commit}`]);
@@ -166,7 +175,7 @@ try {
   if (bundleHead !== sourceCommit) fail("SOURCE_BUNDLE_HEAD_MISMATCH", "A létrehozott bundle HEAD eltér a kért sourceCommit értéktől.");
 
   const snapshot = loadSnapshot();
-  const node = chooseNode(snapshot);
+  const node = chooseNode(snapshot, requestedRunnerId);
   const nodeId = node.id;
 
   execFileSync(SCP_BIN, scpArgs(bundle, `${nodeId}:/srv/dimpro-build/temp/${runId}.bundle`), {

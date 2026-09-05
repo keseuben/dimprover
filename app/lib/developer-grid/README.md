@@ -17,7 +17,7 @@ A Developer Grid saját DEV verziósorozatot használ a ChatGrid v0.3.x fallback
 
 ## Build node readiness
 
-A `build01` és `build02` node státusza nem kézi READY flag: a foundation betöltésekor rövid, fail-closed SSH readiness probe fut a szerveren konfigurált `build01` / `build02` SSH aliasokra. Kötelező: batch mód, 3 másodperces connect timeout, egyetlen connection attempt és strict host-key ellenőrzés. READY csak az explicit `DIMPRO_BUILD_NODE_READY` marker pontos visszaadása után lehet. Minden más eredmény `NOT_CONNECTED`, ilyenkor a canonical DEV szerver marad a hivatalos executor az exclusive build gate alatt.
+A `build01` és `build02` node státusza nem kézi READY flag. A Developer Grid a sanitizált MCP/SSH gateway snapshotot olvassa; READY csak friss LIVE snapshot, működő toolchain, SAFE/WATCH Storage Governor, legalább 4 GiB swap és szabad runner-local build lock mellett lehet. A DEV alkalmazásszerver nem FULL BUILD fallback: ha egyik runner sem READY + FREE, a build `QUEUED` marad.
 
 A `v0.1.1 DEV` ellenőrzési pontban elkészült a dinamikus build01/build02 SSH readiness probe, a native delta desktop kapcsolat, a külön Windows EXE/DEV ZIP és a publikus DEV API staging. A következő `v0.1.2 DEV` stabilizációs kör fókusza a dependency/security hardening, dokumentációs konzisztencia és a v0.1.1 Windows kézi acceptance visszajelzéseinek javítása.
 
@@ -41,3 +41,11 @@ A Developer Grid DEV kiadási artifactfolyam külön fail-closed release motorra
 A BUILD-01 és BUILD-02 node-ok FULL BUILD végrehajtása fail-closed remote executoron keresztül történik. A DEV gateway kizárólag sanitizált health snapshotot ír a `/srv/dimpro-dev/coordination/health-snapshots/build-nodes.json` fájlba; a scheduler csak friss `READY + LIVE + FREE`, `toolchainReady=true`, `SAFE/WATCH` storage és legalább 4 GiB swap mellett rendelhet run-t.
 
 A runner helyi kizárólagos lockja a hardened node-konfigurációval egyezően `/srv/dimpro-build/state/full-build.lock`. A forrás teljes Git commit SHA + branch provenance alapján Git bundle-ben érkezik, a runner `npm ci` után kizárólag a canonical `npm run build:raw` műveletet futtatja. A build node-on deploy, migration, restart, cutover és candidate művelet tiltott. Az artifact csak DEV standalone buildből, `BUILD_ID`-ből és `.dimpro-release.json` provenance-ből készül; visszaadás után SHA-256 és runner/source metadata kötelezően ellenőrzött. PROD hozzáférés minden ponton `DENY`.
+
+## v0.1.13 Control Plane – BUILD Runner Pool
+
+A központi Fejlesztői Vezérlőpult FULL BUILD művelete csak explicit felhasználói build-kérésből, aktív authoritative task/session és `bootAckState=VALIDATED` mellett indulhat. A kérés külön `GridBuildRun` rekordot kap `runId`, `taskId`, `sessionId`, `workerCode`, teljes source commit SHA és branch azonosítóval.
+
+A scheduler BUILD01-et választja elsőként, BUILD02-t fallbackként. A kiosztott node-azonosítót a remote dispatcher explicit `runner-id` formában kapja; ha a kijelölt runner az indítás pillanatában már nem READY/FREE, a végrehajtás fail-closed, és nem vált át rejtetten másik runnerre. Várólistás buildet a control plane később újraütemezhet, mert az eredeti build-kérés már authoritative módon rögzített.
+
+A hosszú build nem a HTTP kérésben fut. Egy detached DEV build-job indítja a remote dispatchert, amely a build állapotáról külön evidence fájlt ír. A control plane a `QUEUED → ASSIGNED → RUNNING → PASS/FAIL/BLOCKED` állapotokat reconciliálja, és `BUILD_QUEUED`, `BUILD_ASSIGNED`, `BUILD_STARTED`, `BUILD_RESULT` eseményt ír. PASS esetén BUILD_ID, artifact SHA-256 és evidence hivatkozás kerül vissza a felületre; FAIL/BLOCKED esetén failure code, exit code és output SHA-256. PROD minden ponton DENY.

@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
@@ -1506,6 +1506,7 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
       ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
     });
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId: task.sessionId });
     if (persisted?.validated !== true) return;
     const continuation = await sendBootAckAcceptedContinuation(view, task, workerCode);
     const patch = continuation?.sent && continuation?.verified
@@ -2604,6 +2605,19 @@ function registerIpc() {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
     try { return { ok: true, activeWork: await fetchDeveloperGridActiveWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken() }) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Az aktív munka nem tölthető be." }; }
+  });
+  ipcMain.handle("build-runs:get", async () => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, buildRuns: await fetchDeveloperGridBuildRuns({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Build Runner Pool állapota nem tölthető be." }; }
+  });
+  ipcMain.handle("build-runs:request", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const build = await requestDeveloperGridFullBuild({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:payload || {} });
+      send("context:refresh", { reason:"build-requested", runId:build?.run?.id || null });
+      return { ok:true, build };
+    } catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A FULL BUILD indítása sikertelen." }; }
   });
   ipcMain.handle("work-start:create", async (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };

@@ -31,12 +31,22 @@ A Developer Grid négy ChatGPT-cellás munkaterét és a középső BENJADMIN Fe
 - Hibás, hiányos, eltérő vagy időtúllépett ACK `BLOCKED`; automatikus folytatás nincs.
 - Új projektcsevegésnél a csevegés explicit rögzítése után ugyanaz a Launch Packet → BOOT ACK lánc indul.
 
+## BUILD Runner Pool / remote executor – integrálva
+
+- A korábbi BUILD Runner Pool és Remote Build Executor V1 fejlesztési ág bekerült a v0.1.13 control plane-be.
+- BUILD01 priority 1, BUILD02 priority 2; egyik sem használható rejtett DEV-host FULL BUILD fallbackkel.
+- A központi Vezérlőpult `FULL BUILD INDÍTÁSA` gombja csak aktív task/session + validált BOOT ACK után engedélyezett.
+- A build authoritative `GridBuildRun` állapotot kap: `QUEUED → ASSIGNED → RUNNING → PASS/FAIL/BLOCKED`.
+- A scheduler által kijelölt runner explicit azonosítóval kerül a remote dispatcherhez; runner-állapot változásnál fail-closed.
+- A build detached jobként fut, BUILD_ID, artifact SHA-256, output SHA-256, evidenceRef és failure code visszacsatolással.
+- A felület BUILD01/BUILD02 health mellett megjeleníti az aktív run-t, commitot és a legutóbbi build eredményét.
+- Automatikus queue reconciliation csak már explicit módon kért buildet indíthat el.
+
 ## Következő fejlesztési blokk
 
-- A már létező BUILD Runner Pool / remote executor fejlesztési ág integrálása a v0.1.13 control plane-be;
-- BUILD01/BUILD02 tényleges build-dispatch, queue, runId, commitSha és test/build evidence visszacsatolás a központi felületre;
-- Diagnostic Evidence Engine esemény- és evidence-séma teljes bekötése;
-- Windows natív v0.1.13 candidate E2E.
+- Diagnostic Evidence Engine esemény- és evidence-séma teljes bekötése a HANDOFF/TEST/FILE/ERROR eseményekhez;
+- Review/V.Guard kapu és handoff completeness gate szigorítása;
+- Windows natív v0.1.13 candidate E2E, majd valós BUILD01/BUILD02 candidate validáció.
 
 ## Biztonsági invariantok
 
