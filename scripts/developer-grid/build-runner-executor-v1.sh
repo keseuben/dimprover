@@ -59,6 +59,26 @@ worktree="${WORKTREE_ROOT}/${run_id}"
 log_file="${LOG_ROOT}/${run_id}.log"
 result_file="${RESULT_ROOT}/${run_id}.json"
 
+cleanup() {
+  local ec=$?
+  if [[ -d "${worktree}" ]]; then
+    git --git-dir="${REPO}" worktree remove --force "${worktree}" >/dev/null 2>&1 || true
+  fi
+  rm -f "${bundle}"
+  if [[ -f "${CURRENT_RUN}" ]]; then
+    current="$(jq -r '.runId // empty' "${CURRENT_RUN}" 2>/dev/null || true)"
+    [[ "${current}" == "${run_id}" ]] && rm -f "${CURRENT_RUN}"
+  fi
+  if (( ec != 0 )) && [[ ! -s "${result_file}" ]]; then
+    jq -n \
+      --arg runId "${run_id}" --arg nodeId "${node_id}" --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --argjson exitCode "${ec}" \
+      '{schemaVersion:1,environment:"DEV",productionAccess:"DENY",status:"FAIL",runId:$runId,nodeId:$nodeId,code:"RUNNER_EXECUTION_FAILED",exitCode:$exitCode,finishedAt:$finishedAt}' \
+      > "${result_file}"
+  fi
+}
+trap cleanup EXIT
+
 [[ -f "${bundle}" ]] || fail_json "SOURCE_BUNDLE_MISSING" "A forrás Git bundle nem érkezett meg."
 [[ ! -e "${artifact_dir}" ]] || fail_json "ARTIFACT_RUN_ALREADY_EXISTS" "Ehhez a runId-hez már létezik artifact."
 [[ ! -e "${worktree}" ]] || fail_json "WORKTREE_RUN_ALREADY_EXISTS" "Ehhez a runId-hez már létezik worktree."
@@ -79,11 +99,11 @@ source "${TOOLCHAIN_ENV}"
 
 bundle_head="$(git bundle list-heads "${bundle}" "refs/heads/${source_branch}" | awk 'NR==1{print $1}')"
 [[ "${bundle_head}" == "${source_commit}" ]] || fail_json "SOURCE_BUNDLE_HEAD_MISMATCH" "A bundle branch HEAD nem egyezik a kért sourceCommit értékkel."
-git bundle verify "${bundle}" >/dev/null 2>&1 || fail_json "SOURCE_BUNDLE_VERIFY_FAILED" "A Git bundle ellenőrzése sikertelen."
 
 if [[ ! -d "${REPO}" ]]; then
   git init --bare "${REPO}" >/dev/null
 fi
+git --git-dir="${REPO}" bundle verify "${bundle}" >/dev/null 2>&1 || fail_json "SOURCE_BUNDLE_VERIFY_FAILED" "A Git bundle ellenőrzése sikertelen."
 git --git-dir="${REPO}" fetch --force "${bundle}" "refs/heads/${source_branch}:refs/heads/${source_branch}" >>"${log_file}" 2>&1 \
   || fail_json "SOURCE_FETCH_FAILED" "A forrás branch nem tölthető be a runner repositoryba."
 resolved="$(git --git-dir="${REPO}" rev-parse "refs/heads/${source_branch}^{commit}" 2>/dev/null || true)"
@@ -96,26 +116,6 @@ jq -n \
   --arg startedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{schemaVersion:1,environment:"DEV",productionAccess:"DENY",runId:$runId,taskId:$taskId,sessionId:$sessionId,workerCode:$workerCode,nodeId:$nodeId,sourceCommit:$sourceCommit,sourceBranch:$sourceBranch,startedAt:$startedAt}' \
   > "${CURRENT_RUN}"
-
-cleanup() {
-  local ec=$?
-  if [[ -d "${worktree}" ]]; then
-    git --git-dir="${REPO}" worktree remove --force "${worktree}" >/dev/null 2>&1 || true
-  fi
-  rm -f "${bundle}"
-  if [[ -f "${CURRENT_RUN}" ]]; then
-    current="$(jq -r '.runId // empty' "${CURRENT_RUN}" 2>/dev/null || true)"
-    [[ "${current}" == "${run_id}" ]] && rm -f "${CURRENT_RUN}"
-  fi
-  if (( ec != 0 )) && [[ ! -s "${result_file}" ]]; then
-    jq -n \
-      --arg runId "${run_id}" --arg nodeId "${node_id}" --arg finishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      --argjson exitCode "${ec}" \
-      '{schemaVersion:1,environment:"DEV",productionAccess:"DENY",status:"FAIL",runId:$runId,nodeId:$nodeId,code:"RUNNER_EXECUTION_FAILED",exitCode:$exitCode,finishedAt:$finishedAt}' \
-      > "${result_file}"
-  fi
-}
-trap cleanup EXIT
 
 git --git-dir="${REPO}" worktree add --detach "${worktree}" "${source_commit}" >>"${log_file}" 2>&1 \
   || fail_json "WORKTREE_CREATE_FAILED" "A runner worktree nem hozható létre."

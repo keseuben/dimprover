@@ -54,8 +54,13 @@ check("runner sources pinned toolchain", () => {
   assert.match(runner, /toolchains\/node\.env/);
   for (const marker of ["v22.23.2","10.9.8","2.43.0"]) assert.ok(runner.includes(marker));
 });
-check("runner verifies Git bundle provenance", () => {
-  for (const marker of ["git bundle list-heads","git bundle verify","SOURCE_BUNDLE_HEAD_MISMATCH","SOURCE_PROVENANCE_MISMATCH"]) assert.ok(runner.includes(marker));
+check("runner verifies Git bundle provenance in runner repository", () => {
+  for (const marker of ["git bundle list-heads","SOURCE_BUNDLE_HEAD_MISMATCH","SOURCE_PROVENANCE_MISMATCH"]) assert.ok(runner.includes(marker));
+  assert.match(runner, /git --git-dir="\$\{REPO\}" bundle verify/);
+});
+check("runner installs cleanup trap before bundle validation", () => {
+  assert.ok(runner.indexOf("trap cleanup EXIT") < runner.indexOf("SOURCE_BUNDLE_MISSING"));
+  assert.ok(runner.indexOf("trap cleanup EXIT") < runner.indexOf("SOURCE_BUNDLE_VERIFY_FAILED"));
 });
 check("runner creates detached worktree from exact commit", () => {
   assert.match(runner, /worktree add --detach/);
