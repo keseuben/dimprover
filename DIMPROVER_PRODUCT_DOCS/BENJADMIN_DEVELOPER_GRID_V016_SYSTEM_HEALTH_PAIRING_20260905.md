@@ -32,6 +32,7 @@ A fizikai E2E során az `admin.dev.dimpro.hu/api/dev/grid/*` Nginx útvonal még
 - Valódi BUILD01 FULL BUILD az MCP Build Transport Gatewayen.
 - Exact HEAD + BUILD_ID release provenance.
 - Candidate Developer Grid API runtime smoke külön porton.
+- A candidate smoke runnerhiány esetén `BUILD_QUEUE` fail-closed állapotot vár; DEV-host FULL BUILD fallback továbbra is tiltott.
 - DEV Nginx `/api/dev/grid/` átvezetés csak valid candidate-re, config backup + `nginx -t` mellett.
 - Authorized System Health read smoke szerveroldali credentialdel úgy, hogy titok nem kerül logba vagy kimenetre.
 - Windows EXE/DEV ZIP/manifest immutable DEV release és teljes publikus SHA-256 visszaellenőrzés.

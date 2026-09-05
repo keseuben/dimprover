@@ -43,8 +43,8 @@ const hasReadyBuildNode = buildNodes.some((node) => node.state === "READY");
 check(
   hasReadyBuildNode
     ? foundation.json?.foundation?.buildExecutor?.kind === "REMOTE_BUILD_NODE"
-    : foundation.json?.foundation?.buildExecutor?.kind === "CANONICAL_DEV_SERVER",
-  "Build executor follows readiness state",
+    : foundation.json?.foundation?.buildExecutor?.kind === "BUILD_QUEUE",
+  "Build executor follows readiness state without DEV-host fallback",
 );
 check(foundation.json?.foundation?.realtime?.mode === "DELTA_EVENT", "Realtime mode DELTA_EVENT");
 check(foundation.json?.foundation?.realtime?.fullSnapshotPollingAllowed === false, "Full snapshot polling forbidden");
