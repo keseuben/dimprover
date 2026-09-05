@@ -548,13 +548,6 @@ function renderLive() {
   const footerAi = $("#footerAiStatus");
   if (footerAi) footerAi.textContent = `${workingCount} dolgozik · ${needsAttentionCount} vár`;
   setFooterDot("#footerAiDot", state.connection.benjadmin ? "online" : "warning");
-  const activeTasks = (state.live?.tasks || []).filter((task) => ["ready","claimed","in_progress","testing","blocked"].includes(String(task?.status || "").toLowerCase()));
-  const headerContext = $("#headerContextLabel");
-  if (headerContext) {
-    const first = activeTasks[0];
-    headerContext.textContent = first ? `${activeTasks.length > 1 ? `${activeTasks.length} aktív · ` : ""}${first.title || "Aktív fejlesztési feladat"}` : "Nincs aktív fejlesztési feladat";
-    headerContext.title = headerContext.textContent;
-  }
   const openProfileCode = $("#workerProfileLayer")?.dataset.workerCode;
   if (openProfileCode && !$("#workerProfileLayer").classList.contains("is-hidden")) {
     const live = workerProfileLive(openProfileCode);
@@ -741,14 +734,12 @@ function renderChatRefreshStatus() {
     button.disabled = state.security?.unlocked !== true;
     button.title = `ChatGPT frissítés · legutóbb ${latest}${refresh.dailyEnabled === false ? " · napi frissítés kikapcsolva" : " · napi frissítés bekapcsolva"}`;
   }
-  const headerUpdated = $("#headerChatUpdated");
-  if (headerUpdated) headerUpdated.textContent = `Utolsó frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
-  const headerVersion = $("#headerChatVersion");
-  if (headerVersion) headerVersion.textContent = `Grid UI v${state.appVersion || "—"}`;
+  const headerStatus = $("#headerChatStatus");
+  if (headerStatus) headerStatus.title = `ChatGPT webfelület · ${headerStatus.textContent || "—"} · legutóbbi frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
   const headerButton = $("#headerChatRefreshButton");
   if (headerButton) {
     headerButton.disabled = state.security?.unlocked !== true;
-    headerButton.title = `ChatGPT frissítés · legutóbb ${latest}${deferred > 0 ? ` · ${deferred} nézet halasztva` : ""}`;
+    headerButton.title = `ChatGPT biztonságos frissítés · legutóbb ${latest}${deferred > 0 ? ` · ${deferred} nézet halasztva` : ""}`;
   }
   const settingsStatus = $("#chatRefreshSettingsStatus");
   if (settingsStatus) settingsStatus.textContent = `Legutóbbi frissítés: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;

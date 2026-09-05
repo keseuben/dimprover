@@ -11,25 +11,23 @@
   <header class="titlebar" aria-label="BENJADMIN Developer Grid fejléc">
     <div class="titlebar__brand">
       <span class="brand-mark" aria-hidden="true">B</span>
-      <strong>BENJADMIN</strong>
-      <span>Developer Grid</span><small class="product-subtitle" title="AI Fejlesztésirányítási Központ">AI Engineering Control Center</small><span id="appVersionLabel" class="app-version-label" title="Futó Developer Grid verzió">v—</span>
-      <button id="devminButton" class="titlebar-mini-button devmin-header-button no-drag" type="button" title="05 DevminAI megjelenítése / elrejtése (Ctrl+Alt+5)" aria-label="05 DevminAI megjelenítése / elrejtése" disabled>+</button><button id="layoutModeButton" class="titlebar-mini-button no-drag" type="button" title="4 / 2 cellás nézet (Ctrl+Alt+6)" aria-label="4 / 2 cellás nézet" disabled>▦</button>
-      <div id="splitControls" class="split-controls no-drag is-hidden" aria-label="Kétcellás nézet kiválasztása">
+      <div class="titlebar__identity">
+        <strong>BENJADMIN Developer Grid</strong>
+        <small>AI Engineering Control Center <span aria-hidden="true">·</span> <span id="appVersionLabel" class="app-version-label" title="Futó Developer Grid verzió">v—</span></small>
+      </div>
+    </div>
+    <div class="titlebar__spacer" aria-hidden="true"></div>
+    <div class="titlebar__tools no-drag">
+      <span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
+      <button id="devminButton" class="titlebar-mini-button devmin-header-button" type="button" title="05 DevminAI megjelenítése / elrejtése (Ctrl+Alt+5)" aria-label="05 DevminAI megjelenítése / elrejtése" disabled>+</button>
+      <button id="layoutModeButton" class="titlebar-mini-button" type="button" title="4 / 2 cellás nézet (Ctrl+Alt+6)" aria-label="4 / 2 cellás nézet" disabled>▦</button>
+      <div id="splitControls" class="split-controls is-hidden" aria-label="Kétcellás nézet kiválasztása">
         <label>Bal <select id="splitLeftSelect" aria-label="Bal oldali csevegő"></select></label>
         <label>Jobb <select id="splitRightSelect" aria-label="Jobb oldali csevegő"></select></label>
       </div>
-    </div>
-    <div class="titlebar__center">
-      <span id="headerContextLabel" class="header-context-label">Nincs aktív fejlesztési feladat</span>
-      <span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
-    </div>
-    <div class="titlebar__tools no-drag">
-      <div class="chat-surface-status" aria-label="ChatGPT felület frissítési állapota">
-        <span class="chat-surface-status__label">ChatGPT webfelület</span>
-        <span id="headerChatStatus" class="chat-surface-status__online">—</span>
-        <span id="headerChatUpdated" class="chat-surface-status__updated">Utolsó frissítés: —</span>
-        <span id="headerChatVersion" class="chat-surface-status__version">Grid UI v—</span>
-        <button id="headerChatRefreshButton" type="button" title="Az összes megnyitott ChatGPT nézet biztonságos frissítése" disabled>↻ Frissítés</button>
+      <div class="chat-surface-status" aria-label="ChatGPT felület állapota">
+        <span id="headerChatStatus" class="chat-surface-status__online" title="ChatGPT webfelület állapota">—</span>
+        <button id="headerChatRefreshButton" type="button" title="Az összes megnyitott ChatGPT nézet biztonságos frissítése" aria-label="ChatGPT nézetek frissítése" disabled>↻</button>
       </div>
       <button id="dailyStartButton" class="daily-start-button" type="button" title="Napi fejlesztési indítás · Central Core Vezérlőpult" aria-label="Napi fejlesztési indítás" disabled>▶</button>
       <button id="contextWorkspaceButton" class="context-workspace-button" type="button" title="BENJADMIN Fejlesztői Vezérlőpult · Central Core" aria-label="Context Workspace" disabled>▤</button>

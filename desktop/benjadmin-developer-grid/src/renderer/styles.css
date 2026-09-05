@@ -2331,3 +2331,259 @@ body.has-health-drawer .central-panel {
   .system-health-columns { grid-template-columns:repeat(7,minmax(165px,1fr)); }
   .system-health-overall b { font-size:7.5px; }
 }
+
+/* Developer Grid v0.1.15 · simplified application header + hardened System Health contrast */
+.titlebar {
+  display:flex;
+  align-items:center;
+  gap:0;
+  padding:0;
+}
+.titlebar__brand {
+  flex:0 0 auto;
+  min-width:245px;
+  max-width:320px;
+  height:100%;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:0 10px 0 12px;
+  overflow:hidden;
+}
+.titlebar__identity {
+  min-width:0;
+  display:grid;
+  align-content:center;
+  gap:1px;
+  line-height:1.08;
+}
+.titlebar__identity > strong {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#e7f5fb;
+  font-size:12.5px;
+  font-weight:900;
+  letter-spacing:.055em;
+}
+.titlebar__identity > small {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+  white-space:nowrap;
+  color:#7893a1;
+  font-size:9.5px;
+  font-weight:750;
+  letter-spacing:.015em;
+}
+.titlebar__identity .app-version-label {
+  height:auto;
+  min-height:0;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:#78b7cc;
+  font-size:9.5px;
+  letter-spacing:.025em;
+}
+.titlebar__spacer {
+  flex:1 1 auto;
+  min-width:12px;
+  height:100%;
+  -webkit-app-region:drag;
+}
+.titlebar__tools {
+  flex:0 0 auto;
+  max-width:calc(100% - 250px);
+  align-items:center;
+  gap:2px;
+  padding-left:4px;
+}
+.titlebar-mini-button {
+  width:30px;
+  min-width:30px;
+  height:30px;
+  margin:0;
+}
+.split-controls { margin:0 3px 0 1px; }
+.chat-surface-status {
+  flex:0 0 auto;
+  min-width:62px;
+  height:32px;
+  padding:0 4px;
+  gap:3px;
+  border-left:1px solid var(--line);
+  border-right:1px solid var(--line);
+}
+.chat-surface-status__online {
+  width:20px;
+  min-width:20px;
+  height:30px;
+  padding:0;
+  overflow:hidden;
+  color:transparent !important;
+  font-size:0 !important;
+}
+.chat-surface-status__online::before {
+  left:7px;
+  width:7px;
+  height:7px;
+  margin-top:-3.5px;
+}
+.chat-surface-status button {
+  width:30px;
+  min-width:30px;
+  height:30px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  font-size:15px;
+  line-height:1;
+}
+.titlebar__tools > .daily-start-button,
+.titlebar__tools > .context-workspace-button,
+.titlebar__tools > .global-settings-button,
+.titlebar__tools > .review-button {
+  margin-block:0;
+  height:32px;
+}
+.titlebar .icon-button { width:34px; min-width:34px; height:100%; }
+.workspace-zoom { height:32px; align-self:center; }
+.window-button { height:100%; }
+:root[data-theme="light"] .titlebar__identity > strong { color:#123746; }
+:root[data-theme="light"] .titlebar__identity > small { color:#526f7d; }
+:root[data-theme="light"] .titlebar__identity .app-version-label { color:#176b88; }
+
+/* Quick Health is a solid status surface, not translucent glass. */
+.system-health-peek {
+  background:#071e1a !important;
+  border-top:2px solid #249d76 !important;
+  box-shadow:0 -14px 34px rgba(0,0,0,.34) !important;
+  color:#f0fff9 !important;
+}
+.system-health-peek__identity {
+  align-self:stretch;
+  flex:1 1 auto;
+  padding:7px 12px;
+  margin:-5px 0 -5px -5px;
+  border-radius:7px;
+  background:#0b2a23;
+  border:1px solid rgba(82,233,178,.22);
+}
+.system-health-peek__identity > div {
+  min-width:0;
+  display:grid;
+  align-content:center;
+  gap:4px;
+}
+.system-health-peek strong {
+  display:block;
+  margin:0;
+  color:#effff9 !important;
+  opacity:1 !important;
+  text-shadow:none !important;
+  font-size:12.5px !important;
+  font-weight:950;
+  line-height:1.15;
+  letter-spacing:.075em;
+}
+.system-health-peek p {
+  margin:0;
+  color:#b9ded1 !important;
+  opacity:1 !important;
+  text-shadow:none !important;
+  font-size:10.5px !important;
+  line-height:1.35;
+}
+.system-health-peek p span { color:#95bfb0 !important; }
+.system-health-peek__metrics > span {
+  background:#0c2a24 !important;
+  border-color:rgba(82,233,178,.22) !important;
+  color:#d9eee7 !important;
+  opacity:1 !important;
+}
+.system-health-peek__metrics b { color:#7ce4bd !important; }
+
+/* Expanded Health receives an opaque, separated title strip so labels never merge into the canvas. */
+.system-health-drawer {
+  background:#07191b !important;
+  border-top:2px solid #249d76 !important;
+}
+.system-health-drawer__head {
+  height:52px !important;
+  padding:0 12px 0 15px !important;
+  background:#0b2a24 !important;
+  border-bottom:1px solid #1e6d58 !important;
+  box-shadow:0 2px 0 rgba(0,0,0,.18) !important;
+  color:#effff9 !important;
+}
+.system-health-drawer__head .system-health-drawer__identity strong {
+  color:#f1fff9 !important;
+  opacity:1 !important;
+  text-shadow:none !important;
+  font-size:12.5px !important;
+  font-weight:950;
+}
+.system-health-drawer__head .system-health-drawer__identity span:not(.system-health-drawer__mark) {
+  color:#b1d6c9 !important;
+  opacity:1 !important;
+  text-shadow:none !important;
+  font-size:9.5px !important;
+}
+.system-health-columns { height:calc(100% - 52px); }
+.system-health-overall { background:#102d27; }
+
+:root[data-theme="light"] .system-health-peek {
+  background:#edf9f4 !important;
+  border-top-color:#17815f !important;
+  color:#103c30 !important;
+  box-shadow:0 -12px 28px rgba(25,66,53,.16) !important;
+}
+:root[data-theme="light"] .system-health-peek__identity {
+  background:#ffffff;
+  border-color:#b7dfd1;
+}
+:root[data-theme="light"] .system-health-peek strong { color:#064b37 !important; }
+:root[data-theme="light"] .system-health-peek p { color:#315f51 !important; }
+:root[data-theme="light"] .system-health-peek p span { color:#527a6d !important; }
+:root[data-theme="light"] .system-health-peek__metrics > span {
+  background:#ffffff !important;
+  border-color:#c4e4d9 !important;
+  color:#244f43 !important;
+}
+:root[data-theme="light"] .system-health-peek__metrics b { color:#087653 !important; }
+:root[data-theme="light"] .system-health-drawer { background:#f4fbf8 !important; }
+:root[data-theme="light"] .system-health-drawer__head {
+  background:#e3f4ed !important;
+  border-bottom-color:#99cdbb !important;
+  color:#103c30 !important;
+}
+:root[data-theme="light"] .system-health-drawer__head .system-health-drawer__identity strong { color:#064b37 !important; }
+:root[data-theme="light"] .system-health-drawer__head .system-health-drawer__identity span:not(.system-health-drawer__mark) { color:#456e61 !important; }
+:root[data-theme="light"] .system-health-overall { background:#f7fcfa; }
+
+@media (max-width:1500px) {
+  .titlebar__brand { min-width:220px; max-width:250px; padding-left:9px; gap:7px; }
+  .titlebar__identity > strong { font-size:11px; }
+  .titlebar__identity > small,
+  .titlebar__identity .app-version-label { font-size:8.5px; }
+  .titlebar__tools { max-width:calc(100% - 224px); }
+  .split-controls select { width:82px; }
+  .workspace-zoom .icon-button { width:24px !important; min-width:24px !important; }
+  .zoom-readout { width:34px; }
+  .titlebar .icon-button { width:30px; min-width:30px; }
+  .window-button { width:38px; }
+  .system-health-peek strong { font-size:11.5px !important; }
+  .system-health-peek p { font-size:9.5px !important; }
+}
+
+@media (min-width:2200px) {
+  .titlebar__brand { min-width:290px; max-width:360px; }
+  .titlebar__identity > strong { font-size:14px; }
+  .titlebar__identity > small,
+  .titlebar__identity .app-version-label { font-size:10.5px; }
+}
