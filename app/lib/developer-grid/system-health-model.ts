@@ -63,6 +63,19 @@ export type LegacyHealthMetric = {
   diskUsedBytes: number | null;
   diskPercent: number | null;
   uptimeSeconds: number | null;
+  memoryAvailableBytes?: number | null;
+  swapMinimumBytes?: number | null;
+  diskAvailableBytes?: number | null;
+  buildLockHeld?: boolean | null;
+  currentRunId?: string | null;
+  queueDepth?: number | null;
+  storageGovernor?: string | null;
+  toolchainReady?: boolean | null;
+  nodeVersion?: string | null;
+  npmVersion?: string | null;
+  gitVersion?: string | null;
+  architecture?: string | null;
+  kernel?: string | null;
   latencyMs?: number | null;
   memoryPsiSomeAvg60?: number | null;
   memoryPsiFullAvg60?: number | null;
@@ -72,10 +85,12 @@ export type LegacyHealthServer = {
   id: "dev-vps" | "build01" | "build02" | "prod-vps" | "db-vps";
   label: string;
   hostname: string;
-  state: "READY" | "NOT_CONNECTED" | "DEGRADED";
+  state: "READY" | "BUSY" | "BLOCKED" | "NOT_CONNECTED" | "DEGRADED";
   reason: string;
   lastVerifiedAt: string | null;
   metrics: LegacyHealthMetric;
+  source?: string;
+  quality?: InfrastructureHealthQuality;
 };
 
 export type LegacyHealthStorage = {

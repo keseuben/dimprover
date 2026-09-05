@@ -7,7 +7,8 @@ function pct(used: number | null | undefined, total: number | null | undefined) 
 }
 
 function serverState(server: LegacyHealthServer): InfrastructureHealthNode["state"] {
-  return server.state === "READY" ? "READY" : server.state === "DEGRADED" ? "DEGRADED" : "NOT_CONNECTED";
+  if (server.state === "READY" || server.state === "BUSY" || server.state === "BLOCKED" || server.state === "DEGRADED") return server.state;
+  return "NOT_CONNECTED";
 }
 
 export function normalizeHealthServer(server: LegacyHealthServer, nowMs = Date.now()): InfrastructureHealthNode {
@@ -32,21 +33,34 @@ export function normalizeHealthServer(server: LegacyHealthServer, nowMs = Date.n
       cores: metrics.cores,
       memoryTotalBytes: metrics.memoryTotalBytes,
       memoryUsedBytes: metrics.memoryUsedBytes,
+      memoryAvailableBytes: metrics.memoryAvailableBytes ?? null,
       memoryPercent: metrics.memoryPercent,
       swapTotalBytes: metrics.swapTotalBytes,
       swapUsedBytes: metrics.swapUsedBytes,
+      swapMinimumBytes: metrics.swapMinimumBytes ?? null,
       swapPercent: pct(metrics.swapUsedBytes, metrics.swapTotalBytes),
       diskTotalBytes: metrics.diskTotalBytes,
       diskUsedBytes: metrics.diskUsedBytes,
+      diskAvailableBytes: metrics.diskAvailableBytes ?? null,
       diskPercent: metrics.diskPercent,
       uptimeSeconds: metrics.uptimeSeconds,
+      buildLockHeld: metrics.buildLockHeld ?? null,
+      currentRunId: metrics.currentRunId ?? null,
+      queueDepth: metrics.queueDepth ?? null,
+      storageGovernor: metrics.storageGovernor ?? null,
+      toolchainReady: metrics.toolchainReady ?? null,
+      nodeVersion: metrics.nodeVersion ?? null,
+      npmVersion: metrics.npmVersion ?? null,
+      gitVersion: metrics.gitVersion ?? null,
+      architecture: metrics.architecture ?? null,
+      kernel: metrics.kernel ?? null,
       latencyMs: metrics.latencyMs ?? null,
       memoryPsiSomeAvg60: metrics.memoryPsiSomeAvg60 ?? null,
       memoryPsiFullAvg60: metrics.memoryPsiFullAvg60 ?? null,
     },
     capabilities: [...definition.capabilities],
-    source: definition.source,
-    quality: server.state === "READY" ? "LIVE" : metrics.memoryPercent !== null || metrics.diskPercent !== null ? "PARTIAL" : "UNKNOWN",
+    source: server.source || definition.source,
+    quality: server.quality || (server.state === "READY" ? "LIVE" : metrics.memoryPercent !== null || metrics.diskPercent !== null ? "PARTIAL" : "UNKNOWN"),
   }, nowMs);
 }
 

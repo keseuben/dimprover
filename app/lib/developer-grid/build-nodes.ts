@@ -1,9 +1,10 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import fs from "node:fs";
 import type { BuildNodeDefinition } from "./types";
 
-const execFileAsync = promisify(execFile);
-const READINESS_MARKER = "DIMPRO_BUILD_NODE_READY";
+const SNAPSHOT_SCHEMA_VERSION = 1;
+const SNAPSHOT_SOURCE = "DIMPRO_MCP_SSH_GATEWAY";
+const DEFAULT_SNAPSHOT_FILE = "/srv/dimpro-dev/coordination/health-snapshots/build-nodes.json";
+const DEFAULT_MAX_AGE_MS = 60_000;
 
 const DEFAULT_BUILD_NODES: readonly BuildNodeDefinition[] = [
   {
@@ -12,7 +13,7 @@ const DEFAULT_BUILD_NODES: readonly BuildNodeDefinition[] = [
     state: "NOT_CONNECTED",
     capabilities: ["NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"],
     lastVerifiedAt: null,
-    reason: "SSH readiness még nincs hitelesítve.",
+    reason: "MCP SSH gateway snapshot még nincs hitelesítve.",
   },
   {
     id: "build02",
@@ -20,72 +21,267 @@ const DEFAULT_BUILD_NODES: readonly BuildNodeDefinition[] = [
     state: "NOT_CONNECTED",
     capabilities: ["NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"],
     lastVerifiedAt: null,
-    reason: "SSH readiness még nincs hitelesítve.",
+    reason: "MCP SSH gateway snapshot még nincs hitelesítve.",
   },
 ] as const;
 
-const SSH_TARGET: Record<BuildNodeDefinition["id"], string> = {
-  build01: "build01",
-  build02: "build02",
+export type BuildNodeSnapshotState = "READY" | "BUSY" | "BLOCKED" | "NOT_CONNECTED";
+export type BuildNodeSnapshotQuality = "LIVE" | "STALE" | "UNKNOWN";
+
+export type BuildNodeMetrics = {
+  cpuPercent: number;
+  load1: number;
+  cores: number;
+  memoryTotalBytes: number;
+  memoryUsedBytes: number;
+  memoryAvailableBytes: number;
+  memoryPercent: number;
+  swapTotalBytes: number;
+  swapUsedBytes: number;
+  swapMinimumBytes: number;
+  swapPercent: number;
+  diskTotalBytes: number;
+  diskUsedBytes: number;
+  diskAvailableBytes: number;
+  diskPercent: number;
+  uptimeSeconds: number;
+  buildLockHeld: boolean;
+  currentRunId: string | null;
+  queueDepth: number | null;
+  storageGovernor: string;
+  toolchainReady: boolean;
+  nodeVersion: string;
+  npmVersion: string;
+  gitVersion: string;
+  architecture: string;
+  kernel: string;
 };
 
-export type BuildNodeProbeResult = {
-  ready: boolean;
-  reason: string;
+export type BuildNodeSnapshot = BuildNodeDefinition & {
+  healthState: BuildNodeSnapshotState;
+  source: typeof SNAPSHOT_SOURCE;
+  quality: BuildNodeSnapshotQuality;
+  snapshotSampledAt: string | null;
+  metrics: BuildNodeMetrics | null;
 };
 
-export type BuildNodeProbe = (node: BuildNodeDefinition) => Promise<BuildNodeProbeResult>;
+export type BuildNodeProbeOptions = {
+  snapshotFile?: string;
+  nowMs?: number;
+  maxAgeMs?: number;
+};
+
+type JsonObject = Record<string, unknown>;
+
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function containsForbiddenKey(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenKey);
+  if (!isObject(value)) return false;
+  return Object.entries(value).some(([key, nested]) =>
+    /password|secret|token|privatekey|authorization|commandline|envvars/i.test(key) || containsForbiddenKey(nested)
+  );
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function nullableNumber(value: unknown): number | null | undefined {
+  return value === null ? null : finiteNumber(value) ?? undefined;
+}
+
+function safeString(value: unknown, maxLength = 160): string | null {
+  return typeof value === "string" && value.length <= maxLength ? value : null;
+}
 
 function cloneNode(node: BuildNodeDefinition): BuildNodeDefinition {
   return { ...node, capabilities: [...node.capabilities] };
+}
+
+function unavailableNode(
+  definition: BuildNodeDefinition,
+  reason: string,
+  quality: BuildNodeSnapshotQuality,
+  lastVerifiedAt: string | null = null,
+  metrics: BuildNodeMetrics | null = null,
+  snapshotSampledAt: string | null = null,
+): BuildNodeSnapshot {
+  return {
+    ...cloneNode(definition),
+    state: "NOT_CONNECTED",
+    healthState: "NOT_CONNECTED",
+    reason,
+    lastVerifiedAt,
+    source: SNAPSHOT_SOURCE,
+    quality,
+    snapshotSampledAt,
+    metrics,
+  };
+}
+
+function snapshotState(value: unknown): BuildNodeSnapshotState | null {
+  return value === "READY" || value === "BUSY" || value === "BLOCKED" || value === "NOT_CONNECTED" ? value : null;
+}
+
+function buildState(value: BuildNodeSnapshotState): BuildNodeDefinition["state"] {
+  if (value === "READY") return "READY";
+  if (value === "BUSY") return "BUSY";
+  if (value === "BLOCKED") return "DISABLED";
+  return "NOT_CONNECTED";
+}
+
+function sanitizeMetrics(value: unknown): BuildNodeMetrics | null {
+  if (!isObject(value)) return null;
+  const numericKeys = [
+    "cpuPercent", "load1", "cores", "memoryTotalBytes", "memoryUsedBytes", "memoryAvailableBytes",
+    "memoryPercent", "swapTotalBytes", "swapUsedBytes", "swapMinimumBytes", "swapPercent",
+    "diskTotalBytes", "diskUsedBytes", "diskAvailableBytes", "diskPercent", "uptimeSeconds",
+  ] as const;
+  const numeric: Partial<Record<(typeof numericKeys)[number], number>> = {};
+  for (const key of numericKeys) {
+    const parsed = finiteNumber(value[key]);
+    if (parsed === null) return null;
+    numeric[key] = parsed;
+  }
+  if (value.buildLockHeld !== true && value.buildLockHeld !== false) return null;
+  if (value.toolchainReady !== true && value.toolchainReady !== false) return null;
+  const queueDepth = nullableNumber(value.queueDepth);
+  if (queueDepth === undefined) return null;
+  const currentRunId = value.currentRunId === null ? null : safeString(value.currentRunId, 128);
+  if (value.currentRunId !== null && currentRunId === null) return null;
+  const storageGovernor = safeString(value.storageGovernor, 32);
+  const nodeVersion = safeString(value.nodeVersion, 32);
+  const npmVersion = safeString(value.npmVersion, 32);
+  const gitVersion = safeString(value.gitVersion, 32);
+  const architecture = safeString(value.architecture, 32);
+  const kernel = safeString(value.kernel, 64);
+  if (!storageGovernor || !nodeVersion || !npmVersion || !gitVersion || !architecture || !kernel) return null;
+  return {
+    ...(numeric as Pick<BuildNodeMetrics, (typeof numericKeys)[number]>),
+    buildLockHeld: value.buildLockHeld,
+    currentRunId,
+    queueDepth,
+    storageGovernor,
+    toolchainReady: value.toolchainReady,
+    nodeVersion,
+    npmVersion,
+    gitVersion,
+    architecture,
+    kernel,
+  };
+}
+
+function parseTimestamp(value: unknown): { iso: string; ms: number } | null {
+  if (typeof value !== "string") return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? { iso: value, ms } : null;
+}
+
+function parseNode(
+  value: unknown,
+  definition: BuildNodeDefinition,
+  snapshotSampledAt: string,
+  nowMs: number,
+  maxAgeMs: number,
+): BuildNodeSnapshot | null {
+  if (!isObject(value)) return null;
+  const state = snapshotState(value.state);
+  const timestamp = parseTimestamp(value.lastVerifiedAt);
+  const metrics = sanitizeMetrics(value.metrics);
+  if (
+    value.schemaVersion !== SNAPSHOT_SCHEMA_VERSION ||
+    value.id !== definition.id ||
+    value.hostname !== definition.hostname ||
+    value.source !== SNAPSHOT_SOURCE ||
+    value.quality !== "LIVE" ||
+    !state ||
+    !timestamp ||
+    !metrics
+  ) return null;
+
+  const stale = nowMs - timestamp.ms > maxAgeMs || timestamp.ms - nowMs > maxAgeMs;
+  if (stale) {
+    return unavailableNode(
+      definition,
+      "A build node MCP gateway állapotmintája elavult.",
+      "STALE",
+      timestamp.iso,
+      metrics,
+      snapshotSampledAt,
+    );
+  }
+
+  return {
+    ...cloneNode(definition),
+    state: buildState(state),
+    healthState: state,
+    reason: safeString(value.reason) || "A build node állapota hitelesítve.",
+    lastVerifiedAt: timestamp.iso,
+    source: SNAPSHOT_SOURCE,
+    quality: "LIVE",
+    snapshotSampledAt,
+    metrics,
+  };
+}
+
+function invalidSnapshot(reason: string): BuildNodeSnapshot[] {
+  return DEFAULT_BUILD_NODES.map((definition) => unavailableNode(definition, reason, "UNKNOWN"));
 }
 
 export function listBuildNodes(): BuildNodeDefinition[] {
   return DEFAULT_BUILD_NODES.map(cloneNode);
 }
 
-async function sshReadinessProbe(node: BuildNodeDefinition): Promise<BuildNodeProbeResult> {
-  const target = SSH_TARGET[node.id];
+export async function probeBuildNodes(options: BuildNodeProbeOptions = {}): Promise<BuildNodeSnapshot[]> {
+  const snapshotFile = options.snapshotFile || process.env.BENJADMIN_BUILD_NODE_SNAPSHOT_FILE?.trim() || DEFAULT_SNAPSHOT_FILE;
+  const nowMs = options.nowMs ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
+  let parsed: unknown;
   try {
-    const result = await execFileAsync("/usr/bin/ssh", [
-      "-o", "BatchMode=yes",
-      "-o", "ConnectTimeout=3",
-      "-o", "ConnectionAttempts=1",
-      "-o", "StrictHostKeyChecking=yes",
-      target,
-      "printf", READINESS_MARKER,
-    ], {
-      encoding: "utf8",
-      timeout: 5_000,
-      maxBuffer: 32_768,
-      env: { ...process.env, LC_ALL: "C" },
-    });
-    if (result.stdout.trim() !== READINESS_MARKER) {
-      return { ready: false, reason: "SSH elérhető, de a readiness marker nem egyezik." };
-    }
-    return { ready: true, reason: "Hitelesített SSH readiness marker rendben." };
+    parsed = JSON.parse(fs.readFileSync(snapshotFile, "utf8"));
   } catch {
-    return { ready: false, reason: "SSH readiness kapcsolat nem érhető el vagy nincs még hitelesítve." };
+    return invalidSnapshot("A build node MCP gateway snapshot nem olvasható.");
   }
-}
+  if (!isObject(parsed) || containsForbiddenKey(parsed)) {
+    return invalidSnapshot("A build node MCP gateway snapshot formátuma érvénytelen.");
+  }
+  const sampledAt = parseTimestamp(parsed.sampledAt);
+  const rawNodes = parsed.nodes;
+  if (
+    parsed.schemaVersion !== SNAPSHOT_SCHEMA_VERSION ||
+    parsed.environment !== "DEV" ||
+    parsed.productionAccess !== "DENY" ||
+    parsed.source !== SNAPSHOT_SOURCE ||
+    !sampledAt ||
+    !Array.isArray(rawNodes) ||
+    rawNodes.length !== DEFAULT_BUILD_NODES.length
+  ) return invalidSnapshot("A build node MCP gateway snapshot szerződése érvénytelen.");
 
-export async function probeBuildNodes(probe: BuildNodeProbe = sshReadinessProbe): Promise<BuildNodeDefinition[]> {
-  const verifiedAt = new Date().toISOString();
-  return Promise.all(DEFAULT_BUILD_NODES.map(async (definition) => {
-    const node = cloneNode(definition);
-    let result: BuildNodeProbeResult;
-    try {
-      result = await probe(node);
-    } catch {
-      result = { ready: false, reason: "Build node readiness probe hibával tért vissza." };
+  const ids = rawNodes.map((node) => isObject(node) ? node.id : null);
+  if (new Set(ids).size !== DEFAULT_BUILD_NODES.length) {
+    return invalidSnapshot("A build node MCP gateway snapshot node-azonosítói érvénytelenek.");
+  }
+
+  const snapshotStale = nowMs - sampledAt.ms > maxAgeMs || sampledAt.ms - nowMs > maxAgeMs;
+  return DEFAULT_BUILD_NODES.map((definition) => {
+    const rawNode = rawNodes.find((node) => isObject(node) && node.id === definition.id);
+    const node = parseNode(rawNode, definition, sampledAt.iso, nowMs, maxAgeMs);
+    if (!node) return unavailableNode(definition, "A build node MCP gateway node-mintája érvénytelen.", "UNKNOWN");
+    if (snapshotStale && node.quality !== "STALE") {
+      return unavailableNode(
+        definition,
+        "A build node MCP gateway snapshot elavult.",
+        "STALE",
+        node.lastVerifiedAt,
+        node.metrics,
+        sampledAt.iso,
+      );
     }
-    return {
-      ...node,
-      state: result.ready ? "READY" : "NOT_CONNECTED",
-      lastVerifiedAt: verifiedAt,
-      reason: result.reason,
-    };
-  }));
+    return node;
+  });
 }
 
 export function selectBuildNode(nodes: BuildNodeDefinition[]) {

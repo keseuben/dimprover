@@ -15,8 +15,8 @@ const MINUTE = 60_000;
 
 const REGISTRY: readonly InfrastructureNodeRegistryEntry[] = [
   { id: "dev-vps", label: "DEV VPS", kind: "DEV", readOnly: false, capabilities: ["OS_METRICS", "MEMORY_PSI", "RUNTIME_HEALTH"], source: "LOCAL_OS", staleAfterMs: MINUTE },
-  { id: "build01", label: "BUILD01", kind: "BUILD", readOnly: true, capabilities: ["SSH_READINESS", "NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"], source: "BUILD_NODE_READINESS", staleAfterMs: MINUTE },
-  { id: "build02", label: "BUILD02", kind: "BUILD", readOnly: true, capabilities: ["SSH_READINESS", "NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"], source: "BUILD_NODE_READINESS", staleAfterMs: MINUTE },
+  { id: "build01", label: "BUILD01", kind: "BUILD", readOnly: true, capabilities: ["READONLY_METRICS", "MCP_SSH_GATEWAY", "NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"], source: "DIMPRO_MCP_SSH_GATEWAY", staleAfterMs: MINUTE },
+  { id: "build02", label: "BUILD02", kind: "BUILD", readOnly: true, capabilities: ["READONLY_METRICS", "MCP_SSH_GATEWAY", "NEXT_BUILD", "TYPECHECK", "LINT", "SMOKE"], source: "DIMPRO_MCP_SSH_GATEWAY", staleAfterMs: MINUTE },
   { id: "prod-vps", label: "PROD / ÉLŐ", kind: "PROD", readOnly: true, capabilities: ["HTTPS_AVAILABILITY", "READONLY_SNAPSHOT"], source: "READONLY_HTTPS_PROBE", staleAfterMs: 2 * MINUTE },
   { id: "db-vps", label: "DB VPS", kind: "DATABASE", readOnly: true, capabilities: ["TCP_AVAILABILITY", "READONLY_SNAPSHOT"], source: "READONLY_TCP_PROBE", staleAfterMs: 2 * MINUTE },
   { id: "dev-root", label: "DEV TÁRHELY", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY"], source: "LOCAL_STATFS", staleAfterMs: 10 * MINUTE },

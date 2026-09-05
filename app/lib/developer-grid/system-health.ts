@@ -3,7 +3,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { probeBuildNodes } from "./build-nodes";
-import type { BuildNodeDefinition } from "./types";
+import type { BuildNodeSnapshot } from "./build-nodes";
 import type { DeveloperGridSystemHealthV2, DimprominAiHealthAdapter, LegacyHealthMetric, LegacyHealthServer, LegacyHealthStorage } from "./system-health-model";
 import { normalizeInfrastructureNodes } from "./system-health-adapters";
 import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./system-health-severity";
@@ -144,11 +144,17 @@ async function protectedServers(): Promise<HealthServer[]> {
   ];
 }
 
-function buildServer(node: BuildNodeDefinition): HealthServer {
+function buildServer(node: BuildNodeSnapshot): HealthServer {
   return {
-    id: node.id, label: node.id.toUpperCase(), hostname: node.hostname,
-    state: node.state === "READY" ? "READY" : "NOT_CONNECTED", reason: node.reason, lastVerifiedAt: node.lastVerifiedAt,
-    metrics: emptyMetric(),
+    id: node.id,
+    label: node.id.toUpperCase(),
+    hostname: node.hostname,
+    state: node.healthState,
+    reason: node.reason,
+    lastVerifiedAt: node.lastVerifiedAt,
+    metrics: node.metrics ? { ...node.metrics } : emptyMetric(),
+    source: node.source,
+    quality: node.quality,
   };
 }
 

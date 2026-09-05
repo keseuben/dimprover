@@ -95,7 +95,7 @@ const checks = [
   [foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_BRANCH") && foundation.includes("DIMPRO_DEVELOPER_GRID_SOURCE_REPOSITORY"), "immutable runtime provenance expectations are explicit and scopeable"],
   [foundationRoute.includes('releaseRuntimeProvenance.state !== "BLOCKED"'), "foundation API blocks release/runtime mismatch"],
   [build.includes("build01.dimpro.hu") && build.includes("build02.dimpro.hu"), "build node abstraction"],
-  [build.includes("probeBuildNodes") && build.includes("BatchMode=yes") && build.includes("StrictHostKeyChecking=yes"), "build node SSH readiness probe"],
+  [build.includes("probeBuildNodes") && build.includes("BENJADMIN_BUILD_NODE_SNAPSHOT_FILE") && build.includes("DIMPRO_MCP_SSH_GATEWAY") && !build.includes('"/usr/bin/ssh"'), "build node MCP gateway snapshot adapter"],
   [build.includes("Veszélyes kerülő build tilos"), "dangerous fallback build forbidden"],
   [orchestrator.includes("CANONICAL_DEV_SERVER") && orchestrator.includes("exclusiveLockHeld"), "canonical DEV build executor"],
   [stateStore.includes("events.jsonl") && stateStore.includes("atomic"), "persistent state/event store"],

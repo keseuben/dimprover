@@ -16,6 +16,7 @@ const adapters = read("app/lib/developer-grid/system-health-adapters.ts");
 const ai = read("app/lib/developer-grid/system-health-ai.ts");
 const operationsSource = read("app/lib/developer-grid/system-health-operations.ts");
 const facade = read("app/lib/developer-grid/system-health.ts");
+const buildNodes = read("app/lib/developer-grid/build-nodes.ts");
 let n = 0;
 const check = (label, fn) => { fn(); n += 1; console.log(`PASS ${String(n).padStart(2, "0")} ${label}`); };
 
@@ -48,6 +49,8 @@ check("planned AI metrics are explicit null health fields", () => { for (const k
 check("PROD and DB registry nodes are read only", () => { assert.match(registry, /prod-vps[\s\S]*kind: \"PROD\"[\s\S]*readOnly: true/); assert.match(registry, /db-vps[\s\S]*kind: \"DATABASE\"[\s\S]*readOnly: true/); });
 check("adapter normalizes legacy servers and storage", () => { assert.match(adapters, /normalizeHealthServer/); assert.match(adapters, /normalizeHealthStorage/); assert.match(adapters, /normalizeInfrastructureNodes/); });
 check("adapter never invents missing build metrics", () => { assert.match(adapters, /memoryPercent: metrics\.memoryPercent/); assert.match(adapters, /diskPercent: metrics\.diskPercent/); });
+check("build nodes use sanitized MCP gateway snapshots without direct SSH", () => { assert.match(buildNodes, /BENJADMIN_BUILD_NODE_SNAPSHOT_FILE/); assert.match(buildNodes, /DIMPRO_MCP_SSH_GATEWAY/); assert.match(buildNodes, /containsForbiddenKey/); assert.doesNotMatch(buildNodes, /execFile|\/usr\/bin\/ssh/); });
+check("build gateway metrics and BLOCKED state reach the health adapter", () => { for (const field of ["buildLockHeld","swapMinimumBytes","storageGovernor","toolchainReady"]) assert.ok(adapters.includes(field)); assert.match(facade, /state: node\.healthState/); assert.match(facade, /metrics: node\.metrics/); });
 check("facade publishes schemaVersion 2 and normalized nodes", () => { assert.match(facade, /schemaVersion: 2/); assert.match(facade, /nodes, overall: aggregateInfrastructureHealth\(nodes\), alerts: infrastructureHealthAlerts\(nodes\), operations, servers, storage/); });
 check("facade integrates optional DIMPROMIN adapter and operational context", () => { assert.match(facade, /applyDimprominAiAdapter/); assert.match(facade, /getInfrastructureOperationalContext/); assert.match(facade, /aiAdapter: DimprominAiHealthAdapter/); });
 check("facade keeps 30 60 300 second cache policy and AI 30 second base", () => { assert.match(facade, /SERVER_TTL_MS = 30_000/); assert.match(facade, /PROTECTED_SERVER_TTL_MS = 60_000/); assert.match(facade, /DISK_TTL_MS = 60_000/); assert.match(facade, /STORAGE_TTL_MS = 300_000/); assert.match(facade, /AI_TTL_MS = 30_000/); });
