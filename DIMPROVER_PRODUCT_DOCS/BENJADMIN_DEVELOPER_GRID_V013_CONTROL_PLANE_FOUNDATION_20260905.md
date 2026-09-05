@@ -124,3 +124,30 @@ A gateway szolgáltatás forrása verziózott az `ops/developer-grid/build-gatew
 Az MCP Build Transport Gateway első valós BUILD01 futása sikeresen lezárult az `d78a5c7d5a354cb510c736a48d3cc6f3c7409d9a` commiton. Run: `v013-mcp-build01-20260905-1734`; BUILD_ID: `gaugmFlD3HgzF9Mc7w0aw`; artifact SHA-256: `391fb4eed8028a4e32f1b8afe6c762a967a5d3e03302c6e4d388e602950422aa`. A futás a `DEV → HTTPS MCP gateway → BUILD01 → gateway → canonical DEV artifact store` útvonalon ment végig, PROD hozzáférés nélkül.
 
 A Windows candidate és release wrapper-ek korábbi v0.1.12 / 2026-08-27 canonical worktree kötéseit a v0.1.13 canonical forrásra frissítettük. Az érintett kapuk továbbra is fail-closed módon ellenőrzik a `dimpro-dev` hostot, a `/srv/dimpro-dev/repositories/dimprover.git` közös repositoryt, az explicit v0.1.13 worktree-t és branch-et, a tiszta Git állapotot, a pontos HEAD-et, a `.next/BUILD_ID` + `.dimpro-release.json` provenance-t, valamint a `DEV ONLY · PROD DENY` szabályt. A DEV ZIP-be a Build Transport Gateway verziózott `ops/developer-grid` forrása is bekerül.
+
+## System Health felület + nagy kijelzős olvashatóság – 2026-09-05
+
+A Developer Grid alsó státuszsávja és a System Health réteg a Windows nagy kijelzős használathoz új vizuális geometriát kapott.
+
+- A felső alkalmazásfejléc 44 px, a négy worker-cella fejléce 108 px, az állandó státuszléc 42 px. A fejléc-, cellafejléc- és lábléc-tipográfia 1500 px alatt visszafogottabban, 2200 px felett nagyobb mérettel skálázódik.
+- A jobb alsó `B` System Health gomb hover állapotban teljes szélességű, 86 px magas `SYSTEM HEALTH · GYORSNÉZET` sávot nyit közvetlenül a lábléc felett. A gyorsnézet összefoglaló állapotot, aktív riasztást és DEV / BUILD01 / BUILD02 / PROD / DB rövid állapotot mutat.
+- A `B` gombra kattintás fix, teljes szélességű System Health kártyát nyit közvetlenül a lábléc felett. A kártya DEV VPS, BUILD01, BUILD02, PROD, DB, tárhely és Kapcsolat/AI oszlopokat jelenít meg; külön overall állapot-pill, frissítési idő és kézi frissítés gomb tartozik hozzá.
+- A dockolt Central Core / Fejlesztői Vezérlőpult és az opcionális központi panel System Health megnyitásakor automatikusan a gyorsnézet vagy a részletes kártya fölé húzódik. Így a Central Core többé nem takarhatja ki a System Health réteget.
+- A natív ChatGPT `WebContentsView` bounds továbbra is ugyanekkora alsó területet tart fenn, ezért a natív nézetek sem fedik le a gyorsnézetet vagy a részletes kártyát.
+- A System Health read plane kezelése javult: ha egy korábban mentett device token 401/403 választ kap, a read-only kliens megpróbálhatja a már konfigurált reporter credentialt. Írási jogosultság vagy write-fallback ebből nem keletkezik.
+- Ha egyik olvasási credential sem érvényes, a felület nem marad néma `—` állapotban: `PÁROSÍTÁS` / `PÁROSÍTÁS SZÜKSÉGES` állapotot jelez és a gyorsnézetben rövid hibamagyarázat jelenik meg.
+
+Új/érintett contract ellenőrzések:
+
+- System Health / UI contract: **25/25 PASS**;
+- Desktop live delta contract: **20/20 PASS**;
+- Workspace/chat regresszió: **37/37 PASS**;
+- Desktop acceptance: **76/76 PASS**;
+- BOOT ACK: **8/8 PASS**;
+- Work-start: **38/38 PASS**;
+- Build Control Plane: **14/14 PASS**;
+- Build node gateway: **22/22 PASS**;
+- Build Runner Pool: **33/33 PASS**;
+- Remote Build Executor V2 MCP transport: **28/28 PASS**;
+- Health Core V2: **41/41 PASS**;
+- Foundation: **54 required files / 63 invariants PASS**.

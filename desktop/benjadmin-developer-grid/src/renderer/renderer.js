@@ -92,7 +92,7 @@ const state = {
   shortcutDiagnostics: null,
   chatConnections: {},
   chatRefresh: { cells: {}, latestRefreshedAt: "", dailyEnabled: true, deferredCount: 0, updateAvailableCount: 0 },
-  systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false }
+  systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false, error: null, unauthorized: false }
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -582,38 +582,95 @@ function escapeHtml(value) {
 
 function healthServer(id) { return state.systemHealth.data?.servers?.find((server) => server.id === id) || null; }
 
+function formatHealthTimestamp(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(parsed);
+}
+
+function healthOverallTone(health) {
+  const severity = String(health?.overall?.severity || "").toUpperCase();
+  if (severity === "CRITICAL") return "critical";
+  if (severity === "WARNING") return "warning";
+  if (severity === "INFO") return "info";
+  if (severity === "OK") return "ok";
+  return "unknown";
+}
+
 function renderSystemHealth() {
   const health = state.systemHealth.data;
+  const authBlocked = !health && state.systemHealth.unauthorized === true;
+  const unavailableLabel = authBlocked ? "PÁROSÍTÁS" : "—";
   const serverStatus = (id, dotId, textId, formatter) => {
-    const server = healthServer(id); const ready = server?.state === "READY";
-    setFooterDot(dotId, ready ? "online" : server ? "warning" : "offline");
-    const text = $(textId); if (text) text.textContent = server ? formatter(server) : "—";
+    const server = healthServer(id);
+    const ready = server?.state === "READY";
+    setFooterDot(dotId, ready ? "online" : server ? "warning" : authBlocked ? "warning" : "offline");
+    const text = $(textId);
+    if (text) text.textContent = server ? formatter(server) : unavailableLabel;
   };
-  serverStatus("build01", "#footerBuild01Dot", "#footerBuild01Status", (s) => s.state === "READY" ? "READY" : "NINCS KAPCS.");
-  serverStatus("build02", "#footerBuild02Dot", "#footerBuild02Status", (s) => s.state === "READY" ? "READY" : "NINCS KAPCS.");
+
+  serverStatus("build01", "#footerBuild01Dot", "#footerBuild01Status", (s) => s.state === "READY" ? "READY" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
+  serverStatus("build02", "#footerBuild02Dot", "#footerBuild02Status", (s) => s.state === "READY" ? "READY" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
   serverStatus("dev-vps", "#footerDevDot", "#footerDevStatus", (s) => Number.isFinite(Number(s.metrics?.diskPercent)) ? `${metricText(s.metrics.diskPercent)} disk` : s.state);
   serverStatus("prod-vps", "#footerProdDot", "#footerProdStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
   serverStatus("db-vps", "#footerDbDot", "#footerDbStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
+
   const storage = health?.storage?.[0] || null;
-  setFooterDot("#footerStorageDot", storage?.state === "READY" ? "online" : storage ? "warning" : "offline");
-  if ($("#footerStorageStatus")) $("#footerStorageStatus").textContent = storage && Number.isFinite(Number(storage.percent)) ? metricText(storage.percent) : "—";
+  setFooterDot("#footerStorageDot", storage?.state === "READY" ? "online" : storage || authBlocked ? "warning" : "offline");
+  if ($("#footerStorageStatus")) $("#footerStorageStatus").textContent = storage && Number.isFinite(Number(storage.percent)) ? metricText(storage.percent) : unavailableLabel;
+
+  const overallTone = healthOverallTone(health);
+  const overall = $("#systemHealthOverall");
+  if (overall) {
+    overall.className = `system-health-overall is-${authBlocked ? "warning" : overallTone}`;
+    const label = authBlocked ? "PÁROSÍTÁS SZÜKSÉGES"
+      : overallTone === "ok" ? "MINDEN RENDSZER RENDBEN"
+      : overallTone === "critical" ? "KRITIKUS ÁLLAPOT"
+      : overallTone === "warning" ? "ELLENŐRZÉS SZÜKSÉGES"
+      : overallTone === "info" ? "INFORMÁCIÓS ÁLLAPOT"
+      : "ÁLLAPOT VÁR";
+    const b = $("b", overall);
+    if (b) b.textContent = label;
+  }
 
   const columns = $("#systemHealthColumns");
-  if (columns && health) {
-    const serverColumn = (server) => {
-      const m = server?.metrics || {}; const ready = server?.state === "READY";
-      return `<article class="health-column"><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${ready ? "is-ready" : "is-warning"}">${escapeHtml(server?.state || "UNKNOWN")}</span><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${metricText(m.cpuPercent)}</dd><dt>RAM</dt><dd>${metricText(m.memoryPercent)}</dd><dt>Swap</dt><dd>${m.swapTotalBytes ? `${formatBytes(m.swapUsedBytes)} / ${formatBytes(m.swapTotalBytes)}` : "—"}</dd><dt>Tárhely</dt><dd>${metricText(m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds)/3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
-    };
-    const ordered = ["dev-vps","build01","build02","prod-vps","db-vps"].map(healthServer).filter(Boolean);
-    const storageHtml = (health.storage || []).map((item) => `<article class="health-column"><h4>${escapeHtml(item.label)}</h4><span class="health-state ${item.state === "READY" ? "is-ready" : "is-warning"}">${escapeHtml(item.state)}</span><dl><dt>Használt</dt><dd>${formatBytes(item.usedBytes)}</dd><dt>Kapacitás</dt><dd>${formatBytes(item.totalBytes)}</dd><dt>Foglaltság</dt><dd>${metricText(item.percent)}</dd></dl><p>Frissítve: ${escapeHtml(item.refreshedAt || "—")}</p></article>`).join("");
-    const connectionHtml = `<article class="health-column"><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-warning"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
-    columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + connectionHtml;
-    const updated = $("#systemHealthUpdated"); if (updated) updated.textContent = `Frissítve: ${health.generatedAt || "—"} · 30/60/300 mp cache`;
+  if (columns) {
+    if (health) {
+      const serverColumn = (server) => {
+        const m = server?.metrics || {};
+        const ready = server?.state === "READY";
+        const busy = server?.state === "BUSY";
+        const stateClass = ready ? "is-ready" : busy ? "is-info" : "is-warning";
+        const stateText = ready ? "READY" : busy ? "BUSY" : String(server?.state || "UNKNOWN");
+        return `<article class="health-column" data-health-state="${escapeHtml(stateText)}"><header><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${stateClass}">${escapeHtml(stateText)}</span></header><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${metricText(m.cpuPercent)}</dd><dt>RAM</dt><dd>${metricText(m.memoryPercent)}</dd><dt>Swap</dt><dd>${m.swapTotalBytes ? `${formatBytes(m.swapUsedBytes)} / ${formatBytes(m.swapTotalBytes)}` : "—"}</dd><dt>Tárhely</dt><dd>${metricText(m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
+      };
+      const ordered = ["dev-vps", "build01", "build02", "prod-vps", "db-vps"].map(healthServer).filter(Boolean);
+      const storageHtml = (health.storage || []).map((item) => `<article class="health-column" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "TÁRHELY")}</h4><span class="health-state ${item.state === "READY" ? "is-ready" : "is-warning"}">${escapeHtml(item.state || "UNKNOWN")}</span></header><dl><dt>Használt</dt><dd>${formatBytes(item.usedBytes)}</dd><dt>Kapacitás</dt><dd>${formatBytes(item.totalBytes)}</dd><dt>Foglaltság</dt><dd>${metricText(item.percent)}</dd><dt>Forrás</dt><dd>DEV root</dd></dl><p>Frissítve: ${escapeHtml(formatHealthTimestamp(item.refreshedAt))}</p></article>`).join("");
+      const connectionHtml = `<article class="health-column" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><header><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-info"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span></header><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Central lock</dt><dd>${escapeHtml(health.operations?.centralLock || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
+      columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + connectionHtml;
+    } else {
+      const message = authBlocked
+        ? "A Developer Grid System Health olvasási hitelesítése lejárt vagy hiányzik. Párosítsd újra a Developer Gridet."
+        : (state.systemHealth.error || "System Health adat érkezésére várunk.");
+      columns.innerHTML = `<article class="health-column health-column--empty"><header><h4>SYSTEM HEALTH</h4><span class="health-state is-warning">NINCS ADAT</span></header><p>${escapeHtml(message)}</p></article>`;
+    }
   }
+
+  const updated = $("#systemHealthUpdated");
+  if (updated) {
+    updated.textContent = health
+      ? `Frissítve: ${formatHealthTimestamp(health.generatedAt)} · szerver 30 mp · PROD/DB 60 mp · tárhely 5 perc`
+      : (state.systemHealth.error || "Frissítésre vár");
+  }
+
   const peek = $("#systemHealthPeek");
   if (peek) {
-    const alerts = (health?.servers || []).filter((s) => s.state !== "READY").map((s) => `${s.label}: ${s.state}`);
-    peek.innerHTML = `<strong>SYSTEM HEALTH · GYORSNÉZET</strong><p>${alerts.length ? escapeHtml(alerts.join(" · ")) : "Minden elérhető rendszer rendben."}<br>DEV: ${escapeHtml($("#footerDevStatus")?.textContent || "—")} · PROD: ${escapeHtml($("#footerProdStatus")?.textContent || "—")} · DB: ${escapeHtml($("#footerDbStatus")?.textContent || "—")}</p>`;
+    const alerts = Array.isArray(health?.alerts) ? health.alerts : [];
+    const summary = authBlocked
+      ? "A System Health hitelesítése lejárt vagy hiányzik. A Developer Grid párosítása szükséges."
+      : health?.overall?.summary || (state.systemHealth.error || "System Health adat várakozik.");
+    const alertText = alerts.length ? `${alerts.length} figyelmeztetés · ${alerts.slice(0, 2).map((item) => `${item.label}: ${item.state}`).join(" · ")}` : "Nincs aktív infrastruktúra-riasztás.";
+    peek.innerHTML = `<div class="system-health-peek__identity"><span class="system-health-peek__mark">B</span><div><strong>SYSTEM HEALTH · GYORSNÉZET</strong><p>${escapeHtml(summary)}<br><span>${escapeHtml(alertText)}</span></p></div></div><div class="system-health-peek__metrics"><span><b>DEV</b>${escapeHtml($("#footerDevStatus")?.textContent || "—")}</span><span><b>BUILD01</b>${escapeHtml($("#footerBuild01Status")?.textContent || "—")}</span><span><b>BUILD02</b>${escapeHtml($("#footerBuild02Status")?.textContent || "—")}</span><span><b>PROD</b>${escapeHtml($("#footerProdStatus")?.textContent || "—")}</span><span><b>DB</b>${escapeHtml($("#footerDbStatus")?.textContent || "—")}</span></div>`;
   }
 }
 
@@ -621,8 +678,19 @@ async function refreshSystemHealth(force = false) {
   if (!state.security?.unlocked || state.systemHealth.loading) return;
   if (!force && Date.now() - state.systemHealth.lastFetchedAt < 28_000) return;
   state.systemHealth.loading = true;
-  try { const result = await api.getSystemHealth?.(); if (result?.ok && result.health) { state.systemHealth.data = result.health; state.systemHealth.lastFetchedAt = Date.now(); renderSystemHealth(); } }
-  finally { state.systemHealth.loading = false; }
+  try {
+    const result = await api.getSystemHealth?.();
+    if (result?.ok && result.health) {
+      state.systemHealth.data = result.health;
+      state.systemHealth.error = null;
+      state.systemHealth.unauthorized = false;
+      state.systemHealth.lastFetchedAt = Date.now();
+    } else {
+      state.systemHealth.error = result?.error || "System Health kapcsolat sikertelen.";
+      state.systemHealth.unauthorized = result?.unauthorized === true;
+    }
+    renderSystemHealth();
+  } finally { state.systemHealth.loading = false; }
 }
 
 function startSystemHealthPolling() {
@@ -1553,9 +1621,11 @@ function bindUi() {
   });
   $("#devminButton").addEventListener("click", () => void api.workspaceAction("central-toggle"));
   $("#systemHealthButton").addEventListener("mouseenter", () => { if (state.systemHealth.mode !== "expanded") void setSystemHealthMode("peek"); });
-  $("#systemHealthButton").addEventListener("mouseleave", () => window.setTimeout(() => { if (state.systemHealth.mode === "peek" && !$("#systemHealthButton").matches(":hover") && !$("#systemHealthPeek").matches(":hover")) void setSystemHealthMode("closed"); }, 90));
-  $("#systemHealthPeek").addEventListener("mouseleave", () => { if (state.systemHealth.mode === "peek") void setSystemHealthMode("closed"); });
+  $("#systemHealthButton").addEventListener("mouseleave", () => window.setTimeout(() => { if (state.systemHealth.mode === "peek" && !$("#systemHealthButton").matches(":hover") && !$("#systemHealthPeek").matches(":hover")) void setSystemHealthMode("closed"); }, 160));
+  $("#systemHealthPeek").addEventListener("mouseenter", () => { if (state.systemHealth.mode !== "expanded") state.systemHealth.mode = "peek"; });
+  $("#systemHealthPeek").addEventListener("mouseleave", () => window.setTimeout(() => { if (state.systemHealth.mode === "peek" && !$("#systemHealthButton").matches(":hover") && !$("#systemHealthPeek").matches(":hover")) void setSystemHealthMode("closed"); }, 120));
   $("#systemHealthButton").addEventListener("click", () => void setSystemHealthMode(state.systemHealth.mode === "expanded" ? "closed" : "expanded"));
+  $("#systemHealthRefresh").addEventListener("click", () => void refreshSystemHealth(true));
   $("#systemHealthClose").addEventListener("click", () => void setSystemHealthMode("closed"));
   $("#dailyStartButton").addEventListener("click", async () => {
     const result = await api.contextWorkspaceMode?.("open");

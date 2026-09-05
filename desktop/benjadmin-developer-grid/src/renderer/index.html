@@ -146,10 +146,23 @@
   </main>
 
   <section id="systemHealthDrawer" class="system-health-drawer is-hidden" aria-label="Developer Grid System Health részletes panel">
-    <div class="system-health-drawer__head"><div><strong>SYSTEM HEALTH</strong><span id="systemHealthUpdated">Frissítésre vár</span></div><button id="systemHealthClose" type="button" title="System Health panel bezárása" aria-label="System Health panel bezárása">×</button></div>
+    <div class="system-health-drawer__head">
+      <div class="system-health-drawer__identity">
+        <span class="system-health-drawer__mark" aria-hidden="true">B</span>
+        <div>
+          <strong>SYSTEM HEALTH</strong>
+          <span id="systemHealthUpdated">Frissítésre vár</span>
+        </div>
+      </div>
+      <div class="system-health-drawer__actions">
+        <span id="systemHealthOverall" class="system-health-overall"><i id="systemHealthOverallDot"></i><b>ÁLLAPOT VÁR</b></span>
+        <button id="systemHealthRefresh" type="button" title="System Health azonnali frissítése" aria-label="System Health frissítése">↻</button>
+        <button id="systemHealthClose" type="button" title="System Health panel bezárása" aria-label="System Health panel bezárása">×</button>
+      </div>
+    </div>
     <div id="systemHealthColumns" class="system-health-columns"></div>
   </section>
-  <div id="systemHealthPeek" class="system-health-peek is-hidden" role="status"></div>
+  <div id="systemHealthPeek" class="system-health-peek is-hidden" role="status" aria-live="polite"></div>
   <footer id="developerStatusBar" class="developer-status-bar no-drag" aria-label="Developer Grid élő státuszsáv">
     <span class="footer-status footer-env">DEV · PROD DENY</span>
     <span class="footer-status footer-chat-refresh"><i id="footerChatDot" class="footer-dot"></i><b>ChatGPT</b><em id="footerChatStatus">—</em><em id="footerChatRefreshStatus">frissítés: —</em><button id="chatRefreshButton" type="button" title="Az összes megnyitott ChatGPT nézet biztonságos frissítése" aria-label="ChatGPT nézetek frissítése" disabled>↻</button></span>

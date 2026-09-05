@@ -23,12 +23,12 @@ function check(ok,label){checks+=1;if(!ok)throw new Error(`FAIL ${String(checks)
 
 check((index.match(/class="context-row"/g)||[]).length===4,"worker header merges context and work item into row 2");
 check(!index.includes('cell-header__bottom"><span data-role="work-item"'),"old standalone work-item row removed");
-check(main.includes("const CELL_HEADER_HEIGHT = 96;"),"native worker header reduced to 96px");
-check(styles.includes("--cell-header-h: 96px"),"CSS worker header matches native geometry");
-check(styles.includes("height: 30px") && styles.includes("font-size: clamp(8px, .35vw, 10.5px)"),"workflow timeline enlarged and readable");
-check(main.includes("const DEVELOPER_FOOTER_HEIGHT = 34;"),"native footer raised to 34px");
-check(styles.includes("--developer-footer-h: 34px"),"CSS footer matches native 34px geometry");
-check(styles.includes("font-size: clamp(8px, .33vw, 12px)"),"footer typography scales for large displays");
+check(main.includes("const CELL_HEADER_HEIGHT = 108;"),"native worker header uses 108px large-display geometry");
+check(styles.includes("--cell-header-h: 108px"),"CSS worker header matches native 108px geometry");
+check(styles.includes("min-height:33px; height:33px") && styles.includes("font-size:clamp(9.5px,.31vw,11.5px)"),"workflow timeline enlarged and readable on large displays");
+check(main.includes("const DEVELOPER_FOOTER_HEIGHT = 42;"),"native footer uses 42px large-display geometry");
+check(styles.includes("--developer-footer-h: 42px"),"CSS footer matches native 42px geometry");
+check(styles.includes("font-size:clamp(10.5px,.32vw,13px)"),"footer typography scales for large displays");
 check(renderer.includes('dot.closest(".footer-status")') && styles.includes(".footer-status.is-online"),"footer health tone colors the entire segment");
 
 check(types.includes('ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT"'),"authoritative chat launch modes typed");

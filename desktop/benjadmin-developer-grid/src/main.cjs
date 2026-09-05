@@ -20,10 +20,10 @@ const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.c
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
-const APP_BAR_HEIGHT = 38;
-const CELL_HEADER_HEIGHT = 96;
-const DEVELOPER_FOOTER_HEIGHT = 34;
-const SYSTEM_HEALTH_PEEK_HEIGHT = 82;
+const APP_BAR_HEIGHT = 44;
+const CELL_HEADER_HEIGHT = 108;
+const DEVELOPER_FOOTER_HEIGHT = 42;
+const SYSTEM_HEALTH_PEEK_HEIGHT = 86;
 const CENTRAL_HEADER_HEIGHT = 52;
 const GRID_GAP = 2;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -375,12 +375,23 @@ function getOrCreateAgentId() {
   return agentId;
 }
 
-function liveCredential() {
+function liveCredentials() {
+  const credentials = [];
   const deviceToken = readDeviceToken();
-  if (deviceToken) return { mode: "device", token: deviceToken };
+  if (deviceToken) credentials.push({ mode: "device", token: deviceToken });
   const reporterKey = readReporterKey();
-  if (reporterKey) return { mode: "reporter", token: reporterKey };
-  return { mode: "none", token: "" };
+  if (reporterKey && reporterKey !== deviceToken) credentials.push({ mode: "reporter", token: reporterKey });
+  return credentials;
+}
+
+function liveCredential() {
+  return liveCredentials()[0] || { mode: "none", token: "" };
+}
+
+function credentialHeaders(credential) {
+  return credential?.mode === "device"
+    ? { "x-benjadmin-chatgrid-device-token": credential.token, accept: "application/json" }
+    : { "x-dimpro-dev-reporter-key": credential?.token || "", accept: "application/json" };
 }
 
 function publicPairingState() {
@@ -2024,7 +2035,9 @@ function closeChatView(cellId) {
 }
 
 function systemHealthDrawerHeight(height) {
-  return Math.max(180, Math.min(320, Math.round(Number(height || 0) * 0.26)));
+  // Compact fixed card above the persistent footer: large enough for readable metrics,
+  // but never takes over the engineering workspace.
+  return Math.max(220, Math.min(300, Math.round(Number(height || 0) * 0.245)));
 }
 
 function systemHealthReserveHeight(height) {
@@ -2256,7 +2269,8 @@ function stopLiveClient() {
 
 function startLiveClient() {
   stopLiveClient();
-  const credential = liveCredential();
+  const credentials = liveCredentials();
+  const credential = credentials[0] || { mode: "none", token: "" };
   if (!unlocked || !credential.token) {
     send("live:connection", {
       kind: "benjadmin",
@@ -2271,6 +2285,7 @@ function startLiveClient() {
     baseUrl: config.benjadminBaseUrl,
     authMode: credential.mode,
     authToken: credential.token,
+    authCandidates: credentials,
     pollIntervalMs: config.pollIntervalMs,
     onSnapshot(snapshot) {
       latestLiveSnapshot = snapshot;
@@ -2447,20 +2462,27 @@ function createShellWindow() {
 }
 
 async function fetchDeveloperGridSystemHealth() {
-  if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
-  const credential = liveCredential();
-  if (!credential.token) return { ok: false, error: "A Developer Grid nincs párosítva." };
-  const headers = credential.mode === "device"
-    ? { "x-benjadmin-chatgrid-device-token": credential.token, accept: "application/json" }
-    : { "x-dimpro-dev-reporter-key": credential.token, accept: "application/json" };
-  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 8_000);
-  try {
-    const response = await fetch(`${config.benjadminBaseUrl}/api/dev/grid/system-health`, { method: "GET", headers, cache: "no-store", signal: controller.signal });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) return { ok: false, error: payload?.error || `System Health HTTP ${response.status}` };
-    return { ok: true, health: payload.health };
-  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "System Health kapcsolat sikertelen." }; }
-  finally { clearTimeout(timer); }
+  if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van.", code: "LOCKED" };
+  const credentials = liveCredentials();
+  if (!credentials.length) return { ok: false, error: "A Developer Grid nincs párosítva.", code: "AUTH_REQUIRED", unauthorized: true };
+  let lastAuthError = null;
+  for (const credential of credentials) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(`${config.benjadminBaseUrl}/api/dev/grid/system-health`, { method: "GET", headers: credentialHeaders(credential), cache: "no-store", signal: controller.signal });
+      const payload = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) {
+        lastAuthError = { ok: false, error: payload?.error || `System Health HTTP ${response.status}`, code: "AUTH_REJECTED", unauthorized: true };
+        continue;
+      }
+      if (!response.ok || !payload?.ok) return { ok: false, error: payload?.error || `System Health HTTP ${response.status}`, code: `HTTP_${response.status}` };
+      return { ok: true, health: payload.health, authMode: credential.mode };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "System Health kapcsolat sikertelen.", code: "NETWORK_ERROR" };
+    } finally { clearTimeout(timer); }
+  }
+  return lastAuthError || { ok: false, error: "A Developer Grid hitelesítése sikertelen.", code: "AUTH_REJECTED", unauthorized: true };
 }
 
 function registerIpc() {

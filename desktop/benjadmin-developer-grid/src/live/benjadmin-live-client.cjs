@@ -17,10 +17,17 @@ const GRID_TASK_STATUS_TO_DESKTOP = Object.freeze({
 });
 
 class BenjadminLiveClient {
-  constructor({ baseUrl, reporterKey, authMode, authToken, pollIntervalMs = 2000, onSnapshot, onEvent, onError }) {
+  constructor({ baseUrl, reporterKey, authMode, authToken, authCandidates, pollIntervalMs = 2000, onSnapshot, onEvent, onError }) {
     this.baseUrl = String(baseUrl || "").replace(/\/+$/, "");
-    this.authMode = authMode === "device" ? "device" : "reporter";
-    this.authToken = String(authToken || reporterKey || "");
+    const primary = { mode: authMode === "device" ? "device" : "reporter", token: String(authToken || reporterKey || "") };
+    const supplied = Array.isArray(authCandidates) ? authCandidates : [primary];
+    this.authCandidates = supplied
+      .map((item) => ({ mode: item?.mode === "device" ? "device" : "reporter", token: String(item?.token || "") }))
+      .filter((item, index, all) => item.token && all.findIndex((candidate) => candidate.mode === item.mode && candidate.token === item.token) === index);
+    if (!this.authCandidates.length && primary.token) this.authCandidates.push(primary);
+    this.authCandidateIndex = 0;
+    this.authMode = this.authCandidates[0]?.mode || primary.mode;
+    this.authToken = this.authCandidates[0]?.token || primary.token;
     this.pollIntervalMs = Math.max(1000, Math.min(15000, Number(pollIntervalMs) || 2000));
     this.onSnapshot = onSnapshot;
     this.onEvent = onEvent;
@@ -62,23 +69,48 @@ class BenjadminLiveClient {
       : { "x-dimpro-dev-reporter-key": this.authToken, accept: "application/json" };
   }
 
+  advanceAuthCandidate() {
+    const nextIndex = this.authCandidateIndex + 1;
+    const next = this.authCandidates[nextIndex];
+    if (!next) return false;
+    this.authCandidateIndex = nextIndex;
+    this.authMode = next.mode;
+    this.authToken = next.token;
+    return true;
+  }
+
   async request(pathname) {
-    this.abortController = new AbortController();
-    const timeout = setTimeout(() => this.abortController?.abort(), 8000);
-    try {
-      const response = await fetch(`${this.baseUrl}${pathname}`, {
-        method: "GET",
-        headers: this.authHeaders(),
-        cache: "no-store",
-        signal: this.abortController.signal
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `BENJADMIN HTTP ${response.status} · ${pathname}`);
-      return payload;
-    } finally {
-      clearTimeout(timeout);
-      this.abortController = null;
+    let authAttempts = 0;
+    while (authAttempts <= this.authCandidates.length) {
+      this.abortController = new AbortController();
+      const timeout = setTimeout(() => this.abortController?.abort(), 8000);
+      try {
+        const response = await fetch(`${this.baseUrl}${pathname}`, {
+          method: "GET",
+          headers: this.authHeaders(),
+          cache: "no-store",
+          signal: this.abortController.signal
+        });
+        const payload = await response.json().catch(() => null);
+        if ((response.status === 401 || response.status === 403) && this.advanceAuthCandidate()) {
+          authAttempts += 1;
+          continue;
+        }
+        if (!response.ok || !payload?.ok) {
+          const error = new Error(payload?.error || `BENJADMIN HTTP ${response.status} · ${pathname}`);
+          error.status = response.status;
+          error.code = response.status === 401 || response.status === 403 ? "AUTH_REJECTED" : `HTTP_${response.status}`;
+          throw error;
+        }
+        return payload;
+      } finally {
+        clearTimeout(timeout);
+        this.abortController = null;
+      }
     }
+    const error = new Error(`BENJADMIN hitelesítés sikertelen · ${pathname}`);
+    error.code = "AUTH_REJECTED";
+    throw error;
   }
 
   emitSnapshot(snapshot) {

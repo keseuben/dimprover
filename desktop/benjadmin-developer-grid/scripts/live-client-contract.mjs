@@ -21,6 +21,7 @@ check("event delta uses cursor",()=>assert.match(clientSource,/events\?limit=100
 check("native contract rejects full snapshot polling",()=>assert.match(clientSource,/fullSnapshotPollingAllowed !== false/));
 check("legacy fallback is explicitly one-shot",()=>assert.match(clientSource,/legacyBootstrapUsed/));
 check("legacy endpoint occurs only as compatibility bootstrap",()=>assert.equal((clientSource.match(/\/api\/dev\/chatgrid\/live/g)||[]).length,1));
+check("read client supports explicit credential fallback on auth rejection",()=>{assert.match(clientSource,/authCandidates/);assert.match(clientSource,/advanceAuthCandidate/);assert.match(clientSource,/response\.status === 401 \|\| response\.status === 403/);});
 const events=new Map(); applyLiveEvents(events,[{origin:"BACKFILL",workerCode:"OUTMINAI",sequence:99,taskId:"t1",delta:{workStageIndex:6}},{origin:"LIVE",workerCode:"OUTMINAI",sequence:5,taskId:"t1",timestamp:"2026-08-28T10:03:00Z",kind:"coding",delta:{workStageIndex:3,workItem:"Targeted tests"}}]);
 check("BACKFILL is ignored for live state",()=>assert.equal(events.get("OUTMINAI").sequence,5));
 const snap=synthesizeGridSnapshot({foundation,state,liveEventsByWorker:events,generatedAt:"2026-08-28T10:04:00Z"});
