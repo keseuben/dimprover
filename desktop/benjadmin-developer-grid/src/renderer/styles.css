@@ -2587,3 +2587,81 @@ body.has-health-drawer .central-panel {
   .titlebar__identity > small,
   .titlebar__identity .app-version-label { font-size:10.5px; }
 }
+
+/* Developer Grid v0.1.16 · System Health pairing recovery */
+.health-pairing-card {
+  grid-column:1 / -1;
+  min-height:150px;
+  margin-top:6px;
+  padding:18px 20px;
+  display:grid;
+  grid-template-columns:minmax(250px,.8fr) minmax(420px,1.2fr);
+  align-items:center;
+  gap:24px;
+  border:1px solid rgba(229,184,77,.30);
+  border-radius:10px;
+  background:linear-gradient(135deg,rgba(229,184,77,.07),rgba(255,255,255,.012));
+}
+.health-pairing-card__identity {
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:13px;
+}
+.health-pairing-card__identity .system-health-drawer__mark { width:38px; height:38px; }
+.health-pairing-card__identity h4 {
+  margin:0 0 5px;
+  color:#f4d98e;
+  font-size:12px;
+  font-weight:950;
+  letter-spacing:.075em;
+}
+.health-pairing-card__identity p {
+  margin:0;
+  max-width:520px;
+  color:#b8c9c4;
+  font-size:10px;
+  line-height:1.45;
+}
+.health-pairing-card__actions { display:grid; gap:8px; }
+.health-pairing-card__actions > button,
+.health-pairing-card__activation button {
+  min-height:32px;
+  border:1px solid rgba(80,227,164,.34);
+  border-radius:7px;
+  background:rgba(80,227,164,.08);
+  color:#bdf7df;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.035em;
+  cursor:pointer;
+}
+.health-pairing-card__actions > button:hover:not(:disabled),
+.health-pairing-card__activation button:hover:not(:disabled) { background:rgba(80,227,164,.15); border-color:rgba(80,227,164,.56); color:#effff9; }
+.health-pairing-card__actions button:disabled { opacity:.45; cursor:not-allowed; }
+.health-pairing-card__activation { display:grid; grid-template-columns:minmax(260px,1fr) minmax(150px,auto); gap:7px; }
+.health-pairing-card__activation input {
+  min-width:0;
+  height:32px;
+  padding:0 10px;
+  border:1px solid rgba(148,163,184,.22);
+  border-radius:7px;
+  background:#07191b;
+  color:#dceee8;
+  font-size:10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  outline:none;
+}
+.health-pairing-card__activation input:focus { border-color:rgba(80,227,164,.55); box-shadow:0 0 0 2px rgba(80,227,164,.08); }
+.health-pairing-card__actions small { color:#748e86; font-size:8.5px; line-height:1.4; }
+:root[data-theme="light"] .health-pairing-card { border-color:#d9b55b; background:linear-gradient(135deg,#fff9e9,#f8fcfa); }
+:root[data-theme="light"] .health-pairing-card__identity h4 { color:#76510a; }
+:root[data-theme="light"] .health-pairing-card__identity p { color:#49665d; }
+:root[data-theme="light"] .health-pairing-card__actions > button,
+:root[data-theme="light"] .health-pairing-card__activation button { color:#075b43; background:#edf9f4; border-color:#83cdb4; }
+:root[data-theme="light"] .health-pairing-card__activation input { color:#153e33; background:#fff; border-color:#bfd3cc; }
+:root[data-theme="light"] .health-pairing-card__actions small { color:#607c73; }
+@media (max-width:1200px) {
+  .health-pairing-card { grid-template-columns:1fr; gap:12px; padding:14px; }
+  .health-pairing-card__activation { grid-template-columns:1fr; }
+}

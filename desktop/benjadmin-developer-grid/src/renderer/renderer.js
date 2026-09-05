@@ -641,10 +641,21 @@ function renderSystemHealth() {
       const storageHtml = (health.storage || []).map((item) => `<article class="health-column" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "TÁRHELY")}</h4><span class="health-state ${item.state === "READY" ? "is-ready" : "is-warning"}">${escapeHtml(item.state || "UNKNOWN")}</span></header><dl><dt>Használt</dt><dd>${formatBytes(item.usedBytes)}</dd><dt>Kapacitás</dt><dd>${formatBytes(item.totalBytes)}</dd><dt>Foglaltság</dt><dd>${metricText(item.percent)}</dd><dt>Forrás</dt><dd>DEV root</dd></dl><p>Frissítve: ${escapeHtml(formatHealthTimestamp(item.refreshedAt))}</p></article>`).join("");
       const connectionHtml = `<article class="health-column" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><header><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-info"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span></header><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Central lock</dt><dd>${escapeHtml(health.operations?.centralLock || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
       columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + connectionHtml;
+    } else if (authBlocked) {
+      const pairing = state.connection.pairing || { status: "idle" };
+      const pairingBusy = ["claiming", "pending_approval"].includes(pairing.status);
+      const pairingStatus = pairing.status === "claiming"
+        ? "Párosítási igény küldése…"
+        : pairing.status === "pending_approval"
+          ? "A gép regisztrálva. A webes BENJADMIN felületen még jóvá kell hagyni."
+          : pairing.status === "active"
+            ? "Párosítás kész. System Health frissítése folyamatban…"
+            : pairing.status === "error"
+              ? (pairing.error || "A párosítás sikertelen.")
+              : "A System Health adatokhoz egyszeri biztonságos eszközpárosítás szükséges.";
+      columns.innerHTML = `<article class="health-pairing-card"><div class="health-pairing-card__identity"><span class="system-health-drawer__mark" aria-hidden="true">B</span><div><h4>DEVELOPER GRID PÁROSÍTÁS</h4><p>${escapeHtml(pairingStatus)}</p></div></div><div class="health-pairing-card__actions"><button type="button" data-health-action="open-pairing">PÁROSÍTÁSI OLDAL MEGNYITÁSA</button><div class="health-pairing-card__activation"><input id="systemHealthPairingInput" type="text" autocomplete="off" spellcheck="false" placeholder="pairing-id#XXXXX-XXXXX" aria-label="Developer Grid párosítási kód" ${pairingBusy ? "disabled" : ""}/><button type="button" data-health-action="start-pairing" ${pairingBusy ? "disabled" : ""}>${pairingBusy ? "FOLYAMATBAN…" : "PÁROSÍTÁS INDÍTÁSA"}</button></div><small>Biztonsági okból a webes BENJADMIN jóváhagyás megmarad. A device token csak a Windows biztonságos titoktárolójába kerül.</small></div></article>`;
     } else {
-      const message = authBlocked
-        ? "A Developer Grid System Health olvasási hitelesítése lejárt vagy hiányzik. Párosítsd újra a Developer Gridet."
-        : (state.systemHealth.error || "System Health adat érkezésére várunk.");
+      const message = state.systemHealth.error || "System Health adat érkezésére várunk.";
       columns.innerHTML = `<article class="health-column health-column--empty"><header><h4>SYSTEM HEALTH</h4><span class="health-state is-warning">NINCS ADAT</span></header><p>${escapeHtml(message)}</p></article>`;
     }
   }
@@ -1618,6 +1629,33 @@ function bindUi() {
   $("#systemHealthButton").addEventListener("click", () => void setSystemHealthMode(state.systemHealth.mode === "expanded" ? "closed" : "expanded"));
   $("#systemHealthRefresh").addEventListener("click", () => void refreshSystemHealth(true));
   $("#systemHealthClose").addEventListener("click", () => void setSystemHealthMode("closed"));
+  $("#systemHealthColumns").addEventListener("click", async (event) => {
+    const button = event.target.closest?.("[data-health-action]");
+    if (!button) return;
+    const action = button.dataset.healthAction;
+    if (action === "open-pairing") {
+      const result = await api.openPairingPage();
+      if (!result?.ok) showToast("BENJADMIN párosítás", result?.error || "A párosítási oldal nem nyitható meg.");
+      return;
+    }
+    if (action === "start-pairing") {
+      const input = $("#systemHealthPairingInput");
+      const activationCode = input?.value?.trim() || "";
+      if (!activationCode) { showToast("BENJADMIN párosítás", "Másold be a webes BENJADMIN oldalon létrehozott egyszer használatos párosítási kódot."); return; }
+      button.disabled = true;
+      if (input) input.disabled = true;
+      const result = await api.startPairing(activationCode);
+      if (!result?.ok) {
+        button.disabled = false;
+        if (input) input.disabled = false;
+        showToast("BENJADMIN párosítás", result?.error || "A párosítás nem indítható.");
+        return;
+      }
+      state.connection.pairing = result.pairing || { status: "pending_approval" };
+      renderConnectionSettings();
+      renderSystemHealth();
+    }
+  });
   $("#dailyStartButton").addEventListener("click", async () => {
     const result = await api.contextWorkspaceMode?.("open");
     if (!result?.ok) showToast("Napi indítás", result?.error || "A Central Core Vezérlőpult nem nyitható meg.");
@@ -1741,13 +1779,16 @@ function bindIpc() {
     state.connection.pairing = pairing || { status: "idle" };
     renderConnectionSettings();
     if (pairing?.status === "active") {
-      showToast("BENJADMIN párosítás kész", "Az élő worker-státuszkapcsolat aktiválva.");
+      showToast("BENJADMIN párosítás kész", "Az élő worker-státusz és a System Health kapcsolat aktiválva.");
+      state.systemHealth.unauthorized = false;
+      state.systemHealth.lastFetchedAt = 0;
       window.setTimeout(async () => {
         const connection = await api.getConnectionState();
         state.connection.configured = Boolean(connection?.configured);
         state.connection.mode = connection?.mode || "none";
         state.connection.device = connection?.device || null;
         renderConnectionSettings();
+        await refreshSystemHealth(true);
       }, 400);
     } else if (pairing?.status === "error") {
       showToast("BENJADMIN párosítás", pairing.error || "A párosítás sikertelen.");

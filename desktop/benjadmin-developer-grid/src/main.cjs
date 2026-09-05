@@ -2632,7 +2632,7 @@ function registerIpc() {
   });
   ipcMain.handle("connection:open-pairing-page", async () => {
     if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
-    const url = `${config.benjadminBaseUrl}/admin/dev-console/chatgrid-pairing`;
+    const url = `${config.benjadminBaseUrl}/admin/dev-console/chatgrid-pairing?client=developer-grid`;
     try { await shell.openExternal(url); return { ok: true, url }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A BENJADMIN párosítási oldal nem nyitható meg." }; }
   });
