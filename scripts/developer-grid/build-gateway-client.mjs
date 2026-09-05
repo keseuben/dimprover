@@ -51,7 +51,7 @@ function requestJson(method, pathname, options = {}) {
         resolve(payload);
       });
     });
-    req.setTimeout(Number(process.env.DIMPRO_BUILD_GATEWAY_HTTP_TIMEOUT_MS || 45_000), () => req.destroy(Object.assign(new Error("Build gateway request timeout."), { code:"BUILD_GATEWAY_TIMEOUT" })));
+    req.setTimeout(Number(process.env.DIMPRO_BUILD_GATEWAY_HTTP_TIMEOUT_MS || 120_000), () => req.destroy(Object.assign(new Error("Build gateway request timeout."), { code:"BUILD_GATEWAY_TIMEOUT" })));
     req.on("error", reject);
     if (bodyFile) fs.createReadStream(bodyFile).on("error", reject).pipe(req); else req.end();
   });
