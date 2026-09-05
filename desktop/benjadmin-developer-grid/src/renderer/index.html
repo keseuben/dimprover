@@ -145,7 +145,7 @@
   <div id="systemHealthPeek" class="system-health-peek is-hidden" role="status"></div>
   <footer id="developerStatusBar" class="developer-status-bar no-drag" aria-label="Developer Grid élő státuszsáv">
     <span class="footer-status footer-env">DEV · PROD DENY</span>
-    <span class="footer-status"><i id="footerChatDot" class="footer-dot"></i><b>ChatGPT</b><em id="footerChatStatus">—</em></span>
+    <span class="footer-status footer-chat-refresh"><i id="footerChatDot" class="footer-dot"></i><b>ChatGPT</b><em id="footerChatStatus">—</em><em id="footerChatRefreshStatus">frissítés: —</em><button id="chatRefreshButton" type="button" title="Az összes megnyitott ChatGPT nézet biztonságos frissítése" aria-label="ChatGPT nézetek frissítése" disabled>↻</button></span>
     <span class="footer-status"><i id="footerDeltaDot" class="footer-dot"></i><b>DELTA</b><em id="footerDeltaStatus">—</em></span>
     <span class="footer-status"><i id="footerAiDot" class="footer-dot"></i><b>AI</b><em id="footerAiStatus">0 dolgozik · 0 vár</em></span>
     <span class="footer-status"><i id="footerBuild01Dot" class="footer-dot"></i><b>BUILD01</b><em id="footerBuild01Status">—</em></span>
@@ -158,7 +158,7 @@
   </footer>
 
 
-  <section id="centralPanel" class="central-panel is-hidden" style="display:none !important" aria-hidden="true">
+  <section id="centralPanel" class="central-panel is-hidden" aria-hidden="true">
     <header class="central-header no-drag">
       <div class="central-header__title"><span class="worker-number">05</span><img class="central-avatar" src="../assets/team/devminai.png" alt="" /><strong id="centralLabel">DevminAI</strong><span class="shortcut-badge">Ctrl+Alt+5</span></div>
       <div class="cell-actions">
@@ -320,6 +320,13 @@
           <p class="settings-note">A Developer Grid keret témája. A ChatGPT saját témája a ChatGPT beállítását követi.</p>
           <label class="toggle-row"><span><strong>Avatárok megjelenítése</strong><small>01–05 csapattag avatárja a Developer Grid fejlécekben.</small></span><input id="showAvatarsInput" type="checkbox" /></label>
           <label class="toggle-row"><span><strong>Háttér-vízjel megjelenítése</strong><small>Halvány csapattag-vízjel a ChatGPT munkafelület fölött, kattintást nem akadályozva.</small></span><input id="showAvatarWatermarksInput" type="checkbox" /></label>
+        </section>
+
+        <section class="settings-section">
+          <h3>ChatGPT webfelület frissítése</h3>
+          <div class="chat-refresh-settings"><div><strong id="chatRefreshSettingsStatus">Legutóbbi frissítés: —</strong><small id="chatRefreshSettingsDetail">A Grid figyeli a megnyitott ChatGPT nézeteket.</small></div><button id="chatRefreshNowSettings" class="secondary-button" type="button">Frissítés most</button></div>
+          <label class="toggle-row"><span><strong>Biztonságos napi frissítés</strong><small>Napváltás után újratölti a ChatGPT webnézeteket, de válaszgenerálást vagy beírt, el nem küldött szöveget nem szakít meg.</small></span><input id="chatDailyRefreshInput" type="checkbox" /></label>
+          <p class="settings-note">A ChatGPT szerveroldali felülete automatikusan érkezik. A Grid frissítés gyorsítótár nélkül tölti újra a webnézetet; aktív munka esetén későbbre halasztja.</p>
         </section>
 
         <section class="settings-section">

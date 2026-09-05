@@ -1552,6 +1552,22 @@ body.has-health-drawer .chat-grid { bottom: calc(var(--developer-footer-h) + var
 .footer-status b { font-size:7px; letter-spacing:.05em; color:inherit; }
 .footer-status em { min-width:0; overflow:hidden; text-overflow:ellipsis; font-style:normal; font-size:7px; color:var(--muted); }
 .footer-env { flex:0 0 auto; color:#9df0ca; font-weight:950; letter-spacing:.09em; }
+.footer-chat-refresh { flex:1.45 1 0 !important; }
+.footer-chat-refresh #footerChatRefreshStatus { opacity:.9; }
+.footer-chat-refresh button {
+  flex:0 0 23px;
+  width:23px;
+  height:23px;
+  border:1px solid rgba(148,163,184,.22);
+  border-radius:6px;
+  background:rgba(255,255,255,.045);
+  color:inherit;
+  cursor:pointer;
+  font-size:13px;
+  line-height:1;
+}
+.footer-chat-refresh button:hover:not(:disabled) { background:rgba(80,227,164,.16); border-color:rgba(80,227,164,.42); }
+.footer-chat-refresh button:disabled { cursor:not-allowed; opacity:.4; }
 .footer-dot { width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:#64748b; }
 .footer-dot.is-online { background:#28c984; box-shadow:0 0 7px rgba(40,201,132,.35); }
 .footer-dot.is-warning { background:#e5b84d; box-shadow:0 0 7px rgba(229,184,77,.28); }
@@ -1826,6 +1842,23 @@ body.has-health-drawer .chat-grid { bottom: calc(var(--developer-footer-h) + var
   background: linear-gradient(180deg, rgba(14,157,109,.16), rgba(14,157,109,.09));
   color: #066044;
 }
+
+.chat-refresh-settings {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 10px;
+  padding:10px 12px;
+  border:1px solid rgba(80,227,164,.22);
+  border-radius:9px;
+  background:rgba(80,227,164,.055);
+}
+.chat-refresh-settings > div { display:grid; gap:4px; min-width:0; }
+.chat-refresh-settings strong { color:var(--text); font-size:12px; }
+.chat-refresh-settings small { color:var(--muted); font-size:10px; line-height:1.35; }
+.chat-refresh-settings button { flex:0 0 auto; }
+:root[data-theme="light"] .chat-refresh-settings { background:rgba(14,157,109,.055); border-color:rgba(14,157,109,.22); }
 
 @media (max-width: 1500px) {
   .context-row .context-path { font-size: 8px; }

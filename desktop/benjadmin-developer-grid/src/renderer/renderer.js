@@ -90,6 +90,7 @@ const state = {
   notificationDiagnostics: null,
   shortcutDiagnostics: null,
   chatConnections: {},
+  chatRefresh: { cells: {}, latestRefreshedAt: "", dailyEnabled: true, deferredCount: 0, updateAvailableCount: 0 },
   systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false }
 };
 
@@ -149,6 +150,8 @@ function renderSecurity(security) {
   $("#workspaceZoomOut").disabled = !unlocked;
   $("#workspaceZoomValue").disabled = !unlocked;
   $("#workspaceZoomIn").disabled = !unlocked;
+  $("#chatRefreshButton").disabled = !unlocked;
+  $("#chatRefreshNowSettings").disabled = !unlocked;
 
   if (unlocked) {
     stopLockoutCountdown();
@@ -195,7 +198,7 @@ function stopLockoutCountdown() {
 }
 
 async function loadUnlockedState() {
-  const [configResult, connectionResult] = await Promise.all([api.getConfig(), api.getConnectionState()]);
+  const [configResult, connectionResult, refreshResult] = await Promise.all([api.getConfig(), api.getConnectionState(), api.getChatRefreshState?.()]);
   if (configResult?.ok && configResult.config) {
     state.config = configResult.config;
     renderConfig();
@@ -204,6 +207,8 @@ async function loadUnlockedState() {
   state.connection.mode = connectionResult?.mode || "none";
   state.connection.device = connectionResult?.device || null;
   state.connection.pairing = connectionResult?.pairing || { status: "idle" };
+  if (refreshResult?.ok && refreshResult.state) state.chatRefresh = refreshResult.state;
+  renderChatRefreshStatus();
   if (!state.connection.configured) setConnectionUi("BENJADMIN élő státuszkapcsolat nincs párosítva", "warning");
   renderConnectionSettings();
   startReviewPolling();
@@ -621,12 +626,68 @@ async function setSystemHealthMode(mode) {
   if (mode !== "closed") void refreshSystemHealth(false);
 }
 
+function formatChatRefreshTime(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "—";
+  const today = new Date();
+  const sameDay = parsed.getFullYear() === today.getFullYear() && parsed.getMonth() === today.getMonth() && parsed.getDate() === today.getDate();
+  const time = new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" }).format(parsed);
+  if (sameDay) return `ma ${time}`;
+  return new Intl.DateTimeFormat("hu-HU", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(parsed);
+}
+
+function renderChatRefreshStatus() {
+  const refresh = state.chatRefresh || {};
+  const latest = formatChatRefreshTime(refresh.latestRefreshedAt);
+  const reasonLabels = { startup: "indítás", navigation: "navigáció", "manual-all": "kézi közös", "manual-cell": "kézi cella", "daily-safe": "napi" };
+  const latestReason = reasonLabels[refresh.latestReason] || "";
+  const deferred = Number(refresh.deferredCount || 0);
+  const available = Number(refresh.updateAvailableCount || 0);
+  let label = `frissítve: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
+  if (deferred > 0) label = `${deferred} aktív nézet miatt vár`;
+  else if (available > 0) label = "frissítés elérhető";
+  const footer = $("#footerChatRefreshStatus");
+  if (footer) footer.textContent = label;
+  const button = $("#chatRefreshButton");
+  if (button) {
+    button.disabled = state.security?.unlocked !== true;
+    button.title = `ChatGPT frissítés · legutóbb ${latest}${refresh.dailyEnabled === false ? " · napi frissítés kikapcsolva" : " · napi frissítés bekapcsolva"}`;
+  }
+  const settingsStatus = $("#chatRefreshSettingsStatus");
+  if (settingsStatus) settingsStatus.textContent = `Legutóbbi frissítés: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
+  const settingsDetail = $("#chatRefreshSettingsDetail");
+  if (settingsDetail) settingsDetail.textContent = deferred > 0
+    ? `${deferred} nézet frissítése aktív válasz vagy piszkozat miatt biztonságosan elhalasztva.`
+    : available > 0 ? `${available} ChatGPT nézeten frissítési jelzés látható.` : "A Grid figyeli a megnyitott ChatGPT nézeteket.";
+}
+
+async function refreshAllChatViews() {
+  const footerButton = $("#chatRefreshButton");
+  const settingsButton = $("#chatRefreshNowSettings");
+  if (footerButton) footerButton.disabled = true;
+  if (settingsButton) settingsButton.disabled = true;
+  try {
+    const result = await api.refreshChatViews?.();
+    if (!result?.ok) throw new Error(result?.error || "A ChatGPT nézetek nem frissíthetők.");
+    if (result.state) state.chatRefresh = result.state;
+    renderChatRefreshStatus();
+    const refreshed = Number(result.refreshed || 0);
+    const deferred = Number(result.deferred || 0);
+    showToast("ChatGPT frissítés", deferred > 0 ? `${refreshed} nézet frissítése elindult, ${deferred} aktív nézet biztonságosan későbbre maradt.` : `${refreshed} ChatGPT nézet frissítése elindult.`);
+  } catch (error) {
+    showToast("ChatGPT frissítés", error instanceof Error ? error.message : "A frissítés sikertelen.");
+  } finally {
+    renderChatRefreshStatus();
+  }
+}
+
 function renderChatFooter() {
   const configured = (state.config?.cells || []).filter((cell) => cell.enabled !== false);
   const online = configured.filter((cell) => state.chatConnections[cell.id] === true).length;
   const total = configured.length;
   setFooterDot("#footerChatDot", total > 0 && online === total ? "online" : online > 0 ? "warning" : "offline");
   if ($("#footerChatStatus")) $("#footerChatStatus").textContent = total ? `${online}/${total} online` : "—";
+  renderChatRefreshStatus();
 }
 
 function renderLayout() {
@@ -898,6 +959,8 @@ async function openSettings(focusCellId = null) {
   $("#pairingActivationInput").value = "";
   $("#launchAtLoginInput").checked = state.config.launchAtLogin === true;
   $("#rememberLastConversationInput").checked = state.config.rememberLastConversation !== false;
+  $("#chatDailyRefreshInput").checked = state.config.chatRefresh?.dailyEnabled !== false;
+  renderChatRefreshStatus();
   $("#quietModeInput").checked = state.config.notifications?.quietMode === true;
   $("#completionSoundInput").checked = state.config.notifications?.completionSound !== false;
   $("#stageSoundInput").checked = state.config.notifications?.stageSound !== false;
@@ -942,6 +1005,7 @@ function readSettingsConfig() {
   };
   next.launchAtLogin = $("#launchAtLoginInput").checked;
   next.rememberLastConversation = $("#rememberLastConversationInput").checked;
+  next.chatRefresh = { dailyEnabled: $("#chatDailyRefreshInput").checked };
   next.notifications = {
     quietMode: $("#quietModeInput").checked,
     completionSound: $("#completionSoundInput").checked,
@@ -1184,6 +1248,11 @@ async function handleCellAction(button) {
   if (action === "settings") { await openSettings(cellId); return; }
   const result = await api.cellAction(cellId, action);
   if (!result?.ok && result?.error) showToast("Developer Grid művelet", result.error);
+  else if (action === "reload" && result?.deferred) {
+    if (result.state) state.chatRefresh = result.state;
+    renderChatRefreshStatus();
+    showToast("ChatGPT frissítés", "Aktív válasz vagy beírt piszkozat miatt a frissítés későbbre maradt.");
+  }
   else if (action === "microphone" && result?.microphoneAttempted && !result?.microphoneButtonFound) {
     showToast("Mikrofon engedélyezve", "A ChatGPT saját mikrofon gombja nem volt automatikusan felismerhető; használd a csevegés alsó mikrofon ikonját.");
   }
@@ -1480,6 +1549,8 @@ function bindUi() {
     const result = await api.updateConfig(next);
     if (result?.ok && result.config) { state.config = result.config; renderConfig(); }
   });
+  $("#chatRefreshButton").addEventListener("click", () => void refreshAllChatViews());
+  $("#chatRefreshNowSettings").addEventListener("click", () => void refreshAllChatViews());
   $("#settingsButton").addEventListener("click", async () => { if (!$("#reviewLayer").classList.contains("is-hidden")) await closeReviewRoom(); await openSettings(); });
   $("#lockButton").addEventListener("click", async () => { await closeReviewRoom(); await closeSettings(); await api.lock(); });
   $("#settingsClose").addEventListener("click", () => void closeSettings());
@@ -1587,6 +1658,10 @@ function bindIpc() {
     state.layout = { ...state.layout, ...layout };
     if (state.config && Number.isFinite(Number(layout?.workspaceZoomPercent))) state.config.workspaceZoomPercent = Number(layout.workspaceZoomPercent);
     renderLayout();
+  });
+  api.onChatRefreshState?.((refresh) => {
+    state.chatRefresh = refresh || state.chatRefresh;
+    renderChatRefreshStatus();
   });
 }
 

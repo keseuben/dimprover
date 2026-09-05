@@ -26,6 +26,8 @@ const CENTRAL_HEADER_HEIGHT = 52;
 const GRID_GAP = 2;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MS = 30_000;
+const CHAT_REFRESH_MAINTENANCE_MS = 60_000;
+const CHAT_REFRESH_PROBE_MS = 5 * 60_000;
 const AVATAR_ASSETS = Object.freeze({
   BENAI: path.join(__dirname, "assets", "team", "benai.webp"),
   OUTMINAI: path.join(__dirname, "assets", "team", "outminai.webp"),
@@ -67,6 +69,10 @@ let appQuitting = false;
 let centralWindowSaveTimer = null;
 const latestWorkerConversationScanned = new Set();
 const watermarkCssKeys = new Map();
+const chatRefreshCells = new Map();
+const pendingChatRefreshReasons = new Map();
+let chatRefreshTimer = null;
+let chatRefreshMaintenanceBusy = false;
 const avatarDataUriCache = new Map();
 
 function userDataPath() { return app.getPath("userData"); }
@@ -982,6 +988,142 @@ function createCentralWindow() {
   return centralWindow;
 }
 
+function localDayKey(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function chatRefreshCell(cellId) {
+  if (!chatRefreshCells.has(cellId)) {
+    chatRefreshCells.set(cellId, {
+      cellId,
+      lastRefreshedAt: "",
+      lastReason: "",
+      lastDailyDay: "",
+      lastProbedAt: 0,
+      updateAvailable: false,
+      deferred: false,
+      loading: false,
+      error: ""
+    });
+  }
+  return chatRefreshCells.get(cellId);
+}
+
+function publicChatRefreshState() {
+  const cells = Object.fromEntries([...chatRefreshCells.entries()].map(([cellId, value]) => [cellId, { ...value, lastProbedAt: value.lastProbedAt ? new Date(value.lastProbedAt).toISOString() : "" }]));
+  const values = Object.values(cells);
+  const latest = values.filter((item) => item.lastRefreshedAt).sort((a, b) => a.lastRefreshedAt.localeCompare(b.lastRefreshedAt)).at(-1) || null;
+  return {
+    cells,
+    latestRefreshedAt: latest?.lastRefreshedAt || "",
+    latestReason: latest?.lastReason || "",
+    dailyEnabled: config?.chatRefresh?.dailyEnabled !== false,
+    deferredCount: values.filter((item) => item.deferred).length,
+    updateAvailableCount: values.filter((item) => item.updateAvailable).length
+  };
+}
+
+function emitChatRefreshState() {
+  const state = publicChatRefreshState();
+  send("chat-refresh:state", state);
+  return state;
+}
+
+async function inspectChatRefreshSafety(view) {
+  if (!view || view.webContents.isDestroyed()) return { busy: true, generating: false, hasDraft: false, updateAvailable: false };
+  return view.webContents.executeJavaScript(`(() => {
+    const visible = (node) => Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== "hidden");
+    const stopSelectors = [
+      'button[data-testid="stop-button"]',
+      'button[aria-label*="stop" i]',
+      'button[aria-label*="leáll" i]'
+    ];
+    const generating = stopSelectors.some((selector) => visible(document.querySelector(selector)));
+    const editors = [...document.querySelectorAll('textarea, [contenteditable="true"]')].filter(visible);
+    const hasDraft = editors.some((editor) => String(editor.value ?? editor.innerText ?? editor.textContent ?? "").trim().length > 0);
+    const updatePattern = /(refresh|reload|update available|frissít|újratölt|actualizar|mettre à jour|aktualisieren)/i;
+    const updateAvailable = [...document.querySelectorAll('button')].filter(visible).some((button) => {
+      const label = [button.textContent, button.title, button.getAttribute('aria-label')].filter(Boolean).join(' ');
+      return updatePattern.test(label);
+    });
+    return { busy: generating || hasDraft, generating, hasDraft, updateAvailable };
+  })()`, true).catch(() => ({ busy: true, generating: false, hasDraft: false, updateAvailable: false }));
+}
+
+async function probeChatRefresh(cellId, view) {
+  const cellState = chatRefreshCell(cellId);
+  const inspection = await inspectChatRefreshSafety(view);
+  cellState.lastProbedAt = Date.now();
+  cellState.updateAvailable = inspection.updateAvailable === true;
+  return inspection;
+}
+
+async function requestChatRefresh(cellId, reason = "manual") {
+  const view = chatViews.get(cellId);
+  if (!view || view.webContents.isDestroyed()) return { refreshed: false, deferred: false, error: "A ChatGPT nézet nincs megnyitva." };
+  const inspection = await probeChatRefresh(cellId, view);
+  const cellState = chatRefreshCell(cellId);
+  if (inspection.busy) {
+    cellState.deferred = true;
+    cellState.error = inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
+    emitChatRefreshState();
+    return { refreshed: false, deferred: true, error: cellState.error };
+  }
+  cellState.deferred = false;
+  cellState.loading = true;
+  cellState.error = "";
+  pendingChatRefreshReasons.set(cellId, reason);
+  view.webContents.reloadIgnoringCache();
+  emitChatRefreshState();
+  return { refreshed: true, deferred: false };
+}
+
+async function refreshOpenChatViews(reason = "manual-all") {
+  let refreshed = 0;
+  let deferred = 0;
+  for (const cellId of chatViews.keys()) {
+    const result = await requestChatRefresh(cellId, reason);
+    if (result.refreshed) refreshed += 1;
+    if (result.deferred) deferred += 1;
+  }
+  return { ok: true, refreshed, deferred, state: emitChatRefreshState() };
+}
+
+async function maintainChatRefresh() {
+  if (!unlocked || chatRefreshMaintenanceBusy) return;
+  chatRefreshMaintenanceBusy = true;
+  try {
+    const today = localDayKey();
+    const now = Date.now();
+    for (const [cellId, view] of chatViews.entries()) {
+      const cellState = chatRefreshCell(cellId);
+      let inspection = null;
+      if (!cellState.lastProbedAt || now - cellState.lastProbedAt >= CHAT_REFRESH_PROBE_MS) inspection = await probeChatRefresh(cellId, view);
+      if (config?.chatRefresh?.dailyEnabled === false || cellState.lastDailyDay === today) continue;
+      if (!inspection) inspection = await probeChatRefresh(cellId, view);
+      if (inspection.busy) {
+        cellState.deferred = true;
+        cellState.error = inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
+        continue;
+      }
+      await requestChatRefresh(cellId, "daily-safe");
+    }
+    emitChatRefreshState();
+  } finally {
+    chatRefreshMaintenanceBusy = false;
+  }
+}
+
+function startChatRefreshMaintenance() {
+  if (chatRefreshTimer) clearInterval(chatRefreshTimer);
+  chatRefreshTimer = setInterval(() => void maintainChatRefresh(), CHAT_REFRESH_MAINTENANCE_MS);
+}
+
+function stopChatRefreshMaintenance() {
+  if (chatRefreshTimer) clearInterval(chatRefreshTimer);
+  chatRefreshTimer = null;
+}
+
 function createChatView(cell) {
   const hostWindow = cell?.id === "central" ? createCentralWindow() : shellWindow;
   if (!hostWindow || !unlocked || !cell?.enabled || chatViews.has(cell.id)) return;
@@ -1016,13 +1158,29 @@ function createChatView(cell) {
   view.webContents.on("did-navigate", (_event, url) => rememberChatNavigation(cell.id, url));
   view.webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => { if (isMainFrame) rememberChatNavigation(cell.id, url); });
   view.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
-    if (isMainFrame) send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: `${description} (${code})`, url });
+    if (isMainFrame) {
+      const refreshState = chatRefreshCell(cell.id);
+      refreshState.loading = false;
+      refreshState.error = `${description} (${code})`;
+      send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: refreshState.error, url });
+      emitChatRefreshState();
+    }
   });
   view.webContents.on("did-finish-load", () => {
+    const refreshState = chatRefreshCell(cell.id);
+    refreshState.lastRefreshedAt = new Date().toISOString();
+    refreshState.lastReason = pendingChatRefreshReasons.get(cell.id) || (refreshState.lastReason ? "navigation" : "startup");
+    refreshState.lastDailyDay = localDayKey();
+    refreshState.deferred = false;
+    refreshState.loading = false;
+    refreshState.error = "";
+    pendingChatRefreshReasons.delete(cell.id);
     applyWorkspaceZoom();
     void applyChatWatermark(cell, view);
     if (cell.id !== "central") void applyWorkspaceStandbyLock(cell, view, !workerHasAssignedDevelopment(latestLiveSnapshot, cell.workerCode));
     send("live:connection", { kind: "chat", cellId: cell.id, ok: true });
+    emitChatRefreshState();
+    setTimeout(() => void probeChatRefresh(cell.id, view).then(() => emitChatRefreshState()), 2200);
     setTimeout(() => void selectLatestNamedConversation(cell, view), 1400);
   });
   view.webContents.on("before-input-event", (event, input) => {
@@ -2119,6 +2277,8 @@ async function fetchDeveloperGridSystemHealth() {
 
 function registerIpc() {
   ipcMain.handle("app:get-version", () => ({ ok: true, version: app.getVersion() }));
+  ipcMain.handle("chat-refresh:get", () => ({ ok: unlocked, state: publicChatRefreshState() }));
+  ipcMain.handle("chat-refresh:run", () => unlocked ? refreshOpenChatViews("manual-all") : ({ ok: false, error: "A ChatGrid zárolva van." }));
   ipcMain.handle("shortcuts:get-status", () => ({ ok: true, shortcuts: shortcutRegistrationState.map((item) => ({ ...item })) }));
   ipcMain.handle("system-health:get", () => fetchDeveloperGridSystemHealth());
   ipcMain.handle("security:get-state", () => securityState());
@@ -2446,7 +2606,7 @@ function registerIpc() {
       else closeChatView(cell.id);
     } else if (payload.action === "toggle-central") toggleCentralChat();
     else if (payload.action === "reopen") { createChatView(cell); updateViewBounds(); }
-    else if (payload.action === "reload") chatViews.get(cell.id)?.webContents.reload();
+    else if (payload.action === "reload") return { ok: true, ...(await requestChatRefresh(cell.id, "manual-cell")), state: publicChatRefreshState() };
     else if (payload.action === "focus") chatViews.get(cell.id)?.webContents.focus();
     else if (payload.action === "zoom-in") setWorkspaceZoom((config.workspaceZoomPercent || 100) + 10);
     else if (payload.action === "zoom-out") setWorkspaceZoom((config.workspaceZoomPercent || 100) - 10);
@@ -2514,10 +2674,11 @@ app.whenReady().then(() => {
   });
   createShellWindow();
   registerGlobalShortcuts();
+  startChatRefreshMaintenance();
   powerMonitor.on("lock-screen", () => lockWorkspace("windows-session-lock"));
 });
 
 app.on("before-quit", () => { appQuitting = true; });
-app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("will-quit", () => { stopChatRefreshMaintenance(); globalShortcut.unregisterAll(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!shellWindow) createShellWindow(); });

@@ -3,7 +3,7 @@
 const { DEFAULT_USAGE_GUIDE } = require("../guide/default-guide.cjs");
 
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
-const CONFIG_VERSION = 11;
+const CONFIG_VERSION = 12;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = Object.freeze({
   pollIntervalMs: 2000,
   launchAtLogin: true,
   rememberLastConversation: true,
+  chatRefresh: { dailyEnabled: true },
   usageGuide: { showOnUnlock: true, content: DEFAULT_USAGE_GUIDE },
   centralWindow: { x: null, y: null, width: 980, height: 860, maximized: false },
   contextWorkspace: { visible: true, width: 560, zoomPercent: 100, detached: false, x: null, y: null, windowWidth: 920, windowHeight: 860, maximized: false },
@@ -141,6 +142,9 @@ function sanitizeConfig(input) {
   if (Number.isFinite(Number(input.pollIntervalMs))) next.pollIntervalMs = Math.max(1000, Math.min(15000, Math.round(Number(input.pollIntervalMs))));
   if (typeof input.launchAtLogin === "boolean") next.launchAtLogin = input.launchAtLogin;
   if (typeof input.rememberLastConversation === "boolean") next.rememberLastConversation = input.rememberLastConversation;
+  if (input.chatRefresh && typeof input.chatRefresh === "object") {
+    next.chatRefresh.dailyEnabled = input.chatRefresh.dailyEnabled !== false;
+  }
   if (input.usageGuide && typeof input.usageGuide === "object") {
     next.usageGuide = {
       showOnUnlock: input.usageGuide.showOnUnlock !== false,

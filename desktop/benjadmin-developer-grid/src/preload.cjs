@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld("chatGrid", {
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
   getShortcutStatus: () => ipcRenderer.invoke("shortcuts:get-status"),
   getSystemHealth: () => ipcRenderer.invoke("system-health:get"),
+  getChatRefreshState: () => ipcRenderer.invoke("chat-refresh:get"),
+  refreshChatViews: () => ipcRenderer.invoke("chat-refresh:run"),
   getSecurityState: () => ipcRenderer.invoke("security:get-state"),
   setupPassword: (password) => ipcRenderer.invoke("security:setup", { password }),
   unlock: (password) => ipcRenderer.invoke("security:unlock", { password }),
@@ -54,5 +56,6 @@ contextBridge.exposeInMainWorld("chatGrid", {
   onHandoffState: (callback) => ipcRenderer.on("handoff:state", (_event, payload) => callback(payload)),
   onContextLayout: (callback) => ipcRenderer.on("context:layout", (_event, payload) => callback(payload)),
   onContextRefresh: (callback) => ipcRenderer.on("context:refresh", (_event, payload) => callback(payload)),
+  onChatRefreshState: (callback) => ipcRenderer.on("chat-refresh:state", (_event, payload) => callback(payload)),
   onOpenSettings: (callback) => ipcRenderer.on("ui:open-settings", () => callback())
 });

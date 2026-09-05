@@ -6,12 +6,12 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node scripts/acceptance.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs",
+    "check": "node scripts/acceptance.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs && node scripts/chat-refresh-contract.mjs",
     "dist:win": "electron-builder --win portable --x64",
     "package:dev": "bash scripts/package-dev-release.sh"
   },
   "devDependencies": {
-    "electron": "43.3.0",
+    "electron": "43.6.0",
     "electron-builder": "26.15.3"
   },
   "build": {
