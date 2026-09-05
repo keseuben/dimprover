@@ -1,7 +1,7 @@
 "use strict";
 
 const LAUNCHABLE_TASK_STATUSES = new Set(["ready", "claimed"]);
-const TASK_LAUNCH_PROMPT_MARKER = "BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V2";
+const TASK_LAUNCH_PROMPT_MARKER = "BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3";
 
 function cleanText(value, maxLength = 4000) {
   return String(value ?? "").replace(/\r\n/g, "\n").trim().slice(0, maxLength);
@@ -25,8 +25,12 @@ function taskLaunchGate(task) {
   if (!task || typeof task !== "object") return { ok: false, code: "TASK_MISSING", error: "A BENJADMIN task nem érhető el." };
   const scopeOk = hasMeaningfulList(task.scopeText ?? task.scope ?? task.allowedScope ?? task.allowedScopes);
   const acceptanceOk = hasMeaningfulList(task.acceptanceText ?? task.acceptance ?? task.acceptanceCriteria);
-  if (!scopeOk || !acceptanceOk) {
-    const missing = [!scopeOk ? "engedélyezett scope" : "", !acceptanceOk ? "acceptance" : ""].filter(Boolean).join(" és ");
+  const branchOk = Boolean(cleanText(task.branchName, 500));
+  const worktreeOk = Boolean(cleanText(task.worktreePath, 800));
+  const headOk = /^[0-9a-f]{40}$/i.test(cleanText(task.sourceHead ?? task.baseHead ?? task.startHead, 80));
+  const sessionOk = Boolean(cleanText(task.sessionId ?? task.activeSessionId, 220));
+  if (!scopeOk || !acceptanceOk || !branchOk || !worktreeOk || !headOk || !sessionOk) {
+    const missing = [!scopeOk ? "engedélyezett scope" : "", !acceptanceOk ? "acceptance" : "", !branchOk ? "branch" : "", !worktreeOk ? "worktree" : "", !headOk ? "base HEAD" : "", !sessionOk ? "sessionId" : ""].filter(Boolean).join(", ");
     return {
       ok: false,
       code: "TASK_CONTRACT_INCOMPLETE",
@@ -52,13 +56,15 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   const acceptance = cleanText(task?.acceptanceText ?? task?.acceptance ?? task?.acceptanceCriteria, 2500);
   const branch = cleanText(task?.branchName, 500);
   const worktree = cleanText(task?.worktreePath, 800);
+  const sourceHead = cleanText(task?.sourceHead ?? task?.baseHead ?? task?.startHead, 80);
+  const sessionId = cleanText(task?.sessionId ?? task?.activeSessionId, 220);
   const projectId = cleanText(task?.projectId, 200);
   const priority = Number.isFinite(Number(task?.priority)) ? String(Number(task.priority)) : "";
   const label = cleanText(workerLabel, 80) || cleanText(workerCode, 80) || "Kódmérnök";
   const context = [presence?.mainModule, presence?.moduleName, presence?.submoduleName]
     .map((item) => cleanText(item, 200)).filter(Boolean).join(" › ");
 
-  const lines = [TASK_LAUNCH_PROMPT_MARKER, `${label}, új BENJADMIN fejlesztési feladat érkezett.`, "", `FELADAT: ${title}`];
+  const lines = [TASK_LAUNCH_PROMPT_MARKER, `${label}, új BENJADMIN fejlesztési feladat érkezett.`, "", "LAUNCH PACKET · AUTHORITATIVE", `FELADAT: ${title}`];
   if (description) lines.push(`LEÍRÁS: ${description}`);
   if (priority) lines.push(`PRIORITÁS: ${priority}`);
   if (projectId) lines.push(`PROJECT ID: ${projectId}`);
@@ -80,6 +86,8 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   lines.push(`ENGEDÉLYEZETT SCOPE: ${scope}`);
   if (branch) lines.push(`BRANCH: ${branch}`);
   if (worktree) lines.push(`WORKTREE: ${worktree}`);
+  if (sourceHead) lines.push(`BASE HEAD: ${sourceHead}`);
+  if (sessionId) lines.push(`SESSION ID: ${sessionId}`);
   lines.push(`ACCEPTANCE: ${acceptance}`);
 
   lines.push(
@@ -89,7 +97,26 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
     "Más worker scope-ját és fájljait ne módosítsd. Shared build/release/migration/restart/cutover csak központi koordinációs lock alatt történhet.",
     "",
     "Ez TASK_LAUNCH prompt. Csak explicit BenjAdmin / Central Core INDÍTÁS után használható; ÁTADÁS folyamatból soha nem indulhat automatikusan.",
-    "Munkakezdéskor az első státuszsor pontosan: MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
+    "KÓDOLÁS ELŐTT kötelező a BOOT ACKNOWLEDGEMENT. Az ACK előtt semmilyen fájlírás, commit, build, release vagy konfigurációmódosítás nem engedélyezett.",
+    "Az első válaszod pontosan tartalmazza ezt a blokkot:",
+    "BOOT ACKNOWLEDGEMENT",
+    `Worker: ${cleanText(workerCode, 40)}`,
+    `Task: ${cleanText(task?.id, 220)}`,
+    `Session: ${sessionId}`,
+    `Project/Module: ${projectId || "—"} / ${context || "—"}`,
+    `Branch: ${branch}`,
+    `Worktree: ${worktree}`,
+    `Base HEAD: ${sourceHead}`,
+    `Read/Write scope: ${scope}`,
+    "Deny scope: PROD, más worker scope, nem engedélyezett path",
+    "Active directive: DEV ONLY · PROD DENY",
+    "Prior state: ellenőrizendő a Context Pack / handoff alapján",
+    "First check: git branch + HEAD + worktree clean/expected + scope/lock",
+    "Risk/blocker: <röviden>",
+    "Coding allowed: YES vagy NO",
+    "Ha branch/worktree/HEAD/scope eltér: Coding allowed: NO és SOURCE_BASELINE_MISMATCH / CLARIFICATION_REQUIRED. Ne írj fájlt.",
+    "Ha minden egyezik, az ACK után ugyanabban a válaszban csak az elemzési/preflight eredményt add meg; tényleges fájlírást csak az ACK érvényessége után kezdj.",
+    "MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
     "Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát: mit végeztél, mely fájlokon/területen, milyen teszt/commit/build eredménnyel és mi a következő lépés. Ne csak a munka végén legyen központi nyoma.",
     "Munka végén: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM; add meg az eltelt időt és az állapotot is.",
     `Lezáráskor frissítsd a worker tartós handoffját is: /srv/dimpro-dev/handoffs/${cleanText(workerCode, 40) || "WORKER"}_LATEST.md`,

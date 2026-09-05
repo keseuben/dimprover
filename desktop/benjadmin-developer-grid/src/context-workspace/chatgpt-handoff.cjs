@@ -19,6 +19,16 @@ const CONVERSATION_INFO_SCRIPT = String.raw`(() => {
   }
 })()`;
 
+const LATEST_ASSISTANT_SCRIPT = String.raw`(() => {
+  const generating = Boolean(document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="Leáll"]'));
+  const nodes = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+  if (!nodes.length) return { ok: false, generating, error: "Nem található assistant-válasz." };
+  const node = nodes[nodes.length - 1];
+  const container = node.closest("article") || node.closest('[data-testid^="conversation-turn-"]') || node;
+  const text = String(container.innerText || container.textContent || "").trim();
+  return text ? { ok: true, generating, text: text.slice(0, 190000) } : { ok: false, generating, error: "A legutóbbi assistant-válasz üres." };
+})()`;
+
 const HANDOFF_ASSISTANT_SCRIPT = String.raw`(() => {
   const nodes = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
   if (!nodes.length) return { ok: false, error: "Nem található assistant-válasz." };
@@ -86,6 +96,12 @@ async function getConversationInfo(view, cell, cells) {
     chatSessionId: String(info?.id || fallbackId).slice(0, 120),
     chatTitle: String(info?.title || `${fallbackId} ${cell.label} – fejlesztés`).slice(0, 300),
   };
+}
+
+async function captureLatestAssistantText(view) {
+  if (!view || view.webContents.isDestroyed()) return { ok: false, error: "A ChatGPT felület nem érhető el." };
+  return view.webContents.executeJavaScript(LATEST_ASSISTANT_SCRIPT, true)
+    .catch(() => ({ ok: false, error: "A ChatGPT legutóbbi válasza nem olvasható biztonságosan." }));
 }
 
 async function captureLatestAssistantMarkdown(view) {
@@ -346,8 +362,10 @@ function extractCommit(body, label) {
 
 module.exports = {
   CONVERSATION_INFO_SCRIPT,
+  LATEST_ASSISTANT_SCRIPT,
   HANDOFF_ASSISTANT_SCRIPT,
   getConversationInfo,
+  captureLatestAssistantText,
   captureLatestAssistantMarkdown,
   parseHandoffV2,
   renderHandoffMarkdown,

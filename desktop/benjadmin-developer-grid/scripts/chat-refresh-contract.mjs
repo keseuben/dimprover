@@ -21,10 +21,10 @@ function check(name, fn) {
   catch (error) { checks.push({ name, ok: false, error: error.message }); }
 }
 
-check("config v12 enables safe daily refresh by default", () => {
-  assert.equal(CONFIG_VERSION, 12);
+check("config v13 enables safe daily refresh by default", () => {
+  assert.equal(CONFIG_VERSION, 13);
   assert.equal(sanitizeConfig({}).chatRefresh.dailyEnabled, true);
-  assert.equal(sanitizeConfig({ version: 12, chatRefresh: { dailyEnabled: false } }).chatRefresh.dailyEnabled, false);
+  assert.equal(sanitizeConfig({ version: 13, chatRefresh: { dailyEnabled: false } }).chatRefresh.dailyEnabled, false);
 });
 check("refresh avoids active generation and unsent drafts", () => {
   assert.match(main, /data-testid="stop-button"/);

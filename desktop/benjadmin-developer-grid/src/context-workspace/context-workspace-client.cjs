@@ -118,5 +118,10 @@ async function bindDeveloperGridConversation({ baseUrl, deviceToken, input }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "PATCH", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 15000);
   return payload.binding || null;
 }
+async function recordDeveloperGridBootAck({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "PUT", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 15000);
+  return payload.bootAck || null;
+}
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, sanitizeSnapshot };

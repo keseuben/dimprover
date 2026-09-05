@@ -43,7 +43,7 @@ check(renderer.includes('"CSEVEGÉS RÖGZÍTÉSE"') && renderer.includes('datase
 check(main.includes("TASK_CHAT_CONVERSATION_MISMATCH"),"task launch fails closed on wrong current conversation");
 check(renderer.includes("explicitChatPlan") && main.includes("launchProbe"),"chat-planned READY task remains launchable despite session startedAt");
 check(live.includes("chatConversationConfirmedAt") && main.includes("authoritative = task?.chatLaunchMode"),"conversation binding survives desktop restart through authoritative state");
-check(workspace.includes("Automatikus · Central Core választ") && !workspace.includes("Automatikus · BenAI koordinátor választ"),"work-start automatic routing is owned by Central Core, not BenAI");
+check(!workspace.includes("Automatikus · Central Core választ") && workspace.includes("Válassz kódmérnököt") && workStart.includes("DEVELOPER_GRID_WORKER_REQUIRED"),"work-start requires explicit worker and has no automatic fallback");
 check(workspace.includes(">ÁrminAI<") && workspace.includes(">OutminAI<") && workspace.includes(">BenjáminAI<") && workspace.includes(">JázminAI<"),"all four coding engineers are explicitly selectable");
 check(renderer.includes('api.contextWorkspaceMode?.("open")') && !renderer.includes("api.prepareDailyStart();"),"daily start opens Central Core control panel instead of a worker chat");
 check(!main.includes("prepareBenAiDailyStart") && !main.includes('daily:prepare-start') && !preload.includes("prepareDailyStart"),"legacy BenAI coordinator daily-start IPC is removed, not merely hidden");

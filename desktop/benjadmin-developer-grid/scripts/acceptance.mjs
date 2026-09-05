@@ -11,9 +11,10 @@ const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
 const html=fs.readFileSync(path.join(root,"src/renderer/index.html"),"utf8");
 const css=fs.readFileSync(path.join(root,"src/renderer/styles.css"),"utf8");
 const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8");
+const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.12",()=>assert.equal(pkg.version,"0.1.12"));
+check("package version 0.1.13",()=>assert.equal(pkg.version,"0.1.13"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -23,7 +24,7 @@ check("exactly four primary cells",()=>assert.equal(config.cells.length,4));
 check("fixed visual worker order",()=>assert.deepEqual(config.cells.map(x=>x.workerCode),["ARMINAI","OUTMINAI","BENAI","JAZMINAI"]));
 check("fixed visual labels",()=>assert.deepEqual(config.cells.map(x=>x.label),["ÁrminAI","OutminAI","BenjáminAI","JázminAI"]));
 check("worker option order matches layout",()=>assert.deepEqual(WORKER_OPTIONS,["ARMINAI","OUTMINAI","BENAI","JAZMINAI"]));
-check("central control workspace visible by default",()=>assert.equal(config.contextWorkspace.visible,true));
+check("central control workspace closed by default for full-width chat cells",()=>assert.equal(config.contextWorkspace.visible,false));
 check("central control workspace docked by default",()=>assert.equal(config.contextWorkspace.detached,false));
 check("05 DevminAI prepared",()=>assert.equal(config.centralChat.label,"DevminAI"));
 check("Developer Grid title rendered",()=>assert.match(html,/BENJADMIN Developer Grid/));
@@ -52,8 +53,14 @@ check("central workspace renders immediately before remote context fetch",()=>{c
 check("central workspace renders pairing error instead of blank body",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/contextErrorMessage/);assert.match(x,/párosítsd a Developer Gridet/);assert.match(x,/if\(!result\?\.ok\)\{state\.notice=contextErrorMessage\(result\?\.error\);render\(\)/)});
 check("daily work-start composer visible",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/Mit fejlesszünk\?/);assert.match(x,/MUNKA INDÍTÁSA/);assert.match(x,/workStartPrompt/)});
 check("daily work-start preserves draft and uses explicit submit",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/workStartDraft/);assert.match(x,/e\.ctrlKey/);assert.match(x,/if\(state\.workStartBusy\)return/)});
+
+check("header exposes ChatGPT refresh lifecycle",()=>{assert.match(html,/headerChatStatus/);assert.match(html,/headerChatUpdated/);assert.match(html,/headerChatVersion/);assert.match(html,/headerChatRefreshButton/);assert.match(renderer,/formatChatRefreshFullTime/);});
+check("control workspace is forced closed at app startup",()=>assert.match(main,/contextWorkspace = \{ \.\.\.config\.contextWorkspace, visible: false, detached: false \}/));
+check("control center shows BUILD01 and BUILD02 runner health",()=>{assert.match(contextWorkspaceSource,/BUILD RUNNER POOL/);assert.match(contextWorkspaceSource,/build01/);assert.match(contextWorkspaceSource,/build02/);assert.match(contextWorkspaceSource,/getSystemHealth/);});
+check("work-start requires explicit coding worker",()=>{assert.doesNotMatch(contextWorkspaceSource,/Automatikus · Central Core választ/);assert.match(contextWorkspaceSource,/Válassz kódmérnököt/);assert.match(contextWorkspaceSource,/Automatikus worker-kiosztás nincs/);});
+const taskLaunchPrompt=fs.readFileSync(path.join(root,"src/task-launch/prompt-builder.cjs"),"utf8");
+check("Task Launch V3 carries authoritative launch packet and BOOT ACK",()=>{assert.match(taskLaunchPrompt,/TASK_LAUNCH_V3/);assert.match(taskLaunchPrompt,/LAUNCH PACKET · AUTHORITATIVE/);assert.match(taskLaunchPrompt,/BOOT ACKNOWLEDGEMENT/);assert.match(taskLaunchPrompt,/SOURCE_BASELINE_MISMATCH/);});
 check("ChatGrid source product not overwritten by package identity",()=>assert.ok(!pkg.name.includes("chatgrid")));
-const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 check("header handoff is stage-aware",()=>assert.match(contextWorkspaceSource,/idleStageAllowsHandoff=stageIndex===2\|\|stageIndex===6/));
 check("stage 6 exposes V2 save wording",()=>assert.match(contextWorkspaceSource,/V2 MENTÉS/));
 check("new handoff only in closure stage",()=>assert.match(contextWorkspaceSource,/stateName!=="SAVED"\|\|stageIndex!==6/));
@@ -89,4 +96,4 @@ check("BenjáminAI profile is integrated code engineer",()=>{assert.match(render
 check("all four worker headers expose code-engineer role badge",()=>{assert.equal((html.match(/data-role="worker-role"/g)||[]).length,4);assert.match(html,/INTEGRÁLT KÓDMÉRNÖK/);assert.match(renderer,/WORKER_ROLE_LABELS/);});
 check("Central Core owns coordination wording",()=>{assert.match(contextWorkspaceSource,/Central Core koordináció/);assert.doesNotMatch(contextWorkspaceSource,/BenAI koordináció/);assert.match(guideSource,/Central Core \/ Grid Orchestrator/);});
 check("worker headers expose engineering phase status",()=>{for(const label of ["ELEMZÉS","FEJLESZT","TESZTEL","ELLENŐRIZ","BUILD","LEZÁRÁS"])assert.match(renderer,new RegExp(label));});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.12 RC acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.13 DEV acceptance PASS · ${n}/${n}`);

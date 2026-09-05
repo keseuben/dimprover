@@ -3,7 +3,7 @@
 const { DEFAULT_USAGE_GUIDE } = require("../guide/default-guide.cjs");
 
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
-const CONFIG_VERSION = 12;
+const CONFIG_VERSION = 13;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
@@ -25,7 +25,7 @@ const DEFAULT_CONFIG = Object.freeze({
   chatRefresh: { dailyEnabled: true },
   usageGuide: { showOnUnlock: true, content: DEFAULT_USAGE_GUIDE },
   centralWindow: { x: null, y: null, width: 980, height: 860, maximized: false },
-  contextWorkspace: { visible: true, width: 560, zoomPercent: 100, detached: false, x: null, y: null, windowWidth: 920, windowHeight: 860, maximized: false },
+  contextWorkspace: { visible: false, width: 560, zoomPercent: 100, detached: false, x: null, y: null, windowWidth: 920, windowHeight: 860, maximized: false },
   notifications: {
     quietMode: false,
     completionSound: true,

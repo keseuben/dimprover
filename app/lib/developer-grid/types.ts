@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.12-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.13-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -47,6 +47,11 @@ export type DevelopmentContext = {
   chatConversationTitle?: string | null;
   chatConversationConfirmedAt?: string | null;
   chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | null;
+  bootAckState?: "WAITING" | "VALIDATED" | "BLOCKED" | null;
+  bootAckValidatedAt?: string | null;
+  bootAckSha256?: string | null;
+  bootAckCodingAllowed?: boolean | null;
+  bootAckMismatches?: string[];
   source: "ACTIVE_SESSION" | "EXPLICIT_TASK" | "TASK_PROVENANCE" | "ACTIVITY" | "GIT" | "PRESENCE" | "HEURISTIC";
   resolvedAt: string;
 };

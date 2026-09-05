@@ -37,16 +37,19 @@ check(client.includes("bindDeveloperGridConversation") && preload.includes("bind
 check(ui.includes("MEGLÉVŐ CSEVEGÉS FOLYTATÁSA") && ui.includes("ÚJ PROJEKTCSEVEGÉS"), "control center exposes explicit chat strategy choice");
 
 check(types.includes('RoutableWorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI"'), "four routable Developer Grid coding workers declared");
-check(engine.includes("preferredWorkerCode: input.preferredWorkerCode") && engine.includes("DEVELOPER_GRID_WORKER_PREFERENCE_INVALID"), "explicit worker preference normalized and persisted");
+check(engine.includes("DEVELOPER_GRID_WORKER_REQUIRED") && engine.includes("DEVELOPER_GRID_WORKER_PREFERENCE_INVALID"), "explicit worker is mandatory and invalid worker fails closed");
 check(engine.includes("coordinatorSelection") && engine.includes("worker_benjaminai") && engine.includes("routedWorkerCodeFromTask"), "actual routed worker resolved from current router metadata without Benjamin fallback");
 check(engine.includes('routingState: "WAITING_FOR_WORKER"') && engine.includes("session: null") && engine.includes("upsertGridTask(task)"), "unrouted task waits fail closed without fake worker session");
-check(ui.includes("workStartWorkerCode") && ui.includes("Automatikus · Central Core választ") && ui.includes(">ÁrminAI<") && ui.includes(">OutminAI<") && ui.includes(">BenjáminAI<") && ui.includes(">JázminAI<"), "control center exposes automatic plus four explicit worker choices");
-check(ui.includes(`preferredWorkerCode:state.workStartWorkerCode==="AUTO"?null:state.workStartWorkerCode`), "selected worker is sent with work-start request");
-check(engine.includes("resolveContinuityContext") && engine.includes("continuityPreviousWorkerCode") && engine.includes("continuityHandoffId"), "automatic routing resolves previous worker and latest handoff continuity");
-check(engine.includes('preferencePolicy: input.preferredWorkerCode ? "STRICT" : "SOFT"') && engine.includes('orchestrationSource: "CENTRAL_CORE"'), "manual worker is strict while continuity preference is soft under Central Core");
+check(ui.includes("workStartWorkerCode") && !ui.includes("Automatikus · Central Core választ") && ui.includes("Válassz kódmérnököt") && ui.includes(">ÁrminAI<") && ui.includes(">OutminAI<") && ui.includes(">BenjáminAI<") && ui.includes(">JázminAI<"), "control center exposes four explicit worker choices without automatic fallback");
+check(ui.includes("preferredWorkerCode:state.workStartWorkerCode"), "selected explicit worker is sent with work-start request");
+check(engine.includes("resolveContinuityContext") && engine.includes("continuityPreviousWorkerCode") && engine.includes("continuityHandoffId"), "continuity resolves previous worker and latest handoff as context only");
+check(engine.includes('preferencePolicy: "STRICT"') && engine.includes('routingPreferenceSource = "BENJADMIN_EXPLICIT"') && engine.includes("DEVELOPER_GRID_WORKER_ROUTE_MISMATCH"), "explicit worker route is strict and mismatched routing fails closed");
 check(ui.includes("const continuityBound=false") || ui.includes("let continuityBound=false"), "control center attempts automatic continuity handoff binding");
 check(devEngine.includes("ensureDeveloperGridCodingWorkerRegistry") && devEngine.includes('id: "worker_benjaminai"') && engine.includes("await ensureDeveloperGridCodingWorkerRegistry()"), "BenjáminAI coding worker registry is idempotently ensured before routing");
 check(engine.includes('.filter((task) => !["queued", "ready"].includes') && engine.includes("handoffWorkerCode || previousWorkerCode"), "continuity ignores unstarted queue tasks and prefers worked handoff evidence");
 check(engine.includes("item.project.trim().toLowerCase() === input.projectId.trim().toLowerCase()"), "handoff continuity fallback is project-scoped and cannot cross-bind same-named modules");
 check(devEngine.includes('capabilities: ["code","ui","api","test","review"]') && !devEngine.includes('capabilities: ["code","ui","api","test","review","coordination"]'), "BenjáminAI registry is coding-only without coordinator capability");
+check(engine.includes('scope: [{ type: "module", key: input.moduleName }]'), "work-start creates non-empty module scope for launch gate");
+const taskPrompt = fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/task-launch/prompt-builder.cjs"),"utf8");
+check(taskPrompt.includes("TASK_LAUNCH_V3") && taskPrompt.includes("BOOT ACKNOWLEDGEMENT") && taskPrompt.includes("BASE HEAD") && taskPrompt.includes("SESSION ID"), "launch packet V3 requires source/session BOOT ACK evidence");
 console.log(`Developer Grid work-start contract PASS · ${n}/${n}`);

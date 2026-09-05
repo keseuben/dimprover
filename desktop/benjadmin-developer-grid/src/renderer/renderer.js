@@ -80,6 +80,7 @@ let notificationAudioContext = null;
 
 const state = {
   security: null,
+  appVersion: "",
   config: null,
   live: null,
   connection: { benjadmin: false, configured: false, mode: "none", device: null, pairing: { status: "idle" } },
@@ -251,6 +252,8 @@ function isTaskAwaitingChatLaunch(task) {
   if (!task) return false;
   const launchable = ["ready", "claimed"].includes(String(task.status || "").toLowerCase());
   const explicitChatPlan = Boolean(task?.chatLaunchMode || task?.chatLaunch?.chatLaunchMode);
+  const ackCompleted = task?.chatLaunch?.ackState === "VALIDATED" && Boolean(task?.chatLaunch?.ackContinuationSentAt);
+  if (ackCompleted) return false;
   return launchable && (explicitChatPlan || !task.startedAt);
 }
 
@@ -258,9 +261,15 @@ function deriveVisualStatus(presence, task) {
   const taskStatus = String(task?.status || "").toLowerCase();
   if (taskStatus === "blocked" || taskStatus === "failed") return { label: "BLOKKOLVA", tone: "blocked", cellClass: "is-blocked" };
   if (isTaskAwaitingChatLaunch(task)) {
-    return task?.chatLaunch?.preparedAt
-      ? { label: "CHAT ELŐKÉSZÍTVE", tone: "launch", cellClass: "is-launch-pending" }
-      : { label: "INDÍTÁSRA VÁR", tone: "launch", cellClass: "is-launch-pending" };
+    const ackState = String(task?.chatLaunch?.ackState || "").toUpperCase();
+    if (ackState === "BLOCKED") return { label: "ACK BLOKKOLVA", tone: "blocked", cellClass: "is-blocked" };
+    if (ackState === "VALIDATED") return { label: task?.chatLaunch?.ackContinuationState === "MANUAL_REQUIRED" ? "ACK OK · FOLYTATÁS VÁR" : "ACK VALIDÁLVA", tone: "launch", cellClass: "is-launch-pending" };
+    if (ackState === "WAITING") return { label: "BOOT ACK VÁR", tone: "launch", cellClass: "is-launch-pending" };
+    return task?.chatLaunch?.sentAt
+      ? { label: "BOOT ACK VÁR", tone: "launch", cellClass: "is-launch-pending" }
+      : task?.chatLaunch?.preparedAt
+        ? { label: "CHAT ELŐKÉSZÍTVE", tone: "launch", cellClass: "is-launch-pending" }
+        : { label: "INDÍTÁSRA VÁR", tone: "launch", cellClass: "is-launch-pending" };
   }
 
   // Az aktív BENJADMIN task elsőbbséget élvez a stale/hiányos worker-presence jelzéssel szemben.
@@ -499,7 +508,8 @@ function renderLive() {
     if (launchButton) {
       const chatPlan = task?.chatLaunch || null;
       const needsConversationBinding = Boolean(awaitingLaunch && chatPlan?.chatLaunchMode && chatPlan?.conversationBound !== true);
-      launchButton.classList.toggle("is-hidden", !awaitingLaunch || handoffBlocksLaunch);
+      const launchInFlight = ["WAITING", "VALIDATED"].includes(String(task?.chatLaunch?.ackState || "").toUpperCase()) || Boolean(task?.chatLaunch?.sentAt && task?.chatLaunch?.autoSendState === "SENT");
+      launchButton.classList.toggle("is-hidden", !awaitingLaunch || handoffBlocksLaunch || launchInFlight);
       launchButton.disabled = handoffBlocksLaunch;
       launchButton.dataset.taskId = awaitingLaunch ? String(task?.id || "") : "";
       launchButton.dataset.workerCode = cellConfig.workerCode;
@@ -522,7 +532,10 @@ function renderLive() {
               ? Math.max(1, Math.min(6, Number(presence.workStageIndex)))
               : (taskStatus === "testing" ? 3 : 0)));
     const stage = awaitingLaunch
-      ? (task?.chatLaunch?.preparedAt ? "ELLENŐRIZD · KÜLDD EL" : "ÚJ FELADAT")
+      ? (task?.chatLaunch?.ackState === "BLOCKED" ? "BOOT ACK BLOKKOLT"
+          : task?.chatLaunch?.ackState === "VALIDATED" ? "BOOT ACK OK"
+            : task?.chatLaunch?.ackState === "WAITING" || task?.chatLaunch?.sentAt ? "BOOT ACK VÁR"
+              : task?.chatLaunch?.preparedAt ? "ELLENŐRIZD · KÜLDD EL" : "ÚJ FELADAT")
       : (stageIndex ? (STAGE_LABELS[stageIndex] || `${stageIndex}/6`) : (task?.status ? task.status.toUpperCase() : "—"));
     cell.dataset.workStageIndex = String(stageIndex || 0);
     cell.dataset.currentTaskTitle = String(task?.title || "").slice(0, 500);
@@ -636,6 +649,13 @@ function formatChatRefreshTime(value) {
   return new Intl.DateTimeFormat("hu-HU", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(parsed);
 }
 
+function formatChatRefreshFullTime(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("hu-HU", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" }).format(parsed);
+  return parts.replace(/\s+/g, " ");
+}
+
 function renderChatRefreshStatus() {
   const refresh = state.chatRefresh || {};
   const latest = formatChatRefreshTime(refresh.latestRefreshedAt);
@@ -653,6 +673,15 @@ function renderChatRefreshStatus() {
     button.disabled = state.security?.unlocked !== true;
     button.title = `ChatGPT frissítés · legutóbb ${latest}${refresh.dailyEnabled === false ? " · napi frissítés kikapcsolva" : " · napi frissítés bekapcsolva"}`;
   }
+  const headerUpdated = $("#headerChatUpdated");
+  if (headerUpdated) headerUpdated.textContent = `Utolsó frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
+  const headerVersion = $("#headerChatVersion");
+  if (headerVersion) headerVersion.textContent = `Grid UI v${state.appVersion || "—"}`;
+  const headerButton = $("#headerChatRefreshButton");
+  if (headerButton) {
+    headerButton.disabled = state.security?.unlocked !== true;
+    headerButton.title = `ChatGPT frissítés · legutóbb ${latest}${deferred > 0 ? ` · ${deferred} nézet halasztva` : ""}`;
+  }
   const settingsStatus = $("#chatRefreshSettingsStatus");
   if (settingsStatus) settingsStatus.textContent = `Legutóbbi frissítés: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
   const settingsDetail = $("#chatRefreshSettingsDetail");
@@ -663,8 +692,10 @@ function renderChatRefreshStatus() {
 
 async function refreshAllChatViews() {
   const footerButton = $("#chatRefreshButton");
+  const headerButton = $("#headerChatRefreshButton");
   const settingsButton = $("#chatRefreshNowSettings");
   if (footerButton) footerButton.disabled = true;
+  if (headerButton) headerButton.disabled = true;
   if (settingsButton) settingsButton.disabled = true;
   try {
     const result = await api.refreshChatViews?.();
@@ -687,6 +718,11 @@ function renderChatFooter() {
   const total = configured.length;
   setFooterDot("#footerChatDot", total > 0 && online === total ? "online" : online > 0 ? "warning" : "offline");
   if ($("#footerChatStatus")) $("#footerChatStatus").textContent = total ? `${online}/${total} online` : "—";
+  const headerStatus = $("#headerChatStatus");
+  if (headerStatus) {
+    headerStatus.textContent = total > 0 && online === total ? "Online" : online > 0 ? `${online}/${total} online` : "Offline";
+    headerStatus.dataset.tone = total > 0 && online === total ? "online" : online > 0 ? "warning" : "offline";
+  }
   renderChatRefreshStatus();
 }
 
@@ -1275,9 +1311,10 @@ async function handleTaskLaunch(button) {
     const task = activeTaskForWorker(workerCode);
     if (task && task.id === taskId && result.chatLaunch) task.chatLaunch = result.chatLaunch;
     renderLive();
+    const launchSent = result?.taskLaunch?.ok && result?.taskLaunch?.mode === "sent";
     showToast(
-      bindingMode ? "Csevegés rögzítve" : (result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon"),
-      result.message || (bindingMode ? "A task most már a jelenlegi ChatGPT csevegéshez kötődik." : "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el.")
+      launchSent ? "Launch Packet elküldve" : bindingMode ? "Csevegés rögzítve" : (result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon"),
+      result.message || (launchSent ? "BOOT ACK validáció folyamatban; kódolás addig tiltva." : bindingMode ? "A task most már a jelenlegi ChatGPT csevegéshez kötődik." : "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el.")
     );
   } finally {
     button.disabled = false;
@@ -1550,6 +1587,7 @@ function bindUi() {
     if (result?.ok && result.config) { state.config = result.config; renderConfig(); }
   });
   $("#chatRefreshButton").addEventListener("click", () => void refreshAllChatViews());
+  $("#headerChatRefreshButton").addEventListener("click", () => void refreshAllChatViews());
   $("#chatRefreshNowSettings").addEventListener("click", () => void refreshAllChatViews());
   $("#settingsButton").addEventListener("click", async () => { if (!$("#reviewLayer").classList.contains("is-hidden")) await closeReviewRoom(); await openSettings(); });
   $("#lockButton").addEventListener("click", async () => { await closeReviewRoom(); await closeSettings(); await api.lock(); });
@@ -1669,8 +1707,10 @@ async function init() {
   bindUi();
   bindIpc();
   const appInfo = await api.getAppVersion?.();
+  state.appVersion = appInfo?.version || "";
   const versionLabel = $("#appVersionLabel");
-  if (versionLabel && appInfo?.version) versionLabel.textContent = `v${appInfo.version}`;
+  if (versionLabel && state.appVersion) versionLabel.textContent = `v${state.appVersion}`;
+  renderChatRefreshStatus();
   const security = await api.getSecurityState();
   renderSecurity(security);
   if (security?.unlocked) await loadUnlockedState();

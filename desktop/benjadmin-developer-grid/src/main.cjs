@@ -10,9 +10,10 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
-const { getConversationInfo, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
+const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
+const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 
@@ -298,6 +299,9 @@ function enrichSnapshotWithTaskLaunch(snapshot) {
       conversationBound: Boolean(task.chatConversationId), chatSessionId: task.chatConversationId || null,
       chatConversationUrl: task.chatConversationUrl || null, chatTitle: task.chatConversationTitle || null,
       chatConversationConfirmedAt: task.chatConversationConfirmedAt || null,
+      bootAckState: task.bootAckState || null, bootAckValidatedAt: task.bootAckValidatedAt || null,
+      bootAckSha256: task.bootAckSha256 || null, bootAckCodingAllowed: task.bootAckCodingAllowed ?? null,
+      bootAckMismatches: Array.isArray(task.bootAckMismatches) ? task.bootAckMismatches : [],
     } : null;
     const local = records[String(task.id)] || null;
     return { ...task, chatLaunch: authoritative || local ? { ...(authoritative || {}), ...(local || {}) } : null };
@@ -1351,6 +1355,7 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
     if (!composer) return { inserted: false, reason: 'composer-not-found', existingKind: 'NONE' };
     const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
     const classify = (value) => value.includes('BENJADMIN_PROMPT_KIND: HANDOFF_V2') ? 'HANDOFF_V2'
+      : value.includes('BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3') ? 'TASK_LAUNCH_V3'
       : value.includes('BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V2') ? 'TASK_LAUNCH_V2'
       : value.includes('ÁTADÁSI FELADAT – BENJADMIN CHATGRID · HANDOFF V2') && value.includes('BENJADMIN_HANDOFF_META_V2') ? 'HANDOFF_V2_LEGACY'
       : value.includes('új BENJADMIN fejlesztési feladat érkezett') && value.includes('MUNKAFELVÉTEL:') ? 'TASK_LAUNCH_LEGACY'
@@ -1391,7 +1396,130 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
   })()`, true).catch(() => ({ inserted: false, reason: "execute-failed", existingKind: "NONE" }));
 }
 
-async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null } = {}) {
+async function sendPreparedChatPrompt(view, expectedMarker = "") {
+  if (!view || view.webContents.isDestroyed()) return { sent: false, reason: "chat-unavailable" };
+  await waitForChatComposer(view);
+  const markerLiteral = JSON.stringify(String(expectedMarker || ""));
+  return view.webContents.executeJavaScript(`(async () => {
+    const marker = ${markerLiteral};
+    const selectors = ['#prompt-textarea','textarea[data-testid="prompt-textarea"]','[data-testid="prompt-textarea"][contenteditable="true"]','main form [contenteditable="true"]'];
+    let composer = null;
+    for (const selector of selectors) { const candidate = document.querySelector(selector); if (candidate && candidate.getClientRects().length) { composer = candidate; break; } }
+    if (!composer) return { sent:false, reason:'composer-not-found' };
+    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    if (marker && !read().includes(marker)) return { sent:false, reason:'marker-mismatch' };
+    const buttons = [
+      document.querySelector('button[data-testid="send-button"]'),
+      document.querySelector('form button[type="submit"]'),
+      ...Array.from(document.querySelectorAll('button')).filter((button) => /^(send|küldés|küld)$/i.test(String(button.getAttribute('aria-label') || button.textContent || '').trim()))
+    ].filter(Boolean);
+    const send = buttons.find((button) => !button.disabled && button.getClientRects().length);
+    if (!send) return { sent:false, reason:'send-button-not-found' };
+    send.click();
+    const started = Date.now();
+    while (Date.now() - started < 3000) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const generating = Boolean(document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="Leáll"]'));
+      if (!read().trim() || generating) return { sent:true, verified:true, generating };
+    }
+    return { sent:true, verified:false, reason:'send-not-observed' };
+  })()`, true).catch(() => ({ sent:false, reason:"execute-failed" }));
+}
+
+function launchTaskFromWork(work, chatPlan = null) {
+  const session = work?.session || null;
+  const task = work?.task || null;
+  const code = assignedWorkerCodeFromWork(work);
+  if (!session || !task || !code) return null;
+  return {
+    ...task,
+    status: String(task.status || "READY").toLowerCase(),
+    assignedWorkerId: code,
+    requestedWorkerId: code,
+    branchName: session.sourceProvenance?.branch || null,
+    worktreePath: session.sourceProvenance?.worktree || null,
+    sourceHead: session.sourceProvenance?.head || null,
+    sessionId: session.id || null,
+    scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
+    acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
+    chatLaunchMode: session.developmentContext?.chatLaunchMode || chatPlan?.chatLaunchMode || null,
+  };
+}
+
+function bootAckExpected(task, workerCode) {
+  return {
+    workerCode,
+    taskId: String(task?.id || ""),
+    sessionId: String(task?.sessionId || ""),
+    branch: String(task?.branchName || ""),
+    worktree: String(task?.worktreePath || ""),
+    baseHead: String(task?.sourceHead || ""),
+  };
+}
+
+async function sendBootAckAcceptedContinuation(view, task, workerCode) {
+  const marker = "BENJADMIN_PROMPT_KIND: BOOT_ACK_ACCEPTED_V1";
+  const prompt = [
+    marker,
+    "BENJADMIN CONTROL EVENT · BOOT_ACK_VALIDATED",
+    `Worker: ${workerCode}`,
+    `Task: ${task.id}`,
+    `Session: ${task.sessionId}`,
+    `Branch: ${task.branchName}`,
+    `Worktree: ${task.worktreePath}`,
+    `Base HEAD: ${task.sourceHead}`,
+    "DEV ONLY · PROD DENY.",
+    "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot."
+  ].join("\n");
+  const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason: insertion?.reason || "continuation-not-inserted" };
+  return sendPreparedChatPrompt(view, marker);
+}
+
+async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSha256 = "" }) {
+  const taskId = String(task?.id || "");
+  if (!taskId || !task?.sessionId) return;
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline && view && !view.webContents.isDestroyed()) {
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    const capture = await captureLatestAssistantText(view);
+    if (!capture?.ok || capture.generating || !String(capture.text || "").trim()) continue;
+    const body = String(capture.text || "");
+    const responseSha256 = createHash("sha256").update(body).digest("hex");
+    if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) continue;
+    if (!/BOOT\s+ACKNOWLEDGEMENT/i.test(body)) continue;
+    const validation = validateBootAcknowledgement(body, bootAckExpected(task, workerCode));
+    const parsed = validation.parsed || {};
+    const persisted = await recordDeveloperGridBootAck({
+      baseUrl: config.benjadminBaseUrl,
+      deviceToken: readDeviceToken(),
+      input: {
+        taskId, workerCode, sessionId: task.sessionId, responseSha256,
+        codingAllowed: validation.validated === true && parsed.codingAllowed === true,
+        branch: parsed.branch || "", worktree: parsed.worktree || "", baseHead: parsed.baseHead || "",
+        mismatches: validation.mismatches || [validation.code || "BOOT_ACK_INVALID"],
+      },
+    }).catch((error) => ({ state:"BLOCKED", validated:false, mismatches:[error.message || "BOOT_ACK_PERSIST_FAILED"] }));
+    const local = saveTaskLaunchPatch(task, workerCode, {
+      ackState: persisted?.validated === true ? "VALIDATED" : "BLOCKED",
+      ackAt: new Date().toISOString(), ackSha256: responseSha256,
+      ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
+    });
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    if (persisted?.validated !== true) return;
+    const continuation = await sendBootAckAcceptedContinuation(view, task, workerCode);
+    const patch = continuation?.sent && continuation?.verified
+      ? { ackContinuationSentAt: new Date().toISOString(), ackContinuationState: "SENT" }
+      : { ackContinuationState: "MANUAL_REQUIRED", ackContinuationError: continuation?.reason || "not-verified" };
+    saveTaskLaunchPatch(task, workerCode, patch);
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    return;
+  }
+  saveTaskLaunchPatch(task, workerCode, { ackState:"BLOCKED", ackMismatches:["BOOT_ACK_TIMEOUT"], ackAt:new Date().toISOString() });
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+}
+
+async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null, launchAfterBind = false } = {}) {
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
@@ -1422,7 +1550,14 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
     chatConversationConfirmedAt: binding?.chatConversationConfirmedAt || new Date().toISOString(), automatic: automatic === true,
   });
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
-  return { ok: true, binding, chatLaunch, message: chatLaunchMode === "NEW_PROJECT_CHAT" ? "Az új projektcsevegés rögzítve. A feladat most indítható." : "A meglévő csevegés rögzítve. A feladat most indítható." };
+  let taskLaunch = null;
+  if (launchAfterBind) taskLaunch = await prepareWorkerTaskLaunch(code, id, { autoSend:true, taskOverride:taskOverride || task });
+  return {
+    ok: true, binding, chatLaunch: taskLaunch?.chatLaunch || chatLaunch, taskLaunch,
+    message: taskLaunch?.ok && taskLaunch?.mode === "sent"
+      ? "A csevegés rögzítve és a Launch Packet elküldve. BOOT ACK validáció folyamatban."
+      : chatLaunchMode === "NEW_PROJECT_CHAT" ? "Az új projektcsevegés rögzítve. A feladat indításra kész." : "A meglévő csevegés rögzítve. A feladat indításra kész."
+  };
 }
 
 function assignedWorkerCodeFromWork(work) {
@@ -1446,7 +1581,7 @@ async function initializeTaskChatPlan(work, requestedMode, conversationGuards = 
   return record;
 }
 
-async function prepareWorkerTaskLaunch(workerCode, taskId) {
+async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, taskOverride = null } = {}) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
   try {
     if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Worker Task Launch kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
@@ -1456,11 +1591,11 @@ async function prepareWorkerTaskLaunch(workerCode, taskId) {
   const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
   if (!cell) return { ok: false, error: "A worker nincs aktív ChatGrid cellához rendelve." };
   const snapshot = latestLiveSnapshot;
-  const worker = snapshot?.workers?.find((item) => item.code === code);
-  const task = snapshot?.tasks?.find((item) => String(item.id) === id);
+  const task = taskOverride || snapshot?.tasks?.find((item) => String(item.id) === id);
+  const worker = snapshot?.workers?.find((item) => item.code === code) || (taskOverride ? { id: code, code, name: cell.label } : null);
   if (!worker || !task) return { ok: false, error: "A BENJADMIN task már nem érhető el az élő állapotban." };
   const assignedWorkerId = task.assignedWorkerId || task.requestedWorkerId;
-  if (assignedWorkerId !== worker.id) return { ok: false, error: "A task nem ehhez a workerhez van kiosztva." };
+  if (!taskOverride && assignedWorkerId !== worker.id) return { ok: false, error: "A task nem ehhez a workerhez van kiosztva." };
   const launchRecord = loadTaskLaunchRecords()[id] || {};
   const launchProbe = { ...task, chatLaunchMode: task.chatLaunchMode || launchRecord.chatLaunchMode || null };
   if (!isTaskAwaitingChatLaunch(launchProbe)) return { ok: false, error: "A task már nem vár ChatGPT indításra." };
@@ -1488,13 +1623,15 @@ async function prepareWorkerTaskLaunch(workerCode, taskId) {
   view.webContents.focus();
 
   const presence = snapshot?.workerPresence?.find((item) => item.workerCode === code) || null;
+  const baselineCapture = await captureLatestAssistantText(view);
+  const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   const contextPack = contextPackPromptForWorker(code);
   const prompt = `${buildWorkerTaskPrompt({ task, workerCode: code, workerLabel: cell.label, presence })}${contextPack ? `\n\n${contextPack}` : ""}`;
   const insertion = await insertWorkerTaskPrompt(view, prompt, TASK_LAUNCH_PROMPT_MARKER);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
     const detail = ["HANDOFF_V2", "HANDOFF_V2_LEGACY"].includes(insertion?.existingKind)
       ? "A ChatGPT mezőben HANDOFF V2 prompt van; task indítás nem írhatja felül."
-      : insertion?.existingKind === "TASK_LAUNCH_V2"
+      : ["TASK_LAUNCH_V3", "TASK_LAUNCH_V2"].includes(insertion?.existingKind)
         ? "A ChatGPT mezőben már van TASK_LAUNCH prompt. Előbb kezeld vagy töröld a draftot."
         : insertion?.reason === "composer-not-empty"
           ? "A ChatGPT mező nem üres. A ChatGrid fail-closed módban nem írja felül."
@@ -1502,11 +1639,23 @@ async function prepareWorkerTaskLaunch(workerCode, taskId) {
     return { ok: false, code: "TASK_PROMPT_NOT_INSERTED", error: detail, insertion };
   }
   const mode = "inserted";
-  const chatLaunch = saveTaskLaunchRecord(task, code, mode);
+  let chatLaunch = saveTaskLaunchPatch(task, code, { preparedAt: new Date().toISOString(), mode, baselineResponseSha256 });
+  if (autoSend) {
+    const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
+    if (sent?.sent !== true || sent?.verified !== true) {
+      chatLaunch = saveTaskLaunchPatch(task, code, { autoSendState:"MANUAL_REQUIRED", autoSendError:sent?.reason || "not-verified" });
+      if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+      return { ok:false, code:"TASK_PROMPT_SEND_NOT_VERIFIED", chatLaunch, error:"A Launch Packet a ChatGPT mezőben van, de az automatikus elküldés nem volt igazolható. A rendszer fail-closed; ellenőrizd és küldd el kézzel." };
+    }
+    chatLaunch = saveTaskLaunchPatch(task, code, { sentAt:new Date().toISOString(), autoSendState:"SENT", ackState:"WAITING", ackMismatches:[] });
+    void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256 }).catch(() => undefined);
+  }
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   return {
-    ok: true, mode, chatLaunch,
-    message: "A TASK_LAUNCH prompt igazoltan a worker ChatGPT mezőjében van. Ellenőrizd, majd kézzel küldd el."
+    ok: true, mode: autoSend ? "sent" : mode, chatLaunch,
+    message: autoSend
+      ? "A Launch Packet elküldve a kijelölt workernek. BOOT ACK validáció folyamatban; kódolás addig fail-closed."
+      : "A TASK_LAUNCH prompt igazoltan a worker ChatGPT mezőjében van. Ellenőrizd, majd kézzel küldd el."
   };
 }
 
@@ -1586,7 +1735,7 @@ async function prepareWorkerHandoff(workerCode) {
   view.webContents.focus();
   const insertion = await insertWorkerTaskPrompt(view, prompt, HANDOFF_PROMPT_MARKER);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
-    const detail = ["TASK_LAUNCH_V2", "TASK_LAUNCH_LEGACY"].includes(insertion?.existingKind)
+    const detail = ["TASK_LAUNCH_V3", "TASK_LAUNCH_V2", "TASK_LAUNCH_LEGACY"].includes(insertion?.existingKind)
       ? "A ChatGPT mezőben egy TASK_LAUNCH prompt van. Az ÁTADÁS nem írhatja felül. Töröld vagy kezeld a draftot, majd nyomd meg az ÁTADÁS gombot újra."
       : insertion?.existingKind === "HANDOFF_V2"
         ? "A HANDOFF V2 prompt jelen van, de a marker-ellenőrzés nem sikerült. Ne küldd el; próbáld újra."
@@ -2463,8 +2612,14 @@ function registerIpc() {
       const work = await startDeveloperGridWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: payload || {} });
       preserveWorkerConversationsAfterWorkStart(conversationGuards);
       const chatPlan = await initializeTaskChatPlan(work, payload?.chatLaunchMode, conversationGuards);
+      let taskLaunch = null;
+      const launchTask = launchTaskFromWork(work, chatPlan);
+      const launchWorkerCode = assignedWorkerCodeFromWork(work);
+      if (work?.routingState === "ROUTED" && launchTask && launchWorkerCode && chatPlan?.conversationBound === true) {
+        taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:true, taskOverride:launchTask });
+      }
       send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
-      return { ok: true, work, chatPlan };
+      return { ok: true, work, chatPlan, taskLaunch };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
   ipcMain.handle("context:mode", (_event, payload) => {
@@ -2521,7 +2676,7 @@ function registerIpc() {
   ipcMain.handle("task:bind-conversation", async (_event, payload) => {
     try {
       const code = String(payload?.workerCode || "").toUpperCase();
-      return await bindCurrentTaskConversation(code, payload?.taskId);
+      return await bindCurrentTaskConversation(code, payload?.taskId, { launchAfterBind:true });
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A worker ChatGPT csevegés rögzítése sikertelen." }; }
   });
 
@@ -2639,6 +2794,9 @@ function registerIpc() {
 app.whenReady().then(() => {
   app.setName(APP_TITLE);
   config = loadConfig();
+  // v0.1.13: a dockolt Fejlesztői Vezérlőpult futásidejű felület.
+  // Induláskor mindig zártan kezd, hogy a négy ChatGPT WebContentsView teljes cellaszélességet kapjon.
+  config.contextWorkspace = { ...config.contextWorkspace, visible: false, detached: false };
   nativeTheme.themeSource = config.appearance === "light" ? "light" : "dark";
   applyLoginItemSetting();
   registerIpc();

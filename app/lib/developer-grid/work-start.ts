@@ -24,10 +24,15 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();
-  const preferredWorkerCode: RoutableWorkerCode | null = rawPreferredWorkerCode && rawPreferredWorkerCode !== "AUTO"
-    ? (["ARMINAI", "OUTMINAI", "BENJAMINAI", "JAZMINAI"].includes(rawPreferredWorkerCode) ? rawPreferredWorkerCode as RoutableWorkerCode : null)
+  if (!rawPreferredWorkerCode || rawPreferredWorkerCode === "AUTO") {
+    const error = new Error("A munka indításához explicit kódmérnök kiválasztása kötelező. Automatikus vagy rejtett worker-fallback tiltott.");
+    Object.assign(error, { code: "DEVELOPER_GRID_WORKER_REQUIRED", status: 400 });
+    throw error;
+  }
+  const preferredWorkerCode: RoutableWorkerCode | null = ["ARMINAI", "OUTMINAI", "BENJAMINAI", "JAZMINAI"].includes(rawPreferredWorkerCode)
+    ? rawPreferredWorkerCode as RoutableWorkerCode
     : null;
-  if (rawPreferredWorkerCode && rawPreferredWorkerCode !== "AUTO" && !preferredWorkerCode) {
+  if (!preferredWorkerCode) {
     const error = new Error("A kiválasztott Developer Grid worker nem routolható.");
     Object.assign(error, { code: "DEVELOPER_GRID_WORKER_PREFERENCE_INVALID", status: 400 });
     throw error;
@@ -164,8 +169,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   await ensureDeveloperGridCodingWorkerRegistry();
   const engineState = await getDevCenterEngineState();
   const continuity = await resolveContinuityContext(engineState, input, taskId);
-  const routingPreference = input.preferredWorkerCode || continuity.previousWorkerCode;
-  const routingPreferenceSource = input.preferredWorkerCode ? "BENJADMIN_EXPLICIT" : continuity.previousWorkerCode ? "CONTINUITY" : "CAPACITY";
+  // Handoff/continuity kizárólag kontextust adhat. Worker-választást nem írhat felül.
+  const routingPreference = input.preferredWorkerCode;
+  const routingPreferenceSource = "BENJADMIN_EXPLICIT";
   let engineTask = engineState.tasks.find((task) => task.id === taskId) || null;
   let reused = Boolean(engineTask);
   if (engineTask) {
@@ -195,6 +201,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
         description: input.sourcePrompt,
         priority: 90,
         createdBy: "BenjAdmin",
+        scope: [{ type: "module", key: input.moduleName }],
         metadata: {
           origin: "BENJADMIN_DEVELOPER_GRID_WORK_START",
           sourcePrompt: input.sourcePrompt,
@@ -242,13 +249,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       taskId,
       estimateMinutes: estimate.minutes,
       preferredWorkerCode: routingPreference,
-      preferencePolicy: input.preferredWorkerCode ? "STRICT" : "SOFT",
+      preferencePolicy: "STRICT",
       orchestrationSource: "CENTRAL_CORE",
-      note: input.preferredWorkerCode
-        ? `Developer Grid Vezérlőpult · BenjAdmin explicit worker: ${input.preferredWorkerCode}`
-        : continuity.previousWorkerCode
-          ? `Developer Grid Central Core · continuity preference: ${continuity.previousWorkerCode}`
-          : "Developer Grid Central Core · kapacitásalapú kiosztás",
+      note: `Developer Grid Vezérlőpult · BenjAdmin explicit worker: ${input.preferredWorkerCode} · automatic fallback DENY`,
       prepareForPlusPull: true,
       chainSource: "DEVELOPER_GRID_WORK_START",
     });
@@ -259,6 +262,11 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
 
   const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
   const routedCode = routedWorkerCodeFromTask(engineTask as unknown as Record<string, unknown>, metadata);
+  if (routedCode && routedCode !== input.preferredWorkerCode) {
+    const error = new Error(`A Central Core eltérő workert adott vissza (${routedCode}) a BenjAdmin által kijelölt ${input.preferredWorkerCode} helyett. Indítás fail-closed.`);
+    Object.assign(error, { code: "DEVELOPER_GRID_WORKER_ROUTE_MISMATCH", status: 409 });
+    throw error;
+  }
   const developmentContext: DevelopmentContext = {
     projectId: input.projectId,
     mainModule: "BENJADMIN",
@@ -284,15 +292,13 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     await appendGridEvent({
       kind: "analysis",
       origin: "LIVE",
-      workerCode: input.preferredWorkerCode || continuity.previousWorkerCode || "BENJAMINAI",
+      workerCode: input.preferredWorkerCode,
       taskId,
       projectId: input.projectId,
       developmentContext,
       productionAccess: "DENY",
       delta: {
-        summary: input.preferredWorkerCode
-          ? `${input.preferredWorkerCode} worker jelenleg nem routolható; task várakozik, session nem materializálható.`
-          : "Nincs ténylegesen routolt worker; task várakozik, hamis BenjáminAI session nem materializálható.",
+        summary: `${input.preferredWorkerCode} explicit worker jelenleg nem routolható; task várakozik, automatikus fallback és hamis session tiltva.`,
         preferredWorkerCode: input.preferredWorkerCode,
         routingState: "WAITING_FOR_WORKER",
       },
@@ -334,6 +340,75 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     preferredWorkerCode: input.preferredWorkerCode,
     routingState: "ROUTED" as const,
     productionAccess: "DENY" as const,
+  };
+}
+
+
+export async function recordDeveloperGridBootAck(rawInput: Record<string, unknown>) {
+  const taskId = text(rawInput.taskId, 240);
+  const workerCode = strictCoreWorkerCode(rawInput.workerCode);
+  const sessionId = text(rawInput.sessionId, 260);
+  const responseSha256 = text(rawInput.responseSha256, 64).toLowerCase();
+  const codingAllowed = rawInput.codingAllowed === true;
+  const mismatches = Array.isArray(rawInput.mismatches)
+    ? rawInput.mismatches.map((item) => text(item, 120)).filter(Boolean).slice(0, 20)
+    : [];
+  if (!taskId || !sessionId || !/^[0-9a-f]{64}$/.test(responseSha256)) {
+    const error = new Error("A BOOT ACK rögzítéséhez taskId, sessionId és SHA-256 szükséges.");
+    Object.assign(error, { code: "DEVELOPER_GRID_BOOT_ACK_INVALID", status: 400 });
+    throw error;
+  }
+  const state = await readGridState();
+  if (!state.task || state.task.id !== taskId) {
+    const error = new Error("A BOOT ACK nem az authoritative aktuális taskhoz tartozik.");
+    Object.assign(error, { code: "DEVELOPER_GRID_BOOT_ACK_TASK_MISMATCH", status: 409 });
+    throw error;
+  }
+  const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
+  if (!session) {
+    const error = new Error("A BOOT ACK-hoz tartozó aktív worker session nem található.");
+    Object.assign(error, { code: "DEVELOPER_GRID_BOOT_ACK_SESSION_MISMATCH", status: 409 });
+    throw error;
+  }
+  const expected = session.sourceProvenance;
+  const reportedBranch = text(rawInput.branch, 600);
+  const reportedWorktree = text(rawInput.worktree, 1200).replace(/\\/g, "/").replace(/\/+$/g, "");
+  const reportedHead = text(rawInput.baseHead, 80).toLowerCase();
+  const expectedWorktree = String(expected.worktree || "").replace(/\\/g, "/").replace(/\/+$/g, "");
+  const serverMismatches = [...mismatches];
+  if (reportedBranch !== expected.branch) serverMismatches.push("branch");
+  if (reportedWorktree !== expectedWorktree) serverMismatches.push("worktree");
+  if (reportedHead !== String(expected.head || "").toLowerCase()) serverMismatches.push("baseHead");
+  if (!codingAllowed) serverMismatches.push("codingAllowed");
+  const uniqueMismatches = [...new Set(serverMismatches)].slice(0, 20);
+  const validated = uniqueMismatches.length === 0;
+  const now = new Date().toISOString();
+  const updated: WorkerSession = {
+    ...session,
+    developmentContext: {
+      ...session.developmentContext,
+      bootAckState: validated ? "VALIDATED" : "BLOCKED",
+      bootAckValidatedAt: validated ? now : null,
+      bootAckSha256: responseSha256,
+      bootAckCodingAllowed: codingAllowed,
+      bootAckMismatches: uniqueMismatches,
+      resolvedAt: now,
+    },
+  };
+  const next = await upsertWorkerSession(updated);
+  await appendGridEvent({
+    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
+    developmentContext: updated.developmentContext,
+    branch: expected.branch, worktree: expected.worktree, head: expected.head,
+    delta: {
+      eventType: validated ? "BOOT_ACK_VALIDATED" : "BOOT_ACK_BLOCKED",
+      summary: validated ? "BOOT ACK validálva; a worker fejlesztési futása engedélyezhető." : `BOOT ACK blokkolva: ${uniqueMismatches.join(", ") || "ismeretlen eltérés"}`,
+      responseSha256, codingAllowed, mismatches: uniqueMismatches, workStageIndex: 1,
+    },
+  });
+  return {
+    taskId, workerCode, sessionId, state: validated ? "VALIDATED" as const : "BLOCKED" as const,
+    validated, codingAllowed, mismatches: uniqueMismatches, responseSha256, revision: next.revision, productionAccess: "DENY" as const,
   };
 }
 

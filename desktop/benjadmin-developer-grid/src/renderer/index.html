@@ -24,6 +24,13 @@
       <span id="quietModeBadge" class="quiet-mode-badge is-hidden">NÉMA MÓD</span>
     </div>
     <div class="titlebar__tools no-drag">
+      <div class="chat-surface-status" aria-label="ChatGPT felület frissítési állapota">
+        <span class="chat-surface-status__label">ChatGPT webfelület</span>
+        <span id="headerChatStatus" class="chat-surface-status__online">—</span>
+        <span id="headerChatUpdated" class="chat-surface-status__updated">Utolsó frissítés: —</span>
+        <span id="headerChatVersion" class="chat-surface-status__version">Grid UI v—</span>
+        <button id="headerChatRefreshButton" type="button" title="Az összes megnyitott ChatGPT nézet biztonságos frissítése" disabled>↻ Frissítés</button>
+      </div>
       <button id="dailyStartButton" class="daily-start-button" type="button" title="Napi fejlesztési indítás · Central Core Vezérlőpult" aria-label="Napi fejlesztési indítás" disabled>▶</button>
       <button id="contextWorkspaceButton" class="context-workspace-button" type="button" title="BENJADMIN Fejlesztői Vezérlőpult · Central Core" aria-label="Context Workspace" disabled>▤</button>
       <button id="reviewButton" class="review-button" type="button" title="External Review Room · M.Forge-AI + V.Guard-AI" aria-label="External Review Room" disabled>
