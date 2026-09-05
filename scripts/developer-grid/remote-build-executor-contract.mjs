@@ -54,6 +54,13 @@ check("runner sources pinned toolchain", () => {
   assert.match(runner, /toolchains\/node\.env/);
   for (const marker of ["v22.23.2","10.9.8","2.43.0"]) assert.ok(runner.includes(marker));
 });
+check("runner imports only allowlisted public build environment", () => {
+  assert.match(runner, /build-public-env\.json/);
+  assert.ok(runner.includes("NEXT_PUBLIC_SUPABASE_URL"));
+  assert.ok(runner.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY"));
+  assert.match(runner, /BUILD_PUBLIC_ENV_KEYS_INVALID/);
+  assert.match(runner, /unset SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_PASSWORD SUPABASE_DB_URL/);
+});
 check("runner verifies Git bundle provenance in runner repository", () => {
   for (const marker of ["git bundle list-heads","SOURCE_BUNDLE_HEAD_MISMATCH","SOURCE_PROVENANCE_MISMATCH"]) assert.ok(runner.includes(marker));
   assert.match(runner, /git --git-dir="\$\{REPO\}" bundle verify/);
