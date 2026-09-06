@@ -32,7 +32,7 @@ check(foundation.response.status === 200, "Foundation API reporter auth", `HTTP 
 check(foundation.json?.foundation?.sourceProvenance?.sourceState === "VERIFIED", "Source provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.state === "VERIFIED", "Release/runtime provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.blockCode === null, "Release/runtime blockCode empty");
-check(foundation.json?.foundation?.version === "0.1.16-dev", "Developer Grid version v0.1.16 DEV");
+check(foundation.json?.foundation?.version === "0.1.17-dev", "Developer Grid version v0.1.17 DEV");
 check(Boolean(foundation.json?.foundation?.releaseRuntimeProvenance?.buildId), "Runtime BUILD_ID exposed");
 check(/^[0-9a-f]{40}$/.test(String(foundation.json?.foundation?.releaseRuntimeProvenance?.sourceCommit || "")), "Runtime source commit exposed");
 check(foundation.json?.foundation?.productionAccess === "DENY", "PROD access DENY");

@@ -2,9 +2,15 @@ import os from "node:os";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "@/app/lib/drive-core/storageConfig";
+import { listDriveS3Objects } from "@/app/lib/drive-core/s3ObjectStorage";
+import { getDropStorageConfig, getDropStorageSafeStatus } from "@/app/lib/drop/storage/dropStorageConfig";
+import { listDropS3Objects } from "@/app/lib/drop/storage/dropS3Storage";
 import { probeBuildNodes } from "./build-nodes";
 import type { BuildNodeSnapshot } from "./build-nodes";
-import type { DeveloperGridSystemHealthV2, DimprominAiHealthAdapter, LegacyHealthMetric, LegacyHealthServer, LegacyHealthStorage } from "./system-health-model";
+import type { DeveloperGridSystemHealthV2, DimprominAiHealthAdapter, LegacyHealthMetric, LegacyHealthServer, LegacyHealthStorage, LegacyHealthTraffic } from "./system-health-model";
 import { normalizeInfrastructureNodes } from "./system-health-adapters";
 import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./system-health-severity";
 import { applyDimprominAiAdapter } from "./system-health-ai";
@@ -14,14 +20,20 @@ const SERVER_TTL_MS = 30_000;
 const PROTECTED_SERVER_TTL_MS = 60_000;
 const DISK_TTL_MS = 60_000;
 const STORAGE_TTL_MS = 300_000;
+const TRAFFIC_TTL_MS = 300_000;
 const AI_TTL_MS = 30_000;
 const PROD_URL = "https://license.dimpro.hu/admin/szerver";
 const DB_HOST = "213.160.68.33";
 const DB_PORT = 5432;
+const HETZNER_INCLUDED_STORAGE_BYTES = 1_000_000_000_000;
+const HETZNER_STORAGE_BOX_ALIAS = "dimpro-backup-bx11";
+const SUPABASE_MANAGEMENT_API = "https://api.supabase.com";
+const execFileAsync = promisify(execFile);
 
 export type HealthMetric = LegacyHealthMetric;
 export type HealthServer = LegacyHealthServer;
 export type HealthStorage = LegacyHealthStorage;
+export type HealthTraffic = LegacyHealthTraffic;
 export type DeveloperGridSystemHealth = DeveloperGridSystemHealthV2;
 
 type Cache<T> = { value: T | null; expiresAt: number };
@@ -29,6 +41,7 @@ const serverCache: Cache<HealthServer[]> = { value: null, expiresAt: 0 };
 const protectedServerCache: Cache<HealthServer[]> = { value: null, expiresAt: 0 };
 const diskCache: Cache<ReturnType<typeof localDiskMetric>> = { value: null, expiresAt: 0 };
 const storageCache: Cache<HealthStorage[]> = { value: null, expiresAt: 0 };
+const trafficCache: Cache<HealthTraffic[]> = { value: null, expiresAt: 0 };
 
 const emptyMetric = (): HealthMetric => ({
   cpuPercent: null, load1: null, cores: null,
@@ -163,23 +176,184 @@ async function refreshServers(disk: ReturnType<typeof localDiskMetric>) {
   return [await localServer(disk), ...nodes.map(buildServer)];
 }
 
+
+type BucketUsageSample = { configured: boolean; ok: boolean; usedBytes: number; objectCount: number; truncated: boolean; error: string | null; endpoint: string | null; bucket: string | null };
+
+async function measureDriveBucket(): Promise<BucketUsageSample> {
+  const config = getDriveObjectStorageConfig();
+  const safe = getDriveObjectStorageSafeStatus(config);
+  if (!safe.storageConfigured || !config.s3 || !config.bucket) return { configured: false, ok: false, usedBytes: 0, objectCount: 0, truncated: false, error: safe.warning, endpoint: config.s3?.endpoint || null, bucket: config.bucket || null };
+  try {
+    let continuationToken: string | null = null;
+    let usedBytes = 0;
+    let objectCount = 0;
+    let truncated = false;
+    for (let page = 0; page < 100; page += 1) {
+      const result = await listDriveS3Objects({ maxKeys: 1000, continuationToken });
+      usedBytes += result.objects.reduce((sum, item) => sum + Number(item.sizeBytes || 0), 0);
+      objectCount += result.objects.length;
+      continuationToken = result.nextContinuationToken;
+      truncated = result.truncated;
+      if (!result.truncated || !continuationToken) break;
+    }
+    return { configured: true, ok: true, usedBytes, objectCount, truncated, error: null, endpoint: config.s3.endpoint, bucket: config.bucket };
+  } catch (error) {
+    return { configured: true, ok: false, usedBytes: 0, objectCount: 0, truncated: false, error: error instanceof Error ? error.message.slice(0, 180) : "Drive S3 mérési hiba.", endpoint: config.s3.endpoint, bucket: config.bucket };
+  }
+}
+
+async function measureDropBucket(): Promise<BucketUsageSample> {
+  const config = getDropStorageConfig();
+  const safe = getDropStorageSafeStatus(config);
+  if (!safe.storageConfigured || config.provider !== "s3-compatible" || !config.s3 || !config.bucket) return { configured: false, ok: false, usedBytes: 0, objectCount: 0, truncated: false, error: "A Drop S3 tárhely nincs mérhető állapotban.", endpoint: config.s3?.endpoint || null, bucket: config.bucket || null };
+  try {
+    let continuationToken: string | null = null;
+    let usedBytes = 0;
+    let objectCount = 0;
+    let truncated = false;
+    for (let page = 0; page < 100; page += 1) {
+      const result = await listDropS3Objects({ maxKeys: 1000, bucket: config.bucket, continuationToken });
+      usedBytes += result.objects.reduce((sum, item) => sum + Number(item.sizeBytes || 0), 0);
+      objectCount += result.objects.length;
+      continuationToken = result.nextContinuationToken;
+      truncated = result.truncated;
+      if (!result.truncated || !continuationToken) break;
+    }
+    return { configured: true, ok: true, usedBytes, objectCount, truncated, error: null, endpoint: config.s3.endpoint, bucket: config.bucket };
+  } catch (error) {
+    return { configured: true, ok: false, usedBytes: 0, objectCount: 0, truncated: false, error: error instanceof Error ? error.message.slice(0, 180) : "Drop S3 mérési hiba.", endpoint: config.s3.endpoint, bucket: config.bucket };
+  }
+}
+
+function isHetznerObjectEndpoint(endpoint: string | null) {
+  try { return new URL(endpoint || "").hostname.toLowerCase().endsWith(".your-objectstorage.com"); }
+  catch { return false; }
+}
+
+async function inspectHetznerObjectStorage(): Promise<HealthStorage> {
+  const [drive, drop] = await Promise.all([measureDriveBucket(), measureDropBucket()]);
+  const configured = [drive, drop].filter((item) => item.configured);
+  const successful = configured.filter((item) => item.ok);
+  const now = new Date().toISOString();
+  if (!configured.length) return { id: "hetzner-object-storage", label: "HETZNER OBJECT STORAGE", state: "UNKNOWN", totalBytes: HETZNER_INCLUDED_STORAGE_BYTES, usedBytes: null, availableBytes: null, percent: null, objectCount: null, refreshedAt: now, reason: "A DIMPRO Hetzner Object Storage bucketek nincsenek konfigurálva ebben a runtime-ban.", source: "HETZNER_S3_READONLY", quality: "UNKNOWN" };
+  if (!successful.length) return { id: "hetzner-object-storage", label: "HETZNER OBJECT STORAGE", state: "DEGRADED", totalBytes: HETZNER_INCLUDED_STORAGE_BYTES, usedBytes: null, availableBytes: null, percent: null, objectCount: null, refreshedAt: now, reason: configured.map((item) => item.error).filter(Boolean).join(" · ").slice(0, 360), source: "HETZNER_S3_READONLY", quality: "UNKNOWN" };
+  const usedBytes = successful.reduce((sum, item) => sum + item.usedBytes, 0);
+  const objectCount = successful.reduce((sum, item) => sum + item.objectCount, 0);
+  const truncated = successful.some((item) => item.truncated);
+  const hetzner = successful.some((item) => isHetznerObjectEndpoint(item.endpoint));
+  const state = successful.length === configured.length && !truncated ? "READY" : "DEGRADED";
+  const baseNote = hetzner ? "Az 1 TB Hetzner báziskeret account-szintű közös keret, nem bucket hard limit." : "A konfigurált S3 bucketek összesített read-only foglaltsága.";
+  return {
+    id: "hetzner-object-storage", label: "HETZNER OBJECT STORAGE", state,
+    totalBytes: HETZNER_INCLUDED_STORAGE_BYTES, usedBytes, availableBytes: Math.max(0, HETZNER_INCLUDED_STORAGE_BYTES - usedBytes), percent: Math.round((usedBytes / HETZNER_INCLUDED_STORAGE_BYTES) * 100_000) / 1_000, objectCount,
+    refreshedAt: now, reason: `${successful.length}/${configured.length} DIMPRO bucket mérve · ${objectCount} objektum${truncated ? "+" : ""}. ${baseNote}`, source: "HETZNER_S3_READONLY", quality: state === "READY" ? "LIVE" : "PARTIAL",
+  };
+}
+
+async function inspectHetznerStorageBox(): Promise<HealthStorage> {
+  const now = new Date().toISOString();
+  try {
+    const { stdout } = await execFileAsync("/usr/bin/ssh", [
+      "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "ConnectionAttempts=1", "-o", "StrictHostKeyChecking=yes",
+      HETZNER_STORAGE_BOX_ALIAS,
+      "df -B1 --output=size,used,avail,pcent /home",
+    ], { timeout: 12_000, maxBuffer: 64 * 1024, encoding: "utf8" });
+    const lastLine = String(stdout || "").trim().split(/\r?\n/).filter(Boolean).at(-1) || "";
+    const match = lastLine.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)%/);
+    const totalBytes = Number(match?.[1]);
+    const usedBytes = Number(match?.[2]);
+    const availableBytes = Number(match?.[3]);
+    const percent = Number(match?.[4]);
+    if (![totalBytes, usedBytes, availableBytes, percent].every(Number.isFinite) || totalBytes <= 0) throw new Error("BX11 df válasz érvénytelen.");
+    return { id: "hetzner-bx11", label: "HETZNER BX11 STORAGE BOX", state: "READY", totalBytes, usedBytes, availableBytes, percent, refreshedAt: now, reason: "Read-only SSH df mérés a BX11 backup tárhelyen.", source: "HETZNER_STORAGE_BOX_READONLY", quality: "LIVE" };
+  } catch (error) {
+    return { id: "hetzner-bx11", label: "HETZNER BX11 STORAGE BOX", state: "DEGRADED", totalBytes: null, usedBytes: null, availableBytes: null, percent: null, refreshedAt: now, reason: error instanceof Error ? error.message.slice(0, 180) : "BX11 mérési hiba.", source: "HETZNER_STORAGE_BOX_READONLY", quality: "UNKNOWN" };
+  }
+}
+
+function supabaseProjectRef() {
+  const explicit = process.env.SUPABASE_PROJECT_REF?.trim() || process.env.BENJADMIN_SUPABASE_PROJECT_REF?.trim() || "";
+  if (/^[a-z0-9]{8,40}$/i.test(explicit)) return explicit;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+  try { const host = new URL(url).hostname; const match = host.match(/^([a-z0-9]+)\.supabase\.co$/i); return match?.[1] || null; }
+  catch { return null; }
+}
+
+function configuredBytes(name: string) {
+  const value = Number(process.env[name]?.trim() || "");
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+}
+
+async function supabaseManagementJson(pathname: string, token: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`${SUPABASE_MANAGEMENT_API}${pathname}`, { method: "GET", headers: { authorization: `Bearer ${token}`, accept: "application/json" }, cache: "no-store", signal: controller.signal });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(`Supabase Management API HTTP ${response.status}${payload?.message ? ` · ${String(payload.message).slice(0, 120)}` : ""}`);
+    return payload;
+  } finally { clearTimeout(timer); }
+}
+
+function sumUsageRows(rows: unknown, key: string) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((sum, row) => sum + (row && typeof row === "object" && Number.isFinite(Number((row as Record<string, unknown>)[key])) ? Number((row as Record<string, unknown>)[key]) : 0), 0);
+}
+
+async function inspectSupabaseTraffic(): Promise<HealthTraffic> {
+  const now = new Date().toISOString();
+  const projectRef = supabaseProjectRef();
+  const token = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN?.trim() || "";
+  const egressBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_BYTES");
+  const cachedEgressBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_BYTES");
+  const egressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_QUOTA_BYTES");
+  const cachedEgressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_QUOTA_BYTES");
+  const egressPercent = egressBytes !== null && egressQuotaBytes !== null ? pct(egressBytes, egressQuotaBytes) : null;
+  const cachedEgressPercent = cachedEgressBytes !== null && cachedEgressQuotaBytes !== null ? pct(cachedEgressBytes, cachedEgressQuotaBytes) : null;
+  const base = { id: "supabase-traffic" as const, label: "SUPABASE FORGALOM", projectRef, interval: "MANAGEMENT_API", egressBytes, cachedEgressBytes, egressQuotaBytes, cachedEgressQuotaBytes, egressPercent, cachedEgressPercent };
+  if (!projectRef) return { ...base, state: "NOT_CONNECTED", reason: "Supabase project ref nem azonosítható.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
+  if (!token) return { ...base, state: "NOT_CONNECTED", reason: "A Supabase forgalom read-only lekéréséhez BENJADMIN_SUPABASE_ANALYTICS_TOKEN szükséges (analytics_usage_read). A service-role kulcsot erre nem használjuk.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
+  try {
+    const [countsPayload, requestPayload] = await Promise.all([
+      supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-counts`, token),
+      supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-requests-count`, token),
+    ]);
+    const rows = countsPayload?.result;
+    const restRequests = sumUsageRows(rows, "total_rest_requests");
+    const authRequests = sumUsageRows(rows, "total_auth_requests");
+    const storageRequests = sumUsageRows(rows, "total_storage_requests");
+    const realtimeRequests = sumUsageRows(rows, "total_realtime_requests");
+    const explicitCount = Array.isArray(requestPayload?.result) ? Number(requestPayload.result[0]?.count) : null;
+    const apiRequests = Number.isFinite(explicitCount) ? explicitCount : restRequests + authRequests + storageRequests + realtimeRequests;
+    const egressKnown = egressBytes !== null || cachedEgressBytes !== null;
+    return { ...base, state: "READY", reason: egressKnown ? "Supabase Management API request-forgalom + konfigurált egress snapshot." : "Supabase Management API request-forgalom élő. A pontos billing-egresshez külön usage snapshot/adatforrás szükséges.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "LIVE", apiRequests, restRequests, authRequests, storageRequests, realtimeRequests };
+  } catch (error) {
+    return { ...base, state: "DEGRADED", reason: error instanceof Error ? error.message.slice(0, 220) : "Supabase analytics lekérési hiba.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
+  }
+}
+
 export async function getDeveloperGridSystemHealth(aiAdapter: DimprominAiHealthAdapter | null = null): Promise<DeveloperGridSystemHealth> {
   const now = Date.now();
   if (!diskCache.value || diskCache.expiresAt <= now) { diskCache.value = localDiskMetric(); diskCache.expiresAt = now + DISK_TTL_MS; }
   if (!serverCache.value || serverCache.expiresAt <= now) { serverCache.value = await refreshServers(diskCache.value); serverCache.expiresAt = now + SERVER_TTL_MS; }
   if (!protectedServerCache.value || protectedServerCache.expiresAt <= now) { protectedServerCache.value = await protectedServers(); protectedServerCache.expiresAt = now + PROTECTED_SERVER_TTL_MS; }
   if (!storageCache.value || storageCache.expiresAt <= now) {
-    storageCache.value = [{ id: "dev-root", label: "DEV TÁRHELY", state: diskCache.value.total !== null ? "READY" : "UNKNOWN", totalBytes: diskCache.value.total, usedBytes: diskCache.value.used, percent: diskCache.value.percent, refreshedAt: diskCache.value.refreshedAt }];
+    storageCache.value = await Promise.all([inspectHetznerObjectStorage(), inspectHetznerStorageBox()]);
     storageCache.expiresAt = now + STORAGE_TTL_MS;
+  }
+  if (!trafficCache.value || trafficCache.expiresAt <= now) {
+    trafficCache.value = [await inspectSupabaseTraffic()];
+    trafficCache.expiresAt = now + TRAFFIC_TTL_MS;
   }
   const servers = [...serverCache.value, ...protectedServerCache.value].map((server) => ({ ...server, metrics: { ...server.metrics } }));
   const storage = storageCache.value.map((item) => ({ ...item }));
-  const normalizedNodes = normalizeInfrastructureNodes(servers, storage, now);
+  const traffic = trafficCache.value.map((item) => ({ ...item }));
+  const normalizedNodes = normalizeInfrastructureNodes(servers, storage, traffic, now);
   const nodes = await applyDimprominAiAdapter(normalizedNodes, aiAdapter, now);
   const operations = await getInfrastructureOperationalContext();
   return {
     schemaVersion: 2, environment: "DEV", productionAccess: "DENY", generatedAt: new Date().toISOString(),
-    refreshPolicy: { serversMs: SERVER_TTL_MS, protectedServersMs: PROTECTED_SERVER_TTL_MS, diskMs: DISK_TTL_MS, storageMs: STORAGE_TTL_MS, aiMs: AI_TTL_MS, source: "SERVER_CACHE_NO_SUPABASE_POLLING" },
-    nodes, overall: aggregateInfrastructureHealth(nodes), alerts: infrastructureHealthAlerts(nodes), operations, servers, storage,
+    refreshPolicy: { serversMs: SERVER_TTL_MS, protectedServersMs: PROTECTED_SERVER_TTL_MS, diskMs: DISK_TTL_MS, storageMs: STORAGE_TTL_MS, trafficMs: TRAFFIC_TTL_MS, aiMs: AI_TTL_MS, source: "SERVER_CACHE_NO_SUPABASE_POLLING" },
+    nodes, overall: aggregateInfrastructureHealth(nodes), alerts: infrastructureHealthAlerts(nodes), operations, servers, storage, traffic,
   };
 }

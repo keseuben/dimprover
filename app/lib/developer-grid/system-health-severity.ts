@@ -34,6 +34,14 @@ function diskSeverity(percent: number | null): InfrastructureHealthSeverity {
   return "OK";
 }
 
+function trafficSeverity(percent: number | null): InfrastructureHealthSeverity {
+  if (percent === null) return "OK";
+  if (percent >= 95) return "CRITICAL";
+  if (percent >= 85) return "WARNING";
+  if (percent >= 70) return "INFO";
+  return "OK";
+}
+
 function psiSeverity(someAvg60: number | null, fullAvg60: number | null): InfrastructureHealthSeverity {
   if ((fullAvg60 ?? 0) >= 25 || (someAvg60 ?? 0) >= 35) return "CRITICAL";
   if ((fullAvg60 ?? 0) >= 5 || (someAvg60 ?? 0) >= 10) return "WARNING";
@@ -65,6 +73,7 @@ export function evaluateInfrastructureNode(input: InfrastructureHealthNode, nowM
   severity = maxSeverity(severity, ramSeverity(numericMetric(node, "memoryPercent")));
   severity = maxSeverity(severity, swapSeverity(swapPercent));
   severity = maxSeverity(severity, diskSeverity(numericMetric(node, "diskPercent")));
+  severity = maxSeverity(severity, trafficSeverity(numericMetric(node, "usagePercent")));
   severity = maxSeverity(severity, psiSeverity(numericMetric(node, "memoryPsiSomeAvg60"), numericMetric(node, "memoryPsiFullAvg60")));
   if (stale) severity = maxSeverity(severity, "WARNING");
   const state: InfrastructureHealthState = stale && node.state === "READY" ? "DEGRADED" : node.state;

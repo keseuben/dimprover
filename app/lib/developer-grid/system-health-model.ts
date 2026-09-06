@@ -1,4 +1,4 @@
-export type InfrastructureNodeKind = "DEV" | "BUILD" | "PROD" | "DATABASE" | "STORAGE" | "AI";
+export type InfrastructureNodeKind = "DEV" | "BUILD" | "PROD" | "DATABASE" | "STORAGE" | "SERVICE" | "AI";
 
 export type InfrastructureHealthState =
   | "READY"
@@ -96,11 +96,39 @@ export type LegacyHealthServer = {
 export type LegacyHealthStorage = {
   id: string;
   label: string;
-  state: "READY" | "UNKNOWN";
+  state: "READY" | "DEGRADED" | "UNKNOWN";
   totalBytes: number | null;
   usedBytes: number | null;
   percent: number | null;
   refreshedAt: string | null;
+  objectCount?: number | null;
+  availableBytes?: number | null;
+  reason?: string | null;
+  source?: string | null;
+  quality?: InfrastructureHealthQuality;
+};
+
+export type LegacyHealthTraffic = {
+  id: "supabase-traffic";
+  label: string;
+  state: "READY" | "DEGRADED" | "NOT_CONNECTED" | "UNKNOWN";
+  reason: string;
+  refreshedAt: string | null;
+  source: string;
+  quality: InfrastructureHealthQuality;
+  projectRef: string | null;
+  interval: string;
+  apiRequests: number | null;
+  restRequests: number | null;
+  authRequests: number | null;
+  storageRequests: number | null;
+  realtimeRequests: number | null;
+  egressBytes: number | null;
+  cachedEgressBytes: number | null;
+  egressQuotaBytes: number | null;
+  cachedEgressQuotaBytes: number | null;
+  egressPercent: number | null;
+  cachedEgressPercent: number | null;
 };
 
 export type DimprominAiHealthMetrics = {
@@ -161,6 +189,7 @@ export type DeveloperGridSystemHealthV2 = {
     protectedServersMs: number;
     diskMs: number;
     storageMs: number;
+    trafficMs: number;
     aiMs: number;
     source: "SERVER_CACHE_NO_SUPABASE_POLLING";
   };
@@ -170,4 +199,5 @@ export type DeveloperGridSystemHealthV2 = {
   operations: InfrastructureOperationalContext;
   servers: LegacyHealthServer[];
   storage: LegacyHealthStorage[];
+  traffic: LegacyHealthTraffic[];
 };

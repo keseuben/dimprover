@@ -558,6 +558,7 @@ function renderLive() {
 }
 
 function formatBytes(value) {
+  if (value === null || value === undefined || value === "") return "—";
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
   const units = ["B","KB","MB","GB","TB"]; let n = bytes; let i = 0;
@@ -566,7 +567,42 @@ function formatBytes(value) {
 }
 
 function metricText(value, suffix = "%") {
-  const n = Number(value); return Number.isFinite(n) ? `${Math.round(n * 10) / 10}${suffix}` : "—";
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const rounded = Math.abs(n) > 0 && Math.abs(n) < 0.1 ? Math.round(n * 1000) / 1000 : Math.round(n * 10) / 10;
+  return `${rounded}${suffix}`;
+}
+
+function numericMetric(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function capacityPercent(used, total, percent) {
+  const u = numericMetric(used);
+  const t = numericMetric(total);
+  const p = numericMetric(percent);
+  if (p !== null) return p;
+  return u !== null && t !== null && t > 0 ? Math.round((u / t) * 1000) / 10 : null;
+}
+
+function capacityMetricText(used, total, percent) {
+  const u = numericMetric(used);
+  const t = numericMetric(total);
+  const p = capacityPercent(used, total, percent);
+  const capacity = u !== null && t !== null && t > 0 ? `${formatBytes(u)} / ${formatBytes(t)}` : "—";
+  return p !== null ? `${capacity} · ${metricText(p)}` : capacity;
+}
+
+function cpuMetricText(percent, cores) {
+  const p = numericMetric(percent);
+  const c = numericMetric(cores);
+  if (p === null) return "—";
+  if (c === null || c <= 0) return metricText(p);
+  const usedCores = Math.round((p / 100) * c * 10) / 10;
+  return `${metricText(p)} · ≈${usedCores} / ${c} vCPU`;
 }
 
 function escapeHtml(value) {
@@ -579,6 +615,13 @@ function formatHealthTimestamp(value) {
   const parsed = value ? new Date(value) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) return "—";
   return new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(parsed);
+}
+
+function formatCount(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("hu-HU", { maximumFractionDigits: 0 }).format(n);
 }
 
 function healthOverallTone(health) {
@@ -608,9 +651,16 @@ function renderSystemHealth() {
   serverStatus("prod-vps", "#footerProdDot", "#footerProdStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
   serverStatus("db-vps", "#footerDbDot", "#footerDbStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
 
-  const storage = health?.storage?.[0] || null;
-  setFooterDot("#footerStorageDot", storage?.state === "READY" ? "online" : storage || authBlocked ? "warning" : "offline");
-  if ($("#footerStorageStatus")) $("#footerStorageStatus").textContent = storage && Number.isFinite(Number(storage.percent)) ? metricText(storage.percent) : unavailableLabel;
+  const storages = Array.isArray(health?.storage) ? health.storage : [];
+  const objectStorage = storages.find((item) => item.id === "hetzner-object-storage") || null;
+  const bx11Storage = storages.find((item) => item.id === "hetzner-bx11") || null;
+  const storageHealthy = storages.length > 0 && storages.every((item) => item.state === "READY");
+  setFooterDot("#footerStorageDot", storageHealthy ? "online" : storages.length || authBlocked ? "warning" : "offline");
+  if ($("#footerStorageStatus")) {
+    const obj = objectStorage && Number.isFinite(Number(objectStorage.percent)) ? `OBJ ${metricText(objectStorage.percent)}` : null;
+    const bx = bx11Storage && Number.isFinite(Number(bx11Storage.percent)) ? `BX11 ${metricText(bx11Storage.percent)}` : null;
+    $("#footerStorageStatus").textContent = [obj, bx].filter(Boolean).join(" · ") || unavailableLabel;
+  }
 
   const overallTone = healthOverallTone(health);
   const overall = $("#systemHealthOverall");
@@ -635,12 +685,25 @@ function renderSystemHealth() {
         const busy = server?.state === "BUSY";
         const stateClass = ready ? "is-ready" : busy ? "is-info" : "is-warning";
         const stateText = ready ? "READY" : busy ? "BUSY" : String(server?.state || "UNKNOWN");
-        return `<article class="health-column" data-health-state="${escapeHtml(stateText)}"><header><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${stateClass}">${escapeHtml(stateText)}</span></header><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${metricText(m.cpuPercent)}</dd><dt>RAM</dt><dd>${metricText(m.memoryPercent)}</dd><dt>Swap</dt><dd>${m.swapTotalBytes ? `${formatBytes(m.swapUsedBytes)} / ${formatBytes(m.swapTotalBytes)}` : "—"}</dd><dt>Tárhely</dt><dd>${metricText(m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
+        return `<article class="health-column" data-health-state="${escapeHtml(stateText)}"><header><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${stateClass}">${escapeHtml(stateText)}</span></header><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${cpuMetricText(m.cpuPercent, m.cores)}</dd><dt>RAM</dt><dd>${capacityMetricText(m.memoryUsedBytes, m.memoryTotalBytes, m.memoryPercent)}</dd><dt>Swap</dt><dd>${capacityMetricText(m.swapUsedBytes, m.swapTotalBytes, m.swapPercent)}</dd><dt>Tárhely</dt><dd>${capacityMetricText(m.diskUsedBytes, m.diskTotalBytes, m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
       };
       const ordered = ["dev-vps", "build01", "build02", "prod-vps", "db-vps"].map(healthServer).filter(Boolean);
-      const storageHtml = (health.storage || []).map((item) => `<article class="health-column" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "TÁRHELY")}</h4><span class="health-state ${item.state === "READY" ? "is-ready" : "is-warning"}">${escapeHtml(item.state || "UNKNOWN")}</span></header><dl><dt>Használt</dt><dd>${formatBytes(item.usedBytes)}</dd><dt>Kapacitás</dt><dd>${formatBytes(item.totalBytes)}</dd><dt>Foglaltság</dt><dd>${metricText(item.percent)}</dd><dt>Forrás</dt><dd>DEV root</dd></dl><p>Frissítve: ${escapeHtml(formatHealthTimestamp(item.refreshedAt))}</p></article>`).join("");
+      const storageHtml = (health.storage || []).map((item) => {
+        const stateClass = item.state === "READY" ? "is-ready" : item.state === "DEGRADED" ? "is-warning" : "is-info";
+        const stateText = item.state === "READY" ? "READY" : item.state === "DEGRADED" ? "ELLENŐRIZD" : "NINCS ADAT";
+        const objectRow = Number.isFinite(Number(item.objectCount)) ? `<dt>Objektum</dt><dd>${formatCount(item.objectCount)} db</dd>` : "";
+        return `<article class="health-column" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "TÁRHELY")}</h4><span class="health-state ${stateClass}">${stateText}</span></header><dl><dt>Tárhely</dt><dd>${capacityMetricText(item.usedBytes, item.totalBytes, item.percent)}</dd><dt>Szabad</dt><dd>${formatBytes(item.availableBytes)}</dd>${objectRow}<dt>Forrás</dt><dd>${escapeHtml(item.source || "read-only")}</dd></dl><p>${escapeHtml(item.reason || `Frissítve: ${formatHealthTimestamp(item.refreshedAt)}`)}</p></article>`;
+      }).join("");
+      const trafficHtml = (health.traffic || []).map((item) => {
+        const maxPercent = Math.max(Number(item.egressPercent || 0), Number(item.cachedEgressPercent || 0));
+        const stateClass = maxPercent >= 95 ? "is-critical" : maxPercent >= 85 || item.state === "DEGRADED" ? "is-warning" : item.state === "READY" ? "is-ready" : "is-info";
+        const stateText = maxPercent >= 95 ? "KRITIKUS" : maxPercent >= 85 ? "MAGAS" : item.state === "READY" ? "LIVE" : item.state === "NOT_CONNECTED" ? "NINCS TOKEN" : "ELLENŐRIZD";
+        const egressText = item.egressBytes != null || item.egressQuotaBytes != null ? capacityMetricText(item.egressBytes, item.egressQuotaBytes, item.egressPercent) : "—";
+        const cachedText = item.cachedEgressBytes != null || item.cachedEgressQuotaBytes != null ? capacityMetricText(item.cachedEgressBytes, item.cachedEgressQuotaBytes, item.cachedEgressPercent) : "—";
+        return `<article class="health-column health-column--traffic" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "SUPABASE FORGALOM")}</h4><span class="health-state ${stateClass}">${stateText}</span></header><dl><dt>API kérés</dt><dd>${formatCount(item.apiRequests)}</dd><dt>REST</dt><dd>${formatCount(item.restRequests)}</dd><dt>Auth</dt><dd>${formatCount(item.authRequests)}</dd><dt>Storage</dt><dd>${formatCount(item.storageRequests)}</dd><dt>Realtime</dt><dd>${formatCount(item.realtimeRequests)}</dd><dt>Egress</dt><dd>${egressText}</dd><dt>Cached</dt><dd>${cachedText}</dd></dl><p>${escapeHtml(item.reason || "")}</p></article>`;
+      }).join("");
       const connectionHtml = `<article class="health-column" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><header><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-info"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span></header><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Central lock</dt><dd>${escapeHtml(health.operations?.centralLock || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
-      columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + connectionHtml;
+      columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + trafficHtml + connectionHtml;
     } else if (authBlocked) {
       const pairing = state.connection.pairing || { status: "idle" };
       const pairingBusy = ["claiming", "pending_approval"].includes(pairing.status);
@@ -663,7 +726,7 @@ function renderSystemHealth() {
   const updated = $("#systemHealthUpdated");
   if (updated) {
     updated.textContent = health
-      ? `Frissítve: ${formatHealthTimestamp(health.generatedAt)} · szerver 30 mp · PROD/DB 60 mp · tárhely 5 perc`
+      ? `Frissítve: ${formatHealthTimestamp(health.generatedAt)} · szerver 30 mp · PROD/DB 60 mp · külső tárhely / forgalom 5 perc`
       : (state.systemHealth.error || "Frissítésre vár");
   }
 

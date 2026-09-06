@@ -151,3 +151,15 @@ A Developer Grid alsó státuszsávja és a System Health réteg a Windows nagy 
 - Remote Build Executor V2 MCP transport: **28/28 PASS**;
 - Health Core V2: **41/41 PASS**;
 - Foundation: **54 required files / 63 invariants PASS**.
+
+## v0.1.17 System Health – külső tárhely és Supabase forgalom – 2026-09-06
+
+A Windows acceptance alapján a System Health nagy kijelzős olvashatósága tovább erősödött: a részletes kártyák címei, státuszai és metrikái nagyobb tipográfiát kaptak, az erőforrás-oszlopokat jól látható függőleges separator választja el. CPU-nál a terhelési százalék mellett a teljes vCPU-szám és becsült használt vCPU jelenik meg; RAM, Swap és szerverlemez esetén `használt / teljes · %` formátum az alap.
+
+A korábbi külön `DEV TÁRHELY` kártya megszűnik mint duplikált lokális lemeznézet. A DEV VPS saját lemeze továbbra is a DEV VPS kártyában látszik. A külön infrastruktúra-kártyák helyette:
+
+- **HETZNER OBJECT STORAGE** – a konfigurált DIMPRO Drive + Drop S3 bucketek read-only összesítése, használt/1 TB account-szintű báziskeret, szabad érték, százalék és objektumszám. Az 1 TB nem bucket hard limit.
+- **HETZNER BX11 STORAGE BOX** – a fix `dimpro-backup-bx11` SSH alias read-only `df` méréséből kapacitás, használt, szabad és százalék. Tetszőleges shell/írás nincs.
+- **SUPABASE FORGALOM** – Supabase Management API read-only analytics adapter. Request count metrikákhoz külön `analytics_usage_read` jogosultságú `BENJADMIN_SUPABASE_ANALYTICS_TOKEN` szükséges. A service-role key nem monitoring credential. Hiányzó tokennél explicit `NINCS TOKEN`, nem hamis nulla érték jelenik meg. Egress/cached egress csak hiteles usage snapshotból jelenhet meg; 85% felett WARNING, 95% felett CRITICAL.
+
+Élő DEV ellenőrzésben a Hetzner Object Storage mindkét DIMPRO bucketje elérhető volt, összesen 88 objektummal; a BX11 read-only kapacitásmérés is működik. A Supabase project ref azonosítható, de külön Management API analytics token jelenleg nincs konfigurálva, ezért a live forgalmi kártya helyesen fail-closed `NINCS TOKEN` állapotú marad.
