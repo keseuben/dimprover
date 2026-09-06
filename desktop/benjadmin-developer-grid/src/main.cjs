@@ -760,7 +760,10 @@ async function applyWorkspaceStandbyLock(cell, view, shouldLock) {
     const key = ${JSON.stringify(key)};
     const shouldLock = ${shouldLock ? "true" : "false"};
     if (!shouldLock) {
-      try { sessionStorage.setItem(key, "1"); } catch {}
+      // Active work always resets any previous manual standby bypass.
+      // When the task later becomes terminal, the next live snapshot can restore
+      // the standby cover automatically instead of inheriting a stale unlock.
+      try { sessionStorage.removeItem(key); } catch {}
       existing?.remove();
       return { locked:false, reason:"active-task" };
     }

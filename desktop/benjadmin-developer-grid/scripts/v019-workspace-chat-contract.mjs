@@ -58,6 +58,9 @@ check(main.includes('rgba(${accent.rgb},0.20)') && main.includes('brightness(94%
 check(main.includes("workerVisualAccent(cell)"),"standby overlay follows worker avatar accent");
 check(main.includes("sessionStorage.setItem(key,\"1\")"),"avatar click unlock persists for current app tab session");
 check(main.includes("syncWorkspaceStandbyLocks(snapshot)"),"live snapshot automatically unlocks assigned worker");
+check(main.includes("sessionStorage.removeItem(key)") && main.includes('reason:"active-task"'),"active assignment clears stale manual standby bypass");
+check(main.includes('sessionStorage.getItem(key) === "1"') && main.includes('reason:"manual-unlock"'),"manual standby unlock persists only while worker remains inactive");
+check(main.includes('["completed", "closed", "cancelled", "canceled", "failed"]'),"terminal task state returns worker to standby eligibility");
 check(main.includes('cell.id === "central"'),"DevminAI central view excluded from primary workspace standby lock");
 check(!main.includes('NEW_PROJECT_CHAT") await view.webContents.loadURL'),"Developer Grid does not auto-create external ChatGPT project chats");
 

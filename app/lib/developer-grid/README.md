@@ -156,3 +156,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - Egy olvasási/lock hiba az első forráson nem némítja el az attesztációt; a második fizikai másolat SHA-256 + bájtméret alapján ugyanúgy bizonyíthatja a release artifactot.
 - A renderer esemény csak `REPORTED` / `UNAVAILABLE` státuszt kap; fájlútvonal, token és SHA nem kerül ki a heartbeat eseménybe.
 - A szerveroldali Physical Windows E2E gate továbbra is az immutable publikus manifest SHA-256 + bytes értékével hasonlít, és PROD DENY marad.
+
+
+## v0.1.28 Standby cover automatic return
+
+- A készenléti takaró aktív worker-task alatt továbbra sem látszik.
+- Aktív task belépésekor a runtime törli a korábbi kézi készenléti feloldást, ezért az nem maradhat stale bypass a task lezárása után.
+- Amikor a worker taskja `completed`, `closed`, `cancelled/canceled` vagy `failed` állapotba kerül, a következő DELTA/live snapshot újraértékeli a workert és automatikusan visszateszi a `MUNKATÉR KÉSZENLÉTBEN` takarót.
+- Ha nincs aktív task és a felhasználó kézzel kattint az avatárra, a feloldás továbbra is az aktuális ChatGPT-tab session idejére megmarad.
+- A Central Core továbbra is kivétel a standby overlay alól; PROD DENY változatlan.

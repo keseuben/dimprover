@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here=path.dirname(fileURLToPath(import.meta.url));
+const root=path.resolve(here,"..");
+const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
+let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+check("inactive worker is requested to lock",()=>assert.match(main,/applyWorkspaceStandbyLock\(cell, view, !workerHasAssignedDevelopment/));
+check("active assignment clears stale manual bypass",()=>assert.match(main,/sessionStorage\.removeItem\(key\)[\s\S]{0,160}reason:"active-task"/));
+check("manual avatar unlock still persists during idle session",()=>assert.match(main,/sessionStorage\.setItem\(key,"1"\)[\s\S]{0,220}overlay\.animate/));
+check("terminal task statuses are not considered assigned development",()=>assert.match(main,/!\["completed", "closed", "cancelled", "canceled", "failed"\]\.includes\(status\)/));
+check("each live snapshot re-evaluates standby locks",()=>assert.match(main,/onSnapshot\(snapshot\)[\s\S]{0,180}syncWorkspaceStandbyLocks\(snapshot\)/));
+console.log(`Developer Grid standby auto-return contract PASS · ${n}/${n}`);
