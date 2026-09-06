@@ -3,8 +3,8 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readNodeTelemetryKey } from "./protected-telemetry-enrollment";
 
-const DEFAULT_KEY_FILE = "/root/.dimpro-secrets/protected-telemetry/ingest.key";
 export const DEFAULT_PROTECTED_SNAPSHOT_FILE = "/srv/dimpro-dev/coordination/health-snapshots/protected-nodes.json";
 const MAX_SAMPLE_AGE_MS = 5 * 60_000;
 const MAX_FUTURE_SKEW_MS = 60_000;
@@ -48,18 +48,12 @@ function safeEqual(left: string, right: string) {
   const a = Buffer.from(left); const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
 }
-function keyFile() { return process.env.BENJADMIN_PROTECTED_TELEMETRY_INGEST_KEY_FILE?.trim() || DEFAULT_KEY_FILE; }
 export function protectedSnapshotFile() { return process.env.BENJADMIN_INFRA_SNAPSHOT_FILE?.trim() || DEFAULT_PROTECTED_SNAPSHOT_FILE; }
-async function configuredKey() {
-  const direct = process.env.BENJADMIN_PROTECTED_TELEMETRY_INGEST_KEY?.trim();
-  if (direct) return direct;
-  try { return (await readFile(keyFile(), "utf8")).trim(); } catch { return ""; }
-}
-export async function isProtectedTelemetryAuthorized(headers: Headers) {
-  const configured = await configuredKey();
-  if (configured.length < 32) return false;
-  const direct = headers.get("x-benjadmin-protected-telemetry-key")?.trim() || "";
-  return direct.length >= 32 && safeEqual(direct, configured);
+export async function isProtectedTelemetryAuthorized(headers: Headers, nodeId: ProtectedTelemetryNodeId) {
+  const supplied = headers.get("x-benjadmin-protected-telemetry-key")?.trim() || "";
+  if (supplied.length < 32) return false;
+  const nodeKey = await readNodeTelemetryKey(nodeId);
+  return nodeKey.length >= 32 && safeEqual(supplied, nodeKey);
 }
 function numericMetric(metrics: Record<string, unknown>, key: string) {
   const [min, max] = metricRanges[key]; const raw = metrics[key];

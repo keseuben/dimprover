@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";import fs from "node:fs";const s=fs.readFileSync(new URL("./install-protected-telemetry-agent.sh",import.meta.url),"utf8");let n=0;const c=(l,f)=>{f();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${l}`)};
+c("node allowlist",()=>assert.match(s,/prod-vps\|db-vps/));
+c("root install only",()=>assert.match(s,/EUID/));
+c("self enrollment avoids pre-shared secret transfer",()=>{assert.doesNotMatch(s,/KEY_SOURCE/);assert.match(s,/protected-telemetry\/enroll/)});
+c("agent runs one-shot only",()=>{assert.match(s,/Type=oneshot/);assert.doesNotMatch(s,/ExecStart=.*(?:bash|sh) -c/)});
+c("systemd hardening",()=>{for(const x of ["NoNewPrivileges=true","ProtectSystem=strict","CapabilityBoundingSet=","MemoryDenyWriteExecute=true","RestrictSUIDSGID=true"])assert.ok(s.includes(x))});
+c("one minute timer",()=>assert.match(s,/OnUnitActiveSec=60s/));
+c("DEV ingress endpoint fixed HTTPS",()=>assert.match(s,/https:\/\/admin\.dev\.dimpro\.hu\/api\/dev\/grid\/protected-telemetry/));
+c("no command channel",()=>assert.doesNotMatch(s,/ssh|nc |socat|ExecStart=.*curl/));
+console.log(`Developer Grid protected telemetry installer contract PASS · ${n}/${n}`);

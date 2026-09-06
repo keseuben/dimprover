@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"; import fs from "node:fs";
 let n=0; const read=(f)=>fs.readFileSync(new URL(`../../${f}`,import.meta.url),"utf8"); const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
 const ingress=read("app/lib/developer-grid/protected-telemetry-ingress.ts"),route=read("app/api/dev/grid/protected-telemetry/route.ts"),health=read("app/lib/developer-grid/system-health.ts"),agent=read("scripts/developer-grid/protected-telemetry-agent.py");
-check("dedicated ingress secret",()=>{assert.match(ingress,/BENJADMIN_PROTECTED_TELEMETRY_INGEST_KEY/);assert.match(ingress,/timingSafeEqual/)});
+check("dedicated node-aware ingress secret",()=>{assert.match(ingress,/readNodeTelemetryKey/);assert.match(ingress,/timingSafeEqual/);assert.doesNotMatch(ingress,/BENJADMIN_PROTECTED_TELEMETRY_INGEST_KEY/)});
 check("only PROD and DB accepted",()=>{assert.match(ingress,/prod-vps/);assert.match(ingress,/db-vps/);assert.match(ingress,/PROTECTED_TELEMETRY_NODE_INVALID/)});
 check("metric allowlist and ranges",()=>{assert.match(ingress,/metricRanges/);for(const k of ["cpuPercent","memoryTotalBytes","swapTotalBytes","diskTotalBytes","uptimeSeconds"])assert.match(ingress,new RegExp(k))});
 check("time freshness fail closed",()=>{assert.match(ingress,/MAX_SAMPLE_AGE_MS/);assert.match(ingress,/MAX_FUTURE_SKEW_MS/)});

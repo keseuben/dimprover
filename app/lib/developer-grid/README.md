@@ -174,3 +174,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - A heartbeat csak biztonságos állapotot küld: packaged Windows, env-jelzők, candidate darabszám, stabil másolat léte és kötött failure-code lista. Fájlútvonal, token és SHA nem kerül a probe-ba.
 - A szerver a probe-ot sanitizálva tárolja, és a Central Core PHYSICAL WINDOWS E2E blokkoló sora rövid failure-code-ot tud mutatni, ha az identity továbbra sem jelenthető.
 - PROD DENY változatlan.
+
+## v0.1.30 Protected PROD / DB resource telemetry enrollment
+
+- A PROD és DB VPS read-only resource agentje nem igényel kézzel másolt közös ingest secretet.
+- Az első agent-futás source-IP-hez kötött, 10 perces, egyszeri enrollmenttel kér node-specifikus kulcsot a DEV runtime-tól. PROD forrás: `213.160.68.24`, DB forrás: `213.160.68.33`.
+- A kulcs az adott VPS-en `/etc/benjadmin/protected-telemetry.key` alatt 0600 módban tárolódik; a DEV oldalon node-specifikus secret fájl készül.
+- Az enrollment ugyanazzal a nonce-szal csak rövid replay ablakban ismételhető hálózati hiba esetére; utána admin reset nélkül nem ad új kulcsot.
+- A systemd agent one-shot, percenként timerből indul, nincs shell/command channel, nincs inbound port és nincs remote execution. Csak `/proc`, `statvfs` és uptime adatokat olvas, majd HTTPS-en sanitizált metrikát küld DEV-be.
+- A System Health csak friss mintát tekint LIVE-nak; stale minta esetén automatikusan visszaáll PARTIAL állapotra. PROD alkalmazás- vagy DB-konfigurációt az agent nem módosít.
