@@ -1,12 +1,12 @@
 {
   "name": "@dimpro/benjadmin-developer-grid-desktop",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "private": true,
   "description": "BENJADMIN Developer Grid – AI Engineering Control Center / AI Fejlesztésirányítási Központ",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node scripts/acceptance.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs && node scripts/chat-refresh-contract.mjs",
+    "check": "node scripts/acceptance.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs && node scripts/chat-refresh-contract.mjs && node scripts/device-heartbeat-contract.mjs",
     "dist:win": "electron-builder --win portable --x64",
     "package:dev": "bash scripts/package-dev-release.sh"
   },

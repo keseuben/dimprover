@@ -108,3 +108,13 @@ A monitoring token gate fail-closed: kizárólag `sbp_fc…` kezdetű scoped/fin
 A PROD és DB VPS teljes CPU/RAM/Swap/tárhely/uptime adataihoz a Developer Grid külön write-only DEV ingress végpontot biztosít: `POST /api/dev/grid/protected-telemetry`. Csak dedikált protected-telemetry kulccsal, `prod-vps` vagy `db-vps` node-hoz, szigorú metrika-allowlisttel és időbélyeg-validációval fogad mintát. A DEV snapshot atomikusan, `PROD DENY` metaadattal tárolódik.
 
 A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux OS számlálókat olvas (`/proc`, `statvfs`) és HTTPS-en küld sanitizált mintát; nincs parancsfogadó csatornája és nincs SSH-végrehajtása. Amíg nincs külön engedéllyel telepítve a protected hostokra, a UI `ONLINE · RÉSZLEGES` állapotot és RTT-t mutat.
+
+
+## v0.1.23 Windows device presence heartbeat
+
+- A párosított Developer Grid Windows kliens feloldott állapotban 5 percenként sanitizált heartbeatet küld a meglévő Windows Bridge heartbeat végpontra.
+- A heartbeat kizárólag a DPAPI/safeStorage-ban őrzött device tokent használja Bearer hitelesítésre; a token nem kerül renderer eseménybe vagy naplóba.
+- Az agent/session azonosító a lokális device metadata-ból érkezik, a hálózati kérés 8 másodperces timeouttal fail-closed.
+- Lock, kilépés vagy a live client leállítása megszünteti a heartbeat ütemezést.
+- Cél: a `last_seen_at` valóban jelezze, hogy a Developer Grid Windows kliens aktív, és a későbbi fizikai Windows E2E bizonyíték ne csak a pairing időpontjára támaszkodjon.
+- DEV ONLY · PROD DENY.

@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here=path.dirname(fileURLToPath(import.meta.url));
+const root=path.resolve(here,"..");
+const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
+let n=0;
+function check(label,fn){fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);}
+check("heartbeat interval is five minutes",()=>assert.match(main,/DEVICE_HEARTBEAT_INTERVAL_MS = 5 \* 60_000/));
+check("heartbeat uses Windows Bridge endpoint",()=>assert.match(main,/\/api\/dev\/terminal-hub\/windows-bridge\/heartbeat/));
+check("heartbeat authenticates only with bearer device token",()=>{assert.match(main,/authorization: `Bearer \$\{token\}`/);assert.match(main,/const token = readDeviceToken\(\)/);});
+check("heartbeat carries persisted agent and session identity",()=>{assert.match(main,/metadata\?\.agentId/);assert.match(main,/metadata\?\.sessionId/);assert.match(main,/protocolVersion: 1, agentId, sessionId/);});
+check("heartbeat is bounded by network timeout",()=>assert.match(main,/setTimeout\(\(\) => controller\.abort\(\), 8_000\)/));
+check("heartbeat starts only for device auth",()=>assert.match(main,/credential\.mode === "device"\) startDeviceHeartbeat\(\)/));
+check("workspace lock stops heartbeat with live client",()=>{assert.match(main,/function stopLiveClient\(\)[\s\S]*stopDeviceHeartbeat\(\)/);assert.match(main,/function lockWorkspace[\s\S]*stopLiveClient\(\)/);});
+check("heartbeat never exposes token in renderer event",()=>{assert.doesNotMatch(main,/connection:device-heartbeat", \{[^}]*token/s);assert.match(main,/connection:device-heartbeat", \{ ok: true, at:/);});
+console.log(`Developer Grid device heartbeat contract PASS · ${n}/${n}`);

@@ -30,6 +30,7 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MS = 30_000;
 const CHAT_REFRESH_MAINTENANCE_MS = 60_000;
 const CHAT_REFRESH_PROBE_MS = 5 * 60_000;
+const DEVICE_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
 const AVATAR_ASSETS = Object.freeze({
   BENAI: path.join(__dirname, "assets", "team", "benai.webp"),
   OUTMINAI: path.join(__dirname, "assets", "team", "outminai.webp"),
@@ -76,6 +77,8 @@ const pendingChatRefreshReasons = new Map();
 const stageReportMonitorKeys = new Set();
 let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
+let deviceHeartbeatTimer = null;
+let deviceHeartbeatBusy = false;
 const avatarDataUriCache = new Map();
 
 function userDataPath() { return app.getPath("userData"); }
@@ -2262,9 +2265,56 @@ function registerGlobalShortcuts() {
   }
 }
 
+function stopDeviceHeartbeat() {
+  if (deviceHeartbeatTimer) clearTimeout(deviceHeartbeatTimer);
+  deviceHeartbeatTimer = null;
+}
+
+async function sendDeviceHeartbeatOnce() {
+  if (!unlocked || deviceHeartbeatBusy) return;
+  const token = readDeviceToken();
+  const metadata = readDeviceMeta();
+  const agentId = String(metadata?.agentId || "").trim();
+  const sessionId = String(metadata?.sessionId || "").trim();
+  if (!token || !agentId || !sessionId || !config?.benjadminBaseUrl) return;
+  deviceHeartbeatBusy = true;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(`${config.benjadminBaseUrl}/api/dev/terminal-hub/windows-bridge/heartbeat`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ protocolVersion: 1, agentId, sessionId, sentAt: new Date().toISOString() }),
+        cache: "no-store",
+        signal: controller.signal
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Windows Bridge heartbeat HTTP ${response.status}`);
+      send("connection:device-heartbeat", { ok: true, at: new Date().toISOString() });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (error) {
+    send("connection:device-heartbeat", { ok: false, error: error instanceof Error ? error.message.slice(0, 240) : "A device heartbeat sikertelen." });
+  } finally {
+    deviceHeartbeatBusy = false;
+    if (unlocked && readDeviceToken()) {
+      deviceHeartbeatTimer = setTimeout(() => void sendDeviceHeartbeatOnce(), DEVICE_HEARTBEAT_INTERVAL_MS);
+    }
+  }
+}
+
+function startDeviceHeartbeat() {
+  stopDeviceHeartbeat();
+  if (!unlocked || !readDeviceToken()) return;
+  deviceHeartbeatTimer = setTimeout(() => void sendDeviceHeartbeatOnce(), 1200);
+}
+
 function stopLiveClient() {
   liveClient?.stop();
   liveClient = null;
+  stopDeviceHeartbeat();
 }
 
 function startLiveClient() {
@@ -2301,6 +2351,7 @@ function startLiveClient() {
     }
   });
   liveClient.start();
+  if (credential.mode === "device") startDeviceHeartbeat();
 }
 function workerLabel(workerCode) {
   const cell = config.cells.find((item) => item.workerCode === workerCode);
