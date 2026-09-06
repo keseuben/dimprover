@@ -89,8 +89,15 @@ Világos módban a System Health READY/INFO/WARNING/CRITICAL badge-ek külön s�
 
 A Supabase Management API lekérés kizárólag read-only `analytics_usage_read` jogosultságú tokennel működik. A token átadható `BENJADMIN_SUPABASE_ANALYTICS_TOKEN` környezeti változóban vagy alapértelmezetten a `/root/.dimpro-secrets/supabase-dev/analytics-usage-read.token` szerveroldali secret fájlból; service-role kulcsra nincs fallback. A request analytics endpointok: `usage.api-counts` és `usage.api-requests-count`.
 
-## v0.1.20 Supabase monitoring – biztonságos admin bekötés
+## v0.1.21 Supabase monitoring – biztonságos admin bekötés
 
 A `NINCS TOKEN` Supabase állapot most közvetlen `BEKÖTÉS` műveletet ad a Windows System Health panelen. Ez a Developer Grid saját DEV runtime-ján kiszolgált, külön setup oldalt nyitja meg, ezért nem függ a fő BENJADMIN admin runtime verziójától. A setup oldal a meglévő BENJADMIN admin kulccsal hívja az admin-only `/api/dev/grid/supabase-monitoring` végpontot.
 
 A beküldött token mentés előtt mindkét read-only usage végponton validálódik, és csak sikeres `analytics_usage_read` jogosultság esetén kerül 0600 jogosultságú DEV secret fájlba. A token értékét az API soha nem adja vissza; törléskor csak a helyi monitoring secret törlődik, a Supabase-fiókban létrehozott token nem kerül automatikusan visszavonásra. Mentés/törlés azonnal invalidálja a System Health Supabase cache-t.
+
+
+## v0.1.21 Supabase monitoring – canonical admin + scoped-only gate
+
+A Supabase monitoring setup a Developer Grid lokális admin-kulcsa mellett a canonical BENJADMIN admin runtime (`127.0.0.1:3100`, Host: `admin.dev.dimpro.hu`) által validált böngészős admin-hitelesítést is elfogadja. Így a fő BENJADMIN adminban már hitelesített böngészőből nem kell külön Developer Grid admin kulcsot kezelni.
+
+A monitoring token gate fail-closed: kizárólag `sbp_fc…` kezdetű scoped/fine-grained PAT fogadható el. A két `analytics_usage_read` usage endpointnak sikeresnek kell lennie, miközben egy ettől független Project Settings Read endpointnak 403-mal tiltva kell maradnia. Classic vagy túl széles scoped token nem menthető. A setup felület a token típust már beillesztéskor jelzi és classic tokennél a Mentés gombot letiltja.

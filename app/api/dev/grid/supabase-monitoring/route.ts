@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
+import { isDeveloperGridAdminAuthorized } from "@/app/lib/developer-grid/benjadmin-admin-auth";
 import {
   deleteSupabaseAnalyticsToken,
   getSupabaseMonitoringStatus,
@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 const json = (payload: unknown, status = 200) => NextResponse.json(payload, { status, headers: { "cache-control": "no-store" } });
 
 async function authorized(request: NextRequest) {
-  return isLicenseAdminAuthorized(request.headers);
+  return isDeveloperGridAdminAuthorized(request.headers);
 }
 
 export async function GET(request: NextRequest) {

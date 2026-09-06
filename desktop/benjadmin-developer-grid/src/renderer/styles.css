@@ -2716,3 +2716,5 @@ body.has-health-drawer .central-panel {
 
 /* v0.1.20 · compact System Health setup action */
 .health-group__actions{display:flex;align-items:center;gap:6px;min-width:0}.health-inline-action{border:1px solid var(--mint-border,#72bdb1);background:rgba(18,117,101,.08);color:inherit;border-radius:6px;padding:3px 7px;font-size:8.5px;font-weight:800;letter-spacing:.03em;cursor:pointer}.health-inline-action:hover{background:rgba(18,117,101,.16)}:root[data-theme="dark"] .health-inline-action{background:rgba(55,205,183,.1);border-color:rgba(94,224,204,.38);color:#c8fff5}
+
+/* v0.1.21 · scoped Supabase monitoring gate is served by the DEV backend setup page. */

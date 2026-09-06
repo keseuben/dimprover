@@ -17,6 +17,8 @@ const ai = read("app/lib/developer-grid/system-health-ai.ts");
 const operationsSource = read("app/lib/developer-grid/system-health-operations.ts");
 const supabaseConfig = read("app/lib/developer-grid/supabase-monitoring-config.ts");
 const supabaseRoute = read("app/api/dev/grid/supabase-monitoring/route.ts");
+const supabaseAdminAuth = read("app/lib/developer-grid/benjadmin-admin-auth.ts");
+const supabaseSetup = read("app/api/dev/grid/supabase-monitoring/setup/route.ts");
 const facade = read("app/lib/developer-grid/system-health.ts");
 const buildNodes = read("app/lib/developer-grid/build-nodes.ts");
 let n = 0;
@@ -82,5 +84,7 @@ check("DB not connected is critical", () => assert.equal(severity.evaluateInfras
 check("overall aggregation promotes critical node", () => { const nodes=[severity.evaluateInfrastructureNode(baseNode()),severity.evaluateInfrastructureNode(baseNode({id:"bad",kind:"PROD",state:"NOT_CONNECTED"}))]; const o=severity.aggregateInfrastructureHealth(nodes); assert.equal(o.severity,"CRITICAL"); assert.equal(o.state,"BLOCKED"); assert.equal(o.counts.CRITICAL,1); });
 check("alerts contain only warning and critical nodes", () => { const nodes=[severity.evaluateInfrastructureNode(baseNode()),severity.evaluateInfrastructureNode(baseNode({id:"i",state:"PLANNED",kind:"AI",quality:"REGISTRY_ONLY",sampledAt:null})),severity.evaluateInfrastructureNode(baseNode({id:"w",metrics:{diskPercent:91}}))]; const alerts=severity.infrastructureHealthAlerts(nodes); assert.deepEqual(alerts.map((x)=>x.nodeId),["w"]); });
 
-check("Supabase monitoring secret is admin-only validated and never returned", () => { assert.match(supabaseConfig, /analytics_usage_read/); assert.match(supabaseConfig, /mode: 0o600/); assert.match(supabaseConfig, /usage\.api-counts/); assert.match(supabaseConfig, /usage\.api-requests-count/); assert.doesNotMatch(supabaseConfig, /SUPABASE_SERVICE_ROLE_KEY/); assert.match(supabaseRoute, /isLicenseAdminAuthorized/); assert.doesNotMatch(supabaseRoute, /token:\s*body\.token|validated:\s*\{[^}]*token/); });
+check("Supabase monitoring secret is admin-only validated and never returned", () => { assert.match(supabaseConfig, /analytics_usage_read/); assert.match(supabaseConfig, /mode: 0o600/); assert.match(supabaseConfig, /usage\.api-counts/); assert.match(supabaseConfig, /usage\.api-requests-count/); assert.doesNotMatch(supabaseConfig, /SUPABASE_SERVICE_ROLE_KEY/); assert.match(supabaseAdminAuth, /isLicenseAdminAuthorized/); assert.doesNotMatch(supabaseRoute, /token:\s*body\.token|validated:\s*\{[^}]*token/); });
+check("Supabase monitoring reuses canonical BENJADMIN admin authority", () => { assert.match(supabaseRoute, /isDeveloperGridAdminAuthorized/); assert.match(supabaseAdminAuth, /127\.0\.0\.1:3100\/api\/license\/admin/); assert.match(supabaseAdminAuth, /admin\.dev\.dimpro\.hu/); assert.match(supabaseAdminAuth, /isLicenseAdminAuthorized/); });
+check("Supabase monitoring rejects classic and overprivileged tokens", () => { assert.match(supabaseConfig, /startsWith\("sbp_fc"\)/); assert.match(supabaseConfig, /SUPABASE_CLASSIC_TOKEN_REJECTED/); assert.match(supabaseConfig, /SUPABASE_TOKEN_OVERPRIVILEGED/); assert.match(supabaseConfig, /leastPrivilegeValidated/); assert.match(supabaseSetup, /CLASSIC \/ NEM ENGEDÉLYEZETT TOKEN/); assert.match(supabaseSetup, /Usage Analytics · Read/); });
 console.log(`Developer Grid Health Core V2 contract PASS · ${n}/${n}`);

@@ -16,6 +16,8 @@ export type SupabaseMonitoringStatus = {
   storage: "SERVER_SECRET_FILE";
   lastValidatedAt: string | null;
   validationState: "VALIDATED" | "NOT_CONFIGURED" | "UNKNOWN";
+  tokenKind: "SCOPED_FINE_GRAINED" | null;
+  leastPrivilegeValidated: boolean;
 };
 
 function tokenFile() {
@@ -72,11 +74,33 @@ async function managementGet(pathname: string, token: string) {
   }
 }
 
+
+async function managementStatus(pathname: string, token: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${MANAGEMENT_API}${pathname}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return response.status;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function validateSupabaseAnalyticsToken(tokenValue: string) {
   const token = String(tokenValue || "").trim();
   if (token.length < 20 || /\s/.test(token)) {
     const error = new Error("A Supabase Management API token formátuma érvénytelen.");
     Object.assign(error, { code: "SUPABASE_ANALYTICS_TOKEN_INVALID" });
+    throw error;
+  }
+  if (!token.startsWith("sbp_fc")) {
+    const error = new Error("Classic vagy nem azonosítható Supabase token nem menthető. A monitoring kizárólag sbp_fc… kezdetű scoped/fine-grained tokent fogad el.");
+    Object.assign(error, { code: "SUPABASE_CLASSIC_TOKEN_REJECTED" });
     throw error;
   }
   const projectRef = resolveSupabaseProjectRef();
@@ -94,7 +118,25 @@ export async function validateSupabaseAnalyticsToken(tokenValue: string) {
     Object.assign(error, { code: "SUPABASE_ANALYTICS_RESPONSE_INVALID" });
     throw error;
   }
-  return { projectRef, validatedAt: new Date().toISOString() };
+
+  // Least-privilege proof: a monitoring token must NOT be able to read project settings.
+  // Proper analytics_usage_read-only scoped tokens receive 403 on this unrelated endpoint.
+  const unrelatedScopeStatus = await managementStatus(`/v1/projects/${encodeURIComponent(projectRef)}`, token);
+  if (unrelatedScopeStatus === 200) {
+    const error = new Error("A token túl széles jogosultságú. A Project Settings Read hozzáférés is elérhető vele; hozz létre kizárólag Usage Analytics / Read (analytics_usage_read) scoped tokent.");
+    Object.assign(error, { code: "SUPABASE_TOKEN_OVERPRIVILEGED" });
+    throw error;
+  }
+  if (unrelatedScopeStatus !== 403) {
+    const error = new Error(unrelatedScopeStatus === 401
+      ? "A Supabase scoped token érvénytelen vagy lejárt."
+      : unrelatedScopeStatus === 429
+        ? "A Supabase Management API ideiglenes rate limitet jelzett a jogosultság-ellenőrzésnél."
+        : `A minimális jogosultság nem igazolható (HTTP ${unrelatedScopeStatus}).`);
+    Object.assign(error, { code: `SUPABASE_SCOPE_PROBE_HTTP_${unrelatedScopeStatus}` });
+    throw error;
+  }
+  return { projectRef, validatedAt: new Date().toISOString(), tokenKind: "SCOPED_FINE_GRAINED" as const, leastPrivilegeValidated: true };
 }
 
 async function writeStatus(projectRef: string, validatedAt: string) {
@@ -102,7 +144,7 @@ async function writeStatus(projectRef: string, validatedAt: string) {
   const dir = path.dirname(file);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   await chmod(dir, 0o700).catch(() => undefined);
-  await writeFile(file, `${JSON.stringify({ schemaVersion: 1, projectRef, permission: "analytics_usage_read", validatedAt }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeFile(file, `${JSON.stringify({ schemaVersion: 2, projectRef, permission: "analytics_usage_read", tokenKind: "SCOPED_FINE_GRAINED", leastPrivilegeValidated: true, validatedAt }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   await chmod(file, 0o600);
 }
 
@@ -146,8 +188,8 @@ export async function getSupabaseMonitoringStatus(): Promise<SupabaseMonitoringS
   let lastValidatedAt: string | null = null;
   if (configured) {
     try {
-      const parsed = JSON.parse(await readFile(statusFile(), "utf8")) as { validatedAt?: unknown; projectRef?: unknown };
-      if (typeof parsed.validatedAt === "string" && (!projectRef || parsed.projectRef === projectRef)) lastValidatedAt = parsed.validatedAt;
+      const parsed = JSON.parse(await readFile(statusFile(), "utf8")) as { validatedAt?: unknown; projectRef?: unknown; tokenKind?: unknown; leastPrivilegeValidated?: unknown };
+      if (typeof parsed.validatedAt === "string" && parsed.tokenKind === "SCOPED_FINE_GRAINED" && parsed.leastPrivilegeValidated === true && (!projectRef || parsed.projectRef === projectRef)) lastValidatedAt = parsed.validatedAt;
     } catch {}
   }
   return {
@@ -157,5 +199,7 @@ export async function getSupabaseMonitoringStatus(): Promise<SupabaseMonitoringS
     storage: "SERVER_SECRET_FILE",
     lastValidatedAt,
     validationState: configured ? (lastValidatedAt ? "VALIDATED" : "UNKNOWN") : "NOT_CONFIGURED",
+    tokenKind: configured && lastValidatedAt ? "SCOPED_FINE_GRAINED" : null,
+    leastPrivilegeValidated: Boolean(configured && lastValidatedAt),
   };
 }

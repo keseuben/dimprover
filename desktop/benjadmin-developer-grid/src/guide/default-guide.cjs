@@ -127,7 +127,7 @@ Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 - Release, migráció, restart vagy cutover külön központi exclusive-operation gate; ezek nem a build runner feladatai.
 - Kötelező a BUILD_ID, artifact/hash és szükség szerinti smoke evidence visszaellenőrzése.
 - Párhuzamos build vagy lock-megkerülés tilos.
-- PROD továbbra is DENY; a Developer Grid v0.1.20 ebből a folyamatból PROD-műveletet nem indít.
+- PROD továbbra is DENY; a Developer Grid v0.1.21 ebből a folyamatból PROD-műveletet nem indít.
 
 6/6 · LEZÁRÁS
 - Commit(ok), teszteredmények, build/hash adatok, handoff és dokumentáció rögzítése.
