@@ -2293,7 +2293,7 @@ async function sendDeviceHeartbeatOnce() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Windows Bridge heartbeat HTTP ${response.status}`);
-      send("connection:device-heartbeat", { ok: true, at: new Date().toISOString() });
+      send("connection:device-heartbeat", { ok: true, at: new Date().toISOString(), artifactIdentity: client ? "REPORTED" : "UNAVAILABLE" });
       send("context:refresh", { reason:"device-heartbeat" });
     } finally {
       clearTimeout(timer);
@@ -2308,23 +2308,36 @@ async function sendDeviceHeartbeatOnce() {
   }
 }
 
+function desktopArtifactCandidates() {
+  const portable = String(process.env.PORTABLE_EXECUTABLE_FILE || "").trim();
+  const installed = installedExecutablePath();
+  const candidates = [portable, installed].filter(Boolean);
+  return [...new Set(candidates.map((file) => path.resolve(file)))];
+}
+
+async function hashDesktopArtifact(file) {
+  const stat = fs.statSync(file);
+  if (!stat.isFile() || stat.size <= 0 || stat.size > 1024 * 1024 * 1024) return null;
+  const hash = createHash("sha256");
+  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  return {
+    product: APP_TITLE,
+    version: app.getVersion(),
+    executableSha256: hash.digest("hex"),
+    executableBytes: stat.size
+  };
+}
+
 async function resolveDesktopArtifactIdentity() {
   if (desktopArtifactIdentityCache) return desktopArtifactIdentityCache;
   if (!app.isPackaged || process.platform !== "win32") return null;
-  const file = portableSourceExecutablePath();
-  try {
-    const stat = fs.statSync(file);
-    if (!stat.isFile() || stat.size <= 0) return null;
-    const hash = createHash("sha256");
-    for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
-    desktopArtifactIdentityCache = {
-      product: APP_TITLE,
-      version: app.getVersion(),
-      executableSha256: hash.digest("hex"),
-      executableBytes: stat.size
-    };
-    return desktopArtifactIdentityCache;
-  } catch { return null; }
+  for (const file of desktopArtifactCandidates()) {
+    try {
+      const identity = await hashDesktopArtifact(file);
+      if (identity) { desktopArtifactIdentityCache = identity; return desktopArtifactIdentityCache; }
+    } catch { /* try the next byte-identical physical artifact candidate */ }
+  }
+  return null;
 }
 
 function startDeviceHeartbeat() {

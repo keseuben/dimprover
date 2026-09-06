@@ -60,6 +60,7 @@ const required = [
   "scripts/developer-grid/windows-physical-e2e-contract.mjs",
   "scripts/developer-grid/windows-e2e-gate-contract.mjs",
   "desktop/benjadmin-developer-grid/scripts/central-core-theme-contract.mjs",
+  "desktop/benjadmin-developer-grid/scripts/windows-artifact-attestation-contract.mjs",
   "scripts/developer-grid/write-windows-artifact-marker.mjs",
   "scripts/developer-grid/write-package-session-marker.mjs",
 ];
@@ -114,7 +115,7 @@ const reviewGate = fs.readFileSync(path.join(root, "app/lib/developer-grid/revie
 const vguardReview = fs.readFileSync(path.join(root, "app/lib/developer-grid/vguard-review.ts"), "utf8");
 
 const checks = [
-  [types.includes('DEVELOPER_GRID_VERSION = "0.1.26-dev"'), "versioned DEV candidate contract"],
+  [types.includes('DEVELOPER_GRID_VERSION = "0.1.27-dev"'), "versioned DEV candidate contract"],
   [types.includes('"ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI"'), "worker registry contract"],
   [types.includes("export type GridWorkflow =") && types.includes("export type WorkerSession ="), "task/workflow/session contracts"],
   [types.includes("export type DevelopmentDocumentRef =") && types.includes("export type GridHandoff ="), "handoff/document contracts"],

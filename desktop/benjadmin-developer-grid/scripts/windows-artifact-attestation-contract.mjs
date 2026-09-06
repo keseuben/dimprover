@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here=path.dirname(fileURLToPath(import.meta.url));
+const root=path.resolve(here,"..");
+const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
+let n=0;const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+check("attestation only runs in packaged Windows",()=>assert.match(main,/!app\.isPackaged \|\| process\.platform !== "win32"/));
+check("portable source is first candidate",()=>assert.match(main,/const candidates = \[portable, installed\]/));
+check("stable LocalAppData copy is fallback",()=>assert.match(main,/const installed = installedExecutablePath\(\)/));
+check("artifact read is bounded to one GiB",()=>assert.match(main,/stat\.size > 1024 \* 1024 \* 1024/));
+check("exact SHA-256 and bytes are reported",()=>{assert.match(main,/executableSha256: hash\.digest\("hex"\)/);assert.match(main,/executableBytes: stat\.size/);});
+check("failure of one candidate does not suppress later candidate",()=>assert.match(main,/try the next byte-identical physical artifact candidate/));
+console.log(`Developer Grid Windows artifact attestation contract PASS · ${n}/${n}`);

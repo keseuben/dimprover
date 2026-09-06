@@ -147,3 +147,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - Világos módban külön nagy kontrasztú szöveg- és felületértékek készültek a work-start, aktív munka, Diagnostic Evidence, gate-ek, V.Guard, Build Runner Pool és Context Pack másodlagos szövegeire.
 - Acceptance: nyitott Central Core mellett dark→light→dark váltás után a panel maradjon nyitva és elöl; light módban a leíró/segédszövegek legyenek jól olvashatók.
 - PROD továbbra is DENY.
+
+
+## v0.1.27 Physical Windows artifact attestation fallback
+
+- A v0.1.26 fizikai heartbeatje élő volt, de a szerver `client` attesztációja üres maradt, ezért a `PHYSICAL WINDOWS E2E` gate BLOCKED állapotban maradt.
+- A Windows kliens most két byte-azonos release-forrást próbál: először az electron-builder `PORTABLE_EXECUTABLE_FILE` forrását, majd a startupkor készített stabil LocalAppData másolatot.
+- Egy olvasási/lock hiba az első forráson nem némítja el az attesztációt; a második fizikai másolat SHA-256 + bájtméret alapján ugyanúgy bizonyíthatja a release artifactot.
+- A renderer esemény csak `REPORTED` / `UNAVAILABLE` státuszt kap; fájlútvonal, token és SHA nem kerül ki a heartbeat eseménybe.
+- A szerveroldali Physical Windows E2E gate továbbra is az immutable publikus manifest SHA-256 + bytes értékével hasonlít, és PROD DENY marad.
