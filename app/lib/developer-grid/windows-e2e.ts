@@ -25,6 +25,7 @@ export async function evaluateDeveloperGridWindowsE2E(deviceToken: string) {
   const [device, foundation] = await Promise.all([getWindowsBridgeDeviceAttestation(deviceToken), getDeveloperGridFoundation()]);
   const manifest = readManifest(version);
   const reported = device.client;
+  const probe = device.clientProbe || null;
   const expectedHead = String(foundation.sourceProvenance.head || "");
   const expectedBuildId = String(foundation.releaseRuntimeProvenance.buildId || "");
   const lastSeenMs = device.lastSeenAt ? Date.parse(device.lastSeenAt) : NaN;
@@ -35,7 +36,7 @@ export async function evaluateDeveloperGridWindowsE2E(deviceToken: string) {
     { id:"manifest-head", label:"Manifest current source HEAD", required:true, pass:Boolean(manifest && expectedHead && manifest.gitCommit===expectedHead) },
     { id:"manifest-build", label:"Manifest current BUILD_ID", required:true, pass:Boolean(manifest && expectedBuildId && manifest.buildId===expectedBuildId) },
     { id:"heartbeat", label:"Fizikai Windows heartbeat friss", required:true, pass:heartbeatFresh },
-    { id:"client", label:"Windows artifact identity jelentve", required:true, pass:Boolean(reported) },
+    { id:"client", label:reported ? "Windows artifact identity jelentve" : `Windows artifact identity jelentve${probe?.failureCodes?.length ? ` · ${probe.failureCodes.slice(0,2).join("+")}` : ""}`, required:true, pass:Boolean(reported) },
     { id:"version", label:`Windows kliens v${version}`, required:true, pass:Boolean(reported && reported.version===version) },
     { id:"sha256", label:"Windows EXE SHA-256 egyezik", required:true, pass:Boolean(reported && manifest?.exe?.sha256 && reported.executableSha256===manifest.exe.sha256) },
     { id:"bytes", label:"Windows EXE bájtméret egyezik", required:true, pass:Boolean(reported && Number(manifest?.exe?.bytes)>0 && reported.executableBytes===Number(manifest?.exe?.bytes)) },
@@ -52,6 +53,7 @@ export async function evaluateDeveloperGridWindowsE2E(deviceToken: string) {
     expected:{ version, gitCommit:expectedHead || null, buildId:expectedBuildId || null, exeFile:manifest?.exe?.file || null, exeSha256:manifest?.exe?.sha256 || null, exeBytes:Number(manifest?.exe?.bytes)||null },
     reported: reported ? { version:reported.version, exeSha256:reported.executableSha256, exeBytes:reported.executableBytes, reportedAt:reported.reportedAt } : null,
     device:{ deviceId:device.deviceId, agentId:device.agentId, deviceLabel:device.deviceLabel, lastSeenAt:device.lastSeenAt },
+    attestationProbe: probe,
     checks,
     evaluatedAt:new Date().toISOString(),
   };

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getTerminalHubFeatureFlags } from "./config";
-import { WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS, WINDOWS_BRIDGE_PROTOCOL_VERSION, type WindowsBridgeAgentHello, type WindowsBridgeCapability, type WindowsBridgeClientIdentity, type WindowsBridgeHeartbeat } from "./windows-bridge";
+import { WINDOWS_BRIDGE_PAIRING_MAX_AGE_SECONDS, WINDOWS_BRIDGE_PROTOCOL_VERSION, type WindowsBridgeAgentHello, type WindowsBridgeCapability, type WindowsBridgeClientIdentity, type WindowsBridgeClientProbe, type WindowsBridgeHeartbeat } from "./windows-bridge";
 import { createWindowsBridgePairingCode, createWindowsBridgeToken, hashWindowsBridgePairingCode, hashWindowsBridgeToken, safeWindowsBridgeHashEqual, WINDOWS_BRIDGE_PAIRING_ATTEMPT_LIMIT } from "./windows-bridge-pairing-core";
 
 const MAX_DEVICE_LABEL = 160;
@@ -24,6 +24,7 @@ export type WindowsBridgeDeviceSummary = {
   approvedAt: string | null;
   lastSeenAt: string | null;
   client: (WindowsBridgeClientIdentity & { reportedAt: string }) | null;
+  clientProbe?: (WindowsBridgeClientProbe & { reportedAt: string }) | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -72,6 +73,28 @@ function normalizeClientIdentity(value: unknown): WindowsBridgeClientIdentity | 
   if (product !== "BENJADMIN Developer Grid" || !/^0\.\d+\.\d+$/.test(version) || !/^[0-9a-f]{64}$/.test(executableSha256) || !Number.isSafeInteger(executableBytes) || executableBytes <= 0 || executableBytes > 1024 * 1024 * 1024) return null;
   return { product, version, executableSha256, executableBytes };
 }
+function normalizeClientProbe(value: unknown): WindowsBridgeClientProbe | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Row;
+  const status = clean(row.status, 20);
+  const candidateCount = Number(row.candidateCount);
+  const failureCodes = Array.isArray(row.failureCodes) ? row.failureCodes.filter((item): item is string => typeof item === "string" && /^[A-Z0-9_]{3,64}$/.test(item)).slice(0, 8) : [];
+  if (!["REPORTED", "UNAVAILABLE"].includes(status) || !Number.isInteger(candidateCount) || candidateCount < 0 || candidateCount > 8) return null;
+  return {
+    status: status as WindowsBridgeClientProbe["status"],
+    packagedWindows: row.packagedWindows === true, portableFileEnv: row.portableFileEnv === true, portableDirEnv: row.portableDirEnv === true,
+    installedCopyExists: row.installedCopyExists === true, candidateCount, failureCodes
+  };
+}
+function storedClientProbe(metadata: unknown): (WindowsBridgeClientProbe & { reportedAt: string }) | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const row = metadata as Row;
+  const probe = normalizeClientProbe(row.clientProbe);
+  if (!probe) return null;
+  const reportedAt = clean((row.clientProbe as Row).reportedAt, 64);
+  return reportedAt ? { ...probe, reportedAt } : null;
+}
+
 function storedClientIdentity(metadata: unknown): (WindowsBridgeClientIdentity & { reportedAt: string }) | null {
   if (!metadata || typeof metadata !== "object") return null;
   const row = metadata as Row;
@@ -191,6 +214,7 @@ export async function getWindowsBridgeDeviceAttestation(token: string) {
     deviceLabel: String(device.device_label || ""),
     lastSeenAt: device.last_seen_at ? String(device.last_seen_at) : null,
     client: storedClientIdentity(device.metadata),
+    clientProbe: storedClientProbe(device.metadata),
   };
 }
 
@@ -198,12 +222,18 @@ export async function heartbeatWindowsBridgeDevice(input: WindowsBridgeHeartbeat
   if (input.protocolVersion !== WINDOWS_BRIDGE_PROTOCOL_VERSION || !validAgentId(clean(input.agentId, 128)) || !clean(input.sessionId, 64)) throw new WindowsBridgePairingError("HEARTBEAT_INVALID", "Érvénytelen Windows Bridge heartbeat.");
   const clientIdentity = input.client === undefined ? null : normalizeClientIdentity(input.client);
   if (input.client !== undefined && !clientIdentity) throw new WindowsBridgePairingError("HEARTBEAT_CLIENT_INVALID", "Érvénytelen vagy nem sanitizált Windows kliensazonosság.");
+  const clientProbe = input.clientProbe === undefined ? null : normalizeClientProbe(input.clientProbe);
+  if (input.clientProbe !== undefined && !clientProbe) throw new WindowsBridgePairingError("HEARTBEAT_CLIENT_PROBE_INVALID", "Érvénytelen Windows artifact probe állapot.");
   const { client, device } = await authenticateWindowsBridgeDevice(token, input.agentId); const now = new Date().toISOString();
   const session = await client.from("dev_center_windows_bridge_sessions").update({ last_heartbeat_at: now }).eq("id", clean(input.sessionId, 64)).eq("device_id", device.id).eq("status", "active").select("id").maybeSingle();
   if (session.error || !session.data) throw new WindowsBridgePairingError("BRIDGE_SESSION_INVALID", "Az aktív Windows Bridge session nem található.", 409);
   const previousMetadata = device.metadata && typeof device.metadata === "object" ? device.metadata as Row : {};
   const updatePayload: Row = { last_seen_at: now, updated_at: now };
-  if (clientIdentity) updatePayload.metadata = { ...previousMetadata, client: { ...clientIdentity, reportedAt: now } };
+  if (clientIdentity || clientProbe) updatePayload.metadata = {
+    ...previousMetadata,
+    ...(clientIdentity ? { client: { ...clientIdentity, reportedAt: now } } : {}),
+    ...(clientProbe ? { clientProbe: { ...clientProbe, reportedAt: now } } : {})
+  };
   const update = await client.from("dev_center_windows_bridge_devices").update(updatePayload).eq("id", device.id).eq("status", "active");
   if (update.error) throw new WindowsBridgePairingError("HEARTBEAT_UPDATE_FAILED", update.error.message, 500);
   return { ok: true as const, serverTime: now, nextHeartbeatSeconds: 300, clientIdentityAccepted: Boolean(clientIdentity), commands: [] as never[] };

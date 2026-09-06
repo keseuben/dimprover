@@ -53,12 +53,23 @@ export type WindowsBridgeClientIdentity = {
   executableBytes: number;
 };
 
+export type WindowsBridgeClientProbe = {
+  status: "REPORTED" | "UNAVAILABLE";
+  packagedWindows: boolean;
+  portableFileEnv: boolean;
+  portableDirEnv: boolean;
+  installedCopyExists: boolean;
+  candidateCount: number;
+  failureCodes: string[];
+};
+
 export type WindowsBridgeHeartbeat = {
   protocolVersion: 1;
   agentId: string;
   sessionId: string;
   sentAt: string;
   client?: WindowsBridgeClientIdentity;
+  clientProbe?: WindowsBridgeClientProbe;
 };
 
 export function getWindowsBridgeReadiness(): WindowsBridgeReadiness {

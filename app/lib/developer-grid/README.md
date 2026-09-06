@@ -165,3 +165,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - Amikor a worker taskja `completed`, `closed`, `cancelled/canceled` vagy `failed` állapotba kerül, a következő DELTA/live snapshot újraértékeli a workert és automatikusan visszateszi a `MUNKATÉR KÉSZENLÉTBEN` takarót.
 - Ha nincs aktív task és a felhasználó kézzel kattint az avatárra, a feloldás továbbra is az aktuális ChatGPT-tab session idejére megmarad.
 - A Central Core továbbra is kivétel a standby overlay alól; PROD DENY változatlan.
+
+
+## v0.1.29 Physical Windows E2E diagnosztika
+
+- A fizikai heartbeat friss, de a szerveroldali `client` artifact identity továbbra is üres volt, ezért a v0.1.29 sanitizált attesztációs probe-ot vezet be.
+- A Windows kliens a `PORTABLE_EXECUTABLE_FILE` mellett a `PORTABLE_EXECUTABLE_DIR` alapján is rekonstruálja a canonical portable wrapper fájlnevet, majd a stabil LocalAppData másolatot próbálja.
+- A heartbeat csak biztonságos állapotot küld: packaged Windows, env-jelzők, candidate darabszám, stabil másolat léte és kötött failure-code lista. Fájlútvonal, token és SHA nem kerül a probe-ba.
+- A szerver a probe-ot sanitizálva tárolja, és a Central Core PHYSICAL WINDOWS E2E blokkoló sora rövid failure-code-ot tud mutatni, ha az identity továbbra sem jelenthető.
+- PROD DENY változatlan.

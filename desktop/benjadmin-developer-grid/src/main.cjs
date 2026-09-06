@@ -80,6 +80,7 @@ let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
 let deviceHeartbeatBusy = false;
 let desktopArtifactIdentityCache = null;
+let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
 
 function userDataPath() { return app.getPath("userData"); }
@@ -2290,7 +2291,7 @@ async function sendDeviceHeartbeatOnce() {
       const response = await fetch(`${config.benjadminBaseUrl}/api/dev/terminal-hub/windows-bridge/heartbeat`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ protocolVersion: 1, agentId, sessionId, sentAt: new Date().toISOString(), ...(client ? { client } : {}) }),
+        body: JSON.stringify({ protocolVersion: 1, agentId, sessionId, sentAt: new Date().toISOString(), ...(client ? { client } : {}), clientProbe: desktopArtifactProbeState }),
         cache: "no-store",
         signal: controller.signal
       });
@@ -2313,8 +2314,10 @@ async function sendDeviceHeartbeatOnce() {
 
 function desktopArtifactCandidates() {
   const portable = String(process.env.PORTABLE_EXECUTABLE_FILE || "").trim();
+  const portableDir = String(process.env.PORTABLE_EXECUTABLE_DIR || "").trim();
+  const reconstructed = portableDir ? path.join(portableDir, `BENJADMIN-Developer-Grid-${app.getVersion()}-Windows-x64.exe`) : "";
   const installed = installedExecutablePath();
-  const candidates = [portable, installed].filter(Boolean);
+  const candidates = [portable, reconstructed, installed].filter(Boolean);
   return [...new Set(candidates.map((file) => path.resolve(file)))];
 }
 
@@ -2333,13 +2336,32 @@ async function hashDesktopArtifact(file) {
 
 async function resolveDesktopArtifactIdentity() {
   if (desktopArtifactIdentityCache) return desktopArtifactIdentityCache;
-  if (!app.isPackaged || process.platform !== "win32") return null;
-  for (const file of desktopArtifactCandidates()) {
+  const packagedWindows = app.isPackaged && process.platform === "win32";
+  const portableFileEnv = Boolean(String(process.env.PORTABLE_EXECUTABLE_FILE || "").trim());
+  const portableDirEnv = Boolean(String(process.env.PORTABLE_EXECUTABLE_DIR || "").trim());
+  const installed = installedExecutablePath();
+  const installedCopyExists = packagedWindows && fs.existsSync(installed);
+  const candidates = packagedWindows ? desktopArtifactCandidates() : [];
+  const failureCodes = [];
+  desktopArtifactProbeState = { status:"UNAVAILABLE", packagedWindows, portableFileEnv, portableDirEnv, installedCopyExists, candidateCount:candidates.length, failureCodes };
+  if (!packagedWindows) { failureCodes.push("NOT_PACKAGED_WINDOWS"); return null; }
+  if (!portableFileEnv) failureCodes.push("PORTABLE_FILE_ENV_MISSING");
+  if (!portableDirEnv) failureCodes.push("PORTABLE_DIR_ENV_MISSING");
+  if (!installedCopyExists) failureCodes.push("STABLE_COPY_MISSING");
+  for (let index=0; index<candidates.length; index+=1) {
+    const file = candidates[index];
     try {
+      if (!fs.existsSync(file)) { failureCodes.push(`CANDIDATE_${index+1}_MISSING`); continue; }
       const identity = await hashDesktopArtifact(file);
-      if (identity) { desktopArtifactIdentityCache = identity; return desktopArtifactIdentityCache; }
-    } catch { /* try the next byte-identical physical artifact candidate */ }
+      if (identity) {
+        desktopArtifactIdentityCache = identity;
+        desktopArtifactProbeState = { ...desktopArtifactProbeState, status:"REPORTED", failureCodes:[...failureCodes] };
+        return desktopArtifactIdentityCache;
+      }
+      failureCodes.push(`CANDIDATE_${index+1}_INVALID`);
+    } catch { failureCodes.push(`CANDIDATE_${index+1}_READ_FAILED`); }
   }
+  desktopArtifactProbeState = { ...desktopArtifactProbeState, status:"UNAVAILABLE", failureCodes:[...new Set(failureCodes)].slice(0,8) };
   return null;
 }
 

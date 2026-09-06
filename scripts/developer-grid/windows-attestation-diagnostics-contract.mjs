@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const bridge=fs.readFileSync("app/lib/dev-center/terminal-hub/windows-bridge.ts","utf8");
+const pairing=fs.readFileSync("app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts","utf8");
+const e2e=fs.readFileSync("app/lib/developer-grid/windows-e2e.ts","utf8");
+let n=0;const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+check("heartbeat contract carries safe client probe",()=>assert.match(bridge,/clientProbe\?: WindowsBridgeClientProbe/));
+check("probe has no path or secret fields",()=>{const m=bridge.match(/export type WindowsBridgeClientProbe = \{[\s\S]*?\n\};/);assert.ok(m);assert.doesNotMatch(m[0],/path|token|sha256|fileName/i);});
+check("server normalizes bounded failure codes",()=>{assert.match(pairing,/normalizeClientProbe/);assert.match(pairing,/slice\(0, 8\)/);});
+check("probe persists beside client metadata",()=>assert.match(pairing,/clientProbe: \{ \.\.\.clientProbe, reportedAt: now \}/));
+check("E2E response exposes sanitized attestation probe",()=>assert.match(e2e,/attestationProbe: probe/));
+console.log(`Developer Grid Windows attestation diagnostics contract PASS · ${n}/${n}`);
