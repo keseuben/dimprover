@@ -81,3 +81,10 @@ A szerver/resource kártyák nagy kijelzős tipográfiát és függőleges elvá
 A System Health részletes panel a szervereket többé nem öt ismétlődő kártyaként jeleníti meg. A DEV VPS, BUILD01, BUILD02, PROD/ÉLŐ és DB VPS egy közös összehasonlító táblázatba kerül: az első oszlop egyszer tartalmazza a Host, CPU, RAM, Swap, Tárhely, Load 1m és Uptime mezőneveket, az öt további oszlop pedig az öt szerver értékeit és fejléc-státuszát. Ez megszünteti az ismétlődő címkéket és nagy kijelzőn gyorsabb összehasonlítást tesz lehetővé.
 
 A Hetzner Object Storage és a BX11 Storage Box szintén egy közös kétoszlopos külső-tárhely táblázatban jelenik meg. A Supabase forgalom és az AI/kapcsolat külön, kompakt blokk marad. A v0.1.17 túl nagy metrika-tipográfiája vissza lett véve: a fő táblázat 9,5 px, a csoportcím 11,5 px, a státusz badge 8,5 px alapméretet használ; 1500 px alatti szélességnél 9 px-re csökken. A függőleges és vízszintes táblázati elválasztók megmaradnak.
+
+
+## v0.1.19 System Health – kontraszt, védett szerver telemetria és Supabase analytics
+
+Világos módban a System Health READY/INFO/WARNING/CRITICAL badge-ek külön sötét előtérszínt, erősebb keretet és elkülönülő háttérszínt kapnak. A PROD és DB oszlopok a read-only elérhetőségi RTT-t mindig megjelenítik; ha nincs friss (legfeljebb 5 perces) resource snapshot, a státusz kifejezetten `ONLINE · RÉSZLEGES`, és CPU/RAM/lemez adatot nem találunk ki. A resource snapshot normalizáló a camelCase és snake_case mezőket, valamint a `cpuPercent`, `uptimeSec` és RTT aliasokat is kezeli.
+
+A Supabase Management API lekérés kizárólag read-only `analytics_usage_read` jogosultságú tokennel működik. A token átadható `BENJADMIN_SUPABASE_ANALYTICS_TOKEN` környezeti változóban vagy alapértelmezetten a `/root/.dimpro-secrets/supabase-dev/analytics-usage-read.token` szerveroldali secret fájlból; service-role kulcsra nincs fallback. A request analytics endpointok: `usage.api-counts` és `usage.api-requests-count`.

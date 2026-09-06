@@ -21,6 +21,7 @@ const PROTECTED_SERVER_TTL_MS = 60_000;
 const DISK_TTL_MS = 60_000;
 const STORAGE_TTL_MS = 300_000;
 const TRAFFIC_TTL_MS = 300_000;
+const INFRA_SNAPSHOT_MAX_AGE_MS = 5 * 60_000;
 const AI_TTL_MS = 30_000;
 const PROD_URL = "https://license.dimpro.hu/admin/szerver";
 const DB_HOST = "213.160.68.33";
@@ -28,6 +29,7 @@ const DB_PORT = 5432;
 const HETZNER_INCLUDED_STORAGE_BYTES = 1_000_000_000_000;
 const HETZNER_STORAGE_BOX_ALIAS = "dimpro-backup-bx11";
 const SUPABASE_MANAGEMENT_API = "https://api.supabase.com";
+const DEFAULT_SUPABASE_ANALYTICS_TOKEN_FILE = "/root/.dimpro-secrets/supabase-dev/analytics-usage-read.token";
 const execFileAsync = promisify(execFile);
 
 export type HealthMetric = LegacyHealthMetric;
@@ -110,24 +112,57 @@ async function localServer(disk: ReturnType<typeof localDiskMetric>): Promise<He
   };
 }
 
-type InfraSnapshot = { sampledAt?: string; production?: Record<string, unknown>; database?: Record<string, unknown> };
+type InfraSnapshot = { sampledAt?: string; generatedAt?: string; production?: Record<string, unknown>; database?: Record<string, unknown> };
+
+function numberField(sample: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    if (typeof sample[key] === "number" && Number.isFinite(Number(sample[key]))) return Number(sample[key]);
+  }
+  return null;
+}
 
 function snapshotMetric(sample: Record<string, unknown> | undefined): HealthMetric {
   if (!sample) return emptyMetric();
-  const n = (key: string) => typeof sample[key] === "number" ? Number(sample[key]) : null;
+  const nested = sample.metrics && typeof sample.metrics === "object" ? sample.metrics as Record<string, unknown> : sample;
   return {
-    cpuPercent: null, load1: n("load1m"), cores: null,
-    memoryTotalBytes: n("memoryTotalBytes"), memoryUsedBytes: n("memoryUsedBytes"), memoryPercent: n("memoryPercent"),
-    swapTotalBytes: n("swapTotalBytes"), swapUsedBytes: n("swapUsedBytes"),
-    diskTotalBytes: n("diskTotalBytes"), diskUsedBytes: n("diskUsedBytes"), diskPercent: n("diskPercent"),
-    uptimeSeconds: null,
+    cpuPercent: numberField(nested, "cpuPercent", "cpu_percent"),
+    load1: numberField(nested, "load1m", "load1", "load_1m"),
+    cores: numberField(nested, "cores", "cpuCores", "cpu_cores"),
+    memoryTotalBytes: numberField(nested, "memoryTotalBytes", "memory_total_bytes"),
+    memoryUsedBytes: numberField(nested, "memoryUsedBytes", "memory_used_bytes"),
+    memoryAvailableBytes: numberField(nested, "memoryAvailableBytes", "memory_available_bytes"),
+    memoryPercent: numberField(nested, "memoryPercent", "memory_percent"),
+    swapTotalBytes: numberField(nested, "swapTotalBytes", "swap_total_bytes"),
+    swapUsedBytes: numberField(nested, "swapUsedBytes", "swap_used_bytes"),
+    diskTotalBytes: numberField(nested, "diskTotalBytes", "disk_total_bytes"),
+    diskUsedBytes: numberField(nested, "diskUsedBytes", "disk_used_bytes"),
+    diskAvailableBytes: numberField(nested, "diskAvailableBytes", "disk_available_bytes"),
+    diskPercent: numberField(nested, "diskPercent", "disk_percent"),
+    uptimeSeconds: numberField(nested, "uptimeSeconds", "uptimeSec", "uptime_sec"),
+    latencyMs: numberField(nested, "latencyMs", "networkRttMs", "rttMs", "responseMs"),
   };
+}
+
+function snapshotTimestamp(snapshot: InfraSnapshot | null) {
+  return snapshot?.sampledAt || snapshot?.generatedAt || null;
+}
+
+function snapshotIsFresh(snapshot: InfraSnapshot | null, now = Date.now()) {
+  const stamp = snapshotTimestamp(snapshot);
+  const parsed = stamp ? Date.parse(stamp) : Number.NaN;
+  return Number.isFinite(parsed) && now - parsed >= 0 && now - parsed <= INFRA_SNAPSHOT_MAX_AGE_MS;
 }
 
 function loadInfraSnapshot(): InfraSnapshot | null {
   const configured = process.env.BENJADMIN_INFRA_SNAPSHOT_FILE?.trim();
-  const filePath = configured || path.join(process.cwd(), ".dimprover", "monitor", "benjadmin-infrastructure-snapshot.json");
-  try { return JSON.parse(fs.readFileSync(filePath, "utf8")) as InfraSnapshot; } catch { return null; }
+  const candidates = [configured, path.join(process.cwd(), ".dimprover", "monitor", "benjadmin-infrastructure-snapshot.json")].filter(Boolean) as string[];
+  for (const filePath of candidates) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as InfraSnapshot;
+      if (snapshotIsFresh(parsed)) return parsed;
+    } catch {}
+  }
+  return null;
 }
 
 async function probeHttp(url: string, timeoutMs = 4_000) {
@@ -151,9 +186,20 @@ async function protectedServers(): Promise<HealthServer[]> {
   const [prod, db] = await Promise.all([probeHttp(PROD_URL), probeTcp(DB_HOST, DB_PORT)]);
   const prodMetric = { ...snapshotMetric(snapshot?.production), latencyMs: prod.latencyMs };
   const dbMetric = { ...snapshotMetric(snapshot?.database), latencyMs: db.latencyMs };
+  const hasResourceSample = (metric: HealthMetric) => metric.cpuPercent !== null || metric.memoryTotalBytes !== null || metric.diskTotalBytes !== null || metric.uptimeSeconds !== null;
+  const prodHasResources = hasResourceSample(prodMetric);
+  const dbHasResources = hasResourceSample(dbMetric);
   return [
-    { id: "prod-vps", label: "PROD / ÉLŐ", hostname: "license.dimpro.hu", state: prod.online ? "READY" : "DEGRADED", reason: prod.online ? `Read-only HTTPS probe · ${prod.latencyMs ?? "—"} ms` : "Read-only HTTPS probe sikertelen.", lastVerifiedAt: new Date().toISOString(), metrics: prodMetric },
-    { id: "db-vps", label: "DB VPS", hostname: "db.dimpro.hu", state: db.online ? "READY" : "DEGRADED", reason: db.online ? `Read-only TCP probe · ${db.latencyMs ?? "—"} ms` : "Read-only DB TCP probe sikertelen.", lastVerifiedAt: new Date().toISOString(), metrics: dbMetric },
+    {
+      id: "prod-vps", label: "PROD / ÉLŐ", hostname: "license.dimpro.hu", state: prod.online ? "READY" : "DEGRADED",
+      reason: prod.online ? `${prodHasResources ? "Friss read-only resource snapshot" : "Read-only HTTPS probe; resource collector nincs bekötve"} · ${prod.latencyMs ?? "—"} ms` : "Read-only HTTPS probe sikertelen.",
+      lastVerifiedAt: new Date().toISOString(), metrics: prodMetric, source: prodHasResources ? "PROTECTED_RESOURCE_SNAPSHOT+HTTPS_READONLY" : "HTTPS_READONLY", quality: prodHasResources ? "LIVE" : "PARTIAL",
+    },
+    {
+      id: "db-vps", label: "DB VPS", hostname: "db.dimpro.hu", state: db.online ? "READY" : "DEGRADED",
+      reason: db.online ? `${dbHasResources ? "Friss read-only resource snapshot" : "Read-only TCP probe; resource collector nincs bekötve"} · ${db.latencyMs ?? "—"} ms` : "Read-only DB TCP probe sikertelen.",
+      lastVerifiedAt: new Date().toISOString(), metrics: dbMetric, source: dbHasResources ? "PROTECTED_RESOURCE_SNAPSHOT+TCP_READONLY" : "TCP_READONLY", quality: dbHasResources ? "LIVE" : "PARTIAL",
+    },
   ];
 }
 
@@ -284,6 +330,16 @@ function configuredBytes(name: string) {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
+function supabaseAnalyticsToken() {
+  const direct = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN?.trim();
+  if (direct) return direct;
+  const tokenFile = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN_FILE?.trim() || DEFAULT_SUPABASE_ANALYTICS_TOKEN_FILE;
+  try {
+    const token = fs.readFileSync(tokenFile, "utf8").trim();
+    return token || "";
+  } catch { return ""; }
+}
+
 async function supabaseManagementJson(pathname: string, token: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8_000);
@@ -303,7 +359,7 @@ function sumUsageRows(rows: unknown, key: string) {
 async function inspectSupabaseTraffic(): Promise<HealthTraffic> {
   const now = new Date().toISOString();
   const projectRef = supabaseProjectRef();
-  const token = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN?.trim() || "";
+  const token = supabaseAnalyticsToken();
   const egressBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_BYTES");
   const cachedEgressBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_BYTES");
   const egressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_QUOTA_BYTES");
@@ -312,7 +368,7 @@ async function inspectSupabaseTraffic(): Promise<HealthTraffic> {
   const cachedEgressPercent = cachedEgressBytes !== null && cachedEgressQuotaBytes !== null ? pct(cachedEgressBytes, cachedEgressQuotaBytes) : null;
   const base = { id: "supabase-traffic" as const, label: "SUPABASE FORGALOM", projectRef, interval: "MANAGEMENT_API", egressBytes, cachedEgressBytes, egressQuotaBytes, cachedEgressQuotaBytes, egressPercent, cachedEgressPercent };
   if (!projectRef) return { ...base, state: "NOT_CONNECTED", reason: "Supabase project ref nem azonosítható.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
-  if (!token) return { ...base, state: "NOT_CONNECTED", reason: "A Supabase forgalom read-only lekéréséhez BENJADMIN_SUPABASE_ANALYTICS_TOKEN szükséges (analytics_usage_read). A service-role kulcsot erre nem használjuk.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
+  if (!token) return { ...base, state: "NOT_CONNECTED", reason: "A Supabase forgalom read-only lekéréséhez analytics_usage_read jogosultságú Management API token szükséges. A service-role kulcsot erre nem használjuk.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
   try {
     const [countsPayload, requestPayload] = await Promise.all([
       supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-counts`, token),

@@ -682,7 +682,7 @@ function renderSystemHealth() {
       const healthBadge = (stateValue, { ready = "READY", busy = "BUSY", missing = "ELLENŐRIZD" } = {}) => {
         const stateText = String(stateValue || "UNKNOWN").toUpperCase();
         const stateClass = stateText === "READY" ? "is-ready" : stateText === "BUSY" ? "is-info" : stateText === "CRITICAL" ? "is-critical" : stateText === "NOT_CONNECTED" ? "is-info" : "is-warning";
-        const label = stateText === "READY" ? ready : stateText === "BUSY" ? busy : stateText === "NOT_CONNECTED" ? "NINCS ADAT" : missing;
+        const label = stateText === "READY" ? ready : stateText === "BUSY" ? busy : stateText === "NOT_CONNECTED" ? missing : missing;
         return `<span class="health-state ${stateClass}">${escapeHtml(label)}</span>`;
       };
       const ordered = ["dev-vps", "build01", "build02", "prod-vps", "db-vps"].map(healthServer).filter(Boolean);
@@ -695,12 +695,16 @@ function renderSystemHealth() {
         if (key === "disk") return escapeHtml(capacityMetricText(m.diskUsedBytes, m.diskTotalBytes, m.diskPercent));
         if (key === "load") return Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—";
         if (key === "uptime") return Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—";
+        if (key === "rtt") return Number.isFinite(Number(m.latencyMs)) ? `${Math.round(Number(m.latencyMs))} ms` : "—";
         return "—";
       };
       const serverRows = [
-        ["Host", "host"], ["CPU", "cpu"], ["RAM", "ram"], ["Swap", "swap"], ["Tárhely", "disk"], ["Load 1m", "load"], ["Uptime", "uptime"],
+        ["Host", "host"], ["CPU", "cpu"], ["RAM", "ram"], ["Swap", "swap"], ["Tárhely", "disk"], ["Load 1m", "load"], ["RTT", "rtt"], ["Uptime", "uptime"],
       ];
-      const serverHeader = ordered.map((server) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(server?.label || "—")}</strong>${healthBadge(server?.state)}</div></th>`).join("");
+      const serverBadge = (server) => server?.state === "READY" && server?.quality === "PARTIAL"
+        ? '<span class="health-state is-info">ONLINE · RÉSZLEGES</span>'
+        : healthBadge(server?.state);
+      const serverHeader = ordered.map((server) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(server?.label || "—")}</strong>${serverBadge(server)}</div></th>`).join("");
       const serverBody = serverRows.map(([label, key]) => `<tr><th scope="row">${label}</th>${ordered.map((server) => `<td>${serverValue(server, key)}</td>`).join("")}</tr>`).join("");
       const serverTable = `<section class="health-group health-group--servers"><div class="health-group__head"><h4>SZERVEREK</h4><span>${ordered.length} node · közös erőforrásnézet</span></div><div class="health-table-wrap"><table class="health-table health-table--servers"><thead><tr><th scope="col" class="health-table__metric">ERŐFORRÁS</th>${serverHeader}</tr></thead><tbody>${serverBody}</tbody></table></div></section>`;
 

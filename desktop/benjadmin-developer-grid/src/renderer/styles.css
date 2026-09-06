@@ -2361,7 +2361,15 @@ body.has-health-drawer .central-panel {
 :root[data-theme="light"] .health-table td,
 :root[data-theme="light"] .health-kv-table th,
 :root[data-theme="light"] .health-kv-table td { border-color:rgba(7,132,92,.14); }
-:root[data-theme="light"] .health-group .health-state.is-ready { color:#075d43; }
+/* v0.1.19 · light mode status badges use dark foregrounds and explicit borders. */
+:root[data-theme="light"] .health-group .health-state.is-ready { color:#064c38; background:#d7f4e8; border-color:#238b69; }
+:root[data-theme="light"] .health-group .health-state.is-info { color:#07536a; background:#d9f1f7; border-color:#2d87a1; }
+:root[data-theme="light"] .health-group .health-state.is-warning { color:#6d4a00; background:#fff0c7; border-color:#b47a09; }
+:root[data-theme="light"] .health-group .health-state.is-critical { color:#7d1d2d; background:#ffe0e5; border-color:#c34f61; }
+:root[data-theme="light"] .system-health-overall.is-ok { color:#064c38; background:#d7f4e8; border-color:#238b69; }
+:root[data-theme="light"] .system-health-overall.is-info { color:#07536a; background:#d9f1f7; border-color:#2d87a1; }
+:root[data-theme="light"] .system-health-overall.is-warning { color:#6d4a00; background:#fff0c7; border-color:#b47a09; }
+:root[data-theme="light"] .system-health-overall.is-critical { color:#7d1d2d; background:#ffe0e5; border-color:#c34f61; }
 
 @media (max-width: 1500px) {
   .system-health-peek__metrics { display:none; }
