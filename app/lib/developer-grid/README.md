@@ -127,3 +127,13 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - A szerver szigorúan validálja a termék/verzió/SHA/méret mezőket, és kizárólag sanitizált kliensazonosságot tárol a device metadata mezőben szerveroldali `reportedAt` idővel.
 - A Windows device listából így ellenőrizhető lesz, hogy a fizikai gépen ténylegesen az adott publikus EXE SHA futott-e; ez a physical Windows E2E lezárási bizonyíték egyik gépi forrása.
 - A heartbeat nem tartalmaz kulcsot, tokent vagy más credentialt; PROD továbbra is DENY.
+
+
+## v0.1.25 Physical Windows E2E gate
+
+- A Central Core külön `PHYSICAL WINDOWS E2E` kaput jelenít meg.
+- A gate a párosított Windows device sanitizált attesztációját a publikus DEV artifact manifesttel hasonlítja össze.
+- Kötelező egyezések: current source HEAD, current BUILD_ID, DEV/PROD DENY manifest, kliensverzió, EXE SHA-256 és bájtméret.
+- A Windows heartbeat legfeljebb 10 perces lehet, így régi vagy leállított kliens nem adhat zöld kaput.
+- Sikeres device heartbeat automatikusan frissíti a Central Core panelt; kézi token, jelszó vagy raw credential nem kerül a UI-ba.
+- A gate önmagában nem zár le taskot és nem enged PROD műveletet; a későbbi closure evidence egyik kötelező forrása lesz.

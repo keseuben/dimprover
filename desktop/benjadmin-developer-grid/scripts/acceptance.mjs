@@ -14,7 +14,7 @@ const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8"
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.24",()=>assert.equal(pkg.version,"0.1.24"));
+check("package version 0.1.25",()=>assert.equal(pkg.version,"0.1.25"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -58,6 +58,7 @@ check("header exposes compact ChatGPT refresh lifecycle",()=>{assert.match(html,
 check("control workspace is forced closed at app startup",()=>assert.match(main,/contextWorkspace = \{ \.\.\.config\.contextWorkspace, visible: false, detached: false \}/));
 check("control center shows BUILD01 and BUILD02 runner health",()=>{assert.match(contextWorkspaceSource,/BUILD RUNNER POOL/);assert.match(contextWorkspaceSource,/build01/);assert.match(contextWorkspaceSource,/build02/);assert.match(contextWorkspaceSource,/getSystemHealth/);});
 check("control center shows Diagnostic Evidence and review gates",()=>{assert.match(contextWorkspaceSource,/DIAGNOSTIC EVIDENCE ENGINE/);assert.match(contextWorkspaceSource,/REVIEW READINESS/);assert.match(contextWorkspaceSource,/BUILD GATE/);assert.match(contextWorkspaceSource,/CLOSURE \/ HANDOFF/);});
+check("control center shows Physical Windows E2E gate",()=>{assert.match(contextWorkspaceSource,/PHYSICAL WINDOWS E2E/);assert.match(contextWorkspaceSource,/getDeveloperGridWindowsE2E/);});
 check("control center exposes explicit VGuard review without automatic provider spend",()=>{assert.match(contextWorkspaceSource,/FÜGGETLEN REVIEW INDÍTÁSA/);assert.match(contextWorkspaceSource,/requestDeveloperGridVGuardReview/);assert.doesNotMatch(contextWorkspaceSource,/setInterval\([^)]*requestDeveloperGridVGuardReview/);});
 check("work-start requires explicit coding worker",()=>{assert.doesNotMatch(contextWorkspaceSource,/Automatikus · Central Core választ/);assert.match(contextWorkspaceSource,/Válassz kódmérnököt/);assert.match(contextWorkspaceSource,/Automatikus worker-kiosztás nincs/);});
 const taskLaunchPrompt=fs.readFileSync(path.join(root,"src/task-launch/prompt-builder.cjs"),"utf8");
@@ -98,4 +99,4 @@ check("BenjáminAI profile is integrated code engineer",()=>{assert.match(render
 check("all four worker headers expose code-engineer role badge",()=>{assert.equal((html.match(/data-role="worker-role"/g)||[]).length,4);assert.match(html,/INTEGRÁLT KÓDMÉRNÖK/);assert.match(renderer,/WORKER_ROLE_LABELS/);});
 check("Central Core owns coordination wording",()=>{assert.match(contextWorkspaceSource,/Central Core koordináció/);assert.doesNotMatch(contextWorkspaceSource,/BenAI koordináció/);assert.match(guideSource,/Central Core \/ Grid Orchestrator/);});
 check("worker headers expose engineering phase status",()=>{for(const label of ["ELEMZÉS","FEJLESZT","TESZTEL","ELLENŐRIZ","BUILD","LEZÁRÁS"])assert.match(renderer,new RegExp(label));});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.24 DEV acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.25 DEV acceptance PASS · ${n}/${n}`);

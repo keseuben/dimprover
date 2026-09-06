@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   requestDeveloperGridFullBuild: (input = {}) => ipcRenderer.invoke("build-runs:request", input),
   getDeveloperGridEvidence: (taskId = "") => ipcRenderer.invoke("evidence:get", { taskId }),
   getDeveloperGridReviewGate: (taskId = "", target = "REVIEW") => ipcRenderer.invoke("review-gate:get", { taskId, target }),
+  getDeveloperGridWindowsE2E: () => ipcRenderer.invoke("windows-e2e:get"),
   requestDeveloperGridVGuardReview: (input = {}) => ipcRenderer.invoke("review-gate:run", input),
   bindTaskConversation: (workerCode, taskId) => ipcRenderer.invoke("task:bind-conversation", { workerCode, taskId }),
   contextWorkspaceMode: (action, payload = {}) => ipcRenderer.invoke("context:mode", { action, ...payload }),

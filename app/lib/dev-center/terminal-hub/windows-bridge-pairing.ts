@@ -176,11 +176,22 @@ export async function pollWindowsBridgeClaim(pairingId: string, claimToken: stri
 
 export async function authenticateWindowsBridgeDevice(token: string, agentId?: string) {
   assertBridgeEnabled(); const tokenHash = hashWindowsBridgeToken(token || ""); const client = db();
-  let query = client.from("dev_center_windows_bridge_devices").select("id,agent_id,status,device_label,metadata").eq("token_hash", tokenHash).eq("status", "active");
+  let query = client.from("dev_center_windows_bridge_devices").select("id,agent_id,status,device_label,last_seen_at,metadata").eq("token_hash", tokenHash).eq("status", "active");
   if (agentId) query = query.eq("agent_id", clean(agentId, 128));
   const result = await query.maybeSingle();
   if (result.error || !result.data) throw new WindowsBridgePairingError("DEVICE_TOKEN_INVALID", "Érvénytelen vagy visszavont Windows Bridge device token.", 401);
-  return { client, device: result.data as { id: string; agent_id: string; status: string; device_label: string; metadata?: Row } };
+  return { client, device: result.data as { id: string; agent_id: string; status: string; device_label: string; last_seen_at?: string | null; metadata?: Row } };
+}
+
+export async function getWindowsBridgeDeviceAttestation(token: string) {
+  const { device } = await authenticateWindowsBridgeDevice(token);
+  return {
+    deviceId: String(device.id),
+    agentId: String(device.agent_id),
+    deviceLabel: String(device.device_label || ""),
+    lastSeenAt: device.last_seen_at ? String(device.last_seen_at) : null,
+    client: storedClientIdentity(device.metadata),
+  };
 }
 
 export async function heartbeatWindowsBridgeDevice(input: WindowsBridgeHeartbeat, token: string) {

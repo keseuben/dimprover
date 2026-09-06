@@ -159,5 +159,10 @@ async function requestDeveloperGridVGuardReview({ baseUrl, deviceToken, input })
   const payload = await jsonRequest(`${base}/api/dev/grid/review-gate`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 360000);
   return payload.review || null;
 }
+async function fetchDeveloperGridWindowsE2E({ baseUrl, deviceToken }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/windows-e2e`, { method:"GET", headers:headers(deviceToken) }, 15000);
+  return payload.windowsE2E || null;
+}
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, sanitizeSnapshot };

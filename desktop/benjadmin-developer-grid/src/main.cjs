@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
@@ -2294,6 +2294,7 @@ async function sendDeviceHeartbeatOnce() {
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Windows Bridge heartbeat HTTP ${response.status}`);
       send("connection:device-heartbeat", { ok: true, at: new Date().toISOString() });
+      send("context:refresh", { reason:"device-heartbeat" });
     } finally {
       clearTimeout(timer);
     }
@@ -2761,6 +2762,11 @@ function registerIpc() {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try { return { ok:true, ...(await fetchDeveloperGridEvidence({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId || ""), limit:160 })) }; }
     catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Diagnostic Evidence nem tölthető be." }; }
+  });
+  ipcMain.handle("windows-e2e:get", async () => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, windowsE2E: await fetchDeveloperGridWindowsE2E({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Physical Windows E2E állapot nem tölthető be." }; }
   });
   ipcMain.handle("review-gate:get", async (_event, payload) => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
