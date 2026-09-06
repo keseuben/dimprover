@@ -137,3 +137,13 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - A Windows heartbeat legfeljebb 10 perces lehet, így régi vagy leállított kliens nem adhat zöld kaput.
 - Sikeres device heartbeat automatikusan frissíti a Central Core panelt; kézi token, jelszó vagy raw credential nem kerül a UI-ba.
 - A gate önmagában nem zár le taskot és nem enged PROD műveletet; a későbbi closure evidence egyik kötelező forrása lesz.
+
+
+## v0.1.26 Central Core theme persistence + light contrast
+
+- A dockolt Central Core / Context Workspace megnyitott állapota runtime-authoritative. Általános konfigurációmentés vagy sötét/világos téma váltás nem írhatja felül stale renderer `visible/detached` értékkel.
+- A main process megőrzi a teljes aktuális Context Workspace runtime layoutot, majd config update után újra publikálja a `context:layout` állapotot.
+- A shell renderer a layout eventből frissíti a saját config snapshotját is, így a következő beállításmentés már nem régi panelállapotból indul.
+- Világos módban külön nagy kontrasztú szöveg- és felületértékek készültek a work-start, aktív munka, Diagnostic Evidence, gate-ek, V.Guard, Build Runner Pool és Context Pack másodlagos szövegeire.
+- Acceptance: nyitott Central Core mellett dark→light→dark váltás után a panel maradjon nyitva és elöl; light módban a leíró/segédszövegek legyenek jól olvashatók.
+- PROD továbbra is DENY.

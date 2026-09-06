@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here=path.dirname(fileURLToPath(import.meta.url));
+const root=path.resolve(here,"..");
+const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
+const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8");
+const css=fs.readFileSync(path.join(root,"src/renderer/styles.css"),"utf8");
+let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+check("generic config update preserves runtime Context Workspace",()=>{assert.match(main,/runtimeContextWorkspace = config\.contextWorkspace/);assert.match(main,/contextWorkspace: runtimeContextWorkspace/);});
+check("config update republishes authoritative Context Workspace layout",()=>assert.match(main,/send\("context:layout", \{ \.\.\.saved\.contextWorkspace, docked: contextWorkspaceDocked\(\) \}\)/));
+check("theme toggle still uses config update path",()=>{assert.match(renderer,/next\.appearance = next\.appearance === "light" \? "dark" : "light"/);assert.match(renderer,/api\.updateConfig\(next\)/);});
+check("light Central Core has explicit high contrast work text",()=>{assert.match(css,/v0\.1\.26 · Central Core theme persistence/);assert.match(css,/cw-work-start > header span/);assert.match(css,/color:#365f56/);});
+check("light evidence and gate secondary text is dark",()=>{assert.match(css,/cw-gate-grid small/);assert.match(css,/cw-evidence-grid strong/);assert.match(css,/color:#3f645b/);});
+check("light status states retain distinct pass and blocked colors",()=>{assert.match(css,/data-gate-state="PASS"/);assert.match(css,/data-gate-state="BLOCKED"/);assert.match(css,/color:#9f2340/);});
+console.log(`Developer Grid Central Core theme persistence contract PASS · ${n}/${n}`);

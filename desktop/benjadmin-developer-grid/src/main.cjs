@@ -2662,7 +2662,14 @@ function registerIpc() {
     if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
     const previousCells = new Map(config.cells.map((cell) => [cell.id, { ...cell }]));
     const previousCentral = config.centralChat ? { ...config.centralChat } : null;
-    const saved = saveConfig(nextConfig);
+    // The Context Workspace is runtime-owned by context:mode. Renderer config can be stale
+    // when the panel was opened after the last config snapshot (e.g. theme toggle).
+    // Preserve the authoritative runtime layout so an appearance save cannot hide/detach it.
+    const runtimeContextWorkspace = config.contextWorkspace ? { ...config.contextWorkspace } : null;
+    const mergedConfig = runtimeContextWorkspace
+      ? { ...(nextConfig || {}), contextWorkspace: runtimeContextWorkspace }
+      : nextConfig;
+    const saved = saveConfig(mergedConfig);
     for (const cell of saved.cells) {
       const previous = previousCells.get(cell.id);
       if (!cell.enabled) closeChatView(cell.id);
@@ -2678,6 +2685,7 @@ function registerIpc() {
     updateViewBounds();
     startLiveClient();
     send("config:state", saved);
+    if (runtimeContextWorkspace) send("context:layout", { ...saved.contextWorkspace, docked: contextWorkspaceDocked() });
     sendCentralUiState();
     return { ok: true, config: saved };
   });

@@ -2718,3 +2718,80 @@ body.has-health-drawer .central-panel {
 .health-group__actions{display:flex;align-items:center;gap:6px;min-width:0}.health-inline-action{border:1px solid var(--mint-border,#72bdb1);background:rgba(18,117,101,.08);color:inherit;border-radius:6px;padding:3px 7px;font-size:8.5px;font-weight:800;letter-spacing:.03em;cursor:pointer}.health-inline-action:hover{background:rgba(18,117,101,.16)}:root[data-theme="dark"] .health-inline-action{background:rgba(55,205,183,.1);border-color:rgba(94,224,204,.38);color:#c8fff5}
 
 /* v0.1.21 · scoped Supabase monitoring gate is served by the DEV backend setup page. */
+
+
+/* Developer Grid v0.1.26 · Central Core theme persistence + light-mode contrast */
+:root[data-theme="light"] .context-workspace,
+:root[data-theme="light"] .context-workspace-window {
+  color:#142f2a;
+}
+:root[data-theme="light"] .context-workspace__body,
+:root[data-theme="light"] .context-workspace-window #contextWorkspaceRoot {
+  color:#183f36;
+}
+:root[data-theme="light"] .cw-work-start {
+  background:#ffffff;
+  border-color:#76bca8;
+  box-shadow:0 8px 22px rgba(16,87,70,.10);
+}
+:root[data-theme="light"] .cw-work-start > header strong { color:#073f34; }
+:root[data-theme="light"] .cw-work-start > header span,
+:root[data-theme="light"] .cw-work-prompt,
+:root[data-theme="light"] .cw-work-meta label,
+:root[data-theme="light"] .cw-work-worker small,
+:root[data-theme="light"] .cw-work-actions small { color:#365f56; }
+:root[data-theme="light"] .cw-active-work { background:#eaf8f1; border-color:#78bca6; }
+:root[data-theme="light"] .cw-active-work strong { color:#0a6449; }
+:root[data-theme="light"] .cw-active-work span { color:#173f35; }
+:root[data-theme="light"] .cw-active-work small { color:#3f675d; }
+:root[data-theme="light"] .cw-diagnostics,
+:root[data-theme="light"] .cw-runner-pool,
+:root[data-theme="light"] .cw-pack {
+  background:#ffffff;
+  border-color:#9dbfb5;
+}
+:root[data-theme="light"] .cw-diagnostics > header strong,
+:root[data-theme="light"] .cw-runner-pool > header strong,
+:root[data-theme="light"] .cw-pack > header strong { color:#133f35; }
+:root[data-theme="light"] .cw-diagnostics > header span,
+:root[data-theme="light"] .cw-runner-pool > header span,
+:root[data-theme="light"] .cw-pack > header span { color:#3e665d; }
+:root[data-theme="light"] .cw-evidence-grid article,
+:root[data-theme="light"] .cw-source-line,
+:root[data-theme="light"] .cw-gate-grid article,
+:root[data-theme="light"] .cw-runner-grid article,
+:root[data-theme="light"] .cw-build-run {
+  background:#fbfefd;
+  border-color:#b7cec7;
+}
+:root[data-theme="light"] .cw-evidence-grid strong,
+:root[data-theme="light"] .cw-source-line strong,
+:root[data-theme="light"] .cw-gate-grid small,
+:root[data-theme="light"] .cw-vguard-actions span,
+:root[data-theme="light"] .cw-runner-grid span,
+:root[data-theme="light"] .cw-runner-grid small,
+:root[data-theme="light"] .cw-runner-grid em,
+:root[data-theme="light"] .cw-build-run span,
+:root[data-theme="light"] .cw-build-run small,
+:root[data-theme="light"] .cw-build-actions small { color:#3f645b; }
+:root[data-theme="light"] .cw-evidence-grid b,
+:root[data-theme="light"] .cw-source-line span,
+:root[data-theme="light"] .cw-vguard-actions strong,
+:root[data-theme="light"] .cw-runner-grid strong { color:#0e4f40; }
+:root[data-theme="light"] .cw-gate-grid strong { color:#163f35; }
+:root[data-theme="light"] .cw-gate-grid article[data-gate-state="PASS"] { background:#edf9f3; border-color:#84bba8; }
+:root[data-theme="light"] .cw-gate-grid article[data-gate-state="PASS"] b { color:#0a6549; }
+:root[data-theme="light"] .cw-gate-grid article[data-gate-state="BLOCKED"] { background:#fff7f8; border-color:#d6a7b0; }
+:root[data-theme="light"] .cw-gate-grid article[data-gate-state="BLOCKED"] b,
+:root[data-theme="light"] .cw-diagnostics > header b,
+:root[data-theme="light"] .cw-runner-pool > header b { color:#9f2340; }
+:root[data-theme="light"] .cw-runner-grid b { background:#fff4cf; color:#705000; }
+:root[data-theme="light"] .cw-runner-grid article[data-runner-state="READY"] b { background:#e4f7ee; color:#0b6348; }
+:root[data-theme="light"] .cw-pack-grid article { background:#fbfefd; border-color:#bdcec8; }
+:root[data-theme="light"] .cw-pack-grid strong { color:#145340; }
+:root[data-theme="light"] .cw-pack-grid span,
+:root[data-theme="light"] .cw-pack-grid small { color:#45695f; }
+:root[data-theme="light"] .cw-upload-grid label,
+:root[data-theme="light"] .cw-check { color:#365f56; }
+:root[data-theme="light"] .cw-notice { color:#1d4b40; background:#f1faf6; border-color:#9bbcaf; }
+:root[data-theme="light"] .context-workspace__resize:hover { background:rgba(16,125,94,.16); }
