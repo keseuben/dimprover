@@ -79,6 +79,7 @@ let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
 let deviceHeartbeatBusy = false;
+let desktopArtifactIdentityCache = null;
 const avatarDataUriCache = new Map();
 
 function userDataPath() { return app.getPath("userData"); }
@@ -2282,10 +2283,11 @@ async function sendDeviceHeartbeatOnce() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
     try {
+      const client = await resolveDesktopArtifactIdentity();
       const response = await fetch(`${config.benjadminBaseUrl}/api/dev/terminal-hub/windows-bridge/heartbeat`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ protocolVersion: 1, agentId, sessionId, sentAt: new Date().toISOString() }),
+        body: JSON.stringify({ protocolVersion: 1, agentId, sessionId, sentAt: new Date().toISOString(), ...(client ? { client } : {}) }),
         cache: "no-store",
         signal: controller.signal
       });
@@ -2303,6 +2305,25 @@ async function sendDeviceHeartbeatOnce() {
       deviceHeartbeatTimer = setTimeout(() => void sendDeviceHeartbeatOnce(), DEVICE_HEARTBEAT_INTERVAL_MS);
     }
   }
+}
+
+async function resolveDesktopArtifactIdentity() {
+  if (desktopArtifactIdentityCache) return desktopArtifactIdentityCache;
+  if (!app.isPackaged || process.platform !== "win32") return null;
+  const file = portableSourceExecutablePath();
+  try {
+    const stat = fs.statSync(file);
+    if (!stat.isFile() || stat.size <= 0) return null;
+    const hash = createHash("sha256");
+    for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+    desktopArtifactIdentityCache = {
+      product: APP_TITLE,
+      version: app.getVersion(),
+      executableSha256: hash.digest("hex"),
+      executableBytes: stat.size
+    };
+    return desktopArtifactIdentityCache;
+  } catch { return null; }
 }
 
 function startDeviceHeartbeat() {

@@ -15,4 +15,6 @@ check("heartbeat is bounded by network timeout",()=>assert.match(main,/setTimeou
 check("heartbeat starts only for device auth",()=>assert.match(main,/credential\.mode === "device"\) startDeviceHeartbeat\(\)/));
 check("workspace lock stops heartbeat with live client",()=>{assert.match(main,/function stopLiveClient\(\)[\s\S]*stopDeviceHeartbeat\(\)/);assert.match(main,/function lockWorkspace[\s\S]*stopLiveClient\(\)/);});
 check("heartbeat never exposes token in renderer event",()=>{assert.doesNotMatch(main,/connection:device-heartbeat", \{[^}]*token/s);assert.match(main,/connection:device-heartbeat", \{ ok: true, at:/);});
+check("packaged Windows heartbeat hashes exact portable artifact",()=>{assert.match(main,/resolveDesktopArtifactIdentity/);assert.match(main,/portableSourceExecutablePath\(\)/);assert.match(main,/createHash\("sha256"\)/);assert.match(main,/fs\.createReadStream\(file\)/);});
+check("heartbeat reports immutable artifact identity",()=>{assert.match(main,/product: APP_TITLE/);assert.match(main,/version: app\.getVersion\(\)/);assert.match(main,/executableSha256/);assert.match(main,/executableBytes/);});
 console.log(`Developer Grid device heartbeat contract PASS · ${n}/${n}`);

@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const bridge=fs.readFileSync("app/lib/dev-center/terminal-hub/windows-bridge.ts","utf8");
+const pairing=fs.readFileSync("app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts","utf8");
+const main=fs.readFileSync("desktop/benjadmin-developer-grid/src/main.cjs","utf8");
+let n=0; const check=(label,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+check("heartbeat type carries safe Developer Grid artifact identity",()=>{assert.match(bridge,/WindowsBridgeClientIdentity/);assert.match(bridge,/executableSha256: string/);assert.match(bridge,/executableBytes: number/);});
+check("client identity type contains no credential fields",()=>{const part=bridge.slice(bridge.indexOf("export type WindowsBridgeClientIdentity"),bridge.indexOf("export type WindowsBridgeHeartbeat"));assert.doesNotMatch(part,/password|secret|token|apiKey|credential/i);});
+check("server validates exact product version sha and byte bounds",()=>{assert.match(pairing,/normalizeClientIdentity/);assert.match(pairing,/BENJADMIN Developer Grid/);assert.match(pairing,/\^0\\.\\d\+\\.\\d\+\$/);assert.match(pairing,/\[0-9a-f\]\{64\}/);assert.match(pairing,/1024 \* 1024 \* 1024/);});
+check("server stores only sanitized client identity plus server timestamp",()=>{assert.match(pairing,/client: \{ \.\.\.clientIdentity, reportedAt: now \}/);assert.match(pairing,/previousMetadata/);});
+check("device summary exposes physical client evidence",()=>{assert.match(pairing,/client: storedClientIdentity\(row\.metadata\)/);assert.match(pairing,/metadata,created_at/);});
+check("server heartbeat cadence matches five minute desktop cadence",()=>{assert.match(pairing,/nextHeartbeatSeconds: 300/);assert.match(main,/DEVICE_HEARTBEAT_INTERVAL_MS = 5 \* 60_000/);});
+check("desktop hashes packaged Windows executable only",()=>{assert.match(main,/!app\.isPackaged \|\| process\.platform !== "win32"/);assert.match(main,/portableSourceExecutablePath\(\)/);});
+check("desktop sends client identity inside authenticated heartbeat only",()=>{assert.match(main,/authorization: `Bearer \$\{token\}`/);assert.match(main,/\.\.\.\(client \? \{ client \} : \{\}\)/);});
+console.log(`Developer Grid physical Windows E2E telemetry contract PASS · ${n}/${n}`);

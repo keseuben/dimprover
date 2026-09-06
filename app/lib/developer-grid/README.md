@@ -118,3 +118,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - Lock, kilépés vagy a live client leállítása megszünteti a heartbeat ütemezést.
 - Cél: a `last_seen_at` valóban jelezze, hogy a Developer Grid Windows kliens aktív, és a későbbi fizikai Windows E2E bizonyíték ne csak a pairing időpontjára támaszkodjon.
 - DEV ONLY · PROD DENY.
+
+
+## v0.1.24 Physical Windows E2E artifact identity
+
+- A Windows heartbeat a párosított, feloldott és csomagolt Developer Grid kliens pontos artifact-azonosságát is jelenti: termék, appverzió, portable EXE SHA-256 és bájtméret.
+- Az EXE hash egyszer, streamelve készül a tényleges portable forrásfájlról; a kliens ezt cache-eli, így az 5 perces heartbeat nem hash-eli újra a ~95 MB artifactot.
+- A szerver szigorúan validálja a termék/verzió/SHA/méret mezőket, és kizárólag sanitizált kliensazonosságot tárol a device metadata mezőben szerveroldali `reportedAt` idővel.
+- A Windows device listából így ellenőrizhető lesz, hogy a fizikai gépen ténylegesen az adott publikus EXE SHA futott-e; ez a physical Windows E2E lezárási bizonyíték egyik gépi forrása.
+- A heartbeat nem tartalmaz kulcsot, tokent vagy más credentialt; PROD továbbra is DENY.

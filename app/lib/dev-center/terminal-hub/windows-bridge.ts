@@ -46,11 +46,19 @@ export type WindowsBridgeAgentHello = {
   sentAt: string;
 };
 
+export type WindowsBridgeClientIdentity = {
+  product: "BENJADMIN Developer Grid";
+  version: string;
+  executableSha256: string;
+  executableBytes: number;
+};
+
 export type WindowsBridgeHeartbeat = {
   protocolVersion: 1;
   agentId: string;
   sessionId: string;
   sentAt: string;
+  client?: WindowsBridgeClientIdentity;
 };
 
 export function getWindowsBridgeReadiness(): WindowsBridgeReadiness {
