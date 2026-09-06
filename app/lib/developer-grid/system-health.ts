@@ -16,6 +16,7 @@ import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./sys
 import { applyDimprominAiAdapter } from "./system-health-ai";
 import { getInfrastructureOperationalContext } from "./system-health-operations";
 import { readSupabaseAnalyticsToken, resolveSupabaseProjectRef } from "./supabase-monitoring-config";
+import { DEFAULT_PROTECTED_SNAPSHOT_FILE } from "./protected-telemetry-ingress";
 
 const SERVER_TTL_MS = 30_000;
 const PROTECTED_SERVER_TTL_MS = 60_000;
@@ -114,7 +115,7 @@ async function localServer(disk: ReturnType<typeof localDiskMetric>): Promise<He
   };
 }
 
-type InfraSnapshot = { sampledAt?: string; generatedAt?: string; production?: Record<string, unknown>; database?: Record<string, unknown> };
+type InfraSnapshot = { sampledAt?: string; generatedAt?: string; environment?: string; productionAccess?: string; production?: Record<string, unknown>; database?: Record<string, unknown> };
 
 function numberField(sample: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
@@ -157,14 +158,20 @@ function snapshotIsFresh(snapshot: InfraSnapshot | null, now = Date.now()) {
 
 function loadInfraSnapshot(): InfraSnapshot | null {
   const configured = process.env.BENJADMIN_INFRA_SNAPSHOT_FILE?.trim();
-  const candidates = [configured, path.join(process.cwd(), ".dimprover", "monitor", "benjadmin-infrastructure-snapshot.json")].filter(Boolean) as string[];
-  for (const filePath of candidates) {
+  const candidates = [configured, DEFAULT_PROTECTED_SNAPSHOT_FILE, path.join(process.cwd(), ".dimprover", "monitor", "benjadmin-infrastructure-snapshot.json")].filter(Boolean) as string[];
+  for (const filePath of [...new Set(candidates)]) {
     try {
       const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as InfraSnapshot;
-      if (snapshotIsFresh(parsed)) return parsed;
+      if ((parsed.environment && parsed.environment !== "DEV") || (parsed.productionAccess && parsed.productionAccess !== "DENY")) continue;
+      if (snapshotIsFresh(parsed) || sectionIsFresh(parsed, parsed.production) || sectionIsFresh(parsed, parsed.database)) return parsed;
     } catch {}
   }
   return null;
+}
+function sectionTimestamp(snapshot: InfraSnapshot | null, section: Record<string, unknown> | undefined) { return typeof section?.sampledAt === "string" ? section.sampledAt : snapshotTimestamp(snapshot); }
+function sectionIsFresh(snapshot: InfraSnapshot | null, section: Record<string, unknown> | undefined, now = Date.now()) {
+  if (!section) return false; const stamp = sectionTimestamp(snapshot, section); const parsed = stamp ? Date.parse(stamp) : Number.NaN;
+  return Number.isFinite(parsed) && now - parsed >= 0 && now - parsed <= INFRA_SNAPSHOT_MAX_AGE_MS;
 }
 
 async function probeHttp(url: string, timeoutMs = 4_000) {
@@ -186,8 +193,10 @@ async function probeTcp(host: string, port: number, timeoutMs = 3_000) {
 async function protectedServers(): Promise<HealthServer[]> {
   const snapshot = loadInfraSnapshot();
   const [prod, db] = await Promise.all([probeHttp(PROD_URL), probeTcp(DB_HOST, DB_PORT)]);
-  const prodMetric = { ...snapshotMetric(snapshot?.production), latencyMs: prod.latencyMs };
-  const dbMetric = { ...snapshotMetric(snapshot?.database), latencyMs: db.latencyMs };
+  const prodSample = sectionIsFresh(snapshot, snapshot?.production) ? snapshot?.production : undefined;
+  const dbSample = sectionIsFresh(snapshot, snapshot?.database) ? snapshot?.database : undefined;
+  const prodMetric = { ...snapshotMetric(prodSample), latencyMs: prod.latencyMs };
+  const dbMetric = { ...snapshotMetric(dbSample), latencyMs: db.latencyMs };
   const hasResourceSample = (metric: HealthMetric) => metric.cpuPercent !== null || metric.memoryTotalBytes !== null || metric.diskTotalBytes !== null || metric.uptimeSeconds !== null;
   const prodHasResources = hasResourceSample(prodMetric);
   const dbHasResources = hasResourceSample(dbMetric);

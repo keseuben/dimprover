@@ -1,0 +1,13 @@
+import assert from "node:assert/strict"; import fs from "node:fs";
+let n=0; const read=(f)=>fs.readFileSync(new URL(`../../${f}`,import.meta.url),"utf8"); const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const ingress=read("app/lib/developer-grid/protected-telemetry-ingress.ts"),route=read("app/api/dev/grid/protected-telemetry/route.ts"),health=read("app/lib/developer-grid/system-health.ts"),agent=read("scripts/developer-grid/protected-telemetry-agent.py");
+check("dedicated ingress secret",()=>{assert.match(ingress,/BENJADMIN_PROTECTED_TELEMETRY_INGEST_KEY/);assert.match(ingress,/timingSafeEqual/)});
+check("only PROD and DB accepted",()=>{assert.match(ingress,/prod-vps/);assert.match(ingress,/db-vps/);assert.match(ingress,/PROTECTED_TELEMETRY_NODE_INVALID/)});
+check("metric allowlist and ranges",()=>{assert.match(ingress,/metricRanges/);for(const k of ["cpuPercent","memoryTotalBytes","swapTotalBytes","diskTotalBytes","uptimeSeconds"])assert.match(ingress,new RegExp(k))});
+check("time freshness fail closed",()=>{assert.match(ingress,/MAX_SAMPLE_AGE_MS/);assert.match(ingress,/MAX_FUTURE_SKEW_MS/)});
+check("atomic DEV PROD-DENY snapshot",()=>{assert.match(ingress,/environment: "DEV"/);assert.match(ingress,/productionAccess: "DENY"/);assert.match(ingress,/rename\(tmp, file\)/);assert.match(ingress,/0o640/)});
+check("write-only endpoint",()=>{assert.match(route,/PROTECTED_TELEMETRY_WRITE_ONLY/);assert.match(route,/202/);assert.doesNotMatch(route,/accepted: \{[^}]*metrics/)});
+check("shared snapshot per-node freshness",()=>{assert.match(health,/DEFAULT_PROTECTED_SNAPSHOT_FILE/);assert.match(health,/sectionIsFresh/);assert.match(health,/prodSample/);assert.match(health,/dbSample/)});
+check("local-read agent no command channel",()=>{assert.match(agent,/\/proc\/meminfo/);assert.match(agent,/\/proc\/stat/);assert.match(agent,/os\.statvfs/);assert.match(agent,/urllib\.request/);assert.doesNotMatch(agent,/subprocess|os\.system|Popen|ssh|exec\(/)});
+check("HTTPS secret header",()=>{assert.match(agent,/https:\/\/admin\.dev\.dimpro\.hu/);assert.match(agent,/x-benjadmin-protected-telemetry-key/)});
+console.log(`Developer Grid protected telemetry contract PASS · ${n}/${n}`);
