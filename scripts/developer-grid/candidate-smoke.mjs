@@ -1,4 +1,10 @@
-const base = (process.env.DEVELOPER_GRID_CANDIDATE_BASE || "http://127.0.0.1:3299").replace(/\/+$/, "");
+const candidateBase = String(process.env.DEVELOPER_GRID_CANDIDATE_BASE || "").trim();
+if (!candidateBase) throw new Error("DEVELOPER_GRID_CANDIDATE_BASE hiányzik; candidate smoke nem használhat implicit/stale portot.");
+const parsedBase = new URL(candidateBase);
+if (!(["127.0.0.1", "localhost"].includes(parsedBase.hostname) && parsedBase.protocol === "http:")) {
+  throw new Error(`DEVELOPER_GRID_CANDIDATE_BASE_LOCAL_ONLY: ${parsedBase.origin}`);
+}
+const base = parsedBase.origin.replace(/\/+$/, "");
 const reporterKey = process.env.DEVELOPER_GRID_CANDIDATE_REPORTER_KEY || "";
 const adminKey = process.env.DEVELOPER_GRID_CANDIDATE_ADMIN_KEY || "";
 
