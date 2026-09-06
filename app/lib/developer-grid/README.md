@@ -75,3 +75,9 @@ A részletes System Health a DEV VPS lokális lemezét már nem külön „DEV T
 A System Health külön `SUPABASE FORGALOM` kártyát is támogat. A request-forgalom kizárólag a Supabase Management API read-only analytics végpontjairól olvasható, `analytics_usage_read` jogosultságú, külön `BENJADMIN_SUPABASE_ANALYTICS_TOKEN` secrettel. A meglévő Supabase service-role kulcsot a monitoring nem használja. Ha az analytics token hiányzik, a kártya explicit `NINCS TOKEN` állapotot mutat, nem talál ki forgalmi értéket. Origin/cached egress és kvóta csak hiteles usage snapshotból jelenhet meg; 85% felett WARNING, 95% felett CRITICAL health szintet ad.
 
 A szerver/resource kártyák nagy kijelzős tipográfiát és függőleges elválasztó vonalakat kaptak. CPU-nál százalék + becsült használt/összes vCPU, RAM/Swap/lemez esetén használt/összes kapacitás + százalék jelenik meg.
+
+## v0.1.18 System Health – csoportos táblázatos nézet
+
+A System Health részletes panel a szervereket többé nem öt ismétlődő kártyaként jeleníti meg. A DEV VPS, BUILD01, BUILD02, PROD/ÉLŐ és DB VPS egy közös összehasonlító táblázatba kerül: az első oszlop egyszer tartalmazza a Host, CPU, RAM, Swap, Tárhely, Load 1m és Uptime mezőneveket, az öt további oszlop pedig az öt szerver értékeit és fejléc-státuszát. Ez megszünteti az ismétlődő címkéket és nagy kijelzőn gyorsabb összehasonlítást tesz lehetővé.
+
+A Hetzner Object Storage és a BX11 Storage Box szintén egy közös kétoszlopos külső-tárhely táblázatban jelenik meg. A Supabase forgalom és az AI/kapcsolat külön, kompakt blokk marad. A v0.1.17 túl nagy metrika-tipográfiája vissza lett véve: a fő táblázat 9,5 px, a csoportcím 11,5 px, a státusz badge 8,5 px alapméretet használ; 1500 px alatti szélességnél 9 px-re csökken. A függőleges és vízszintes táblázati elválasztók megmaradnak.

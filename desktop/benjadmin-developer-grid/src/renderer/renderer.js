@@ -679,31 +679,58 @@ function renderSystemHealth() {
   const columns = $("#systemHealthColumns");
   if (columns) {
     if (health) {
-      const serverColumn = (server) => {
-        const m = server?.metrics || {};
-        const ready = server?.state === "READY";
-        const busy = server?.state === "BUSY";
-        const stateClass = ready ? "is-ready" : busy ? "is-info" : "is-warning";
-        const stateText = ready ? "READY" : busy ? "BUSY" : String(server?.state || "UNKNOWN");
-        return `<article class="health-column" data-health-state="${escapeHtml(stateText)}"><header><h4>${escapeHtml(server?.label || "—")}</h4><span class="health-state ${stateClass}">${escapeHtml(stateText)}</span></header><dl><dt>Host</dt><dd>${escapeHtml(server?.hostname || "—")}</dd><dt>CPU</dt><dd>${cpuMetricText(m.cpuPercent, m.cores)}</dd><dt>RAM</dt><dd>${capacityMetricText(m.memoryUsedBytes, m.memoryTotalBytes, m.memoryPercent)}</dd><dt>Swap</dt><dd>${capacityMetricText(m.swapUsedBytes, m.swapTotalBytes, m.swapPercent)}</dd><dt>Tárhely</dt><dd>${capacityMetricText(m.diskUsedBytes, m.diskTotalBytes, m.diskPercent)}</dd><dt>Load 1m</dt><dd>${Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—"}</dd><dt>Uptime</dt><dd>${Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—"}</dd></dl><p>${escapeHtml(server?.reason || "")}</p></article>`;
+      const healthBadge = (stateValue, { ready = "READY", busy = "BUSY", missing = "ELLENŐRIZD" } = {}) => {
+        const stateText = String(stateValue || "UNKNOWN").toUpperCase();
+        const stateClass = stateText === "READY" ? "is-ready" : stateText === "BUSY" ? "is-info" : stateText === "CRITICAL" ? "is-critical" : stateText === "NOT_CONNECTED" ? "is-info" : "is-warning";
+        const label = stateText === "READY" ? ready : stateText === "BUSY" ? busy : stateText === "NOT_CONNECTED" ? "NINCS ADAT" : missing;
+        return `<span class="health-state ${stateClass}">${escapeHtml(label)}</span>`;
       };
       const ordered = ["dev-vps", "build01", "build02", "prod-vps", "db-vps"].map(healthServer).filter(Boolean);
-      const storageHtml = (health.storage || []).map((item) => {
-        const stateClass = item.state === "READY" ? "is-ready" : item.state === "DEGRADED" ? "is-warning" : "is-info";
-        const stateText = item.state === "READY" ? "READY" : item.state === "DEGRADED" ? "ELLENŐRIZD" : "NINCS ADAT";
-        const objectRow = Number.isFinite(Number(item.objectCount)) ? `<dt>Objektum</dt><dd>${formatCount(item.objectCount)} db</dd>` : "";
-        return `<article class="health-column" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "TÁRHELY")}</h4><span class="health-state ${stateClass}">${stateText}</span></header><dl><dt>Tárhely</dt><dd>${capacityMetricText(item.usedBytes, item.totalBytes, item.percent)}</dd><dt>Szabad</dt><dd>${formatBytes(item.availableBytes)}</dd>${objectRow}<dt>Forrás</dt><dd>${escapeHtml(item.source || "read-only")}</dd></dl><p>${escapeHtml(item.reason || `Frissítve: ${formatHealthTimestamp(item.refreshedAt)}`)}</p></article>`;
-      }).join("");
-      const trafficHtml = (health.traffic || []).map((item) => {
-        const maxPercent = Math.max(Number(item.egressPercent || 0), Number(item.cachedEgressPercent || 0));
-        const stateClass = maxPercent >= 95 ? "is-critical" : maxPercent >= 85 || item.state === "DEGRADED" ? "is-warning" : item.state === "READY" ? "is-ready" : "is-info";
-        const stateText = maxPercent >= 95 ? "KRITIKUS" : maxPercent >= 85 ? "MAGAS" : item.state === "READY" ? "LIVE" : item.state === "NOT_CONNECTED" ? "NINCS TOKEN" : "ELLENŐRIZD";
-        const egressText = item.egressBytes != null || item.egressQuotaBytes != null ? capacityMetricText(item.egressBytes, item.egressQuotaBytes, item.egressPercent) : "—";
-        const cachedText = item.cachedEgressBytes != null || item.cachedEgressQuotaBytes != null ? capacityMetricText(item.cachedEgressBytes, item.cachedEgressQuotaBytes, item.cachedEgressPercent) : "—";
-        return `<article class="health-column health-column--traffic" data-health-state="${escapeHtml(item.state || "UNKNOWN")}"><header><h4>${escapeHtml(item.label || "SUPABASE FORGALOM")}</h4><span class="health-state ${stateClass}">${stateText}</span></header><dl><dt>API kérés</dt><dd>${formatCount(item.apiRequests)}</dd><dt>REST</dt><dd>${formatCount(item.restRequests)}</dd><dt>Auth</dt><dd>${formatCount(item.authRequests)}</dd><dt>Storage</dt><dd>${formatCount(item.storageRequests)}</dd><dt>Realtime</dt><dd>${formatCount(item.realtimeRequests)}</dd><dt>Egress</dt><dd>${egressText}</dd><dt>Cached</dt><dd>${cachedText}</dd></dl><p>${escapeHtml(item.reason || "")}</p></article>`;
-      }).join("");
-      const connectionHtml = `<article class="health-column" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><header><h4>KAPCSOLAT / AI</h4><span class="health-state ${state.connection.benjadmin ? "is-ready" : "is-info"}">${state.connection.benjadmin ? "DELTA LIVE" : "KAPCSOLAT VÁR"}</span></header><dl><dt>ChatGPT</dt><dd>${escapeHtml($("#footerChatStatus")?.textContent || "—")}</dd><dt>Delta</dt><dd>${escapeHtml($("#footerDeltaStatus")?.textContent || "—")}</dd><dt>AI</dt><dd>${escapeHtml($("#footerAiStatus")?.textContent || "—")}</dd><dt>Central lock</dt><dd>${escapeHtml(health.operations?.centralLock || "—")}</dd><dt>Forrás</dt><dd>server cache</dd></dl><p>DEV ONLY · PROD telemetria read-only.</p></article>`;
-      columns.innerHTML = ordered.map(serverColumn).join("") + storageHtml + trafficHtml + connectionHtml;
+      const serverValue = (server, key) => {
+        const m = server?.metrics || {};
+        if (key === "host") return escapeHtml(server?.hostname || "—");
+        if (key === "cpu") return escapeHtml(cpuMetricText(m.cpuPercent, m.cores));
+        if (key === "ram") return escapeHtml(capacityMetricText(m.memoryUsedBytes, m.memoryTotalBytes, m.memoryPercent));
+        if (key === "swap") return escapeHtml(capacityMetricText(m.swapUsedBytes, m.swapTotalBytes, m.swapPercent));
+        if (key === "disk") return escapeHtml(capacityMetricText(m.diskUsedBytes, m.diskTotalBytes, m.diskPercent));
+        if (key === "load") return Number.isFinite(Number(m.load1)) ? Number(m.load1).toFixed(2) : "—";
+        if (key === "uptime") return Number.isFinite(Number(m.uptimeSeconds)) ? `${Math.floor(Number(m.uptimeSeconds) / 3600)} h` : "—";
+        return "—";
+      };
+      const serverRows = [
+        ["Host", "host"], ["CPU", "cpu"], ["RAM", "ram"], ["Swap", "swap"], ["Tárhely", "disk"], ["Load 1m", "load"], ["Uptime", "uptime"],
+      ];
+      const serverHeader = ordered.map((server) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(server?.label || "—")}</strong>${healthBadge(server?.state)}</div></th>`).join("");
+      const serverBody = serverRows.map(([label, key]) => `<tr><th scope="row">${label}</th>${ordered.map((server) => `<td>${serverValue(server, key)}</td>`).join("")}</tr>`).join("");
+      const serverTable = `<section class="health-group health-group--servers"><div class="health-group__head"><h4>SZERVEREK</h4><span>${ordered.length} node · közös erőforrásnézet</span></div><div class="health-table-wrap"><table class="health-table health-table--servers"><thead><tr><th scope="col" class="health-table__metric">ERŐFORRÁS</th>${serverHeader}</tr></thead><tbody>${serverBody}</tbody></table></div></section>`;
+
+      const storages = Array.isArray(health.storage) ? health.storage : [];
+      const storageHeader = storages.map((item) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(item.label || "TÁRHELY")}</strong>${healthBadge(item.state, { missing: item.state === "DEGRADED" ? "ELLENŐRIZD" : "NINCS ADAT" })}</div></th>`).join("");
+      const storageMetric = (item, key) => {
+        if (key === "usage") return escapeHtml(capacityMetricText(item.usedBytes, item.totalBytes, item.percent));
+        if (key === "free") return escapeHtml(formatBytes(item.availableBytes));
+        if (key === "objects") return Number.isFinite(Number(item.objectCount)) ? `${formatCount(item.objectCount)} db` : "—";
+        if (key === "source") return escapeHtml(item.source || "read-only");
+        if (key === "refresh") return escapeHtml(formatHealthTimestamp(item.refreshedAt));
+        return "—";
+      };
+      const storageRows = [["Használat","usage"],["Szabad","free"],["Objektum","objects"],["Forrás","source"],["Frissítve","refresh"]];
+      const storageBody = storageRows.map(([label,key]) => `<tr><th scope="row">${label}</th>${storages.map((item) => `<td>${storageMetric(item,key)}</td>`).join("")}</tr>`).join("");
+      const storageTable = `<section class="health-group health-group--storage"><div class="health-group__head"><h4>KÜLSŐ TÁRHELY</h4><span>Hetzner · read-only</span></div><div class="health-table-wrap"><table class="health-table health-table--storage"><thead><tr><th scope="col" class="health-table__metric">MUTATÓ</th>${storageHeader}</tr></thead><tbody>${storageBody}</tbody></table></div></section>`;
+
+      const traffic = Array.isArray(health.traffic) ? health.traffic[0] : null;
+      const maxPercent = Math.max(Number(traffic?.egressPercent || 0), Number(traffic?.cachedEgressPercent || 0));
+      const trafficState = maxPercent >= 95 ? "CRITICAL" : maxPercent >= 85 ? "DEGRADED" : traffic?.state;
+      const trafficBadge = maxPercent >= 95 ? healthBadge("CRITICAL", { missing: "KRITIKUS" }) : maxPercent >= 85 ? healthBadge("DEGRADED", { missing: "MAGAS" }) : healthBadge(traffic?.state, { ready: "LIVE", missing: "NINCS TOKEN" });
+      const egressText = traffic && (traffic.egressBytes != null || traffic.egressQuotaBytes != null) ? capacityMetricText(traffic.egressBytes, traffic.egressQuotaBytes, traffic.egressPercent) : "—";
+      const cachedText = traffic && (traffic.cachedEgressBytes != null || traffic.cachedEgressQuotaBytes != null) ? capacityMetricText(traffic.cachedEgressBytes, traffic.cachedEgressQuotaBytes, traffic.cachedEgressPercent) : "—";
+      const supabaseRows = [["API",formatCount(traffic?.apiRequests)],["REST",formatCount(traffic?.restRequests)],["Auth",formatCount(traffic?.authRequests)],["Storage",formatCount(traffic?.storageRequests)],["Realtime",formatCount(traffic?.realtimeRequests)],["Egress",egressText],["Cached",cachedText]];
+      const supabaseTable = `<section class="health-group health-group--supabase" data-health-state="${escapeHtml(trafficState || "UNKNOWN")}"><div class="health-group__head"><h4>SUPABASE</h4>${trafficBadge}</div><table class="health-kv-table"><tbody>${supabaseRows.map(([k,v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")}</tbody></table><p class="health-group__note">${escapeHtml(traffic?.reason || "Supabase forgalmi adat várakozik.")}</p></section>`;
+
+      const aiRows = [["ChatGPT",$("#footerChatStatus")?.textContent || "—"],["Delta",$("#footerDeltaStatus")?.textContent || "—"],["AI",$("#footerAiStatus")?.textContent || "—"],["Central lock",health.operations?.centralLock || "—"],["Forrás","server cache"]];
+      const aiTable = `<section class="health-group health-group--ai" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><div class="health-group__head"><h4>AI / KAPCSOLAT</h4>${healthBadge(state.connection.benjadmin ? "READY" : "WAITING", { ready: "DELTA LIVE", missing: "KAPCSOLAT VÁR" })}</div><table class="health-kv-table"><tbody>${aiRows.map(([k,v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")}</tbody></table><p class="health-group__note">DEV ONLY · PROD telemetria read-only.</p></section>`;
+
+      columns.innerHTML = serverTable + storageTable + supabaseTable + aiTable;
     } else if (authBlocked) {
       const pairing = state.connection.pairing || { status: "idle" };
       const pairingBusy = ["claiming", "pending_approval"].includes(pairing.status);
