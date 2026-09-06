@@ -88,3 +88,9 @@ A Hetzner Object Storage és a BX11 Storage Box szintén egy közös kétoszlopo
 Világos módban a System Health READY/INFO/WARNING/CRITICAL badge-ek külön sötét előtérszínt, erősebb keretet és elkülönülő háttérszínt kapnak. A PROD és DB oszlopok a read-only elérhetőségi RTT-t mindig megjelenítik; ha nincs friss (legfeljebb 5 perces) resource snapshot, a státusz kifejezetten `ONLINE · RÉSZLEGES`, és CPU/RAM/lemez adatot nem találunk ki. A resource snapshot normalizáló a camelCase és snake_case mezőket, valamint a `cpuPercent`, `uptimeSec` és RTT aliasokat is kezeli.
 
 A Supabase Management API lekérés kizárólag read-only `analytics_usage_read` jogosultságú tokennel működik. A token átadható `BENJADMIN_SUPABASE_ANALYTICS_TOKEN` környezeti változóban vagy alapértelmezetten a `/root/.dimpro-secrets/supabase-dev/analytics-usage-read.token` szerveroldali secret fájlból; service-role kulcsra nincs fallback. A request analytics endpointok: `usage.api-counts` és `usage.api-requests-count`.
+
+## v0.1.20 Supabase monitoring – biztonságos admin bekötés
+
+A `NINCS TOKEN` Supabase állapot most közvetlen `BEKÖTÉS` műveletet ad a Windows System Health panelen. Ez a Developer Grid saját DEV runtime-ján kiszolgált, külön setup oldalt nyitja meg, ezért nem függ a fő BENJADMIN admin runtime verziójától. A setup oldal a meglévő BENJADMIN admin kulccsal hívja az admin-only `/api/dev/grid/supabase-monitoring` végpontot.
+
+A beküldött token mentés előtt mindkét read-only usage végponton validálódik, és csak sikeres `analytics_usage_read` jogosultság esetén kerül 0600 jogosultságú DEV secret fájlba. A token értékét az API soha nem adja vissza; törléskor csak a helyi monitoring secret törlődik, a Supabase-fiókban létrehozott token nem kerül automatikusan visszavonásra. Mentés/törlés azonnal invalidálja a System Health Supabase cache-t.

@@ -15,6 +15,7 @@ import { normalizeInfrastructureNodes } from "./system-health-adapters";
 import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./system-health-severity";
 import { applyDimprominAiAdapter } from "./system-health-ai";
 import { getInfrastructureOperationalContext } from "./system-health-operations";
+import { readSupabaseAnalyticsToken, resolveSupabaseProjectRef } from "./supabase-monitoring-config";
 
 const SERVER_TTL_MS = 30_000;
 const PROTECTED_SERVER_TTL_MS = 60_000;
@@ -29,7 +30,6 @@ const DB_PORT = 5432;
 const HETZNER_INCLUDED_STORAGE_BYTES = 1_000_000_000_000;
 const HETZNER_STORAGE_BOX_ALIAS = "dimpro-backup-bx11";
 const SUPABASE_MANAGEMENT_API = "https://api.supabase.com";
-const DEFAULT_SUPABASE_ANALYTICS_TOKEN_FILE = "/root/.dimpro-secrets/supabase-dev/analytics-usage-read.token";
 const execFileAsync = promisify(execFile);
 
 export type HealthMetric = LegacyHealthMetric;
@@ -44,6 +44,8 @@ const protectedServerCache: Cache<HealthServer[]> = { value: null, expiresAt: 0 
 const diskCache: Cache<ReturnType<typeof localDiskMetric>> = { value: null, expiresAt: 0 };
 const storageCache: Cache<HealthStorage[]> = { value: null, expiresAt: 0 };
 const trafficCache: Cache<HealthTraffic[]> = { value: null, expiresAt: 0 };
+
+export function invalidateSupabaseTrafficCache() { trafficCache.value = null; trafficCache.expiresAt = 0; }
 
 const emptyMetric = (): HealthMetric => ({
   cpuPercent: null, load1: null, cores: null,
@@ -317,27 +319,9 @@ async function inspectHetznerStorageBox(): Promise<HealthStorage> {
   }
 }
 
-function supabaseProjectRef() {
-  const explicit = process.env.SUPABASE_PROJECT_REF?.trim() || process.env.BENJADMIN_SUPABASE_PROJECT_REF?.trim() || "";
-  if (/^[a-z0-9]{8,40}$/i.test(explicit)) return explicit;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
-  try { const host = new URL(url).hostname; const match = host.match(/^([a-z0-9]+)\.supabase\.co$/i); return match?.[1] || null; }
-  catch { return null; }
-}
-
 function configuredBytes(name: string) {
   const value = Number(process.env[name]?.trim() || "");
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
-}
-
-function supabaseAnalyticsToken() {
-  const direct = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN?.trim();
-  if (direct) return direct;
-  const tokenFile = process.env.BENJADMIN_SUPABASE_ANALYTICS_TOKEN_FILE?.trim() || DEFAULT_SUPABASE_ANALYTICS_TOKEN_FILE;
-  try {
-    const token = fs.readFileSync(tokenFile, "utf8").trim();
-    return token || "";
-  } catch { return ""; }
 }
 
 async function supabaseManagementJson(pathname: string, token: string) {
@@ -358,8 +342,8 @@ function sumUsageRows(rows: unknown, key: string) {
 
 async function inspectSupabaseTraffic(): Promise<HealthTraffic> {
   const now = new Date().toISOString();
-  const projectRef = supabaseProjectRef();
-  const token = supabaseAnalyticsToken();
+  const projectRef = resolveSupabaseProjectRef();
+  const token = await readSupabaseAnalyticsToken();
   const egressBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_BYTES");
   const cachedEgressBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_BYTES");
   const egressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_QUOTA_BYTES");

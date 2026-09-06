@@ -729,7 +729,8 @@ function renderSystemHealth() {
       const egressText = traffic && (traffic.egressBytes != null || traffic.egressQuotaBytes != null) ? capacityMetricText(traffic.egressBytes, traffic.egressQuotaBytes, traffic.egressPercent) : "—";
       const cachedText = traffic && (traffic.cachedEgressBytes != null || traffic.cachedEgressQuotaBytes != null) ? capacityMetricText(traffic.cachedEgressBytes, traffic.cachedEgressQuotaBytes, traffic.cachedEgressPercent) : "—";
       const supabaseRows = [["API",formatCount(traffic?.apiRequests)],["REST",formatCount(traffic?.restRequests)],["Auth",formatCount(traffic?.authRequests)],["Storage",formatCount(traffic?.storageRequests)],["Realtime",formatCount(traffic?.realtimeRequests)],["Egress",egressText],["Cached",cachedText]];
-      const supabaseTable = `<section class="health-group health-group--supabase" data-health-state="${escapeHtml(trafficState || "UNKNOWN")}"><div class="health-group__head"><h4>SUPABASE</h4>${trafficBadge}</div><table class="health-kv-table"><tbody>${supabaseRows.map(([k,v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")}</tbody></table><p class="health-group__note">${escapeHtml(traffic?.reason || "Supabase forgalmi adat várakozik.")}</p></section>`;
+      const supabaseSetup = traffic?.state === "NOT_CONNECTED" ? '<button type="button" class="health-inline-action" data-health-action="open-supabase-monitoring">BEKÖTÉS</button>' : "";
+      const supabaseTable = `<section class="health-group health-group--supabase" data-health-state="${escapeHtml(trafficState || "UNKNOWN")}"><div class="health-group__head"><h4>SUPABASE</h4><div class="health-group__actions">${trafficBadge}${supabaseSetup}</div></div><table class="health-kv-table"><tbody>${supabaseRows.map(([k,v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")}</tbody></table><p class="health-group__note">${escapeHtml(traffic?.reason || "Supabase forgalmi adat várakozik.")}</p></section>`;
 
       const aiRows = [["ChatGPT",$("#footerChatStatus")?.textContent || "—"],["Delta",$("#footerDeltaStatus")?.textContent || "—"],["AI",$("#footerAiStatus")?.textContent || "—"],["Central lock",health.operations?.centralLock || "—"],["Forrás","server cache"]];
       const aiTable = `<section class="health-group health-group--ai" data-health-state="${state.connection.benjadmin ? "READY" : "WAITING"}"><div class="health-group__head"><h4>AI / KAPCSOLAT</h4>${healthBadge(state.connection.benjadmin ? "READY" : "WAITING", { ready: "DELTA LIVE", missing: "KAPCSOLAT VÁR" })}</div><table class="health-kv-table"><tbody>${aiRows.map(([k,v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")}</tbody></table><p class="health-group__note">DEV ONLY · PROD telemetria read-only.</p></section>`;
@@ -1730,6 +1731,11 @@ function bindUi() {
     if (action === "open-pairing") {
       const result = await api.openPairingPage();
       if (!result?.ok) showToast("BENJADMIN párosítás", result?.error || "A párosítási oldal nem nyitható meg.");
+      return;
+    }
+    if (action === "open-supabase-monitoring") {
+      const result = await api.openSupabaseMonitoringPage();
+      if (!result?.ok) showToast("Supabase monitoring", result?.error || "A Supabase monitoring beállítóoldal nem nyitható meg.");
       return;
     }
     if (action === "start-pairing") {

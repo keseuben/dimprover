@@ -227,7 +227,7 @@ export default function DeveloperGridShell() {
               <h2 className={styles.controlTitle}>BENJADMIN FEJLESZTŐI VEZÉRLŐPULT</h2>
               <div className={styles.subtitle}>Central Core · authoritative task/session + delta state/activity</div>
             </div>
-            <Link href="/admin/dev-console" className={styles.link}>Fejlesztői Konzol referencia →</Link>
+            <div className={styles.badges}><Link href="/api/dev/grid/supabase-monitoring/setup" className={styles.link}>Supabase monitoring →</Link><Link href="/admin/dev-console" className={styles.link}>Fejlesztői Konzol referencia →</Link></div>
           </div>
           <div className={styles.tabs}>
             {(foundation?.controlPlane.views || ["ÁTTEKINTÉS", "FELADATOK", "MODULOK", "DOKUMENTUMOK", "ÁTADÓK", "BUILDEK", "ESEMÉNYEK"]).map((tab) => <span key={tab} className={styles.tab}>{tab}</span>)}

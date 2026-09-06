@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   setReporterKey: (key) => ipcRenderer.invoke("connection:set-reporter-key", { key }),
   getConnectionState: () => ipcRenderer.invoke("connection:get-state"),
   openPairingPage: () => ipcRenderer.invoke("connection:open-pairing-page"),
+  openSupabaseMonitoringPage: () => ipcRenderer.invoke("system-health:open-supabase-monitoring"),
   startPairing: (activationCode) => ipcRenderer.invoke("connection:pairing-start", { activationCode }),
   cancelPairing: () => ipcRenderer.invoke("connection:pairing-cancel"),
   forgetDevice: () => ipcRenderer.invoke("connection:forget-device"),

@@ -1,0 +1,34 @@
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const html = `<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BENJADMIN · Supabase monitoring</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#07111d;color:#e8f5f4;font:14px Inter,system-ui,sans-serif}.shell{max-width:1040px;margin:0 auto;padding:32px}.eyebrow{font-size:12px;letter-spacing:.12em;color:#38d6c7;font-weight:800}h1{font-size:30px;margin:7px 0 8px}p{color:#a8bdc4;line-height:1.55}.status{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#27404b;border:1px solid #27404b;border-radius:14px;overflow:hidden;margin:22px 0}.status>div{background:#0d1a29;padding:15px}.status span{display:block;color:#7e9da7;font-size:11px;margin-bottom:6px}.status strong{font-size:14px}.card{background:#0d1a29;border:1px solid #27404b;border-radius:14px;padding:21px;margin:0 0 18px}.card h2{font-size:17px;margin:0 0 8px}.field span{display:block;font-size:12px;font-weight:700;color:#9bb4bc;margin:15px 0 7px}.field input{width:100%;border:1px solid #31545e;background:#07111d;color:#eefafa;border-radius:9px;padding:12px 14px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}button,a.button{border:1px solid #2f9d90;background:#153d3a;color:#dffbf7;border-radius:8px;padding:9px 13px;font-weight:800;text-decoration:none;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#152432;border-color:#385366}.danger{background:#351c25;border-color:#854050;color:#ffbbc7}.ok{color:#68e6b6}.warn{color:#ffd47a}.error{color:#ff98a8}.message{color:#69e5b4}.small{font-size:12px}.toplinks{display:flex;justify-content:space-between;gap:12px;align-items:center}@media(max-width:760px){.shell{padding:20px}.status{grid-template-columns:1fr 1fr}}
+</style></head><body><main class="shell">
+<div class="toplinks"><div><div class="eyebrow">BENJADMIN DEVELOPER GRID · SYSTEM HEALTH</div><h1>Supabase monitoring bekötése</h1></div><a class="button secondary" href="/admin" rel="noreferrer">BENJADMIN admin</a></div>
+<p>Read-only request-forgalom a Supabase Management API-ból. A service-role kulcsot ez a modul nem használja.</p>
+<section class="status"><div><span>Projekt</span><strong id="project">Betöltés…</strong></div><div><span>Jogosultság</span><strong>analytics_usage_read</strong></div><div><span>Token</span><strong id="configured">—</strong></div><div><span>Validálás</span><strong id="validated">—</strong></div></section>
+<section class="card"><h2>1. Fine-grained Management API token</h2><p>Hozz létre külön monitoring tokent, amelynek csak az <code>analytics_usage_read</code> jogosultságra van szüksége.</p><a class="button" href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noreferrer">Supabase tokenkezelő megnyitása ↗</a></section>
+<form id="form" class="card"><h2>2. Ellenőrzés és biztonságos mentés</h2><p>A token HTTPS-en kerül a DEV backendhez. Sikeres ellenőrzés után 0600 jogosultságú szerveroldali secret fájlba kerül, és sem ez az oldal, sem az API nem adja vissza az értékét.</p><label class="field"><span>Supabase Management API token</span><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="fine-grained token"></label><div class="actions"><button id="save" type="submit">ELLENŐRZÉS ÉS MENTÉS</button><button id="refresh" type="button" class="secondary">ÁLLAPOT FRISSÍTÉSE</button><button id="remove" type="button" class="danger" hidden>HELYI TOKEN TÖRLÉSE</button></div><p id="message" class="message"></p><p id="error" class="error"></p></form>
+<section class="card small"><strong>Forgalmi értelmezés</strong><p>Az API / REST / Auth / Storage / Realtime kérésdarabszám automatikusan mérhető. A számlázási egress szervezeti szintű mutató, ezért azt nem becsüljük a request-számokból. Csak hiteles egress usage adat kerül százalékos kvótaként a System Healthbe.</p></section>
+</main><script>
+const $=id=>document.getElementById(id); const key=()=>localStorage.getItem('dimproLicenseAdminKey')?.trim()||''; const headers=(json=false)=>Object.assign(json?{'content-type':'application/json'}:{},{'x-dimpro-license-admin-key':key()});
+function showStatus(s){$('project').textContent=s?.projectRef||'NINCS';$('configured').textContent=s?.configured?'KONFIGURÁLVA':'NINCS';$('configured').className=s?.configured?'ok':'warn';$('validated').textContent=s?.lastValidatedAt?new Date(s.lastValidatedAt).toLocaleString('hu-HU'):'—';$('remove').hidden=!s?.configured;}
+async function refresh(){ $('error').textContent=''; if(!key()){ $('error').textContent='Nincs BENJADMIN admin kulcs ebben a böngészőprofilban. Nyisd meg előbb az admin felületet és jelentkezz be.'; return; } try{const r=await fetch('/api/dev/grid/supabase-monitoring',{headers:headers(),cache:'no-store'});const p=await r.json();if(!r.ok||!p.status)throw new Error(p.error||'Az állapot nem tölthető be.');showStatus(p.status);}catch(e){$('error').textContent=e.message||String(e);}}
+$('form').addEventListener('submit',async e=>{e.preventDefault();$('error').textContent='';$('message').textContent='';const token=$('token').value.trim();if(!token){$('error').textContent='Illeszd be a Management API tokent.';return;}$('save').disabled=true;try{const r=await fetch('/api/dev/grid/supabase-monitoring',{method:'POST',headers:headers(true),body:JSON.stringify({token})});const p=await r.json();if(!r.ok||!p.status)throw new Error(p.error||'A token ellenőrzése sikertelen.');$('token').value='';showStatus(p.status);$('message').textContent='Kapcsolat ellenőrizve és biztonságosan mentve. A Developer Gridben nyomj System Health frissítést.';}catch(e){$('error').textContent=e.message||String(e);}finally{$('save').disabled=false;}});
+$('refresh').addEventListener('click',refresh);$('remove').addEventListener('click',async()=>{if(!confirm('Törlöd a DEV szerveren tárolt monitoring tokent? A Supabase-fiók tokenje ettől nem kerül visszavonásra.'))return;try{const r=await fetch('/api/dev/grid/supabase-monitoring',{method:'DELETE',headers:headers()});const p=await r.json();if(!r.ok||!p.status)throw new Error(p.error||'A helyi token nem törölhető.');showStatus(p.status);$('message').textContent='A helyi monitoring token törölve.';}catch(e){$('error').textContent=e.message||String(e);}});void refresh();
+</script></body></html>`;
+
+export async function GET() {
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "x-frame-options": "DENY",
+      "content-security-policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    },
+  });
+}
