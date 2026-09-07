@@ -4,6 +4,8 @@ const read=name=>fs.readFileSync(new URL(name,import.meta.url),"utf8");
 const s=read("./install-protected-telemetry-agent.sh"),agent=read("./protected-telemetry-agent.py");
 let n=0;const c=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 c("node allowlist",()=>assert.match(s,/prod-vps\|db-vps/));
+c("agent source resolves beside installer",()=>{assert.match(s,/SCRIPT_DIR=.*BASH_SOURCE/);assert.match(s,/AGENT_SOURCE=.*SCRIPT_DIR\/protected-telemetry-agent\.py/);});
+c("unprivileged runtime can traverse code directory while credential directory stays restricted",()=>{assert.match(s,/install -d -m 0755 \/opt\/benjadmin/);assert.match(s,/install -d -m 0750 \/etc\/benjadmin/);assert.match(s,/chmod 0600 \/etc\/benjadmin\/protected-telemetry\.key/);});
 c("root install only",()=>assert.match(s,/EUID/));
 c("admin-approved enrollment without pre-shared key transfer",()=>{assert.doesNotMatch(s,/KEY_SOURCE/);assert.match(agent,/DEFAULT_ENROLL_ENDPOINT/);assert.match(agent,/getpass\.getpass/);});
 c("agent runs one-shot only",()=>{assert.match(s,/Type=oneshot/);assert.doesNotMatch(s,/ExecStart=.*(?:bash|sh) -c/);});

@@ -2,13 +2,15 @@
 set -Eeuo pipefail
 NODE_ID="${1:-}"
 case "$NODE_ID" in prod-vps|db-vps) ;; *) echo "Usage: install-protected-telemetry-agent.sh prod-vps|db-vps" >&2; exit 2;; esac
-AGENT_SOURCE="${BENJADMIN_AGENT_SOURCE:-./protected-telemetry-agent.py}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+AGENT_SOURCE="${BENJADMIN_AGENT_SOURCE:-$SCRIPT_DIR/protected-telemetry-agent.py}"
 ENDPOINT="https://admin.dev.dimpro.hu/api/dev/grid/protected-telemetry"
 [[ $EUID -eq 0 ]] || { echo "root required" >&2; exit 3; }
 [[ -f "$AGENT_SOURCE" ]] || { echo "agent source missing" >&2; exit 4; }
 command -v python3 >/dev/null
 command -v systemctl >/dev/null
-install -d -m 0750 /opt/benjadmin /etc/benjadmin
+install -d -m 0755 /opt/benjadmin
+install -d -m 0750 /etc/benjadmin
 if [[ -f /opt/benjadmin/protected-telemetry-agent.py ]]; then
   if ! cmp -s "$AGENT_SOURCE" /opt/benjadmin/protected-telemetry-agent.py; then
     echo "An existing agent differs; review it before replacing." >&2; exit 5
