@@ -15,7 +15,7 @@ import { normalizeInfrastructureNodes } from "./system-health-adapters";
 import { aggregateInfrastructureHealth, infrastructureHealthAlerts } from "./system-health-severity";
 import { applyDimprominAiAdapter } from "./system-health-ai";
 import { getInfrastructureOperationalContext } from "./system-health-operations";
-import { readSupabaseAnalyticsToken, resolveSupabaseProjectRef } from "./supabase-monitoring-config";
+import { getSupabaseMonitoringProjects, readSupabaseAnalyticsToken } from "./supabase-monitoring-config";
 import { DEFAULT_PROTECTED_SNAPSHOT_FILE } from "./protected-telemetry-ingress";
 
 const SERVER_TTL_MS = 30_000;
@@ -328,10 +328,6 @@ async function inspectHetznerStorageBox(): Promise<HealthStorage> {
   }
 }
 
-function configuredBytes(name: string) {
-  const value = Number(process.env[name]?.trim() || "");
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
-}
 
 async function supabaseManagementJson(pathname: string, token: string) {
   const controller = new AbortController();
@@ -344,41 +340,49 @@ async function supabaseManagementJson(pathname: string, token: string) {
   } finally { clearTimeout(timer); }
 }
 
-function sumUsageRows(rows: unknown, key: string) {
-  if (!Array.isArray(rows)) return 0;
-  return rows.reduce((sum, row) => sum + (row && typeof row === "object" && Number.isFinite(Number((row as Record<string, unknown>)[key])) ? Number((row as Record<string, unknown>)[key]) : 0), 0);
+function sumUsageRows(rows: unknown, key: string): number | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  let sum = 0; let found = false;
+  for (const row of rows) {
+    const value = row && typeof row === "object" ? (row as Record<string, unknown>)[key] : undefined;
+    if (value === undefined || value === null || value === "") continue;
+    const number = Number(value);
+    if (!Number.isSafeInteger(number) || number < 0) return null;
+    sum += number; found = true;
+  }
+  return found && Number.isSafeInteger(sum) ? sum : null;
 }
 
-async function inspectSupabaseTraffic(): Promise<HealthTraffic> {
-  const now = new Date().toISOString();
-  const projectRef = resolveSupabaseProjectRef();
+async function inspectSupabaseTraffic(): Promise<HealthTraffic[]> {
   const token = await readSupabaseAnalyticsToken();
-  const egressBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_BYTES");
-  const cachedEgressBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_BYTES");
-  const egressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_EGRESS_QUOTA_BYTES");
-  const cachedEgressQuotaBytes = configuredBytes("BENJADMIN_SUPABASE_CACHED_EGRESS_QUOTA_BYTES");
-  const egressPercent = egressBytes !== null && egressQuotaBytes !== null ? pct(egressBytes, egressQuotaBytes) : null;
-  const cachedEgressPercent = cachedEgressBytes !== null && cachedEgressQuotaBytes !== null ? pct(cachedEgressBytes, cachedEgressQuotaBytes) : null;
-  const base = { id: "supabase-traffic" as const, label: "SUPABASE FORGALOM", projectRef, interval: "MANAGEMENT_API", egressBytes, cachedEgressBytes, egressQuotaBytes, cachedEgressQuotaBytes, egressPercent, cachedEgressPercent };
-  if (!projectRef) return { ...base, state: "NOT_CONNECTED", reason: "Supabase project ref nem azonosítható.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
-  if (!token) return { ...base, state: "NOT_CONNECTED", reason: "A Supabase forgalom read-only lekéréséhez analytics_usage_read jogosultságú Management API token szükséges. A service-role kulcsot erre nem használjuk.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
-  try {
-    const [countsPayload, requestPayload] = await Promise.all([
-      supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-counts`, token),
-      supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-requests-count`, token),
-    ]);
-    const rows = countsPayload?.result;
-    const restRequests = sumUsageRows(rows, "total_rest_requests");
-    const authRequests = sumUsageRows(rows, "total_auth_requests");
-    const storageRequests = sumUsageRows(rows, "total_storage_requests");
-    const realtimeRequests = sumUsageRows(rows, "total_realtime_requests");
-    const explicitCount = Array.isArray(requestPayload?.result) ? Number(requestPayload.result[0]?.count) : null;
-    const apiRequests = Number.isFinite(explicitCount) ? explicitCount : restRequests + authRequests + storageRequests + realtimeRequests;
-    const egressKnown = egressBytes !== null || cachedEgressBytes !== null;
-    return { ...base, state: "READY", reason: egressKnown ? "Supabase Management API request-forgalom + konfigurált egress snapshot." : "Supabase Management API request-forgalom élő. A pontos billing-egresshez külön usage snapshot/adatforrás szükséges.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "LIVE", apiRequests, restRequests, authRequests, storageRequests, realtimeRequests };
-  } catch (error) {
-    return { ...base, state: "DEGRADED", reason: error instanceof Error ? error.message.slice(0, 220) : "Supabase analytics lekérési hiba.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN", apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
-  }
+  const projects = await getSupabaseMonitoringProjects();
+  return Promise.all(projects.map(async (project): Promise<HealthTraffic> => {
+    const now = new Date().toISOString();
+    const projectRef = project.projectRef;
+    const base = { id: project.environment === "PROD" ? "supabase-traffic-prod" as const : "supabase-traffic" as const,
+      label: `SUPABASE · ${project.environment}`, environment: project.environment, projectName: project.projectName,
+      projectRef, interval: "MANAGEMENT_API", egressBytes: null, cachedEgressBytes: null,
+      egressQuotaBytes: null, cachedEgressQuotaBytes: null, egressPercent: null, cachedEgressPercent: null };
+    const empty = { apiRequests: null, restRequests: null, authRequests: null, storageRequests: null, realtimeRequests: null };
+    if (!projectRef) return { ...base, ...empty, state: "NOT_CONNECTED", reason: `${project.projectName}: projektazonosító nincs beállítva.`, refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN" };
+    if (!token) return { ...base, ...empty, state: "NOT_CONNECTED", reason: "Scoped analytics_usage_read monitoring token szükséges.", refreshedAt: now, source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN" };
+    try {
+      const [countsPayload, requestPayload] = await Promise.all([
+        supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-counts`, token),
+        supabaseManagementJson(`/v1/projects/${encodeURIComponent(projectRef)}/analytics/endpoints/usage.api-requests-count`, token),
+      ]);
+      if (!Array.isArray(countsPayload?.result) || !Array.isArray(requestPayload?.result)) throw new Error("SUPABASE_ANALYTICS_RESPONSE_INVALID");
+      const rows = countsPayload.result;
+      const sum = (key: string) => sumUsageRows(rows, key);
+      const explicitCount = requestPayload.result.length ? Number(requestPayload.result[0]?.count) : null;
+      const apiRequests = explicitCount !== null && Number.isSafeInteger(explicitCount) && explicitCount >= 0 ? explicitCount : null;
+      return { ...base, state: "READY", reason: `${project.projectName} · ${projectRef} · Management API alapértelmezett időszaka; nem számlázási összesítő. Billing-egresshez külön hiteles usage adat szükséges.`, refreshedAt: new Date().toISOString(), source: "SUPABASE_MANAGEMENT_API", quality: "LIVE",
+        apiRequests, restRequests: sum("total_rest_requests"), authRequests: sum("total_auth_requests"), storageRequests: sum("total_storage_requests"), realtimeRequests: sum("total_realtime_requests") };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Supabase analytics lekérési hiba.";
+      return { ...base, ...empty, state: "DEGRADED", reason: `${project.projectName}: ${message.slice(0, 180)}`, refreshedAt: new Date().toISOString(), source: "SUPABASE_MANAGEMENT_API", quality: "UNKNOWN" };
+    }
+  }));
 }
 
 export async function getDeveloperGridSystemHealth(aiAdapter: DimprominAiHealthAdapter | null = null): Promise<DeveloperGridSystemHealth> {
@@ -391,7 +395,7 @@ export async function getDeveloperGridSystemHealth(aiAdapter: DimprominAiHealthA
     storageCache.expiresAt = now + STORAGE_TTL_MS;
   }
   if (!trafficCache.value || trafficCache.expiresAt <= now) {
-    trafficCache.value = [await inspectSupabaseTraffic()];
+    trafficCache.value = await inspectSupabaseTraffic();
     trafficCache.expiresAt = now + TRAFFIC_TTL_MS;
   }
   const servers = [...serverCache.value, ...protectedServerCache.value].map((server) => ({ ...server, metrics: { ...server.metrics } }));

@@ -388,3 +388,6 @@ A Projektkapu korábbi összecsukható, munkateret átméretező bal sidebar mod
 A Projektkapu vizuális alapja a közös DIMPRO enterprise tokenrendszer: `#06182c`, `#092641`, `#1167ee`, `#edf3f8`, `#f7fafc`, `#ffffff`, `#dce6ef`, `#64748b`, `#13233a`. Az általános türkiz/zöld Projektkapu brand-háttér megszűnt; zöld kizárólag státusz/siker jelentéssel használható. A modulok identitása kis ikon-, badge- vagy aktívvonal-akcentussal marad meg.
 
 A D6 gyors modulváltás shell-szintű szolgáltatás: `Ctrl+Alt+M` nyitja a palettát; Tab/Shift+Tab és nyilak választanak, Enter nyit, Esc zár, 1–6 közvetlenül választ modult. A modulregistry továbbra is az egyetlen modulnév/útvonal adatforrás.
+
+### BENJADMIN Developer Grid v0.1.31 – Supabase DEV / PROD monitoring
+A System Health külön DEV és PROD analytics adatforrást kezel. A meglévő scoped token megmarad; a PROD project ref külön admin-megerősített, analytics-only validált konfiguráció. Minden projekt saját státuszt és cache-elt request-metrikát kap, a hiányzó érték nem nulla. A forgalmi időszak a Management API alapértelmezése, nem teljes billing-ciklus. Szervezeti egress nem osztható fel automatikusan és nem számítható request-darabszámból. A kód kizárólag DEV-ben fut; PROD adatbázis- vagy alkalmazásmódosítást nem végez. A v0.1.30 kiadás változatlanul visszaállítási pont.

@@ -2795,3 +2795,12 @@ body.has-health-drawer .central-panel {
 :root[data-theme="light"] .cw-check { color:#365f56; }
 :root[data-theme="light"] .cw-notice { color:#1d4b40; background:#f1faf6; border-color:#9bbcaf; }
 :root[data-theme="light"] .context-workspace__resize:hover { background:rgba(16,125,94,.16); }
+
+/* v0.1.31 · separate Supabase DEV / PROD project columns. */
+.system-health-columns { grid-template-columns:minmax(720px,5fr) minmax(350px,2.35fr) minmax(290px,1.9fr) minmax(205px,1.25fr); }
+.health-table--supabase .health-table__metric { width:65px; }
+.health-table--supabase th:not(:first-child),.health-table--supabase td:not(:first-child) { width:calc((100% - 65px)/2); }
+.health-group--supabase .health-table-wrap { height:calc(100% - 31px); }
+.health-group--supabase .health-group__note { display:block; white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:1500px) { .system-health-columns { grid-template-columns:minmax(690px,5fr) minmax(330px,2.35fr) minmax(280px,1.9fr) minmax(195px,1.2fr); } }
+:root[data-theme="light"] .health-group--supabase .health-group__note { color:#476b60; }

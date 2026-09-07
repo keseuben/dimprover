@@ -109,7 +109,9 @@ export type LegacyHealthStorage = {
 };
 
 export type LegacyHealthTraffic = {
-  id: "supabase-traffic";
+  id: "supabase-traffic" | "supabase-traffic-prod";
+  environment?: "DEV" | "PROD";
+  projectName?: string;
   label: string;
   state: "READY" | "DEGRADED" | "NOT_CONNECTED" | "UNKNOWN";
   reason: string;

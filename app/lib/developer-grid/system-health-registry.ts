@@ -23,6 +23,7 @@ const REGISTRY: readonly InfrastructureNodeRegistryEntry[] = [
   { id: "hetzner-object-storage", label: "HETZNER OBJECT STORAGE", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY", "OBJECT_COUNT", "S3_READONLY"], source: "HETZNER_S3_READONLY", staleAfterMs: 10 * MINUTE },
   { id: "hetzner-bx11", label: "HETZNER BX11 STORAGE BOX", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY", "BACKUP_TARGET", "SSH_READONLY"], source: "HETZNER_STORAGE_BOX_READONLY", staleAfterMs: 10 * MINUTE },
   { id: "supabase-traffic", label: "SUPABASE FORGALOM", kind: "SERVICE", readOnly: true, capabilities: ["ANALYTICS_USAGE", "API_REQUEST_COUNTS", "EGRESS_USAGE"], source: "SUPABASE_MANAGEMENT_API", staleAfterMs: 10 * MINUTE },
+  { id: "supabase-traffic-prod", label: "SUPABASE · PROD", kind: "SERVICE", readOnly: true, capabilities: ["ANALYTICS_USAGE", "API_REQUEST_COUNTS"], source: "SUPABASE_MANAGEMENT_API", staleAfterMs: 10 * MINUTE },
   { id: "drive-storage", label: "DIMPRO DRIVE STORAGE", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY"], source: "REGISTRY", staleAfterMs: 10 * MINUTE, planned: true },
   { id: "drop-storage", label: "DIMPRO DROP STORAGE", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY"], source: "REGISTRY", staleAfterMs: 10 * MINUTE, planned: true },
   { id: "backup-storage", label: "BACKUP STORAGE", kind: "STORAGE", readOnly: true, capabilities: ["CAPACITY"], source: "REGISTRY", staleAfterMs: 10 * MINUTE, planned: true },

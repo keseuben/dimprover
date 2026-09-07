@@ -110,6 +110,8 @@ export function normalizeHealthTraffic(traffic: LegacyHealthTraffic, nowMs = Dat
     readOnly: definition.readOnly,
     metrics: {
       projectRef: traffic.projectRef,
+      environment: traffic.environment ?? "DEV",
+      projectName: traffic.projectName ?? "dimpro-dev",
       interval: traffic.interval,
       apiRequests: traffic.apiRequests,
       restRequests: traffic.restRequests,

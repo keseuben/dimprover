@@ -183,3 +183,12 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 - Az enrollment ugyanazzal a nonce-szal csak rövid replay ablakban ismételhető hálózati hiba esetére; utána admin reset nélkül nem ad új kulcsot.
 - A systemd agent one-shot, percenként timerből indul, nincs shell/command channel, nincs inbound port és nincs remote execution. Csak `/proc`, `statvfs` és uptime adatokat olvas, majd HTTPS-en sanitizált metrikát küld DEV-be.
 - A System Health csak friss mintát tekint LIVE-nak; stale minta esetén automatikusan visszaáll PARTIAL állapotra. PROD alkalmazás- vagy DB-konfigurációt az agent nem módosít.
+
+## v0.1.31 Supabase DEV / PROD monitoring
+
+- A meglévő scoped `analytics_usage_read` token változatlanul a DEV secretfájlban marad. Az új projektbekötés nem kér új tokent, és nem módosít Supabase-adatot.
+- A DEV projektazonosító a canonical DEV konfigurációból érkezik. A dimprover / PROD projektazonosító külön, admin által megerősített és analytics-only módon ellenőrzött konfigurációban tárolódik. A token nem jogosult projektbeállítások lekérésére, ezért a projekt neve nem igazolható automatikusan; az admin a Supabase Dashboard URL-jéből másolja az azonosítót.
+- A `PUT /api/dev/grid/supabase-monitoring` kizárólag a PROD mappinget fogadja, megerősített `dimprover` névvel, DEV-től eltérő, érvényes ref-fel. Mentés előtt mindkét read-only usage végpontnak sikerülnie kell, a Project Settings Read pedig 403 marad. Az írás atomikus, 0600 jogosultságú.
+- A System Health két külön resource node-ot és két külön DEV/PROD oszlopot közöl; egy projekt hibája nem írja felül a másik metrikáit. Hiányzó érték null/—, nem kitalált nulla. Az API alapértelmezett időszaka nem minősül teljes számlázási ciklusnak. A request-számokat nem összegezzük szervezeti billing-egressként, és egress-kvótát nem osztunk fel projektekre.
+- A token érvényessége és a projektmapping egymástól külön kezelendő. A meglévő DEV token státusz kompatibilis marad; új token mentése már minden beállított projektet ellenőriz. A rendszer kizárólag DEV runtime-ban fut, PROD application/database write nincs.
+- A v0.1.30 immutable release és a korábbi Central Core/Windows E2E működés változatlan. A v0.1.31 új Windows candidate ellenőrzés után adható ki.

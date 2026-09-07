@@ -3197,3 +3197,6 @@ Tesztelés:
 - Ismételt keydown (`event.repeat`) nem váltogatja a palettát.
 - Candidate és élő böngészőteszt: AltGr-szerű `key != "m"`, `code = "KeyM"`, `Ctrl + Alt` kombináció PASS; normál `Ctrl + Alt + M` PASS.
 - Release: `.next-projectgate-shortcut-v0901-release-final`, build `GrPJbz-YcYUZGNiVbTn60`.
+
+### BENJADMIN Developer Grid v0.1.31 – Supabase DEV / PROD monitoring
+A System Health külön DEV és PROD analytics adatforrást kezel. A meglévő scoped token megmarad; a PROD project ref külön admin-megerősített, analytics-only validált konfiguráció. Minden projekt saját státuszt és cache-elt request-metrikát kap, a hiányzó érték nem nulla. A forgalmi időszak a Management API alapértelmezése, nem teljes billing-ciklus. Szervezeti egress nem osztható fel automatikusan és nem számítható request-darabszámból. A kód kizárólag DEV-ben fut; PROD adatbázis- vagy alkalmazásmódosítást nem végez. A v0.1.30 kiadás változatlanul visszaállítási pont.

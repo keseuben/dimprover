@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDeveloperGridAdminAuthorized } from "@/app/lib/developer-grid/benjadmin-admin-auth";
 import {
+  configureSupabaseMonitoringProject,
   deleteSupabaseAnalyticsToken,
   getSupabaseMonitoringStatus,
   saveSupabaseAnalyticsToken,
@@ -32,6 +33,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "SUPABASE_MONITORING_SETUP_FAILED";
     return json({ ok: false, code, error: error instanceof Error ? error.message : "A Supabase monitoring token nem menthető." }, code.includes("HTTP_429") ? 429 : code.includes("HTTP_401") ? 401 : code.includes("HTTP_403") ? 403 : 400);
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  if (!(await authorized(request))) return json({ ok: false, error: "Admin jogosultság szükséges a Supabase monitoring beállításához." }, 401);
+  try {
+    const body = await request.json() as { environment?: unknown; projectRef?: unknown; confirmProjectName?: unknown };
+    const validated = await configureSupabaseMonitoringProject(body);
+    invalidateSupabaseTrafficCache();
+    return json({ ok: true, validated, status: await getSupabaseMonitoringStatus() });
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "SUPABASE_PROJECT_SETUP_FAILED";
+    return json({ ok: false, code, error: error instanceof Error ? error.message : "A PROD monitoring projekt nem kapcsolható." }, code.includes("HTTP_429") ? 429 : code.includes("HTTP_401") ? 401 : code.includes("HTTP_403") ? 403 : 400);
   }
 }
 
