@@ -706,7 +706,7 @@ function renderSystemHealth() {
         : healthBadge(server?.state);
       const serverHeader = ordered.map((server) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(server?.label || "—")}</strong>${serverBadge(server)}</div></th>`).join("");
       const serverBody = serverRows.map(([label, key]) => `<tr><th scope="row">${label}</th>${ordered.map((server) => `<td>${serverValue(server, key)}</td>`).join("")}</tr>`).join("");
-      const serverTable = `<section class="health-group health-group--servers"><div class="health-group__head"><h4>SZERVEREK</h4><span>${ordered.length} node · közös erőforrásnézet</span></div><div class="health-table-wrap"><table class="health-table health-table--servers"><thead><tr><th scope="col" class="health-table__metric">ERŐFORRÁS</th>${serverHeader}</tr></thead><tbody>${serverBody}</tbody></table></div></section>`;
+      const serverTable = `<section class="health-group health-group--servers"><div class="health-group__head"><h4>SZERVEREK</h4><div class="health-group__actions"><button type="button" class="health-inline-action" data-health-action="open-protected-telemetry">BEÁLLÍTÁS</button><span>${ordered.length} node · közös erőforrásnézet</span></div></div><div class="health-table-wrap"><table class="health-table health-table--servers"><thead><tr><th scope="col" class="health-table__metric">ERŐFORRÁS</th>${serverHeader}</tr></thead><tbody>${serverBody}</tbody></table></div></section>`;
 
       const storages = Array.isArray(health.storage) ? health.storage : [];
       const storageHeader = storages.map((item) => `<th scope="col"><div class="health-table__server-head"><strong>${escapeHtml(item.label || "TÁRHELY")}</strong>${healthBadge(item.state, { missing: item.state === "DEGRADED" ? "ELLENŐRIZD" : "NINCS ADAT" })}</div></th>`).join("");
@@ -1734,6 +1734,11 @@ function bindUi() {
     if (action === "open-pairing") {
       const result = await api.openPairingPage();
       if (!result?.ok) showToast("BENJADMIN párosítás", result?.error || "A párosítási oldal nem nyitható meg.");
+      return;
+    }
+    if (action === "open-protected-telemetry") {
+      const result = await api.openProtectedTelemetryPage();
+      if (!result?.ok) showToast("VPS telemetria", result?.error || "A telemetria beállítóoldal nem nyitható meg.");
       return;
     }
     if (action === "open-supabase-monitoring") {

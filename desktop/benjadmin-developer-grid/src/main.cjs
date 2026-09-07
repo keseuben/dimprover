@@ -2761,6 +2761,12 @@ function registerIpc() {
     try { await shell.openExternal(url); return { ok: true, url }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Supabase monitoring beállítóoldal nem nyitható meg." }; }
   });
+  ipcMain.handle("system-health:open-protected-telemetry", async () => {
+    if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
+    const url = `${config.benjadminBaseUrl}/api/dev/grid/protected-telemetry/setup`;
+    try { await shell.openExternal(url); return { ok: true, url }; }
+    catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A VPS telemetria beállítóoldal nem nyitható meg." }; }
+  });
   ipcMain.handle("connection:pairing-start", async (_event, payload) => {
     try { return { ok: true, pairing: await beginChatGridPairing(payload?.activationCode) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A ChatGrid párosítás sikertelen." }; }

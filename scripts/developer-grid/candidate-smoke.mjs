@@ -27,6 +27,10 @@ async function request(path, options = {}) {
 const page = await request("/admin/developer-grid");
 check([200, 307, 308].includes(page.response.status), "Developer Grid page route responds", `HTTP ${page.response.status}`);
 
+const enrollmentAnonymous = await request("/api/dev/grid/protected-telemetry/admin");
+check(enrollmentAnonymous.response.status === 401, "Protected telemetry admin status requires authentication");
+const enrollmentPostAnonymous = await request("/api/dev/grid/protected-telemetry/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nodeId: "prod-vps", confirm: true }) });
+check(enrollmentPostAnonymous.response.status === 401, "Protected telemetry enrollment cannot be armed anonymously");
 const anonymous = await request("/api/dev/grid/foundation");
 check(anonymous.response.status === 401, "Foundation API fails closed without auth", `HTTP ${anonymous.response.status}`);
 
@@ -38,7 +42,7 @@ check(foundation.response.status === 200, "Foundation API reporter auth", `HTTP 
 check(foundation.json?.foundation?.sourceProvenance?.sourceState === "VERIFIED", "Source provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.state === "VERIFIED", "Release/runtime provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.blockCode === null, "Release/runtime blockCode empty");
-check(foundation.json?.foundation?.version === "0.1.31-dev", "Developer Grid version v0.1.31 DEV");
+check(foundation.json?.foundation?.version === "0.1.32-dev", "Developer Grid version v0.1.32 DEV");
 check(Boolean(foundation.json?.foundation?.releaseRuntimeProvenance?.buildId), "Runtime BUILD_ID exposed");
 check(/^[0-9a-f]{40}$/.test(String(foundation.json?.foundation?.releaseRuntimeProvenance?.sourceCommit || "")), "Runtime source commit exposed");
 check(foundation.json?.foundation?.productionAccess === "DENY", "PROD access DENY");

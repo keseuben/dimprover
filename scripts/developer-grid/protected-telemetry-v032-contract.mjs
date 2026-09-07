@@ -1,0 +1,53 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import os from "node:os";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+const require=createRequire(import.meta.url);const ts=require("typescript");
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const read=name=>fs.readFileSync(path.join(root,name),"utf8");
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),"benjadmin-protected-v032-"));
+const names=["BENJADMIN_PROTECTED_TELEMETRY_SECRET_DIR","BENJADMIN_INFRA_SNAPSHOT_FILE"];
+const old=Object.fromEntries(names.map(name=>[name,process.env[name]]));
+process.env.BENJADMIN_PROTECTED_TELEMETRY_SECRET_DIR=path.join(dir,"secrets");
+process.env.BENJADMIN_INFRA_SNAPSHOT_FILE=path.join(dir,"snapshot.json");
+function load(source,mocks={}){const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const m={exports:{}};new Function("exports","module","require",js)(m.exports,m,id=>id==="server-only"?{}:id in mocks?mocks[id]:require(id));return m.exports;}
+const core=load(read("app/lib/developer-grid/protected-telemetry-enrollment.ts"));
+const ingress=load(read("app/lib/developer-grid/protected-telemetry-ingress.ts"),{"./protected-telemetry-enrollment":core});
+const headers=(ip,extra={})=>new Headers({"x-real-ip":ip,...extra});
+const prod=headers("213.160.68.24");const db=headers("213.160.68.33");
+const nonce="n".repeat(32);let n=0;
+async function check(label,fn){await fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label);}
+try{
+  await check("No registration exists initially",async()=>{const s=await core.getProtectedTelemetryEnrollmentStatus();assert.equal(s.length,2);assert(s.every(x=>!x.registered&&!x.enrollmentPending));});
+  await check("Enrollment without admin approval is denied",async()=>{await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:"a".repeat(43)},prod),{code:"PROTECTED_TELEMETRY_ENROLL_NOT_APPROVED"});});
+  const approval=await core.prepareProtectedTelemetryEnrollment("prod-vps");
+  await check("Admin approval is node-bound and expires in ten minutes",async()=>{assert.equal(approval.nodeId,"prod-vps");assert(40<=approval.code.length);assert(Date.parse(approval.expiresAt)>Date.now());assert(Date.parse(approval.expiresAt)-Date.now()<=600000);});
+  await check("Only a digest is persisted",async()=>{const file=path.join(dir,"secrets","prod-vps.enrollment.json");const text=fs.readFileSync(file,"utf8");assert(!text.includes(approval.code));assert.equal(JSON.parse(text).schemaVersion,2);assert.equal(fs.statSync(file).mode&0o777,0o600);assert.equal(fs.statSync(path.dirname(file)).mode&0o777,0o700);});
+  await check("Status never exposes the approval code",async()=>{const s=await core.getProtectedTelemetryEnrollmentStatus();assert.equal(s[0].enrollmentPending,true);assert(!JSON.stringify(s).includes(approval.code));});
+  await check("Spoofed forwarded IP is denied",async()=>{await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:approval.code},headers("198.51.100.1",{"x-forwarded-for":"213.160.68.24"})),{code:"PROTECTED_TELEMETRY_ENROLL_SOURCE_DENIED"});});
+  await check("Wrong node cannot use the approval",async()=>{await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"db-vps",nonce,enrollmentCode:approval.code},db),{code:"PROTECTED_TELEMETRY_ENROLL_NOT_APPROVED"});});
+  await check("Wrong approval is denied",async()=>{await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:"b".repeat(43)},prod),{code:"PROTECTED_TELEMETRY_ENROLL_NOT_APPROVED"});});
+  await check("Expired approval is denied",async()=>{const file=path.join(dir,"secrets","prod-vps.enrollment.json");const s=JSON.parse(fs.readFileSync(file));s.expiresAt=new Date(0).toISOString();fs.writeFileSync(file,JSON.stringify(s));await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:approval.code},prod),{code:"PROTECTED_TELEMETRY_ENROLL_NOT_APPROVED"});});
+  const approved=await core.prepareProtectedTelemetryEnrollment("prod-vps");
+  const enrolled=await core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:approved.code},prod);
+  await check("Successful enrollment creates a private node key",async()=>{assert.equal(enrolled.nodeId,"prod-vps");assert.equal(fs.statSync(core.nodeTelemetryKeyFile("prod-vps")).mode&0o777,0o600);assert.equal(await core.readNodeTelemetryKey("prod-vps"),enrolled.key);assert(!fs.readFileSync(path.join(dir,"secrets","prod-vps.enrollment.json"),"utf8").includes(approved.code));});
+  await check("Replay is denied and existing key stays unchanged",async()=>{await assert.rejects(core.enrollProtectedTelemetryNode({nodeId:"prod-vps",nonce,enrollmentCode:approved.code},prod),{code:"PROTECTED_TELEMETRY_ALREADY_ENROLLED"});await assert.rejects(core.prepareProtectedTelemetryEnrollment("prod-vps"),{code:"PROTECTED_TELEMETRY_ALREADY_ENROLLED"});assert.equal(await core.readNodeTelemetryKey("prod-vps"),enrolled.key);});
+  const dbApproval=await core.prepareProtectedTelemetryEnrollment("db-vps");
+  const dbResults=await Promise.allSettled([core.enrollProtectedTelemetryNode({nodeId:"db-vps",nonce,enrollmentCode:dbApproval.code},db),core.enrollProtectedTelemetryNode({nodeId:"db-vps",nonce,enrollmentCode:dbApproval.code},db)]);
+  await check("Concurrent enrollment accepts only one request",async()=>{assert.equal(dbResults.filter(x=>x.status==="fulfilled").length,1);assert.equal(dbResults.filter(x=>x.status==="rejected").length,1);});
+  await check("PROD and DB keys are independent",async()=>{const key=await core.readNodeTelemetryKey("db-vps");assert(key.length>=32);assert.notEqual(key,enrolled.key);});
+  await check("Ingest requires both matching node key and source IP",async()=>{const auth=key=>headers("213.160.68.24",{"x-benjadmin-protected-telemetry-key":key});assert.equal(await ingress.isProtectedTelemetryAuthorized(auth(enrolled.key),"prod-vps"),true);assert.equal(await ingress.isProtectedTelemetryAuthorized(auth("z".repeat(64)),"prod-vps"),false);assert.equal(await ingress.isProtectedTelemetryAuthorized(headers("213.160.68.33",{"x-benjadmin-protected-telemetry-key":enrolled.key}),"prod-vps"),false);});
+  await check("Stale and invalid metrics fail closed",async()=>{const sample={schemaVersion:1,nodeId:"prod-vps",sampledAt:new Date().toISOString(),hostname:"prod",metrics:{cpuPercent:15,memoryTotalBytes:100,memoryUsedBytes:20,diskTotalBytes:100,diskUsedBytes:20}};assert.equal(ingress.sanitizeProtectedTelemetryPayload(sample).metrics.cpuPercent,15);assert.throws(()=>ingress.sanitizeProtectedTelemetryPayload({...sample,sampledAt:new Date(0).toISOString()}),{code:"PROTECTED_TELEMETRY_TIMESTAMP_INVALID"});assert.throws(()=>ingress.sanitizeProtectedTelemetryPayload({...sample,metrics:{...sample.metrics,cpuPercent:150}}),{code:"PROTECTED_TELEMETRY_METRIC_INVALID"});});
+  await check("Sanitized samples remain in DEV snapshot only",async()=>{const sample=ingress.sanitizeProtectedTelemetryPayload({schemaVersion:1,nodeId:"prod-vps",sampledAt:new Date().toISOString(),hostname:"prod",metrics:{cpuPercent:15,memoryTotalBytes:100,memoryUsedBytes:20,diskTotalBytes:100,diskUsedBytes:20}});await ingress.storeProtectedTelemetry(sample);const s=JSON.parse(fs.readFileSync(process.env.BENJADMIN_INFRA_SNAPSHOT_FILE));assert.equal(s.environment,"DEV");assert.equal(s.productionAccess,"DENY");assert.equal(s.production.metrics.cpuPercent,15);assert(!JSON.stringify(s).includes(enrolled.key));});
+  const route=load(read("app/api/dev/grid/protected-telemetry/admin/route.ts"),{"next/server":{NextResponse:{json:(body,options={})=>Response.json(body,{status:options.status||200,headers:options.headers})}},"@/app/lib/developer-grid/benjadmin-admin-auth":{isDeveloperGridAdminAuthorized:async h=>h.get("x-test-admin")==="yes"},"@/app/lib/developer-grid/protected-telemetry-enrollment":core});
+  await check("Admin endpoint rejects anonymous requests",async()=>{const r=await route.POST({headers:new Headers(),json:async()=>({nodeId:"prod-vps",confirm:true})});assert.equal(r.status,401);});
+  await check("Admin endpoint requires confirmation and trusted origin",async()=>{const a=await route.POST({headers:headers("127.0.0.1",{"x-test-admin":"yes","origin":"https://evil.example"}),json:async()=>({nodeId:"prod-vps",confirm:true})});assert.equal(a.status,403);const b=await route.POST({headers:headers("127.0.0.1",{"x-test-admin":"yes"}),json:async()=>({nodeId:"prod-vps",confirm:false})});assert.equal(b.status,400);});
+  await check("Admin GET returns metadata, never an existing key",async()=>{const r=await route.GET({headers:headers("127.0.0.1",{"x-test-admin":"yes"})});const x=await r.json();assert.equal(r.status,200);assert(!JSON.stringify(x).includes(enrolled.key));assert(!JSON.stringify(x).includes(approved.code));});
+  await check("Setup page embedded JavaScript is syntactically valid",async()=>{const source=read("app/api/dev/grid/protected-telemetry/setup/route.ts");const match=source.match(/const html = `([\s\S]*?)`;/);assert(match);const script=match[1].match(/<script>([\s\S]*?)<\/script>/);assert(script);new vm.Script(script[1]);assert.match(source,/cache-control/);assert.match(source,/frame-ancestors/);});
+  await check("Agent requires a hidden interactive enrollment code",async()=>{const s=read("scripts/developer-grid/protected-telemetry-agent.py");assert.match(s,/getpass\.getpass/);assert.match(s,/os\.isatty/);assert.match(s,/enrollmentCode/);assert.match(s,/O_EXCL/);assert.doesNotMatch(s,/O_TRUNC|subprocess|os\.system|Popen|exec\(/);});
+  await check("Installer activates only after first successful sample",async()=>{const s=read("scripts/developer-grid/install-protected-telemetry-agent.sh");assert(s.indexOf("/usr/bin/python3 /opt/benjadmin/protected-telemetry-agent.py")<s.indexOf("systemctl enable --now"));assert.match(s,/NoNewPrivileges=true/);assert.match(s,/ProtectSystem=strict/);assert.match(s,/DynamicUser=yes/);assert.match(s,/LoadCredential=telemetry.key/);assert.doesNotMatch(s,/KEY_SOURCE|curl\s+.*\|\s*(?:bash|sh)/);});
+}finally{fs.rmSync(dir,{recursive:true,force:true});for(const [name,value]of Object.entries(old)){if(value===undefined)delete process.env[name];else process.env[name]=value;}}
+console.log("Developer Grid protected telemetry v0.1.32 contract PASS · "+n+"/"+n);

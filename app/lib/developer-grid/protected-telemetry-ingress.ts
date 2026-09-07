@@ -3,7 +3,7 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { readNodeTelemetryKey } from "./protected-telemetry-enrollment";
+import { readNodeTelemetryKey, sourceIpAllowed } from "./protected-telemetry-enrollment";
 
 export const DEFAULT_PROTECTED_SNAPSHOT_FILE = "/srv/dimpro-dev/coordination/health-snapshots/protected-nodes.json";
 const MAX_SAMPLE_AGE_MS = 5 * 60_000;
@@ -50,6 +50,7 @@ function safeEqual(left: string, right: string) {
 }
 export function protectedSnapshotFile() { return process.env.BENJADMIN_INFRA_SNAPSHOT_FILE?.trim() || DEFAULT_PROTECTED_SNAPSHOT_FILE; }
 export async function isProtectedTelemetryAuthorized(headers: Headers, nodeId: ProtectedTelemetryNodeId) {
+  if (!sourceIpAllowed(nodeId, headers)) return false;
   const supplied = headers.get("x-benjadmin-protected-telemetry-key")?.trim() || "";
   if (supplied.length < 32) return false;
   const nodeKey = await readNodeTelemetryKey(nodeId);
