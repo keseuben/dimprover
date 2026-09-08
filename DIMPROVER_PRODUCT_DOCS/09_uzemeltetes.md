@@ -562,3 +562,11 @@ Migrációs szabály:
 - utána marker-, tábla-, RLS-, RPC- és alkalmazásoldali health ellenőrzés;
 - titkos érték soha ne jelenjen meg parancskimenetben vagy Fejlesztési Központ naplóban.
 
+
+## 2026-09-08 – Ellenőrzött helyi backup-retention V1
+
+A korábbi V1.0 szándékosan csak a regenerálható build-kimeneteket törölte automatikusan; a teljes backupok és artifactok report-only állapotban maradtak. A napi titkosított Restic-mentés külön működik, 14 napi, 8 heti és 12 havi megtartással. A helyi bináris rollback-mentések nem helyettesítik az adatbázis- és fájlmentéseket.
+
+Az új, külön allowlistás policy csak a Health kiadási runtime-mentéseit, a Developer Grid build-run archivumait és a verziózott kiadási archivumokat kezeli. Health: minimum 7 nap, legalább 2 legújabb; build-run: minimum 48 óra, legalább 3 legújabb; kiadási archivum: minimum 72 óra, legalább 3 legújabb. A forrás Git-azonosságát, leszármazását és a build/artifact ellenőrzőösszegeit ellenőrzi. Az aktív runtime, a rollback, a rögzített kiadások és az ismeretlen vagy hiányos mentések védettek. A publikus letöltéseket, teljes worktree-ket, adatbázismentéseket és a régi, manifest nélküli Drive-mentéseket nem törli.
+
+A végrehajtás előtt sikeres, legfeljebb 36 órás napi backupot és szabad koordinációs zárat követel meg. A dry-run az alapértelmezés; az éles törlés csak a koordinált --apply módban történhet, újraellenőrzéssel és 0600 jogosultságú auditnaplóval. A széles backups.autoDelete=false és artifacts.autoDelete=false kapcsolók változatlanok: nem biztonságos az összes mentési könyvtárra általános törlést engedélyezni. Az új, szűk policy enabled=true. A mentések életciklusának későbbi bővítése külön manifest-/forrásellenőrzést igényel.

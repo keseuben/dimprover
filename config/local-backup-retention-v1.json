@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "backupMarker": "/var/log/dimpro-backup/latest-status.env",
+  "maxBackupAgeHours": 36,
+  "families": [
+    {
+      "id": "health-runtime",
+      "kind": "runtime",
+      "root": "/srv/dimpro-dev/backups/releases",
+      "source": "/srv/dimpro-dev/worktrees/dimpro-one-health-lab-ui-v01-20260831",
+      "branch": "feature/dimpro-one-health-lab-ui-v01-20260831",
+      "keepNewest": 2,
+      "minAgeHours": 168
+    },
+    {
+      "id": "grid-build-runs",
+      "kind": "build",
+      "root": "/srv/dimpro-dev/artifacts/build-runs",
+      "source": "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905",
+      "branch": "feature/benjadmin-developer-grid-v013-outminai-20260905",
+      "keepNewest": 3,
+      "minAgeHours": 48
+    },
+    {
+      "id": "grid-release-archives",
+      "kind": "archive",
+      "root": "/srv/dimpro-dev/artifacts/benjadmin-developer-grid",
+      "source": "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905",
+      "branch": [
+        "feature/benjadmin-developer-grid-v1-20260827",
+        "feature/benjadmin-developer-grid-v013-outminai-20260905"
+      ],
+      "keepNewest": 3,
+      "minAgeHours": 72
+    }
+  ],
+  "protectedCommits": [
+    "afd5ef0ef596e8a57cfca6ee5b3a1f0b2a8bfb45",
+    "233c7da446ceead858c311fd72c8157584e5afb1",
+    "f7f531cd716236954f3b8352d830c28edcaff3d9",
+    "4012cd2c517e0ff66e62d8f14e3e1cc530435b02",
+    "1c29804ca4f352a27dcbb6ad419f0301d7fd0765"
+  ],
+  "protectedPaths": [
+    "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905/.next",
+    "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905/.next-v031-rollback-20260907"
+  ],
+  "auditRoot": "/srv/dimpro-dev/coordination/recovery/local-retention-v1-20260908"
+}
