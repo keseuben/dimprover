@@ -159,7 +159,8 @@ check('V2 keeps only one newest build per active worktree', realConfig.builds.ke
 check('Daily retention service uses guarded retention wrapper', dailyService.includes('dimpro-dev-storage-retention.sh') && dailyService.includes('--prune-dependencies'));
 check('Daily retention timer is persistent and Budapest scheduled', dailyTimer.includes('Persistent=true') && dailyTimer.includes('Europe/Budapest'));
 check('Worktree helper compares package-lock hashes', worktreeHelper.includes('sha256sum') && worktreeHelper.includes('package-lock.json'));
-check('Worktree helper uses Turbopack-safe node_modules hardlinks', worktreeHelper.includes('cp -al "$OPERATOR_ROOT/node_modules"'));
+check('Worktree helper uses Turbopack-safe node_modules hardlinks', worktreeHelper.includes('cp -al "$DEPENDENCY_SOURCE_ROOT/node_modules"'));
+check('Worktree helper rejects symlink dependency sources', worktreeHelper.includes('[[ ! -L "$CANDIDATE_ROOT/node_modules" ]]') && worktreeHelper.includes('benjadmin-operator-ui-v2'));
 check('Retired worktree policy is encoded', source.includes('retiredWorktree') && source.includes('retireRegenerablesAfterHours'));
 check('PM2 cwd protects worktree retirement', source.includes('pm2WorktreeRoots'));
 check('Agent policy documents retention rule', agents.includes('BEGIN:dimpro-dev-storage-rules'));

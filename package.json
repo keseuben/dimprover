@@ -16,7 +16,9 @@
     "storage:retention:dry-run": "node scripts/dimpro-dev-storage-retention.mjs --quiet",
     "storage:retention:apply-builds": "bash scripts/dimpro-dev-storage-retention.sh --quiet",
     "storage:retention:deep-report": "node scripts/dimpro-dev-storage-retention.mjs --quiet",
-    "storage:prebuild:check": "bash scripts/dimpro-dev-storage-prebuild.sh"
+    "storage:prebuild:check": "bash scripts/dimpro-dev-storage-prebuild.sh",
+    "storage:retention:worktrees:dry-run": "node scripts/dimpro-dev-worktree-retention-v3.mjs --quiet",
+    "storage:retention:worktrees:apply": "bash scripts/dimpro-dev-worktree-retention-v3.sh --quiet"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

@@ -1,0 +1,27 @@
+[Unit]
+Description=DIMPRO DEV safe automatic worktree retention V3
+After=local-fs.target dimpro-dev-backup.service dimpro-dev-storage-retention.service
+ConditionPathIsDirectory=/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905
+ConditionPathExists=/var/log/dimpro-backup/latest-status.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/bin/bash -lc 'set -euo pipefail; ROOT=/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905; REPORT_DIR=/srv/dimpro-dev/artifacts/worktree-retention-v3; mkdir -p "$REPORT_DIR"; exec "$ROOT/scripts/dimpro-dev-worktree-retention-v3.sh" --quiet --report-file="$REPORT_DIR/daily-$(date -u +%%Y%%m%%dT%%H%%M%%SZ).json"'
+TimeoutStartSec=1800
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

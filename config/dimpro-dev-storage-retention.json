@@ -23,13 +23,29 @@
     "autoPrune": false
   },
   "worktrees": {
-    "reportOnly": true,
-    "minInactiveHours": 168,
+    "reportOnly": false,
+    "minInactiveHours": 336,
     "retireRegenerablesAfterHours": 12,
     "requireMergedIntoAnyRef": [
       "integration/benjadmin-dev",
       "feat/benjadmin-operator-ui-v2"
-    ]
+    ],
+    "autoPrune": true,
+    "keepNewestPerFamily": 3,
+    "backupStatusFile": "/var/log/dimpro-backup/latest-status.env",
+    "backupMaxAgeHours": 30,
+    "archiveRefNamespace": "refs/retention-archive",
+    "recoveryDir": "/srv/dimpro-dev/coordination/recovery/worktree-retention-v3",
+    "protectedNameRegex": [
+      "immutable"
+    ],
+    "protectedBranches": [
+      "main",
+      "master",
+      "integration/benjadmin-dev",
+      "feat/benjadmin-operator-ui-v2"
+    ],
+    "keepNewestMaxAgeHours": 720
   },
   "backups": {
     "autoDelete": false

@@ -14,7 +14,7 @@ A koordinált DEV build után a `scripts/dimpro-dev-storage-retention.mjs` autom
 - aktív PM2 `NEXT_DIST_DIR` és `active-next-release` soha nem törölhető;
 - aktív/nem nyugdíjazott worktree-nként legfeljebb 1 legfrissebb `.next*` candidate buildet tartunk meg a kötelező runtime-védelmeken felül;
 - ha egy worktree legalább 12 órája inaktív, clean, canonical baseline-ba integrált, és sem PM2, sem futó processz nem használja, `retired` állapotúnak minősül; ilyenkor a regenerálható `.next*` buildre nem vonatkozik örök `newest`/`.next` védelem;
-- backup, artifact és teljes worktree automatikusan nem törölhető;
+- backup és artifact továbbra sem törölhető általánosan; teljes worktree csak a külön V3 motorral, 30 GiB alatti szabad helynél, 14 nap inaktivitás + clean/attached/ref-egyezés + friss Restic backup + processz/PM2/systemd/cron védelem után törölhető; családonként az utolsó 3 worktree 30 napig védett;
 - `node_modules` automatikusan nem törölhető, csak explicit deep-prune módban clean + merged + inactive gate után;
 - minden apply központi `maintenance` / `build` lock alatt történik;
 - minden koordinált DEV build előtt kötelező storage preflight fut: 30 GiB cél szabad hely, 15 GiB hard minimum; 15 GiB alatt vagy 90% felett a build blokkolódik;

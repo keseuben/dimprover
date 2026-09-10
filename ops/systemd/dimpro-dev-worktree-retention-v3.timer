@@ -1,0 +1,12 @@
+[Unit]
+Description=Run DIMPRO DEV worktree retention V3 daily
+
+[Timer]
+OnCalendar=*-*-* 04:20:00 Europe/Budapest
+RandomizedDelaySec=10min
+AccuracySec=1min
+Persistent=true
+Unit=dimpro-dev-worktree-retention-v3.service
+
+[Install]
+WantedBy=timers.target

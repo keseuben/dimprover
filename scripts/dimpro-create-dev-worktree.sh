@@ -41,19 +41,34 @@ fi
 # Dependency retention szabály:
 # azonos package-lock.json esetén Turbopack-kompatibilis hardlinkelt node_modules fa készül.
 # Külső node_modules symlink TILOS, mert a Turbopack a projektgyökéren kívüli symlinket elutasítja.
-if [[ -d "$OPERATOR_ROOT/node_modules" && -f "$OPERATOR_ROOT/package-lock.json" && -f "$TARGET/package-lock.json" ]]; then
-  OP_HASH="$(sha256sum "$OPERATOR_ROOT/package-lock.json" | cut -d' ' -f1)"
+# A megadott operator root symlinkes dependency-fája ezért nem használható forrásként;
+# ilyenkor a canonical Operator UI valódi node_modules könyvtára a biztonságos fallback.
+DEPENDENCY_SOURCE_ROOT=""
+for CANDIDATE_ROOT in "$OPERATOR_ROOT" "/srv/dimpro-dev/worktrees/benjadmin-operator-ui-v2"; do
+  [[ -n "$DEPENDENCY_SOURCE_ROOT" ]] && break
+  [[ -f "$CANDIDATE_ROOT/package-lock.json" ]] || continue
+  [[ -d "$CANDIDATE_ROOT/node_modules" ]] || continue
+  [[ ! -L "$CANDIDATE_ROOT/node_modules" ]] || continue
+  [[ -f "$TARGET/package-lock.json" ]] || continue
+  SOURCE_HASH="$(sha256sum "$CANDIDATE_ROOT/package-lock.json" | cut -d' ' -f1)"
   WT_HASH="$(sha256sum "$TARGET/package-lock.json" | cut -d' ' -f1)"
-  if [[ "$OP_HASH" == "$WT_HASH" ]]; then
-    if [[ ! -e "$TARGET/node_modules" && ! -L "$TARGET/node_modules" ]]; then
-      cp -al "$OPERATOR_ROOT/node_modules" "$TARGET/node_modules"
-      echo "[DIMPRO worktree] node_modules hardlinkelt dependency-fa létrehozva."
-    else
-      echo "[DIMPRO worktree] node_modules már létezik; nem módosítom." >&2
+  [[ "$SOURCE_HASH" == "$WT_HASH" ]] || continue
+  DEPENDENCY_SOURCE_ROOT="$CANDIDATE_ROOT"
+done
+
+if [[ -n "$DEPENDENCY_SOURCE_ROOT" ]]; then
+  if [[ ! -e "$TARGET/node_modules" && ! -L "$TARGET/node_modules" ]]; then
+    cp -al "$DEPENDENCY_SOURCE_ROOT/node_modules" "$TARGET/node_modules"
+    if [[ -L "$TARGET/node_modules" || ! -d "$TARGET/node_modules" ]]; then
+      echo "[DIMPRO worktree] A létrejött node_modules nem valódi könyvtár; worktree dependency setup megszakítva." >&2
+      exit 1
     fi
+    echo "[DIMPRO worktree] node_modules hardlinkelt dependency-fa létrehozva: $DEPENDENCY_SOURCE_ROOT"
   else
-    echo "[DIMPRO worktree] package-lock eltér; node_modules nincs automatikusan létrehozva." >&2
+    echo "[DIMPRO worktree] node_modules már létezik; nem módosítom." >&2
   fi
+else
+  echo "[DIMPRO worktree] Nincs Turbopack-safe, lockfile-azonos valódi node_modules forrás; dependency-fa nincs automatikusan létrehozva." >&2
 fi
 
 printf "[DIMPRO worktree] kész: %s · branch: %s\n" "$TARGET" "$BRANCH"
