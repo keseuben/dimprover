@@ -227,6 +227,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   // Handoff/continuity kizárólag kontextust adhat. Worker-választást nem írhat felül.
   const routingPreference = input.preferredWorkerCode;
   const routingPreferenceSource = "BENJADMIN_EXPLICIT";
+  const estimate = estimateDevelopmentMinutes(input.sourcePrompt);
   let engineTask = engineState.tasks.find((task) => task.id === taskId) || null;
   let reused = Boolean(engineTask);
   if (engineTask) {
@@ -245,7 +246,6 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       Object.assign(error, { code: "DEVELOPER_GRID_REPOSITORY_BINDING_REQUIRED", status: 409 });
       throw error;
     }
-    const estimate = estimateDevelopmentMinutes(input.sourcePrompt);
     let created = null;
     try {
       created = await createDevEngineTask({
@@ -299,8 +299,12 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       if (!created?.ok) throw Object.assign(new Error(created?.error || "A Developer Grid task nem hozható létre."), { code: "DEVELOPER_GRID_WORK_CREATE_FAILED", status: 400 });
       engineTask = created.task;
     }
-    if (!reused) {
-      const routed = await autoRouteDevEngineTaskByAvailability({
+  }
+
+  let preRoutingMetadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
+  let preRoutedCode = routedWorkerCodeFromTask(engineTask as unknown as Record<string, unknown>, preRoutingMetadata);
+  if (!preRoutedCode && ["queued", "ready"].includes(String(engineTask.status || "").toLowerCase())) {
+    const routed = await autoRouteDevEngineTaskByAvailability({
       taskId,
       estimateMinutes: estimate.minutes,
       preferredWorkerCode: routingPreference,
@@ -308,11 +312,11 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       orchestrationSource: "CENTRAL_CORE",
       note: `Developer Grid Vezérlőpult · BenjAdmin explicit worker: ${input.preferredWorkerCode} · automatic fallback DENY`,
       prepareForPlusPull: true,
-      chainSource: "DEVELOPER_GRID_WORK_START",
+      chainSource: reused ? "DEVELOPER_GRID_WORK_START_RETRY" : "DEVELOPER_GRID_WORK_START",
     });
-      engineTask = routed.task;
-      reused = false;
-    }
+    engineTask = routed.task;
+    preRoutingMetadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
+    preRoutedCode = routedWorkerCodeFromTask(engineTask as unknown as Record<string, unknown>, preRoutingMetadata);
   }
 
   const metadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};

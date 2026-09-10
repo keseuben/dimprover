@@ -3221,3 +3221,12 @@ A korábbi augusztus 11-i erőforrásminta történeti adat, nem LIVE mérés. A
 
 ### v0.1.33 canonical source baseline
 A Developer Grid foundation alapértelmezett authoritative forrása a `feature/benjadmin-developer-grid-v013-outminai-20260905` branch és a `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905` worktree. A régi 2026-08-27 foundation worktree csak történeti forrás; új Central Core task nem indulhat róla. Környezeti override továbbra is lehetséges, de source provenance ellenőrzés fail-closed.
+
+### BENJADMIN Developer Grid v0.1.34 – Central Core routing hotfix + navigáció
+
+- Javítva a `PREFERRED_BUSY` téves tartós blokkolás: a 72 óránál régebbi, ténylegesen inaktív worker sessionök auditált stale reconciliationnel felszabadíthatók.
+- Javítva az idempotens újrapróbálás: a már létrejött, de `queued` Central Core task ugyanazzal az idempotencyKey-jel újraroutolható, ha a kijelölt worker időközben felszabadult.
+- Az explicit worker kötelezettség és az automatikus fallback tiltás változatlan.
+- Új sticky Central Core kártyanavigáció: MUNKA / MEMÓRIA / EVIDENCE / BUILD / CONTEXT / ÁTADÁSOK.
+- Munkaindítási hiba, várakozás és siker a MUNKA kártyán belül azonnal látható.
+- Desktop verzió: 0.1.34; backend contract: 0.1.34-dev. DEV ONLY · PROD DENY.

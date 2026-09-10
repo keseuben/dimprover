@@ -614,6 +614,61 @@ export async function routeDevEngineTask(input: { taskId: string; workerCode: st
   return { ok: true as const, task: mapTask(data as JsonRecord), worker: mapWorker(worker as JsonRecord) };
 }
 
+const CENTRAL_CORE_STALE_SESSION_AGE_MS = 72 * 60 * 60 * 1000;
+
+function staleRoutingTimestamp(value: unknown) {
+  const parsed = Date.parse(text(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function reconcilePreferredWorkerStaleSessions(client: SupabaseClient, workerCode: string) {
+  const normalizedCode = text(workerCode).toUpperCase();
+  const workerId = CONSOLE_ROUTABLE_WORKERS[normalizedCode];
+  if (!workerId) return { workerCode: normalizedCode, recoveredSessionIds: [] as string[] };
+  const sessions = await client.from("dev_center_worker_sessions")
+    .select("id,worker_id,task_id,status,last_heartbeat_at,opened_at,updated_at,lease_expires_at")
+    .eq("worker_id", workerId)
+    .neq("status", "closed");
+  if (sessions.error) databaseError("A preferred worker stale sessionjei nem olvashatók.", sessions.error);
+  const sessionRows = sessions.data || [];
+  const taskIds = [...new Set(sessionRows.map((row) => text(row.task_id)).filter(Boolean))];
+  const taskUpdatedAt = new Map<string, number>();
+  if (taskIds.length) {
+    const tasks = await client.from("dev_center_tasks").select("id,status,updated_at").in("id", taskIds);
+    if (tasks.error) databaseError("A stale sessionökhöz tartozó taskok nem olvashatók.", tasks.error);
+    for (const task of tasks.data || []) taskUpdatedAt.set(text(task.id), staleRoutingTimestamp(task.updated_at));
+  }
+  const cutoff = Date.now() - CENTRAL_CORE_STALE_SESSION_AGE_MS;
+  const recoveredSessionIds: string[] = [];
+  for (const row of sessionRows) {
+    const sessionId = text(row.id);
+    if (!sessionId) continue;
+    const taskId = text(row.task_id);
+    const heartbeatAt = staleRoutingTimestamp(row.last_heartbeat_at);
+    const sessionUpdatedAt = staleRoutingTimestamp(row.updated_at);
+    const openedAt = staleRoutingTimestamp(row.opened_at);
+    const taskAt = taskId ? taskUpdatedAt.get(taskId) || 0 : 0;
+    const freshness = Math.max(heartbeatAt, sessionUpdatedAt, openedAt, taskAt);
+    if (!freshness || freshness > cutoff) continue;
+    const released = await client.rpc("dev_center_release_session_atomic", {
+      p_session_id: sessionId,
+      p_reason: "Central Core stale-session reconciliation: no session/task activity > 72h; released without task requeue.",
+      p_requeue_task: false,
+    });
+    if (released.error) databaseError("A stale worker session nem szabadítható fel.", released.error, 409);
+    recoveredSessionIds.push(sessionId);
+    await addAudit(client, {
+      action: "CENTRAL_CORE_STALE_SESSION_RELEASED",
+      entityType: "worker_session",
+      entityId: sessionId,
+      taskId: taskId || undefined,
+      summary: `${normalizedCode} elavult worker session felszabadítva Central Core routing előtt.`,
+      metadata: { workerCode: normalizedCode, staleAfterHours: 72, requeueTask: false, productionAccess: "DENY" },
+    });
+  }
+  return { workerCode: normalizedCode, recoveredSessionIds };
+}
+
 export async function autoRouteDevEngineTaskByAvailability(input: { taskId: string; estimateMinutes?: number | null; note?: string | null; preferredWorkerCode?: string | null; preferencePolicy?: "STRICT" | "SOFT"; orchestrationSource?: "CENTRAL_CORE"; prepareForPlusPull?: boolean; chainSource?: string | null }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);
@@ -626,6 +681,9 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
   if (preferredWorkerCode && !Object.prototype.hasOwnProperty.call(CONSOLE_ROUTABLE_WORKERS, preferredWorkerCode)) {
     throw new DevCenterEngineError("A kézi worker preferencia ismeretlen.", "DEV_CENTER_TASK_WORKER_INVALID", 400, { preferredWorkerCode });
   }
+  const staleRecovery = preferredWorkerCode
+    ? await reconcilePreferredWorkerStaleSessions(client, preferredWorkerCode)
+    : { workerCode: "", recoveredSessionIds: [] as string[] };
   const workerResult = await client.from("dev_center_workers").select("id,code,name,status,updated_at").in("code", ["ARMINAI", "JAZMINAI", "OUTMINAI", "BENJAMINAI"]);
   if (workerResult.error) databaseError("A Central Core worker pool nem olvasható.", workerResult.error);
   const sessionResult = await client.from("dev_center_worker_sessions").select("worker_id,task_id,status").neq("status", "closed");
@@ -697,6 +755,7 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       coordinatorSuggestedWorker: suggestedWorker ? { workerId: suggestedWorker.id, workerCode: suggestedWorker.code, workerName: suggestedWorker.name } : null,
       coordinatorCandidates: candidates.map((worker) => ({ workerCode: worker.code, activeSessions: worker.activeSessions, activeTasks: worker.activeTasks, queuedTasks: worker.queuedTasks })),
       coordinatorRejected: rejected,
+      coordinatorStaleSessionRecovery: staleRecovery,
     };
     const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
     if (waiting.error) databaseError("A Central Core preferencia-visszajelzés nem menthető.", waiting.error, 409);
@@ -732,6 +791,7 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
       coordinatorRoutedAt: now,
       routingPreferencePolicy: preferencePolicy,
       continuityFallback: softFallback,
+      coordinatorStaleSessionRecovery: staleRecovery,
       coordinatorSelection: { workerCode: chosen.code, activeSessions: chosen.activeSessions, activeTasks: chosen.activeTasks, queuedTasks: chosen.queuedTasks },
       ...(input.prepareForPlusPull ? {
         coordinatorChainState: "READY_FOR_PLUS_PULL",
@@ -772,6 +832,7 @@ export async function autoRouteDevEngineTaskByAvailability(input: { taskId: stri
     coordinatorCheckedAt: now,
     coordinatorCandidates: candidates.map((worker) => ({ workerCode: worker.code, activeSessions: worker.activeSessions, activeTasks: worker.activeTasks, queuedTasks: worker.queuedTasks })),
     coordinatorRejected: rejected,
+    coordinatorStaleSessionRecovery: staleRecovery,
   };
   const waiting = await client.from("dev_center_tasks").update({ metadata, updated_at: now }).eq("id", task.id).select("*").single();
   if (waiting.error) databaseError("A Central Core várakozási állapot nem menthető.", waiting.error, 409);

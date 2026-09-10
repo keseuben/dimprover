@@ -407,3 +407,11 @@ A desktop 8 másodperces memory monitorja kizárólag az authoritative taskhoz k
 
 ### v0.1.33 canonical source baseline
 A Developer Grid foundation alapértelmezett authoritative forrása a `feature/benjadmin-developer-grid-v013-outminai-20260905` branch és a `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905` worktree. A régi 2026-08-27 foundation worktree csak történeti forrás; új Central Core task nem indulhat róla. Környezeti override továbbra is lehetséges, de source provenance ellenőrzés fail-closed.
+
+### BENJADMIN Developer Grid v0.1.34 – Central Core routing recovery és kártyanavigáció
+
+- A Central Core explicit worker routing előtt csak a kijelölt worker történeti sessionjeit vizsgálja. Automatikusan kizárólag olyan nem lezárt session szabadítható fel, amelynél a session heartbeat, a session frissítése és a kapcsolt task frissítése is legalább 72 órája elavult.
+- A stale session felszabadítása a meglévő atomikus session-release RPC-n keresztül történik, auditbejegyzéssel és `requeueTask=false` szabállyal. A történeti task nem minősül automatikusan késznek és nem kerül újra végrehajtási sorba.
+- Egy korábban `PREFERRED_BUSY` miatt `queued` állapotban maradt, azonos idempotencyKey-jű Central Core task új munkaindításkor újra routolható; explicit worker és STRICT/no-fallback szabály változatlan.
+- A Central Core fejléc alatti sticky kártyanavigáció: MUNKA, MEMÓRIA, EVIDENCE, BUILD, CONTEXT, ÁTADÁSOK.
+- A munkaindítás success/waiting/error visszajelzése közvetlenül a munkaindító kártyában jelenik meg, ezért nem szükséges a panel aljára görgetni a hiba megértéséhez.
