@@ -164,5 +164,23 @@ async function fetchDeveloperGridWindowsE2E({ baseUrl, deviceToken }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/windows-e2e`, { method:"GET", headers:headers(deviceToken) }, 15000);
   return payload.windowsE2E || null;
 }
+async function saveDeveloperGridConversationMemory({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/conversation-memory`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify(input || {}) }, 30000);
+  return payload.memory || null;
+}
+async function fetchDeveloperGridConversationMemory({ baseUrl, deviceToken, taskId="", sessionId="", conversationId="" }) {
+  const base = ensureDevBase(baseUrl); const url = new URL(`${base}/api/dev/grid/conversation-memory`);
+  if(String(taskId||"").trim()) url.searchParams.set("taskId",String(taskId));
+  if(String(sessionId||"").trim()) url.searchParams.set("sessionId",String(sessionId));
+  if(String(conversationId||"").trim()) url.searchParams.set("conversationId",String(conversationId));
+  const payload = await jsonRequest(url.href,{method:"GET",headers:headers(deviceToken)},15000);
+  return payload.memory || null;
+}
+async function closeDeveloperGridWork({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/work-close`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify(input || {}) }, 30000);
+  return payload.close || null;
+}
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, sanitizeSnapshot };

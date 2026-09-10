@@ -1,6 +1,8 @@
 "server-only";
 
 import { appendGridEvidence } from "./evidence";
+import { setDevEngineTaskTesting } from "@/app/lib/dev-center/engine-repository";
+import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { appendGridEvent, readGridState, upsertWorkerSession } from "./state-store";
 import { verifySourceHeadAdvance } from "./source-provenance";
 import type { GridEvidenceKind, GridEvidenceStatus, WorkerCode } from "./types";
@@ -21,6 +23,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   const workerCode = text(rawInput.workerCode, 40).toUpperCase() as WorkerCode;
   const reportedHead = text(rawInput.head, 80).toLowerCase();
   const reportedStage = Number(rawInput.stage);
+  const reportedResult = text(rawInput.result, 40).toUpperCase();
   if (!state.task || state.task.id !== taskId) fail("DEVELOPER_GRID_EVIDENCE_TASK_MISMATCH", "A worker evidence nem az authoritative aktuális taskhoz tartozik.");
   if (!workers.has(workerCode)) fail("DEVELOPER_GRID_EVIDENCE_WORKER_INVALID", "Ismeretlen Developer Grid evidence worker.", 400);
   const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
@@ -31,6 +34,9 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   if (!Number.isInteger(reportedStage) || reportedStage < 1 || reportedStage > 6) fail("DEVELOPER_GRID_EVIDENCE_STAGE_INVALID", "A worker stage reporthoz 1–6 közötti stage szükséges.", 400);
   const previousStage = Number(session.developmentContext.workStageIndex || 1);
   if (reportedStage < previousStage) fail("DEVELOPER_GRID_STAGE_REGRESSION_BLOCKED", `A stage nem léphet vissza: ${previousStage}/6 → ${reportedStage}/6.`);
+  if (reportedStage > previousStage + 1) fail("DEVELOPER_GRID_STAGE_SKIP_BLOCKED", `Stage átugrás tiltva: ${previousStage}/6 → ${reportedStage}/6.`);
+  if (reportedStage > previousStage && reportedResult !== "PASS") fail("DEVELOPER_GRID_STAGE_ADVANCE_PASS_REQUIRED", "A következő fejlesztési fázisba csak PASS stage report után lehet továbblépni.");
+  if (previousStage >= 4 && reportedStage > previousStage) fail("DEVELOPER_GRID_STAGE_CENTRAL_GATE_REQUIRED", "A 4→5, 5→6 és lezárási átmenetet kizárólag a Central Core Review/Build/Closure kapuja végezheti.");
 
   const entries = Array.isArray(rawInput.entries) ? rawInput.entries.slice(0, 60) : [];
   if (!entries.length) fail("DEVELOPER_GRID_EVIDENCE_ENTRIES_REQUIRED", "Legalább egy evidence bejegyzés szükséges.", 400);
@@ -42,6 +48,12 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     if (!allowedStatuses.has(status)) fail("DEVELOPER_GRID_EVIDENCE_STATUS_INVALID", `Érvénytelen worker evidence status: ${status || "NINCS"}.`, 400);
     return { row, kind, status };
   });
+  if (previousStage === 3 && reportedStage === 4 && !validatedEntries.some((entry) => entry.kind === "TEST" && entry.status === "PASS")) {
+    fail("DEVELOPER_GRID_STAGE_TEST_PASS_REQUIRED", "A 3/6 TESZTELÉS csak current-HEAD PASS TEST evidence-szel léphet 4/6 ELLENŐRZÉS fázisba.");
+  }
+  if (reportedStage > previousStage && validatedEntries.some((entry) => entry.status === "FAIL" || entry.status === "BLOCKED")) {
+    fail("DEVELOPER_GRID_STAGE_BLOCKING_EVIDENCE", "FAIL/BLOCKED evidence mellett stage előrelépés tiltva.");
+  }
 
   let authoritativeSession = { ...session, developmentContext: { ...session.developmentContext, workStageIndex: reportedStage, resolvedAt: new Date().toISOString() } };
   if (reportedHead !== session.sourceProvenance.head.toLowerCase()) {
@@ -59,6 +71,12 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
       kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
       developmentContext: authoritativeSession.developmentContext, branch: authoritativeSession.sourceProvenance.branch, worktree: authoritativeSession.sourceProvenance.worktree, head: authoritativeSession.sourceProvenance.head,
       delta: { eventType: "WORK_STAGE_ADVANCED", summary: `Fejlesztési szakasz előrehaladt: ${previousStage}/6 → ${reportedStage}/6.`, status: "PASS", severity: "INFO", sessionId, workStageIndex: reportedStage, sanitized: true },
+    });
+  }
+
+  if (previousStage < 3 && reportedStage >= 3) {
+    await setDevEngineTaskTesting(taskId).catch((error) => {
+      fail(error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "DEV_CENTER_TASK_TESTING_SYNC_FAILED") : "DEV_CENTER_TASK_TESTING_SYNC_FAILED", error instanceof Error ? error.message : "A Central Core engine TESTING állapota nem szinkronizálható.");
     });
   }
 
@@ -81,5 +99,6 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
       attributes: row.attributes,
     }));
   }
-  return { taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, productionAccess: "DENY" as const };
+  const memory = await refreshDerivedConversationMemory(taskId, sessionId).catch(() => null);
+  return { taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, memory, productionAccess: "DENY" as const };
 }

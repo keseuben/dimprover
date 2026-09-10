@@ -431,16 +431,77 @@ async function handleStageAction(cell, action, task, moduleContext, workItem) {
   }
 }
 
+async function handleStageStep(cell, index, stageIndex, task) {
+  if (!task?.id || index !== stageIndex) return;
+  const workerCode = cell?.dataset.workerCode || "";
+  if (!workerCode) return;
+  const step = cell.querySelector(`[data-stage-step="${index}"]`);
+  if (step?.dataset.busy === "true") return;
+  if (step) { step.dataset.busy = "true"; step.classList.add("is-busy"); }
+  try {
+    if (index >= 1 && index <= 3) {
+      const result = await api.prepareStageAction(workerCode, "advance-stage");
+      if (!result?.ok) throw new Error(result?.error || "A fázislépés nem indítható.");
+      showToast("Fejlesztési fázis", result.message || `${index}/6 fázislépés elküldve.`);
+      return;
+    }
+    if (index === 4) {
+      const result = await api.requestDeveloperGridVGuardReview({ taskId: task.id });
+      if (!result?.ok) throw new Error(result?.error || result?.review?.error || "A független ellenőrzés nem indítható.");
+      showToast("ELLENŐRZÉS", `V.Guard ${result.review?.result || result.state || "PASS"}. A Central Core frissíti a fázist.`);
+      return;
+    }
+    if (index === 5) {
+      const result = await api.requestDeveloperGridFullBuild({ taskId: task.id, sessionId: task.sessionId });
+      if (!result?.ok) throw new Error(result?.error || "A FULL BUILD nem indítható.");
+      const run = result.build?.run || result.run || null;
+      showToast("BUILD / KIADÁS", run ? `${run.status || "QUEUED"} · ${run.nodeId || "runner kiosztásra vár"}` : "A build kérés rögzítve.");
+      return;
+    }
+    if (index === 6) {
+      const result = await api.closeDeveloperGridWork({ taskId: task.id, sessionId: task.sessionId });
+      if (!result?.ok) throw new Error(result?.error || "A fejlesztési munka nem zárható le.");
+      showToast("LEZÁRÁS", "6/6 kapu PASS · task, session és automatikus handoff lezárva.");
+    }
+  } catch (error) {
+    showToast("Central Core kapu", error instanceof Error ? error.message : "A művelet blokkolva van.");
+  } finally {
+    if (step) { delete step.dataset.busy; step.classList.remove("is-busy"); }
+  }
+}
+
 function renderStageTimeline(cell, stageIndex, task) {
   const host = cell.querySelector("[data-role=stage-timeline]");
   if (!host) return;
-  const blocked = ["blocked", "failed"].includes(String(task?.status || "").toLowerCase());
+  const taskStatus = String(task?.status || "").toLowerCase();
+  const blocked = ["blocked", "failed"].includes(taskStatus);
+  const terminal = ["completed", "cancelled"].includes(taskStatus);
+  const titles = {
+    1: "ELEMZÉS lezárása és továbblépés a FEJLESZTÉS fázisba",
+    2: "FEJLESZTÉS lezárása és továbblépés a TESZTELÉS fázisba",
+    3: "TESZTELÉS lezárása és továbblépés az ELLENŐRZÉS fázisba",
+    4: "Független V.Guard ellenőrzés indítása; PASS után 5/6 BUILD",
+    5: "Central Core FULL BUILD indítása BUILD01 / BUILD02 runneren",
+    6: "Lezárási kapu: handoff, build, review és evidence ellenőrzése, majd task lezárás",
+  };
   for (const step of host.querySelectorAll("[data-stage-step]")) {
     const index = Number(step.dataset.stageStep || 0);
-    step.classList.remove("is-complete", "is-active", "is-blocked");
+    const clickable = Boolean(task && !blocked && !terminal && stageIndex > 0 && index === stageIndex);
+    step.classList.remove("is-complete", "is-active", "is-blocked", "is-clickable");
+    step.removeAttribute("role"); step.removeAttribute("tabindex"); step.onclick = null; step.onkeydown = null;
     if (stageIndex > 0 && index < stageIndex) step.classList.add("is-complete");
     if (stageIndex > 0 && index === stageIndex) step.classList.add(blocked ? "is-blocked" : "is-active");
-    if (stageIndex === 6 && String(task?.status || "").toLowerCase() === "completed") step.classList.add("is-complete");
+    if (stageIndex === 6 && taskStatus === "completed") step.classList.add("is-complete");
+    if (clickable) {
+      step.classList.add("is-clickable");
+      step.setAttribute("role", "button");
+      step.setAttribute("tabindex", "0");
+      step.title = titles[index] || "Aktuális fejlesztési fázis";
+      step.onclick = () => void handleStageStep(cell, index, stageIndex, task);
+      step.onkeydown = (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void handleStageStep(cell, index, stageIndex, task); }
+      };
+    } else step.title = index < stageIndex ? "Teljesített fejlesztési fázis" : index > stageIndex ? "A korábbi fázisok lezárása után érhető el" : "";
   }
 }
 

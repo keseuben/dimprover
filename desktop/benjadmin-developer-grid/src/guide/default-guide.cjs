@@ -127,7 +127,7 @@ Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 - Release, migráció, restart vagy cutover külön központi exclusive-operation gate; ezek nem a build runner feladatai.
 - Kötelező a BUILD_ID, artifact/hash és szükség szerinti smoke evidence visszaellenőrzése.
 - Párhuzamos build vagy lock-megkerülés tilos.
-- PROD továbbra is DENY; a Developer Grid v0.1.32 ebből a folyamatból PROD-műveletet nem indít.
+- PROD továbbra is DENY; a Developer Grid v0.1.33 ebből a folyamatból PROD-műveletet nem indít.
 
 6/6 · LEZÁRÁS
 - Commit(ok), teszteredmények, build/hash adatok, handoff és dokumentáció rögzítése.
@@ -138,6 +138,14 @@ Ctrl + / Ctrl - / Ctrl 0 — közös ChatGPT zoom
 
 11. SAJÁT MEGJEGYZÉSEK
 Ezt a dokumentumot a „Szerkesztés” gombbal bármikor kiegészítheted. A „Mentés” a helyi Developer Grid konfigurációban tárolja a módosított szöveget. Az „Alap visszaállítása” az eredeti BENJADMIN útmutatót tölti vissza; csak mentés után válik véglegessé.
+
+
+V0.1.33 – CENTRAL CORE MEMORY ÉS 6 LÉPCSŐ
+- BLACK BOX: a taskhoz rögzített ChatGPT-csevegés védett nyers feketedoboz naplója; nem kell kézzel menteni.
+- CONTEXT: automatikus, sanitizált folytatási állapot; ezt kapja meg a következő kapcsolódó fejlesztési task.
+- HANDOFF: a 6/6 lezárási bizonyítékokból automatikusan készül; a kézi V2 mentés helyreállítási lehetőség marad.
+- A felső ELEMZÉS / FEJLESZT / TESZTEL / ELLENŐRIZ / BUILD / LEZÁRÁS sáv aktuális eleme kattintható. 1–3 a workernek küld ellenőrzött stage promptot, 4 V.Guard review-t, 5 BUILD01/BUILD02 FULL BUILD-et, 6 Closure Gate-et indít.
+- A Central Core ELAVULT jelzése azt jelenti, hogy a korábbi authoritative task/source már nem tekinthető jelenlegi futásnak; új munkát új Central Core taskként indíts.
 `;
 
 module.exports = { DEFAULT_USAGE_GUIDE };

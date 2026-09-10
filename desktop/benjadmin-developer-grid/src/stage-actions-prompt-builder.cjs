@@ -1,5 +1,32 @@
 "use strict";
 
+const PHASE_ADVANCE = Object.freeze({
+  1: {
+    title: "1/6 ELEMZÉS LEZÁRÁSA → 2/6 FEJLESZTÉS",
+    body: [
+      "Zárd le az ELEMZÉS fázist: ellenőrizd a feladatot, scope-ot, branch/worktree/HEAD-et, kockázatokat, blokkolókat, acceptance feltételeket és teszttervet.",
+      "Ebben a körben még csak akkor kezdj tényleges kódmódosításba, ha az elemzés PASS és nincs scope/source blocker.",
+      "PASS esetén a gépi stage report stage mezője 2 legyen; FAIL/BLOCKED esetén maradjon 1 és rögzíts ERROR evidence-et."
+    ]
+  },
+  2: {
+    title: "2/6 FEJLESZTÉS LEZÁRÁSA → 3/6 TESZTELÉS",
+    body: [
+      "Fejezd be a kijelölt DEV scope tényleges kód-/konfiguráció-/dokumentációmódosítását.",
+      "Ellenőrizd a git diffet, a módosított fájlokat és a source HEAD-et; félkész vagy scope-on kívüli módosítással ne lépj tovább.",
+      "PASS esetén a gépi stage report stage mezője 3 legyen; sorold fel a módosított fájlokat FILE evidence-ként és adj legalább egy technikai PASS ellenőrzést."
+    ]
+  },
+  3: {
+    title: "3/6 TESZTELÉS LEZÁRÁSA → 4/6 ELLENŐRZÉS",
+    body: [
+      "Futtasd le a taskhoz szükséges célzott teszteket: legalább git diff --check és a releváns unit/contract/acceptance/typecheck/lint ellenőrzéseket.",
+      "Csak valós PASS eredményt jelents. FAIL/BLOCKED esetén javíts a scope-on belül és ismételd a tesztet; ne lépj tovább hamis PASS-szal.",
+      "PASS esetén a gépi stage report stage mezője 4 legyen, és legalább egy TEST/PASS evidence kötelező."
+    ]
+  }
+});
+
 const ACTIONS = Object.freeze({
   checkpoint: {
     title: "BIZTONSÁGOS DEV CHECKPOINT",
@@ -40,9 +67,11 @@ function clean(value, max = 1200) {
 }
 
 function buildStageActionPrompt({ action, workerCode, workerLabel, task, presence }) {
-  const spec = ACTIONS[action];
-  if (!spec) throw new Error("Ismeretlen Developer Grid stage action.");
   const stage = Number.isFinite(Number(presence?.workStageIndex)) ? Number(presence.workStageIndex) : null;
+  const phaseAdvance = action === "advance-stage";
+  const spec = phaseAdvance ? PHASE_ADVANCE[stage] : ACTIONS[action];
+  if (!spec) throw new Error(phaseAdvance ? "A stage továbblépés csak az 1–3. fázisban worker-vezérelt; a 4–6. fázist a Central Core kapui kezelik." : "Ismeretlen Developer Grid stage action.");
+  const reportStage = phaseAdvance ? Math.min(6, Number(stage || 1) + 1) : Number(stage || 1);
   const lines = [
     "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1",
     `MŰVELET: ${spec.title}`,
@@ -68,10 +97,10 @@ function buildStageActionPrompt({ action, workerCode, workerLabel, task, presenc
     "Evidence-be csak technikai, sanitizált tény kerüljön; secret, .env érték, token, jelszó, üzleti dokumentumtartalom tilos.",
     "FILE: path/changeType/contentSha256; TEST: testName/status/durationMs/outputSha256; ERROR: errorCode/status/severity. Legalább egy evidence kötelező.",
     "BENJADMIN_STAGE_REPORT_V1",
-    JSON.stringify({ schemaVersion:1, workerCode:clean(workerCode,40), taskId:clean(task?.id,220), sessionId:clean(task?.sessionId,240), head:"REPLACE_WITH_CURRENT_40_CHAR_HEAD", stage:stage||1, result:"PASS", summary:"technikai stage összesítés", evidence:[{kind:"TEST",status:"PASS",severity:"INFO",summary:"célzott ellenőrzés",attributes:{testName:"git diff --check",durationMs:0,outputSha256:null}}] }),
+    JSON.stringify({ schemaVersion:1, workerCode:clean(workerCode,40), taskId:clean(task?.id,220), sessionId:clean(task?.sessionId,240), head:"REPLACE_WITH_CURRENT_40_CHAR_HEAD", stage:reportStage, result:"PASS", summary:phaseAdvance?`${stage}/6 fázis PASS; továbblépés ${reportStage}/6 fázisba.`:"technikai stage összesítés", evidence:[{kind:"TEST",status:"PASS",severity:"INFO",summary:"célzott ellenőrzés",attributes:{testName:"git diff --check",durationMs:0,outputSha256:null}}] }),
     "BENJADMIN_STAGE_REPORT_END",
     "",
-    "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
+    phaseAdvance ? "A fázislépést BenjAdmin a felső 6-lépcsős sávból explicit indította. A desktop a promptot ellenőrzötten elküldheti és a stage reportot automatikusan validálja/evidence-ként rögzíti." : "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
   ];
   return lines.join("\n");
 }

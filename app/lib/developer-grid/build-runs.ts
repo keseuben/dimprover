@@ -7,8 +7,9 @@ import { spawn } from "node:child_process";
 import { probeBuildNodes } from "./build-nodes";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
+import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { scheduleBuildRun } from "./build-runner-scheduler";
-import { appendGridEvent, readGridState } from "./state-store";
+import { appendGridEvent, readGridState, upsertWorkerSession } from "./state-store";
 import { claimBuildRunDispatch, claimQueuedBuildRun, createBuildRunIfTaskIdle, patchBuildRun, readBuildJobEvidence, readBuildRunStore } from "./build-run-store";
 import type { GridBuildRun, WorkerSession } from "./types";
 
@@ -86,6 +87,17 @@ async function applyEvidence(run: GridBuildRun) {
     status: evidence.status, buildId: evidence.buildId, artifactSha256: evidence.artifactSha256, evidenceRef: evidence.evidenceRef,
     resultSha256: evidence.outputSha256, failureCode: evidence.code, exitCode: evidence.exitCode,
   });
+  if (evidence.status === "PASS") {
+    const after = await readGridState();
+    const active = after.sessions.find((item) => item.id === updated.sessionId && item.taskId === updated.taskId && item.endedAt === null) || null;
+    if (active && Number(active.developmentContext.workStageIndex || 1) === 5) {
+      const advanced = { ...active, developmentContext: { ...active.developmentContext, workStageIndex: 6, resolvedAt: new Date().toISOString() } };
+      await upsertWorkerSession(advanced);
+      await appendGridEvent({ kind:"analysis",origin:"LIVE",workerCode:active.workerCode,taskId:updated.taskId,projectId:after.task?.projectId || "project_dimprover",developmentContext:advanced.developmentContext,branch:active.sourceProvenance.branch,worktree:active.sourceProvenance.worktree,head:active.sourceProvenance.head,productionAccess:"DENY",
+        delta:{eventType:"WORK_STAGE_ADVANCED",summary:"FULL BUILD PASS; fejlesztési szakasz: 5/6 → 6/6 LEZÁRÁS.",status:"PASS",severity:"INFO",sessionId:active.id,workStageIndex:6,buildId:evidence.buildId,artifactSha256:evidence.artifactSha256,sanitized:true} });
+    }
+  }
+  await refreshDerivedConversationMemory(updated.taskId, updated.sessionId).catch(() => null);
   return updated;
 }
 
@@ -128,6 +140,7 @@ export async function requestDeveloperGridFullBuild(input: Record<string, unknow
   const session = activeSessionForTask(state.sessions, taskId, sessionId);
   if (!session) errorWith("BUILD_SESSION_REQUIRED", "A FULL BUILD-hez aktív worker session szükséges.");
   if (session.developmentContext.bootAckState !== "VALIDATED" || !session.developmentContext.bootAckValidatedAt) errorWith("BUILD_BOOT_ACK_REQUIRED", "FULL BUILD csak validált BOOT ACK után indítható.");
+  if (Number(session.developmentContext.workStageIndex || 1) !== 5) errorWith("BUILD_STAGE_REQUIRED", "FULL BUILD kizárólag az 5/6 BUILD / KIADÁS fázisban indítható.");
   if (session.sourceProvenance.sourceState !== "VERIFIED" || session.sourceProvenance.blockCode) errorWith("SOURCE_BASELINE_MISMATCH", "A source provenance nem VERIFIED; build fail-closed.");
   if (!/^[0-9a-f]{40}$/i.test(session.sourceProvenance.head)) errorWith("BUILD_SOURCE_HEAD_INVALID", "A buildhez teljes 40 karakteres source HEAD szükséges.");
   try { await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:true }); }

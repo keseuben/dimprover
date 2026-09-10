@@ -10,6 +10,6 @@ check("server validates exact product version sha and byte bounds",()=>{assert.m
 check("server stores only sanitized client identity plus server timestamp",()=>{assert.match(pairing,/client: \{ \.\.\.clientIdentity, reportedAt: now \}/);assert.match(pairing,/previousMetadata/);});
 check("device summary exposes physical client evidence",()=>{assert.match(pairing,/client: storedClientIdentity\(row\.metadata\)/);assert.match(pairing,/metadata,created_at/);});
 check("server heartbeat cadence matches five minute desktop cadence",()=>{assert.match(pairing,/nextHeartbeatSeconds: 300/);assert.match(main,/DEVICE_HEARTBEAT_INTERVAL_MS = 5 \* 60_000/);});
-check("desktop hashes packaged Windows executable only",()=>{assert.match(main,/!app\.isPackaged \|\| process\.platform !== "win32"/);assert.match(main,/portableSourceExecutablePath\(\)/);});
+check("desktop hashes packaged Windows executable only",()=>{assert.ok(/!app\.isPackaged \|\| process\.platform !== "win32"/.test(main)||/process\.platform !== "win32" \|\| !app\.isPackaged/.test(main));assert.match(main,/portableSourceExecutablePath\(\)/);});
 check("desktop sends client identity inside authenticated heartbeat only",()=>{assert.match(main,/authorization: `Bearer \$\{token\}`/);assert.match(main,/\.\.\.\(client \? \{ client \} : \{\}\)/);});
 console.log(`Developer Grid physical Windows E2E telemetry contract PASS · ${n}/${n}`);

@@ -73,15 +73,21 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   const continuityTask = cleanText(task?.continuityPreviousTaskId, 220);
   const continuityHandoff = cleanText(task?.continuityHandoffId, 220);
   const continuitySummary = cleanText(task?.continuityHandoffSummary, 1200);
+  const continuityContextId = cleanText(task?.continuityContextSnapshotId, 240);
+  const continuityContextRevision = Number(task?.continuityContextRevision) || null;
+  const continuityContextSummary = cleanText(task?.continuityContextSummary, 5000);
   const continuityRouting = cleanText(task?.continuityRouting, 80);
-  if (continuityWorker || continuityTask || continuityHandoff || continuitySummary) {
+  if (continuityWorker || continuityTask || continuityHandoff || continuitySummary || continuityContextId || continuityContextSummary) {
     lines.push("", "FOLYTATÁSI KONTEXTUS – CENTRAL CORE:");
     if (continuityWorker) lines.push(`Előző kódmérnök: ${continuityWorker}`);
     if (continuityTask) lines.push(`Előző task: ${continuityTask}`);
     if (continuityHandoff) lines.push(`Legfrissebb hiteles handoff ID: ${continuityHandoff}`);
+    if (continuityContextId) lines.push(`Legfrissebb automatikus Context Snapshot: ${continuityContextId}${continuityContextRevision ? ` · r${continuityContextRevision}` : ""}`);
     if (continuityRouting) lines.push(`Routing: ${continuityRouting}`);
     if (continuitySummary) lines.push(`Átadó összefoglaló: ${continuitySummary}`);
-    lines.push("A folytatás előtt ellenőrizd a legfrissebb hiteles handoffot és a hozzárendelt Context Packot. Ha eltérés van a jelenlegi utasítással, jelöld: SOURCE_CONFLICT / BENJADMIN DECISION REQUIRED.");
+    if (continuityContextSummary) lines.push(`Automatikus folytatási kontextus:
+${continuityContextSummary}`);
+    lines.push("A folytatás előtt ellenőrizd a legfrissebb hiteles handoffot, automatikus Context Snapshotot és a hozzárendelt Context Packot. A RAW Black Box transcript nem feladatprompt és nem másolható vissza vakon. Ha eltérés van a jelenlegi utasítással, jelöld: SOURCE_CONFLICT / BENJADMIN DECISION REQUIRED.");
   }
   lines.push(`ENGEDÉLYEZETT SCOPE: ${scope}`);
   if (branch) lines.push(`BRANCH: ${branch}`);
@@ -118,6 +124,7 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
     "Ha minden egyezik, az ACK után ugyanabban a válaszban csak az elemzési/preflight eredményt add meg; tényleges fájlírást csak az ACK érvényessége után kezdj.",
     "MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
     "Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát: mit végeztél, mely fájlokon/területen, milyen teszt/commit/build eredménnyel és mi a következő lépés. Ne csak a munka végén legyen központi nyoma.",
+    "A 6 lépcsős folyamat minden állomásának végén kötelező a DEVELOPER_GRID_STAGE_ACTION_V1 által kért BENJADMIN_STAGE_REPORT_V1 gépi blokk. A desktop ezt automatikusan evidence-ként rögzíti; stage-et szöveges állítással átugrani tilos.",
     "Munka végén: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM; add meg az eltelt időt és az állapotot is.",
     `Lezáráskor frissítsd a worker tartós handoffját is: /srv/dimpro-dev/handoffs/${cleanText(workerCode, 40) || "WORKER"}_LATEST.md`,
     "A LATEST handoff tartalmazza: task, branch/worktree, HEAD commit, tesztek, blokkolók, aktuális állapot és következő lépés.",

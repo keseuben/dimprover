@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+
+const root=process.cwd();
+const read=(f)=>fs.readFileSync(path.join(root,f),"utf8");
+const memory=read("app/lib/developer-grid/conversation-memory.ts");
+const route=read("app/api/dev/grid/conversation-memory/route.ts");
+const workStart=read("app/lib/developer-grid/work-start.ts");
+const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
+const transcript=read("desktop/benjadmin-developer-grid/src/context-workspace/chatgpt-transcript.cjs");
+const client=read("desktop/benjadmin-developer-grid/src/context-workspace/context-workspace-client.cjs");
+const preload=read("desktop/benjadmin-developer-grid/src/preload.cjs");
+const workspace=read("desktop/benjadmin-developer-grid/src/renderer/context-workspace.js");
+let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`);};
+
+check("three distinct memory schemas exist",()=>{assert.match(memory,/RAW_CHAT_TRANSCRIPT_V1/);assert.match(memory,/BENJADMIN_CONTEXT_SNAPSHOT_V1/);assert.match(memory,/BENJADMIN_HANDOFF_PACK_V1/);});
+check("RAW black box is DEV PROD-DENY immutable",()=>{assert.match(memory,/environment:\s*"DEV"/);assert.match(memory,/productionAccess:\s*"DENY"/);assert.match(memory,/immutable:\s*true/);});
+check("RAW storage is append-only delta with reconstruction",()=>{assert.match(memory,/storageMode:\s*"DELTA"/);assert.match(memory,/deltaMessageCount/);assert.match(memory,/reconstructRawSnapshot/);assert.match(memory,/deltaMessages/);assert.match(memory,/appendFile\(rawFile/);});
+check("RAW snapshot preserves hash chain and full snapshot digest",()=>{assert.match(memory,/snapshotSha256/);assert.match(memory,/previousChainSha256/);assert.match(memory,/chainSha256/);assert.match(memory,/snapshotDigest/);});
+check("memory files are private",()=>{assert.match(memory,/mode:0o700/);assert.match(memory,/mode:0o600/);assert.match(memory,/chmod\(rawFile,0o600\)/);});
+check("RAW capture is bound to authoritative task session worker and conversation",()=>{for(const code of ["DEVELOPER_GRID_RAW_TASK_MISMATCH","DEVELOPER_GRID_RAW_SESSION_MISMATCH","DEVELOPER_GRID_RAW_CONVERSATION_MISMATCH"])assert.match(memory,new RegExp(code));});
+check("sanitized Context Snapshot uses secret scanner",()=>{assert.match(memory,/scanSensitiveText/);assert.match(memory,/safeExcerpt/);assert.match(memory,/sanitized:true/);});
+check("Context Snapshot stores stage source blockers and next phase",()=>{for(const token of ["stageLabel","sourceHead","unresolvedBlockers","nextStageLabel","evidenceCounts"])assert.ok(memory.includes(token));});
+check("automatic Handoff requires stage6 PASS build tests and no blockers",()=>{assert.match(memory,/context\.stage>=6&&Boolean\(build\)&&tests\.length>0&&blockers\.length===0/);assert.match(memory,/saveDevelopmentHandoff/);assert.match(memory,/kind:"HANDOFF",status:"COMPLETED"/);});
+check("continuity resolver can feed latest Context Snapshot into next task",()=>{assert.match(workStart,/findLatestContinuationContext/);assert.match(workStart,/continuityContextSnapshotId/);assert.match(workStart,/continuityContextSummary/);});
+check("desktop captures only ChatGPT conversation messages",()=>{assert.match(transcript,/data-message-author-role/);assert.match(transcript,/conversationId/);assert.ok(transcript.includes("/c/..."));assert.match(transcript,/pathname\.match/);assert.match(transcript,/generating/);});
+check("desktop background monitor skips generation and deduplicates",()=>{assert.match(main,/CONVERSATION_MEMORY_INTERVAL_MS = 8_000/);assert.match(main,/captureConversationTranscript/);assert.match(main,/capture\.generating/);assert.match(main,/conversationMemoryHashes/);});
+check("memory API requires paired Developer Grid device",()=>{assert.match(route,/isChatGridDeviceAuthorized/);assert.match(route,/POST/);assert.match(route,/GET/);});
+check("desktop client and preload expose memory status",()=>{assert.match(client,/saveDeveloperGridConversationMemory/);assert.match(client,/fetchDeveloperGridConversationMemory/);assert.match(preload,/getDeveloperGridConversationMemory/);});
+check("Central Core shows BLACK BOX CONTEXT HANDOFF",()=>{assert.match(workspace,/CONVERSATION MEMORY/);assert.match(workspace,/BLACK BOX/);assert.match(workspace,/CONTEXT/);assert.match(workspace,/HANDOFF/);});
+check("Central Core detects stale authoritative work",()=>{assert.match(workStart,/AUTHORITATIVE_STATE_OLDER_THAN_72H/);assert.match(workspace,/AUTHORITATIVE ÁLLAPOT ELAVULT/);});
+console.log(`Developer Grid Conversation Memory v0.1.33 contract PASS · ${n}/${n}`);

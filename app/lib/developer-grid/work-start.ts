@@ -1,11 +1,13 @@
 "server-only";
 
 import { createHash } from "node:crypto";
-import { autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState } from "@/app/lib/dev-center/engine-repository";
+import { advanceDevEngineTaskManualBridge, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
+import { findLatestContinuationContext } from "./conversation-memory";
+import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { appendGridEvent, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
 import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, WorkerSession } from "./types";
 
@@ -92,6 +94,34 @@ function normalizedHandoffWorkerCode(value: unknown): RoutableWorkerCode | null 
   return routableWorkerCode(code);
 }
 
+async function syncEngineBridgeTarget(taskId: string, target: "HANDED_OFF" | "RUNNING") {
+  const engineState = await getDevCenterEngineState();
+  const task = engineState.tasks.find((item) => item.id === taskId) || null;
+  if (!task) {
+    const error = new Error("A Central Core engine task nem található.");
+    Object.assign(error, { code: "DEVELOPER_GRID_ENGINE_TASK_MISSING", status: 409 });
+    throw error;
+  }
+  const metadata = task.metadata && typeof task.metadata === "object" ? task.metadata as Record<string, unknown> : {};
+  const current = text(metadata.bridgeState, 40).toUpperCase();
+  if (target === "HANDED_OFF") {
+    if (current === "WAITING_HANDOFF") return advanceDevEngineTaskManualBridge({ taskId, target: "HANDED_OFF" });
+    if (["HANDED_OFF", "RUNNING", "RESULT_PENDING"].includes(current)) return { ok: true as const, task, bridgeState: current };
+  }
+  if (target === "RUNNING") {
+    if (current === "WAITING_HANDOFF") await advanceDevEngineTaskManualBridge({ taskId, target: "HANDED_OFF" });
+    const refreshedState = await getDevCenterEngineState();
+    const refreshedTask = refreshedState.tasks.find((item) => item.id === taskId) || null;
+    const refreshedMeta = refreshedTask?.metadata && typeof refreshedTask.metadata === "object" ? refreshedTask.metadata as Record<string, unknown> : {};
+    const refreshed = text(refreshedMeta.bridgeState, 40).toUpperCase();
+    if (refreshed === "HANDED_OFF") return advanceDevEngineTaskManualBridge({ taskId, target: "RUNNING" });
+    if (["RUNNING", "RESULT_PENDING"].includes(refreshed)) return { ok: true as const, task: refreshedTask, bridgeState: refreshed };
+  }
+  const error = new Error(`A Central Core engine bridge nem vihető ${target} állapotba: ${current || "NINCS"}.`);
+  Object.assign(error, { code: "DEVELOPER_GRID_ENGINE_BRIDGE_STATE_MISMATCH", status: 409 });
+  throw error;
+}
+
 async function resolveContinuityContext(engineState: Awaited<ReturnType<typeof getDevCenterEngineState>>, input: ReturnType<typeof normalizeWorkStartInput>, currentTaskId: string) {
   const candidates = engineState.tasks
     .filter((task) => task.id !== currentTaskId && task.projectId === input.projectId)
@@ -116,11 +146,18 @@ async function resolveContinuityContext(engineState: Awaited<ReturnType<typeof g
       || null;
   } catch { handoff = null; }
   const handoffWorkerCode = handoff ? normalizedHandoffWorkerCode(handoff.workerCode) : null;
+  let contextSnapshot = null as Awaited<ReturnType<typeof findLatestContinuationContext>>;
+  try {
+    contextSnapshot = await findLatestContinuationContext({ projectId: input.projectId, moduleName: input.moduleName, submoduleName: input.submoduleName, excludeTaskId: currentTaskId });
+  } catch { contextSnapshot = null; }
   return {
-    previousTaskId: handoff?.taskId || previousTask?.id || null,
-    previousWorkerCode: handoffWorkerCode || previousWorkerCode,
+    previousTaskId: handoff?.taskId || contextSnapshot?.taskId || previousTask?.id || null,
+    previousWorkerCode: handoffWorkerCode || contextSnapshot?.workerCode || previousWorkerCode,
     handoffId: handoff?.id || null,
     handoffSummary: handoff?.summary || null,
+    contextSnapshotId: contextSnapshot?.id || null,
+    contextRevision: contextSnapshot?.revision || null,
+    contextSummary: contextSnapshot?.summary || null,
   };
 }
 
@@ -153,7 +190,25 @@ function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
 
 export async function getDeveloperGridActiveWork() {
   const state = await readGridState();
-  return { task: state.task, sessions: state.sessions.filter((session) => session.endedAt === null), revision: state.revision, updatedAt: state.updatedAt };
+  const sessions = state.task ? state.sessions.filter((session) => session.endedAt === null && session.taskId === state.task?.id) : [];
+  const reasons: string[] = [];
+  let executionState = "CURRENT" as "CURRENT" | "STALE" | "BLOCKED" | "EMPTY";
+  let actualHead: string | null = null;
+  const ageHours = state.updatedAt && Number.isFinite(Date.parse(state.updatedAt)) ? Math.max(0, (Date.now() - Date.parse(state.updatedAt)) / 3_600_000) : null;
+  if (!state.task) executionState = "EMPTY";
+  else if (!sessions.length) { executionState = "BLOCKED"; reasons.push("ACTIVE_SESSION_MISSING"); }
+  else {
+    const session = sessions[0];
+    try {
+      const current = await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean: false });
+      actualHead = current.head;
+    } catch (error) {
+      executionState = "STALE";
+      reasons.push(error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "SOURCE_EXECUTION_STALE") : "SOURCE_EXECUTION_STALE");
+    }
+    if (ageHours !== null && ageHours > 72) { executionState = "STALE"; reasons.push("AUTHORITATIVE_STATE_OLDER_THAN_72H"); }
+  }
+  return { task: state.task, sessions, revision: state.revision, updatedAt: state.updatedAt, reconciliation: { state: executionState, reasons: [...new Set(reasons)], ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10, authoritativeHead: sessions[0]?.sourceProvenance.head || null, actualHead } };
 }
 
 export async function startDeveloperGridWork(rawInput: Record<string, unknown>) {
@@ -267,6 +322,18 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     Object.assign(error, { code: "DEVELOPER_GRID_WORKER_ROUTE_MISMATCH", status: 409 });
     throw error;
   }
+  let engineSessionId: string | null = null;
+  if (routedCode) {
+    const currentStatus = String(engineTask.status || "").toLowerCase();
+    if (["queued", "ready"].includes(currentStatus)) {
+      const started = await startDevEngineTaskManualBridge(taskId);
+      engineTask = started.task;
+      engineSessionId = started.session?.id || null;
+    } else {
+      const currentMetadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
+      engineSessionId = text(currentMetadata.activeSessionId, 240) || null;
+    }
+  }
   const developmentContext: DevelopmentContext = {
     projectId: input.projectId,
     mainModule: "BENJADMIN",
@@ -278,11 +345,17 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     sourcePrompt: input.sourcePrompt,
     chatLaunchMode: input.chatLaunchMode,
     preferredWorkerCode: input.preferredWorkerCode,
+    engineSessionId,
     continuityPreviousTaskId: continuity.previousTaskId,
     continuityPreviousWorkerCode: continuity.previousWorkerCode,
     continuityHandoffId: continuity.handoffId,
     continuityHandoffSummary: continuity.handoffSummary,
+    continuityContextSnapshotId: continuity.contextSnapshotId,
+    continuityContextRevision: continuity.contextRevision,
+    continuityContextSummary: continuity.contextSummary,
     continuityRouting: routedCode && continuity.previousWorkerCode ? (routedCode === continuity.previousWorkerCode ? "SAME_WORKER" : "FALLBACK_WORKER") : "NO_HISTORY",
+    rawTranscriptState: "WAITING",
+    handoffPackState: "DRAFT",
     source: "EXPLICIT_TASK",
     resolvedAt: new Date().toISOString(),
   };
@@ -396,6 +469,7 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
     },
   };
   const next = await upsertWorkerSession(updated);
+  if (validated) await syncEngineBridgeTarget(taskId, "RUNNING");
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
     developmentContext: updated.developmentContext,
@@ -477,6 +551,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     },
   };
   const next = await upsertWorkerSession(updated);
+  await syncEngineBridgeTarget(taskId, "HANDED_OFF");
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
     delta: { summary: `ChatGPT csevegés rögzítve · ${chatLaunchMode}`, workItem: updated.developmentContext.workItem, workStageIndex: updated.developmentContext.workStageIndex || 1 },

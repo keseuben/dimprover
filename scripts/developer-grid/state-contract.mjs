@@ -9,11 +9,39 @@ const root = process.cwd();
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "developer-grid-state-contract-"));
 const out = path.join(tmp, "out");
 await fs.mkdir(out, { recursive: true });
-await execFileAsync("npx", ["tsc", "app/lib/developer-grid/types.ts", "app/lib/developer-grid/events.ts", "app/lib/developer-grid/state-store.ts", "--outDir", out, "--module", "commonjs", "--moduleResolution", "node", "--target", "ES2022", "--esModuleInterop", "--skipLibCheck", "--noEmit", "false"], { cwd: root, maxBuffer: 8_000_000 });
-const storePath = path.join(out, "state-store.js");
-let storeSource = await fs.readFile(storePath, "utf8");
-storeSource = storeSource.replace('require("server-only");', '');
-await fs.writeFile(storePath, storeSource);
+const contractTsconfig = path.join(tmp, "tsconfig.json");
+await fs.writeFile(contractTsconfig, JSON.stringify({
+  compilerOptions: {
+    target: "ES2022",
+    module: "commonjs",
+    moduleResolution: "node",
+    esModuleInterop: true,
+    skipLibCheck: true,
+    noEmit: false,
+    outDir: out,
+    rootDir: root,
+    baseUrl: root,
+    paths: { "@/*": ["./*"] },
+    typeRoots: [path.join(root, "node_modules/@types")],
+    types: ["node"],
+  },
+  files: [
+    path.join(root, "app/lib/developer-grid/types.ts"),
+    path.join(root, "app/lib/developer-grid/events.ts"),
+    path.join(root, "app/lib/developer-grid/state-store.ts"),
+    path.join(root, "app/lib/developer-grid/evidence.ts"),
+    path.join(root, "app/lib/dev-center/ai-worker/secret-scanner.ts"),
+  ],
+}, null, 2));
+await execFileAsync("npx", ["tsc", "-p", contractTsconfig], { cwd: root, maxBuffer: 8_000_000 });
+const storePath = path.join(out, "app/lib/developer-grid/state-store.js");
+const evidencePath = path.join(out, "app/lib/developer-grid/evidence.js");
+for (const file of [storePath, evidencePath]) {
+  let source = await fs.readFile(file, "utf8");
+  source = source.replace('require("server-only");', '');
+  if (file === evidencePath) source = source.replaceAll('require("@/app/lib/dev-center/ai-worker/secret-scanner")', 'require("../dev-center/ai-worker/secret-scanner")');
+  await fs.writeFile(file, source);
+}
 const store = await import(`file://${storePath}?v=${Date.now()}`);
 const stateRoot = path.join(tmp, "state");
 const task = { id:"task-1", projectId:"project_dimprover", title:"Developer Grid", priority:98, environment:"DEV", productionAccess:"DENY", status:"RUNNING", acceptance:[] };

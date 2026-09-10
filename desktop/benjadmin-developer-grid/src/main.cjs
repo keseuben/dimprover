@@ -10,9 +10,10 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
+const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport } = require("./task-launch/stage-report.cjs");
@@ -31,6 +32,7 @@ const LOCKOUT_MS = 30_000;
 const CHAT_REFRESH_MAINTENANCE_MS = 60_000;
 const CHAT_REFRESH_PROBE_MS = 5 * 60_000;
 const DEVICE_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
+const CONVERSATION_MEMORY_INTERVAL_MS = 8_000;
 const AVATAR_ASSETS = Object.freeze({
   BENAI: path.join(__dirname, "assets", "team", "benai.webp"),
   OUTMINAI: path.join(__dirname, "assets", "team", "outminai.webp"),
@@ -79,6 +81,10 @@ let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
 let deviceHeartbeatBusy = false;
+let conversationMemoryTimer = null;
+let conversationMemoryBusy = false;
+const conversationMemoryHashes = new Map();
+const processedStageReportHashes = new Set();
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -1464,6 +1470,20 @@ function launchTaskFromWork(work, chatPlan = null) {
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
     acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
     chatLaunchMode: session.developmentContext?.chatLaunchMode || chatPlan?.chatLaunchMode || null,
+    continuityPreviousTaskId: session.developmentContext?.continuityPreviousTaskId || null,
+    continuityPreviousWorkerCode: session.developmentContext?.continuityPreviousWorkerCode || null,
+    continuityHandoffId: session.developmentContext?.continuityHandoffId || null,
+    continuityHandoffSummary: session.developmentContext?.continuityHandoffSummary || null,
+    continuityContextSnapshotId: session.developmentContext?.continuityContextSnapshotId || null,
+    continuityContextRevision: session.developmentContext?.continuityContextRevision || null,
+    continuityContextSummary: session.developmentContext?.continuityContextSummary || null,
+    continuityRouting: session.developmentContext?.continuityRouting || null,
+    rawTranscriptState: session.developmentContext?.rawTranscriptState || null,
+    contextSnapshotId: session.developmentContext?.contextSnapshotId || null,
+    contextRevision: session.developmentContext?.contextRevision || null,
+    contextSnapshotSummary: session.developmentContext?.contextSnapshotSummary || null,
+    handoffPackState: session.developmentContext?.handoffPackState || null,
+    handoffPackId: session.developmentContext?.handoffPackId || null,
   };
 }
 
@@ -1681,6 +1701,34 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   };
 }
 
+async function processCapturedStageReport({ body, workerCode, task, baselineResponseSha256 = "" }) {
+  const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
+  const textBody = String(body || "");
+  if (!textBody.includes(STAGE_REPORT_START) || !task?.id || !task?.sessionId) return { processed:false };
+  const responseSha256 = createHash("sha256").update(textBody).digest("hex");
+  if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) return { processed:false, reason:"baseline" };
+  const dedupeKey = `${backendWorkerCode}:${task.id}:${task.sessionId}:${responseSha256}`;
+  if (processedStageReportHashes.has(dedupeKey)) return { processed:false, reason:"duplicate" };
+  const parsed = parseDeveloperGridStageReport(textBody);
+  if (!parsed?.ok || !parsed.report) return { processed:false, reason:"parse" };
+  const report = parsed.report;
+  processedStageReportHashes.add(dedupeKey);
+  if (processedStageReportHashes.size > 500) {
+    const first = processedStageReportHashes.values().next().value;
+    if (first) processedStageReportHashes.delete(first);
+  }
+  if (report.workerCode !== backendWorkerCode || report.taskId !== String(task.id) || report.sessionId !== String(task.sessionId)) {
+    send("context:refresh", { reason:"stage-report-identity-blocked", taskId:task.id, workerCode:backendWorkerCode });
+    return { processed:true, error:"identity-mismatch" };
+  }
+  const result = await submitDeveloperGridEvidence({
+    baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
+    input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, result:report.result, summary:report.summary, entries:report.evidence },
+  }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
+  send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
+  return { processed:true, result };
+}
+
 async function monitorWorkerStageReport({ view, workerCode, task, baselineResponseSha256 = "" }) {
   const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
   const monitorKey = `${backendWorkerCode}:${task?.id || ""}:${task?.sessionId || ""}`;
@@ -1692,25 +1740,71 @@ async function monitorWorkerStageReport({ view, workerCode, task, baselineRespon
       await new Promise((resolve) => setTimeout(resolve, 1800));
       const capture = await captureLatestAssistantText(view);
       if (!capture?.ok || capture.generating) continue;
-      const body = String(capture.text || "");
-      if (!body.includes(STAGE_REPORT_START)) continue;
-      const responseSha256 = createHash("sha256").update(body).digest("hex");
-      if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) continue;
-      const parsed = parseDeveloperGridStageReport(body);
-      if (!parsed?.ok || !parsed.report) continue;
-      const report = parsed.report;
-      if (report.workerCode !== backendWorkerCode || report.taskId !== String(task.id) || report.sessionId !== String(task.sessionId)) {
-        send("context:refresh", { reason:"stage-report-identity-blocked", taskId:task.id, workerCode:backendWorkerCode });
-        return;
-      }
-      const result = await submitDeveloperGridEvidence({
-        baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
-        input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, entries:report.evidence },
-      }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
-      send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
-      return;
+      const processed = await processCapturedStageReport({ body:capture.text, workerCode, task, baselineResponseSha256 });
+      if (processed?.processed) return;
     }
   } finally { stageReportMonitorKeys.delete(monitorKey); }
+}
+
+function conversationMemoryTaskForWorker(workerCode) {
+  const { task, presence } = liveContextForWorker(workerCode);
+  if (!task?.id || !task?.sessionId) return null;
+  const expectedConversationId = String(task.chatConversationId || task.chatSessionId || "").trim();
+  if (!expectedConversationId) return null;
+  return { task, presence, expectedConversationId };
+}
+
+async function syncConversationMemoryForWorker(workerCode) {
+  const code = String(workerCode || "").toUpperCase();
+  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  if (!cell) return null;
+  const live = conversationMemoryTaskForWorker(code);
+  if (!live) return null;
+  const view = chatViews.get(cell.id);
+  if (!view || view.webContents.isDestroyed()) return null;
+  const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+  if (!currentId || currentId !== live.expectedConversationId) return null;
+  const capture = await captureConversationTranscript(view);
+  if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
+  const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
+  const cacheKey = `${live.task.id}:${live.task.sessionId}:${currentId}`;
+  const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
+  if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
+  if (conversationMemoryHashes.get(cacheKey) === transcriptHash) return null;
+  const memory = await saveDeveloperGridConversationMemory({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+    input:{ taskId:live.task.id, sessionId:live.task.sessionId, workerCode:code === "BENAI" ? "BENJAMINAI" : code, conversationId:currentId, conversationUrl:capture.conversationUrl, conversationTitle:capture.conversationTitle, capturedAt:capture.capturedAt, messages:capture.messages },
+  });
+  conversationMemoryHashes.set(cacheKey, transcriptHash);
+  if (conversationMemoryHashes.size > 120) {
+    const first = conversationMemoryHashes.keys().next().value;
+    if (first) conversationMemoryHashes.delete(first);
+  }
+  if (memory) send("context:memory", { workerCode:code, taskId:live.task.id, sessionId:live.task.sessionId, memory });
+  send("context:refresh", { reason:"conversation-memory-saved", taskId:live.task.id, workerCode:code });
+  return memory;
+}
+
+async function syncConversationMemoryOnce() {
+  if (!unlocked || conversationMemoryBusy || !readDeviceToken()) return;
+  conversationMemoryBusy = true;
+  try {
+    for (const code of ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"]) {
+      await syncConversationMemoryForWorker(code).catch(() => undefined);
+    }
+  } finally { conversationMemoryBusy = false; }
+}
+
+function startConversationMemoryMonitor() {
+  if (conversationMemoryTimer) clearInterval(conversationMemoryTimer);
+  conversationMemoryTimer = setInterval(() => void syncConversationMemoryOnce(), CONVERSATION_MEMORY_INTERVAL_MS);
+  setTimeout(() => void syncConversationMemoryOnce(), 2500);
+}
+function stopConversationMemoryMonitor() {
+  if (conversationMemoryTimer) clearInterval(conversationMemoryTimer);
+  conversationMemoryTimer = null;
+  conversationMemoryBusy = false;
 }
 
 async function prepareWorkerStageAction(workerCode, action) {
@@ -1739,6 +1833,12 @@ async function prepareWorkerStageAction(workerCode, action) {
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {
+    if (action === "advance-stage") {
+      const sent = await sendPreparedChatPrompt(view, marker);
+      if (sent?.sent !== true || sent?.verified !== true) return { ok:false, code:"STAGE_PROMPT_SEND_NOT_VERIFIED", error:"A fázislépési prompt a ChatGPT mezőben van, de az automatikus elküldés nem volt igazolható. Ellenőrizd és küldd el kézzel." };
+      void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
+      return { ok:true, mode:"sent", message:"A fázislépési prompt elküldve. A BENJADMIN_STAGE_REPORT_V1 választ a desktop automatikusan validálja és a Central Core állapotot frissíti." };
+    }
     void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
     return { ok: true, mode: "inserted", message: "A stage action prompt a worker ChatGPT mezőjében van. Küldés után a BENJADMIN_STAGE_REPORT_V1 választ a desktop automatikusan evidence-ként rögzíti." };
   }
@@ -2797,6 +2897,11 @@ function registerIpc() {
     try { return { ok: true, activeWork: await fetchDeveloperGridActiveWork({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken() }) }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Az aktív munka nem tölthető be." }; }
   });
+  ipcMain.handle("conversation-memory:get", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, memory:await fetchDeveloperGridConversationMemory({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId || ""), sessionId:String(payload?.sessionId || ""), conversationId:String(payload?.conversationId || "") }) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Conversation Memory nem tölthető be." }; }
+  });
   ipcMain.handle("build-runs:get", async () => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try { return { ok:true, buildRuns: await fetchDeveloperGridBuildRuns({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }) }; }
@@ -2849,6 +2954,14 @@ function registerIpc() {
       send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
       return { ok: true, work, chatPlan, taskLaunch };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
+  });
+  ipcMain.handle("work-close:run", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const close = await closeDeveloperGridWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:payload || {} });
+      send("context:refresh", { reason:"work-closed", taskId:close?.task?.id || payload?.taskId || null });
+      return { ok:true, close };
+    } catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Developer Grid lezárás sikertelen." }; }
   });
   ipcMain.handle("context:mode", (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
@@ -3061,10 +3174,11 @@ app.whenReady().then(() => {
   createShellWindow();
   registerGlobalShortcuts();
   startChatRefreshMaintenance();
+  startConversationMemoryMonitor();
   powerMonitor.on("lock-screen", () => lockWorkspace("windows-session-lock"));
 });
 
 app.on("before-quit", () => { appQuitting = true; });
-app.on("will-quit", () => { stopChatRefreshMaintenance(); globalShortcut.unregisterAll(); });
+app.on("will-quit", () => { stopChatRefreshMaintenance(); stopConversationMemoryMonitor(); globalShortcut.unregisterAll(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!shellWindow) createShellWindow(); });

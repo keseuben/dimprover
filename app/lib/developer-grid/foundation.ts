@@ -9,8 +9,8 @@ import { listDeveloperGridWorkers } from "./worker-registry";
 export const DEVELOPER_GRID_TASK_ID = "dev-task-benjadmin-developer-grid-v1-night-20260827";
 export const DEVELOPER_GRID_PROJECT_ID = "project_dimprover";
 
-const DEFAULT_DEVELOPER_GRID_BRANCH = "feature/benjadmin-developer-grid-v1-20260827";
-const DEFAULT_DEVELOPER_GRID_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v1-20260827";
+const DEFAULT_DEVELOPER_GRID_BRANCH = "feature/benjadmin-developer-grid-v013-outminai-20260905";
+const DEFAULT_DEVELOPER_GRID_WORKTREE = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
 const DEFAULT_DEVELOPER_GRID_REPOSITORY = "/srv/dimpro-dev/repositories/dimprover.git";
 
 function runtimeExpectation(name: string, fallback: string) {

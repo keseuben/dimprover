@@ -196,3 +196,19 @@ A `scripts/developer-grid/protected-telemetry-agent.py` kizárólag helyi Linux 
 ## v0.1.32 Protected telemetry
 
 Admin setup: /api/dev/grid/protected-telemetry/setup. Admin API: GET/POST /api/dev/grid/protected-telemetry/admin. Public enrollment requires the selected node source IP, a valid one-time admin code, and a client nonce. The code is returned only on explicit admin preparation and stored only as a digest. No automatic public self-enrollment and no shared ingest secret. Existing node keys are not overwritten. Failed or lost enrollment requires status review; no automatic reset. The host installer must be run from a verified source bundle on the actual authorized host. It performs a single interactive enrollment and first read-only sample before enabling its systemd timer. Periodic execution uses DynamicUser and LoadCredential. No application, database, or SSH configuration changes are part of telemetry collection. Legacy historical resource snapshots remain excluded from LIVE. Production access stays DENY.
+
+## v0.1.33 Central Core Conversation Memory + 6-stage executable workflow
+
+- A Central Core munkaindítás már nem csak Grid-feladatot materializál: a kijelölt kódmérnök részére valódi DevCenter engine sessiont indít. A rögzített ChatGPT-csevegés `HANDED_OFF`, a validált BOOT ACK `RUNNING` engine-állapotot eredményez. Explicit worker továbbra is kötelező; automatikus worker-fallback tiltott.
+- A fejlesztési memória három külön réteg: `RAW_CHAT_TRANSCRIPT_V1` (Fekete doboz), `BENJADMIN_CONTEXT_SNAPSHOT_V1` (sanitizált folytatási kontextus) és `BENJADMIN_HANDOFF_PACK_V1` (lezárási/átadási csomag). A RAW réteg append-only delta formátumú, hash-láncolt és task/session/conversation azonosítóhoz kötött; nem kerül automatikusan vissza promptként.
+- A Windows desktop a taskhoz authoritative módon rögzített `/c/...` ChatGPT-beszélgetést figyeli. Generálás közben nem ment, változatlan transcriptet deduplikál. A szerveroldali memory könyvtár 0700, a fájlok 0600 jogosultságúak.
+- A következő, azonos projekt/modul/submodul task Launch Packetje a legfrissebb sanitizált Context Snapshotot és hiteles handoffot folytatási forrásként kapja. A nyers csevegés csak audit/feketedoboz forrás.
+- A felső hatlépcsős sáv tényleges vezérlő: 1 ELEMZÉS → 2 FEJLESZTÉS → 3 TESZTELÉS → 4 ELLENŐRZÉS → 5 BUILD/KIADÁS → 6 LEZÁRÁS. Stage-visszalépés és -átugrás tiltott. 1→2, 2→3 és 3→4 worker stage reporttal történik; 3→4 current-HEAD TEST/PASS evidence-et igényel.
+- A 4→5 átmenetet csak explicit Central Core V.Guard review PASS/PASS_WITH_NOTES nyithatja meg. Az 5→6 átmenetet csak a Central Core BUILD01/BUILD02 FULL BUILD PASS eredménye nyithatja meg. Worker oldali közvetlen FULL BUILD és DEV-host build fallback továbbra is tiltott.
+- A 6/6 lezárási gomb csak VALIDATED BOOT ACK + current-HEAD PASS teszt + review + PASS build + COMPLETED automatikus handoff esetén zár. Ekkor a DevCenter task `completed`, a Grid task `COMPLETED`, a Grid session `endedAt` értéket kap.
+- A Central Core az authoritative task/source állapotot reconciliálja. Source-eltérés vagy 72 óránál régebbi állapot `ELAVULT` jelzést kap; a régi task történet marad, de új fejlesztést új Central Core taskként kell indítani.
+- DEV ONLY · PROD DENY.
+
+
+### v0.1.33 canonical source baseline
+A Developer Grid foundation alapértelmezett authoritative forrása a `feature/benjadmin-developer-grid-v013-outminai-20260905` branch és a `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905` worktree. A régi 2026-08-27 foundation worktree csak történeti forrás; új Central Core task nem indulhat róla. Környezeti override továbbra is lehetséges, de source provenance ellenőrzés fail-closed.

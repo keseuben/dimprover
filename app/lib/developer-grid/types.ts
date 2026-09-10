@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.32-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.33-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -36,10 +36,14 @@ export type DevelopmentContext = {
   sourcePrompt?: string | null;
   chatLaunchMode?: ChatLaunchMode | null;
   preferredWorkerCode?: RoutableWorkerCode | null;
+  engineSessionId?: string | null;
   continuityPreviousTaskId?: string | null;
   continuityPreviousWorkerCode?: RoutableWorkerCode | null;
   continuityHandoffId?: string | null;
   continuityHandoffSummary?: string | null;
+  continuityContextSnapshotId?: string | null;
+  continuityContextRevision?: number | null;
+  continuityContextSummary?: string | null;
   continuityRouting?: "SAME_WORKER" | "FALLBACK_WORKER" | "NO_HISTORY" | null;
   chatPreviousConversationId?: string | null;
   chatConversationId?: string | null;
@@ -52,6 +56,14 @@ export type DevelopmentContext = {
   bootAckSha256?: string | null;
   bootAckCodingAllowed?: boolean | null;
   bootAckMismatches?: string[];
+  rawTranscriptState?: "WAITING" | "CAPTURING" | "BLOCKED" | null;
+  rawTranscriptSnapshotSha256?: string | null;
+  rawTranscriptCapturedAt?: string | null;
+  contextSnapshotId?: string | null;
+  contextRevision?: number | null;
+  contextSnapshotSummary?: string | null;
+  handoffPackId?: string | null;
+  handoffPackState?: "DRAFT" | "READY" | "COMPLETED" | null;
   source: "ACTIVE_SESSION" | "EXPLICIT_TASK" | "TASK_PROVENANCE" | "ACTIVITY" | "GIT" | "PRESENCE" | "HEURISTIC";
   resolvedAt: string;
 };

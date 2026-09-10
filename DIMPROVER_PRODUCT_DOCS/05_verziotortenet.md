@@ -3204,3 +3204,20 @@ A System Health külön DEV és PROD analytics adatforrást kezel. A meglévő s
 ### BENJADMIN Developer Grid v0.1.32 – Protected VPS telemetry
 
 A korábbi augusztus 11-i erőforrásminta történeti adat, nem LIVE mérés. A DEV oldali védett telemetria regisztrációja admin-jóváhagyott, node-hoz és megbízható forrás-IP-hez kötött, 10 percig érvényes egyszeri kódot használ. A szerver csak a kód SHA-256 lenyomatát tárolja, a külön node-kulcs 0600 jogosultságú, meglévő kulcs nem íródik felül. Az adatfogadó a node-kulcsot és a forráscímet is ellenőrzi. A két VPS csak helyi /proc és statvfs rendszeradatokat küld HTTPS-en a DEV-be. Nincs távoli parancscsatorna, alkalmazás-deploy vagy adatbázis-írás. A kezdeti, jóváhagyott telepítés root jogosultságot igényel, a periodikus szolgáltatás DynamicUser és systemd LoadCredential használatával, jogosultságok és írási hozzáférés nélkül fut. A timer csak az első sikeres mintavétel után aktiválódik. A hiányzó vagy lejárt minta nem LIVE. A telepítéshez a védett gép tényleges, ellenőrzött konzolhozzáférése szükséges; a DEV forrás tesztelése nem bizonyítja a PROD/DB telepítését.
+
+### BENJADMIN Developer Grid v0.1.33 – Central Core Conversation Memory + 6 lépcsős vezérlés
+
+- Elkészült a háromrétegű fejlesztési memória: Fekete doboz RAW transcript, sanitizált Context Snapshot és automatikus Handoff Pack.
+- A RAW transcript task/session/csevegés-azonosítóhoz kötött, 0600 fájlokba írt append-only delta napló, teljes snapshot SHA-256 és hash-lánc mellett; generálás közben nincs mentés, változatlan állapot deduplikált.
+- A Central Core új `CONVERSATION MEMORY` panelen külön mutatja a BLACK BOX / CONTEXT / HANDOFF állapotot és az aktuális folytatási összefoglalót.
+- A következő azonos projekt/modul fejlesztés Launch Packetje automatikusan megkapja a legfrissebb sanitizált Context Snapshotot és hiteles handoffot.
+- A Central Core indítás valódi DevCenter worker sessiont nyit; conversation binding → HANDED_OFF, validált BOOT ACK → RUNNING.
+- A worker fejléc 6-lépcsős sávja aktív vezérlővé vált. 1→2, 2→3, 3→4 gépi stage reporttal; stage-skip/regresszió és nem-PASS előrelépés tiltott.
+- 3→4-hez current-HEAD TEST/PASS evidence kötelező. 4→5 csak explicit V.Guard PASS/PASS_WITH_NOTES, 5→6 csak BUILD01/BUILD02 FULL BUILD PASS után történik.
+- Új `work-close` Closure Gate készült: 6/6, VALIDATED BOOT ACK, review, test, PASS build és COMPLETED handoff után lezárja a DevCenter taskot és a Grid sessiont.
+- A Central Core a régi vagy source-eltéréses authoritative taskot `ELAVULT` állapotként jelzi, nem aktív munkaként.
+- Desktop verzió: 0.1.33; Developer Grid backend contract: 0.1.33-dev. DEV ONLY · PROD DENY.
+
+
+### v0.1.33 canonical source baseline
+A Developer Grid foundation alapértelmezett authoritative forrása a `feature/benjadmin-developer-grid-v013-outminai-20260905` branch és a `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905` worktree. A régi 2026-08-27 foundation worktree csak történeti forrás; új Central Core task nem indulhat róla. Környezeti override továbbra is lehetséges, de source provenance ellenőrzés fail-closed.
