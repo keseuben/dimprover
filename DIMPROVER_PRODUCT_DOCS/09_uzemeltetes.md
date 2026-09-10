@@ -586,3 +586,8 @@ A jelenlegi általános backup/artifact retention nem törli automatikusan a Con
 ### Developer Grid v0.1.34 – stale worker session üzemeltetési szabály
 
 A Central Core nem tekintheti korlátlan ideig foglaltnak a workert egy történeti, heartbeat nélküli session miatt. Routing előtt a kijelölt worker nem lezárt sessionjei fail-safe ellenőrzést kapnak. Automatikus release csak akkor engedett, ha a session heartbeatje, session `updated_at` értéke és a kapcsolt task `updated_at` értéke egyaránt 72 óránál régebbi. Az automatikus release nem requeue-olja és nem complete-eli a történeti taskot; a művelet auditált. Bármely frissebb aktivitás esetén a session érintetlen marad és a strict routing `PREFERRED_BUSY` állapotot jelez.
+
+### Developer Grid v0.1.35 – stale state lock üzemeltetés
+
+A `coordination/developer-grid/mutation.lock` fájlt kézzel normál esetben nem kell törölni. A runtime 30 másodperces minimum stale-kor után automatikusan ellenőrzi a tulajdonos PID/process-start identity állapotát. Élő tulajdonos esetén továbbra is 5 másodperces fail-closed timeout érvényesül. Régi üres/sérült vagy már nem létező processhez tartozó lock automatikusan felszabadul. A 2026-08-31-ről fennmaradt történeti üres lockot 2026-09-10-én auditált recovery másolattal eltávolítottuk.
+

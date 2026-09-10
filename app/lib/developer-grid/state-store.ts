@@ -1,7 +1,7 @@
 "server-only";
 
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import path from "node:path";
 import { paginateEvents } from "./events";
@@ -10,6 +10,9 @@ import type { DeveloperGridRuntimeState, DeveloperGridTask, GridActivityEvent, G
 
 export const DEFAULT_DEVELOPER_GRID_STATE_ROOT = "/srv/dimpro-dev/coordination/developer-grid";
 const MAX_STATE_CHANGES = 1000;
+const STATE_LOCK_WAIT_ATTEMPTS = 100;
+const STATE_LOCK_WAIT_MS = 50;
+const STATE_LOCK_STALE_AFTER_MS = 30_000;
 
 export type GridPersistentState = DeveloperGridRuntimeState;
 
@@ -38,20 +41,80 @@ async function atomic(file: string, payload: unknown) {
   await rename(tmp, file);
 }
 
+type StateMutationLockMetadata = {
+  pid?: number;
+  acquiredAt?: string;
+  processStartTicks?: string | null;
+};
+
+async function linuxProcessStartTicks(pid: number): Promise<string | null> {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    const raw = await readFile(`/proc/${pid}/stat`, "utf8");
+    const closingParen = raw.lastIndexOf(")");
+    if (closingParen < 0) return null;
+    const fieldsAfterCommand = raw.slice(closingParen + 2).trim().split(/\s+/);
+    return fieldsAfterCommand[19] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function readStateMutationLockMetadata(lockPath: string): Promise<StateMutationLockMetadata | null> {
+  try {
+    const raw = (await readFile(lockPath, "utf8")).trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StateMutationLockMetadata;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function recoverStaleStateMutationLock(lockPath: string, nowMs = Date.now()): Promise<boolean> {
+  let before;
+  try { before = await stat(lockPath); }
+  catch { return false; }
+  const ageMs = Math.max(0, nowMs - before.mtimeMs);
+  if (ageMs < STATE_LOCK_STALE_AFTER_MS) return false;
+
+  const metadata = await readStateMutationLockMetadata(lockPath);
+  if (metadata?.pid && Number.isInteger(Number(metadata.pid))) {
+    const pid = Number(metadata.pid);
+    const liveStartTicks = await linuxProcessStartTicks(pid);
+    if (liveStartTicks) {
+      if (!metadata.processStartTicks || metadata.processStartTicks === liveStartTicks) return false;
+    }
+  }
+
+  let current;
+  try { current = await stat(lockPath); }
+  catch { return false; }
+  if (current.ino !== before.ino || current.mtimeMs !== before.mtimeMs) return false;
+  try {
+    await unlink(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function serializeMutation<T>(root: string, operation: () => Promise<T>): Promise<T> {
   const target = files(root);
   await ensureRoot(target.root);
   const lockPath = path.join(target.root, "mutation.lock");
   let handle = null;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < STATE_LOCK_WAIT_ATTEMPTS; attempt += 1) {
     try {
       handle = await open(lockPath, "wx", 0o600);
-      await handle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`);
+      const processStartTicks = await linuxProcessStartTicks(process.pid);
+      await handle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString(), processStartTicks })}\n`);
       break;
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
       if (code !== "EEXIST") throw error;
-      await sleep(50);
+      await recoverStaleStateMutationLock(lockPath);
+      await sleep(STATE_LOCK_WAIT_MS);
     }
   }
   if (!handle) {

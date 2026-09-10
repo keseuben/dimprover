@@ -10,7 +10,7 @@ const ui=read("desktop/benjadmin-developer-grid/src/renderer/context-workspace.j
 const css=read("desktop/benjadmin-developer-grid/src/renderer/styles.css");
 const types=read("app/lib/developer-grid/types.ts");
 let n=0;const check=(label,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
-check("v0.1.34 backend contract",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.34-dev"/));
+check("v0.1.35 backend contract",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.35-dev"/));
 check("Central Core stale threshold is 72h",()=>assert.match(engine,/CENTRAL_CORE_STALE_SESSION_AGE_MS = 72 \* 60 \* 60 \* 1000/));
 check("stale routing validates heartbeat",()=>assert.match(engine,/last_heartbeat_at/));
 check("stale routing validates session update",()=>assert.match(engine,/sessionUpdatedAt/));
@@ -30,4 +30,4 @@ check("work-start error stays near work card",()=>assert.match(ui,/workStartNoti
 check("navigation performs section jump",()=>assert.match(ui,/scrollIntoView\(\{behavior:"smooth",block:"start"\}\)/));
 check("navigation is sticky",()=>assert.match(css,/\.cw-card-nav[\s\S]*?position: sticky/));
 check("section scroll margin protects sticky nav",()=>assert.match(css,/\[data-cw-section\] \{ scroll-margin-top:/));
-console.log(`Developer Grid routing + Central Core navigation v0.1.34 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid routing + Central Core navigation v0.1.35 regression contract PASS · ${n}/${n}`);

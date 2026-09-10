@@ -415,3 +415,8 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Egy korábban `PREFERRED_BUSY` miatt `queued` állapotban maradt, azonos idempotencyKey-jű Central Core task új munkaindításkor újra routolható; explicit worker és STRICT/no-fallback szabály változatlan.
 - A Central Core fejléc alatti sticky kártyanavigáció: MUNKA, MEMÓRIA, EVIDENCE, BUILD, CONTEXT, ÁTADÁSOK.
 - A munkaindítás success/waiting/error visszajelzése közvetlenül a munkaindító kártyában jelenik meg, ezért nem szükséges a panel aljára görgetni a hiba megértéséhez.
+
+### BENJADMIN Developer Grid v0.1.35 – state mutation lock recovery
+
+A Central Core authoritative state/event store továbbra is cross-process `mutation.lock` sorosítást használ. A v0.1.35 a megszakadt folyamatból hátramaradt lockokhoz fail-safe recoveryt ad: 30 másodpercnél frissebb lockhoz nem nyúl; régi locknál PID és Linux process-start identity alapján ellenőrzi a tulajdonost. Élő vagy bizonytalan tulajdonos esetén a lock védett marad. Csak bizonyítottan halott, PID-reuse-os vagy régi sérült lock távolítható el. DEV ONLY · PROD DENY.
+

@@ -3230,3 +3230,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új sticky Central Core kártyanavigáció: MUNKA / MEMÓRIA / EVIDENCE / BUILD / CONTEXT / ÁTADÁSOK.
 - Munkaindítási hiba, várakozás és siker a MUNKA kártyán belül azonnal látható.
 - Desktop verzió: 0.1.34; backend contract: 0.1.34-dev. DEV ONLY · PROD DENY.
+
+### BENJADMIN Developer Grid v0.1.35 – Central Core state-lock hotfix
+
+- Javítva a `DEVELOPER_GRID_STATE_LOCK_TIMEOUT` hiba, amelyet egy megszakadt korábbi state-művelet után hátramaradt `mutation.lock` okozhatott.
+- Beépült a fail-safe stale-lock recovery PID + process-start identity ellenőrzéssel és inode/mtime race-védelemmel.
+- Friss és élő tulajdonosú lock továbbra sem törhető fel; a cross-process írássorbarendezés változatlanul fail-closed.
+- State contract kibővítve friss, élő legacy PID, sérült orphan és dead-PID lock esetekkel.
+- Desktop verzió: 0.1.35; backend contract: 0.1.35-dev. DEV ONLY · PROD DENY.
+
