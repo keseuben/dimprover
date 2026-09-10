@@ -26,7 +26,7 @@ check(preload.includes("startDeveloperGridWork") && preload.includes("getDevelop
 check(main.includes('ipcMain.handle("work-start:create"') && main.includes('ipcMain.handle("work-start:get"'), "main process gates work-start IPC");
 check(ui.includes("Mit fejlesszünk?") && ui.includes("MUNKA INDÍTÁSA") && ui.includes("workStartPrompt"), "visible control panel composer");
 check(ui.includes("ctrlKey") && ui.includes("Enter") && ui.includes("preventDefault"), "Ctrl+Enter explicit submit");
-check(ui.includes("if(state.workStartBusy)return") && ui.includes("state.workStartBusy||!valid"), "double-submit guarded client-side");
+check(ui.includes("if(state.workStartBusy)return") && ui.includes("state.workStartBusy||state.workResumeBusy||!valid"), "double-submit guarded client-side");
 check(ui.includes("state.workStartDraft") && ui.includes("contextErrorMessage"), "draft retained on backend/auth failure");
 check(!ui.includes("api/dev/chatgrid/live"), "composer does not add ChatGrid snapshot mutation path");
 check(types.includes('ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT"') && engine.includes("chatLaunchMode: input.chatLaunchMode"), "chat strategy stored in authoritative developmentContext");

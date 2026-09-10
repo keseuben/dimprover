@@ -420,3 +420,8 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 
 A Central Core authoritative state/event store továbbra is cross-process `mutation.lock` sorosítást használ. A v0.1.35 a megszakadt folyamatból hátramaradt lockokhoz fail-safe recoveryt ad: 30 másodpercnél frissebb lockhoz nem nyúl; régi locknál PID és Linux process-start identity alapján ellenőrzi a tulajdonost. Élő vagy bizonytalan tulajdonos esetén a lock védett marad. Csak bizonyítottan halott, PID-reuse-os vagy régi sérült lock távolítható el. DEV ONLY · PROD DENY.
 
+
+### BENJADMIN Developer Grid v0.1.36 – Launch Recovery és authoritative active-task reconciliation
+
+A Central Core task-életciklus BOOT ACK előtti állapota explicit. A DevCenter `claimed` task `HANDED_OFF`/`TASK_BOUND` bridge állapotban a Developer Gridben továbbra is `READY`, nem `RUNNING`; `RUNNING` csak validált BOOT ACK után lehet. Ha egy várólistás új task mellett már létezik valódi aktív worker session, az új task nem írhatja felül a Central Core authoritative task pointerét. A bootstrap ilyenkor az aktív session taskját az engine-ből visszaállítja. A Central Core külön `INDÍTÁS FOLYTATÁSA` művelettel ugyanahhoz a task/session/csevegéshez újraküldheti a Launch Packetet új task létrehozása nélkül. A ChatGPT conversation ID egyezése kötelező, eltérés fail-closed. DEV ONLY · PROD DENY.
+A resume és a BOOT ACK kapu az aktuális source provenance-t újraellenőrzi: egy közben megváltozott canonical HEAD-hez kötött régi task nem kaphat új Launch Packetet vagy téves `Coding allowed` engedélyt. Ilyenkor auditált lezárás és aktuális HEAD-ről induló task szükséges.

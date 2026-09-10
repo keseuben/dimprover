@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   getDeveloperGridActiveWork: () => ipcRenderer.invoke("work-start:get"),
   getDeveloperGridConversationMemory: (input = {}) => ipcRenderer.invoke("conversation-memory:get", input),
   startDeveloperGridWork: (input = {}) => ipcRenderer.invoke("work-start:create", input),
+  resumeDeveloperGridTaskLaunch: () => ipcRenderer.invoke("work-start:resume-launch"),
   closeDeveloperGridWork: (input = {}) => ipcRenderer.invoke("work-close:run", input),
   getDeveloperGridBuildRuns: () => ipcRenderer.invoke("build-runs:get"),
   requestDeveloperGridFullBuild: (input = {}) => ipcRenderer.invoke("build-runs:request", input),

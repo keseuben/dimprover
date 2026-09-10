@@ -3239,3 +3239,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - State contract kibővítve friss, élő legacy PID, sérült orphan és dead-PID lock esetekkel.
 - Desktop verzió: 0.1.35; backend contract: 0.1.35-dev. DEV ONLY · PROD DENY.
 
+
+### BENJADMIN Developer Grid v0.1.36 – Central Core Launch Recovery
+
+- Javítva a `claimed + HANDED_OFF/TASK_BOUND` task hibás korai `RUNNING` leképezése; BOOT ACK előtt `READY` marad.
+- Validált BOOT ACK után az engine bridge és a Developer Grid authoritative task együtt vált `RUNNING` állapotba.
+- Várólistás task nem írhatja felül más, ténylegesen aktív session authoritative taskját.
+- Bootstrap reconciliation az aktív sessionből és a DevCenter engine taskból helyreállítja az elszakadt task pointert.
+- Új Central Core `INDÍTÁS FOLYTATÁSA` út: ugyanazon task/session és rögzített ChatGPT `/c/...` csevegés Launch Packetje újraküldhető új task létrehozása nélkül.
+- Új Launch Recovery regressziós contract: 25 célzott ellenőrzés.
+- Desktop verzió: 0.1.36; backend contract: 0.1.36-dev. DEV ONLY · PROD DENY.

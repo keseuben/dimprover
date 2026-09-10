@@ -212,3 +212,7 @@ Admin setup: /api/dev/grid/protected-telemetry/setup. Admin API: GET/POST /api/d
 
 ### v0.1.33 canonical source baseline
 A Developer Grid foundation alapértelmezett authoritative forrása a `feature/benjadmin-developer-grid-v013-outminai-20260905` branch és a `/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905` worktree. A régi 2026-08-27 foundation worktree csak történeti forrás; új Central Core task nem indulhat róla. Környezeti override továbbra is lehetséges, de source provenance ellenőrzés fail-closed.
+
+## BOOT ACK előtti Launch Recovery
+
+`claimed + TASK_BOUND/HANDED_OFF` még `READY`; `RUNNING` csak validált BOOT ACK után. A várólistás task nem írhatja felül a tényleges aktív session taskját. Megszakadt Launch Packet ugyanahhoz a task/session/csevegéshez újraküldhető a Central Core resume útján, új task nélkül. DEV ONLY · PROD DENY.

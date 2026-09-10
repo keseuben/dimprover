@@ -2955,6 +2955,51 @@ function registerIpc() {
       return { ok: true, work, chatPlan, taskLaunch };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
+  ipcMain.handle("work-start:resume-launch", async () => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      const task = activeWork?.task || null;
+      const session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
+      if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs folytatható authoritative task + worker session." };
+      if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"Az aktív task source provenance állapota már nem aktuális. A régi Launch Packet nem küldhető újra; a taskot auditáltan le kell zárni és az aktuális HEAD-ről kell folytatni." };
+      if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A task BOOT ACK-ja már validált; nincs újraküldendő Launch Packet." };
+      const work = { task, session };
+      const code = assignedWorkerCodeFromWork(work);
+      const launchTask = launchTaskFromWork(work, null);
+      if (!code || !launchTask) return { ok:false, code:"ACTIVE_TASK_LAUNCH_CONTEXT_MISSING", error:"A folytatható task Launch Packet kontextusa hiányos." };
+      const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+      if (!cell) return { ok:false, code:"ACTIVE_TASK_WORKER_CELL_MISSING", error:"Az assigned worker nincs aktív Developer Grid cellában." };
+      let view = chatViews.get(cell.id);
+      if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
+      if (!view || view.webContents.isDestroyed()) return { ok:false, code:"ACTIVE_TASK_CHAT_UNAVAILABLE", error:"A worker ChatGPT felülete nem érhető el." };
+      const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+      if (!currentConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_REQUIRED", error:"Nyisd meg a taskhoz tartozó ChatGPT /c/... csevegést." };
+      const ctx = session.developmentContext || {};
+      const expectedConversationId = String(ctx.chatConversationId || "").trim();
+      if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
+      let taskLaunch = null;
+      if (!expectedConversationId) {
+        const bound = await bindCurrentTaskConversation(code, task.id, { automatic:true, taskOverride:launchTask, launchAfterBind:true });
+        if (!bound?.ok) return bound;
+        taskLaunch = bound.taskLaunch || null;
+      } else {
+        saveTaskLaunchPatch(launchTask, code, {
+          chatLaunchMode: ctx.chatLaunchMode || "EXISTING_CHAT",
+          conversationBound: true,
+          chatSessionId: expectedConversationId,
+          chatConversationUrl: ctx.chatConversationUrl || view.webContents.getURL(),
+          chatTitle: ctx.chatConversationTitle || "",
+        });
+        taskLaunch = await prepareWorkerTaskLaunch(code, task.id, { autoSend:true, taskOverride:launchTask });
+      }
+      send("context:refresh", { reason:taskLaunch?.ok ? "task-launch-resumed" : "task-launch-resume-blocked", taskId:task.id, sessionId:session.id });
+      return { ok:taskLaunch?.ok === true, activeWork, taskLaunch, error:taskLaunch?.ok ? null : (taskLaunch?.error || "A Launch Packet újraküldése nem igazolható.") };
+    } catch (error) {
+      return { ok:false, error:error instanceof Error ? error.message : "A Launch Packet folytatása sikertelen." };
+    }
+  });
+
   ipcMain.handle("work-close:run", async (_event, payload) => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {

@@ -170,12 +170,19 @@ function strictCoreWorkerCode(value: unknown): CoreWorkerCode {
   throw error;
 }
 
-function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
-  const rawStatus = String(task.status || "").toLowerCase();
-  const status: DeveloperGridTask["status"] = rawStatus === "completed" ? "COMPLETED"
+export function gridTaskStatusFromEngine(rawStatusValue: unknown, bridgeStateValue: unknown): DeveloperGridTask["status"] {
+  const rawStatus = String(rawStatusValue || "").toLowerCase();
+  const bridgeState = text(bridgeStateValue, 40).toUpperCase();
+  const claimedAwaitingBootAck = rawStatus === "claimed" && !["RUNNING", "RESULT_PENDING"].includes(bridgeState);
+  return rawStatus === "completed" ? "COMPLETED"
     : rawStatus === "blocked" || rawStatus === "failed" ? "BLOCKED"
       : rawStatus === "testing" ? "REVIEW"
-        : rawStatus === "queued" || rawStatus === "ready" ? "READY" : "RUNNING";
+        : rawStatus === "queued" || rawStatus === "ready" || claimedAwaitingBootAck ? "READY" : "RUNNING";
+}
+
+function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
+  const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata) ? task.metadata as Record<string, unknown> : {};
+  const status = gridTaskStatusFromEngine(task.status, metadata.bridgeState);
   return {
     id: String(task.id || ""),
     projectId: String(task.projectId || DEVELOPER_GRID_PROJECT_ID),
@@ -189,18 +196,42 @@ function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
 }
 
 export async function getDeveloperGridActiveWork() {
-  const state = await readGridState();
-  const sessions = state.task ? state.sessions.filter((session) => session.endedAt === null && session.taskId === state.task?.id) : [];
+  let state = await readGridState();
+  let task = state.task;
+  const allActiveSessions = state.sessions.filter((session) => session.endedAt === null);
+  let sessions = task ? allActiveSessions.filter((session) => session.taskId === task?.id) : [];
   const reasons: string[] = [];
+  let reconciledFromActiveSession = false;
+
+  // A várólistás task nem írhatja felül a ténylegesen futó/BOOT ACK-ra váró session taskját.
+  // Ha a persistent task pointer elszakadt az aktív sessiontől, az engine authoritative task rekordjából visszaállítjuk.
+  if ((!task || sessions.length === 0) && allActiveSessions.length > 0) {
+    const activeSession = [...allActiveSessions].sort((a, b) => Date.parse(b.startedAt || "") - Date.parse(a.startedAt || ""))[0];
+    try {
+      const engineState = await getDevCenterEngineState();
+      const engineTask = engineState.tasks.find((item) => item.id === activeSession.taskId) || null;
+      if (engineTask && !["completed", "blocked", "failed", "cancelled"].includes(String(engineTask.status || "").toLowerCase())) {
+        task = gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+        state = await upsertGridTask(task);
+        sessions = state.sessions.filter((session) => session.endedAt === null && session.taskId === task?.id);
+        reconciledFromActiveSession = sessions.length > 0;
+        if (reconciledFromActiveSession) reasons.push("AUTHORITATIVE_TASK_RESTORED_FROM_ACTIVE_SESSION");
+      }
+    } catch {
+      // Fail-closed: ha az engine nem ellenőrizhető, a lenti ACTIVE_SESSION_MISSING/BLOCKED állapot marad.
+    }
+  }
+
+  const activeSession = sessions[0] || null;
   let executionState = "CURRENT" as "CURRENT" | "STALE" | "BLOCKED" | "EMPTY";
   let actualHead: string | null = null;
-  const ageHours = state.updatedAt && Number.isFinite(Date.parse(state.updatedAt)) ? Math.max(0, (Date.now() - Date.parse(state.updatedAt)) / 3_600_000) : null;
-  if (!state.task) executionState = "EMPTY";
-  else if (!sessions.length) { executionState = "BLOCKED"; reasons.push("ACTIVE_SESSION_MISSING"); }
+  const ageSource = activeSession?.developmentContext?.resolvedAt || activeSession?.startedAt || state.updatedAt;
+  const ageHours = ageSource && Number.isFinite(Date.parse(ageSource)) ? Math.max(0, (Date.now() - Date.parse(ageSource)) / 3_600_000) : null;
+  if (!task) executionState = "EMPTY";
+  else if (!activeSession) { executionState = "BLOCKED"; reasons.push("ACTIVE_SESSION_MISSING"); }
   else {
-    const session = sessions[0];
     try {
-      const current = await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean: false });
+      const current = await verifyCurrentSourceExecutionState(activeSession.sourceProvenance, { requireClean: false });
       actualHead = current.head;
     } catch (error) {
       executionState = "STALE";
@@ -208,7 +239,7 @@ export async function getDeveloperGridActiveWork() {
     }
     if (ageHours !== null && ageHours > 72) { executionState = "STALE"; reasons.push("AUTHORITATIVE_STATE_OLDER_THAN_72H"); }
   }
-  return { task: state.task, sessions, revision: state.revision, updatedAt: state.updatedAt, reconciliation: { state: executionState, reasons: [...new Set(reasons)], ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10, authoritativeHead: sessions[0]?.sourceProvenance.head || null, actualHead } };
+  return { task, sessions, revision: state.revision, updatedAt: state.updatedAt, reconciliation: { state: executionState, reasons: [...new Set(reasons)], ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10, authoritativeHead: activeSession?.sourceProvenance.head || null, actualHead, reconciledFromActiveSession } };
 }
 
 export async function startDeveloperGridWork(rawInput: Record<string, unknown>) {
@@ -365,7 +396,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   };
   const task = gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
   if (!routedCode) {
-    const waitingState = await upsertGridTask(task);
+    const beforeWaiting = await readGridState();
+    const preservedActiveSession = beforeWaiting.sessions.find((item) => item.endedAt === null && item.taskId !== task.id) || null;
+    const waitingState = preservedActiveSession ? beforeWaiting : await upsertGridTask(task);
     await appendGridEvent({
       kind: "analysis",
       origin: "LIVE",
@@ -381,8 +414,10 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       },
     });
     return {
-      task: waitingState.task,
+      task,
       session: null,
+      queuedTask: task,
+      preservedActiveTaskId: preservedActiveSession?.taskId || null,
       stateRevision: waitingState.revision,
       reused,
       sourcePrompt: input.sourcePrompt,
@@ -457,6 +492,11 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
   if (reportedWorktree !== expectedWorktree) serverMismatches.push("worktree");
   if (reportedHead !== String(expected.head || "").toLowerCase()) serverMismatches.push("baseHead");
   if (!codingAllowed) serverMismatches.push("codingAllowed");
+  try {
+    await verifyCurrentSourceExecutionState(expected, { requireClean: false });
+  } catch {
+    serverMismatches.push("sourceProvenance");
+  }
   const uniqueMismatches = [...new Set(serverMismatches)].slice(0, 20);
   const validated = uniqueMismatches.length === 0;
   const now = new Date().toISOString();
@@ -472,8 +512,11 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
       resolvedAt: now,
     },
   };
-  const next = await upsertWorkerSession(updated);
-  if (validated) await syncEngineBridgeTarget(taskId, "RUNNING");
+  let next = await upsertWorkerSession(updated);
+  if (validated) {
+    await syncEngineBridgeTarget(taskId, "RUNNING");
+    if (state.task) next = await upsertGridTask({ ...state.task, status: "RUNNING" });
+  }
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
     developmentContext: updated.developmentContext,

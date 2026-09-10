@@ -591,3 +591,8 @@ A Central Core nem tekintheti korlátlan ideig foglaltnak a workert egy történ
 
 A `coordination/developer-grid/mutation.lock` fájlt kézzel normál esetben nem kell törölni. A runtime 30 másodperces minimum stale-kor után automatikusan ellenőrzi a tulajdonos PID/process-start identity állapotát. Élő tulajdonos esetén továbbra is 5 másodperces fail-closed timeout érvényesül. Régi üres/sérült vagy már nem létező processhez tartozó lock automatikusan felszabadul. A 2026-08-31-ről fennmaradt történeti üres lockot 2026-09-10-én auditált recovery másolattal eltávolítottuk.
 
+
+### Developer Grid v0.1.36 – BOOT ACK előtti task és Launch Recovery
+
+Ha a DevCenter task már `claimed`, de a bridge csak `TASK_BOUND`/`HANDED_OFF`, a task még nem tekinthető futó fejlesztésnek. A worker csak validált BOOT ACK után kerül `RUNNING` állapotba. Ha a Launch Packet küldése megszakad, nem szabad új taskkal kerülni a problémát: az authoritative aktív taskhoz használható az `INDÍTÁS FOLYTATÁSA` művelet. Várólistás task nem veheti át a Central Core authoritative pointerét egy már aktív sessiontől. Conversation ID eltérés, hiányzó session vagy már validált ACK esetén a resume fail-closed.
+A Launch Recovery csak `CURRENT` source reconciliation mellett engedélyezett. Hotfix/release miatti HEAD-változás után a régi task resume-ja tiltott; a BOOT ACK backend ugyanígy újraellenőrzi a tényleges Git provenance-t.
