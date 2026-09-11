@@ -13,7 +13,8 @@ const GRID_TASK_STATUS_TO_DESKTOP = Object.freeze({
   RUNNING: "in_progress",
   BLOCKED: "blocked",
   REVIEW: "testing",
-  COMPLETED: "completed"
+  COMPLETED: "completed",
+  CANCELLED: "cancelled"
 });
 
 class BenjadminLiveClient {
@@ -307,11 +308,12 @@ function synthesizeGridSnapshot({ foundation, state, liveEventsByWorker, generat
     const context = session?.developmentContext || {};
     const liveEvent = liveEventsByWorker instanceof Map ? liveEventsByWorker.get(code) : null;
     const eventDelta = liveEvent?.taskId === session?.taskId && liveEvent?.delta && typeof liveEvent.delta === "object" ? liveEvent.delta : {};
-    const taskDone = task && String(task.id || "") === String(session?.taskId || "") && String(task.status || "").toUpperCase() === "COMPLETED";
+    const taskStatus = String(task?.status || "").toUpperCase();
+    const taskDone = task && String(task.id || "") === String(session?.taskId || "") && ["COMPLETED", "CANCELLED", "BLOCKED"].includes(taskStatus);
     return {
       workerCode: code,
       active: !taskDone,
-      lifecycleState: taskDone ? "COMPLETED" : "ACTIVE",
+      lifecycleState: taskDone ? (taskStatus === "CANCELLED" ? "CANCELLED" : taskStatus === "BLOCKED" ? "BLOCKED" : "COMPLETED") : "ACTIVE",
       phase: String(liveEvent?.kind || ""),
       summary: String(eventDelta.summary || context.workItem || ""),
       taskId: session?.taskId ? String(session.taskId) : null,
@@ -443,7 +445,7 @@ function detectTaskEvents(previous, current) {
     else if (task.status === "blocked" || task.status === "failed") events.push({ type: task.status, workerCode, taskId: task.id, taskTitle: task.title, projectId: task.projectId, at: task.updatedAt || new Date().toISOString() });
   }
   const previousPresence = new Map((previous.workerPresence || []).map((item) => [item.workerCode, item]));
-  const terminalTaskIds = new Set((current.tasks || []).filter((task) => ["completed", "failed"].includes(String(task.status || "").toLowerCase())).map((task) => task.id));
+  const terminalTaskIds = new Set((current.tasks || []).filter((task) => ["completed", "failed", "blocked", "cancelled"].includes(String(task.status || "").toLowerCase())).map((task) => task.id));
   for (const presence of current.workerPresence || []) {
     const before = previousPresence.get(presence.workerCode);
     if (!before) continue;

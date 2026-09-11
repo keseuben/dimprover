@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -32,6 +32,8 @@ const LOCKOUT_MS = 30_000;
 const CHAT_REFRESH_MAINTENANCE_MS = 60_000;
 const CHAT_REFRESH_PROBE_MS = 5 * 60_000;
 const DEVICE_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
+const ENGINE_SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
+const ENGINE_SESSION_HEARTBEAT_RETRY_MS = 60_000;
 const CONVERSATION_MEMORY_INTERVAL_MS = 8_000;
 const AVATAR_ASSETS = Object.freeze({
   BENAI: path.join(__dirname, "assets", "team", "benai.webp"),
@@ -81,6 +83,9 @@ let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
 let deviceHeartbeatBusy = false;
+let engineSessionHeartbeatTimer = null;
+let engineSessionHeartbeatBusy = false;
+let engineSessionHeartbeatEnabled = false;
 let conversationMemoryTimer = null;
 let conversationMemoryBusy = false;
 const conversationMemoryHashes = new Map();
@@ -1561,6 +1566,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
     send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId, source });
     if (persisted?.validated !== true) return { processed:true, validated:false, blocked:true, responseSha256, mismatches:persisted?.mismatches || validation.mismatches || [] };
 
+    void sendEngineSessionHeartbeatOnce({ taskId, sessionId, workerCode }).catch(() => undefined);
     let continuation = { sent:false, verified:false, reason:"continuation-disabled" };
     if (sendContinuation && view && !view.webContents.isDestroyed()) {
       const currentRecord = loadTaskLaunchRecords()[taskId] || {};
@@ -2411,6 +2417,64 @@ function registerGlobalShortcuts() {
   }
 }
 
+function stopEngineSessionHeartbeat() {
+  engineSessionHeartbeatEnabled = false;
+  if (engineSessionHeartbeatTimer) clearTimeout(engineSessionHeartbeatTimer);
+  engineSessionHeartbeatTimer = null;
+}
+function scheduleEngineSessionHeartbeat(delayMs = ENGINE_SESSION_HEARTBEAT_INTERVAL_MS) {
+  if (engineSessionHeartbeatTimer) clearTimeout(engineSessionHeartbeatTimer);
+  engineSessionHeartbeatTimer = null;
+  if (!engineSessionHeartbeatEnabled || !unlocked || !readDeviceToken()) return;
+  engineSessionHeartbeatTimer = setTimeout(() => void sendEngineSessionHeartbeatOnce(), Math.max(10_000, Number(delayMs) || ENGINE_SESSION_HEARTBEAT_INTERVAL_MS));
+}
+async function sendEngineSessionHeartbeatOnce(explicit = null) {
+  if (engineSessionHeartbeatTimer) clearTimeout(engineSessionHeartbeatTimer);
+  engineSessionHeartbeatTimer = null;
+  if (!unlocked || engineSessionHeartbeatBusy || !readDeviceToken() || !config?.benjadminBaseUrl) return null;
+  engineSessionHeartbeatBusy = true;
+  let nextDelay = ENGINE_SESSION_HEARTBEAT_INTERVAL_MS;
+  try {
+    let taskId = String(explicit?.taskId || "").trim();
+    let sessionId = String(explicit?.sessionId || "").trim();
+    let workerCode = String(explicit?.workerCode || "").trim().toUpperCase();
+    if (workerCode === "BENAI") workerCode = "BENJAMINAI";
+    if (!taskId || !sessionId || !workerCode) {
+      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      const task = activeWork?.task || null;
+      const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === String(task?.id || "")) || null;
+      const status = String(task?.status || "").toUpperCase();
+      if (!task || !session || !["RUNNING", "REVIEW"].includes(status) || String(session?.developmentContext?.bootAckState || "").toUpperCase() !== "VALIDATED" || session?.developmentContext?.bootAckCodingAllowed !== true) {
+        return null;
+      }
+      taskId = String(task.id || "");
+      sessionId = String(session.id || "");
+      workerCode = String(session.workerCode || "").toUpperCase();
+    }
+    const heartbeat = await heartbeatDeveloperGridSession({
+      baseUrl:config.benjadminBaseUrl,
+      deviceToken:readDeviceToken(),
+      input:{ taskId, sessionId, workerCode }
+    });
+    send("connection:engine-heartbeat", { ok:true, taskId, sessionId, workerCode, at:heartbeat?.heartbeatAt || new Date().toISOString(), leaseSeconds:heartbeat?.leaseSeconds || null });
+    return heartbeat;
+  } catch (error) {
+    nextDelay = ENGINE_SESSION_HEARTBEAT_RETRY_MS;
+    send("connection:engine-heartbeat", { ok:false, error:error instanceof Error ? error.message.slice(0,240) : "A Developer Grid engine heartbeat sikertelen." });
+    send("context:refresh", { reason:"engine-session-heartbeat-failed" });
+    return null;
+  } finally {
+    engineSessionHeartbeatBusy = false;
+    if (engineSessionHeartbeatEnabled) scheduleEngineSessionHeartbeat(nextDelay);
+  }
+}
+function startEngineSessionHeartbeat() {
+  stopEngineSessionHeartbeat();
+  if (!unlocked || !readDeviceToken()) return;
+  engineSessionHeartbeatEnabled = true;
+  scheduleEngineSessionHeartbeat(5_000);
+}
+
 function stopDeviceHeartbeat() {
   if (deviceHeartbeatTimer) clearTimeout(deviceHeartbeatTimer);
   deviceHeartbeatTimer = null;
@@ -2516,6 +2580,7 @@ function stopLiveClient() {
   liveClient?.stop();
   liveClient = null;
   stopDeviceHeartbeat();
+  stopEngineSessionHeartbeat();
 }
 
 function startLiveClient() {
@@ -2552,7 +2617,7 @@ function startLiveClient() {
     }
   });
   liveClient.start();
-  if (credential.mode === "device") startDeviceHeartbeat();
+  if (credential.mode === "device") { startDeviceHeartbeat(); startEngineSessionHeartbeat(); }
 }
 function workerLabel(workerCode) {
   const cell = config.cells.find((item) => item.workerCode === workerCode);

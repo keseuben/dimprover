@@ -223,3 +223,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Ha a Launch Packet a ChatGPT mezőbe bekerült, de a felhasználó kézzel küldi el Enterrel, a folyamatos transcript monitor a már meglévő valid BOOT ACK-et utólag is felismeri és authoritatively rögzíti.
 - Az `INDÍTÁS FOLYTATÁSA` előbb a legfrissebb assistant választ vizsgálja. Valid BOOT ACK esetén nem küld duplikált Launch Packetet; invalid ACK esetén fail-closed blokkol.
 - A BOOT ACK feldolgozás task + session + response SHA alapján deduplikált, a continuation küldése idempotens, átmeneti persist hiba pedig újrapróbálható marad.
+
+
+## v0.1.38 · DevCenter engine session heartbeat
+
+- A Developer Grid desktop a VALIDATED BOOT ACK utáni aktív worker session DevCenter lease-ét azonnal, majd 5 percenként paired-device, DEV-only heartbeat útvonalon megújítja.
+- A szerver kizárólag az authoritative Grid task/session `engineSessionId` értékét használhatja; kliens nem adhat tetszőleges DevCenter session azonosítót. A heartbeat VALIDATED BOOT ACK, aktív Grid task és aktuális source provenance nélkül fail-closed.
+- Sikertelen heartbeat 60 másodperces retry ciklust kap; workspace lock/kilépés leállítja a heartbeatet. PROD DENY.
+- A DevCenter `cancelled` task a Gridben is terminális `CANCELLED`; többé nem eshet vissza `RUNNING` állapotba, és aktív session hiányában nem kap hamis `ACTIVE_SESSION_MISSING` figyelmeztetést.

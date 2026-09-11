@@ -175,7 +175,8 @@ export function gridTaskStatusFromEngine(rawStatusValue: unknown, bridgeStateVal
   const bridgeState = text(bridgeStateValue, 40).toUpperCase();
   const claimedAwaitingBootAck = rawStatus === "claimed" && !["RUNNING", "RESULT_PENDING"].includes(bridgeState);
   return rawStatus === "completed" ? "COMPLETED"
-    : rawStatus === "blocked" || rawStatus === "failed" ? "BLOCKED"
+    : rawStatus === "cancelled" ? "CANCELLED"
+      : rawStatus === "blocked" || rawStatus === "failed" ? "BLOCKED"
       : rawStatus === "testing" ? "REVIEW"
         : rawStatus === "queued" || rawStatus === "ready" || claimedAwaitingBootAck ? "READY" : "RUNNING";
 }
@@ -227,7 +228,9 @@ export async function getDeveloperGridActiveWork() {
   let actualHead: string | null = null;
   const ageSource = activeSession?.developmentContext?.resolvedAt || activeSession?.startedAt || state.updatedAt;
   const ageHours = ageSource && Number.isFinite(Date.parse(ageSource)) ? Math.max(0, (Date.now() - Date.parse(ageSource)) / 3_600_000) : null;
+  const terminalTask = Boolean(task && ["COMPLETED", "BLOCKED", "CANCELLED"].includes(task.status));
   if (!task) executionState = "EMPTY";
+  else if (!activeSession && terminalTask) executionState = "CURRENT";
   else if (!activeSession) { executionState = "BLOCKED"; reasons.push("ACTIVE_SESSION_MISSING"); }
   else {
     try {

@@ -25,7 +25,7 @@
   }
   function workStartView() {
     const task=state.activeWork?.task||null;
-    const active=Boolean(task&&!["COMPLETED","BLOCKED"].includes(String(task.status||"").toUpperCase()));
+    const active=Boolean(task&&!["COMPLETED","BLOCKED","CANCELLED"].includes(String(task.status||"").toUpperCase()));
     const reconciliation=state.activeWork?.reconciliation||null;
     const stale=Boolean(task&&["STALE","BLOCKED"].includes(String(reconciliation?.state||"").toUpperCase()));
     const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;

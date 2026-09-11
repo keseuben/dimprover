@@ -123,6 +123,11 @@ async function recordDeveloperGridBootAck({ baseUrl, deviceToken, input }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "PUT", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 15000);
   return payload.bootAck || null;
 }
+async function heartbeatDeveloperGridSession({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/session-heartbeat`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify(input || {}) }, 15000);
+  return payload.heartbeat || null;
+}
 async function fetchDeveloperGridBuildRuns({ baseUrl, deviceToken }) {
   const base = ensureDevBase(baseUrl);
   const payload = await jsonRequest(`${base}/api/dev/grid/build-runs`, { method: "GET", headers: headers(deviceToken) }, 20000);
@@ -183,4 +188,4 @@ async function closeDeveloperGridWork({ baseUrl, deviceToken, input }) {
   return payload.close || null;
 }
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, sanitizeSnapshot };

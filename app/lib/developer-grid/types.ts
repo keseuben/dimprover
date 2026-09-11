@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.37-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.38-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -21,7 +21,7 @@ export type DeveloperGridTask = {
   priority: number;
   environment: GridEnvironment;
   productionAccess: ProductionAccess;
-  status: "READY" | "RUNNING" | "BLOCKED" | "REVIEW" | "COMPLETED";
+  status: "READY" | "RUNNING" | "BLOCKED" | "REVIEW" | "COMPLETED" | "CANCELLED";
   acceptance: string[];
 };
 

@@ -11,8 +11,8 @@ const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts")
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
 
-check("v0.1.37 package version", () => assert.equal(pkg.version, "0.1.37"));
-check("v0.1.37 backend version", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.37-dev"/));
+check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.38"));
+check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.38-dev"/));
 check("shared BOOT ACK processor exists", () => assert.match(main, /async function processCapturedBootAck\(/));
 check("shared BOOT ACK processor persists authoritative ACK", () => {
   const start = main.indexOf("async function processCapturedBootAck(");
