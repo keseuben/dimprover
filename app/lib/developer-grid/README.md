@@ -216,3 +216,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 ## BOOT ACK előtti Launch Recovery
 
 `claimed + TASK_BOUND/HANDED_OFF` még `READY`; `RUNNING` csak validált BOOT ACK után. A várólistás task nem írhatja felül a tényleges aktív session taskját. Megszakadt Launch Packet ugyanahhoz a task/session/csevegéshez újraküldhető a Central Core resume útján, új task nélkül. DEV ONLY · PROD DENY.
+
+## v0.1.37 · BOOT ACK recovery
+
+- A BOOT ACK feldolgozás közös desktop pipeline-on fut a launch-monitor, a Conversation Memory monitor és az `INDÍTÁS FOLYTATÁSA` recovery számára.
+- Ha a Launch Packet a ChatGPT mezőbe bekerült, de a felhasználó kézzel küldi el Enterrel, a folyamatos transcript monitor a már meglévő valid BOOT ACK-et utólag is felismeri és authoritatively rögzíti.
+- Az `INDÍTÁS FOLYTATÁSA` előbb a legfrissebb assistant választ vizsgálja. Valid BOOT ACK esetén nem küld duplikált Launch Packetet; invalid ACK esetén fail-closed blokkol.
+- A BOOT ACK feldolgozás task + session + response SHA alapján deduplikált, a continuation küldése idempotens, átmeneti persist hiba pedig újrapróbálható marad.

@@ -85,6 +85,8 @@ let conversationMemoryTimer = null;
 let conversationMemoryBusy = false;
 const conversationMemoryHashes = new Map();
 const processedStageReportHashes = new Set();
+const processedBootAckHashes = new Set();
+const bootAckProcessingKeys = new Set();
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -1517,6 +1519,70 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode) {
   return sendPreparedChatPrompt(view, marker);
 }
 
+async function processCapturedBootAck({ view, body, task, workerCode, baselineResponseSha256 = "", sendContinuation = true, source = "MONITOR" }) {
+  const taskId = String(task?.id || "");
+  const sessionId = String(task?.sessionId || "");
+  const text = String(body || "").trim();
+  if (!taskId || !sessionId || !text || !/BOOT\s+ACKNOWLEDGEMENT/i.test(text)) return { processed:false, validated:false, reason:"BOOT_ACK_NOT_FOUND" };
+  const responseSha256 = createHash("sha256").update(text).digest("hex");
+  if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) return { processed:false, validated:false, reason:"BOOT_ACK_BASELINE_RESPONSE" };
+  const processKey = `${taskId}:${sessionId}:${responseSha256}`;
+  const launchRecord = loadTaskLaunchRecords()[taskId] || {};
+  if (processedBootAckHashes.has(processKey) || (String(launchRecord.ackState || "").toUpperCase() === "VALIDATED" && String(launchRecord.ackSha256 || "") === responseSha256)) {
+    return { processed:false, validated:true, duplicate:true, responseSha256 };
+  }
+  if (bootAckProcessingKeys.has(processKey)) return { processed:false, validated:false, pending:true, responseSha256 };
+  bootAckProcessingKeys.add(processKey);
+  try {
+    const validation = validateBootAcknowledgement(text, bootAckExpected(task, workerCode));
+    const parsed = validation.parsed || {};
+    const persisted = await recordDeveloperGridBootAck({
+      baseUrl: config.benjadminBaseUrl,
+      deviceToken: readDeviceToken(),
+      input: {
+        taskId, workerCode, sessionId, responseSha256,
+        codingAllowed: validation.validated === true && parsed.codingAllowed === true,
+        branch: parsed.branch || "", worktree: parsed.worktree || "", baseHead: parsed.baseHead || "",
+        mismatches: validation.mismatches || [validation.code || "BOOT_ACK_INVALID"],
+      },
+    });
+    processedBootAckHashes.add(processKey);
+    if (processedBootAckHashes.size > 160) {
+      const first = processedBootAckHashes.values().next().value;
+      if (first) processedBootAckHashes.delete(first);
+    }
+    saveTaskLaunchPatch(task, workerCode, {
+      ackState: persisted?.validated === true ? "VALIDATED" : "BLOCKED",
+      ackAt: new Date().toISOString(), ackSha256: responseSha256,
+      ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
+      ackRecoverySource: source,
+    });
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId, source });
+    if (persisted?.validated !== true) return { processed:true, validated:false, blocked:true, responseSha256, mismatches:persisted?.mismatches || validation.mismatches || [] };
+
+    let continuation = { sent:false, verified:false, reason:"continuation-disabled" };
+    if (sendContinuation && view && !view.webContents.isDestroyed()) {
+      const currentRecord = loadTaskLaunchRecords()[taskId] || {};
+      if (String(currentRecord.ackContinuationState || "").toUpperCase() === "SENT") {
+        continuation = { sent:true, verified:true, duplicate:true };
+      } else {
+        continuation = await sendBootAckAcceptedContinuation(view, task, workerCode);
+        const patch = continuation?.sent && continuation?.verified
+          ? { ackContinuationSentAt: new Date().toISOString(), ackContinuationState: "SENT" }
+          : { ackContinuationState: "MANUAL_REQUIRED", ackContinuationError: continuation?.reason || "not-verified" };
+        saveTaskLaunchPatch(task, workerCode, patch);
+        if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+      }
+    }
+    return { processed:true, validated:true, responseSha256, continuation };
+  } catch (error) {
+    return { processed:false, validated:false, retryable:true, responseSha256, error:error instanceof Error ? error.message : "BOOT_ACK_PERSIST_FAILED" };
+  } finally {
+    bootAckProcessingKeys.delete(processKey);
+  }
+}
+
 async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSha256 = "" }) {
   const taskId = String(task?.id || "");
   if (!taskId || !task?.sessionId) return;
@@ -1525,37 +1591,8 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
     await new Promise((resolve) => setTimeout(resolve, 1800));
     const capture = await captureLatestAssistantText(view);
     if (!capture?.ok || capture.generating || !String(capture.text || "").trim()) continue;
-    const body = String(capture.text || "");
-    const responseSha256 = createHash("sha256").update(body).digest("hex");
-    if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) continue;
-    if (!/BOOT\s+ACKNOWLEDGEMENT/i.test(body)) continue;
-    const validation = validateBootAcknowledgement(body, bootAckExpected(task, workerCode));
-    const parsed = validation.parsed || {};
-    const persisted = await recordDeveloperGridBootAck({
-      baseUrl: config.benjadminBaseUrl,
-      deviceToken: readDeviceToken(),
-      input: {
-        taskId, workerCode, sessionId: task.sessionId, responseSha256,
-        codingAllowed: validation.validated === true && parsed.codingAllowed === true,
-        branch: parsed.branch || "", worktree: parsed.worktree || "", baseHead: parsed.baseHead || "",
-        mismatches: validation.mismatches || [validation.code || "BOOT_ACK_INVALID"],
-      },
-    }).catch((error) => ({ state:"BLOCKED", validated:false, mismatches:[error.message || "BOOT_ACK_PERSIST_FAILED"] }));
-    const local = saveTaskLaunchPatch(task, workerCode, {
-      ackState: persisted?.validated === true ? "VALIDATED" : "BLOCKED",
-      ackAt: new Date().toISOString(), ackSha256: responseSha256,
-      ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
-    });
-    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
-    send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId: task.sessionId });
-    if (persisted?.validated !== true) return;
-    const continuation = await sendBootAckAcceptedContinuation(view, task, workerCode);
-    const patch = continuation?.sent && continuation?.verified
-      ? { ackContinuationSentAt: new Date().toISOString(), ackContinuationState: "SENT" }
-      : { ackContinuationState: "MANUAL_REQUIRED", ackContinuationError: continuation?.reason || "not-verified" };
-    saveTaskLaunchPatch(task, workerCode, patch);
-    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
-    return;
+    const result = await processCapturedBootAck({ view, body:capture.text, task, workerCode, baselineResponseSha256, source:"LAUNCH_MONITOR" });
+    if (result?.validated || result?.blocked) return;
   }
   saveTaskLaunchPatch(task, workerCode, { ackState:"BLOCKED", ackMismatches:["BOOT_ACK_TIMEOUT"], ackAt:new Date().toISOString() });
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
@@ -1768,6 +1805,10 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
   const cacheKey = `${live.task.id}:${live.task.sessionId}:${currentId}`;
+  const bodyWithBootAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(item.text || "")));
+  if (bodyWithBootAck && String(live.task?.bootAckState || "").toUpperCase() !== "VALIDATED") {
+    await processCapturedBootAck({ view, body:bodyWithBootAck.text, workerCode:code, task:live.task, source:"CONVERSATION_MEMORY" }).catch(() => undefined);
+  }
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
   if (conversationMemoryHashes.get(cacheKey) === transcriptHash) return null;
@@ -2978,6 +3019,15 @@ function registerIpc() {
       const ctx = session.developmentContext || {};
       const expectedConversationId = String(ctx.chatConversationId || "").trim();
       if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
+      const existingAssistant = await captureLatestAssistantText(view);
+      if (existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
+        const recovered = await processCapturedBootAck({ view, body:existingAssistant.text, task:launchTask, workerCode:code, source:"RESUME_EXISTING_ACK" });
+        if (recovered?.validated) {
+          send("context:refresh", { reason:"boot-ack-recovered-before-relaunch", taskId:task.id, sessionId:session.id });
+          return { ok:true, recoveredBootAck:true, activeWork, taskLaunch:{ ok:true, mode:"boot-ack-recovered", message:"A meglévő ChatGPT válasz valid BOOT ACK volt; új Launch Packet küldése nélkül helyreállítva." } };
+        }
+        if (recovered?.blocked) return { ok:false, code:"BOOT_ACK_RECOVERY_BLOCKED", error:`A meglévő BOOT ACK nem validálható: ${(recovered.mismatches || []).join(", ") || "ismeretlen eltérés"}. Új Launch Packet automatikus küldése letiltva.` };
+      }
       let taskLaunch = null;
       if (!expectedConversationId) {
         const bound = await bindCurrentTaskConversation(code, task.id, { automatic:true, taskOverride:launchTask, launchAfterBind:true });
