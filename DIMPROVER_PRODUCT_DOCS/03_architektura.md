@@ -425,3 +425,11 @@ A Central Core authoritative state/event store továbbra is cross-process `mutat
 
 A Central Core task-életciklus BOOT ACK előtti állapota explicit. A DevCenter `claimed` task `HANDED_OFF`/`TASK_BOUND` bridge állapotban a Developer Gridben továbbra is `READY`, nem `RUNNING`; `RUNNING` csak validált BOOT ACK után lehet. Ha egy várólistás új task mellett már létezik valódi aktív worker session, az új task nem írhatja felül a Central Core authoritative task pointerét. A bootstrap ilyenkor az aktív session taskját az engine-ből visszaállítja. A Central Core külön `INDÍTÁS FOLYTATÁSA` művelettel ugyanahhoz a task/session/csevegéshez újraküldheti a Launch Packetet új task létrehozása nélkül. A ChatGPT conversation ID egyezése kötelező, eltérés fail-closed. DEV ONLY · PROD DENY.
 A resume és a BOOT ACK kapu az aktuális source provenance-t újraellenőrzi: egy közben megváltozott canonical HEAD-hez kötött régi task nem kaphat új Launch Packetet vagy téves `Coding allowed` engedélyt. Ilyenkor auditált lezárás és aktuális HEAD-ről induló task szükséges.
+
+### BENJADMIN Developer Grid v0.1.39 – engine ownership és launch automatizálási invariánsok
+
+A DevCenter engine session heartbeat ownership lánca: Grid task/session → `engineSessionId` → DevCenter worker session → task `claimed_by_session_id` + `assigned_worker_id`. A `bind_task` köteles mindkét task ownership mezőt és a kezdeti claim lease-t rögzíteni; heartbeat csak pontos azonosítóegyezés mellett újíthat lease-t. A state materializer kizárólag valós bridge task+session párból materializálhat RUNNING Grid sessiont, hiányzó bridge session esetén no-op/fail-closed működés kötelező.
+
+A desktop ChatGPT vezérlésnél a Launch Packet és a BOOT ACK accepted kontrollesemény közös, megfigyelt auto-send helperen megy át. Az explicit emberi engedély továbbra is a Central Core MUNKA INDÍTÁSA; ezt követően a packet elküldése és a validált ACK continuation automatikus. Nem megfigyelt küldés nem tekinthető sikernek.
+
+A Windows `launchAtLogin` beállítás perzisztens desktop konfiguráció, amelyet az Electron main process `setLoginItemSettings()` hívása érvényesít. A kapcsoló a Beállítások UI-ból BE/KI állítható, és nem oldja fel a helyi jelszavas munkateret.

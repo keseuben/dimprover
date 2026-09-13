@@ -80,7 +80,10 @@
     else if(plan.chatLaunchMode==="NEW_PROJECT_CHAT")baseNotice="A feladat kiosztva. Hozd létre a megfelelő ChatGPT Projektben az új csevegést, majd kattints a worker CSEVEGÉS RÖGZÍTÉSE gombjára.";
     else if(plan.conversationBound)baseNotice="A feladat kiosztva és a meglévő worker-csevegés rögzítve.";
     else baseNotice="A feladat kiosztva, de a meglévő csevegés még nincs rögzítve. Nyisd meg a kívánt /c/... beszélgetést és rögzítsd.";
-    state.workStartNotice=baseNotice+continuityNote;state.workStartNoticeTone=launch&&launch.ok===false?"error":"success";state.notice="";render();
+    state.workStartNotice=baseNotice+continuityNote;state.workStartNoticeTone=launch&&launch.ok===false?"error":"success";state.notice="";
+    const authoritative=await api.getDeveloperGridActiveWork?.();
+    if(authoritative?.ok&&authoritative.activeWork)state.activeWork=authoritative.activeWork;
+    render();
   }
   async function resumeWorkLaunch(){
     if(state.workResumeBusy)return;

@@ -1442,14 +1442,22 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
     if (!composer) return { sent:false, reason:'composer-not-found' };
     const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
     if (marker && !read().includes(marker)) return { sent:false, reason:'marker-mismatch' };
+    const form = composer.closest('form') || document.querySelector('main form');
     const buttons = [
       document.querySelector('button[data-testid="send-button"]'),
-      document.querySelector('form button[type="submit"]'),
-      ...Array.from(document.querySelectorAll('button')).filter((button) => /^(send|küldés|küld)$/i.test(String(button.getAttribute('aria-label') || button.textContent || '').trim()))
+      document.querySelector('button[data-testid*="send"]'),
+      form?.querySelector('button[type="submit"]'),
+      document.querySelector('main form button[type="submit"]'),
+      ...Array.from(document.querySelectorAll('button')).filter((button) => /send|küld/i.test(String(button.getAttribute('aria-label') || button.getAttribute('data-testid') || button.textContent || '').trim()))
     ].filter(Boolean);
     const send = buttons.find((button) => !button.disabled && button.getClientRects().length);
-    if (!send) return { sent:false, reason:'send-button-not-found' };
-    send.click();
+    if (send) {
+      send.click();
+    } else if (form && typeof form.requestSubmit === 'function') {
+      form.requestSubmit();
+    } else {
+      return { sent:false, reason:'send-control-not-found' };
+    }
     const started = Date.now();
     while (Date.now() - started < 3000) {
       await new Promise((resolve) => setTimeout(resolve, 120));

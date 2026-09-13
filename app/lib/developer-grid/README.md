@@ -231,3 +231,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A szerver kizárólag az authoritative Grid task/session `engineSessionId` értékét használhatja; kliens nem adhat tetszőleges DevCenter session azonosítót. A heartbeat VALIDATED BOOT ACK, aktív Grid task és aktuális source provenance nélkül fail-closed.
 - Sikertelen heartbeat 60 másodperces retry ciklust kap; workspace lock/kilépés leállítja a heartbeatet. PROD DENY.
 - A DevCenter `cancelled` task a Gridben is terminális `CANCELLED`; többé nem eshet vissza `RUNNING` állapotba, és aktív session hiányában nem kap hamis `ACTIVE_SESSION_MISSING` figyelmeztetést.
+
+## v0.1.39 · Central Core launch/state + heartbeat ownership hotfix
+
+- A DevCenter `bind_task` most az `assigned_worker_id` mellett az authoritative `claimed_by_session_id`, `claim_expires_at` és `last_claimed_at` mezőket is rögzíti. Ez megszünteti azt a v0.1.38 fizikai hibát, amelyben a paired-device session heartbeat a helyes Grid session ellenére 409 választ kapott.
+- A heartbeat továbbra is fail-closed: csak a VALIDATED BOOT ACK-kal rendelkező authoritative Grid task/session, az aktuális source provenance és ugyanahhoz a workerhez/taskhoz kötött DevCenter engine session újítható meg.
+- A ChatGPT Launch Packet és a `BOOT_ACK_ACCEPTED_V1` ugyanazt a megerősített auto-send útvonalat használja: aktuális send-button testid variánsok, azonos form submit gomb és `requestSubmit()` fallback támogatott. A küldést a desktop továbbra is megfigyeli; nem igazolt elküldés fail-closed.
+- A Central Core normál work-start után azonnal visszaolvassa az authoritative active-work state-et, ezért a korábbi task kártyája nem maradhat stale kijelzésként a frissen indított munka fölött.
+- A state materializer aktív DevCenter bridge task+session hiányában nem generál többé mesterséges `RUNNING` taskot vagy synthetic worker sessiont; ilyen esetben no-op állapotot ad vissza `NO_ACTIVE_BRIDGE_SESSION` okkal.
+- A Windows autostart kapcsoló a Beállításokban explicit megnevezést kap: BE esetén Windows bejelentkezéskor automatikus indulás, KI esetén csak kézi indulás. A meglévő `launchAtLogin` konfiguráció és Electron `setLoginItemSettings()` lánc megmarad, regressziós contract védi.
+- Célzott v0.1.39 regresszió: Central Core hotfix 19/19 PASS. DEV ONLY · PROD DENY.

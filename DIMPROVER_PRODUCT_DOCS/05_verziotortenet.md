@@ -3249,3 +3249,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új Central Core `INDÍTÁS FOLYTATÁSA` út: ugyanazon task/session és rögzített ChatGPT `/c/...` csevegés Launch Packetje újraküldhető új task létrehozása nélkül.
 - Új Launch Recovery regressziós contract: 25 célzott ellenőrzés.
 - Desktop verzió: 0.1.36; backend contract: 0.1.36-dev. DEV ONLY · PROD DENY.
+
+### BENJADMIN Developer Grid v0.1.39 – Central Core launch/state és heartbeat ownership hotfix
+
+- A v0.1.38 fizikai heartbeat E2E feltárta, hogy a kliens a heartbeat route-ot szabályosan hívta, de minden kérés 409-et kapott, mert a DevCenter `bind_task` nem rögzítette a task `claimed_by_session_id` ownership mezőjét. A v0.1.39 ezt az engine task claim létrehozásakor atomikusan összhangba hozza a worker sessionnel, és 900 másodperces kezdeti claim lease-t rögzít.
+- A Launch Packet és a BOOT ACK accepted kontrollüzenet desktop auto-send útvonala robusztusabb ChatGPT send/submit felismerést és semantic `requestSubmit()` fallbacket kapott; kézi kattintás normál esetben nem szükséges.
+- A Central Core munkaindítás után az authoritative active-work állapotot újraolvassa, így a korábbi BLOCKED/RUNNING kártya nem marad tévesen a friss task helyén.
+- A legacy state materializer aktív DevCenter task+session hiányában nem hozhat létre synthetic RUNNING sessiont.
+- A Windows induláskori automatikus indítás meglévő `launchAtLogin` funkciója látható, egyértelmű BE/KI leírást és regressziós védelmet kapott.
+- Desktop/backend verzió: 0.1.39 / 0.1.39-dev. DEV ONLY · PROD DENY.

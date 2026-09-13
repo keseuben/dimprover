@@ -596,3 +596,11 @@ A `coordination/developer-grid/mutation.lock` fájlt kézzel normál esetben nem
 
 Ha a DevCenter task már `claimed`, de a bridge csak `TASK_BOUND`/`HANDED_OFF`, a task még nem tekinthető futó fejlesztésnek. A worker csak validált BOOT ACK után kerül `RUNNING` állapotba. Ha a Launch Packet küldése megszakad, nem szabad új taskkal kerülni a problémát: az authoritative aktív taskhoz használható az `INDÍTÁS FOLYTATÁSA` művelet. Várólistás task nem veheti át a Central Core authoritative pointerét egy már aktív sessiontől. Conversation ID eltérés, hiányzó session vagy már validált ACK esetén a resume fail-closed.
 A Launch Recovery csak `CURRENT` source reconciliation mellett engedélyezett. Hotfix/release miatti HEAD-változás után a régi task resume-ja tiltott; a BOOT ACK backend ugyanígy újraellenőrzi a tényleges Git provenance-t.
+
+### Developer Grid v0.1.39 – heartbeat és autostart üzemeltetési szabály
+
+A v0.1.38 physical session-heartbeat tesztben a Windows kliens a `/api/dev/grid/session-heartbeat` végpontot folyamatosan hívta, de a hiányzó `claimed_by_session_id` task ownership miatt 409 választ kapott; a 900 másodperces lease végül szabályosan lejárt és recovery történt. v0.1.39-től `bind_task` után a task claimed session azonosítója, worker ownership és kezdeti claim lease kötelezően konzisztens. Fizikai acceptance során legalább 15 percen túl ellenőrizni kell, hogy a heartbeat 200 választ kap, a lease előretolódik, és nincs automatic recovery/requeue.
+
+A ChatGPT Launch Packet és BOOT ACK accepted üzenet normál működésben felhasználói második kattintás nélkül kerül elküldésre. Kézi fallback csak diagnosztikai kivétel lehet, és külön incidensként kezelendő.
+
+A Windows automatikus indulás a Beállítások `Developer Grid induljon el a Windows indításakor` kapcsolójával vezérelhető. BE esetén Electron login item aktív, KI esetén a program csak kézzel indul. A beállítás módosítása nem változtatja meg a jelszavas feloldási szabályt és nem ad PROD hozzáférést.

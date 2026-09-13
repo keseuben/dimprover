@@ -372,7 +372,15 @@ export async function advanceDevEngineSession(sessionId: string, action: string,
     const session = await updateSessionStage(client, sessionId, "WORKER_BOUND", "TASK_BOUND", {
       task_id: taskId, project_id: task.projectId, version_id: task.versionId, repository_id: task.repositoryId,
     }, "TASK_BOUND", `Feladat hozzárendelve: ${task.title}`);
-    const { error: taskUpdateError } = await client.from("dev_center_tasks").update({ status: "claimed", assigned_worker_id: current.workerId, updated_at: nowIso() }).eq("id", taskId);
+    const claimedAt = nowIso();
+    const { error: taskUpdateError } = await client.from("dev_center_tasks").update({
+      status: "claimed",
+      assigned_worker_id: current.workerId,
+      claimed_by_session_id: sessionId,
+      claim_expires_at: leaseIso(900),
+      last_claimed_at: claimedAt,
+      updated_at: claimedAt,
+    }).eq("id", taskId);
     if (taskUpdateError) databaseError("A feladat foglalása sikertelen.", taskUpdateError);
     return { ok: true as const, session, task };
   }
