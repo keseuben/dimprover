@@ -50,6 +50,31 @@ export async function materializeCurrentDeveloperGridTaskSession() {
 
   const bridgeTask = row(bridge.task);
   const bridgeSession = row(bridge.session);
+  const taskStatus = text(bridgeTask.status).toLowerCase();
+  const sessionStatus = text(bridgeSession.status).toLowerCase();
+  const activeTask = ["claimed", "in_progress", "testing"].includes(taskStatus);
+  const activeSession = ["open", "active"].includes(sessionStatus);
+  if (!activeTask || !activeSession) {
+    return {
+      materialized: false as const,
+      state: await readGridState(),
+      session: null,
+      reusedActiveSession: false,
+      bridge: {
+        connected: bridge.connected,
+        taskResolved: Boolean(bridge.task),
+        sessionResolved: Boolean(bridge.session),
+        workerResolved: Boolean(bridge.worker),
+        presenceAuthoritative: bridge.presenceAuthoritative,
+        authoritativeContextSource: bridge.authoritativeContextSource,
+        checkedAt: bridge.checkedAt,
+        reason: "BRIDGE_TASK_SESSION_NOT_ACTIVE",
+        taskStatus: taskStatus || null,
+        sessionStatus: sessionStatus || null,
+      },
+    };
+  }
+
   const sourceTaskId = text(bridgeTask.id) || DEVELOPER_GRID_TASK_ID;
   const explicit = contextCandidate(sourceTaskId, bridgeTask, bridgeSession);
   const developmentContext: DevelopmentContext = resolveDevelopmentContext({

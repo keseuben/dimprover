@@ -241,3 +241,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A state materializer aktív DevCenter bridge task+session hiányában nem generál többé mesterséges `RUNNING` taskot vagy synthetic worker sessiont; ilyen esetben no-op állapotot ad vissza `NO_ACTIVE_BRIDGE_SESSION` okkal.
 - A Windows autostart kapcsoló a Beállításokban explicit megnevezést kap: BE esetén Windows bejelentkezéskor automatikus indulás, KI esetén csak kézi indulás. A meglévő `launchAtLogin` konfiguráció és Electron `setLoginItemSettings()` lánc megmarad, regressziós contract védi.
 - Célzott v0.1.39 regresszió: Central Core hotfix 19/19 PASS. DEV ONLY · PROD DENY.
+
+## v0.1.40 · Terminal bridge materializer hotfix
+
+- A v0.1.39 publikus artifact fizikai Windows rolloutja előtt kiderült, hogy a Developer Console bridge egy történelmi `blocked` task + `closed` session párt még visszaadhat kontextusként. A materializer ezt korábban pusztán az objektumok létezése miatt `RUNNING` Grid sessionné materializálta.
+- v0.1.40-től Grid RUNNING materializáció csak akkor engedett, ha a bridge task státusza `claimed`, `in_progress` vagy `testing`, és a worker session státusza `open` vagy `active`.
+- Minden terminális vagy inaktív pár no-op: `materialized=false`, `session=null`, `BRIDGE_TASK_SESSION_NOT_ACTIVE`, a sanitizált task/session státuszokkal. Synthetic vagy történelmi RUNNING session nem jöhet létre.
+- A candidate smoke aktív bridge esetén VERIFIED sessiont vár, terminális/inaktív bridge esetén pedig kifejezetten no-op materializációt. DEV ONLY · PROD DENY.
+- A v0.1.39 immutable artifact audit/rollback célra megmarad, de fizikai kliensre nem tekintendő aktuális kiadásnak; a v0.1.40 supersede-eli.

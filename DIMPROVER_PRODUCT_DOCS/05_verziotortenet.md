@@ -3258,3 +3258,9 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A legacy state materializer aktív DevCenter task+session hiányában nem hozhat létre synthetic RUNNING sessiont.
 - A Windows induláskori automatikus indítás meglévő `launchAtLogin` funkciója látható, egyértelmű BE/KI leírást és regressziós védelmet kapott.
 - Desktop/backend verzió: 0.1.39 / 0.1.39-dev. DEV ONLY · PROD DENY.
+
+### BENJADMIN Developer Grid v0.1.40 – terminal bridge materializer hotfix
+
+- A v0.1.39 kiadás publikus artifact-verifikációja után, de még fizikai Windows rollout előtt a smoke/materializer egy lezárt történelmi bridge párt (`task=blocked`, `session=closed`) újra RUNNING Grid sessionné alakított. Emiatt a v0.1.39 immutable artifact superseded státuszú, audit/rollback célra megmarad, de nem kerül felhasználói rolloutba.
+- A materializer v0.1.40-től kizárólag `claimed|in_progress|testing` task és `open|active` session kombinációt tekint aktívnak. Minden más kombináció no-op, session létrehozása nélkül.
+- A candidate smoke külön ellenőrzi az aktív és terminális bridge viselkedést. Desktop/backend verzió: 0.1.40 / 0.1.40-dev. DEV ONLY · PROD DENY.

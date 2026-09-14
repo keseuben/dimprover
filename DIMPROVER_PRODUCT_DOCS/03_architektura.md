@@ -433,3 +433,7 @@ A DevCenter engine session heartbeat ownership lánca: Grid task/session → `en
 A desktop ChatGPT vezérlésnél a Launch Packet és a BOOT ACK accepted kontrollesemény közös, megfigyelt auto-send helperen megy át. Az explicit emberi engedély továbbra is a Central Core MUNKA INDÍTÁSA; ezt követően a packet elküldése és a validált ACK continuation automatikus. Nem megfigyelt küldés nem tekinthető sikernek.
 
 A Windows `launchAtLogin` beállítás perzisztens desktop konfiguráció, amelyet az Electron main process `setLoginItemSettings()` hívása érvényesít. A kapcsoló a Beállítások UI-ból BE/KI állítható, és nem oldja fel a helyi jelszavas munkateret.
+
+### Developer Grid v0.1.40 – bridge aktivitási kapu
+
+A Developer Console bridge objektumainak puszta létezése nem jelent aktív munkát. RUNNING Grid materializációhoz két független állapotkapu kötelező: task `claimed|in_progress|testing`, worker session `open|active`. `blocked`, `completed`, `cancelled`, `failed`, `closed` vagy bármely ismeretlen státusz fail-closed/no-op. A no-op nem írhat új Grid sessiont, és a bridge státuszokat csak sanitizált diagnosztikai mezőként adhatja vissza.

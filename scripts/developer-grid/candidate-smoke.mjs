@@ -42,7 +42,7 @@ check(foundation.response.status === 200, "Foundation API reporter auth", `HTTP 
 check(foundation.json?.foundation?.sourceProvenance?.sourceState === "VERIFIED", "Source provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.state === "VERIFIED", "Release/runtime provenance VERIFIED");
 check(foundation.json?.foundation?.releaseRuntimeProvenance?.blockCode === null, "Release/runtime blockCode empty");
-check(foundation.json?.foundation?.version === "0.1.39-dev", "Developer Grid version v0.1.39 DEV");
+check(foundation.json?.foundation?.version === "0.1.40-dev", "Developer Grid version v0.1.40 DEV");
 check(Boolean(foundation.json?.foundation?.releaseRuntimeProvenance?.buildId), "Runtime BUILD_ID exposed");
 check(/^[0-9a-f]{40}$/.test(String(foundation.json?.foundation?.releaseRuntimeProvenance?.sourceCommit || "")), "Runtime source commit exposed");
 check(foundation.json?.foundation?.productionAccess === "DENY", "PROD access DENY");
@@ -80,7 +80,16 @@ if (adminKey) {
     headers: { "x-dimpro-license-admin-key": adminKey },
   });
   check(materialize.response.status === 200 && materialize.json?.ok === true, "Task/session materialization");
-  check(materialize.json?.materialized?.session?.sourceProvenance?.sourceState === "VERIFIED", "Materialized session source VERIFIED");
+  const bridgeTaskStatus = String(bridge.json?.bridge?.task?.status || "").toLowerCase();
+  const bridgeSessionStatus = String(bridge.json?.bridge?.session?.status || "").toLowerCase();
+  const bridgeIsActive = ["claimed", "in_progress", "testing"].includes(bridgeTaskStatus)
+    && ["open", "active"].includes(bridgeSessionStatus);
+  if (bridgeIsActive) {
+    check(materialize.json?.materialized?.session?.sourceProvenance?.sourceState === "VERIFIED", "Materialized active session source VERIFIED");
+  } else {
+    check(materialize.json?.materialized?.materialized === false, "Terminal or inactive bridge is materialization no-op");
+    check(materialize.json?.materialized?.session === null, "Terminal or inactive bridge creates no Grid session");
+  }
 } else {
   console.log("SKIP task/session materialization · DEVELOPER_GRID_CANDIDATE_ADMIN_KEY nincs megadva");
 }

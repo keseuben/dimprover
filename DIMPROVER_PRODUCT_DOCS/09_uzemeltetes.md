@@ -604,3 +604,9 @@ A v0.1.38 physical session-heartbeat tesztben a Windows kliens a `/api/dev/grid/
 A ChatGPT Launch Packet és BOOT ACK accepted üzenet normál működésben felhasználói második kattintás nélkül kerül elküldésre. Kézi fallback csak diagnosztikai kivétel lehet, és külön incidensként kezelendő.
 
 A Windows automatikus indulás a Beállítások `Developer Grid induljon el a Windows indításakor` kapcsolójával vezérelhető. BE esetén Electron login item aktív, KI esetén a program csak kézzel indul. A beállítás módosítása nem változtatja meg a jelszavas feloldási szabályt és nem ad PROD hozzáférést.
+
+### Developer Grid v0.1.40 – materializer acceptance és supersede szabály
+
+Candidate vagy post-cutover smoke során a `/api/dev/grid/bridge` státuszait mindig össze kell vetni a materializáció eredményével. Aktív bridge (`claimed|in_progress|testing` + `open|active`) esetén VERIFIED Grid session várható; terminális vagy inaktív bridge esetén `materialized=false` és `session=null` a helyes eredmény. A smoke nem tekintheti PASS-nak azt, ha egy `blocked/closed` történelmi pár RUNNING Grid sessiont hoz létre.
+
+A v0.1.39 publikus artifact hash-hiteles marad, de a v0.1.40 előtti terminális materializer hiba miatt felhasználói rollout előtt superseded lett. Fizikai Windows E2E csak v0.1.40 vagy újabb klienssel végezhető. PROD DENY változatlan.
