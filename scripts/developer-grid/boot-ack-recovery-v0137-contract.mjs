@@ -74,4 +74,34 @@ check("temporary persist failure remains retryable", () => {
   assert.match(main.slice(start, end), /retryable:true/);
 });
 
+check("active ChatGPT generation blocks duplicate Launch Packet insertion", () => {
+  const start = main.indexOf("async function prepareWorkerTaskLaunch(");
+  const end = main.indexOf("\nasync function processCapturedStageReport", start);
+  const block = main.slice(start, end);
+  const capture = block.indexOf("baselineCapture?.generating");
+  const insert = block.indexOf("insertWorkerTaskPrompt(view, prompt");
+  assert.ok(capture > 0 && insert > capture);
+  assert.match(block, /CHATGPT_GENERATION_ACTIVE/);
+  assert.match(block, /mode:"response-pending"/);
+  assert.match(block, /RESPONSE_PENDING/);
+});
+check("resume launch does not relaunch while ChatGPT is still generating", () => {
+  const start = main.indexOf('ipcMain.handle("work-start:resume-launch"');
+  const end = main.indexOf('ipcMain.handle("work-close:run"', start);
+  const block = main.slice(start, end);
+  const generating = block.indexOf("existingAssistant?.generating");
+  const relaunch = block.indexOf("prepareWorkerTaskLaunch(code, task.id");
+  assert.ok(generating > 0 && relaunch > generating);
+  assert.match(block, /chatgpt-response-pending/);
+  assert.match(block, /CHATGPT_GENERATION_ACTIVE/);
+});
+check("BOOT ACK monitor timeout is explicit response timeout", () => {
+  const start = main.indexOf("async function monitorWorkerBootAck(");
+  const end = main.indexOf("\nasync function bindCurrentTaskConversation", start);
+  const block = main.slice(start, end);
+  assert.match(block, /autoSendState:"RESPONSE_TIMEOUT"/);
+  assert.match(block, /BOOT_ACK_TIMEOUT/);
+  assert.match(block, /boot-ack-timeout/);
+});
+
 console.log(`Developer Grid BOOT ACK recovery v0.1.37 contract PASS · ${n}/${n}`);

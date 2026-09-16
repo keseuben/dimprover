@@ -1625,8 +1625,9 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
     const result = await processCapturedBootAck({ view, body:capture.text, task, workerCode, baselineResponseSha256, source:"LAUNCH_MONITOR" });
     if (result?.validated || result?.blocked) return;
   }
-  saveTaskLaunchPatch(task, workerCode, { ackState:"BLOCKED", ackMismatches:["BOOT_ACK_TIMEOUT"], ackAt:new Date().toISOString() });
+  saveTaskLaunchPatch(task, workerCode, { ackState:"BLOCKED", autoSendState:"RESPONSE_TIMEOUT", ackMismatches:["BOOT_ACK_TIMEOUT"], ackAt:new Date().toISOString() });
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  send("context:refresh", { reason:"boot-ack-timeout", taskId, sessionId:String(task?.sessionId||""), workerCode });
 }
 
 async function bindCurrentTaskConversation(workerCode, taskId, { automatic = false, taskOverride = null, launchAfterBind = false } = {}) {
@@ -1746,6 +1747,29 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   const presence = snapshot?.workerPresence?.find((item) => item.workerCode === code) || null;
   const baselineCapture = await captureLatestAssistantText(view);
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
+  if (baselineCapture?.generating) {
+    const launchInFlight = Boolean(launchRecord.sentAt)
+      || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase())
+      || String(launchRecord.ackState || "").toUpperCase() === "WAITING";
+    const chatLaunch = saveTaskLaunchPatch(task, code, {
+      surfaceType,
+      generationObservedAt: new Date().toISOString(),
+      autoSendState: launchInFlight ? "RESPONSE_PENDING" : "CHATGPT_BUSY",
+      ...(launchInFlight ? { ackState:"WAITING" } : {}),
+    });
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    if (launchInFlight) {
+      void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || baselineResponseSha256 || "") }).catch(() => undefined);
+      return {
+        ok:true, mode:"response-pending", pending:true, chatLaunch,
+        message:"A Launch Packet már elküldött állapotú, a ChatGPT még választ generál. Új prompt nem kerül beszúrásra; a rendszer ugyanennek a tasknak a BOOT ACK-jára vár.",
+      };
+    }
+    return {
+      ok:false, code:"CHATGPT_GENERATION_ACTIVE", chatLaunch,
+      error:"A ChatGPT jelenleg választ generál ebben a worker-csevegésben. A Grid nem írja felül és nem duplikálja a Launch Packetet. Várd meg vagy állítsd le a generálást, majd használd az INDÍTÁS FOLYTATÁSA gombot.",
+    };
+  }
   const contextPack = contextPackPromptForWorker(code);
   const prompt = `${buildWorkerTaskPrompt({ task, workerCode: code, workerLabel: cell.label, presence })}${contextPack ? `\n\n${contextPack}` : ""}`;
   const insertion = await insertWorkerTaskPrompt(view, prompt, TASK_LAUNCH_PROMPT_MARKER);
@@ -3268,6 +3292,19 @@ function registerIpc() {
       const expectedConversationId = String(ctx.surfaceConversationId || ctx.chatConversationId || "").trim();
       if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
       const existingAssistant = await captureLatestAssistantText(view);
+      if (existingAssistant?.generating) {
+        const launchRecord = loadTaskLaunchRecords()[task.id] || {};
+        const launchInFlight = Boolean(launchRecord.sentAt)
+          || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase())
+          || String(launchRecord.ackState || "").toUpperCase() === "WAITING";
+        if (launchInFlight) {
+          const chatLaunch = saveTaskLaunchPatch(launchTask, code, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
+          void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+          send("context:refresh", { reason:"chatgpt-response-pending", taskId:task.id, sessionId:session.id });
+          return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, chatLaunch, message:"A Launch Packet már elküldött állapotú; a ChatGPT még választ generál. Újraküldés nem történt." } };
+        }
+        return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"A ChatGPT még választ generál. A Grid fail-closed módban nem küld új Launch Packetet. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot." };
+      }
       if (existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
         const recovered = await processCapturedBootAck({ view, body:existingAssistant.text, task:launchTask, workerCode:code, source:"RESUME_EXISTING_ACK" });
         if (recovered?.validated) {

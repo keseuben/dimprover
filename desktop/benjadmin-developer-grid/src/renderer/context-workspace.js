@@ -110,16 +110,18 @@
       }
     }
     const plan=result.chatPlan||{};const launch=result.taskLaunch||null;
-    state.workStartStatus=launch?.ok&&launch?.mode==="sent"?"BOOT ACK VÁR":launch&&launch.ok===false?"INDÍTÁS BLOKKOLT":"AKTÍV";
+    const responsePending=launch?.ok&&launch?.mode==="response-pending";
+    const chatBusy=launch?.code==="CHATGPT_GENERATION_ACTIVE";
+    state.workStartStatus=launch?.ok&&launch?.mode==="sent"?"BOOT ACK VÁR":responsePending?"CHATGPT VÁLASZRA VÁR":chatBusy?"CHATGPT FOGLALT":launch&&launch.ok===false?"INDÍTÁS BLOKKOLT":"AKTÍV";
     state.workStartDraft="";state.workStartKey="";const continuityNote=continuityBound?" A legfrissebb modul-átadó automatikusan bekerült a worker Context Packjába.":"";
-    const launchNote=launch?.ok&&launch?.mode==="sent"?"A Launch Packet automatikusan elküldve a kijelölt workernek. A rendszer BOOT ACK-ra vár; kódolás csak validált ACK után indul.":launch&&launch.ok===false?`A task létrejött, de a ${surfaceType} indítás fail-closed: ${contextErrorMessage(launch.error||"az automatikus küldés nem igazolható")}`:plan?.surfaceBlockError?`A task surface-e ${surfaceType}; automatikus indítás blokkolva: ${contextErrorMessage(plan.surfaceBlockError)}`:"";
+    const launchNote=launch?.ok&&launch?.mode==="sent"?"A Launch Packet automatikusan elküldve a kijelölt workernek. A rendszer BOOT ACK-ra vár; kódolás csak validált ACK után indul.":responsePending?"A Launch Packet már elküldött állapotú. A ChatGPT még választ generál; a Grid nem küld duplikált promptot és ugyanennek a tasknak a BOOT ACK-jára vár.":chatBusy?"A ChatGPT már választ generál ebben a worker-csevegésben. A task megmaradt; várd meg vagy állítsd le a generálást, majd használd az INDÍTÁS FOLYTATÁSA gombot.":launch&&launch.ok===false?`A task létrejött, de a ${surfaceType} indítás fail-closed: ${contextErrorMessage(launch.error||"az automatikus küldés nem igazolható")}`:plan?.surfaceBlockError?`A task surface-e ${surfaceType}; automatikus indítás blokkolva: ${contextErrorMessage(plan.surfaceBlockError)}`:"";
     let baseNotice="";
     if(result.work?.reused)baseNotice="A már létrehozott munka authoritative állapota visszatöltve.";
     else if(launchNote)baseNotice=launchNote;
     else if(plan.chatLaunchMode==="NEW_PROJECT_CHAT")baseNotice="A feladat kiosztva. Hozd létre a megfelelő ChatGPT Projektben az új csevegést, majd kattints a worker CSEVEGÉS RÖGZÍTÉSE gombjára.";
     else if(plan.conversationBound)baseNotice="A feladat kiosztva és a meglévő worker-csevegés rögzítve.";
     else baseNotice="A feladat kiosztva, de a meglévő csevegés még nincs rögzítve. Nyisd meg a kívánt /c/... beszélgetést és rögzítsd.";
-    state.workStartNotice=baseNotice+continuityNote;state.workStartNoticeTone=launch&&launch.ok===false?"error":"success";state.notice="";
+    state.workStartNotice=baseNotice+continuityNote;state.workStartNoticeTone=responsePending||chatBusy?"warning":launch&&launch.ok===false?"error":"success";state.notice="";
     const authoritative=await api.getDeveloperGridActiveWork?.();
     if(authoritative?.ok&&authoritative.activeWork)state.activeWork=authoritative.activeWork;
     render();
@@ -191,7 +193,10 @@
     const result=await api.resumeDeveloperGridTaskLaunch?.();
     state.workResumeBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A Launch Packet folytatása sikertelen.");state.workStartNoticeTone="error";render();return;}
-    state.workStartStatus="BOOT ACK VÁR";state.workStartNotice="A Launch Packet automatikusan elküldve a rögzített worker-csevegésbe. A rendszer BOOT ACK válaszra vár.";state.workStartNoticeTone="success";
+    const pending=result?.taskLaunch?.mode==="response-pending";
+    state.workStartStatus=pending?"CHATGPT VÁLASZRA VÁR":"BOOT ACK VÁR";
+    state.workStartNotice=pending?"A Launch Packet már elküldött állapotú; a ChatGPT még generál. A Grid nem küldött duplikált promptot, ugyanennek a tasknak a BOOT ACK-jára vár.":"A Launch Packet automatikusan elküldve a rögzített worker-csevegésbe. A rendszer BOOT ACK válaszra vár.";
+    state.workStartNoticeTone=pending?"warning":"success";
     await refresh(false);
   }
   function setNotice(message, tone="info") { state.notice=message||""; const el=root.querySelector("[data-context-notice]"); if (el) { el.textContent=state.notice; el.dataset.tone=tone; el.hidden=!state.notice; } }
