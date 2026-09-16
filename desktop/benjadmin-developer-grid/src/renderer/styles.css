@@ -2900,3 +2900,40 @@ body.has-health-drawer .central-panel {
   .cw-card-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   [data-cw-section] { scroll-margin-top: 70px; }
 }
+
+/* v0.1.41 · OpenAI first-party Codex Task Bridge */
+.cw-task-bridge { display:grid; gap:5px; padding:8px; border:1px solid rgba(244,201,93,.34); border-radius:8px; background:rgba(88,60,7,.13); }
+.cw-task-bridge > div:first-child { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.cw-task-bridge strong { font-size:8px; color:#ffe39a; letter-spacing:.04em; }
+.cw-task-bridge b { font-size:7px; color:#8ff0b2; }
+.cw-task-bridge span { font-size:9px; color:#dbe8ed; font-weight:800; }
+.cw-task-bridge small { font-size:7px; color:#8198a4; overflow-wrap:anywhere; }
+.cw-task-bridge > div:last-child { display:flex; gap:6px; }
+.cw-task-bridge button { border:1px solid rgba(244,201,93,.34); border-radius:6px; background:rgba(244,201,93,.08); color:#ffe39a; padding:5px 8px; font-size:7px; font-weight:900; cursor:pointer; }
+.cw-task-bridge button:disabled { opacity:.45; cursor:not-allowed; }
+.cw-task-bridge-mode .cw-work-prompt { border:0; padding:0; background:transparent; }
+.cw-task-bridge-mode .cw-work-prompt textarea { width:100%; min-height:58px; resize:vertical; border:1px solid rgba(244,201,93,.24); border-radius:6px; background:#071019; color:#d5e5ed; padding:6px 7px; font-size:8px; }
+:root[data-theme="light"] .cw-task-bridge { background:#fff8df; border-color:#d5ad35; }
+:root[data-theme="light"] .cw-task-bridge strong,:root[data-theme="light"] .cw-task-bridge b { color:#6f4b00; }
+:root[data-theme="light"] .cw-task-bridge span { color:#173747; }
+:root[data-theme="light"] .cw-task-bridge-mode .cw-work-prompt textarea { background:#fff; color:#173747; }
+.codex-task-panel { width:min(92%,620px); display:grid; gap:6px; padding:10px; border:1px solid rgba(244,201,93,.34); border-radius:9px; background:rgba(74,49,7,.18); text-align:left; }
+.codex-task-panel > div { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.codex-task-panel strong { color:#ffe39a; font-size:9px; letter-spacing:.04em; }
+.codex-task-panel b { color:#8ff0b2; font-size:8px; }
+.codex-task-panel span { color:#dbe8ed; font-size:10px; font-weight:900; }
+.codex-task-panel small { color:#8198a4; font-size:8px; overflow-wrap:anywhere; }
+.codex-task-panel button { font-size:8px; font-weight:900; }
+:root[data-theme="light"] .codex-task-panel { background:#fff8df; border-color:#d5ad35; }
+:root[data-theme="light"] .codex-task-panel strong,:root[data-theme="light"] .codex-task-panel b { color:#6f4b00; }
+:root[data-theme="light"] .codex-task-panel span { color:#173747; }
+.codex-task-indicators,.cw-task-bridge-indicators { display:grid !important; grid-template-columns:repeat(6,minmax(0,1fr)); gap:4px; }
+.codex-task-indicators i,.cw-task-bridge-indicators i { min-width:0; display:grid; gap:1px; padding:4px 5px; border:1px solid rgba(148,163,184,.18); border-radius:5px; background:rgba(8,20,29,.52); font-style:normal; }
+.codex-task-indicators em,.cw-task-bridge-indicators em { color:#6f8794; font-size:6px; font-style:normal; font-weight:900; letter-spacing:.06em; }
+.codex-task-indicators b,.cw-task-bridge-indicators b { color:#d7e8ee; font-size:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.codex-task-indicators i[data-value="PASS"] b,.codex-task-indicators i[data-value="CLEAN"] b,.codex-task-indicators i[data-value="LOCKED"] b,.cw-task-bridge-indicators i[data-value="PASS"] b,.cw-task-bridge-indicators i[data-value="CLEAN"] b,.cw-task-bridge-indicators i[data-value="LOCKED"] b { color:#8ff0b2; }
+.codex-task-indicators i[data-value="ERROR"] b,.codex-task-indicators i[data-value="VIOLATION"] b,.codex-task-indicators i[data-value="CHANGES"] b,.cw-task-bridge-indicators i[data-value="ERROR"] b,.cw-task-bridge-indicators i[data-value="VIOLATION"] b,.cw-task-bridge-indicators i[data-value="CHANGES"] b { color:#ffaaa8; }
+.codex-task-indicators i[data-value="PENDING"] b,.codex-task-indicators i[data-value="RUNNING"] b,.cw-task-bridge-indicators i[data-value="PENDING"] b,.cw-task-bridge-indicators i[data-value="RUNNING"] b { color:#ffe39a; }
+.codex-task-actions,.cw-task-bridge-actions { display:flex !important; flex-wrap:wrap; gap:6px; }
+:root[data-theme="light"] .codex-task-indicators i,:root[data-theme="light"] .cw-task-bridge-indicators i { background:#fff; border-color:rgba(15,42,61,.16); }
+:root[data-theme="light"] .codex-task-indicators b,:root[data-theme="light"] .cw-task-bridge-indicators b { color:#173747; }

@@ -30,8 +30,8 @@ class CodexSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "CODEX_NATIVE_BRIDGE_REQUIRED",
-      error: "A Codex a ChatGPT desktop natív nézete. A surface kiválasztható és per-cell menthető, de automatikus Launch/BOOT ACK/transcript csak a natív Codex bridge elkészülte után engedélyezhető; ChatGPT DOM fallback tiltott.",
+      code: "CODEX_TASK_BRIDGE_REQUIRED",
+      error: "A Codex OpenAI first-party fejlesztői surface Task Bridge végrehajtást használ. Embedded ChatGPT Launch/BOOT ACK/DOM transcript automatizálás Codexhez tiltott; használd a Developer Grid Codex Task Bridge-et.",
     };
   }
 }

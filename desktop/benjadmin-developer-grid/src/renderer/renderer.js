@@ -94,7 +94,8 @@ const state = {
   shortcutDiagnostics: null,
   chatConnections: {},
   chatRefresh: { cells: {}, latestRefreshedAt: "", dailyEnabled: true, deferredCount: 0, updateAvailableCount: 0 },
-  systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false, error: null, unauthorized: false }
+  systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false, error: null, unauthorized: false },
+  taskBridges: {}
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -102,6 +103,10 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 function escapeText(value) {
   return String(value ?? "");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[ch]);
 }
 
 function workerCodeForCell(cellId) {
@@ -217,6 +222,7 @@ async function loadUnlockedState() {
   startReviewPolling();
   startSystemHealthPolling();
   state.shortcutDiagnostics = await api.getShortcutStatus?.();
+  await refreshTaskBridgeCells();
 }
 
 function activeTaskForWorker(workerCode) {
@@ -324,6 +330,123 @@ function renderSplitControls() {
   $("#layoutModeButton").title = splitMode ? "Vissza 4 cellás nézetre (Ctrl+Alt+6)" : "2 cellás nézet (Ctrl+Alt+6)";
 }
 
+function normalizeBridgeWorkerCode(workerCode) { return String(workerCode||"").toUpperCase()==="BENAI"?"BENJAMINAI":String(workerCode||"").toUpperCase(); }
+async function refreshTaskBridgeCell(workerCode) {
+  const code=normalizeBridgeWorkerCode(workerCode); if(!code||!state.security?.unlocked)return null;
+  const result=await api.getDeveloperGridTaskBridge?.({workerCode:code});
+  if(result?.ok){state.taskBridges[workerCode]=result.taskBridge||null;renderConfig();return result.taskBridge||null;}
+  return null;
+}
+async function refreshTaskBridgeCells() {
+  const cells=(state.config?.cells||[]).filter(cell=>String(cell.surfaceType||"CHATGPT").toUpperCase()==="CODEX"&&cell.enabled!==false);
+  await Promise.all(cells.map(cell=>refreshTaskBridgeCell(cell.workerCode)));
+}
+function taskBridgePhaseIndicators(current) {
+  const bridge=current?.bridge||{}, detection=current?.detection||{};
+  const stateCode=String(detection.effectiveState||bridge.state||"READY_FOR_WORKER").toUpperCase();
+  const review=String(bridge.reviewState||(
+    stateCode==="REVIEW_PENDING"?"PENDING":stateCode==="REVIEW_IN_PROGRESS"?"RUNNING":stateCode==="REVIEW_CHANGES_REQUESTED"?"CHANGES":
+    ["REVIEW_PASS","BUILD_PENDING","BUILD_RUNNING","BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"].includes(stateCode)?"PASS":"WAIT"
+  )).toUpperCase();
+  const build=String(bridge.buildState||(
+    stateCode==="BUILD_PENDING"?"PENDING":stateCode==="BUILD_RUNNING"?"RUNNING":
+    ["BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"].includes(stateCode)?"PASS":"WAIT"
+  )).toUpperCase();
+  const dev=String(bridge.devAcceptanceState||(
+    stateCode==="DEV_ACCEPTANCE_PENDING"?"PENDING":["DEV_ACCEPTANCE_PASS","CLOSED"].includes(stateCode)?"PASS":"WAIT"
+  )).toUpperCase();
+  return [
+    ["WORKER",stateCode],["GIT",String(detection.gitState||"UNKNOWN").toUpperCase()],
+    ["SCOPE",String(detection.scopeState||"UNKNOWN").toUpperCase()],["REVIEW",review],["BUILD",build],["DEV",dev]
+  ];
+}
+async function copyTaskBridgeToCodex(workerCode) {
+  const current=state.taskBridges[workerCode]; const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("Codex Task Bridge","Nincs másolható Task Bridge task.");return;}
+  const result=await api.copyDeveloperGridTaskBridgeToCodex?.(taskId);
+  if(!result?.ok){showToast("Task másolása Codexhez",result?.error||"A Codex bootstrap nem másolható.");return;}
+  showToast("Task másolása Codexhez",result.message||"A sanitizált bootstrap prompt a vágólapra került.");
+  await refreshTaskBridgeCell(workerCode);
+}
+async function importTaskBridgeFromCell(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("Codex Task Bridge","Nincs importálható aktív task.");return;}
+  const result=await api.importDeveloperGridTaskBridgeResult?.(taskId);
+  if(!result?.ok){showToast("Codex result import",result?.error||"A result.json import sikertelen.");return;}
+  showToast("Codex result import","PASS · Git/scope/provenance ellenőrizve; review gate következik.");
+  await refreshTaskBridgeCell(workerCode);
+}
+async function copyTaskBridgeReviewToBenAi(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("BenAI review","Nincs review-ra váró Task Bridge task.");return;}
+  const result=await api.copyDeveloperGridTaskBridgeReviewToBenAi?.(taskId);
+  if(!result?.ok){showToast("BenAI review",result?.error||"A REVIEW.md nem másolható.");return;}
+  showToast("BenAI review",result.message||"A REVIEW.md a vágólapra került.");
+  await refreshTaskBridgeCell(workerCode);
+}
+async function importTaskBridgeReviewFromCell(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("BenAI review","Nincs importálható review.");return;}
+  const result=await api.importDeveloperGridTaskBridgeReview?.(taskId);
+  if(!result?.ok){showToast("BenAI review import",result?.error||"A review.json import sikertelen.");return;}
+  const reviewResult=String(result?.result?.review?.result||"").toUpperCase();
+  showToast("BenAI review import",reviewResult==="PASS"?"REVIEW_PASS · a build-kapu megnyitható.":"CHANGES_REQUESTED · build továbbra is blokkolt.");
+  await refreshTaskBridgeCell(workerCode);
+}
+async function resumeTaskBridgeReworkFromCell(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("Codex rework","Nincs javításra visszaadható task.");return;}
+  const result=await api.resumeDeveloperGridTaskBridgeRework?.(taskId);
+  if(!result?.ok){showToast("Codex rework",result?.error||"A javítási kör nem indítható.");return;}
+  showToast("Codex rework",result.message||"Új rework session indult; a bootstrap a vágólapra került.");
+  await refreshTaskBridgeCell(workerCode);
+}
+async function requestTaskBridgeBuildFromCell(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("Task Bridge build","Nincs buildelhető task.");return;}
+  const result=await api.requestDeveloperGridTaskBridgeBuild?.(taskId);
+  if(!result?.ok){showToast("Task Bridge build",result?.error||"A remote build kérés sikertelen.");return;}
+  const status=String(result?.build?.run?.status||result?.build?.bridge?.buildState||"PENDING").toUpperCase();
+  showToast("Task Bridge build",`BUILD ${status} · hardened BUILD01/BUILD02 pool.`);
+  await refreshTaskBridgeCell(workerCode);
+}
+async function importTaskBridgeAcceptanceFromCell(workerCode) {
+  const current=state.taskBridges[workerCode];const taskId=current?.taskId||current?.bridge?.taskId||"";
+  if(!taskId){showToast("DEV acceptance","Nincs acceptance-re váró task.");return;}
+  const result=await api.importDeveloperGridTaskBridgeAcceptance?.(taskId);
+  if(!result?.ok){showToast("DEV acceptance",result?.error||"Az acceptance.json import sikertelen.");return;}
+  const status=String(result?.result?.acceptance?.status||"").toUpperCase();
+  showToast("DEV acceptance",status==="DEV_ACCEPTANCE_PASS"?"PASS · a Dev Engine task lezárva.":"FAIL · a Task Bridge hibás állapotba került.");
+  await refreshTaskBridgeCell(workerCode);
+}
+function renderCodexTaskPanel(cell,workerCode) {
+  const empty=$("[data-role=empty-state]",cell);if(!empty)return;
+  let panel=$("[data-role=codex-task-panel]",empty);
+  if(!panel){panel=document.createElement("div");panel.dataset.role="codex-task-panel";panel.className="codex-task-panel";empty.append(panel);}
+  const current=state.taskBridges[workerCode]||null,bridge=current?.bridge||null,detection=current?.detection||null;
+  if(!current||!bridge){panel.innerHTML=`<strong>CODEX TASK BRIDGE</strong><span>Nincs aktív Task Bridge ehhez a workerhez.</span><button type="button" data-codex-refresh>FRISSÍTÉS</button>`;}
+  else {
+    const bridgeState=String(detection?.effectiveState||bridge.state||"READY_FOR_WORKER").toUpperCase();
+    const postImport=["REVIEW_PENDING","REVIEW_IN_PROGRESS","REVIEW_PASS","REVIEW_CHANGES_REQUESTED","BUILD_PENDING","BUILD_RUNNING","BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"];
+    const canImport=Boolean(detection?.resultDetected)&&!postImport.includes(bridgeState);
+    const canReviewCopy=["REVIEW_PENDING","REVIEW_IN_PROGRESS"].includes(bridgeState);
+    const canReviewImport=Boolean(detection?.reviewResultDetected)&&canReviewCopy;
+    const canRework=bridgeState==="REVIEW_CHANGES_REQUESTED"&&String(bridge.reviewState||"").toUpperCase()==="CHANGES_REQUESTED";
+    const canBuild=bridgeState==="REVIEW_PASS"&&String(bridge.reviewState||"").toUpperCase()==="PASS";
+    const canAcceptanceImport=bridgeState==="DEV_ACCEPTANCE_PENDING"&&Boolean(detection?.acceptanceResultDetected)&&String(bridge.buildState||"").toUpperCase()==="PASS";
+    const indicators=taskBridgePhaseIndicators(current).map(([label,value])=>`<i data-value="${escapeHtml(value)}"><em>${escapeHtml(label)}</em><b>${escapeHtml(value)}</b></i>`).join("");
+    panel.innerHTML=`<div><strong>CODEX TASK BRIDGE</strong><b>${escapeHtml(bridgeState)}</b></div><span>${escapeHtml(current.taskId||"")}</span><small>${escapeHtml(bridge.branchName||current.branchName||"")}</small><small>${escapeHtml(bridge.worktreePath||current.worktreePath||"")}</small><small>Scope: ${escapeHtml((bridge.allowedPaths||[]).join(" · ")||"—")}</small><div class="codex-task-indicators">${indicators}</div><div class="codex-task-actions"><button type="button" data-codex-copy>TASK MÁSOLÁSA CODEXHEZ</button><button type="button" data-codex-refresh>FRISSÍTÉS</button><button type="button" data-codex-import ${canImport?"":"disabled"}>RESULT IMPORT</button><button type="button" data-codex-review-copy ${canReviewCopy?"":"disabled"}>REVIEW MÁSOLÁSA BENAI-NAK</button><button type="button" data-codex-review-import ${canReviewImport?"":"disabled"}>REVIEW IMPORT</button><button type="button" data-codex-rework ${canRework?"":"disabled"}>JAVÍTÁS VISSZA CODEXHEZ</button><button type="button" data-codex-build ${canBuild?"":"disabled"}>BUILD INDÍTÁSA</button><button type="button" data-codex-acceptance ${canAcceptanceImport?"":"disabled"}>DEV ACCEPTANCE IMPORT</button></div>`;
+  }
+  panel.querySelector("[data-codex-copy]")?.addEventListener("click",()=>void copyTaskBridgeToCodex(workerCode));
+  panel.querySelector("[data-codex-refresh]")?.addEventListener("click",()=>void refreshTaskBridgeCell(workerCode));
+  panel.querySelector("[data-codex-import]")?.addEventListener("click",()=>void importTaskBridgeFromCell(workerCode));
+  panel.querySelector("[data-codex-review-copy]")?.addEventListener("click",()=>void copyTaskBridgeReviewToBenAi(workerCode));
+  panel.querySelector("[data-codex-review-import]")?.addEventListener("click",()=>void importTaskBridgeReviewFromCell(workerCode));
+  panel.querySelector("[data-codex-rework]")?.addEventListener("click",()=>void resumeTaskBridgeReworkFromCell(workerCode));
+  panel.querySelector("[data-codex-build]")?.addEventListener("click",()=>void requestTaskBridgeBuildFromCell(workerCode));
+  panel.querySelector("[data-codex-acceptance]")?.addEventListener("click",()=>void importTaskBridgeAcceptanceFromCell(workerCode));
+}
+
 function renderConfig() {
   if (!state.config) return;
   applyAppearance();
@@ -353,20 +476,23 @@ function renderConfig() {
     if (surfaceSelect) {
       surfaceSelect.value = surfaceType;
       const activeTask = activeTaskForWorker(cellConfig.workerCode);
-      const activeStatus = String(activeTask?.status || "").toUpperCase();
-      const locked = ["RUNNING","REVIEW"].includes(activeStatus);
+      const activeBridgeState = String(state.taskBridges?.[cellConfig.workerCode]?.bridge?.state || "").toUpperCase();
+      const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
+      const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · natív desktop surface · bridge aktiválásig taskindítás tiltott" : surfaceType === "WORK" ? "Work · v0.1.42-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.42-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {
       const strong = $("strong", emptyState);
       const reopen = $("[data-cell-action=reopen]", emptyState);
       if (surfaceType === "CODEX") {
-        if (strong) strong.textContent = "Codex · natív desktop surface. A natív bridge nélkül automatikus task launch tiltott.";
+        if (strong) strong.textContent = "Codex · OpenAI first-party Task Bridge";
         if (reopen) reopen.classList.add("is-hidden");
+        renderCodexTaskPanel(cell,cellConfig.workerCode);
       } else {
-        if (strong) strong.textContent = surfaceType === "WORK" ? "Work surface v0.1.42-re előkészítve." : "A ChatGPT felület zárva.";
+        $("[data-role=codex-task-panel]",emptyState)?.remove();
+        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.42 adapter." : "A ChatGPT felület zárva.";
         if (reopen) reopen.classList.toggle("is-hidden", surfaceType !== "CHATGPT");
       }
     }
@@ -2002,6 +2128,7 @@ function bindIpc() {
     else setConnectionUi("BENJADMIN delta kapcsolat várakozik", "warning");
     renderConnectionSettings();
   });
+  api.onTaskBridgeState?.((payload)=>{const code=String(payload?.workerCode||"").toUpperCase();const uiCode=code==="BENJAMINAI"?"BENAI":code;if(uiCode){state.taskBridges[uiCode]=payload?.taskBridge||null;renderConfig();}});
   api.onWorkerEvent(handleWorkerEvent);
   api.onOpenSettings?.(() => { void openSettings(); });
   api.onPairingState(async (pairing) => {

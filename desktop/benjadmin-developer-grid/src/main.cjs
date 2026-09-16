@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -2466,6 +2466,30 @@ function scheduleEngineSessionHeartbeat(delayMs = ENGINE_SESSION_HEARTBEAT_INTER
   if (!engineSessionHeartbeatEnabled || !unlocked || !readDeviceToken()) return;
   engineSessionHeartbeatTimer = setTimeout(() => void sendEngineSessionHeartbeatOnce(), Math.max(10_000, Number(delayMs) || ENGINE_SESSION_HEARTBEAT_INTERVAL_MS));
 }
+async function heartbeatCodexTaskBridgesOnce() {
+  const cells=(config?.cells||[]).filter((cell)=>cell?.enabled!==false&&normalizeWorkerSurfaceType(cell?.surfaceType||"CHATGPT")==="CODEX");
+  const results=[];
+  for(const cell of cells){
+    const workerCode=String(cell.workerCode||"").toUpperCase()==="BENAI"?"BENJAMINAI":String(cell.workerCode||"").toUpperCase();
+    if(!workerCode)continue;
+    try{
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),workerCode});
+      const bridge=current?.bridge||null;
+      const state=String(bridge?.state||"").toUpperCase();
+      const status=String(current?.status||"").toLowerCase();
+      if(!current?.taskId||!["READY_FOR_WORKER","WORKER_RUNNING","WORKER_COMPLETED"].includes(state)||!["claimed","in_progress","testing","ready"].includes(status))continue;
+      const heartbeat=await heartbeatDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId:current.taskId});
+      results.push({taskId:current.taskId,workerCode,heartbeat});
+      send("task-bridge:state",{workerCode,taskBridge:current});
+      send("connection:engine-heartbeat",{ok:true,kind:"TASK_BRIDGE",taskId:current.taskId,workerCode,at:heartbeat?.heartbeatAt||new Date().toISOString(),leaseSeconds:heartbeat?.leaseSeconds||null});
+    }catch(error){
+      results.push({workerCode,error:error instanceof Error?error.message:"Task Bridge heartbeat hiba"});
+      send("connection:engine-heartbeat",{ok:false,kind:"TASK_BRIDGE",workerCode,error:error instanceof Error?error.message.slice(0,240):"A Task Bridge heartbeat sikertelen."});
+    }
+  }
+  return results;
+}
+
 async function sendEngineSessionHeartbeatOnce(explicit = null) {
   if (engineSessionHeartbeatTimer) clearTimeout(engineSessionHeartbeatTimer);
   engineSessionHeartbeatTimer = null;
@@ -2483,7 +2507,8 @@ async function sendEngineSessionHeartbeatOnce(explicit = null) {
       const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === String(task?.id || "")) || null;
       const status = String(task?.status || "").toUpperCase();
       if (!task || !session || !["RUNNING", "REVIEW"].includes(status) || String(session?.developmentContext?.bootAckState || "").toUpperCase() !== "VALIDATED" || session?.developmentContext?.bootAckCodingAllowed !== true) {
-        return null;
+        const taskBridgeHeartbeats=await heartbeatCodexTaskBridgesOnce();
+        return taskBridgeHeartbeats.length?taskBridgeHeartbeats:null;
       }
       taskId = String(task.id || "");
       sessionId = String(session.id || "");
@@ -2495,6 +2520,7 @@ async function sendEngineSessionHeartbeatOnce(explicit = null) {
       input:{ taskId, sessionId, workerCode }
     });
     send("connection:engine-heartbeat", { ok:true, taskId, sessionId, workerCode, at:heartbeat?.heartbeatAt || new Date().toISOString(), leaseSeconds:heartbeat?.leaseSeconds || null });
+    await heartbeatCodexTaskBridgesOnce();
     return heartbeat;
   } catch (error) {
     nextDelay = ENGINE_SESSION_HEARTBEAT_RETRY_MS;
@@ -3093,6 +3119,111 @@ function registerIpc() {
       return { ok:true, review };
     } catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A V.Guard review sikertelen." }; }
   });
+  ipcMain.handle("task-bridge:get", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try { return { ok:true, taskBridge:await fetchDeveloperGridTaskBridge({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), taskId:String(payload?.taskId||""), workerCode:String(payload?.workerCode||"") }) }; }
+    catch (error) { return { ok:false, error:error instanceof Error ? error.message : "A Task Bridge állapot nem tölthető be." }; }
+  });
+  ipcMain.handle("task-bridge:start", async (_event, payload) => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const taskBridge=await startDeveloperGridTaskBridge({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:payload||{} });
+      send("context:refresh",{reason:"task-bridge-started",taskId:taskBridge?.taskId||null});
+      send("task-bridge:state",{workerCode:String(payload?.preferredWorkerCode||"").toUpperCase(),taskBridge});
+      return {ok:true,taskBridge};
+    } catch(error){ return {ok:false,error:error instanceof Error?error.message:"A Codex Task Bridge nem indítható."}; }
+  });
+  ipcMain.handle("task-bridge:copy-bootstrap", async (_event, payload) => {
+    if (!unlocked) return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();
+    if(!taskId) return {ok:false,error:"A Codex Task Bridge taskId hiányzik."};
+    try {
+      const bootstrap=await fetchDeveloperGridTaskBridgeBootstrap({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const prompt=String(bootstrap?.prompt||"").trim();
+      if(!prompt) return {ok:false,error:"A Codex bootstrap prompt üres."};
+      clipboard.writeText(prompt);
+      const started=await markDeveloperGridTaskBridgeWorkerStarted({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-copied-to-codex",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||started?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,taskId,sha256:bootstrap?.sha256||null,state:started?.bridge?.state||"WORKER_RUNNING",message:"A sanitizált Codex bootstrap prompt a vágólapra került. Illeszd be a Codex felületre."};
+    } catch(error){return {ok:false,error:error instanceof Error?error.message:"A Codex task nem másolható a vágólapra."};}
+  });
+  ipcMain.handle("task-bridge:copy-review", async (_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();if(!taskId)return {ok:false,error:"A Task Bridge taskId hiányzik."};
+    try{
+      const review=await fetchDeveloperGridTaskBridgeReview({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const prompt=String(review?.prompt||"").trim();if(!prompt)return {ok:false,error:"A BenAI review prompt üres."};
+      clipboard.writeText(prompt);
+      const started=await markDeveloperGridTaskBridgeReviewStarted({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-review-started",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||started?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,taskId,state:started?.bridge?.state||"REVIEW_IN_PROGRESS",message:"A REVIEW.md tartalma a vágólapra került. Illeszd be a BenAI review csevegésbe."};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A BenAI review nem indítható."};}
+  });
+  ipcMain.handle("task-bridge:import-review",async(_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();
+    try{
+      const result=await importDeveloperGridTaskBridgeReview({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-review-imported",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||result?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,result};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A BenAI review import sikertelen."};}
+  });
+  ipcMain.handle("task-bridge:resume-rework",async(_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();
+    try{
+      const result=await resumeDeveloperGridTaskBridgeRework({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const bootstrap=await fetchDeveloperGridTaskBridgeBootstrap({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      if(String(bootstrap?.prompt||"").trim()) clipboard.writeText(String(bootstrap.prompt).trim());
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-rework-started",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||result?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,result,message:"A javítási kör új sessionnel és scope lockkal elindult; a review findingokat tartalmazó Codex bootstrap a vágólapra került."};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A Task Bridge rework nem indítható."};}
+  });
+  ipcMain.handle("task-bridge:request-build",async(_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();
+    try{
+      const build=await requestDeveloperGridTaskBridgeBuild({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-build-requested",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||build?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,build};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A Task Bridge build nem indítható."};}
+  });
+  ipcMain.handle("task-bridge:import-acceptance",async(_event,payload)=>{
+    if(!unlocked)return {ok:false,error:"A Developer Grid zárolva van."};
+    const taskId=String(payload?.taskId||"").trim();
+    try{
+      const result=await importDeveloperGridTaskBridgeAcceptance({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      const current=await fetchDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId});
+      send("context:refresh",{reason:"task-bridge-acceptance-imported",taskId});
+      send("task-bridge:state",{workerCode:String(current?.bridge?.workerCode||result?.bridge?.workerCode||"").toUpperCase(),taskBridge:current});
+      return {ok:true,result};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A DEV acceptance import sikertelen."};}
+  });
+  ipcMain.handle("task-bridge:heartbeat", async (_event, payload) => {
+    if (!unlocked) return {ok:false,error:"A Developer Grid zárolva van."};
+    try {return {ok:true,heartbeat:await heartbeatDeveloperGridTaskBridge({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId:String(payload?.taskId||"")})};}
+    catch(error){return {ok:false,error:error instanceof Error?error.message:"A Task Bridge heartbeat sikertelen."};}
+  });
+  ipcMain.handle("task-bridge:import-result", async (_event, payload) => {
+    if (!unlocked) return {ok:false,error:"A Developer Grid zárolva van."};
+    try {
+      const result=await importDeveloperGridTaskBridgeResult({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId:String(payload?.taskId||"")});
+      send("context:refresh",{reason:"task-bridge-result-imported",taskId:String(payload?.taskId||"")});
+      send("task-bridge:state",{workerCode:String(result?.bridge?.workerCode||"").toUpperCase(),taskBridge:{taskId:result?.taskId||payload?.taskId||null,bridge:result?.bridge||null,status:"testing"}});
+      return {ok:true,result};
+    }catch(error){return {ok:false,error:error instanceof Error?error.message:"A Codex result import sikertelen."};}
+  });
+
   ipcMain.handle("work-start:create", async (_event, payload) => {
     if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
     const conversationGuards = captureWorkerConversationGuards();

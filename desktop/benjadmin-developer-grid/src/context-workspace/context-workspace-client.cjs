@@ -188,4 +188,58 @@ async function closeDeveloperGridWork({ baseUrl, deviceToken, input }) {
   return payload.close || null;
 }
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, sanitizeSnapshot };
+async function fetchDeveloperGridTaskBridge({ baseUrl, deviceToken, taskId="", workerCode="" }) {
+  const base = ensureDevBase(baseUrl); const url = new URL(`${base}/api/dev/grid/task-bridge`);
+  if(String(taskId||"").trim()) url.searchParams.set("taskId",String(taskId));
+  else if(String(workerCode||"").trim()) url.searchParams.set("workerCode",String(workerCode));
+  const payload = await jsonRequest(url.href,{method:"GET",headers:headers(deviceToken)},15000);
+  return payload.taskBridge || null;
+}
+async function startDeveloperGridTaskBridge({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"POST",headers:headers(deviceToken,true),body:JSON.stringify(input||{})},30000);
+  return payload.taskBridge || null;
+}
+async function fetchDeveloperGridTaskBridgeBootstrap({ baseUrl, deviceToken, taskId }) {
+  const base = ensureDevBase(baseUrl); const url = new URL(`${base}/api/dev/grid/task-bridge`);
+  url.searchParams.set("taskId",String(taskId||"")); url.searchParams.set("action","bootstrap");
+  const payload = await jsonRequest(url.href,{method:"GET",headers:headers(deviceToken)},15000);
+  return payload.bootstrap || null;
+}
+async function markDeveloperGridTaskBridgeWorkerStarted({ baseUrl, deviceToken, taskId }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PATCH",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"WORKER_STARTED"})},15000);
+  return payload.result || null;
+}
+async function fetchDeveloperGridTaskBridgeReview({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl); const url=new URL(`${base}/api/dev/grid/task-bridge`);
+  url.searchParams.set("taskId",String(taskId||""));url.searchParams.set("action","review");
+  const payload=await jsonRequest(url.href,{method:"GET",headers:headers(deviceToken)},15000);return payload.review||null;
+}
+async function markDeveloperGridTaskBridgeReviewStarted({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl);const payload=await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PATCH",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"REVIEW_STARTED"})},15000);return payload.result||null;
+}
+async function resumeDeveloperGridTaskBridgeRework({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl);const payload=await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PATCH",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"START_REWORK"})},30000);return payload.result||null;
+}
+async function importDeveloperGridTaskBridgeReview({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl);const payload=await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PUT",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"IMPORT_REVIEW"})},30000);return payload.result||null;
+}
+async function requestDeveloperGridTaskBridgeBuild({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl);const payload=await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"POST",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"REQUEST_BUILD"})},30000);return payload.build||null;
+}
+async function importDeveloperGridTaskBridgeAcceptance({ baseUrl, deviceToken, taskId }) {
+  const base=ensureDevBase(baseUrl);const payload=await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PUT",headers:headers(deviceToken,true),body:JSON.stringify({taskId,action:"IMPORT_ACCEPTANCE"})},30000);return payload.result||null;
+}
+async function heartbeatDeveloperGridTaskBridge({ baseUrl, deviceToken, taskId }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PATCH",headers:headers(deviceToken,true),body:JSON.stringify({taskId})},15000);
+  return payload.heartbeat || null;
+}
+async function importDeveloperGridTaskBridgeResult({ baseUrl, deviceToken, taskId }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/task-bridge`,{method:"PUT",headers:headers(deviceToken,true),body:JSON.stringify({taskId})},30000);
+  return payload.result || null;
+}
+
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult, sanitizeSnapshot };

@@ -36,7 +36,7 @@ async function buildEvent(run: GridBuildRun, eventType: string, summary: string,
   const session = state.sessions.find((item) => item.id === run.sessionId) || null;
   await appendGridEvent({
     kind: "build", origin: "LIVE", workerCode: run.workerCode, taskId: run.taskId,
-    projectId: state.task?.projectId || "project_dimprover", productionAccess: "DENY",
+    projectId: state.task?.id === run.taskId ? state.task.projectId : "project_dimprover", productionAccess: "DENY",
     developmentContext: session?.developmentContext,
     branch: run.sourceBranch, worktree: session?.sourceProvenance.worktree, head: run.sourceCommit,
     delta: { eventType, summary, runId: run.id, sessionId: run.sessionId, nodeId: run.nodeId, sourceCommit: run.sourceCommit, ...extra },
@@ -132,6 +132,32 @@ export async function reconcileDeveloperGridBuildRuns() {
   return { ...store, runs: [...store.runs].sort((a,b) => Date.parse(b.queuedAt)-Date.parse(a.queuedAt)) };
 }
 
+async function enqueueVerifiedBuildRequest(request: { runId:string; taskId:string; sessionId:string; workerCode:GridBuildRun["workerCode"]; sourceCommit:string; sourceBranch:string; requestedAt:string }) {
+  const store = await reconcileDeveloperGridBuildRuns();
+  const duplicateActive = store.runs.find((run) => run.taskId === request.taskId && !TERMINAL.has(run.status));
+  if (duplicateActive) return { reused: true, run: duplicateActive, revision: store.revision, productionAccess: "DENY" as const };
+  const nodes = await probeBuildNodes();
+  const decision = scheduleBuildRun({ request, nodes, activeRuns: activeRuns(store.runs), runHistory: store.runs.filter((run) => TERMINAL.has(run.status)) });
+  if (decision.decision === "BLOCKED" || !decision.run) errorWith(decision.code, decision.reason);
+  const saved = await createBuildRunIfTaskIdle(decision.run);
+  if (!saved.created) return { reused:true, run:saved.run, revision:saved.revision, productionAccess:"DENY" as const };
+  await buildEvent(saved.run, decision.decision === "QUEUED" ? "BUILD_QUEUED" : "BUILD_ASSIGNED", decision.reason, { status: decision.run.status });
+  if (decision.decision === "ASSIGNED") await spawnAssignedRun(saved.run);
+  return { reused:false, run:saved.run, decision:decision.decision, revision:saved.revision, productionAccess:"DENY" as const };
+}
+
+export async function requestDeveloperGridReviewedBuild(input: {
+  taskId:string; sessionId:string; workerCode:GridBuildRun["workerCode"]; sourceCommit:string; sourceBranch:string;
+  reviewState:"REVIEW_PASS"; reviewedCommit:string; reviewResultSha256:string;
+}) {
+  if (input.reviewState !== "REVIEW_PASS") errorWith("BUILD_REVIEW_PASS_REQUIRED", "Task Bridge build csak REVIEW_PASS után kérhető.");
+  if (!/^[0-9a-f]{40}$/i.test(input.sourceCommit) || input.reviewedCommit.toLowerCase() !== input.sourceCommit.toLowerCase()) errorWith("BUILD_REVIEW_COMMIT_MISMATCH", "A review-zott commit és a build source commit eltér.");
+  if (!/^[0-9a-f]{64}$/i.test(input.reviewResultSha256)) errorWith("BUILD_REVIEW_PROOF_INVALID", "A Task Bridge buildhez érvényes review proof SHA-256 szükséges.");
+  if (!/^[A-Za-z0-9._/-]{1,220}$/.test(input.sourceBranch)) errorWith("BUILD_SOURCE_BRANCH_INVALID", "A Task Bridge build branch érvénytelen.");
+  const requestedAt=new Date().toISOString();
+  return enqueueVerifiedBuildRequest({ runId:runId(), taskId:input.taskId, sessionId:input.sessionId, workerCode:input.workerCode, sourceCommit:input.sourceCommit.toLowerCase(), sourceBranch:input.sourceBranch, requestedAt });
+}
+
 export async function requestDeveloperGridFullBuild(input: Record<string, unknown>) {
   const taskId = String(input.taskId || "").trim();
   const sessionId = String(input.sessionId || "").trim();
@@ -152,17 +178,6 @@ export async function requestDeveloperGridFullBuild(input: Record<string, unknow
     const gate = await evaluateDeveloperGridReviewGate({ taskId, target:"BUILD" });
     if (!gate.ready) errorWith("BUILD_REVIEW_GATE_BLOCKED", `A 5/6 BUILD fázis előtt a Review Gate kötelező: ${gate.checks.filter((item) => item.required && !item.pass).map((item) => item.label).join(" · ") || "BLOCKED"}.`);
   }
-  const store = await reconcileDeveloperGridBuildRuns();
-  const duplicateActive = store.runs.find((run) => run.taskId === taskId && !TERMINAL.has(run.status));
-  if (duplicateActive) return { reused: true, run: duplicateActive, revision: store.revision, productionAccess: "DENY" as const };
-  const requestedAt = new Date().toISOString();
-  const request = { runId: runId(), taskId, sessionId: session.id, workerCode: session.workerCode, sourceCommit: session.sourceProvenance.head, sourceBranch: session.sourceProvenance.branch, requestedAt };
-  const nodes = await probeBuildNodes();
-  const decision = scheduleBuildRun({ request, nodes, activeRuns: activeRuns(store.runs), runHistory: store.runs.filter((run) => TERMINAL.has(run.status)) });
-  if (decision.decision === "BLOCKED" || !decision.run) errorWith(decision.code, decision.reason);
-  const saved = await createBuildRunIfTaskIdle(decision.run);
-  if (!saved.created) return { reused:true, run:saved.run, revision:saved.revision, productionAccess:"DENY" as const };
-  await buildEvent(saved.run, decision.decision === "QUEUED" ? "BUILD_QUEUED" : "BUILD_ASSIGNED", decision.reason, { status: decision.run.status });
-  if (decision.decision === "ASSIGNED") await spawnAssignedRun(saved.run);
-  return { reused: false, run: saved.run, decision: decision.decision, revision: saved.revision, productionAccess: "DENY" as const };
+  const request = { runId: runId(), taskId, sessionId: session.id, workerCode: session.workerCode, sourceCommit: session.sourceProvenance.head, sourceBranch: session.sourceProvenance.branch, requestedAt:new Date().toISOString() };
+  return enqueueVerifiedBuildRequest(request);
 }

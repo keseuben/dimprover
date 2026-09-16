@@ -10,7 +10,7 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
   const fmtDuration = m => { const n=Math.max(0,Number(m)||0), h=Math.floor(n/60); return h ? `${h} ó ${n%60} p` : `${n} p`; };
@@ -27,32 +27,63 @@
   }
   function workStartView() {
     const task=state.activeWork?.task||null;
-    const active=Boolean(task&&!["COMPLETED","BLOCKED","CANCELLED"].includes(String(task.status||"").toUpperCase()));
     const reconciliation=state.activeWork?.reconciliation||null;
-    const stale=Boolean(task&&["STALE","BLOCKED"].includes(String(reconciliation?.state||"").toUpperCase()));
+    const terminalTask=Boolean(task&&["COMPLETED","BLOCKED","CANCELLED"].includes(String(task.status||"").toUpperCase()));
+    const stale=Boolean(task&&!terminalTask&&reconciliation&&reconciliation.state&&reconciliation.state!=="CURRENT");
     const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
     const bootAckState=String(activeSession?.developmentContext?.bootAckState||"").toUpperCase();
     const canResumeLaunch=Boolean(task&&activeSession&&String(task.status||"").toUpperCase()==="READY"&&bootAckState!=="VALIDATED");
     const workerSelected=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode);
-    const status=state.workResumeBusy?"INDÍTÁS":state.workStartBusy?"ELŐKÉSZÍTÉS":stale?"ELAVULT":canResumeLaunch?(bootAckState==="WAITING"?"BOOT ACK VÁR":"INDÍTÁSRA VÁR"):active?"AKTÍV":!workerSelected&&state.workStartDraft.trim().length>=12?"KÓDMÉRNÖK KELL":state.workStartStatus||"KÉSZ";
-    const valid=state.workStartDraft.trim().length>=12&&workerSelected;
+    const surfaceType=selectedWorkerSurface();
+    const isCodex=surfaceType==="CODEX";
+    const isWork=surfaceType==="WORK";
+    const scopeReady=!isCodex||state.workStartAllowedPaths.split(/[\r\n,;]+/).map(x=>x.trim()).filter(Boolean).length>0;
+    const bridgeStatus=String(state.taskBridge?.bridge?.state||state.taskBridge?.state||"").toUpperCase();
+    const status=state.workResumeBusy?"INDÍTÁS":state.taskBridgeBusy?"TASK BRIDGE":state.workStartBusy?"ELŐKÉSZÍTÉS":stale?"ELAVULT":canResumeLaunch?(bootAckState==="WAITING"?"BOOT ACK VÁR":"INDÍTÁSRA VÁR"):bridgeStatus|| (active?"AKTÍV":!workerSelected&&state.workStartDraft.trim().length>=12?"KÓDMÉRNÖK KELL":state.workStartStatus||"KÉSZ");
+    const valid=state.workStartDraft.trim().length>=12&&workerSelected&&scopeReady&&!isWork;
     const existing=state.workStartChatMode!=="NEW_PROJECT_CHAT";
     const staleNote=stale?`<div class="cw-stale-work"><strong>AUTHORITATIVE ÁLLAPOT ELAVULT</strong><span>${esc((reconciliation?.reasons||[]).join(" · ")||"A task forrásállapota nem egyezik a jelenlegi DEV állapottal.")}</span><small>Korábbi taskként megmarad, de új fejlesztést a Central Core-ból új taskként indíts.</small></div>`:"";
-    return `<section class="cw-work-start" data-cw-section="work" data-work-status="${esc(status)}"><header><div><strong>Mit fejlesszünk?</strong><span>A napi fejlesztési munka elsődleges indítópontja · Central Core koordináció</span></div><b>${esc(status)}</b></header>${task?`<div class="cw-active-work"><strong>${stale?"KORÁBBI / ELAVULT MUNKA":"AKTÍV MUNKA"}</strong><span>${esc(task.title||task.id)}</span><small>${esc(task.id)} · ${esc(task.status||"")} · state r${Number(state.activeWork?.revision)||0}</small></div>`:""}${staleNote}<label class="cw-work-prompt">Új fejlesztési feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a mai fejlesztési feladatot vagy a következő konkrét lépést…">${esc(state.workStartDraft)}</textarea></label><div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}" placeholder="project_dimprover"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}" placeholder="Developer Grid V1"></label><label class="cw-work-worker">Kódoló AI · kötelező<select id="workStartWorkerCode"><option value="" ${state.workStartWorkerCode?"":"selected"} disabled>Válassz kódmérnököt…</option><option value="ARMINAI" ${state.workStartWorkerCode==="ARMINAI"?"selected":""}>ÁrminAI</option><option value="OUTMINAI" ${state.workStartWorkerCode==="OUTMINAI"?"selected":""}>OutminAI</option><option value="BENJAMINAI" ${state.workStartWorkerCode==="BENJAMINAI"?"selected":""}>BenjáminAI</option><option value="JAZMINAI" ${state.workStartWorkerCode==="JAZMINAI"?"selected":""}>JázminAI</option></select><small>Explicit worker kötelező. A Central Core nem választhat rejtett vagy automatikus fallback workert. Kijelölt surface: ${esc(selectedWorkerSurface())}.</small></label></div><fieldset class="cw-chat-mode"><legend>Csevegési mód</legend><label class="${existing?"is-selected":""}"><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${existing?"checked":""}><span><strong>MEGLÉVŐ CSEVEGÉS FOLYTATÁSA</strong><small>Az assigned worker jelenlegi /c/... beszélgetése marad. Jó előző napi munka folytatására és kontextusmegőrzésre.</small></span></label><label class="${existing?"":"is-selected"}"><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${existing?"":"checked"}><span><strong>ÚJ PROJEKTCSEVEGÉS</strong><small>A task kiosztása után te hozod létre a ChatGPT Projektben az új csevegést, majd a worker fejlécben rögzíted.</small></span></label></fieldset>${state.workStartNotice?`<div class="cw-work-start-notice" data-tone="${esc(state.workStartNoticeTone)}"><strong>${state.workStartNoticeTone==="error"?"INDÍTÁS BLOKKOLT":state.workStartNoticeTone==="warning"?"VÁRAKOZIK":"MUNKAINDÍTÁS"}</strong><span>${esc(state.workStartNotice)}</span></div>`:""}<div class="cw-work-actions"><small>${canResumeLaunch?"A kiosztott task BOOT ACK előtt áll · folytatás új task nélkül":"Ctrl+Enter: indítás · Enter: új sor · a csevegési mód a taskhoz rögzül"}</small>${canResumeLaunch?`<button id="workResumeButton" type="button" ${state.workResumeBusy?'disabled="true"':''}>${state.workResumeBusy?"KÜLDÉS…":"INDÍTÁS FOLYTATÁSA"}</button>`:""}<button id="workStartButton" type="button" ${state.workStartBusy||state.workResumeBusy||!valid?'disabled="true"':''}>${state.workStartBusy?"ELŐKÉSZÍTÉS…":"MUNKA INDÍTÁSA"}</button></div></section>`;
+    const bridge=state.taskBridge?.bridge||state.taskBridge||null;
+    const detection=state.taskBridge?.detection||{};
+    const bridgeState=String(detection.effectiveState||bridge?.state||"READY_FOR_WORKER").toUpperCase();
+    const reviewIndicator=String(bridge?.reviewState||(bridgeState==="REVIEW_PENDING"?"PENDING":bridgeState==="REVIEW_IN_PROGRESS"?"RUNNING":bridgeState==="REVIEW_CHANGES_REQUESTED"?"CHANGES":["REVIEW_PASS","BUILD_PENDING","BUILD_RUNNING","BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"].includes(bridgeState)?"PASS":"WAIT")).toUpperCase();
+    const buildIndicator=String(bridge?.buildState||(bridgeState==="BUILD_PENDING"?"PENDING":bridgeState==="BUILD_RUNNING"?"RUNNING":["BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"].includes(bridgeState)?"PASS":"WAIT")).toUpperCase();
+    const devIndicator=String(bridge?.devAcceptanceState||(bridgeState==="DEV_ACCEPTANCE_PENDING"?"PENDING":["DEV_ACCEPTANCE_PASS","CLOSED"].includes(bridgeState)?"PASS":"WAIT")).toUpperCase();
+    const postImportStates=["REVIEW_PENDING","REVIEW_IN_PROGRESS","REVIEW_PASS","REVIEW_CHANGES_REQUESTED","BUILD_PENDING","BUILD_RUNNING","BUILD_PASS","DEV_ACCEPTANCE_PENDING","DEV_ACCEPTANCE_PASS","CLOSED"];
+    const canBridgeImport=Boolean(detection.resultDetected)&&!postImportStates.includes(bridgeState);
+    const canReviewCopy=["REVIEW_PENDING","REVIEW_IN_PROGRESS"].includes(bridgeState);
+    const canReviewImport=Boolean(detection.reviewResultDetected)&&canReviewCopy;
+    const canBridgeRework=bridgeState==="REVIEW_CHANGES_REQUESTED"&&String(bridge?.reviewState||"").toUpperCase()==="CHANGES_REQUESTED";
+    const canBridgeBuild=bridgeState==="REVIEW_PASS"&&String(bridge?.reviewState||"").toUpperCase()==="PASS";
+    const canAcceptanceImport=bridgeState==="DEV_ACCEPTANCE_PENDING"&&Boolean(detection.acceptanceResultDetected)&&String(bridge?.buildState||"").toUpperCase()==="PASS";
+    const bridgeIndicators=bridge?[["WORKER",bridgeState],["GIT",String(detection.gitState||"UNKNOWN").toUpperCase()],["SCOPE",String(detection.scopeState||"UNKNOWN").toUpperCase()],["REVIEW",reviewIndicator],["BUILD",buildIndicator],["DEV",devIndicator]].map(([label,value])=>`<i data-value="${esc(value)}"><em>${esc(label)}</em><b>${esc(value)}</b></i>`).join(""):"";
+    const bridgeCard=bridge&&String(bridge.surfaceType||"").toUpperCase()==="CODEX"?`<div class="cw-task-bridge" data-state="${esc(bridgeState)}"><div><strong>CODEX TASK BRIDGE</strong><b>${esc(bridgeState)}</b></div><span>${esc(state.taskBridge?.taskId||bridge.taskId||"")}</span><small>${esc(bridge.branchName||"")} · ${esc(bridge.worktreePath||"")}</small><small>Scope: ${esc((bridge.allowedPaths||[]).join(" · ")||"—")}</small><div class="cw-task-bridge-indicators">${bridgeIndicators}</div><div class="cw-task-bridge-actions"><button id="taskBridgeCopyButton" type="button">TASK MÁSOLÁSA CODEXHEZ</button><button id="taskBridgeRefreshButton" type="button">FRISSÍTÉS</button><button id="taskBridgeImportButton" type="button" ${canBridgeImport?"":'disabled="true"'}>RESULT IMPORT</button><button id="taskBridgeReviewCopyButton" type="button" ${canReviewCopy?"":'disabled="true"'}>REVIEW MÁSOLÁSA BENAI-NAK</button><button id="taskBridgeReviewImportButton" type="button" ${canReviewImport?"":'disabled="true"'}>REVIEW IMPORT</button><button id="taskBridgeReworkButton" type="button" ${canBridgeRework?"":'disabled="true"'}>JAVÍTÁS VISSZA CODEXHEZ</button><button id="taskBridgeBuildButton" type="button" ${canBridgeBuild?"":'disabled="true"'}>BUILD INDÍTÁSA</button><button id="taskBridgeAcceptanceButton" type="button" ${canAcceptanceImport?"":'disabled="true"'}>DEV ACCEPTANCE IMPORT</button></div></div>`:"";
+    const launchOptions=isCodex
+      ? `<fieldset class="cw-chat-mode cw-task-bridge-mode"><legend>Codex Task Bridge</legend><label class="is-selected"><span><strong>OPENAI FIRST-PARTY · TASK BRIDGE</strong><small>A worker identitása változatlan marad. A Grid izolált DEV branch/worktree/scope-lock csomagot készít; közvetlen Codex API-hívás nincs.</small></span></label><label class="cw-work-prompt"><span><strong>ENGEDÉLYEZETT PATH-SCOPE · KÖTELEZŐ</strong><small>Soronként vagy vesszővel. Példa: app/lib/developer-grid · desktop/benjadmin-developer-grid/src</small></span><textarea id="workStartAllowedPaths" rows="3" placeholder="app/lib/developer-grid\ndesktop/benjadmin-developer-grid/src">${esc(state.workStartAllowedPaths)}</textarea></label></fieldset>`
+      : isWork
+        ? `<fieldset class="cw-chat-mode"><legend>ChatGPT Work</legend><label class="is-selected"><span><strong>OPENAI FIRST-PARTY · WORK</strong><small>A Work adapter v0.1.42-ben aktiválódik. Ebben a verzióban taskindítás még tiltott.</small></span></label></fieldset>`
+        : `<fieldset class="cw-chat-mode"><legend>Csevegési mód</legend><label class="${existing?"is-selected":""}"><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${existing?"checked":""}><span><strong>MEGLÉVŐ CSEVEGÉS FOLYTATÁSA</strong><small>Az assigned worker jelenlegi /c/... beszélgetése marad. Jó előző napi munka folytatására és kontextusmegőrzésre.</small></span></label><label class="${existing?"":"is-selected"}"><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${existing?"":"checked"}><span><strong>ÚJ PROJEKTCSEVEGÉS</strong><small>A task kiosztása után te hozod létre a ChatGPT Projektben az új csevegést, majd a worker fejlécben rögzíted.</small></span></label></fieldset>`;
+    return `<section class="cw-work-start" data-cw-section="work" data-work-status="${esc(status)}"><header><div><strong>Mit fejlesszünk?</strong><span>A napi fejlesztési munka elsődleges indítópontja · Central Core koordináció</span></div><b>${esc(status)}</b></header>${task?`<div class="cw-active-work"><strong>${stale?"KORÁBBI / ELAVULT MUNKA":"AKTÍV MUNKA"}</strong><span>${esc(task.title||task.id)}</span><small>${esc(task.id)} · ${esc(task.status||"")} · state r${Number(state.activeWork?.revision)||0}</small></div>`:""}${bridgeCard}${staleNote}<label class="cw-work-prompt">Új fejlesztési feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a mai fejlesztési feladatot vagy a következő konkrét lépést…">${esc(state.workStartDraft)}</textarea></label><div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}" placeholder="project_dimprover"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}" placeholder="Developer Grid V1"></label><label class="cw-work-worker">Kódoló AI · kötelező<select id="workStartWorkerCode"><option value="" ${state.workStartWorkerCode?"":"selected"} disabled>Válassz kódmérnököt…</option><option value="ARMINAI" ${state.workStartWorkerCode==="ARMINAI"?"selected":""}>ÁrminAI</option><option value="OUTMINAI" ${state.workStartWorkerCode==="OUTMINAI"?"selected":""}>OutminAI</option><option value="BENJAMINAI" ${state.workStartWorkerCode==="BENJAMINAI"?"selected":""}>BenjáminAI</option><option value="JAZMINAI" ${state.workStartWorkerCode==="JAZMINAI"?"selected":""}>JázminAI</option></select><small>Explicit worker kötelező. Worker-identitás és OpenAI surface külön adat. Kijelölt surface: ${esc(surfaceType)}.</small></label></div>${launchOptions}${state.workStartNotice?`<div class="cw-work-start-notice" data-tone="${esc(state.workStartNoticeTone)}"><strong>${state.workStartNoticeTone==="error"?"INDÍTÁS BLOKKOLT":state.workStartNoticeTone==="warning"?"VÁRAKOZIK":"MUNKAINDÍTÁS"}</strong><span>${esc(state.workStartNotice)}</span></div>`:""}<div class="cw-work-actions"><small>${isCodex?"Codex: task → branch/worktree → scope-lock → TASK.md/task.json → result.json import → review/build gate":canResumeLaunch?"A kiosztott task BOOT ACK előtt áll · folytatás új task nélkül":"Ctrl+Enter: indítás · Enter: új sor · a csevegési mód a taskhoz rögzül"}</small>${!isCodex&&canResumeLaunch?`<button id="workResumeButton" type="button" ${state.workResumeBusy?'disabled="true"':''}>${state.workResumeBusy?"KÜLDÉS…":"INDÍTÁS FOLYTATÁSA"}</button>`:""}<button id="workStartButton" type="button" ${state.workStartBusy||state.workResumeBusy||state.taskBridgeBusy||!valid?'disabled="true"':''}>${state.workStartBusy||state.taskBridgeBusy?"ELŐKÉSZÍTÉS…":isCodex?"CODEX TASK INDÍTÁSA":"MUNKA INDÍTÁSA"}</button></div></section>`;
   }
   function ensureWorkStartKey(){if(!state.workStartKey)state.workStartKey=(globalThis.crypto?.randomUUID?.()||`grid-${Date.now()}-${Math.random().toString(16).slice(2)}`);return state.workStartKey;}
   async function startWork(){
-    if(state.workStartBusy)return;
+    if(state.workStartBusy||state.taskBridgeBusy)return;
     const prompt=state.workStartDraft.trim();
     if(prompt.length<12){state.workStartStatus="BLOKKOLT";state.workStartNotice="A fejlesztési utasítás legalább 12 karakter legyen.";state.workStartNoticeTone="error";render();return;}
     if(!["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode)){state.workStartStatus="BLOKKOLT";state.workStartNotice="Válassz explicit kódmérnököt. Automatikus worker-kiosztás nincs.";state.workStartNoticeTone="error";render();return;}
-    state.workStartBusy=true;state.workStartStatus="ELŐKÉSZÍTÉS";state.workStartNotice="A Central Core létrehozza vagy újrapróbálja a taskot és ellenőrzi a worker rendelkezésre állását…";state.workStartNoticeTone="info";render();
     const surfaceType=selectedWorkerSurface();
-    if(surfaceType!=="CHATGPT"){
-      state.workStartBusy=false;state.workStartStatus="BLOKKOLT";
-      state.workStartNotice=surfaceType==="CODEX"?"A Codex surface kiválasztható és menthető, de a natív desktop bridge még nincs aktiválva. Task nem jött létre.":"A Work surface v0.1.42-re van előkészítve. Task nem jött létre.";
-      state.workStartNoticeTone="warning";render();return;
+    if(surfaceType==="WORK"){state.workStartStatus="BLOKKOLT";state.workStartNotice="A Work surface OpenAI first-party, de a Work adapter v0.1.42-ben aktiválódik. Task nem jött létre.";state.workStartNoticeTone="warning";render();return;}
+    if(surfaceType==="CODEX"){
+      const allowedPaths=state.workStartAllowedPaths.split(/[\r\n,;]+/).map(x=>x.trim()).filter(Boolean);
+      if(!allowedPaths.length){state.workStartStatus="BLOKKOLT";state.workStartNotice="Codex Task Bridge indításhoz legalább egy engedélyezett path-scope kötelező.";state.workStartNoticeTone="error";render();return;}
+      state.taskBridgeBusy=true;state.workStartStatus="TASK BRIDGE";state.workStartNotice="A Central Core előkészíti az izolált DEV branch/worktree/scope-lock Task Bridge-et…";state.workStartNoticeTone="info";render();
+      const result=await api.startDeveloperGridTaskBridge?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,allowedPaths,idempotencyKey:ensureWorkStartKey(),providerFamily:"OPENAI_FIRST_PARTY",surfaceType:"CODEX",executionMode:"TASK_BRIDGE"});
+      state.taskBridgeBusy=false;
+      if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A Codex Task Bridge indítása sikertelen.");state.workStartNoticeTone="error";render();return;}
+      state.taskBridge=result.taskBridge||null;state.workStartStatus="READY_FOR_WORKER";state.workStartDraft="";state.workStartKey="";
+      const bridge=result.taskBridge?.bridge||{};state.workStartNotice=`Codex Task Bridge READY_FOR_WORKER. Branch: ${bridge.branchName||"—"}. TASK.md: ${bridge.taskMarkdownPath||"—"}`;state.workStartNoticeTone="success";render();return;
     }
+    state.workStartBusy=true;state.workStartStatus="ELŐKÉSZÍTÉS";state.workStartNotice="A Central Core létrehozza vagy újrapróbálja a taskot és ellenőrzi a worker rendelkezésre állását…";state.workStartNoticeTone="info";render();
     const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,surfaceType,idempotencyKey:ensureWorkStartKey()});
     state.workStartBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A munkaindítás sikertelen.");state.workStartNoticeTone="error";render();return;}
@@ -92,6 +123,67 @@
     const authoritative=await api.getDeveloperGridActiveWork?.();
     if(authoritative?.ok&&authoritative.activeWork)state.activeWork=authoritative.activeWork;
     render();
+  }
+  async function refreshTaskBridge(){
+    if(selectedWorkerSurface()!=="CODEX"||!state.workStartWorkerCode)return;
+    const result=await api.getDeveloperGridTaskBridge?.({workerCode:state.workStartWorkerCode});
+    if(result?.ok)state.taskBridge=result.taskBridge||null;
+    else if(result?.error)setNotice(contextErrorMessage(result.error),"error");
+    render();
+  }
+  async function copyTaskBridgeToCodex(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";
+    if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="A sanitizált Codex bootstrap prompt előkészítése…";state.workStartNoticeTone="info";render();
+    const result=await api.copyDeveloperGridTaskBridgeToCodex?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A Codex bootstrap nem másolható.");state.workStartNoticeTone="error";render();return;}
+    state.workStartStatus="WORKER_RUNNING";state.workStartNotice=result.message||"A Codex bootstrap prompt a vágólapra került.";state.workStartNoticeTone="success";await refreshTaskBridge();
+  }
+  async function importTaskBridgeResult(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";
+    if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="A result.json Git/scope/provenance ellenőrzése folyamatban…";state.workStartNoticeTone="info";render();
+    const result=await api.importDeveloperGridTaskBridgeResult?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A result import sikertelen.");state.workStartNoticeTone="error";render();return;}
+    state.workStartStatus="REVIEW_PENDING";state.workStartNotice="Codex result import PASS. A task REVIEW_PENDING állapotba került; build továbbra is tiltott.";state.workStartNoticeTone="success";await refreshTaskBridge();
+  }
+  async function copyTaskBridgeReviewToBenAi(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="A REVIEW.md előkészítése BenAI ellenőrzéshez…";state.workStartNoticeTone="info";render();
+    const result=await api.copyDeveloperGridTaskBridgeReviewToBenAi?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A review nem másolható BenAI-nak.");state.workStartNoticeTone="error";render();return;}
+    state.workStartStatus="REVIEW_IN_PROGRESS";state.workStartNotice=result.message||"A REVIEW.md a vágólapra került.";state.workStartNoticeTone="success";await refreshTaskBridge();
+  }
+  async function importTaskBridgeReview(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="A review.json commit/provenance ellenőrzése folyamatban…";state.workStartNoticeTone="info";render();
+    const result=await api.importDeveloperGridTaskBridgeReview?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A review import sikertelen.");state.workStartNoticeTone="error";render();return;}
+    const reviewResult=String(result?.result?.review?.result||"").toUpperCase();
+    state.workStartStatus=reviewResult==="PASS"?"REVIEW_PASS":"REVIEW_CHANGES_REQUESTED";
+    state.workStartNotice=reviewResult==="PASS"?"BenAI REVIEW_PASS. A build-kapu megnyitható; build még nem indult.":"BenAI CHANGES_REQUESTED. A build-kapu zárva marad.";
+    state.workStartNoticeTone=reviewResult==="PASS"?"success":"warning";await refreshTaskBridge();
+  }
+  async function resumeTaskBridgeRework(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="Új Codex rework session és scope-lock előkészítése…";state.workStartNoticeTone="info";render();
+    const result=await api.resumeDeveloperGridTaskBridgeRework?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A rework nem indítható.");state.workStartNoticeTone="error";render();return;}
+    state.workStartStatus="WORKER_RUNNING";state.workStartNotice=result.message||"A javítási kör elindult; a review findingokat tartalmazó bootstrap a vágólapra került.";state.workStartNoticeTone="success";await refreshTaskBridge();
+  }
+  async function requestTaskBridgeBuild(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="A REVIEW_PASS commit átadása a BUILD01/BUILD02 poolnak…";state.workStartNoticeTone="info";render();
+    const result=await api.requestDeveloperGridTaskBridgeBuild?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A Task Bridge build nem indítható.");state.workStartNoticeTone="error";render();return;}
+    const runStatus=String(result?.build?.run?.status||"PENDING").toUpperCase();state.workStartStatus=runStatus==="QUEUED"?"BUILD_PENDING":"BUILD_RUNNING";state.workStartNotice=`Task Bridge build ${runStatus}. Hardened BUILD01/BUILD02 pool; PROD továbbra is DENY.`;state.workStartNoticeTone="success";await refreshTaskBridge();
+  }
+  async function importTaskBridgeAcceptance(){
+    const taskId=state.taskBridge?.taskId||state.taskBridge?.bridge?.taskId||"";if(!taskId||state.taskBridgeBusy)return;
+    state.taskBridgeBusy=true;state.workStartNotice="Az acceptance.json build/provenance ellenőrzése folyamatban…";state.workStartNoticeTone="info";render();
+    const result=await api.importDeveloperGridTaskBridgeAcceptance?.(taskId);state.taskBridgeBusy=false;
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A DEV acceptance import sikertelen.");state.workStartNoticeTone="error";render();return;}
+    const status=String(result?.result?.acceptance?.status||"").toUpperCase();state.workStartStatus=status||"DEV_ACCEPTANCE_PASS";state.workStartNotice=status==="DEV_ACCEPTANCE_PASS"?"DEV_ACCEPTANCE_PASS. A Dev Engine task teljesített állapotba került.":"DEV_ACCEPTANCE_FAIL. A task nem zárható le.";state.workStartNoticeTone=status==="DEV_ACCEPTANCE_PASS"?"success":"error";await refreshTaskBridge();
   }
   async function resumeWorkLaunch(){
     if(state.workResumeBusy)return;
@@ -191,9 +283,18 @@
     workPrompt?.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.ctrlKey){e.preventDefault();void startWork();}});
     root.querySelector("#workStartProjectId")?.addEventListener("input",e=>{state.workStartProjectId=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelector("#workStartModuleName")?.addEventListener("input",e=>{state.workStartModuleName=e.target.value;state.workStartKey="";state.workStartNotice="";});
-    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";render();});
+    root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();});
+    root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";render();}));
     root.querySelector("#workStartButton")?.addEventListener("click",()=>void startWork());
+    root.querySelector("#taskBridgeCopyButton")?.addEventListener("click",()=>void copyTaskBridgeToCodex());
+    root.querySelector("#taskBridgeRefreshButton")?.addEventListener("click",()=>void refreshTaskBridge());
+    root.querySelector("#taskBridgeImportButton")?.addEventListener("click",()=>void importTaskBridgeResult());
+    root.querySelector("#taskBridgeReviewCopyButton")?.addEventListener("click",()=>void copyTaskBridgeReviewToBenAi());
+    root.querySelector("#taskBridgeReviewImportButton")?.addEventListener("click",()=>void importTaskBridgeReview());
+    root.querySelector("#taskBridgeReworkButton")?.addEventListener("click",()=>void resumeTaskBridgeRework());
+    root.querySelector("#taskBridgeBuildButton")?.addEventListener("click",()=>void requestTaskBridgeBuild());
+    root.querySelector("#taskBridgeAcceptanceButton")?.addEventListener("click",()=>void importTaskBridgeAcceptance());
     root.querySelector("#workResumeButton")?.addEventListener("click",()=>void resumeWorkLaunch());
     root.querySelector("#fullBuildButton")?.addEventListener("click",()=>void requestFullBuild());
     root.querySelector("#vguardReviewButton")?.addEventListener("click",()=>void requestVGuardReview());
@@ -228,6 +329,7 @@
     if(workResult?.ok&&workResult.activeWork)state.activeWork=workResult.activeWork;
     if(healthResult?.ok&&healthResult.health)state.systemHealth=healthResult.health;
     if(buildResult?.ok&&buildResult.buildRuns)state.buildRuns=buildResult.buildRuns;
+    if(selectedWorkerSurface()==="CODEX"&&state.workStartWorkerCode){const bridgeResult=await api.getDeveloperGridTaskBridge?.({workerCode:state.workStartWorkerCode});if(bridgeResult?.ok)state.taskBridge=bridgeResult.taskBridge||null;}
     if(windowsResult?.ok)state.windowsE2E=windowsResult.windowsE2E||null;
     const taskId=state.activeWork?.task?.id||"";
     if(taskId){
