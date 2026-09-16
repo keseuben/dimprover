@@ -28,3 +28,6 @@ Az `INDÍTÁS FOLYTATÁSA` a már létrejött, de korábban blokkolt taskot hely
 - Végrehajtó eszköz hiánya külön `EXECUTION_TOOL_UNAVAILABLE`.
 - Launch Packet proof nélkül fail-closed.
 - BOOT ACK proof hash, active scope-lock és active worktree lease nélkül fail-closed.
+
+## v0.1.41 release worktree provenance
+A Windows package/release wrapper explicit `BENJADMIN_DEV_CANONICAL_ROOT` és `BENJADMIN_DEV_CANONICAL_BRANCH` DEV környezeti értéket fogadhat, hogy új Developer Grid feature/release branchből is szabályosan csomagolható legyen. A root kizárólag `/srv/dimpro-dev/worktrees/*`, a common Git repository kizárólag `/srv/dimpro-dev/repositories/dimprover.git`, a host továbbra is `dimpro-dev`; tiszta worktree, exact HEAD/branch, BUILD_ID és PROD DENY változatlanul kötelező.

@@ -2,13 +2,17 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EXPECTED_ROOT="/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905"
-EXPECTED_BRANCH="feature/benjadmin-developer-grid-v013-outminai-20260905"
-EXPECTED_COMMON="/srv/dimpro-dev/repositories/dimprover.git"
+EXPECTED_ROOT="${BENJADMIN_DEV_CANONICAL_ROOT:-/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905}"
+EXPECTED_BRANCH="${BENJADMIN_DEV_CANONICAL_BRANCH:-feature/benjadmin-developer-grid-v013-outminai-20260905}"
+EXPECTED_COMMON="${BENJADMIN_DEV_CANONICAL_GIT:-/srv/dimpro-dev/repositories/dimprover.git}"
 EXPECTED_HOST="dimpro-dev"
 DESKTOP="$ROOT/desktop/benjadmin-developer-grid"
 
 fail() { echo "BLOCKED · $1" >&2; exit "${2:-1}"; }
+
+[[ "$EXPECTED_ROOT" == /srv/dimpro-dev/worktrees/* ]] || fail "CANONICAL_DEV_WORKTREE_ENV_DENIED" 39
+[[ "$EXPECTED_COMMON" == "/srv/dimpro-dev/repositories/dimprover.git" ]] || fail "CANONICAL_DEV_REPOSITORY_ENV_DENIED" 39
+git check-ref-format --branch "$EXPECTED_BRANCH" >/dev/null 2>&1 || fail "CANONICAL_DEV_BRANCH_ENV_INVALID" 39
 
 [[ "$(hostname)" == "$EXPECTED_HOST" ]] || fail "CANONICAL_DEV_HOST_MISMATCH" 40
 [[ "$ROOT" == "$EXPECTED_ROOT" ]] || fail "CANONICAL_DEV_WORKTREE_MISMATCH" 41
