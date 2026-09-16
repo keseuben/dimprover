@@ -29,8 +29,17 @@ function taskLaunchGate(task) {
   const worktreeOk = Boolean(cleanText(task.worktreePath, 800));
   const headOk = /^[0-9a-f]{40}$/i.test(cleanText(task.sourceHead ?? task.baseHead ?? task.startHead, 80));
   const sessionOk = Boolean(cleanText(task.sessionId ?? task.activeSessionId, 220));
-  if (!scopeOk || !acceptanceOk || !branchOk || !worktreeOk || !headOk || !sessionOk) {
-    const missing = [!scopeOk ? "engedélyezett scope" : "", !acceptanceOk ? "acceptance" : "", !branchOk ? "branch" : "", !worktreeOk ? "worktree" : "", !headOk ? "base HEAD" : "", !sessionOk ? "sessionId" : ""].filter(Boolean).join(", ");
+  const proof = task.sourceExecutionProof && typeof task.sourceExecutionProof === "object" ? task.sourceExecutionProof : null;
+  const proofOk = Boolean(proof
+    && proof.state === "VERIFIED"
+    && proof.authority === "CENTRAL_CORE"
+    && proof.handshakeStage === "READY"
+    && proof.productionAccess === "DENY"
+    && /^[0-9a-f]{64}$/i.test(cleanText(proof.sha256, 80))
+    && Number(proof.activeScopeLockCount || 0) >= 1
+    && Number(proof.activeWorktreeLeaseCount || 0) >= 1);
+  if (!scopeOk || !acceptanceOk || !branchOk || !worktreeOk || !headOk || !sessionOk || !proofOk) {
+    const missing = [!scopeOk ? "engedélyezett scope" : "", !acceptanceOk ? "acceptance" : "", !branchOk ? "branch" : "", !worktreeOk ? "worktree" : "", !headOk ? "base HEAD" : "", !sessionOk ? "sessionId" : "", !proofOk ? "Central Core source proof" : ""].filter(Boolean).join(", ");
     return {
       ok: false,
       code: "TASK_CONTRACT_INCOMPLETE",
@@ -57,6 +66,8 @@ function buildWorkerTaskPrompt({ task, workerCode, workerLabel, presence }) {
   const branch = cleanText(task?.branchName, 500);
   const worktree = cleanText(task?.worktreePath, 800);
   const sourceHead = cleanText(task?.sourceHead ?? task?.baseHead ?? task?.startHead, 80);
+  const sourceProof = task?.sourceExecutionProof && typeof task.sourceExecutionProof === "object" ? task.sourceExecutionProof : null;
+  const sourceProofSha256 = cleanText(sourceProof?.sha256, 80).toLowerCase();
   const sessionId = cleanText(task?.sessionId ?? task?.activeSessionId, 220);
   const projectId = cleanText(task?.projectId, 200);
   const priority = Number.isFinite(Number(task?.priority)) ? String(Number(task.priority)) : "";
@@ -94,6 +105,21 @@ ${continuityContextSummary}`);
   if (worktree) lines.push(`WORKTREE: ${worktree}`);
   if (sourceHead) lines.push(`BASE HEAD: ${sourceHead}`);
   if (sessionId) lines.push(`SESSION ID: ${sessionId}`);
+  if (sourceProofSha256) {
+    lines.push(
+      "",
+      "CENTRAL CORE SOURCE PREFLIGHT PROOF",
+      `State: ${cleanText(sourceProof?.state, 40)}`,
+      `Authority: ${cleanText(sourceProof?.authority, 40)}`,
+      `Proof SHA-256: ${sourceProofSha256}`,
+      `Verified at: ${cleanText(sourceProof?.verifiedAt, 100)}`,
+      `Engine session: ${cleanText(sourceProof?.engineSessionId, 240)}`,
+      `Handshake: ${cleanText(sourceProof?.handshakeStage, 40)}`,
+      `Scope locks: ${Number(sourceProof?.activeScopeLockCount || 0)}`,
+      `Worktree leases: ${Number(sourceProof?.activeWorktreeLeaseCount || 0)}`,
+      "Production access: DENY"
+    );
+  }
   lines.push(`ACCEPTANCE: ${acceptance}`);
 
   lines.push(
@@ -113,17 +139,19 @@ ${continuityContextSummary}`);
     `Branch: ${branch}`,
     `Worktree: ${worktree}`,
     `Base HEAD: ${sourceHead}`,
+    `Source proof: ${sourceProofSha256}`,
     `Read/Write scope: ${scope}`,
     "Deny scope: PROD, más worker scope, nem engedélyezett path",
     "Active directive: DEV ONLY · PROD DENY",
     "Prior state: ellenőrizendő a Context Pack / handoff alapján",
-    "First check: kizárólag az AUTHORITATIVE WORKTREE útvonalon ellenőrizd a git branch + HEAD + worktree clean/expected + scope/lock állapotot",
+    "First check: ellenőrizd a Launch Packet CENTRAL CORE SOURCE PREFLIGHT PROOF blokkját, a proof SHA-256 értékét és a Context Pack / handoff folytonosságát",
     "Risk/blocker: <röviden>",
     "Coding allowed: YES vagy NO",
-    "SOURCE AUTHORITY SZABÁLY: a Launch Packet WORKTREE/BRANCH/BASE HEAD hármasa authoritative. Ne helyettesítsd /root/dimprover, scratch repo, default MCP cwd vagy más lokális Git nézettel.",
-    "Ha az exact authoritative WORKTREE útvonal nem érhető el vagy azon a git provenance nem olvasható: Coding allowed: NO; jelents SOURCE_EXECUTION_PATH_UNAVAILABLE állapotot. Ezt TILOS SOURCE_BASELINE_MISMATCH-nak nevezni.",
-    "SOURCE_BASELINE_MISMATCH csak akkor jelenthető, ha az exact authoritative WORKTREE elérhető, és azon tényleges branch/HEAD/canonical repository eltérés igazolható. Scope/lock eltérés külön CLARIFICATION_REQUIRED/BLOCKER; ne hamisíts source mismatch-et.",
-    "Ne írj fájlt, amíg az authoritative execution path és a BOOT ACK nincs validálva.",
+    "SOURCE AUTHORITY SZABÁLY: a Launch Packet WORKTREE/BRANCH/BASE HEAD + CENTRAL CORE SOURCE PREFLIGHT PROOF együtt authoritative. Ne helyettesítsd /root/dimprover, scratch repo, default MCP cwd vagy más lokális Git nézettel.",
+    "Ha a CENTRAL CORE proof State=VERIFIED, Authority=CENTRAL_CORE, Handshake=READY, legalább 1 scope lock és 1 worktree lease szerepel, valamint a BOOT ACK Source proof mezőjébe pontosan visszaadod a Proof SHA-256 értéket, akkor a source/scope preflight teljesítettnek tekintendő. A ChatGPT saját környezetéből közvetlen /srv fájlrendszer- vagy MCP-mount hiánya önmagában NEM preflight blocker és emiatt Coding allowed: NO nem adható.",
+    "SOURCE_BASELINE_MISMATCH csak a Central Core által jelzett proof/provenance eltérésre használható. A saját ChatGPT sandboxból hiányzó /srv útvonalat ne minősítsd source mismatchnek.",
+    "A tényleges fájlíráshoz továbbra is engedélyezett DEV execution channel szükséges. Ha a módosítás pillanatában nincs ilyen végrehajtási eszköz, jelents EXECUTION_TOOL_UNAVAILABLE állapotot; ez külön hiba a source preflighttól.",
+    "Ne írj fájlt, amíg a BOOT ACK nincs validálva.",
     "Ha minden egyezik, az ACK után ugyanabban a válaszban csak az elemzési/preflight eredményt add meg; tényleges fájlírást csak az ACK érvényessége után kezdj.",
     "MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
     "Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát: mit végeztél, mely fájlokon/területen, milyen teszt/commit/build eredménnyel és mi a következő lépés. Ne csak a munka végén legyen központi nyoma.",

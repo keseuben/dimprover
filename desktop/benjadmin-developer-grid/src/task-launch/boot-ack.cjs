@@ -35,6 +35,7 @@ function parseBootAcknowledgement(body) {
     branch: field(text, "Branch", 600),
     worktree: normalizePath(field(text, "Worktree", 1200)),
     baseHead: field(text, "Base HEAD", 80).toLowerCase(),
+    sourceProofSha256: field(text, "Source proof", 80).toLowerCase(),
     readWriteScope: field(text, "Read/Write scope", 1600),
     denyScope: field(text, "Deny scope", 1600),
     activeDirective: field(text, "Active directive", 1000),
@@ -43,7 +44,7 @@ function parseBootAcknowledgement(body) {
     riskBlocker: field(text, "Risk/blocker", 1600),
     codingAllowed: codingRaw === "YES" ? true : codingRaw === "NO" ? false : null,
   };
-  const required = ["worker", "taskId", "sessionId", "branch", "worktree", "baseHead", "readWriteScope", "activeDirective", "firstCheck"];
+  const required = ["worker", "taskId", "sessionId", "branch", "worktree", "baseHead", "sourceProofSha256", "readWriteScope", "activeDirective", "firstCheck"];
   const missing = required.filter((key) => !parsed[key]);
   if (parsed.codingAllowed === null) missing.push("codingAllowed");
   if (missing.length) return { ok: false, code: "BOOT_ACK_INCOMPLETE", error: `Hiányos BOOT ACK: ${missing.join(", ")}.`, parsed };
@@ -67,6 +68,8 @@ function validateBootAcknowledgement(body, expected = {}) {
   if (wantWorktree && ack.worktree !== wantWorktree) mismatches.push("worktree");
   const wantHead = clean(expected.baseHead, 80).toLowerCase();
   if (wantHead && ack.baseHead !== wantHead) mismatches.push("baseHead");
+  const wantSourceProof = clean(expected.sourceProofSha256, 80).toLowerCase();
+  if (wantSourceProof && ack.sourceProofSha256 !== wantSourceProof) mismatches.push("sourceProof");
   if (!/PROD\s*DENY/i.test(`${ack.activeDirective} ${ack.denyScope}`)) mismatches.push("PROD_DENY");
   if (ack.codingAllowed !== true) mismatches.push("codingAllowed");
   return {

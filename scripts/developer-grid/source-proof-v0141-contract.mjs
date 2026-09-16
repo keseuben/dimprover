@@ -1,0 +1,42 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const read=(p)=>fs.readFileSync(p,"utf8");
+const work=read("app/lib/developer-grid/work-start.ts");
+const types=read("app/lib/developer-grid/types.ts");
+const workspace=read("app/lib/developer-grid/worker-workspace.ts");
+const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
+const prompt=read("desktop/benjadmin-developer-grid/src/task-launch/prompt-builder.cjs");
+const ack=read("desktop/benjadmin-developer-grid/src/task-launch/boot-ack.cjs");
+let n=0;const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
+
+check("SourceExecutionProof is Central Core VERIFIED READY proof",()=>{assert.match(types,/SourceExecutionProof/);assert.match(types,/authority: "CENTRAL_CORE"/);assert.match(types,/handshakeStage: "READY"/);assert.match(types,/activeScopeLockCount/);assert.match(types,/activeWorktreeLeaseCount/)});
+check("task workspace is deterministic per worker and task",()=>{assert.match(workspace,/worker\/\$\{slug\(workerCode/);assert.match(workspace,/DEVELOPER_WORKER_WORKTREE_ROOT/);assert.match(workspace,/taskId/)});
+check("task workspace requires exact canonical 40-char base",()=>{assert.match(workspace,/\^\[0-9a-f\]\{40\}\$/);assert.match(workspace,/DEVELOPER_WORKER_REPOSITORY/);assert.match(workspace,/rev-parse/)});
+check("existing task worktree must match branch head and clean state",()=>{assert.match(workspace,/branch !== branchName \|\| head !== baseCommit \|\| dirty\.trim\(\)/);assert.match(workspace,/DEVELOPER_WORKSPACE_EXISTING_MISMATCH/)});
+check("work-start advances Dev Center branch and worktree handshake",()=>{assert.match(work,/advanceDevEngineSession\(input\.engineSessionId, "bind_branch"/);assert.match(work,/advanceDevEngineSession\(input\.engineSessionId, "bind_worktree"/)});
+check("work-start acquires atomic scope and worktree lease bundle",()=>assert.match(work,/acquireScopeBundleAtomic\(\{ sessionId:input\.engineSessionId, scope:input\.scope, leaseSeconds:900 \}\)/));
+check("work-start requires READY active engine session before launch",()=>{assert.match(work,/engineSession\.handshakeStage !== "READY"/);assert.match(work,/engineSession\.status !== "active"/);assert.match(work,/DEVELOPER_GRID_ENGINE_NOT_READY/)});
+check("READY session must be bound to exact task workspace",()=>{assert.match(work,/DEVELOPER_GRID_READY_BINDING_MISMATCH/);assert.match(work,/engineSession\.branchName !== workspace\.branchName/);assert.match(work,/boundWorktree !== expectedWorktree/)});
+check("work-start rechecks write execution gate",()=>assert.match(work,/assertDevEngineOperation\(input\.engineSessionId, "write"\)/));
+check("work-start verifies task-specific source provenance",()=>{assert.match(work,/verifySourceProvenance\(\{/);assert.match(work,/repository: workspace\.repository/);assert.match(work,/worktree: workspace\.worktreePath/);assert.match(work,/branch: workspace\.branchName/)});
+check("proof binds exact engine session and active locks leases",()=>{assert.match(work,/engineSessionId:input\.engineSessionId/);assert.match(work,/activeScopeLockCount:Number\(operation\.activeLockCount/);assert.match(work,/activeWorktreeLeaseCount:Number\(operation\.activeWorktreeLeaseCount/)});
+check("proof has integrity SHA-256",()=>{assert.match(work,/sourceExecutionProofSha256/);assert.match(work,/createHash\("sha256"\)/)});
+check("Grid task remains READY until BOOT ACK despite engine READY",()=>assert.match(work,/routedCode \? \{ \.\.\.engineGridTask, status:"READY" \}/));
+check("Grid source provenance uses task-specific ready execution",()=>assert.match(work,/\.\.\.readyExecution\.provenance/));
+check("Launch Packet carries Central Core proof block",()=>{assert.match(prompt,/CENTRAL CORE SOURCE PREFLIGHT PROOF/);assert.match(prompt,/Proof SHA-256/);assert.match(prompt,/Scope locks/);assert.match(prompt,/Worktree leases/)});
+check("Launch Packet says missing local srv mount is not preflight blocker",()=>assert.match(prompt,/közvetlen \/srv fájlrendszer- vagy MCP-mount hiánya önmagában NEM preflight blocker/));
+check("Launch Packet separates execution-tool failure from source preflight",()=>assert.match(prompt,/EXECUTION_TOOL_UNAVAILABLE/));
+check("BOOT ACK template echoes source proof",()=>assert.match(prompt,/`Source proof: \$\{sourceProofSha256\}`/));
+check("Desktop launch task carries source proof",()=>assert.match(main,/sourceExecutionProof: session\.developmentContext\?\.sourceExecutionProof/));
+check("Desktop ACK expectation verifies proof hash",()=>{assert.match(main,/sourceProofSha256: String\(task\?\.sourceExecutionProof\?\.sha256/);assert.match(ack,/mismatches\.push\("sourceProof"\)/)});
+check("Desktop sends proof hash to authoritative backend",()=>assert.match(main,/sourceProofSha256: parsed\.sourceProofSha256/));
+check("Backend recomputes stored proof integrity",()=>{assert.match(work,/sourceProofIntegrity/);assert.match(work,/computedProofSha256/)});
+check("Backend rechecks proof provenance and session identity",()=>{assert.match(work,/sourceProofProvenance/);assert.match(work,/sourceProofSession/)});
+check("Backend rechecks live write gate during BOOT ACK",()=>{const i=work.indexOf("export async function recordDeveloperGridBootAck");const b=work.slice(i,i+10000);assert.match(b,/assertDevEngineOperation\(engineSessionId, "write"\)/);assert.match(b,/engineExecutionGate/)});
+check("Backend rejects proof without active lock and worktree lease",()=>{assert.match(work,/sourceProofLocks/);assert.match(work,/scopeLock/);assert.match(work,/worktreeLease/)});
+check("existing task recovery reuses same authoritative task/session",()=>{assert.match(work,/export async function recoverDeveloperGridLaunchExecution/);assert.match(work,/taskId:task\.id/);assert.match(work,/engineSessionId/);assert.match(work,/gridSessionId:session\.id/)});
+check("recovery resets blocked ACK to WAITING with stable-or-fresh proof",()=>{assert.match(work,/reusableSourceExecutionProof/);assert.match(work,/sourceExecutionProof = reusableSourceExecutionProof/);assert.match(work,/bootAckState:"WAITING"/);assert.match(work,/bootAckMismatches:\[\]/)});
+check("backend rejects proofless BOOT ACK",()=>assert.match(work,/sourceProofRequired/));
+console.log(`Developer Grid source proof v0.1.41 contract PASS · ${n}/${n}`);

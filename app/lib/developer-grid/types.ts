@@ -28,6 +28,23 @@ export type DeveloperGridTask = {
   acceptance: string[];
 };
 
+export type SourceExecutionProof = {
+  schemaVersion: 1;
+  state: "VERIFIED";
+  authority: "CENTRAL_CORE";
+  verifiedAt: string;
+  repository: string;
+  worktree: string;
+  branch: string;
+  head: string;
+  engineSessionId: string;
+  handshakeStage: "READY";
+  activeScopeLockCount: number;
+  activeWorktreeLeaseCount: number;
+  productionAccess: "DENY";
+  sha256: string;
+};
+
 export type DevelopmentContext = {
   projectId: string;
   mainModule: string;
@@ -46,6 +63,7 @@ export type DevelopmentContext = {
   surfaceConversationConfirmedAt?: string | null;
   preferredWorkerCode?: RoutableWorkerCode | null;
   engineSessionId?: string | null;
+  sourceExecutionProof?: SourceExecutionProof | null;
   continuityPreviousTaskId?: string | null;
   continuityPreviousWorkerCode?: RoutableWorkerCode | null;
   continuityHandoffId?: string | null;

@@ -19,7 +19,7 @@ check("Work-start propagates precise foundation source block code",()=>assert.ma
 check("Materializer propagates precise source block code",()=>assert.match(materializer,/foundation\.sourceProvenance\.blockCode \|\| "SOURCE_BASELINE_MISMATCH"/));
 check("Work-start API treats both source failures as conflict",()=>{assert.match(workRoute,/SOURCE_EXECUTION_PATH_UNAVAILABLE/);assert.match(workRoute,/SOURCE_BASELINE_MISMATCH/);assert.match(workRoute,/409/)});
 check("State API treats both source failures as conflict",()=>{assert.match(stateRoute,/SOURCE_EXECUTION_PATH_UNAVAILABLE/);assert.match(stateRoute,/SOURCE_BASELINE_MISMATCH/);assert.match(stateRoute,/409/)});
-check("Launch prompt forbids scratch or default MCP cwd as source authority",()=>{assert.match(prompt,/Ne helyettesítsd \/root\/dimprover, scratch repo, default MCP cwd/);assert.match(prompt,/Launch Packet WORKTREE\/BRANCH\/BASE HEAD hármasa authoritative/)});
-check("Unavailable authoritative path is not called baseline mismatch",()=>{assert.match(prompt,/SOURCE_EXECUTION_PATH_UNAVAILABLE/);assert.match(prompt,/TILOS SOURCE_BASELINE_MISMATCH-nak nevezni/)});
-check("Baseline mismatch requires accessible exact authoritative worktree",()=>assert.match(prompt,/SOURCE_BASELINE_MISMATCH csak akkor jelenthető, ha az exact authoritative WORKTREE elérhető/));
+check("Launch prompt forbids scratch or default MCP cwd as source authority",()=>{assert.match(prompt,/Ne helyettesítsd \/root\/dimprover, scratch repo, default MCP cwd/);assert.match(prompt,/WORKTREE\/BRANCH\/BASE HEAD \+ CENTRAL CORE SOURCE PREFLIGHT PROOF együtt authoritative/)});
+check("Central Core proof replaces worker-local srv visibility as preflight gate",()=>{assert.match(prompt,/CENTRAL CORE SOURCE PREFLIGHT PROOF/);assert.match(prompt,/MCP-mount hiánya önmagában NEM preflight blocker/);assert.match(prompt,/Source proof/)});
+check("Baseline mismatch is reserved for Central Core proof or provenance mismatch",()=>assert.match(prompt,/SOURCE_BASELINE_MISMATCH csak a Central Core által jelzett proof\/provenance eltérésre/));
 console.log(`Developer Grid source authority v0.1.41 contract PASS · ${n}/${n}`);

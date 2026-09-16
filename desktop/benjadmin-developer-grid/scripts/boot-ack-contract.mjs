@@ -22,8 +22,9 @@ const expected = {
   branch: "feature/benjadmin-v013",
   worktree: "/srv/dimpro-dev/worktrees/benjadmin-v013",
   baseHead: "a".repeat(40),
+  sourceProofSha256: "b".repeat(64),
 };
-const validBody = `BOOT ACKNOWLEDGEMENT\nWorker: OUTMINAI\nTask: dev-task-grid-abc\nSession: grid-work-dev-task-grid-abc-outminai\nProject/Module: project_dimprover / Developer Grid V1\nBranch: feature/benjadmin-v013\nWorktree: /srv/dimpro-dev/worktrees/benjadmin-v013\nBase HEAD: ${"a".repeat(40)}\nRead/Write scope: module:Developer Grid V1\nDeny scope: PROD, más worker scope\nActive directive: DEV ONLY · PROD DENY\nPrior state: canonical handoff\nFirst check: branch + HEAD + worktree + lock\nRisk/blocker: nincs\nCoding allowed: YES`;
+const validBody = `BOOT ACKNOWLEDGEMENT\nWorker: OUTMINAI\nTask: dev-task-grid-abc\nSession: grid-work-dev-task-grid-abc-outminai\nProject/Module: project_dimprover / Developer Grid V1\nBranch: feature/benjadmin-v013\nWorktree: /srv/dimpro-dev/worktrees/benjadmin-v013\nBase HEAD: ${"a".repeat(40)}\nSource proof: ${"b".repeat(64)}\nRead/Write scope: module:Developer Grid V1\nDeny scope: PROD, más worker scope\nActive directive: DEV ONLY · PROD DENY\nPrior state: canonical handoff\nFirst check: branch + HEAD + worktree + lock\nRisk/blocker: nincs\nCoding allowed: YES`;
 
 check("valid BOOT ACK matches authoritative Launch Packet", () => {
   const result = validateBootAcknowledgement(validBody, expected);

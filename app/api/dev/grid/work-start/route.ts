@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isChatGridDeviceAuthorized } from "@/app/lib/dev-center/chatgrid-device-auth";
-import { bindDeveloperGridConversation, getDeveloperGridActiveWork, recordDeveloperGridBootAck, startDeveloperGridWork } from "@/app/lib/developer-grid/work-start";
+import { bindDeveloperGridConversation, getDeveloperGridActiveWork, recordDeveloperGridBootAck, recoverDeveloperGridLaunchExecution, startDeveloperGridWork } from "@/app/lib/developer-grid/work-start";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +18,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!(await isChatGridDeviceAuthorized(request.headers))) return json({ ok: false, error: "A Developer Grid eszköz nincs párosítva." }, 401);
   try {
-    const result = await startDeveloperGridWork(await request.json().catch(() => ({})));
+    const body = await request.json().catch(() => ({}));
+    if (body && typeof body === "object" && String((body as Record<string, unknown>).action || "").toUpperCase() === "RECOVER_LAUNCH_EXECUTION") {
+      const recovery = await recoverDeveloperGridLaunchExecution();
+      return json({ ok:true, recovery, activeWork:await getDeveloperGridActiveWork() });
+    }
+    const result = await startDeveloperGridWork(body);
     return json({ ok: true, work: result });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "DEVELOPER_GRID_WORK_START_FAILED";

@@ -1,15 +1,17 @@
 "server-only";
 
 import { createHash } from "node:crypto";
-import { advanceDevEngineTaskManualBridge, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
+import { advanceDevEngineSession, advanceDevEngineTaskManualBridge, assertDevEngineOperation, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
+import { acquireScopeBundleAtomic } from "@/app/lib/dev-center/orchestration-repository";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
 import { findLatestContinuationContext } from "./conversation-memory";
-import { verifyCurrentSourceExecutionState } from "./source-provenance";
+import { verifyCurrentSourceExecutionState, verifySourceProvenance } from "./source-provenance";
+import { ensureDeveloperWorkerWorkspace } from "./worker-workspace";
 import { appendGridEvent, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
-import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, WorkerSession, WorkerSurfaceType } from "./types";
+import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, SourceExecutionProof, WorkerSession, WorkerSurfaceType } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
 export const WORK_START_MAX_LENGTH = 12000;
@@ -173,6 +175,110 @@ async function resolveContinuityContext(engineState: Awaited<ReturnType<typeof g
     contextRevision: contextSnapshot?.revision || null,
     contextSummary: contextSnapshot?.summary || null,
   };
+}
+
+function sourceExecutionProofSha256(input: Omit<SourceExecutionProof, "sha256">) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+function reusableSourceExecutionProof(existing: SourceExecutionProof | null | undefined, fresh: SourceExecutionProof) {
+  if (!existing) return null;
+  const { sha256, ...base } = existing;
+  if (!/^[0-9a-f]{64}$/.test(String(sha256 || "").toLowerCase())) return null;
+  if (sourceExecutionProofSha256(base) !== String(sha256).toLowerCase()) return null;
+  if (existing.state !== "VERIFIED" || existing.authority !== "CENTRAL_CORE" || existing.handshakeStage !== "READY" || existing.productionAccess !== "DENY") return null;
+  if (existing.repository !== fresh.repository || existing.worktree !== fresh.worktree || existing.branch !== fresh.branch || existing.head !== fresh.head || existing.engineSessionId !== fresh.engineSessionId) return null;
+  if (Number(fresh.activeScopeLockCount || 0) < 1 || Number(fresh.activeWorktreeLeaseCount || 0) < 1) return null;
+  return existing;
+}
+
+async function ensureDeveloperGridReadyExecution(input: {
+  taskId: string;
+  workerCode: RoutableWorkerCode;
+  engineSessionId: string;
+  baseHead: string;
+  scope: Array<{ type: "module"; key: string }>;
+  gridSessionId: string;
+}) {
+  if (!input.engineSessionId) throw Object.assign(new Error("A Developer Grid READY preflighthoz Dev Center engine session szükséges."), { code:"DEVELOPER_GRID_ENGINE_SESSION_REQUIRED", status:409 });
+
+  let state = await getDevCenterEngineState();
+  let engineSession = state.sessions.find((item) => item.id === input.engineSessionId) || null;
+  if (!engineSession) throw Object.assign(new Error("A Developer Grid Dev Center session nem található."), { code:"DEVELOPER_GRID_ENGINE_SESSION_MISSING", status:409 });
+  if (engineSession.taskId !== input.taskId) throw Object.assign(new Error("A Dev Center session más taskhoz tartozik."), { code:"DEVELOPER_GRID_ENGINE_SESSION_TASK_MISMATCH", status:409 });
+
+  const workspace = await ensureDeveloperWorkerWorkspace({ workerCode:input.workerCode, taskId:input.taskId, baseCommit:input.baseHead });
+  if (engineSession.handshakeStage === "READY") {
+    const boundWorktree = String(engineSession.worktreePath || "").replace(/\\/g,"/").replace(/\/+$/g,"");
+    const expectedWorktree = String(workspace.worktreePath || "").replace(/\\/g,"/").replace(/\/+$/g,"");
+    if (engineSession.branchName !== workspace.branchName || boundWorktree !== expectedWorktree) {
+      throw Object.assign(new Error("A READY Dev Center session branch/worktree bindingje eltér a task-specifikus workspace-től."), {
+        code:"DEVELOPER_GRID_READY_BINDING_MISMATCH", status:409,
+        details:{ expectedBranch:workspace.branchName, actualBranch:engineSession.branchName, expectedWorktree, actualWorktree:boundWorktree },
+      });
+    }
+  }
+
+  if (engineSession.handshakeStage === "TASK_BOUND") {
+    const branch = await advanceDevEngineSession(input.engineSessionId, "bind_branch", { branchName:workspace.branchName });
+    if (!branch.ok) throw Object.assign(new Error(branch.error || "A task branch binding sikertelen."), { code:"DEVELOPER_GRID_BRANCH_BIND_FAILED", status:409 });
+    engineSession = branch.session || engineSession;
+  }
+  if (engineSession.handshakeStage === "BRANCH_BOUND") {
+    const worktree = await advanceDevEngineSession(input.engineSessionId, "bind_worktree", { worktreePath:workspace.worktreePath });
+    if (!worktree.ok) throw Object.assign(new Error(worktree.error || "A task worktree binding sikertelen."), { code:"DEVELOPER_GRID_WORKTREE_BIND_FAILED", status:409 });
+    engineSession = worktree.session || engineSession;
+  }
+  if (engineSession.handshakeStage === "WORKTREE_BOUND") {
+    await acquireScopeBundleAtomic({ sessionId:input.engineSessionId, scope:input.scope, leaseSeconds:900 });
+    state = await getDevCenterEngineState();
+    engineSession = state.sessions.find((item) => item.id === input.engineSessionId) || null;
+  }
+  if (!engineSession || engineSession.handshakeStage !== "READY" || engineSession.status !== "active") {
+    throw Object.assign(new Error(`A Developer Grid worker session nem READY (${engineSession?.handshakeStage || "MISSING"}). Launch Packet nem küldhető.`), { code:"DEVELOPER_GRID_ENGINE_NOT_READY", status:409 });
+  }
+
+  const operation = await assertDevEngineOperation(input.engineSessionId, "write");
+  const provenance = await verifySourceProvenance({
+    repository: workspace.repository,
+    worktree: workspace.worktreePath,
+    branch: workspace.branchName,
+    expectedHead: input.baseHead,
+    worker: input.workerCode,
+    taskId: input.taskId,
+    sessionId: input.gridSessionId,
+  });
+  if (provenance.sourceState !== "VERIFIED" || provenance.blockCode) {
+    const code = provenance.blockCode || "SOURCE_BASELINE_MISMATCH";
+    throw Object.assign(new Error(`BLOCKED · ${code} · ${provenance.reasons.join("; ")}`), { code, status:409, provenance });
+  }
+
+  state = await getDevCenterEngineState();
+  const freshTask = state.tasks.find((item) => item.id === input.taskId) || null;
+  const freshSession = state.sessions.find((item) => item.id === input.engineSessionId) || null;
+  if (!freshTask || !freshSession || freshSession.handshakeStage !== "READY") {
+    throw Object.assign(new Error("A READY handshake utáni authoritative task/session nem olvasható."), { code:"DEVELOPER_GRID_READY_STATE_MISSING", status:409 });
+  }
+  if (freshTask.claimedBySessionId !== input.engineSessionId || freshTask.assignedWorkerId !== freshSession.workerId) {
+    throw Object.assign(new Error("A READY task ownership eltér a session/worker kötéstől."), { code:"DEVELOPER_GRID_READY_OWNERSHIP_MISMATCH", status:409 });
+  }
+
+  const proofBase: Omit<SourceExecutionProof, "sha256"> = {
+    schemaVersion:1,
+    state:"VERIFIED",
+    authority:"CENTRAL_CORE",
+    verifiedAt:new Date().toISOString(),
+    repository:provenance.repository,
+    worktree:provenance.worktree,
+    branch:provenance.branch,
+    head:provenance.head,
+    engineSessionId:input.engineSessionId,
+    handshakeStage:"READY",
+    activeScopeLockCount:Number(operation.activeLockCount || 0),
+    activeWorktreeLeaseCount:Number(operation.activeWorktreeLeaseCount || 0),
+    productionAccess:"DENY",
+  };
+  const proof: SourceExecutionProof = { ...proofBase, sha256:sourceExecutionProofSha256(proofBase) };
+  return { workspace, provenance, proof, engineTask:freshTask, engineSession:freshSession };
 }
 
 function strictCoreWorkerCode(value: unknown): CoreWorkerCode {
@@ -376,6 +482,8 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     throw error;
   }
   let engineSessionId: string | null = null;
+  const gridSessionId = routedCode ? `grid-work-${taskId}-${routedCode.toLowerCase()}` : "";
+  let readyExecution: Awaited<ReturnType<typeof ensureDeveloperGridReadyExecution>> | null = null;
   if (routedCode) {
     const currentStatus = String(engineTask.status || "").toLowerCase();
     if (["queued", "ready"].includes(currentStatus)) {
@@ -386,6 +494,18 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       const currentMetadata = engineTask.metadata && typeof engineTask.metadata === "object" ? engineTask.metadata as Record<string, unknown> : {};
       engineSessionId = text(currentMetadata.activeSessionId, 240) || null;
     }
+    if (!engineSessionId) {
+      throw Object.assign(new Error("A routolt Developer Grid taskhoz nincs Dev Center engine session."), { code:"DEVELOPER_GRID_ENGINE_SESSION_REQUIRED", status:409 });
+    }
+    readyExecution = await ensureDeveloperGridReadyExecution({
+      taskId,
+      workerCode:routedCode,
+      engineSessionId,
+      baseHead:String(foundation.sourceProvenance.head || "").toLowerCase(),
+      scope:[{ type:"module", key:input.moduleName }],
+      gridSessionId,
+    });
+    engineTask = readyExecution.engineTask;
   }
   const developmentContext: DevelopmentContext = {
     projectId: input.projectId,
@@ -400,6 +520,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     surfaceType: input.surfaceType,
     preferredWorkerCode: input.preferredWorkerCode,
     engineSessionId,
+    sourceExecutionProof: readyExecution?.proof || null,
     continuityPreviousTaskId: continuity.previousTaskId,
     continuityPreviousWorkerCode: continuity.previousWorkerCode,
     continuityHandoffId: continuity.handoffId,
@@ -413,7 +534,8 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     source: "EXPLICIT_TASK",
     resolvedAt: new Date().toISOString(),
   };
-  const task = gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+  const engineGridTask = gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+  const task: DeveloperGridTask = routedCode ? { ...engineGridTask, status:"READY" } : engineGridTask;
   if (!routedCode) {
     const beforeWaiting = await readGridState();
     const preservedActiveSession = beforeWaiting.sessions.find((item) => item.endedAt === null && item.taskId !== task.id) || null;
@@ -447,16 +569,17 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       productionAccess: "DENY" as const,
     };
   }
+  if (!readyExecution) throw Object.assign(new Error("A routolt task READY execution proof nélkül nem materializálható."), { code:"DEVELOPER_GRID_READY_PROOF_REQUIRED", status:409 });
   const session: WorkerSession = {
-    id: `grid-work-${taskId}-${routedCode.toLowerCase()}`,
+    id: gridSessionId,
     workerCode: routedCode,
     taskId,
     developmentContext,
     sourceProvenance: {
-      ...foundation.sourceProvenance,
+      ...readyExecution.provenance,
       worker: routedCode,
       taskId,
-      sessionId: `grid-work-${taskId}-${routedCode.toLowerCase()}`,
+      sessionId: gridSessionId,
     },
     startedAt: new Date().toISOString(),
     endedAt: null,
@@ -477,11 +600,70 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
 }
 
 
+export async function recoverDeveloperGridLaunchExecution() {
+  const state = await readGridState();
+  const task = state.task;
+  if (!task) throw Object.assign(new Error("Nincs helyreállítható authoritative Developer Grid task."), { code:"DEVELOPER_GRID_RECOVERY_TASK_MISSING", status:409 });
+  const session = state.sessions.find((item) => item.taskId === task.id && item.endedAt === null) || null;
+  if (!session) throw Object.assign(new Error("A helyreállításhoz aktív Developer Grid worker session szükséges."), { code:"DEVELOPER_GRID_RECOVERY_SESSION_MISSING", status:409 });
+  if (session.developmentContext.bootAckState === "VALIDATED") {
+    throw Object.assign(new Error("A task BOOT ACK-ja már validált; execution recovery nem szükséges."), { code:"DEVELOPER_GRID_RECOVERY_ACK_ALREADY_VALIDATED", status:409 });
+  }
+  const workerCode = routableWorkerCode(session.workerCode);
+  if (!workerCode) throw Object.assign(new Error("A recovery worker nem routolható."), { code:"DEVELOPER_GRID_RECOVERY_WORKER_INVALID", status:409 });
+  const engineSessionId = text(session.developmentContext.engineSessionId, 240);
+  if (!engineSessionId) throw Object.assign(new Error("A recoveryhez hiányzik a Dev Center engine session."), { code:"DEVELOPER_GRID_RECOVERY_ENGINE_SESSION_MISSING", status:409 });
+  const moduleName = text(session.developmentContext.moduleName, 180);
+  if (!moduleName) throw Object.assign(new Error("A recovery scope modulja hiányzik."), { code:"DEVELOPER_GRID_RECOVERY_SCOPE_MISSING", status:409 });
+  const baseHead = String(session.sourceProvenance.head || "").toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(baseHead)) throw Object.assign(new Error("A recovery source HEAD érvénytelen."), { code:"DEVELOPER_GRID_RECOVERY_HEAD_INVALID", status:409 });
+
+  const ready = await ensureDeveloperGridReadyExecution({
+    taskId:task.id,
+    workerCode,
+    engineSessionId,
+    baseHead,
+    scope:[{ type:"module", key:moduleName }],
+    gridSessionId:session.id,
+  });
+  const now = new Date().toISOString();
+  const sourceExecutionProof = reusableSourceExecutionProof(session.developmentContext.sourceExecutionProof, ready.proof) || ready.proof;
+  const recoveredSession: WorkerSession = {
+    ...session,
+    sourceProvenance:{ ...ready.provenance, worker:workerCode, taskId:task.id, sessionId:session.id },
+    developmentContext:{
+      ...session.developmentContext,
+      sourceExecutionProof,
+      bootAckState:"WAITING",
+      bootAckValidatedAt:null,
+      bootAckCodingAllowed:null,
+      bootAckMismatches:[],
+      resolvedAt:now,
+    },
+  };
+  const next = await upsertWorkerSession(recoveredSession);
+  await appendGridEvent({
+    kind:"analysis", origin:"LIVE", workerCode, taskId:task.id, projectId:task.projectId, productionAccess:"DENY",
+    developmentContext:recoveredSession.developmentContext,
+    branch:recoveredSession.sourceProvenance.branch,
+    worktree:recoveredSession.sourceProvenance.worktree,
+    head:recoveredSession.sourceProvenance.head,
+    delta:{
+      eventType:"LAUNCH_EXECUTION_RECOVERED",
+      summary:"A meglévő task Dev Center handshake-je READY állapotig helyreállt; task-specifikus worktree + scope lock + worktree lease + Central Core source proof aktív.",
+      status:"PASS", severity:"INFO", sessionId:session.id, engineSessionId, sourceProofSha256:sourceExecutionProof.sha256,
+      activeScopeLockCount:sourceExecutionProof.activeScopeLockCount, activeWorktreeLeaseCount:sourceExecutionProof.activeWorktreeLeaseCount,
+    },
+  });
+  return { task:next.task, session:recoveredSession, sourceExecutionProof, revision:next.revision, productionAccess:"DENY" as const };
+}
+
 export async function recordDeveloperGridBootAck(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 240);
   const workerCode = strictCoreWorkerCode(rawInput.workerCode);
   const sessionId = text(rawInput.sessionId, 260);
   const responseSha256 = text(rawInput.responseSha256, 64).toLowerCase();
+  const sourceProofSha256 = text(rawInput.sourceProofSha256, 64).toLowerCase();
   const codingAllowed = rawInput.codingAllowed === true;
   const mismatches = Array.isArray(rawInput.mismatches)
     ? rawInput.mismatches.map((item) => text(item, 120)).filter(Boolean).slice(0, 20)
@@ -513,10 +695,36 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
   if (reportedWorktree !== expectedWorktree) serverMismatches.push("worktree");
   if (reportedHead !== String(expected.head || "").toLowerCase()) serverMismatches.push("baseHead");
   if (!codingAllowed) serverMismatches.push("codingAllowed");
+
+  const proof = session.developmentContext.sourceExecutionProof || null;
+  if (!proof) serverMismatches.push("sourceProofRequired");
+  if (proof) {
+    const { sha256: storedProofSha256, ...proofBase } = proof;
+    const computedProofSha256 = sourceExecutionProofSha256(proofBase);
+    if (!/^[0-9a-f]{64}$/.test(String(storedProofSha256 || "")) || computedProofSha256 !== String(storedProofSha256 || "").toLowerCase()) serverMismatches.push("sourceProofIntegrity");
+    if (sourceProofSha256 !== String(storedProofSha256 || "").toLowerCase()) serverMismatches.push("sourceProof");
+    if (proof.state !== "VERIFIED" || proof.authority !== "CENTRAL_CORE" || proof.handshakeStage !== "READY" || proof.productionAccess !== "DENY") serverMismatches.push("sourceProofState");
+    if (proof.repository !== expected.repository || proof.worktree !== expected.worktree || proof.branch !== expected.branch || proof.head !== expected.head) serverMismatches.push("sourceProofProvenance");
+    if (!session.developmentContext.engineSessionId || proof.engineSessionId !== session.developmentContext.engineSessionId) serverMismatches.push("sourceProofSession");
+    if (Number(proof.activeScopeLockCount || 0) < 1 || Number(proof.activeWorktreeLeaseCount || 0) < 1) serverMismatches.push("sourceProofLocks");
+  }
   try {
     await verifyCurrentSourceExecutionState(expected, { requireClean: false });
   } catch {
     serverMismatches.push("sourceProvenance");
+  }
+  if (proof) {
+    try {
+      const engineSessionId = String(session.developmentContext.engineSessionId || "");
+      if (!engineSessionId) serverMismatches.push("engineSessionId");
+      else {
+        const operation = await assertDevEngineOperation(engineSessionId, "write");
+        if (Number(operation.activeLockCount || 0) < 1) serverMismatches.push("scopeLock");
+        if (Number(operation.activeWorktreeLeaseCount || 0) < 1) serverMismatches.push("worktreeLease");
+      }
+    } catch {
+      serverMismatches.push("engineExecutionGate");
+    }
   }
   const uniqueMismatches = [...new Set(serverMismatches)].slice(0, 20);
   const validated = uniqueMismatches.length === 0;
@@ -546,12 +754,12 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
       eventType: validated ? "BOOT_ACK_VALIDATED" : "BOOT_ACK_BLOCKED",
       summary: validated ? "BOOT ACK validálva; a worker fejlesztési futása engedélyezhető." : `BOOT ACK blokkolva: ${uniqueMismatches.join(", ") || "ismeretlen eltérés"}`,
       status: validated ? "PASS" : "BLOCKED", severity: validated ? "INFO" : "HIGH", sessionId,
-      responseSha256, codingAllowed, mismatches: uniqueMismatches, workStageIndex: 1,
+      responseSha256, sourceProofSha256: sourceProofSha256 || null, codingAllowed, mismatches: uniqueMismatches, workStageIndex: 1,
     },
   });
   return {
     taskId, workerCode, sessionId, state: validated ? "VALIDATED" as const : "BLOCKED" as const,
-    validated, codingAllowed, mismatches: uniqueMismatches, responseSha256, revision: next.revision, productionAccess: "DENY" as const,
+    validated, codingAllowed, mismatches: uniqueMismatches, responseSha256, sourceProofSha256:sourceProofSha256 || null, revision: next.revision, productionAccess: "DENY" as const,
   };
 }
 

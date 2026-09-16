@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -1494,6 +1494,7 @@ function launchTaskFromWork(work, chatPlan = null) {
     branchName: session.sourceProvenance?.branch || null,
     worktreePath: session.sourceProvenance?.worktree || null,
     sourceHead: session.sourceProvenance?.head || null,
+    sourceExecutionProof: session.developmentContext?.sourceExecutionProof || null,
     sessionId: session.id || null,
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
     acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
@@ -1527,6 +1528,7 @@ function bootAckExpected(task, workerCode) {
     branch: String(task?.branchName || ""),
     worktree: String(task?.worktreePath || ""),
     baseHead: String(task?.sourceHead || ""),
+    sourceProofSha256: String(task?.sourceExecutionProof?.sha256 || ""),
   };
 }
 
@@ -1541,6 +1543,7 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode) {
     `Branch: ${task.branchName}`,
     `Worktree: ${task.worktreePath}`,
     `Base HEAD: ${task.sourceHead}`,
+    `Source proof: ${task?.sourceExecutionProof?.sha256 || "—"}`,
     "DEV ONLY · PROD DENY.",
     "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot."
   ].join("\n");
@@ -1573,6 +1576,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
         taskId, workerCode, sessionId, responseSha256,
         codingAllowed: validation.validated === true && parsed.codingAllowed === true,
         branch: parsed.branch || "", worktree: parsed.worktree || "", baseHead: parsed.baseHead || "",
+        sourceProofSha256: parsed.sourceProofSha256 || "",
         mismatches: validation.mismatches || [validation.code || "BOOT_ACK_INVALID"],
       },
     });
@@ -3268,12 +3272,22 @@ function registerIpc() {
   ipcMain.handle("work-start:resume-launch", async () => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {
-      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      const task = activeWork?.task || null;
-      const session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
+      let activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      let task = activeWork?.task || null;
+      let session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs folytatható authoritative task + worker session." };
-      if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"Az aktív task source provenance állapota már nem aktuális. A régi Launch Packet nem küldhető újra; a taskot auditáltan le kell zárni és az aktuális HEAD-ről kell folytatni." };
       if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A task BOOT ACK-ja már validált; nincs újraküldendő Launch Packet." };
+      const previousSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
+
+      const recoveredExecution = await recoverDeveloperGridLaunchExecution({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      activeWork = recoveredExecution?.activeWork || await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      task = activeWork?.task || null;
+      session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
+      if (!task || !session) return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az authoritative task/session nem olvasható." };
+      if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"A READY recovery után a task source provenance állapota nem aktuális. Launch Packet nem küldhető." };
+      const currentSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
+      if (!currentSourceProofSha256) return { ok:false, code:"ACTIVE_TASK_SOURCE_PROOF_REQUIRED", error:"A READY recovery nem adott Central Core source proofot; Launch Packet tiltva." };
+      const sourceProofRefreshed = currentSourceProofSha256 !== previousSourceProofSha256;
       const work = { task, session };
       const code = assignedWorkerCodeFromWork(work);
       const launchTask = launchTaskFromWork(work, null);
@@ -3293,6 +3307,7 @@ function registerIpc() {
       if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
       const existingAssistant = await captureLatestAssistantText(view);
       if (existingAssistant?.generating) {
+        if (sourceProofRefreshed) return { ok:false, code:"CHATGPT_GENERATION_ACTIVE_RECOVERY", error:"A Central Core source proof frissült, de a ChatGPT még a korábbi válaszon dolgozik. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot; a régi BOOT ACK nem kerül újrafelhasználásra." };
         const launchRecord = loadTaskLaunchRecords()[task.id] || {};
         const launchInFlight = Boolean(launchRecord.sentAt)
           || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase())
@@ -3305,7 +3320,7 @@ function registerIpc() {
         }
         return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"A ChatGPT még választ generál. A Grid fail-closed módban nem küld új Launch Packetet. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot." };
       }
-      if (existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
+      if (!sourceProofRefreshed && existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
         const recovered = await processCapturedBootAck({ view, body:existingAssistant.text, task:launchTask, workerCode:code, source:"RESUME_EXISTING_ACK" });
         if (recovered?.validated) {
           send("context:refresh", { reason:"boot-ack-recovered-before-relaunch", taskId:task.id, sessionId:session.id });
@@ -3314,6 +3329,13 @@ function registerIpc() {
         if (recovered?.blocked) return { ok:false, code:"BOOT_ACK_RECOVERY_BLOCKED", error:`A meglévő BOOT ACK nem validálható: ${(recovered.mismatches || []).join(", ") || "ismeretlen eltérés"}. Új Launch Packet automatikus küldése letiltva.` };
       }
       let taskLaunch = null;
+      if (sourceProofRefreshed) {
+        saveTaskLaunchPatch(launchTask, code, {
+          sentAt:null, autoSendState:"RECOVERY_READY", ackState:"WAITING", ackSha256:null, ackMismatches:[],
+          ackContinuationState:null, ackContinuationSentAt:null, sourceProofSha256:currentSourceProofSha256,
+          sourceProofRecoveredAt:new Date().toISOString(),
+        });
+      }
       if (!expectedConversationId) {
         const bound = await bindCurrentTaskConversation(code, task.id, { automatic:true, taskOverride:launchTask, launchAfterBind:true });
         if (!bound?.ok) return bound;
