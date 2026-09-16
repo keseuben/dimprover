@@ -33,6 +33,8 @@ check("Work adapter remains fail-closed for v0.1.42", () => assert.match(adapter
 check("main process never creates embedded view for non-embedded surface", () => assert.match(main,/!isEmbeddedWorkerSurface\(surfaceType\)/));
 check("active task blocks surface mutation", () => assert.match(main,/WORKER_SURFACE_ACTIVE_TASK_LOCKED/));
 check("Central Core sends selected surface with work-start", () => { assert.match(context,/selectedWorkerSurface/); assert.match(context,/surfaceType,idempotencyKey/); });
+check("unavailable Codex Work surfaces are blocked before task creation", () => { assert.match(context,/surfaceType!=="CHATGPT"/); assert.match(context,/Task nem jött létre/); assert.match(workStart,/CODEX_NATIVE_BRIDGE_REQUIRED/); assert.match(workStart,/WORK_SURFACE_PLANNED_V0142/); });
+check("unknown explicit surface fails closed instead of falling back to ChatGPT", () => assert.match(workStart,/DEVELOPER_GRID_SURFACE_INVALID/));
 check("work-start persists surface into authoritative development context", () => { assert.match(workStart,/surfaceType: input\.surfaceType/); assert.match(workStart,/DEVELOPER_GRID_SURFACE_MISMATCH/); });
 check("generic surface conversation provenance coexists with legacy ChatGPT fields", () => { for (const key of ["surfaceConversationId","surfaceConversationUrl","surfaceConversationTitle","surfaceConversationConfirmedAt"]) assert.match(types,new RegExp(key)); assert.match(workStart,/chatConversationId: chatConversationId \|\| null/); });
 check("Conversation Memory keys RAW and derived state by surface", () => { assert.match(memory,/surfaceMemoryKey/); assert.match(memory,/DEVELOPER_GRID_RAW_SURFACE_MISMATCH/); assert.match(memory,/surfaceType:currentSurfaceType/); });
@@ -40,6 +42,7 @@ check("legacy v0.1.40 ChatGPT memory remains readable and chain-continuable", ()
 check("desktop RAW capture is ChatGPT-only until native Codex bridge exists", () => assert.match(main,/if \(surfaceType !== "CHATGPT"\) return null/));
 check("live state exposes generic surface provenance", () => { assert.match(live,/surfaceType:/); assert.match(live,/surfaceConversationId:/); });
 check("renderer persists per-cell selection and disables active-task switching", () => { assert.match(renderer,/changeWorkerSurface/); assert.match(renderer,/Aktív task közben a worker surface nem váltható/); });
+check("planned Work surface remains recoverable to an active choice", () => { assert.match(renderer,/surfaceSelect\.disabled = locked/); assert.doesNotMatch(renderer,/surfaceSelect\.disabled = locked \|\| surfaceType === "WORK"/); });
 check("Codex cannot inherit ChatGPT URL as surface URL", () => assert.match(surface,/if \(type === WORKER_SURFACE_TYPES\.CODEX\) return ""/));
 check("Codex binding accepts only absent URL or codex protocol identity", () => assert.match(workStart,/surfaceConversationUrl\.toLowerCase\(\)\.startsWith\("codex:"\)/));
 

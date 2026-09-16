@@ -3274,3 +3274,5 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Conversation Memory surface-szétválasztása mellett a v0.1.40 surface-prefix nélküli ChatGPT RAW/context/handoff láncok kompatibilisen tovább olvashatók és folytathatók.
 - Első célzott contract: Worker Surface Selector 21/21 PASS. Örökölt kritikus regresszió: materializer 10/10, Central Core hotfix 19/19, heartbeat 24/24, BOOT ACK recovery 12/12, routing/navigation 25/25 PASS; desktop teljes check-lánc PASS.
 - Desktop/backend verzió: 0.1.41 / 0.1.41-dev. DEV ONLY · PROD DENY.
+
+- v0.1.41 review hardening: Codex/Work kiválasztás mellett a task-létrehozás már a Central Core API-hívása előtt blokkol, és a backend közvetlen hívásnál is fail-closed. Így hiányzó natív bridge nem hagyhat hátra végrehajthatatlan READY taskot. Ismeretlen explicit surface nem eshet vissza csendben ChatGPT-re; meglévő Work konfigurációból a felhasználó vissza tud váltani támogatott surface-re.

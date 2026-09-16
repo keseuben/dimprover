@@ -26,7 +26,19 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const rawSurfaceType = text(input.surfaceType, 40).toUpperCase();
+  if (rawSurfaceType && !["CHATGPT", "CODEX", "WORK"].includes(rawSurfaceType)) {
+    const error = new Error("Ismeretlen Developer Grid worker surface. A munkaindítás fail-closed.");
+    Object.assign(error, { code: "DEVELOPER_GRID_SURFACE_INVALID", status: 400 });
+    throw error;
+  }
   const surfaceType: WorkerSurfaceType = rawSurfaceType === "CODEX" ? "CODEX" : rawSurfaceType === "WORK" ? "WORK" : "CHATGPT";
+  if (surfaceType !== "CHATGPT") {
+    const error = new Error(surfaceType === "CODEX"
+      ? "A Codex surface kiválasztható, de a natív desktop bridge még nincs aktiválva. Task létrehozása addig tiltott."
+      : "A Work surface v0.1.42-re van előkészítve. Task létrehozása v0.1.41-ben tiltott.");
+    Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_NATIVE_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0142", status: 409 });
+    throw error;
+  }
   const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();
   if (!rawPreferredWorkerCode || rawPreferredWorkerCode === "AUTO") {
     const error = new Error("A munka indításához explicit kódmérnök kiválasztása kötelező. Automatikus vagy rejtett worker-fallback tiltott.");

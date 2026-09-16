@@ -48,6 +48,11 @@
     if(!["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode)){state.workStartStatus="BLOKKOLT";state.workStartNotice="Válassz explicit kódmérnököt. Automatikus worker-kiosztás nincs.";state.workStartNoticeTone="error";render();return;}
     state.workStartBusy=true;state.workStartStatus="ELŐKÉSZÍTÉS";state.workStartNotice="A Central Core létrehozza vagy újrapróbálja a taskot és ellenőrzi a worker rendelkezésre állását…";state.workStartNoticeTone="info";render();
     const surfaceType=selectedWorkerSurface();
+    if(surfaceType!=="CHATGPT"){
+      state.workStartBusy=false;state.workStartStatus="BLOKKOLT";
+      state.workStartNotice=surfaceType==="CODEX"?"A Codex surface kiválasztható és menthető, de a natív desktop bridge még nincs aktiválva. Task nem jött létre.":"A Work surface v0.1.42-re van előkészítve. Task nem jött létre.";
+      state.workStartNoticeTone="warning";render();return;
+    }
     const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,surfaceType,idempotencyKey:ensureWorkStartKey()});
     state.workStartBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A munkaindítás sikertelen.");state.workStartNoticeTone="error";render();return;}

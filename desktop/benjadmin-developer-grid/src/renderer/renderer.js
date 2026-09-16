@@ -355,8 +355,8 @@ function renderConfig() {
       const activeTask = activeTaskForWorker(cellConfig.workerCode);
       const activeStatus = String(activeTask?.status || "").toUpperCase();
       const locked = ["RUNNING","REVIEW"].includes(activeStatus);
-      surfaceSelect.disabled = locked || surfaceType === "WORK";
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · natív desktop surface" : "Worker felület kiválasztása";
+      surfaceSelect.disabled = locked;
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · natív desktop surface · bridge aktiválásig taskindítás tiltott" : surfaceType === "WORK" ? "Work · v0.1.42-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {

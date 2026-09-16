@@ -259,3 +259,6 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A conversation binding generikus provenance mezőket használ: `surfaceType`, `surfaceConversationId`, `surfaceConversationUrl`, `surfaceConversationTitle`, `surfaceConversationConfirmedAt`. A korábbi `chatConversation*` mezők ChatGPT backward-compatibility célra megmaradnak.
 - A Conversation Memory surface szerint különíti el a RAW/context/handoff láncokat. A v0.1.40 surface-prefix nélküli ChatGPT memóriafájlok olvasása és hash-láncának folytatása kompatibilitási fallbackkel megmarad; Codex/Work adat nem olvadhat össze ChatGPT transcriptbe.
 - DEV ONLY · PROD DENY. v0.1.41-ben FULL BUILD/release csak a teljes source-quality, review és Central Core build gate után engedélyezhető.
+
+### v0.1.41 review hardening
+A Codex/Work selector mentése nem hozhat létre végrehajthatatlan authoritative taskot. Amíg a Codex natív bridge nincs aktiválva, illetve a Work surface v0.1.42 előtt van, a Central Core már az API-hívás előtt blokkolja a `MUNKA INDÍTÁSA` műveletet, a backend pedig ugyanilyen fail-closed kaput tart fenn közvetlen API-hívás ellen. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
