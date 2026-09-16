@@ -17,6 +17,8 @@ check(engine.includes("WORK_START_MIN_LENGTH = 12") && engine.includes("DEVELOPE
 check(engine.includes("idempotencyKey") && engine.includes("workStartTaskId") && engine.includes("DEVELOPER_GRID_WORK_IDEMPOTENCY_CONFLICT"), "idempotent task creation");
 check(engine.includes("sourcePromptPreserved: true") && engine.includes("sourcePrompt: input.sourcePrompt"), "original prompt preserved verbatim");
 check(engine.includes("sourceProvenance.sourceState !== \"VERIFIED\"") && engine.includes("SOURCE_BASELINE_MISMATCH"), "source provenance fail closed");
+check(engine.includes("sourceProvenance.blockCode") || engine.includes("foundation.sourceProvenance.blockCode"), "source provenance preserves precise block code");
+check(route.includes("SOURCE_EXECUTION_PATH_UNAVAILABLE"), "source execution path unavailable is distinct from baseline mismatch");
 check(engine.includes("createDevEngineTask") && engine.includes("autoRouteDevEngineTaskByAvailability"), "existing authoritative task engine reused");
 check(engine.includes("materializeGridTaskSession") && engine.includes("source: \"EXPLICIT_TASK\""), "task/session and explicit developmentContext materialized");
 check(route.includes("isChatGridDeviceAuthorized") && route.includes("productionAccess: \"DENY\""), "paired device DEV-only write adapter");

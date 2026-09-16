@@ -268,3 +268,6 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 
 ### v0.1.41 review hardening
 A hagyományos `/api/dev/grid/work-start` út Codex esetén fail-closed `CODEX_TASK_BRIDGE_REQUIRED`, mert a ChatGPT Launch Packet / BOOT ACK / DOM transcript protokoll nem használható Codex végrehajtásra. A Codex kizárólag a párosított DEV eszközzel védett Task Bridge API-n indítható. A Work surface v0.1.42-ig `WORK_SURFACE_PLANNED_V0142` állapotban marad. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
+
+### v0.1.41 source-authority hardening
+A Launch Packet `WORKTREE / BRANCH / BASE HEAD` hármasa authoritative source provenance. A worker nem használhat `/root/dimprover`, scratch repositoryt, default MCP cwd-t vagy más lokális Git nézetet helyettesítő source-ként. Ha az exact authoritative worktree nem érhető el vagy a Git provenance azon nem olvasható, a helyes fail-closed kód `SOURCE_EXECUTION_PATH_UNAVAILABLE`; ez nem minősül source mismatchnek. `SOURCE_BASELINE_MISMATCH` csak akkor engedélyezett, ha az exact authoritative worktree elérhető, és azon tényleges branch, HEAD vagy canonical repository eltérés igazolható. A BOOT ACK mindkét esetben `Coding allowed: NO` marad a hiba feloldásáig.

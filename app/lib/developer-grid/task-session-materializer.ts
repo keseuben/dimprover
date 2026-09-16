@@ -24,8 +24,9 @@ function contextCandidate(taskId: string, bridgeTask: Record<string, unknown>, b
 export async function materializeCurrentDeveloperGridTaskSession() {
   const [foundation, bridge] = await Promise.all([getDeveloperGridFoundation(), getDeveloperConsoleGridBridge()]);
   if (foundation.sourceProvenance.sourceState !== "VERIFIED") {
-    const error = new Error(`BLOCKED · SOURCE_BASELINE_MISMATCH · ${foundation.sourceProvenance.reasons.join("; ")}`);
-    Object.assign(error, { code: "SOURCE_BASELINE_MISMATCH", provenance: foundation.sourceProvenance });
+    const code = foundation.sourceProvenance.blockCode || "SOURCE_BASELINE_MISMATCH";
+    const error = new Error(`BLOCKED · ${code} · ${foundation.sourceProvenance.reasons.join("; ")}`);
+    Object.assign(error, { code, provenance: foundation.sourceProvenance });
     throw error;
   }
 

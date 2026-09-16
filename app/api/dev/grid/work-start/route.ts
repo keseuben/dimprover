@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     return json({ ok: true, work: result });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "DEVELOPER_GRID_WORK_START_FAILED";
-    const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) || 500 : code === "SOURCE_BASELINE_MISMATCH" ? 409 : 500;
+    const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) || 500 : ["SOURCE_BASELINE_MISMATCH", "SOURCE_EXECUTION_PATH_UNAVAILABLE"].includes(code) ? 409 : 500;
     return json({ ok: false, code, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }, status);
   }
 }

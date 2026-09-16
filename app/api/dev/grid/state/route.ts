@@ -30,6 +30,6 @@ export async function POST(request: NextRequest) {
     return json({ ok: true, materialized });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
-    return json({ ok: false, code: code || "DEVELOPER_GRID_STATE_MATERIALIZATION_FAILED", error: error instanceof Error ? error.message : "A Developer Grid state materializálása sikertelen." }, code === "SOURCE_BASELINE_MISMATCH" ? 409 : 500);
+    return json({ ok: false, code: code || "DEVELOPER_GRID_STATE_MATERIALIZATION_FAILED", error: error instanceof Error ? error.message : "A Developer Grid state materializálása sikertelen." }, ["SOURCE_BASELINE_MISMATCH", "SOURCE_EXECUTION_PATH_UNAVAILABLE"].includes(code) ? 409 : 500);
   }
 }

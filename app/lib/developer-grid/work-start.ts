@@ -263,8 +263,9 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
   const input = normalizeWorkStartInput(rawInput);
   const foundation = await getDeveloperGridFoundation();
   if (foundation.sourceProvenance.sourceState !== "VERIFIED") {
-    const error = new Error(`BLOCKED · SOURCE_BASELINE_MISMATCH · ${foundation.sourceProvenance.reasons.join("; ")}`);
-    Object.assign(error, { code: "SOURCE_BASELINE_MISMATCH", status: 409 });
+    const code = foundation.sourceProvenance.blockCode || "SOURCE_BASELINE_MISMATCH";
+    const error = new Error(`BLOCKED · ${code} · ${foundation.sourceProvenance.reasons.join("; ")}`);
+    Object.assign(error, { code, status: 409, provenance: foundation.sourceProvenance });
     throw error;
   }
 

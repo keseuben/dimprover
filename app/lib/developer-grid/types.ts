@@ -88,7 +88,7 @@ export type SourceProvenance = {
   sessionId: string;
   verifiedAt: string;
   sourceState: SourceState;
-  blockCode: "SOURCE_BASELINE_MISMATCH" | null;
+  blockCode: "SOURCE_BASELINE_MISMATCH" | "SOURCE_EXECUTION_PATH_UNAVAILABLE" | null;
   reasons: string[];
 };
 

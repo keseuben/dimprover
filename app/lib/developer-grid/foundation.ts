@@ -92,6 +92,7 @@ export async function getDeveloperGridFoundation(): Promise<DeveloperGridFoundat
         "A rendszer emlékszik, nem az egyes AI-chat.",
         "Presence aktivitásjel; nem authoritative development context.",
         "SOURCE_BASELINE_MISMATCH esetén fail-closed BLOCKED.",
+        "SOURCE_EXECUTION_PATH_UNAVAILABLE esetén fail-closed BLOCKED, de ez nem minősül source mismatchnek.",
         "RELEASE_STATE_MISMATCH esetén fail-closed BLOCKED.",
         "DEV ONLY · PROD DENY.",
       ],

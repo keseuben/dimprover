@@ -28,6 +28,7 @@ export async function verifySourceProvenance(expectation: SourceProvenanceExpect
   let actualBranch = "";
   let actualHead = "";
   let actualCommonDir = "";
+  let executionPathUnavailable = false;
 
   try {
     [actualTopLevel, actualBranch, actualHead, actualCommonDir] = await Promise.all([
@@ -37,7 +38,8 @@ export async function verifySourceProvenance(expectation: SourceProvenanceExpect
       git(expectedWorktree, ["rev-parse", "--git-common-dir"]),
     ]);
   } catch (error) {
-    reasons.push(error instanceof Error ? `Git provenance nem olvasható: ${error.message}` : "Git provenance nem olvasható.");
+    executionPathUnavailable = true;
+    reasons.push(error instanceof Error ? `Authoritative execution worktree nem olvasható: ${error.message}` : "Authoritative execution worktree nem olvasható.");
   }
 
   if (actualTopLevel && path.resolve(actualTopLevel) !== expectedWorktree) reasons.push(`Worktree mismatch: ${actualTopLevel}`);
@@ -57,6 +59,9 @@ export async function verifySourceProvenance(expectation: SourceProvenanceExpect
   if (!actualCommonDir) reasons.push("Canonical repository nem igazolható.");
 
   const sourceState = reasons.length ? "BLOCKED" : "VERIFIED";
+  const blockCode = sourceState === "BLOCKED"
+    ? executionPathUnavailable ? "SOURCE_EXECUTION_PATH_UNAVAILABLE" : "SOURCE_BASELINE_MISMATCH"
+    : null;
   return {
     repository: expectedRepository,
     worktree: expectedWorktree,
@@ -68,15 +73,16 @@ export async function verifySourceProvenance(expectation: SourceProvenanceExpect
     sessionId: expectation.sessionId,
     verifiedAt: new Date().toISOString(),
     sourceState,
-    blockCode: sourceState === "BLOCKED" ? "SOURCE_BASELINE_MISMATCH" : null,
+    blockCode,
     reasons,
   };
 }
 
 export function assertVerifiedSource(provenance: SourceProvenance): SourceProvenance {
   if (provenance.sourceState !== "VERIFIED") {
-    const error = new Error(`BLOCKED · SOURCE_BASELINE_MISMATCH${provenance.reasons.length ? ` · ${provenance.reasons.join("; ")}` : ""}`);
-    Object.assign(error, { code: "SOURCE_BASELINE_MISMATCH", provenance });
+    const code = provenance.blockCode || "SOURCE_BASELINE_MISMATCH";
+    const error = new Error(`BLOCKED · ${code}${provenance.reasons.length ? ` · ${provenance.reasons.join("; ")}` : ""}`);
+    Object.assign(error, { code, provenance });
     throw error;
   }
   return provenance;
