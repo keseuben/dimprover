@@ -7,7 +7,7 @@ import { scanSensitiveText } from "@/app/lib/dev-center/ai-worker/secret-scanner
 import { listDevelopmentHandoffs, saveDevelopmentHandoff } from "@/app/lib/dev-center/handoff-store";
 import { appendGridEvidence, getGridEvidenceSummary, listGridEvidence } from "./evidence";
 import { readGridState, upsertWorkerSession } from "./state-store";
-import type { GridEvidence, RoutableWorkerCode, WorkerSession } from "./types";
+import type { GridEvidence, RoutableWorkerCode, WorkerSession, WorkerSurfaceType } from "./types";
 
 export const RAW_CHAT_TRANSCRIPT_SCHEMA = "RAW_CHAT_TRANSCRIPT_V1" as const;
 export const CONTEXT_SNAPSHOT_SCHEMA = "BENJADMIN_CONTEXT_SNAPSHOT_V1" as const;
@@ -40,6 +40,7 @@ export type RawConversationSnapshot = {
   taskId: string;
   sessionId: string;
   workerCode: RoutableWorkerCode;
+  surfaceType: WorkerSurfaceType;
   conversationId: string;
   conversationUrl: string;
   conversationTitle: string;
@@ -64,6 +65,7 @@ export type ContextSnapshot = {
   taskId: string;
   sessionId: string;
   workerCode: RoutableWorkerCode;
+  surfaceType: WorkerSurfaceType;
   projectId: string;
   mainModule: string;
   moduleName: string;
@@ -95,6 +97,7 @@ export type AutomaticHandoffPack = {
   taskId: string;
   sessionId: string;
   workerCode: RoutableWorkerCode;
+  surfaceType: WorkerSurfaceType;
   conversationId: string;
   contextSnapshotId: string;
   sourceHead: string;
@@ -120,6 +123,32 @@ function iso(value: unknown) {
 }
 function safeId(value: unknown, max = 180) {
   return text(value, max).replace(/[^A-Za-z0-9._:-]/g, "-").replace(/^-+|-+$/g, "");
+}
+function surfaceType(value: unknown): WorkerSurfaceType {
+  const raw=text(value,40).toUpperCase();
+  return raw==="CODEX"?"CODEX":raw==="WORK"?"WORK":"CHATGPT";
+}
+function sessionSurfaceType(session: WorkerSession): WorkerSurfaceType { return surfaceType(session.developmentContext.surfaceType||"CHATGPT"); }
+function sessionSurfaceConversationId(session: WorkerSession) { return safeId(session.developmentContext.surfaceConversationId||session.developmentContext.chatConversationId,180); }
+function surfaceMemoryKey(type: WorkerSurfaceType, conversationId: string) { return `${type.toLowerCase()}--${safeId(conversationId,180)}`; }
+async function regularFile(file: string) { try { return (await stat(file)).isFile(); } catch { return false; } }
+async function rawMemoryFile(f: ReturnType<typeof memoryFiles>, type: WorkerSurfaceType, conversationId: string) {
+  const keyed=path.join(f.rawDir,`${surfaceMemoryKey(type,conversationId)}.jsonl`);
+  if(await regularFile(keyed)) return keyed;
+  if(type==="CHATGPT"){
+    const legacy=path.join(f.rawDir,`${safeId(conversationId,180)}.jsonl`);
+    if(await regularFile(legacy)) return legacy;
+  }
+  return keyed;
+}
+async function latestMemoryFile(f: ReturnType<typeof memoryFiles>, type: WorkerSurfaceType, conversationId: string, suffix: "context.json"|"handoff.json") {
+  const keyed=path.join(f.latestDir,`${surfaceMemoryKey(type,conversationId)}.${suffix}`);
+  if(await regularFile(keyed)) return keyed;
+  if(type==="CHATGPT"){
+    const legacy=path.join(f.latestDir,`${safeId(conversationId,180)}.${suffix}`);
+    if(await regularFile(legacy)) return legacy;
+  }
+  return keyed;
 }
 function sha(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function safeExcerpt(value: unknown, max = 1400) {
@@ -202,7 +231,7 @@ function reconstructRawSnapshot(rows: RawConversationSnapshot[], taskId: string,
     for(const message of row.messages||[]) byId.set(message.messageId,{...message});
   }
   const messages=[...byId.values()].sort((a,b)=>a.ordinal-b.ordinal||a.messageId.localeCompare(b.messageId));
-  return {...latest,messages,messageCount:latest.messageCount||messages.length,deltaMessageCount:latest.deltaMessageCount||0,storageMode:"DELTA" as const};
+  return {...latest,surfaceType:latest.surfaceType||"CHATGPT",messages,messageCount:latest.messageCount||messages.length,deltaMessageCount:latest.deltaMessageCount||0,storageMode:"DELTA" as const};
 }
 function deltaMessages(current: RawConversationMessage[], prior: RawConversationSnapshot | null) {
   if(!prior) return current;
@@ -219,9 +248,13 @@ async function currentSessionForInput(input: Record<string,unknown>, stateRoot?:
   if(!workers.has(workerCode)) throw Object.assign(new Error("Ismeretlen RAW transcript worker."),{code:"DEVELOPER_GRID_RAW_WORKER_INVALID",status:400});
   const session=state.sessions.find(s=>s.id===sessionId&&s.taskId===taskId&&s.workerCode===workerCode&&s.endedAt===null);
   if(!session) throw Object.assign(new Error("A RAW transcript aktív worker sessionje nem található."),{code:"DEVELOPER_GRID_RAW_SESSION_MISMATCH",status:409});
+  const expectedSurfaceType=sessionSurfaceType(session);
+  const inputSurfaceType=surfaceType(input.surfaceType||expectedSurfaceType);
+  if(inputSurfaceType!==expectedSurfaceType) throw Object.assign(new Error("A RAW transcript surface típusa nem egyezik az authoritative worker session felületével."),{code:"DEVELOPER_GRID_RAW_SURFACE_MISMATCH",status:409});
   const conversationId=safeId(input.conversationId,180);
-  if(!conversationId||conversationId!==safeId(session.developmentContext.chatConversationId,180)) throw Object.assign(new Error("A RAW transcript csevegésazonosítója nem egyezik a rögzített ChatGPT csevegéssel."),{code:"DEVELOPER_GRID_RAW_CONVERSATION_MISMATCH",status:409});
-  return {state,session,taskId,sessionId,workerCode,conversationId};
+  const expectedConversationId=sessionSurfaceConversationId(session);
+  if(!conversationId||conversationId!==expectedConversationId) throw Object.assign(new Error("A RAW transcript conversation/thread azonosítója nem egyezik a rögzített worker surface-szel."),{code:"DEVELOPER_GRID_RAW_CONVERSATION_MISMATCH",status:409});
+  return {state,session,taskId,sessionId,workerCode,surfaceType:expectedSurfaceType,conversationId};
 }
 function latestMessage(messages: RawConversationMessage[], wanted: RawConversationMessage["role"]){return [...messages].reverse().find(m=>m.role===wanted)||null;}
 function evidenceChangedFiles(evidence: GridEvidence[]){return [...new Set(evidence.filter(e=>e.kind==="FILE").map(e=>e.attributes.path).filter((v):v is string=>Boolean(v&&v!=="[SENSITIVE_PATH]")))].slice(0,120);}
@@ -245,15 +278,16 @@ async function createContextSnapshot(session: WorkerSession, raw: RawConversatio
     `Task: ${safeExcerpt(session.developmentContext.workItem,600)}`,
     `Állapot: ${stage}/6 · ${stageLabel(stage)}`,
     `Worker: ${session.workerCode}`,
+    `Surface: ${raw.surfaceType}`,
     `Source: ${safeExcerpt(session.sourceProvenance.branch,300)} · ${session.sourceProvenance.head.slice(0,12)}`,
     latestUserExcerpt?`Utolsó felhasználói kontextus: ${latestUserExcerpt}`:"",
     latestAssistantExcerpt?`Utolsó AI állapot: ${latestAssistantExcerpt}`:"",
     blockers.length?`Blokkolók: ${blockers.map(x=>x.summary).join(" | ")}`:"Blokkolók: nincs rögzített HIGH/CRITICAL blocker.",
     nextStage?`Következő fázis: ${nextStage}/6 · ${stageLabel(nextStage)}`:"Következő fázis: lezárási/handoff kapu.",
   ].filter(Boolean).join("\n");
-  const snapshot: ContextSnapshot={schema:CONTEXT_SNAPSHOT_SCHEMA,schemaVersion:1,id:`ctx-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,revision,environment:"DEV",productionAccess:"DENY",sanitized:true,taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,projectId:session.developmentContext.projectId,mainModule:session.developmentContext.mainModule,moduleName:session.developmentContext.moduleName,submoduleName:session.developmentContext.submoduleName||null,conversationId:raw.conversationId,rawSnapshotSha256:raw.snapshotSha256,stage,stageLabel:stageLabel(stage),sourceHead:session.sourceProvenance.head,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,sourcePrompt,latestUserExcerpt,latestAssistantExcerpt,evidenceCounts:evidenceSummary.counts,unresolvedBlockers:blockers,nextStage,nextStageLabel:nextStage?stageLabel(nextStage):null,summary,createdAt:new Date().toISOString()};
+  const snapshot: ContextSnapshot={schema:CONTEXT_SNAPSHOT_SCHEMA,schemaVersion:1,id:`ctx-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,revision,environment:"DEV",productionAccess:"DENY",sanitized:true,taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,surfaceType:raw.surfaceType,projectId:session.developmentContext.projectId,mainModule:session.developmentContext.mainModule,moduleName:session.developmentContext.moduleName,submoduleName:session.developmentContext.submoduleName||null,conversationId:raw.conversationId,rawSnapshotSha256:raw.snapshotSha256,stage,stageLabel:stageLabel(stage),sourceHead:session.sourceProvenance.head,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,sourcePrompt,latestUserExcerpt,latestAssistantExcerpt,evidenceCounts:evidenceSummary.counts,unresolvedBlockers:blockers,nextStage,nextStageLabel:nextStage?stageLabel(nextStage):null,summary,createdAt:new Date().toISOString()};
   await appendFile(f.contexts,`${JSON.stringify(snapshot)}\n`,{encoding:"utf8",mode:0o600});
-  await atomicJson(path.join(f.latestDir,`${raw.conversationId}.context.json`),snapshot);
+  await atomicJson(path.join(f.latestDir,`${surfaceMemoryKey(raw.surfaceType,raw.conversationId)}.context.json`),snapshot);
   return {snapshot,evidence};
 }
 
@@ -296,7 +330,7 @@ async function canonicalAutoHandoff(session: WorkerSession, context: ContextSnap
     "",
     "DEV ONLY · PROD DENY",
   ].join("\n");
-  const saved=await saveDevelopmentHandoff({id:deterministicId,schemaVersion:2,chatSessionId:context.conversationId,chatTitle:session.developmentContext.chatConversationTitle||context.conversationId,workerCode:session.workerCode,mainProject:"DIMPRO - DIMPROVER",project:session.developmentContext.projectId,module:session.developmentContext.moduleName,contextModule:session.developmentContext.submoduleName||"",developmentArea:session.developmentContext.workItem,fileAreaKey:session.developmentContext.moduleName,taskId:session.taskId,taskTitle:session.developmentContext.workItem,liveNextTaskId:"",liveNextTaskTitle:"",startedAt:session.startedAt,finishedAt:new Date().toISOString(),status:"COMPLETED",branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,startCommit:session.sourceProvenance.baseHead||session.sourceProvenance.head,endCommit:session.sourceProvenance.head,testsSummary,buildRelease,tags:["automatic","central-core","conversation-memory"],summary:context.summary,body});
+  const saved=await saveDevelopmentHandoff({id:deterministicId,schemaVersion:2,chatSessionId:context.conversationId,chatTitle:session.developmentContext.surfaceConversationTitle||session.developmentContext.chatConversationTitle||context.conversationId,workerCode:session.workerCode,mainProject:"DIMPRO - DIMPROVER",project:session.developmentContext.projectId,module:session.developmentContext.moduleName,contextModule:session.developmentContext.submoduleName||"",developmentArea:session.developmentContext.workItem,fileAreaKey:session.developmentContext.moduleName,taskId:session.taskId,taskTitle:session.developmentContext.workItem,liveNextTaskId:"",liveNextTaskTitle:"",startedAt:session.startedAt,finishedAt:new Date().toISOString(),status:"COMPLETED",branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,startCommit:session.sourceProvenance.baseHead||session.sourceProvenance.head,endCommit:session.sourceProvenance.head,testsSummary,buildRelease,tags:["automatic","central-core","conversation-memory",`surface-${context.surfaceType.toLowerCase()}`],summary:context.summary,body});
   const already=evidence.find(e=>e.kind==="HANDOFF"&&e.attributes.handoffId===saved.id&&e.head===session.sourceProvenance.head);
   if(!already) await appendGridEvidence({kind:"HANDOFF",status:"COMPLETED",severity:"INFO",source:"HANDOFF_STORE",taskId:session.taskId,projectId:session.developmentContext.projectId,workerCode:session.workerCode,sessionId:session.id,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head:session.sourceProvenance.head,summary:`Automatikus Handoff Pack COMPLETED · ${saved.id}`,attributes:{handoffId:saved.id,handoffStatus:"COMPLETED"}});
   return {state:"COMPLETED" as const,canonicalHandoffId:saved.id,build,tests,changedFiles,blockers};
@@ -306,9 +340,9 @@ async function createHandoffPack(session: WorkerSession, context: ContextSnapsho
   const f=await ensureRoot(root);
   const result=await canonicalAutoHandoff(session,context,evidence);
   const state=result.state;
-  const pack: AutomaticHandoffPack={schema:HANDOFF_PACK_SCHEMA,schemaVersion:1,id:`hp-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,conversationId:context.conversationId,contextSnapshotId:context.id,sourceHead:session.sourceProvenance.head,stage:context.stage,state,buildEvidenceId:result.build?.id||null,testEvidenceIds:result.tests.map(t=>t.id),changedFiles:result.changedFiles,blockers:result.blockers,nextStep:context.nextStage?`${context.nextStage}/6 · ${context.nextStageLabel}`:"Új task / lezárás",summary:context.summary,canonicalHandoffId:result.canonicalHandoffId,createdAt:new Date().toISOString()};
+  const pack: AutomaticHandoffPack={schema:HANDOFF_PACK_SCHEMA,schemaVersion:1,id:`hp-${session.taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",taskId:session.taskId,sessionId:session.id,workerCode:session.workerCode as RoutableWorkerCode,surfaceType:context.surfaceType,conversationId:context.conversationId,contextSnapshotId:context.id,sourceHead:session.sourceProvenance.head,stage:context.stage,state,buildEvidenceId:result.build?.id||null,testEvidenceIds:result.tests.map(t=>t.id),changedFiles:result.changedFiles,blockers:result.blockers,nextStep:context.nextStage?`${context.nextStage}/6 · ${context.nextStageLabel}`:"Új task / lezárás",summary:context.summary,canonicalHandoffId:result.canonicalHandoffId,createdAt:new Date().toISOString()};
   await appendFile(f.handoffs,`${JSON.stringify(pack)}\n`,{encoding:"utf8",mode:0o600});
-  await atomicJson(path.join(f.latestDir,`${context.conversationId}.handoff.json`),pack);
+  await atomicJson(path.join(f.latestDir,`${surfaceMemoryKey(context.surfaceType,context.conversationId)}.handoff.json`),pack);
   return pack;
 }
 
@@ -320,7 +354,7 @@ async function updateSessionMemoryPointers(session: WorkerSession, raw: RawConve
 
 export async function appendConversationMemorySnapshot(input: Record<string,unknown>, options: {memoryRoot?:string;stateRoot?:string} = {}) {
   const memoryRoot=options.memoryRoot||DEFAULT_CONVERSATION_MEMORY_ROOT;
-  const {session,taskId,sessionId,workerCode,conversationId}=await currentSessionForInput(input,options.stateRoot);
+  const {session,taskId,sessionId,workerCode,surfaceType:currentSurfaceType,conversationId}=await currentSessionForInput(input,options.stateRoot);
   const messages=normalizeMessages(input.messages);
   if(!messages.length) throw Object.assign(new Error("A RAW transcript snapshot legalább egy üzenetet igényel."),{code:"DEVELOPER_GRID_RAW_MESSAGES_REQUIRED",status:400});
   const snapshotSha256=snapshotDigest(messages);
@@ -329,19 +363,19 @@ export async function appendConversationMemorySnapshot(input: Record<string,unkn
   const f=await ensureRoot(memoryRoot);
   const release=await acquire(memoryRoot);
   try{
-    const rawFile=path.join(f.rawDir,`${conversationId}.jsonl`);
+    const rawFile=await rawMemoryFile(f,currentSurfaceType,conversationId);
     const rows=await readLines<RawConversationSnapshot>(rawFile,4000);
     const previousChain=rows.at(-1)||null;
     const previousSession=reconstructRawSnapshot(rows,taskId,sessionId);
     if(previousSession?.snapshotSha256===snapshotSha256){
-      const latestContext=await readLatestContext(conversationId,memoryRoot);
-      const latestHandoff=await readLatestHandoffPack(conversationId,memoryRoot);
+      const latestContext=await readLatestContext(conversationId,memoryRoot,currentSurfaceType);
+      const latestHandoff=await readLatestHandoffPack(conversationId,memoryRoot,currentSurfaceType);
       return {deduplicated:true,raw:rawMetadata(previousSession),context:latestContext,handoff:latestHandoff,productionAccess:"DENY" as const};
     }
     const delta=deltaMessages(messages,previousSession);
     const previousChainSha256=previousChain?.chainSha256||null;
-    const chainSha256=sha(`${previousChainSha256||"GENESIS"}\n${snapshotSha256}\n${taskId}\n${sessionId}\n${conversationId}\n${delta.length}`);
-    const stored: RawConversationSnapshot={schema:RAW_CHAT_TRANSCRIPT_SCHEMA,schemaVersion:1,id:`raw-${taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",immutable:true,taskId,sessionId,workerCode,conversationId,conversationUrl:text(input.conversationUrl,1200),conversationTitle:text(input.conversationTitle,500),capturedAt:iso(input.capturedAt),messageCount:messages.length,deltaMessageCount:delta.length,storageMode:"DELTA",snapshotSha256,previousChainSha256,chainSha256,messages:delta};
+    const chainSha256=sha(`${previousChainSha256||"GENESIS"}\n${snapshotSha256}\n${taskId}\n${sessionId}\n${currentSurfaceType}\n${conversationId}\n${delta.length}`);
+    const stored: RawConversationSnapshot={schema:RAW_CHAT_TRANSCRIPT_SCHEMA,schemaVersion:1,id:`raw-${taskId}-${Date.now()}-${randomUUID().slice(0,8)}`,environment:"DEV",productionAccess:"DENY",immutable:true,taskId,sessionId,workerCode,surfaceType:currentSurfaceType,conversationId,conversationUrl:text(input.conversationUrl,1200),conversationTitle:text(input.conversationTitle,500),capturedAt:iso(input.capturedAt),messageCount:messages.length,deltaMessageCount:delta.length,storageMode:"DELTA",snapshotSha256,previousChainSha256,chainSha256,messages:delta};
     await appendFile(rawFile,`${JSON.stringify(stored)}\n`,{encoding:"utf8",mode:0o600});
     await chmod(rawFile,0o600).catch(()=>undefined);
     const raw: RawConversationSnapshot={...stored,messages};
@@ -352,18 +386,18 @@ export async function appendConversationMemorySnapshot(input: Record<string,unkn
   } finally {await release();}
 }
 
-function rawMetadata(raw: RawConversationSnapshot){return {id:raw.id,schema:raw.schema,taskId:raw.taskId,sessionId:raw.sessionId,workerCode:raw.workerCode,conversationId:raw.conversationId,capturedAt:raw.capturedAt,messageCount:raw.messageCount,deltaMessageCount:raw.deltaMessageCount,storageMode:raw.storageMode,snapshotSha256:raw.snapshotSha256,chainSha256:raw.chainSha256,immutable:true};}
-export async function readLatestContext(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT){try{return JSON.parse(await readFile(path.join((await ensureRoot(root)).latestDir,`${safeId(conversationId,180)}.context.json`),"utf8")) as ContextSnapshot;}catch{return null;}}
-export async function readLatestHandoffPack(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT){try{return JSON.parse(await readFile(path.join((await ensureRoot(root)).latestDir,`${safeId(conversationId,180)}.handoff.json`),"utf8")) as AutomaticHandoffPack;}catch{return null;}}
+function rawMetadata(raw: RawConversationSnapshot){return {id:raw.id,schema:raw.schema,taskId:raw.taskId,sessionId:raw.sessionId,workerCode:raw.workerCode,surfaceType:raw.surfaceType,conversationId:raw.conversationId,capturedAt:raw.capturedAt,messageCount:raw.messageCount,deltaMessageCount:raw.deltaMessageCount,storageMode:raw.storageMode,snapshotSha256:raw.snapshotSha256,chainSha256:raw.chainSha256,immutable:true};}
+export async function readLatestContext(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"context.json"),"utf8")) as ContextSnapshot;}catch{return null;}}
+export async function readLatestHandoffPack(conversationId: string, root = DEFAULT_CONVERSATION_MEMORY_ROOT, type: WorkerSurfaceType = "CHATGPT"){try{const f=await ensureRoot(root);return JSON.parse(await readFile(await latestMemoryFile(f,type,conversationId,"handoff.json"),"utf8")) as AutomaticHandoffPack;}catch{return null;}}
 
-export async function getConversationMemoryStatus(input: {taskId?:string;sessionId?:string;conversationId?:string;root?:string}={}) {
+export async function getConversationMemoryStatus(input: {taskId?:string;sessionId?:string;conversationId?:string;surfaceType?:WorkerSurfaceType;root?:string}={}) {
   const root=input.root||DEFAULT_CONVERSATION_MEMORY_ROOT; const f=await ensureRoot(root); const contexts=await readLines<ContextSnapshot>(f.contexts); const handoffs=await readLines<AutomaticHandoffPack>(f.handoffs);
-  const taskId=text(input.taskId,220),sessionId=text(input.sessionId,240),conversationId=safeId(input.conversationId,180);
-  const cf=contexts.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId));
-  const hf=handoffs.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId));
+  const taskId=text(input.taskId,220),sessionId=text(input.sessionId,240),conversationId=safeId(input.conversationId,180),wantedSurface=input.surfaceType?surfaceType(input.surfaceType):null;
+  const cf=contexts.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId)&&(!wantedSurface||surfaceType(x.surfaceType)===wantedSurface));
+  const hf=handoffs.filter(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId)&&(!conversationId||x.conversationId===conversationId)&&(!wantedSurface||surfaceType(x.surfaceType)===wantedSurface));
   const context=cf.at(-1)||null; const handoff=hf.at(-1)||null;
   let raw=null as ReturnType<typeof rawMetadata>|null;
-  if(context){const rawFile=path.join(f.rawDir,`${context.conversationId}.jsonl`);const rows=await readLines<RawConversationSnapshot>(rawFile,4000);const found=[...rows].reverse().find(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId));if(found)raw=rawMetadata(found);}
+  if(context){const rawFile=await rawMemoryFile(f,surfaceType(context.surfaceType),context.conversationId);const rows=await readLines<RawConversationSnapshot>(rawFile,4000);const found=[...rows].reverse().find(x=>(!taskId||x.taskId===taskId)&&(!sessionId||x.sessionId===sessionId));if(found)raw=rawMetadata({...found,surfaceType:found.surfaceType||"CHATGPT"});}
   return {raw,context,handoff,productionAccess:"DENY" as const};
 }
 
@@ -374,7 +408,8 @@ export async function findLatestContinuationContext(input:{projectId:string;modu
 }
 
 export async function refreshDerivedConversationMemory(taskId:string, sessionId:string, options:{memoryRoot?:string;stateRoot?:string}={}){
-  const state=await readGridState(options.stateRoot);const session=state.sessions.find(s=>s.taskId===taskId&&s.id===sessionId&&s.endedAt===null);if(!session||!session.developmentContext.chatConversationId)return null;
-  const root=options.memoryRoot||DEFAULT_CONVERSATION_MEMORY_ROOT;const f=await ensureRoot(root);const rows=await readLines<RawConversationSnapshot>(path.join(f.rawDir,`${safeId(session.developmentContext.chatConversationId,180)}.jsonl`),4000);const raw=reconstructRawSnapshot(rows,taskId,sessionId);if(!raw)return null;
+  const state=await readGridState(options.stateRoot);const session=state.sessions.find(s=>s.taskId===taskId&&s.id===sessionId&&s.endedAt===null);if(!session)return null;
+  const currentSurfaceType=sessionSurfaceType(session);const conversationId=sessionSurfaceConversationId(session);if(!conversationId)return null;
+  const root=options.memoryRoot||DEFAULT_CONVERSATION_MEMORY_ROOT;const f=await ensureRoot(root);const rows=await readLines<RawConversationSnapshot>(await rawMemoryFile(f,currentSurfaceType,conversationId),4000);const raw=reconstructRawSnapshot(rows,taskId,sessionId);if(!raw)return null;
   const release=await acquire(root);try{const {snapshot:context,evidence}=await createContextSnapshot(session,raw,root,options.stateRoot);const handoff=await createHandoffPack(session,context,evidence,root);await updateSessionMemoryPointers(session,raw,context,handoff,options.stateRoot);return {raw:rawMetadata(raw),context,handoff,productionAccess:"DENY" as const};}finally{await release();}
 }

@@ -9,7 +9,7 @@ import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundat
 import { findLatestContinuationContext } from "./conversation-memory";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { appendGridEvent, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
-import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, WorkerSession } from "./types";
+import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, WorkerSession, WorkerSurfaceType } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
 export const WORK_START_MAX_LENGTH = 12000;
@@ -25,6 +25,8 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  const rawSurfaceType = text(input.surfaceType, 40).toUpperCase();
+  const surfaceType: WorkerSurfaceType = rawSurfaceType === "CODEX" ? "CODEX" : rawSurfaceType === "WORK" ? "WORK" : "CHATGPT";
   const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();
   if (!rawPreferredWorkerCode || rawPreferredWorkerCode === "AUTO") {
     const error = new Error("A munka indításához explicit kódmérnök kiválasztása kötelező. Automatikus vagy rejtett worker-fallback tiltott.");
@@ -49,7 +51,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, preferredWorkerCode };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -382,6 +384,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     taskId,
     sourcePrompt: input.sourcePrompt,
     chatLaunchMode: input.chatLaunchMode,
+    surfaceType: input.surfaceType,
     preferredWorkerCode: input.preferredWorkerCode,
     engineSessionId,
     continuityPreviousTaskId: continuity.previousTaskId,
@@ -425,6 +428,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       reused,
       sourcePrompt: input.sourcePrompt,
       chatLaunchMode: input.chatLaunchMode,
+      surfaceType: input.surfaceType,
       preferredWorkerCode: input.preferredWorkerCode,
       routingState: "WAITING_FOR_WORKER" as const,
       productionAccess: "DENY" as const,
@@ -452,6 +456,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     reused,
     sourcePrompt: input.sourcePrompt,
     chatLaunchMode: input.chatLaunchMode,
+    surfaceType: input.surfaceType,
     preferredWorkerCode: input.preferredWorkerCode,
     routingState: "ROUTED" as const,
     productionAccess: "DENY" as const,
@@ -537,32 +542,56 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
   };
 }
 
-function conversationIdFromUrl(value: unknown) {
+function normalizeSurfaceType(value: unknown, fallback: WorkerSurfaceType = "CHATGPT"): WorkerSurfaceType {
+  const raw = text(value, 40).toUpperCase();
+  return raw === "CODEX" ? "CODEX" : raw === "WORK" ? "WORK" : raw === "CHATGPT" ? "CHATGPT" : fallback;
+}
+
+function surfaceConversationIdFromUrl(surfaceType: WorkerSurfaceType, value: unknown) {
   const raw = text(value, 1000);
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:" || !["chatgpt.com", "www.chatgpt.com"].includes(url.hostname)) return "";
-    const match = url.pathname.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/);
-    return match?.[1] || "";
-  } catch { return ""; }
+    if (surfaceType === "CHATGPT" || surfaceType === "WORK") {
+      if (url.protocol !== "https:" || !["chatgpt.com", "www.chatgpt.com"].includes(url.hostname)) return "";
+      return url.pathname.match(/(?:^|\/)c\/([A-Za-z0-9_-]+)/)?.[1] || "";
+    }
+    if (surfaceType === "CODEX" && url.protocol === "codex:") {
+      if (url.hostname === "threads") return url.pathname.split("/").filter(Boolean)[0] || "";
+      return url.pathname.match(/(?:^|\/)threads\/([A-Za-z0-9._:-]+)/)?.[1] || "";
+    }
+  } catch { /* invalid surface URL */ }
+  return "";
 }
+
 
 export async function bindDeveloperGridConversation(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 220);
   const workerCode = strictCoreWorkerCode(rawInput.workerCode);
-  const chatConversationUrl = text(rawInput.chatConversationUrl, 1000);
-  const chatConversationId = text(rawInput.chatConversationId, 180) || conversationIdFromUrl(chatConversationUrl);
-  const chatConversationTitle = text(rawInput.chatConversationTitle, 500);
-  const chatPreviousConversationId = text(rawInput.chatPreviousConversationId, 180) || null;
+  const surfaceType = normalizeSurfaceType(rawInput.surfaceType);
+  const surfaceConversationUrl = text(rawInput.surfaceConversationUrl ?? rawInput.chatConversationUrl, 1000);
+  const surfaceConversationId = text(rawInput.surfaceConversationId ?? rawInput.chatConversationId, 180) || surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
+  const surfaceConversationTitle = text(rawInput.surfaceConversationTitle ?? rawInput.chatConversationTitle, 500);
+  const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
+  const chatConversationUrl = surfaceType === "CHATGPT" ? surfaceConversationUrl : "";
+  const chatConversationId = surfaceType === "CHATGPT" ? surfaceConversationId : "";
+  const chatConversationTitle = surfaceType === "CHATGPT" ? surfaceConversationTitle : "";
+  const chatPreviousConversationId = surfaceType === "CHATGPT" ? surfacePreviousConversationId : null;
   const requestedMode = text(rawInput.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = requestedMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const confirmedBy = chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
-  if (!taskId || !chatConversationId || conversationIdFromUrl(chatConversationUrl) !== chatConversationId) {
-    const error = new Error("A taskhoz csak igazolt ChatGPT /c/... csevegés rögzíthető.");
-    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_CONVERSATION_INVALID", status: 400 });
+  const urlDerivedSurfaceId = surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
+  const codexUrlValid = !surfaceConversationUrl || (surfaceConversationUrl.toLowerCase().startsWith("codex:") && urlDerivedSurfaceId === surfaceConversationId);
+  const surfaceIdentityValid = surfaceType === "CODEX"
+    ? Boolean(taskId && surfaceConversationId && codexUrlValid)
+    : Boolean(taskId && surfaceConversationId && urlDerivedSurfaceId === surfaceConversationId);
+  if (!surfaceIdentityValid) {
+    const error = new Error(surfaceType === "CODEX"
+      ? "A Codex taskhoz hiteles thread/session azonosító szükséges."
+      : "A taskhoz csak igazolt ChatGPT /c/... csevegés rögzíthető.");
+    Object.assign(error, { code: "DEVELOPER_GRID_SURFACE_CONVERSATION_INVALID", status: 400 });
     throw error;
   }
-  if (chatLaunchMode === "NEW_PROJECT_CHAT" && chatPreviousConversationId && chatPreviousConversationId === chatConversationId) {
+  if (chatLaunchMode === "NEW_PROJECT_CHAT" && surfacePreviousConversationId && surfacePreviousConversationId === surfaceConversationId) {
     const error = new Error("Az új projektcsevegés nem egyezhet a korábbi csevegéssel.");
     Object.assign(error, { code: "DEVELOPER_GRID_NEW_CHAT_REQUIRED", status: 409 });
     throw error;
@@ -579,6 +608,12 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_SESSION_MISSING", status: 409 });
     throw error;
   }
+  const existingSurfaceType = normalizeSurfaceType(session.developmentContext.surfaceType || "CHATGPT");
+  if (existingSurfaceType !== surfaceType) {
+    const error = new Error("A worker surface eltér a munkaindításkor rögzített felülettől.");
+    Object.assign(error, { code: "DEVELOPER_GRID_SURFACE_MISMATCH", status: 409 });
+    throw error;
+  }
   const existingMode = session.developmentContext.chatLaunchMode || chatLaunchMode;
   if (existingMode !== chatLaunchMode) {
     const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
@@ -591,11 +626,17 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     developmentContext: {
       ...session.developmentContext,
       chatLaunchMode,
+      surfaceType,
+      surfacePreviousConversationId,
+      surfaceConversationId,
+      surfaceConversationUrl,
+      surfaceConversationTitle,
+      surfaceConversationConfirmedAt: confirmedAt,
       chatPreviousConversationId,
-      chatConversationId,
-      chatConversationUrl,
-      chatConversationTitle,
-      chatConversationConfirmedAt: confirmedAt,
+      chatConversationId: chatConversationId || null,
+      chatConversationUrl: chatConversationUrl || null,
+      chatConversationTitle: chatConversationTitle || null,
+      chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null,
       chatConversationConfirmedBy: confirmedBy,
       resolvedAt: confirmedAt,
     },
@@ -604,10 +645,11 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   await syncEngineBridgeTarget(taskId, "HANDED_OFF");
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
-    delta: { summary: `ChatGPT csevegés rögzítve · ${chatLaunchMode}`, workItem: updated.developmentContext.workItem, workStageIndex: updated.developmentContext.workStageIndex || 1 },
+    delta: { summary: `${surfaceType} surface rögzítve · ${chatLaunchMode}`, workItem: updated.developmentContext.workItem, workStageIndex: updated.developmentContext.workStageIndex || 1 },
   });
   return {
-    taskId, workerCode, chatLaunchMode, chatConversationId, chatConversationUrl, chatConversationTitle,
-    chatConversationConfirmedAt: confirmedAt, chatConversationConfirmedBy: confirmedBy, revision: next.revision, productionAccess: "DENY" as const,
+    taskId, workerCode, chatLaunchMode, surfaceType, surfaceConversationId, surfaceConversationUrl, surfaceConversationTitle,
+    surfaceConversationConfirmedAt: confirmedAt, chatConversationId: chatConversationId || null, chatConversationUrl: chatConversationUrl || null, chatConversationTitle: chatConversationTitle || null,
+    chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy, revision: next.revision, productionAccess: "DENY" as const,
   };
 }

@@ -437,3 +437,11 @@ A Windows `launchAtLogin` beállítás perzisztens desktop konfiguráció, amely
 ### Developer Grid v0.1.40 – bridge aktivitási kapu
 
 A Developer Console bridge objektumainak puszta létezése nem jelent aktív munkát. RUNNING Grid materializációhoz két független állapotkapu kötelező: task `claimed|in_progress|testing`, worker session `open|active`. `blocked`, `completed`, `cancelled`, `failed`, `closed` vagy bármely ismeretlen státusz fail-closed/no-op. A no-op nem írhat új Grid sessiont, és a bridge státuszokat csak sanitizált diagnosztikai mezőként adhatja vissza.
+
+### BENJADMIN Developer Grid v0.1.41 – Worker Surface architektúra
+
+A Developer Gridben a kódmérnök identitása és a felület külön réteg. A worker (`ARMINAI`, `OUTMINAI`, `BENJAMINAI`, `JAZMINAI`) ugyanaz marad, miközben a cella `WorkerSurfaceType = CHATGPT | CODEX | WORK` értéket kap. A surface per-cell konfiguráció, amelyet a Central Core munkaindításkor az authoritative `DevelopmentContext.surfaceType` mezőbe fagyaszt. Aktív task alatt surface-váltás tiltott, így egy RUNNING ChatGPT-task nem vihető át audit nélkül Codexre.
+
+A desktop surface adapterrétege közös interfész fölé választja szét a felületeket. A ChatGPT meglévő sandboxolt WebContentsView-ja beágyazott surface. A Codex natív desktop surface-ként van modellezve; webes DOM-fallback nincs. A v0.1.41-ben a natív Codex bridge hiánya explicit `CODEX_NATIVE_BRIDGE_REQUIRED` kapu, ezért Codex kiválasztásakor automatikus task launch, BOOT ACK-capture és transcript-capture nem indulhat el tévesen ChatGPT-mechanizmussal. A Work adapter adatszerkezete elkészült, de aktiválása v0.1.42 scope.
+
+A beszélgetés/thread provenance generikussá vált: `surfaceType`, `surfaceConversationId`, `surfaceConversationUrl`, `surfaceConversationTitle`, `surfaceConversationConfirmedAt`. A ChatGPT-specifikus mezők backward-compatible alias/fallback szerepben megmaradnak. A Conversation Memory fájlkulcsa surface-t is tartalmaz, hogy eltérő provider/surface sessionök ne kerülhessenek ugyanabba a RAW hash-láncba. A v0.1.40 régi ChatGPT fájlok továbbra is olvashatók és ugyanazon láncon folytathatók.

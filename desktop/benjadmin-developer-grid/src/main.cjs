@@ -18,6 +18,8 @@ const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport } = require("./task-launch/stage-report.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
+const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
+const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
@@ -315,10 +317,15 @@ function enrichSnapshotWithTaskLaunch(snapshot) {
   const records = loadTaskLaunchRecords();
   return { ...snapshot, tasks: snapshot.tasks.map((task) => {
     const authoritative = task?.chatLaunchMode ? {
-      chatLaunchMode: task.chatLaunchMode, previousConversationId: task.chatPreviousConversationId || null,
-      conversationBound: Boolean(task.chatConversationId), chatSessionId: task.chatConversationId || null,
-      chatConversationUrl: task.chatConversationUrl || null, chatTitle: task.chatConversationTitle || null,
-      chatConversationConfirmedAt: task.chatConversationConfirmedAt || null,
+      chatLaunchMode: task.chatLaunchMode, surfaceType: normalizeWorkerSurfaceType(task.surfaceType || "CHATGPT"),
+      previousConversationId: task.surfacePreviousConversationId || task.chatPreviousConversationId || null,
+      conversationBound: Boolean(task.surfaceConversationId || task.chatConversationId),
+      surfaceConversationId: task.surfaceConversationId || task.chatConversationId || null,
+      surfaceConversationUrl: task.surfaceConversationUrl || task.chatConversationUrl || null,
+      surfaceConversationTitle: task.surfaceConversationTitle || task.chatConversationTitle || null,
+      chatSessionId: task.surfaceConversationId || task.chatConversationId || null,
+      chatConversationUrl: task.chatConversationUrl || null, chatTitle: task.surfaceConversationTitle || task.chatConversationTitle || null,
+      chatConversationConfirmedAt: task.surfaceConversationConfirmedAt || task.chatConversationConfirmedAt || null,
       bootAckState: task.bootAckState || null, bootAckValidatedAt: task.bootAckValidatedAt || null,
       bootAckSha256: task.bootAckSha256 || null, bootAckCodingAllowed: task.bootAckCodingAllowed ?? null,
       bootAckMismatches: Array.isArray(task.bootAckMismatches) ? task.bootAckMismatches : [],
@@ -1164,7 +1171,12 @@ function stopChatRefreshMaintenance() {
 
 function createChatView(cell) {
   const hostWindow = cell?.id === "central" ? createCentralWindow() : shellWindow;
+  const surfaceType = cell?.id === "central" ? "CHATGPT" : normalizeWorkerSurfaceType(cell?.surfaceType || "CHATGPT");
   if (!hostWindow || !unlocked || !cell?.enabled || chatViews.has(cell.id)) return;
+  if (cell?.id !== "central" && !isEmbeddedWorkerSurface(surfaceType)) {
+    send("live:connection", { kind:"surface", cellId:cell.id, workerCode:cell.workerCode, surfaceType, ok:true, embedded:false });
+    return;
+  }
   const view = new WebContentsView({
     webPreferences: {
       partition: CHAT_PARTITION,
@@ -1241,7 +1253,8 @@ function createChatView(cell) {
   });
   hostWindow.contentView.addChildView(view);
   chatViews.set(cell.id, view);
-  void view.webContents.loadURL(cell.url).catch((error) => send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: error.message }));
+  const targetUrl = cell.url || defaultWorkerSurfaceUrl(surfaceType) || "https://chatgpt.com/";
+  void view.webContents.loadURL(targetUrl).catch((error) => send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: error.message }));
 }
 
 function createEnabledChatViews() {
@@ -1485,6 +1498,10 @@ function launchTaskFromWork(work, chatPlan = null) {
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
     acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
     chatLaunchMode: session.developmentContext?.chatLaunchMode || chatPlan?.chatLaunchMode || null,
+    surfaceType: normalizeWorkerSurfaceType(session.developmentContext?.surfaceType || "CHATGPT"),
+    surfaceConversationId: session.developmentContext?.surfaceConversationId || session.developmentContext?.chatConversationId || null,
+    surfaceConversationUrl: session.developmentContext?.surfaceConversationUrl || session.developmentContext?.chatConversationUrl || null,
+    surfaceConversationTitle: session.developmentContext?.surfaceConversationTitle || session.developmentContext?.chatConversationTitle || null,
     continuityPreviousTaskId: session.developmentContext?.continuityPreviousTaskId || null,
     continuityPreviousWorkerCode: session.developmentContext?.continuityPreviousWorkerCode || null,
     continuityHandoffId: session.developmentContext?.continuityHandoffId || null,
@@ -1620,6 +1637,9 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
   const task = taskOverride || latestLiveSnapshot?.tasks?.find((item) => String(item.id) === id);
   if (!task) return { ok: false, error: "A BENJADMIN task nem érhető el az élő állapotban." };
+  const surfaceType = normalizeWorkerSurfaceType(taskOverride?.surfaceType || cell.surfaceType || "CHATGPT");
+  const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
+  if (!adapterGate.ok) return adapterGate;
   let view = chatViews.get(cell.id);
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
   if (!view || view.webContents.isDestroyed()) return { ok: false, error: "A worker ChatGPT felülete nem nyitható meg." };
@@ -1634,11 +1654,13 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   }
   const info = await getConversationInfo(view, cell, config.cells || []);
   const binding = await bindDeveloperGridConversation({ baseUrl: config.benjadminBaseUrl, deviceToken: readDeviceToken(), input: {
-    taskId: id, workerCode: code, chatLaunchMode, chatPreviousConversationId: previousConversationId || null,
-    chatConversationId: conversationId, chatConversationUrl: url, chatConversationTitle: info.chatTitle || "",
+    taskId: id, workerCode: code, chatLaunchMode, surfaceType,
+    surfacePreviousConversationId: previousConversationId || null, surfaceConversationId: conversationId, surfaceConversationUrl: url, surfaceConversationTitle: info.chatTitle || "",
+    chatPreviousConversationId: previousConversationId || null, chatConversationId: conversationId, chatConversationUrl: url, chatConversationTitle: info.chatTitle || "",
   }});
   const chatLaunch = saveTaskLaunchPatch(task, code, {
-    chatLaunchMode, previousConversationId: previousConversationId || null, conversationBound: true,
+    chatLaunchMode, surfaceType, previousConversationId: previousConversationId || null, conversationBound: true,
+    surfaceConversationId:conversationId, surfaceConversationUrl:url, surfaceConversationTitle:info.chatTitle || "",
     chatSessionId: conversationId, chatConversationUrl: url, chatTitle: info.chatTitle || "",
     chatConversationConfirmedAt: binding?.chatConversationConfirmedAt || new Date().toISOString(), automatic: automatic === true,
   });
@@ -1663,10 +1685,13 @@ async function initializeTaskChatPlan(work, requestedMode, conversationGuards = 
   const code = assignedWorkerCodeFromWork(work);
   if (!task?.id || !code) return null;
   const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const surfaceType = normalizeWorkerSurfaceType(work?.session?.developmentContext?.surfaceType || cell?.surfaceType || "CHATGPT");
   const guard = cell ? conversationGuards.find((item) => item.cellId === cell.id) : null;
-  const previousConversationId = chatConversationIdFromUrl(guard?.url || "");
+  const previousConversationId = surfaceType === "CHATGPT" ? chatConversationIdFromUrl(guard?.url || "") : "";
   const chatLaunchMode = String(requestedMode || "EXISTING_CHAT").toUpperCase() === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
-  let record = saveTaskLaunchPatch(task, code, { chatLaunchMode, previousConversationId: previousConversationId || null, conversationBound: false, preparedAt: null, mode: null });
+  let record = saveTaskLaunchPatch(task, code, { surfaceType, chatLaunchMode, previousConversationId: previousConversationId || null, conversationBound: false, preparedAt: null, mode: null });
+  const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
+  if (!adapterGate.ok) return { ...record, surfaceType, surfaceReady:false, surfaceBlockCode:adapterGate.code, surfaceBlockError:adapterGate.error };
   if (chatLaunchMode === "EXISTING_CHAT" && previousConversationId) {
     const bound = await bindCurrentTaskConversation(code, task.id, { automatic: true, taskOverride: task }).catch((error) => ({ ok: false, error: error.message }));
     if (bound?.ok) record = bound.chatLaunch;
@@ -1682,7 +1707,10 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
   const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
-  if (!cell) return { ok: false, error: "A worker nincs aktív ChatGrid cellához rendelve." };
+  if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
+  const surfaceType = normalizeWorkerSurfaceType(taskOverride?.surfaceType || cell.surfaceType || "CHATGPT");
+  const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
+  if (!adapterGate.ok) return adapterGate;
   const snapshot = latestLiveSnapshot;
   const task = taskOverride || snapshot?.tasks?.find((item) => String(item.id) === id);
   const worker = snapshot?.workers?.find((item) => item.code === code) || (taskOverride ? { id: code, code, name: cell.label } : null);
@@ -1732,7 +1760,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
     return { ok: false, code: "TASK_PROMPT_NOT_INSERTED", error: detail, insertion };
   }
   const mode = "inserted";
-  let chatLaunch = saveTaskLaunchPatch(task, code, { preparedAt: new Date().toISOString(), mode, baselineResponseSha256 });
+  let chatLaunch = saveTaskLaunchPatch(task, code, { surfaceType, preparedAt: new Date().toISOString(), mode, baselineResponseSha256 });
   if (autoSend) {
     const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
     if (sent?.sent !== true || sent?.verified !== true) {
@@ -1800,9 +1828,11 @@ async function monitorWorkerStageReport({ view, workerCode, task, baselineRespon
 function conversationMemoryTaskForWorker(workerCode) {
   const { task, presence } = liveContextForWorker(workerCode);
   if (!task?.id || !task?.sessionId) return null;
-  const expectedConversationId = String(task.chatConversationId || task.chatSessionId || "").trim();
+  const surfaceType = normalizeWorkerSurfaceType(task.surfaceType || "CHATGPT");
+  if (surfaceType !== "CHATGPT") return null;
+  const expectedConversationId = String(task.surfaceConversationId || task.chatConversationId || task.chatSessionId || "").trim();
   if (!expectedConversationId) return null;
-  return { task, presence, expectedConversationId };
+  return { task, presence, surfaceType, expectedConversationId };
 }
 
 async function syncConversationMemoryForWorker(workerCode) {
@@ -1818,7 +1848,7 @@ async function syncConversationMemoryForWorker(workerCode) {
   const capture = await captureConversationTranscript(view);
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
-  const cacheKey = `${live.task.id}:${live.task.sessionId}:${currentId}`;
+  const cacheKey = `${live.task.id}:${live.task.sessionId}:${live.surfaceType}:${currentId}`;
   const bodyWithBootAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(item.text || "")));
   if (bodyWithBootAck && String(live.task?.bootAckState || "").toUpperCase() !== "VALIDATED") {
     await processCapturedBootAck({ view, body:bodyWithBootAck.text, workerCode:code, task:live.task, source:"CONVERSATION_MEMORY" }).catch(() => undefined);
@@ -1829,7 +1859,7 @@ async function syncConversationMemoryForWorker(workerCode) {
   const memory = await saveDeveloperGridConversationMemory({
     baseUrl:config.benjadminBaseUrl,
     deviceToken:readDeviceToken(),
-    input:{ taskId:live.task.id, sessionId:live.task.sessionId, workerCode:code === "BENAI" ? "BENJAMINAI" : code, conversationId:currentId, conversationUrl:capture.conversationUrl, conversationTitle:capture.conversationTitle, capturedAt:capture.capturedAt, messages:capture.messages },
+    input:{ taskId:live.task.id, sessionId:live.task.sessionId, workerCode:code === "BENAI" ? "BENJAMINAI" : code, surfaceType:live.surfaceType, conversationId:currentId, conversationUrl:capture.conversationUrl, conversationTitle:capture.conversationTitle, capturedAt:capture.capturedAt, messages:capture.messages },
   });
   conversationMemoryHashes.set(cacheKey, transcriptHash);
   if (conversationMemoryHashes.size > 120) {
@@ -2921,10 +2951,21 @@ function registerIpc() {
     const mergedConfig = runtimeContextWorkspace
       ? { ...(nextConfig || {}), contextWorkspace: runtimeContextWorkspace }
       : nextConfig;
-    const saved = saveConfig(mergedConfig);
+    const candidate = sanitizeConfig(mergedConfig);
+    for (const cell of candidate.cells) {
+      const previous = previousCells.get(cell.id);
+      const beforeSurface = normalizeWorkerSurfaceType(previous?.surfaceType || "CHATGPT");
+      const nextSurface = normalizeWorkerSurfaceType(cell.surfaceType || "CHATGPT");
+      if (previous && beforeSurface !== nextSurface && workerHasAssignedDevelopment(latestLiveSnapshot, previous.workerCode)) {
+        return { ok:false, code:"WORKER_SURFACE_ACTIVE_TASK_LOCKED", error:`${previous.label || previous.workerCode} surface-e aktív task közben nem váltható.` };
+      }
+    }
+    const saved = saveConfig(candidate);
     for (const cell of saved.cells) {
       const previous = previousCells.get(cell.id);
+      const surfaceChanged = normalizeWorkerSurfaceType(previous?.surfaceType || "CHATGPT") !== normalizeWorkerSurfaceType(cell.surfaceType || "CHATGPT");
       if (!cell.enabled) closeChatView(cell.id);
+      else if (surfaceChanged) { closeChatView(cell.id); createChatView(cell); }
       else if (!chatViews.has(cell.id)) createChatView(cell);
       else if (previous?.url !== cell.url) void chatViews.get(cell.id)?.webContents.loadURL(cell.url);
 
@@ -3084,13 +3125,16 @@ function registerIpc() {
       if (!code || !launchTask) return { ok:false, code:"ACTIVE_TASK_LAUNCH_CONTEXT_MISSING", error:"A folytatható task Launch Packet kontextusa hiányos." };
       const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
       if (!cell) return { ok:false, code:"ACTIVE_TASK_WORKER_CELL_MISSING", error:"Az assigned worker nincs aktív Developer Grid cellában." };
+      const surfaceType = normalizeWorkerSurfaceType(launchTask.surfaceType || session?.developmentContext?.surfaceType || cell.surfaceType || "CHATGPT");
+      const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
+      if (!adapterGate.ok) return adapterGate;
       let view = chatViews.get(cell.id);
       if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
       if (!view || view.webContents.isDestroyed()) return { ok:false, code:"ACTIVE_TASK_CHAT_UNAVAILABLE", error:"A worker ChatGPT felülete nem érhető el." };
       const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
       if (!currentConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_REQUIRED", error:"Nyisd meg a taskhoz tartozó ChatGPT /c/... csevegést." };
       const ctx = session.developmentContext || {};
-      const expectedConversationId = String(ctx.chatConversationId || "").trim();
+      const expectedConversationId = String(ctx.surfaceConversationId || ctx.chatConversationId || "").trim();
       if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
       const existingAssistant = await captureLatestAssistantText(view);
       if (existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
@@ -3108,11 +3152,13 @@ function registerIpc() {
         taskLaunch = bound.taskLaunch || null;
       } else {
         saveTaskLaunchPatch(launchTask, code, {
-          chatLaunchMode: ctx.chatLaunchMode || "EXISTING_CHAT",
-          conversationBound: true,
+          chatLaunchMode: ctx.chatLaunchMode || "EXISTING_CHAT", surfaceType,
+          conversationBound: true, surfaceConversationId: expectedConversationId,
+          surfaceConversationUrl: ctx.surfaceConversationUrl || ctx.chatConversationUrl || view.webContents.getURL(),
+          surfaceConversationTitle: ctx.surfaceConversationTitle || ctx.chatConversationTitle || "",
           chatSessionId: expectedConversationId,
           chatConversationUrl: ctx.chatConversationUrl || view.webContents.getURL(),
-          chatTitle: ctx.chatConversationTitle || "",
+          chatTitle: ctx.surfaceConversationTitle || ctx.chatConversationTitle || "",
         });
         taskLaunch = await prepareWorkerTaskLaunch(code, task.id, { autoSend:true, taskOverride:launchTask });
       }

@@ -610,3 +610,11 @@ A Windows automatikus indulás a Beállítások `Developer Grid induljon el a Wi
 Candidate vagy post-cutover smoke során a `/api/dev/grid/bridge` státuszait mindig össze kell vetni a materializáció eredményével. Aktív bridge (`claimed|in_progress|testing` + `open|active`) esetén VERIFIED Grid session várható; terminális vagy inaktív bridge esetén `materialized=false` és `session=null` a helyes eredmény. A smoke nem tekintheti PASS-nak azt, ha egy `blocked/closed` történelmi pár RUNNING Grid sessiont hoz létre.
 
 A v0.1.39 publikus artifact hash-hiteles marad, de a v0.1.40 előtti terminális materializer hiba miatt felhasználói rollout előtt superseded lett. Fizikai Windows E2E csak v0.1.40 vagy újabb klienssel végezhető. PROD DENY változatlan.
+
+### Developer Grid v0.1.41 – Worker Surface üzemeltetési szabály
+
+A worker surface perzisztens cellabeállítás, de nem futás közbeni jogosultságkapcsoló. `RUNNING` vagy más aktív fejlesztési task alatt surface-váltás tilos; előbb a taskot auditáltan le kell zárni vagy új taskot kell indítani. A Central Core authoritative sessionben tárolt `surfaceType` az irányadó, nem a renderer pillanatnyi dropdownja.
+
+ChatGPT surface esetén a meglévő sandboxolt WebContents, conversation binding, BOOT ACK és Conversation Memory lánc működik. Codex surface natív desktop integrációt igényel; natív bridge bizonyítása előtt `CODEX_NATIVE_BRIDGE_REQUIRED` a helyes fail-closed állapot. Tilos a Codex feladatot ChatGPT WebContents DOM-vezérléssel, kitalált web URL-lel vagy a ChatGPT transcriptből származó evidence-szel végrehajtottnak tekinteni. A Work surface v0.1.42 előtt nem aktiválható.
+
+A Conversation Memory új surface-prefixelt fájlokat használ, de ChatGPT esetén a v0.1.40 régi, prefix nélküli RAW/context/handoff fájlt előnyösen tovább folytatja, ha új kulcsos fájl még nincs. Retention, 0700/0600 jogosultság és PROD DENY változatlan. Release előtt kötelező a Worker Surface contract, desktop acceptance, TypeScript/lint, Central Core review, BUILD01/BUILD02 FULL BUILD és fizikai Windows acceptance.

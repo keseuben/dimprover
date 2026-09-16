@@ -249,3 +249,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Minden terminális vagy inaktív pár no-op: `materialized=false`, `session=null`, `BRIDGE_TASK_SESSION_NOT_ACTIVE`, a sanitizált task/session státuszokkal. Synthetic vagy történelmi RUNNING session nem jöhet létre.
 - A candidate smoke aktív bridge esetén VERIFIED sessiont vár, terminális/inaktív bridge esetén pedig kifejezetten no-op materializációt. DEV ONLY · PROD DENY.
 - A v0.1.39 immutable artifact audit/rollback célra megmarad, de fizikai kliensre nem tekintendő aktuális kiadásnak; a v0.1.40 supersede-eli.
+
+## v0.1.41 · Worker Surface Selector
+
+- A worker-identitás és a munkafelület külön fogalom: ugyanaz az ÁrminAI, OutminAI, BenjáminAI vagy JázminAI cella `CHATGPT`, `CODEX` vagy később `WORK` surface-hez köthető. Új worker-identitás nem jön létre surface-váltáskor.
+- A négy elsődleges worker cella fejlécében perzisztens surface-választó jelenik meg. A v0.1.41 alapértelmezése és backward-compatible módja `CHATGPT`; `CODEX` választható; `WORK` az adatmodellben és adapterrétegben előkészített, de a UI-ban v0.1.42-ig tiltott.
+- A desktop külön `WorkerSurfaceAdapter` réteget használ. A ChatGPT beágyazott WebContents surface marad. A Codex natív desktop surface, ezért v0.1.41-ben nincs `chatgpt.com/codex` vagy más DOM-fallback. Amíg a natív Codex bridge nem igazolt, az automatikus Launch Packet / BOOT ACK / RAW transcript Codex módban fail-closed `CODEX_NATIVE_BRIDGE_REQUIRED` állapotot ad.
+- A Central Core `MUNKA INDÍTÁSA` már a kiválasztott `surfaceType` értéket authoritative DevelopmentContext mezőként rögzíti. Aktív worker-task közben a surface nem váltható; a surface-váltás nem bővít scope-ot, jogosultságot vagy PROD hozzáférést.
+- A conversation binding generikus provenance mezőket használ: `surfaceType`, `surfaceConversationId`, `surfaceConversationUrl`, `surfaceConversationTitle`, `surfaceConversationConfirmedAt`. A korábbi `chatConversation*` mezők ChatGPT backward-compatibility célra megmaradnak.
+- A Conversation Memory surface szerint különíti el a RAW/context/handoff láncokat. A v0.1.40 surface-prefix nélküli ChatGPT memóriafájlok olvasása és hash-láncának folytatása kompatibilitási fallbackkel megmarad; Codex/Work adat nem olvadhat össze ChatGPT transcriptbe.
+- DEV ONLY · PROD DENY. v0.1.41-ben FULL BUILD/release csak a teljes source-quality, review és Central Core build gate után engedélyezhető.

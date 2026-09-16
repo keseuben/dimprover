@@ -1,9 +1,10 @@
 "use strict";
 
 const { DEFAULT_USAGE_GUIDE } = require("../guide/default-guide.cjs");
+const { normalizeWorkerSurfaceType, safeWorkerSurfaceUrl } = require("../surfaces/worker-surface.cjs");
 
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
-const CONFIG_VERSION = 13;
+const CONFIG_VERSION = 14;
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
@@ -36,10 +37,10 @@ const DEFAULT_CONFIG = Object.freeze({
     flashTaskbar: true
   },
   cells: [
-    { id: "cell-1", workerCode: "ARMINAI", label: "ÁrminAI", url: "https://chatgpt.com/", enabled: true },
-    { id: "cell-2", workerCode: "OUTMINAI", label: "OutminAI", url: "https://chatgpt.com/", enabled: true },
-    { id: "cell-3", workerCode: "BENAI", label: "BenjáminAI", url: "https://chatgpt.com/", enabled: true },
-    { id: "cell-4", workerCode: "JAZMINAI", label: "JázminAI", url: "https://chatgpt.com/", enabled: true }
+    { id: "cell-1", workerCode: "ARMINAI", label: "ÁrminAI", surfaceType: "CHATGPT", url: "https://chatgpt.com/", enabled: true },
+    { id: "cell-2", workerCode: "OUTMINAI", label: "OutminAI", surfaceType: "CHATGPT", url: "https://chatgpt.com/", enabled: true },
+    { id: "cell-3", workerCode: "BENAI", label: "BenjáminAI", surfaceType: "CHATGPT", url: "https://chatgpt.com/", enabled: true },
+    { id: "cell-4", workerCode: "JAZMINAI", label: "JázminAI", surfaceType: "CHATGPT", url: "https://chatgpt.com/", enabled: true }
   ],
   centralChat: { id: "central", label: "DevminAI", url: "https://chatgpt.com/", enabled: true }
 });
@@ -63,11 +64,13 @@ function safeChatUrl(value, fallback) {
 function normalizeCell(source, fallback) {
   if (!source || typeof source !== "object") return { ...fallback };
   const workerCode = String(source.workerCode || fallback.workerCode).toUpperCase();
+  const surfaceType = normalizeWorkerSurfaceType(source.surfaceType, fallback.surfaceType || "CHATGPT");
   return {
     id: fallback.id,
     workerCode: WORKER_OPTIONS.includes(workerCode) ? workerCode : fallback.workerCode,
     label: String(source.label || fallback.label).slice(0, 40),
-    url: safeChatUrl(source.url, fallback.url),
+    surfaceType,
+    url: safeWorkerSurfaceUrl(source.url, surfaceType, fallback.url),
     enabled: source.enabled !== false
   };
 }

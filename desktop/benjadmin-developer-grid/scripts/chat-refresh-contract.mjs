@@ -21,8 +21,8 @@ function check(name, fn) {
   catch (error) { checks.push({ name, ok: false, error: error.message }); }
 }
 
-check("config v13 enables safe daily refresh by default", () => {
-  assert.equal(CONFIG_VERSION, 13);
+check("config v14 enables safe daily refresh by default", () => {
+  assert.equal(CONFIG_VERSION, 14);
   assert.equal(sanitizeConfig({}).chatRefresh.dailyEnabled, true);
   assert.equal(sanitizeConfig({ version: 13, chatRefresh: { dailyEnabled: false } }).chatRefresh.dailyEnabled, false);
 });

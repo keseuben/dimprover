@@ -3264,3 +3264,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A v0.1.39 kiadás publikus artifact-verifikációja után, de még fizikai Windows rollout előtt a smoke/materializer egy lezárt történelmi bridge párt (`task=blocked`, `session=closed`) újra RUNNING Grid sessionné alakított. Emiatt a v0.1.39 immutable artifact superseded státuszú, audit/rollback célra megmarad, de nem kerül felhasználói rolloutba.
 - A materializer v0.1.40-től kizárólag `claimed|in_progress|testing` task és `open|active` session kombinációt tekint aktívnak. Minden más kombináció no-op, session létrehozása nélkül.
 - A candidate smoke külön ellenőrzi az aktív és terminális bridge viselkedést. Desktop/backend verzió: 0.1.40 / 0.1.40-dev. DEV ONLY · PROD DENY.
+
+### BENJADMIN Developer Grid v0.1.41 – Worker Surface Selector
+
+- A négy worker cella perzisztens ChatGPT/Codex surface-választót kapott; a Work opció v0.1.42-re láthatóan előkészített, de tiltott.
+- Új `WorkerSurfaceType` és adapterréteg készült. ChatGPT beágyazott surface marad, Codex natív desktop surface-ként kezelendő; tiltott a nem támogatott webes/DOM fallback.
+- A Central Core work-start, worker session, conversation binding, live state és Conversation Memory egységes `surfaceType` + `surfaceConversation*` provenance-t kapott. A legacy `chatConversation*` kompatibilitás megmarad.
+- Aktív task közbeni surface-váltás fail-closed. Codex natív bridge nélkül az automatikus Launch/BOOT ACK/transcript `CODEX_NATIVE_BRIDGE_REQUIRED` állapotban blokkol; ez nem jogosultság- vagy funkcionalitás-visszaesés ChatGPT módban.
+- A Conversation Memory surface-szétválasztása mellett a v0.1.40 surface-prefix nélküli ChatGPT RAW/context/handoff láncok kompatibilisen tovább olvashatók és folytathatók.
+- Első célzott contract: Worker Surface Selector 21/21 PASS. Örökölt kritikus regresszió: materializer 10/10, Central Core hotfix 19/19, heartbeat 24/24, BOOT ACK recovery 12/12, routing/navigation 25/25 PASS; desktop teljes check-lánc PASS.
+- Desktop/backend verzió: 0.1.41 / 0.1.41-dev. DEV ONLY · PROD DENY.

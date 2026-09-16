@@ -2,6 +2,8 @@
 
 const api = window.chatGrid;
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
+const WORKER_SURFACE_OPTIONS = ["CHATGPT", "CODEX", "WORK"];
+const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.42" });
 const WORKER_DEFAULT_LABELS = {
   ARMINAI: "ÁrminAI",
   JAZMINAI: "JázminAI",
@@ -344,6 +346,29 @@ function renderConfig() {
     if (roleBadge) {
       roleBadge.textContent = WORKER_ROLE_LABELS[cellConfig.workerCode] || "KÓDMÉRNÖK";
       roleBadge.title = BENJADMIN_PROFILES[cellConfig.workerCode]?.title || roleBadge.textContent;
+    }
+    const surfaceType = WORKER_SURFACE_OPTIONS.includes(String(cellConfig.surfaceType || "").toUpperCase()) ? String(cellConfig.surfaceType).toUpperCase() : "CHATGPT";
+    cell.dataset.surfaceType = surfaceType;
+    const surfaceSelect = $("[data-role=surface-select]", cell);
+    if (surfaceSelect) {
+      surfaceSelect.value = surfaceType;
+      const activeTask = activeTaskForWorker(cellConfig.workerCode);
+      const activeStatus = String(activeTask?.status || "").toUpperCase();
+      const locked = ["RUNNING","REVIEW"].includes(activeStatus);
+      surfaceSelect.disabled = locked || surfaceType === "WORK";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · natív desktop surface" : "Worker felület kiválasztása";
+    }
+    const emptyState = $("[data-role=empty-state]", cell);
+    if (emptyState) {
+      const strong = $("strong", emptyState);
+      const reopen = $("[data-cell-action=reopen]", emptyState);
+      if (surfaceType === "CODEX") {
+        if (strong) strong.textContent = "Codex · natív desktop surface. A natív bridge nélkül automatikus task launch tiltott.";
+        if (reopen) reopen.classList.add("is-hidden");
+      } else {
+        if (strong) strong.textContent = surfaceType === "WORK" ? "Work surface v0.1.42-re előkészítve." : "A ChatGPT felület zárva.";
+        if (reopen) reopen.classList.toggle("is-hidden", surfaceType !== "CHATGPT");
+      }
     }
     cell.classList.toggle("is-disabled", cellConfig.enabled === false);
   }
@@ -1049,8 +1074,9 @@ function renderCellSettings() {
     grid.className = "cell-config__grid";
     grid.append(
       makeSettingsField("Kódmérnök", "workerCode", cell.workerCode, "select"),
+      makeSettingsField("Felület", "surfaceType", cell.surfaceType || "CHATGPT", "surface-select"),
       makeSettingsField("Megjelenített név", "label", cell.label, "text"),
-      makeSettingsField("ChatGPT csevegés URL", "url", cell.url, "url", true)
+      makeSettingsField("ChatGPT / Work URL", "url", cell.url, "url", true)
     );
     article.append(head, grid);
     host.append(article);
@@ -1070,6 +1096,16 @@ function makeSettingsField(labelText, field, value, kind, spanTwo = false) {
       option.value = code;
       option.textContent = WORKER_DEFAULT_LABELS[code] || code;
       option.selected = code === value;
+      control.append(option);
+    }
+  } else if (kind === "surface-select") {
+    control = document.createElement("select");
+    for (const type of WORKER_SURFACE_OPTIONS) {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = WORKER_SURFACE_LABELS[type] || type;
+      option.selected = type === String(value || "CHATGPT").toUpperCase();
+      option.disabled = type === "WORK";
       control.append(option);
     }
   } else {
@@ -1210,6 +1246,28 @@ async function requestWebNotificationPermission() {
   }
 }
 
+async function changeWorkerSurface(select) {
+  if (!state.config || !state.security?.unlocked) return;
+  const cellId = select.closest("[data-cell-id]")?.dataset.cellId || "";
+  const index = state.config.cells.findIndex((cell) => cell.id === cellId);
+  if (index < 0) return;
+  const nextSurface = String(select.value || "CHATGPT").toUpperCase();
+  if (!WORKER_SURFACE_OPTIONS.includes(nextSurface) || nextSurface === "WORK") { renderConfig(); return; }
+  const next = structuredClone(state.config);
+  next.cells[index].surfaceType = nextSurface;
+  if (nextSurface === "CHATGPT" && !String(next.cells[index].url || "").startsWith("https://")) next.cells[index].url = "https://chatgpt.com/";
+  const result = await api.updateConfig(next);
+  if (!result?.ok) {
+    showToast("Felületváltás blokkolva", result?.error || "A worker surface nem váltható.");
+    renderConfig();
+    return;
+  }
+  state.config = result.config;
+  renderConfig();
+  renderLayout();
+  showToast("Worker felület", nextSurface === "CODEX" ? "Codex kiválasztva. Natív bridge nélkül az automatikus task launch fail-closed." : "ChatGPT felület aktív.");
+}
+
 async function openSettings(focusCellId = null) {
   if (!state.config || !state.security?.unlocked) return;
   await api.setUiOverlay(true);
@@ -1283,6 +1341,7 @@ function readSettingsConfig() {
   next.cells = $$(".cell-config", $("#cellSettings")).map((article, index) => ({
     id: next.cells[index].id,
     workerCode: $("[data-field=workerCode]", article).value,
+    surfaceType: $("[data-field=surfaceType]", article)?.value || "CHATGPT",
     label: $("[data-field=label]", article).value.trim(),
     url: $("[data-field=url]", article).value.trim(),
     enabled: $("[data-field=enabled]", article).checked
@@ -1875,6 +1934,7 @@ function bindUi() {
     const workerCode = workerCodeForCell(cellId);
     if (workerCode) void openWorkerProfile(workerCode);
   });
+  for (const surfaceSelect of $$("[data-role=surface-select]")) surfaceSelect.addEventListener("change", () => void changeWorkerSurface(surfaceSelect));
   $("#workerProfileClose").addEventListener("click", () => void closeWorkerProfile());
   $("#workerProfileBackdrop").addEventListener("click", () => void closeWorkerProfile());
   for (const button of $$("[data-window-action]")) button.addEventListener("click", () => api.windowAction(button.dataset.windowAction));

@@ -1,8 +1,9 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.40-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.41-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
+export type WorkerSurfaceType = "CHATGPT" | "CODEX" | "WORK";
 export type ProductionAccess = "DENY";
 export type WorkerCode = "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI" | "DEVMINAI";
 export type CoreWorkerCode = Exclude<WorkerCode, "DEVMINAI">;
@@ -35,6 +36,12 @@ export type DevelopmentContext = {
   taskId: string;
   sourcePrompt?: string | null;
   chatLaunchMode?: ChatLaunchMode | null;
+  surfaceType?: WorkerSurfaceType | null;
+  surfacePreviousConversationId?: string | null;
+  surfaceConversationId?: string | null;
+  surfaceConversationUrl?: string | null;
+  surfaceConversationTitle?: string | null;
+  surfaceConversationConfirmedAt?: string | null;
   preferredWorkerCode?: RoutableWorkerCode | null;
   engineSessionId?: string | null;
   continuityPreviousTaskId?: string | null;

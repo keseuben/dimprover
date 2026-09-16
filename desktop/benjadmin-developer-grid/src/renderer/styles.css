@@ -172,6 +172,12 @@ button { color: inherit; }
 .chat-cell.is-launch-pending .worker-dot { background: var(--amber); box-shadow: 0 0 8px rgba(244,201,93,.52); }
 .status-pill { flex: 0 0 auto; border-radius: 999px; padding: 2px 6px; font-size: 8px; font-weight: 900; letter-spacing: .06em; border: 1px solid transparent; }
 .worker-role-pill { flex:0 0 auto; max-width:122px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:999px; padding:2px 6px; border:1px solid rgba(67,217,255,.24); background:rgba(67,217,255,.07); color:#9edff0; font-size:7px; font-weight:950; letter-spacing:.045em; }
+.worker-surface-select { flex:0 0 auto; width:78px; height:22px; border:1px solid rgba(80,227,164,.34); border-radius:999px; background:rgba(80,227,164,.08); color:#b9f7db; padding:0 18px 0 7px; font-size:8px; font-weight:900; outline:none; cursor:pointer; }
+.worker-surface-select:focus { border-color:rgba(67,217,255,.65); box-shadow:0 0 0 2px rgba(67,217,255,.08); }
+.worker-surface-select:disabled { opacity:.55; cursor:not-allowed; }
+.chat-cell[data-surface-type="CODEX"] .worker-surface-select { border-color:rgba(244,201,93,.44); background:rgba(244,201,93,.1); color:#ffe39a; }
+:root[data-theme="light"] .worker-surface-select { background:#fff; color:#07536c; border-color:rgba(0,127,163,.32); }
+:root[data-theme="light"] .chat-cell[data-surface-type="CODEX"] .worker-surface-select { color:#704600; border-color:rgba(149,94,0,.42); background:rgba(236,181,40,.12); }
 :root[data-theme="light"] .worker-role-pill { border-color:rgba(0,91,123,.38); background:rgba(0,127,163,.09); color:#07536c; }
 .status-pill.is-active { color: #9ff4ce; border-color: rgba(80,227,164,.3); background: rgba(80,227,164,.1); }
 .status-pill.is-idle { color: #93a6b6; border-color: rgba(148,163,184,.17); background: rgba(148,163,184,.06); }
@@ -2043,6 +2049,7 @@ body.has-health-drawer .chat-grid { bottom: calc(var(--developer-footer-h) + var
 .worker-title strong { font-size:15px; }
 .status-pill { padding:3px 7px; font-size:10px; }
 .worker-role-pill { max-width:150px; padding:3px 7px; font-size:9.5px; }
+.worker-surface-select { width:88px; height:25px; font-size:9.5px; }
 .cell-actions button { width:28px; min-width:28px; height:25px; font-size:14px; }
 .cell-actions .zoom-value { width:46px; font-size:10.5px; }
 .context-row { height:20px; }
