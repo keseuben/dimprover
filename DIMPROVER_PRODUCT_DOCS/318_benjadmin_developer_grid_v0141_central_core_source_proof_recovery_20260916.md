@@ -31,3 +31,6 @@ Az `INDÍTÁS FOLYTATÁSA` a már létrejött, de korábban blokkolt taskot hely
 
 ## v0.1.41 release worktree provenance
 A Windows package/release wrapper explicit `BENJADMIN_DEV_CANONICAL_ROOT` és `BENJADMIN_DEV_CANONICAL_BRANCH` DEV környezeti értéket fogadhat, hogy új Developer Grid feature/release branchből is szabályosan csomagolható legyen. A root kizárólag `/srv/dimpro-dev/worktrees/*`, a common Git repository kizárólag `/srv/dimpro-dev/repositories/dimprover.git`, a host továbbra is `dimpro-dev`; tiszta worktree, exact HEAD/branch, BUILD_ID és PROD DENY változatlanul kötelező.
+
+## v0.1.41 Release Artifact Engine source-policy javítás
+A Release Artifact Engine ugyanazt az explicit `BENJADMIN_DEV_CANONICAL_ROOT`, `BENJADMIN_DEV_CANONICAL_BRANCH` és `BENJADMIN_DEV_CANONICAL_GIT` source-policyt használja, mint a package/release wrapper. Korábban a wrapper helyesen validálta az új release worktree-t, de az engine `main()` még a v0.1.40 történeti worktree-jét vizsgálta. Az engine most csak `/srv/dimpro-dev/worktrees/*` rootot, a canonical `/srv/dimpro-dev/repositories/dimprover.git` bare repót és érvényes Git branchet fogad el. A default v0.1.40 értékek backward compatibility miatt megmaradnak, de explicit v0.1.41 release-policy esetén az engine az exact megadott worktree-t auditálja.

@@ -39,6 +39,17 @@ function git(root, ...args) {
   return run("git", ["-C", root, ...args]);
 }
 
+export function resolveReleaseSourcePolicy(env = process.env) {
+  const worktree = text(env.BENJADMIN_DEV_CANONICAL_ROOT) || EXPECTED_WORKTREE;
+  const branch = text(env.BENJADMIN_DEV_CANONICAL_BRANCH) || EXPECTED_BRANCH;
+  const repository = text(env.BENJADMIN_DEV_CANONICAL_GIT) || EXPECTED_REPOSITORY;
+  if (!worktree.startsWith("/srv/dimpro-dev/worktrees/")) fail("CANONICAL_DEV_WORKTREE_ENV_DENIED", worktree || "NINCS");
+  if (repository !== EXPECTED_REPOSITORY) fail("CANONICAL_DEV_REPOSITORY_ENV_DENIED", repository || "NINCS");
+  try { run("git", ["check-ref-format", "--branch", branch]); }
+  catch { fail("CANONICAL_DEV_BRANCH_ENV_INVALID", branch || "NINCS"); }
+  return { worktree, branch, repository };
+}
+
 function parseArgs(argv) {
   const result = {
     stage: false,
@@ -229,7 +240,7 @@ function readSourceVersion(root) {
   return source.match(/DEVELOPER_GRID_VERSION\s*=\s*"([^"]+)"/)?.[1] || "";
 }
 
-function verifySourceIdentity(root) {
+function verifySourceIdentity(root, sourcePolicy = resolveReleaseSourcePolicy()) {
   if (os.hostname() !== EXPECTED_HOST) fail("RELEASE_HOST_MISMATCH", `${os.hostname()} != ${EXPECTED_HOST}`);
   const topLevel = git(root, "rev-parse", "--show-toplevel");
   const branch = git(root, "branch", "--show-current");
@@ -237,9 +248,9 @@ function verifySourceIdentity(root) {
   const commonDirRaw = git(root, "rev-parse", "--git-common-dir");
   const commonDir = path.resolve(root, commonDirRaw);
   const status = git(root, "status", "--porcelain");
-  if (topLevel !== EXPECTED_WORKTREE) fail("SOURCE_BASELINE_MISMATCH", `worktree: ${topLevel}`);
-  if (branch !== EXPECTED_BRANCH) fail("SOURCE_BASELINE_MISMATCH", `branch: ${branch}`);
-  if (commonDir !== EXPECTED_REPOSITORY) fail("SOURCE_BASELINE_MISMATCH", `repository: ${commonDir}`);
+  if (topLevel !== sourcePolicy.worktree) fail("SOURCE_BASELINE_MISMATCH", `worktree: ${topLevel}`);
+  if (branch !== sourcePolicy.branch) fail("SOURCE_BASELINE_MISMATCH", `branch: ${branch}`);
+  if (commonDir !== sourcePolicy.repository) fail("SOURCE_BASELINE_MISMATCH", `repository: ${commonDir}`);
   if (status) fail("SOURCE_WORKTREE_DIRTY", "Release artifact csak tiszta worktree-ből készülhet.");
   return { head, branch, worktree: topLevel, repository: commonDir };
 }
@@ -287,8 +298,8 @@ function writeShaFile(directory, fileName, hash) {
   return shaName;
 }
 
-async function inspectRelease(root) {
-  const identity = verifySourceIdentity(root);
+async function inspectRelease(root, sourcePolicy = resolveReleaseSourcePolicy()) {
+  const identity = verifySourceIdentity(root, sourcePolicy);
   const packageFile = path.join(root, "desktop/benjadmin-developer-grid/package.json");
   const pkg = readJson(packageFile, "DESKTOP_PACKAGE_INVALID");
   const version = text(pkg.version);
@@ -438,8 +449,9 @@ async function verifyPublicRelease(materialized, publicBase) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const root = EXPECTED_WORKTREE;
-  const inspection = await inspectRelease(root);
+  const sourcePolicy = resolveReleaseSourcePolicy();
+  const root = sourcePolicy.worktree;
+  const inspection = await inspectRelease(root, sourcePolicy);
   if (process.env.DIMPRO_RELEASE_COORDINATED !== "1") {
     fail("RELEASE_LOCK_REQUIRED", "Artifact materializálás csak központi release lock alatt engedélyezett.");
   }

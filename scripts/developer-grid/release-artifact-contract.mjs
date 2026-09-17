@@ -11,6 +11,7 @@ import {
   validatePublicHeaders,
   validateSha256Sidecar,
   writeImmutableBuffer,
+  resolveReleaseSourcePolicy,
 } from "./release-artifact-engine.mjs";
 
 let n = 0;
@@ -33,6 +34,15 @@ check(isForbiddenZipEntry("x/admin-key.txt"), "admin key forbidden");
 check(isForbiddenZipEntry("x/SUPABASE_SERVICE_ROLE_KEY.txt"), "service role marker forbidden");
 check(isForbiddenZipEntry("x/.npmrc"), ".npmrc forbidden");
 check(isForbiddenZipEntry("x/.netrc"), ".netrc forbidden");
+const releasePolicy = resolveReleaseSourcePolicy({
+  BENJADMIN_DEV_CANONICAL_ROOT: "/srv/dimpro-dev/worktrees/benjadmin-grid-v0141-release-20260916",
+  BENJADMIN_DEV_CANONICAL_BRANCH: "feature/benjadmin-grid-v0141-worker-surface-20260916",
+  BENJADMIN_DEV_CANONICAL_GIT: "/srv/dimpro-dev/repositories/dimprover.git",
+});
+check(releasePolicy.worktree.endsWith("benjadmin-grid-v0141-release-20260916") && releasePolicy.branch.startsWith("feature/") && releasePolicy.repository === "/srv/dimpro-dev/repositories/dimprover.git", "explicit DEV release source policy accepted");
+check(throwsCode(() => resolveReleaseSourcePolicy({ BENJADMIN_DEV_CANONICAL_ROOT: "/root/not-dev" }), "CANONICAL_DEV_WORKTREE_ENV_DENIED"), "release source policy denies non-DEV worktree root");
+check(throwsCode(() => resolveReleaseSourcePolicy({ BENJADMIN_DEV_CANONICAL_GIT: "/tmp/other.git" }), "CANONICAL_DEV_REPOSITORY_ENV_DENIED"), "release source policy denies alternate repository");
+check(throwsCode(() => resolveReleaseSourcePolicy({ BENJADMIN_DEV_CANONICAL_BRANCH: "bad..branch" }), "CANONICAL_DEV_BRANCH_ENV_INVALID"), "release source policy validates branch syntax");
 check(isForbiddenZipEntry("x/.ssh/id_ed25519"), ".ssh private key path forbidden");
 check(isForbiddenZipEntry("x/config/client.pem"), "PEM credential material forbidden");
 check(isForbiddenZipEntry("x/certs/signing.key"), "private key file forbidden");
@@ -130,7 +140,7 @@ check(engine.includes("ARTIFACT_IMMUTABILITY_VIOLATION"), "engine is immutable f
 check(engine.includes("PUBLIC_ARTIFACT_HASH_MISMATCH"), "public full-download hash mismatch blocks");
 check(engine.includes("PUBLIC_MANIFEST_HASH_MISMATCH"), "public manifest full-download hash mismatch blocks");
 check(engine.includes("PUBLIC_SHA256_SIDECAR_HASH_MISMATCH"), "public sha256 sidecar mismatch blocks");
-check(engine.includes("SOURCE_BASELINE_MISMATCH") && engine.includes("SOURCE_WORKTREE_DIRTY"), "source provenance gates present");
+check(engine.includes("SOURCE_BASELINE_MISMATCH") && engine.includes("SOURCE_WORKTREE_DIRTY") && engine.includes("resolveReleaseSourcePolicy"), "source provenance gates present and use explicit DEV release policy");
 check(engine.includes("WINDOWS_ARTIFACT_MARKER_MISSING") && engine.includes("WINDOWS_ARTIFACT_MARKER_MISMATCH") && engine.includes('windowsArtifactProvenance: "VERIFIED"'), "release engine requires exact Windows artifact provenance marker");
 check(engine.includes("PACKAGE_SESSION_MARKER_MISSING") && engine.includes("PACKAGE_SESSION_MARKER_MISMATCH") && engine.includes('packageSessionProvenance: "VERIFIED"'), "release engine requires exact EXE + DEV ZIP package session marker");
 
