@@ -1583,6 +1583,22 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode) {
   return sendPreparedChatPrompt(view, marker);
 }
 
+function isBootAckCandidateText(value) {
+  const body = String(value || "");
+  return /BOOT\s+ACKNOWLEDGEMENT/i.test(body) || body.includes(STAGE_REPORT_START);
+}
+
+async function captureLatestBootAckCandidate(view) {
+  const latest = await captureLatestAssistantText(view);
+  if (latest?.generating) return latest;
+  if (latest?.ok && isBootAckCandidateText(latest.text)) return { ...latest, candidateSource:"LATEST_ASSISTANT" };
+  const transcript = await captureConversationTranscript(view);
+  if (!transcript?.ok || transcript.generating || !Array.isArray(transcript.messages)) return latest;
+  const candidate = [...transcript.messages].reverse().find((item) => item?.role === "ASSISTANT" && isBootAckCandidateText(item?.text));
+  if (!candidate) return latest;
+  return { ok:true, generating:false, text:String(candidate.text || ""), candidateSource:"TRANSCRIPT_HISTORY", messageId:candidate.messageId || null };
+}
+
 async function processCapturedBootAck({ view, body, task, workerCode, baselineResponseSha256 = "", sendContinuation = true, source = "MONITOR" }) {
   const taskId = String(task?.id || "");
   const sessionId = String(task?.sessionId || "");
@@ -1962,7 +1978,7 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
   const cacheKey = `${live.task.id}:${live.task.sessionId}:${live.surfaceType}:${currentId}`;
-  const bodyWithBootAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(item.text || "")));
+  const bodyWithBootAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && isBootAckCandidateText(item.text));
   if (bodyWithBootAck && String(live.task?.bootAckState || "").toUpperCase() !== "VALIDATED") {
     await processCapturedBootAck({ view, body:bodyWithBootAck.text, workerCode:code, task:live.task, source:"CONVERSATION_MEMORY" }).catch(() => undefined);
   }
@@ -3392,7 +3408,7 @@ function registerIpc() {
       const ctx = session.developmentContext || {};
       const expectedConversationId = String(ctx.surfaceConversationId || ctx.chatConversationId || "").trim();
       if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"ACTIVE_TASK_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva az assigned worker cellájában." };
-      const existingAssistant = await captureLatestAssistantText(view);
+      const existingAssistant = await captureLatestBootAckCandidate(view);
       if (existingAssistant?.generating) {
         if (sourceProofRefreshed) return { ok:false, code:"CHATGPT_GENERATION_ACTIVE_RECOVERY", error:"A Central Core source proof frissült, de a ChatGPT még a korábbi válaszon dolgozik. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot; a régi BOOT ACK nem kerül újrafelhasználásra." };
         const launchRecord = loadTaskLaunchRecords()[task.id] || {};
@@ -3407,7 +3423,7 @@ function registerIpc() {
         }
         return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"A ChatGPT még választ generál. A Grid fail-closed módban nem küld új Launch Packetet. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot." };
       }
-      if (!sourceProofRefreshed && existingAssistant?.ok && !existingAssistant.generating && /BOOT\s+ACKNOWLEDGEMENT/i.test(String(existingAssistant.text || ""))) {
+      if (!sourceProofRefreshed && existingAssistant?.ok && !existingAssistant.generating && isBootAckCandidateText(existingAssistant.text)) {
         const recovered = await processCapturedBootAck({ view, body:existingAssistant.text, task:launchTask, workerCode:code, source:"RESUME_EXISTING_ACK" });
         if (recovered?.validated) {
           send("context:refresh", { reason:"boot-ack-recovered-before-relaunch", taskId:task.id, sessionId:session.id });

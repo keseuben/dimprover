@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const require=createRequire(import.meta.url);
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const { validateStageReportAsBootAck }=require(path.join(root,"src/task-launch/stage-report.cjs"));
+const main=fs.readFileSync(path.join(root,"src/main.cjs"),"utf8");
 let checks=0;function check(label,fn){fn();checks++;console.log(`PASS ${String(checks).padStart(2,"0")} ${label}`)}
 const expected={
   workerCode:"BENAI",
@@ -41,4 +43,7 @@ check("negative evidence fails closed",()=>{const r=validateStageReportAsBootAck
 check("branch evidence must match",()=>{const r=validateStageReportAsBootAck(body(x=>{x.evidence[1].attributes.branch="wrong";return x}),expected);assert.equal(r.validated,false);assert.ok(r.mismatches.includes("sourceContextEvidence"))});
 check("worktree evidence must match",()=>{const r=validateStageReportAsBootAck(body(x=>{x.evidence[1].attributes.worktree="/wrong";return x}),expected);assert.equal(r.validated,false)});
 check("sourceConflict must be false",()=>{const r=validateStageReportAsBootAck(body(x=>{x.evidence[1].attributes.sourceConflict=true;return x}),expected);assert.equal(r.validated,false)});
+check("Desktop recognizes BOOT ACK or Stage Report as one ACK candidate class",()=>{assert.match(main,/function isBootAckCandidateText/);assert.match(main,/body\.includes\(STAGE_REPORT_START\)/)});
+check("Conversation Memory searches historical Stage-1 report for BOOT ACK recovery",()=>{assert.match(main,/const bodyWithBootAck = \[\.\.\.capture\.messages\]\.reverse\(\)\.find\(\(item\) => item\.role === "ASSISTANT" && isBootAckCandidateText\(item\.text\)\)/)});
+check("resume launch searches transcript history before relaunch",()=>{assert.match(main,/async function captureLatestBootAckCandidate/);assert.match(main,/captureConversationTranscript\(view\)/);assert.match(main,/const existingAssistant = await captureLatestBootAckCandidate\(view\)/);assert.match(main,/isBootAckCandidateText\(existingAssistant\.text\)/)});
 console.log(`Developer Grid Stage-1 BOOT ACK fallback contract PASS · ${checks}/${checks}`);

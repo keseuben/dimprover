@@ -11,8 +11,8 @@ const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts")
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
 
-check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.44"));
-check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.44-dev"/));
+check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.45"));
+check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.45-dev"/));
 check("shared BOOT ACK processor exists", () => assert.match(main, /async function processCapturedBootAck\(/));
 check("shared BOOT ACK processor persists authoritative ACK", () => {
   const start = main.indexOf("async function processCapturedBootAck(");
@@ -40,7 +40,7 @@ check("resume launch probes existing assistant ACK before relaunch", () => {
   const start = main.indexOf('ipcMain.handle("work-start:resume-launch"');
   const end = main.indexOf('ipcMain.handle("work-close:run"', start);
   const block = main.slice(start, end);
-  const capture = block.indexOf("captureLatestAssistantText(view)");
+  const capture = block.indexOf("captureLatestBootAckCandidate(view)");
   const recover = block.indexOf('source:"RESUME_EXISTING_ACK"');
   const relaunch = block.indexOf("prepareWorkerTaskLaunch(code, task.id");
   assert.ok(capture > 0 && recover > capture && relaunch > recover);

@@ -300,3 +300,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Kötelező egyezés: worker, task, session, HEAD, CENTRAL_CORE proof SHA-256, READY handshake, legalább 1 scope lock + 1 worktree lease, PROD DENY, codingAllowed=true, exact branch/worktree és sourceConflict=false.
 - FAIL/BLOCKED/ERROR evidence vagy bármely identity/proof eltérés fail-closed; free-form szöveg soha nem elegendő.
 - A Work OpenAI first-party adapter aktiválása v0.1.45-re tolódik.
+
+
+## v0.1.45 · Stage-1 transcript recovery hotfix
+
+- A Desktop BOOT ACK recovery már nem csak a legutóbbi asszisztensüzenetet vizsgálja: a teljes rögzített ChatGPT transcriptből visszakeresi a legutóbbi strukturált `BOOT ACKNOWLEDGEMENT` vagy `BENJADMIN_STAGE_REPORT_V1` jelöltet.
+- A Stage-1 report továbbra is csak a szigorú `validateStageReportAsBootAck()` kapun keresztül fogadható el: exact worker/task/session/HEAD/source-proof/branch/worktree, `CENTRAL_CORE`, `READY`, scope-lock, worktree lease, `PROD DENY`, `codingAllowed=true`, negatív evidence nélkül.
+- A Conversation Memory ugyanezt a strukturált ACK-jelölt osztályt használja, ezért egy későbbi free-form asszisztensválasz nem takarhatja el a korábbi valid Stage-1 PASS reportot.
+- Az `INDÍTÁS FOLYTATÁSA` ugyanebből a transcript-history jelöltből helyreállíthatja a BOOT ACK persist → heartbeat → `BOOT_ACK_ACCEPTED_V1` → Execution Bridge láncot, új Launch Packet küldése nélkül.
+- Szabad szöveg továbbra sem válhat BOOT ACK-ká. PROD hozzáférés továbbra is DENY.
+- A ChatGPT Work OpenAI first-party adapter aktiválása a hotfix miatt **v0.1.46-ra** tolódik.
