@@ -254,7 +254,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 
 - A worker-identitás és a munkafelület külön fogalom: ugyanaz az ÁrminAI, OutminAI, BenjáminAI vagy JázminAI worker `CHATGPT`, `CODEX` vagy később `WORK` surface-hez köthető. Surface-váltás nem hoz létre új worker-identitást, és nem bővít scope-ot vagy jogosultságot.
 - A provider taxonomy külön kezeli a felületet és a végrehajtást. A ChatGPT, a Codex és a tervezett Work is `OPENAI_FIRST_PARTY`; a Codex nem `EXTERNAL_AI`. A Codex v0.1.41 végrehajtási módja `TASK_BRIDGE`, a ChatGPT meglévő embedded chat/BOOT ACK útja változatlan marad.
-- A négy elsődleges worker cella fejlécében perzisztens surface-választó jelenik meg. Alapértelmezés és backward-compatible mód: `CHATGPT`. `CODEX` aktív. `WORK` az adatmodellben és adapterrétegben előkészített OpenAI first-party surface, de a UI-ban v0.1.44-ig fail-closed.
+- A négy elsődleges worker cella fejlécében perzisztens surface-választó jelenik meg. Alapértelmezés és backward-compatible mód: `CHATGPT`. `CODEX` aktív. `WORK` az adatmodellben és adapterrétegben előkészített OpenAI first-party surface, de a UI-ban v0.1.45-ig fail-closed.
 - Codex módban nincs ChatGPT DOM-fallback, nincs mesterséges `/codex` WebContents és nincs külön `worker_codex`. A Central Core izolált DEV Task Bridge-et készít: egy task = egy deterministic worker branch + egy worktree + explicit path-scope + atomikus claim/scope lease.
 - A Task Bridge induló artefaktumai: `TASK.md`, `task.json`, `CODEX_BOOTSTRAP.txt`, `audit.jsonl`. A futási lánc további gépi artefaktumai: `result.json`, `REVIEW.md`, `review.json`, `build.json`, `ACCEPTANCE.md`, `acceptance.json`. A `.devgrid/tasks/` runtime terület Gitből kizárt.
 - A `task.json` lifecycle-manifest; a `taskJsonInitialSha256` kizárólag a létrehozáskori snapshot hash-e. A státusz a Task Bridge authoritative metadata állapotával együtt frissül. A fő állapotlánc: `READY_FOR_WORKER → WORKER_RUNNING → WORKER_COMPLETED → REVIEW_PENDING → REVIEW_IN_PROGRESS → REVIEW_PASS | REVIEW_CHANGES_REQUESTED → BUILD_PENDING/BUILD_RUNNING → DEV_ACCEPTANCE_PENDING → DEV_ACCEPTANCE_PASS`. Hibás provenance vagy gate esetén fail-closed `ERROR`/blocked állapot érvényes.
@@ -267,7 +267,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - DEV ONLY · PROD DENY minden Task Bridge lépésnél. Deploy, restart, migration, release és PROD végrehajtás nem része a Codex Task Bridge V1-nek.
 
 ### v0.1.41 review hardening
-A hagyományos `/api/dev/grid/work-start` út Codex esetén fail-closed `CODEX_TASK_BRIDGE_REQUIRED`, mert a ChatGPT Launch Packet / BOOT ACK / DOM transcript protokoll nem használható Codex végrehajtásra. A Codex kizárólag a párosított DEV eszközzel védett Task Bridge API-n indítható. A Work surface v0.1.44-ig `WORK_SURFACE_PLANNED_V0144` állapotban marad. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
+A hagyományos `/api/dev/grid/work-start` út Codex esetén fail-closed `CODEX_TASK_BRIDGE_REQUIRED`, mert a ChatGPT Launch Packet / BOOT ACK / DOM transcript protokoll nem használható Codex végrehajtásra. A Codex kizárólag a párosított DEV eszközzel védett Task Bridge API-n indítható. A Work surface v0.1.45-ig `WORK_SURFACE_PLANNED_V0145` állapotban marad. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
 
 ### v0.1.41 source-authority + Central Core execution proof hardening
 A Launch Packet `WORKTREE / BRANCH / BASE HEAD` hármasa a `CENTRAL CORE SOURCE PREFLIGHT PROOF` blokkal együtt authoritative source provenance. A Central Core a ChatGPT Launch Packet előtt szerveroldalon létrehozza vagy validálja a determinisztikus `worker/<worker>/<task>` branchet és task-worktree-t, a Dev Center sessiont `READY` handshake állapotig viszi, atomi scope-lockot és worktree lease-t szerez, majd az exact Git provenance + `write` execution gate ellenőrzése után SHA-256-tal kötött `SourceExecutionProof` rekordot rögzít. Launch Packet proof nélkül fail-closed.
@@ -283,7 +283,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 ## v0.1.42 · Central Core renderer boot hotfix
 - A v0.1.41 publikus artifact immutable marad; a renderer-javítás külön v0.1.42 patch release.
 - A `context-workspace.js` első `render()` hívása előtt explicit `active` work-state készül, így a Central Core panel nem állhat le `ReferenceError` miatt.
-- A Work OpenAI first-party adapter aktiválása az Execution Bridge v0.1.43 release miatt v0.1.44-re tolódik; a v0.1.43-ban továbbra is fail-closed.
+- A Work OpenAI first-party adapter aktiválása az Execution Bridge v0.1.43 release miatt v0.1.45-re tolódik; a v0.1.43-ban továbbra is fail-closed.
 
 ## v0.1.43 · Central Core Execution Bridge V1
 - ChatGPT surface worker közvetlen VPS/MCP mount nélkül, strukturált `BENJADMIN_EXECUTION_REQUEST_V1` kérésekkel dolgozik.
@@ -291,4 +291,12 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - V1 actionök: `LIST_FILES`, `READ_FILE`, `SEARCH_FILES`, `WRITE_FILE`, `GIT_STATUS`, `GIT_DIFF`, `GIT_DIFF_CHECK`, `RUN_DEV_COMMAND` (`TSC|LINT|CONTRACT`).
 - Nincs nyers shell. RED/sensitive path, symlink, `.git`, `.next`, `node_modules`, PROD, deploy, restart, migration és release tiltott. A teljes build továbbra is Central Core/BUILD01-02 kapu.
 - A requestId idempotens és append-only DEV auditot kap; az execution eredmény automatikusan visszakerül ugyanabba a worker ChatGPT beszélgetésbe.
-- Work surface aktiválás v0.1.44.
+- Work surface aktiválás v0.1.45.
+
+
+## v0.1.44 · Stage-1 BOOT ACK recovery hotfix
+
+- Ha a worker a kötelező BOOT ACK blokk helyett előbb egy strukturált Stage-1 PASS reportot ad, a Desktop csak szigorú exact identity/proof/source evidence egyezés esetén használhatja BOOT ACK recoveryként.
+- Kötelező egyezés: worker, task, session, HEAD, CENTRAL_CORE proof SHA-256, READY handshake, legalább 1 scope lock + 1 worktree lease, PROD DENY, codingAllowed=true, exact branch/worktree és sourceConflict=false.
+- FAIL/BLOCKED/ERROR evidence vagy bármely identity/proof eltérés fail-closed; free-form szöveg soha nem elegendő.
+- A Work OpenAI first-party adapter aktiválása v0.1.45-re tolódik.

@@ -16,7 +16,7 @@ const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantM
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
-const { STAGE_REPORT_START, parseDeveloperGridStageReport } = require("./task-launch/stage-report.cjs");
+const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
 const { EXECUTION_REQUEST_START, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
@@ -1587,7 +1587,9 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
   const taskId = String(task?.id || "");
   const sessionId = String(task?.sessionId || "");
   const text = String(body || "").trim();
-  if (!taskId || !sessionId || !text || !/BOOT\s+ACKNOWLEDGEMENT/i.test(text)) return { processed:false, validated:false, reason:"BOOT_ACK_NOT_FOUND" };
+  const hasBootAck = /BOOT\s+ACKNOWLEDGEMENT/i.test(text);
+  const hasStageReport = text.includes(STAGE_REPORT_START);
+  if (!taskId || !sessionId || !text || (!hasBootAck && !hasStageReport)) return { processed:false, validated:false, reason:"BOOT_ACK_NOT_FOUND" };
   const responseSha256 = createHash("sha256").update(text).digest("hex");
   if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) return { processed:false, validated:false, reason:"BOOT_ACK_BASELINE_RESPONSE" };
   const processKey = `${taskId}:${sessionId}:${responseSha256}`;
@@ -1598,7 +1600,11 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
   if (bootAckProcessingKeys.has(processKey)) return { processed:false, validated:false, pending:true, responseSha256 };
   bootAckProcessingKeys.add(processKey);
   try {
-    const validation = validateBootAcknowledgement(text, bootAckExpected(task, workerCode));
+    const expected = bootAckExpected(task, workerCode);
+    const validation = hasBootAck
+      ? validateBootAcknowledgement(text, expected)
+      : validateStageReportAsBootAck(text, expected);
+    if (!hasBootAck && validation?.validated !== true) return { processed:false, validated:false, reason:"STAGE_REPORT_NOT_BOOT_ACK_COMPATIBLE", mismatches:validation?.mismatches || [] };
     const parsed = validation.parsed || {};
     const persisted = await recordDeveloperGridBootAck({
       baseUrl: config.benjadminBaseUrl,
@@ -1620,7 +1626,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
       ackState: persisted?.validated === true ? "VALIDATED" : "BLOCKED",
       ackAt: new Date().toISOString(), ackSha256: responseSha256,
       ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
-      ackRecoverySource: source,
+      ackRecoverySource: hasBootAck ? source : `${source}:STAGE1_PASS_FALLBACK`,
     });
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
     send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId, source });

@@ -53,4 +53,74 @@ function parseDeveloperGridStageReport(raw) {
   return { ok:true, report:{ schemaVersion:1, workerCode, taskId, sessionId, head, stage, result, summary:text(row.summary,600), evidence } };
 }
 
-module.exports = { STAGE_REPORT_START, STAGE_REPORT_END, parseDeveloperGridStageReport };
+
+function normalizeWorkerForAck(value) {
+  const code = text(value, 40).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return code === "BENAI" ? "BENJAMINAI" : code;
+}
+function normalizePathForAck(value) { return text(value,1200).replace(/\\/g,"/").replace(/\/+$/g,""); }
+function validateStageReportAsBootAck(raw, expected = {}) {
+  const parsed = parseDeveloperGridStageReport(raw);
+  if (!parsed?.ok || !parsed.report) return { ok:false, validated:false, code:parsed?.code || "STAGE_REPORT_INVALID", mismatches:[parsed?.code || "STAGE_REPORT_INVALID"] };
+  const report = parsed.report;
+  const mismatches = [];
+  const wantWorker = normalizeWorkerForAck(expected.workerCode);
+  const wantTask = text(expected.taskId,220);
+  const wantSession = text(expected.sessionId,240);
+  const wantHead = text(expected.baseHead || expected.head,80).toLowerCase();
+  const wantProof = text(expected.sourceProofSha256,80).toLowerCase();
+  const wantBranch = text(expected.branch,600);
+  const wantWorktree = normalizePathForAck(expected.worktree);
+  if (report.stage !== 1) mismatches.push("stage");
+  if (report.result !== "PASS") mismatches.push("result");
+  if (wantWorker && normalizeWorkerForAck(report.workerCode) !== wantWorker) mismatches.push("worker");
+  if (wantTask && report.taskId !== wantTask) mismatches.push("taskId");
+  if (wantSession && report.sessionId !== wantSession) mismatches.push("sessionId");
+  if (!wantHead || report.head !== wantHead) mismatches.push("head");
+  if (!/^[0-9a-f]{64}$/.test(wantProof)) mismatches.push("sourceProofExpected");
+  if (!wantBranch) mismatches.push("branchExpected");
+  if (!wantWorktree) mismatches.push("worktreeExpected");
+  if (report.evidence.some((item) => item.kind === "ERROR" || item.status === "FAIL" || item.status === "BLOCKED")) mismatches.push("negativeEvidence");
+  const proofEvidence = report.evidence.find((item) => {
+    const a = record(item.attributes);
+    return item.kind === "TEST" && item.status === "PASS"
+      && String(item.summary || "").toUpperCase().includes("CENTRAL_CORE_SOURCE_PREFLIGHT_VERIFIED")
+      && text(a.authority,40).toUpperCase() === "CENTRAL_CORE"
+      && text(a.proofSha256,80).toLowerCase() === wantProof
+      && text(a.handshake,40).toUpperCase() === "READY"
+      && Number(a.scopeLocks || 0) >= 1
+      && Number(a.worktreeLeases || 0) >= 1
+      && text(a.productionAccess,40).toUpperCase() === "DENY"
+      && a.codingAllowed === true;
+  });
+  if (!proofEvidence) mismatches.push("centralCoreProofEvidence");
+  const sourceContextEvidence = report.evidence.find((item) => {
+    const a = record(item.attributes);
+    return item.kind === "TEST" && item.status === "PASS"
+      && a.sourceConflict === false
+      && text(a.branch,600) === wantBranch
+      && normalizePathForAck(a.worktree) === wantWorktree;
+  });
+  if (!sourceContextEvidence) mismatches.push("sourceContextEvidence");
+  const validated = mismatches.length === 0;
+  return {
+    ok:true,
+    validated,
+    blocked:!validated,
+    mismatches,
+    report,
+    fallback:true,
+    parsed: validated ? {
+      worker: wantWorker,
+      taskId: wantTask,
+      sessionId: wantSession,
+      branch: wantBranch,
+      worktree: wantWorktree,
+      baseHead: wantHead,
+      sourceProofSha256: wantProof,
+      codingAllowed: true,
+    } : {},
+  };
+}
+
+module.exports = { STAGE_REPORT_START, STAGE_REPORT_END, parseDeveloperGridStageReport, validateStageReportAsBootAck };

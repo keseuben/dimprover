@@ -41,8 +41,8 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "WORK_SURFACE_PLANNED_V0144",
-      error: "A Work surface adapter v0.1.44-ben aktiválódik. v0.1.43-ban a Central Core Execution Bridge miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      code: "WORK_SURFACE_PLANNED_V0145",
+      error: "A Work surface adapter v0.1.45-ben aktiválódik. v0.1.44-ben a Stage-1 BOOT ACK recovery hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }
