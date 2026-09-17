@@ -10,13 +10,14 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport } = require("./task-launch/stage-report.cjs");
+const { EXECUTION_REQUEST_START, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
@@ -94,6 +95,8 @@ const conversationMemoryHashes = new Map();
 const processedStageReportHashes = new Set();
 const processedBootAckHashes = new Set();
 const bootAckProcessingKeys = new Set();
+const processedExecutionRequestHashes = new Set();
+const executionRequestProcessingKeys = new Set();
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -1532,6 +1535,33 @@ function bootAckExpected(task, workerCode) {
   };
 }
 
+function executionBridgeProtocolLines(task, workerCode) {
+  const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const example = {
+    schemaVersion: 1,
+    requestId: "req-001",
+    taskId: String(task?.id || ""),
+    sessionId: String(task?.sessionId || ""),
+    workerCode: backendWorkerCode,
+    sourceProofSha256: String(task?.sourceExecutionProof?.sha256 || ""),
+    action: "GIT_STATUS",
+  };
+  return [
+    "EXECUTION CHANNEL: CENTRAL_CORE_EXECUTION_BRIDGE_V1 · ACTIVE · DEV ONLY · PROD DENY.",
+    "A közvetlen VPS/MCP/shell nem szükséges. A Central Core a requesteket az authoritative task-worktree-n hajtja végre, aktív scope-lock + worktree lease + source proof ellenőrzéssel.",
+    "Egy assistant-válaszban pontosan EGY execution requestet adj ki, majd várd meg a BENJADMIN_EXECUTION_RESULT_V1 választ.",
+    "Request forma:",
+    "BENJADMIN_EXECUTION_REQUEST_V1",
+    JSON.stringify(example),
+    "BENJADMIN_EXECUTION_REQUEST_END",
+    "Engedélyezett action: LIST_FILES, READ_FILE, SEARCH_FILES, WRITE_FILE, GIT_STATUS, GIT_DIFF, GIT_DIFF_CHECK, RUN_DEV_COMMAND.",
+    "READ_FILE: path + opcionális startLine/endLine. SEARCH_FILES: query + opcionális path. LIST_FILES: opcionális path/depth.",
+    "WRITE_FILE: path + teljes UTF-8 content. RED/sensitive path, symlink, .git, .next, node_modules tiltott.",
+    "RUN_DEV_COMMAND: command=TSC|LINT|CONTRACT; CONTRACT esetén path kötelező. Nyers shell, deploy, restart, migration, release és PROD művelet nincs.",
+    "A requestId minden új műveletnél legyen egyedi (pl. req-001, req-002). Azonos requestId más tartalommal blokkolódik.",
+  ];
+}
+
 async function sendBootAckAcceptedContinuation(view, task, workerCode) {
   const marker = "BENJADMIN_PROMPT_KIND: BOOT_ACK_ACCEPTED_V1";
   const prompt = [
@@ -1545,7 +1575,8 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode) {
     `Base HEAD: ${task.sourceHead}`,
     `Source proof: ${task?.sourceExecutionProof?.sha256 || "—"}`,
     "DEV ONLY · PROD DENY.",
-    "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot."
+    "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot.",
+    ...executionBridgeProtocolLines(task, workerCode)
   ].join("\n");
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason: insertion?.reason || "continuation-not-inserted" };
@@ -1808,6 +1839,54 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   };
 }
 
+async function sendExecutionResultToWorker(view, payload) {
+  const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1";
+  const prompt = buildDeveloperGridExecutionResultPrompt(payload);
+  const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason:insertion?.reason || "execution-result-not-inserted" };
+  return sendPreparedChatPrompt(view, marker);
+}
+
+async function processCapturedExecutionRequest({ view, body, workerCode, task }) {
+  const textBody = String(body || "");
+  if (!textBody.includes(EXECUTION_REQUEST_START) || !task?.id || !task?.sessionId || !view || view.webContents.isDestroyed()) return { processed:false };
+  const parsed = parseDeveloperGridExecutionRequest(textBody);
+  if (!parsed?.ok || !parsed.request) {
+    saveTaskLaunchPatch(task, workerCode, { executionBridgeState:"REQUEST_INVALID", executionBridgeError:parsed?.code || "EXECUTION_REQUEST_INVALID", executionBridgeAt:new Date().toISOString() });
+    send("context:refresh", { reason:"execution-request-invalid", taskId:task.id, workerCode, code:parsed?.code || "EXECUTION_REQUEST_INVALID" });
+    return { processed:false, invalid:true, error:parsed?.error || "EXECUTION_REQUEST_INVALID" };
+  }
+  const request = parsed.request;
+  const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const expectedProof = String(task?.sourceExecutionProof?.sha256 || "").toLowerCase();
+  const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
+  const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
+  const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
+  const launchRecord = loadTaskLaunchRecords()[task.id] || {};
+  if (processedExecutionRequestHashes.has(key) || String(launchRecord.lastExecutionRequestId || "") === request.requestId) return { processed:false, duplicate:true };
+  if (executionRequestProcessingKeys.has(key)) return { processed:false, pending:true };
+  executionRequestProcessingKeys.add(key);
+  try {
+    let payload;
+    if (localMismatch) {
+      payload = { requestId:request.requestId, taskId:String(task.id), sessionId:String(task.sessionId), action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_IDENTITY_MISMATCH", summary:"A request task/session/worker/source proof identity eltér az authoritative aktív Grid állapottól.", data:{} } };
+    } else {
+      payload = await executeDeveloperGridRequest({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:request }).catch((error) => ({ requestId:request.requestId, taskId:request.taskId, sessionId:request.sessionId, action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_BRIDGE_HTTP_FAILED", summary:error instanceof Error ? error.message : "Execution Bridge API hiba.", data:{} } }));
+    }
+    const sent = await sendExecutionResultToWorker(view, payload);
+    if (sent?.sent !== true || sent?.verified !== true) {
+      saveTaskLaunchPatch(task, workerCode, { executionBridgeState:"RESULT_SEND_PENDING", executionBridgeError:sent?.reason || "not-verified", executionBridgeAt:new Date().toISOString() });
+      send("context:refresh", { reason:"execution-result-send-pending", taskId:task.id, workerCode, requestId:request.requestId });
+      return { processed:false, retryable:true, payload, sent };
+    }
+    processedExecutionRequestHashes.add(key);
+    if (processedExecutionRequestHashes.size > 500) { const first=processedExecutionRequestHashes.values().next().value; if(first) processedExecutionRequestHashes.delete(first); }
+    saveTaskLaunchPatch(task, workerCode, { lastExecutionRequestId:request.requestId, lastExecutionAction:request.action, executionBridgeState:String(payload?.execution?.status || "PASS").toUpperCase(), executionBridgeCode:String(payload?.execution?.code || ""), executionBridgeAt:new Date().toISOString() });
+    send("context:refresh", { reason:"execution-result-sent", taskId:task.id, workerCode, requestId:request.requestId, status:payload?.execution?.status || null, code:payload?.execution?.code || null });
+    return { processed:true, payload, sent };
+  } finally { executionRequestProcessingKeys.delete(key); }
+}
+
 async function processCapturedStageReport({ body, workerCode, task, baselineResponseSha256 = "" }) {
   const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
   const textBody = String(body || "");
@@ -1883,6 +1962,8 @@ async function syncConversationMemoryForWorker(workerCode) {
   }
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
+  const bodyWithExecutionRequest = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(EXECUTION_REQUEST_START));
+  if (bodyWithExecutionRequest) await processCapturedExecutionRequest({ view, body:bodyWithExecutionRequest.text, workerCode:code, task:live.task }).catch(() => undefined);
   if (conversationMemoryHashes.get(cacheKey) === transcriptHash) return null;
   const memory = await saveDeveloperGridConversationMemory({
     baseUrl:config.benjadminBaseUrl,

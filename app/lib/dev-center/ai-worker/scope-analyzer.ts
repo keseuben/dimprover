@@ -133,8 +133,8 @@ async function evidenceFor(root: string, filePath: string, searchTokens: string[
   }
 }
 
-export async function analyzeTechnicalScope(input: { title: string; goal: string; moduleHint?: string | null }) {
-  const root = projectRoot();
+export async function analyzeTechnicalScope(input: { title: string; goal: string; moduleHint?: string | null }, rootOverride?: string) {
+  const root = rootOverride ? path.resolve(rootOverride) : projectRoot();
   const searchTokens = tokens(`${input.title} ${input.goal} ${input.moduleHint || ""}`);
   const hints = moduleHints(`${input.title} ${input.goal} ${input.moduleHint || ""}`);
   const tracked = await trackedFiles(root);
