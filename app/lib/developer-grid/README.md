@@ -254,7 +254,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 
 - A worker-identitás és a munkafelület külön fogalom: ugyanaz az ÁrminAI, OutminAI, BenjáminAI vagy JázminAI worker `CHATGPT`, `CODEX` vagy később `WORK` surface-hez köthető. Surface-váltás nem hoz létre új worker-identitást, és nem bővít scope-ot vagy jogosultságot.
 - A provider taxonomy külön kezeli a felületet és a végrehajtást. A ChatGPT, a Codex és a tervezett Work is `OPENAI_FIRST_PARTY`; a Codex nem `EXTERNAL_AI`. A Codex v0.1.41 végrehajtási módja `TASK_BRIDGE`, a ChatGPT meglévő embedded chat/BOOT ACK útja változatlan marad.
-- A négy elsődleges worker cella fejlécében perzisztens surface-választó jelenik meg. Alapértelmezés és backward-compatible mód: `CHATGPT`. `CODEX` aktív. `WORK` az adatmodellben és adapterrétegben előkészített OpenAI first-party surface, de a UI-ban v0.1.42-ig fail-closed.
+- A négy elsődleges worker cella fejlécében perzisztens surface-választó jelenik meg. Alapértelmezés és backward-compatible mód: `CHATGPT`. `CODEX` aktív. `WORK` az adatmodellben és adapterrétegben előkészített OpenAI first-party surface, de a UI-ban v0.1.43-ig fail-closed.
 - Codex módban nincs ChatGPT DOM-fallback, nincs mesterséges `/codex` WebContents és nincs külön `worker_codex`. A Central Core izolált DEV Task Bridge-et készít: egy task = egy deterministic worker branch + egy worktree + explicit path-scope + atomikus claim/scope lease.
 - A Task Bridge induló artefaktumai: `TASK.md`, `task.json`, `CODEX_BOOTSTRAP.txt`, `audit.jsonl`. A futási lánc további gépi artefaktumai: `result.json`, `REVIEW.md`, `review.json`, `build.json`, `ACCEPTANCE.md`, `acceptance.json`. A `.devgrid/tasks/` runtime terület Gitből kizárt.
 - A `task.json` lifecycle-manifest; a `taskJsonInitialSha256` kizárólag a létrehozáskori snapshot hash-e. A státusz a Task Bridge authoritative metadata állapotával együtt frissül. A fő állapotlánc: `READY_FOR_WORKER → WORKER_RUNNING → WORKER_COMPLETED → REVIEW_PENDING → REVIEW_IN_PROGRESS → REVIEW_PASS | REVIEW_CHANGES_REQUESTED → BUILD_PENDING/BUILD_RUNNING → DEV_ACCEPTANCE_PENDING → DEV_ACCEPTANCE_PASS`. Hibás provenance vagy gate esetén fail-closed `ERROR`/blocked állapot érvényes.
@@ -267,7 +267,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - DEV ONLY · PROD DENY minden Task Bridge lépésnél. Deploy, restart, migration, release és PROD végrehajtás nem része a Codex Task Bridge V1-nek.
 
 ### v0.1.41 review hardening
-A hagyományos `/api/dev/grid/work-start` út Codex esetén fail-closed `CODEX_TASK_BRIDGE_REQUIRED`, mert a ChatGPT Launch Packet / BOOT ACK / DOM transcript protokoll nem használható Codex végrehajtásra. A Codex kizárólag a párosított DEV eszközzel védett Task Bridge API-n indítható. A Work surface v0.1.42-ig `WORK_SURFACE_PLANNED_V0142` állapotban marad. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
+A hagyományos `/api/dev/grid/work-start` út Codex esetén fail-closed `CODEX_TASK_BRIDGE_REQUIRED`, mert a ChatGPT Launch Packet / BOOT ACK / DOM transcript protokoll nem használható Codex végrehajtásra. A Codex kizárólag a párosított DEV eszközzel védett Task Bridge API-n indítható. A Work surface v0.1.43-ig `WORK_SURFACE_PLANNED_V0143` állapotban marad. Ismeretlen explicit surface nem normalizálódhat csendben ChatGPT-re.
 
 ### v0.1.41 source-authority + Central Core execution proof hardening
 A Launch Packet `WORKTREE / BRANCH / BASE HEAD` hármasa a `CENTRAL CORE SOURCE PREFLIGHT PROOF` blokkal együtt authoritative source provenance. A Central Core a ChatGPT Launch Packet előtt szerveroldalon létrehozza vagy validálja a determinisztikus `worker/<worker>/<task>` branchet és task-worktree-t, a Dev Center sessiont `READY` handshake állapotig viszi, atomi scope-lockot és worktree lease-t szerez, majd az exact Git provenance + `write` execution gate ellenőrzése után SHA-256-tal kötött `SourceExecutionProof` rekordot rögzít. Launch Packet proof nélkül fail-closed.
@@ -278,3 +278,9 @@ A korábbi v0.1.40/v0.1.41 eleji `TASK_BOUND` Launch Packetekhez az `INDÍTÁS F
 
 ### v0.1.41 ChatGPT launch race hardening
 Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet új Launch Packetet. Ha a task Launch Packetje már elküldött állapotú, a kliens `response-pending` recovery módba lép, ugyanazt a task/sessiont figyeli és nem duplikál promptot. Ha a generálás más okból aktív, `CHATGPT_GENERATION_ACTIVE` fail-closed állapot jelenik meg és a felhasználó a generálás befejezése/leállítása után az `INDÍTÁS FOLYTATÁSA` művelettel folytathatja ugyanazt a taskot. A 5 perces BOOT ACK monitor timeout `RESPONSE_TIMEOUT / BOOT_ACK_TIMEOUT` állapotot rögzít, új taskot nem hoz létre.
+
+
+## v0.1.42 · Central Core renderer boot hotfix
+- A v0.1.41 publikus artifact immutable marad; a renderer-javítás külön v0.1.42 patch release.
+- A `context-workspace.js` első `render()` hívása előtt explicit `active` work-state készül, így a Central Core panel nem állhat le `ReferenceError` miatt.
+- A Work OpenAI first-party adapter aktiválása emiatt v0.1.43-ra tolódik; a v0.1.42-ben továbbra is fail-closed.

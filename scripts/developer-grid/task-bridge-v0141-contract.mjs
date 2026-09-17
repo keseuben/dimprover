@@ -60,5 +60,5 @@ check("Codex cell and Central Core expose worker review workflow",()=>{assert.ma
 check("CHANGES_REQUESTED exposes an explicit Codex rework action only",()=>{assert.match(preload,/resumeDeveloperGridTaskBridgeRework/);assert.match(main,/task-bridge:resume-rework/);assert.match(renderer,/JAVÍTÁS VISSZA CODEXHEZ/);assert.match(renderer,/canRework=bridgeState==="REVIEW_CHANGES_REQUESTED"/);assert.match(context,/canBridgeRework=bridgeState==="REVIEW_CHANGES_REQUESTED"/)});
 check("Codex cell dynamic values are HTML escaped",()=>{assert.match(renderer,/function escapeHtml/);assert.match(renderer,/escapeHtml\(bridge\.branchName/)});
 check("Surface selector locks while Codex Task Bridge is nonterminal",()=>{assert.match(renderer,/Boolean\(activeTask\) \|\| bridgeLocked/);assert.match(renderer,/CLOSED.*ERROR/);assert.match(renderer,/activeBridgeState/)});
-check("Work stays first-party planned surface",()=>{assert.match(context,/OPENAI FIRST-PARTY · WORK/);assert.match(context,/v0\.1\.42/)});
+check("Work stays first-party planned surface",()=>{assert.match(context,/OPENAI FIRST-PARTY · WORK/);assert.match(context,/v0\.1\.43/)});
 console.log(`TASK_BRIDGE_V0141_CONTRACT_PASS ${pass}/${pass}`);

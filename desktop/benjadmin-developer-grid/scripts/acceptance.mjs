@@ -14,7 +14,7 @@ const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8"
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.41",()=>assert.equal(pkg.version,"0.1.41"));
+check("package version 0.1.42",()=>assert.equal(pkg.version,"0.1.42"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -52,6 +52,7 @@ check("central workspace renderer is present",()=>{const x=fs.readFileSync(path.
 check("central workspace renders immediately before remote context fetch",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/render\(\);\s*setNotice\("Vezérlőpult kapcsolódás/)});
 check("central workspace renders pairing error instead of blank body",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/contextErrorMessage/);assert.match(x,/párosítsd a Developer Gridet/);assert.match(x,/if\(!result\?\.ok\)\{state\.notice=contextErrorMessage\(result\?\.error\);render\(\)/)});
 check("daily work-start composer visible",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/Mit fejlesszünk\?/);assert.match(x,/MUNKA INDÍTÁSA/);assert.match(x,/workStartPrompt/)});
+check("Central Core initial renderer defines active work state before first render",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/const active=Boolean\(task&&!terminalTask&&!stale\)/);assert.match(x,/render\(\);\s*setNotice\("Vezérlőpult kapcsolódás/)});
 check("daily work-start preserves draft and uses explicit submit",()=>{const x=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");assert.match(x,/workStartDraft/);assert.match(x,/e\.ctrlKey/);assert.match(x,/if\(state\.workStartBusy\|\|state\.taskBridgeBusy\)return/)});
 
 check("header exposes compact ChatGPT refresh lifecycle",()=>{assert.match(html,/headerChatStatus/);assert.match(html,/headerChatRefreshButton/);assert.doesNotMatch(html,/id="headerChatUpdated"/);assert.doesNotMatch(html,/id="headerChatVersion"/);assert.match(renderer,/formatChatRefreshFullTime/);});
@@ -99,4 +100,4 @@ check("BenjáminAI profile is integrated code engineer",()=>{assert.match(render
 check("all four worker headers expose code-engineer role badge",()=>{assert.equal((html.match(/data-role="worker-role"/g)||[]).length,4);assert.match(html,/INTEGRÁLT KÓDMÉRNÖK/);assert.match(renderer,/WORKER_ROLE_LABELS/);});
 check("Central Core owns coordination wording",()=>{assert.match(contextWorkspaceSource,/Central Core koordináció/);assert.doesNotMatch(contextWorkspaceSource,/BenAI koordináció/);assert.match(guideSource,/Central Core \/ Grid Orchestrator/);});
 check("worker headers expose engineering phase status",()=>{for(const label of ["ELEMZÉS","FEJLESZT","TESZTEL","ELLENŐRIZ","BUILD","LEZÁRÁS"])assert.match(renderer,new RegExp(label));});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.41 DEV acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.42 DEV acceptance PASS · ${n}/${n}`);

@@ -34,3 +34,9 @@ A Windows package/release wrapper explicit `BENJADMIN_DEV_CANONICAL_ROOT` és `B
 
 ## v0.1.41 Release Artifact Engine source-policy javítás
 A Release Artifact Engine ugyanazt az explicit `BENJADMIN_DEV_CANONICAL_ROOT`, `BENJADMIN_DEV_CANONICAL_BRANCH` és `BENJADMIN_DEV_CANONICAL_GIT` source-policyt használja, mint a package/release wrapper. Korábban a wrapper helyesen validálta az új release worktree-t, de az engine `main()` még a v0.1.40 történeti worktree-jét vizsgálta. Az engine most csak `/srv/dimpro-dev/worktrees/*` rootot, a canonical `/srv/dimpro-dev/repositories/dimprover.git` bare repót és érvényes Git branchet fogad el. A default v0.1.40 értékek backward compatibility miatt megmaradnak, de explicit v0.1.41 release-policy esetén az engine az exact megadott worktree-t auditálja.
+
+## v0.1.41 Central Core renderer boot javítás
+A `context-workspace.js` első renderelésekor a work-start státusz egy nem definiált `active` változóra hivatkozott. Emiatt a renderer még a `context:layout` eseménykezelők feliratkozása előtt kivétellel leállt: a main process lefoglalta a Central Core középső sávját, de maga a panel rejtve maradt. A javítás explicit `active = task && !terminalTask && !stale` állapotot képez az első render előtt, és acceptance contract védi a boot-sorrendet.
+
+## v0.1.42 immutable hotfix release
+A már publikált v0.1.41 EXE/ZIP artifact nem írható felül eltérő bájtokkal. A Central Core renderer boot javítás ezért v0.1.42 patch release-ként kerül kiadásra. A korábban v0.1.42-re tervezett ChatGPT Work adapter v0.1.43-ra tolódik; funkcionális scope-ja nem került bele ebbe a hotfixbe.
