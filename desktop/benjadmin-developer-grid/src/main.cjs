@@ -1677,7 +1677,7 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
   const deadline = Date.now() + 5 * 60_000;
   while (Date.now() < deadline && view && !view.webContents.isDestroyed()) {
     await new Promise((resolve) => setTimeout(resolve, 1800));
-    const capture = await captureLatestAssistantText(view);
+    const capture = await captureLatestBootAckCandidate(view);
     if (!capture?.ok || capture.generating || !String(capture.text || "").trim()) continue;
     const result = await processCapturedBootAck({ view, body:capture.text, task, workerCode, baselineResponseSha256, source:"LAUNCH_MONITOR" });
     if (result?.validated || result?.blocked) return;
@@ -3380,6 +3380,54 @@ function registerIpc() {
       let session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
       if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs folytatható authoritative task + worker session." };
       if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A task BOOT ACK-ja már validált; nincs újraküldendő Launch Packet." };
+
+      // v0.1.46: first recover an ACK candidate against the CURRENT authoritative
+      // session/proof. Never rotate the execution proof before giving the already
+      // produced BOOT ACK / Stage-1 PASS report a chance to validate.
+      const preRecoveryWork = { task, session };
+      const preRecoveryCode = assignedWorkerCodeFromWork(preRecoveryWork);
+      const preRecoveryLaunchTask = launchTaskFromWork(preRecoveryWork, null);
+      if (preRecoveryCode && preRecoveryLaunchTask) {
+        const preRecoveryCell = config?.cells?.find((item) => item.workerCode === preRecoveryCode && item.enabled !== false);
+        const preRecoverySurface = normalizeWorkerSurfaceType(preRecoveryLaunchTask.surfaceType || session?.developmentContext?.surfaceType || preRecoveryCell?.surfaceType || "CHATGPT");
+        if (preRecoveryCell && preRecoverySurface === "CHATGPT") {
+          let preRecoveryView = chatViews.get(preRecoveryCell.id);
+          if (!preRecoveryView) { createChatView(preRecoveryCell); updateViewBounds(); preRecoveryView = chatViews.get(preRecoveryCell.id); }
+          if (preRecoveryView && !preRecoveryView.webContents.isDestroyed()) {
+            const preRecoveryConversationId = chatConversationIdFromUrl(preRecoveryView.webContents.getURL());
+            const preRecoveryContext = session.developmentContext || {};
+            const preRecoveryExpectedConversationId = String(preRecoveryContext.surfaceConversationId || preRecoveryContext.chatConversationId || "").trim();
+            if (preRecoveryConversationId && (!preRecoveryExpectedConversationId || preRecoveryConversationId === preRecoveryExpectedConversationId)) {
+              const preRecoveryAssistant = await captureLatestBootAckCandidate(preRecoveryView);
+              if (preRecoveryAssistant?.generating) {
+                const launchRecord = loadTaskLaunchRecords()[task.id] || {};
+                saveTaskLaunchPatch(preRecoveryLaunchTask, preRecoveryCode, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
+                void monitorWorkerBootAck({ view:preRecoveryView, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+                send("context:refresh", { reason:"chatgpt-response-pending-before-recovery", taskId:task.id, sessionId:session.id });
+                return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, message:"A ChatGPT még a jelenlegi Launch Packet válaszát generálja. A source proof nem változott; a Grid ugyanennek a BOOT ACK-jára vár." } };
+              }
+              if (preRecoveryAssistant?.ok && isBootAckCandidateText(preRecoveryAssistant.text)) {
+                const preRecovered = await processCapturedBootAck({ view:preRecoveryView, body:preRecoveryAssistant.text, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, source:"RESUME_PRE_RECOVERY_ACK" });
+                if (preRecovered?.validated) {
+                  const refreshedWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }).catch(() => activeWork);
+                  send("context:refresh", { reason:"boot-ack-recovered-before-execution-recovery", taskId:task.id, sessionId:session.id });
+                  return { ok:true, recoveredBootAck:true, activeWork:refreshedWork, taskLaunch:{ ok:true, mode:"boot-ack-recovered", message:"A meglévő strukturált BOOT ACK / Stage-1 PASS a jelenlegi source proof ellen validálva; execution recovery és új Launch Packet nélkül folytatva." } };
+                }
+                if (preRecovered?.blocked) {
+                  const mismatches = Array.isArray(preRecovered.mismatches) ? preRecovered.mismatches.map((item) => String(item || "")) : [];
+                  const recoverableExecutionMismatches = new Set(["engineExecutionGate", "scopeLock", "worktreeLease", "sourceProofLocks", "sourceProvenance"]);
+                  const executionLifecycleOnly = mismatches.length > 0 && mismatches.every((item) => recoverableExecutionMismatches.has(item));
+                  if (!executionLifecycleOnly) {
+                    return { ok:false, code:"BOOT_ACK_PRE_RECOVERY_BLOCKED", error:`A jelenlegi source proofhoz tartozó BOOT ACK jelölt blokkolt: ${mismatches.join(", ") || "ismeretlen eltérés"}. A Grid fail-closed; source proof rotáció nem történt.` };
+                  }
+                  saveTaskLaunchPatch(preRecoveryLaunchTask, preRecoveryCode, { ackState:"WAITING", ackMismatches:mismatches, autoSendState:"EXECUTION_RECOVERY_REQUIRED" });
+                }
+              }
+            }
+          }
+        }
+      }
+
       const previousSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
 
       const recoveredExecution = await recoverDeveloperGridLaunchExecution({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });

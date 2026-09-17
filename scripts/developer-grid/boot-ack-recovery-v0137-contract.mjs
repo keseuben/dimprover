@@ -11,8 +11,8 @@ const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts")
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
 
-check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.45"));
-check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.45-dev"/));
+check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.46"));
+check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.46-dev"/));
 check("shared BOOT ACK processor exists", () => assert.match(main, /async function processCapturedBootAck\(/));
 check("shared BOOT ACK processor persists authoritative ACK", () => {
   const start = main.indexOf("async function processCapturedBootAck(");
@@ -35,6 +35,25 @@ check("Conversation Memory recovers valid ACK before transcript hash dedupe", ()
   const dedupe = block.indexOf("conversationMemoryHashes.get(cacheKey) === transcriptHash");
   assert.ok(ack > 0 && dedupe > ack);
   assert.match(block, /bodyWithBootAck/);
+});
+check("resume probes current ACK before execution recovery can rotate source proof", () => {
+  const start = main.indexOf('ipcMain.handle("work-start:resume-launch"');
+  const end = main.indexOf('ipcMain.handle("work-close:run"', start);
+  const block = main.slice(start, end);
+  const candidate = block.indexOf('source:"RESUME_PRE_RECOVERY_ACK"');
+  const recover = block.indexOf("recoverDeveloperGridLaunchExecution({");
+  assert.ok(candidate > 0 && recover > candidate);
+  assert.match(block, /boot-ack-recovered-before-execution-recovery/);
+  assert.match(block, /source proof nem változott/);
+});
+check("pre-recovery ACK only auto-recovers execution lifecycle mismatches", () => {
+  const start = main.indexOf('ipcMain.handle("work-start:resume-launch"');
+  const end = main.indexOf('ipcMain.handle("work-close:run"', start);
+  const block = main.slice(start, end);
+  assert.match(block, /recoverableExecutionMismatches = new Set\(\["engineExecutionGate", "scopeLock", "worktreeLease", "sourceProofLocks", "sourceProvenance"\]\)/);
+  assert.match(block, /executionLifecycleOnly/);
+  assert.match(block, /EXECUTION_RECOVERY_REQUIRED/);
+  assert.match(block, /BOOT_ACK_PRE_RECOVERY_BLOCKED/);
 });
 check("resume launch probes existing assistant ACK before relaunch", () => {
   const start = main.indexOf('ipcMain.handle("work-start:resume-launch"');

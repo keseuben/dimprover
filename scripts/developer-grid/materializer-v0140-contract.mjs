@@ -13,8 +13,8 @@ const smoke = read("scripts/developer-grid/candidate-smoke.mjs");
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2, "0")} ${label}`); }
 
-check("package version v0.1.45", () => assert.equal(pkg.version, "0.1.45"));
-check("backend version v0.1.45-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.45-dev"/));
+check("package version v0.1.46", () => assert.equal(pkg.version, "0.1.46"));
+check("backend version v0.1.46-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.46-dev"/));
 check("materializer active task statuses are exact", () => {
   assert.match(materializer, /\["claimed", "in_progress", "testing"\]\.includes\(taskStatus\)/);
 });
@@ -50,4 +50,4 @@ check("candidate smoke still validates active materialized source", () => {
   assert.match(smoke, /Materialized active session source VERIFIED/);
 });
 
-console.log(`Developer Grid materializer v0.1.45 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid materializer v0.1.46 contract PASS · ${n}/${n}`);

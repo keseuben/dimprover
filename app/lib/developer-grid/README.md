@@ -310,3 +310,12 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Az `INDÍTÁS FOLYTATÁSA` ugyanebből a transcript-history jelöltből helyreállíthatja a BOOT ACK persist → heartbeat → `BOOT_ACK_ACCEPTED_V1` → Execution Bridge láncot, új Launch Packet küldése nélkül.
 - Szabad szöveg továbbra sem válhat BOOT ACK-ká. PROD hozzáférés továbbra is DENY.
 - A ChatGPT Work OpenAI first-party adapter aktiválása a hotfix miatt **v0.1.46-ra** tolódik.
+
+
+## v0.1.46 · Live BOOT ACK monitor + pre-recovery ordering hotfix
+
+- A live `monitorWorkerBootAck()` a transcript-aware `captureLatestBootAckCandidate()` helperrel dolgozik; a későbbi assistant turn nem takarhatja el a strukturált BOOT ACK / Stage-1 PASS jelöltet.
+- Az `INDÍTÁS FOLYTATÁSA` a backend execution recovery előtt megpróbálja a meglévő strukturált ACK-jelöltet a jelenlegi authoritative task/session/source proof ellen validálni.
+- Aktív ChatGPT-generálás alatt source proof nem rotálódhat: a Grid ugyanazon session BOOT ACK-jára vár.
+- Csak execution-lifecycle jellegű mismatch (`engineExecutionGate`, `scopeLock`, `worktreeLease`, `sourceProofLocks`, `sourceProvenance`) léphet tovább kontrollált recoveryre. Task/session/worker/branch/HEAD/proof eltérés továbbra is fail-closed.
+- A Work OpenAI first-party adapter a hotfix miatt **v0.1.47-re** tolódik.
