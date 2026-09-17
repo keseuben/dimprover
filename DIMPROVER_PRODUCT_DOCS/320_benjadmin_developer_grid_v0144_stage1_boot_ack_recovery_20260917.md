@@ -1,6 +1,6 @@
 # BENJADMIN Developer Grid v0.1.44 – Stage-1 BOOT ACK Recovery Hotfix
 
-Dátum: 2026-09-17  
+Dátum: 2026-09-17
 Környezet: **DEV ONLY · PROD DENY**
 
 ## Cél
