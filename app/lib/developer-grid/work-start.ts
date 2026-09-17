@@ -1,7 +1,7 @@
 "server-only";
 
 import { createHash } from "node:crypto";
-import { advanceDevEngineSession, advanceDevEngineTaskManualBridge, assertDevEngineOperation, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
+import { advanceDevEngineSession, advanceDevEngineTaskManualBridge, assertDevEngineOperation, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, recoverClosedDevEngineTaskManualBridgeSession, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
 import { acquireScopeBundleAtomic } from "@/app/lib/dev-center/orchestration-repository";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
@@ -611,8 +611,20 @@ export async function recoverDeveloperGridLaunchExecution() {
   }
   const workerCode = routableWorkerCode(session.workerCode);
   if (!workerCode) throw Object.assign(new Error("A recovery worker nem routolható."), { code:"DEVELOPER_GRID_RECOVERY_WORKER_INVALID", status:409 });
-  const engineSessionId = text(session.developmentContext.engineSessionId, 240);
+  let engineSessionId = text(session.developmentContext.engineSessionId, 240);
   if (!engineSessionId) throw Object.assign(new Error("A recoveryhez hiányzik a Dev Center engine session."), { code:"DEVELOPER_GRID_RECOVERY_ENGINE_SESSION_MISSING", status:409 });
+  let recoveredFromEngineSessionId: string | null = null;
+  const engineStateBeforeRecovery = await getDevCenterEngineState();
+  const engineSessionBeforeRecovery = engineStateBeforeRecovery.sessions.find((item) => item.id === engineSessionId) || null;
+  if (!engineSessionBeforeRecovery) throw Object.assign(new Error("A recoveryhez tartozó Dev Center engine session nem található."), { code:"DEVELOPER_GRID_RECOVERY_ENGINE_SESSION_NOT_FOUND", status:409 });
+  if (engineSessionBeforeRecovery.taskId !== task.id) throw Object.assign(new Error("A recovery Dev Center session más taskhoz tartozik."), { code:"DEVELOPER_GRID_RECOVERY_ENGINE_TASK_MISMATCH", status:409 });
+  if (engineSessionBeforeRecovery.status === "closed") {
+    const previousEngineSessionId = engineSessionId;
+    const fresh = await recoverClosedDevEngineTaskManualBridgeSession({ taskId:task.id, closedSessionId:previousEngineSessionId, expectedWorkerCode:workerCode });
+    engineSessionId = text(fresh.session?.id, 240);
+    if (!engineSessionId) throw Object.assign(new Error("A fresh recovery Dev Center session nem jött létre."), { code:"DEVELOPER_GRID_RECOVERY_FRESH_SESSION_MISSING", status:409 });
+    recoveredFromEngineSessionId = previousEngineSessionId;
+  }
   const moduleName = text(session.developmentContext.moduleName, 180);
   if (!moduleName) throw Object.assign(new Error("A recovery scope modulja hiányzik."), { code:"DEVELOPER_GRID_RECOVERY_SCOPE_MISSING", status:409 });
   const baseHead = String(session.sourceProvenance.head || "").toLowerCase();
@@ -633,9 +645,11 @@ export async function recoverDeveloperGridLaunchExecution() {
     sourceProvenance:{ ...ready.provenance, worker:workerCode, taskId:task.id, sessionId:session.id },
     developmentContext:{
       ...session.developmentContext,
+      engineSessionId,
       sourceExecutionProof,
       bootAckState:"WAITING",
       bootAckValidatedAt:null,
+      bootAckSha256:null,
       bootAckCodingAllowed:null,
       bootAckMismatches:[],
       resolvedAt:now,
@@ -651,7 +665,7 @@ export async function recoverDeveloperGridLaunchExecution() {
     delta:{
       eventType:"LAUNCH_EXECUTION_RECOVERED",
       summary:"A meglévő task Dev Center handshake-je READY állapotig helyreállt; task-specifikus worktree + scope lock + worktree lease + Central Core source proof aktív.",
-      status:"PASS", severity:"INFO", sessionId:session.id, engineSessionId, sourceProofSha256:sourceExecutionProof.sha256,
+      status:"PASS", severity:"INFO", sessionId:session.id, engineSessionId, recoveredFromEngineSessionId, sourceProofSha256:sourceExecutionProof.sha256,
       activeScopeLockCount:sourceExecutionProof.activeScopeLockCount, activeWorktreeLeaseCount:sourceExecutionProof.activeWorktreeLeaseCount,
     },
   });

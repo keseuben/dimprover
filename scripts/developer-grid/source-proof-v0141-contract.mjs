@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const read=(p)=>fs.readFileSync(p,"utf8");
 const work=read("app/lib/developer-grid/work-start.ts");
+const engineRepo=read("app/lib/dev-center/engine-repository.ts");
 const types=read("app/lib/developer-grid/types.ts");
 const workspace=read("app/lib/developer-grid/worker-workspace.ts");
 const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
@@ -39,4 +40,8 @@ check("Backend rejects proof without active lock and worktree lease",()=>{assert
 check("existing task recovery reuses same authoritative task/session",()=>{assert.match(work,/export async function recoverDeveloperGridLaunchExecution/);assert.match(work,/taskId:task\.id/);assert.match(work,/engineSessionId/);assert.match(work,/gridSessionId:session\.id/)});
 check("recovery resets blocked ACK to WAITING with stable-or-fresh proof",()=>{assert.match(work,/reusableSourceExecutionProof/);assert.match(work,/sourceExecutionProof = reusableSourceExecutionProof/);assert.match(work,/bootAckState:"WAITING"/);assert.match(work,/bootAckMismatches:\[\]/)});
 check("backend rejects proofless BOOT ACK",()=>assert.match(work,/sourceProofRequired/));
+check("closed Dev Center session recovery creates a fresh session for the same task",()=>{assert.match(work,/recoverClosedDevEngineTaskManualBridgeSession/);assert.match(work,/recoveredFromEngineSessionId/);assert.match(engineRepo,/TASK_MANUAL_BRIDGE_RECOVERY_STARTED/);assert.match(engineRepo,/DEV_CENTER_RECOVERY_SESSION_NOT_CLOSED/)});
+check("closed-session recovery resets the existing task instead of creating a new task",()=>{assert.match(engineRepo,/status:"ready", assigned_worker_id:null, claimed_by_session_id:null/);assert.match(engineRepo,/startDevEngineTaskManualBridge\(task\.id\)/);const i=engineRepo.indexOf("export async function recoverClosedDevEngineTaskManualBridgeSession");const b=engineRepo.slice(i,i+15000);assert.doesNotMatch(b,/createDevEngineTask\(/)});
+check("closed-session recovery releases only old-session orchestration resources",()=>{assert.match(engineRepo,/dev_center_scope_locks/);assert.match(engineRepo,/dev_center_worktree_leases/);assert.match(engineRepo,/\.eq\("session_id", previous\.id\)\.eq\("status", "active"\)/)});
+check("closed-session recovery clears stale BOOT ACK and switches engineSessionId",()=>{assert.match(work,/engineSessionId,/);assert.match(work,/bootAckSha256:null/);assert.match(work,/sessionId:session\.id, engineSessionId, recoveredFromEngineSessionId/)});
 console.log(`Developer Grid source proof v0.1.41 contract PASS · ${n}/${n}`);

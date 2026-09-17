@@ -1096,6 +1096,103 @@ export async function startDevEngineTaskManualBridge(taskId: string) {
   }
 }
 
+
+export async function recoverClosedDevEngineTaskManualBridgeSession(input: {
+  taskId: string;
+  closedSessionId: string;
+  expectedWorkerCode?: string | null;
+}) {
+  const client = await requireClient();
+  const task = await getTaskForConsoleControl(client, input.taskId);
+  if (["completed", "cancelled", "testing"].includes(task.status)) {
+    throw new DevCenterEngineError("A lezárt session recovery csak BOOT ACK előtti fejlesztési taskon engedélyezett.", "DEV_CENTER_RECOVERY_TASK_STATE_DENIED", 409, { taskId:task.id, status:task.status });
+  }
+  if (!task.requestedWorkerId) throw new DevCenterEngineError("A recovery taskhoz nincs kijelölt worker.", "DEV_CENTER_RECOVERY_WORKER_REQUIRED", 409, { taskId:task.id });
+  const previousRow = await client.from("dev_center_worker_sessions").select("*").eq("id", input.closedSessionId).maybeSingle();
+  if (previousRow.error) databaseError("A korábbi worker session nem olvasható.", previousRow.error);
+  if (!previousRow.data) throw new DevCenterEngineError("A korábbi worker session nem található.", "DEV_CENTER_RECOVERY_SESSION_NOT_FOUND", 404, { sessionId:input.closedSessionId });
+  const previous = mapSession(previousRow.data as JsonRecord);
+  if (previous.status !== "closed") throw new DevCenterEngineError("Recovery csak ténylegesen lezárt korábbi sessionből indítható.", "DEV_CENTER_RECOVERY_SESSION_NOT_CLOSED", 409, { sessionId:previous.id, status:previous.status });
+  if (previous.taskId !== task.id) throw new DevCenterEngineError("A lezárt session más taskhoz tartozik.", "DEV_CENTER_RECOVERY_SESSION_TASK_MISMATCH", 409, { sessionId:previous.id, taskId:task.id, previousTaskId:previous.taskId });
+  if (previous.workerId && previous.workerId !== task.requestedWorkerId) throw new DevCenterEngineError("A lezárt session worker-kötése eltér a task kijelölt workerétől.", "DEV_CENTER_RECOVERY_SESSION_WORKER_MISMATCH", 409, { sessionId:previous.id, workerId:previous.workerId, requestedWorkerId:task.requestedWorkerId });
+
+  const workerResult = await client.from("dev_center_workers").select("id,code,status").eq("id", task.requestedWorkerId).maybeSingle();
+  if (workerResult.error) databaseError("A recovery worker nem olvasható.", workerResult.error);
+  if (!workerResult.data) throw new DevCenterEngineError("A recovery worker nem található.", "DEV_CENTER_RECOVERY_WORKER_NOT_FOUND", 404);
+  const expectedWorkerCode = text(input.expectedWorkerCode).toUpperCase();
+  if (expectedWorkerCode && text(workerResult.data.code).toUpperCase() !== expectedWorkerCode) {
+    throw new DevCenterEngineError("A recovery worker-kód eltér a Central Core kijelölésétől.", "DEV_CENTER_RECOVERY_WORKER_CODE_MISMATCH", 409, { expectedWorkerCode, actualWorkerCode:text(workerResult.data.code).toUpperCase() });
+  }
+
+  const [activeTaskSessions, activeWorkerSessions] = await Promise.all([
+    client.from("dev_center_worker_sessions").select("id").eq("task_id", task.id).neq("status", "closed"),
+    client.from("dev_center_worker_sessions").select("id,task_id").eq("worker_id", task.requestedWorkerId).neq("status", "closed"),
+  ]);
+  if (activeTaskSessions.error) databaseError("A task aktív sessionjei nem ellenőrizhetők.", activeTaskSessions.error);
+  if (activeWorkerSessions.error) databaseError("A worker aktív sessionjei nem ellenőrizhetők.", activeWorkerSessions.error);
+  if ((activeTaskSessions.data || []).length) throw new DevCenterEngineError("A taskhoz már tartozik aktív session; új recovery session nem nyitható.", "DEV_CENTER_RECOVERY_ACTIVE_TASK_SESSION", 409, { taskId:task.id });
+  if ((activeWorkerSessions.data || []).length) throw new DevCenterEngineError("A kijelölt workerhez más aktív session tartozik; recovery fail-closed.", "DEV_CENTER_RECOVERY_WORKER_BUSY", 409, { workerId:task.requestedWorkerId });
+
+  // A lezárt session már nem birtokolhat aktív orchestration erőforrást. Csak a saját rekordjait oldjuk fel.
+  const now = nowIso();
+  const [lockRelease, leaseRelease] = await Promise.all([
+    client.from("dev_center_scope_locks").update({ status:"released", released_at:now }).eq("session_id", previous.id).eq("status", "active"),
+    client.from("dev_center_worktree_leases").update({ status:"released", released_at:now }).eq("session_id", previous.id).eq("status", "active"),
+  ]);
+  if (lockRelease.error) databaseError("A lezárt session scope lockjai nem oldhatók fel.", lockRelease.error, 409);
+  if (leaseRelease.error) databaseError("A lezárt session worktree lease-ei nem oldhatók fel.", leaseRelease.error, 409);
+
+  const metadata = jsonRecord(task.metadata);
+  const metadataSessionId = text(metadata.activeSessionId);
+  if (metadataSessionId && metadataSessionId !== previous.id) {
+    throw new DevCenterEngineError("A task activeSessionId már más sessionre mutat; recovery race blokkolva.", "DEV_CENTER_RECOVERY_ACTIVE_SESSION_RACE", 409, { expectedSessionId:previous.id, actualSessionId:metadataSessionId });
+  }
+  const recoveryCount = Math.max(0, Number(metadata.manualBridgeRecoveryCount || 0)) + 1;
+  const nextMetadata = {
+    ...metadata,
+    activeSessionId:null,
+    workflowState:"RECOVERY_READY",
+    executionGate:"RECOVERY_SESSION_REQUIRED",
+    bridgeState:"WAITING_HANDOFF",
+    bridgeUpdatedAt:now,
+    manualBridgeRecoveredFromSessionId:previous.id,
+    manualBridgeRecoveryCount:recoveryCount,
+    manualBridgeRecoveryPreparedAt:now,
+  };
+  const reset = client.from("dev_center_tasks").update({
+    status:"ready", assigned_worker_id:null, claimed_by_session_id:null, claim_expires_at:null,
+    branch_name:null, worktree_path:null, blocked_reason:null, metadata:nextMetadata, updated_at:now,
+  }).eq("id", task.id).eq("updated_at", task.updatedAt);
+  const resetResult = await reset.select("id").maybeSingle();
+  if (resetResult.error) databaseError("A recovery task READY visszaállítása sikertelen.", resetResult.error, 409);
+  if (!resetResult.data) throw new DevCenterEngineError("A task állapota recovery közben megváltozott; retry szükséges.", "DEV_CENTER_RECOVERY_TASK_RACE", 409, { taskId:task.id });
+  const workerReset = await client.from("dev_center_workers").update({ status:"ready", updated_at:now }).eq("id", task.requestedWorkerId);
+  if (workerReset.error) databaseError("A recovery worker READY visszaállítása sikertelen.", workerReset.error, 409);
+  await addAudit(client, {
+    action:"TASK_MANUAL_BRIDGE_RECOVERY_PREPARED", entityType:"task", entityId:task.id, taskId:task.id, projectId:task.projectId,
+    summary:`${task.title} · lezárt session után friss recovery session előkészítve.`,
+    metadata:{ previousSessionId:previous.id, workerId:task.requestedWorkerId, workerCode:text(workerResult.data.code).toUpperCase(), recoveryCount, productionAccess:"DENY" },
+    actorId:text(workerResult.data.code).toUpperCase(),
+  });
+  try {
+    const started = await startDevEngineTaskManualBridge(task.id);
+    await addAudit(client, {
+      action:"TASK_MANUAL_BRIDGE_RECOVERY_STARTED", entityType:"task", entityId:task.id, sessionId:started.session?.id || undefined, taskId:task.id, projectId:task.projectId,
+      summary:`${task.title} · új recovery session megnyitva ugyanahhoz a taskhoz.`,
+      metadata:{ previousSessionId:previous.id, recoverySessionId:started.session?.id || null, recoveryCount, productionAccess:"DENY" },
+      actorId:text(workerResult.data.code).toUpperCase(),
+    });
+    return { ...started, recovered:true as const, recoveredFromSessionId:previous.id, recoveryCount };
+  } catch (error) {
+    const rollbackAt = nowIso();
+    await client.from("dev_center_tasks").update({
+      status:"ready", assigned_worker_id:null, claimed_by_session_id:null, claim_expires_at:null, blocked_reason:null,
+      metadata:{ ...nextMetadata, workflowState:"RECOVERY_RETRY_REQUIRED", recoveryFailedAt:rollbackAt }, updated_at:rollbackAt,
+    }).eq("id", task.id);
+    throw error;
+  }
+}
+
 export async function advanceDevEngineTaskManualBridge(input: { taskId: string; target: Exclude<ManualBridgeState, "WAITING_HANDOFF"> }) {
   const client = await requireClient();
   const task = await getTaskForConsoleControl(client, input.taskId);

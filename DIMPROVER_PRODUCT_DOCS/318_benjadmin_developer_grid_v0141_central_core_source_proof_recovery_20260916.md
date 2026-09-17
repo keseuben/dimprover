@@ -40,3 +40,6 @@ A `context-workspace.js` első renderelésekor a work-start státusz egy nem def
 
 ## v0.1.42 immutable hotfix release
 A már publikált v0.1.41 EXE/ZIP artifact nem írható felül eltérő bájtokkal. A Central Core renderer boot javítás ezért v0.1.42 patch release-ként kerül kiadásra. A korábban v0.1.42-re tervezett ChatGPT Work adapter v0.1.43-ra tolódik; funkcionális scope-ja nem került bele ebbe a hotfixbe.
+
+## v0.1.42 closed-session launch recovery hotfix
+Az `INDÍTÁS FOLYTATÁSA` többé nem próbál lezárt Dev Center engine sessiont módosítani. Ha a Grid task BOOT ACK előtt maradt, de a hozzá kötött engine session már `closed`, a régi engine session immutable marad. A backend ellenőrzi, hogy nincs más aktív task- vagy worker-session, kizárólag a lezárt session saját esetleg bent maradt scope-lock/worktree-lease rekordjait oldja fel, ugyanazt a taskot optimistic state-check mellett READY-re állítja, majd ugyanahhoz a workerhez friss auditált manual-bridge sessiont nyit. Ezután a task-specifikus branch/worktree/scope READY handshake és új Central Core Source Proof készül. A Grid session ID és a task ID változatlan; csak a `developmentContext.engineSessionId` frissül. A korábbi blokkolt BOOT ACK SHA törlődik, így ugyanabban a ChatGPT beszélgetésben friss Launch Packet küldhető új task létrehozása nélkül.
