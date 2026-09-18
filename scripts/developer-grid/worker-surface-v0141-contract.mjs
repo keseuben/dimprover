@@ -21,8 +21,8 @@ const live = read("desktop/benjadmin-developer-grid/src/live/benjadmin-live-clie
 let n = 0;
 function check(name, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.47", () => assert.equal(pkg.version, "0.1.46"));
-check("backend version v0.1.47-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.46-dev"/));
+check("desktop version v0.1.46", () => assert.equal(pkg.version, "0.1.46"));
+check("backend version v0.1.46-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.46-dev"/));
 check("surface type contract includes ChatGPT Codex Work", () => assert.match(types, /WorkerSurfaceType = "CHATGPT" \| "CODEX" \| "WORK"/));
 check("all four worker cells default to ChatGPT", () => assert.equal((defaults.match(/surfaceType: "CHATGPT"/g) || []).length, 4));
 check("config v14 persists normalized per-cell surface", () => { assert.match(defaults,/CONFIG_VERSION = 14/); assert.match(defaults,/normalizeWorkerSurfaceType/); assert.match(defaults,/surfaceType,/); });
