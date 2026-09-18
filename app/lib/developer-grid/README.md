@@ -370,3 +370,14 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A recovery továbbra is kizárólag read-only legacy actionokra használható; WRITE_FILE és RUN_DEV_COMMAND fail-closed.
 - Új TASK_LAUNCH továbbra sem keletkezik.
 - A Work OpenAI first-party adapter tervezett aktiválása v0.1.52.
+
+
+## v0.1.52 · Multi-session live snapshot
+
+- A natív DELTA live snapshot több párhuzamos aktív worker session esetén már minden aktív sessionhez külön task-projekciót készít.
+- A globális state.task részletes adatai továbbra is authoritative primary taskként maradnak meg.
+- A nem-primary, de aktív sessionök saját taskId, worker, branch, worktree, source HEAD, modul és conversation binding adataikkal kerülnek a snapshot tasks[] listájába.
+- A legacy chatConversationId és chatConversationUrl továbbra is felpromotálódik generikus surfaceConversationId / surfaceConversationUrl mezővé.
+- Ez megszünteti azt a hibát, amikor egy másik worker globális current taskja miatt a BenjáminAI aktív taskja eltűnt a Desktop live contextből, és emiatt leállt a Conversation Memory / Execution Recovery ciklus.
+- PROD továbbra is DENY.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.53.

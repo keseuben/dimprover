@@ -245,6 +245,69 @@ function gridTaskStatus(value) {
   return GRID_TASK_STATUS_TO_DESKTOP[String(value || "").toUpperCase()] || String(value || "").toLowerCase() || "ready";
 }
 
+function synthesizeSessionTask({ session, primaryTask, stateUpdatedAt, generatedAt }) {
+  const context = session?.developmentContext || {};
+  const taskId = String(session?.taskId || primaryTask?.id || "");
+  if (!taskId) return null;
+  const isPrimary = Boolean(primaryTask && String(primaryTask.id || "") === taskId);
+  const assignedCode = normalizeWorkerCode(session?.workerCode);
+  const title = isPrimary
+    ? String(primaryTask?.title || "").slice(0, 500)
+    : String(context.workItem || context.moduleName || taskId).slice(0, 500);
+  return {
+    id: taskId,
+    title,
+    description: "",
+    status: isPrimary ? gridTaskStatus(primaryTask?.status) : "in_progress",
+    priority: isPrimary && Number.isFinite(Number(primaryTask?.priority)) ? Number(primaryTask.priority) : null,
+    projectId: isPrimary && primaryTask?.projectId ? String(primaryTask.projectId) : (context.projectId ? String(context.projectId) : null),
+    assignedWorkerId: assignedCode || null,
+    requestedWorkerId: assignedCode || null,
+    branchName: session?.sourceProvenance?.branch || null,
+    worktreePath: session?.sourceProvenance?.worktree || null,
+    sourceHead: session?.sourceProvenance?.head || null,
+    sessionId: session?.id || null,
+    scopeText: context.moduleName ? "module:" + context.moduleName : "",
+    acceptanceText: isPrimary && Array.isArray(primaryTask?.acceptance) ? primaryTask.acceptance.join("\n") : "",
+    startedAt: session?.startedAt || null,
+    completedAt: isPrimary && String(primaryTask?.status || "").toUpperCase() === "COMPLETED" ? (stateUpdatedAt || generatedAt || null) : null,
+    createdAt: session?.startedAt || null,
+    updatedAt: isPrimary ? (stateUpdatedAt || generatedAt || null) : (session?.sourceProvenance?.verifiedAt || generatedAt || null),
+    chatLaunchMode: context.chatLaunchMode || null,
+    surfaceType: context.surfaceType || "CHATGPT",
+    surfacePreviousConversationId: context.surfacePreviousConversationId || context.chatPreviousConversationId || null,
+    surfaceConversationId: context.surfaceConversationId || context.chatConversationId || null,
+    surfaceConversationUrl: context.surfaceConversationUrl || context.chatConversationUrl || null,
+    surfaceConversationTitle: context.surfaceConversationTitle || context.chatConversationTitle || null,
+    surfaceConversationConfirmedAt: context.surfaceConversationConfirmedAt || context.chatConversationConfirmedAt || null,
+    chatPreviousConversationId: context.chatPreviousConversationId || null,
+    chatConversationId: context.chatConversationId || null,
+    chatConversationUrl: context.chatConversationUrl || null,
+    chatConversationTitle: context.chatConversationTitle || null,
+    chatConversationConfirmedAt: context.chatConversationConfirmedAt || null,
+    bootAckState: context.bootAckState || null,
+    bootAckValidatedAt: context.bootAckValidatedAt || null,
+    bootAckSha256: context.bootAckSha256 || null,
+    bootAckCodingAllowed: context.bootAckCodingAllowed ?? null,
+    bootAckMismatches: Array.isArray(context.bootAckMismatches) ? context.bootAckMismatches : [],
+    continuityPreviousTaskId: context.continuityPreviousTaskId || null,
+    continuityPreviousWorkerCode: context.continuityPreviousWorkerCode || null,
+    continuityHandoffId: context.continuityHandoffId || null,
+    continuityHandoffSummary: context.continuityHandoffSummary || null,
+    continuityContextSnapshotId: context.continuityContextSnapshotId || null,
+    continuityContextRevision: Number(context.continuityContextRevision) || null,
+    continuityContextSummary: context.continuityContextSummary || null,
+    continuityRouting: context.continuityRouting || null,
+    rawTranscriptState: context.rawTranscriptState || null,
+    rawTranscriptCapturedAt: context.rawTranscriptCapturedAt || null,
+    contextSnapshotId: context.contextSnapshotId || null,
+    contextRevision: Number(context.contextRevision) || null,
+    contextSnapshotSummary: context.contextSnapshotSummary || null,
+    handoffPackId: context.handoffPackId || null,
+    handoffPackState: context.handoffPackState || null
+  };
+}
+
 function synthesizeGridSnapshot({ foundation, state, liveEventsByWorker, generatedAt, transport = "GRID_DELTA_NATIVE" }) {
   const workerRows = Array.isArray(foundation?.workers) ? foundation.workers : [];
   const workers = workerRows.flatMap((worker) => {
@@ -255,60 +318,32 @@ function synthesizeGridSnapshot({ foundation, state, liveEventsByWorker, generat
   const sessions = Array.isArray(state?.sessions) ? state.sessions : [];
   const activeSessions = sessions.filter((session) => !session?.endedAt && normalizeWorkerCode(session?.workerCode));
   const task = state?.task || null;
-  const taskSession = task ? activeSessions.find((session) => String(session?.taskId || "") === String(task.id || "")) || null : null;
-  const assignedCode = normalizeWorkerCode(taskSession?.workerCode);
-  const tasks = task ? [{
-    id: String(task.id || ""),
-    title: String(task.title || "").slice(0, 500),
-    description: "",
-    status: gridTaskStatus(task.status),
-    priority: Number.isFinite(Number(task.priority)) ? Number(task.priority) : null,
-    projectId: task.projectId ? String(task.projectId) : null,
-    assignedWorkerId: assignedCode || null,
-    requestedWorkerId: assignedCode || null,
-    branchName: taskSession?.sourceProvenance?.branch || null,
-    worktreePath: taskSession?.sourceProvenance?.worktree || null,
-    sourceHead: taskSession?.sourceProvenance?.head || null,
-    sessionId: taskSession?.id || null,
-    scopeText: taskSession?.developmentContext?.moduleName ? `module:${taskSession.developmentContext.moduleName}` : "",
-    acceptanceText: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : "",
-    startedAt: taskSession?.startedAt || null,
-    completedAt: String(task.status || "").toUpperCase() === "COMPLETED" ? (state?.updatedAt || generatedAt || null) : null,
-    createdAt: taskSession?.startedAt || null,
-    updatedAt: state?.updatedAt || generatedAt || null,
-    chatLaunchMode: taskSession?.developmentContext?.chatLaunchMode || null,
-    surfaceType: taskSession?.developmentContext?.surfaceType || "CHATGPT",
-    surfacePreviousConversationId: taskSession?.developmentContext?.surfacePreviousConversationId || taskSession?.developmentContext?.chatPreviousConversationId || null,
-    surfaceConversationId: taskSession?.developmentContext?.surfaceConversationId || taskSession?.developmentContext?.chatConversationId || null,
-    surfaceConversationUrl: taskSession?.developmentContext?.surfaceConversationUrl || taskSession?.developmentContext?.chatConversationUrl || null,
-    surfaceConversationTitle: taskSession?.developmentContext?.surfaceConversationTitle || taskSession?.developmentContext?.chatConversationTitle || null,
-    surfaceConversationConfirmedAt: taskSession?.developmentContext?.surfaceConversationConfirmedAt || taskSession?.developmentContext?.chatConversationConfirmedAt || null,
-    chatPreviousConversationId: taskSession?.developmentContext?.chatPreviousConversationId || null,
-    chatConversationId: taskSession?.developmentContext?.chatConversationId || null,
-    chatConversationUrl: taskSession?.developmentContext?.chatConversationUrl || null,
-    chatConversationTitle: taskSession?.developmentContext?.chatConversationTitle || null,
-    chatConversationConfirmedAt: taskSession?.developmentContext?.chatConversationConfirmedAt || null,
-    bootAckState: taskSession?.developmentContext?.bootAckState || null,
-    bootAckValidatedAt: taskSession?.developmentContext?.bootAckValidatedAt || null,
-    bootAckSha256: taskSession?.developmentContext?.bootAckSha256 || null,
-    bootAckCodingAllowed: taskSession?.developmentContext?.bootAckCodingAllowed ?? null,
-    bootAckMismatches: Array.isArray(taskSession?.developmentContext?.bootAckMismatches) ? taskSession.developmentContext.bootAckMismatches : [],
-    continuityPreviousTaskId: taskSession?.developmentContext?.continuityPreviousTaskId || null,
-    continuityPreviousWorkerCode: taskSession?.developmentContext?.continuityPreviousWorkerCode || null,
-    continuityHandoffId: taskSession?.developmentContext?.continuityHandoffId || null,
-    continuityHandoffSummary: taskSession?.developmentContext?.continuityHandoffSummary || null,
-    continuityContextSnapshotId: taskSession?.developmentContext?.continuityContextSnapshotId || null,
-    continuityContextRevision: Number(taskSession?.developmentContext?.continuityContextRevision) || null,
-    continuityContextSummary: taskSession?.developmentContext?.continuityContextSummary || null,
-    continuityRouting: taskSession?.developmentContext?.continuityRouting || null,
-    rawTranscriptState: taskSession?.developmentContext?.rawTranscriptState || null,
-    rawTranscriptCapturedAt: taskSession?.developmentContext?.rawTranscriptCapturedAt || null,
-    contextSnapshotId: taskSession?.developmentContext?.contextSnapshotId || null,
-    contextRevision: Number(taskSession?.developmentContext?.contextRevision) || null,
-    contextSnapshotSummary: taskSession?.developmentContext?.contextSnapshotSummary || null,
-    handoffPackId: taskSession?.developmentContext?.handoffPackId || null,
-    handoffPackState: taskSession?.developmentContext?.handoffPackState || null
-  }] : [];
+  const primaryTaskId = String(task?.id || "");
+  const tasksById = new Map();
+  for (const session of activeSessions) {
+    const sessionTaskId = String(session?.taskId || "");
+    if (!sessionTaskId) continue;
+    const projected = synthesizeSessionTask({
+      session,
+      primaryTask: primaryTaskId === sessionTaskId ? task : null,
+      stateUpdatedAt: state?.updatedAt || null,
+      generatedAt,
+    });
+    if (projected) tasksById.set(sessionTaskId, projected);
+  }
+  if (task?.id && !tasksById.has(primaryTaskId)) {
+    const projected = synthesizeSessionTask({
+      session: null,
+      primaryTask: task,
+      stateUpdatedAt: state?.updatedAt || null,
+      generatedAt,
+    });
+    if (projected) tasksById.set(primaryTaskId, projected);
+  }
+  const tasks = [
+    ...(primaryTaskId && tasksById.has(primaryTaskId) ? [tasksById.get(primaryTaskId)] : []),
+    ...[...tasksById.entries()].filter(([taskId]) => taskId !== primaryTaskId).map(([, projected]) => projected),
+  ].filter(Boolean);
   const workerPresence = activeSessions.map((session) => {
     const code = normalizeWorkerCode(session?.workerCode);
     const context = session?.developmentContext || {};
