@@ -1523,6 +1523,18 @@ function launchTaskFromWork(work, chatPlan = null) {
   };
 }
 
+function resolvedExecutionProofSha256(task, override = "") {
+  const explicit = String(override || "").trim().toLowerCase();
+  if (/^[0-9a-f]{64}$/.test(explicit)) return explicit;
+  const taskId = String(task?.id || "");
+  const launchRecord = taskId ? (loadTaskLaunchRecords()[taskId] || {}) : {};
+  const candidates = [
+    String(launchRecord?.sourceProofSha256 || "").trim().toLowerCase(),
+    String(task?.sourceExecutionProof?.sha256 || "").trim().toLowerCase(),
+  ];
+  return candidates.find((value) => /^[0-9a-f]{64}$/.test(value)) || "";
+}
+
 function bootAckExpected(task, workerCode) {
   return {
     workerCode,
@@ -1531,11 +1543,11 @@ function bootAckExpected(task, workerCode) {
     branch: String(task?.branchName || ""),
     worktree: String(task?.worktreePath || ""),
     baseHead: String(task?.sourceHead || ""),
-    sourceProofSha256: String(task?.sourceExecutionProof?.sha256 || ""),
+    sourceProofSha256: resolvedExecutionProofSha256(task),
   };
 }
 
-function executionBridgeProtocolLines(task, workerCode) {
+function executionBridgeProtocolLines(task, workerCode, sourceProofSha256Override = "") {
   const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
   const example = {
     schemaVersion: 1,
@@ -1543,7 +1555,7 @@ function executionBridgeProtocolLines(task, workerCode) {
     taskId: String(task?.id || ""),
     sessionId: String(task?.sessionId || ""),
     workerCode: backendWorkerCode,
-    sourceProofSha256: String(task?.sourceExecutionProof?.sha256 || ""),
+    sourceProofSha256: resolvedExecutionProofSha256(task, sourceProofSha256Override),
     action: "GIT_STATUS",
   };
   return [
@@ -1562,8 +1574,9 @@ function executionBridgeProtocolLines(task, workerCode) {
   ];
 }
 
-async function sendBootAckAcceptedContinuation(view, task, workerCode) {
+async function sendBootAckAcceptedContinuation(view, task, workerCode, sourceProofSha256Override = "") {
   const marker = "BENJADMIN_PROMPT_KIND: BOOT_ACK_ACCEPTED_V1";
+  const authoritativeProofSha256 = resolvedExecutionProofSha256(task, sourceProofSha256Override);
   const prompt = [
     marker,
     "BENJADMIN CONTROL EVENT · BOOT_ACK_VALIDATED",
@@ -1573,10 +1586,10 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode) {
     `Branch: ${task.branchName}`,
     `Worktree: ${task.worktreePath}`,
     `Base HEAD: ${task.sourceHead}`,
-    `Source proof: ${task?.sourceExecutionProof?.sha256 || "—"}`,
+    `Source proof: ${authoritativeProofSha256 || "—"}`,
     "DEV ONLY · PROD DENY.",
     "Az authoritative BOOT ACK egyezik a Launch Packettel. Folytasd a feladatot a rögzített scope és acceptance szerint. Scope-, source-, lock- vagy környezeteltérés esetén azonnal állj meg és jelents BLOCKER_REPORTED / SOURCE_BASELINE_MISMATCH állapotot.",
-    ...executionBridgeProtocolLines(task, workerCode)
+    ...executionBridgeProtocolLines(task, workerCode, authoritativeProofSha256)
   ].join("\n");
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason: insertion?.reason || "continuation-not-inserted" };
@@ -1638,11 +1651,16 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
       const first = processedBootAckHashes.values().next().value;
       if (first) processedBootAckHashes.delete(first);
     }
+    const authoritativeProofSha256 = resolvedExecutionProofSha256(
+      task,
+      persisted?.sourceProofSha256 || parsed.sourceProofSha256 || ""
+    );
     saveTaskLaunchPatch(task, workerCode, {
       ackState: persisted?.validated === true ? "VALIDATED" : "BLOCKED",
       ackAt: new Date().toISOString(), ackSha256: responseSha256,
       ackMismatches: Array.isArray(persisted?.mismatches) ? persisted.mismatches : (validation.mismatches || []),
       ackRecoverySource: hasBootAck ? source : `${source}:STAGE1_PASS_FALLBACK`,
+      sourceProofSha256: authoritativeProofSha256,
     });
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
     send("context:refresh", { reason: persisted?.validated === true ? "boot-ack-validated" : "boot-ack-blocked", taskId, sessionId, source });
@@ -1655,7 +1673,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
       if (String(currentRecord.ackContinuationState || "").toUpperCase() === "SENT") {
         continuation = { sent:true, verified:true, duplicate:true };
       } else {
-        continuation = await sendBootAckAcceptedContinuation(view, task, workerCode);
+        continuation = await sendBootAckAcceptedContinuation(view, task, workerCode, authoritativeProofSha256);
         const patch = continuation?.sent && continuation?.verified
           ? { ackContinuationSentAt: new Date().toISOString(), ackContinuationState: "SENT" }
           : { ackContinuationState: "MANUAL_REQUIRED", ackContinuationError: continuation?.reason || "not-verified" };
@@ -1880,11 +1898,11 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
   }
   const request = parsed.request;
   const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
-  const expectedProof = String(task?.sourceExecutionProof?.sha256 || "").toLowerCase();
+  const launchRecord = loadTaskLaunchRecords()[task.id] || {};
+  const expectedProof = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
   const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
   const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
   const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
-  const launchRecord = loadTaskLaunchRecords()[task.id] || {};
   if (processedExecutionRequestHashes.has(key) || String(launchRecord.lastExecutionRequestId || "") === request.requestId) return { processed:false, duplicate:true };
   if (executionRequestProcessingKeys.has(key)) return { processed:false, pending:true };
   executionRequestProcessingKeys.add(key);

@@ -319,3 +319,11 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Aktív ChatGPT-generálás alatt source proof nem rotálódhat: a Grid ugyanazon session BOOT ACK-jára vár.
 - Csak execution-lifecycle jellegű mismatch (`engineExecutionGate`, `scopeLock`, `worktreeLease`, `sourceProofLocks`, `sourceProvenance`) léphet tovább kontrollált recoveryre. Task/session/worker/branch/HEAD/proof eltérés továbbra is fail-closed.
 - A Work OpenAI first-party adapter a hotfix miatt **v0.1.47-re** tolódik.
+
+
+## v0.1.47 · Execution proof propagation hotfix
+
+- A validált BOOT ACK authoritative sourceProofSha256 értéke mostantól a Desktop task-launch rekordban is persistálódik.
+- A BOOT_ACK_ACCEPTED_V1 control event és a CENTRAL_CORE_EXECUTION_BRIDGE_V1 request-sablon a persistált proofot használja akkor is, ha a lokális task snapshotból a sourceExecutionProof mező hiányzik.
+- Az Execution Bridge helyi identity-check ugyanebből a persistált proof fallbackből dolgozik, így nem keletkezhet üres proof miatti EXECUTION_REQUEST_IDENTITY_INVALID vagy lokális mismatch.
+- A Work OpenAI first-party adapter aktiválása a hotfix miatt v0.1.48-ra tolódik.
