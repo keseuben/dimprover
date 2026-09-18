@@ -29,7 +29,7 @@ check("recovery uses new deterministic request id",()=>assert.match(main,/req-re
 check("recovery injects authoritative proof",()=>assert.match(main,/sourceProofSha256:proofSha256/));
 check("recovery explicitly forbids new Task Launch",()=>assert.match(main,/új TASK_LAUNCH küldése TILOS/));
 check("recovery is persisted and deduplicated",()=>{
-  assert.match(main,/executionRecoveryState:"SENT"/);
+  assert.match(main,/executionRecoveryState:"SENT_CONFIRMED"/);
   assert.match(main,/executionRecoveryInvalidSha256/);
   assert.match(main,/executionRequestRecoveryKeys/);
 });

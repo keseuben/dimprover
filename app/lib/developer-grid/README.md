@@ -358,3 +358,15 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A retry kizárólag a korábban engedélyezett read-only legacy recovery actionokra érvényes; WRITE_FILE és RUN_DEV_COMMAND továbbra is fail-closed.
 - Új TASK_LAUNCH továbbra sem keletkezik.
 - A Work OpenAI first-party adapter tervezett aktiválása v0.1.51.
+
+
+## v0.1.51 · Transcript-confirmed recovery send
+
+- A fizikai v0.1.50 E2E megmutatta, hogy a composer kiürülése vagy a generálás elindulása önmagában nem bizonyítja a recovery prompt tényleges elküldését.
+- A recovery csak akkor kap SENT_CONFIRMED állapotot, ha az EXECUTION_REQUEST_RECOVERY_V1 marker tényleges USER üzenetként megjelenik a ChatGPT transcriptben.
+- A transcript-ellenőrzés messageId és capturedAt bizonyítékot is tárol.
+- Nem bizonyított küldés SEND_PENDING marad és 20 másodperces cooldown mellett legfeljebb 3 alkalommal próbálkozhat újra.
+- A v0.1.50-ből örökölt, nem transcript-igazolt retry állapot nem blokkolja a v0.1.51 első ellenőrzött próbálkozását.
+- A recovery továbbra is kizárólag read-only legacy actionokra használható; WRITE_FILE és RUN_DEV_COMMAND fail-closed.
+- Új TASK_LAUNCH továbbra sem keletkezik.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.52.

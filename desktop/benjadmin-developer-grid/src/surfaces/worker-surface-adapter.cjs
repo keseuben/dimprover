@@ -41,8 +41,8 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "WORK_SURFACE_PLANNED_V0151",
-      error: "A Work surface adapter v0.1.51-ben aktiválódik. v0.1.50-ben a stale recovery retry hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      code: "WORK_SURFACE_PLANNED_V0152",
+      error: "A Work surface adapter v0.1.52-ben aktiválódik. v0.1.51-ben a transcript-confirmed recovery hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

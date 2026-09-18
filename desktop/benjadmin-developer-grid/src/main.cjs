@@ -1485,6 +1485,36 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
   })()`, true).catch(() => ({ sent:false, reason:"execute-failed" }));
 }
 
+
+async function verifyPromptMarkerInTranscript(view, expectedMarker, timeoutMs = 12000) {
+  const marker = String(expectedMarker || "").trim();
+  if (!marker || !view || view.webContents.isDestroyed()) return { verified:false, reason:"transcript-verification-unavailable" };
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs || 0));
+  let lastCaptureReason = "transcript-marker-not-observed";
+  while (Date.now() < deadline && view && !view.webContents.isDestroyed()) {
+    const capture = await captureConversationTranscript(view).catch(() => null);
+    if (capture?.ok && Array.isArray(capture.messages)) {
+      const matched = [...capture.messages].reverse().find((item) =>
+        item?.role === "USER" && String(item?.text || "").includes(marker)
+      );
+      if (matched) {
+        return {
+          verified:true,
+          marker,
+          messageId:matched.messageId || null,
+          capturedAt:capture.capturedAt || null,
+          conversationId:capture.conversationId || null,
+        };
+      }
+      lastCaptureReason = capture.generating ? "transcript-marker-not-observed-generating" : "transcript-marker-not-observed";
+    } else {
+      lastCaptureReason = "transcript-capture-unavailable";
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  return { verified:false, marker, reason:lastCaptureReason };
+}
+
 function launchTaskFromWork(work, chatPlan = null) {
   const session = work?.session || null;
   const task = work?.task || null;
@@ -1974,17 +2004,24 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
   const invalidSha256 = createHash("sha256").update(String(invalidBody || "")).digest("hex");
   const sameRecovery = String(launchRecord.executionRecoveryInvalidSha256 || "") === invalidSha256;
   const recoveryState = String(launchRecord.executionRecoveryState || "").toUpperCase();
-  const previousAttemptCount = Math.max(0, Number(launchRecord.executionRecoveryAttemptCount || 0) || 0);
-  const previousAtMs = Date.parse(String(launchRecord.executionRecoveryAt || ""));
+  const retryVersion = String(launchRecord.executionRecoveryRetryVersion || "").toUpperCase();
+  const previousAttemptCount = retryVersion === "V0151"
+    ? Math.max(0, Number(launchRecord.executionRecoveryAttemptCount || 0) || 0)
+    : 0;
+  const previousAtMs = retryVersion === "V0151" ? Date.parse(String(launchRecord.executionRecoveryAt || "")) : Number.NaN;
   const retryAgeMs = Number.isFinite(previousAtMs) ? Math.max(0, Date.now() - previousAtMs) : Number.POSITIVE_INFINITY;
-  const recoveryRetryCooldownMs = 90_000;
+  const recoveryRetryCooldownMs = 20_000;
   const recoveryRetryMaxAttempts = 3;
-  if (recoveryState === "SENT" && sameRecovery) {
+  if (recoveryState === "SENT_CONFIRMED" && sameRecovery && launchRecord.executionRecoveryTranscriptVerified === true) {
+    return { sent:true, verified:true, duplicate:true, transcriptVerified:true, invalidSha256, attemptCount:previousAttemptCount };
+  }
+  if (sameRecovery && retryVersion === "V0151" && ["SENT","SEND_PENDING"].includes(recoveryState)) {
     if (retryAgeMs < recoveryRetryCooldownMs || previousAttemptCount >= recoveryRetryMaxAttempts) {
       return {
-        sent:true,
-        verified:true,
+        sent:false,
+        verified:false,
         duplicate:true,
+        pending:previousAttemptCount < recoveryRetryMaxAttempts,
         invalidSha256,
         retryDeferred:retryAgeMs < recoveryRetryCooldownMs,
         retryExhausted:previousAttemptCount >= recoveryRetryMaxAttempts,
@@ -2027,17 +2064,21 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
     ].join("\n");
     const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
     if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
-      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount });
-      return { sent:false, retryable:true, reason:insertion?.reason || "recovery-not-inserted", invalidSha256 };
+      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount, executionRecoveryRetryVersion:"V0151", executionRecoveryTranscriptVerified:false });
+      return { sent:false, retryable:true, reason:insertion?.reason || "recovery-not-inserted", invalidSha256, attemptCount:nextAttemptCount };
     }
     const sent = await sendPreparedChatPrompt(view, marker);
-    const patch = sent?.sent === true && sent?.verified === true
-      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount }
-      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount };
+    const transcriptVerification = sent?.sent === true && sent?.verified === true
+      ? await verifyPromptMarkerInTranscript(view, marker, 12000)
+      : { verified:false, reason:sent?.reason || "recovery-send-not-verified" };
+    const transcriptVerified = transcriptVerification?.verified === true;
+    const patch = transcriptVerified
+      ? { executionRecoveryState:"SENT_CONFIRMED", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount, executionRecoveryRetryVersion:"V0151", executionRecoveryTranscriptVerified:true, executionRecoveryTranscriptMessageId:transcriptVerification.messageId || null, executionRecoveryTranscriptCapturedAt:transcriptVerification.capturedAt || null }
+      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:transcriptVerification?.reason || sent?.reason || "recovery-transcript-not-observed", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount, executionRecoveryRetryVersion:"V0151", executionRecoveryTranscriptVerified:false };
     saveTaskLaunchPatch(task, workerCode, patch);
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
-    send("context:refresh", { reason:patch.executionRecoveryState === "SENT" ? "execution-request-recovery-sent" : "execution-request-recovery-pending", taskId, workerCode, requestId:recoveryRequestId });
-    return { ...sent, invalidSha256, recoveryRequestId, eligible:true };
+    send("context:refresh", { reason:transcriptVerified ? "execution-request-recovery-transcript-confirmed" : "execution-request-recovery-pending", taskId, workerCode, requestId:recoveryRequestId });
+    return { ...sent, verified:transcriptVerified, transcriptVerification, invalidSha256, recoveryRequestId, attemptCount:nextAttemptCount, eligible:true };
   } finally {
     executionRequestRecoveryKeys.delete(recoveryKey);
   }
