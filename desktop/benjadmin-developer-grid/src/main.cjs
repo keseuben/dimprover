@@ -1972,9 +1972,28 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
   }
   const proofSha256 = authority.proofSha256;
   const invalidSha256 = createHash("sha256").update(String(invalidBody || "")).digest("hex");
-  if (String(launchRecord.executionRecoveryState || "").toUpperCase() === "SENT" && String(launchRecord.executionRecoveryInvalidSha256 || "") === invalidSha256) {
-    return { sent:true, verified:true, duplicate:true, invalidSha256 };
+  const sameRecovery = String(launchRecord.executionRecoveryInvalidSha256 || "") === invalidSha256;
+  const recoveryState = String(launchRecord.executionRecoveryState || "").toUpperCase();
+  const previousAttemptCount = Math.max(0, Number(launchRecord.executionRecoveryAttemptCount || 0) || 0);
+  const previousAtMs = Date.parse(String(launchRecord.executionRecoveryAt || ""));
+  const retryAgeMs = Number.isFinite(previousAtMs) ? Math.max(0, Date.now() - previousAtMs) : Number.POSITIVE_INFINITY;
+  const recoveryRetryCooldownMs = 90_000;
+  const recoveryRetryMaxAttempts = 3;
+  if (recoveryState === "SENT" && sameRecovery) {
+    if (retryAgeMs < recoveryRetryCooldownMs || previousAttemptCount >= recoveryRetryMaxAttempts) {
+      return {
+        sent:true,
+        verified:true,
+        duplicate:true,
+        invalidSha256,
+        retryDeferred:retryAgeMs < recoveryRetryCooldownMs,
+        retryExhausted:previousAttemptCount >= recoveryRetryMaxAttempts,
+        retryAgeMs,
+        attemptCount:previousAttemptCount,
+      };
+    }
   }
+  const nextAttemptCount = previousAttemptCount + 1;
   const recoveryKey = taskId + ":" + sessionId + ":" + invalidSha256;
   if (executionRequestRecoveryKeys.has(recoveryKey)) return { sent:false, pending:true, invalidSha256 };
   executionRequestRecoveryKeys.add(recoveryKey);
@@ -2008,13 +2027,13 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
     ].join("\n");
     const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
     if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
-      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource });
+      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount });
       return { sent:false, retryable:true, reason:insertion?.reason || "recovery-not-inserted", invalidSha256 };
     }
     const sent = await sendPreparedChatPrompt(view, marker);
     const patch = sent?.sent === true && sent?.verified === true
-      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource }
-      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource };
+      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount }
+      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource, executionRecoveryAttemptCount:nextAttemptCount };
     saveTaskLaunchPatch(task, workerCode, patch);
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
     send("context:refresh", { reason:patch.executionRecoveryState === "SENT" ? "execution-request-recovery-sent" : "execution-request-recovery-pending", taskId, workerCode, requestId:recoveryRequestId });

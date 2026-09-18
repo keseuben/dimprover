@@ -347,3 +347,14 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A recovery továbbra is kizárólag read-only execution actionokra engedélyezett; WRITE_FILE és RUN_DEV_COMMAND proof nélküli legacy kérésből nem állítható helyre.
 - Új TASK_LAUNCH nem keletkezik; a meglévő task/session folytatódik.
 - A Work OpenAI first-party adapter tervezett aktiválása v0.1.50.
+
+
+## v0.1.50 · Stale recovery retry
+
+- A fizikai v0.1.49 E2E feltárta, hogy a lokális recovery dedupe tartós SENT állapota blokkolhatja az újrapróbálást akkor is, ha nem született tényleges req-recovery assistant-válasz és backend execution audit.
+- Ugyanarra az invalid legacy requestre a Desktop 90 másodperces cooldown után újrapróbálhatja a recovery promptot.
+- A retry legfeljebb 3 próbálkozásra korlátozott, ezért nem alakulhat ki végtelen prompt-loop.
+- A recovery requestId továbbra is determinisztikus, így a backend execution audit idempotens marad.
+- A retry kizárólag a korábban engedélyezett read-only legacy recovery actionokra érvényes; WRITE_FILE és RUN_DEV_COMMAND továbbra is fail-closed.
+- Új TASK_LAUNCH továbbra sem keletkezik.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.51.
