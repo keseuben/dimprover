@@ -326,7 +326,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A validált BOOT ACK authoritative sourceProofSha256 értéke mostantól a Desktop task-launch rekordban is persistálódik.
 - A BOOT_ACK_ACCEPTED_V1 control event és a CENTRAL_CORE_EXECUTION_BRIDGE_V1 request-sablon a persistált proofot használja akkor is, ha a lokális task snapshotból a sourceExecutionProof mező hiányzik.
 - Az Execution Bridge helyi identity-check ugyanebből a persistált proof fallbackből dolgozik, így nem keletkezhet üres proof miatti EXECUTION_REQUEST_IDENTITY_INVALID vagy lokális mismatch.
-- A Work OpenAI first-party adapter aktiválása a hotfix miatt v0.1.48-ra tolódik.
+- A Work OpenAI first-party adapter aktiválása a hotfix-sorozat miatt v0.1.50-re tolódik.
 
 
 ## v0.1.48 · Legacy execution request recovery hotfix
@@ -337,3 +337,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - WRITE_FILE és RUN_DEV_COMMAND legacy proof nélküli request esetén továbbra is fail-closed.
 - A recovery új determinisztikus requestId-t és az authoritative source proofot használ, és ugyanarra a hibás requestre legfeljebb egyszer küldhető.
 - A Work OpenAI first-party adapter aktiválása a hotfix miatt v0.1.49-re tolódik.
+
+
+## v0.1.49 · Session-authority execution recovery
+
+- A v0.1.48 fizikai E2E feltárta, hogy a legacy execution recovery a BOOT ACK és proof állapotot task top-level mezőkből próbálta olvasni, miközben az authoritative értékek az aktív worker session developmentContext objektumában élnek.
+- A Desktop recovery most read-only fetchDeveloperGridActiveWork() fallbackkal exact task/session/worker egyezés mellett olvassa az authoritative session állapotot.
+- Recovery csak bootAckState=VALIDATED, bootAckCodingAllowed=true, sourceExecutionProof.state=VERIFIED, authority=CENTRAL_CORE, handshakeStage=READY, legalább 1 scope lock és worktree lease, productionAccess=DENY, valamint VERIFIED source provenance mellett indul.
+- A recovery továbbra is kizárólag read-only execution actionokra engedélyezett; WRITE_FILE és RUN_DEV_COMMAND proof nélküli legacy kérésből nem állítható helyre.
+- Új TASK_LAUNCH nem keletkezik; a meglévő task/session folytatódik.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.50.

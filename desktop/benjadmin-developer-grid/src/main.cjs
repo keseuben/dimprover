@@ -1902,16 +1902,75 @@ function parseExecutionRequestRecoveryCandidate(body, task, workerCode) {
   return { row, action, workerCode:expectedWorker };
 }
 
+async function resolveExecutionRecoveryAuthority(task, workerCode, candidate, launchRecord = {}) {
+  const taskId = String(task?.id || "");
+  const sessionId = String(candidate?.row?.sessionId || task?.sessionId || "");
+  let ackState = String(task?.bootAckState || launchRecord?.ackState || "").toUpperCase();
+  let codingAllowed = task?.bootAckCodingAllowed === true;
+  let proofSha256 = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
+  let authoritySource = "TASK_OR_LOCAL_RECORD";
+
+  if (ackState === "VALIDATED" && /^[0-9a-f]{64}$/.test(proofSha256)) {
+    return { ok:true, ackState, codingAllowed:true, proofSha256, authoritySource };
+  }
+
+  const activeWork = await fetchDeveloperGridActiveWork({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+  }).catch(() => null);
+  const session = Array.isArray(activeWork?.sessions)
+    ? activeWork.sessions.find((item) =>
+        item?.endedAt == null
+        && String(item?.taskId || "") === taskId
+        && String(item?.id || "") === sessionId
+        && String(item?.workerCode || "").toUpperCase() === (String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase())
+      ) || null
+    : null;
+  const context = session?.developmentContext || {};
+  const proof = context?.sourceExecutionProof || null;
+  const provenance = session?.sourceProvenance || null;
+
+  ackState = String(context?.bootAckState || ackState || "").toUpperCase();
+  codingAllowed = context?.bootAckCodingAllowed === true;
+  proofSha256 = String(proof?.sha256 || proofSha256 || "").trim().toLowerCase();
+  authoritySource = "ACTIVE_WORK_SESSION";
+
+  const proofOk =
+    proof?.state === "VERIFIED"
+    && proof?.authority === "CENTRAL_CORE"
+    && proof?.handshakeStage === "READY"
+    && Number(proof?.activeScopeLockCount || 0) >= 1
+    && Number(proof?.activeWorktreeLeaseCount || 0) >= 1
+    && proof?.productionAccess === "DENY"
+    && /^[0-9a-f]{64}$/.test(proofSha256);
+  const provenanceOk = provenance?.sourceState === "VERIFIED" && !provenance?.blockCode;
+
+  if (ackState !== "VALIDATED" || codingAllowed !== true || !proofOk || !provenanceOk) {
+    return { ok:false, ackState, codingAllowed, proofSha256, authoritySource, reason:"EXECUTION_RECOVERY_AUTHORITY_NOT_VERIFIED" };
+  }
+
+  saveTaskLaunchPatch(task, workerCode, {
+    ackState:"VALIDATED",
+    sourceProofSha256:proofSha256,
+    executionRecoveryAuthoritySource:authoritySource,
+    executionRecoveryAuthorityAt:new Date().toISOString(),
+  });
+  return { ok:true, ackState, codingAllowed, proofSha256, authoritySource };
+}
+
 async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, invalidBody, parserCode) {
   const taskId = String(task?.id || "");
   const sessionId = String(task?.sessionId || "");
   const launchRecord = loadTaskLaunchRecords()[taskId] || {};
-  const ackState = String(task?.bootAckState || launchRecord?.ackState || "").toUpperCase();
-  const proofSha256 = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
   const candidate = parseExecutionRequestRecoveryCandidate(invalidBody, task, workerCode);
-  if (String(parserCode || "") !== "EXECUTION_REQUEST_IDENTITY_INVALID" || ackState !== "VALIDATED" || !/^[0-9a-f]{64}$/.test(proofSha256) || !candidate) {
+  if (String(parserCode || "") !== "EXECUTION_REQUEST_IDENTITY_INVALID" || !candidate) {
     return { sent:false, eligible:false, reason:"EXECUTION_RECOVERY_NOT_ELIGIBLE" };
   }
+  const authority = await resolveExecutionRecoveryAuthority(task, workerCode, candidate, launchRecord);
+  if (!authority?.ok) {
+    return { sent:false, eligible:false, reason:authority?.reason || "EXECUTION_RECOVERY_AUTHORITY_NOT_VERIFIED", authority };
+  }
+  const proofSha256 = authority.proofSha256;
   const invalidSha256 = createHash("sha256").update(String(invalidBody || "")).digest("hex");
   if (String(launchRecord.executionRecoveryState || "").toUpperCase() === "SENT" && String(launchRecord.executionRecoveryInvalidSha256 || "") === invalidSha256) {
     return { sent:true, verified:true, duplicate:true, invalidSha256 };
@@ -1949,13 +2008,13 @@ async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, 
     ].join("\n");
     const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
     if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
-      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString() });
+      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource });
       return { sent:false, retryable:true, reason:insertion?.reason || "recovery-not-inserted", invalidSha256 };
     }
     const sent = await sendPreparedChatPrompt(view, marker);
     const patch = sent?.sent === true && sent?.verified === true
-      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString() }
-      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString() };
+      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource }
+      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString(), executionRecoveryAuthoritySource:authority.authoritySource };
     saveTaskLaunchPatch(task, workerCode, patch);
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
     send("context:refresh", { reason:patch.executionRecoveryState === "SENT" ? "execution-request-recovery-sent" : "execution-request-recovery-pending", taskId, workerCode, requestId:recoveryRequestId });

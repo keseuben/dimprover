@@ -9,7 +9,7 @@ const WORKER_SURFACE_TYPES = Object.freeze({
 const WORKER_SURFACE_OPTIONS = Object.freeze([
   { type: WORKER_SURFACE_TYPES.CHATGPT, label: "ChatGPT", selectable: true, embedded: true },
   { type: WORKER_SURFACE_TYPES.CODEX, label: "Codex", selectable: true, embedded: false },
-  { type: WORKER_SURFACE_TYPES.WORK, label: "Work", selectable: false, embedded: true, plannedVersion: "0.1.49" },
+  { type: WORKER_SURFACE_TYPES.WORK, label: "Work", selectable: false, embedded: true, plannedVersion: "0.1.50" },
 ]);
 
 function normalizeWorkerSurfaceType(value, fallback = WORKER_SURFACE_TYPES.CHATGPT) {
