@@ -41,8 +41,8 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "WORK_SURFACE_PLANNED_V0148",
-      error: "A Work surface adapter v0.1.48-ban aktiválódik. v0.1.47-ben a live BOOT ACK monitor/recovery hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      code: "WORK_SURFACE_PLANNED_V0149",
+      error: "A Work surface adapter v0.1.49-ben aktiválódik. v0.1.48-ban a live BOOT ACK monitor/recovery hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

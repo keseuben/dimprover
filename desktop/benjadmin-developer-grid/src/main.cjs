@@ -97,6 +97,7 @@ const processedBootAckHashes = new Set();
 const bootAckProcessingKeys = new Set();
 const processedExecutionRequestHashes = new Set();
 const executionRequestProcessingKeys = new Set();
+const executionRequestRecoveryKeys = new Set();
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -1879,6 +1880,91 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   };
 }
 
+const EXECUTION_RECOVERY_ACTIONS = new Set(["LIST_FILES","READ_FILE","SEARCH_FILES","GIT_STATUS","GIT_DIFF","GIT_DIFF_CHECK"]);
+
+function parseExecutionRequestRecoveryCandidate(body, task, workerCode) {
+  const textBody = String(body || "");
+  const start = textBody.indexOf(EXECUTION_REQUEST_START);
+  const end = textBody.indexOf(EXECUTION_REQUEST_END, start >= 0 ? start + EXECUTION_REQUEST_START.length : 0);
+  if (start < 0 || end < 0) return null;
+  let row;
+  try { row = JSON.parse(textBody.slice(start + EXECUTION_REQUEST_START.length, end).trim()); }
+  catch { return null; }
+  if (!row || typeof row !== "object" || Array.isArray(row) || Number(row.schemaVersion) !== 1) return null;
+  const expectedWorker = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const actualWorkerRaw = String(row.workerCode || "").trim().toUpperCase();
+  const actualWorker = actualWorkerRaw === "BENAI" ? "BENJAMINAI" : actualWorkerRaw;
+  const action = String(row.action || "").trim().toUpperCase();
+  const suppliedProof = String(row.sourceProofSha256 || "").trim();
+  if (suppliedProof) return null;
+  if (String(row.taskId || "") !== String(task?.id || "") || String(row.sessionId || "") !== String(task?.sessionId || "") || actualWorker !== expectedWorker) return null;
+  if (!EXECUTION_RECOVERY_ACTIONS.has(action)) return null;
+  return { row, action, workerCode:expectedWorker };
+}
+
+async function sendExecutionRequestRecoveryContinuation(view, task, workerCode, invalidBody, parserCode) {
+  const taskId = String(task?.id || "");
+  const sessionId = String(task?.sessionId || "");
+  const launchRecord = loadTaskLaunchRecords()[taskId] || {};
+  const ackState = String(task?.bootAckState || launchRecord?.ackState || "").toUpperCase();
+  const proofSha256 = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
+  const candidate = parseExecutionRequestRecoveryCandidate(invalidBody, task, workerCode);
+  if (String(parserCode || "") !== "EXECUTION_REQUEST_IDENTITY_INVALID" || ackState !== "VALIDATED" || !/^[0-9a-f]{64}$/.test(proofSha256) || !candidate) {
+    return { sent:false, eligible:false, reason:"EXECUTION_RECOVERY_NOT_ELIGIBLE" };
+  }
+  const invalidSha256 = createHash("sha256").update(String(invalidBody || "")).digest("hex");
+  if (String(launchRecord.executionRecoveryState || "").toUpperCase() === "SENT" && String(launchRecord.executionRecoveryInvalidSha256 || "") === invalidSha256) {
+    return { sent:true, verified:true, duplicate:true, invalidSha256 };
+  }
+  const recoveryKey = taskId + ":" + sessionId + ":" + invalidSha256;
+  if (executionRequestRecoveryKeys.has(recoveryKey)) return { sent:false, pending:true, invalidSha256 };
+  executionRequestRecoveryKeys.add(recoveryKey);
+  try {
+    const recoveryRequestId = "req-recovery-" + invalidSha256.slice(0, 12);
+    const corrected = {
+      schemaVersion:1,
+      requestId:recoveryRequestId,
+      taskId,
+      sessionId,
+      workerCode:candidate.workerCode,
+      sourceProofSha256:proofSha256,
+      action:candidate.action,
+    };
+    for (const key of ["path","query"]) if (typeof candidate.row[key] === "string") corrected[key] = candidate.row[key];
+    for (const key of ["startLine","endLine","depth"]) if (Number.isInteger(Number(candidate.row[key]))) corrected[key] = Number(candidate.row[key]);
+    const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_REQUEST_RECOVERY_V1";
+    const prompt = [
+      marker,
+      "BENJADMIN CONTROL EVENT · EXECUTION_REQUEST_RECOVERY",
+      "Worker: " + candidate.workerCode,
+      "Task: " + taskId,
+      "Session: " + sessionId,
+      "Source proof: " + proofSha256,
+      "DEV ONLY · PROD DENY.",
+      "A korábbi execution request kizárólag üres sourceProofSha256 miatt érvénytelen volt. A task és a validált BOOT ACK változatlan; új TASK_LAUNCH küldése TILOS.",
+      "Válaszolj pontosan EGY execution request blokkal, további szöveg nélkül. A requestId új és kötelezően az alábbi legyen:",
+      EXECUTION_REQUEST_START,
+      JSON.stringify(corrected),
+      EXECUTION_REQUEST_END,
+    ].join("\n");
+    const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+    if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+      saveTaskLaunchPatch(task, workerCode, { executionRecoveryState:"SEND_PENDING", executionRecoveryError:insertion?.reason || "recovery-not-inserted", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryAt:new Date().toISOString() });
+      return { sent:false, retryable:true, reason:insertion?.reason || "recovery-not-inserted", invalidSha256 };
+    }
+    const sent = await sendPreparedChatPrompt(view, marker);
+    const patch = sent?.sent === true && sent?.verified === true
+      ? { executionRecoveryState:"SENT", executionRecoveryError:null, executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString() }
+      : { executionRecoveryState:"SEND_PENDING", executionRecoveryError:sent?.reason || "recovery-send-not-verified", executionRecoveryInvalidSha256:invalidSha256, executionRecoveryRequestId:recoveryRequestId, executionRecoveryAt:new Date().toISOString() };
+    saveTaskLaunchPatch(task, workerCode, patch);
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    send("context:refresh", { reason:patch.executionRecoveryState === "SENT" ? "execution-request-recovery-sent" : "execution-request-recovery-pending", taskId, workerCode, requestId:recoveryRequestId });
+    return { ...sent, invalidSha256, recoveryRequestId, eligible:true };
+  } finally {
+    executionRequestRecoveryKeys.delete(recoveryKey);
+  }
+}
+
 async function sendExecutionResultToWorker(view, payload) {
   const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1";
   const prompt = buildDeveloperGridExecutionResultPrompt(payload);
@@ -1892,9 +1978,11 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
   if (!textBody.includes(EXECUTION_REQUEST_START) || !task?.id || !task?.sessionId || !view || view.webContents.isDestroyed()) return { processed:false };
   const parsed = parseDeveloperGridExecutionRequest(textBody);
   if (!parsed?.ok || !parsed.request) {
-    saveTaskLaunchPatch(task, workerCode, { executionBridgeState:"REQUEST_INVALID", executionBridgeError:parsed?.code || "EXECUTION_REQUEST_INVALID", executionBridgeAt:new Date().toISOString() });
-    send("context:refresh", { reason:"execution-request-invalid", taskId:task.id, workerCode, code:parsed?.code || "EXECUTION_REQUEST_INVALID" });
-    return { processed:false, invalid:true, error:parsed?.error || "EXECUTION_REQUEST_INVALID" };
+    const parserCode = parsed?.code || "EXECUTION_REQUEST_INVALID";
+    saveTaskLaunchPatch(task, workerCode, { executionBridgeState:"REQUEST_INVALID", executionBridgeError:parserCode, executionBridgeAt:new Date().toISOString() });
+    send("context:refresh", { reason:"execution-request-invalid", taskId:task.id, workerCode, code:parserCode });
+    const recovery = await sendExecutionRequestRecoveryContinuation(view, task, workerCode, textBody, parserCode).catch((error) => ({ sent:false, retryable:true, error:error instanceof Error ? error.message : "EXECUTION_RECOVERY_FAILED" }));
+    return { processed:false, invalid:true, error:parsed?.error || "EXECUTION_REQUEST_INVALID", recovery };
   }
   const request = parsed.request;
   const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();

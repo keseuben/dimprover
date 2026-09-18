@@ -327,3 +327,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A BOOT_ACK_ACCEPTED_V1 control event és a CENTRAL_CORE_EXECUTION_BRIDGE_V1 request-sablon a persistált proofot használja akkor is, ha a lokális task snapshotból a sourceExecutionProof mező hiányzik.
 - Az Execution Bridge helyi identity-check ugyanebből a persistált proof fallbackből dolgozik, így nem keletkezhet üres proof miatti EXECUTION_REQUEST_IDENTITY_INVALID vagy lokális mismatch.
 - A Work OpenAI first-party adapter aktiválása a hotfix miatt v0.1.48-ra tolódik.
+
+
+## v0.1.48 · Legacy execution request recovery hotfix
+
+- A már meglévő, korábbi kliens által létrehozott proof nélküli execution request automatikusan helyreállítható új TASK_LAUNCH nélkül.
+- Recovery csak validált BOOT ACK, exact task/session/worker identity és üres sourceProofSha256 esetén indulhat.
+- Az automatikus recovery kizárólag read-only műveletekre engedélyezett: LIST_FILES, READ_FILE, SEARCH_FILES, GIT_STATUS, GIT_DIFF és GIT_DIFF_CHECK.
+- WRITE_FILE és RUN_DEV_COMMAND legacy proof nélküli request esetén továbbra is fail-closed.
+- A recovery új determinisztikus requestId-t és az authoritative source proofot használ, és ugyanarra a hibás requestre legfeljebb egyszer küldhető.
+- A Work OpenAI first-party adapter aktiválása a hotfix miatt v0.1.49-re tolódik.
