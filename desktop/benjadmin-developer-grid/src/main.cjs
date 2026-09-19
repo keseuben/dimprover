@@ -199,6 +199,13 @@ function saveTaskLaunchPatch(task, workerCode, patch = {}) {
   return taskLaunchRecords[taskId];
 }
 
+function publishTaskLaunchPatch(task, workerCode, patch = {}, reason = "task-launch-state") {
+  const record = saveTaskLaunchPatch(task, workerCode, patch);
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  send("context:refresh", { reason, taskId:String(task?.id || patch?.taskId || ""), workerCode:String(workerCode || "").toUpperCase() });
+  return record;
+}
+
 function saveTaskLaunchRecord(task, workerCode, mode) {
   return saveTaskLaunchPatch(task, workerCode, { preparedAt: new Date().toISOString(), mode: mode === "inserted" ? "inserted" : "clipboard" });
 }
@@ -2136,14 +2143,23 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
 
 async function processCapturedStageReport({ body, workerCode, task, baselineResponseSha256 = "" }) {
   const backendWorkerCode = workerCode === "BENAI" ? "BENJAMINAI" : workerCode;
+  const uiWorkerCode = backendWorkerCode === "BENJAMINAI" ? "BENAI" : backendWorkerCode;
   const textBody = String(body || "");
   if (!textBody.includes(STAGE_REPORT_START) || !task?.id || !task?.sessionId) return { processed:false };
+  const checkpointRecord = loadTaskLaunchRecords()[String(task.id)] || {};
+  const checkpointPending = ["PREPARING","SENT_CONFIRMED","WAITING_RESPONSE"].includes(String(checkpointRecord.checkpointState || "").toUpperCase());
   const responseSha256 = createHash("sha256").update(textBody).digest("hex");
   if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) return { processed:false, reason:"baseline" };
   const dedupeKey = `${backendWorkerCode}:${task.id}:${task.sessionId}:${responseSha256}`;
   if (processedStageReportHashes.has(dedupeKey)) return { processed:false, reason:"duplicate" };
   const parsed = parseDeveloperGridStageReport(textBody);
-  if (!parsed?.ok || !parsed.report) return { processed:false, reason:"parse" };
+  if (!parsed?.ok || !parsed.report) {
+    if (checkpointPending) publishTaskLaunchPatch(task, uiWorkerCode, {
+      checkpointState:"BLOCKED", checkpointError:parsed?.code || "STAGE_REPORT_PARSE_FAILED",
+      checkpointCompletedAt:new Date().toISOString(),
+    }, "checkpoint-stage-report-invalid");
+    return { processed:false, reason:"parse" };
+  }
   const report = parsed.report;
   processedStageReportHashes.add(dedupeKey);
   if (processedStageReportHashes.size > 500) {
@@ -2151,6 +2167,10 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     if (first) processedStageReportHashes.delete(first);
   }
   if (report.workerCode !== backendWorkerCode || report.taskId !== String(task.id) || report.sessionId !== String(task.sessionId)) {
+    if (checkpointPending) publishTaskLaunchPatch(task, uiWorkerCode, {
+      checkpointState:"BLOCKED", checkpointError:"STAGE_REPORT_IDENTITY_MISMATCH",
+      checkpointCompletedAt:new Date().toISOString(),
+    }, "checkpoint-stage-report-identity-blocked");
     send("context:refresh", { reason:"stage-report-identity-blocked", taskId:task.id, workerCode:backendWorkerCode });
     return { processed:true, error:"identity-mismatch" };
   }
@@ -2158,6 +2178,21 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
     input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, result:report.result, summary:report.summary, entries:report.evidence },
   }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
+  if (checkpointPending) {
+    const negativeEvidence = report.evidence.some((item) => item.kind === "ERROR" || item.status === "FAIL" || item.status === "BLOCKED");
+    const passed = !result?.error && report.result === "PASS" && !negativeEvidence;
+    publishTaskLaunchPatch(task, uiWorkerCode, {
+      checkpointState:passed ? "PASS" : "BLOCKED",
+      checkpointError:passed ? null : (result?.error || `STAGE_REPORT_${report.result}`),
+      checkpointCompletedAt:new Date().toISOString(),
+      checkpointReportResult:report.result,
+      checkpointReportHead:report.head,
+      checkpointReportStage:report.stage,
+      checkpointReportSummary:report.summary,
+      checkpointReportEvidence:report.evidence.slice(0,60),
+      checkpointReportResponseSha256:responseSha256,
+    }, passed ? "checkpoint-pass" : "checkpoint-blocked");
+  }
   send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
   return { processed:true, result };
 }
@@ -2248,6 +2283,31 @@ function stopConversationMemoryMonitor() {
   conversationMemoryBusy = false;
 }
 
+function checkpointGuard(task, workerCode, view) {
+  const code = String(workerCode || "").toUpperCase();
+  const ownerRaw = String(task?.assignedWorkerId || task?.requestedWorkerId || "").toUpperCase();
+  const owner = ownerRaw === "BENJAMINAI" ? "BENAI" : ownerRaw;
+  const proofSha = String(task?.sourceProofSha256 || "").toLowerCase();
+  const expectedConversationId = String(task?.surfaceConversationId || task?.chatConversationId || task?.chatLaunch?.surfaceConversationId || task?.chatLaunch?.chatSessionId || "").trim();
+  const currentConversationId = view && !view.webContents.isDestroyed() ? chatConversationIdFromUrl(view.webContents.getURL()) : "";
+  const blockers = [];
+  if (!task?.id || !task?.sessionId) blockers.push("TASK_SESSION_IDENTITY_MISSING");
+  if (owner && owner !== code) blockers.push("WORKER_SCOPE_MISMATCH");
+  if (!/^[0-9a-f]{40}$/i.test(String(task?.sourceHead || ""))) blockers.push("SOURCE_HEAD_INVALID");
+  if (String(task?.sourceState || "").toUpperCase() !== "VERIFIED") blockers.push("SOURCE_PROVENANCE_NOT_VERIFIED");
+  if (String(task?.sourceProofState || "").toUpperCase() !== "VERIFIED") blockers.push("SOURCE_PROOF_NOT_VERIFIED");
+  if (String(task?.sourceProofAuthority || "").toUpperCase() !== "CENTRAL_CORE") blockers.push("SOURCE_AUTHORITY_NOT_CENTRAL_CORE");
+  if (String(task?.sourceProofHandshakeStage || "").toUpperCase() !== "READY") blockers.push("SOURCE_HANDSHAKE_NOT_READY");
+  if (!/^[0-9a-f]{64}$/.test(proofSha)) blockers.push("SOURCE_PROOF_SHA_INVALID");
+  if (Number(task?.sourceProofActiveScopeLockCount || 0) < 1) blockers.push("SCOPE_LOCK_REQUIRED");
+  if (Number(task?.sourceProofActiveWorktreeLeaseCount || 0) < 1) blockers.push("WORKTREE_LEASE_REQUIRED");
+  if (String(task?.sourceProofProductionAccess || "DENY").toUpperCase() !== "DENY") blockers.push("PROD_DENY_REQUIRED");
+  if (String(task?.bootAckState || task?.chatLaunch?.bootAckState || "").toUpperCase() !== "VALIDATED") blockers.push("BOOT_ACK_REQUIRED");
+  if ((task?.bootAckCodingAllowed ?? task?.chatLaunch?.bootAckCodingAllowed) !== true) blockers.push("CODING_NOT_ALLOWED");
+  if (!expectedConversationId || !currentConversationId || expectedConversationId !== currentConversationId) blockers.push("CONVERSATION_BINDING_MISMATCH");
+  return { ok:blockers.length === 0, blockers, proofSha, expectedConversationId, currentConversationId };
+}
+
 async function prepareWorkerStageAction(workerCode, action) {
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   try {
@@ -2259,7 +2319,6 @@ async function prepareWorkerStageAction(workerCode, action) {
   const { presence, task } = liveContextForWorker(code);
   if (!task) return { ok: false, error: "Nincs authoritative aktuális task ehhez a workerhez." };
   if (!task.sessionId || !/^[0-9a-f]{40}$/i.test(String(task.sourceHead || ""))) return { ok:false, error:"A stage actionhoz authoritative sessionId és 40 karakteres source HEAD szükséges." };
-  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task, presence });
   let view = chatViews.get(cell.id);
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
   if (!view) return { ok: false, error: "A worker ChatGPT felülete nem nyitható meg." };
@@ -2271,6 +2330,66 @@ async function prepareWorkerStageAction(workerCode, action) {
   const baselineCapture = await captureLatestAssistantText(view);
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   view.webContents.focus();
+
+  if (action === "checkpoint") {
+    const guard = checkpointGuard(task, code, view);
+    const checkpointRequestId = `checkpoint-${Date.now().toString(36)}-${randomUUID().slice(0,8)}`;
+    if (!guard.ok) {
+      const error = `CHECKPOINT_BLOCKED · ${guard.blockers.join(", ")}`;
+      publishTaskLaunchPatch(task, code, {
+        checkpointState:"BLOCKED", checkpointRequestId, checkpointError:error,
+        checkpointAt:new Date().toISOString(), checkpointTranscriptVerified:false,
+      }, "checkpoint-blocked");
+      return { ok:false, code:"CHECKPOINT_GUARD_BLOCKED", error, checkpoint:{ state:"BLOCKED", requestId:checkpointRequestId, blockers:guard.blockers } };
+    }
+    const marker = `BENJADMIN_CHECKPOINT_REQUEST_V1 ${checkpointRequestId}`;
+    const basePrompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task, presence });
+    const prompt = `${marker}\n${basePrompt}`;
+    publishTaskLaunchPatch(task, code, {
+      checkpointState:"PREPARING", checkpointRequestId, checkpointError:null,
+      checkpointAt:new Date().toISOString(), checkpointTranscriptVerified:false,
+      checkpointSourceHead:String(task.sourceHead || ""), checkpointSourceProofSha256:guard.proofSha,
+    }, "checkpoint-preparing");
+    const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+    if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+      const error = insertion?.reason || "checkpoint-not-inserted";
+      publishTaskLaunchPatch(task, code, {
+        checkpointState:"BLOCKED", checkpointRequestId, checkpointError:error,
+        checkpointAt:new Date().toISOString(), checkpointTranscriptVerified:false,
+      }, "checkpoint-insert-blocked");
+      return { ok:false, code:"CHECKPOINT_INSERT_NOT_VERIFIED", error:"A checkpoint prompt nem illeszthető be ellenőrzötten a kötött worker csevegésbe.", checkpoint:{ state:"BLOCKED", requestId:checkpointRequestId, error } };
+    }
+    const sent = await sendPreparedChatPrompt(view, marker);
+    const transcriptVerification = sent?.sent === true && sent?.verified === true
+      ? await verifyPromptMarkerInTranscript(view, marker, 12000)
+      : { verified:false, reason:sent?.reason || "checkpoint-send-not-verified" };
+    if (transcriptVerification?.verified !== true) {
+      const error = transcriptVerification?.reason || sent?.reason || "checkpoint-transcript-not-confirmed";
+      publishTaskLaunchPatch(task, code, {
+        checkpointState:"BLOCKED", checkpointRequestId, checkpointError:error,
+        checkpointAt:new Date().toISOString(), checkpointTranscriptVerified:false,
+      }, "checkpoint-transcript-blocked");
+      return { ok:false, code:"CHECKPOINT_TRANSCRIPT_NOT_CONFIRMED", error:"A checkpoint elküldése nem igazolható USER transcript markerrel; fail-closed.", checkpoint:{ state:"BLOCKED", requestId:checkpointRequestId, error } };
+    }
+    publishTaskLaunchPatch(task, code, {
+      checkpointState:"SENT_CONFIRMED", checkpointRequestId, checkpointError:null,
+      checkpointAt:new Date().toISOString(), checkpointSentAt:new Date().toISOString(),
+      checkpointTranscriptVerified:true,
+      checkpointTranscriptMessageId:transcriptVerification.messageId || null,
+      checkpointTranscriptCapturedAt:transcriptVerification.capturedAt || null,
+    }, "checkpoint-sent-confirmed");
+    const waitingRecord = publishTaskLaunchPatch(task, code, {
+      checkpointState:"WAITING_RESPONSE", checkpointRequestId, checkpointWaitingAt:new Date().toISOString(),
+    }, "checkpoint-waiting-response");
+    void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);
+    return {
+      ok:true, mode:"sent-confirmed",
+      message:"Checkpoint elküldve és USER transcript markerrel igazolva. A BENJADMIN_STAGE_REPORT_V1 válaszra vár.",
+      checkpoint:{ state:"WAITING_RESPONSE", requestId:checkpointRequestId, transcriptVerified:true, transcriptMessageId:transcriptVerification.messageId || null, record:waitingRecord }
+    };
+  }
+
+  const prompt = buildStageActionPrompt({ action, workerCode: code, workerLabel: cell.label, task, presence });
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {

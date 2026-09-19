@@ -236,6 +236,34 @@
     </section>
   </div>
 
+  <div id="taskInspectorLayer" class="task-inspector-layer is-hidden" role="presentation">
+    <button id="taskInspectorBackdrop" class="task-inspector-backdrop" type="button" aria-label="Task Inspector bezárása"></button>
+    <section class="task-inspector-panel" role="dialog" aria-modal="true" aria-labelledby="taskInspectorTitle" data-testid="developer-grid-task-inspector">
+      <header class="task-inspector-header">
+        <div>
+          <span class="eyebrow">BENJADMIN · TASK-SPECIFIC CONTROL</span>
+          <h2 id="taskInspectorTitle">Aktuális Task</h2>
+          <p id="taskInspectorSubtitle">Authoritative worker task / session / source állapot.</p>
+        </div>
+        <div class="task-inspector-header-tools">
+          <span class="task-inspector-dev-badge">DEV ONLY</span>
+          <span class="task-inspector-prod-badge">PROD DENY</span>
+          <button id="taskInspectorClose" class="icon-button" type="button" aria-label="Task Inspector bezárása">×</button>
+        </div>
+      </header>
+      <nav class="task-inspector-tabs" aria-label="Task Inspector nézet">
+        <button type="button" data-task-inspector-mode="task">AKTUÁLIS TASK</button>
+        <button type="button" data-task-inspector-mode="context">KONTEXTUS</button>
+        <button type="button" data-task-inspector-mode="checkpoint">CHECKPOINT</button>
+      </nav>
+      <div class="task-inspector-statebar">
+        <span id="taskInspectorState">—</span>
+        <small id="taskInspectorIdentity">—</small>
+      </div>
+      <div id="taskInspectorBody" class="task-inspector-body"></div>
+    </section>
+  </div>
+
   <div id="reviewLayer" class="review-layer is-hidden" role="presentation">
     <button id="reviewBackdrop" class="review-backdrop" type="button" aria-label="External Review Room bezárása"></button>
     <section class="review-room-panel" role="dialog" aria-modal="true" aria-labelledby="reviewRoomTitle" data-testid="chatgrid-external-review-room">

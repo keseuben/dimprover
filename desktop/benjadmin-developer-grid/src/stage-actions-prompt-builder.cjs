@@ -100,7 +100,11 @@ function buildStageActionPrompt({ action, workerCode, workerLabel, task, presenc
     JSON.stringify({ schemaVersion:1, workerCode:clean(workerCode,40), taskId:clean(task?.id,220), sessionId:clean(task?.sessionId,240), head:"REPLACE_WITH_CURRENT_40_CHAR_HEAD", stage:reportStage, result:"PASS", summary:phaseAdvance?`${stage}/6 fázis PASS; továbblépés ${reportStage}/6 fázisba.`:"technikai stage összesítés", evidence:[{kind:"TEST",status:"PASS",severity:"INFO",summary:"célzott ellenőrzés",attributes:{testName:"git diff --check",durationMs:0,outputSha256:null}}] }),
     "BENJADMIN_STAGE_REPORT_END",
     "",
-    phaseAdvance ? "A fázislépést BenjAdmin a felső 6-lépcsős sávból explicit indította. A desktop a promptot ellenőrzötten elküldheti és a stage reportot automatikusan validálja/evidence-ként rögzíti." : "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
+    phaseAdvance
+      ? "A fázislépést BenjAdmin a felső 6-lépcsős sávból explicit indította. A desktop a promptot ellenőrzötten elküldheti és a stage reportot automatikusan validálja/evidence-ként rögzíti."
+      : action === "checkpoint"
+        ? "A checkpointot BenjAdmin explicit kérte. A desktop exact task/session/worker + DEV provenance guard után ellenőrzötten elküldi, USER transcript markerrel igazolja, majd a BENJADMIN_STAGE_REPORT_V1 választ automatikusan validálja és evidence-ként rögzíti. FULL BUILD és PROD művelet ebből a workflow-ból tilos."
+        : "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
   ];
   return lines.join("\n");
 }

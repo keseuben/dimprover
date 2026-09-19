@@ -6,7 +6,7 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node scripts/acceptance.mjs && node scripts/boot-ack-contract.mjs && node scripts/boot-ack-stage-fallback-contract.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs && node scripts/chat-refresh-contract.mjs && node scripts/device-heartbeat-contract.mjs && node scripts/central-core-theme-contract.mjs && node scripts/windows-artifact-attestation-contract.mjs && node scripts/standby-auto-return-contract.mjs && node ../../scripts/developer-grid/worker-surface-v0141-contract.mjs",
+    "check": "node scripts/acceptance.mjs && node scripts/boot-ack-contract.mjs && node scripts/boot-ack-stage-fallback-contract.mjs && node scripts/shortcut-contract.mjs && node scripts/system-health-contract.mjs && node scripts/v019-workspace-chat-contract.mjs && node scripts/chat-refresh-contract.mjs && node scripts/device-heartbeat-contract.mjs && node scripts/central-core-theme-contract.mjs && node scripts/windows-artifact-attestation-contract.mjs && node scripts/standby-auto-return-contract.mjs && node ../../scripts/developer-grid/worker-surface-v0141-contract.mjs && node ../../scripts/developer-grid/task-context-checkpoint-actions-v0152-contract.mjs",
     "dist:win": "electron-builder --win portable --x64",
     "package:dev": "bash scripts/package-dev-release.sh"
   },

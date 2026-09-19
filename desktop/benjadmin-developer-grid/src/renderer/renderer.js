@@ -95,7 +95,8 @@ const state = {
   chatConnections: {},
   chatRefresh: { cells: {}, latestRefreshedAt: "", dailyEnabled: true, deferredCount: 0, updateAvailableCount: 0 },
   systemHealth: { data: null, lastFetchedAt: 0, timer: null, mode: "closed", loading: false, error: null, unauthorized: false },
-  taskBridges: {}
+  taskBridges: {},
+  taskInspector: { workerCode:null, mode:"task", loading:false, memory:null, evidence:null, lastError:null, checkpointResponse:null }
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -555,13 +556,11 @@ async function handleStageAction(cell, action, task, moduleContext, workItem) {
   const workerCode = cell?.dataset.workerCode || "";
   if (!workerCode || !action) return;
   if (action === "current-task") {
-    const moduleLabel = moduleBadgeText(moduleContext, task);
-    showToast("Aktuális task", `${task?.title || "Nincs aktív task"}${moduleLabel ? ` · ${moduleLabel}` : ""}${workItem ? ` · ${workItem}` : ""}`);
+    await openTaskInspector(workerCode, "task");
     return;
   }
   if (action === "context") {
-    const result = await api.contextWorkspaceMode("open");
-    if (!result?.ok) showToast("Kontextus", result?.error || "A Fejlesztői Vezérlőpult nem nyitható meg.");
+    await openTaskInspector(workerCode, "context");
     return;
   }
   if (action === "review") {
@@ -571,9 +570,21 @@ async function handleStageAction(cell, action, task, moduleContext, workItem) {
   const button = cell.querySelector(`[data-stage-action="${action}"]`);
   if (button) button.disabled = true;
   try {
+    if (action === "checkpoint") await openTaskInspector(workerCode, "checkpoint");
     const result = await api.prepareStageAction(workerCode, action);
     if (!result?.ok) {
-      showToast("Developer Grid művelet", result?.error || "A stage action nem készíthető elő.");
+      if (action === "checkpoint") {
+        state.taskInspector.lastError = result?.error || "A checkpoint blokkolva van.";
+        state.taskInspector.checkpointResponse = result?.checkpoint || null;
+        renderTaskInspector();
+      } else showToast("Developer Grid művelet", result?.error || "A stage action nem készíthető elő.");
+      return;
+    }
+    if (action === "checkpoint") {
+      state.taskInspector.lastError = null;
+      state.taskInspector.checkpointResponse = result?.checkpoint || null;
+      renderTaskInspector();
+      showToast("Checkpoint", result.message || "Elküldve és transcriptben igazolva; válaszra vár.");
       return;
     }
     showToast(result.mode === "inserted" ? "Prompt előkészítve" : "Prompt a vágólapon", result.message || "Ellenőrizd, majd kézzel küldd el.");
@@ -667,7 +678,7 @@ function renderStageActions(cell, stageIndex, task, moduleContext, workItem) {
     button.dataset.stageAction = action.id;
     button.textContent = action.label;
     button.title = action.id === "checkpoint"
-      ? "Biztonságos DEV checkpoint prompt előkészítése; elküldés csak kézzel"
+      ? "Verified DEV checkpoint: exact task/session guard, automatikus küldés, USER transcript-confirm, stage report monitor"
       : action.id === "tests"
         ? "Célzott tesztelési prompt előkészítése"
         : action.id === "build-runtime"
@@ -675,8 +686,8 @@ function renderStageActions(cell, stageIndex, task, moduleContext, workItem) {
           : action.id === "review"
             ? "External Review Room megnyitása az aktuális taskhoz"
             : action.id === "context"
-              ? "BENJADMIN Fejlesztői Vezérlőpult megnyitása"
-              : "Aktuális task összefoglaló";
+              ? "Az aktuális worker task-specifikus Context Snapshot nézete"
+              : "Authoritative Task Inspector megnyitása";
     button.addEventListener("click", () => void handleStageAction(cell, action.id, task, moduleContext, workItem));
     host.append(button);
   }
@@ -1284,8 +1295,205 @@ async function closeWorkerProfile() {
   $("#workerProfileLayer").classList.add("is-hidden");
   delete $("#workerProfileLayer").dataset.workerCode;
   const settingsOpen = !$("#settingsLayer").classList.contains("is-hidden");
-  if (state.security?.unlocked && !settingsOpen) await api.setUiOverlay(false);
+  const inspectorOpen = !$("#taskInspectorLayer")?.classList.contains("is-hidden");
+  if (state.security?.unlocked && !settingsOpen && !inspectorOpen) await api.setUiOverlay(false);
 }
+
+function taskInspectorContext(workerCode) {
+  const presence = presenceForWorker(workerCode);
+  const task = displayTaskForWorker(workerCode, presence);
+  const moduleContext = moduleContextForWorker(workerCode, presence, task);
+  return { presence, task, moduleContext };
+}
+
+function taskInspectorText(value, fallback = "—") {
+  if (value === null || value === undefined || value === "") return fallback;
+  return String(value);
+}
+
+function taskInspectorDate(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("hu-HU");
+}
+
+function taskInspectorRows(rows) {
+  return `<dl class="task-inspector-kv">${rows.map(([label,value,mono=false]) => `<div><dt>${escapeHtml(label)}</dt><dd${mono ? ' class="is-mono"' : ""}>${escapeHtml(taskInspectorText(value))}</dd></div>`).join("")}</dl>`;
+}
+
+function taskInspectorSection(title, content, subtitle = "") {
+  return `<section class="task-inspector-section"><header><strong>${escapeHtml(title)}</strong>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ""}</header>${content}</section>`;
+}
+
+function checkpointLabel(value) {
+  return ({ PREPARING:"ELŐKÉSZÍTÉS", SENT_CONFIRMED:"ELKÜLDVE", WAITING_RESPONSE:"VÁLASZRA VÁR", PASS:"PASS", BLOCKED:"BLOCKED" })[String(value || "IDLE").toUpperCase()] || "NINCS AKTÍV CHECKPOINT";
+}
+
+function renderTaskInspector() {
+  const layer = $("#taskInspectorLayer");
+  const body = $("#taskInspectorBody");
+  if (!layer || !body || layer.classList.contains("is-hidden")) return;
+  const workerCode = state.taskInspector.workerCode || "";
+  const { presence, task, moduleContext } = taskInspectorContext(workerCode);
+  const mode = state.taskInspector.mode || "task";
+  const memory = state.taskInspector.memory || null;
+  const evidencePayload = state.taskInspector.evidence || null;
+  const launch = task?.chatLaunch || {};
+  const stageIndex = Number(presence?.workStageIndex || task?.workStageIndex || 0);
+  $("#taskInspectorTitle").textContent = mode === "context" ? "Task Kontextus" : mode === "checkpoint" ? "Checkpoint" : "Aktuális Task";
+  $("#taskInspectorSubtitle").textContent = mode === "context"
+    ? "Az aktuális task Context Snapshot / continuity / transcript nézete."
+    : mode === "checkpoint"
+      ? "Verified DEV checkpoint · FULL BUILD TILTOTT · PROD DENY."
+      : "Authoritative task / session / source / execution állapot.";
+  const stateValue = mode === "checkpoint" ? String(launch.checkpointState || state.taskInspector.checkpointResponse?.state || "IDLE").toUpperCase() : String(task?.status || "UNKNOWN").toUpperCase();
+  $("#taskInspectorState").textContent = mode === "checkpoint" ? checkpointLabel(stateValue) : (stageIndex ? (STAGE_LABELS[stageIndex] || `${stageIndex}/6`) : stateValue);
+  $("#taskInspectorState").dataset.state = stateValue;
+  $("#taskInspectorIdentity").textContent = task ? `${workerCode} · ${task.id} · ${task.sessionId || "session nincs"}` : `${workerCode} · nincs aktív task`;
+  for (const tab of $$("[data-task-inspector-mode]", layer)) tab.classList.toggle("is-active", tab.dataset.taskInspectorMode === mode);
+
+  if (!task) {
+    body.innerHTML = `<div class="task-inspector-empty"><strong>Nincs authoritative aktív task ehhez a workerhez.</strong><span>Új task nem jön létre ebből a nézetből.</span></div>`;
+    return;
+  }
+  if (state.taskInspector.loading) {
+    body.innerHTML = `<div class="task-inspector-empty"><strong>Task-adatok betöltése…</strong><span>A live snapshot már elérhető; Context Memory és evidence frissül.</span></div>`;
+    return;
+  }
+
+  const hierarchy = [task.mainModule || moduleContext?.mainModule, task.moduleName || moduleContext?.moduleName, task.submoduleName || moduleContext?.submoduleName].filter(Boolean).join(" › ");
+  const conversationId = task.surfaceConversationId || task.chatConversationId || launch.surfaceConversationId || launch.chatSessionId || "";
+  const conversationTitle = task.surfaceConversationTitle || task.chatConversationTitle || launch.surfaceConversationTitle || launch.chatTitle || "";
+  const bootAckState = task.bootAckState || launch.bootAckState || "";
+  const bootCoding = task.bootAckCodingAllowed ?? launch.bootAckCodingAllowed;
+  const memoryContext = memory?.context || null;
+  const raw = memory?.raw || null;
+  const handoff = memory?.handoff || null;
+  const evidenceRows = Array.isArray(evidencePayload?.evidence) ? evidencePayload.evidence : [];
+
+  if (mode === "task") {
+    body.innerHTML = [
+      taskInspectorSection("Task identity", taskInspectorRows([
+        ["Task", task.title || task.workItem], ["Task ID", task.id,true], ["Worker",workerCode], ["Projekt",task.projectId],
+        ["Modul / almodul",hierarchy], ["Fázis",stageIndex ? (STAGE_LABELS[stageIndex] || `${stageIndex}/6`) : "—"], ["Task státusz",String(task.status || "—").toUpperCase()],
+        ["Session ID",task.sessionId,true], ["Conversation",conversationTitle], ["Conversation ID",conversationId,true], ["Context revision",task.contextRevision || presence?.contextRevision]
+      ])),
+      taskInspectorSection("Authoritative source", taskInspectorRows([
+        ["Repository",task.sourceRepository,true], ["Branch",task.branchName || presence?.branch,true], ["Worktree",task.worktreePath || presence?.worktree,true], ["HEAD",task.sourceHead,true],
+        ["Source provenance",`${task.sourceState || "—"}${task.sourceBlockCode ? ` · ${task.sourceBlockCode}` : ""}`],
+        ["Proof state / authority",`${task.sourceProofState || "—"} · ${task.sourceProofAuthority || "—"}`], ["Source proof SHA-256",task.sourceProofSha256 || launch.sourceProofSha256,true],
+        ["Handshake",task.sourceProofHandshakeStage], ["Scope lock",task.sourceProofActiveScopeLockCount], ["Worktree lease",task.sourceProofActiveWorktreeLeaseCount],
+        ["BOOT ACK / coding",`${bootAckState || "—"} · codingAllowed=${bootCoding === true ? "true" : bootCoding === false ? "false" : "—"}`], ["Production access",task.sourceProofProductionAccess || "DENY"]
+      ])),
+      taskInspectorSection("Execution / recovery", taskInspectorRows([
+        ["Execution recovery",launch.executionRecoveryState || "NINCS"], ["Recovery request",launch.executionRecoveryRequestId,true],
+        ["Recovery transcript verified",launch.executionRecoveryTranscriptVerified === true ? "IGEN" : launch.executionRecoveryTranscriptVerified === false ? "NEM" : "—"],
+        ["Recovery attempt",launch.executionRecoveryAttemptCount], ["Utolsó execution request",launch.lastExecutionRequestId,true], ["Utolsó action",launch.lastExecutionAction],
+        ["Execution state",launch.executionBridgeState || "NINCS"], ["Execution code",launch.executionBridgeCode], ["Execution idő",taskInspectorDate(launch.executionBridgeAt)]
+      ]),"A Task Inspector nem indít új taskot és nem generál TASK_LAUNCH-ot.")
+    ].join("");
+    return;
+  }
+
+  if (mode === "context") {
+    const blockers = Array.isArray(memoryContext?.unresolvedBlockers) ? memoryContext.unresolvedBlockers : [];
+    const sourcePrompt = memoryContext?.sourcePrompt || task.sourcePrompt || "Nincs rögzített sourcePrompt.";
+    const summary = memoryContext?.summary || task.contextSnapshotSummary || presence?.contextSnapshotSummary || "Nincs még Context Snapshot összefoglaló.";
+    body.innerHTML = [
+      taskInspectorSection("Context Snapshot",taskInspectorRows([
+        ["Snapshot ID",memoryContext?.id || task.contextSnapshotId || presence?.contextSnapshotId,true], ["Revision",memoryContext?.revision || task.contextRevision || presence?.contextRevision],
+        ["Work item",task.workItem || presence?.workItem || task.title], ["Stage",memoryContext?.stage ? `${memoryContext.stage}/6 · ${memoryContext.stageLabel || ""}` : (stageIndex ? `${stageIndex}/6` : "—")],
+        ["Projekt / modul",[memoryContext?.projectId || task.projectId,memoryContext?.mainModule || task.mainModule,memoryContext?.moduleName || task.moduleName,memoryContext?.submoduleName || task.submoduleName].filter(Boolean).join(" › ") || hierarchy],
+        ["Branch",memoryContext?.branch || task.branchName,true], ["Worktree",memoryContext?.worktree || task.worktreePath,true], ["HEAD",memoryContext?.sourceHead || task.sourceHead,true],
+        ["Scope",task.scopeText], ["Conversation ID",memoryContext?.conversationId || conversationId,true],
+        ["RAW transcript",`${task.rawTranscriptState || presence?.rawTranscriptState || (raw ? "CAPTURED" : "—")} · ${taskInspectorDate(raw?.capturedAt || task.rawTranscriptCapturedAt || presence?.rawTranscriptCapturedAt)}`]
+      ])),
+      taskInspectorSection("Forrásutasítás",`<pre class="task-inspector-pre">${escapeHtml(sourcePrompt)}</pre>`),
+      taskInspectorSection("Continuity / handoff",taskInspectorRows([
+        ["Routing",task.continuityRouting], ["Előző task",task.continuityPreviousTaskId,true], ["Előző worker",task.continuityPreviousWorkerCode],
+        ["Continuity Context",`${task.continuityContextSnapshotId || "—"} · rev ${task.continuityContextRevision || "—"}`],
+        ["Continuity handoff",task.continuityHandoffId,true], ["Aktuális handoff",`${handoff?.id || task.handoffPackId || "—"} · ${handoff?.state || task.handoffPackState || "—"}`],
+        ["Source proof / BOOT ACK",`${task.sourceProofState || "—"} / ${bootAckState || "—"}`]
+      ])),
+      taskInspectorSection("Context összefoglaló",`<pre class="task-inspector-pre">${escapeHtml(summary)}</pre>`),
+      taskInspectorSection("Blocker / evidence", blockers.length
+        ? `<div class="task-inspector-list">${blockers.map((item) => `<article class="is-blocked"><strong>${escapeHtml(item.kind || "BLOCKER")} · ${escapeHtml(item.status || "")}</strong><span>${escapeHtml(item.summary || "—")}</span></article>`).join("")}</div>`
+        : `<div class="task-inspector-list"><article class="is-pass"><strong>Nincs Context Snapshot blocker</strong><span>Task-specifikus context betöltve.</span></article></div>`)
+    ].join("");
+    return;
+  }
+
+  const checkpointState = String(launch.checkpointState || state.taskInspector.checkpointResponse?.state || "IDLE").toUpperCase();
+  const reportEvidence = Array.isArray(launch.checkpointReportEvidence) ? launch.checkpointReportEvidence : [];
+  const relevantEvidence = evidenceRows.slice(-12).reverse();
+  body.innerHTML = [
+    `<div class="task-inspector-guard-banner"><strong>VERIFIED DEV CHECKPOINT</strong><span>Exact worker/task/session · source proof · scope lock · lease · BOOT ACK · bound conversation</span><b>FULL BUILD TILTOTT · PROD DENY</b></div>`,
+    taskInspectorSection("Checkpoint lifecycle",taskInspectorRows([
+      ["UI állapot",checkpointLabel(checkpointState)], ["Request ID",launch.checkpointRequestId || state.taskInspector.checkpointResponse?.requestId,true],
+      ["Source HEAD",launch.checkpointSourceHead || task.sourceHead,true], ["Source proof",launch.checkpointSourceProofSha256 || task.sourceProofSha256,true],
+      ["USER transcript verified",launch.checkpointTranscriptVerified === true ? "IGEN" : launch.checkpointTranscriptVerified === false ? "NEM" : "—"],
+      ["Transcript message",launch.checkpointTranscriptMessageId,true], ["Elküldve",taskInspectorDate(launch.checkpointSentAt)], ["Válaszra vár",taskInspectorDate(launch.checkpointWaitingAt)],
+      ["Lezárva",taskInspectorDate(launch.checkpointCompletedAt)], ["Eredmény",launch.checkpointReportResult], ["Checkpoint HEAD / commit",launch.checkpointReportHead,true],
+      ["Report stage",launch.checkpointReportStage ? `${launch.checkpointReportStage}/6` : "—"], ["Hiba / blocker",launch.checkpointError || state.taskInspector.lastError]
+    ])),
+    taskInspectorSection("Checkpoint report",`<pre class="task-inspector-pre">${escapeHtml(launch.checkpointReportSummary || (checkpointState === "WAITING_RESPONSE" ? "BENJADMIN_STAGE_REPORT_V1 válaszra vár…" : "Még nincs checkpoint report."))}</pre>`),
+    taskInspectorSection("Report evidence",reportEvidence.length
+      ? `<div class="task-inspector-list">${reportEvidence.map((item) => `<article class="${item.status === "PASS" ? "is-pass" : item.status === "FAIL" || item.status === "BLOCKED" || item.kind === "ERROR" ? "is-blocked" : ""}"><strong>${escapeHtml(item.kind || "EVIDENCE")} · ${escapeHtml(item.status || "—")}</strong><span>${escapeHtml(item.summary || "—")}</span></article>`).join("")}</div>`
+      : `<div class="task-inspector-list"><article><strong>Stage report evidence még nincs</strong><span>${checkpointState === "WAITING_RESPONSE" ? "A Desktop figyeli a kötött worker választ." : "A checkpoint indításakor jelenik meg."}</span></article></div>`),
+    taskInspectorSection("Task evidence",relevantEvidence.length
+      ? `<div class="task-inspector-list">${relevantEvidence.map((item) => `<article class="${item.status === "PASS" ? "is-pass" : item.status === "FAIL" || item.status === "BLOCKED" ? "is-blocked" : ""}"><strong>${escapeHtml(item.kind || "EVIDENCE")} · ${escapeHtml(item.status || "—")}</strong><span>${escapeHtml(item.summary || "—")}</span></article>`).join("")}</div>`
+      : `<div class="task-inspector-list"><article><strong>Nincs lekért evidence</strong><span>Task: ${escapeHtml(task.id)}</span></article></div>`)
+  ].join("");
+}
+
+async function refreshTaskInspectorData() {
+  const workerCode = state.taskInspector.workerCode || "";
+  if (!workerCode || $("#taskInspectorLayer")?.classList.contains("is-hidden")) return;
+  const { task } = taskInspectorContext(workerCode);
+  if (!task?.id) { renderTaskInspector(); return; }
+  const conversationId = task.surfaceConversationId || task.chatConversationId || task.chatLaunch?.surfaceConversationId || task.chatLaunch?.chatSessionId || "";
+  state.taskInspector.loading = true;
+  renderTaskInspector();
+  const [memoryResult,evidenceResult] = await Promise.all([
+    api.getDeveloperGridConversationMemory({ taskId:task.id, sessionId:task.sessionId || "", conversationId }),
+    api.getDeveloperGridEvidence(task.id)
+  ]);
+  if (state.taskInspector.workerCode !== workerCode) return;
+  state.taskInspector.loading = false;
+  state.taskInspector.memory = memoryResult?.ok ? memoryResult.memory : null;
+  state.taskInspector.evidence = evidenceResult?.ok ? evidenceResult : null;
+  if (!memoryResult?.ok && state.taskInspector.mode === "context") state.taskInspector.lastError = memoryResult?.error || "A task Context Memory nem tölthető be.";
+  renderTaskInspector();
+}
+
+async function openTaskInspector(workerCode, mode = "task") {
+  if (!state.security?.unlocked) return;
+  const { task } = taskInspectorContext(workerCode);
+  if (!task) { showToast("Task Inspector","Nincs authoritative aktív task ehhez a workerhez."); return; }
+  if (!$("#workerProfileLayer").classList.contains("is-hidden")) await closeWorkerProfile();
+  if (!$("#reviewLayer").classList.contains("is-hidden")) await closeReviewRoom();
+  if (!$("#settingsLayer").classList.contains("is-hidden")) await closeSettings();
+  await api.setUiOverlay(true);
+  state.taskInspector = { workerCode, mode:["task","context","checkpoint"].includes(mode) ? mode : "task", loading:false, memory:null, evidence:null, lastError:null, checkpointResponse:null };
+  $("#taskInspectorLayer").dataset.workerCode = workerCode;
+  $("#taskInspectorLayer").classList.remove("is-hidden");
+  renderTaskInspector();
+  window.setTimeout(() => $("#taskInspectorClose")?.focus(),20);
+  await refreshTaskInspectorData();
+}
+
+async function closeTaskInspector() {
+  const layer = $("#taskInspectorLayer");
+  if (!layer) return;
+  layer.classList.add("is-hidden");
+  delete layer.dataset.workerCode;
+  state.taskInspector = { workerCode:null, mode:"task", loading:false, memory:null, evidence:null, lastError:null, checkpointResponse:null };
+  const profileOpen = !$("#workerProfileLayer").classList.contains("is-hidden");
+  const reviewOpen = !$("#reviewLayer").classList.contains("is-hidden");
+  const settingsOpen = !$("#settingsLayer").classList.contains("is-hidden");
+  if (state.security?.unlocked && !profileOpen && !reviewOpen && !settingsOpen) await api.setUiOverlay(false);
+}
+
 
 
 function setDiagnosticStatus(element, text, tone = "") {
@@ -2063,6 +2271,12 @@ function bindUi() {
   for (const surfaceSelect of $$("[data-role=surface-select]")) surfaceSelect.addEventListener("change", () => void changeWorkerSurface(surfaceSelect));
   $("#workerProfileClose").addEventListener("click", () => void closeWorkerProfile());
   $("#workerProfileBackdrop").addEventListener("click", () => void closeWorkerProfile());
+  $("#taskInspectorClose").addEventListener("click", () => void closeTaskInspector());
+  $("#taskInspectorBackdrop").addEventListener("click", () => void closeTaskInspector());
+  for (const tab of $$("[data-task-inspector-mode]")) tab.addEventListener("click", () => {
+    state.taskInspector.mode = tab.dataset.taskInspectorMode || "task";
+    renderTaskInspector();
+  });
   for (const button of $$("[data-window-action]")) button.addEventListener("click", () => api.windowAction(button.dataset.windowAction));
   for (const button of $$("[data-cell-action]")) button.addEventListener("click", () => handleCellAction(button));
   for (const button of $$("[data-task-launch-action]")) button.addEventListener("click", () => void handleTaskLaunch(button));
@@ -2076,6 +2290,7 @@ function bindUi() {
     }
   });
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#taskInspectorLayer").classList.contains("is-hidden")) { void closeTaskInspector(); return; }
     if (event.key === "Escape" && !$("#reviewLayer").classList.contains("is-hidden")) { void closeReviewRoom(); return; }
     if (event.key === "Escape" && !$("#workerProfileLayer").classList.contains("is-hidden")) { void closeWorkerProfile(); return; }
     if (event.key === "Escape" && !$("#settingsLayer").classList.contains("is-hidden")) void closeSettings();
@@ -2099,7 +2314,14 @@ function bindIpc() {
     renderConfig();
     renderChatFooter();
   });
-  api.onLiveState((live) => { state.live = live; renderLive(); });
+  api.onLiveState((live) => {
+    state.live = live;
+    renderLive();
+    if (!$("#taskInspectorLayer")?.classList.contains("is-hidden")) renderTaskInspector();
+  });
+  api.onContextRefresh?.(() => {
+    if (!$("#taskInspectorLayer")?.classList.contains("is-hidden")) void refreshTaskInspectorData();
+  });
   api.onLiveConnection((connection) => {
     if (connection?.kind === "large-paste") {
       const label = WORKER_DEFAULT_LABELS[connection.workerCode] || connection.workerCode || "ChatGPT";

@@ -381,3 +381,14 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Ez megszünteti azt a hibát, amikor egy másik worker globális current taskja miatt a BenjáminAI aktív taskja eltűnt a Desktop live contextből, és emiatt leállt a Conversation Memory / Execution Recovery ciklus.
 - PROD továbbra is DENY.
 - A Work OpenAI first-party adapter tervezett aktiválása v0.1.53.
+
+### v0.1.52 · Task / Context / Checkpoint worker-cell actions
+
+- **AKTUÁLIS TASK** már nem toast: task-specifikus Task Inspector nyílik authoritative task/session/source/proof/BOOT ACK/conversation/execution adatokkal.
+- **KONTEXTUS** ugyanennek a worker tasknak a Conversation Memory Context Snapshotját, continuity/handoff és RAW transcript/evidence állapotát mutatja; nem nyitja meg a globális Context Workspace-t.
+- **CHECKPOINT** exact worker/task/session + VERIFIED DEV provenance + CENTRAL_CORE proof + scope-lock + worktree lease + VALIDATED BOOT ACK + bound conversation guard után automatikusan küld.
+- A checkpoint küldés csak tényleges USER transcript marker után válik igazolttá. Állapotai: PREPARING → SENT_CONFIRMED → WAITING_RESPONSE → PASS/BLOCKED.
+- A BENJADMIN_STAGE_REPORT_V1 válasz HEAD/commit, summary és evidence adatai visszakerülnek a Checkpoint Inspectorba.
+- Checkpointból FULL BUILD, release, restart, migration és PROD művelet nem indulhat. Új task és TASK_LAUNCH sem keletkezik.
+- A korábbi `7973afb0` multi-session build nem release; az UI action fixszel együtt új regresszió és új BUILD01 szükséges.
+- DEV ONLY · PROD DENY.
