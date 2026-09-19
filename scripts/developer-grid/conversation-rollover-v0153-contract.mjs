@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const rollover = require("../../desktop/benjadmin-developer-grid/src/context-workspace/conversation-rollover.cjs");
-const main = fs.readFileSync("desktop/benjadmin-developer-grid/src/main.cjs","utf8");
-const backend = fs.readFileSync("app/lib/developer-grid/work-start.ts","utf8");
-const renderer = fs.readFileSync("desktop/benjadmin-developer-grid/src/renderer/renderer.js","utf8");
-const types = fs.readFileSync("app/lib/developer-grid/types.ts","utf8");
-const pkg = JSON.parse(fs.readFileSync("desktop/benjadmin-developer-grid/package.json","utf8"));
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const rollover = require(path.join(root, "desktop/benjadmin-developer-grid/src/context-workspace/conversation-rollover.cjs"));
+const main = read("desktop/benjadmin-developer-grid/src/main.cjs");
+const backend = read("app/lib/developer-grid/work-start.ts");
+const renderer = read("desktop/benjadmin-developer-grid/src/renderer/renderer.js");
+const types = read("app/lib/developer-grid/types.ts");
+const pkg = JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 
 let n=0;
 function check(label,fn){fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
