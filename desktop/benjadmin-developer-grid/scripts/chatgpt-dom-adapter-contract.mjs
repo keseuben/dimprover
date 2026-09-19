@@ -78,7 +78,7 @@ check("finished load enforces pin and only idle uses latest named fallback",()=>
   assert.ok(main.includes('schedulePinnedConversationGuard(cell, view, "did-finish-load", 180)'));
   assert.ok(main.includes("if (!pin) void selectLatestNamedConversation(cell, view)"));
 });
-check("conversation memory mismatch invokes conversation guard instead of silently skipping",()=>assert.ok(main.includes("conversation-memory-mismatch")));
+check("conversation memory mismatch is observation-only and never restores navigation",()=>{const a=main.indexOf("async function syncConversationMemoryForWorker");const b=main.indexOf("async function syncConversationMemoryOnce",a);const block=main.slice(a,b);assert.ok(block.includes("CONVERSATION_MEMORY_MISMATCH_OBSERVED_NO_NAVIGATION"));assert.ok(!block.includes("ensurePinnedConversation("));assert.ok(!block.includes("loadURL("));});
 check("active refresh reloads pinned conversation URL",()=>{
   assert.ok(main.includes("const pin = conversationPinForCell(cell)"));
   assert.ok(main.includes("pinnedConversation: Boolean"));

@@ -11,8 +11,8 @@ const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const renderer=read("desktop/benjadmin-developer-grid/src/renderer/renderer.js");
 let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
 
-check("desktop version v0.1.56",()=>assert.equal(pkg.version,"0.1.56"));
-check("backend version v0.1.56-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/));
+check("desktop version v0.1.57",()=>assert.equal(pkg.version,"0.1.57"));
+check("backend version v0.1.57-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.57-dev"/));
 check("sticky pending is keyed to task, previous pin and candidate conversation",()=>{assert.match(main,/const stickyRebindPending = Boolean\([\s\S]*state\.rebindTaskId === pin\.taskId[\s\S]*state\.rebindPreviousConversationId === pin\.conversationId[\s\S]*currentId === state\.rebindConversationId/)});
 check("sticky pending is evaluated before pinned/restore decisions",()=>{const sticky=main.indexOf("const stickyRebindPending");const pinned=main.indexOf("if (currentId === pin.conversationId)",sticky);const restore=main.indexOf("chatConversationGuardRestoring.has(cell.id)",sticky);assert.ok(sticky>0&&pinned>sticky&&restore>pinned)});
 check("sticky pending never reloads authoritative old URL",()=>{const start=main.indexOf("if (stickyRebindPending)");const end=main.indexOf("if (currentId === pin.conversationId)",start);const block=main.slice(start,end);assert.doesNotMatch(block,/loadURL\(pin\.conversationUrl\)/);assert.match(block,/rebindPending:true/);assert.match(block,/sticky:true/)});
@@ -25,8 +25,8 @@ check("candidate URL must remain in same ChatGPT Project",()=>assert.match(main,
 check("backend bind receives project-qualified candidate URL",()=>{const start=main.indexOf("async function rebindCurrentTaskConversation");const end=main.indexOf("function assignedWorkerCodeFromWork",start);const block=main.slice(start,end);assert.match(block,/surfaceConversationUrl:candidateUrl/);assert.match(block,/chatConversationUrl:candidateUrl/)});
 check("local task launch record retains project-qualified candidate URL",()=>{const start=main.indexOf("async function rebindCurrentTaskConversation");const end=main.indexOf("function assignedWorkerCodeFromWork",start);const block=main.slice(start,end);assert.ok((block.match(/surfaceConversationUrl:candidateUrl/g)||[]).length>=2);assert.ok((block.match(/chatConversationUrl:candidateUrl/g)||[]).length>=2)});
 check("navigation memory records the proven candidate URL",()=>assert.match(main,/rememberChatNavigation\(cell\.id, candidateUrl\)/));
-check("conversation memory mismatch still routes through guarded sticky logic",()=>assert.match(main,/ensurePinnedConversation\(cell, view, "conversation-memory-mismatch"/));
+check("conversation memory mismatch stays observation-only",()=>{const a=main.indexOf("async function syncConversationMemoryForWorker");const b=main.indexOf("async function syncConversationMemoryOnce",a);const block=main.slice(a,b);assert.match(block,/CONVERSATION_MEMORY_MISMATCH_OBSERVED_NO_NAVIGATION/);assert.doesNotMatch(block,/ensurePinnedConversation\(/);assert.doesNotMatch(block,/loadURL\(/);});
 check("manual rebind remains explicit in renderer",()=>assert.match(renderer,/CSEVEGŐ ÁTKÖTÉSE/));
 check("manual rebind still creates no TASK_LAUNCH",()=>{const start=main.indexOf("async function rebindCurrentTaskConversation");const end=main.indexOf("function assignedWorkerCodeFromWork",start);const block=main.slice(start,end);assert.doesNotMatch(block,/prepareWorkerTaskLaunch/);assert.doesNotMatch(block,/TASK_LAUNCH_PROMPT_MARKER/)});
 check("pending reset only occurs on pinned return or completed rebind",()=>{assert.match(main,/currentId === pin\.conversationId[\s\S]*clearConversationRebindCandidate\(state\)/);assert.match(main,/refreshState\.conversationGuardState = "PINNED"[\s\S]*clearConversationRebindCandidate\(refreshState\)/)});
-console.log(`Developer Grid sticky conversation rebind v0.1.56 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid sticky conversation rebind v0.1.57 contract PASS · ${n}/${n}`);

@@ -104,7 +104,7 @@ const conversationRolloverProcessingKeys = new Set();
 const chatConversationGuardRestoring = new Set();
 const chatConversationGuardAttempts = new Map();
 const chatLatestAlignmentTokens = new Map();
-const CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 2200;
+const CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 10_000;
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -801,6 +801,38 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
     return { ok:true, pinned:true, restored:false, conversationId:pin.conversationId };
   }
   const currentUrl = view.webContents.getURL();
+  const graceUntilMs = Number(state.conversationNavigationGraceUntilMs || 0);
+  const graceProjectUrl = String(state.conversationNavigationGraceUrl || "");
+  const graceDerivedRebind = Boolean(
+    currentId
+    && graceUntilMs > Date.now()
+    && graceProjectUrl
+    && sameChatProjectRoute(pin.conversationUrl, graceProjectUrl)
+  );
+  if (graceDerivedRebind) {
+    const projectRoot = chatProjectRootFromConversationUrl(pin.conversationUrl);
+    const candidateUrl = projectRoot ? `${projectRoot}/c/${encodeURIComponent(currentId)}` : currentUrl;
+    clearConversationNavigationGrace(state);
+    state.conversationGuardState = "REBIND_PENDING";
+    state.conversationGuardError = "";
+    state.rebindTaskId = pin.taskId;
+    state.rebindPreviousConversationId = pin.conversationId;
+    state.rebindConversationId = currentId;
+    state.rebindConversationUrl = candidateUrl;
+    state.rebindDetectedAt = state.rebindDetectedAt || new Date().toISOString();
+    send("live:connection", {
+      kind:"conversation-guard",
+      cellId:cell.id,
+      workerCode:cell.workerCode,
+      ok:true,
+      code:"CHAT_CONVERSATION_REBIND_PENDING_FROM_PROJECT_GRACE",
+      expectedConversationId:pin.conversationId,
+      currentConversationId:currentId,
+      taskId:pin.taskId,
+    });
+    emitChatRefreshState();
+    return { ok:true, pinned:true, rebindPending:true, graceDerived:true, conversationId:pin.conversationId, candidateConversationId:currentId };
+  }
   if (currentId && sameChatProjectConversation(pin.conversationUrl, currentUrl)) {
     clearConversationNavigationGrace(state);
     state.conversationGuardState = "REBIND_PENDING";
@@ -2900,10 +2932,33 @@ async function syncConversationMemoryForWorker(workerCode) {
   const view = chatViews.get(cell.id);
   if (!view || view.webContents.isDestroyed()) return null;
   const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+  const memoryState = chatRefreshCell(cell.id);
   if (!currentId || currentId !== live.expectedConversationId) {
-    await ensurePinnedConversation(cell, view, "conversation-memory-mismatch", { alignLatest:true }).catch(() => null);
+    const mismatchKey = `${live.task.id}:${live.expectedConversationId}:${currentId || "NONE"}`;
+    const changed = memoryState.conversationMemoryMismatchKey !== mismatchKey;
+    memoryState.conversationMemoryMismatchKey = mismatchKey;
+    memoryState.conversationMemoryMismatchAt = new Date().toISOString();
+    memoryState.conversationMemoryExpectedId = live.expectedConversationId;
+    memoryState.conversationMemoryCurrentId = currentId || "";
+    if (changed) {
+      send("live:connection", {
+        kind:"conversation-memory",
+        cellId:cell.id,
+        workerCode:code,
+        ok:true,
+        code:"CONVERSATION_MEMORY_MISMATCH_OBSERVED_NO_NAVIGATION",
+        taskId:live.task.id,
+        expectedConversationId:live.expectedConversationId,
+        currentConversationId:currentId || null,
+      });
+      emitChatRefreshState();
+    }
     return null;
   }
+  memoryState.conversationMemoryMismatchKey = "";
+  memoryState.conversationMemoryMismatchAt = "";
+  memoryState.conversationMemoryExpectedId = "";
+  memoryState.conversationMemoryCurrentId = "";
   const capture = await captureConversationTranscript(view);
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");

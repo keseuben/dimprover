@@ -3,7 +3,7 @@
 const api = window.chatGrid;
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
 const WORKER_SURFACE_OPTIONS = ["CHATGPT", "CODEX", "WORK"];
-const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.57" });
+const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.58" });
 const WORKER_DEFAULT_LABELS = {
   ARMINAI: "ÁrminAI",
   JAZMINAI: "JázminAI",
@@ -481,7 +481,7 @@ function renderConfig() {
       const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
       const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.57-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.58-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {

@@ -13,9 +13,9 @@ const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface
 const adapter=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");
 
 let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-check("desktop version v0.1.56",()=>assert.equal(pkg.version,"0.1.56"));
-check("backend version v0.1.56-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/));
-check("navigation grace is bounded to 2200ms",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 2200/));
+check("desktop version v0.1.57",()=>assert.equal(pkg.version,"0.1.57"));
+check("backend version v0.1.57-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.57-dev"/));
+check("navigation grace is bounded to 10s",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 10_000/));
 check("same-project route helper accepts project routes",()=>assert.match(main,/function sameChatProjectRoute\(/));
 check("project key helper requires ChatGPT project path",()=>assert.match(main,/\^\\\/g\\\/\(g-p-\[\^\/\]\+\)\(\?:\\\/\|\$\)/));
 check("grace only applies without current conversation id",()=>assert.match(main,/if \(!currentId && sameChatProjectRoute\(pin\.conversationUrl, currentUrl\)\)/));
@@ -30,5 +30,5 @@ check("foreign route clears grace instead of extending it",()=>assert.match(main
 check("public refresh state exposes grace count",()=>assert.match(main,/conversationNavigationGraceCount/));
 check("renderer exposes navigation grace telemetry",()=>{assert.match(renderer,/navigationGrace = Number\(refresh\.conversationNavigationGraceCount/);assert.match(renderer,/chat navigáció:/)});
 check("manual rebind remains present",()=>assert.match(renderer,/CSEVEGŐ ÁTKÖTÉSE/));
-check("Work activation postponed to v0.1.57",()=>{assert.match(surface,/plannedVersion: "0\.1\.57"/);assert.match(adapter,/WORK_SURFACE_PLANNED_V0156/)});
-console.log(`Developer Grid conversation navigation grace v0.1.56 contract PASS · ${n}/${n}`);
+check("Work activation postponed to v0.1.58",()=>{assert.match(surface,/plannedVersion: "0\.1\.58"/);assert.match(adapter,/WORK_SURFACE_PLANNED_V0157/)});
+console.log(`Developer Grid conversation navigation grace v0.1.57 contract PASS · ${n}/${n}`);

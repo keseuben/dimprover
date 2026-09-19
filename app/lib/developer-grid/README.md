@@ -462,3 +462,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Új task, session vagy `TASK_LAUNCH` nem keletkezik a conversation rebind miatt.
 - A Work first-party adapter aktiválása v0.1.57-re került; v0.1.56 csak a már validált continuity hotfix ütközésmentes kiadása.
 - DEV ONLY · PROD DENY.
+
+## v0.1.57 · Conversation state machine hotfix
+
+- A ChatGPT Projecten belüli kézi conversation-váltásnál a project-root `NAVIGATION_GRACE` időablak 10 másodperc.
+- Ha a grace időablakban ChatGPT project-qualified route-ról plain `/c/<conversation-id>` route-ra canonicalizál, az új conversation `REBIND_PENDING` lesz, nem automatikus restore.
+- A candidate URL a bizonyított project-root + új conversation ID alapján project-qualified formában marad meg.
+- A Conversation Memory monitor 8 másodpercenként továbbra is olvas/ment, de conversation mismatch esetén kizárólag megfigyelési állapotot rögzít; `loadURL`, reload vagy pinned restore indítása tiltott.
+- Ez megszünteti azt a fizikai hibát, amelyben egy worker csevegőváltása után pár másodperccel egy vagy több cella visszaugrott a ChatGPT kezdőlapjára/régi pinre.
+- A Work first-party adapter aktiválása v0.1.58-ra került.
+- DEV ONLY · PROD DENY.
