@@ -104,6 +104,7 @@ const conversationRolloverProcessingKeys = new Set();
 const chatConversationGuardRestoring = new Set();
 const chatConversationGuardAttempts = new Map();
 const chatLatestAlignmentTokens = new Map();
+const CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 2200;
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -694,6 +695,29 @@ function sameChatProjectConversation(previousUrl, nextUrl) {
   return Boolean(previousRoot && nextRoot && previousRoot === nextRoot);
 }
 
+function chatProjectKeyFromAnyUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || !["chatgpt.com", "www.chatgpt.com"].includes(url.hostname)) return "";
+    return url.pathname.match(/^\/g\/(g-p-[^/]+)(?:\/|$)/)?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+function sameChatProjectRoute(previousUrl, nextUrl) {
+  const previousKey = chatProjectKeyFromAnyUrl(previousUrl);
+  const nextKey = chatProjectKeyFromAnyUrl(nextUrl);
+  return Boolean(previousKey && nextKey && previousKey === nextKey);
+}
+
+function clearConversationNavigationGrace(state) {
+  if (!state) return;
+  state.conversationNavigationGraceUntilMs = 0;
+  state.conversationNavigationGraceStartedAt = "";
+  state.conversationNavigationGraceUrl = "";
+}
+
 function conversationGuardAttemptAllowed(cellId) {
   const now = Date.now();
   const previous = chatConversationGuardAttempts.get(cellId);
@@ -737,25 +761,48 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
     state.conversationGuardState = "IDLE";
     state.pinnedConversationId = "";
     clearConversationRebindCandidate(state);
+    clearConversationNavigationGrace(state);
     return { ok:true, pinned:false };
   }
   if (pin.suspended) {
     state.conversationGuardState = "SUSPENDED";
     state.pinnedConversationId = "";
     clearConversationRebindCandidate(state);
+    clearConversationNavigationGrace(state);
     return { ok:true, pinned:false, suspended:true, rolloverState:pin.rolloverState };
   }
   state.pinnedConversationId = pin.conversationId;
   const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+  const stickyRebindPending = Boolean(
+    state.conversationGuardState === "REBIND_PENDING"
+    && state.rebindTaskId === pin.taskId
+    && state.rebindPreviousConversationId === pin.conversationId
+    && state.rebindConversationId
+    && currentId === state.rebindConversationId
+  );
+  if (stickyRebindPending) {
+    state.conversationGuardError = "";
+    emitChatRefreshState();
+    return {
+      ok:true,
+      pinned:true,
+      rebindPending:true,
+      sticky:true,
+      conversationId:pin.conversationId,
+      candidateConversationId:state.rebindConversationId,
+    };
+  }
   if (currentId === pin.conversationId) {
     state.conversationGuardState = "PINNED";
     state.conversationGuardError = "";
     clearConversationRebindCandidate(state);
+    clearConversationNavigationGrace(state);
     if (alignLatest) void alignPinnedConversationToLatest(cell, view, reason);
     return { ok:true, pinned:true, restored:false, conversationId:pin.conversationId };
   }
   const currentUrl = view.webContents.getURL();
   if (currentId && sameChatProjectConversation(pin.conversationUrl, currentUrl)) {
+    clearConversationNavigationGrace(state);
     state.conversationGuardState = "REBIND_PENDING";
     state.conversationGuardError = "";
     state.rebindTaskId = pin.taskId;
@@ -775,6 +822,41 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
     });
     emitChatRefreshState();
     return { ok:true, pinned:true, rebindPending:true, conversationId:pin.conversationId, candidateConversationId:currentId };
+  }
+  if (!currentId && sameChatProjectRoute(pin.conversationUrl, currentUrl)) {
+    const now = Date.now();
+    const existingUntil = Number(state.conversationNavigationGraceUntilMs || 0);
+    if (existingUntil > now) {
+      state.conversationGuardState = "NAVIGATION_GRACE";
+      return { ok:true, pinned:true, navigationGrace:true, conversationId:pin.conversationId, graceUntilMs:existingUntil };
+    }
+    if (!existingUntil) {
+      const graceUntil = now + CHAT_CONVERSATION_NAVIGATION_GRACE_MS;
+      state.conversationNavigationGraceUntilMs = graceUntil;
+      state.conversationNavigationGraceStartedAt = new Date(now).toISOString();
+      state.conversationNavigationGraceUrl = currentUrl;
+      state.conversationGuardState = "NAVIGATION_GRACE";
+      state.conversationGuardError = "";
+      send("live:connection", {
+        kind:"conversation-guard",
+        cellId:cell.id,
+        workerCode:cell.workerCode,
+        ok:true,
+        code:"CHAT_CONVERSATION_NAVIGATION_GRACE",
+        expectedConversationId:pin.conversationId,
+        taskId:pin.taskId,
+        graceMs:CHAT_CONVERSATION_NAVIGATION_GRACE_MS,
+      });
+      emitChatRefreshState();
+      setTimeout(() => {
+        if (!view || view.webContents.isDestroyed()) return;
+        void ensurePinnedConversation(cell, view, reason + ":navigation-grace-expired", { alignLatest:true });
+      }, CHAT_CONVERSATION_NAVIGATION_GRACE_MS + 80);
+      return { ok:true, pinned:true, navigationGrace:true, conversationId:pin.conversationId, graceUntilMs:graceUntil };
+    }
+    clearConversationNavigationGrace(state);
+  } else {
+    clearConversationNavigationGrace(state);
   }
   if (chatConversationGuardRestoring.has(cell.id)) return { ok:false, pinned:true, restoring:true, conversationId:pin.conversationId };
   if (!conversationGuardAttemptAllowed(cell.id)) {
@@ -1292,6 +1374,7 @@ function publicChatRefreshState() {
     conversationGuardBlockedCount: values.filter((item) => item.conversationGuardState === "BLOCKED").length,
     conversationGuardRestoringCount: values.filter((item) => item.conversationGuardState === "RESTORING").length,
     conversationRebindPendingCount: values.filter((item) => item.conversationGuardState === "REBIND_PENDING").length,
+    conversationNavigationGraceCount: values.filter((item) => item.conversationGuardState === "NAVIGATION_GRACE").length,
     pinnedConversationCount: values.filter((item) => item.conversationGuardState === "PINNED").length,
     domAdapterVersion: CHATGPT_DOM_ADAPTER_VERSION,
   };
@@ -1353,6 +1436,23 @@ async function requestChatRefresh(cellId, reason = "manual") {
   pendingChatRefreshReasons.set(cellId, reason);
   const cell = chatConfigById(cellId);
   const pin = conversationPinForCell(cell);
+  const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+  const rebindDecisionPending = Boolean(
+    cellState.conversationGuardState === "REBIND_PENDING"
+    && pin && !pin.suspended
+    && cellState.rebindTaskId === pin.taskId
+    && cellState.rebindPreviousConversationId === pin.conversationId
+    && cellState.rebindConversationId
+    && currentConversationId === cellState.rebindConversationId
+  );
+  if (rebindDecisionPending) {
+    cellState.deferred = true;
+    cellState.loading = false;
+    cellState.error = "Csevegő-átkötési döntésre vár";
+    pendingChatRefreshReasons.delete(cellId);
+    emitChatRefreshState();
+    return { refreshed:false, deferred:true, rebindPending:true, error:cellState.error };
+  }
   if (pin && !pin.suspended && pin.conversationUrl) {
     await view.webContents.loadURL(pin.conversationUrl).catch((error) => {
       cellState.loading = false;
@@ -2050,13 +2150,14 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
     return { ok:false, code:"MANUAL_REBIND_PIN_REQUIRED", error:"Nincs aktív authoritative conversation pin ehhez a taskhoz." };
   }
   const refreshState = chatRefreshCell(cell.id);
-  const url = view.webContents.getURL();
-  const conversationId = chatConversationIdFromUrl(url);
+  const currentUrl = view.webContents.getURL();
+  const conversationId = chatConversationIdFromUrl(currentUrl);
   if (!conversationId || conversationId === pin.conversationId) {
     return { ok:false, code:"MANUAL_REBIND_NEW_CHAT_REQUIRED", error:"Nyisd meg ugyanabban a ChatGPT Projectben az új /c/... beszélgetést." };
   }
-  if (!sameChatProjectConversation(pin.conversationUrl, url)) {
-    return { ok:false, code:"MANUAL_REBIND_PROJECT_MISMATCH", error:"Az új beszélgetés nem ugyanahhoz a ChatGPT Projecthez tartozik." };
+  const candidateUrl = String(refreshState.rebindConversationUrl || currentUrl || "");
+  if (chatConversationIdFromUrl(candidateUrl) !== conversationId || !sameChatProjectConversation(pin.conversationUrl, candidateUrl)) {
+    return { ok:false, code:"MANUAL_REBIND_PROJECT_MISMATCH", error:"Az új beszélgetés nem ugyanahhoz a ChatGPT Projecthez tartozik, vagy a bizonyított candidate URL eltér a jelenlegi conversationtől." };
   }
   if (refreshState.conversationGuardState !== "REBIND_PENDING"
       || refreshState.rebindTaskId !== id
@@ -2080,11 +2181,11 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
       productionAccess:"DENY",
       surfacePreviousConversationId:pin.conversationId,
       surfaceConversationId:conversationId,
-      surfaceConversationUrl:url,
+      surfaceConversationUrl:candidateUrl,
       surfaceConversationTitle:info.chatTitle || "",
       chatPreviousConversationId:pin.conversationId,
       chatConversationId:conversationId,
-      chatConversationUrl:url,
+      chatConversationUrl:candidateUrl,
       chatConversationTitle:info.chatTitle || "",
     },
   });
@@ -2094,10 +2195,10 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
     surfaceType:"CHATGPT",
     surfacePreviousConversationId:pin.conversationId,
     surfaceConversationId:conversationId,
-    surfaceConversationUrl:url,
+    surfaceConversationUrl:candidateUrl,
     surfaceConversationTitle:info.chatTitle || "",
     chatSessionId:conversationId,
-    chatConversationUrl:url,
+    chatConversationUrl:candidateUrl,
     chatTitle:info.chatTitle || "",
     chatConversationConfirmedAt:confirmedAt,
     manualRebindAt:confirmedAt,
@@ -2111,7 +2212,7 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
   refreshState.pinnedConversationId = conversationId;
   refreshState.conversationGuardError = "";
   clearConversationRebindCandidate(refreshState);
-  rememberChatNavigation(cell.id, url);
+  rememberChatNavigation(cell.id, candidateUrl);
   emitChatRefreshState();
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   send("context:refresh", { reason:"manual-conversation-rebind", taskId:id, workerCode:code, previousConversationId:pin.conversationId, conversationId });

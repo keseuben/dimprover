@@ -3,7 +3,7 @@
 const api = window.chatGrid;
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
 const WORKER_SURFACE_OPTIONS = ["CHATGPT", "CODEX", "WORK"];
-const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.55" });
+const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.56" });
 const WORKER_DEFAULT_LABELS = {
   ARMINAI: "ÁrminAI",
   JAZMINAI: "JázminAI",
@@ -481,7 +481,7 @@ function renderConfig() {
       const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
       const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.55-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.56-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {
@@ -1072,11 +1072,13 @@ function renderChatRefreshStatus() {
   const guardBlocked = Number(refresh.conversationGuardBlockedCount || 0);
   const guardRestoring = Number(refresh.conversationGuardRestoringCount || 0);
   const rebindPending = Number(refresh.conversationRebindPendingCount || 0);
+  const navigationGrace = Number(refresh.conversationNavigationGraceCount || 0);
   const pinned = Number(refresh.pinnedConversationCount || 0);
   let label = `frissítve: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
   if (domBlocked > 0) label = `DOM BLOCKED: ${domBlocked}`;
   else if (guardBlocked > 0) label = `chat guard BLOCKED: ${guardBlocked}`;
   else if (guardRestoring > 0) label = `chat visszaállítás: ${guardRestoring}`;
+  else if (navigationGrace > 0) label = `chat navigáció: ${navigationGrace}`;
   else if (rebindPending > 0) label = `chat átkötés vár: ${rebindPending}`;
   else if (deferred > 0) label = `${deferred} aktív nézet miatt vár`;
   else if (available > 0) label = "frissítés elérhető";
@@ -1090,7 +1092,7 @@ function renderChatRefreshStatus() {
   }
   const headerStatus = $("#headerChatStatus");
   if (headerStatus) {
-    headerStatus.title = `ChatGPT webfelület · ${headerStatus.textContent || "—"} · DOM adapter ${refresh.domAdapterVersion || "—"} · pinned ${pinned} · DOM blocked ${domBlocked} · guard blocked ${guardBlocked} · legutóbbi frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
+    headerStatus.title = `ChatGPT webfelület · ${headerStatus.textContent || "—"} · DOM adapter ${refresh.domAdapterVersion || "—"} · pinned ${pinned} · grace ${navigationGrace} · DOM blocked ${domBlocked} · guard blocked ${guardBlocked} · legutóbbi frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
   }
   const headerButton = $("#headerChatRefreshButton");
   if (headerButton) {
@@ -1104,6 +1106,7 @@ function renderChatRefreshStatus() {
     ? `${domBlocked} ChatGPT nézet DOM-adaptere nem egészséges. Selector/UI változás gyanú; automatikus műveletek fail-closed állapotban.`
     : guardBlocked > 0 ? `${guardBlocked} aktív worker conversation guardja blokkolt; az authoritative /c/... útvonal nem volt visszaállítható.`
     : guardRestoring > 0 ? `${guardRestoring} worker csevegése automatikus visszaállítás alatt van.`
+    : navigationGrace > 0 ? `${navigationGrace} worker ugyanazon ChatGPT Projecten belüli navigációjára vár; a Grid rövid ideig nem állítja vissza a régi chatet.`
     : rebindPending > 0 ? `${rebindPending} worker ugyanazon ChatGPT Projecten belül másik csevegést nyitott. A cellában a CSEVEGŐ ÁTKÖTÉSE gombbal erősíthető meg.`
     : deferred > 0 ? `${deferred} nézet frissítése aktív válasz vagy piszkozat miatt biztonságosan elhalasztva.`
     : available > 0 ? `${available} ChatGPT nézeten frissítési jelzés látható.`

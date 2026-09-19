@@ -36,7 +36,7 @@ function dbClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) throw new Error("A DEV adatbázis-kapcsolat nincs konfigurálva.");
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false }, global: { headers: { "x-client-info": "dimpro-developer-grid-task-bridge/0.1.54" } } });
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false }, global: { headers: { "x-client-info": "dimpro-developer-grid-task-bridge/0.1.55" } } });
 }
 function text(value: unknown, max = 12000) { return String(value ?? "").trim().slice(0, max); }
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }

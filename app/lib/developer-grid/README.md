@@ -369,7 +369,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A v0.1.50-ből örökölt, nem transcript-igazolt retry állapot nem blokkolja a v0.1.51 első ellenőrzött próbálkozását.
 - A recovery továbbra is kizárólag read-only legacy actionokra használható; WRITE_FILE és RUN_DEV_COMMAND fail-closed.
 - Új TASK_LAUNCH továbbra sem keletkezik.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.55.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.56.
 
 
 ## v0.1.52 · Multi-session live snapshot
@@ -380,7 +380,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A legacy chatConversationId és chatConversationUrl továbbra is felpromotálódik generikus surfaceConversationId / surfaceConversationUrl mezővé.
 - Ez megszünteti azt a hibát, amikor egy másik worker globális current taskja miatt a BenjáminAI aktív taskja eltűnt a Desktop live contextből, és emiatt leállt a Conversation Memory / Execution Recovery ciklus.
 - PROD továbbra is DENY.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.55.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.56.
 
 ### v0.1.52 · Task / Context / Checkpoint worker-cell actions
 
@@ -435,5 +435,22 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Kézi rebind alatt a Central Core engine task `RUNNING` marad; új task, új session vagy `TASK_LAUNCH` nem készül.
 - Ha a felhasználó a megerősítés előtt visszatér az eredeti pinned chathez, a `REBIND_PENDING` állapot automatikusan megszűnik.
 - A footer/header telemetria külön jelzi a várakozó rebindet.
-- A Work first-party adapter aktiválása v0.1.55-re került; v0.1.54 kizárólag a conversation continuity hotfix.
+- A Work first-party adapter aktiválása v0.1.56-ra került; v0.1.55 kizárólag a conversation continuity hotfix.
+- DEV ONLY · PROD DENY.
+
+## v0.1.55 · ChatGPT conversation navigation grace
+
+- A v0.1.54 fizikai E2E-ben kiderült, hogy a ChatGPT ugyanazon Projecten belüli kézi chatváltáskor röviden Project root route-ra kerülhet, mielőtt az új `/c/...` conversation URL megjelenik.
+- A korábbi 120 ms-os pinned conversation guard ezt túl korán driftnek minősítette és visszatöltötte a régi authoritative chatet, ezért a `REBIND_PENDING` állapot nem tudott kialakulni.
+- v0.1.55-ben ugyanazon ChatGPT Project root/átmeneti route-jára legfeljebb 2200 ms `NAVIGATION_GRACE` jár. Ebben az ablakban nincs automatikus restore.
+- Ha a grace alatt új, ugyanazon Projecthez tartozó `/c/...` route jelenik meg, a meglévő v0.1.54 folyamat szerint `REBIND_PENDING` lesz, és megjelenik a `CSEVEGŐ ÁTKÖTÉSE` gomb.
+- Ha a grace lejár és továbbra sincs új conversation ID, a Grid visszaállítja a korábbi authoritative pinned chatet.
+- Másik ChatGPT Project, általános homepage vagy nem engedélyezett route nem kap grace időt; ezeknél a fail-closed restore változatlan.
+- A pinned chathez való visszatérés azonnal törli a grace állapotot.
+- A footer/settings telemetria külön mutatja a `chat navigáció` / `NAVIGATION_GRACE` állapotot.
+- Ha az új conversation egyszer már `REBIND_PENDING` állapotba került, az állapot ugyanahhoz a candidate conversation ID-hoz sticky marad akkor is, ha ChatGPT a project-qualified URL-t később sima `/c/...` route-ra canonicalizálja.
+- `REBIND_PENDING` alatt az automatikus ChatGPT refresh és a Conversation Memory mismatch út nem töltheti vissza a régi pinned conversationt; a refresh biztonságosan `deferred` lesz a felhasználói döntésig.
+- A `CSEVEGŐ ÁTKÖTÉSE` művelet a pending állapotban korábban bizonyított, project-qualified candidate URL-t használja, így az ugyanazon ChatGPT Projecthez tartozás a canonicalizált `/c/...` route után is bizonyítható.
+- A pending állapot csak a régi pinned chathez való visszatéréskor vagy sikeres explicit rebind után törlődik.
+- A Work first-party adapter aktiválása v0.1.56-ra került; v0.1.55 kizárólag a conversation continuity hotfix.
 - DEV ONLY · PROD DENY.

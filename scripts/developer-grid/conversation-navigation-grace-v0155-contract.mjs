@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const read=(rel)=>fs.readFileSync(path.join(root,rel),"utf8");
+const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
+const types=read("app/lib/developer-grid/types.ts");
+const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
+const renderer=read("desktop/benjadmin-developer-grid/src/renderer/renderer.js");
+const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface.cjs");
+const adapter=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");
+
+let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("desktop version v0.1.55",()=>assert.equal(pkg.version,"0.1.55"));
+check("backend version v0.1.55-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.55-dev"/));
+check("navigation grace is bounded to 2200ms",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 2200/));
+check("same-project route helper accepts project routes",()=>assert.match(main,/function sameChatProjectRoute\(/));
+check("project key helper requires ChatGPT project path",()=>assert.match(main,/\^\\\/g\\\/\(g-p-\[\^\/\]\+\)\(\?:\\\/\|\$\)/));
+check("grace only applies without current conversation id",()=>assert.match(main,/if \(!currentId && sameChatProjectRoute\(pin\.conversationUrl, currentUrl\)\)/));
+check("grace starts before automatic restore",()=>{const g=main.indexOf('code:"CHAT_CONVERSATION_NAVIGATION_GRACE"');const r=main.indexOf('chatConversationGuardRestoring.has(cell.id)',g);assert.ok(g>0&&r>g)});
+check("grace records explicit guard state",()=>assert.match(main,/conversationGuardState = "NAVIGATION_GRACE"/));
+check("grace emits explicit telemetry event",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE/));
+check("grace schedules recheck after expiry",()=>assert.match(main,/navigation-grace-expired/));
+check("grace expiry still reaches authoritative restore",()=>assert.match(main,/await view\.webContents\.loadURL\(pin\.conversationUrl\)/));
+check("new same-project conversation still becomes rebind pending",()=>assert.match(main,/currentId && sameChatProjectConversation\(pin\.conversationUrl, currentUrl\)[\s\S]*REBIND_PENDING/));
+check("return to pinned conversation clears grace",()=>assert.match(main,/currentId === pin\.conversationId[\s\S]*clearConversationNavigationGrace\(state\)/));
+check("foreign route clears grace instead of extending it",()=>assert.match(main,/\} else \{\s*clearConversationNavigationGrace\(state\);\s*\}\s*if \(chatConversationGuardRestoring/));
+check("public refresh state exposes grace count",()=>assert.match(main,/conversationNavigationGraceCount/));
+check("renderer exposes navigation grace telemetry",()=>{assert.match(renderer,/navigationGrace = Number\(refresh\.conversationNavigationGraceCount/);assert.match(renderer,/chat navigáció:/)});
+check("manual rebind remains present",()=>assert.match(renderer,/CSEVEGŐ ÁTKÖTÉSE/));
+check("Work activation postponed to v0.1.56",()=>{assert.match(surface,/plannedVersion: "0\.1\.56"/);assert.match(adapter,/WORK_SURFACE_PLANNED_V0155/)});
+console.log(`Developer Grid conversation navigation grace v0.1.55 contract PASS · ${n}/${n}`);
