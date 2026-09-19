@@ -475,3 +475,14 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A candidate smoke kötelezően ellenőrzi: Windows Bridge ON, pairing ON, execution OFF, pairing secret konfigurált, PROD execution tiltott. Hiányos runtime-env esetén a candidate nem adható ki.
 - A Work first-party adapter aktiválása v0.1.58-ra került.
 - DEV ONLY · PROD DENY.
+
+## v0.1.58 · Worker chat navigation isolation
+
+- A négy worker és a központi ChatGPT nézet külön Electron persistent partitiont kap. A localStorage, IndexedDB, Service Worker és BroadcastChannel állapot cellánként izolált, ezért egy worker ChatGPT navigációja nem szivároghat át más worker nézetére.
+- A korábbi közös `persist:benjadmin-developer-grid-chatgpt` partition csak auth-cookie seedként marad meg. Első v0.1.58 induláskor az üres cella-partitionök automatikusan megkapják a meglévő ChatGPT cookie-kat, ezért nem kell cellánként újra bejelentkezni.
+- A cookie-változások kontrolláltan szinkronizálódnak az izolált partitionök között, loop-suppression védelemmel; a kliensoldali route/storage állapot viszont nem közös.
+- ChatGPT `window.open` link ugyanabban a worker-cellában nyílik meg; külön Electron gyermekablak nem készül.
+- Conversation mismatch esetén automatikus pinned restore navigáció tiltott. Bizonyított azonos projekten belüli váltás `REBIND_PENDING`; egyéb eltérés `MISMATCH_BLOCKED` vagy `BROWSING`, de egyik állapot sem navigálhat másik URL-re önállóan.
+- Új task/session/TASK_LAUNCH nem keletkezik.
+- A Work first-party adapter aktiválása v0.1.59-re került.
+- DEV ONLY · PROD DENY.

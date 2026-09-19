@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const main=fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+let n=0; function check(name,fn){fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+name);}
+check("legacy shared partition is retained only as auth seed",()=>assert.match(main,/const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt"/));
+check("isolated partition prefix exists",()=>assert.match(main,/CHAT_PARTITION_PREFIX = "persist:benjadmin-developer-grid-chatgpt-cell-"/));
+check("cell partition helper exists",()=>assert.match(main,/function chatPartitionForCell\(cell\)/));
+check("WebContentsView uses cell-specific partition",()=>assert.match(main,/partition: chatSessionPartitions\.get\(cell\.id\) \|\| chatPartitionForCell\(cell\)/));
+check("WebContentsView no longer binds directly to shared partition",()=>{const a=main.indexOf("function createChatView");const b=main.indexOf("function createEnabledChatViews",a);assert.doesNotMatch(main.slice(a,b),/partition: CHAT_PARTITION/);});
+check("isolated sessions initialize before shell window",()=>{const a=main.indexOf("await initializeIsolatedChatSessions()");const b=main.indexOf("createShellWindow()",a);assert.ok(a>0&&b>a);});
+check("isolated partitions inherit only missing legacy auth cookies",()=>{assert.match(main,/const existingKeys = new Set/);assert.match(main,/if \(!existingKeys\.has\(key\)\) await applyChatCookieToPartition/);});
+check("host-only cookies remain host-only",()=>assert.match(main,/cookie\.domain && cookie\.hostOnly !== true/));
+check("cookie synchronization listener is installed",()=>assert.match(main,/sourceSession\.cookies\.on\("changed", listener\)/));
+check("cookie synchronization suppresses loops",()=>assert.match(main,/consumeChatCookieSuppression\(partition, cookie, removed\)/));
+check("permissions are configured per isolated session",()=>assert.match(main,/configureChatSession\(session\.fromPartition\(partition\)\)/));
+check("all configured worker and central cells receive partitions",()=>assert.match(main,/for \(const cell of configs\)/));
+check("cookie listeners are removed on quit",()=>assert.match(main,/cookies\.removeListener\("changed", listener\)/));
+console.log("Developer Grid ChatGPT session isolation v0.1.58 contract PASS · "+n+"/"+n);

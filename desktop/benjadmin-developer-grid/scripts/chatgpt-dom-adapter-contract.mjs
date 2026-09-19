@@ -56,19 +56,24 @@ check("active worker conversation is pinned by exact conversation id",()=>{
   assert.ok(main.includes("state.pinnedConversationId = pin.conversationId"));
 });
 check("rollover transition suspends normal pin guard",()=>assert.ok(main.includes('["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT"]')));
-check("conversation guard restores exact authoritative URL",()=>{
-  assert.ok(main.includes("await view.webContents.loadURL(pin.conversationUrl)"));
-  assert.ok(main.includes("CHAT_CONVERSATION_RESTORED"));
+check("conversation guard never auto-restores authoritative URL",()=>{
+  const a=main.indexOf("async function ensurePinnedConversation");
+  const b=main.indexOf("function schedulePinnedConversationGuard",a);
+  const block=main.slice(a,b);
+  assert.ok(block.includes("CHAT_CONVERSATION_MISMATCH_NO_NAVIGATION"));
+  assert.ok(block.includes("CHAT_CONVERSATION_BROWSE_NO_NAVIGATION"));
+  assert.ok(!block.includes("loadURL(pin.conversationUrl)"));
+  assert.ok(!block.includes("CHAT_CONVERSATION_RESTORED"));
 });
 check("same-project alternate conversation waits for explicit rebind",()=>{
   assert.ok(main.includes("sameChatProjectConversation(pin.conversationUrl, currentUrl)"));
   assert.ok(main.includes('state.conversationGuardState = "REBIND_PENDING"'));
   assert.ok(main.includes("CHAT_CONVERSATION_REBIND_PENDING"));
 });
-check("conversation guard is rate limited",()=>{
-  assert.ok(main.includes("30_000"));
-  assert.ok(main.includes("count >= 3"));
-  assert.ok(main.includes("CHAT_CONVERSATION_GUARD_RATE_LIMIT"));
+check("obsolete automatic restore rate limiter is removed",()=>{
+  assert.ok(!main.includes("conversationGuardAttemptAllowed"));
+  assert.ok(!main.includes("CHAT_CONVERSATION_GUARD_RATE_LIMIT"));
+  assert.ok(!main.includes("chatConversationGuardRestoring"));
 });
 check("navigation events enforce pin guard",()=>{
   assert.ok(main.includes('schedulePinnedConversationGuard(cell, view, "did-navigate", 120)'));

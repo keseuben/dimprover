@@ -41,8 +41,8 @@ const memory={
   handoff:{id:"hp-rollover-1",summary:"Frozen continuity"},
 };
 
-check("desktop version v0.1.57",()=>assert.equal(pkg.version,"0.1.57"));
-check("backend version v0.1.57-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.57-dev"/));
+check("desktop version v0.1.58",()=>assert.equal(pkg.version,"0.1.58"));
+check("backend version v0.1.58-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.58-dev"/));
 check("Hungarian maximum conversation marker detected",()=>{
   const x=rollover.detectConversationLimit([{role:"ASSISTANT",messageId:"hu",text:"Elérted a beszélgetés maximális hosszát, de folytathatod a beszélgetést egy új csevegés indításával. Új csevegés indítása"}]);
   assert.equal(x.reached,true); assert.equal(x.reason,"CONVERSATION_LIMIT_REACHED");
@@ -169,4 +169,4 @@ check("conversation binding no longer requires global primary task identity",()=
   assert.doesNotMatch(backend,/DEVELOPER_GRID_CHAT_TASK_MISMATCH/);
 });
 
-console.log(`Developer Grid conversation rollover v0.1.57 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid conversation rollover v0.1.58 contract PASS · ${n}/${n}`);

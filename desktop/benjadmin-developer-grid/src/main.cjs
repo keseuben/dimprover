@@ -26,6 +26,8 @@ const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLitera
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
+const CHAT_PARTITION_PREFIX = "persist:benjadmin-developer-grid-chatgpt-cell-";
+const CHAT_COOKIE_SYNC_SUPPRESS_MS = 2500;
 const APP_BAR_HEIGHT = 44;
 const CELL_HEADER_HEIGHT = 108;
 const DEVELOPER_FOOTER_HEIGHT = 42;
@@ -54,6 +56,9 @@ let shellWindow = null;
 let config = null;
 let unlocked = false;
 let chatViews = new Map();
+let chatSessionPartitions = new Map();
+let chatCookieSyncSuppressions = new Map();
+let chatCookieSyncListeners = [];
 let liveClient = null;
 let reporterKeyMemory = "";
 let deviceTokenMemory = "";
@@ -102,8 +107,6 @@ const processedExecutionRequestHashes = new Set();
 const executionRequestProcessingKeys = new Set();
 const executionRequestRecoveryKeys = new Set();
 const conversationRolloverProcessingKeys = new Set();
-const chatConversationGuardRestoring = new Set();
-const chatConversationGuardAttempts = new Map();
 const chatLatestAlignmentTokens = new Map();
 const CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 10_000;
 let desktopArtifactIdentityCache = null;
@@ -719,17 +722,6 @@ function clearConversationNavigationGrace(state) {
   state.conversationNavigationGraceUrl = "";
 }
 
-function conversationGuardAttemptAllowed(cellId) {
-  const now = Date.now();
-  const previous = chatConversationGuardAttempts.get(cellId);
-  const sameWindow = Boolean(previous && now - previous.windowStart < 30_000);
-  const windowStart = sameWindow ? previous.windowStart : now;
-  const count = sameWindow ? previous.count : 0;
-  if (count >= 3) return false;
-  chatConversationGuardAttempts.set(cellId, { windowStart, count:count + 1 });
-  return true;
-}
-
 async function alignPinnedConversationToLatest(cell, view, reason = "navigation") {
   if (!cell || !view || view.webContents.isDestroyed()) return { ok:false, reason:"chat-unavailable" };
   const token = String(Date.now()) + "-" + Math.random().toString(16).slice(2);
@@ -891,41 +883,41 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
   } else {
     clearConversationNavigationGrace(state);
   }
-  if (chatConversationGuardRestoring.has(cell.id)) return { ok:false, pinned:true, restoring:true, conversationId:pin.conversationId };
-  if (!conversationGuardAttemptAllowed(cell.id)) {
-    state.conversationGuardState = "BLOCKED";
-    state.conversationGuardError = "Túl sok automatikus conversation-visszaállítás 30 másodpercen belül.";
-    send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:false, code:"CHAT_CONVERSATION_GUARD_RATE_LIMIT", expectedConversationId:pin.conversationId, currentConversationId:currentId || null });
-    return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
-  }
-  chatConversationGuardRestoring.add(cell.id);
-  state.conversationGuardState = "RESTORING";
-  state.conversationGuardError = "";
+  clearConversationNavigationGrace(state);
   state.conversationGuardLastReason = reason;
-  try {
-    await view.webContents.loadURL(pin.conversationUrl);
-    const restoredId = chatConversationIdFromUrl(view.webContents.getURL());
-    if (restoredId !== pin.conversationId) {
-      state.conversationGuardState = "BLOCKED";
-      state.conversationGuardError = "A visszaállított ChatGPT route eltér az authoritative conversationtől (" + (restoredId || "NINCS") + ").";
-      send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:false, code:"CHAT_CONVERSATION_RESTORE_MISMATCH", expectedConversationId:pin.conversationId, currentConversationId:restoredId || null });
-      return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
-    }
-    state.conversationGuardState = "PINNED";
-    state.conversationGuardRestoredAt = new Date().toISOString();
-    state.conversationGuardRestoreCount = Number(state.conversationGuardRestoreCount || 0) + 1;
-    rememberChatNavigation(cell.id, view.webContents.getURL());
-    send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:true, code:"CHAT_CONVERSATION_RESTORED", expectedConversationId:pin.conversationId, reason });
-    if (alignLatest) void alignPinnedConversationToLatest(cell, view, reason + ":restored");
-    return { ok:true, pinned:true, restored:true, conversationId:pin.conversationId };
-  } catch (error) {
-    state.conversationGuardState = "BLOCKED";
-    state.conversationGuardError = String(error?.message || error || "Conversation restore failed").slice(0, 500);
-    return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
-  } finally {
-    chatConversationGuardRestoring.delete(cell.id);
+  state.conversationGuardRestoredAt = "";
+  if (currentId) {
+    state.conversationGuardState = "MISMATCH_BLOCKED";
+    state.conversationGuardError = "Eltérő ChatGPT conversation észlelve. Automatikus visszanavigálás tiltva; átkötés csak bizonyított projektkapcsolattal és explicit jóváhagyással végezhető.";
+    send("live:connection", {
+      kind:"conversation-guard",
+      cellId:cell.id,
+      workerCode:cell.workerCode,
+      ok:false,
+      code:"CHAT_CONVERSATION_MISMATCH_NO_NAVIGATION",
+      expectedConversationId:pin.conversationId,
+      currentConversationId:currentId,
+      taskId:pin.taskId,
+      reason,
+    });
     emitChatRefreshState();
+    return { ok:false, pinned:true, blocked:true, mismatch:true, noNavigation:true, conversationId:pin.conversationId, currentConversationId:currentId };
   }
+  state.conversationGuardState = "BROWSING";
+  state.conversationGuardError = "";
+  send("live:connection", {
+    kind:"conversation-guard",
+    cellId:cell.id,
+    workerCode:cell.workerCode,
+    ok:true,
+    code:"CHAT_CONVERSATION_BROWSE_NO_NAVIGATION",
+    expectedConversationId:pin.conversationId,
+    currentConversationId:null,
+    taskId:pin.taskId,
+    reason,
+  });
+  emitChatRefreshState();
+  return { ok:true, pinned:true, browsing:true, noNavigation:true, conversationId:pin.conversationId };
 }
 
 function schedulePinnedConversationGuard(cell, view, reason = "navigation", delayMs = 250) {
@@ -1165,8 +1157,135 @@ function chatConfigById(chatId) {
   return config?.cells?.find((item) => item.id === chatId) || null;
 }
 
-function allChatConfigs() {
-  return [...(config?.cells || []), ...(config?.centralChat?.enabled === false ? [] : [config.centralChat])];
+function chatPartitionForCell(cell) {
+  const id = String(cell?.id || "central").toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "central";
+  return CHAT_PARTITION_PREFIX + id;
+}
+
+function chatCookieUrl(cookie) {
+  const host = String(cookie?.domain || "").replace(/^\./, "").trim();
+  if (!host) return "";
+  const pathName = String(cookie?.path || "/");
+  return (cookie?.secure === false ? "http://" : "https://") + host + (pathName.startsWith("/") ? pathName : "/" + pathName);
+}
+
+function normalizedChatCookie(cookie) {
+  const url = chatCookieUrl(cookie);
+  if (!url || !cookie?.name) return null;
+  const out = {
+    url,
+    name: String(cookie.name),
+    value: String(cookie.value || ""),
+    path: String(cookie.path || "/"),
+    secure: cookie.secure !== false,
+    httpOnly: cookie.httpOnly === true,
+  };
+  if (cookie.domain && cookie.hostOnly !== true) out.domain = String(cookie.domain);
+  if (cookie.sameSite && ["unspecified", "no_restriction", "lax", "strict"].includes(String(cookie.sameSite))) out.sameSite = String(cookie.sameSite);
+  if (Number.isFinite(Number(cookie.expirationDate))) out.expirationDate = Number(cookie.expirationDate);
+  return out;
+}
+
+function chatCookieFingerprint(partition, cookie, removed) {
+  return [partition, removed ? "REMOVE" : "SET", String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|");
+}
+
+function suppressChatCookieEvent(partition, cookie, removed) {
+  const key = chatCookieFingerprint(partition, cookie, removed);
+  chatCookieSyncSuppressions.set(key, Date.now() + CHAT_COOKIE_SYNC_SUPPRESS_MS);
+}
+
+function consumeChatCookieSuppression(partition, cookie, removed) {
+  const now = Date.now();
+  for (const [key, until] of chatCookieSyncSuppressions.entries()) if (until <= now) chatCookieSyncSuppressions.delete(key);
+  const key = chatCookieFingerprint(partition, cookie, removed);
+  const until = Number(chatCookieSyncSuppressions.get(key) || 0);
+  if (until <= now) return false;
+  chatCookieSyncSuppressions.delete(key);
+  return true;
+}
+
+async function applyChatCookieToPartition(partition, cookie, removed) {
+  const targetSession = session.fromPartition(partition);
+  const url = chatCookieUrl(cookie);
+  if (!url || !cookie?.name) return;
+  suppressChatCookieEvent(partition, cookie, removed);
+  try {
+    if (removed) await targetSession.cookies.remove(url, String(cookie.name));
+    else {
+      const normalized = normalizedChatCookie(cookie);
+      if (normalized) await targetSession.cookies.set(normalized);
+    }
+  } catch {
+    chatCookieSyncSuppressions.delete(chatCookieFingerprint(partition, cookie, removed));
+  }
+}
+
+function configureChatSession(chatSession) {
+  chatSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) => {
+    const origin = requestingOrigin || details?.requestingUrl || details?.securityOrigin || "";
+    if (permission === "notifications") return isChatGptUrl(origin);
+    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") return isChatGptUrl(origin);
+    if (permission === "fileSystem") return isChatGptUrl(origin) && details?.fileAccessType !== "writable" && details?.isDirectory !== true;
+    if (permission !== "media" || config.microphoneEnabled !== true || !isChatGptUrl(origin)) return false;
+    const mediaType = details?.mediaType;
+    return !mediaType || mediaType === "audio" || mediaType === "unknown";
+  });
+  chatSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    const requestUrl = details?.requestingUrl || details?.requestingOrigin || "";
+    if (permission === "notifications") { callback(isChatGptUrl(requestUrl)); return; }
+    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") { callback(isChatGptUrl(requestUrl)); return; }
+    if (permission === "fileSystem") { callback(isChatGptUrl(requestUrl) && details?.fileAccessType !== "writable" && details?.isDirectory !== true); return; }
+    if (permission === "media" && config.microphoneEnabled === true) {
+      const mediaTypes = Array.isArray(details?.mediaTypes) ? details.mediaTypes : [];
+      callback(isChatGptUrl(requestUrl) && (mediaTypes.length === 0 || mediaTypes.every((type) => type === "audio")));
+      return;
+    }
+    callback(false);
+  });
+  chatSession.on("file-system-access-restricted", (_event, details, callback) => {
+    callback(isChatGptUrl(details?.origin || "") && details?.isDirectory !== true ? "allow" : "deny");
+  });
+}
+
+async function initializeIsolatedChatSessions() {
+  const configs = [...(config?.cells || []), ...(config?.centralChat ? [config.centralChat] : [])];
+  const legacySession = session.fromPartition(CHAT_PARTITION);
+  configureChatSession(legacySession);
+  chatSessionPartitions = new Map();
+  for (const cell of configs) {
+    const partition = chatPartitionForCell(cell);
+    chatSessionPartitions.set(cell.id, partition);
+    configureChatSession(session.fromPartition(partition));
+  }
+
+  const legacyCookies = await legacySession.cookies.get({}).catch(() => []);
+  for (const partition of new Set(chatSessionPartitions.values())) {
+    const targetSession = session.fromPartition(partition);
+    const existing = await targetSession.cookies.get({}).catch(() => []);
+    const existingKeys = new Set(existing.map((cookie) =>
+      [String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|")
+    ));
+    for (const cookie of legacyCookies) {
+      const key = [String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|");
+      if (!existingKeys.has(key)) await applyChatCookieToPartition(partition, cookie, false);
+    }
+  }
+
+  const partitions = [CHAT_PARTITION, ...new Set(chatSessionPartitions.values())];
+  chatCookieSyncListeners = [];
+  for (const partition of partitions) {
+    const sourceSession = session.fromPartition(partition);
+    const listener = (_event, cookie, _cause, removed) => {
+      if (consumeChatCookieSuppression(partition, cookie, removed)) return;
+      for (const target of partitions) {
+        if (target === partition) continue;
+        void applyChatCookieToPartition(target, cookie, removed);
+      }
+    };
+    sourceSession.cookies.on("changed", listener);
+    chatCookieSyncListeners.push({ partition, listener });
+  }
 }
 
 
@@ -1556,7 +1675,7 @@ function createChatView(cell) {
   }
   const view = new WebContentsView({
     webPreferences: {
-      partition: CHAT_PARTITION,
+      partition: chatSessionPartitions.get(cell.id) || chatPartitionForCell(cell),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -1570,14 +1689,23 @@ function createChatView(cell) {
   view.webContents.setUserAgent(browserUa);
   view.webContents.setWindowOpenHandler(({ url }) => {
     if (!allowedChatUrl(url)) return { action: "deny" };
-    return {
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        title: APP_TITLE,
-        autoHideMenuBar: true,
-        webPreferences: { partition: CHAT_PARTITION, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true }
-      }
-    };
+    if (isChatGptUrl(url)) {
+      setImmediate(() => {
+        if (!view.webContents.isDestroyed()) {
+          const navState = chatRefreshCell(cell.id);
+          navState.lastNavigationIntent = "WINDOW_OPEN_SAME_VIEW";
+          navState.lastNavigationIntentUrl = url;
+          navState.lastNavigationIntentAt = new Date().toISOString();
+          void view.webContents.loadURL(url).catch((error) => {
+            navState.error = String(error?.message || error || "ChatGPT same-view navigation failed").slice(0, 500);
+            emitChatRefreshState();
+          });
+        }
+      });
+      return { action: "deny" };
+    }
+    setImmediate(() => void shell.openExternal(url).catch(() => undefined));
+    return { action: "deny" };
   });
   view.webContents.on("will-navigate", (event, url) => {
     if (!allowedChatUrl(url)) event.preventDefault();
@@ -4784,7 +4912,7 @@ function registerIpc() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(APP_TITLE);
   config = loadConfig();
   // v0.1.13: a dockolt Fejlesztői Vezérlőpult futásidejű felület.
@@ -4793,36 +4921,7 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = config.appearance === "light" ? "light" : "dark";
   applyLoginItemSetting();
   registerIpc();
-  const chatSession = session.fromPartition(CHAT_PARTITION);
-  chatSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) => {
-    const origin = requestingOrigin || details?.requestingUrl || details?.securityOrigin || "";
-    if (permission === "notifications") return isChatGptUrl(origin);
-    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") return isChatGptUrl(origin);
-    if (permission === "fileSystem") {
-      return isChatGptUrl(origin) && details?.fileAccessType !== "writable" && details?.isDirectory !== true;
-    }
-    if (permission !== "media" || config.microphoneEnabled !== true || !isChatGptUrl(origin)) return false;
-    const mediaType = details?.mediaType;
-    return !mediaType || mediaType === "audio" || mediaType === "unknown";
-  });
-  chatSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
-    const requestUrl = details?.requestingUrl || details?.requestingOrigin || "";
-    if (permission === "notifications") { callback(isChatGptUrl(requestUrl)); return; }
-    if (permission === "clipboard-sanitized-write" || permission === "clipboard-write") { callback(isChatGptUrl(requestUrl)); return; }
-    if (permission === "fileSystem") {
-      callback(isChatGptUrl(requestUrl) && details?.fileAccessType !== "writable" && details?.isDirectory !== true);
-      return;
-    }
-    if (permission === "media" && config.microphoneEnabled === true) {
-      const mediaTypes = Array.isArray(details?.mediaTypes) ? details.mediaTypes : [];
-      callback(isChatGptUrl(requestUrl) && (mediaTypes.length === 0 || mediaTypes.every((type) => type === "audio")));
-      return;
-    }
-    callback(false);
-  });
-  chatSession.on("file-system-access-restricted", (_event, details, callback) => {
-    callback(isChatGptUrl(details?.origin || "") && details?.isDirectory !== true ? "allow" : "deny");
-  });
+  await initializeIsolatedChatSessions();
   createShellWindow();
   registerGlobalShortcuts();
   startChatRefreshMaintenance();
@@ -4831,6 +4930,14 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => { appQuitting = true; });
-app.on("will-quit", () => { stopChatRefreshMaintenance(); stopConversationMemoryMonitor(); globalShortcut.unregisterAll(); });
+app.on("will-quit", () => {
+  stopChatRefreshMaintenance();
+  stopConversationMemoryMonitor();
+  for (const { partition, listener } of chatCookieSyncListeners) {
+    try { session.fromPartition(partition).cookies.removeListener("changed", listener); } catch {}
+  }
+  chatCookieSyncListeners = [];
+  globalShortcut.unregisterAll();
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!shellWindow) createShellWindow(); });
