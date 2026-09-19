@@ -15,8 +15,8 @@ const renderer = read("desktop/benjadmin-developer-grid/src/renderer/renderer.js
 let n=0;
 function check(name, fn){ fn(); n+=1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.55",()=>assert.equal(pkg.version,"0.1.55"));
-check("backend version v0.1.55-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.55-dev"/));
+check("desktop version v0.1.56",()=>assert.equal(pkg.version,"0.1.56"));
+check("backend version v0.1.56-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/));
 check("manual rebind confirmation provenance is typed",()=>assert.match(types,/USER_MANUAL_REBIND/));
 check("backend exposes explicit manualRebind path",()=>assert.match(backend,/const manualRebind = rawInput\.manualRebind === true/));
 check("manual rebind requires exact authoritative previous conversation",()=>assert.match(backend,/surfacePreviousConversationId !== authoritativeConversationId/));
@@ -42,4 +42,4 @@ check("refresh telemetry exposes pending rebind count",()=>assert.match(main,/co
 check("refresh event rerenders worker header immediately",()=>assert.match(renderer,/onChatRefreshState\?\.[\s\S]*renderLive\(\)[\s\S]*renderChatRefreshStatus\(\)/));
 check("manual rebind response explicitly preserves same task without new launch",()=>assert.match(main,/Új TASK_LAUNCH nem készült/));
 
-console.log(`Developer Grid manual conversation rebind v0.1.55 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid manual conversation rebind v0.1.56 contract PASS · ${n}/${n}`);

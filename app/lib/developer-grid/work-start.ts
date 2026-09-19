@@ -37,8 +37,8 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.56-ra van előkészítve. Task létrehozása v0.1.55-ben tiltott.");
-    Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0155", status: 409 });
+      : "A Work OpenAI first-party surface v0.1.57-re van előkészítve. Task létrehozása v0.1.56-ban tiltott.");
+    Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0156", status: 409 });
     throw error;
   }
   const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();

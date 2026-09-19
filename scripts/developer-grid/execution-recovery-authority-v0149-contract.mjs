@@ -8,8 +8,8 @@ const types=fs.readFileSync("app/lib/developer-grid/types.ts","utf8");
 let n=0;
 const check=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label)};
 
-check("desktop version v0.1.55",()=>assert.equal(pkg.version,"0.1.55"));
-check("backend version v0.1.55-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.55-dev"/));
+check("desktop version v0.1.56",()=>assert.equal(pkg.version,"0.1.56"));
+check("backend version v0.1.56-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/));
 check("recovery authority resolver exists",()=>assert.match(main,/async function resolveExecutionRecoveryAuthority/));
 check("resolver uses read-only active work fetch",()=>assert.match(main,/fetchDeveloperGridActiveWork\(\{/));
 check("resolver requires exact task id",()=>assert.match(main,/String\(item\?\.taskId \|\| ""\) === taskId/));
@@ -38,4 +38,4 @@ check("legacy recovery still read-only",()=>{
 check("new Task Launch remains forbidden",()=>assert.match(main,/új TASK_LAUNCH küldése TILOS/));
 check("authority source diagnostics persisted",()=>assert.match(main,/executionRecoveryAuthoritySource/));
 
-console.log("Developer Grid execution recovery authority v0.1.55 contract PASS · "+n+"/"+n);
+console.log("Developer Grid execution recovery authority v0.1.56 contract PASS · "+n+"/"+n);

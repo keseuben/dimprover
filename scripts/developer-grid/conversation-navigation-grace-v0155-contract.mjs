@@ -13,8 +13,8 @@ const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface
 const adapter=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");
 
 let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-check("desktop version v0.1.55",()=>assert.equal(pkg.version,"0.1.55"));
-check("backend version v0.1.55-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.55-dev"/));
+check("desktop version v0.1.56",()=>assert.equal(pkg.version,"0.1.56"));
+check("backend version v0.1.56-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/));
 check("navigation grace is bounded to 2200ms",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 2200/));
 check("same-project route helper accepts project routes",()=>assert.match(main,/function sameChatProjectRoute\(/));
 check("project key helper requires ChatGPT project path",()=>assert.match(main,/\^\\\/g\\\/\(g-p-\[\^\/\]\+\)\(\?:\\\/\|\$\)/));
@@ -30,5 +30,5 @@ check("foreign route clears grace instead of extending it",()=>assert.match(main
 check("public refresh state exposes grace count",()=>assert.match(main,/conversationNavigationGraceCount/));
 check("renderer exposes navigation grace telemetry",()=>{assert.match(renderer,/navigationGrace = Number\(refresh\.conversationNavigationGraceCount/);assert.match(renderer,/chat navigáció:/)});
 check("manual rebind remains present",()=>assert.match(renderer,/CSEVEGŐ ÁTKÖTÉSE/));
-check("Work activation postponed to v0.1.56",()=>{assert.match(surface,/plannedVersion: "0\.1\.56"/);assert.match(adapter,/WORK_SURFACE_PLANNED_V0155/)});
-console.log(`Developer Grid conversation navigation grace v0.1.55 contract PASS · ${n}/${n}`);
+check("Work activation postponed to v0.1.57",()=>{assert.match(surface,/plannedVersion: "0\.1\.57"/);assert.match(adapter,/WORK_SURFACE_PLANNED_V0156/)});
+console.log(`Developer Grid conversation navigation grace v0.1.56 contract PASS · ${n}/${n}`);

@@ -454,3 +454,11 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A pending állapot csak a régi pinned chathez való visszatéréskor vagy sikeres explicit rebind után törlődik.
 - A Work first-party adapter aktiválása v0.1.56-ra került; v0.1.55 kizárólag a conversation continuity hotfix.
 - DEV ONLY · PROD DENY.
+
+## v0.1.56 · Immutable continuity release
+
+- A v0.1.55 conversation continuity javítás változatlan működési logikával kerül új release identity alá, mert a v0.1.55 publikus artifact-névhez már korábbi immutable tartalom tartozik és azt a release engine helyesen nem engedi felülírni.
+- A v0.1.56 tartalmazza a `NAVIGATION_GRACE`, sticky `REBIND_PENDING`, refresh-defer és project-qualified candidate URL védelmet.
+- Új task, session vagy `TASK_LAUNCH` nem keletkezik a conversation rebind miatt.
+- A Work first-party adapter aktiválása v0.1.57-re került; v0.1.56 csak a már validált continuity hotfix ütközésmentes kiadása.
+- DEV ONLY · PROD DENY.

@@ -11,7 +11,7 @@ const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const types=read("app/lib/developer-grid/types.ts");
 const scopeAnalyzer=read("app/lib/dev-center/ai-worker/scope-analyzer.ts");
 const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
-check("v0.1.55 version contract",()=>{assert.equal(pkg.version,"0.1.55");assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.55-dev"/)});
+check("v0.1.56 version contract",()=>{assert.equal(pkg.version,"0.1.56");assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.56-dev"/)});
 check("paired-device DEV-only execution route",()=>{assert.match(route,/isChatGridDeviceAuthorized/);assert.match(route,/x-dimpro-environment":"DEV"/);assert.match(route,/x-dimpro-production-access":"DENY"/)});
 check("execution route exposes POST only",()=>{assert.match(route,/export async function POST/);assert.doesNotMatch(route,/export async function (GET|PUT|PATCH|DELETE)/)});
 check("scope analyzer accepts explicit canonical root override",()=>{assert.match(scopeAnalyzer,/rootOverride/);assert.match(scopeAnalyzer,/path\.resolve\(rootOverride\)/)});
@@ -46,5 +46,5 @@ check("conversation monitor captures execution requests",()=>{assert.match(main,
 check("desktop validates request identity before backend",()=>{assert.match(main,/EXECUTION_IDENTITY_MISMATCH/);assert.match(main,/expectedProof/)});
 check("desktop sends execution result back to same worker chat",()=>{assert.match(main,/sendExecutionResultToWorker/);assert.match(main,/BENJADMIN_PROMPT_KIND: EXECUTION_RESULT_V1/);assert.match(parser,/BENJADMIN_EXECUTION_RESULT_V1/)});
 check("desktop request processing is deduplicated",()=>{assert.match(main,/processedExecutionRequestHashes/);assert.match(main,/lastExecutionRequestId/);assert.match(main,/executionRequestProcessingKeys/)});
-check("Work remains planned v0.1.56",()=>{const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");assert.match(surface,/WORK_SURFACE_PLANNED_V0155/)});
-console.log(`Developer Grid Execution Bridge v0.1.55 contract PASS · ${n}/${n}`);
+check("Work remains planned v0.1.57",()=>{const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");assert.match(surface,/WORK_SURFACE_PLANNED_V0156/)});
+console.log(`Developer Grid Execution Bridge v0.1.56 contract PASS · ${n}/${n}`);
