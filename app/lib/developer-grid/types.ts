@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.53-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.54-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -78,7 +78,7 @@ export type DevelopmentContext = {
   chatConversationUrl?: string | null;
   chatConversationTitle?: string | null;
   chatConversationConfirmedAt?: string | null;
-  chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | "CONVERSATION_ROLLOVER" | null;
+  chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | "USER_MANUAL_REBIND" | "CONVERSATION_ROLLOVER" | null;
   conversationRolloverState?: ConversationRolloverState | null;
   conversationRolloverReason?: "CONTEXT_LIMIT" | null;
   conversationRolloverPreviousConversationId?: string | null;

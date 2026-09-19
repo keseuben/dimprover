@@ -41,8 +41,8 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "WORK_SURFACE_PLANNED_V0153",
-      error: "A Work surface adapter v0.1.54-ban aktiválódik. v0.1.53-ban a conversation rollover kiadás miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      code: "WORK_SURFACE_PLANNED_V0154",
+      error: "A Work surface adapter v0.1.55-ben aktiválódik. v0.1.54-ben a manual conversation rebind hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

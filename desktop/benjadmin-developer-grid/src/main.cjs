@@ -678,6 +678,22 @@ function conversationPinForCell(cell) {
   };
 }
 
+function clearConversationRebindCandidate(state) {
+  if (!state) return;
+  state.rebindTaskId = "";
+  state.rebindPreviousConversationId = "";
+  state.rebindConversationId = "";
+  state.rebindConversationUrl = "";
+  state.rebindConversationTitle = "";
+  state.rebindDetectedAt = "";
+}
+
+function sameChatProjectConversation(previousUrl, nextUrl) {
+  const previousRoot = chatProjectRootFromConversationUrl(previousUrl);
+  const nextRoot = chatProjectRootFromConversationUrl(nextUrl);
+  return Boolean(previousRoot && nextRoot && previousRoot === nextRoot);
+}
+
 function conversationGuardAttemptAllowed(cellId) {
   const now = Date.now();
   const previous = chatConversationGuardAttempts.get(cellId);
@@ -720,11 +736,13 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
   if (!pin) {
     state.conversationGuardState = "IDLE";
     state.pinnedConversationId = "";
+    clearConversationRebindCandidate(state);
     return { ok:true, pinned:false };
   }
   if (pin.suspended) {
     state.conversationGuardState = "SUSPENDED";
     state.pinnedConversationId = "";
+    clearConversationRebindCandidate(state);
     return { ok:true, pinned:false, suspended:true, rolloverState:pin.rolloverState };
   }
   state.pinnedConversationId = pin.conversationId;
@@ -732,8 +750,31 @@ async function ensurePinnedConversation(cell, view, reason = "navigation", { ali
   if (currentId === pin.conversationId) {
     state.conversationGuardState = "PINNED";
     state.conversationGuardError = "";
+    clearConversationRebindCandidate(state);
     if (alignLatest) void alignPinnedConversationToLatest(cell, view, reason);
     return { ok:true, pinned:true, restored:false, conversationId:pin.conversationId };
+  }
+  const currentUrl = view.webContents.getURL();
+  if (currentId && sameChatProjectConversation(pin.conversationUrl, currentUrl)) {
+    state.conversationGuardState = "REBIND_PENDING";
+    state.conversationGuardError = "";
+    state.rebindTaskId = pin.taskId;
+    state.rebindPreviousConversationId = pin.conversationId;
+    state.rebindConversationId = currentId;
+    state.rebindConversationUrl = currentUrl;
+    state.rebindDetectedAt = state.rebindDetectedAt || new Date().toISOString();
+    send("live:connection", {
+      kind:"conversation-guard",
+      cellId:cell.id,
+      workerCode:cell.workerCode,
+      ok:true,
+      code:"CHAT_CONVERSATION_REBIND_PENDING",
+      expectedConversationId:pin.conversationId,
+      currentConversationId:currentId,
+      taskId:pin.taskId,
+    });
+    emitChatRefreshState();
+    return { ok:true, pinned:true, rebindPending:true, conversationId:pin.conversationId, candidateConversationId:currentId };
   }
   if (chatConversationGuardRestoring.has(cell.id)) return { ok:false, pinned:true, restoring:true, conversationId:pin.conversationId };
   if (!conversationGuardAttemptAllowed(cell.id)) {
@@ -1250,6 +1291,7 @@ function publicChatRefreshState() {
     domBlockedCount: values.filter((item) => item.domHealth === "BLOCKED").length,
     conversationGuardBlockedCount: values.filter((item) => item.conversationGuardState === "BLOCKED").length,
     conversationGuardRestoringCount: values.filter((item) => item.conversationGuardState === "RESTORING").length,
+    conversationRebindPendingCount: values.filter((item) => item.conversationGuardState === "REBIND_PENDING").length,
     pinnedConversationCount: values.filter((item) => item.conversationGuardState === "PINNED").length,
     domAdapterVersion: CHATGPT_DOM_ADAPTER_VERSION,
   };
@@ -1989,6 +2031,97 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
     message: taskLaunch?.ok && taskLaunch?.mode === "sent"
       ? "A csevegés rögzítve és a Launch Packet elküldve. BOOT ACK validáció folyamatban."
       : chatLaunchMode === "NEW_PROJECT_CHAT" ? "Az új projektcsevegés rögzítve. A feladat indításra kész." : "A meglévő csevegés rögzítve. A feladat indításra kész."
+  };
+}
+
+async function rebindCurrentTaskConversation(workerCode, taskId) {
+  if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+  const code = String(workerCode || "").toUpperCase();
+  const id = String(taskId || "");
+  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  if (!cell) return { ok:false, error:"A worker nincs aktív Developer Grid cellához rendelve." };
+  const task = latestLiveSnapshot?.tasks?.find((item) => String(item.id) === id);
+  if (!task) return { ok:false, error:"A BENJADMIN task nem érhető el az élő állapotban." };
+  if (isTerminalDeveloperTask(task)) return { ok:false, code:"TASK_TERMINAL", error:"Lezárt task conversationje nem köthető át." };
+  const view = chatViews.get(cell.id);
+  if (!view || view.webContents.isDestroyed()) return { ok:false, error:"A worker ChatGPT felülete nem érhető el." };
+  const pin = conversationPinForCell(cell);
+  if (!pin || pin.suspended || pin.taskId !== id || !pin.conversationId) {
+    return { ok:false, code:"MANUAL_REBIND_PIN_REQUIRED", error:"Nincs aktív authoritative conversation pin ehhez a taskhoz." };
+  }
+  const refreshState = chatRefreshCell(cell.id);
+  const url = view.webContents.getURL();
+  const conversationId = chatConversationIdFromUrl(url);
+  if (!conversationId || conversationId === pin.conversationId) {
+    return { ok:false, code:"MANUAL_REBIND_NEW_CHAT_REQUIRED", error:"Nyisd meg ugyanabban a ChatGPT Projectben az új /c/... beszélgetést." };
+  }
+  if (!sameChatProjectConversation(pin.conversationUrl, url)) {
+    return { ok:false, code:"MANUAL_REBIND_PROJECT_MISMATCH", error:"Az új beszélgetés nem ugyanahhoz a ChatGPT Projecthez tartozik." };
+  }
+  if (refreshState.conversationGuardState !== "REBIND_PENDING"
+      || refreshState.rebindTaskId !== id
+      || refreshState.rebindPreviousConversationId !== pin.conversationId
+      || refreshState.rebindConversationId !== conversationId) {
+    return { ok:false, code:"MANUAL_REBIND_PENDING_REQUIRED", error:"A csevegőváltás nincs megerősítésre váró állapotban. Nyisd meg újra a kívánt beszélgetést." };
+  }
+  const info = await getConversationInfo(view, cell, config.cells || []);
+  const record = loadTaskLaunchRecords()[id] || {};
+  const chatLaunchMode = String(record.chatLaunchMode || task.chatLaunchMode || "EXISTING_CHAT").toUpperCase() === "NEW_PROJECT_CHAT"
+    ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
+  const binding = await bindDeveloperGridConversation({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+    input:{
+      taskId:id,
+      workerCode:code,
+      chatLaunchMode,
+      surfaceType:"CHATGPT",
+      manualRebind:true,
+      productionAccess:"DENY",
+      surfacePreviousConversationId:pin.conversationId,
+      surfaceConversationId:conversationId,
+      surfaceConversationUrl:url,
+      surfaceConversationTitle:info.chatTitle || "",
+      chatPreviousConversationId:pin.conversationId,
+      chatConversationId:conversationId,
+      chatConversationUrl:url,
+      chatConversationTitle:info.chatTitle || "",
+    },
+  });
+  const confirmedAt = binding?.chatConversationConfirmedAt || new Date().toISOString();
+  const chatLaunch = saveTaskLaunchPatch(task, code, {
+    conversationBound:true,
+    surfaceType:"CHATGPT",
+    surfacePreviousConversationId:pin.conversationId,
+    surfaceConversationId:conversationId,
+    surfaceConversationUrl:url,
+    surfaceConversationTitle:info.chatTitle || "",
+    chatSessionId:conversationId,
+    chatConversationUrl:url,
+    chatTitle:info.chatTitle || "",
+    chatConversationConfirmedAt:confirmedAt,
+    manualRebindAt:confirmedAt,
+    manualRebindPreviousConversationId:pin.conversationId,
+    conversationRolloverState:null,
+    conversationRolloverConversationId:null,
+    conversationRolloverConversationUrl:null,
+    conversationRolloverConversationTitle:null,
+  });
+  refreshState.conversationGuardState = "PINNED";
+  refreshState.pinnedConversationId = conversationId;
+  refreshState.conversationGuardError = "";
+  clearConversationRebindCandidate(refreshState);
+  rememberChatNavigation(cell.id, url);
+  emitChatRefreshState();
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  send("context:refresh", { reason:"manual-conversation-rebind", taskId:id, workerCode:code, previousConversationId:pin.conversationId, conversationId });
+  void alignPinnedConversationToLatest(cell, view, "manual-rebind");
+  return {
+    ok:true,
+    binding,
+    chatLaunch,
+    chatRefresh:publicChatRefreshState(),
+    message:"Az új ChatGPT csevegés authoritative módon a meglévő taskhoz kötve. Új TASK_LAUNCH nem készült.",
   };
 }
 
@@ -4373,6 +4506,15 @@ function registerIpc() {
       const code = String(payload?.workerCode || "").toUpperCase();
       return await bindCurrentTaskConversation(code, payload?.taskId, { launchAfterBind:true });
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A worker ChatGPT csevegés rögzítése sikertelen." }; }
+  });
+
+  ipcMain.handle("task:rebind-conversation", async (_event, payload) => {
+    try {
+      const code = String(payload?.workerCode || "").toUpperCase();
+      return await rebindCurrentTaskConversation(code, payload?.taskId);
+    } catch (error) {
+      return { ok:false, error:error instanceof Error ? error.message : "A worker ChatGPT csevegés átkötése sikertelen." };
+    }
   });
 
   ipcMain.handle("task:prepare-launch", async (_event, payload) => {

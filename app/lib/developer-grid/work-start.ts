@@ -37,8 +37,8 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.54-ra van előkészítve. Task létrehozása v0.1.53-ban tiltott.");
-    Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0153", status: 409 });
+      : "A Work OpenAI first-party surface v0.1.55-re van előkészítve. Task létrehozása v0.1.54-ben tiltott.");
+    Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0154", status: 409 });
     throw error;
   }
   const rawPreferredWorkerCode = text(input.preferredWorkerCode, 40).toUpperCase();
@@ -799,6 +799,18 @@ function surfaceConversationIdFromUrl(surfaceType: WorkerSurfaceType, value: unk
 }
 
 
+function chatProjectKeyFromConversationUrl(value: unknown) {
+  const raw = text(value, 1000);
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || !["chatgpt.com", "www.chatgpt.com"].includes(url.hostname)) return "";
+    return url.pathname.match(/^\/g\/(g-p-[^/]+)\/c\/[A-Za-z0-9_-]+(?:\/.*)?$/)?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+
 export async function bindDeveloperGridConversation(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 220);
   const workerCode = strictCoreWorkerCode(rawInput.workerCode);
@@ -808,6 +820,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const surfaceConversationTitle = text(rawInput.surfaceConversationTitle ?? rawInput.chatConversationTitle, 500);
   const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
   const conversationRollover = rawInput.conversationRollover === true;
+  const manualRebind = rawInput.manualRebind === true;
   const requestedRolloverState = text(rawInput.conversationRolloverState, 40).toUpperCase();
   const conversationRolloverState = ["ACK_WAIT", "READY", "BLOCKED"].includes(requestedRolloverState) ? requestedRolloverState : "ACK_WAIT";
   const rolloverContextSnapshotId = text(rawInput.conversationRolloverContextSnapshotId, 260);
@@ -825,7 +838,9 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const chatLaunchMode: ChatLaunchMode = requestedMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const confirmedBy = conversationRollover
     ? "CONVERSATION_ROLLOVER" as const
-    : chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
+    : manualRebind
+      ? "USER_MANUAL_REBIND" as const
+      : chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
   const urlDerivedSurfaceId = surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
   const codexUrlValid = !surfaceConversationUrl || (surfaceConversationUrl.toLowerCase().startsWith("codex:") && urlDerivedSurfaceId === surfaceConversationId);
   const surfaceIdentityValid = surfaceType === "CODEX"
@@ -869,6 +884,48 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_MODE_MISMATCH", status: 409 });
     throw error;
+  }
+  if (manualRebind) {
+    if (conversationRollover || surfaceType !== "CHATGPT") {
+      const error = new Error("Kézi conversation rebind csak normál ChatGPT surface-en engedélyezett.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_SURFACE_INVALID", status: 409 });
+      throw error;
+    }
+    const ctx = session.developmentContext;
+    const authoritativeConversationId = text(ctx.surfaceConversationId ?? ctx.chatConversationId, 180);
+    const authoritativeConversationUrl = text(ctx.surfaceConversationUrl ?? ctx.chatConversationUrl, 1000);
+    if (!surfacePreviousConversationId || !authoritativeConversationId || surfacePreviousConversationId !== authoritativeConversationId) {
+      const error = new Error("A kézi rebind előző conversation azonosítója nem egyezik az authoritative sessionnel.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_PREVIOUS_MISMATCH", status: 409 });
+      throw error;
+    }
+    if (!surfaceConversationId || surfaceConversationId === authoritativeConversationId) {
+      const error = new Error("A kézi rebindhez új ChatGPT conversation szükséges.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_NEW_CONVERSATION_REQUIRED", status: 409 });
+      throw error;
+    }
+    const previousProjectKey = chatProjectKeyFromConversationUrl(authoritativeConversationUrl);
+    const nextProjectKey = chatProjectKeyFromConversationUrl(surfaceConversationUrl);
+    if (!previousProjectKey || !nextProjectKey || previousProjectKey !== nextProjectKey) {
+      const error = new Error("Kézi rebind csak ugyanazon ChatGPT Project két csevegése között engedélyezett.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_PROJECT_MISMATCH", status: 409 });
+      throw error;
+    }
+    if (ctx.bootAckState !== "VALIDATED" || ctx.bootAckCodingAllowed !== true) {
+      const error = new Error("Kézi rebind csak validált BOOT ACK és engedélyezett coding állapot mellett végezhető.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_BOOT_ACK_REQUIRED", status: 409 });
+      throw error;
+    }
+    if (!ctx.contextSnapshotId || !ctx.handoffPackId) {
+      const error = new Error("Kézi rebindhez Context Snapshot és Handoff Pack continuity szükséges.");
+      Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_CONTINUITY_REQUIRED", status: 409 });
+      throw error;
+    }
+    if (String(rawInput.productionAccess || "DENY").toUpperCase() !== "DENY") {
+      const error = new Error("Kézi conversation rebind PROD hozzáféréssel tiltott.");
+      Object.assign(error, { code: "PROD_DENY", status: 409 });
+      throw error;
+    }
   }
   if (conversationRollover) {
     if (surfaceType !== "CHATGPT") {
@@ -941,6 +998,20 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       chatConversationTitle: chatConversationTitle || null,
       chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null,
       chatConversationConfirmedBy: confirmedBy,
+      ...(manualRebind ? {
+        conversationRolloverState: null,
+        conversationRolloverReason: null,
+        conversationRolloverPreviousConversationId: null,
+        conversationRolloverContextSnapshotId: null,
+        conversationRolloverContextRevision: null,
+        conversationRolloverHandoffPackId: null,
+        conversationRolloverSourceHead: null,
+        conversationRolloverSourceProofSha256: null,
+        conversationRolloverPromptMessageId: null,
+        conversationRolloverAckSha256: null,
+        conversationRolloverStartedAt: null,
+        conversationRolloverCompletedAt: null,
+      } : {}),
       ...(conversationRollover ? {
         conversationRolloverState: conversationRolloverState as "ACK_WAIT" | "READY" | "BLOCKED",
         conversationRolloverReason: "CONTEXT_LIMIT" as const,
@@ -959,17 +1030,21 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     },
   };
   const next = await upsertWorkerSession(updated);
-  await syncEngineBridgeTarget(taskId, conversationRollover ? "RUNNING" : "HANDED_OFF");
+  await syncEngineBridgeTarget(taskId, (conversationRollover || manualRebind) ? "RUNNING" : "HANDED_OFF");
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: authoritativeProjectId, productionAccess: "DENY",
     delta: {
-      eventType: conversationRollover ? "CONVERSATION_ROLLOVER_" + conversationRolloverState : "SURFACE_BOUND",
+      eventType: conversationRollover
+        ? "CONVERSATION_ROLLOVER_" + conversationRolloverState
+        : manualRebind ? "CONVERSATION_MANUAL_REBIND" : "SURFACE_BOUND",
       summary: conversationRollover
         ? "ChatGPT conversation rollover · " + surfacePreviousConversationId + " → " + surfaceConversationId + " · " + conversationRolloverState
-        : surfaceType + " surface rögzítve · " + chatLaunchMode,
+        : manualRebind
+          ? "ChatGPT kézi conversation rebind · " + surfacePreviousConversationId + " → " + surfaceConversationId
+          : surfaceType + " surface rögzítve · " + chatLaunchMode,
       workItem: updated.developmentContext.workItem,
       workStageIndex: updated.developmentContext.workStageIndex || 1,
-      previousConversationId: conversationRollover ? surfacePreviousConversationId : null,
+      previousConversationId: (conversationRollover || manualRebind) ? surfacePreviousConversationId : null,
       conversationId: surfaceConversationId,
       contextSnapshotId: conversationRollover ? rolloverContextSnapshotId : null,
       handoffPackId: conversationRollover ? rolloverHandoffPackId : null,
@@ -979,6 +1054,8 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     taskId, workerCode, chatLaunchMode, surfaceType, surfaceConversationId, surfaceConversationUrl, surfaceConversationTitle,
     surfaceConversationConfirmedAt: confirmedAt, chatConversationId: chatConversationId || null, chatConversationUrl: chatConversationUrl || null, chatConversationTitle: chatConversationTitle || null,
     chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy,
+    manualRebind,
+    previousConversationId: manualRebind ? surfacePreviousConversationId : null,
     conversationRollover: conversationRollover ? {
       state: conversationRolloverState,
       previousConversationId: surfacePreviousConversationId,

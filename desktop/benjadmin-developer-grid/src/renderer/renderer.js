@@ -3,7 +3,7 @@
 const api = window.chatGrid;
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
 const WORKER_SURFACE_OPTIONS = ["CHATGPT", "CODEX", "WORK"];
-const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.53" });
+const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.55" });
 const WORKER_DEFAULT_LABELS = {
   ARMINAI: "ÁrminAI",
   JAZMINAI: "JázminAI",
@@ -481,7 +481,7 @@ function renderConfig() {
       const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
       const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.53-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.55-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {
@@ -493,7 +493,7 @@ function renderConfig() {
         renderCodexTaskPanel(cell,cellConfig.workerCode);
       } else {
         $("[data-role=codex-task-panel]",emptyState)?.remove();
-        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.53 adapter." : "A ChatGPT felület zárva.";
+        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.55 adapter." : "A ChatGPT felület zárva.";
         if (reopen) reopen.classList.toggle("is-hidden", surfaceType !== "CHATGPT");
       }
     }
@@ -730,14 +730,21 @@ function renderLive() {
     const launchButton = $("[data-task-launch-action=prepare]", cell);
     if (launchButton) {
       const chatPlan = task?.chatLaunch || null;
+      const refreshCell = state.chatRefresh?.cells?.[cellConfig.id] || {};
+      const rebindPending = Boolean(
+        task?.id
+        && refreshCell.conversationGuardState === "REBIND_PENDING"
+        && refreshCell.rebindTaskId === String(task.id)
+        && refreshCell.rebindConversationId
+      );
       const needsConversationBinding = Boolean(awaitingLaunch && chatPlan?.chatLaunchMode && chatPlan?.conversationBound !== true);
       const launchInFlight = ["WAITING", "VALIDATED"].includes(String(task?.chatLaunch?.ackState || "").toUpperCase()) || Boolean(task?.chatLaunch?.sentAt && task?.chatLaunch?.autoSendState === "SENT");
-      launchButton.classList.toggle("is-hidden", !awaitingLaunch || handoffBlocksLaunch || launchInFlight);
-      launchButton.disabled = handoffBlocksLaunch;
-      launchButton.dataset.taskId = awaitingLaunch ? String(task?.id || "") : "";
+      launchButton.classList.toggle("is-hidden", rebindPending ? false : (!awaitingLaunch || handoffBlocksLaunch || launchInFlight));
+      launchButton.disabled = rebindPending ? false : handoffBlocksLaunch;
+      launchButton.dataset.taskId = (rebindPending || awaitingLaunch) ? String(task?.id || "") : "";
       launchButton.dataset.workerCode = cellConfig.workerCode;
-      launchButton.dataset.launchAction = needsConversationBinding ? "bind" : "prepare";
-      launchButton.textContent = needsConversationBinding ? "CSEVEGÉS RÖGZÍTÉSE" : (task?.chatLaunch?.preparedAt ? "Újra" : "Indítás");
+      launchButton.dataset.launchAction = rebindPending ? "rebind" : needsConversationBinding ? "bind" : "prepare";
+      launchButton.textContent = rebindPending ? "CSEVEGŐ ÁTKÖTÉSE" : needsConversationBinding ? "CSEVEGÉS RÖGZÍTÉSE" : (task?.chatLaunch?.preparedAt ? "Újra" : "Indítás");
       launchButton.title = handoffBlocksLaunch
         ? "Task indítás tiltva az aktív/helyreállítandó ÁTADÁS alatt"
         : needsConversationBinding
@@ -745,6 +752,11 @@ function renderLive() {
           : (task?.chatLaunch?.preparedAt
               ? "A kiosztási prompt újbóli előkészítése a worker ChatGPT-ben"
               : "A kiosztási prompt előkészítése a rögzített worker ChatGPT csevegésben; elküldés csak kézzel");
+      if (rebindPending) {
+        launchButton.title = "Másik csevegés van nyitva ugyanabban a ChatGPT Projectben. Jóváhagyás: "
+          + (refreshCell.rebindPreviousConversationId || "—") + " → " + (refreshCell.rebindConversationId || "—")
+          + ". Új TASK_LAUNCH nem készül.";
+      }
     }
     const taskStatus = String(task?.status || "").toLowerCase();
     const stageIndex = awaitingLaunch
@@ -1059,11 +1071,13 @@ function renderChatRefreshStatus() {
   const domBlocked = Number(refresh.domBlockedCount || 0);
   const guardBlocked = Number(refresh.conversationGuardBlockedCount || 0);
   const guardRestoring = Number(refresh.conversationGuardRestoringCount || 0);
+  const rebindPending = Number(refresh.conversationRebindPendingCount || 0);
   const pinned = Number(refresh.pinnedConversationCount || 0);
   let label = `frissítve: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
   if (domBlocked > 0) label = `DOM BLOCKED: ${domBlocked}`;
   else if (guardBlocked > 0) label = `chat guard BLOCKED: ${guardBlocked}`;
   else if (guardRestoring > 0) label = `chat visszaállítás: ${guardRestoring}`;
+  else if (rebindPending > 0) label = `chat átkötés vár: ${rebindPending}`;
   else if (deferred > 0) label = `${deferred} aktív nézet miatt vár`;
   else if (available > 0) label = "frissítés elérhető";
   else if (pinned > 0) label = `${pinned} aktív chat rögzítve · ${latest}`;
@@ -1090,6 +1104,7 @@ function renderChatRefreshStatus() {
     ? `${domBlocked} ChatGPT nézet DOM-adaptere nem egészséges. Selector/UI változás gyanú; automatikus műveletek fail-closed állapotban.`
     : guardBlocked > 0 ? `${guardBlocked} aktív worker conversation guardja blokkolt; az authoritative /c/... útvonal nem volt visszaállítható.`
     : guardRestoring > 0 ? `${guardRestoring} worker csevegése automatikus visszaállítás alatt van.`
+    : rebindPending > 0 ? `${rebindPending} worker ugyanazon ChatGPT Projecten belül másik csevegést nyitott. A cellában a CSEVEGŐ ÁTKÖTÉSE gombbal erősíthető meg.`
     : deferred > 0 ? `${deferred} nézet frissítése aktív válasz vagy piszkozat miatt biztonságosan elhalasztva.`
     : available > 0 ? `${available} ChatGPT nézeten frissítési jelzés látható.`
     : `${pinned} aktív worker conversation rögzítve · DOM adapter ${refresh.domAdapterVersion || "—"} · a Grid 5 percenként élő DOM-smoke-ot futtat.`;
@@ -1954,19 +1969,36 @@ async function handleTaskLaunch(button) {
   if (!workerCode || !taskId) return;
   button.disabled = true;
   try {
-    const bindingMode = button.dataset.launchAction === "bind";
-    const result = bindingMode ? await api.bindTaskConversation(workerCode, taskId) : await api.prepareTaskLaunch(workerCode, taskId);
+    const action = button.dataset.launchAction || "prepare";
+    const bindingMode = action === "bind";
+    const rebindMode = action === "rebind";
+    const result = rebindMode
+      ? await api.rebindTaskConversation(workerCode, taskId)
+      : bindingMode ? await api.bindTaskConversation(workerCode, taskId) : await api.prepareTaskLaunch(workerCode, taskId);
     if (!result?.ok) {
-      showToast(bindingMode ? "Csevegés rögzítése" : "Worker indítás", result?.error || (bindingMode ? "A jelenlegi ChatGPT csevegés nem rögzíthető." : "A ChatGPT indítás nem készíthető elő."));
+      const title = rebindMode ? "Csevegés átkötése" : bindingMode ? "Csevegés rögzítése" : "Worker indítás";
+      const fallback = rebindMode
+        ? "A jelenlegi ChatGPT csevegés nem köthető át ehhez a taskhoz."
+        : bindingMode ? "A jelenlegi ChatGPT csevegés nem rögzíthető." : "A ChatGPT indítás nem készíthető elő.";
+      showToast(title, result?.error || fallback);
       return;
     }
+    if (result.chatRefresh) state.chatRefresh = result.chatRefresh;
     const task = activeTaskForWorker(workerCode);
     if (task && task.id === taskId && result.chatLaunch) task.chatLaunch = result.chatLaunch;
     renderLive();
+    renderChatRefreshStatus();
     const launchSent = result?.taskLaunch?.ok && result?.taskLaunch?.mode === "sent";
     showToast(
-      launchSent ? "Launch Packet elküldve" : bindingMode ? "Csevegés rögzítve" : (result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon"),
-      result.message || (launchSent ? "BOOT ACK validáció folyamatban; kódolás addig tiltva." : bindingMode ? "A task most már a jelenlegi ChatGPT csevegéshez kötődik." : "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el.")
+      rebindMode ? "Csevegés átkötve"
+        : launchSent ? "Launch Packet elküldve"
+          : bindingMode ? "Csevegés rögzítve"
+            : (result.mode === "inserted" ? "Feladatprompt előkészítve" : "Feladatprompt a vágólapon"),
+      result.message || (rebindMode
+        ? "Az új csevegés lett authoritative; a meglévő task/session folytatódik új TASK_LAUNCH nélkül."
+        : launchSent ? "BOOT ACK validáció folyamatban; kódolás addig tiltva."
+          : bindingMode ? "A task most már a jelenlegi ChatGPT csevegéshez kötődik."
+            : "Ellenőrizd a worker ChatGPT mezőjét, majd kézzel küldd el.")
     );
   } finally {
     button.disabled = false;
@@ -2409,6 +2441,7 @@ function bindIpc() {
   });
   api.onChatRefreshState?.((refresh) => {
     state.chatRefresh = refresh || state.chatRefresh;
+    renderLive();
     renderChatRefreshStatus();
   });
 }

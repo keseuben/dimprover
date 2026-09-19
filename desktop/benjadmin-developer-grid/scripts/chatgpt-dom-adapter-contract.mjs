@@ -60,6 +60,11 @@ check("conversation guard restores exact authoritative URL",()=>{
   assert.ok(main.includes("await view.webContents.loadURL(pin.conversationUrl)"));
   assert.ok(main.includes("CHAT_CONVERSATION_RESTORED"));
 });
+check("same-project alternate conversation waits for explicit rebind",()=>{
+  assert.ok(main.includes("sameChatProjectConversation(pin.conversationUrl, currentUrl)"));
+  assert.ok(main.includes('state.conversationGuardState = "REBIND_PENDING"'));
+  assert.ok(main.includes("CHAT_CONVERSATION_REBIND_PENDING"));
+});
 check("conversation guard is rate limited",()=>{
   assert.ok(main.includes("30_000"));
   assert.ok(main.includes("count >= 3"));
@@ -73,7 +78,7 @@ check("finished load enforces pin and only idle uses latest named fallback",()=>
   assert.ok(main.includes('schedulePinnedConversationGuard(cell, view, "did-finish-load", 180)'));
   assert.ok(main.includes("if (!pin) void selectLatestNamedConversation(cell, view)"));
 });
-check("conversation memory mismatch restores instead of silently skipping",()=>assert.ok(main.includes("conversation-memory-mismatch")));
+check("conversation memory mismatch invokes conversation guard instead of silently skipping",()=>assert.ok(main.includes("conversation-memory-mismatch")));
 check("active refresh reloads pinned conversation URL",()=>{
   assert.ok(main.includes("const pin = conversationPinForCell(cell)"));
   assert.ok(main.includes("pinnedConversation: Boolean"));

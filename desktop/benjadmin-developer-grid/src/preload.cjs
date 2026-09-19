@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld("chatGrid", {
   getDeveloperGridWindowsE2E: () => ipcRenderer.invoke("windows-e2e:get"),
   requestDeveloperGridVGuardReview: (input = {}) => ipcRenderer.invoke("review-gate:run", input),
   bindTaskConversation: (workerCode, taskId) => ipcRenderer.invoke("task:bind-conversation", { workerCode, taskId }),
+  rebindTaskConversation: (workerCode, taskId) => ipcRenderer.invoke("task:rebind-conversation", { workerCode, taskId }),
   contextWorkspaceMode: (action, payload = {}) => ipcRenderer.invoke("context:mode", { action, ...payload }),
   bindContext: (workerCode, item) => ipcRenderer.invoke("context:bind", { workerCode, item }),
   clearContext: (workerCode) => ipcRenderer.invoke("context:clear", { workerCode }),

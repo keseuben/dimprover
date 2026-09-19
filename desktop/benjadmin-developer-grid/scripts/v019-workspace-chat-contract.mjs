@@ -39,7 +39,7 @@ check(route.includes("export async function PATCH") && route.includes("bindDevel
 check(client.includes('method: "PATCH"') && preload.includes("bindTaskConversation"),"desktop exposes conversation binding IPC path");
 check(main.includes("TASK_NEW_PROJECT_CHAT_REQUIRED") && main.includes("previousConversationId"),"new project chat must differ from prior conversation");
 check(main.includes("taskOverride: task"),"existing-chat auto binding does not race next DELTA snapshot");
-check(renderer.includes('"CSEVEGÉS RÖGZÍTÉSE"') && renderer.includes('dataset.launchAction = needsConversationBinding ? "bind" : "prepare"'),"worker launch is binding-first when required");
+check(renderer.includes('"CSEVEGÉS RÖGZÍTÉSE"') && renderer.includes('dataset.launchAction = rebindPending ? "rebind" : needsConversationBinding ? "bind" : "prepare"'),"worker launch remains binding-first when required while manual rebind is explicit");
 check(main.includes("TASK_CHAT_CONVERSATION_MISMATCH"),"task launch fails closed on wrong current conversation");
 check(renderer.includes("explicitChatPlan") && main.includes("launchProbe"),"chat-planned READY task remains launchable despite session startedAt");
 check(live.includes("chatConversationConfirmedAt") && main.includes("authoritative = task?.chatLaunchMode"),"conversation binding survives desktop restart through authoritative state");

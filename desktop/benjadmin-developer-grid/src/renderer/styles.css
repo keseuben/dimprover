@@ -2009,14 +2009,17 @@ body.has-health-drawer .chat-grid { bottom: calc(var(--developer-footer-h) + var
 :root[data-theme="light"] .cw-chat-mode strong { color:#155a47; }
 :root[data-theme="light"] .cw-chat-mode small { color:#617a86; }
 
-.task-launch-button[data-launch-action="bind"] {
+.task-launch-button[data-launch-action="bind"],
+.task-launch-button[data-launch-action="rebind"] {
   border-color: rgba(42,224,171,.58);
   background: rgba(42,224,171,.12);
   color: #b8f8e4;
   white-space: nowrap;
 }
-.task-launch-button[data-launch-action="bind"]:hover { background:rgba(42,224,171,.20); }
-:root[data-theme="light"] .task-launch-button[data-launch-action="bind"] { color:#075b43; background:rgba(14,157,109,.10); border-color:rgba(14,157,109,.45); }
+.task-launch-button[data-launch-action="bind"]:hover,
+.task-launch-button[data-launch-action="rebind"]:hover { background:rgba(42,224,171,.20); }
+:root[data-theme="light"] .task-launch-button[data-launch-action="bind"],
+:root[data-theme="light"] .task-launch-button[data-launch-action="rebind"] { color:#075b43; background:rgba(14,157,109,.10); border-color:rgba(14,157,109,.45); }
 
 /* Developer Grid v0.1.13 · large-display readability pass
    Header, worker-cell headers and footer are intentionally larger on engineering monitors. */

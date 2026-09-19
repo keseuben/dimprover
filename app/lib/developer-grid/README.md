@@ -369,7 +369,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A v0.1.50-ből örökölt, nem transcript-igazolt retry állapot nem blokkolja a v0.1.51 első ellenőrzött próbálkozását.
 - A recovery továbbra is kizárólag read-only legacy actionokra használható; WRITE_FILE és RUN_DEV_COMMAND fail-closed.
 - Új TASK_LAUNCH továbbra sem keletkezik.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.54.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.55.
 
 
 ## v0.1.52 · Multi-session live snapshot
@@ -380,7 +380,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A legacy chatConversationId és chatConversationUrl továbbra is felpromotálódik generikus surfaceConversationId / surfaceConversationUrl mezővé.
 - Ez megszünteti azt a hibát, amikor egy másik worker globális current taskja miatt a BenjáminAI aktív taskja eltűnt a Desktop live contextből, és emiatt leállt a Conversation Memory / Execution Recovery ciklus.
 - PROD továbbra is DENY.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.54.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.55.
 
 ### v0.1.52 · Task / Context / Checkpoint worker-cell actions
 
@@ -419,4 +419,21 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Betöltés vagy automatikus conversation-visszaállítás után a Grid egyszer, eseményvezérelten a legutolsó ChatGPT turnre igazít. A 8 másodperces Conversation Memory monitor nem kényszerít folyamatos scrollt, ezért a felhasználó szándékos visszagörgetése megmarad.
 - A Grid 5 percenként élő DOM-health smoke-ot futtat. `DOM BLOCKED`, conversation-guard `BLOCKED/RESTORING`, pinned conversation darabszám és adapter-verzió a footer/header/settings telemetriában látható.
 - Selector/UI törés esetén az automatikus ChatGPT műveletek fail-closed viselkedése megmarad; a javítás elsődleges helye a verziózott DOM adapter.
+- DEV ONLY · PROD DENY.
+
+
+## v0.1.54 · Manual conversation rebind
+
+- Aktív ChatGPT tasknál az exact bound `/c/...` conversation továbbra is pinned authoritative route.
+- Ha a worker véletlenül a ChatGPT Project gyökérnézetére vagy idegen projectre esik, a v0.1.53 auto-restore védelem változatlanul visszaállítja az authoritative chatet.
+- Ha a felhasználó ugyanazon ChatGPT Projecten belül tudatosan egy másik `/c/...` beszélgetést nyit meg, a Grid már nem rántja vissza azonnal: `REBIND_PENDING` állapot keletkezik.
+- A worker cellában ilyenkor megjelenik a `CSEVEGŐ ÁTKÖTÉSE` gomb. Az új chat csak explicit gombnyomás után válhat authoritative-vá.
+- A backend csak exact `taskId + workerCode + aktív session + previousConversationId` egyezés mellett enged rebindet; az új conversation ID-nak különböznie kell a régitől.
+- A régi és az új chatnek ugyanahhoz a `/g/g-p-.../` ChatGPT Projecthez kell tartoznia.
+- Kötelező a `VALIDATED` BOOT ACK, `codingAllowed=true`, Context Snapshot és Handoff Pack continuity, valamint `PROD DENY`.
+- A sikeres rebind audit eseménye `CONVERSATION_MANUAL_REBIND`, provenance értéke `USER_MANUAL_REBIND`.
+- Kézi rebind alatt a Central Core engine task `RUNNING` marad; új task, új session vagy `TASK_LAUNCH` nem készül.
+- Ha a felhasználó a megerősítés előtt visszatér az eredeti pinned chathez, a `REBIND_PENDING` állapot automatikusan megszűnik.
+- A footer/header telemetria külön jelzi a várakozó rebindet.
+- A Work first-party adapter aktiválása v0.1.55-re került; v0.1.54 kizárólag a conversation continuity hotfix.
 - DEV ONLY · PROD DENY.
