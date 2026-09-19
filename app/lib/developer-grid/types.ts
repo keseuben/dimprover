@@ -1,8 +1,9 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.52-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.53-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
+export type ConversationRolloverState = "HANDOFF_SAVED" | "NAVIGATING" | "CONTINUATION_SENT" | "ACK_WAIT" | "READY" | "BLOCKED";
 export type WorkerSurfaceType = "CHATGPT" | "CODEX" | "WORK";
 export type WorkerProviderFamily = "OPENAI_FIRST_PARTY" | "DIMPRO_INTERNAL" | "EXTERNAL_PROVIDER";
 export type WorkerExecutionMode = "EMBEDDED_CHAT" | "TASK_BRIDGE" | "LOCAL_RUNTIME" | "CLOUD_RUNTIME";
@@ -77,7 +78,19 @@ export type DevelopmentContext = {
   chatConversationUrl?: string | null;
   chatConversationTitle?: string | null;
   chatConversationConfirmedAt?: string | null;
-  chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | null;
+  chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | "CONVERSATION_ROLLOVER" | null;
+  conversationRolloverState?: ConversationRolloverState | null;
+  conversationRolloverReason?: "CONTEXT_LIMIT" | null;
+  conversationRolloverPreviousConversationId?: string | null;
+  conversationRolloverContextSnapshotId?: string | null;
+  conversationRolloverContextRevision?: number | null;
+  conversationRolloverHandoffPackId?: string | null;
+  conversationRolloverSourceHead?: string | null;
+  conversationRolloverSourceProofSha256?: string | null;
+  conversationRolloverPromptMessageId?: string | null;
+  conversationRolloverAckSha256?: string | null;
+  conversationRolloverStartedAt?: string | null;
+  conversationRolloverCompletedAt?: string | null;
   bootAckState?: "WAITING" | "VALIDATED" | "BLOCKED" | null;
   bootAckValidatedAt?: string | null;
   bootAckSha256?: string | null;

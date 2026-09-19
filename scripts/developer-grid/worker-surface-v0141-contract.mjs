@@ -21,8 +21,8 @@ const live = read("desktop/benjadmin-developer-grid/src/live/benjadmin-live-clie
 let n = 0;
 function check(name, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.52", () => assert.equal(pkg.version, "0.1.52"));
-check("backend version v0.1.52-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.52-dev"/));
+check("desktop version v0.1.53", () => assert.equal(pkg.version, "0.1.53"));
+check("backend version v0.1.53-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.53-dev"/));
 check("surface type contract includes ChatGPT Codex Work", () => assert.match(types, /WorkerSurfaceType = "CHATGPT" \| "CODEX" \| "WORK"/));
 check("all four worker cells default to ChatGPT", () => assert.equal((defaults.match(/surfaceType: "CHATGPT"/g) || []).length, 4));
 check("config v14 persists normalized per-cell surface", () => { assert.match(defaults,/CONFIG_VERSION = 14/); assert.match(defaults,/normalizeWorkerSurfaceType/); assert.match(defaults,/surfaceType,/); });
@@ -46,4 +46,4 @@ check("planned Work surface remains recoverable to an active choice", () => { as
 check("Codex cannot inherit ChatGPT URL as surface URL", () => assert.match(surface,/if \(type === WORKER_SURFACE_TYPES\.CODEX\) return ""/));
 check("Codex binding accepts only absent URL or codex protocol identity", () => assert.match(workStart,/surfaceConversationUrl\.toLowerCase\(\)\.startsWith\("codex:"\)/));
 
-console.log(`Developer Grid Worker Surface Selector v0.1.52 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid Worker Surface Selector v0.1.53 contract PASS · ${n}/${n}`);

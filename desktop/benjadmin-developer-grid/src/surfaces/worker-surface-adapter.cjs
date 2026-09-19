@@ -42,7 +42,7 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
     return {
       ok: false,
       code: "WORK_SURFACE_PLANNED_V0153",
-      error: "A Work surface adapter v0.1.53-ban aktiválódik. v0.1.52-ben a multisession snapshot hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      error: "A Work surface adapter v0.1.54-ban aktiválódik. v0.1.53-ban a conversation rollover kiadás miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

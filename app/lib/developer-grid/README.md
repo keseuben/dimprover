@@ -369,7 +369,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A v0.1.50-ből örökölt, nem transcript-igazolt retry állapot nem blokkolja a v0.1.51 első ellenőrzött próbálkozását.
 - A recovery továbbra is kizárólag read-only legacy actionokra használható; WRITE_FILE és RUN_DEV_COMMAND fail-closed.
 - Új TASK_LAUNCH továbbra sem keletkezik.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.52.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.54.
 
 
 ## v0.1.52 · Multi-session live snapshot
@@ -380,7 +380,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A legacy chatConversationId és chatConversationUrl továbbra is felpromotálódik generikus surfaceConversationId / surfaceConversationUrl mezővé.
 - Ez megszünteti azt a hibát, amikor egy másik worker globális current taskja miatt a BenjáminAI aktív taskja eltűnt a Desktop live contextből, és emiatt leállt a Conversation Memory / Execution Recovery ciklus.
 - PROD továbbra is DENY.
-- A Work OpenAI first-party adapter tervezett aktiválása v0.1.53.
+- A Work OpenAI first-party adapter tervezett aktiválása v0.1.54.
 
 ### v0.1.52 · Task / Context / Checkpoint worker-cell actions
 
@@ -391,4 +391,19 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A BENJADMIN_STAGE_REPORT_V1 válasz HEAD/commit, summary és evidence adatai visszakerülnek a Checkpoint Inspectorba.
 - Checkpointból FULL BUILD, release, restart, migration és PROD művelet nem indulhat. Új task és TASK_LAUNCH sem keletkezik.
 - A korábbi `7973afb0` multi-session build nem release; az UI action fixszel együtt új regresszió és új BUILD01 szükséges.
+- DEV ONLY · PROD DENY.
+
+
+## v0.1.53 · Conversation rollover · betelt ChatGPT csevegés biztonságos folytatása
+
+- A Conversation Memory a kötött ChatGPT transcript legutóbbi assistant üzenetében felismeri a ChatGPT magyar vagy angol maximális beszélgetéshossz jelzését. Általános „hosszú beszélgetés” szöveg nem trigger.
+- A rollover **nem új fejlesztési task**: megmarad az exact `taskId`, `sessionId`, worker, stage, branch, worktree, source HEAD, Central Core source proof, scope-lock és worktree lease. `TASK_LAUNCH` nem készül.
+- A régi csevegés utolsó állapota előbb RAW transcriptként mentődik, majd a hozzá tartozó Context Snapshot + Handoff Pack azonosító, revision, HEAD és source-proof befagyasztásra kerül.
+- A Desktop csak ChatGPT Project `/g/g-p-.../c/...` kötésből indíthat automatikus rollover-t. A rendszer ugyanannak a Projectnek a gyökérnézetére navigál, új csevegést indít, és `CONVERSATION_ROLLOVER_V1` kontrollpromptot küld.
+- A küldés csak akkor fogadható el, ha a marker tényleges USER üzenetként megjelenik az új transcriptben, és az új `/c/...` conversation ID eltér a régitől.
+- A Central Core rebind csak exact previous-conversation + Context Snapshot + revision + Handoff Pack + HEAD + source-proof + VALIDATED BOOT ACK + PROD DENY egyezés mellett engedélyezett. A futó engine task `RUNNING` állapota megmarad.
+- Az új kódmérnök `BENJADMIN_CONVERSATION_ROLLOVER_ACK_V1` blokkban visszaigazolja ugyanazt a task/session/source identity-t. Az Execution Bridge addig fail-closed `CONVERSATION_ROLLOVER_ACK_REQUIRED`.
+- Rollover lifecycle: `HANDOFF_SAVED → NAVIGATING → CONTINUATION_SENT → ACK_WAIT → READY`; bármely identity/provenance/transcript eltérés `BLOCKED`.
+- A Task Inspector külön mutatja a rollover állapotot, előző/új conversation ID-t, befagyasztott Context/Handoff azonosítókat, transcript proofot, ACK SHA-256 értéket és hibát.
+- A **teljesen új témát** nem ez a rollover út indítja. Új témánál a Grid Központ valódi új work-startot, új task/session identity-t és valódi `TASK_LAUNCH` láncot készít; a korábbi Context/Handoff csak opcionális continuity-forrás lehet.
 - DEV ONLY · PROD DENY.

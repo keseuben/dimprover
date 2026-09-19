@@ -1362,8 +1362,8 @@ function renderTaskInspector() {
   }
 
   const hierarchy = [task.mainModule || moduleContext?.mainModule, task.moduleName || moduleContext?.moduleName, task.submoduleName || moduleContext?.submoduleName].filter(Boolean).join(" › ");
-  const conversationId = task.surfaceConversationId || task.chatConversationId || launch.surfaceConversationId || launch.chatSessionId || "";
-  const conversationTitle = task.surfaceConversationTitle || task.chatConversationTitle || launch.surfaceConversationTitle || launch.chatTitle || "";
+  const conversationId = launch.conversationRolloverConversationId || launch.surfaceConversationId || launch.chatSessionId || task.surfaceConversationId || task.chatConversationId || "";
+  const conversationTitle = launch.conversationRolloverConversationTitle || launch.surfaceConversationTitle || launch.chatTitle || task.surfaceConversationTitle || task.chatConversationTitle || "";
   const bootAckState = task.bootAckState || launch.bootAckState || "";
   const bootCoding = task.bootAckCodingAllowed ?? launch.bootAckCodingAllowed;
   const memoryContext = memory?.context || null;
@@ -1385,6 +1385,18 @@ function renderTaskInspector() {
         ["Handshake",task.sourceProofHandshakeStage], ["Scope lock",task.sourceProofActiveScopeLockCount], ["Worktree lease",task.sourceProofActiveWorktreeLeaseCount],
         ["BOOT ACK / coding",`${bootAckState || "—"} · codingAllowed=${bootCoding === true ? "true" : bootCoding === false ? "false" : "—"}`], ["Production access",task.sourceProofProductionAccess || "DENY"]
       ])),
+      taskInspectorSection("Conversation rollover", taskInspectorRows([
+        ["Rollover állapot",launch.conversationRolloverState || task.conversationRolloverState || "NINCS"],
+        ["Előző conversation",launch.conversationRolloverPreviousConversationId || task.conversationRolloverPreviousConversationId,true],
+        ["Új conversation",launch.conversationRolloverConversationId || conversationId,true],
+        ["Befagyasztott Context",`${launch.conversationRolloverContextSnapshotId || task.conversationRolloverContextSnapshotId || "—"} · rev ${launch.conversationRolloverContextRevision || task.conversationRolloverContextRevision || "—"}`],
+        ["Befagyasztott handoff",launch.conversationRolloverHandoffPackId || task.conversationRolloverHandoffPackId,true],
+        ["Source HEAD",launch.conversationRolloverSourceHead || task.conversationRolloverSourceHead,true],
+        ["USER transcript verified",launch.conversationRolloverTranscriptVerified === true ? "IGEN" : launch.conversationRolloverTranscriptVerified === false ? "NEM" : "—"],
+        ["Prompt message",launch.conversationRolloverPromptMessageId || task.conversationRolloverPromptMessageId,true],
+        ["ACK SHA-256",launch.conversationRolloverAckSha256 || task.conversationRolloverAckSha256,true],
+        ["Rollover hiba",launch.conversationRolloverError || "NINCS"]
+      ]),"A chat betelése ugyanazt a task/session/worktree/branch állapotot folytatja; új TASK_LAUNCH nem készül."),
       taskInspectorSection("Execution / recovery", taskInspectorRows([
         ["Execution recovery",launch.executionRecoveryState || "NINCS"], ["Recovery request",launch.executionRecoveryRequestId,true],
         ["Recovery transcript verified",launch.executionRecoveryTranscriptVerified === true ? "IGEN" : launch.executionRecoveryTranscriptVerified === false ? "NEM" : "—"],
@@ -1413,6 +1425,10 @@ function renderTaskInspector() {
         ["Routing",task.continuityRouting], ["Előző task",task.continuityPreviousTaskId,true], ["Előző worker",task.continuityPreviousWorkerCode],
         ["Continuity Context",`${task.continuityContextSnapshotId || "—"} · rev ${task.continuityContextRevision || "—"}`],
         ["Continuity handoff",task.continuityHandoffId,true], ["Aktuális handoff",`${handoff?.id || task.handoffPackId || "—"} · ${handoff?.state || task.handoffPackState || "—"}`],
+        ["Chat rollover",launch.conversationRolloverState || task.conversationRolloverState || "NINCS"],
+        ["Rollover predecessor",launch.conversationRolloverPreviousConversationId || task.conversationRolloverPreviousConversationId,true],
+        ["Rollover Context",`${launch.conversationRolloverContextSnapshotId || task.conversationRolloverContextSnapshotId || "—"} · rev ${launch.conversationRolloverContextRevision || task.conversationRolloverContextRevision || "—"}`],
+        ["Rollover handoff",launch.conversationRolloverHandoffPackId || task.conversationRolloverHandoffPackId,true],
         ["Source proof / BOOT ACK",`${task.sourceProofState || "—"} / ${bootAckState || "—"}`]
       ])),
       taskInspectorSection("Context összefoglaló",`<pre class="task-inspector-pre">${escapeHtml(summary)}</pre>`),

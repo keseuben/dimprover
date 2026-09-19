@@ -11,8 +11,8 @@ const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts")
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
 
-check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.52"));
-check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0.1.52-dev"/));
+check("current package keeps v0.1.37 recovery", () => assert.equal(pkg.version, "0.1.53"));
+check("current backend keeps v0.1.37 recovery", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0.1.53-dev"/));
 check("shared BOOT ACK processor exists", () => assert.match(main, /async function processCapturedBootAck\(/));
 check("shared BOOT ACK processor persists authoritative ACK", () => {
   const start = main.indexOf("async function processCapturedBootAck(");
@@ -32,7 +32,7 @@ check("Conversation Memory recovers valid ACK before transcript hash dedupe", ()
   const end = main.indexOf("\nasync function syncConversationMemoryOnce", start);
   const block = main.slice(start, end);
   const ack = block.indexOf("source:\"CONVERSATION_MEMORY\"");
-  const dedupe = block.indexOf("conversationMemoryHashes.get(cacheKey) === transcriptHash");
+  const dedupe = block.indexOf("if (conversationMemoryHashes.get(cacheKey) !== transcriptHash)");
   assert.ok(ack > 0 && dedupe > ack);
   assert.match(block, /bodyWithBootAck/);
 });

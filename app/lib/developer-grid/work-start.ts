@@ -37,7 +37,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.53-ra van előkészítve. Task létrehozása v0.1.52-ben tiltott.");
+      : "A Work OpenAI first-party surface v0.1.54-ra van előkészítve. Task létrehozása v0.1.53-ban tiltott.");
     Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0153", status: 409 });
     throw error;
   }
@@ -807,13 +807,25 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const surfaceConversationId = text(rawInput.surfaceConversationId ?? rawInput.chatConversationId, 180) || surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
   const surfaceConversationTitle = text(rawInput.surfaceConversationTitle ?? rawInput.chatConversationTitle, 500);
   const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
+  const conversationRollover = rawInput.conversationRollover === true;
+  const requestedRolloverState = text(rawInput.conversationRolloverState, 40).toUpperCase();
+  const conversationRolloverState = ["ACK_WAIT", "READY", "BLOCKED"].includes(requestedRolloverState) ? requestedRolloverState : "ACK_WAIT";
+  const rolloverContextSnapshotId = text(rawInput.conversationRolloverContextSnapshotId, 260);
+  const rolloverContextRevision = Number(rawInput.conversationRolloverContextRevision || 0);
+  const rolloverHandoffPackId = text(rawInput.conversationRolloverHandoffPackId, 260);
+  const rolloverSourceHead = text(rawInput.conversationRolloverSourceHead, 64).toLowerCase();
+  const rolloverSourceProofSha256 = text(rawInput.conversationRolloverSourceProofSha256, 64).toLowerCase();
+  const rolloverPromptMessageId = text(rawInput.conversationRolloverPromptMessageId, 220) || null;
+  const rolloverAckSha256 = text(rawInput.conversationRolloverAckSha256, 64).toLowerCase() || null;
   const chatConversationUrl = surfaceType === "CHATGPT" ? surfaceConversationUrl : "";
   const chatConversationId = surfaceType === "CHATGPT" ? surfaceConversationId : "";
   const chatConversationTitle = surfaceType === "CHATGPT" ? surfaceConversationTitle : "";
   const chatPreviousConversationId = surfaceType === "CHATGPT" ? surfacePreviousConversationId : null;
   const requestedMode = text(rawInput.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = requestedMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
-  const confirmedBy = chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
+  const confirmedBy = conversationRollover
+    ? "CONVERSATION_ROLLOVER" as const
+    : chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
   const urlDerivedSurfaceId = surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
   const codexUrlValid = !surfaceConversationUrl || (surfaceConversationUrl.toLowerCase().startsWith("codex:") && urlDerivedSurfaceId === surfaceConversationId);
   const surfaceIdentityValid = surfaceType === "CODEX"
@@ -832,17 +844,20 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     throw error;
   }
   const state = await readGridState();
-  if (!state.task || String(state.task.id) !== taskId) {
-    const error = new Error("A conversation binding task nem authoritative aktuális task.");
-    Object.assign(error, { code: "DEVELOPER_GRID_CHAT_TASK_MISMATCH", status: 409 });
-    throw error;
-  }
-  const session = state.sessions.find((item) => item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
+  const session = state.sessions.find((item) =>
+    item.taskId === taskId
+    && item.workerCode === workerCode
+    && item.endedAt === null
+    && String(item.developmentContext?.taskId || item.taskId) === taskId
+  );
   if (!session) {
-    const error = new Error("A taskhoz tartozó aktív worker session nem található.");
+    const error = new Error("A taskhoz tartozó exact aktív worker session nem található.");
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_SESSION_MISSING", status: 409 });
     throw error;
   }
+  const authoritativeProjectId = state.task?.id === taskId
+    ? state.task.projectId
+    : text(session.developmentContext.projectId, 180) || DEVELOPER_GRID_PROJECT_ID;
   const existingSurfaceType = normalizeSurfaceType(session.developmentContext.surfaceType || "CHATGPT");
   if (existingSurfaceType !== surfaceType) {
     const error = new Error("A worker surface eltér a munkaindításkor rögzített felülettől.");
@@ -854,6 +869,59 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_MODE_MISMATCH", status: 409 });
     throw error;
+  }
+  if (conversationRollover) {
+    if (surfaceType !== "CHATGPT") {
+      const error = new Error("Conversation rollover jelenleg kizárólag ChatGPT surface-en engedélyezett.");
+      Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_SURFACE_INVALID", status: 409 });
+      throw error;
+    }
+    const ctx = session.developmentContext;
+    const authoritativeConversationId = text(ctx.surfaceConversationId ?? ctx.chatConversationId, 180);
+    const frozenPreviousConversationId = text(ctx.conversationRolloverPreviousConversationId, 180);
+    const idempotentRollover = authoritativeConversationId === surfaceConversationId
+      && frozenPreviousConversationId === surfacePreviousConversationId;
+    const firstRolloverBinding = authoritativeConversationId === surfacePreviousConversationId
+      && surfaceConversationId !== surfacePreviousConversationId;
+    if (!surfacePreviousConversationId || (!firstRolloverBinding && !idempotentRollover)) {
+      const error = new Error("A rollover előző csevegésazonosítója nem egyezik az authoritative aktuális csevegéssel.");
+      Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_PREVIOUS_CONVERSATION_MISMATCH", status: 409 });
+      throw error;
+    }
+    if (!surfaceConversationId || surfaceConversationId === surfacePreviousConversationId) {
+      const error = new Error("A rollover új csevegésazonosítója hiányzik vagy megegyezik a régivel.");
+      Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_NEW_CONVERSATION_REQUIRED", status: 409 });
+      throw error;
+    }
+    if (ctx.bootAckState !== "VALIDATED" || ctx.bootAckCodingAllowed !== true) {
+      const error = new Error("Conversation rollover csak validált BOOT ACK és engedélyezett coding állapot mellett köthető.");
+      Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_BOOT_ACK_REQUIRED", status: 409 });
+      throw error;
+    }
+    const frozenContextSnapshotId = text(ctx.conversationRolloverContextSnapshotId ?? ctx.contextSnapshotId, 260);
+    const frozenContextRevision = Number(ctx.conversationRolloverContextRevision ?? ctx.contextRevision ?? 0);
+    const frozenHandoffPackId = text(ctx.conversationRolloverHandoffPackId ?? ctx.handoffPackId, 260);
+    const expectedProofSha256 = text(ctx.sourceExecutionProof?.sha256, 64).toLowerCase();
+    const expectedHead = text(session.sourceProvenance.head, 64).toLowerCase();
+    const rolloverIdentityMismatch = !frozenContextSnapshotId
+      || rolloverContextSnapshotId !== frozenContextSnapshotId
+      || rolloverContextRevision !== frozenContextRevision
+      || !frozenHandoffPackId
+      || rolloverHandoffPackId !== frozenHandoffPackId
+      || !/^[0-9a-f]{40}$/.test(rolloverSourceHead)
+      || rolloverSourceHead !== expectedHead
+      || !/^[0-9a-f]{64}$/.test(rolloverSourceProofSha256)
+      || rolloverSourceProofSha256 !== expectedProofSha256;
+    if (rolloverIdentityMismatch) {
+      const error = new Error("A conversation rollover Context/Handoff/source identity eltér az authoritative aktív session állapotától.");
+      Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_IDENTITY_MISMATCH", status: 409 });
+      throw error;
+    }
+    if (String(rawInput.productionAccess || "DENY").toUpperCase() !== "DENY") {
+      const error = new Error("Conversation rollover PROD hozzáféréssel tiltott.");
+      Object.assign(error, { code: "PROD_DENY", status: 409 });
+      throw error;
+    }
   }
   const confirmedAt = new Date().toISOString();
   const updated: WorkerSession = {
@@ -873,18 +941,53 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       chatConversationTitle: chatConversationTitle || null,
       chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null,
       chatConversationConfirmedBy: confirmedBy,
+      ...(conversationRollover ? {
+        conversationRolloverState: conversationRolloverState as "ACK_WAIT" | "READY" | "BLOCKED",
+        conversationRolloverReason: "CONTEXT_LIMIT" as const,
+        conversationRolloverPreviousConversationId: surfacePreviousConversationId,
+        conversationRolloverContextSnapshotId: rolloverContextSnapshotId,
+        conversationRolloverContextRevision: rolloverContextRevision,
+        conversationRolloverHandoffPackId: rolloverHandoffPackId,
+        conversationRolloverSourceHead: rolloverSourceHead,
+        conversationRolloverSourceProofSha256: rolloverSourceProofSha256,
+        conversationRolloverPromptMessageId: rolloverPromptMessageId,
+        conversationRolloverAckSha256: rolloverAckSha256,
+        conversationRolloverStartedAt: session.developmentContext.conversationRolloverStartedAt || confirmedAt,
+        conversationRolloverCompletedAt: conversationRolloverState === "READY" ? confirmedAt : null,
+      } : {}),
       resolvedAt: confirmedAt,
     },
   };
   const next = await upsertWorkerSession(updated);
-  await syncEngineBridgeTarget(taskId, "HANDED_OFF");
+  await syncEngineBridgeTarget(taskId, conversationRollover ? "RUNNING" : "HANDED_OFF");
   await appendGridEvent({
-    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
-    delta: { summary: `${surfaceType} surface rögzítve · ${chatLaunchMode}`, workItem: updated.developmentContext.workItem, workStageIndex: updated.developmentContext.workStageIndex || 1 },
+    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: authoritativeProjectId, productionAccess: "DENY",
+    delta: {
+      eventType: conversationRollover ? "CONVERSATION_ROLLOVER_" + conversationRolloverState : "SURFACE_BOUND",
+      summary: conversationRollover
+        ? "ChatGPT conversation rollover · " + surfacePreviousConversationId + " → " + surfaceConversationId + " · " + conversationRolloverState
+        : surfaceType + " surface rögzítve · " + chatLaunchMode,
+      workItem: updated.developmentContext.workItem,
+      workStageIndex: updated.developmentContext.workStageIndex || 1,
+      previousConversationId: conversationRollover ? surfacePreviousConversationId : null,
+      conversationId: surfaceConversationId,
+      contextSnapshotId: conversationRollover ? rolloverContextSnapshotId : null,
+      handoffPackId: conversationRollover ? rolloverHandoffPackId : null,
+    },
   });
   return {
     taskId, workerCode, chatLaunchMode, surfaceType, surfaceConversationId, surfaceConversationUrl, surfaceConversationTitle,
     surfaceConversationConfirmedAt: confirmedAt, chatConversationId: chatConversationId || null, chatConversationUrl: chatConversationUrl || null, chatConversationTitle: chatConversationTitle || null,
-    chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy, revision: next.revision, productionAccess: "DENY" as const,
+    chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy,
+    conversationRollover: conversationRollover ? {
+      state: conversationRolloverState,
+      previousConversationId: surfacePreviousConversationId,
+      contextSnapshotId: rolloverContextSnapshotId,
+      contextRevision: rolloverContextRevision,
+      handoffPackId: rolloverHandoffPackId,
+      sourceHead: rolloverSourceHead,
+      sourceProofSha256: rolloverSourceProofSha256,
+    } : null,
+    revision: next.revision, productionAccess: "DENY" as const,
   };
 }
