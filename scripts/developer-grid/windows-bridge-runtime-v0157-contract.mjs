@@ -16,6 +16,7 @@ check("pairing page derives clean origin",()=>assert.match(main,/new URL\(String
 check("pairing page uses direct route",()=>assert.match(main,/\/admin\/dev-console\/chatgrid-pairing\?client=developer-grid/));
 check("pairing page no longer concatenates full base path",()=>assert.doesNotMatch(main,/const url = `\$\{config\.benjadminBaseUrl\}\/admin\/dev-console\/chatgrid-pairing/));
 check("candidate smoke checks bridge readiness",()=>assert.match(smoke,/\/api\/dev\/terminal-hub\/windows-bridge\/readiness/));
+check("candidate smoke requires admin key for readiness gate",()=>assert.match(smoke,/if \(!adminKey\) throw new Error\("DEVELOPER_GRID_CANDIDATE_ADMIN_KEY hiányzik; Windows Bridge readiness gate nem hagyható ki\."\)/));
 check("candidate smoke requires bridge enabled",()=>assert.match(smoke,/readiness\.bridgeEnabled === true/));
 check("candidate smoke requires pairing enabled",()=>assert.match(smoke,/readiness\.pairingEnabled === true/));
 check("candidate smoke requires execution disabled",()=>assert.match(smoke,/readiness\.executionEnabled === false/));

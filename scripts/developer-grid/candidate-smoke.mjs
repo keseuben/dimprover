@@ -74,7 +74,8 @@ const bridge = await request("/api/dev/grid/bridge", { headers: reporterHeaders 
 check(bridge.response.status === 200 && bridge.json?.bridge?.connected === true, "Developer Console bridge connected");
 check(bridge.json?.bridge?.presenceAuthoritative === false, "Presence remains non-authoritative");
 
-if (adminKey) {
+if (!adminKey) throw new Error("DEVELOPER_GRID_CANDIDATE_ADMIN_KEY hiányzik; Windows Bridge readiness gate nem hagyható ki.");
+{
   const bridgeReadiness = await request("/api/dev/terminal-hub/windows-bridge/readiness", {
     headers: { "x-dimpro-license-admin-key": adminKey },
   });
@@ -101,8 +102,6 @@ if (adminKey) {
     check(materialize.json?.materialized?.materialized === false, "Terminal or inactive bridge is materialization no-op");
     check(materialize.json?.materialized?.session === null, "Terminal or inactive bridge creates no Grid session");
   }
-} else {
-  console.log("SKIP task/session materialization · DEVELOPER_GRID_CANDIDATE_ADMIN_KEY nincs megadva");
 }
 
 console.log(`Developer Grid ${foundation.json?.foundation?.version || "unknown"} candidate smoke PASS · ${checks} checks · ${base}`);
