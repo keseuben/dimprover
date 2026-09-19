@@ -37,6 +37,7 @@ const LOCKOUT_MS = 30_000;
 const CHAT_REFRESH_MAINTENANCE_MS = 60_000;
 const CHAT_REFRESH_PROBE_MS = 5 * 60_000;
 const DEVICE_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
+const DEVICE_HEARTBEAT_RETRY_MS = 15_000;
 const ENGINE_SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
 const ENGINE_SESSION_HEARTBEAT_RETRY_MS = 60_000;
 const CONVERSATION_MEMORY_INTERVAL_MS = 8_000;
@@ -3771,6 +3772,7 @@ async function sendDeviceHeartbeatOnce() {
   const sessionId = String(metadata?.sessionId || "").trim();
   if (!token || !agentId || !sessionId || !config?.benjadminBaseUrl) return;
   deviceHeartbeatBusy = true;
+  let nextDelay = DEVICE_HEARTBEAT_INTERVAL_MS;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
@@ -3791,11 +3793,12 @@ async function sendDeviceHeartbeatOnce() {
       clearTimeout(timer);
     }
   } catch (error) {
-    send("connection:device-heartbeat", { ok: false, error: error instanceof Error ? error.message.slice(0, 240) : "A device heartbeat sikertelen." });
+    nextDelay = DEVICE_HEARTBEAT_RETRY_MS;
+    send("connection:device-heartbeat", { ok: false, retryInSeconds: Math.round(nextDelay / 1000), error: error instanceof Error ? error.message.slice(0, 240) : "A device heartbeat sikertelen." });
   } finally {
     deviceHeartbeatBusy = false;
     if (unlocked && readDeviceToken()) {
-      deviceHeartbeatTimer = setTimeout(() => void sendDeviceHeartbeatOnce(), DEVICE_HEARTBEAT_INTERVAL_MS);
+      deviceHeartbeatTimer = setTimeout(() => void sendDeviceHeartbeatOnce(), nextDelay);
     }
   }
 }
@@ -4251,7 +4254,10 @@ function registerIpc() {
   });
   ipcMain.handle("connection:open-pairing-page", async () => {
     if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
-    const url = `${config.benjadminBaseUrl}/admin/dev-console/chatgrid-pairing?client=developer-grid`;
+    let origin = "";
+    try { origin = new URL(String(config.benjadminBaseUrl || "")).origin; }
+    catch { return { ok: false, error: "A BENJADMIN alap URL érvénytelen." }; }
+    const url = `${origin}/admin/dev-console/chatgrid-pairing?client=developer-grid`;
     try { await shell.openExternal(url); return { ok: true, url }; }
     catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A BENJADMIN párosítási oldal nem nyitható meg." }; }
   });

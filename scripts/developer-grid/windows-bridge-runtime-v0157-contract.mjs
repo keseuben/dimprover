@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const main=fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+const smoke=fs.readFileSync(path.join(root,"scripts/developer-grid/candidate-smoke.mjs"),"utf8");
+let n=0;
+function check(name,fn){fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+name);}
+check("heartbeat retry is 15 seconds",()=>assert.match(main,/DEVICE_HEARTBEAT_RETRY_MS = 15_000/));
+check("heartbeat defaults to normal interval",()=>assert.match(main,/let nextDelay = DEVICE_HEARTBEAT_INTERVAL_MS/));
+check("heartbeat failure switches to retry interval",()=>assert.match(main,/catch \(error\) \{[\s\S]*nextDelay = DEVICE_HEARTBEAT_RETRY_MS/));
+check("heartbeat failure reports retry seconds",()=>assert.match(main,/retryInSeconds: Math\.round\(nextDelay \/ 1000\)/));
+check("heartbeat scheduler uses selected nextDelay",()=>assert.match(main,/setTimeout\(\(\) => void sendDeviceHeartbeatOnce\(\), nextDelay\)/));
+check("pairing page derives clean origin",()=>assert.match(main,/new URL\(String\(config\.benjadminBaseUrl \|\| ""\)\)\.origin/));
+check("pairing page uses direct route",()=>assert.match(main,/\/admin\/dev-console\/chatgrid-pairing\?client=developer-grid/));
+check("pairing page no longer concatenates full base path",()=>assert.doesNotMatch(main,/const url = `\$\{config\.benjadminBaseUrl\}\/admin\/dev-console\/chatgrid-pairing/));
+check("candidate smoke checks bridge readiness",()=>assert.match(smoke,/\/api\/dev\/terminal-hub\/windows-bridge\/readiness/));
+check("candidate smoke requires bridge enabled",()=>assert.match(smoke,/readiness\.bridgeEnabled === true/));
+check("candidate smoke requires pairing enabled",()=>assert.match(smoke,/readiness\.pairingEnabled === true/));
+check("candidate smoke requires execution disabled",()=>assert.match(smoke,/readiness\.executionEnabled === false/));
+check("candidate smoke requires pairing secret",()=>assert.match(smoke,/readiness\.security\?\.pairingSecretConfigured === true/));
+check("candidate smoke forbids PROD execution",()=>assert.match(smoke,/readiness\.security\?\.prodExecutionAllowed === false/));
+console.log("Developer Grid Windows Bridge runtime v0.1.57 contract PASS · "+n+"/"+n);

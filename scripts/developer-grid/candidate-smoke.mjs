@@ -75,6 +75,17 @@ check(bridge.response.status === 200 && bridge.json?.bridge?.connected === true,
 check(bridge.json?.bridge?.presenceAuthoritative === false, "Presence remains non-authoritative");
 
 if (adminKey) {
+  const bridgeReadiness = await request("/api/dev/terminal-hub/windows-bridge/readiness", {
+    headers: { "x-dimpro-license-admin-key": adminKey },
+  });
+  check(bridgeReadiness.response.status === 200 && bridgeReadiness.json?.ok === true, "Windows Bridge readiness available");
+  const readiness = bridgeReadiness.json?.readiness || {};
+  check(readiness.bridgeEnabled === true, "Windows Bridge enabled");
+  check(readiness.pairingEnabled === true, "Windows Bridge pairing enabled");
+  check(readiness.executionEnabled === false, "Windows Bridge execution remains disabled");
+  check(readiness.security?.pairingSecretConfigured === true, "Windows Bridge pairing secret configured");
+  check(readiness.security?.prodExecutionAllowed === false, "Windows Bridge PROD execution forbidden");
+
   const materialize = await request("/api/dev/grid/state", {
     method: "POST",
     headers: { "x-dimpro-license-admin-key": adminKey },

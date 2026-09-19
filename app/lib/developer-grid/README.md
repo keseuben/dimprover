@@ -470,5 +470,8 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A candidate URL a bizonyított project-root + új conversation ID alapján project-qualified formában marad meg.
 - A Conversation Memory monitor 8 másodpercenként továbbra is olvas/ment, de conversation mismatch esetén kizárólag megfigyelési állapotot rögzít; `loadURL`, reload vagy pinned restore indítása tiltott.
 - Ez megszünteti azt a fizikai hibát, amelyben egy worker csevegőváltása után pár másodperccel egy vagy több cella visszaugrott a ChatGPT kezdőlapjára/régi pinre.
+- Sikertelen Windows Bridge heartbeat után a Desktop nem vár újabb 5 percet: 15 másodperces fail-safe retry indul, siker után visszaáll az 5 perces normál intervallum.
+- A `PÁROSÍTÁSI OLDAL MEGNYITÁSA` mindig a BENJADMIN base URL originjából építi a `/admin/dev-console/chatgrid-pairing?client=developer-grid` címet, ezért tárolt path/hash nem viheti a Rendszerstruktúra oldalra.
+- A candidate smoke kötelezően ellenőrzi: Windows Bridge ON, pairing ON, execution OFF, pairing secret konfigurált, PROD execution tiltott. Hiányos runtime-env esetén a candidate nem adható ki.
 - A Work first-party adapter aktiválása v0.1.58-ra került.
 - DEV ONLY · PROD DENY.
