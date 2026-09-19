@@ -22,6 +22,7 @@ const { EXECUTION_REQUEST_START, parseDeveloperGridExecutionRequest, buildDevelo
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
+const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLiteral, stopSelectorLiteral, microphoneSelectorLiteral, conversationLinkSelectorLiteral, inspectChatGptDom, inspectChatRefreshSafety: inspectChatRefreshSafetyViaAdapter, scrollToLatestChatTurn } = require("./chatgpt/chatgpt-dom-adapter.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
@@ -100,6 +101,9 @@ const processedExecutionRequestHashes = new Set();
 const executionRequestProcessingKeys = new Set();
 const executionRequestRecoveryKeys = new Set();
 const conversationRolloverProcessingKeys = new Set();
+const chatConversationGuardRestoring = new Set();
+const chatConversationGuardAttempts = new Map();
+const chatLatestAlignmentTokens = new Map();
 let desktopArtifactIdentityCache = null;
 let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false, portableFileEnv: false, portableDirEnv: false, installedCopyExists: false, candidateCount: 0, failureCodes: [] };
 const avatarDataUriCache = new Map();
@@ -627,9 +631,160 @@ function chatConversationIdFromUrl(value) {
   } catch { return ""; }
 }
 
+function isTerminalDeveloperTask(task) {
+  return ["completed", "closed", "cancelled", "canceled", "failed"].includes(String(task?.status || "").toLowerCase());
+}
+
+function conversationPinForCell(cell) {
+  if (!cell || cell.id === "central" || !cell.workerCode) return null;
+  const { task } = liveContextForWorker(String(cell.workerCode || "").toUpperCase());
+  if (!task || isTerminalDeveloperTask(task)) return null;
+  const record = loadTaskLaunchRecords()[String(task.id || "")] || {};
+  const rolloverState = String(record.conversationRolloverState || task.conversationRolloverState || "").toUpperCase();
+  if (["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT"].includes(rolloverState)) {
+    return { taskId:String(task.id || ""), suspended:true, reason:"ROLLOVER_TRANSITION", rolloverState };
+  }
+  const conversationId = String(
+    record.conversationRolloverConversationId
+    || task.conversationRolloverConversationId
+    || record.surfaceConversationId
+    || record.chatSessionId
+    || task.surfaceConversationId
+    || task.chatConversationId
+    || task.chatLaunch?.surfaceConversationId
+    || task.chatLaunch?.chatSessionId
+    || ""
+  ).trim();
+  if (!conversationId) return null;
+  const currentUrl = chatViews.get(cell.id)?.webContents?.getURL?.() || "";
+  const candidates = [
+    record.conversationRolloverConversationUrl,
+    task.conversationRolloverConversationUrl,
+    task.surfaceConversationUrl,
+    task.chatConversationUrl,
+    record.surfaceConversationUrl,
+    cell.url,
+    currentUrl,
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const conversationUrl = candidates.find((value) => chatConversationIdFromUrl(value) === conversationId)
+    || "https://chatgpt.com/c/" + encodeURIComponent(conversationId);
+  return {
+    taskId:String(task.id || ""),
+    sessionId:String(task.sessionId || ""),
+    conversationId,
+    conversationUrl,
+    rolloverState,
+    suspended:false,
+  };
+}
+
+function conversationGuardAttemptAllowed(cellId) {
+  const now = Date.now();
+  const previous = chatConversationGuardAttempts.get(cellId);
+  const sameWindow = Boolean(previous && now - previous.windowStart < 30_000);
+  const windowStart = sameWindow ? previous.windowStart : now;
+  const count = sameWindow ? previous.count : 0;
+  if (count >= 3) return false;
+  chatConversationGuardAttempts.set(cellId, { windowStart, count:count + 1 });
+  return true;
+}
+
+async function alignPinnedConversationToLatest(cell, view, reason = "navigation") {
+  if (!cell || !view || view.webContents.isDestroyed()) return { ok:false, reason:"chat-unavailable" };
+  const token = String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  chatLatestAlignmentTokens.set(cell.id, token);
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (chatLatestAlignmentTokens.get(cell.id) !== token || view.webContents.isDestroyed()) return { ok:false, reason:"superseded" };
+    const pin = conversationPinForCell(cell);
+    const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+    if (!pin || pin.suspended || currentId !== pin.conversationId) return { ok:false, reason:"conversation-changed" };
+    const result = await scrollToLatestChatTurn(view);
+    if (result?.ok) {
+      const state = chatRefreshCell(cell.id);
+      state.latestAlignedAt = result.alignedAt || new Date().toISOString();
+      state.latestAlignedReason = reason;
+      state.latestAlignedMessageCount = Number(result.messageCount || 0);
+      return result;
+    }
+    if (!["turns-not-ready", "conversation-required"].includes(String(result?.reason || ""))) return result;
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+  return { ok:false, reason:"latest-turn-timeout" };
+}
+
+async function ensurePinnedConversation(cell, view, reason = "navigation", { alignLatest = true } = {}) {
+  if (!cell || cell.id === "central" || !view || view.webContents.isDestroyed()) return { ok:false, reason:"not-applicable" };
+  const pin = conversationPinForCell(cell);
+  const state = chatRefreshCell(cell.id);
+  state.domAdapterVersion = CHATGPT_DOM_ADAPTER_VERSION;
+  if (!pin) {
+    state.conversationGuardState = "IDLE";
+    state.pinnedConversationId = "";
+    return { ok:true, pinned:false };
+  }
+  if (pin.suspended) {
+    state.conversationGuardState = "SUSPENDED";
+    state.pinnedConversationId = "";
+    return { ok:true, pinned:false, suspended:true, rolloverState:pin.rolloverState };
+  }
+  state.pinnedConversationId = pin.conversationId;
+  const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+  if (currentId === pin.conversationId) {
+    state.conversationGuardState = "PINNED";
+    state.conversationGuardError = "";
+    if (alignLatest) void alignPinnedConversationToLatest(cell, view, reason);
+    return { ok:true, pinned:true, restored:false, conversationId:pin.conversationId };
+  }
+  if (chatConversationGuardRestoring.has(cell.id)) return { ok:false, pinned:true, restoring:true, conversationId:pin.conversationId };
+  if (!conversationGuardAttemptAllowed(cell.id)) {
+    state.conversationGuardState = "BLOCKED";
+    state.conversationGuardError = "Túl sok automatikus conversation-visszaállítás 30 másodpercen belül.";
+    send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:false, code:"CHAT_CONVERSATION_GUARD_RATE_LIMIT", expectedConversationId:pin.conversationId, currentConversationId:currentId || null });
+    return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
+  }
+  chatConversationGuardRestoring.add(cell.id);
+  state.conversationGuardState = "RESTORING";
+  state.conversationGuardError = "";
+  state.conversationGuardLastReason = reason;
+  try {
+    await view.webContents.loadURL(pin.conversationUrl);
+    const restoredId = chatConversationIdFromUrl(view.webContents.getURL());
+    if (restoredId !== pin.conversationId) {
+      state.conversationGuardState = "BLOCKED";
+      state.conversationGuardError = "A visszaállított ChatGPT route eltér az authoritative conversationtől (" + (restoredId || "NINCS") + ").";
+      send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:false, code:"CHAT_CONVERSATION_RESTORE_MISMATCH", expectedConversationId:pin.conversationId, currentConversationId:restoredId || null });
+      return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
+    }
+    state.conversationGuardState = "PINNED";
+    state.conversationGuardRestoredAt = new Date().toISOString();
+    state.conversationGuardRestoreCount = Number(state.conversationGuardRestoreCount || 0) + 1;
+    rememberChatNavigation(cell.id, view.webContents.getURL());
+    send("live:connection", { kind:"conversation-guard", cellId:cell.id, workerCode:cell.workerCode, ok:true, code:"CHAT_CONVERSATION_RESTORED", expectedConversationId:pin.conversationId, reason });
+    if (alignLatest) void alignPinnedConversationToLatest(cell, view, reason + ":restored");
+    return { ok:true, pinned:true, restored:true, conversationId:pin.conversationId };
+  } catch (error) {
+    state.conversationGuardState = "BLOCKED";
+    state.conversationGuardError = String(error?.message || error || "Conversation restore failed").slice(0, 500);
+    return { ok:false, pinned:true, blocked:true, conversationId:pin.conversationId };
+  } finally {
+    chatConversationGuardRestoring.delete(cell.id);
+    emitChatRefreshState();
+  }
+}
+
+function schedulePinnedConversationGuard(cell, view, reason = "navigation", delayMs = 250) {
+  if (!cell || cell.id === "central") return;
+  setTimeout(() => {
+    if (!view || view.webContents.isDestroyed()) return;
+    void ensurePinnedConversation(cell, view, reason, { alignLatest:true });
+  }, Math.max(0, Number(delayMs || 0)));
+}
+
 function rememberChatNavigation(chatId, url) {
   if (!config?.rememberLastConversation || !isChatConversationUrl(url)) return false;
   const target = chatConfigById(chatId);
+  const pin = conversationPinForCell(target);
+  if (pin && !pin.suspended && pin.conversationId && chatConversationIdFromUrl(url) !== pin.conversationId) return false;
   if (!target || target.url === url) return false;
   target.url = url;
   saveConfig(config);
@@ -667,6 +822,8 @@ function preserveWorkerConversationsAfterWorkStart(guards) {
 
 async function selectLatestNamedConversation(cell, view) {
   if (!config?.rememberLastConversation || !cell || latestWorkerConversationScanned.has(cell.id)) return false;
+  const pin = conversationPinForCell(cell);
+  if (pin?.conversationId || pin?.suspended) return false;
   latestWorkerConversationScanned.add(cell.id);
   const slot = cell.id === "central" ? 5 : (config.cells || []).findIndex((item) => item.id === cell.id) + 1;
   if (slot < 1) return false;
@@ -678,7 +835,7 @@ async function selectLatestNamedConversation(cell, view) {
     const escapeRe = (value) => value.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&");
     const re = new RegExp("^(\\d{6})[_\\s-]+" + slot + "[_\\s-]+" + escapeRe(worker) + "(?:\\s*[–—-].*)?$", "i");
     const rows = [];
-    for (const a of document.querySelectorAll('a[href*="/c/"]')) {
+    for (const a of document.querySelectorAll(${conversationLinkSelectorLiteral()})) {
       const labels = [a.textContent, a.getAttribute("aria-label"), a.getAttribute("title")].filter(Boolean).map((v) => String(v).trim().replace(/\s+/g, " "));
       const title = labels.find((v) => re.test(v));
       if (!title) continue;
@@ -1089,7 +1246,12 @@ function publicChatRefreshState() {
     latestReason: latest?.lastReason || "",
     dailyEnabled: config?.chatRefresh?.dailyEnabled !== false,
     deferredCount: values.filter((item) => item.deferred).length,
-    updateAvailableCount: values.filter((item) => item.updateAvailable).length
+    updateAvailableCount: values.filter((item) => item.updateAvailable).length,
+    domBlockedCount: values.filter((item) => item.domHealth === "BLOCKED").length,
+    conversationGuardBlockedCount: values.filter((item) => item.conversationGuardState === "BLOCKED").length,
+    conversationGuardRestoringCount: values.filter((item) => item.conversationGuardState === "RESTORING").length,
+    pinnedConversationCount: values.filter((item) => item.conversationGuardState === "PINNED").length,
+    domAdapterVersion: CHATGPT_DOM_ADAPTER_VERSION,
   };
 }
 
@@ -1100,31 +1262,33 @@ function emitChatRefreshState() {
 }
 
 async function inspectChatRefreshSafety(view) {
-  if (!view || view.webContents.isDestroyed()) return { busy: true, generating: false, hasDraft: false, updateAvailable: false };
-  return view.webContents.executeJavaScript(`(() => {
-    const visible = (node) => Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== "hidden");
-    const stopSelectors = [
-      'button[data-testid="stop-button"]',
-      'button[aria-label*="stop" i]',
-      'button[aria-label*="leáll" i]'
-    ];
-    const generating = stopSelectors.some((selector) => visible(document.querySelector(selector)));
-    const editors = [...document.querySelectorAll('textarea, [contenteditable="true"]')].filter(visible);
-    const hasDraft = editors.some((editor) => String(editor.value ?? editor.innerText ?? editor.textContent ?? "").trim().length > 0);
-    const updatePattern = /(refresh|reload|update available|frissít|újratölt|actualizar|mettre à jour|aktualisieren)/i;
-    const updateAvailable = [...document.querySelectorAll('button')].filter(visible).some((button) => {
-      const label = [button.textContent, button.title, button.getAttribute('aria-label')].filter(Boolean).join(' ');
-      return updatePattern.test(label);
-    });
-    return { busy: generating || hasDraft, generating, hasDraft, updateAvailable };
-  })()`, true).catch(() => ({ busy: true, generating: false, hasDraft: false, updateAvailable: false }));
+  return inspectChatRefreshSafetyViaAdapter(view);
 }
 
 async function probeChatRefresh(cellId, view) {
   const cellState = chatRefreshCell(cellId);
-  const inspection = await inspectChatRefreshSafety(view);
+  const [inspection, domHealth] = await Promise.all([
+    inspectChatRefreshSafety(view),
+    inspectChatGptDom(view),
+  ]);
   cellState.lastProbedAt = Date.now();
   cellState.updateAvailable = inspection.updateAvailable === true;
+  cellState.domAdapterVersion = domHealth?.version || CHATGPT_DOM_ADAPTER_VERSION;
+  cellState.domHealth = domHealth?.ok === true ? "PASS" : "BLOCKED";
+  cellState.domRoute = domHealth?.route || "UNAVAILABLE";
+  cellState.domConversationId = domHealth?.conversationId || "";
+  cellState.domMissing = Array.isArray(domHealth?.missing) ? domHealth.missing : [];
+  if (domHealth?.ok !== true) {
+    send("live:connection", {
+      kind:"chat-dom-health",
+      cellId,
+      ok:false,
+      code:"CHATGPT_DOM_ADAPTER_BLOCKED",
+      adapterVersion:cellState.domAdapterVersion,
+      route:cellState.domRoute,
+      missing:cellState.domMissing,
+    });
+  }
   return inspection;
 }
 
@@ -1135,7 +1299,9 @@ async function requestChatRefresh(cellId, reason = "manual") {
   const cellState = chatRefreshCell(cellId);
   if (inspection.busy) {
     cellState.deferred = true;
-    cellState.error = inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
+    cellState.error = inspection.ok !== true
+      ? "ChatGPT DOM adapter nem kész"
+      : inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
     emitChatRefreshState();
     return { refreshed: false, deferred: true, error: cellState.error };
   }
@@ -1143,9 +1309,18 @@ async function requestChatRefresh(cellId, reason = "manual") {
   cellState.loading = true;
   cellState.error = "";
   pendingChatRefreshReasons.set(cellId, reason);
-  view.webContents.reloadIgnoringCache();
+  const cell = chatConfigById(cellId);
+  const pin = conversationPinForCell(cell);
+  if (pin && !pin.suspended && pin.conversationUrl) {
+    await view.webContents.loadURL(pin.conversationUrl).catch((error) => {
+      cellState.loading = false;
+      cellState.error = String(error?.message || error || "Pinned conversation refresh failed").slice(0, 500);
+    });
+  } else {
+    view.webContents.reloadIgnoringCache();
+  }
   emitChatRefreshState();
-  return { refreshed: true, deferred: false };
+  return { refreshed: true, deferred: false, pinnedConversation: Boolean(pin && !pin.suspended && pin.conversationUrl) };
 }
 
 async function refreshOpenChatViews(reason = "manual-all") {
@@ -1173,7 +1348,9 @@ async function maintainChatRefresh() {
       if (!inspection) inspection = await probeChatRefresh(cellId, view);
       if (inspection.busy) {
         cellState.deferred = true;
-        cellState.error = inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
+        cellState.error = inspection.ok !== true
+          ? "ChatGPT DOM adapter nem kész"
+          : inspection.generating ? "Aktív válaszgenerálás" : "Beírt, el nem küldött szöveg";
         continue;
       }
       await requestChatRefresh(cellId, "daily-safe");
@@ -1230,8 +1407,15 @@ function createChatView(cell) {
   view.webContents.on("will-navigate", (event, url) => {
     if (!allowedChatUrl(url)) event.preventDefault();
   });
-  view.webContents.on("did-navigate", (_event, url) => rememberChatNavigation(cell.id, url));
-  view.webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => { if (isMainFrame) rememberChatNavigation(cell.id, url); });
+  view.webContents.on("did-navigate", (_event, url) => {
+    rememberChatNavigation(cell.id, url);
+    schedulePinnedConversationGuard(cell, view, "did-navigate", 120);
+  });
+  view.webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
+    if (!isMainFrame) return;
+    rememberChatNavigation(cell.id, url);
+    schedulePinnedConversationGuard(cell, view, "did-navigate-in-page", 120);
+  });
   view.webContents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
     if (isMainFrame) {
       const refreshState = chatRefreshCell(cell.id);
@@ -1255,8 +1439,12 @@ function createChatView(cell) {
     if (cell.id !== "central") void applyWorkspaceStandbyLock(cell, view, !workerHasAssignedDevelopment(latestLiveSnapshot, cell.workerCode));
     send("live:connection", { kind: "chat", cellId: cell.id, ok: true });
     emitChatRefreshState();
+    schedulePinnedConversationGuard(cell, view, "did-finish-load", 180);
     setTimeout(() => void probeChatRefresh(cell.id, view).then(() => emitChatRefreshState()), 2200);
-    setTimeout(() => void selectLatestNamedConversation(cell, view), 1400);
+    setTimeout(() => {
+      const pin = conversationPinForCell(cell);
+      if (!pin) void selectLatestNamedConversation(cell, view);
+    }, 1400);
   });
   view.webContents.on("before-input-event", (event, input) => {
     if (cell.id === "central" && input.type === "keyDown" && input.key === "F11" && centralWindow && !centralWindow.isDestroyed()) {
@@ -1307,12 +1495,7 @@ async function insertLargeClipboardText(view, sourceText) {
     const startedAt = performance.now();
     const text = ${literal};
     const chunkSize = ${chunkSize};
-    const selectors = [
-      '#prompt-textarea',
-      'textarea[data-testid="prompt-textarea"]',
-      '[data-testid="prompt-textarea"][contenteditable="true"]',
-      'main form [contenteditable="true"]'
-    ];
+    const selectors = ${composerSelectorLiteral()};
     let composer = null;
     for (const selector of selectors) {
       const candidate = document.querySelector(selector);
@@ -1413,12 +1596,7 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
   return view.webContents.executeJavaScript(`(() => {
     const text = ${literal};
     const marker = ${markerLiteral};
-    const selectors = [
-      '#prompt-textarea',
-      'textarea[data-testid="prompt-textarea"]',
-      '[data-testid="prompt-textarea"][contenteditable="true"]',
-      'main form [contenteditable="true"]'
-    ];
+    const selectors = ${composerSelectorLiteral()};
     let composer = null;
     for (const selector of selectors) {
       const candidate = document.querySelector(selector);
@@ -1474,18 +1652,16 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
   const markerLiteral = JSON.stringify(String(expectedMarker || ""));
   return view.webContents.executeJavaScript(`(async () => {
     const marker = ${markerLiteral};
-    const selectors = ['#prompt-textarea','textarea[data-testid="prompt-textarea"]','[data-testid="prompt-textarea"][contenteditable="true"]','main form [contenteditable="true"]'];
+    const selectors = ${composerSelectorLiteral()};
     let composer = null;
     for (const selector of selectors) { const candidate = document.querySelector(selector); if (candidate && candidate.getClientRects().length) { composer = candidate; break; } }
     if (!composer) return { sent:false, reason:'composer-not-found' };
     const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
     if (marker && !read().includes(marker)) return { sent:false, reason:'marker-mismatch' };
     const form = composer.closest('form') || document.querySelector('main form');
+    const sendSelectors = ${sendSelectorLiteral()};
     const buttons = [
-      document.querySelector('button[data-testid="send-button"]'),
-      document.querySelector('button[data-testid*="send"]'),
-      form?.querySelector('button[type="submit"]'),
-      document.querySelector('main form button[type="submit"]'),
+      ...sendSelectors.flatMap((selector) => Array.from(document.querySelectorAll(selector))),
       ...Array.from(document.querySelectorAll('button')).filter((button) => /send|küld/i.test(String(button.getAttribute('aria-label') || button.getAttribute('data-testid') || button.textContent || '').trim()))
     ].filter(Boolean);
     const send = buttons.find((button) => !button.disabled && button.getClientRects().length);
@@ -1499,7 +1675,8 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
     const started = Date.now();
     while (Date.now() - started < 3000) {
       await new Promise((resolve) => setTimeout(resolve, 120));
-      const generating = Boolean(document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="Leáll"]'));
+      const stopSelectors = ${stopSelectorLiteral()};
+      const generating = stopSelectors.some((selector) => Boolean(document.querySelector(selector)));
       if (!read().trim() || generating) return { sent:true, verified:true, generating };
     }
     return { sent:true, verified:false, reason:'send-not-observed' };
@@ -2489,7 +2666,10 @@ async function syncConversationMemoryForWorker(workerCode) {
   const view = chatViews.get(cell.id);
   if (!view || view.webContents.isDestroyed()) return null;
   const currentId = chatConversationIdFromUrl(view.webContents.getURL());
-  if (!currentId || currentId !== live.expectedConversationId) return null;
+  if (!currentId || currentId !== live.expectedConversationId) {
+    await ensurePinnedConversation(cell, view, "conversation-memory-mismatch", { alignLatest:true }).catch(() => null);
+    return null;
+  }
   const capture = await captureConversationTranscript(view);
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
@@ -4287,13 +4467,7 @@ function registerIpc() {
       if (!view) return { ok: false, error: "A ChatGPT felület nincs megnyitva." };
       view.webContents.focus();
       const clicked = await view.webContents.executeJavaScript(`(() => {
-        const selectors = [
-          'button[data-testid="composer-speech-button"]',
-          'button[data-testid="voice-mode-button"]',
-          'button[aria-label*="microphone" i]',
-          'button[aria-label*="dictat" i]',
-          'button[aria-label*="hang" i]'
-        ];
+        const selectors = ${microphoneSelectorLiteral()};
         for (const selector of selectors) {
           const button = document.querySelector(selector);
           if (button && button.getClientRects().length) { button.click(); return true; }

@@ -407,3 +407,16 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A Task Inspector külön mutatja a rollover állapotot, előző/új conversation ID-t, befagyasztott Context/Handoff azonosítókat, transcript proofot, ACK SHA-256 értéket és hibát.
 - A **teljesen új témát** nem ez a rollover út indítja. Új témánál a Grid Központ valódi új work-startot, új task/session identity-t és valódi `TASK_LAUNCH` láncot készít; a korábbi Context/Handoff csak opcionális continuity-forrás lehet.
 - DEV ONLY · PROD DENY.
+
+### v0.1.53 · ChatGPT DOM adapter + conversation pin
+
+- A ChatGPT composer/send/stop/microphone/message/conversation-link selectorok egyetlen verziózott `chatgpt-dom-adapter.cjs` modulban élnek. A transcript és handoff extraction ugyanebből az adapterből dolgozik.
+- Az adapternek külön desktop contractja van; a main process nem duplikálhatja a core selector literálokat.
+- Aktív worker tasknál az authoritative `surfaceConversationId/surfaceConversationUrl` pinned route. Ha a beágyazott ChatGPT projekt-rootra vagy másik csevegésre esik vissza, a Desktop legfeljebb 3 automatikus kísérlettel / 30 másodperc visszaállítja az exact `/c/...` útvonalat.
+- Rollover `HANDOFF_SAVED/NAVIGATING/CONTINUATION_SENT` szakaszban a normál pin guard szándékosan szünetel; `ACK_WAIT/READY` után már az új conversation válik authoritative pinned route-tá.
+- Aktív task frissítése nem vak `reloadIgnoringCache()`: a Desktop az exact pinned conversation URL-t tölti újra. Idle cellán a korábbi cache-bypass refresh megmaradhat.
+- A korábbi `selectLatestNamedConversation()` fallback csak idle, nem kötött worker cellán futhat; aktív tasknál soha nem írhatja felül az authoritative conversation bindingot.
+- Betöltés vagy automatikus conversation-visszaállítás után a Grid egyszer, eseményvezérelten a legutolsó ChatGPT turnre igazít. A 8 másodperces Conversation Memory monitor nem kényszerít folyamatos scrollt, ezért a felhasználó szándékos visszagörgetése megmarad.
+- A Grid 5 percenként élő DOM-health smoke-ot futtat. `DOM BLOCKED`, conversation-guard `BLOCKED/RESTORING`, pinned conversation darabszám és adapter-verzió a footer/header/settings telemetriában látható.
+- Selector/UI törés esetén az automatikus ChatGPT műveletek fail-closed viselkedése megmarad; a javítás elsődleges helye a verziózott DOM adapter.
+- DEV ONLY · PROD DENY.

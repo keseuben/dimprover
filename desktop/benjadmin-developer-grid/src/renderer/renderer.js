@@ -1056,9 +1056,17 @@ function renderChatRefreshStatus() {
   const latestReason = reasonLabels[refresh.latestReason] || "";
   const deferred = Number(refresh.deferredCount || 0);
   const available = Number(refresh.updateAvailableCount || 0);
+  const domBlocked = Number(refresh.domBlockedCount || 0);
+  const guardBlocked = Number(refresh.conversationGuardBlockedCount || 0);
+  const guardRestoring = Number(refresh.conversationGuardRestoringCount || 0);
+  const pinned = Number(refresh.pinnedConversationCount || 0);
   let label = `frissítve: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
-  if (deferred > 0) label = `${deferred} aktív nézet miatt vár`;
+  if (domBlocked > 0) label = `DOM BLOCKED: ${domBlocked}`;
+  else if (guardBlocked > 0) label = `chat guard BLOCKED: ${guardBlocked}`;
+  else if (guardRestoring > 0) label = `chat visszaállítás: ${guardRestoring}`;
+  else if (deferred > 0) label = `${deferred} aktív nézet miatt vár`;
   else if (available > 0) label = "frissítés elérhető";
+  else if (pinned > 0) label = `${pinned} aktív chat rögzítve · ${latest}`;
   const footer = $("#footerChatRefreshStatus");
   if (footer) footer.textContent = label;
   const button = $("#chatRefreshButton");
@@ -1067,7 +1075,9 @@ function renderChatRefreshStatus() {
     button.title = `ChatGPT frissítés · legutóbb ${latest}${refresh.dailyEnabled === false ? " · napi frissítés kikapcsolva" : " · napi frissítés bekapcsolva"}`;
   }
   const headerStatus = $("#headerChatStatus");
-  if (headerStatus) headerStatus.title = `ChatGPT webfelület · ${headerStatus.textContent || "—"} · legutóbbi frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
+  if (headerStatus) {
+    headerStatus.title = `ChatGPT webfelület · ${headerStatus.textContent || "—"} · DOM adapter ${refresh.domAdapterVersion || "—"} · pinned ${pinned} · DOM blocked ${domBlocked} · guard blocked ${guardBlocked} · legutóbbi frissítés: ${formatChatRefreshFullTime(refresh.latestRefreshedAt)}`;
+  }
   const headerButton = $("#headerChatRefreshButton");
   if (headerButton) {
     headerButton.disabled = state.security?.unlocked !== true;
@@ -1076,9 +1086,13 @@ function renderChatRefreshStatus() {
   const settingsStatus = $("#chatRefreshSettingsStatus");
   if (settingsStatus) settingsStatus.textContent = `Legutóbbi frissítés: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
   const settingsDetail = $("#chatRefreshSettingsDetail");
-  if (settingsDetail) settingsDetail.textContent = deferred > 0
-    ? `${deferred} nézet frissítése aktív válasz vagy piszkozat miatt biztonságosan elhalasztva.`
-    : available > 0 ? `${available} ChatGPT nézeten frissítési jelzés látható.` : "A Grid figyeli a megnyitott ChatGPT nézeteket.";
+  if (settingsDetail) settingsDetail.textContent = domBlocked > 0
+    ? `${domBlocked} ChatGPT nézet DOM-adaptere nem egészséges. Selector/UI változás gyanú; automatikus műveletek fail-closed állapotban.`
+    : guardBlocked > 0 ? `${guardBlocked} aktív worker conversation guardja blokkolt; az authoritative /c/... útvonal nem volt visszaállítható.`
+    : guardRestoring > 0 ? `${guardRestoring} worker csevegése automatikus visszaállítás alatt van.`
+    : deferred > 0 ? `${deferred} nézet frissítése aktív válasz vagy piszkozat miatt biztonságosan elhalasztva.`
+    : available > 0 ? `${available} ChatGPT nézeten frissítési jelzés látható.`
+    : `${pinned} aktív worker conversation rögzítve · DOM adapter ${refresh.domAdapterVersion || "—"} · a Grid 5 percenként élő DOM-smoke-ot futtat.`;
 }
 
 async function refreshAllChatViews() {

@@ -26,11 +26,17 @@ check("config v14 enables safe daily refresh by default", () => {
   assert.equal(sanitizeConfig({}).chatRefresh.dailyEnabled, true);
   assert.equal(sanitizeConfig({ version: 13, chatRefresh: { dailyEnabled: false } }).chatRefresh.dailyEnabled, false);
 });
-check("refresh avoids active generation and unsent drafts", () => {
-  assert.match(main, /data-testid="stop-button"/);
-  assert.match(main, /hasDraft/);
-  assert.match(main, /reloadIgnoringCache/);
+check("refresh avoids active generation and unsent drafts through shared DOM adapter", () => {
+  assert.match(main, /inspectChatRefreshSafetyViaAdapter/);
+  assert.match(main, /inspection\.busy/);
+  assert.match(main, /inspection\.generating/);
 });
+check("active task refresh preserves exact bound conversation", () => {
+  assert.match(main, /const pin = conversationPinForCell\(cell\)/);
+  assert.match(main, /await view\.webContents\.loadURL\(pin\.conversationUrl\)/);
+  assert.match(main, /pinnedConversation: Boolean/);
+});
+check("idle refresh may still use cache-bypassing reload", () => assert.match(main, /reloadIgnoringCache/));
 check("refresh state is bridged without DOM coupling", () => {
   assert.match(preload, /getChatRefreshState/);
   assert.match(preload, /onChatRefreshState/);

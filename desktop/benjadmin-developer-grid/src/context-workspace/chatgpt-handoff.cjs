@@ -1,60 +1,6 @@
 "use strict";
 
-const CONVERSATION_INFO_SCRIPT = String.raw`(() => {
-  try {
-    const currentPath = new URL(location.href).pathname;
-    for (const a of document.querySelectorAll('a[href*="/c/"]')) {
-      const href = new URL(a.href, location.origin);
-      if (href.pathname !== currentPath) continue;
-      const title = [a.textContent, a.getAttribute("aria-label"), a.getAttribute("title")]
-        .filter(Boolean)
-        .map((value) => String(value).trim().replace(/\s+/g, " "))
-        .find(Boolean) || "";
-      const match = title.match(/^(\d{6})[_\s-]+([1-5])[_\s-]+/);
-      return { title, id: match ? match[1] + "_" + match[2] : "" };
-    }
-    return { title: document.querySelector("main h1")?.textContent?.trim() || "", id: "" };
-  } catch {
-    return { title: "", id: "" };
-  }
-})()`;
-
-const LATEST_ASSISTANT_SCRIPT = String.raw`(() => {
-  const generating = Boolean(document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="Leáll"]'));
-  const nodes = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
-  if (!nodes.length) return { ok: false, generating, error: "Nem található assistant-válasz." };
-  const node = nodes[nodes.length - 1];
-  const container = node.closest("article") || node.closest('[data-testid^="conversation-turn-"]') || node;
-  const text = String(container.innerText || container.textContent || "").trim();
-  return text ? { ok: true, generating, text: text.slice(0, 190000) } : { ok: false, generating, error: "A legutóbbi assistant-válasz üres." };
-})()`;
-
-const HANDOFF_ASSISTANT_SCRIPT = String.raw`(() => {
-  const nodes = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
-  if (!nodes.length) return { ok: false, error: "Nem található assistant-válasz." };
-  let legacy = null;
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
-    const node = nodes[i];
-    const container = node.closest("article") || node.closest('[data-testid^="conversation-turn-"]') || node;
-    const text = String(container.innerText || container.textContent || "").trim();
-    if (!text) continue;
-    if (text.includes("BENJADMIN_HANDOFF_META_V2")) {
-      return { ok: true, text: text.slice(0, 190000), format: "v2", messageIndexFromEnd: nodes.length - 1 - i };
-    }
-    const markerlessV2 = /"schemaVersion"\s*:\s*2/.test(text)
-      && /"workerCode"\s*:/.test(text)
-      && /"workedMainProject"\s*:/.test(text)
-      && /"workedTaskTitle"\s*:/.test(text)
-      && /"prodDeny"\s*:/.test(text);
-    if (markerlessV2) {
-      return { ok: true, text: text.slice(0, 190000), format: "v2-markerless", messageIndexFromEnd: nodes.length - 1 - i };
-    }
-    if (!legacy && /MUNKA\s+VISSZAADVA/i.test(text) && /ÁTADÓ/i.test(text) && text.length >= 120) {
-      legacy = { ok: true, text: text.slice(0, 190000), format: "legacy", messageIndexFromEnd: nodes.length - 1 - i };
-    }
-  }
-  return legacy || { ok: false, error: "Nem található érvényes BENJADMIN Handoff V2 vagy korábbi szabványos átadó az assistant-válaszok között." };
-})()`;
+const { CONVERSATION_INFO_SCRIPT, LATEST_ASSISTANT_SCRIPT, HANDOFF_ASSISTANT_SCRIPT } = require("../chatgpt/chatgpt-dom-adapter.cjs");
 
 function stripUiArtifacts(value) {
   return String(value ?? "")

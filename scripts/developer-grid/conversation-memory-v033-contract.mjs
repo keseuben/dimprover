@@ -9,6 +9,7 @@ const route=read("app/api/dev/grid/conversation-memory/route.ts");
 const workStart=read("app/lib/developer-grid/work-start.ts");
 const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const transcript=read("desktop/benjadmin-developer-grid/src/context-workspace/chatgpt-transcript.cjs");
+const domAdapter=read("desktop/benjadmin-developer-grid/src/chatgpt/chatgpt-dom-adapter.cjs");
 const client=read("desktop/benjadmin-developer-grid/src/context-workspace/context-workspace-client.cjs");
 const preload=read("desktop/benjadmin-developer-grid/src/preload.cjs");
 const workspace=read("desktop/benjadmin-developer-grid/src/renderer/context-workspace.js");
@@ -24,7 +25,7 @@ check("sanitized Context Snapshot uses secret scanner",()=>{assert.match(memory,
 check("Context Snapshot stores stage source blockers and next phase",()=>{for(const token of ["stageLabel","sourceHead","unresolvedBlockers","nextStageLabel","evidenceCounts"])assert.ok(memory.includes(token));});
 check("automatic Handoff requires stage6 PASS build tests and no blockers",()=>{assert.match(memory,/context\.stage>=6&&Boolean\(build\)&&tests\.length>0&&blockers\.length===0/);assert.match(memory,/saveDevelopmentHandoff/);assert.match(memory,/kind:"HANDOFF",status:"COMPLETED"/);});
 check("continuity resolver can feed latest Context Snapshot into next task",()=>{assert.match(workStart,/findLatestContinuationContext/);assert.match(workStart,/continuityContextSnapshotId/);assert.match(workStart,/continuityContextSummary/);});
-check("desktop captures only ChatGPT conversation messages",()=>{assert.match(transcript,/data-message-author-role/);assert.match(transcript,/conversationId/);assert.ok(transcript.includes("/c/..."));assert.match(transcript,/pathname\.match/);assert.match(transcript,/generating/);});
+check("desktop captures only ChatGPT conversation messages through shared DOM adapter",()=>{assert.match(transcript,/chatgpt-dom-adapter\.cjs/);assert.match(domAdapter,/data-message-author-role/);assert.match(domAdapter,/conversationId/);assert.ok(domAdapter.includes("/c/..."));assert.match(domAdapter,/pathname\.match/);assert.match(domAdapter,/generating/);});
 check("desktop background monitor skips generation and deduplicates",()=>{assert.match(main,/CONVERSATION_MEMORY_INTERVAL_MS = 8_000/);assert.match(main,/captureConversationTranscript/);assert.match(main,/capture\.generating/);assert.match(main,/conversationMemoryHashes/);});
 check("memory API requires paired Developer Grid device",()=>{assert.match(route,/isChatGridDeviceAuthorized/);assert.match(route,/POST/);assert.match(route,/GET/);});
 check("desktop client and preload expose memory status",()=>{assert.match(client,/saveDeveloperGridConversationMemory/);assert.match(client,/fetchDeveloperGridConversationMemory/);assert.match(preload,/getDeveloperGridConversationMemory/);});

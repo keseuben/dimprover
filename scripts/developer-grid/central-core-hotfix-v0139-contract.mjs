@@ -11,6 +11,7 @@ const engine = read("app/lib/dev-center/engine-repository.ts");
 const heartbeat = read("app/lib/developer-grid/session-heartbeat.ts");
 const materializer = read("app/lib/developer-grid/task-session-materializer.ts");
 const main = read("desktop/benjadmin-developer-grid/src/main.cjs");
+const domAdapter = read("desktop/benjadmin-developer-grid/src/chatgpt/chatgpt-dom-adapter.cjs");
 const preload = read("desktop/benjadmin-developer-grid/src/preload.cjs");
 const ui = read("desktop/benjadmin-developer-grid/src/renderer/context-workspace.js");
 const settingsHtml = read("desktop/benjadmin-developer-grid/src/renderer/index.html");
@@ -54,19 +55,21 @@ check("ChatGPT send keeps marker fail-closed",()=>{
   assert.match(main,/marker && !read\(\)\.includes\(marker\)/);
   assert.match(main,/marker-mismatch/);
 });
-check("ChatGPT send supports current send testid variants",()=>{
-  assert.match(main,/button\[data-testid="send-button"\]/);
-  assert.match(main,/button\[data-testid\*="send"\]/);
+check("ChatGPT send supports current send testid variants through shared DOM adapter",()=>{
+  assert.ok(domAdapter.includes('button[data-testid="send-button"]'));
+  assert.ok(domAdapter.includes('button[data-testid*="send"]'));
+  assert.match(main,/sendSelectorLiteral/);
 });
 check("ChatGPT send supports same-form submit and semantic requestSubmit fallback",()=>{
   assert.match(main,/composer\.closest\('form'\)/);
-  assert.match(main,/form\?\.querySelector\('button\[type="submit"\]'\)/);
+  assert.ok(domAdapter.includes('main form button[type="submit"]'));
   assert.match(main,/typeof form\.requestSubmit === 'function'/);
   assert.match(main,/form\.requestSubmit\(\)/);
 });
 check("ChatGPT send still verifies observed delivery",()=>{
   assert.match(main,/send-not-observed/);
-  assert.match(main,/stop-button/);
+  assert.match(main,/stopSelectorLiteral/);
+  assert.match(domAdapter,/stop-button/);
 });
 
 check("Launch Packet and BOOT ACK accepted continuation share auto-send helper",()=>{
