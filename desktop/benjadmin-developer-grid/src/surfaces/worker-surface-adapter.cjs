@@ -41,8 +41,8 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
   automationBlock() {
     return {
       ok: false,
-      code: "WORK_SURFACE_PLANNED_V0158",
-      error: "A Work surface adapter v0.1.58-ban aktiválódik. v0.1.57-ben a conversation state machine hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      code: "WORK_SURFACE_PLANNED_V0159",
+      error: "A Work surface adapter v0.1.60-ban aktiválódik. v0.1.59-ben az auth isolation hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

@@ -11,10 +11,10 @@ check("cell partition helper exists",()=>assert.match(main,/function chatPartiti
 check("WebContentsView uses cell-specific partition",()=>assert.match(main,/partition: chatSessionPartitions\.get\(cell\.id\) \|\| chatPartitionForCell\(cell\)/));
 check("WebContentsView no longer binds directly to shared partition",()=>{const a=main.indexOf("function createChatView");const b=main.indexOf("function createEnabledChatViews",a);assert.doesNotMatch(main.slice(a,b),/partition: CHAT_PARTITION/);});
 check("isolated sessions initialize before shell window",()=>{const a=main.indexOf("await initializeIsolatedChatSessions()");const b=main.indexOf("createShellWindow()",a);assert.ok(a>0&&b>a);});
-check("isolated partitions inherit only missing legacy auth cookies",()=>{assert.match(main,/const existingKeys = new Set/);assert.match(main,/if \(!existingKeys\.has\(key\)\) await applyChatCookieToPartition/);});
+check("isolated partitions inherit only missing legacy ChatGPT/OpenAI auth cookies",()=>{assert.match(main,/const existingKeys = new Set/);assert.match(main,/if \(!existingKeys\.has\(key\) && isSharedChatAuthCookie\(cookie\)\) await applyChatCookieToPartition/);});
 check("host-only cookies remain host-only",()=>assert.match(main,/cookie\.domain && cookie\.hostOnly !== true/));
 check("cookie synchronization listener is installed",()=>assert.match(main,/sourceSession\.cookies\.on\("changed", listener\)/));
-check("cookie synchronization suppresses loops",()=>assert.match(main,/consumeChatCookieSuppression\(partition, cookie, removed\)/));
+check("cookie synchronization suppresses loops across the full TTL",()=>assert.match(main,/isChatCookieEventSuppressed\(partition, cookie\)/));
 check("permissions are configured per isolated session",()=>assert.match(main,/configureChatSession\(session\.fromPartition\(partition\)\)/));
 check("all configured worker and central cells receive partitions",()=>assert.match(main,/for \(const cell of configs\)/));
 check("cookie listeners are removed on quit",()=>assert.match(main,/cookies\.removeListener\("changed", listener\)/));

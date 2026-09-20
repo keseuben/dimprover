@@ -486,3 +486,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Új task/session/TASK_LAUNCH nem keletkezik.
 - A Work first-party adapter aktiválása v0.1.59-re került.
 - DEV ONLY · PROD DENY.
+
+## v0.1.59 · Auth isolation hotfix
+
+- A v0.1.58 worker-session izoláció megmarad, de az élő cookie-szinkron szűkített: csak `chatgpt.com` és `openai.com` domainhez tartozó cookie SET/ROTATE események terjedhetnek a worker-partitionök között.
+- Cookie törlés/lejárat nem propagálódik egyik workerből a másikba; ezzel megszűnik a globális kijelentkeztetést okozó delete-chain kockázat.
+- A program által végzett cookie-írások suppression kulcsa SET/REMOVE állapottól független, és a teljes 5 másodperces ablakban aktív marad; egyetlen overwrite több Electron `changed` eseménye sem indíthat N×N visszhanghurkot.
+- Google, Apple és OpenAI OAuth popupok ugyanazzal az izolált worker-partitionnel nyílnak meg, ezért a ChatGPT bejelentkezás vissza tud térni a worker-sessionbe.
+- A normál ChatGPT conversation linkek továbbra is ugyanabban a worker-cellában maradnak, más külső HTTPS linkek az operációs rendszer böngészőjében nyílnak.
+- A Work first-party adapter aktiválása v0.1.60-ra került.
+- DEV ONLY · PROD DENY.

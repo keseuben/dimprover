@@ -27,7 +27,7 @@ const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLitera
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
 const CHAT_PARTITION_PREFIX = "persist:benjadmin-developer-grid-chatgpt-cell-";
-const CHAT_COOKIE_SYNC_SUPPRESS_MS = 2500;
+const CHAT_COOKIE_SYNC_SUPPRESS_MS = 5000;
 const APP_BAR_HEIGHT = 44;
 const CELL_HEADER_HEIGHT = 108;
 const DEVELOPER_FOOTER_HEIGHT = 42;
@@ -1169,6 +1169,30 @@ function chatCookieUrl(cookie) {
   return (cookie?.secure === false ? "http://" : "https://") + host + (pathName.startsWith("/") ? pathName : "/" + pathName);
 }
 
+function isSharedChatAuthCookie(cookie) {
+  const domain = String(cookie?.domain || "").replace(/^\./, "").toLowerCase().trim();
+  if (!domain) return false;
+  return domain === "chatgpt.com"
+    || domain.endsWith(".chatgpt.com")
+    || domain === "openai.com"
+    || domain.endsWith(".openai.com");
+}
+
+function isChatAuthPopupUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    return host === "accounts.google.com"
+      || host === "appleid.apple.com"
+      || host === "auth.openai.com"
+      || host === "auth0.openai.com"
+      || host === "login.openai.com";
+  } catch {
+    return false;
+  }
+}
+
 function normalizedChatCookie(cookie) {
   const url = chatCookieUrl(cookie);
   if (!url || !cookie?.name) return null;
@@ -1186,38 +1210,32 @@ function normalizedChatCookie(cookie) {
   return out;
 }
 
-function chatCookieFingerprint(partition, cookie, removed) {
-  return [partition, removed ? "REMOVE" : "SET", String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|");
+function chatCookieFingerprint(partition, cookie) {
+  return [partition, String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|");
 }
 
-function suppressChatCookieEvent(partition, cookie, removed) {
-  const key = chatCookieFingerprint(partition, cookie, removed);
+function suppressChatCookieEvent(partition, cookie) {
+  const key = chatCookieFingerprint(partition, cookie);
   chatCookieSyncSuppressions.set(key, Date.now() + CHAT_COOKIE_SYNC_SUPPRESS_MS);
 }
 
-function consumeChatCookieSuppression(partition, cookie, removed) {
+function isChatCookieEventSuppressed(partition, cookie) {
   const now = Date.now();
   for (const [key, until] of chatCookieSyncSuppressions.entries()) if (until <= now) chatCookieSyncSuppressions.delete(key);
-  const key = chatCookieFingerprint(partition, cookie, removed);
-  const until = Number(chatCookieSyncSuppressions.get(key) || 0);
-  if (until <= now) return false;
-  chatCookieSyncSuppressions.delete(key);
-  return true;
+  const key = chatCookieFingerprint(partition, cookie);
+  return Number(chatCookieSyncSuppressions.get(key) || 0) > now;
 }
 
-async function applyChatCookieToPartition(partition, cookie, removed) {
+async function applyChatCookieToPartition(partition, cookie) {
+  if (!isSharedChatAuthCookie(cookie)) return;
   const targetSession = session.fromPartition(partition);
-  const url = chatCookieUrl(cookie);
-  if (!url || !cookie?.name) return;
-  suppressChatCookieEvent(partition, cookie, removed);
+  const normalized = normalizedChatCookie(cookie);
+  if (!normalized) return;
+  suppressChatCookieEvent(partition, cookie);
   try {
-    if (removed) await targetSession.cookies.remove(url, String(cookie.name));
-    else {
-      const normalized = normalizedChatCookie(cookie);
-      if (normalized) await targetSession.cookies.set(normalized);
-    }
+    await targetSession.cookies.set(normalized);
   } catch {
-    chatCookieSyncSuppressions.delete(chatCookieFingerprint(partition, cookie, removed));
+    chatCookieSyncSuppressions.delete(chatCookieFingerprint(partition, cookie));
   }
 }
 
@@ -1268,7 +1286,7 @@ async function initializeIsolatedChatSessions() {
     ));
     for (const cookie of legacyCookies) {
       const key = [String(cookie?.domain || ""), String(cookie?.path || "/"), String(cookie?.name || "")].join("|");
-      if (!existingKeys.has(key)) await applyChatCookieToPartition(partition, cookie, false);
+      if (!existingKeys.has(key) && isSharedChatAuthCookie(cookie)) await applyChatCookieToPartition(partition, cookie);
     }
   }
 
@@ -1277,10 +1295,11 @@ async function initializeIsolatedChatSessions() {
   for (const partition of partitions) {
     const sourceSession = session.fromPartition(partition);
     const listener = (_event, cookie, _cause, removed) => {
-      if (consumeChatCookieSuppression(partition, cookie, removed)) return;
+      if (removed || !isSharedChatAuthCookie(cookie)) return;
+      if (isChatCookieEventSuppressed(partition, cookie)) return;
       for (const target of partitions) {
         if (target === partition) continue;
-        void applyChatCookieToPartition(target, cookie, removed);
+        void applyChatCookieToPartition(target, cookie);
       }
     };
     sourceSession.cookies.on("changed", listener);
@@ -1689,6 +1708,26 @@ function createChatView(cell) {
   view.webContents.setUserAgent(browserUa);
   view.webContents.setWindowOpenHandler(({ url }) => {
     if (!allowedChatUrl(url)) return { action: "deny" };
+    if (isChatAuthPopupUrl(url)) {
+      const partition = chatSessionPartitions.get(cell.id) || chatPartitionForCell(cell);
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          parent: shellWindow || undefined,
+          autoHideMenuBar: true,
+          width: 560,
+          height: 760,
+          show: true,
+          webPreferences: {
+            partition,
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+            webSecurity: true,
+          },
+        },
+      };
+    }
     if (isChatGptUrl(url)) {
       setImmediate(() => {
         if (!view.webContents.isDestroyed()) {
