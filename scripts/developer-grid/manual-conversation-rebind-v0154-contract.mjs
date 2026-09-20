@@ -15,8 +15,8 @@ const renderer = read("desktop/benjadmin-developer-grid/src/renderer/renderer.js
 let n=0;
 function check(name, fn){ fn(); n+=1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.59",()=>assert.equal(pkg.version, "0.1.60"));
-check("backend version v0.1.60-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.60-dev"/));
+check("desktop version v0.1.61",()=>assert.equal(pkg.version, "0.1.61"));
+check("backend version v0.1.61-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.61-dev"/));
 check("manual rebind confirmation provenance is typed",()=>assert.match(types,/USER_MANUAL_REBIND/));
 check("backend exposes explicit manualRebind path",()=>assert.match(backend,/const manualRebind = rawInput\.manualRebind === true/));
 check("manual rebind requires exact authoritative previous conversation",()=>assert.match(backend,/surfacePreviousConversationId !== authoritativeConversationId/));

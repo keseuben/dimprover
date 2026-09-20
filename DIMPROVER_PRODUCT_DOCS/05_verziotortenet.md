@@ -3286,3 +3286,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A v0.1.59 artifact immutable marad; a javítás új v0.1.60 release identityt használ.
 - A Work first-party surface aktiválása v0.1.61-re tolódott; a v0.1.60-ban továbbra is fail-closed.
 - PROD hozzáférés változatlanul DENY.
+
+## 2026-09-20 – BENJADMIN Developer Grid v0.1.61 – Task Inspector + startup conversation restore
+
+- A v0.1.60 fizikai Windows próba alapján az Aktuális Task, Kontextus és Checkpoint nézet betűmérete még egy fokkal nőtt.
+- Light theme-ben a három Task Inspector tabgomb külön sötét, nagy kontrasztú feliratot és egyértelmű aktív/hover állapotot kapott.
+- A worker cella most már a legutóbb ténylegesen megnyitott ChatGPT conversation URL-jét is elmenti startup restore célra, akkor is, ha az eltér az aktív task authoritative pinjétől.
+- A vizuális navigation memory és a task conversation authority továbbra is külön fogalom: a task pin nem íródik át, automatikus rebind és új TASK_LAUNCH nincs.
+- Same-project eltérés továbbra is REBIND_PENDING, egyéb eltérés MISMATCH_BLOCKED.
+- Startup restore v0.1.61 contract: 14/14 PASS; teljes Desktop regresszió PASS.
+- A Work first-party surface külön aktiválása v0.1.62-re tolódott; v0.1.61-ben továbbra is fail-closed.
+- DEV ONLY · PROD DENY.

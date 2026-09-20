@@ -931,9 +931,12 @@ function schedulePinnedConversationGuard(cell, view, reason = "navigation", dela
 function rememberChatNavigation(chatId, url) {
   if (!config?.rememberLastConversation || !isChatConversationUrl(url)) return false;
   const target = chatConfigById(chatId);
-  const pin = conversationPinForCell(target);
-  if (pin && !pin.suspended && pin.conversationId && chatConversationIdFromUrl(url) !== pin.conversationId) return false;
   if (!target || target.url === url) return false;
+  // Startup navigation memory is observational UI state, not task authority.
+  // Persist the conversation the user actually left visible so the next launch
+  // restores that cell exactly. conversationPinForCell() remains authoritative
+  // for task binding and ensurePinnedConversation() still classifies any drift
+  // as REBIND_PENDING / MISMATCH_BLOCKED without automatic TASK_LAUNCH.
   target.url = url;
   saveConfig(config);
   send("config:state", config);

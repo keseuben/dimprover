@@ -42,7 +42,7 @@ class WorkSurfaceAdapter extends WorkerSurfaceAdapter {
     return {
       ok: false,
       code: "WORK_SURFACE_PLANNED_V0159",
-      error: "A Work surface adapter v0.1.60-ban aktiválódik. v0.1.59-ben az auth isolation hotfix miatt a modell/provenance továbbra is előkészített, de a választás fail-closed.",
+      error: "A Work surface adapter v0.1.62-ben aktiválódik. A v0.1.61 startup-restore/readability patchben a modell/provenance továbbra is előkészített, de a választás fail-closed.",
     };
   }
 }

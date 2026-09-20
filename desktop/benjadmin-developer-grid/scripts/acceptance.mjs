@@ -14,7 +14,7 @@ const renderer=fs.readFileSync(path.join(root,"src/renderer/renderer.js"),"utf8"
 const contextWorkspaceSource=fs.readFileSync(path.join(root,"src/renderer/context-workspace.js"),"utf8");
 const config=cloneDefaultConfig(); let n=0;
 function check(label,fn){fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
-check("package version 0.1.60",()=>assert.equal(pkg.version,"0.1.60"));
+check("package version 0.1.61",()=>assert.equal(pkg.version,"0.1.61"));
 check("separate Developer Grid package",()=>assert.equal(pkg.name,"@dimpro/benjadmin-developer-grid-desktop"));
 check("separate Windows appId",()=>assert.equal(pkg.build.appId,"hu.dimpro.benjadmin.developergrid"));
 check("separate EXE artifact name",()=>assert.match(pkg.build.win.artifactName,/BENJADMIN-Developer-Grid/));
@@ -94,11 +94,11 @@ check("work-start preserves existing worker conversation",()=>{assert.match(main
 check("ChatGPT copy button clipboard write is origin scoped",()=>{assert.match(main,/clipboard-sanitized-write/);assert.match(main,/clipboard-write/);assert.match(main,/return isChatGptUrl\(origin\)/);assert.doesNotMatch(main,/clipboard-read/);});
 check("large paste supports 250k with chunking and timing",()=>{assert.match(main,/LARGE_PASTE_THRESHOLD = 6000/);assert.match(main,/LARGE_PASTE_MAX_CHARS = 250000/);assert.match(main,/LARGE_PASTE_CHUNK = 12000/);assert.match(main,/elapsedMs/);assert.match(renderer,/nagy beillesztés kész/);});
 check("disabled controls never advertise waiting cursor",()=>assert.doesNotMatch(css,/cursor:\s*wait/));
-check("task inspector typography stays readable at compact desktop zoom",()=>{assert.match(css,/\.task-inspector-kv dt \{[^}]*font-size:11px/);assert.match(css,/\.task-inspector-kv dd \{[^}]*font-size:11\.5px/);assert.match(css,/\.task-inspector-pre \{[^}]*font:11px\/1\.62/);assert.match(css,/:root\[data-theme="light"\] \.task-inspector-kv dd \{ color:#143b50; \}/);});
+check("task inspector typography stays readable at compact desktop zoom",()=>{assert.match(css,/\.task-inspector-kv dt \{[^}]*font-size:12px/);assert.match(css,/\.task-inspector-kv dd \{[^}]*font-size:12\.5px/);assert.match(css,/\.task-inspector-pre \{[^}]*font:12px\/1\.65/);assert.match(css,/:root\[data-theme="light"\] \.task-inspector-kv dd \{ color:#143b50; \}/);assert.match(css,/:root\[data-theme="light"\] \.task-inspector-tabs button \{ color:#315769; background:#ffffff;/);assert.match(css,/:root\[data-theme="light"\] \.task-inspector-tabs button:hover[^}]*color:#073f57; background:#e7f8fb;/);});
 check("Central Core has emphasized enterprise surface and readable light controls",()=>{assert.match(css,/Developer Grid v0\.1\.7 RC polish/);assert.match(css,/:root\[data-theme="light"\] \.context-workspace/);assert.match(css,/\.cw-work-actions button[\s\S]*background:#0b9874/);});
 
 check("BenjáminAI profile is integrated code engineer",()=>{assert.match(renderer,/title: "Integrált AI kódmérnök · full-stack \/ rendszerintegráció"/);assert.match(renderer,/category: "Integrált kódmérnök"/);assert.doesNotMatch(renderer,/Fejlesztésirányító AI · koordinátor/);});
 check("all four worker headers expose code-engineer role badge",()=>{assert.equal((html.match(/data-role="worker-role"/g)||[]).length,4);assert.match(html,/INTEGRÁLT KÓDMÉRNÖK/);assert.match(renderer,/WORKER_ROLE_LABELS/);});
 check("Central Core owns coordination wording",()=>{assert.match(contextWorkspaceSource,/Central Core koordináció/);assert.doesNotMatch(contextWorkspaceSource,/BenAI koordináció/);assert.match(guideSource,/Central Core \/ Grid Orchestrator/);});
 check("worker headers expose engineering phase status",()=>{for(const label of ["ELEMZÉS","FEJLESZT","TESZTEL","ELLENŐRIZ","BUILD","LEZÁRÁS"])assert.match(renderer,new RegExp(label));});
-console.log(`BENJADMIN Developer Grid Desktop v0.1.60 DEV acceptance PASS · ${n}/${n}`);
+console.log(`BENJADMIN Developer Grid Desktop v0.1.61 DEV acceptance PASS · ${n}/${n}`);

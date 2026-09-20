@@ -21,15 +21,15 @@ const live = read("desktop/benjadmin-developer-grid/src/live/benjadmin-live-clie
 let n = 0;
 function check(name, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.59", () => assert.equal(pkg.version, "0.1.60"));
-check("backend version v0.1.60-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.60-dev"/));
+check("desktop version v0.1.61", () => assert.equal(pkg.version, "0.1.61"));
+check("backend version v0.1.61-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.61-dev"/));
 check("surface type contract includes ChatGPT Codex Work", () => assert.match(types, /WorkerSurfaceType = "CHATGPT" \| "CODEX" \| "WORK"/));
 check("all four worker cells default to ChatGPT", () => assert.equal((defaults.match(/surfaceType: "CHATGPT"/g) || []).length, 4));
 check("config v14 persists normalized per-cell surface", () => { assert.match(defaults,/CONFIG_VERSION = 14/); assert.match(defaults,/normalizeWorkerSurfaceType/); assert.match(defaults,/surfaceType,/); });
 check("header exposes one surface selector per worker cell", () => assert.equal((html.match(/data-role="surface-select"/g) || []).length, 4));
 check("selector exposes ChatGPT and Codex while Work stays planned", () => { assert.match(html,/<option value="CHATGPT">ChatGPT<\/option>/); assert.match(html,/<option value="CODEX">Codex<\/option>/); assert.match(html,/<option value="WORK" disabled>Work · v0\.1\.60<\/option>/); });
 check("surface adapter separates embedded ChatGPT from Codex Task Bridge", () => { assert.match(adapter,/class ChatGptSurfaceAdapter/); assert.match(adapter,/class CodexSurfaceAdapter/); assert.match(adapter,/CODEX_TASK_BRIDGE_REQUIRED/); });
-check("Work adapter remains fail-closed in the v0.1.60 UI patch", () => assert.match(adapter,/WORK_SURFACE_PLANNED_V0159/));
+check("Work adapter remains fail-closed in the v0.1.61 UI/startup patch", () => assert.match(adapter,/WORK_SURFACE_PLANNED_V0159/));
 check("main process never creates embedded view for non-embedded surface", () => assert.match(main,/!isEmbeddedWorkerSurface\(surfaceType\)/));
 check("active task blocks surface mutation", () => assert.match(main,/WORKER_SURFACE_ACTIVE_TASK_LOCKED/));
 check("Central Core sends selected surface with work-start", () => { assert.match(context,/selectedWorkerSurface/); assert.match(context,/surfaceType,idempotencyKey/); });
