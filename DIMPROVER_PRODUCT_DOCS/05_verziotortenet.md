@@ -3276,3 +3276,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Desktop/backend verzió: 0.1.41 / 0.1.41-dev. DEV ONLY · PROD DENY.
 
 - v0.1.41 review hardening: Codex/Work kiválasztás mellett a task-létrehozás már a Central Core API-hívása előtt blokkol, és a backend közvetlen hívásnál is fail-closed. Így hiányzó natív bridge nem hagyhat hátra végrehajthatatlan READY taskot. Ismeretlen explicit surface nem eshet vissza csendben ChatGPT-re; meglévő Work konfigurációból a felhasználó vissza tud váltani támogatott surface-re.
+
+## 2026-09-20 – BENJADMIN Developer Grid v0.1.60 – Task Inspector olvashatóság
+
+- Az `Aktuális Task`, `Task Kontextus` és `Checkpoint` modálok törzsszövege jelentősen nagyobb és kontrasztosabb lett.
+- A fő label/érték párok 11 / 11.5 px méretet kaptak, a monospaced technikai azonosítók 10.5 px-re nőttek.
+- A hosszú Context/Checkpoint szövegek 11 px és 1.62 sorköz mellett jelennek meg.
+- A világos téma külön sötétebb navy/szürkéskék szövegszíneket kapott.
+- A v0.1.59 artifact immutable marad; a javítás új v0.1.60 release identityt használ.
+- A Work first-party surface aktiválása v0.1.61-re tolódott; a v0.1.60-ban továbbra is fail-closed.
+- PROD hozzáférés változatlanul DENY.
