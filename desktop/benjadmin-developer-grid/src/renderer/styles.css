@@ -3000,5 +3000,20 @@ body.has-health-drawer .central-panel {
 :root[data-theme="light"] .task-inspector-section>header small { color:#496a79; }
 :root[data-theme="light"] .task-inspector-kv dd.is-mono { color:#16566f; }
 :root[data-theme="light"] .task-inspector-guard-banner span { color:#456777; }
+:root[data-theme="light"] .task-inspector-dev-badge { color:#07536c; border-color:#74b8ca; background:#e8f7fb; }
+:root[data-theme="light"] .task-inspector-prod-badge { color:#774a00; border-color:#d2ab58; background:#fff7df; }
+:root[data-theme="light"] .task-inspector-statebar span { color:#07536c; border-color:#78b8c8; background:#e7f7fb; }
+:root[data-theme="light"] .task-inspector-statebar span[data-state="PASS"] { color:#07583f; border-color:#79b79f; background:#e9f7f0; }
+:root[data-theme="light"] .task-inspector-statebar span[data-state="BLOCKED"] { color:#8a3d00; border-color:#d39a66; background:#fff2e6; }
+:root[data-theme="light"] .task-inspector-list article strong { color:#173448; }
+:root[data-theme="light"] .task-inspector-list article.is-pass strong { color:#07583f; }
+:root[data-theme="light"] .task-inspector-list article.is-blocked strong { color:#8a3d00; }
+:root[data-theme="light"] .task-inspector-list article.is-pass { border-color:#9ccbb8; background:#f2fbf6; }
+:root[data-theme="light"] .task-inspector-list article.is-blocked { border-color:#e0b38d; background:#fff8f2; }
+:root[data-theme="light"] .task-inspector-guard-banner strong { color:#07583f; }
+:root[data-theme="light"] .task-inspector-guard-banner b { color:#6f4700; }
+:root[data-theme="light"] .task-inspector-empty { color:#496a79; }
+:root[data-theme="light"] .task-inspector-empty strong { color:#173448; }
+
 :root[data-theme="light"] .task-inspector-section { background:#fbfdfe; border-color:#dce9ee; }
 @media (max-width:920px) { .task-inspector-body { grid-template-columns:1fr; } .task-inspector-guard-banner { grid-template-columns:1fr; } }

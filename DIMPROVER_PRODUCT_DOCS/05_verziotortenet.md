@@ -3297,3 +3297,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Startup restore v0.1.61 contract: 14/14 PASS; teljes Desktop regresszió PASS.
 - A Work first-party surface külön aktiválása v0.1.62-re tolódott; v0.1.61-ben továbbra is fail-closed.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-20 – BENJADMIN Developer Grid v0.1.62 – Task Inspector status contrast
+
+- A v0.1.61 fizikai startup conversation restore PASS.
+- A light-theme Task Inspector állapotjelzők és evidence-címek külön sötét foreground színeket kaptak.
+- Default status: sötét cyan; PASS: sötét zöld; BLOCKED: sötét narancsbarna.
+- A BOOT_ACK PASS/BLOCKED evidence-kártyák és a NINCS AKTÍV CHECKPOINT állapotpilla most már fehér háttéren is nagy kontrasztú.
+- DEV/PROD badge és guard-banner light-theme kontraszt javítva.
+- Startup restore, manual rebind, sticky rebind és auth isolation logika változatlan.
+- Work first-party surface aktiválása v0.1.63-ra tolódott.
+- DEV ONLY · PROD DENY.
