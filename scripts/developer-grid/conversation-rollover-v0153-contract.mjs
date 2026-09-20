@@ -41,8 +41,8 @@ const memory={
   handoff:{id:"hp-rollover-1",summary:"Frozen continuity"},
 };
 
-check("desktop version v0.1.62",()=>assert.equal(pkg.version, "0.1.62"));
-check("backend version v0.1.62-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.62-dev"/));
+check("desktop version v0.1.63",()=>assert.equal(pkg.version, "0.1.63"));
+check("backend version v0.1.63-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.63-dev"/));
 check("Hungarian maximum conversation marker detected",()=>{
   const x=rollover.detectConversationLimit([{role:"ASSISTANT",messageId:"hu",text:"Elérted a beszélgetés maximális hosszát, de folytathatod a beszélgetést egy új csevegés indításával. Új csevegés indítása"}]);
   assert.equal(x.reached,true); assert.equal(x.reason,"CONVERSATION_LIMIT_REACHED");
@@ -157,7 +157,7 @@ check("Task Inspector exposes rollover proof",()=>{
   assert.match(renderer,/conversationRolloverTranscriptVerified/);
   assert.match(renderer,/conversationRolloverAckSha256/);
 });
-check("rollover state type is explicit",()=>assert.match(types,/ConversationRolloverState = "HANDOFF_SAVED" \| "NAVIGATING" \| "CONTINUATION_SENT" \| "ACK_WAIT" \| "READY" \| "BLOCKED"/));
+check("rollover state type is explicit",()=>assert.match(types,/ConversationRolloverState = "HANDOFF_SAVED" \| "NAVIGATING" \| "CONTINUATION_SENT" \| "CLIPBOARD_COPIED" \| "ACK_WAIT" \| "READY" \| "BLOCKED"/));
 
 check("conversation binding authority is exact active task-worker session",()=>{
   assert.match(backend,/state\.sessions\.find\(\(item\) =>[\s\S]*item\.taskId === taskId[\s\S]*item\.workerCode === workerCode[\s\S]*item\.endedAt === null/);

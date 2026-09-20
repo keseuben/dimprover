@@ -37,7 +37,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.63-ra van előkészítve. Task létrehozása a v0.1.62 status-contrast patchben továbbra is tiltott.");
+      : "A Work OpenAI first-party surface v0.1.64-re van előkészítve. Task létrehozása a v0.1.63 Conversation Rollover fejlesztésben továbbra is tiltott.");
     Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0159", status: 409 });
     throw error;
   }
@@ -821,6 +821,8 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
   const conversationRollover = rawInput.conversationRollover === true;
   const manualRebind = rawInput.manualRebind === true;
+  const requestedRolloverReason = text(rawInput.conversationRolloverReason, 40).toUpperCase();
+  const conversationRolloverReason = requestedRolloverReason === "MANUAL_CONTINUATION" ? "MANUAL_CONTINUATION" as const : "CONTEXT_LIMIT" as const;
   const requestedRolloverState = text(rawInput.conversationRolloverState, 40).toUpperCase();
   const conversationRolloverState = ["ACK_WAIT", "READY", "BLOCKED"].includes(requestedRolloverState) ? requestedRolloverState : "ACK_WAIT";
   const rolloverContextSnapshotId = text(rawInput.conversationRolloverContextSnapshotId, 260);
@@ -1014,7 +1016,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       } : {}),
       ...(conversationRollover ? {
         conversationRolloverState: conversationRolloverState as "ACK_WAIT" | "READY" | "BLOCKED",
-        conversationRolloverReason: "CONTEXT_LIMIT" as const,
+        conversationRolloverReason,
         conversationRolloverPreviousConversationId: surfacePreviousConversationId,
         conversationRolloverContextSnapshotId: rolloverContextSnapshotId,
         conversationRolloverContextRevision: rolloverContextRevision,

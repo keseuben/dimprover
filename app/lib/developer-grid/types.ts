@@ -1,9 +1,9 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.62-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.63-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
-export type ConversationRolloverState = "HANDOFF_SAVED" | "NAVIGATING" | "CONTINUATION_SENT" | "ACK_WAIT" | "READY" | "BLOCKED";
+export type ConversationRolloverState = "HANDOFF_SAVED" | "NAVIGATING" | "CONTINUATION_SENT" | "CLIPBOARD_COPIED" | "ACK_WAIT" | "READY" | "BLOCKED";
 export type WorkerSurfaceType = "CHATGPT" | "CODEX" | "WORK";
 export type WorkerProviderFamily = "OPENAI_FIRST_PARTY" | "DIMPRO_INTERNAL" | "EXTERNAL_PROVIDER";
 export type WorkerExecutionMode = "EMBEDDED_CHAT" | "TASK_BRIDGE" | "LOCAL_RUNTIME" | "CLOUD_RUNTIME";
@@ -80,7 +80,7 @@ export type DevelopmentContext = {
   chatConversationConfirmedAt?: string | null;
   chatConversationConfirmedBy?: "EXISTING_CHAT_SELECTION" | "USER_CURRENT_CHAT" | "USER_MANUAL_REBIND" | "CONVERSATION_ROLLOVER" | null;
   conversationRolloverState?: ConversationRolloverState | null;
-  conversationRolloverReason?: "CONTEXT_LIMIT" | null;
+  conversationRolloverReason?: "CONTEXT_LIMIT" | "MANUAL_CONTINUATION" | null;
   conversationRolloverPreviousConversationId?: string | null;
   conversationRolloverContextSnapshotId?: string | null;
   conversationRolloverContextRevision?: number | null;

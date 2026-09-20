@@ -481,7 +481,7 @@ function renderConfig() {
       const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
       const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.63-ra előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.64-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {
@@ -493,7 +493,7 @@ function renderConfig() {
         renderCodexTaskPanel(cell,cellConfig.workerCode);
       } else {
         $("[data-role=codex-task-panel]",emptyState)?.remove();
-        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.63 adapter." : "A ChatGPT felület zárva.";
+        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.64 adapter." : "A ChatGPT felület zárva.";
         if (reopen) reopen.classList.toggle("is-hidden", surfaceType !== "CHATGPT");
       }
     }
@@ -593,6 +593,64 @@ async function handleStageAction(cell, action, task, moduleContext, workItem) {
   }
 }
 
+const HEADER_ACTION_ICONS = Object.freeze({
+  "current-task":"☷",
+  "context":"⌘",
+  "checkpoint":"✓",
+});
+
+function conversationRolloverUiState(task) {
+  const stateValue = String(task?.chatLaunch?.conversationRolloverState || task?.conversationRolloverState || "").toUpperCase();
+  const mode = String(task?.chatLaunch?.conversationRolloverMode || task?.conversationRolloverMode || "").toUpperCase();
+  const handoffId = String(task?.chatLaunch?.conversationRolloverHumanHandoffId || task?.conversationRolloverHumanHandoffId || "");
+  if (stateValue === "BLOCKED") return { state:"blocked", title:"Csevegés folytatása blokkolva · kattintás: új előkészítés", symbol:"↪", handoffReady:Boolean(handoffId) };
+  if (mode === "MANUAL_CLIPBOARD" && stateValue === "HANDOFF_SAVED") return { state:"ready", title:"Átadó kész · kattintás: bootstrap másolása", symbol:"↪", handoffReady:Boolean(handoffId) };
+  if (mode === "MANUAL_CLIPBOARD" && stateValue === "CLIPBOARD_COPIED") return { state:"copied", title:"Bootstrap a vágólapon · nyiss új csevegést, illeszd be és küldd el", symbol:"✓", handoffReady:Boolean(handoffId) };
+  if (mode === "MANUAL_CLIPBOARD" && stateValue === "ACK_WAIT") return { state:"waiting", title:"Új conversation rögzítve · rollover ACK-ra vár", symbol:"…", handoffReady:Boolean(handoffId) };
+  if (stateValue === "READY") return { state:"complete", title:"Conversation rollover kész", symbol:"✓", handoffReady:Boolean(handoffId) };
+  return { state:"idle", title:"Csevegés folytatása új csevegőben · Context Snapshot + Handoff + MD készítése", symbol:"↪", handoffReady:Boolean(handoffId) };
+}
+
+async function handleConversationRolloverAction(cell, task) {
+  const workerCode = cell?.dataset.workerCode || "";
+  const button = cell?.querySelector("[data-conversation-rollover-action]");
+  if (!workerCode || !task?.id || !button || button.disabled) return;
+  const ui = conversationRolloverUiState(task);
+  button.disabled = true;
+  button.classList.add("is-busy");
+  try {
+    const result = ui.state === "ready" || ui.state === "copied"
+      ? await api.copyConversationRollover(workerCode)
+      : await api.prepareConversationRollover(workerCode);
+    if (!result?.ok) {
+      button.dataset.rolloverState = "blocked";
+      showToast("Csevegés folytatása", result?.error || "A rollover művelet sikertelen.");
+      return;
+    }
+    showToast("Csevegés folytatása", result.message || "Rollover állapot frissítve.");
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+  }
+}
+
+async function handleConversationRolloverDownload(cell) {
+  const workerCode = cell?.dataset.workerCode || "";
+  const button = cell?.querySelector("[data-conversation-rollover-download]");
+  if (!workerCode || !button || button.disabled) return;
+  button.disabled = true;
+  try {
+    const result = await api.downloadConversationRolloverHandoff(workerCode);
+    if (!result?.ok) {
+      showToast("MD átadó", result?.error || "A bővített MD átadó nem tölthető le.");
+      return;
+    }
+    showToast("MD átadó", result.canceled ? "A mentést megszakítottad; a szerveres átadó megmaradt." : "A bővített MD átadó letöltve.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleStageStep(cell, index, stageIndex, task) {
   if (!task?.id || index !== stageIndex) return;
   const workerCode = cell?.dataset.workerCode || "";
@@ -673,23 +731,49 @@ function renderStageActions(cell, stageIndex, task, moduleContext, workItem) {
   host.replaceChildren();
   for (const action of STAGE_ACTIONS[stageIndex] || []) {
     const button = document.createElement("button");
+    const icon = HEADER_ACTION_ICONS[action.id] || "";
     button.type = "button";
-    button.className = "stage-action-button";
+    button.className = icon ? "stage-action-button stage-action-icon-button" : "stage-action-button";
     button.dataset.stageAction = action.id;
-    button.textContent = action.label;
+    button.textContent = icon || action.label;
     button.title = action.id === "checkpoint"
-      ? "Verified DEV checkpoint: exact task/session guard, automatikus küldés, USER transcript-confirm, stage report monitor"
+      ? "Checkpoint · Verified DEV checkpoint és aktuális evidence"
       : action.id === "tests"
-        ? "Célzott tesztelési prompt előkészítése"
+        ? "Tesztek · célzott tesztelési prompt előkészítése"
         : action.id === "build-runtime"
-          ? "DEV build/runtime kapu prompt előkészítése"
+          ? "Build / Runtime · DEV build/runtime kapu"
           : action.id === "review"
-            ? "External Review Room megnyitása az aktuális taskhoz"
+            ? "Review · External Review Room"
             : action.id === "context"
-              ? "Az aktuális worker task-specifikus Context Snapshot nézete"
-              : "Authoritative Task Inspector megnyitása";
+              ? "Kontextus · aktuális task-specifikus Context Snapshot"
+              : "Aktuális task · authoritative Task Inspector";
+    button.setAttribute("aria-label", button.title);
     button.addEventListener("click", () => void handleStageAction(cell, action.id, task, moduleContext, workItem));
     host.append(button);
+  }
+  if (task?.id && !["completed","closed","cancelled","canceled","failed"].includes(String(task?.status || "").toLowerCase())) {
+    const ui = conversationRolloverUiState(task);
+    const rollover = document.createElement("button");
+    rollover.type = "button";
+    rollover.className = "conversation-rollover-button";
+    rollover.dataset.conversationRolloverAction = "continue";
+    rollover.dataset.rolloverState = ui.state;
+    rollover.textContent = ui.symbol;
+    rollover.title = ui.title;
+    rollover.setAttribute("aria-label", ui.title);
+    rollover.addEventListener("click", () => void handleConversationRolloverAction(cell, task));
+    host.append(rollover);
+
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "conversation-rollover-download-button";
+    download.dataset.conversationRolloverDownload = "md";
+    download.textContent = "⇩";
+    download.title = ui.handoffReady ? "Teljes MD átadó letöltése" : "Teljes MD átadó letöltése · előbb készítsd el a rollover átadót";
+    download.setAttribute("aria-label", download.title);
+    download.disabled = !ui.handoffReady;
+    download.addEventListener("click", () => void handleConversationRolloverDownload(cell));
+    host.append(download);
   }
 }
 

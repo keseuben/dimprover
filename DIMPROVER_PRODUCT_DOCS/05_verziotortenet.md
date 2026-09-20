@@ -3308,3 +3308,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Startup restore, manual rebind, sticky rebind és auth isolation logika változatlan.
 - Work first-party surface aktiválása v0.1.63-ra tolódott.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-20 – BENJADMIN Developer Grid v0.1.63 – Manual Conversation Rollover
+
+- Bevezetésre került a same-task Conversation Rollover workflow új task és TASK_LAUNCH nélkül.
+- Narancs rollover ikon készíti a friss Context Snapshot + Handoff Pack + PARTIAL bővített MD csomagot.
+- Sikeres előkészítés után a rollover ikon zöld; kattintásra a rövid Central Core bootstrap a vágólapra kerül.
+- Az új conversation csak transcript-confirmed USER rollover marker után köthető utódként, majd ACK_WAIT → READY állapotgépen halad.
+- Külön kék MD-letöltő ikon tölti le a bővített human-readable átadót natív Save As és SHA-256 ellenőrzéssel.
+- Az Aktuális task, Kontextus és Checkpoint vezérlők 27 px magas kompakt ikongombokká váltak, tooltip és aria-label támogatással.
+- A kézi rollover oka MANUAL_CONTINUATION; az automatikus limit rollover továbbra is CONTEXT_LIMIT.
+- Work first-party surface külön aktiválási célja v0.1.64.
+- Következő külön fejezet: Developer Grid / Build Storage Retention.
+- DEV ONLY · PROD DENY.

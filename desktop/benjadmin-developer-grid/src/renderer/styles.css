@@ -1365,11 +1365,29 @@ body.has-context-workspace .chat-cell[data-cell-id="cell-4"] { grid-column: 3; g
 
 /* Developer Grid v0.1.1 — phase-sensitive action strip */
 .stage-actions { display:flex; align-items:center; gap:4px; min-width:0; }
-.stage-action-button { height:20px; padding:0 7px; border:1px solid rgba(67,217,255,.26); border-radius:5px; background:rgba(67,217,255,.065); color:#a9dfec; font-size:8px; font-weight:900; letter-spacing:.025em; white-space:nowrap; cursor:pointer; }
+.stage-action-button { height:27px; padding:0 7px; border:1px solid rgba(67,217,255,.26); border-radius:5px; background:rgba(67,217,255,.065); color:#a9dfec; font-size:8px; font-weight:900; letter-spacing:.025em; white-space:nowrap; cursor:pointer; }
 .stage-action-button:hover:not(:disabled) { border-color:rgba(67,217,255,.52); background:rgba(67,217,255,.13); color:#e0faff; }
 .stage-action-button:disabled { opacity:.52; cursor:not-allowed; }
 :root[data-theme="light"] .stage-action-button { border-color:#6e9eaf; background:#edf7fa; color:#184f64; }
 :root[data-theme="light"] .stage-action-button:hover:not(:disabled) { border-color:#178c6d; background:#d9eff6; color:#073f55; }
+.stage-action-icon-button,
+.conversation-rollover-button,
+.conversation-rollover-download-button { width:27px; min-width:27px; height:27px; padding:0; display:inline-grid; place-items:center; border-radius:5px; font-size:13px; line-height:1; font-weight:950; cursor:pointer; }
+.stage-action-icon-button { border:1px solid rgba(67,217,255,.32); background:rgba(67,217,255,.075); color:#a9dfec; }
+.stage-action-icon-button:hover:not(:disabled) { border-color:rgba(67,217,255,.58); background:rgba(67,217,255,.15); color:#e0faff; }
+.conversation-rollover-button { border:1px solid #b36b19; background:#fff2df; color:#8a4700; }
+.conversation-rollover-button:hover:not(:disabled) { border-color:#8d4d08; background:#ffe6c2; color:#6e3500; }
+.conversation-rollover-button[data-rollover-state="ready"],
+.conversation-rollover-button[data-rollover-state="copied"],
+.conversation-rollover-button[data-rollover-state="complete"] { border-color:#18815d; background:#e2f5ed; color:#0d5f43; }
+.conversation-rollover-button[data-rollover-state="waiting"] { border-color:#18758f; background:#e1f4f8; color:#07566d; }
+.conversation-rollover-button[data-rollover-state="blocked"] { border-color:#bd2948; background:#fff0f3; color:#8c1734; }
+.conversation-rollover-button.is-busy { opacity:.6; cursor:progress; }
+.conversation-rollover-download-button { border:1px solid #2876b6; background:#eaf4ff; color:#155b91; }
+.conversation-rollover-download-button:hover:not(:disabled) { border-color:#155b91; background:#d8ebff; color:#0a456f; }
+.conversation-rollover-download-button:disabled { opacity:.38; cursor:not-allowed; filter:grayscale(.35); }
+:root[data-theme="light"] .stage-action-icon-button { border-color:#6e9eaf; background:#edf7fa; color:#184f64; }
+:root[data-theme="light"] .stage-action-icon-button:hover:not(:disabled) { border-color:#178c6d; background:#d9eff6; color:#073f55; }
 
 
 /* Developer Grid P0 daily work-start composer */

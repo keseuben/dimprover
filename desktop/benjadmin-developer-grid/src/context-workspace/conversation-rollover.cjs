@@ -6,6 +6,7 @@ const ROLLOVER_STATES = Object.freeze({
   HANDOFF_SAVED: "HANDOFF_SAVED",
   NAVIGATING: "NAVIGATING",
   CONTINUATION_SENT: "CONTINUATION_SENT",
+  CLIPBOARD_COPIED: "CLIPBOARD_COPIED",
   ACK_WAIT: "ACK_WAIT",
   READY: "READY",
   BLOCKED: "BLOCKED",
@@ -47,7 +48,7 @@ function chatProjectRootFromConversationUrl(value) {
   } catch { return ""; }
 }
 
-function buildConversationRolloverPrompt({ task, workerCode, previousConversationId, memory, sourceProofSha256 }) {
+function buildConversationRolloverPrompt({ task, workerCode, previousConversationId, previousConversationUrl = "", previousConversationTitle = "", humanHandoffId = "", humanHandoffFileName = "", memory, sourceProofSha256 }) {
   const context = memory?.context || {};
   const handoff = memory?.handoff || {};
   const code = backendWorkerCode(workerCode);
@@ -60,6 +61,9 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
     `Task: ${text(task?.id, 220)}`,
     `Session: ${text(task?.sessionId, 240)}`,
     `Previous conversation: ${text(previousConversationId, 180)}`,
+    `Previous title: ${text(previousConversationTitle, 500) || "—"}`,
+    `Previous URL: ${text(previousConversationUrl, 1200) || "—"}`,
+    `Human Handoff MD: ${text(humanHandoffId, 260) || "—"} · ${text(humanHandoffFileName, 500) || "—"}`,
     `Context Snapshot: ${text(context.id, 260)} · revision ${Number(context.revision || 0)}`,
     `Handoff Pack: ${text(handoff.id, 260)}`,
     `Stage: ${Number(context.stage || task?.workStageIndex || 1)}/6 · ${text(context.stageLabel || "")}`,
@@ -68,6 +72,11 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
     `HEAD: ${text(context.sourceHead || task?.sourceHead, 64)}`,
     `Source proof: ${text(sourceProofSha256, 64) || "—"}`,
     "DEV ONLY · PROD DENY.",
+    "",
+    "CENTRAL CORE BOOTSTRAP:",
+    "- A teljes authoritative taskállapot a Central Core-ban marad.",
+    "- Ellenőrizd a Task + Session + Context Snapshot + Handoff Pack + Branch/Worktree/HEAD azonosságát.",
+    "- A beágyazott összefoglaló fallback, nem helyettesíti az authoritative állapotot.",
     "",
     "FONTOS FOLYTONOSSÁGI SZABÁLYOK:",
     "- Ez NEM új TASK_LAUNCH és NEM új fejlesztési task.",
