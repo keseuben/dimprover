@@ -41,8 +41,8 @@ const memory={
   handoff:{id:"hp-rollover-1",summary:"Frozen continuity"},
 };
 
-check("desktop version v0.1.63",()=>assert.equal(pkg.version, "0.1.63"));
-check("backend version v0.1.63-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.63-dev"/));
+check("desktop version v0.1.64",()=>assert.equal(pkg.version, "0.1.64"));
+check("backend version v0.1.64-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.64-dev"/));
 check("Hungarian maximum conversation marker detected",()=>{
   const x=rollover.detectConversationLimit([{role:"ASSISTANT",messageId:"hu",text:"Elérted a beszélgetés maximális hosszát, de folytathatod a beszélgetést egy új csevegés indításával. Új csevegés indítása"}]);
   assert.equal(x.reached,true); assert.equal(x.reason,"CONVERSATION_LIMIT_REACHED");

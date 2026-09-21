@@ -3321,3 +3321,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Work first-party surface külön aktiválási célja v0.1.64.
 - Következő külön fejezet: Developer Grid / Build Storage Retention.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-21 – BENJADMIN Developer Grid v0.1.64 – Conversation Rollover physical hotfix
+
+- A v0.1.63 fizikai teszt feltárta, hogy régebbi VERIFIED sessionök sourceExecutionProof SHA mező nélkül nem tudtak rolloverbe lépni, noha sourceProvenance állapotuk teljes és hiteles volt.
+- v0.1.64 determinisztikus legacy source-proof fallbacket vezet be kizárólag VERIFIED sourceProvenance esetén; Desktop és backend ugyanazt a canonical mezőkészletet hash-eli.
+- Same-project conversation-pin eltérésnél natív megerősítő dialógus után a meglévő authoritative manual rebind motor fut; más Project továbbra is fail-closed.
+- A rollover hibák persistent BLOCKED állapotot, hibakódot és tooltipet kapnak; renderer IPC reject sem maradhat láthatatlan.
+- CLIPBOARD_COPIED és ACK_WAIT rollover transition alatt a normal conversation pin guard szünetel.
+- Új task/session/TASK_LAUNCH továbbra is tiltott; PROD DENY.
+- Work first-party surface külön aktiválási célja v0.1.65.

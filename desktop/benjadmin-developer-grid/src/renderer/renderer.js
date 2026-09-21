@@ -3,7 +3,7 @@
 const api = window.chatGrid;
 const WORKER_OPTIONS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
 const WORKER_SURFACE_OPTIONS = ["CHATGPT", "CODEX", "WORK"];
-const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.63" });
+const WORKER_SURFACE_LABELS = Object.freeze({ CHATGPT:"ChatGPT", CODEX:"Codex", WORK:"Work · v0.1.65" });
 const WORKER_DEFAULT_LABELS = {
   ARMINAI: "ÁrminAI",
   JAZMINAI: "JázminAI",
@@ -481,7 +481,7 @@ function renderConfig() {
       const bridgeLocked = surfaceType === "CODEX" && Boolean(activeBridgeState) && !["CLOSED","ERROR"].includes(activeBridgeState);
       const locked = Boolean(activeTask) || bridgeLocked;
       surfaceSelect.disabled = locked;
-      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.64-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
+      surfaceSelect.title = locked ? "Aktív task közben a worker surface nem váltható." : surfaceType === "CODEX" ? "Codex · OpenAI first-party Task Bridge" : surfaceType === "WORK" ? "Work · v0.1.65-re előkészítve · visszaváltható" : "Worker felület kiválasztása";
     }
     const emptyState = $("[data-role=empty-state]", cell);
     if (emptyState) {
@@ -493,7 +493,7 @@ function renderConfig() {
         renderCodexTaskPanel(cell,cellConfig.workerCode);
       } else {
         $("[data-role=codex-task-panel]",emptyState)?.remove();
-        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.64 adapter." : "A ChatGPT felület zárva.";
+        if (strong) strong.textContent = surfaceType === "WORK" ? "Work · OpenAI first-party surface · v0.1.65 adapter." : "A ChatGPT felület zárva.";
         if (reopen) reopen.classList.toggle("is-hidden", surfaceType !== "CHATGPT");
       }
     }
@@ -603,7 +603,11 @@ function conversationRolloverUiState(task) {
   const stateValue = String(task?.chatLaunch?.conversationRolloverState || task?.conversationRolloverState || "").toUpperCase();
   const mode = String(task?.chatLaunch?.conversationRolloverMode || task?.conversationRolloverMode || "").toUpperCase();
   const handoffId = String(task?.chatLaunch?.conversationRolloverHumanHandoffId || task?.conversationRolloverHumanHandoffId || "");
-  if (stateValue === "BLOCKED") return { state:"blocked", title:"Csevegés folytatása blokkolva · kattintás: új előkészítés", symbol:"↪", handoffReady:Boolean(handoffId) };
+  if (stateValue === "BLOCKED") {
+    const error = String(task?.chatLaunch?.conversationRolloverError || task?.conversationRolloverError || "").trim();
+    const code = String(task?.chatLaunch?.conversationRolloverErrorCode || task?.conversationRolloverErrorCode || "").trim();
+    return { state:"blocked", title:"Csevegés folytatása blokkolva" + (code ? " · " + code : "") + (error ? " · " + error : "") + " · kattintás: új előkészítés", symbol:"↪", handoffReady:Boolean(handoffId) };
+  }
   if (mode === "MANUAL_CLIPBOARD" && stateValue === "HANDOFF_SAVED") return { state:"ready", title:"Átadó kész · kattintás: bootstrap másolása", symbol:"↪", handoffReady:Boolean(handoffId) };
   if (mode === "MANUAL_CLIPBOARD" && stateValue === "CLIPBOARD_COPIED") return { state:"copied", title:"Bootstrap a vágólapon · nyiss új csevegést, illeszd be és küldd el", symbol:"✓", handoffReady:Boolean(handoffId) };
   if (mode === "MANUAL_CLIPBOARD" && stateValue === "ACK_WAIT") return { state:"waiting", title:"Új conversation rögzítve · rollover ACK-ra vár", symbol:"…", handoffReady:Boolean(handoffId) };
@@ -628,6 +632,10 @@ async function handleConversationRolloverAction(cell, task) {
       return;
     }
     showToast("Csevegés folytatása", result.message || "Rollover állapot frissítve.");
+  } catch (error) {
+    button.dataset.rolloverState = "blocked";
+    button.title = "Csevegés folytatása blokkolva · " + String(error?.message || error || "IPC hiba");
+    showToast("Csevegés folytatása", String(error?.message || error || "A rollover IPC hívás sikertelen."));
   } finally {
     button.disabled = false;
     button.classList.remove("is-busy");

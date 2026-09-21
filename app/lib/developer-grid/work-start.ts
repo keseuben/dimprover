@@ -19,6 +19,25 @@ export const WORK_START_IDEMPOTENCY_MAX = 160;
 
 const text = (value: unknown, max = WORK_START_MAX_LENGTH) => String(value ?? "").trim().slice(0, max);
 
+function derivedVerifiedSourceProvenanceProofSha256(session: WorkerSession) {
+  const p = session.sourceProvenance;
+  if (String(p?.sourceState || "").toUpperCase() !== "VERIFIED") return "";
+  const payload = {
+    repository:String(p.repository || ""),
+    worktree:String(p.worktree || ""),
+    branch:String(p.branch || ""),
+    head:String(p.head || "").toLowerCase(),
+    worker:String(p.worker || "").toUpperCase(),
+    taskId:String(p.taskId || ""),
+    sessionId:String(p.sessionId || ""),
+    verifiedAt:String(p.verifiedAt || ""),
+    sourceState:"VERIFIED",
+  };
+  if (!payload.repository || !payload.worktree || !payload.branch || !/^[0-9a-f]{40}$/.test(payload.head)
+      || !payload.worker || !payload.taskId || !payload.sessionId || !payload.verifiedAt) return "";
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
 export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const sourcePrompt = text(input.sourcePrompt);
   const projectId = text(input.projectId, 180) || DEVELOPER_GRID_PROJECT_ID;
@@ -37,7 +56,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.64-re van előkészítve. Task létrehozása a v0.1.63 Conversation Rollover fejlesztésben továbbra is tiltott.");
+      : "A Work OpenAI first-party surface v0.1.65-re van előkészítve. Task létrehozása a v0.1.64 Rollover Hotfix fejlesztésben továbbra is tiltott.");
     Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0159", status: 409 });
     throw error;
   }
@@ -960,7 +979,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     const frozenContextSnapshotId = text(ctx.conversationRolloverContextSnapshotId ?? ctx.contextSnapshotId, 260);
     const frozenContextRevision = Number(ctx.conversationRolloverContextRevision ?? ctx.contextRevision ?? 0);
     const frozenHandoffPackId = text(ctx.conversationRolloverHandoffPackId ?? ctx.handoffPackId, 260);
-    const expectedProofSha256 = text(ctx.sourceExecutionProof?.sha256, 64).toLowerCase();
+    const expectedProofSha256 = text(ctx.sourceExecutionProof?.sha256, 64).toLowerCase() || derivedVerifiedSourceProvenanceProofSha256(session);
     const expectedHead = text(session.sourceProvenance.head, 64).toLowerCase();
     const rolloverIdentityMismatch = !frozenContextSnapshotId
       || rolloverContextSnapshotId !== frozenContextSnapshotId

@@ -55,7 +55,7 @@ check("active worker conversation is pinned by exact conversation id",()=>{
   assert.ok(main.includes("chatConversationIdFromUrl(value) === conversationId"));
   assert.ok(main.includes("state.pinnedConversationId = pin.conversationId"));
 });
-check("rollover transition suspends normal pin guard",()=>assert.ok(main.includes('["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT"]')));
+check("rollover transition suspends normal pin guard",()=>assert.ok(main.includes('["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT", "CLIPBOARD_COPIED", "ACK_WAIT"]')));
 check("conversation guard never auto-restores authoritative URL",()=>{
   const a=main.indexOf("async function ensurePinnedConversation");
   const b=main.indexOf("function schedulePinnedConversationGuard",a);
