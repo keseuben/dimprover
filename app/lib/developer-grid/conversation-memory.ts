@@ -244,9 +244,9 @@ function deltaMessages(current: RawConversationMessage[], prior: RawConversation
 async function currentSessionForInput(input: Record<string,unknown>, stateRoot?: string) {
   const state=await readGridState(stateRoot);
   const taskId=text(input.taskId,220); const sessionId=text(input.sessionId,240); const workerCode=text(input.workerCode,40).toUpperCase() as RoutableWorkerCode;
-  if(!state.task||state.task.id!==taskId) throw Object.assign(new Error("A RAW transcript nem az authoritative aktuális taskhoz tartozik."),{code:"DEVELOPER_GRID_RAW_TASK_MISMATCH",status:409});
+  if(!taskId) throw Object.assign(new Error("A RAW transcript task azonosítója hiányzik."),{code:"DEVELOPER_GRID_RAW_TASK_REQUIRED",status:400});
   if(!workers.has(workerCode)) throw Object.assign(new Error("Ismeretlen RAW transcript worker."),{code:"DEVELOPER_GRID_RAW_WORKER_INVALID",status:400});
-  const session=state.sessions.find(s=>s.id===sessionId&&s.taskId===taskId&&s.workerCode===workerCode&&s.endedAt===null);
+  const session=state.sessions.find(s=>s.id===sessionId&&s.taskId===taskId&&s.workerCode===workerCode&&s.endedAt===null&&String(s.developmentContext?.taskId||s.taskId)===taskId);
   if(!session) throw Object.assign(new Error("A RAW transcript aktív worker sessionje nem található."),{code:"DEVELOPER_GRID_RAW_SESSION_MISMATCH",status:409});
   const expectedSurfaceType=sessionSurfaceType(session);
   const inputSurfaceType=surfaceType(input.surfaceType||expectedSurfaceType);

@@ -15,8 +15,8 @@ const renderer = read("desktop/benjadmin-developer-grid/src/renderer/renderer.js
 let n=0;
 function check(name, fn){ fn(); n+=1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.64",()=>assert.equal(pkg.version, "0.1.64"));
-check("backend version v0.1.64-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.64-dev"/));
+check("desktop version v0.1.65",()=>assert.equal(pkg.version, "0.1.65"));
+check("backend version v0.1.65-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.65-dev"/));
 check("manual rebind confirmation provenance is typed",()=>assert.match(types,/USER_MANUAL_REBIND/));
 check("backend exposes explicit manualRebind path",()=>assert.match(backend,/const manualRebind = rawInput\.manualRebind === true/));
 check("manual rebind requires exact authoritative previous conversation",()=>assert.match(backend,/surfacePreviousConversationId !== authoritativeConversationId/));
@@ -25,7 +25,7 @@ check("manual rebind requires same ChatGPT Project",()=>{ assert.match(backend,/
 check("manual rebind requires validated BOOT ACK",()=>assert.match(backend,/DEVELOPER_GRID_MANUAL_REBIND_BOOT_ACK_REQUIRED/));
 check("manual rebind requires Context and Handoff continuity",()=>assert.match(backend,/DEVELOPER_GRID_MANUAL_REBIND_CONTINUITY_REQUIRED/));
 check("manual rebind remains PROD DENY",()=>assert.match(backend,/Kézi conversation rebind PROD hozzáféréssel tiltott/));
-check("manual rebind keeps engine task RUNNING",()=>assert.match(backend,/conversationRollover \|\| manualRebind\) \? "RUNNING" : "HANDED_OFF"/));
+check("manual rebind keeps engine task RUNNING",()=>assert.match(backend,/conversationRollover \|\| manualRebind \|\| legacySurfaceBind\) \? "RUNNING" : "HANDED_OFF"/));
 check("manual rebind writes dedicated audit event",()=>assert.match(backend,/CONVERSATION_MANUAL_REBIND/));
 check("manual rebind records USER_MANUAL_REBIND",()=>assert.match(backend,/USER_MANUAL_REBIND/));
 check("manual rebind clears stale rollover fields",()=>assert.match(backend,/manualRebind \? \{[\s\S]*conversationRolloverState: null[\s\S]*conversationRolloverCompletedAt: null/));

@@ -56,7 +56,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   if (surfaceType !== "CHATGPT") {
     const error = new Error(surfaceType === "CODEX"
       ? "A Codex OpenAI first-party surface Task Bridge végrehajtást használ. A ChatGPT work-start/BOOT ACK útvonalon Codex task nem hozható létre; használd a /api/dev/grid/task-bridge kaput."
-      : "A Work OpenAI first-party surface v0.1.65-re van előkészítve. Task létrehozása a v0.1.64 Rollover Hotfix fejlesztésben továbbra is tiltott.");
+      : "A Work OpenAI first-party surface v0.1.66-ra van előkészítve. Task létrehozása a v0.1.65 Legacy Surface Bind hotfixben továbbra is tiltott.");
     Object.assign(error, { code: surfaceType === "CODEX" ? "CODEX_TASK_BRIDGE_REQUIRED" : "WORK_SURFACE_PLANNED_V0159", status: 409 });
     throw error;
   }
@@ -840,6 +840,9 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
   const conversationRollover = rawInput.conversationRollover === true;
   const manualRebind = rawInput.manualRebind === true;
+  const legacySurfaceBind = rawInput.legacySurfaceBind === true;
+  const legacySurfaceBindSourceHead = text(rawInput.legacySurfaceBindSourceHead, 64).toLowerCase();
+  const legacySurfaceBindSourceProofSha256 = text(rawInput.legacySurfaceBindSourceProofSha256, 64).toLowerCase();
   const requestedRolloverReason = text(rawInput.conversationRolloverReason, 40).toUpperCase();
   const conversationRolloverReason = requestedRolloverReason === "MANUAL_CONTINUATION" ? "MANUAL_CONTINUATION" as const : "CONTEXT_LIMIT" as const;
   const requestedRolloverState = text(rawInput.conversationRolloverState, 40).toUpperCase();
@@ -861,7 +864,9 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     ? "CONVERSATION_ROLLOVER" as const
     : manualRebind
       ? "USER_MANUAL_REBIND" as const
-      : chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
+      : legacySurfaceBind
+        ? "USER_LEGACY_SURFACE_BIND" as const
+        : chatLaunchMode === "NEW_PROJECT_CHAT" ? "USER_CURRENT_CHAT" as const : "EXISTING_CHAT_SELECTION" as const;
   const urlDerivedSurfaceId = surfaceConversationIdFromUrl(surfaceType, surfaceConversationUrl);
   const codexUrlValid = !surfaceConversationUrl || (surfaceConversationUrl.toLowerCase().startsWith("codex:") && urlDerivedSurfaceId === surfaceConversationId);
   const surfaceIdentityValid = surfaceType === "CODEX"
@@ -905,6 +910,56 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_MODE_MISMATCH", status: 409 });
     throw error;
+  }
+  if (legacySurfaceBind) {
+    if (conversationRollover || manualRebind || surfaceType !== "CHATGPT") {
+      const error = new Error("Legacy surface bind csak önálló normál ChatGPT surface műveletként engedélyezett.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_SURFACE_INVALID", status: 409 });
+      throw error;
+    }
+    const ctx = session.developmentContext;
+    const authoritativeConversationId = text(ctx.surfaceConversationId ?? ctx.chatConversationId, 180);
+    if (authoritativeConversationId) {
+      const error = new Error("A legacy surface bind tiltott, mert a sessionhez már tartozik authoritative conversation.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_ALREADY_BOUND", status: 409 });
+      throw error;
+    }
+    if (chatLaunchMode !== "EXISTING_CHAT") {
+      const error = new Error("Legacy surface bind csak meglévő ChatGPT csevegés folytatásánál engedélyezett.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_MODE_INVALID", status: 409 });
+      throw error;
+    }
+    if (ctx.bootAckState !== "VALIDATED" || ctx.bootAckCodingAllowed !== true) {
+      const error = new Error("Legacy surface bind csak validált BOOT ACK és engedélyezett coding állapot mellett végezhető.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_BOOT_ACK_REQUIRED", status: 409 });
+      throw error;
+    }
+    if (String(session.sourceProvenance.sourceState || "").toUpperCase() !== "VERIFIED") {
+      const error = new Error("Legacy surface bind csak VERIFIED source provenance mellett végezhető.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_SOURCE_NOT_VERIFIED", status: 409 });
+      throw error;
+    }
+    const expectedProofSha256 = text(ctx.sourceExecutionProof?.sha256, 64).toLowerCase() || derivedVerifiedSourceProvenanceProofSha256(session);
+    const expectedHead = text(session.sourceProvenance.head, 64).toLowerCase();
+    const identityMismatch = !/^[0-9a-f]{40}$/.test(legacySurfaceBindSourceHead)
+      || legacySurfaceBindSourceHead !== expectedHead
+      || !/^[0-9a-f]{64}$/.test(legacySurfaceBindSourceProofSha256)
+      || legacySurfaceBindSourceProofSha256 !== expectedProofSha256;
+    if (identityMismatch) {
+      const error = new Error("A legacy surface bind source identity eltér az authoritative aktív sessiontől.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_SOURCE_MISMATCH", status: 409 });
+      throw error;
+    }
+    if (surfacePreviousConversationId) {
+      const error = new Error("Legacy surface bind esetén nem lehet korábbi authoritative conversation azonosító.");
+      Object.assign(error, { code: "DEVELOPER_GRID_LEGACY_BIND_PREVIOUS_FORBIDDEN", status: 409 });
+      throw error;
+    }
+    if (String(rawInput.productionAccess || "DENY").toUpperCase() !== "DENY") {
+      const error = new Error("Legacy surface bind PROD hozzáféréssel tiltott.");
+      Object.assign(error, { code: "PROD_DENY", status: 409 });
+      throw error;
+    }
   }
   if (manualRebind) {
     if (conversationRollover || surfaceType !== "CHATGPT") {
@@ -1051,18 +1106,22 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     },
   };
   const next = await upsertWorkerSession(updated);
-  await syncEngineBridgeTarget(taskId, (conversationRollover || manualRebind) ? "RUNNING" : "HANDED_OFF");
+  await syncEngineBridgeTarget(taskId, (conversationRollover || manualRebind || legacySurfaceBind) ? "RUNNING" : "HANDED_OFF");
   await appendGridEvent({
     kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: authoritativeProjectId, productionAccess: "DENY",
     delta: {
       eventType: conversationRollover
         ? "CONVERSATION_ROLLOVER_" + conversationRolloverState
-        : manualRebind ? "CONVERSATION_MANUAL_REBIND" : "SURFACE_BOUND",
+        : manualRebind
+          ? "CONVERSATION_MANUAL_REBIND"
+          : legacySurfaceBind ? "CONVERSATION_LEGACY_SURFACE_BIND" : "SURFACE_BOUND",
       summary: conversationRollover
         ? "ChatGPT conversation rollover · " + surfacePreviousConversationId + " → " + surfaceConversationId + " · " + conversationRolloverState
         : manualRebind
           ? "ChatGPT kézi conversation rebind · " + surfacePreviousConversationId + " → " + surfaceConversationId
-          : surfaceType + " surface rögzítve · " + chatLaunchMode,
+          : legacySurfaceBind
+            ? "Legacy ChatGPT surface authoritative rögzítve · " + surfaceConversationId
+            : surfaceType + " surface rögzítve · " + chatLaunchMode,
       workItem: updated.developmentContext.workItem,
       workStageIndex: updated.developmentContext.workStageIndex || 1,
       previousConversationId: (conversationRollover || manualRebind) ? surfacePreviousConversationId : null,
@@ -1076,6 +1135,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     surfaceConversationConfirmedAt: confirmedAt, chatConversationId: chatConversationId || null, chatConversationUrl: chatConversationUrl || null, chatConversationTitle: chatConversationTitle || null,
     chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy,
     manualRebind,
+    legacySurfaceBind,
     previousConversationId: manualRebind ? surfacePreviousConversationId : null,
     conversationRollover: conversationRollover ? {
       state: conversationRolloverState,

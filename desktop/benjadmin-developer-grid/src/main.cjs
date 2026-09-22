@@ -2370,6 +2370,85 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   };
 }
 
+async function bindLegacyCurrentTaskConversation(workerCode, task, cell, view, conversationId, conversationUrl) {
+  const code = String(workerCode || "").toUpperCase();
+  if (!task?.id || !task?.sessionId || !cell || !view || view.webContents.isDestroyed()) {
+    return { ok:false, code:"LEGACY_BIND_CONTEXT_REQUIRED", error:"A legacy csevegésrögzítéshez aktív task/session és worker surface szükséges." };
+  }
+  if (String(task.surfaceConversationId || task.chatConversationId || "").trim()) {
+    return { ok:true, skipped:true, message:"A taskhoz már tartozik authoritative conversation." };
+  }
+  const sourceProofSha256 = resolvedExecutionProofSha256(task);
+  const sourceHead = String(task?.sourceHead || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(sourceHead) || !/^[0-9a-f]{64}$/.test(sourceProofSha256)
+      || String(task?.sourceState || "").toUpperCase() !== "VERIFIED"
+      || String(task?.bootAckState || "").toUpperCase() !== "VALIDATED"
+      || task?.bootAckCodingAllowed !== true) {
+    return { ok:false, code:"LEGACY_BIND_IDENTITY_NOT_VERIFIED", error:"A legacy csevegésrögzítéshez VERIFIED source + validált BOOT ACK szükséges." };
+  }
+  const owner = shellWindow && !shellWindow.isDestroyed() ? shellWindow : undefined;
+  const confirmation = await dialog.showMessageBox(owner, {
+    type:"warning",
+    buttons:["Jelenlegi csevegés rögzítése","Mégse"],
+    defaultId:1,
+    cancelId:1,
+    noLink:true,
+    title:"Régi task csevegésének rögzítése",
+    message:"Ehhez a régi taskhoz még nincs authoritative ChatGPT conversation azonosító.",
+    detail:"A jelenleg megnyitott beszélgetést rögzítjük ehhez a meglévő taskhoz és sessionhöz, majd elkészülhet a rollover átadó. Új task, session vagy TASK_LAUNCH nem készül. DEV ONLY · PROD DENY.",
+  });
+  if (confirmation.response !== 0) {
+    return { ok:false, code:"LEGACY_BIND_CANCELLED", error:"A régi task csevegésének rögzítését megszakítottad." };
+  }
+  const info = await getConversationInfo(view, cell, config.cells || []);
+  const binding = await bindDeveloperGridConversation({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+    input:{
+      taskId:task.id,
+      workerCode:code,
+      chatLaunchMode:"EXISTING_CHAT",
+      surfaceType:"CHATGPT",
+      legacySurfaceBind:true,
+      legacySurfaceBindSourceHead:sourceHead,
+      legacySurfaceBindSourceProofSha256:sourceProofSha256,
+      productionAccess:"DENY",
+      surfacePreviousConversationId:null,
+      surfaceConversationId:conversationId,
+      surfaceConversationUrl:conversationUrl,
+      surfaceConversationTitle:info.chatTitle || "",
+      chatPreviousConversationId:null,
+      chatConversationId:conversationId,
+      chatConversationUrl:conversationUrl,
+      chatConversationTitle:info.chatTitle || "",
+    },
+  });
+  const confirmedAt = binding?.chatConversationConfirmedAt || new Date().toISOString();
+  saveTaskLaunchPatch(task, code, {
+    conversationBound:true,
+    surfaceType:"CHATGPT",
+    surfacePreviousConversationId:null,
+    surfaceConversationId:conversationId,
+    surfaceConversationUrl:conversationUrl,
+    surfaceConversationTitle:info.chatTitle || "",
+    chatSessionId:conversationId,
+    chatConversationUrl:conversationUrl,
+    chatTitle:info.chatTitle || "",
+    chatConversationConfirmedAt:confirmedAt,
+    legacySurfaceBindAt:confirmedAt,
+  });
+  const refreshState = chatRefreshCell(cell.id);
+  refreshState.conversationGuardState = "PINNED";
+  refreshState.pinnedConversationId = conversationId;
+  refreshState.conversationGuardError = "";
+  clearConversationRebindCandidate(refreshState);
+  rememberChatNavigation(cell.id, conversationUrl);
+  emitChatRefreshState();
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  send("context:refresh", { reason:"legacy-surface-bind", taskId:task.id, workerCode:code, conversationId });
+  return { ok:true, binding, message:"A jelenlegi ChatGPT csevegés authoritative módon a legacy taskhoz rögzítve." };
+}
+
 async function rebindCurrentTaskConversation(workerCode, taskId) {
   if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
@@ -3266,6 +3345,13 @@ async function prepareManualConversationRollover(workerCode) {
   const previousConversationUrl = String(view.webContents.getURL() || "");
   const previousConversationId = chatConversationIdFromUrl(previousConversationUrl);
   if (!previousConversationId) return blockManualConversationRollover(task, code, "ROLLOVER_CONVERSATION_REQUIRED", "Nyisd meg azt a ChatGPT csevegést, amelyet új csevegésben szeretnél folytatni.");
+
+  if (!String(task.surfaceConversationId || task.chatConversationId || "").trim()) {
+    const legacyBinding = await bindLegacyCurrentTaskConversation(code, task, cell, view, previousConversationId, previousConversationUrl);
+    if (!legacyBinding?.ok) {
+      return blockManualConversationRollover(task, code, legacyBinding?.code || "ROLLOVER_LEGACY_BIND_FAILED", legacyBinding?.error || "A legacy task csevegésének authoritative rögzítése sikertelen.");
+    }
+  }
 
   let pin = conversationPinForCell(cell);
   if (pin && !pin.suspended && pin.conversationId && pin.conversationId !== previousConversationId) {

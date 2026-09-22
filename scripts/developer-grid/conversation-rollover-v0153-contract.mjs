@@ -41,8 +41,8 @@ const memory={
   handoff:{id:"hp-rollover-1",summary:"Frozen continuity"},
 };
 
-check("desktop version v0.1.64",()=>assert.equal(pkg.version, "0.1.64"));
-check("backend version v0.1.64-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.64-dev"/));
+check("desktop version v0.1.65",()=>assert.equal(pkg.version, "0.1.65"));
+check("backend version v0.1.65-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.65-dev"/));
 check("Hungarian maximum conversation marker detected",()=>{
   const x=rollover.detectConversationLimit([{role:"ASSISTANT",messageId:"hu",text:"Elérted a beszélgetés maximális hosszát, de folytathatod a beszélgetést egy új csevegés indításával. Új csevegés indítása"}]);
   assert.equal(x.reached,true); assert.equal(x.reason,"CONVERSATION_LIMIT_REACHED");
@@ -150,7 +150,7 @@ check("backend verifies BOOT ACK and frozen source identity",()=>{
   assert.match(backend,/DEVELOPER_GRID_ROLLOVER_IDENTITY_MISMATCH/);
   assert.match(backend,/sourceExecutionProof\?\.sha256/);
 });
-check("backend keeps engine target RUNNING during rollover and manual rebind",()=>assert.match(backend,/conversationRollover \|\| manualRebind\) \? "RUNNING" : "HANDED_OFF"/));
+check("backend keeps engine target RUNNING during rollover, manual rebind and legacy bind",()=>assert.match(backend,/conversationRollover \|\| manualRebind \|\| legacySurfaceBind\) \? "RUNNING" : "HANDED_OFF"/));
 check("backend preserves PROD DENY guard",()=>assert.match(backend,/Conversation rollover PROD hozzáféréssel tiltott/));
 check("Task Inspector exposes rollover proof",()=>{
   assert.match(renderer,/Conversation rollover/);

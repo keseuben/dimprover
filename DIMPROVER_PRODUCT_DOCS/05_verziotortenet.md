@@ -3331,3 +3331,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - CLIPBOARD_COPIED és ACK_WAIT rollover transition alatt a normal conversation pin guard szünetel.
 - Új task/session/TASK_LAUNCH továbbra is tiltott; PROD DENY.
 - Work first-party surface külön aktiválási célja v0.1.65.
+
+## 2026-09-22 – BENJADMIN Developer Grid v0.1.65 – Legacy Surface Bind
+
+- Legacy aktív sessionök rolloverje támogatott akkor is, ha a sessionben még nincs authoritative ChatGPT conversation ID.
+- Egyszeri, explicit felhasználói megerősítésű Legacy Surface Bind rögzíti a jelenlegi chatet a meglévő task/sessionhöz.
+- A bind exact VERIFIED source HEAD + source proof ellenőrzéssel fail-closed.
+- Conversation Memory authority multi-worker kompatibilis: exact aktív session, nem globális singleton state.task.
+- RAW conversation identity a bind után továbbra is strict.
+- Új task, session vagy TASK_LAUNCH nem készül.
+- Work first-party aktiválási cél: v0.1.66.
+- DEV ONLY · PROD DENY.
