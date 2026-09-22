@@ -120,19 +120,79 @@ try {
   if (fs.existsSync(rollbackFile)) protect(fs.readFileSync(rollbackFile, "utf8").trim());
 } catch {}
 
-if (!testMode) {
-  const pm2Json = exec("pm2", ["jlist"]);
-  if (pm2Json) {
-    try {
-      for (const proc of JSON.parse(pm2Json)) {
-        const env = proc?.pm2_env || {};
-        if (env.pm_cwd) pm2WorktreeRoots.add(real(env.pm_cwd));
-        if (!env.pm_cwd || !env.NEXT_DIST_DIR) continue;
-        const target = path.isAbsolute(env.NEXT_DIST_DIR) ? env.NEXT_DIST_DIR : path.join(env.pm_cwd, env.NEXT_DIST_DIR);
-        protect(target);
-      }
-    } catch {}
+function pm2EnvValue(env, key) {
+  const nested = env?.env && typeof env.env === "object" ? env.env : {};
+  return env?.[key] ?? nested?.[key] ?? "";
+}
+function worktreeRootForPath(candidate) {
+  if (!candidate) return "";
+  const resolved = real(candidate);
+  if (!within(resolved, worktreesRoot)) return "";
+  const relative = path.relative(worktreesRoot, resolved);
+  const first = relative.split(path.sep).filter(Boolean)[0] || "";
+  return first ? path.join(worktreesRoot, first) : "";
+}
+function protectNextRuntimeAncestor(candidate) {
+  if (!candidate) return;
+  let current = real(candidate);
+  try {
+    if (fs.statSync(current).isFile()) current = path.dirname(current);
+  } catch {}
+  const worktreeRoot = worktreeRootForPath(current);
+  if (!worktreeRoot) return;
+  while (within(current, worktreeRoot) && path.resolve(current) !== path.resolve(worktreeRoot)) {
+    if (path.basename(current).startsWith(".next")) protect(current);
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
+}
+function pm2Processes() {
+  if (testMode) {
+    const fixture = String(process.env.DIMPRO_RETENTION_PM2_JSON || "").trim();
+    if (!fixture) return [];
+    try {
+      const parsed = JSON.parse(fixture);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  const pm2Json = exec("pm2", ["jlist"]);
+  if (!pm2Json) return [];
+  try {
+    const parsed = JSON.parse(pm2Json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+for (const proc of pm2Processes()) {
+  const env = proc?.pm2_env || {};
+  const cwd = String(env.pm_cwd || "").trim();
+  const execPath = String(env.pm_exec_path || "").trim();
+  const nextDistDir = String(pm2EnvValue(env, "NEXT_DIST_DIR") || "").trim();
+  const declaredRoots = [
+    String(pm2EnvValue(env, "DIMPRO_PROJECT_ROOT") || "").trim(),
+    String(pm2EnvValue(env, "DIMPRO_DEVELOPER_GRID_SOURCE_WORKTREE") || "").trim(),
+  ].filter(Boolean);
+
+  const cwdWorktree = worktreeRootForPath(cwd);
+  if (cwdWorktree) pm2WorktreeRoots.add(real(cwdWorktree));
+  for (const root of declaredRoots) {
+    const rootWorktree = worktreeRootForPath(root) || root;
+    pm2WorktreeRoots.add(real(rootWorktree));
+    if (nextDistDir && !path.isAbsolute(nextDistDir)) protect(path.join(root, nextDistDir));
+  }
+
+  if (nextDistDir) {
+    if (path.isAbsolute(nextDistDir)) protect(nextDistDir);
+    else if (cwd) protect(path.join(cwd, nextDistDir));
+  }
+
+  protectNextRuntimeAncestor(cwd);
+  protectNextRuntimeAncestor(execPath);
 }
 
 if (activeOperation?.target) {
