@@ -2147,8 +2147,9 @@ function resolvedExecutionProofSha256(task, override = "") {
   const taskId = String(task?.id || "");
   const launchRecord = taskId ? (loadTaskLaunchRecords()[taskId] || {}) : {};
   const candidates = [
-    String(launchRecord?.sourceProofSha256 || "").trim().toLowerCase(),
+    String(task?.sourceProofSha256 || "").trim().toLowerCase(),
     String(task?.sourceExecutionProof?.sha256 || "").trim().toLowerCase(),
+    String(launchRecord?.sourceProofSha256 || "").trim().toLowerCase(),
     derivedVerifiedSourceProvenanceProofSha256(task),
   ];
   return candidates.find((value) => /^[0-9a-f]{64}$/.test(value)) || "";

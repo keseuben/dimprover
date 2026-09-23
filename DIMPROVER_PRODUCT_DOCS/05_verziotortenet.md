@@ -3342,3 +3342,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új task, session vagy TASK_LAUNCH nem készül.
 - Work first-party aktiválási cél: v0.1.66.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-23 – BENJADMIN Developer Grid v0.1.66 – Authoritative Source Proof Priority
+
+- Javítva a v0.1.65 fizikai legacy-bind SOURCE_MISMATCH hiba.
+- A Desktop proof resolver elsődlegesen a Central Core live task sourceProofSha256 mezőjét használja.
+- A helyi task-launch proof csak fallback; nem írhatja felül az authoritative live proofot.
+- Exact HEAD + proof fail-closed ellenőrzés változatlan.
+- Új task/session/TASK_LAUNCH továbbra sem készül.
+- Work first-party aktiválási cél: v0.1.67.
+- DEV ONLY · PROD DENY.

@@ -11,8 +11,8 @@ const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const renderer=read("desktop/benjadmin-developer-grid/src/renderer/renderer.js");
 let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
 
-check("desktop version v0.1.65",()=>assert.equal(pkg.version, "0.1.65"));
-check("backend version v0.1.65-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.65-dev"/));
+check("desktop version v0.1.66",()=>assert.equal(pkg.version, "0.1.66"));
+check("backend version v0.1.66-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.66-dev"/));
 check("sticky pending is keyed to task, previous pin and candidate conversation",()=>{assert.match(main,/const stickyRebindPending = Boolean\([\s\S]*state\.rebindTaskId === pin\.taskId[\s\S]*state\.rebindPreviousConversationId === pin\.conversationId[\s\S]*currentId === state\.rebindConversationId/)});
 check("sticky pending is evaluated before pinned/no-navigation decisions",()=>{const sticky=main.indexOf("const stickyRebindPending");const pinned=main.indexOf("if (currentId === pin.conversationId)",sticky);const noNav=main.indexOf("CHAT_CONVERSATION_MISMATCH_NO_NAVIGATION",sticky);assert.ok(sticky>0&&pinned>sticky&&noNav>pinned)});
 check("sticky pending never reloads authoritative old URL",()=>{const start=main.indexOf("if (stickyRebindPending)");const end=main.indexOf("if (currentId === pin.conversationId)",start);const block=main.slice(start,end);assert.doesNotMatch(block,/loadURL\(pin\.conversationUrl\)/);assert.match(block,/rebindPending:true/);assert.match(block,/sticky:true/)});
