@@ -108,7 +108,11 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
       newTaskLaunch:false,
     }, null, 2),
     "```",
-    "Az ACK blokk után ugyanabban a válaszban folytathatod a félbemaradt munkát. Ha execution request szükséges, csak az ACK után add ki a következő egyedi BENJADMIN_EXECUTION_REQUEST_V1 kérést.",
+    "ELSŐ VÁLASZ SZABÁLY:",
+    "- Az első assistant-válasz KIZÁRÓLAG a BENJADMIN_CONVERSATION_ROLLOVER_ACK_V1 markerből és a fenti JSON blokkból állhat.",
+    "- Az ACK elküldése előtt és ugyanebben az első válaszban NE hívj semmilyen eszközt, MCP-t, VPS-t, shellt, webet vagy fájlműveletet.",
+    "- Az ACK után ne folytasd önállóan a munkát: várd meg a Grid automatikus BENJADMIN_PROMPT_KIND: CONVERSATION_ROLLOVER_READY_V1 vezérlőüzenetét.",
+    "- DEV source/provenance ellenőrzéshez közvetlen DIMPROVER VPS MCP vagy raw shell használata TILOS; az authoritative DEV worktree-t kizárólag a Central Core Execution Bridge kezelheti.",
   ].join("\n");
 }
 

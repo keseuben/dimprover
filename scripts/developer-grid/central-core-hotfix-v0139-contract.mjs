@@ -21,8 +21,8 @@ const defaults = read("desktop/benjadmin-developer-grid/src/config/defaults.cjs"
 let n=0;
 function check(label, fn){ fn(); n+=1; console.log(`PASS ${String(n).padStart(2,"0")} ${label}`); }
 
-check("package version v0.1.66",()=>assert.equal(pkg.version, "0.1.66"));
-check("backend version v0.1.66-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.66-dev"/));
+check("package version v0.1.67",()=>assert.equal(pkg.version, "0.1.67"));
+check("backend version v0.1.67-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/));
 
 check("bind_task records authoritative claimed session id",()=>{
   assert.match(engine,/claimed_by_session_id:\s*sessionId/);

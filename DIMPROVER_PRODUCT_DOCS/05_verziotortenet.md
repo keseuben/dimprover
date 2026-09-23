@@ -3352,3 +3352,15 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új task/session/TASK_LAUNCH továbbra sem készül.
 - Work first-party aktiválási cél: v0.1.67.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-23 – BENJADMIN Developer Grid v0.1.67 – Rollover Execution Bridge Continuity
+
+- A rollover első AI-válasza ACK-only; eszközhívás az ACK előtt és ugyanabban a válaszban tiltott.
+- Validált ACK után a Grid automatikus CONVERSATION_ROLLOVER_READY_V1 vezérlőüzenetet küld.
+- DEV source/provenance művelethez csak Central Core Execution Bridge használható; közvetlen DIMPROVER VPS MCP/raw shell tiltott.
+- A már READY állapotú exact bound beszélgetés missing continuationje új rollover nélkül egyszer automatikusan helyreáll.
+- A reconstructed task explicit authoritative sourceProofSha256 mezőt kap.
+- Execution request/recovery/rollover proof feloldás nem használ local proof explicit override-ot.
+- Új task/session/TASK_LAUNCH nem készül.
+- Work first-party aktiválási cél: v0.1.68.
+- DEV ONLY · PROD DENY.

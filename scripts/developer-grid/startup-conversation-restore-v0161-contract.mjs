@@ -15,8 +15,8 @@ const end=main.indexOf("function captureWorkerConversationGuards",start);
 const remember=start>=0&&end>start?main.slice(start,end):"";
 const rememberCode=remember.split("\n").filter((line)=>!line.trim().startsWith("//")).join("\n");
 
-check("desktop version v0.1.66",()=>assert.equal(pkg.version,"0.1.66"));
-check("backend version v0.1.66-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.66-dev"/));
+check("desktop version v0.1.67",()=>assert.equal(pkg.version,"0.1.67"));
+check("backend version v0.1.67-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/));
 check("navigation memory function exists",()=>assert.ok(start>=0&&end>start));
 check("navigation memory remains opt-in",()=>assert.match(rememberCode,/rememberLastConversation/));
 check("only ChatGPT conversation routes are persisted",()=>assert.match(rememberCode,/isChatConversationUrl\(url\)/));

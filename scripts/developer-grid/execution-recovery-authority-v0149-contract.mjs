@@ -8,8 +8,8 @@ const types=fs.readFileSync("app/lib/developer-grid/types.ts","utf8");
 let n=0;
 const check=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label)};
 
-check("desktop version v0.1.66",()=>assert.equal(pkg.version, "0.1.66"));
-check("backend version v0.1.66-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.66-dev"/));
+check("desktop version v0.1.67",()=>assert.equal(pkg.version, "0.1.67"));
+check("backend version v0.1.67-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/));
 check("recovery authority resolver exists",()=>assert.match(main,/async function resolveExecutionRecoveryAuthority/));
 check("resolver uses read-only active work fetch",()=>assert.match(main,/fetchDeveloperGridActiveWork\(\{/));
 check("resolver requires exact task id",()=>assert.match(main,/String\(item\?\.taskId \|\| ""\) === taskId/));

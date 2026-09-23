@@ -2080,6 +2080,7 @@ function launchTaskFromWork(work, chatPlan = null) {
     branchName: session.sourceProvenance?.branch || null,
     worktreePath: session.sourceProvenance?.worktree || null,
     sourceHead: session.sourceProvenance?.head || null,
+    sourceProofSha256: session.developmentContext?.sourceExecutionProof?.sha256 || null,
     sourceExecutionProof: session.developmentContext?.sourceExecutionProof || null,
     sessionId: session.id || null,
     scopeText: session.developmentContext?.moduleName ? `module:${session.developmentContext.moduleName}` : "",
@@ -2215,6 +2216,42 @@ async function sendBootAckAcceptedContinuation(view, task, workerCode, sourcePro
   if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return { sent:false, reason: insertion?.reason || "continuation-not-inserted" };
   return sendPreparedChatPrompt(view, marker);
 }
+
+function buildConversationRolloverReadyContinuationPrompt(task, workerCode, sourceProofSha256Override = "") {
+  const marker = "BENJADMIN_PROMPT_KIND: CONVERSATION_ROLLOVER_READY_V1";
+  const authoritativeProofSha256 = resolvedExecutionProofSha256(task, sourceProofSha256Override);
+  return [
+    marker,
+    "BENJADMIN CONTROL EVENT · CONVERSATION ROLLOVER READY · SAME TASK",
+    "Worker: " + workerCode,
+    "Task: " + task.id,
+    "Session: " + task.sessionId,
+    "Branch: " + task.branchName,
+    "Worktree: " + task.worktreePath,
+    "HEAD: " + task.sourceHead,
+    "Source proof: " + (authoritativeProofSha256 || "—"),
+    "DEV ONLY · PROD DENY.",
+    "",
+    "EXECUTION AUTHORITY:",
+    "- A rollover ACK-et a Central Core elfogadta; ugyanaz a task/session/worktree/branch folytatódik.",
+    "- Közvetlen DIMPROVER VPS MCP, közvetlen VPS shell vagy más raw shell DEV source/provenance művelethez TILOS.",
+    "- A DIMPROVER VPS MCP alap hostja nem tekinthető az authoritative DEV execution környezetnek.",
+    "- A DEV worktree állapotát és minden engedélyezett fájl/git műveletet kizárólag a Central Core Execution Bridge-en keresztül ellenőrizd.",
+    "- Első kötelező execution lépés: pontosan EGY GIT_STATUS kérés. Utána várd meg a BENJADMIN_EXECUTION_RESULT_V1 választ.",
+    ...executionBridgeProtocolLines(task, workerCode, authoritativeProofSha256)
+  ].join("\n");
+}
+
+async function sendConversationRolloverReadyContinuation(view, task, workerCode, sourceProofSha256Override = "") {
+  const marker = "BENJADMIN_PROMPT_KIND: CONVERSATION_ROLLOVER_READY_V1";
+  const prompt = buildConversationRolloverReadyContinuationPrompt(task, workerCode, sourceProofSha256Override);
+  const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+    return { sent:false, verified:false, reason: insertion?.reason || "rollover-ready-continuation-not-inserted" };
+  }
+  return sendPreparedChatPrompt(view, marker);
+}
+
 
 function isBootAckCandidateText(value) {
   const body = String(value || "");
@@ -2697,7 +2734,7 @@ async function resolveExecutionRecoveryAuthority(task, workerCode, candidate, la
   const sessionId = String(candidate?.row?.sessionId || task?.sessionId || "");
   let ackState = String(task?.bootAckState || launchRecord?.ackState || "").toUpperCase();
   let codingAllowed = task?.bootAckCodingAllowed === true;
-  let proofSha256 = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
+  let proofSha256 = resolvedExecutionProofSha256(task);
   let authoritySource = "TASK_OR_LOCAL_RECORD";
 
   if (ackState === "VALIDATED" && /^[0-9a-f]{64}$/.test(proofSha256)) {
@@ -2876,7 +2913,7 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
     send("context:refresh", { reason:"execution-blocked-by-conversation-rollover", taskId:task.id, workerCode, rolloverState });
     return { processed:false, blocked:true, code:rolloverState === ROLLOVER_STATES.BLOCKED ? "CONVERSATION_ROLLOVER_BLOCKED" : "CONVERSATION_ROLLOVER_ACK_REQUIRED" };
   }
-  const expectedProof = resolvedExecutionProofSha256(task, launchRecord?.sourceProofSha256 || "");
+  const expectedProof = resolvedExecutionProofSha256(task);
   const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
   const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
   const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
@@ -3078,14 +3115,116 @@ async function processConversationRolloverAck({ view, body, workerCode, task }) 
     conversationRolloverError:null,
     conversationRolloverBindingRevision:binding?.revision || null,
   }, "conversation-rollover-ready");
-  return { processed:true, ready:true, validation, binding };
+
+  let continuation = { sent:false, verified:false, reason:"not-attempted" };
+  const readyRecord = loadTaskLaunchRecords()[taskId] || {};
+  if (String(readyRecord.conversationRolloverReadyContinuationState || "").toUpperCase() === "SENT") {
+    continuation = { sent:true, verified:true, duplicate:true };
+  } else {
+    continuation = await sendConversationRolloverReadyContinuation(
+      view,
+      task,
+      workerCode,
+      expected.sourceProofSha256
+    ).catch((error) => ({
+      sent:false,
+      verified:false,
+      reason:error instanceof Error ? error.message : "ROLLOVER_READY_CONTINUATION_FAILED"
+    }));
+    publishTaskLaunchPatch(task, workerCode, continuation?.sent === true && continuation?.verified === true ? {
+      conversationRolloverReadyContinuationState:"SENT",
+      conversationRolloverReadyContinuationSentAt:new Date().toISOString(),
+      conversationRolloverReadyContinuationError:null,
+    } : {
+      conversationRolloverReadyContinuationState:"MANUAL_REQUIRED",
+      conversationRolloverReadyContinuationError:String(continuation?.reason || "not-verified").slice(0, 800),
+    }, "conversation-rollover-ready-continuation");
+  }
+  return { processed:true, ready:true, validation, binding, continuation };
 }
 
 async function handleConversationRollover({ view, workerCode, task, capture, memory }) {
   const taskId = String(task?.id || "");
   const record = loadTaskLaunchRecords()[taskId] || {};
   const currentState = String(record.conversationRolloverState || task?.conversationRolloverState || task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
-  if (currentState === ROLLOVER_STATES.READY || currentState === ROLLOVER_STATES.BLOCKED || rolloverPendingState(currentState)) return { started:false, state:currentState };
+
+  if (currentState === ROLLOVER_STATES.READY) {
+    const readyState = String(record.conversationRolloverReadyContinuationState || "").toUpperCase();
+    if (readyState === "SENT" || readyState === "MANUAL_REQUIRED") {
+      return { started:false, state:currentState, readyContinuationState:readyState };
+    }
+
+    const expectedConversationId = String(
+      task?.surfaceConversationId
+      || task?.chatConversationId
+      || task?.chatLaunch?.surfaceConversationId
+      || task?.chatLaunch?.chatSessionId
+      || record.conversationRolloverConversationId
+      || ""
+    );
+    const currentConversationId = String(
+      capture?.conversationId
+      || chatConversationIdFromUrl(view?.webContents?.getURL?.() || "")
+      || ""
+    );
+    if (!expectedConversationId || !currentConversationId || currentConversationId !== expectedConversationId) {
+      return {
+        started:false,
+        state:currentState,
+        readyContinuationState:"WAITING_FOR_BOUND_CONVERSATION",
+        expectedConversationId,
+        currentConversationId,
+      };
+    }
+
+    const readyKey = taskId + ":" + String(task?.sessionId || "") + ":rollover-ready-continuation";
+    if (conversationRolloverProcessingKeys.has(readyKey)) {
+      return { started:false, state:currentState, readyContinuationState:"SENDING" };
+    }
+    conversationRolloverProcessingKeys.add(readyKey);
+    try {
+      publishTaskLaunchPatch(task, workerCode, {
+        conversationRolloverReadyContinuationState:"SENDING",
+        conversationRolloverReadyContinuationStartedAt:new Date().toISOString(),
+      }, "conversation-rollover-ready-continuation-start");
+
+      const authoritativeProof = String(
+        record.conversationRolloverSourceProofSha256
+        || task?.conversationRolloverSourceProofSha256
+        || task?.chatLaunch?.conversationRolloverSourceProofSha256
+        || resolvedExecutionProofSha256(task)
+      ).toLowerCase();
+
+      const continuation = await sendConversationRolloverReadyContinuation(
+        view,
+        task,
+        workerCode,
+        authoritativeProof
+      ).catch((error) => ({
+        sent:false,
+        verified:false,
+        reason:error instanceof Error ? error.message : "ROLLOVER_READY_CONTINUATION_FAILED"
+      }));
+
+      publishTaskLaunchPatch(task, workerCode, continuation?.sent === true && continuation?.verified === true ? {
+        conversationRolloverReadyContinuationState:"SENT",
+        conversationRolloverReadyContinuationSentAt:new Date().toISOString(),
+        conversationRolloverReadyContinuationError:null,
+      } : {
+        conversationRolloverReadyContinuationState:"MANUAL_REQUIRED",
+        conversationRolloverReadyContinuationError:String(continuation?.reason || "not-verified").slice(0, 800),
+      }, "conversation-rollover-ready-continuation-recovery");
+
+      return { started:false, state:currentState, readyContinuation:true, continuation };
+    } finally {
+      conversationRolloverProcessingKeys.delete(readyKey);
+    }
+  }
+
+  if (currentState === ROLLOVER_STATES.BLOCKED || rolloverPendingState(currentState)) {
+    return { started:false, state:currentState };
+  }
+
   const limit = detectConversationLimit(capture?.messages);
   if (!limit?.reached) return { started:false, state:currentState, limit };
   const key = taskId + ":" + String(task?.sessionId || "") + ":" + String(capture?.conversationId || "");
@@ -3096,7 +3235,7 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
   try {
     const context = memory?.context || null;
     const handoff = memory?.handoff || null;
-    const sourceProofSha256 = resolvedExecutionProofSha256(task, record.sourceProofSha256 || "");
+    const sourceProofSha256 = resolvedExecutionProofSha256(task);
     const sourceHead = String(context?.sourceHead || task?.sourceHead || "").toLowerCase();
     const projectRoot = chatProjectRootFromConversationUrl(previousConversationUrl);
     const identityOk = context?.id && Number(context?.revision || 0) > 0 && handoff?.id
@@ -3267,6 +3406,7 @@ function buildManualRolloverHandoffMarkdown(input) {
     "",
     "## Folytonossági szabály",
     "Ez PARTIAL / CONTINUATION átadó. A task nincs lezárva. Az új AI a Central Core authoritative Task + Session + Context Snapshot + Handoff Pack állapotát ellenőrizze, majd ugyanazt a taskot folytassa. Új task, új session vagy TASK_LAUNCH nem készülhet.",
+    "DEV source/provenance ellenőrzéshez közvetlen DIMPROVER VPS MCP vagy raw shell használata tilos. A DEV worktree műveletei kizárólag a Central Core Execution Bridge-en keresztül hajthatók végre.",
     "",
     "DEV ONLY · PROD DENY",
     "",
