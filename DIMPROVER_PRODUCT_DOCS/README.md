@@ -256,3 +256,4 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - 325_benjadmin_developer_grid_v0162_inspector_status_contrast_20260920.md – Developer Grid v0.1.62: light-theme Task Inspector státusz/evidence kontrasztjavítás, v0.1.61 startup restore PASS megőrzésével.
 - 326_benjadmin_developer_grid_v0163_manual_conversation_rollover_20260920.md – Developer Grid v0.1.63 same-task Conversation Rollover: orange/green rollover ikon, blue MD download, Central Core bootstrap, transcript-confirmed successor binding és kompakt header ikonok.
 - 327_benjadmin_developer_grid_v0164_rollover_hotfix_20260921.md – Developer Grid v0.1.64: legacy VERIFIED source-proof kompatibilitás, same-project rollover rebind megerősítés és persistent BLOCKED hibaállapot.
+- 331_dimpro_dev_artifact_cache_retirement_v3_20260924.md – történeti release cache-ek artifact/provenance-alapú fail-closed nyugdíjazása.

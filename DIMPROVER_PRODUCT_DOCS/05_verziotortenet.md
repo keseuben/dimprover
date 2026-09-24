@@ -3331,3 +3331,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - CLIPBOARD_COPIED és ACK_WAIT rollover transition alatt a normal conversation pin guard szünetel.
 - Új task/session/TASK_LAUNCH továbbra is tiltott; PROD DENY.
 - Work first-party surface külön aktiválási célja v0.1.65.
+
+## 2026-09-24 – DIMPRO DEV Artifact-backed Historical Release Cache Retirement V3
+
+- Új fail-closed guard történeti release cache-ekhez.
+- Apply csak clean exact HEAD + immutable artifact manifest + sidecar + EXE/ZIP hash + PM2/nginx/Central Core reference-free állapot mellett.
+- Törölhető cél kizárólag .next*, node_modules, desktop dist/dist-dev az explicit plan worktree-n belül.
+- Worktree, source, backup, artifact, Central Core és runtime nem törölhető.
+- Shared-hardlink dependency automatikusan védett.
+- Contract 12/12 PASS; meglévő Storage Retention V2 contract 44/44 PASS.
+- DEV ONLY · PROD DENY.
