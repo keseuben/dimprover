@@ -19,7 +19,7 @@ Történeti Developer Grid pre-materialize .next snapshotok biztonságos nyugdí
 - sourceCommit, sourceBranch, buildId exact plan egyezés
 - source commit létezik a canonical Git repóban
 - snapshot teljes tree SHA-256 és byte méret exact plan egyezés
-- symlink és shared-hardlink tiltott
+- külső symlink és shared-hardlink tiltott; snapshoton belüli symlink engedett és a target string része a tree SHA-256-nak
 - active Central Core és PM2 source commit védett
 - immutable release manifest + sidecar SHA exact
 - immutable EXE és DEV ZIP SHA/byte exact

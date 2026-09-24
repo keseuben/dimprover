@@ -117,14 +117,21 @@ def snapshot_tree(snapshot):
     h=hashlib.sha256(); total=0; count=0
     files=[]
     for p in sorted(snapshot.rglob("*"),key=lambda x:x.relative_to(snapshot).as_posix()):
-        if p.is_symlink(): fail("snapshot contains symlink: "+str(p))
+        rel=p.relative_to(snapshot).as_posix()
+        if p.is_symlink():
+            target=p.readlink()
+            resolved=(p.parent/target).resolve()
+            if not within(resolved,snapshot): fail("snapshot contains external symlink: "+str(p))
+            rec=f"L\0{rel}\0{target.as_posix()}\n".encode()
+            h.update(rec); count+=1
+            files.append((rel,0,"SYMLINK:"+target.as_posix()))
+            continue
         if p.is_dir(): continue
         if not p.is_file(): fail("snapshot contains unsupported object: "+str(p))
         st=p.stat()
         if st.st_nlink>1: fail("snapshot contains shared hardlink: "+str(p))
-        rel=p.relative_to(snapshot).as_posix()
         fh=sha_file(p)
-        rec=f"{rel}\0{st.st_size}\0{fh}\n".encode()
+        rec=f"F\0{rel}\0{st.st_size}\0{fh}\n".encode()
         h.update(rec); total+=st.st_size; count+=1
         files.append((rel,st.st_size,fh))
     return {"treeSha256":h.hexdigest(),"fileCount":count,"bytes":total}

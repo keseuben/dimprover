@@ -3355,7 +3355,7 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 
 - Történeti pre-materialize .next backupok csak full tree SHA + exact release/source proof mellett nyugdíjazhatók.
 - Backup könyvtár megmarad, RETIREMENT_EVIDENCE.json auditfájl készül.
-- Symlink/shared-hardlink automatikusan blokkolt.
+- Külső symlink/shared-hardlink blokkolt; belső snapshot symlink a tree SHA részévé válik.
 - Aktív Central Core/PM2 source commit védett.
 - Contract 16/16 PASS.
 - DEV ONLY · PROD DENY.
