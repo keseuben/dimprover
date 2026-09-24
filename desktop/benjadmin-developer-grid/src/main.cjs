@@ -2914,7 +2914,9 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
     return { processed:false, blocked:true, code:rolloverState === ROLLOVER_STATES.BLOCKED ? "CONVERSATION_ROLLOVER_BLOCKED" : "CONVERSATION_ROLLOVER_ACK_REQUIRED" };
   }
   const expectedProof = resolvedExecutionProofSha256(task);
-  const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
+  const bridgeResultProof = String(launchRecord.executionBridgeAuthoritativeSourceProofSha256 || "").trim().toLowerCase();
+  const acceptedProofs = new Set([expectedProof, /^[0-9a-f]{64}$/.test(bridgeResultProof) ? bridgeResultProof : ""].filter(Boolean));
+  const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || !acceptedProofs.has(request.sourceProofSha256);
   const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
   const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
   if (processedExecutionRequestHashes.has(key) || String(launchRecord.lastExecutionRequestId || "") === request.requestId) return { processed:false, duplicate:true };
@@ -2926,6 +2928,13 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
       payload = { requestId:request.requestId, taskId:String(task.id), sessionId:String(task.sessionId), action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_IDENTITY_MISMATCH", summary:"A request task/session/worker/source proof identity eltér az authoritative aktív Grid állapottól.", data:{} } };
     } else {
       payload = await executeDeveloperGridRequest({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(), input:request }).catch((error) => ({ requestId:request.requestId, taskId:request.taskId, sessionId:request.sessionId, action:request.action, replayed:false, execution:{ status:"BLOCKED", code:"EXECUTION_BRIDGE_HTTP_FAILED", summary:error instanceof Error ? error.message : "Execution Bridge API hiba.", data:{} } }));
+    }
+    const authoritativeResultProof = String(payload?.execution?.data?.authoritativeSourceProofSha256 || "").trim().toLowerCase();
+    if (/^[0-9a-f]{64}$/.test(authoritativeResultProof)) {
+      saveTaskLaunchPatch(task, workerCode, {
+        executionBridgeAuthoritativeSourceProofSha256:authoritativeResultProof,
+        executionBridgeAuthoritativeSourceProofAt:new Date().toISOString(),
+      });
     }
     const sent = await sendExecutionResultToWorker(view, payload);
     if (sent?.sent !== true || sent?.verified !== true) {

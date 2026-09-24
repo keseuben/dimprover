@@ -44,4 +44,4 @@ Az új AI ezután közvetlen DIMPROVER VPS MCP-t használt. Az MCP alap host /ro
 - Rollover Execution Bridge v0.1.67 contract: 21/21 PASS.
 - Teljes Desktop regresszió: PASS.
 - TypeScript: PASS.
-- Work first-party következő célverzió: v0.1.68.
+- Work first-party következő célverzió: v0.1.69.

@@ -11,7 +11,7 @@ const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const types=read("app/lib/developer-grid/types.ts");
 const scopeAnalyzer=read("app/lib/dev-center/ai-worker/scope-analyzer.ts");
 const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
-check("v0.1.67 version contract",()=>{assert.equal(pkg.version, "0.1.67");assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/)});
+check("v0.1.68 version contract",()=>{assert.equal(pkg.version, "0.1.68");assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.68-dev"/)});
 check("paired-device DEV-only execution route",()=>{assert.match(route,/isChatGridDeviceAuthorized/);assert.match(route,/x-dimpro-environment":"DEV"/);assert.match(route,/x-dimpro-production-access":"DENY"/)});
 check("execution route exposes POST only",()=>{assert.match(route,/export async function POST/);assert.doesNotMatch(route,/export async function (GET|PUT|PATCH|DELETE)/)});
 check("scope analyzer accepts explicit canonical root override",()=>{assert.match(scopeAnalyzer,/rootOverride/);assert.match(scopeAnalyzer,/path\.resolve\(rootOverride\)/)});

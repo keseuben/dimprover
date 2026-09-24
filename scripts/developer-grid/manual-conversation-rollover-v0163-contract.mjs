@@ -15,8 +15,8 @@ const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0;
 function check(label,fn){fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+label);}
 
-check("desktop version v0.1.67",()=>assert.equal(pkg.version,"0.1.67"));
-check("backend version v0.1.67-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/));
+check("desktop version v0.1.68",()=>assert.equal(pkg.version,"0.1.68"));
+check("backend version v0.1.68-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.68-dev"/));
 check("manual clipboard rollover state exists",()=>{assert.match(rollover,/CLIPBOARD_COPIED/);assert.match(types,/CLIPBOARD_COPIED/)});
 check("bootstrap points to Central Core authority",()=>assert.match(rollover,/CENTRAL CORE BOOTSTRAP/));
 check("preload exposes rollover prepare/copy/download",()=>{assert.match(preload,/prepareConversationRollover/);assert.match(preload,/copyConversationRollover/);assert.match(preload,/downloadConversationRolloverHandoff/)});

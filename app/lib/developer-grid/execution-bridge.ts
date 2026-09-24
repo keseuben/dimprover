@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { analyzeTechnicalScope } from "@/app/lib/dev-center/ai-worker/scope-analyzer";
 import { classifyScopePath } from "@/app/lib/dev-center/ai-worker/scope-policy";
 import { assertDevEngineOperation } from "@/app/lib/dev-center/engine-repository";
-import { getDeveloperGridActiveWork } from "./work-start";
+import { getDeveloperGridActiveWork, recoverDeveloperGridExecutionBridgeSession } from "./work-start";
 
 const execFileAsync = promisify(execFile);
 const EXECUTION_ROOT = process.env.BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT?.trim() || "/srv/dimpro-dev/coordination/developer-grid/execution";
@@ -239,12 +239,41 @@ async function validateContext(input: Input) {
     throw new DeveloperGridExecutionError("A Central Core source proof eltér vagy hiányzik.", "EXECUTION_SOURCE_PROOF_MISMATCH", 409);
   }
 
-  const engineSessionId = text(context.engineSessionId, 240);
+  let engineSessionId = text(context.engineSessionId, 240);
   if (!engineSessionId) throw new DeveloperGridExecutionError("Hiányzó Dev Center engine session.", "EXECUTION_ENGINE_SESSION_REQUIRED", 409);
   const operation = action === "RUN_DEV_COMMAND" ? "test" : "write";
-  const authorization = await assertDevEngineOperation(engineSessionId, operation);
+  let effectiveProof = proof;
+  let recovery: null | {
+    previousEngineSessionId: string;
+    engineSessionId: string;
+    previousSourceProofSha256: string;
+    sourceProofSha256: string;
+  } = null;
+  let authorization;
+  try {
+    authorization = await assertDevEngineOperation(engineSessionId, operation);
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
+    const recoverable = new Set(["DEV_CENTER_SESSION_NOT_READY", "DEV_CENTER_SESSION_LEASE_EXPIRED", "DEV_CENTER_SCOPE_LOCK_REQUIRED", "DEV_CENTER_WORKTREE_LEASE_REQUIRED"]);
+    if (!recoverable.has(code)) throw error;
+    const recovered = await recoverDeveloperGridExecutionBridgeSession({
+      taskId,
+      gridSessionId:sessionId,
+      workerCode:worker as "ARMINAI" | "OUTMINAI" | "BENJAMINAI" | "JAZMINAI",
+      sourceProofSha256:proofSha,
+    });
+    engineSessionId = recovered.engineSessionId;
+    effectiveProof = recovered.sourceExecutionProof as unknown as Record<string, unknown>;
+    recovery = {
+      previousEngineSessionId:recovered.previousEngineSessionId,
+      engineSessionId:recovered.engineSessionId,
+      previousSourceProofSha256:recovered.previousSourceProofSha256,
+      sourceProofSha256:recovered.sourceExecutionProof.sha256,
+    };
+    authorization = await assertDevEngineOperation(engineSessionId, operation);
+  }
   const root = text(gridSession.sourceProvenance?.worktree, 1200);
-  if (!root || root !== text(authorization.session.worktreePath, 1200) || engineSessionId !== text(proof.engineSessionId, 240)) {
+  if (!root || root !== text(authorization.session.worktreePath, 1200) || engineSessionId !== text(effectiveProof.engineSessionId, 240)) {
     throw new DeveloperGridExecutionError("A worktree/session binding eltér a proof állapotától.", "EXECUTION_WORKTREE_BINDING_MISMATCH", 409);
   }
 
@@ -262,7 +291,11 @@ async function validateContext(input: Input) {
     sourcePrompt: text(context.sourcePrompt, 12_000) || text(task.title, 500),
     moduleName: text(context.moduleName, 180),
   });
-  return { requestId, taskId, sessionId, worker, proofSha, action, engineSessionId, root: rootReal, scopePlan, requestHash: publicRequestHash(input) };
+  return {
+    requestId, taskId, sessionId, worker, proofSha, action, engineSessionId, root: rootReal, scopePlan, requestHash: publicRequestHash(input),
+    authoritativeSourceProofSha256:text(effectiveProof.sha256, 80).toLowerCase(),
+    recovery,
+  };
 }
 
 async function listFiles(scope: ScopePlan, input: Input): Promise<Result> {
@@ -404,6 +437,8 @@ export async function executeDeveloperGridRequest(raw: unknown) {
     sessionId: context.sessionId,
     workerCode: context.worker,
     sourceProofSha256: context.proofSha,
+    authoritativeSourceProofSha256: context.authoritativeSourceProofSha256,
+    engineSessionRecovery: context.recovery,
     action: context.action,
     path: text(input.path, 1000) || null,
     querySha256: text(input.query, 500) ? sha(text(input.query, 500)) : null,
@@ -420,6 +455,14 @@ export async function executeDeveloperGridRequest(raw: unknown) {
     if (error instanceof DeveloperGridExecutionError) result = { status: "BLOCKED", code: error.code, summary: error.message, data: error.details };
     else result = { status: "FAIL", code: "EXECUTION_INTERNAL_ERROR", summary: error instanceof Error ? error.message : "Execution Bridge belső hiba." };
   }
+  result = {
+    ...result,
+    data:{
+      ...(result.data || {}),
+      authoritativeSourceProofSha256:context.authoritativeSourceProofSha256,
+      ...(context.recovery ? { executionSessionRecovery:context.recovery } : {}),
+    },
+  };
   await appendAudit(context.taskId, { event: "RESULT", at: new Date().toISOString(), requestId: context.requestId, requestHash: context.requestHash, taskId: context.taskId, sessionId: context.sessionId, workerCode: context.worker, action: context.action, result, environment: "DEV", productionAccess: "DENY" });
   return { ok: true as const, replayed: false, execution: result, requestId: context.requestId, taskId: context.taskId, sessionId: context.sessionId, action: context.action, productionAccess: "DENY" as const };
 }

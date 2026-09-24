@@ -3362,5 +3362,22 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A reconstructed task explicit authoritative sourceProofSha256 mezőt kap.
 - Execution request/recovery/rollover proof feloldás nem használ local proof explicit override-ot.
 - Új task/session/TASK_LAUNCH nem készül.
-- Work first-party aktiválási cél: v0.1.68.
+- Work first-party aktiválási cél: v0.1.69.
+- DEV ONLY · PROD DENY.
+
+## 2026-09-24 – BENJADMIN Developer Grid v0.1.68 – Stale Engine Session Recovery
+
+- A v0.1.67 fizikai rollover E2E igazolta, hogy a same-task ChatGPT rollover READY állapotig eljut, de az Execution Bridge GIT_STATUS blokkolhat, ha a belső Dev Center engine session lease miatt korábban lezárult.
+- A Grid task/session, ChatGPT conversation binding, branch, worktree, source HEAD és VALIDATED BOOT ACK változatlan marad.
+- Az Execution Bridge kizárólag explicit session/lease/lock gate hibáknál próbál egyszeri belső engine-session recoveryt.
+- Automatikus recovery csak ténylegesen closed Dev Center engine sessionre engedélyezett; aktív vagy eltérő session fail-closed.
+- A meglévő Dev Center taskhoz friss belső engine session nyílik, ugyanaz a worker + module scope + task-specifikus branch/worktree kötődik vissza.
+- Recovery után új scope lock + worktree lease és friss CENTRAL_CORE sourceExecutionProof kötelező.
+- A recovered provenance repository/worktree/branch/HEAD exact módon egyezzen a meglévő Grid sessionnel.
+- Ugyanaz a Grid WorkerSession rekord frissül; új Developer Grid task/session/TASK_LAUNCH nem készül.
+- Az Execution Bridge eredmény visszaadja az új authoritativeSourceProofSha256 értéket, és a worker következő requestje ezt használja.
+- A Desktop rövid state-delta versenyablakban elfogadja a szerver által visszaadott proofot alternatívaként, de a primary proof resolver továbbra is az authoritative live task proofot priorizálja.
+- Célzott stale-engine recovery contract: 27/27 PASS.
+- TypeScript: PASS a kódpatch után.
+- Work first-party aktiválási cél: v0.1.69.
 - DEV ONLY · PROD DENY.

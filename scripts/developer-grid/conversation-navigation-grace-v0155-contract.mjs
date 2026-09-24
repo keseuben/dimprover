@@ -13,8 +13,8 @@ const surface=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface
 const adapter=read("desktop/benjadmin-developer-grid/src/surfaces/worker-surface-adapter.cjs");
 
 let n=0; const check=(name,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-check("desktop version v0.1.67",()=>assert.equal(pkg.version, "0.1.67"));
-check("backend version v0.1.67-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.67-dev"/));
+check("desktop version v0.1.68",()=>assert.equal(pkg.version, "0.1.68"));
+check("backend version v0.1.68-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.68-dev"/));
 check("navigation grace is bounded to 10s",()=>assert.match(main,/CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 10_000/));
 check("same-project route helper accepts project routes",()=>assert.match(main,/function sameChatProjectRoute\(/));
 check("project key helper requires ChatGPT project path",()=>assert.match(main,/\^\\\/g\\\/\(g-p-\[\^\/\]\+\)\(\?:\\\/\|\$\)/));

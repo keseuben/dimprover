@@ -691,6 +691,151 @@ export async function recoverDeveloperGridLaunchExecution() {
   return { task:next.task, session:recoveredSession, sourceExecutionProof, revision:next.revision, productionAccess:"DENY" as const };
 }
 
+
+export async function recoverDeveloperGridExecutionBridgeSession(input: {
+  taskId: string;
+  gridSessionId: string;
+  workerCode: RoutableWorkerCode;
+  sourceProofSha256: string;
+}) {
+  const taskId = text(input.taskId, 240);
+  const gridSessionId = text(input.gridSessionId, 260);
+  const workerCode = routableWorkerCode(input.workerCode);
+  const sourceProofSha256 = text(input.sourceProofSha256, 64).toLowerCase();
+  if (!taskId || !gridSessionId || !workerCode || !/^[0-9a-f]{64}$/.test(sourceProofSha256)) {
+    throw Object.assign(new Error("Az Execution Bridge engine recovery identity hiányos."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_IDENTITY_INVALID", status:400 });
+  }
+
+  const state = await readGridState();
+  const task = state.task;
+  if (!task || task.id !== taskId) {
+    throw Object.assign(new Error("Az Execution Bridge engine recovery task nem authoritative."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_TASK_MISMATCH", status:409 });
+  }
+  const session = state.sessions.find((item) => item.id === gridSessionId && item.taskId === taskId && item.endedAt === null) || null;
+  if (!session || session.workerCode !== workerCode) {
+    throw Object.assign(new Error("Az Execution Bridge engine recovery Grid session nem authoritative."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_SESSION_MISMATCH", status:409 });
+  }
+  if (session.developmentContext.bootAckState !== "VALIDATED" || session.developmentContext.bootAckCodingAllowed !== true) {
+    throw Object.assign(new Error("Execution engine recovery csak VALIDATED BOOT ACK után engedélyezett."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_BOOT_ACK_REQUIRED", status:409 });
+  }
+  const rolloverState = text(session.developmentContext.conversationRolloverState, 40).toUpperCase();
+  if (rolloverState && rolloverState !== "READY") {
+    throw Object.assign(new Error("Execution engine recovery közben a conversation rollover nem READY."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_ROLLOVER_NOT_READY", status:409, details:{ rolloverState } });
+  }
+
+  const previousProof = session.developmentContext.sourceExecutionProof || null;
+  if (!previousProof) {
+    throw Object.assign(new Error("Az Execution Bridge recovery source proof hiányzik."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_PROOF_MISMATCH", status:409 });
+  }
+  const { sha256:previousStoredProofSha256, ...previousProofBase } = previousProof;
+  const previousComputedProofSha256 = sourceExecutionProofSha256(previousProofBase);
+  if (String(previousStoredProofSha256 || "").toLowerCase() !== sourceProofSha256
+      || previousComputedProofSha256 !== sourceProofSha256
+      || previousProof.state !== "VERIFIED" || previousProof.authority !== "CENTRAL_CORE"
+      || previousProof.handshakeStage !== "READY" || previousProof.productionAccess !== "DENY") {
+    throw Object.assign(new Error("Az Execution Bridge recovery source proof eltér, sérült vagy nem VERIFIED."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_PROOF_MISMATCH", status:409 });
+  }
+  const previousEngineSessionId = text(session.developmentContext.engineSessionId, 240);
+  if (!previousEngineSessionId || previousProof.engineSessionId !== previousEngineSessionId) {
+    throw Object.assign(new Error("Az Execution Bridge recovery engine session/proof kötése eltér."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_ENGINE_BINDING_MISMATCH", status:409 });
+  }
+  await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:false });
+
+  const engineState = await getDevCenterEngineState();
+  const previousEngineSession = engineState.sessions.find((item) => item.id === previousEngineSessionId) || null;
+  if (!previousEngineSession) {
+    throw Object.assign(new Error("A recoveryhez tartozó Dev Center engine session nem található."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_ENGINE_SESSION_NOT_FOUND", status:409 });
+  }
+  if (previousEngineSession.taskId !== taskId) {
+    throw Object.assign(new Error("A recovery Dev Center engine session más taskhoz tartozik."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_ENGINE_TASK_MISMATCH", status:409 });
+  }
+  if (previousEngineSession.status !== "closed") {
+    throw Object.assign(new Error("Automatikus Execution Bridge recovery csak lezárt Dev Center engine sessionre engedélyezett."), {
+      code:"DEVELOPER_GRID_EXECUTION_RECOVERY_ENGINE_NOT_CLOSED", status:409,
+      details:{ engineSessionId:previousEngineSessionId, status:previousEngineSession.status, handshakeStage:previousEngineSession.handshakeStage },
+    });
+  }
+
+  const fresh = await recoverClosedDevEngineTaskManualBridgeSession({
+    taskId,
+    closedSessionId:previousEngineSessionId,
+    expectedWorkerCode:workerCode,
+  });
+  const engineSessionId = text(fresh.session?.id, 240);
+  if (!engineSessionId || engineSessionId === previousEngineSessionId) {
+    throw Object.assign(new Error("A fresh Execution Bridge recovery session nem jött létre."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_FRESH_SESSION_MISSING", status:409 });
+  }
+
+  const moduleName = text(session.developmentContext.moduleName, 180);
+  if (!moduleName) {
+    throw Object.assign(new Error("Az Execution Bridge recovery modul scope hiányzik."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_SCOPE_MISSING", status:409 });
+  }
+  const baseHead = String(session.sourceProvenance.head || "").toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(baseHead)) {
+    throw Object.assign(new Error("Az Execution Bridge recovery source HEAD érvénytelen."), { code:"DEVELOPER_GRID_EXECUTION_RECOVERY_HEAD_INVALID", status:409 });
+  }
+
+  const ready = await ensureDeveloperGridReadyExecution({
+    taskId,
+    workerCode,
+    engineSessionId,
+    baseHead,
+    scope:[{ type:"module", key:moduleName }],
+    gridSessionId,
+  });
+  const expected = session.sourceProvenance;
+  if (ready.provenance.repository !== expected.repository || ready.provenance.worktree !== expected.worktree || ready.provenance.branch !== expected.branch || ready.provenance.head !== expected.head) {
+    throw Object.assign(new Error("A recovered engine session source provenance eltér az authoritative Grid sessiontől."), {
+      code:"DEVELOPER_GRID_EXECUTION_RECOVERY_SOURCE_MISMATCH", status:409,
+      details:{ expected:{ repository:expected.repository, worktree:expected.worktree, branch:expected.branch, head:expected.head }, actual:ready.provenance },
+    });
+  }
+
+  const now = new Date().toISOString();
+  const updated: WorkerSession = {
+    ...session,
+    sourceProvenance:{ ...ready.provenance, worker:workerCode, taskId, sessionId:gridSessionId },
+    developmentContext:{
+      ...session.developmentContext,
+      engineSessionId,
+      sourceExecutionProof:ready.proof,
+      resolvedAt:now,
+    },
+  };
+  const next = await upsertWorkerSession(updated);
+  await syncEngineBridgeTarget(taskId, "RUNNING");
+  await appendGridEvent({
+    kind:"analysis", origin:"LIVE", workerCode, taskId, projectId:task.projectId, productionAccess:"DENY",
+    developmentContext:updated.developmentContext,
+    branch:updated.sourceProvenance.branch,
+    worktree:updated.sourceProvenance.worktree,
+    head:updated.sourceProvenance.head,
+    delta:{
+      eventType:"EXECUTION_ENGINE_SESSION_RECOVERED",
+      summary:"A lejárt Dev Center engine session helyreállt ugyanahhoz a Developer Grid task/session/worktree-hez; BOOT ACK és conversation continuity változatlan.",
+      status:"PASS", severity:"INFO", sessionId:gridSessionId,
+      previousEngineSessionId, engineSessionId,
+      previousSourceProofSha256:sourceProofSha256,
+      sourceProofSha256:ready.proof.sha256,
+      activeScopeLockCount:ready.proof.activeScopeLockCount,
+      activeWorktreeLeaseCount:ready.proof.activeWorktreeLeaseCount,
+      workStageIndex:updated.developmentContext.workStageIndex || 1,
+      sanitized:true,
+    },
+  });
+  return {
+    taskId,
+    gridSessionId,
+    workerCode,
+    previousEngineSessionId,
+    engineSessionId,
+    previousSourceProofSha256:sourceProofSha256,
+    sourceExecutionProof:ready.proof,
+    revision:next.revision,
+    productionAccess:"DENY" as const,
+  };
+}
+
 export async function recordDeveloperGridBootAck(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 240);
   const workerCode = strictCoreWorkerCode(rawInput.workerCode);
