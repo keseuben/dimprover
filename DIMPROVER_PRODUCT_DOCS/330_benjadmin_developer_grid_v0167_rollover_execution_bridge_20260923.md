@@ -45,3 +45,7 @@ Az új AI ezután közvetlen DIMPROVER VPS MCP-t használt. Az MCP alap host /ro
 - Teljes Desktop regresszió: PASS.
 - TypeScript: PASS.
 - Work first-party következő célverzió: v0.1.68.
+
+## 2026-09-24 fizikai follow-up
+
+A v0.1.67 fizikai E2E egy külön engine-session lease-élettartam hibát tárt fel. Ennek javítása v0.1.68 Engine Session Recovery Hotfixként készül. A korábban v0.1.68-ra tervezett Work first-party aktiválás emiatt v0.1.69-re tolódik.

@@ -259,3 +259,4 @@ Ez a mappa a DIMPROVER modulok, architektúra, UX szabályok és fejlesztési d�
 - 328_benjadmin_developer_grid_v0165_legacy_surface_bind_20260922.md – v0.1.65 Legacy Surface Bind: legacy conversation-ID nélküli aktív session biztonságos rögzítése és multi-worker Conversation Memory authority.
 - 329_benjadmin_developer_grid_v0166_authoritative_proof_priority_20260923.md – v0.1.66: Central Core live source proof elsőbbség a local/derived fallback proofokkal szemben.
 - 330_benjadmin_developer_grid_v0167_rollover_execution_bridge_20260923.md – v0.1.67: ACK-only rollover, automatikus Central Core Execution Bridge continuation és READY recovery.
+- 335_benjadmin_developer_grid_v0168_engine_session_recovery_20260924.md – v0.1.68 engine-session lease recovery hotfix: exact same Grid task/session continuity, fresh execution authority és fresh Central Core proof.

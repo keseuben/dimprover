@@ -691,6 +691,169 @@ export async function recoverDeveloperGridLaunchExecution() {
   return { task:next.task, session:recoveredSession, sourceExecutionProof, revision:next.revision, productionAccess:"DENY" as const };
 }
 
+
+export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<string, unknown>) {
+  const taskId = text(rawInput.taskId, 240);
+  const gridSessionId = text(rawInput.sessionId, 260);
+  const workerCode = routableWorkerCode(rawInput.workerCode);
+  const expectedPreviousProofSha256 = text(rawInput.sourceProofSha256, 80).toLowerCase();
+  if (!taskId || !gridSessionId || !workerCode || !/^[0-9a-f]{64}$/.test(expectedPreviousProofSha256)) {
+    throw Object.assign(new Error("Az execution authority recovery identity hianyos."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_IDENTITY_INVALID", status:400 });
+  }
+
+  const state = await readGridState();
+  const session = state.sessions.find((item) =>
+    item.id === gridSessionId
+    && item.taskId === taskId
+    && item.endedAt === null
+    && routableWorkerCode(item.workerCode) === workerCode
+  ) || null;
+  if (!session) {
+    throw Object.assign(new Error("Az execution authority recovery Grid session nem authoritative."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_SESSION_MISMATCH", status:409 });
+  }
+  if (session.developmentContext.bootAckState !== "VALIDATED" || session.developmentContext.bootAckCodingAllowed !== true) {
+    throw Object.assign(new Error("Execution authority recovery csak validalt BOOT ACK utan engedelyezett."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_BOOT_ACK_REQUIRED", status:409 });
+  }
+  const rolloverState = text(session.developmentContext.conversationRolloverState, 40).toUpperCase();
+  if (rolloverState && rolloverState !== "READY") {
+    throw Object.assign(new Error("Execution authority recovery kozben a conversation rollover nem READY."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ROLLOVER_NOT_READY", status:409, details:{ rolloverState } });
+  }
+
+  const previousProof = session.developmentContext.sourceExecutionProof || null;
+  if (!previousProof) {
+    throw Object.assign(new Error("Az execution authority recoveryhez hianyzik a korabbi Central Core source proof."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_PROOF_MISSING", status:409 });
+  }
+  const { sha256:previousProofSha256, ...previousProofBase } = previousProof;
+  if (!/^[0-9a-f]{64}$/.test(String(previousProofSha256 || "").toLowerCase())
+      || sourceExecutionProofSha256(previousProofBase) !== String(previousProofSha256).toLowerCase()
+      || String(previousProofSha256).toLowerCase() !== expectedPreviousProofSha256
+      || previousProof.state !== "VERIFIED"
+      || previousProof.authority !== "CENTRAL_CORE"
+      || previousProof.handshakeStage !== "READY"
+      || previousProof.productionAccess !== "DENY") {
+    throw Object.assign(new Error("Az execution authority recovery korabbi source proofja nem hiteles."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_PROOF_INVALID", status:409 });
+  }
+
+  const sourceHead = String(session.sourceProvenance.head || "").toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(sourceHead)
+      || session.sourceProvenance.sourceState !== "VERIFIED"
+      || session.sourceProvenance.blockCode) {
+    throw Object.assign(new Error("Az execution authority recovery source provenance allapota nem VERIFIED."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_SOURCE_NOT_VERIFIED", status:409 });
+  }
+  await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:false });
+
+  const engineState = await getDevCenterEngineState();
+  const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+  if (!engineTask) {
+    throw Object.assign(new Error("Az execution authority Dev Center task nem talalhato."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_TASK_MISSING", status:409 });
+  }
+  const task = state.task?.id === taskId
+    ? state.task
+    : gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+
+  const moduleName = text(session.developmentContext.moduleName, 180);
+  if (!moduleName) throw Object.assign(new Error("Az execution authority recovery scope modulja hianyzik."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_SCOPE_MISSING", status:409 });
+
+  let engineSessionId = text(session.developmentContext.engineSessionId, 240);
+  if (!engineSessionId || previousProof.engineSessionId !== engineSessionId) {
+    throw Object.assign(new Error("Az execution authority recovery engine session/proof kotese elter."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_BINDING_MISMATCH", status:409 });
+  }
+
+  const previousEngineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+  if (!previousEngineSession) {
+    throw Object.assign(new Error("Az execution authority Dev Center engine session nem talalhato."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_SESSION_NOT_FOUND", status:409 });
+  }
+  if (previousEngineSession.taskId !== taskId) {
+    throw Object.assign(new Error("Az execution authority engine session mas taskhoz tartozik."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_TASK_MISMATCH", status:409 });
+  }
+
+  let recoveredFromEngineSessionId: string | null = null;
+  if (previousEngineSession.status === "closed") {
+    const closedSessionId = engineSessionId;
+    const fresh = await recoverClosedDevEngineTaskManualBridgeSession({
+      taskId,
+      closedSessionId,
+      expectedWorkerCode:workerCode,
+    });
+    engineSessionId = text(fresh.session?.id, 240);
+    if (!engineSessionId || engineSessionId === closedSessionId) {
+      throw Object.assign(new Error("A fresh execution authority Dev Center session nem jott letre."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_FRESH_SESSION_MISSING", status:409 });
+    }
+    recoveredFromEngineSessionId = closedSessionId;
+  } else if (previousEngineSession.status !== "active") {
+    throw Object.assign(new Error("Az execution authority engine session allapota nem recoverelheto."), { code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_ENGINE_STATE_DENIED", status:409 });
+  }
+
+  const ready = await ensureDeveloperGridReadyExecution({
+    taskId,
+    workerCode,
+    engineSessionId,
+    baseHead:sourceHead,
+    scope:[{ type:"module", key:moduleName }],
+    gridSessionId,
+  });
+  const expected = session.sourceProvenance;
+  if (ready.provenance.repository !== expected.repository
+      || ready.provenance.worktree !== expected.worktree
+      || ready.provenance.branch !== expected.branch
+      || ready.provenance.head !== expected.head) {
+    throw Object.assign(new Error("A recovered engine session source provenance elter az authoritative Grid sessiontol."), {
+      code:"DEVELOPER_GRID_EXECUTION_AUTHORITY_SOURCE_MISMATCH", status:409,
+    });
+  }
+  await syncEngineBridgeTarget(taskId, "RUNNING");
+
+  const now = new Date().toISOString();
+  const recoveryCount = Math.max(0, Number(session.developmentContext.executionAuthorityRecoveryCount || 0)) + (recoveredFromEngineSessionId ? 1 : 0);
+  const updatedSession: WorkerSession = {
+    ...session,
+    sourceProvenance:{ ...ready.provenance, worker:workerCode, taskId, sessionId:gridSessionId },
+    developmentContext:{
+      ...session.developmentContext,
+      engineSessionId,
+      sourceExecutionProof:ready.proof,
+      executionAuthorityRecoveredAt:now,
+      executionAuthorityRecoveredFromEngineSessionId:recoveredFromEngineSessionId,
+      executionAuthorityRecoveryCount:recoveryCount,
+      resolvedAt:now,
+      bootAckState:"VALIDATED",
+      bootAckCodingAllowed:true,
+    },
+  };
+  const next = await upsertWorkerSession(updatedSession);
+  await appendGridEvent({
+    kind:"analysis", origin:"LIVE", workerCode, taskId, projectId:task.projectId, productionAccess:"DENY",
+    developmentContext:updatedSession.developmentContext,
+    branch:updatedSession.sourceProvenance.branch,
+    worktree:updatedSession.sourceProvenance.worktree,
+    head:updatedSession.sourceProvenance.head,
+    delta:{
+      eventType:recoveredFromEngineSessionId ? "EXECUTION_AUTHORITY_RECOVERED" : "EXECUTION_AUTHORITY_REFRESHED",
+      summary:recoveredFromEngineSessionId
+        ? "Fresh READY execution authority created for the same Grid task/session/worktree identity."
+        : "Existing READY execution authority proof refreshed.",
+      status:"PASS", severity:"INFO", sessionId:gridSessionId, engineSessionId,
+      recoveredFromEngineSessionId,
+      previousSourceProofSha256:expectedPreviousProofSha256,
+      sourceProofSha256:ready.proof.sha256,
+      activeScopeLockCount:ready.proof.activeScopeLockCount,
+      activeWorktreeLeaseCount:ready.proof.activeWorktreeLeaseCount,
+    },
+  });
+  return {
+    task,
+    session:updatedSession,
+    sourceExecutionProof:ready.proof,
+    previousSourceProofSha256:expectedPreviousProofSha256,
+    recovered:Boolean(recoveredFromEngineSessionId),
+    recoveredFromEngineSessionId,
+    engineSessionId,
+    revision:next.revision,
+    productionAccess:"DENY" as const,
+  };
+}
+
+
 export async function recordDeveloperGridBootAck(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 240);
   const workerCode = strictCoreWorkerCode(rawInput.workerCode);

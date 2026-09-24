@@ -3364,3 +3364,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Új task/session/TASK_LAUNCH nem készül.
 - Work first-party aktiválási cél: v0.1.68.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-24 – BENJADMIN Developer Grid v0.1.68 – Engine Session Recovery Hotfix
+
+- A v0.1.67 fizikai rollover E2E feltárta, hogy a Grid session READY maradhat, miközben a mögöttes Dev Center engine session lease-expiry miatt closed állapotba kerül.
+- Új RECOVER_EXECUTION_AUTHORITY út készült exact taskId + Grid sessionId + workerCode + previous sourceProofSha256 identitással.
+- Closed belső engine session esetén friss execution authority készül ugyanahhoz a meglévő Grid task/session/worktree/source identitáshoz.
+- Friss CENTRAL_CORE source proof kerül vissza ugyanabba a Grid sessionbe; BOOT ACK VALIDATED marad.
+- Már SENT v0.1.67 continuation esetén külön EXECUTION_AUTHORITY_RECOVERED_V1 kontrollüzenet viszi tovább az új proofot és az első GIT_STATUS kérést.
+- Nincs új Grid task, Grid session, worktree vagy TASK_LAUNCH.
+- Multi-worker recovery explicit session identity alapján működik; singleton current-task pointer nem használható.
+- Execution Authority Recovery contract 24/24 PASS; Rollover Execution Bridge 21/21 PASS; teljes Desktop regresszió PASS; TypeScript PASS; lint 0 error / 103 warning.
+- Work first-party aktiválási cél: v0.1.69.
+- DEV ONLY · PROD DENY.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isChatGridDeviceAuthorized } from "@/app/lib/dev-center/chatgrid-device-auth";
-import { bindDeveloperGridConversation, getDeveloperGridActiveWork, recordDeveloperGridBootAck, recoverDeveloperGridLaunchExecution, startDeveloperGridWork } from "@/app/lib/developer-grid/work-start";
+import { bindDeveloperGridConversation, getDeveloperGridActiveWork, recordDeveloperGridBootAck, recoverDeveloperGridExecutionAuthority, recoverDeveloperGridLaunchExecution, startDeveloperGridWork } from "@/app/lib/developer-grid/work-start";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,8 +19,13 @@ export async function POST(request: NextRequest) {
   if (!(await isChatGridDeviceAuthorized(request.headers))) return json({ ok: false, error: "A Developer Grid eszköz nincs párosítva." }, 401);
   try {
     const body = await request.json().catch(() => ({}));
-    if (body && typeof body === "object" && String((body as Record<string, unknown>).action || "").toUpperCase() === "RECOVER_LAUNCH_EXECUTION") {
+    const action = body && typeof body === "object" ? String((body as Record<string, unknown>).action || "").toUpperCase() : "";
+    if (action === "RECOVER_LAUNCH_EXECUTION") {
       const recovery = await recoverDeveloperGridLaunchExecution();
+      return json({ ok:true, recovery, activeWork:await getDeveloperGridActiveWork() });
+    }
+    if (action === "RECOVER_EXECUTION_AUTHORITY") {
+      const recovery = await recoverDeveloperGridExecutionAuthority(body as Record<string, unknown>);
       return json({ ok:true, recovery, activeWork:await getDeveloperGridActiveWork() });
     }
     const result = await startDeveloperGridWork(body);

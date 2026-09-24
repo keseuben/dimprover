@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -18,7 +18,7 @@ const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConv
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
-const { EXECUTION_REQUEST_START, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
+const { EXECUTION_REQUEST_START, EXECUTION_REQUEST_END, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
@@ -2253,6 +2253,130 @@ async function sendConversationRolloverReadyContinuation(view, task, workerCode,
 }
 
 
+async function recoverConversationExecutionAuthority(task, workerCode) {
+  const taskId = String(task?.id || "");
+  const sessionId = String(task?.sessionId || "");
+  const normalizedWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  if (!taskId || !sessionId) throw new Error("EXECUTION_AUTHORITY_RECOVERY_GRID_IDENTITY_MISSING");
+
+  const previousProofSha256 = resolvedExecutionProofSha256(task);
+  if (!/^[0-9a-f]{64}$/.test(previousProofSha256)) throw new Error("EXECUTION_AUTHORITY_RECOVERY_PREVIOUS_PROOF_INVALID");
+  const result = await recoverDeveloperGridExecutionAuthority({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+    input:{
+      taskId,
+      sessionId,
+      workerCode:normalizedWorkerCode,
+      sourceProofSha256:previousProofSha256,
+    },
+  });
+  const recovery = result?.recovery || null;
+  const activeWork = result?.activeWork || null;
+  const recoverySession = recovery?.session || null;
+  const recoveryTask = recovery?.task || null;
+  const activeWorkSession = Array.isArray(activeWork?.sessions)
+    ? activeWork.sessions.find((item) =>
+        item?.endedAt == null
+        && String(item?.id || "") === sessionId
+        && String(item?.taskId || "") === taskId
+        && normalizedProofWorkerCode(item?.workerCode) === normalizedWorkerCode
+      ) || null
+    : null;
+  const refreshedSession = recoverySession || activeWorkSession;
+  const refreshedTaskSource = recoveryTask || activeWork?.task || null;
+  const refreshedTask = refreshedSession && refreshedTaskSource
+    ? (launchTaskFromWork({ task:refreshedTaskSource, session:refreshedSession }) || null)
+    : null;
+  const proof = recovery?.sourceExecutionProof || refreshedSession?.developmentContext?.sourceExecutionProof || null;
+  const proofSha256 = String(proof?.sha256 || "").trim().toLowerCase();
+  const refreshedHead = String(refreshedSession?.sourceProvenance?.head || "").trim().toLowerCase();
+  const expectedHead = String(task?.sourceHead || "").trim().toLowerCase();
+
+  if (!refreshedSession || !refreshedTask) throw new Error("EXECUTION_AUTHORITY_RECOVERY_ACTIVE_WORK_MISSING");
+  if (String(refreshedTask.id || "") !== taskId || String(refreshedTask.sessionId || "") !== sessionId) {
+    throw new Error("EXECUTION_AUTHORITY_RECOVERY_GRID_IDENTITY_MISMATCH");
+  }
+  if (!/^[0-9a-f]{64}$/.test(proofSha256) || refreshedHead !== expectedHead) {
+    throw new Error("EXECUTION_AUTHORITY_RECOVERY_SOURCE_IDENTITY_MISMATCH");
+  }
+  if (String(refreshedSession?.developmentContext?.bootAckState || "").toUpperCase() !== "VALIDATED"
+      || refreshedSession?.developmentContext?.bootAckCodingAllowed !== true) {
+    throw new Error("EXECUTION_AUTHORITY_RECOVERY_BOOT_ACK_MISMATCH");
+  }
+  if (String(proof?.engineSessionId || "") !== String(refreshedSession?.developmentContext?.engineSessionId || "")) {
+    throw new Error("EXECUTION_AUTHORITY_RECOVERY_ENGINE_PROOF_MISMATCH");
+  }
+
+  saveTaskLaunchPatch(refreshedTask, workerCode, {
+    sourceProofSha256:proofSha256,
+    executionAuthorityRecoveryVersion:"V0168",
+    executionAuthorityRecoveryState:"RECOVERED",
+    executionAuthorityRecoveryAt:new Date().toISOString(),
+    executionAuthorityProofSha256:proofSha256,
+    executionAuthorityEngineSessionId:String(recovery?.engineSessionId || proof?.engineSessionId || ""),
+    executionAuthorityRecoveredFromEngineSessionId:String(recovery?.recoveredFromEngineSessionId || ""),
+    executionAuthoritySourceHead:refreshedHead,
+    executionAuthorityTaskId:taskId,
+    executionAuthoritySessionId:sessionId,
+  });
+  send("context:refresh", {
+    reason:"execution-authority-recovered",
+    taskId,
+    workerCode,
+    sourceProofSha256:proofSha256,
+  });
+  return { recovery, activeWork, refreshedSession, refreshedTask, proof, proofSha256 };
+}
+
+function buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority) {
+  const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_AUTHORITY_RECOVERED_V1";
+  const proofSha256 = String(authority?.proofSha256 || "").toLowerCase();
+  const backendWorkerCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const request = {
+    schemaVersion:1,
+    requestId:"req-auth-" + proofSha256.slice(0,12),
+    taskId:String(task?.id || ""),
+    sessionId:String(task?.sessionId || ""),
+    workerCode:backendWorkerCode,
+    sourceProofSha256:proofSha256,
+    action:"GIT_STATUS",
+  };
+  return [
+    marker,
+    "BENJADMIN CONTROL EVENT - EXECUTION AUTHORITY RECOVERED - SAME GRID TASK/SESSION",
+    "Worker: " + backendWorkerCode,
+    "Task: " + String(task?.id || ""),
+    "Session: " + String(task?.sessionId || ""),
+    "Branch: " + String(task?.branchName || ""),
+    "Worktree: " + String(task?.worktreePath || ""),
+    "HEAD: " + String(task?.sourceHead || ""),
+    "Fresh source proof: " + proofSha256,
+    "DEV ONLY - PROD DENY.",
+    "",
+    "The previous internal Dev Center engine session expired. Central Core created a fresh READY execution authority for the SAME existing Grid task/session/worktree identity.",
+    "No new Grid task, Grid session, worktree or TASK_LAUNCH was created.",
+    "Do not use the previous source proof again.",
+    "Direct DIMPROVER VPS MCP, VPS shell or raw shell remains forbidden for DEV source/provenance operations.",
+    "Reply with exactly ONE execution request block and no additional text:",
+    EXECUTION_REQUEST_START,
+    JSON.stringify(request),
+    EXECUTION_REQUEST_END,
+    "Then wait for BENJADMIN_EXECUTION_RESULT_V1.",
+  ].join("\n");
+}
+
+async function sendExecutionAuthorityRecoveredContinuation(view, task, workerCode, authority) {
+  const marker = "BENJADMIN_PROMPT_KIND: EXECUTION_AUTHORITY_RECOVERED_V1";
+  const prompt = buildExecutionAuthorityRecoveredPrompt(task, workerCode, authority);
+  const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
+  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+    return { sent:false, verified:false, reason:insertion?.reason || "execution-authority-recovery-not-inserted" };
+  }
+  return sendPreparedChatPrompt(view, marker);
+}
+
+
 function isBootAckCandidateText(value) {
   const body = String(value || "");
   return /BOOT\s+ACKNOWLEDGEMENT/i.test(body) || body.includes(STAGE_REPORT_START);
@@ -2913,7 +3037,13 @@ async function processCapturedExecutionRequest({ view, body, workerCode, task })
     send("context:refresh", { reason:"execution-blocked-by-conversation-rollover", taskId:task.id, workerCode, rolloverState });
     return { processed:false, blocked:true, code:rolloverState === ROLLOVER_STATES.BLOCKED ? "CONVERSATION_ROLLOVER_BLOCKED" : "CONVERSATION_ROLLOVER_ACK_REQUIRED" };
   }
-  const expectedProof = resolvedExecutionProofSha256(task);
+  const recoveredProof = String(launchRecord.executionAuthorityProofSha256 || "").trim().toLowerCase();
+  const recoveredProofBound = String(launchRecord.executionAuthorityRecoveryVersion || "").toUpperCase() === "V0168"
+    && String(launchRecord.executionAuthorityTaskId || "") === String(task.id)
+    && String(launchRecord.executionAuthoritySessionId || "") === String(task.sessionId)
+    && String(launchRecord.executionAuthoritySourceHead || "").toLowerCase() === String(task.sourceHead || "").toLowerCase()
+    && /^[0-9a-f]{64}$/.test(recoveredProof);
+  const expectedProof = recoveredProofBound ? recoveredProof : resolvedExecutionProofSha256(task);
   const localMismatch = request.workerCode !== backendWorkerCode || request.taskId !== String(task.id) || request.sessionId !== String(task.sessionId) || request.sourceProofSha256 !== expectedProof;
   const requestHash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
   const key = `${request.taskId}:${request.sessionId}:${request.requestId}:${requestHash}`;
@@ -3118,26 +3248,37 @@ async function processConversationRolloverAck({ view, body, workerCode, task }) 
 
   let continuation = { sent:false, verified:false, reason:"not-attempted" };
   const readyRecord = loadTaskLaunchRecords()[taskId] || {};
-  if (String(readyRecord.conversationRolloverReadyContinuationState || "").toUpperCase() === "SENT") {
+  const readyAuthorityVersion = String(readyRecord.conversationRolloverReadyContinuationAuthorityVersion || readyRecord.executionAuthorityRecoveryVersion || "").toUpperCase();
+  if (String(readyRecord.conversationRolloverReadyContinuationState || "").toUpperCase() === "SENT" && readyAuthorityVersion === "V0168") {
     continuation = { sent:true, verified:true, duplicate:true };
   } else {
-    continuation = await sendConversationRolloverReadyContinuation(
-      view,
-      task,
-      workerCode,
-      expected.sourceProofSha256
-    ).catch((error) => ({
-      sent:false,
-      verified:false,
-      reason:error instanceof Error ? error.message : "ROLLOVER_READY_CONTINUATION_FAILED"
-    }));
+    let authority = null;
+    try {
+      authority = await recoverConversationExecutionAuthority(task, workerCode);
+      continuation = await sendConversationRolloverReadyContinuation(
+        view,
+        authority.refreshedTask,
+        workerCode,
+        authority.proofSha256
+      );
+    } catch (error) {
+      continuation = {
+        sent:false,
+        verified:false,
+        reason:error instanceof Error ? error.message : "EXECUTION_AUTHORITY_RECOVERY_FAILED"
+      };
+    }
     publishTaskLaunchPatch(task, workerCode, continuation?.sent === true && continuation?.verified === true ? {
       conversationRolloverReadyContinuationState:"SENT",
       conversationRolloverReadyContinuationSentAt:new Date().toISOString(),
       conversationRolloverReadyContinuationError:null,
+      conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+      executionAuthorityRecoveryPromptKind:"CONVERSATION_ROLLOVER_READY_V1",
     } : {
       conversationRolloverReadyContinuationState:"MANUAL_REQUIRED",
       conversationRolloverReadyContinuationError:String(continuation?.reason || "not-verified").slice(0, 800),
+      conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+      executionAuthorityRecoveryState:"BLOCKED",
     }, "conversation-rollover-ready-continuation");
   }
   return { processed:true, ready:true, validation, binding, continuation };
@@ -3150,8 +3291,9 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
 
   if (currentState === ROLLOVER_STATES.READY) {
     const readyState = String(record.conversationRolloverReadyContinuationState || "").toUpperCase();
-    if (readyState === "SENT" || readyState === "MANUAL_REQUIRED") {
-      return { started:false, state:currentState, readyContinuationState:readyState };
+    const authorityVersion = String(record.conversationRolloverReadyContinuationAuthorityVersion || record.executionAuthorityRecoveryVersion || "").toUpperCase();
+    if ((readyState === "SENT" || readyState === "MANUAL_REQUIRED") && authorityVersion === "V0168") {
+      return { started:false, state:currentState, readyContinuationState:readyState, authorityVersion };
     }
 
     const expectedConversationId = String(
@@ -3188,31 +3330,33 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
         conversationRolloverReadyContinuationStartedAt:new Date().toISOString(),
       }, "conversation-rollover-ready-continuation-start");
 
-      const authoritativeProof = String(
-        record.conversationRolloverSourceProofSha256
-        || task?.conversationRolloverSourceProofSha256
-        || task?.chatLaunch?.conversationRolloverSourceProofSha256
-        || resolvedExecutionProofSha256(task)
-      ).toLowerCase();
-
-      const continuation = await sendConversationRolloverReadyContinuation(
-        view,
-        task,
-        workerCode,
-        authoritativeProof
-      ).catch((error) => ({
-        sent:false,
-        verified:false,
-        reason:error instanceof Error ? error.message : "ROLLOVER_READY_CONTINUATION_FAILED"
-      }));
+      let authority = null;
+      let continuation = { sent:false, verified:false, reason:"not-attempted" };
+      try {
+        authority = await recoverConversationExecutionAuthority(task, workerCode);
+        const hadPriorReadyContinuation = readyState === "SENT";
+        continuation = hadPriorReadyContinuation
+          ? await sendExecutionAuthorityRecoveredContinuation(view, authority.refreshedTask, workerCode, authority)
+          : await sendConversationRolloverReadyContinuation(view, authority.refreshedTask, workerCode, authority.proofSha256);
+      } catch (error) {
+        continuation = {
+          sent:false,
+          verified:false,
+          reason:error instanceof Error ? error.message : "EXECUTION_AUTHORITY_RECOVERY_FAILED"
+        };
+      }
 
       publishTaskLaunchPatch(task, workerCode, continuation?.sent === true && continuation?.verified === true ? {
         conversationRolloverReadyContinuationState:"SENT",
         conversationRolloverReadyContinuationSentAt:new Date().toISOString(),
         conversationRolloverReadyContinuationError:null,
+        conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+        executionAuthorityRecoveryPromptKind:readyState === "SENT" ? "EXECUTION_AUTHORITY_RECOVERED_V1" : "CONVERSATION_ROLLOVER_READY_V1",
       } : {
         conversationRolloverReadyContinuationState:"MANUAL_REQUIRED",
         conversationRolloverReadyContinuationError:String(continuation?.reason || "not-verified").slice(0, 800),
+        conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+        executionAuthorityRecoveryState:"BLOCKED",
       }, "conversation-rollover-ready-continuation-recovery");
 
       return { started:false, state:currentState, readyContinuation:true, continuation };
