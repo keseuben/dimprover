@@ -3341,3 +3341,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Shared-hardlink dependency automatikusan védett.
 - Contract 12/12 PASS; meglévő Storage Retention V2 contract 44/44 PASS.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-24 – DIMPRO DEV Build-run Tarball Retirement V1
+
+- Régi, release-szel bizonyított BUILD01/BUILD02 runokból csak a build-artifact.tar.gz nyugdíjazható.
+- metadata.json és result.json evidence megmarad.
+- Apply csak exact tar hash + sourceCommit/buildId + VERIFIED immutable release + EXE/ZIP hash mellett.
+- Aktív Central Core source, PM2 active/rollback source és current build run védett.
+- Contract 13/13 PASS.
+- DEV ONLY · PROD DENY.
