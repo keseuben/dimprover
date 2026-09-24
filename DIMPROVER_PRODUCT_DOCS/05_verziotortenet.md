@@ -3350,3 +3350,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Aktív Central Core source, PM2 active/rollback source és current build run védett.
 - Contract 13/13 PASS.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-24 – DIMPRO DEV Developer Grid Pre-materialize Backup Retirement V1
+
+- Történeti pre-materialize .next backupok csak full tree SHA + exact release/source proof mellett nyugdíjazhatók.
+- Backup könyvtár megmarad, RETIREMENT_EVIDENCE.json auditfájl készül.
+- Symlink/shared-hardlink automatikusan blokkolt.
+- Aktív Central Core/PM2 source commit védett.
+- Contract 16/16 PASS.
+- DEV ONLY · PROD DENY.
