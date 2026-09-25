@@ -3907,7 +3907,8 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (bodyWithBootAck && String(live.task?.bootAckState || "").toUpperCase() !== "VALIDATED") {
     await processCapturedBootAck({ view, body:bodyWithBootAck.text, workerCode:code, task:live.task, source:"CONVERSATION_MEMORY" }).catch(() => undefined);
   }
-  const rolloverState = String(live.task?.conversationRolloverState || live.task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
+  const localRolloverRecord = loadTaskLaunchRecords()[String(live.task.id)] || {};
+  const rolloverState = String(localRolloverRecord.conversationRolloverState || live.task?.conversationRolloverState || live.task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
   const assistantMessages = [...capture.messages].reverse().filter((item) => item.role === "ASSISTANT" && String(item.text || "").trim());
   const markedRolloverAck = assistantMessages.find((item) => String(item.text || "").includes(ROLLOVER_ACK_MARKER));
   const latestAssistant = assistantMessages[0] || null;
