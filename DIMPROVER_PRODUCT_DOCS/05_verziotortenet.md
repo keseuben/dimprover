@@ -3377,3 +3377,15 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Execution Authority Recovery contract 24/24 PASS; Rollover Execution Bridge 21/21 PASS; teljes Desktop regresszió PASS; TypeScript PASS; lint 0 error / 103 warning.
 - Work first-party aktiválási cél: v0.1.69.
 - DEV ONLY · PROD DENY.
+
+## 2026-09-25 – BENJADMIN Developer Grid v0.1.69 – Markerless Rollover ACK Tolerance
+
+- A v0.1.68 fizikai E2E feltárta, hogy egy tartalmilag pontos rollover ACK JSON marker nélkül nem jutott el a validatorig.
+- Az eredeti marker-alapú ACK protokoll változatlanul elsődleges.
+- Marker nélküli fallback csak teljes, önálló raw JSON vagy önálló `json` fenced blokk esetén engedélyezett.
+- Minden authoritative identity/provenance mező továbbra is exact-match; extra mező vagy plusz prose fail-closed BLOCKED.
+- A transcript monitor csak a legfrissebb assistant-választ engedi markerless fallbackként; historical marker recovery megmarad.
+- v0.1.68 execution-authority regression bekerült a teljes Desktop check láncba.
+- Markerless ACK contract 10/10 PASS; v0.1.68 recovery 24/24 PASS; v0.1.67 rollover bridge 21/21 PASS; teljes Desktop regression PASS.
+- Work first-party aktiválási cél: v0.1.70.
+- DEV ONLY · PROD DENY.

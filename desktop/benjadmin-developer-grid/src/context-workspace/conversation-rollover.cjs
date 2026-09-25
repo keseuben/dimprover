@@ -141,15 +141,31 @@ function balancedJsonFrom(value, startAt) {
   return "";
 }
 
+function markerlessAckJsonOnly(body) {
+  const source = String(body || "").trim();
+  if (!source) return { ok:false, code:"ROLLOVER_ACK_MARKER_MISSING" };
+  let candidate = source;
+  const fenced = source.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i);
+  if (fenced) candidate = String(fenced[1] || "").trim();
+  if (!candidate.startsWith("{")) return { ok:false, code:"ROLLOVER_ACK_MARKER_MISSING" };
+  const jsonText = balancedJsonFrom(candidate, 0);
+  if (!jsonText || jsonText.length !== candidate.length) return { ok:false, code:"ROLLOVER_ACK_MARKERLESS_NOT_JSON_ONLY" };
+  try {
+    return { ok:true, ack:JSON.parse(jsonText), markerPresent:false, parseMode:"STRICT_JSON_ONLY_FALLBACK" };
+  } catch {
+    return { ok:false, code:"ROLLOVER_ACK_JSON_INVALID" };
+  }
+}
+
 function parseConversationRolloverAck(body) {
   const source = String(body || "");
   const markerIndex = source.indexOf(ROLLOVER_ACK_MARKER);
-  if (markerIndex < 0) return { ok:false, code:"ROLLOVER_ACK_MARKER_MISSING" };
+  if (markerIndex < 0) return markerlessAckJsonOnly(source);
   const jsonText = balancedJsonFrom(source, markerIndex + ROLLOVER_ACK_MARKER.length);
   if (!jsonText) return { ok:false, code:"ROLLOVER_ACK_JSON_MISSING" };
   try {
     const ack = JSON.parse(jsonText);
-    return { ok:true, ack };
+    return { ok:true, ack, markerPresent:true, parseMode:"MARKER" };
   } catch {
     return { ok:false, code:"ROLLOVER_ACK_JSON_INVALID" };
   }
@@ -174,7 +190,15 @@ function validateConversationRolloverAck(body, expected) {
   if (String(ack.productionAccess || "").toUpperCase() !== "DENY") mismatches.push("productionAccess");
   if (ack.sameTask !== true) mismatches.push("sameTask");
   if (ack.newTaskLaunch !== false) mismatches.push("newTaskLaunch");
-  return { ok:true, ack, validated:mismatches.length === 0, mismatches };
+  if (parsed.parseMode === "STRICT_JSON_ONLY_FALLBACK") {
+    const allowedFields = new Set([
+      "schemaVersion", "taskId", "sessionId", "workerCode", "previousConversationId",
+      "contextSnapshotId", "contextRevision", "handoffPackId", "sourceHead",
+      "sourceProofSha256", "productionAccess", "sameTask", "newTaskLaunch",
+    ]);
+    for (const field of Object.keys(ack)) if (!allowedFields.has(field)) mismatches.push(`unexpected:${field}`);
+  }
+  return { ok:true, ack, markerPresent:parsed.markerPresent, parseMode:parsed.parseMode, validated:mismatches.length === 0, mismatches };
 }
 
 module.exports = {

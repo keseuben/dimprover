@@ -14,7 +14,7 @@ const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fe
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
-const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
+const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
@@ -3197,7 +3197,7 @@ async function processConversationRolloverAck({ view, body, workerCode, task }) 
   const taskId = String(task?.id || "");
   const record = loadTaskLaunchRecords()[taskId] || {};
   const state = String(record.conversationRolloverState || task?.conversationRolloverState || task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
-  if (state !== ROLLOVER_STATES.ACK_WAIT || !String(body || "").includes(ROLLOVER_ACK_MARKER)) return { processed:false, state };
+  if (state !== ROLLOVER_STATES.ACK_WAIT) return { processed:false, state };
   const expected = {
     taskId,
     sessionId:String(task?.sessionId || ""),
@@ -3907,7 +3907,17 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (bodyWithBootAck && String(live.task?.bootAckState || "").toUpperCase() !== "VALIDATED") {
     await processCapturedBootAck({ view, body:bodyWithBootAck.text, workerCode:code, task:live.task, source:"CONVERSATION_MEMORY" }).catch(() => undefined);
   }
-  const bodyWithRolloverAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(ROLLOVER_ACK_MARKER));
+  const rolloverState = String(live.task?.conversationRolloverState || live.task?.chatLaunch?.conversationRolloverState || "").toUpperCase();
+  const assistantMessages = [...capture.messages].reverse().filter((item) => item.role === "ASSISTANT" && String(item.text || "").trim());
+  const markedRolloverAck = assistantMessages.find((item) => String(item.text || "").includes(ROLLOVER_ACK_MARKER));
+  const latestAssistant = assistantMessages[0] || null;
+  const markerlessLatestAck = !markedRolloverAck
+    && rolloverState === ROLLOVER_STATES.ACK_WAIT
+    && latestAssistant
+    && parseConversationRolloverAck(latestAssistant.text)?.ok
+      ? latestAssistant
+      : null;
+  const bodyWithRolloverAck = markedRolloverAck || markerlessLatestAck;
   if (bodyWithRolloverAck) {
     await processConversationRolloverAck({ view, body:bodyWithRolloverAck.text, workerCode:code, task:live.task }).catch(() => undefined);
   }

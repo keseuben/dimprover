@@ -1,9 +1,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 
-const root = "/srv/dimpro-dev/worktrees/benjadmin-grid-v0168-engine-session-recovery-20260924";
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
 const read = (p) => fs.readFileSync(path.join(root,p),"utf8");
 const workStart = read("app/lib/developer-grid/work-start.ts");
 const route = read("app/api/dev/grid/work-start/route.ts");
@@ -23,7 +24,7 @@ const end = workStart.indexOf("export async function recordDeveloperGridBootAck"
 assert.ok(start >= 0 && end > start);
 const recovery = workStart.slice(start,end);
 
-check("version is 0.1.68",()=>{ assert.equal(pkg.version,"0.1.68"); assert.match(types,/0\.1\.68-dev/); });
+check("version is 0.1.69",()=>{ assert.equal(pkg.version,"0.1.69"); assert.match(types,/0\.1\.69-dev/); });
 check("recovery requires explicit task session worker and proof",()=>{
   for (const token of ["rawInput.taskId","rawInput.sessionId","rawInput.workerCode","rawInput.sourceProofSha256"]) assert.ok(recovery.includes(token),token);
 });
