@@ -211,3 +211,34 @@ A helper:
 
 Contract: 10/10 PASS.
 A helper létrehozása önmagában nem futtatott SQL migrációt.
+
+
+## 2026-09-25 – DROP → DRIVE pilot readiness a Projektkapu DRIVE felületen
+
+A DRIVE health API és a DriveWorkspace most külön, összesített pilot readiness állapotot ad a külső Beküldőkapu → DRIVE folyamatra.
+
+A readiness csak akkor `ready=true`, ha egyszerre teljesül többek között:
+- DROP runtime elérhető;
+- DROP release gate aktív;
+- `DROP_DRIVE_INCOMING_ENABLED` aktív;
+- Beküldőkapu és public upload kész;
+- DROP vírusellenőrzés és objektumtárhely kész;
+- DRIVE Document Flow 0.1.0 kész;
+- DRIVE quarantine review kész;
+- DRIVE objektumtárhely írható.
+
+A health válasz `dropDriveIncoming.blockers` mezőben explicit blocker kódokat ad, és `nextStep` mezővel a következő szükséges lépést jelzi. A health végpont **nem kapcsolja be** a feature flaget.
+
+A Drive „Rendszerállapot és haladó műveletek” panelen új „DROP → DRIVE beérkező · pilot” kártya jelenik meg:
+- pilot kész / blokkolók száma;
+- feature aktív / feature zárva;
+- következő szükséges lépés.
+
+Ellenőrzés:
+- pilot readiness contract: 11/11 PASS;
+- módosított health route TypeScript syntactic check: PASS;
+- módosított DriveWorkspace TSX syntactic check: PASS;
+- Document Flow, DROP→DRIVE, API/UI, DRIVE Core, Object Storage és DECIDE regressziós contractok: PASS;
+- `git diff --check`: PASS.
+
+A DEV SQL blocker továbbra is valós: a Document Flow 0.1.0 séma még nincs alkalmazva.

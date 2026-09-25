@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDropRuntimeHealth } from "@/app/lib/drop/dropRuntime";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import {
   getDriveCoreDatabaseHealth,
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const [database, objectStorage, review, security, workspace, compareFindings, documentFlow] = await Promise.all([
+  const [database, objectStorage, review, security, workspace, compareFindings, documentFlow, dropRuntime] = await Promise.all([
     getDriveCoreDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     getDriveWorkspaceDatabaseHealth(),
     getDriveCompareFindingsHealth(),
     getDriveDocumentFlowHealth(),
+    getDropRuntimeHealth().catch(() => null),
   ]);
   const storageNextStep = !objectStorage.database.ready
     ? "A DRIVE Object Storage 0.4.0 SQL-séma alkalmazása szükséges."
@@ -36,6 +38,31 @@ export async function GET(request: NextRequest, context: RouteContext) {
         : objectStorage.mode === "quarantine"
           ? "A karanténfolyamat és a fájlellenőrzés jóváhagyása után kapcsolható active módba a letöltés."
           : "A privát DRIVE objektumtárhely aktív.";
+
+  const dropDriveBlockers: string[] = [];
+  if (!dropRuntime) dropDriveBlockers.push("DROP_RUNTIME_UNAVAILABLE");
+  if (!dropRuntime?.featureGate?.releaseGateEnabled) dropDriveBlockers.push("DROP_RELEASE_GATE_DISABLED");
+  if (!dropRuntime?.featureGate?.flags?.driveIncomingEnabled) dropDriveBlockers.push("DROP_DRIVE_INCOMING_FEATURE_DISABLED");
+  if (!dropRuntime?.readiness?.submissionGate) dropDriveBlockers.push("DROP_SUBMISSION_GATE_NOT_READY");
+  if (!dropRuntime?.readiness?.publicUpload) dropDriveBlockers.push("DROP_PUBLIC_UPLOAD_NOT_READY");
+  if (!dropRuntime?.readiness?.virusScanner) dropDriveBlockers.push("DROP_VIRUS_SCANNER_NOT_READY");
+  if (!dropRuntime?.readiness?.objectStorage) dropDriveBlockers.push("DROP_OBJECT_STORAGE_NOT_READY");
+  if (!documentFlow.ready) dropDriveBlockers.push("DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY");
+  if (!review.ready) dropDriveBlockers.push("DRIVE_REVIEW_NOT_READY");
+  if (!objectStorage.uploadReady) dropDriveBlockers.push("DRIVE_OBJECT_STORAGE_NOT_READY");
+  const dropDriveIncomingReady = dropDriveBlockers.length === 0;
+
+  const dropDriveNextStep = dropDriveIncomingReady
+    ? "A külső Beküldőkapu → Beérkező Drop → DRIVE karantén → jóváhagyás lánc pilotra kész."
+    : !documentFlow.ready
+      ? "A DRIVE Document Flow 0.1.0 DEV SQL-séma alkalmazása szükséges."
+      : !dropRuntime?.featureGate?.flags?.driveIncomingEnabled
+        ? "A DROP_DRIVE_INCOMING_ENABLED feature flag csak a readiness ellenőrzések után aktiválható."
+        : !dropRuntime?.readiness?.submissionGate
+          ? "A DROP Beküldőkapu runtime feltételeit kell készre állítani."
+          : !objectStorage.uploadReady
+            ? "A DRIVE privát objektumtárhely írási kapcsolatát kell aktiválni."
+            : "A DROP → DRIVE pilot egyik biztonsági feltétele még nem teljesül.";
 
   return NextResponse.json({
     ok: true,
@@ -106,6 +133,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
       nextStep: documentFlow.ready
         ? "A Projektkapu dokumentuméletciklus és formális kiadási adatmodell aktív."
         : "A DRIVE Document Flow 0.1.0 SQL candidate alkalmazása szükséges a pilot dokumentumforgalomhoz.",
+    },
+    dropDriveIncoming: {
+      version: "0.1.0",
+      ready: dropDriveIncomingReady,
+      runtimeAvailable: Boolean(dropRuntime),
+      releaseGateEnabled: Boolean(dropRuntime?.featureGate?.releaseGateEnabled),
+      featureEnabled: Boolean(dropRuntime?.featureGate?.flags?.driveIncomingEnabled),
+      submissionGateReady: Boolean(dropRuntime?.readiness?.submissionGate),
+      publicUploadReady: Boolean(dropRuntime?.readiness?.publicUpload),
+      virusScannerReady: Boolean(dropRuntime?.readiness?.virusScanner),
+      dropStorageReady: Boolean(dropRuntime?.readiness?.objectStorage),
+      driveStorageReady: Boolean(objectStorage.uploadReady),
+      documentFlowReady: documentFlow.ready,
+      reviewReady: review.ready,
+      blockers: dropDriveBlockers,
+      nextStep: dropDriveNextStep,
     },
     review: {
       version: review.version,

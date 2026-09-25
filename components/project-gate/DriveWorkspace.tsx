@@ -157,6 +157,22 @@ type HealthPayload = {
     ready: boolean;
     nextStep: string;
   };
+  dropDriveIncoming?: {
+    version: string;
+    ready: boolean;
+    runtimeAvailable: boolean;
+    releaseGateEnabled: boolean;
+    featureEnabled: boolean;
+    submissionGateReady: boolean;
+    publicUploadReady: boolean;
+    virusScannerReady: boolean;
+    dropStorageReady: boolean;
+    driveStorageReady: boolean;
+    documentFlowReady: boolean;
+    reviewReady: boolean;
+    blockers: string[];
+    nextStep: string;
+  };
   review?: {
     version: string;
     databaseReady: boolean;
@@ -262,6 +278,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const canWrite = effectivePermissions.includes("document.write");
   const canApprove = effectivePermissions.includes("document.approve");
   const reviewReady = Boolean(health?.review?.ready);
+  const dropDriveIncomingReady = Boolean(health?.dropDriveIncoming?.ready);
   const documentFlowReady = Boolean(health?.documentFlow?.ready);
   const securityScannerReady = Boolean(health?.security?.ready);
   const storageWriteEnabled = Boolean(health?.storage?.realObjectWriteEnabled);
@@ -836,6 +853,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         </div>
         <b>{documentFlowReady ? "Életciklus aktív" : "Document Flow SQL szükséges"}</b>
         <b>Kiadás: külön jóváhagyott művelet</b>
+      </div>
+
+      <div className={`${styles.reviewStatus} ${dropDriveIncomingReady ? styles.reviewStatusReady : styles.reviewStatusBlocked}`} data-drop-drive-pilot-readiness="0.1.0">
+        <UploadCloud size={17} />
+        <div>
+          <strong>DROP → DRIVE beérkező · pilot</strong>
+          <span>{health?.dropDriveIncoming?.nextStep || "A DROP → DRIVE pilot állapot nem érhető el."}</span>
+        </div>
+        <b>{dropDriveIncomingReady ? "Pilot lánc kész" : `${health?.dropDriveIncoming?.blockers?.length || 0} blokkoló`}</b>
+        <b>{health?.dropDriveIncoming?.featureEnabled ? "Feature aktív" : "Feature zárva"}</b>
       </div>
 
         </div>
