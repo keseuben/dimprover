@@ -43,11 +43,12 @@ requireCheck("devProjectRef", projectRef === expectedDevProjectRef, "DEV_SUPABAS
 requireCheck("supabaseServiceRole", secretReady("SUPABASE_SERVICE_ROLE_KEY"), "SUPABASE_SERVICE_ROLE_NOT_CONFIGURED");
 
 const releaseGate = enabled("DROP_RELEASE_GATE_ENABLED");
+const submissionGateDeliveryMode = value("DROP_SUBMISSION_GATE_DELIVERY_MODE").toLowerCase() === "manual-link" ? "manual-link" : "email";
+const submissionGateEmailRequired = submissionGateDeliveryMode === "email";
 requireCheck("dropReleaseGate", releaseGate, "DROP_RELEASE_GATE_DISABLED");
 for (const [key, blocker] of [
   ["DROP_PACKAGE_ENGINE_ENABLED","DROP_PACKAGE_ENGINE_DISABLED"],
   ["DROP_ACCESS_GATE_ENABLED","DROP_ACCESS_GATE_DISABLED"],
-  ["DROP_EMAIL_NOTIFICATIONS_ENABLED","DROP_EMAIL_NOTIFICATIONS_DISABLED"],
   ["DROP_STORAGE_CORE_ENABLED","DROP_STORAGE_CORE_DISABLED"],
   ["DROP_QUARANTINE_UPLOAD_ENABLED","DROP_QUARANTINE_UPLOAD_DISABLED"],
   ["DROP_SUBMISSION_GATE_ENABLED","DROP_SUBMISSION_GATE_DISABLED"],
@@ -115,13 +116,26 @@ const dropMailPasswordReady = secretReady("DIMPRO_DROP_MAIL_PASS","DIMPRO_MAIL_D
   || Boolean(dropProfile?.password)
   || Boolean(mailStorage?.sharedPassword);
 const smtpHostReady = Boolean(dropProfile?.smtpHost || mailStorage?.smtpHost || value("DIMPRO_MAIL_SMTP_HOST","DIMPRO_SMTP_HOST") || "vuhzuqtm.loginssl.com");
-requireCheck("dropMailProfile", dropMailEnabled && Boolean(dropMailAddress) && dropMailPasswordReady && smtpHostReady, "DROP_MAIL_PROFILE_NOT_READY", {
-  storageFilePresent: existsSync(mailFile),
-  profileEnabled: dropMailEnabled,
-  addressConfigured: Boolean(dropMailAddress),
-  passwordConfigured: dropMailPasswordReady,
-  smtpHostConfigured: smtpHostReady,
-});
+const dropMailProfileReady = dropMailEnabled && Boolean(dropMailAddress) && dropMailPasswordReady && smtpHostReady;
+if (submissionGateEmailRequired) {
+  requireCheck("dropEmailNotificationsFeature", releaseGate && enabled("DROP_EMAIL_NOTIFICATIONS_ENABLED"), "DROP_EMAIL_NOTIFICATIONS_DISABLED");
+  requireCheck("dropMailProfile", dropMailProfileReady, "DROP_MAIL_PROFILE_NOT_READY", {
+    storageFilePresent: existsSync(mailFile),
+    profileEnabled: dropMailEnabled,
+    addressConfigured: Boolean(dropMailAddress),
+    passwordConfigured: dropMailPasswordReady,
+    smtpHostConfigured: smtpHostReady,
+  });
+} else {
+  checks.dropEmailNotificationsFeature = { ready: true, required: false, mode: submissionGateDeliveryMode };
+  checks.dropMailProfile = {
+    ready: true,
+    required: false,
+    mode: submissionGateDeliveryMode,
+    configured: dropMailProfileReady,
+  };
+  if (!dropMailProfileReady) warnings.push("DROP_MAIL_PROFILE_OPTIONAL_IN_MANUAL_LINK_MODE");
+}
 
 const restUrl = value("NEXT_PUBLIC_SUPABASE_URL");
 const serviceRole = value("SUPABASE_SERVICE_ROLE_KEY");
@@ -155,6 +169,7 @@ const result = {
   environment: "DEV",
   productionAccess: "DENY",
   projectRef: projectRef || null,
+  submissionGateDeliveryMode,
   ready: blockers.length === 0,
   blockerCount: blockers.length,
   blockers,

@@ -190,6 +190,9 @@ type HealthPayload = {
     runtimeAvailable: boolean;
     releaseGateEnabled: boolean;
     featureEnabled: boolean;
+    deliveryMode: "email" | "manual-link";
+    emailRequired: boolean;
+    emailReady: boolean;
     submissionGateReady: boolean;
     publicUploadReady: boolean;
     virusScannerReady: boolean;
@@ -1062,6 +1065,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
             <label>Üzenet a feltöltőnek<textarea name="description" rows={2} maxLength={2000} placeholder="Mit és milyen formában kérsz beküldeni?" /></label>
             <small>A kapu automatikusan ehhez a projekthez és a „Beérkező Drop” Drive-mappához kötődik. A külső fél nem választhat más projektet vagy célmappát.</small>
+            {health?.dropDriveIncoming?.deliveryMode === "manual-link" && <small><strong>Pilot mód:</strong> automatikus e-mail helyett a létrehozott linket kézzel add át a külső partnernek.</small>}
             <footer><button type="button" onClick={() => setShowGateForm(false)}>Bezárás</button><button type="submit" disabled={busy || !dropDriveIncomingReady}>{busy ? "Létrehozás…" : "Beküldőkapu létrehozása"}</button></footer>
             {createdGateUrl && <div className={styles.gateCreated}><Check size={16} /><div><strong>Új kapu elkészült</strong><code>{createdGateUrl}</code></div><button type="button" onClick={() => void copyProjectGateUrl(createdGateUrl)}>Link másolása</button><a href={createdGateUrl} target="_blank" rel="noreferrer">Megnyitás</a></div>}
             <div className={styles.gateList}>

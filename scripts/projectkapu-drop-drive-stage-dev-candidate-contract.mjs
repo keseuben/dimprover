@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const source=readFileSync("scripts/projectkapu-drop-drive-stage-dev-candidate.mjs","utf8");
+let pass=0;const check=(n,f)=>{f();pass++;console.log(`PASS ${n}`);};
+check("DEV host hard gate",()=>assert.match(source,/expectedHost = "dimpro-dev"/));
+check("writes only candidates path by default",()=>assert.match(source,/\/srv\/dimpro-dev\/candidates\/projectkapu-drop-drive-pilot/));
+check("does not write integration env",()=>assert.doesNotMatch(source,/writeFileSync\(baseEnv|renameSync\([^,]+,\s*baseEnv/));
+check("uses three-reference secret consensus",()=>assert.match(source,/dimpro-one-health-v1/)&&assert.match(source,/diag-health-v019-ts/)&&assert.match(source,/new Set\(vals\)\.size!==1/));
+check("does not embed secret literals",()=>assert.doesNotMatch(source,/DROP_TOKEN_HMAC_SECRET:\s*["'][^"']{16}/));
+check("stages submission and drive incoming flags",()=>assert.match(source,/DROP_SUBMISSION_GATE_ENABLED: "true"/)&&assert.match(source,/DROP_DRIVE_INCOMING_ENABLED: "true"/));
+check("stages manual-link submission delivery",()=>assert.match(source,/DROP_SUBMISSION_GATE_DELIVERY_MODE: "manual-link"/)&&assert.match(source,/DROP_EMAIL_NOTIFICATIONS_ENABLED: "false"/));
+check("stages clamd scanner",()=>assert.match(source,/DIMPRO_DROP_VIRUS_SCANNER_COMMAND: "clamd-instream"/));
+check("stages active DROP storage",()=>assert.match(source,/DIMPRO_DROP_STORAGE_MODE: "active"/));
+check("backs up existing candidate env",()=>assert.match(source,/\.env\.local\.before-/));
+check("candidate env permissions are 0600",()=>assert.match(source,/chmodSync\(targetEnv,0o600\)/));
+check("PROD mutation commands absent",()=>assert.doesNotMatch(source,/ssh\s+.*prod|pm2\s+restart|systemctl\s+restart|deploy/i));
+console.log(JSON.stringify({total:pass,pass,fail:0},null,2));

@@ -391,3 +391,49 @@ Már kész / igazolt:
 - DRIVE quarantine review schema: `0.4.1`.
 
 A jelenlegi blockerlista alapján több akadály konfiguráció/aktiválás, nem forráskódhiba. A Document Flow SQL és a titokértékek hiánya miatt a feature flageket továbbra sem szabad vakon aktiválni.
+
+
+## 2026-09-25 – Projektkapu manual-link pilot mód + staged DEV candidate
+
+A Projektkapu Beküldőkapu pilothoz explicit kézi linkátadási mód készült:
+
+`DROP_SUBMISSION_GATE_DELIVERY_MODE=manual-link`
+
+Alapelv:
+- az alapértelmezett mód továbbra is `email`;
+- a manual-link kivétel kizárólag a Beküldőkapu readinessre vonatkozik;
+- a DIMPRO Send továbbra is e-mail readinesshez kötött;
+- e-mail nélküli finalize a meglévő motor szerint támogatott: a notification státusz `not_requested`, a csomag ettől még lezárható;
+- a Drive UI manual-link módban jelzi, hogy a létrehozott linket kézzel kell átadni a külső partnernek.
+
+A DRIVE health új mezői:
+- `deliveryMode`;
+- `emailRequired`;
+- `emailReady`.
+
+Készült külön, runtime-ot nem módosító DEV candidate env staging:
+- `scripts/projectkapu-drop-drive-stage-dev-candidate.mjs`;
+- három korábbi DEV worktree-ben azonos DROP token/session/worker secret consensus ellenőrzéssel;
+- a secretértékek nem kerülnek a forráskódba és nem jelennek meg kimenetben;
+- a candidate env csak `/srv/dimpro-dev/candidates/projectkapu-drop-drive-pilot/.env.local` alatt készül;
+- a közös integrált DEV env, folyamat, DB és PROD nem módosul;
+- meglévő candidate env 0600 backupot kap;
+- ClamAV mód: `clamd-instream`;
+- DROP storage mód: `active`;
+- szükséges DROP feature flagek candidate-ben engedélyezve;
+- e-mail notification candidate-ben tiltva, delivery mód `manual-link`.
+
+Candidate read-only pilot preflight eredmény:
+- korábbi 15 blocker → **1 blocker**;
+- egyetlen kötelező blocker: `DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY`;
+- figyelmeztetések: `DROP_MAIL_PROFILE_OPTIONAL_IN_MANUAL_LINK_MODE`, `DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION`.
+
+Ellenőrzés:
+- manual-link contract: 12/12 PASS;
+- candidate staging contract: 12/12 PASS;
+- pilot preflight contract: 14/14 PASS;
+- módosított runtime/health/UI TypeScript syntactic check: PASS;
+- Project Drop gate route/UI/audit, pilot readiness, business filter, DROP→DRIVE, Document Flow, DRIVE Core, Object Storage és DECIDE regresszió: PASS;
+- `git diff --check`: PASS.
+
+Ezzel a céges pilot konfigurációs oldalán a mail már nem kötelező indulási feltétel. A tényleges következő blocker a DEV Document Flow 0.1.0 SQL migrációhoz szükséges PostgreSQL credential.

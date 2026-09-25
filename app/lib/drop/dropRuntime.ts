@@ -20,6 +20,12 @@ function hasEnv(key: string) {
   return Boolean(value && !value.includes("<") && !value.includes(">"));
 }
 
+function getSubmissionGateDeliveryMode() {
+  return process.env.DROP_SUBMISSION_GATE_DELIVERY_MODE?.trim().toLowerCase() === "manual-link"
+    ? "manual-link" as const
+    : "email" as const;
+}
+
 export async function getDropRuntimeHealth() {
   const featureState = getDropFeatureState();
   const storageConfig = getDropStorageConfig();
@@ -50,6 +56,8 @@ export async function getDropRuntimeHealth() {
       && dropMailProfile?.enabled
       && dropMailProfile.smtpConfigured,
   );
+  const submissionGateDeliveryMode = getSubmissionGateDeliveryMode();
+  const submissionGateDeliveryReady = submissionGateDeliveryMode === "manual-link" || emailNotificationsReady;
   const spacesReady = Boolean(featureState.flags.spacesEnabled && spacesSchema.ready);
   const spacePackageCreationReady = Boolean(
     featureState.flags.spacePackageCreationEnabled
@@ -177,7 +185,7 @@ export async function getDropRuntimeHealth() {
       mobileGalleryUpload: featureState.flags.imageDropEnabled && quarantineUploadReady,
       imageGrouping: featureState.flags.imageDropEnabled && spacesSchema.ready,
       packageDrop: coreReady && publicUploadReady,
-      submissionGate: Boolean(featureState.flags.submissionGateEnabled && coreReady && publicUploadReady && emailNotificationsReady && publicWorkflowReady),
+      submissionGate: Boolean(featureState.flags.submissionGateEnabled && coreReady && publicUploadReady && submissionGateDeliveryReady && publicWorkflowReady),
       dimproSend: Boolean(featureState.flags.sendEnabled && coreReady && publicUploadReady && emailNotificationsReady && publicWorkflowReady && identityCoreConsumerReady),
       identityCoreConsumer: identityCoreConsumerReady,
       identityCoreSchema: Boolean(identityCoreHealth?.ready),
@@ -250,6 +258,9 @@ export async function getDropRuntimeHealth() {
     },
     publicWorkflows: {
       enabled: Boolean(featureState.flags.submissionGateEnabled || featureState.flags.sendEnabled),
+      submissionGateDeliveryMode,
+      submissionGateEmailRequired: submissionGateDeliveryMode === "email",
+      submissionGateEmailReady: emailNotificationsReady,
       storeReady: publicWorkflowReady,
       activeStore: publicStore?.activeStore || null,
       requestedStoreMode: publicStore?.requestedMode || null,
