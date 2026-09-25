@@ -401,6 +401,15 @@ export async function changeProjectLifecycle(
   return { ok: true as const, project, previousStatus };
 }
 
+export async function recordProjectAuditEvent(input: Omit<ProjectAuditEvent, "id" | "createdAt">) {
+  const state = await getProjectCoreState();
+  const event = auditEvent(input);
+  state.auditEvents.unshift(event);
+  state.updatedAt = event.createdAt;
+  await writeState(state);
+  return event;
+}
+
 export async function listProjectAuditEvents(projectId: string, limit = 20) {
   const state = await getProjectCoreState();
   return state.auditEvents

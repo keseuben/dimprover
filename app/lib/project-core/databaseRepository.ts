@@ -427,6 +427,28 @@ export async function changeProjectLifecycle(projectId: string, nextStatus: Proj
   return { ok: true as const, project: mapProject(data as DbProject), previousStatus };
 }
 
+export async function recordProjectAuditEvent(input: Omit<ProjectAuditEvent, "id" | "createdAt">) {
+  const client = await requireReadyClient();
+  const row = {
+    id: `project-audit-${randomUUID().slice(0, 12)}`,
+    project_id: input.projectId,
+    actor_user_id: input.actorUserId,
+    event_type: input.eventType,
+    entity_type: input.entityType,
+    entity_id: input.entityId,
+    summary: input.summary,
+    metadata: input.metadata || {},
+    created_at: new Date().toISOString(),
+  };
+  const { data, error } = await client
+    .from("project_core_audit_events")
+    .insert(row)
+    .select("*")
+    .single();
+  if (error) databaseError("A projektaudit esemény nem rögzíthető.", error);
+  return mapAudit(data as DbAuditEvent);
+}
+
 export async function listProjectAuditEvents(projectId: string, limit = 20) {
   const client = await requireReadyClient();
   const { data, error } = await client.from("project_core_audit_events").select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, limit)));

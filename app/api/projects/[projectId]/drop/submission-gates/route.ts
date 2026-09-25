@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
+import { getProjectCoreRepository } from "@/app/lib/project-core/repository";
 import { assertDropFeatureEnabled } from "@/app/lib/drop/dropFeatureFlags";
 import { getDropRuntimeHealth } from "@/app/lib/drop/dropRuntime";
 import { dropErrorResponse, dropNoStoreHeaders } from "@/app/lib/drop/dropApi";
@@ -119,6 +120,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
       downloadProtection: "link_pin",
     }, `${access.actor.displayName || access.actor.email || access.actor.userId} · Projektkapu`);
 
+    try {
+      await getProjectCoreRepository().recordProjectAuditEvent({
+        projectId,
+        actorUserId: access.actor.userId,
+        eventType: "PROJECT_DROP_GATE_CREATED",
+        entityType: "project",
+        entityId: projectId,
+        summary: `Projekt Beküldőkapu létrehozva: ${gate.title}`,
+        metadata: {
+          gateId: gate.id,
+          gateSlug: gate.slug,
+          gateStatus: gate.status,
+          targetFolder: gate.targetFolder,
+          retentionDays: gate.retentionDays,
+          expiresAt: gate.expiresAt,
+        },
+      });
+    } catch {
+      await setDropSubmissionGateStatus(gate.id, "revoked").catch(() => undefined);
+      const error = new Error("A Beküldőkapu auditja nem rögzíthető, ezért a kapu biztonsági okból lezárásra került.");
+      Object.assign(error, { code: "PROJECT_DROP_GATE_AUDIT_FAILED", status: 500 });
+      throw error;
+    }
+
     return NextResponse.json({
       ok: true,
       version: "PROJECT_DROP_GATE 0.1.0",
@@ -145,8 +170,35 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (current.type !== "project" || current.projectId !== projectId) {
       return NextResponse.json({ ok: false, error: "A Beküldőkapu nem ehhez a projekthez tartozik.", code: "PROJECT_DROP_GATE_SCOPE_MISMATCH" }, { status: 404, headers: dropNoStoreHeaders() });
     }
+    if (current.status === "expired") {
+      return NextResponse.json({ ok: false, error: "Lejárt Beküldőkapu nem aktiválható újra.", code: "PROJECT_DROP_GATE_EXPIRED" }, { status: 409, headers: dropNoStoreHeaders() });
+    }
     if (status === "active") await assertProjectIncomingGateReady(projectId);
     const gate = await setDropSubmissionGateStatus(id, status);
+    try {
+      await getProjectCoreRepository().recordProjectAuditEvent({
+        projectId,
+        actorUserId: access.actor.userId,
+        eventType: status === "active" ? "PROJECT_DROP_GATE_REACTIVATED" : "PROJECT_DROP_GATE_REVOKED",
+        entityType: "project",
+        entityId: projectId,
+        summary: status === "active"
+          ? `Projekt Beküldőkapu újraaktiválva: ${gate.title}`
+          : `Projekt Beküldőkapu lezárva: ${gate.title}`,
+        metadata: {
+          gateId: gate.id,
+          gateSlug: gate.slug,
+          previousStatus: current.status,
+          nextStatus: gate.status,
+          targetFolder: gate.targetFolder,
+        },
+      });
+    } catch {
+      await setDropSubmissionGateStatus(id, current.status as "active" | "revoked").catch(() => undefined);
+      const error = new Error("A Beküldőkapu állapotváltozásának auditja nem rögzíthető; az állapot visszaállítása megtörtént.");
+      Object.assign(error, { code: "PROJECT_DROP_GATE_AUDIT_FAILED", status: 500 });
+      throw error;
+    }
     return NextResponse.json({ ok: true, version: "PROJECT_DROP_GATE 0.1.0", gate: serializeGate(gate) }, { headers: dropNoStoreHeaders() });
   } catch (error) {
     return dropErrorResponse(error);

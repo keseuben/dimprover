@@ -312,3 +312,31 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 A DEV Document Flow SQL továbbra sem került alkalmazásra; a PostgreSQL credential blocker változatlanul nyitva marad.
+
+
+## 2026-09-25 – Projekt Beküldőkapu audit / fail-closed visszaállítás
+
+A Project Core repository közös, providerfüggetlen `recordProjectAuditEvent` író képességet kapott:
+- Supabase-backed repository;
+- file-backed DEV fallback;
+- közös repository contract.
+
+A Beküldőkapu projektműveletek auditáltak:
+- `PROJECT_DROP_GATE_CREATED`;
+- `PROJECT_DROP_GATE_REVOKED`;
+- `PROJECT_DROP_GATE_REACTIVATED`.
+
+Az audit a meglévő `entity_type = project` típust használja, ezért új audit entity-type SQL migráció nem szükséges. A gate azonosító, slug, célmappa, státusz és releváns technikai adatok metadata mezőbe kerülnek; címzetti e-mail nem kerül az audit metadata-ba.
+
+Fail-closed viselkedés:
+- ha új kapu létrejön, de a Project Core audit nem menthető, a rendszer az új kaput automatikusan lezárja;
+- állapotváltás audit-hibánál a kapu előző aktív/lezárt állapota visszaáll;
+- lejárt kapu API-ról sem aktiválható újra;
+- audit hiba `PROJECT_DROP_GATE_AUDIT_FAILED` hibakóddal állítja meg a műveletet.
+
+Ellenőrzés:
+- Project Drop gate audit contract: 15/15 PASS;
+- route + Project Core repository fájlok TypeScript syntactic check: PASS;
+- Project Core V0.2.0 contract: PASS;
+- Project Drop route/UI, pilot readiness, business filter, DROP→DRIVE, Document Flow, DRIVE Core, Object Storage, DECIDE célzott regresszió: PASS;
+- `git diff --check`: PASS.

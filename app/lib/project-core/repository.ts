@@ -12,6 +12,7 @@ export type ProjectCoreRepository = Pick<typeof fileRepository,
   | "addProjectMembership"
   | "listProjectMemberships"
   | "changeProjectLifecycle"
+  | "recordProjectAuditEvent"
   | "listProjectAuditEvents"
 >;
 
