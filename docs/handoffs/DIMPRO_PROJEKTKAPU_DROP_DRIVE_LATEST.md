@@ -102,3 +102,20 @@ Nem történt:
 - PM2 restart
 
 Következő blokk: Projektkapu DRIVE API/UI governance nézet és formális Kiadás művelet. Az API-ban a meglévő Project Core permission mintát kell használni; a `KIADOTT` állapot csak a DocumentIssue RPC-n keresztül jöhet létre.
+
+
+## 2026-09-25 – Document Flow API/UI candidate
+
+Elkészült:
+- project-scope document-flow read API;
+- formális Kiadás API `document.approve` permissionnel;
+- DRIVE health documentFlow readiness;
+- üzleti státusz badge-ek a Drive listában;
+- Kiadás gomb csak `AVAILABLE + ERVENYES + APPROVED + NOT_ISSUED` állapotban;
+- kiadási sorszám megjelenítése a `KIADOTT` dokumentumnál.
+
+Új contract: `scripts/drive-document-flow-api-ui-v010-contract.mjs` → 11/11 PASS.
+
+A pilot jelenleg a kiadási rekordot és címzetteket kezeli, de külső címzetti e-mail/letöltőkapu még nincs bekötve.
+
+Blokkoló a tényleges böngészős E2E előtt: a Document Flow SQL candidate még nincs alkalmazva, és a `DROP_DRIVE_INCOMING_ENABLED` feature flag nincs aktiválva. Ezekhez külön engedély szükséges.

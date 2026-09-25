@@ -116,3 +116,42 @@ DEV ellenőrzések:
 A régi DROP 0.8.0 / 0.9.1 contractok exact régi verziószámot várnak, ezért a jelenlegi DROP 1.2.13 baseline-on eleve hibásak. A DRIVE quarantine review contract ismert baseline CSS ellenőrzése 28/29. Ezeket ez a fejlesztés nem módosította.
 
 A Document Flow migráció továbbra sincs alkalmazva, a `DROP_DRIVE_INCOMING_ENABLED` nincs aktiválva, deploy/restart nem történt.
+
+
+## 2026-09-25 – Document Flow API/UI V0.1.0
+
+A dokumentumforgalmi pilothoz elkészült a DEV API/UI réteg candidate-je.
+
+Új API:
+- `GET /api/projects/[projectId]/drive/document-flow` – `document.read` jogosultsággal betölti a governance és formális kiadási állapotokat;
+- `POST /api/projects/[projectId]/drive/documents/[documentId]/versions/[versionId]/issue` – `document.approve` jogosultsággal formális kiadást hoz létre.
+
+A DRIVE health válasz külön `documentFlow` blokkban jelzi, hogy a 0.1.0 adatmodell aktív-e.
+
+A DRIVE felületen a dokumentum technikai státusza mellett megjelenhet az üzleti státusz:
+- Bejövő
+- Ellenőrzés alatt
+- Érvényes
+- Kiadott
+- Archív
+
+A `Kiadás` művelet csak akkor jelenik meg, ha:
+- a felhasználónak `document.approve` jogosultsága van;
+- a Document Flow séma aktív;
+- a verzió technikailag `AVAILABLE`;
+- a governance `ERVENYES + APPROVED`;
+- még nincs aktív `ISSUED` kiadás.
+
+A pilot UI-ban a címzettek e-mail címmel adhatók meg; a művelet jelenleg auditált formális kiadási rekordot és címzettlistát hoz létre. Ez a blokk még nem küld külön kiadási e-mailt, és nem hoz létre külső címzetti letöltőkaput.
+
+Ellenőrzés:
+- Document Flow schema contract: 23/23 PASS
+- DROP → DRIVE Incoming: 22/22 PASS
+- Document Flow API/UI: 11/11 PASS
+- DRIVE Core: 24/24 PASS
+- Object Storage: 29/29 PASS
+- DECIDE Core: 82/82 PASS
+- módosított TS/TSX fájlok TypeScript syntactic transpile check: PASS
+- `git diff --check`: PASS
+
+Teljes `tsc --noEmit` nem zárult le a DEV-en a korábbi megosztott dependency-kísérlet időtúllépése miatt; ezt nem tekintjük PASS-nak. Migráció/deploy/restart továbbra sem történt.

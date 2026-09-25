@@ -249,3 +249,119 @@ export async function recordDriveStorageVersionReference(input: {
   if (versionResult.error) dbError("A dokumentumverzió S3 VersionId nem menthető.", versionResult.error);
   return { recorded: true, storageVersionId: input.storageVersionId };
 }
+
+export type DriveDocumentIssue = {
+  id: string;
+  projectId: string;
+  documentId: string;
+  versionId: string;
+  issueNumber: string;
+  status: "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
+  purpose: string;
+  note: string;
+  issuedBy: string;
+  issuedAt: string;
+};
+
+type DbIssue = {
+  id: string;
+  project_id: string;
+  document_id: string;
+  version_id: string;
+  issue_number: string;
+  status: DriveDocumentIssue["status"];
+  purpose: string;
+  note: string;
+  issued_by: string;
+  issued_at: string;
+};
+
+function mapIssue(row: DbIssue): DriveDocumentIssue {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    documentId: row.document_id,
+    versionId: row.version_id,
+    issueNumber: row.issue_number,
+    status: row.status,
+    purpose: row.purpose || "",
+    note: row.note || "",
+    issuedBy: row.issued_by,
+    issuedAt: row.issued_at,
+  };
+}
+
+export async function listDriveDocumentFlow(projectId: string) {
+  const db = await readyClient();
+  const [governanceResult, issuesResult] = await Promise.all([
+    db.from("drive_core_document_governance")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false })
+      .limit(5000),
+    db.from("drive_core_document_issues")
+      .select("id,project_id,document_id,version_id,issue_number,status,purpose,note,issued_by,issued_at")
+      .eq("project_id", projectId)
+      .order("issued_at", { ascending: false })
+      .limit(5000),
+  ]);
+  if (governanceResult.error) dbError("A dokumentumforgalmi állapotok nem tölthetők be.", governanceResult.error);
+  if (issuesResult.error) dbError("A dokumentumkiadások nem tölthetők be.", issuesResult.error);
+  return {
+    governance: ((governanceResult.data || []) as DbGovernance[]).map(mapGovernance),
+    issues: ((issuesResult.data || []) as DbIssue[]).map(mapIssue),
+  };
+}
+
+export async function issueDriveDocumentVersion(input: {
+  projectId: string;
+  documentId: string;
+  versionId: string;
+  purpose: string;
+  note: string;
+  recipients: Array<{
+    type: "PROJECT_MEMBER" | "EMAIL";
+    userId?: string | null;
+    email?: string | null;
+    name?: string;
+    organization?: string;
+  }>;
+  actorUserId: string;
+}) {
+  if (!Array.isArray(input.recipients) || input.recipients.length < 1) {
+    throw new DriveCoreRepositoryError("A formális kiadáshoz legalább egy címzett szükséges.", "DRIVE_DOCUMENT_FLOW_RECIPIENT_REQUIRED", 400);
+  }
+  const recipients = input.recipients.slice(0, 200).map((item) => ({
+    type: item.type,
+    userId: item.userId?.trim() || null,
+    email: item.email?.trim().toLowerCase() || null,
+    name: item.name?.trim().slice(0, 240) || "",
+    organization: item.organization?.trim().slice(0, 240) || "",
+  }));
+  const db = await readyClient();
+  const { data, error } = await db.rpc("drive_core_issue_document_version_atomic", {
+    p_project_id: input.projectId,
+    p_document_id: input.documentId,
+    p_version_id: input.versionId,
+    p_purpose: input.purpose.trim().slice(0, 1000),
+    p_note: input.note.trim().slice(0, 4000),
+    p_recipients: recipients,
+    p_actor_user_id: input.actorUserId,
+  });
+  if (error) dbError("A dokumentum formális kiadása sikertelen.", error);
+  const payload = data as {
+    issue?: DbIssue;
+    governance?: DbGovernance;
+    recipientCount?: number;
+    idempotent?: boolean;
+  } | null;
+  if (!payload?.issue?.id || !payload?.governance?.version_id) {
+    throw new DriveCoreRepositoryError("A dokumentumkiadás eredménye nem igazolható.", "DRIVE_DOCUMENT_FLOW_ISSUE_RESPONSE_INVALID", 500);
+  }
+  return {
+    issue: mapIssue(payload.issue),
+    governance: mapGovernance(payload.governance),
+    recipientCount: Number(payload.recipientCount || 0),
+    idempotent: Boolean(payload.idempotent),
+  };
+}

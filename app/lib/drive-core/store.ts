@@ -60,6 +60,24 @@ export {
 } from "./compareFindingsRepository";
 
 export {
+  getDriveDocumentFlowHealth,
+  getDriveDocumentGovernance,
+  issueDriveDocumentVersion,
+  listDriveDocumentFlow,
+  markDriveDocumentReview,
+  recordDriveStorageVersionReference,
+  registerDriveIncomingDocument,
+} from "./documentFlowRepository";
+export type { DriveDocumentGovernance, DriveDocumentIssue } from "./documentFlowRepository";
+export {
+  DRIVE_DOCUMENT_FLOW_BOOTSTRAP_ID,
+  DRIVE_DOCUMENT_FLOW_COMPONENT,
+  DRIVE_DOCUMENT_FLOW_MIGRATION_COUNT,
+  DRIVE_DOCUMENT_FLOW_SCHEMA_VERSION,
+  DRIVE_DOCUMENT_FLOW_TABLES,
+} from "./documentFlowSchema";
+
+export {
   DRIVE_BUSINESS_LIFECYCLE_STATUSES,
   DRIVE_BUSINESS_LIFECYCLE_TRANSITIONS,
   DRIVE_ISSUE_STATUSES,

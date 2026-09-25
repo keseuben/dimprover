@@ -405,3 +405,43 @@
   .uploadQueueList article > b { display: none; }
   .externalDropOverlay > div { min-width: 90%; }
 }
+
+.businessStatus {
+  display: inline-flex !important;
+  width: fit-content;
+  margin-top: 4px !important;
+  padding: 3px 7px;
+  border: 1px solid var(--pg-border);
+  border-radius: 999px;
+  background: var(--pg-bg-secondary);
+  color: var(--pg-text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 800;
+}
+.businessStatusBEJOVO, .businessStatusELLENORZES_ALATT {
+  border-color: color-mix(in srgb,var(--pg-warning) 45%,var(--pg-border));
+  background: color-mix(in srgb,var(--pg-warning) 10%,var(--pg-surface));
+}
+.businessStatusERVENYES {
+  border-color: color-mix(in srgb,var(--pg-success) 45%,var(--pg-border));
+  background: color-mix(in srgb,var(--pg-success) 10%,var(--pg-surface));
+  color: var(--pg-success) !important;
+}
+.businessStatusKIADOTT {
+  border-color: color-mix(in srgb,var(--pg-primary) 50%,var(--pg-border));
+  background: var(--pg-primary-soft);
+  color: var(--pg-primary-active) !important;
+}
+.businessStatusARCHIV { opacity: .72; }
+.issueButton {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb,var(--pg-primary) 45%,var(--pg-border));
+  border-radius: 7px;
+  background: var(--pg-primary-soft);
+  color: var(--pg-primary-active);
+  cursor: pointer;
+}
+.issueButton:disabled { cursor: not-allowed; opacity: .5; }

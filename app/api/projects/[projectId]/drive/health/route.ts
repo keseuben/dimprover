@@ -3,6 +3,7 @@ import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import {
   getDriveCoreDatabaseHealth,
   getDriveCompareFindingsHealth,
+  getDriveDocumentFlowHealth,
   getDriveObjectStorageHealth,
   getDriveQuarantineReviewHealth,
   getDriveSecurityScannerHealth,
@@ -17,13 +18,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const [database, objectStorage, review, security, workspace, compareFindings] = await Promise.all([
+  const [database, objectStorage, review, security, workspace, compareFindings, documentFlow] = await Promise.all([
     getDriveCoreDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
     getDriveSecurityScannerHealth(),
     getDriveWorkspaceDatabaseHealth(),
     getDriveCompareFindingsHealth(),
+    getDriveDocumentFlowHealth(),
   ]);
   const storageNextStep = !objectStorage.database.ready
     ? "A DRIVE Object Storage 0.4.0 SQL-séma alkalmazása szükséges."
@@ -92,6 +94,18 @@ export async function GET(request: NextRequest, context: RouteContext) {
       signatureDate: security.signatureDate,
       errorCode: security.errorCode,
       releaseRule: "WEB/DESKTOP feltöltés csak CLEAN ClamAV eredmény után hagyható jóvá.",
+    },
+    documentFlow: {
+      version: documentFlow.expectedSchemaVersion,
+      databaseReady: documentFlow.ready,
+      expectedSchemaVersion: documentFlow.expectedSchemaVersion,
+      actualSchemaVersion: documentFlow.actualSchemaVersion,
+      bootstrapId: documentFlow.bootstrapId,
+      errorCode: documentFlow.errorCode,
+      ready: documentFlow.ready,
+      nextStep: documentFlow.ready
+        ? "A Projektkapu dokumentuméletciklus és formális kiadási adatmodell aktív."
+        : "A DRIVE Document Flow 0.1.0 SQL candidate alkalmazása szükséges a pilot dokumentumforgalomhoz.",
     },
     review: {
       version: review.version,

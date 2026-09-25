@@ -17,6 +17,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   SlidersHorizontal,
   UploadCloud,
@@ -69,6 +70,41 @@ type DriveTree = {
     latestCursor: number;
   };
 };
+type DriveDocumentGovernance = {
+  versionId: string;
+  documentId: string;
+  businessStatus: "BEJOVO" | "ELLENORZES_ALATT" | "ERVENYES" | "KIADOTT" | "ARCHIV" | null;
+  reviewDecision: "PENDING" | "APPROVED" | "REJECTED";
+  issueStatus: "NOT_ISSUED" | "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
+  sourceChannel: "DRIVE" | "DROP" | "DESKTOP" | "SYSTEM";
+  dropPackageId: string | null;
+  dropFileId: string | null;
+  reviewedAt: string | null;
+  validAt: string | null;
+};
+type DriveDocumentIssue = {
+  id: string;
+  versionId: string;
+  issueNumber: string;
+  status: "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
+  issuedAt: string;
+};
+type DocumentFlowPayload = {
+  ok?: boolean;
+  error?: string;
+  governance?: DriveDocumentGovernance[];
+  issues?: DriveDocumentIssue[];
+};
+
+function formatBusinessStatus(status: DriveDocumentGovernance["businessStatus"]) {
+  if (status === "BEJOVO") return "Bejövő";
+  if (status === "ELLENORZES_ALATT") return "Ellenőrzés alatt";
+  if (status === "ERVENYES") return "Érvényes";
+  if (status === "KIADOTT") return "Kiadott";
+  if (status === "ARCHIV") return "Archív";
+  return "Nincs üzleti státusz";
+}
+
 type HealthPayload = {
   ok?: boolean;
   error?: string;
@@ -110,6 +146,16 @@ type HealthPayload = {
     signatureDate: string | null;
     errorCode: string | null;
     releaseRule: string;
+  };
+  documentFlow?: {
+    version: string;
+    databaseReady: boolean;
+    expectedSchemaVersion: string;
+    actualSchemaVersion: string | null;
+    bootstrapId: string | null;
+    errorCode: string | null;
+    ready: boolean;
+    nextStep: string;
   };
   review?: {
     version: string;
@@ -195,6 +241,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [apiPermissions, setApiPermissions] = useState<string[]>([]);
+  const [documentFlowByVersion, setDocumentFlowByVersion] = useState<Record<string, DriveDocumentGovernance>>({});
+  const [documentIssueByVersion, setDocumentIssueByVersion] = useState<Record<string, DriveDocumentIssue>>({});
   const [selectedFolderId, setSelectedFolderId] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "drop" | "other">("all");
@@ -214,6 +262,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const canWrite = effectivePermissions.includes("document.write");
   const canApprove = effectivePermissions.includes("document.approve");
   const reviewReady = Boolean(health?.review?.ready);
+  const documentFlowReady = Boolean(health?.documentFlow?.ready);
   const securityScannerReady = Boolean(health?.security?.ready);
   const storageWriteEnabled = Boolean(health?.storage?.realObjectWriteEnabled);
   const storageDownloadEnabled = Boolean(health?.storage?.realObjectDownloadEnabled);
@@ -236,6 +285,21 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
+
+      if (healthPayload.documentFlow?.ready) {
+        const flowResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/document-flow`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const flowPayload = await flowResponse.json() as DocumentFlowPayload;
+        if (!flowResponse.ok || !flowPayload.ok) throw new Error(flowPayload.error || "A dokumentumforgalmi állapotok nem tölthetők be.");
+        setDocumentFlowByVersion(Object.fromEntries((flowPayload.governance || []).map((item) => [item.versionId, item])));
+        const activeIssues = (flowPayload.issues || []).filter((item) => item.status === "ISSUED");
+        setDocumentIssueByVersion(Object.fromEntries(activeIssues.map((item) => [item.versionId, item])));
+      } else {
+        setDocumentFlowByVersion({});
+        setDocumentIssueByVersion({});
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A DRIVE Core betöltése sikertelen.");
     } finally {
@@ -603,6 +667,64 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function issueDocumentVersion(document: DriveDocument) {
+    const version = document.currentVersion;
+    if (!version) return;
+    const governance = documentFlowByVersion[version.id];
+    if (!governance || governance.businessStatus !== "ERVENYES" || governance.reviewDecision !== "APPROVED") {
+      setError("Csak jóváhagyott, ÉRVÉNYES dokumentumverzió adható ki.");
+      return;
+    }
+
+    const recipientText = window.prompt(
+      "Kiadási címzettek e-mail címei (vesszővel, pontosvesszővel vagy új sorral elválasztva):",
+      "",
+    );
+    if (recipientText === null) return;
+    const emails = [...new Set(recipientText
+      .split(/[,;\n]+/)
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean))];
+    if (!emails.length || emails.some((email) => !email.includes("@"))) {
+      setError("A formális kiadáshoz legalább egy érvényes címzett e-mail címe szükséges.");
+      return;
+    }
+
+    const purpose = window.prompt("Kiadás célja:", "Projekt dokumentumkiadás");
+    if (purpose === null) return;
+    const note = window.prompt("Kiadási megjegyzés (opcionális):", "") ?? "";
+
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/versions/${encodeURIComponent(version.id)}/issue`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          purpose,
+          note,
+          recipients: emails.map((email) => ({ type: "EMAIL", email })),
+        }),
+      });
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        idempotent?: boolean;
+        recipientCount?: number;
+        issue?: { issueNumber?: string };
+      };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentum kiadása sikertelen.");
+      setNotice(payload.idempotent
+        ? `A dokumentumverzió már kiadott: ${payload.issue?.issueNumber || "kiadási rekord"}.`
+        : `Formális kiadás rögzítve: ${payload.issue?.issueNumber || "kiadási rekord"} · ${payload.recipientCount || emails.length} címzett.`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentum kiadása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return <section className={styles.statePanel}><Loader2 className={styles.spin} size={28} /><strong>DRIVE Core betöltése</strong><span>Projektmappák és jogosultságok ellenőrzése…</span></section>;
   }
@@ -706,6 +828,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         <b>Függő takarítás: {health?.review?.pendingCleanupCount ?? "–"}</b>
       </div>
 
+      <div className={`${styles.reviewStatus} ${documentFlowReady ? styles.reviewStatusReady : styles.reviewStatusBlocked}`}>
+        <Send size={17} />
+        <div>
+          <strong>Dokumentumforgalom · 0.1.0</strong>
+          <span>{health?.documentFlow?.nextStep || "A dokumentumforgalmi állapot nem érhető el."}</span>
+        </div>
+        <b>{documentFlowReady ? "Életciklus aktív" : "Document Flow SQL szükséges"}</b>
+        <b>Kiadás: külön jóváhagyott művelet</b>
+      </div>
+
         </div>
       </details>
 
@@ -789,13 +921,19 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           </div>}
           <div className={styles.tableHeader}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
           <div className={styles.documentList}>
-            {visibleDocuments.map((document) => (
+            {visibleDocuments.map((document) => {
+              const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
+              const formalIssue = document.currentVersion ? documentIssueByVersion[document.currentVersion.id] : undefined;
+              return (
               <article key={document.id}>
                 <span className={styles.fileIcon}>{document.extension ? document.extension.toUpperCase().slice(0, 4) : "FILE"}</span>
                 <div>
                   <strong>{document.name}</strong>
                   <small>{document.description || document.mimeType}</small>
                   {document.currentVersion && <span className={`${styles.versionStatus} ${styles[`versionStatus${document.currentVersion.status}`] || ""}`}>{document.currentVersion.status}</span>}
+                  {governance?.businessStatus && <span className={`${styles.businessStatus} ${styles[`businessStatus${governance.businessStatus}`] || ""}`}>
+                    {formatBusinessStatus(governance.businessStatus)}{formalIssue?.issueNumber ? ` · ${formalIssue.issueNumber}` : ""}
+                  </span>}
                 </div>
                 <b>V{document.currentVersionNumber}</b>
                 <span className={document.source === "DROP" ? styles.dropSourceBadge : styles.sourceBadge}>{document.source === "DROP" ? "Drop" : document.source === "DESKTOP" ? "Desktop" : "Web"}</span>
@@ -812,6 +950,14 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onClick={() => void downloadDocument(document)}
                     aria-label={`${document.name} letöltése`}
                   ><Download size={15} /></button>
+                  {canApprove && documentFlowReady && governance?.businessStatus === "ERVENYES" && governance.reviewDecision === "APPROVED" && governance.issueStatus !== "ISSUED" && document.currentVersion?.status === "AVAILABLE" && <button
+                    type="button"
+                    className={styles.issueButton}
+                    disabled={busy}
+                    title="Érvényes dokumentumverzió formális kiadása címzetteknek"
+                    onClick={() => void issueDocumentVersion(document)}
+                    aria-label={`${document.name} formális kiadása`}
+                  ><Send size={15} /></button>}
                   {canApprove && document.currentVersion?.status === "QUARANTINED" && <>
                     <button
                       type="button"
@@ -840,7 +986,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   </>}
                 </div>
               </article>
-            ))}
+              );
+            })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
         </div>
