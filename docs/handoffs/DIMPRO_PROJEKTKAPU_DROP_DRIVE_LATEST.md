@@ -340,3 +340,54 @@ Ellenőrzés:
 - Project Core V0.2.0 contract: PASS;
 - Project Drop route/UI, pilot readiness, business filter, DROP→DRIVE, Document Flow, DRIVE Core, Object Storage, DECIDE célzott regresszió: PASS;
 - `git diff --check`: PASS.
+
+
+## 2026-09-25 – Projektkapu DROP → DRIVE live pilot preflight
+
+Elkészült a read-only céges pilot előellenőrző:
+
+- `scripts/projectkapu-drop-drive-pilot-preflight.mjs`
+- `scripts/projectkapu-drop-drive-pilot-preflight-contract.mjs`
+
+A preflight kizárólag DEV célra készült. A DEV hostot és a canonical Supabase project refet ellenőrzi, titokértékeket nem ír ki, konfigurációt nem módosít, SQL-t nem futtat, és a Supabase ellenőrzéseket read-only REST GET kérésekkel végzi.
+
+Contract: **14/14 PASS**.
+
+Aktuális élő DEV eredmény: **nem pilotkész, 15 blocker**.
+
+Blockerek:
+1. `DROP_RELEASE_GATE_DISABLED`
+2. `DROP_PACKAGE_ENGINE_DISABLED`
+3. `DROP_ACCESS_GATE_DISABLED`
+4. `DROP_EMAIL_NOTIFICATIONS_DISABLED`
+5. `DROP_STORAGE_CORE_DISABLED`
+6. `DROP_QUARANTINE_UPLOAD_DISABLED`
+7. `DROP_SUBMISSION_GATE_DISABLED`
+8. `DROP_DRIVE_INCOMING_DISABLED`
+9. `DROP_PUBLIC_UPLOAD_FEATURE_DISABLED`
+10. `DROP_TOKEN_SECURITY_NOT_CONFIGURED`
+11. `DROP_WORKER_SECRET_NOT_CONFIGURED`
+12. `DROP_SCANNER_MODE_NOT_READY`
+13. `DROP_STORAGE_NOT_ACTIVE`
+14. `DROP_MAIL_PROFILE_NOT_READY`
+15. `DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY`
+
+Figyelmeztetés:
+- `DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION`
+
+Már kész / igazolt:
+- canonical DEV host és Supabase projekt;
+- Supabase service role konfigurálva;
+- ClamAV socket létezik;
+- DROP S3-compatible storage konfigurálva, jelenleg `quarantine` módban;
+- DROP és DRIVE bucket/credential izoláció rendben;
+- DRIVE storage konfigurálva és írható, jelenleg `quarantine`;
+- `DROP_PUBLIC_BASE_URL` explicit konfigurálva;
+- DROP core schema jelen van;
+- DROP storage schema: `DROP 0.5.0`;
+- DROP public workflow schema: `DROP 0.9.5`;
+- public submission gate tábla read-only REST-ből elérhető;
+- DRIVE object storage schema: `0.4.0`;
+- DRIVE quarantine review schema: `0.4.1`.
+
+A jelenlegi blockerlista alapján több akadály konfiguráció/aktiválás, nem forráskódhiba. A Document Flow SQL és a titokértékek hiánya miatt a feature flageket továbbra sem szabad vakon aktiválni.

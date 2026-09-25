@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const source=readFileSync("scripts/projectkapu-drop-drive-pilot-preflight.mjs","utf8");
+let pass=0;const check=(name,fn)=>{fn();pass+=1;console.log(`PASS ${name}`);};
+check("preflight is DEV-target pinned",()=>assert.match(source,/pbgyuznivqvestuksvif/)&&assert.match(source,/dimpro-dev/));
+check("service role values are never printed",()=>assert.doesNotMatch(source,/SUPABASE_SERVICE_ROLE_KEY[^\n]*console\.log/));
+check("DROP release and core flags are checked",()=>assert.match(source,/DROP_RELEASE_GATE_ENABLED/)&&assert.match(source,/DROP_PACKAGE_ENGINE_ENABLED/)&&assert.match(source,/DROP_ACCESS_GATE_ENABLED/));
+check("submission and drive incoming flags are checked",()=>assert.match(source,/DROP_SUBMISSION_GATE_ENABLED/)&&assert.match(source,/DROP_DRIVE_INCOMING_ENABLED/));
+check("token security is checked",()=>assert.match(source,/DROP_TOKEN_HMAC_SECRET/)&&assert.match(source,/DROP_SESSION_SECRET/));
+check("clamd worker readiness is checked",()=>assert.match(source,/clamd-instream/)&&assert.match(source,/DROP_WORKER_SECRET/));
+check("DROP storage isolation is checked",()=>assert.match(source,/DROP_DRIVE_STORAGE_CREDENTIAL_ISOLATION_FAILED/));
+check("DRIVE storage readiness is checked",()=>assert.match(source,/DRIVE_OBJECT_STORAGE_NOT_WRITABLE/));
+check("mail readiness is checked without emitting password",()=>assert.match(source,/DROP_MAIL_PROFILE_NOT_READY/)&&assert.doesNotMatch(source,/password:\s*value/));
+check("read-only REST uses GET fetch only",()=>assert.doesNotMatch(source,/method\s*:/));
+check("DROP schema markers are checked",()=>assert.match(source,/drop-storage/)&&assert.match(source,/DROP 0\.5\.0/)&&assert.match(source,/DROP 0\.9\.5/));
+check("DRIVE schema markers are checked",()=>assert.match(source,/drive-object-storage/)&&assert.match(source,/drive-quarantine-review/)&&assert.match(source,/drive-document-flow/));
+check("Document Flow credential need is warning-only until schema exists",()=>assert.match(source,/DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION/));
+check("no configuration mutation exists",()=>assert.doesNotMatch(source,/writeFile|appendFile|process\.env\[[^\]]+\]\s*=/));
+console.log(JSON.stringify({total:pass,pass,fail:0},null,2));
