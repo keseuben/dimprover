@@ -58,3 +58,21 @@ export {
   listDriveCompareFindings,
   updateDriveCompareFinding,
 } from "./compareFindingsRepository";
+
+export {
+  DRIVE_BUSINESS_LIFECYCLE_STATUSES,
+  DRIVE_BUSINESS_LIFECYCLE_TRANSITIONS,
+  DRIVE_ISSUE_STATUSES,
+  DRIVE_REVIEW_DECISIONS,
+  DRIVE_TECHNICAL_AVAILABILITY,
+  canTransitionDriveBusinessLifecycle,
+  projectLegacyDriveVersionStatus,
+} from "./lifecycle";
+
+export type {
+  DriveBusinessLifecycleStatus,
+  DriveIssueStatus,
+  DriveLegacyLifecycleProjection,
+  DriveReviewDecision,
+  DriveTechnicalAvailability,
+} from "./lifecycle";
