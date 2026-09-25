@@ -231,6 +231,22 @@ export async function findDriveUploadSessionByArchiveKey(input: { projectId: str
   return data ? mapUploadSession(data as DbUploadSession) : null;
 }
 
+export async function findDriveUploadSessionByIncomingKey(input: { projectId: string; incomingKey: string }) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_upload_sessions")
+    .select("*")
+    .eq("project_id", input.projectId)
+    .contains("metadata", { dropIncomingKey: input.incomingKey })
+    .in("status", ["INITIATED", "FINALIZED"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) databaseError("A DROP → DRIVE beérkező munkamenet nem tölthető be.", error);
+  return data ? mapUploadSession(data as DbUploadSession) : null;
+}
+
+
 export async function getDriveUploadSessionRecord(projectId: string, uploadId: string) {
   const client = await requireReadyClient();
   const { data, error } = await client

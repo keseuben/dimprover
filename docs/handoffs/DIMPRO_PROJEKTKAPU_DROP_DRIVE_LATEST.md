@@ -72,3 +72,33 @@ Következő fejlesztési blokk:
 4. DRIVE security scan;
 5. meglévő review után governance `ERVENYES/REJECTED` szinkron;
 6. csak külön formális kiadás után `KIADOTT`.
+
+
+## 2026-09-25 – DROP → DRIVE Incoming V0.1.0 runtime candidate
+
+Aktuális megvalósítás:
+- `app/lib/drop/archive/dropDriveIncomingService.ts`
+- `app/lib/drive-core/documentFlowRepository.ts`
+- `app/lib/drive-core/documentFlowSchema.ts`
+- feature flag: `DROP_DRIVE_INCOMING_ENABLED`
+- Beküldőkapu finalize hook + idempotens finalized retry reconciliation
+- DRIVE review → document governance szinkron
+- S3 HeadObject VersionId továbbvezetés és perzisztálási hely
+- külön DRIVE bucket másolat, server SHA-256, `QUARANTINED` célállapot
+- DROP provenance: packageId + fileId + incoming idempotency key
+
+Tesztállapot:
+- document-flow 23/23 PASS
+- drop-drive-incoming 22/22 PASS
+- drive-core 24/24 PASS
+- object-storage 29/29 PASS
+- decide-core 82/82 PASS
+- diff-check PASS
+
+Nem történt:
+- Document Flow SQL migráció futtatása
+- feature flag aktiválás
+- DEV/PROD deploy
+- PM2 restart
+
+Következő blokk: Projektkapu DRIVE API/UI governance nézet és formális Kiadás művelet. Az API-ban a meglévő Project Core permission mintát kell használni; a `KIADOTT` állapot csak a DocumentIssue RPC-n keresztül jöhet létre.

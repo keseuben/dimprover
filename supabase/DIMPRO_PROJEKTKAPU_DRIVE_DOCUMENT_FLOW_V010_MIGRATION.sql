@@ -197,6 +197,15 @@ begin
       'documentFlowSchema','0.1.0')
   );
 
+  insert into public.drive_core_change_events(
+    id,project_id,event_type,entity_type,entity_id,payload,actor_user_id
+  ) values (
+    'drive-change-'||substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id,'DOCUMENT_INCOMING_REGISTERED','document_version',p_version_id,
+    jsonb_build_object('documentId',p_document_id,'versionId',p_version_id,'governance',to_jsonb(v_governance)),
+    p_actor_user_id
+  );
+
   return jsonb_build_object('governance',to_jsonb(v_governance),'version',to_jsonb(v_version));
 end;
 $$;
@@ -238,6 +247,15 @@ begin
     raise exception 'DRIVE_DOCUMENT_FLOW_REJECT_REQUIRES_REJECTED' using errcode='P0001';
   end if;
 
+  if exists(
+    select 1 from public.drive_core_document_governance
+    where version_id=p_version_id and project_id=p_project_id and document_id=p_document_id and issue_status='ISSUED'
+  ) then
+    select * into v_governance from public.drive_core_document_governance
+    where version_id=p_version_id and project_id=p_project_id and document_id=p_document_id;
+    return jsonb_build_object('governance',to_jsonb(v_governance),'version',to_jsonb(v_version),'idempotent',true);
+  end if;
+
   update public.drive_core_document_governance
   set business_status=case when v_action='APPROVE' then 'ERVENYES' else 'ELLENORZES_ALATT' end,
       review_decision=case when v_action='APPROVE' then 'APPROVED' else 'REJECTED' end,
@@ -266,7 +284,18 @@ begin
       'businessStatus',v_governance.business_status,'documentFlowSchema','0.1.0')
   );
 
-  return jsonb_build_object('governance',to_jsonb(v_governance),'version',to_jsonb(v_version));
+  insert into public.drive_core_change_events(
+    id,project_id,event_type,entity_type,entity_id,payload,actor_user_id
+  ) values (
+    'drive-change-'||substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id,
+    case when v_action='APPROVE' then 'DOCUMENT_MARKED_VALID' else 'DOCUMENT_MARKED_REJECTED' end,
+    'document_version',p_version_id,
+    jsonb_build_object('documentId',p_document_id,'versionId',p_version_id,'governance',to_jsonb(v_governance)),
+    p_actor_user_id
+  );
+
+  return jsonb_build_object('governance',to_jsonb(v_governance),'version',to_jsonb(v_version),'idempotent',false);
 end;
 $$;
 
@@ -385,6 +414,16 @@ begin
     'DRIVE dokumentumverzió formálisan kiadva: '||v_issue_number,
     jsonb_build_object('documentId',p_document_id,'versionId',p_version_id,'issueId',v_issue.id,
       'issueNumber',v_issue_number,'recipientCount',v_count,'documentFlowSchema','0.1.0')
+  );
+
+  insert into public.drive_core_change_events(
+    id,project_id,event_type,entity_type,entity_id,payload,actor_user_id
+  ) values (
+    'drive-change-'||substr(replace(gen_random_uuid()::text,'-',''),1,16),
+    p_project_id,'DOCUMENT_VERSION_ISSUED','document_version',p_version_id,
+    jsonb_build_object('documentId',p_document_id,'versionId',p_version_id,'issue',to_jsonb(v_issue),
+      'recipientCount',v_count,'governance',to_jsonb(v_governance)),
+    p_actor_user_id
   );
 
   return jsonb_build_object('issue',to_jsonb(v_issue),'governance',to_jsonb(v_governance),'recipientCount',v_count,'idempotent',false);

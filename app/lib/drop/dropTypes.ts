@@ -38,6 +38,7 @@ export type DropFeatureFlags = {
   commentsEnabled: boolean;
   pdfReportEnabled: boolean;
   driveArchiveEnabled: boolean;
+  driveIncomingEnabled: boolean;
   driveDesktopEnabled: boolean;
   aiImageCheckEnabled: boolean;
   issueRegisterLinkEnabled: boolean;

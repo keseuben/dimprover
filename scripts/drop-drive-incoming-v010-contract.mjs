@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const incoming = fs.readFileSync(path.join(root, "app/lib/drop/archive/dropDriveIncomingService.ts"), "utf8");
+const repository = fs.readFileSync(path.join(root, "app/lib/drive-core/documentFlowRepository.ts"), "utf8");
+const flags = fs.readFileSync(path.join(root, "app/lib/drop/dropFeatureFlags.ts"), "utf8");
+const types = fs.readFileSync(path.join(root, "app/lib/drop/dropTypes.ts"), "utf8");
+const s3 = fs.readFileSync(path.join(root, "app/lib/drive-core/s3ObjectStorage.ts"), "utf8");
+const review = fs.readFileSync(path.join(root, "app/lib/drive-core/reviewService.ts"), "utf8");
+const finalizer = fs.readFileSync(path.join(root, "app/lib/drop/public/dropPublicFinalizeService.ts"), "utf8");
+
+const checks=[]; const check=(name,fn)=>{try{fn();checks.push({name,pass:true})}catch(error){checks.push({name,pass:false,error:error instanceof Error?error.message:String(error)})}};
+check("submission gate only",()=>assert.match(incoming,/workflow\.workflowType !== "submission_gate"/));
+check("project required",()=>assert.match(incoming,/bundle\.packageRow\.project_id \|\| workflow\.projectId/));
+check("finalization required",()=>assert.match(incoming,/DROP_DRIVE_INCOMING_NOT_FINALIZED/));
+check("clean files required",()=>{assert.match(incoming,/security_status === "clean"/);assert.match(incoming,/virus_scan_status === "clean"/)});
+check("incoming folder provisioning",()=>assert.match(incoming,/provisionProjectDrive/));
+check("source DROP",()=>assert.match(incoming,/source: "DROP"/));
+check("quarantine target",()=>assert.match(incoming,/finalVersionStatus: "QUARANTINED"/));
+check("separate bucket copy",()=>assert.match(incoming,/copyDropObjectToDriveVerified/));
+check("server checksum",()=>assert.match(incoming,/calculateDriveObjectSha256/));
+check("incoming provenance",()=>assert.match(incoming,/registerDriveIncomingDocument/));
+check("idempotent key",()=>assert.match(incoming,/dropIncomingKey/));
+check("expired session recovery",()=>assert.match(incoming,/Lejárt DROP → DRIVE beérkező munkamenet újraindítása/));
+check("flow schema gate",()=>assert.match(incoming,/getDriveDocumentFlowHealth/));
+check("repository incoming RPC",()=>assert.match(repository,/drive_core_register_incoming_document_atomic/));
+check("repository review RPC",()=>assert.match(repository,/drive_core_mark_document_review_atomic/));
+check("storage version persistence",()=>assert.match(repository,/storage_version_id/));
+check("incoming feature flag type",()=>assert.match(types,/driveIncomingEnabled: boolean/));
+check("incoming feature flag env",()=>assert.match(flags,/DROP_DRIVE_INCOMING_ENABLED/));
+check("head exposes version id",()=>assert.match(s3,/versionId: result\.VersionId \|\| null/));
+check("review service flow hook",()=>assert.match(review,/markDriveDocumentReview/));
+check("finalize auto incoming hook",()=>assert.match(finalizer,/processDropDriveIncomingPackage/));
+check("finalized retry reconciles incoming",()=>assert.match(finalizer,/claimed\.state === "finalized"[\s\S]*processDropDriveIncomingPackage/));
+
+const pass=checks.filter(x=>x.pass).length;
+console.log(JSON.stringify({pass,total:checks.length,checks},null,2));
+if(pass!==checks.length) process.exit(1);

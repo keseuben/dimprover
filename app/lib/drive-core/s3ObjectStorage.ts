@@ -150,6 +150,7 @@ export async function headDriveObject(input: { storageKey: string; bucket?: stri
     contentLength: Number(result.ContentLength || 0),
     contentType: result.ContentType || "application/octet-stream",
     etag: result.ETag || null,
+    versionId: result.VersionId || null,
     lastModified: result.LastModified?.toISOString() || null,
     metadata: result.Metadata || {},
   };

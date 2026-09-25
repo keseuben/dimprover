@@ -81,3 +81,38 @@ Candidate:
 - `scripts/drive-document-flow-v010-contract.mjs`
 
 Contract: 21/21 PASS. Migráció futtatása külön jóváhagyásig tilos.
+
+
+## 2026-09-25 – DROP → DRIVE Beérkező V0.1.0
+
+Elkészült a Projektkapu Dokumentumforgalom Pilot első runtime összekötése DEV candidate-ként.
+
+A Beküldőkapu (`submission_gate`) projektkapcsolt, véglegesített csomagja a külön `DROP_DRIVE_INCOMING_ENABLED` feature flag mellett automatikusan átadható a Projektkapu DRIVE részére.
+
+A beérkező útvonal:
+1. csak véglegesített, projekthez kapcsolt Beküldőkapu csomagot kezel;
+2. minden aktív fájlnál CLEAN DROP security/virus állapotot követel;
+3. a projekt meglévő `Beérkező Drop` mappáját használja;
+4. a DROP objektumot a DRIVE saját bucketjébe másolja;
+5. szerveroldali SHA-256 ellenőrzést végez;
+6. a DRIVE verziót `source=DROP`, `QUARANTINED` technikai állapotban finalizálja;
+7. eltárolja a Drop package/file provenance-t és – ha a tárhely szolgáltatja – az S3 VersionId-t;
+8. a governance állapot `ELLENORZES_ALATT / PENDING`;
+9. a meglévő DRIVE review jóváhagyás után `ERVENYES / APPROVED`, elutasításkor `ELLENORZES_ALATT / REJECTED`;
+10. `KIADOTT` továbbra is kizárólag külön formális dokumentumkiadási RPC-vel hozható létre.
+
+Az import idempotens `dropIncomingKey` alapján, és a már véglegesített DROP csomag ismételt véglegesítési kérése reconciliation célból újra ellenőrzi a DRIVE beérkezést. Lejárt INITIATED munkamenet kontrolláltan újraindítható.
+
+A külső beküldő véglegesítését a belső DRIVE import hibája nem teszi sikertelenné: a belső szinkron fail-soft, külön `drive.incoming.completed` / `drive.incoming.failed` audit eseménnyel.
+
+DEV ellenőrzések:
+- Document Flow contract: 23/23 PASS
+- DROP → DRIVE Incoming contract: 22/22 PASS
+- DRIVE Core: 24/24 PASS
+- DRIVE Object Storage: 29/29 PASS
+- DECIDE Core: 82/82 PASS
+- `git diff --check`: PASS
+
+A régi DROP 0.8.0 / 0.9.1 contractok exact régi verziószámot várnak, ezért a jelenlegi DROP 1.2.13 baseline-on eleve hibásak. A DRIVE quarantine review contract ismert baseline CSS ellenőrzése 28/29. Ezeket ez a fejlesztés nem módosította.
+
+A Document Flow migráció továbbra sincs alkalmazva, a `DROP_DRIVE_INCOMING_ENABLED` nincs aktiválva, deploy/restart nem történt.

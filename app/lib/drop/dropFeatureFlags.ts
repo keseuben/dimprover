@@ -30,6 +30,7 @@ export function getDropFeatureFlags(): DropFeatureFlags {
     commentsEnabled: releaseGateEnabled && isEnabled(process.env.DROP_COMMENTS_ENABLED),
     pdfReportEnabled: releaseGateEnabled && isEnabled(process.env.DROP_PDF_REPORT_ENABLED),
     driveArchiveEnabled: releaseGateEnabled && isEnabled(process.env.DROP_DRIVE_ARCHIVE_ENABLED),
+    driveIncomingEnabled: releaseGateEnabled && isEnabled(process.env.DROP_DRIVE_INCOMING_ENABLED),
     driveDesktopEnabled: releaseGateEnabled && isEnabled(process.env.DROP_DRIVE_DESKTOP_ENABLED),
     aiImageCheckEnabled: releaseGateEnabled && isEnabled(process.env.DROP_AI_IMAGE_CHECK_ENABLED),
     issueRegisterLinkEnabled: releaseGateEnabled && isEnabled(process.env.DROP_ISSUE_REGISTER_LINK_ENABLED),

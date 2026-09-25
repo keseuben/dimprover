@@ -9,6 +9,11 @@ import {
   reviewDriveQuarantinedVersionRecord,
 } from "./reviewRepository";
 import type { DriveReviewAction } from "./types";
+import {
+  getDriveDocumentFlowHealth,
+  getDriveDocumentGovernance,
+  markDriveDocumentReview,
+} from "./documentFlowRepository";
 
 function normalizeAction(value: unknown): DriveReviewAction {
   const normalized = typeof value === "string" ? value.trim().toUpperCase() : "";
@@ -80,6 +85,26 @@ export async function reviewDriveQuarantinedVersion(input: {
     note,
     actorUserId: input.actorUserId,
   });
+  let documentFlow = null;
+  const documentFlowHealth = await getDriveDocumentFlowHealth();
+  if (documentFlowHealth.ready) {
+    const governance = await getDriveDocumentGovernance({
+      projectId: input.projectId,
+      documentId: input.documentId,
+      versionId: input.versionId,
+    });
+    if (governance && governance.issueStatus !== "ISSUED") {
+      documentFlow = await markDriveDocumentReview({
+        projectId: input.projectId,
+        documentId: input.documentId,
+        versionId: input.versionId,
+        action,
+        note,
+        actorUserId: input.actorUserId,
+      });
+    }
+  }
+
   let cleanup = null;
   if (action === "REJECT" && result.cleanupTask && !result.idempotent) {
     const storage = getDriveObjectStorageSafeStatus();
@@ -87,7 +112,7 @@ export async function reviewDriveQuarantinedVersion(input: {
       ? await executeCleanupTask(result.cleanupTask, input.actorUserId)
       : { task: result.cleanupTask, deleted: false, error: "A tárhelykapcsolat nincs konfigurálva; a törlési feladat függőben maradt." };
   }
-  return { ok: true as const, ...result, cleanup };
+  return { ok: true as const, ...result, cleanup, documentFlow };
 }
 
 export async function processDriveObjectCleanup(input: {

@@ -17,6 +17,8 @@ import {
 } from "./dropPublicRepository";
 import { sendDropPublicDeliveryEmails, type DropPublicMailFile } from "./dropPublicEmail";
 import { listDropPackageGroups } from "../dropGroupService";
+import { getDropFeatureFlags } from "../dropFeatureFlags";
+import { processDropDriveIncomingPackage } from "../archive/dropDriveIncomingService";
 
 function finalizeError(message: string, code: string, status: number, details?: Record<string, unknown>) {
   const error = new Error(message);
@@ -46,12 +48,28 @@ export async function finalizeDropPublicPackageById(input: {
 }) {
   const source = input.source || "worker";
   const claimed = await claimDropPackageFinalization(input.packageId);
-  if (claimed.state === "finalized") return {
-    finalized: true,
-    idempotent: true,
-    workflow: claimed.workflow,
-    delivery: persistedDeliverySummary(claimed.workflow),
-  };
+  if (claimed.state === "finalized") {
+    let driveIncoming: Record<string, unknown> | null = null;
+    if (claimed.workflow.workflowType === "submission_gate" && claimed.workflow.projectId && getDropFeatureFlags().driveIncomingEnabled) {
+      try {
+        driveIncoming = await processDropDriveIncomingPackage(input.packageId);
+      } catch (error) {
+        driveIncoming = {
+          ok: false,
+          status: "error",
+          code: errorCode(error) || "DROP_DRIVE_INCOMING_FAILED",
+          error: error instanceof Error ? error.message.slice(0, 500) : "Ismeretlen DROP → DRIVE beérkező hiba.",
+        };
+      }
+    }
+    return {
+      finalized: true,
+      idempotent: true,
+      workflow: claimed.workflow,
+      driveIncoming,
+      delivery: persistedDeliverySummary(claimed.workflow),
+    };
+  }
   const client = getDropSupabaseClient();
   try {
     const packageRow = await findDropPackageById(input.packageId);
@@ -290,10 +308,47 @@ export async function finalizeDropPublicPackageById(input: {
         originalFilesAttachedToEmail: false,
       },
     });
+    let driveIncoming: Record<string, unknown> | null = null;
+    if (workflow.workflowType === "submission_gate" && packageRow.project_id && getDropFeatureFlags().driveIncomingEnabled) {
+      try {
+        driveIncoming = await processDropDriveIncomingPackage(input.packageId);
+        await writeDropEvent({
+          packageId: input.packageId,
+          eventType: "drive.incoming.completed",
+          severity: "info",
+          actorName: packageRow.uploader_name,
+          actorEmail: packageRow.uploader_email,
+          payload: {
+            source,
+            workflowType: workflow.workflowType,
+            imported: typeof driveIncoming.imported === "number" ? driveIncoming.imported : null,
+            projectId: typeof driveIncoming.projectId === "string" ? driveIncoming.projectId : packageRow.project_id,
+          },
+        }).catch(() => undefined);
+      } catch (error) {
+        const code = errorCode(error) || "DROP_DRIVE_INCOMING_FAILED";
+        driveIncoming = {
+          ok: false,
+          status: "error",
+          code,
+          error: error instanceof Error ? error.message.slice(0, 500) : "Ismeretlen DROP → DRIVE beérkező hiba.",
+        };
+        await writeDropEvent({
+          packageId: input.packageId,
+          eventType: "drive.incoming.failed",
+          severity: "error",
+          actorName: packageRow.uploader_name,
+          actorEmail: packageRow.uploader_email,
+          payload: { code, source, workflowType: workflow.workflowType },
+        }).catch(() => undefined);
+      }
+    }
+
     return {
       finalized: true,
       idempotent: false,
       workflow: updated,
+      driveIncoming,
       delivery: {
         attempted: mail.attempted,
         sent: totalSent,

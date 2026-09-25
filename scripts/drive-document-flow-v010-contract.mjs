@@ -48,6 +48,12 @@ check("formal issue sets KIADOTT", () => assert.match(migration, /set business_s
 check("direct access revoked", () => assert.match(migration, /revoke all on table public\.drive_core_document_governance from public,anon,authenticated/i));
 check("service role grants", () => assert.match(migration, /grant execute on function public\.drive_core_issue_document_version_atomic/));
 check("schema marker", () => assert.match(migration, /drive-document-flow-v010-20260925/));
+check("drive change events", () => {
+  assert.match(migration, /DOCUMENT_INCOMING_REGISTERED/);
+  assert.match(migration, /DOCUMENT_MARKED_VALID/);
+  assert.match(migration, /DOCUMENT_VERSION_ISSUED/);
+});
+check("issued governance is review immutable", () => assert.match(migration, /issue_status='ISSUED'[\s\S]*idempotent',true/));
 check("no audit constraint rewrite", () => assert.doesNotMatch(migration, /drop constraint.*project_core_audit_entity_type_check/i));
 
 const pass = checks.filter((item) => item.pass).length;
