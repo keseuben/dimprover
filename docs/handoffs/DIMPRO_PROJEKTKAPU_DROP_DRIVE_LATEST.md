@@ -437,3 +437,80 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 Ezzel a céges pilot konfigurációs oldalán a mail már nem kötelező indulási feltétel. A tényleges következő blocker a DEV Document Flow 0.1.0 SQL migrációhoz szükséges PostgreSQL credential.
+
+
+## 2026-09-25 – DEV Document Flow migráció alkalmazva + full build TS javítás
+
+A DRIVE Document Flow 0.1.0 migráció a canonical **DEV Supabase** adatbázison sikeresen alkalmazva.
+
+Biztonsági végrehajtás:
+- cél: DEV Supabase project ref `pbgyuznivqvestuksvif`;
+- DB user: `postgres.pbgyuznivqvestuksvif`;
+- a központi vezérlő VPS meglévő `/root/.pgpass` DEV bejegyzése szolgált hitelesítésként;
+- PROD DB-jelszó / PROD target nem került használatra;
+- migráció SHA-256:
+  `ecff3a81d3917aaedaa00deee5358eb4dc93b1081c511b24fcb6b85436968fb0`.
+
+Migráció előtti célzott backup:
+`/srv/dimpro-dev/backups/drive-document-flow-v010/20260925T201731Z/drive-document-flow-v010-before.dump`
+
+- backup mode: 0600;
+- `pg_restore -l` ellenőrzés: PASS;
+- mentett táblák: `drive_core_documents`, `drive_core_document_versions`, `drive_core_upload_sessions`, `drive_storage_schema_meta`.
+
+Migráció eredmény:
+- tranzakció: COMMIT;
+- meglévő adatmennyiségek változatlanok:
+  - dokumentum: 35 → 35;
+  - verzió: 38 → 38;
+  - upload session: 38 → 38;
+- új governance / issue / recipient / sequence táblák létrejöttek;
+- `storage_version_id` mezők létrejöttek;
+- marker:
+  - schemaVersion: `0.1.0`;
+  - migrationCount: `1`;
+  - bootstrapId: `drive-document-flow-v010-20260925`.
+
+Biztonsági utóellenőrzés:
+- register / review / issue RPC: PASS;
+- RLS: aktív;
+- anon/auth közvetlen governance SELECT: tiltott;
+- service_role SELECT: engedélyezett;
+- anon/auth register és issue RPC EXECUTE: tiltott;
+- service_role RPC EXECUTE: engedélyezett;
+- REST Document Flow probe: PASS;
+- három új REST tábla: HTTP 200;
+- schema marker REST: HTTP 200.
+
+A staged Projektkapu manual-link DEV pilot preflight a migráció után:
+- `ready=true`;
+- blockerCount: **0**;
+- egyetlen warning: `DROP_MAIL_PROFILE_OPTIONAL_IN_MANUAL_LINK_MODE`.
+
+### Full candidate build
+
+Külön candidate source-ból indult teljes Next.js standalone build.
+
+Első candidate kísérlet node_modules symlink miatt Turbopack filesystem-root hibával megállt; az érintett candidate könyvtár nem került törlésre.
+
+Új candidate készült hardlinkelt node_modules-szal:
+`/srv/dimpro-dev/candidates/projectkapu-drop-drive-pilot/source-hardlink-fd94eab1f9da-20260925T202042Z`
+
+A build:
+- Turbopack compile: **PASS** (117 s);
+- teljes TypeScript fázisban egy Projektkapu Document Flow hibát talált:
+  `issue/route.ts` – a normalizált címzett `type` mezője `string`-gé tágult.
+
+Javítás:
+- explicit `NormalizedRecipient` típus;
+- `type: "PROJECT_MEMBER" | "EMAIL"`;
+- explicit normalize függvény visszatérési típus;
+- literal union megőrzése.
+
+Ellenőrzés:
+- Document Flow API/UI contract: **12/12 PASS**;
+- issue route syntactic TypeScript check: PASS;
+- releváns Projektkapu / DROP / DRIVE / DECIDE regressziós contractok: PASS;
+- `git diff --check`: PASS.
+
+Következő lépés: új commit HEAD-ből friss candidate source + teljes standalone rebuild; build PASS után ideiglenes, külön portos DEV runtime smoke, shared runtime módosítása nélkül.

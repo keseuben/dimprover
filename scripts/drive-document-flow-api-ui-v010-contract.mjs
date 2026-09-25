@@ -13,6 +13,7 @@ const ui=fs.readFileSync(path.join(root,"components/project-gate/DriveWorkspace.
 const checks=[];const check=(name,fn)=>{try{fn();checks.push({name,pass:true})}catch(error){checks.push({name,pass:false,error:error instanceof Error?error.message:String(error)})}};
 check("list permission document.read",()=>assert.match(list,/requireProjectPermission\(request, projectId, "document\.read"\)/));
 check("issue permission document.approve",()=>assert.match(issue,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
+check("issue recipient literals remain typed",()=>assert.match(issue,/type NormalizedRecipient/) && assert.match(issue,/NormalizedRecipient\["type"\] \| null/));
 check("list repository",()=>assert.match(repo,/export async function listDriveDocumentFlow/));
 check("issue repository",()=>assert.match(repo,/export async function issueDriveDocumentVersion/));
 check("formal issue RPC",()=>assert.match(repo,/drive_core_issue_document_version_atomic/));

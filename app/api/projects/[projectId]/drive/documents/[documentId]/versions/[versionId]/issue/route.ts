@@ -18,12 +18,20 @@ type RecipientInput = {
   organization?: unknown;
 };
 
-function normalizeRecipients(value: unknown) {
+type NormalizedRecipient = {
+  type: "PROJECT_MEMBER" | "EMAIL";
+  userId: string | null;
+  email: string | null;
+  name: string;
+  organization: string;
+};
+
+function normalizeRecipients(value: unknown): NormalizedRecipient[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 200).flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const row = item as RecipientInput;
-    const type = row.type === "PROJECT_MEMBER" ? "PROJECT_MEMBER" : row.type === "EMAIL" ? "EMAIL" : null;
+    const type: NormalizedRecipient["type"] | null = row.type === "PROJECT_MEMBER" ? "PROJECT_MEMBER" : row.type === "EMAIL" ? "EMAIL" : null;
     if (!type) return [];
     return [{
       type,
