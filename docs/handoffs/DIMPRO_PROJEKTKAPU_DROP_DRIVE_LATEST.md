@@ -531,3 +531,46 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 Következő: új HEAD-ből teljes candidate rebuild.
+
+## 2026-09-25 – Projektkapu DROP → DRIVE pilot candidate acceptance
+
+A céges pilothoz készített külön DEV candidate teljes build- és runtime-ellenőrzése lezárult.
+
+Candidate source commit:
+`cfe55ceccf928038cf3690c7efd33e403cacd2c7`
+
+Build:
+- `npm run build:raw`: PASS;
+- Turbopack compile: PASS;
+- TypeScript: PASS;
+- page data / route generation: PASS;
+- standalone asset sync: PASS;
+- build ID: `BHyYtYcPMw0cmLjln2XfR`;
+- release metadata branch: `worker/benjaminai/dev-task-grid-22b48c4d9bae10e22e09`;
+- release metadata commit: `cfe55ceccf928038cf3690c7efd33e403cacd2c7`;
+- 259 static chunk ellenőrizve.
+
+Végső külön portos runtime smoke:
+- candidate port: `127.0.0.1:3299`;
+- Next.js 16.2.6: Ready;
+- `/login` → 200;
+- `/projektkapu` → 307 (auth redirect, elvárt);
+- `/api/projects/test-project/drop/submission-gates` → 401 (auth védelem, elvárt);
+- `/api/projects/test-project/drive/health` → 401 (auth védelem, elvárt);
+- 5xx: nincs;
+- HTTP smoke: PASS;
+- ideiglenes smoke process leállítva;
+- port 3299 felszabadítva.
+
+DEV adatbázis:
+- Document Flow 0.1.0 migráció alkalmazva;
+- backup: `/srv/dimpro-dev/backups/drive-document-flow-v010/20260925T201731Z/drive-document-flow-v010-before.dump`;
+- RLS/RPC/REST security verify: PASS;
+- staged pilot preflight: `ready=true`, blockerCount=0;
+- manual-link pilot warning: a mail profil opcionális, nem blokkoló.
+
+Publikus DEV cím:
+- `https://projektkapu.dev.dimpro.hu/`
+- login: `https://projektkapu.dev.dimpro.hu/login`
+
+Fontos: a fenti candidate még nincs rákapcsolva a shared/public DEV runtime-ra. A következő külön lépés a DEV candidate publikálása a `projektkapu.dev.dimpro.hu` mögé, majd hitelesített valós Beküldőkapu → DROP → DRIVE E2E teszt. PROD továbbra is DENY.
