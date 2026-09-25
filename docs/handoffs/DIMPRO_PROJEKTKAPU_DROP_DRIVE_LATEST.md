@@ -119,3 +119,40 @@ Elkészült:
 A pilot jelenleg a kiadási rekordot és címzetteket kezeli, de külső címzetti e-mail/letöltőkapu még nincs bekötve.
 
 Blokkoló a tényleges böngészős E2E előtt: a Document Flow SQL candidate még nincs alkalmazva, és a `DROP_DRIVE_INCOMING_ENABLED` feature flag nincs aktiválva. Ezekhez külön engedély szükséges.
+
+
+## 2026-09-25 – Git / Central Grid / Dev Center Engine szinkron helyreállítás
+
+A Projektkapu task központi rögzítése helyre lett állítva.
+
+Task:
+- `dev-task-grid-22b48c4d9bae10e22e09`
+- worker: `BENJAMINAI`
+- Grid session: `grid-work-dev-task-grid-22b48c4d9bae10e22e09-benjaminai`
+- branch: `worker/benjaminai/dev-task-grid-22b48c4d9bae10e22e09`
+- worktree: `/srv/dimpro-dev/worktrees/worker-benjaminai-dev-task-grid-22b48c4d9bae10e22e09`
+- source checkpoint a jelen handoff-frissítés előtt: `7b74aec4ebf83e9e424ebe51a3c4efb80588d927`
+
+Rendezett állapot:
+- local worker branch pusholva az `origin` remote-ra;
+- local és remote HEAD a source checkpointnál egyezett;
+- Central Grid Projectkapu worker session: `3/6 TESZTELÉS`;
+- Central Grid source state: `VERIFIED`;
+- BOOT ACK: `VALIDATED`;
+- korábbi stale BOOT ACK blocker evidence feloldva;
+- unresolved Grid blocker: 0;
+- Dev Center Engine task új aktív BenjáminAI sessionnel helyreállítva;
+- engine session: `dev-session-fc723dc8-f48`;
+- engine task status: `testing`;
+- bridge state: `RESULT_PENDING`;
+- workflow state: `TESTING`.
+
+Fontos: a Developer Gridben más worker taskja lehet az aktuális globális task pointer. A Projektkapu task ettől függetlenül külön aktív BenjáminAI sessionként követett. Más worker globális taskját **tilos felülírni vagy elvenni** a Projektkapu szinkron kedvéért.
+
+A további csevegőváltások és fejlesztési blokkok kötelező általános protokollja:
+
+`docs/handoffs/BENJADMIN_ALTALANOS_CSEVEGOVALTO_GRID_FOLYTATASI_PROMPT_V2.md`
+
+A jelen handoff-frissítést tartalmazó commit SHA önhivatkozás miatt nem kerül ebbe a fájlba; a commit után a final HEAD-et külön Git/remote/Grid ellenőrzés rögzíti.
+
+Következő fejlesztési lépés továbbra is: DEV Document Flow migrációs gate + DEV runtime E2E, PROD DENY.

@@ -308,3 +308,16 @@ Ilyenkor **ne menj tovább a következő fejlesztési fázisba**.
 **Verzió:** V2  
 **Készült:** 2026-09-25  
 **Alapelv:** nincs „kész” fejlesztési checkpoint bizonyított Git + remote + Grid + handoff konzisztencia nélkül.
+
+
+### Handoff-commit önhivatkozási szabály
+
+Ha maga a handoff frissítése hozza létre a következő Git commitot, **ne próbáld a fájlba beírni a saját, még nem létező commit SHA-ját**, mert az önhivatkozó és minden módosítás új SHA-t eredményezne.
+
+Ilyenkor:
+
+1. a handoffba írd be a handoff frissítése előtti **source checkpoint HEAD-et**;
+2. commitold és pushold a handoffot;
+3. a létrejött **final HEAD-et** szinkronizáld a Central Gridbe;
+4. ellenőrizd: local = remote = Grid final HEAD;
+5. a final HEAD bizonyítéka a Git/remote/Grid state legyen, ne önhivatkozó szöveg a commitolt fájlban.
