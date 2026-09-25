@@ -156,3 +156,39 @@ A további csevegőváltások és fejlesztési blokkok kötelező általános pr
 A jelen handoff-frissítést tartalmazó commit SHA önhivatkozás miatt nem kerül ebbe a fájlba; a commit után a final HEAD-et külön Git/remote/Grid ellenőrzés rögzíti.
 
 Következő fejlesztési lépés továbbra is: DEV Document Flow migrációs gate + DEV runtime E2E, PROD DENY.
+
+
+## 2026-09-25 – Document Flow V0.1.0 migration gate / REST probe
+
+Elkészült a DEV-only migrációs biztonsági kapu:
+
+- `scripts/drive-document-flow-v010-migration-gate.mjs`
+- `scripts/drive-document-flow-v010-rest-probe.mjs`
+- `scripts/drive-document-flow-v010-migration-gate-contract.mjs`
+
+A gate:
+- canonical DEV Supabase project refet ellenőriz;
+- a migráció SHA-256 értékét rögzítetten ellenőrzi;
+- PROD-ref egyezés esetén fail-closed blokkol;
+- PostgreSQL credential nélkül nem futtat SQL-t;
+- apply előtt külön explicit DEV approval phrase szükséges;
+- apply előtt `pg_dump` backupot készít és `pg_restore -l` ellenőrzést futtat;
+- a meglévő document/version/upload rekordszámokat védi;
+- utóellenőrzi a Document Flow táblákat, marker verziót, RLS-t és service-role-only RPC jogokat.
+
+Aktuális DEV runtime probe eredmény:
+- canonical DEV projekt: igazolt;
+- Document Flow readiness: `false`;
+- `drive_core_document_governance`: PGRST205 / nincs alkalmazva;
+- `drive_core_document_issues`: PGRST205 / nincs alkalmazva;
+- `drive_core_document_issue_recipients`: PGRST205 / nincs alkalmazva;
+- marker rekord: még nincs;
+- SQL apply: **nem történt**;
+- blokkoló ok: `DRIVE_DOCUMENT_FLOW_V010_DB_CREDENTIAL_REQUIRED`.
+
+Contract:
+- migration gate: 13/13 PASS;
+- REST probe: read-only;
+- `git diff --check`: PASS.
+
+Következő: DEV runtime candidate/build ellenőrzés a séma nélkül is fail-closed health viselkedéssel; a tényleges SQL apply csak DEV DB credential rendelkezésre állásakor.
