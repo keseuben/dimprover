@@ -192,3 +192,22 @@ Contract:
 - `git diff --check`: PASS.
 
 Következő: DEV runtime candidate/build ellenőrzés a séma nélkül is fail-closed health viselkedéssel; a tényleges SQL apply csak DEV DB credential rendelkezésre állásakor.
+
+
+## 2026-09-25 – Interaktív DEV migration apply helper
+
+Elkészült:
+- `scripts/drive-document-flow-v010-dev-apply-interactive.sh`
+- `scripts/drive-document-flow-v010-dev-apply-interactive-contract.mjs`
+
+A helper:
+- kizárólag `dimpro-dev` hoston fut;
+- a DEV Supabase PostgreSQL-jelszót `read -s` módban kéri be;
+- a jelszót nem írja ki és nem menti fájlba;
+- EXIT trapben törli a jelszó és approval környezeti változókat;
+- preflight után külön `APPLY` megerősítést kér;
+- ezután backup + apply + verify + REST readiness probe sorrendben fut;
+- PROD deploy/restart/parancsot nem tartalmaz.
+
+Contract: 10/10 PASS.
+A helper létrehozása önmagában nem futtatott SQL migrációt.
