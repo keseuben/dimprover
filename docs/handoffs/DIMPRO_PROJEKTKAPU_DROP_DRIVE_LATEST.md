@@ -265,3 +265,50 @@ Ellenőrzés:
 - DriveWorkspace TSX syntactic TypeScript check: PASS;
 - pilot readiness / Document Flow API-UI / DROP→DRIVE regresszió: PASS;
 - `git diff --check`: PASS.
+
+
+## 2026-09-25 – Projektkapuhoz kötött Beküldőkapu V0.1.0
+
+A Projektkapu DRIVE felületből közvetlenül kezelhető projektkötött külső Beküldőkapu készült.
+
+Új projekt-scope API:
+- `GET /api/projects/[projectId]/drop/submission-gates`
+- `POST /api/projects/[projectId]/drop/submission-gates`
+- `PATCH /api/projects/[projectId]/drop/submission-gates`
+
+Biztonsági és scope-szabályok:
+- `document.write` projektjogosultság kötelező;
+- a kliens nem adhat meg tetszőleges `projectId` értéket;
+- a route az URL-ben lévő, jogosultsággal ellenőrzött projektet kényszeríti rá;
+- gate type mindig `project`;
+- projekt neve a Project Core-ból származik;
+- a Drive célmappa mindig `Beérkező Drop`;
+- egy projektkapuhoz pontosan egy belső címzett kerül átadásra;
+- a külső link védelme `link_pin`;
+- létrehozás és újraaktiválás csak teljes DROP → DRIVE readiness mellett engedett;
+- lezárás readiness hiba esetén is elvégezhető;
+- más projekthez tartozó gate PATCH művelete scope mismatch hibával blokkolódik.
+
+Drive UI:
+- új `Beküldőkapu` gomb a DRIVE fejlécben;
+- projektkapu létrehozó űrlap;
+- belső címzett név/e-mail;
+- megőrzési idő;
+- külső feltöltőnek szóló leírás;
+- létrehozott publikus link másolása és megnyitása;
+- meglévő projektkapuk listája;
+- lezárás és readiness esetén újraaktiválás;
+- mobilbarát megjelenítés.
+
+A létrehozó UI fail-closed: amíg a Document Flow / DROP → DRIVE pipeline nem kész, az új kapu létrehozása tiltott, de a meglévő kapuk listája és lezárása elérhető.
+
+Ellenőrzés:
+- Project Drop gate route contract: 16/16 PASS;
+- Project Drop gate UI contract: 15/15 PASS;
+- route TypeScript syntactic check: PASS;
+- DriveWorkspace TSX syntactic check: PASS;
+- health import/export paths ellenőrizve;
+- pilot readiness / business filter / DROP→DRIVE / Document Flow API-UI / Document Flow schema / DRIVE Core / Object Storage / DECIDE regresszió: PASS;
+- `git diff --check`: PASS.
+
+A DEV Document Flow SQL továbbra sem került alkalmazásra; a PostgreSQL credential blocker változatlanul nyitva marad.

@@ -95,6 +95,33 @@ type DocumentFlowPayload = {
   governance?: DriveDocumentGovernance[];
   issues?: DriveDocumentIssue[];
 };
+type ProjectDropGate = {
+  id: string;
+  slug: string;
+  type: "project";
+  title: string;
+  description: string;
+  status: "active" | "revoked" | "expired";
+  recipients: Array<{ id?: string; name: string; email: string; label?: string; company?: string; projectRole?: string }>;
+  projectId: string | null;
+  projectName: string | null;
+  targetFolder: string | null;
+  retentionDays: number;
+  expiresAt: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  publicUrl: string;
+};
+type ProjectDropGatePayload = {
+  ok?: boolean;
+  error?: string;
+  code?: string;
+  project?: { id: string; code: string; name: string };
+  gates?: ProjectDropGate[];
+  gate?: ProjectDropGate;
+  publicUrl?: string;
+};
 
 function formatBusinessStatus(status: DriveDocumentGovernance["businessStatus"]) {
   if (status === "BEJOVO") return "Bejövő";
@@ -286,6 +313,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [showDocumentForm, setShowDocumentForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showGateForm, setShowGateForm] = useState(false);
+  const [projectSubmissionGates, setProjectSubmissionGates] = useState<ProjectDropGate[]>([]);
+  const [gateLoading, setGateLoading] = useState(false);
+  const [createdGateUrl, setCreatedGateUrl] = useState("");
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [uploadBatchBusy, setUploadBatchBusy] = useState(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
@@ -400,6 +431,101 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
     return matchesBusinessFilter(governance, businessFilter);
   }), [baseVisibleDocuments, businessFilter, documentFlowByVersion]);
+
+  async function loadProjectSubmissionGates() {
+    setGateLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drop/submission-gates`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = await response.json() as ProjectDropGatePayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekt Beküldőkapui nem tölthetők be.");
+      setProjectSubmissionGates(payload.gates || []);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A projekt Beküldőkapui nem tölthetők be.");
+    } finally {
+      setGateLoading(false);
+    }
+  }
+
+  async function toggleProjectGateForm() {
+    if (showGateForm) {
+      setShowGateForm(false);
+      return;
+    }
+    setShowGateForm(true);
+    setCreatedGateUrl("");
+    await loadProjectSubmissionGates();
+  }
+
+  async function copyProjectGateUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("A Beküldőkapu linkje a vágólapra került.");
+    } catch {
+      setError("A Beküldőkapu linkje nem másolható automatikusan.");
+    }
+  }
+
+  async function submitProjectGate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!dropDriveIncomingReady) {
+      setError(health?.dropDriveIncoming?.nextStep || "A DROP → DRIVE fogadási lánc még nem áll készen.");
+      return;
+    }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setBusy(true); setError(""); setNotice(""); setCreatedGateUrl("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drop/submission-gates`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: form.get("title"),
+          description: form.get("description"),
+          recipient: {
+            name: form.get("recipientName"),
+            email: form.get("recipientEmail"),
+            label: "Projekt címzett",
+            projectRole: "Projektkapu",
+          },
+          retentionDays: Number(form.get("retentionDays") || 5),
+        }),
+      });
+      const payload = await response.json() as ProjectDropGatePayload;
+      if (!response.ok || !payload.ok || !payload.publicUrl) throw new Error(payload.error || "A projekt Beküldőkapu nem hozható létre.");
+      setCreatedGateUrl(payload.publicUrl);
+      setNotice("A projekt Beküldőkapu elkészült. A link külső partnernek átadható.");
+      formElement.reset();
+      await loadProjectSubmissionGates();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A projekt Beküldőkapu létrehozása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateProjectGateStatus(gate: ProjectDropGate, status: "active" | "revoked") {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drop/submission-gates`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: gate.id, status }),
+      });
+      const payload = await response.json() as ProjectDropGatePayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A Beküldőkapu állapota nem módosítható.");
+      setNotice(status === "revoked" ? "A Beküldőkapu lezárva." : "A Beküldőkapu újra aktív.");
+      await loadProjectSubmissionGates();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A Beküldőkapu állapotmódosítása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitFolder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -820,6 +946,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         </div>
         <div className={styles.actions}>
           <button type="button" onClick={() => void load()} title="Dokumentumtár frissítése"><RefreshCw size={16} /> Frissítés</button>
+          {canWrite && <button type="button" onClick={() => void toggleProjectGateForm()} title={dropDriveIncomingReady ? "Projekt Beküldőkapu létrehozása és kezelése" : health?.dropDriveIncoming?.nextStep || "A Beküldőkapu fogadási lánca még nem kész."}><Send size={16} /> Beküldőkapu</button>}
           {canWrite && <button type="button" onClick={() => setShowFolderForm((value) => !value)}><FolderPlus size={16} /> Új mappa</button>}
           {canWrite && <button
             type="button"
@@ -920,8 +1047,34 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         </div>
       </section>}
 
-      {(showFolderForm || showDocumentForm || showUploadForm) && (
+      {(showFolderForm || showDocumentForm || showUploadForm || showGateForm) && (
         <div className={styles.formsRow}>
+          {showGateForm && <form onSubmit={submitProjectGate} className={`${styles.formCard} ${styles.gateForm}`} data-project-drop-gate="0.1.0">
+            <header><Send size={17} /><strong>Projekt Beküldőkapu</strong></header>
+            {!dropDriveIncomingReady && <div className={styles.gateReadinessBlocked}><AlertTriangle size={16} /><span>{health?.dropDriveIncoming?.nextStep || "A DROP → DRIVE fogadási lánc még nem kész."}</span></div>}
+            <div className={styles.formSplit}>
+              <label>Kapu címe<input name="title" required minLength={3} maxLength={200} placeholder="pl. Kiviteli tervek beküldése" /></label>
+              <label>Megőrzés<select name="retentionDays" defaultValue="5"><option value="1">1 nap</option><option value="3">3 nap</option><option value="5">5 nap</option><option value="7">7 nap</option></select></label>
+            </div>
+            <div className={styles.formSplit}>
+              <label>Belső címzett neve<input name="recipientName" required maxLength={160} placeholder="pl. Keserű Benjámin" /></label>
+              <label>Belső címzett e-mail<input name="recipientEmail" type="email" required maxLength={254} placeholder="nev@ceg.hu" /></label>
+            </div>
+            <label>Üzenet a feltöltőnek<textarea name="description" rows={2} maxLength={2000} placeholder="Mit és milyen formában kérsz beküldeni?" /></label>
+            <small>A kapu automatikusan ehhez a projekthez és a „Beérkező Drop” Drive-mappához kötődik. A külső fél nem választhat más projektet vagy célmappát.</small>
+            <footer><button type="button" onClick={() => setShowGateForm(false)}>Bezárás</button><button type="submit" disabled={busy || !dropDriveIncomingReady}>{busy ? "Létrehozás…" : "Beküldőkapu létrehozása"}</button></footer>
+            {createdGateUrl && <div className={styles.gateCreated}><Check size={16} /><div><strong>Új kapu elkészült</strong><code>{createdGateUrl}</code></div><button type="button" onClick={() => void copyProjectGateUrl(createdGateUrl)}>Link másolása</button><a href={createdGateUrl} target="_blank" rel="noreferrer">Megnyitás</a></div>}
+            <div className={styles.gateList}>
+              <div className={styles.gateListHeader}><strong>Projekt kapui</strong><span>{gateLoading ? "Betöltés…" : `${projectSubmissionGates.length} kapu`}</span></div>
+              {!gateLoading && projectSubmissionGates.length === 0 && <small>Még nincs ehhez a projekthez tartozó Beküldőkapu.</small>}
+              {projectSubmissionGates.map((gate) => <article key={gate.id}>
+                <div><strong>{gate.title}</strong><small>{gate.targetFolder || "Beérkező Drop"} · lejár: {formatDate(gate.expiresAt)}</small><code>{gate.publicUrl}</code></div>
+                <b>{gate.status === "active" ? "Aktív" : gate.status === "revoked" ? "Lezárt" : "Lejárt"}</b>
+                <button type="button" onClick={() => void copyProjectGateUrl(gate.publicUrl)}>Másolás</button>
+                {gate.status !== "expired" && <button type="button" disabled={busy || (gate.status !== "active" && !dropDriveIncomingReady)} onClick={() => void updateProjectGateStatus(gate, gate.status === "active" ? "revoked" : "active")}>{gate.status === "active" ? "Lezárás" : "Újraaktiválás"}</button>}
+              </article>)}
+            </div>
+          </form>}
           {showFolderForm && <form onSubmit={submitFolder} className={styles.formCard}>
             <header><FolderPlus size={17} /><strong>Új projektmappa</strong></header>
             <label>Szülőmappa<select name="parentId" defaultValue={selectedFolderId === "all" ? "" : selectedFolderId}><option value="">Projekt gyökér</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>

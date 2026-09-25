@@ -167,6 +167,32 @@
 .uploadForm {
   grid-column: 1 / -1;
 }
+.gateForm { grid-column: 1 / -1; }
+.gateReadinessBlocked { display: flex; align-items: center; gap: 7px; padding: 8px 9px; border-left: 3px solid var(--pg-warning); background: color-mix(in srgb,var(--pg-warning) 8%,var(--pg-surface)); color: var(--pg-text-secondary); font-size: 12px; }
+.gateReadinessBlocked svg { flex: 0 0 auto; color: var(--pg-warning); }
+.gateCreated { display: grid; grid-template-columns: 22px minmax(0,1fr) auto auto; gap: 8px; align-items: center; padding: 9px; border: 1px solid color-mix(in srgb,var(--pg-success) 35%,var(--pg-border)); border-radius: 7px; background: color-mix(in srgb,var(--pg-success) 7%,var(--pg-surface)); }
+.gateCreated > svg { color: var(--pg-success); }
+.gateCreated div { min-width: 0; }
+.gateCreated strong, .gateCreated code { display: block; }
+.gateCreated code { margin-top: 3px; overflow: hidden; color: var(--pg-text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.gateCreated a { padding: 7px 9px; border: 1px solid var(--pg-border); border-radius: 7px; background: var(--pg-surface); color: var(--pg-primary-active); font-size: 12px; font-weight: 780; text-decoration: none; }
+.gateList { display: grid; gap: 6px; margin-top: 3px; }
+.gateListHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gateListHeader strong { color: var(--pg-heading); font-size: 12px; }
+.gateListHeader span { color: var(--pg-text-muted); font-size: 11px; }
+.gateList article { display: grid; grid-template-columns: minmax(0,1fr) auto auto auto; gap: 7px; align-items: center; padding: 8px 9px; border: 1px solid var(--pg-border); border-radius: 7px; background: var(--pg-surface); }
+.gateList article > div { min-width: 0; }
+.gateList article strong, .gateList article small, .gateList article code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gateList article strong { color: var(--pg-heading); font-size: 12px; }
+.gateList article small { margin-top: 2px; color: var(--pg-text-muted); font-size: 11px; }
+.gateList article code { margin-top: 3px; color: var(--pg-text-secondary); font-size: 10px; }
+.gateList article > b { color: var(--pg-primary-active); font-size: 11px; }
+@media (max-width: 760px) {
+  .gateCreated { grid-template-columns: 22px minmax(0,1fr); }
+  .gateCreated button, .gateCreated a { grid-column: 2; }
+  .gateList article { grid-template-columns: minmax(0,1fr) auto; }
+  .gateList article button { grid-column: span 1; }
+}
 
 .downloadButton {
   display: grid;
