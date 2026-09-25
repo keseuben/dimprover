@@ -57,3 +57,18 @@ A teljes TypeScript/lint/build ebben a körben nem futtatható biztonságosan: a
 ## Következő egyetlen lépés
 
 Additív DEV adatmodell-terv és migrációs candidate készítése a perzisztált dokumentuméletciklus + issue rekord + S3 object version reference számára. Migrációt még nem szabad futtatni. Előtte az authoritative review kapcsolatot úgy kell kialakítani, hogy a meglévő DRIVE review és DECIDE ne tárolja ugyanazt a döntést két eltérő truth source-ként.
+
+
+## 2026-09-25 – Document Flow V0.1.0 candidate elkészült
+
+A DEV worktree-ben elkészült az additív dokumentumforgalmi adatmodell. A candidate migráció nem lett alkalmazva adatbázisra és PROD művelet nem történt.
+
+Contract: 21/21 PASS.
+
+Következő fejlesztési blokk:
+1. DROP → DRIVE beérkező service a meglévő `Beérkező Drop` projektmappára építve;
+2. új külső fájl: CLEAN DROP objektum → külön DRIVE bucket → `QUARANTINED` DRIVE verzió;
+3. provenance: Drop package/file azonosító → governance;
+4. DRIVE security scan;
+5. meglévő review után governance `ERVENYES/REJECTED` szinkron;
+6. csak külön formális kiadás után `KIADOTT`.

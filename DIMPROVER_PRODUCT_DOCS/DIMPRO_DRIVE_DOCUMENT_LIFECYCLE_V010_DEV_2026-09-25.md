@@ -59,3 +59,25 @@ A compatibility projection szándékosan nem konvertálja az `AVAILABLE` állapo
 ## Fontos korlát
 
 Ez a v0.1.0 lépés nem módosít adatbázist, nem futtat migrációt, nem változtat letöltési jogosultságot, nem deployol, és nem ér PROD erőforráshoz. A cél a domainhatár kódba rögzítése és regressziós contract létrehozása.
+
+
+## 2026-09-25 – Document Flow V0.1.0 adatmodell-candidate
+
+Elkészült a Projektkapu Dokumentumforgalom Pilot additív DEV adatmodell-candidate-je. A migráció még nincs alkalmazva.
+
+Új perzisztens rétegek:
+- dokumentumverzió governance: üzleti életciklus, review döntés, review mód, issue státusz, DROP provenance;
+- formális dokumentumkiadás és kiadási sorszám;
+- kiadási címzettek;
+- S3 object `storage_version_id` helye a dokumentumverzió- és upload-session rekordokon.
+
+Alapszabály: a technikai `AVAILABLE` nem jelent automatikusan `KIADOTT` állapotot. A jóváhagyás `ERVENYES` állapotot hoz létre; `KIADOTT` csak külön formális issue művelettel, legalább egy címzettel jöhet létre.
+
+A DECIDE nem külön dokumentum-truth-source: a governance rekord marad authoritative, a DECIDE opcionális jóváhagyási workflow-ként kapcsolható.
+
+Candidate:
+- `supabase/migrations/20260925_drive_document_flow_v010.sql`
+- `supabase/DIMPRO_PROJEKTKAPU_DRIVE_DOCUMENT_FLOW_V010_MIGRATION.sql`
+- `scripts/drive-document-flow-v010-contract.mjs`
+
+Contract: 21/21 PASS. Migráció futtatása külön jóváhagyásig tilos.
