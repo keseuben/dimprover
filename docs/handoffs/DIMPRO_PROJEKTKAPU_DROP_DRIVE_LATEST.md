@@ -242,3 +242,26 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 A DEV SQL blocker továbbra is valós: a Document Flow 0.1.0 séma még nincs alkalmazva.
+
+
+## 2026-09-25 – DRIVE üzleti státusz szűrő / ellenőrzési sor
+
+A Drive dokumentumlistában külön üzleti státusz-szűrő készült a napi projektvezetői munkához.
+
+Szűrők:
+- Mind;
+- Ellenőrzésre vár: BEJOVO / ELLENORZES_ALATT / PENDING;
+- Érvényes: ERVENYES + APPROVED;
+- Kiadott: KIADOTT vagy ISSUED;
+- Elutasított: REJECTED;
+- Archív: ARCHIV.
+
+A szűrő a meglévő mappa-, forrás- és szöveges keresés után működik, ezért például külön megnyitható a Beérkező Drop mappa, majd azon belül csak az ellenőrzésre váró dokumentumok. Minden státuszgomb saját darabszámot mutat az aktuális alapnézetre.
+
+A státuszsáv csak aktív Document Flow esetén jelenik meg; mobilon vízszintesen görgethető.
+
+Ellenőrzés:
+- business filter contract: 11/11 PASS;
+- DriveWorkspace TSX syntactic TypeScript check: PASS;
+- pilot readiness / Document Flow API-UI / DROP→DRIVE regresszió: PASS;
+- `git diff --check`: PASS.

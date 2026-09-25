@@ -314,6 +314,12 @@
 .sourceFilters button { padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--pg-text-muted); font-size: 12px; font-weight: 750; cursor: pointer; }
 .sourceFilters button:hover { color: var(--pg-heading); }
 .filterActive { background: var(--pg-surface) !important; color: var(--pg-primary-active) !important; box-shadow: 0 1px 4px color-mix(in srgb,var(--pg-heading) 10%,transparent); }
+.statusFilterBar { display: flex; align-items: center; gap: 4px; padding: 7px 12px; overflow-x: auto; border-bottom: 1px solid var(--pg-border); background: var(--pg-bg-secondary); }
+.statusFilterBar > span { flex: 0 0 auto; margin-right: 3px; color: var(--pg-text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.statusFilterBar button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--pg-text-secondary); font-size: 12px; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.statusFilterBar button:hover { border-color: var(--pg-border); color: var(--pg-heading); }
+.statusFilterBar button b { min-width: 18px; padding: 1px 5px; border-radius: 999px; background: var(--pg-surface); color: var(--pg-text-muted); font-size: 10px; text-align: center; }
+.statusFilterBar .filterActive b { color: var(--pg-primary-active); }
 .folderCards { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--pg-border); background: color-mix(in srgb,var(--pg-primary-soft) 35%,var(--pg-surface)); }
 .folderCards button { display: grid; grid-template-columns: 34px minmax(0,1fr) 18px; gap: 9px; align-items: center; padding: 10px; border: 1px solid var(--pg-border); border-radius: 8px; background: var(--pg-surface); color: var(--pg-text-secondary); text-align: left; cursor: pointer; }
 .folderCards button:hover { border-color: var(--pg-primary); background: var(--pg-selection); }

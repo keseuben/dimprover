@@ -200,6 +200,22 @@ type DownloadPayload = {
   download?: { url: string; fileName: string; expiresAt: string };
 };
 
+type BusinessFilter = "all" | "review" | "valid" | "issued" | "rejected" | "archived";
+
+function matchesBusinessFilter(governance: DriveDocumentGovernance | undefined, filter: BusinessFilter) {
+  if (filter === "all") return true;
+  if (!governance) return false;
+  if (filter === "review") {
+    return governance.businessStatus === "BEJOVO"
+      || governance.businessStatus === "ELLENORZES_ALATT"
+      || governance.reviewDecision === "PENDING";
+  }
+  if (filter === "valid") return governance.businessStatus === "ERVENYES" && governance.reviewDecision === "APPROVED";
+  if (filter === "issued") return governance.businessStatus === "KIADOTT" || governance.issueStatus === "ISSUED";
+  if (filter === "rejected") return governance.reviewDecision === "REJECTED";
+  return governance.businessStatus === "ARCHIV";
+}
+
 type UploadQueueStatus = "QUEUED" | "UPLOADING" | "VERIFYING" | "DONE" | "ERROR";
 type UploadQueueItem = {
   id: string;
@@ -262,6 +278,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "drop" | "other">("all");
+  const [businessFilter, setBusinessFilter] = useState<BusinessFilter>("all");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -360,7 +377,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   }, [tree]);
   const childFolders = useMemo(() => (tree?.folders || []).filter((folder) => (selectedFolderId === "all" ? folder.parentId === null : folder.parentId === selectedFolderId)), [selectedFolderId, tree]);
   const dropDocumentCount = useMemo(() => (tree?.documents || []).filter((document) => document.source === "DROP").length, [tree]);
-  const visibleDocuments = useMemo(() => {
+  const baseVisibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return (tree?.documents || []).filter((document) => {
       const folderMatch = folderScope === null || folderScope.has(document.folderId);
@@ -369,6 +386,20 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       return folderMatch && sourceMatch && queryMatch;
     });
   }, [folderScope, query, sourceFilter, tree]);
+  const businessFilterCounts = useMemo(() => {
+    const counts: Record<BusinessFilter, number> = { all: baseVisibleDocuments.length, review: 0, valid: 0, issued: 0, rejected: 0, archived: 0 };
+    for (const document of baseVisibleDocuments) {
+      const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
+      for (const filter of ["review", "valid", "issued", "rejected", "archived"] as BusinessFilter[]) {
+        if (matchesBusinessFilter(governance, filter)) counts[filter] += 1;
+      }
+    }
+    return counts;
+  }, [baseVisibleDocuments, documentFlowByVersion]);
+  const visibleDocuments = useMemo(() => baseVisibleDocuments.filter((document) => {
+    const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
+    return matchesBusinessFilter(governance, businessFilter);
+  }), [baseVisibleDocuments, businessFilter, documentFlowByVersion]);
 
   async function submitFolder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -941,6 +972,15 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Fájl keresése…" /></label>
             </div>
           </header>
+          {documentFlowReady && <div className={styles.statusFilterBar} aria-label="Dokumentum üzleti státusz szűrése" data-drive-business-filter="0.1.0">
+            <span>Státusz</span>
+            <button type="button" className={businessFilter === "all" ? styles.filterActive : ""} onClick={() => setBusinessFilter("all")}>Mind <b>{businessFilterCounts.all}</b></button>
+            <button type="button" className={businessFilter === "review" ? styles.filterActive : ""} onClick={() => setBusinessFilter("review")}>Ellenőrzésre vár <b>{businessFilterCounts.review}</b></button>
+            <button type="button" className={businessFilter === "valid" ? styles.filterActive : ""} onClick={() => setBusinessFilter("valid")}>Érvényes <b>{businessFilterCounts.valid}</b></button>
+            <button type="button" className={businessFilter === "issued" ? styles.filterActive : ""} onClick={() => setBusinessFilter("issued")}>Kiadott <b>{businessFilterCounts.issued}</b></button>
+            <button type="button" className={businessFilter === "rejected" ? styles.filterActive : ""} onClick={() => setBusinessFilter("rejected")}>Elutasított <b>{businessFilterCounts.rejected}</b></button>
+            <button type="button" className={businessFilter === "archived" ? styles.filterActive : ""} onClick={() => setBusinessFilter("archived")}>Archív <b>{businessFilterCounts.archived}</b></button>
+          </div>}
           {childFolders.length > 0 && <div className={styles.folderCards}>
             {childFolders.map((folder) => <button key={folder.id} type="button" onClick={() => setSelectedFolderId(folder.id)}>
               <span><Folder size={18} /></span><div><strong>{folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
