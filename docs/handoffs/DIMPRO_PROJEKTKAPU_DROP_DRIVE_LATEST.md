@@ -514,3 +514,20 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 Következő lépés: új commit HEAD-ből friss candidate source + teljes standalone rebuild; build PASS után ideiglenes, külön portos DEV runtime smoke, shared runtime módosítása nélkül.
+
+## 2026-09-25 – Full build TS fix #2: project permission error union
+
+A teljes Next.js candidate build következő TypeScript hibája a projektkötött Beküldőkapu route-ban jelent meg: a `requireProjectPermission()` sikertelen union változatain nem minden esetben létezik `code` mező.
+
+Javítás:
+- a GET / POST / PATCH hibaágak a `code` mezőt csak `"code" in access` guard után olvassák;
+- runtime üzleti logika és jogosultsági szabály nem változott.
+
+Ellenőrzés:
+- Project Drop gate route contract: 16/16 PASS;
+- Project Drop gate UI contract: 15/15 PASS;
+- Project Drop gate audit contract: 15/15 PASS;
+- pilot readiness / business filter / DROP→DRIVE / Document Flow / DRIVE Core / Object Storage / DECIDE regresszió: PASS;
+- `git diff --check`: PASS.
+
+Következő: új HEAD-ből teljes candidate rebuild.

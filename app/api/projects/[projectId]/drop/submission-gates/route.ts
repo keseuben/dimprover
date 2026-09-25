@@ -72,7 +72,7 @@ function serializeGate(gate: Awaited<ReturnType<typeof getDropSubmissionGateById
 export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.write");
-  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: access.code }, { status: access.status, headers: dropNoStoreHeaders() });
+  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: "code" in access ? access.code : undefined }, { status: access.status, headers: dropNoStoreHeaders() });
   try {
     const gates = (await listDropSubmissionGates())
       .filter((gate) => gate.type === "project" && gate.projectId === projectId)
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.write");
-  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: access.code }, { status: access.status, headers: dropNoStoreHeaders() });
+  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: "code" in access ? access.code : undefined }, { status: access.status, headers: dropNoStoreHeaders() });
   try {
     await assertProjectIncomingGateReady(projectId);
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.write");
-  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: access.code }, { status: access.status, headers: dropNoStoreHeaders() });
+  if (!access.ok) return NextResponse.json({ ok: false, error: access.error, code: "code" in access ? access.code : undefined }, { status: access.status, headers: dropNoStoreHeaders() });
   try {
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     const id = typeof body?.id === "string" ? body.id.trim() : "";
