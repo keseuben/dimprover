@@ -76,20 +76,21 @@ export default function DriveToolbar({
       <DropActionButton />
       <button
         type="button"
-        className={`${styles.toolButton} ${compareActive ? styles.toolActive : ""}`}
+        className={`${styles.toolButton} ${styles.toolIconOnly} ${compareActive ? styles.toolActive : ""}`}
         onClick={onToggleCompare}
-        title={compareActive ? "Összehasonlítás bezárása" : "Két dokumentum műszaki összehasonlítása"}
+        title={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
+        aria-label={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
       >
-        <GitCompareArrows size={14} /> <span>Összehasonlítás</span>
+        <GitCompareArrows size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="Az AI Dokumentumvizsgáló az 5. napi fejlesztésben aktiválódik">
-        <BrainCircuit size={14} /> <span>AI Dokumentumvizsgáló</span>
+      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló – az 5. napi fejlesztésben aktiválódik" aria-label="AI Dokumentumvizsgáló">
+        <BrainCircuit size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolDisabled}`} disabled title="Kiadási workflow előkészítve">
-        <PackageCheck size={14} /> <span>Kiadás</span>
+      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Kiadás – workflow előkészítve" aria-label="Kiadás">
+        <PackageCheck size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolDisabled}`} disabled title="Megosztási workflow előkészítve">
-        <Share2 size={14} /> <span>Megosztás</span>
+      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás – workflow előkészítve" aria-label="Megosztás">
+        <Share2 size={16} />
       </button>
 
       <div className={styles.toolbarSpacer} />

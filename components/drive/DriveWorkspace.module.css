@@ -130,16 +130,23 @@
 .userPill strong { font-size: var(--drive-font-sm); display: block; }
 .userPill span { font-size: var(--drive-font-xs); color: #697b8e; display: block; margin-top: 2px; }
 
-.toolbar { min-height: 54px; background: white; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 8px 18px; overflow-x: auto; }
+.toolbar { min-width: 0; min-height: 54px; background: white; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 8px 18px; overflow-x: hidden; }
 .toolButton { flex: 0 0 auto; min-height: 34px; border: 1px solid #d6e0e8; background: white; color: #22344c; border-radius: 8px; padding: 7px 11px; display: inline-flex; align-items: center; gap: 7px; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; }
-.toolButton:hover { border-color: #b6c8d8; background: #f8fbfd; }
+.toolButton:hover:not(:disabled) { border-color: #a8bfd3; background: #eef5fb; color: #173c65; }
+.toolButton:focus-visible { outline: 2px solid #6ba8ef; outline-offset: 2px; }
+.toolButton:disabled { opacity: 1; cursor: not-allowed; background: #eef2f6; border-color: #d4dde6; color: #5b6e82; box-shadow: none; }
+.toolIconOnly { width: 36px; min-width: 36px; height: 34px; min-height: 34px; padding: 0; justify-content: center; gap: 0; }
 .toolPrimary { background: linear-gradient(180deg, #166eff, #0e59dc); border-color: #0e59dc; color: white; box-shadow: 0 4px 12px rgba(22,110,255,0.18); }
+.toolPrimary:hover:not(:disabled) { background: linear-gradient(180deg, #0f63ee, #084fc9); border-color: #084fc9; color: #fff; }
+.toolPrimary:disabled { background: #e7eef7; border-color: #cbd8e6; color: #516b87; }
 .toolPurple { background: linear-gradient(180deg, #8b48ed, #7224d8); color: white; border-color: #7e31e5; }
-.toolDisabled { opacity: 0.55; cursor: not-allowed; }
+.toolPurple:hover:not(:disabled) { background: linear-gradient(180deg, #7f3ee0, #651cc9); color: #fff; }
+.toolPurple:disabled { background: #eee6f8; border-color: #d7c6eb; color: #674a87; }
+.toolDisabled { cursor: not-allowed; }
 .toolActive { border-color: #8bb7ff; background: #eef5ff; color: #1765d7; }
 .toolCountBadge { min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; background: #1167ee; color: white; display: inline-grid; place-items: center; font-size: var(--drive-font-xs); font-weight: 900; }
 .toolbarSpacer { flex: 1 1 auto; min-width: 12px; }
-.searchBox { min-width: 260px; max-width: 360px; flex: 1 1 320px; height: 34px; border: 1px solid #d6e0e8; border-radius: 8px; background: #fbfdff; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: #718397; }
+.searchBox { min-width: 180px; max-width: 340px; flex: 1 1 260px; height: 34px; border: 1px solid #d6e0e8; border-radius: 8px; background: #fbfdff; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: #718397; }
 .searchBox input { width: 100%; border: 0; background: transparent; outline: 0; font-size: var(--drive-font-sm); color: #23364d; }
 
 .workspaceWrap { min-height: 0; flex: 1; display: flex; flex-direction: column; }
