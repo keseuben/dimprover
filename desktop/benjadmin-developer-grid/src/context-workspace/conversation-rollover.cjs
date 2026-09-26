@@ -116,6 +116,60 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
   ].join("\n");
 }
 
+function promptLine(source, label) {
+  const lines = String(source || "").split(/\r?\n/);
+  const prefix = String(label || "") + ":";
+  const line = lines.find((item) => String(item || "").trimStart().startsWith(prefix));
+  return line ? String(line).trim().slice(prefix.length).trim() : "";
+}
+
+function parseConversationRolloverPrompt(body) {
+  const source = String(body || "");
+  if (!source.includes(ROLLOVER_PROMPT_MARKER)) return { ok:false, code:"ROLLOVER_PROMPT_MARKER_MISSING" };
+  const contextLine = promptLine(source, "Context Snapshot");
+  const contextMatch = contextLine.match(/^([^\s·]+)\s*·\s*revision\s+(\d+)$/i);
+  const prompt = {
+    workerCode:backendWorkerCode(promptLine(source, "Worker")),
+    taskId:promptLine(source, "Task"),
+    sessionId:promptLine(source, "Session"),
+    previousConversationId:promptLine(source, "Previous conversation"),
+    contextSnapshotId:contextMatch ? String(contextMatch[1] || "") : "",
+    contextRevision:contextMatch ? Number(contextMatch[2] || 0) : 0,
+    handoffPackId:promptLine(source, "Handoff Pack"),
+    sourceHead:promptLine(source, "HEAD").toLowerCase(),
+    sourceProofSha256:promptLine(source, "Source proof").toLowerCase(),
+    productionAccess:/DEV ONLY\s*·\s*PROD DENY\./i.test(source) ? "DENY" : "",
+  };
+  const required = ["workerCode","taskId","sessionId","previousConversationId","contextSnapshotId","handoffPackId","sourceHead","sourceProofSha256","productionAccess"];
+  const missing = required.filter((field) => !String(prompt[field] ?? "").trim());
+  if (!Number.isInteger(prompt.contextRevision) || prompt.contextRevision < 1) missing.push("contextRevision");
+  if (!/^[0-9a-f]{40}$/.test(prompt.sourceHead)) missing.push("sourceHeadFormat");
+  if (!/^[0-9a-f]{64}$/.test(prompt.sourceProofSha256)) missing.push("sourceProofSha256Format");
+  return missing.length ? { ok:false, code:"ROLLOVER_PROMPT_IDENTITY_INCOMPLETE", missing, prompt } : { ok:true, prompt };
+}
+
+function validateConversationRolloverPrompt(body, expected) {
+  const parsed = parseConversationRolloverPrompt(body);
+  if (!parsed.ok) return { ...parsed, validated:false, mismatches:[parsed.code] };
+  const prompt = parsed.prompt || {};
+  const mismatches = [];
+  const same = (field, actual, wanted) => { if (String(actual ?? "") !== String(wanted ?? "")) mismatches.push(field); };
+  same("taskId", prompt.taskId, expected.taskId);
+  same("sessionId", prompt.sessionId, expected.sessionId);
+  same("workerCode", backendWorkerCode(prompt.workerCode), backendWorkerCode(expected.workerCode));
+  same("previousConversationId", prompt.previousConversationId, expected.previousConversationId);
+  same("contextSnapshotId", prompt.contextSnapshotId, expected.contextSnapshotId);
+  same("contextRevision", Number(prompt.contextRevision || 0), Number(expected.contextRevision || 0));
+  same("handoffPackId", prompt.handoffPackId, expected.handoffPackId);
+  same("sourceHead", String(prompt.sourceHead || "").toLowerCase(), String(expected.sourceHead || "").toLowerCase());
+  if (Array.isArray(expected.acceptedSourceProofSha256) && expected.acceptedSourceProofSha256.length) {
+    const accepted = expected.acceptedSourceProofSha256.map((item) => String(item || "").toLowerCase()).filter((item) => /^[0-9a-f]{64}$/.test(item));
+    if (!accepted.includes(String(prompt.sourceProofSha256 || "").toLowerCase())) mismatches.push("sourceProofSha256");
+  }
+  if (prompt.productionAccess !== "DENY") mismatches.push("productionAccess");
+  return { ok:true, prompt, validated:mismatches.length === 0, mismatches };
+}
+
 function balancedJsonFrom(value, startAt) {
   const source = String(value || "");
   let start = source.indexOf("{", Math.max(0, startAt || 0));
@@ -208,6 +262,8 @@ module.exports = {
   detectConversationLimit,
   chatProjectRootFromConversationUrl,
   buildConversationRolloverPrompt,
+  parseConversationRolloverPrompt,
+  validateConversationRolloverPrompt,
   parseConversationRolloverAck,
   validateConversationRolloverAck,
 };

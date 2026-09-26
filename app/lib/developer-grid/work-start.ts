@@ -7,10 +7,11 @@ import { acquireScopeBundleAtomic } from "@/app/lib/dev-center/orchestration-rep
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
+import { encodeEventCursor } from "./events";
 import { findLatestContinuationContext } from "./conversation-memory";
 import { verifyCurrentSourceExecutionState, verifySourceProvenance } from "./source-provenance";
 import { ensureDeveloperWorkerWorkspace } from "./worker-workspace";
-import { appendGridEvent, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
+import { appendGridEvent, listGridEvents, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
 import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, SourceExecutionProof, WorkerSession, WorkerSurfaceType } from "./types";
 
 export const WORK_START_MIN_LENGTH = 12;
@@ -36,6 +37,39 @@ function derivedVerifiedSourceProvenanceProofSha256(session: WorkerSession) {
   if (!payload.repository || !payload.worktree || !payload.branch || !/^[0-9a-f]{40}$/.test(payload.head)
       || !payload.worker || !payload.taskId || !payload.sessionId || !payload.verifiedAt) return "";
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+async function recoveredProofChainAllows(input: {
+  stateLastSequence: number;
+  taskId: string;
+  sessionId: string;
+  workerCode: CoreWorkerCode;
+  previousProofSha256: string;
+  currentProofSha256: string;
+  currentEngineSessionId: string;
+  recordedPreviousProofSha256?: string | null;
+}) {
+  const previousProofSha256 = text(input.previousProofSha256, 64).toLowerCase();
+  const currentProofSha256 = text(input.currentProofSha256, 64).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(previousProofSha256) || !/^[0-9a-f]{64}$/.test(currentProofSha256)) return false;
+  if (previousProofSha256 === currentProofSha256) return true;
+  const recordedPreviousProofSha256 = text(input.recordedPreviousProofSha256, 64).toLowerCase();
+  if (/^[0-9a-f]{64}$/.test(recordedPreviousProofSha256) && recordedPreviousProofSha256 === previousProofSha256) return true;
+  const cursor = encodeEventCursor(Math.max(0, Number(input.stateLastSequence || 0) - 200));
+  const page = await listGridEvents({ cursor, limit:200 });
+  return page.events.some((event) => {
+    const delta = event.delta || {};
+    return event.origin === "LIVE"
+      && event.productionAccess === "DENY"
+      && event.taskId === input.taskId
+      && event.workerCode === input.workerCode
+      && String(delta.eventType || "") === "EXECUTION_AUTHORITY_RECOVERED"
+      && String(delta.status || "") === "PASS"
+      && String(delta.sessionId || "") === input.sessionId
+      && String(delta.previousSourceProofSha256 || "").toLowerCase() === previousProofSha256
+      && String(delta.sourceProofSha256 || "").toLowerCase() === currentProofSha256
+      && String(delta.engineSessionId || "") === input.currentEngineSessionId;
+  });
 }
 
 export function normalizeWorkStartInput(input: Record<string, unknown>) {
@@ -814,6 +848,7 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
       sourceExecutionProof:ready.proof,
       executionAuthorityRecoveredAt:now,
       executionAuthorityRecoveredFromEngineSessionId:recoveredFromEngineSessionId,
+      executionAuthorityPreviousSourceProofSha256:expectedPreviousProofSha256,
       executionAuthorityRecoveryCount:recoveryCount,
       resolvedAt:now,
       bootAckState:"VALIDATED",
@@ -1002,6 +1037,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const surfaceConversationTitle = text(rawInput.surfaceConversationTitle ?? rawInput.chatConversationTitle, 500);
   const surfacePreviousConversationId = text(rawInput.surfacePreviousConversationId ?? rawInput.chatPreviousConversationId, 180) || null;
   const conversationRollover = rawInput.conversationRollover === true;
+  const orphanRolloverRecovery = rawInput.orphanRolloverRecovery === true;
   const manualRebind = rawInput.manualRebind === true;
   const legacySurfaceBind = rawInput.legacySurfaceBind === true;
   const legacySurfaceBindSourceHead = text(rawInput.legacySurfaceBindSourceHead, 64).toLowerCase();
@@ -1072,6 +1108,11 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   if (existingMode !== chatLaunchMode) {
     const error = new Error("A csevegési mód eltér a munkaindításkor rögzített módtól.");
     Object.assign(error, { code: "DEVELOPER_GRID_CHAT_MODE_MISMATCH", status: 409 });
+    throw error;
+  }
+  if (orphanRolloverRecovery && (!conversationRollover || manualRebind || legacySurfaceBind || surfaceType !== "CHATGPT")) {
+    const error = new Error("Orphan rollover recovery csak önálló ChatGPT conversation rollover részeként engedélyezett.");
+    Object.assign(error, { code:"DEVELOPER_GRID_ORPHAN_ROLLOVER_MODE_INVALID", status:409 });
     throw error;
   }
   if (legacySurfaceBind) {
@@ -1194,11 +1235,27 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_BOOT_ACK_REQUIRED", status: 409 });
       throw error;
     }
-    const frozenContextSnapshotId = text(ctx.conversationRolloverContextSnapshotId ?? ctx.contextSnapshotId, 260);
-    const frozenContextRevision = Number(ctx.conversationRolloverContextRevision ?? ctx.contextRevision ?? 0);
-    const frozenHandoffPackId = text(ctx.conversationRolloverHandoffPackId ?? ctx.handoffPackId, 260);
+    const frozenContextSnapshotId = text(orphanRolloverRecovery ? ctx.contextSnapshotId : (ctx.conversationRolloverContextSnapshotId ?? ctx.contextSnapshotId), 260);
+    const frozenContextRevision = Number(orphanRolloverRecovery ? ctx.contextRevision : (ctx.conversationRolloverContextRevision ?? ctx.contextRevision ?? 0));
+    const frozenHandoffPackId = text(orphanRolloverRecovery ? ctx.handoffPackId : (ctx.conversationRolloverHandoffPackId ?? ctx.handoffPackId), 260);
     const expectedProofSha256 = text(ctx.sourceExecutionProof?.sha256, 64).toLowerCase() || derivedVerifiedSourceProvenanceProofSha256(session);
     const expectedHead = text(session.sourceProvenance.head, 64).toLowerCase();
+    const proofAccepted = orphanRolloverRecovery
+      ? await recoveredProofChainAllows({
+          stateLastSequence:state.lastSequence,
+          taskId,
+          sessionId:session.id,
+          workerCode,
+          previousProofSha256:rolloverSourceProofSha256,
+          currentProofSha256:expectedProofSha256,
+          currentEngineSessionId:text(ctx.engineSessionId, 220),
+          recordedPreviousProofSha256:ctx.executionAuthorityPreviousSourceProofSha256,
+        })
+      : rolloverSourceProofSha256 === expectedProofSha256;
+    const authoritativeConversationUrl = text(ctx.surfaceConversationUrl ?? ctx.chatConversationUrl, 1000);
+    const orphanProjectIdentityOk = !orphanRolloverRecovery
+      || (chatProjectKeyFromConversationUrl(authoritativeConversationUrl)
+        && chatProjectKeyFromConversationUrl(authoritativeConversationUrl) === chatProjectKeyFromConversationUrl(surfaceConversationUrl));
     const rolloverIdentityMismatch = !frozenContextSnapshotId
       || rolloverContextSnapshotId !== frozenContextSnapshotId
       || rolloverContextRevision !== frozenContextRevision
@@ -1207,7 +1264,8 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       || !/^[0-9a-f]{40}$/.test(rolloverSourceHead)
       || rolloverSourceHead !== expectedHead
       || !/^[0-9a-f]{64}$/.test(rolloverSourceProofSha256)
-      || rolloverSourceProofSha256 !== expectedProofSha256;
+      || !proofAccepted
+      || !orphanProjectIdentityOk;
     if (rolloverIdentityMismatch) {
       const error = new Error("A conversation rollover Context/Handoff/source identity eltér az authoritative aktív session állapotától.");
       Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_IDENTITY_MISMATCH", status: 409 });
@@ -1262,6 +1320,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
         conversationRolloverSourceProofSha256: rolloverSourceProofSha256,
         conversationRolloverPromptMessageId: rolloverPromptMessageId,
         conversationRolloverAckSha256: rolloverAckSha256,
+        conversationRolloverOrphanRecovery: orphanRolloverRecovery,
         conversationRolloverStartedAt: session.developmentContext.conversationRolloverStartedAt || confirmedAt,
         conversationRolloverCompletedAt: conversationRolloverState === "READY" ? confirmedAt : null,
       } : {}),
@@ -1291,6 +1350,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       conversationId: surfaceConversationId,
       contextSnapshotId: conversationRollover ? rolloverContextSnapshotId : null,
       handoffPackId: conversationRollover ? rolloverHandoffPackId : null,
+      orphanRolloverRecovery: conversationRollover ? orphanRolloverRecovery : false,
     },
   });
   return {
@@ -1299,6 +1359,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy,
     manualRebind,
     legacySurfaceBind,
+    orphanRolloverRecovery,
     previousConversationId: manualRebind ? surfacePreviousConversationId : null,
     conversationRollover: conversationRollover ? {
       state: conversationRolloverState,

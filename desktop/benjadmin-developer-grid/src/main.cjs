@@ -14,7 +14,7 @@ const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fe
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
-const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
+const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverPrompt, validateConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
@@ -3172,6 +3172,7 @@ function conversationRolloverBindingInput({ task, workerCode, previousConversati
     surfaceConversationTitle:conversationTitle,
     surfacePreviousConversationId:previousConversationId,
     conversationRollover:true,
+    orphanRolloverRecovery:record.conversationRolloverOrphanRecovery === true,
     conversationRolloverState:state,
     conversationRolloverReason:String(record.conversationRolloverReason || "CONTEXT_LIMIT"),
     conversationRolloverContextSnapshotId:String(record.conversationRolloverContextSnapshotId || ""),
@@ -3842,6 +3843,102 @@ async function observeManualConversationRollover(input) {
   return { observed:true, bound:true, state:ROLLOVER_STATES.ACK_WAIT, binding };
 }
 
+async function recoverOrphanConversationRollover({ view, workerCode, task, currentConversationId, previousConversationId }) {
+  if (!view || view.webContents.isDestroyed() || !currentConversationId || !previousConversationId || currentConversationId === previousConversationId) {
+    return { observed:false };
+  }
+  const currentUrl = String(view.webContents.getURL() || "");
+  const authoritativeUrl = String(task?.surfaceConversationUrl || task?.chatConversationUrl || task?.chatLaunch?.surfaceConversationUrl || "");
+  if (!sameChatProjectConversation(authoritativeUrl, currentUrl)) return { observed:false };
+
+  const capture = await captureConversationTranscript(view).catch(() => null);
+  if (!capture?.ok) return { observed:false };
+  if (capture.generating) return { observed:false, pending:true };
+  if (String(capture.conversationId || "") !== currentConversationId) return { observed:false };
+  const markerMessage = [...(capture.messages || [])].reverse().find((item) =>
+    String(item?.role || "").toUpperCase() === "USER" && String(item?.text || "").includes(ROLLOVER_PROMPT_MARKER)
+  );
+  if (!markerMessage) return { observed:false };
+
+  const expected = {
+    taskId:String(task?.id || ""),
+    sessionId:String(task?.sessionId || ""),
+    workerCode:workerCode === "BENAI" ? "BENJAMINAI" : workerCode,
+    previousConversationId,
+    contextSnapshotId:String(task?.contextSnapshotId || ""),
+    contextRevision:Number(task?.contextRevision || 0),
+    handoffPackId:String(task?.handoffPackId || ""),
+    sourceHead:String(task?.sourceHead || "").toLowerCase(),
+  };
+  const validation = validateConversationRolloverPrompt(markerMessage.text, expected);
+  if (!validation?.validated) {
+    send("live:connection", {
+      kind:"conversation-rollover-orphan-recovery",
+      workerCode,
+      taskId:String(task?.id || ""),
+      ok:false,
+      code:"ORPHAN_ROLLOVER_PROMPT_IDENTITY_MISMATCH",
+      mismatches:Array.isArray(validation?.mismatches) ? validation.mismatches : [],
+      currentConversationId,
+    });
+    return { observed:false, rejected:true, validation };
+  }
+
+  const parsed = parseConversationRolloverPrompt(markerMessage.text);
+  const prompt = parsed?.prompt || {};
+  const info = await getConversationInfo(view, null, config?.cells).catch(() => ({ chatTitle:"" }));
+  const record = {
+    conversationRolloverMode:"ORPHAN_RECOVERY",
+    conversationRolloverOrphanRecovery:true,
+    conversationRolloverReason:"MANUAL_CONTINUATION",
+    conversationRolloverPreviousConversationId:previousConversationId,
+    conversationRolloverContextSnapshotId:String(prompt.contextSnapshotId || ""),
+    conversationRolloverContextRevision:Number(prompt.contextRevision || 0),
+    conversationRolloverHandoffPackId:String(prompt.handoffPackId || ""),
+    conversationRolloverSourceHead:String(prompt.sourceHead || "").toLowerCase(),
+    conversationRolloverSourceProofSha256:String(prompt.sourceProofSha256 || "").toLowerCase(),
+    conversationRolloverPromptMessageId:markerMessage.messageId || null,
+  };
+  const binding = await bindDeveloperGridConversation({
+    baseUrl:config.benjadminBaseUrl,
+    deviceToken:readDeviceToken(),
+    input:conversationRolloverBindingInput({
+      task,
+      workerCode,
+      previousConversationId,
+      conversationId:currentConversationId,
+      conversationUrl:currentUrl,
+      conversationTitle:info?.chatTitle || capture?.conversationTitle || "",
+      record,
+      state:ROLLOVER_STATES.ACK_WAIT,
+    }),
+  });
+
+  publishTaskLaunchPatch(task, workerCode, {
+    ...record,
+    conversationRolloverState:ROLLOVER_STATES.ACK_WAIT,
+    conversationRolloverConversationId:currentConversationId,
+    conversationRolloverConversationUrl:currentUrl,
+    conversationRolloverConversationTitle:info?.chatTitle || capture?.conversationTitle || "",
+    conversationRolloverTranscriptVerified:true,
+    conversationRolloverTranscriptCapturedAt:capture.capturedAt || null,
+    conversationRolloverBindingRevision:binding?.revision || null,
+    conversationRolloverAckSha256:null,
+    conversationRolloverCompletedAt:null,
+    conversationRolloverError:null,
+    surfaceConversationId:currentConversationId,
+    chatSessionId:currentConversationId,
+  }, "conversation-rollover-orphan-recovered");
+
+  send("context:refresh", {
+    reason:"conversation-rollover-orphan-recovered",
+    taskId:String(task?.id || ""),
+    workerCode,
+    conversationId:currentConversationId,
+  });
+  return { observed:true, bound:true, state:ROLLOVER_STATES.ACK_WAIT, binding, validation };
+}
+
 function conversationMemoryTaskForWorker(workerCode) {
   const { task, presence } = liveContextForWorker(workerCode);
   if (!task?.id || !task?.sessionId) return null;
@@ -3875,6 +3972,14 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (!currentId || currentId !== live.expectedConversationId) {
     const manualRollover = currentId ? await observeManualConversationRollover({ view, workerCode:code, task:live.task, currentConversationId:currentId }).catch(() => null) : null;
     if (manualRollover?.observed || manualRollover?.pending) return null;
+    const orphanRollover = currentId ? await recoverOrphanConversationRollover({
+      view,
+      workerCode:code,
+      task:live.task,
+      currentConversationId:currentId,
+      previousConversationId:live.expectedConversationId,
+    }).catch(() => null) : null;
+    if (orphanRollover?.observed || orphanRollover?.pending) return null;
     const mismatchKey = `${live.task.id}:${live.expectedConversationId}:${currentId || "NONE"}`;
     const changed = memoryState.conversationMemoryMismatchKey !== mismatchKey;
     memoryState.conversationMemoryMismatchKey = mismatchKey;

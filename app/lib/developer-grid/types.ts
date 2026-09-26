@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.71-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.72-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -67,6 +67,7 @@ export type DevelopmentContext = {
   sourceExecutionProof?: SourceExecutionProof | null;
   executionAuthorityRecoveredAt?: string | null;
   executionAuthorityRecoveredFromEngineSessionId?: string | null;
+  executionAuthorityPreviousSourceProofSha256?: string | null;
   executionAuthorityRecoveryCount?: number | null;
   continuityPreviousTaskId?: string | null;
   continuityPreviousWorkerCode?: RoutableWorkerCode | null;
@@ -92,6 +93,7 @@ export type DevelopmentContext = {
   conversationRolloverSourceProofSha256?: string | null;
   conversationRolloverPromptMessageId?: string | null;
   conversationRolloverAckSha256?: string | null;
+  conversationRolloverOrphanRecovery?: boolean | null;
   conversationRolloverStartedAt?: string | null;
   conversationRolloverCompletedAt?: string | null;
   bootAckState?: "WAITING" | "VALIDATED" | "BLOCKED" | null;
