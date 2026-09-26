@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { ProjectListItem } from "@/app/lib/project-core/types";
+import { projectRoleLabel } from "@/app/lib/project-core/permissions";
 import styles from "./ProjectListClient.module.css";
 
 type ProjectsResponse = {
@@ -211,7 +212,7 @@ export default function ProjectListClient() {
                   <span><CalendarRange size={15} /> {project.currentPhase}</span>
                 </div>
                 <div className={styles.cardFooter}>
-                  <span>{project.membership.role}</span>
+                  <span>{projectRoleLabel(project.membership.role)}</span>
                   <strong>Projekt megnyitása <ArrowRight size={16} /></strong>
                 </div>
               </Link>

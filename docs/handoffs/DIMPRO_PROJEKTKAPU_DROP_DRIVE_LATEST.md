@@ -1280,3 +1280,30 @@ Bizonyíték:
 
 DB migration nem szükséges.
 A futó DEV candidate frissítése full buildet igényel; ez a DEV tárhely rendezéséig szándékosan halasztva. PROD: DENY.
+
+## 2026-09-26 – Projekt szerepkörök végleges magyar UI-nevei
+
+A belső technikai szerepkör-kódok változatlanok maradnak az API/adatmodell stabilitása érdekében, de normál Projektkapu UI-ban magyar megjelenítési nevek használatosak.
+
+Végleges mapping:
+- `OWNER` → **Beruházási projektvezető**
+- `PROJECT_MANAGER` → **Projektvezető**
+- `REVIEWER` → **Ellenőrző**
+- `CONTRIBUTOR` → **Közreműködő**
+- `VIEWER` → **Megtekintő**
+
+Megvalósítás:
+- közös `PROJECT_ROLE_LABELS` + `projectRoleLabel()` helper a Project Core permission rétegben;
+- Projektkapu projektlista kártya ezt használja;
+- Projektkapu shell/board felhasználói szerepkör kijelzése ezt használja;
+- ismeretlen/hiányzó szerepkör fallback: `Projekt résztvevő`;
+- a technikai `OWNER`, `REVIEWER` stb. kódok nem jelennek meg normál szerepkör-labelként.
+
+Ellenőrzés:
+- magyar role-label contract: 8/8 PASS;
+- role-matrix contract: 14/14 PASS;
+- célzott TypeScript: 3/3 PASS;
+- raw Projectkapu membership role render: nincs;
+- git diff --check: PASS.
+
+A futó DEV candidate frissítéséhez full build szükséges; a build a DEV tárhely OutminAI általi rendezéséig halasztva. PROD: DENY.

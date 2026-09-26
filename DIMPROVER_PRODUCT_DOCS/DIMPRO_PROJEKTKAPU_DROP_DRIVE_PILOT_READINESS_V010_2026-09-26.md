@@ -177,7 +177,10 @@ Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
    - 1 címzett, 1 kiadási link, 1 `Link másolása` gomb;
    - technikai browser error nem jelent meg.
 3. Link másolás: desktop UI gomb jelenléte PASS; tényleges clipboard-write és mobil acceptance még nyitott.
-4. PROJECT_MANAGER / REVIEWER / CONTRIBUTOR / VIEWER:
+4. Projekt szerepkörök és jogosultságok:
+   - végleges magyar UI-nevek: `OWNER` → **Beruházási projektvezető**, `PROJECT_MANAGER` → **Projektvezető**, `REVIEWER` → **Ellenőrző**, `CONTRIBUTOR` → **Közreműködő**, `VIEWER` → **Megtekintő**;
+   - a belső technikai kódok csak API/adatmodell azonosítóként maradnak meg;
+   - automatikus magyar role-label contract: 8/8 PASS;
    - automatikus backend/UI guard contract: 14/14 PASS;
    - élő multi-role böngészős acceptance még nyitott;
    - **végleges jogosultsági döntés:** REVIEWER ellenőrizhet, jóváhagyhat és elutasíthat, de formális dokumentumkiadást nem indíthat;

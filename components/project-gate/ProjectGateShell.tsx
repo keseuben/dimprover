@@ -22,6 +22,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { projectRoleLabel } from "@/app/lib/project-core/permissions";
 import {
   D6_MODULES,
   DEFAULT_PROJECT_ID,
@@ -476,7 +477,7 @@ export default function ProjectGateShell({ projectId = DEFAULT_PROJECT_ID, activ
   }
 
   const displayName = dashboard?.membership.displayName || "DIMPRO felhasználó";
-  const displayRole = dashboard?.membership.role || "Projekt résztvevő";
+  const displayRole = projectRoleLabel(dashboard?.membership.role);
   const projectStatusLabel = dashboard?.project.status === "ACTIVE" ? "Aktív projekt" : dashboard?.project.status || "Projekt";
   const projectName = dashboard?.project.name || "D6 Irodaépület";
   const projectCode = dashboard?.project.code || "D6-001";

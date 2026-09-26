@@ -4,6 +4,19 @@ import type {
   ProjectPermission,
 } from "./types";
 
+export const PROJECT_ROLE_LABELS: Record<ProjectMembershipRole, string> = {
+  OWNER: "Beruházási projektvezető",
+  PROJECT_MANAGER: "Projektvezető",
+  REVIEWER: "Ellenőrző",
+  CONTRIBUTOR: "Közreműködő",
+  VIEWER: "Megtekintő",
+};
+
+export function projectRoleLabel(role: ProjectMembershipRole | string | null | undefined) {
+  if (!role) return "Projekt résztvevő";
+  return PROJECT_ROLE_LABELS[role as ProjectMembershipRole] || "Projekt résztvevő";
+}
+
 const ROLE_PERMISSIONS: Record<ProjectMembershipRole, ProjectPermission[]> = {
   OWNER: [
     "project.read",
