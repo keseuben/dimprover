@@ -232,8 +232,17 @@ export async function proxy(request: NextRequest) {
       url.search = "";
       return NextResponse.redirect(url);
     }
+    if (projectGateDevSession && pathname.startsWith("/projektkapu")) {
+      return response;
+    }
     if (projectGateDevSession && projectGateRewriteUrl) {
-      return NextResponse.rewrite(projectGateRewriteUrl, { request: { headers: request.headers } });
+      const url = request.nextUrl.clone();
+      url.protocol = "https:";
+      url.hostname = host;
+      url.port = "";
+      url.pathname = projectGateRewriteUrl.pathname;
+      url.search = projectGateRewriteUrl.search;
+      return NextResponse.redirect(url, 307);
     }
   }
 

@@ -25,6 +25,8 @@ check("login UI accepts only six numeric digits",()=>assert.match(login,/inputMo
 check("project host gets dedicated login UI",()=>assert.match(loginPage,/isProjectGateDevDomain/)&&assert.match(loginPage,/ProjectGateCodeLogin/));
 check("pilot session resolves to existing dev-web-user only",()=>assert.match(auth,/mode: "project-gate-dev"/)&&assert.match(auth,/userId: DEV_WEB_USER_ID/)&&assert.match(auth,/uniqueUserIds\(\[DEV_WEB_USER_ID\]\)/));
 check("proxy protects Projectkapu pages with code session",()=>assert.match(proxy,/projectGateDevAccessConfigured/)&&assert.match(proxy,/!projectGateDevSession && !pathname\.startsWith\("\/api\/"\)/));
+check("canonical Projectkapu path bypasses self-rewrite",()=>assert.match(proxy,/projectGateDevSession && pathname\.startsWith\("\/projektkapu"\)/)&&assert.doesNotMatch(proxy,/NextResponse\.rewrite\(projectGateRewriteUrl/));
+check("vanity Projectkapu path redirects to public host",()=>assert.match(proxy,/url\.hostname = host/)&&assert.match(proxy,/return NextResponse\.redirect\(url, 307\)/));
 check("proxy does not hardcode PROD account/modules redirect",()=>assert.doesNotMatch(proxy,/new URL\("\/", "https:\/\/projektkapu\.dimpro\.hu"\)/));
 check("logout clears temporary Projectkapu session",()=>assert.match(guard,/api\/project-gate\/dev-access\/session/)&&assert.match(guard,/method: "DELETE"/));
 
