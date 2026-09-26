@@ -384,6 +384,17 @@ async function requireReadyClient() {
   return getDatabaseClient();
 }
 
+export async function listDriveEngineeringMetadata(projectId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_document_metadata")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("updated_at", { ascending: false });
+  if (error) databaseError("A DRIVE mérnöki metaadatok nem tölthetők be.", error);
+  return (data || []).map((row) => mapMetadata(row as DbMetadata));
+}
+
 export async function getDriveDocumentWorkspaceDetails(projectId: string, documentId: string) {
   const client = await requireReadyClient();
   const [documentResult, versionResult, metadataResult, noteResult, qrResult] = await Promise.all([
