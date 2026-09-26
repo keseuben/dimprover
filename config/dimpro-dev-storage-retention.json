@@ -55,8 +55,9 @@
   },
   "preBuildHardMinFreeGiB": 15,
   "developerGridAdmission": {
-    "remoteBuildReserveGiB": 3,
+    "remoteBuildReserveGiB": 1,
     "windowsPackageReserveGiB": 1,
-    "maxOnlineRuntimeCandidatesBeforeBuild": 3
+    "maxOnlineRuntimeCandidatesBeforeBuild": 3,
+    "localSmallBuildReserveGiB": 3
   }
 }

@@ -63,6 +63,7 @@ function onlineDeveloperGridRuntimeCandidates() {
 export function operationReserveGiB(config, operation) {
   const admission = config?.developerGridAdmission || {};
   if (operation === "remote-build") return Number(admission.remoteBuildReserveGiB);
+  if (operation === "local-small-build") return Number(admission.localSmallBuildReserveGiB);
   if (operation === "windows-package") return Number(admission.windowsPackageReserveGiB);
   throw new Error("STORAGE_ADMISSION_OPERATION_INVALID");
 }
@@ -86,7 +87,7 @@ function diskState(target) {
 }
 
 export function runStorageAdmission({ operation, configFile=CONFIG, devRoot=DEV_ROOT }) {
-  if (!["remote-build","windows-package"].includes(operation)) throw new Error("STORAGE_ADMISSION_OPERATION_INVALID");
+  if (!["remote-build","local-small-build","windows-package"].includes(operation)) throw new Error("STORAGE_ADMISSION_OPERATION_INVALID");
   if (!devRoot.startsWith("/srv/dimpro-dev")) {
     return { ok:true, bypassed:true, environment:"NON_CANONICAL_DEV", productionAccess:"DENY", operation };
   }
