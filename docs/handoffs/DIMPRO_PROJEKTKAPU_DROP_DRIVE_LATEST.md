@@ -1049,3 +1049,44 @@ A scanner később a fájlt `clean/clean` állapotba vitte. Ugyanazon package + 
 
 A retry-lock javítás ezzel teljes runtime E2E szinten PASS.
 PROD: DENY.
+
+## 2026-09-26 – DEV immediate DROP scanner trigger PASS
+
+Gyökérok:
+- a DEV systemd path watcher aktív volt ezen a mappán: `/srv/dimpro-dev/runtime/drop-worker-trigger`;
+- a Projektkapu candidate env-ből viszont hiányzott a `DIMPRO_DROP_SCAN_TRIGGER_DIR`;
+- ezért a runtime a belső default trigger útvonalat használta, amelyet a DEV path unit nem figyelt;
+- fallbackként a 2 perces `dimpro-drop-dev-worker-v1212.timer` dolgozta fel a fájlokat.
+
+Javítás:
+- candidate staging explicit beállítás:
+  `DIMPRO_DROP_SCAN_TRIGGER_DIR=/srv/dimpro-dev/runtime/drop-worker-trigger`
+- commit: `fb4c11f0749bc6ad86e99ca0cfc1c02aa54f38de`
+- scan-trigger contract: 4/4 PASS
+- candidate staging contract: 18/18 PASS
+- env újrastage + csak DEV 3299 candidate restart
+- path watcher: active
+- DROP health: HTTP 200
+
+Runtime acceptance:
+- package: `5602ba9c-e6d7-4264-a6f5-0d3862d29fff`
+- file: `530b8beb-893a-44cc-bbb4-7585f4504019`
+- SHA-256: `3990dabf5cc14270ab829df308d2fa81a0e53137999b104b671ccfe963d23bb8`
+- upload complete: `2026-09-26T09:36:27.680067+00:00`
+- path-trigger systemd start: `2026-09-26 11:36:27 CEST`
+- immediate scanner service complete: `2026-09-26T09:36:28.737Z`
+- totalClaimed: 1
+- totalScanned: 1
+- scanner status: clean
+- DB virus_scan_status: clean
+- DB security_status: clean
+- scan_completed_at - file created_at: 2.637 s
+- a 2 perces fallback timer nem futott a mérés közben.
+
+Operációs megjegyzés:
+- fallback worker: `dimpro-drop-dev-worker-v1212.timer`, 2 percenként, ClamAV 1.5.4, aktív és sikeres;
+- immediate path-trigger: `dimpro-drop-dev-scan-trigger-v1212.path`, aktív;
+- mindkettő jelenleg a stabil `drop-v1212-gyorssend` worker worktree scriptjeit használja, miközben a Projektkapu candidate ugyanazt a közös DEV DB/storage queue-t táplálja;
+- pilot szinten ez runtime teszttel kompatibilisnek bizonyult; systemd worker source refaktor most nem szükséges.
+
+PROD: DENY.
