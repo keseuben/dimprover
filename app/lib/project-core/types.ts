@@ -23,6 +23,7 @@ export type ProjectPermission =
   | "project.manage_lifecycle"
   | "document.read"
   | "document.write"
+  | "document.comment"
   | "document.approve"
   | "document.issue"
   | "issue.read"

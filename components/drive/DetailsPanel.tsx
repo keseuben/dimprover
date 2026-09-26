@@ -25,6 +25,7 @@ type Props = {
   loading: boolean;
   busy: boolean;
   canWrite: boolean;
+  canComment: boolean;
   canApprove: boolean;
   securityReady: boolean;
   securityLabel: string;
@@ -56,6 +57,7 @@ export default function DetailsPanel({
   loading,
   busy,
   canWrite,
+  canComment,
   canApprove,
   securityReady,
   securityLabel,
@@ -150,7 +152,7 @@ export default function DetailsPanel({
             {document.currentVersion?.status === "QUARANTINED" && (
               <div className={styles.infoBox}>
                 <strong>Biztonsági karantén</strong><br />
-                {securityReady ? `${securityLabel} elérhető. A fájl csak CLEAN eredmény és külön jóváhagyás után nyitható meg.` : `Vírusellenőrző nem elérhető (${securityLabel}). A kiadás fail-closed tiltva.`}
+                {securityReady ? `${securityLabel} elérhető. CLEAN eredmény után a terv belső ellenőrzésre megnyitható; letöltéshez és kiadáshoz továbbra is a dokumentumfolyamat szabályai érvényesek.` : `Vírusellenőrző nem elérhető (${securityLabel}). Az előnézet és kiadás fail-closed tiltva.`}
               </div>
             )}
             {canApprove && document.currentVersion?.status === "QUARANTINED" && (
@@ -195,10 +197,10 @@ export default function DetailsPanel({
           <>
             <div className={`${styles.metaItem} ${styles.metaFull}`}>
               <label htmlFor="drive-file-note">Fájlhoz kapcsolt megjegyzés</label>
-              <textarea id="drive-file-note" rows={8} value={note} readOnly={!canWrite} onChange={(event) => setNote(event.target.value)} />
+              <textarea id="drive-file-note" rows={8} value={note} readOnly={!canComment} onChange={(event) => setNote(event.target.value)} />
             </div>
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveNote(note)}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canComment || busy} onClick={() => void onSaveNote(note)}>
                 <StickyNote size={12} /> Megjegyzés mentése
               </button>
             </div>

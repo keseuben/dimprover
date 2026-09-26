@@ -5,6 +5,7 @@ export type DrivePermission =
   | "project.manage_lifecycle"
   | "document.read"
   | "document.write"
+  | "document.comment"
   | "document.approve"
   | "document.issue"
   | "calendar.read"

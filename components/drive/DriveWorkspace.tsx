@@ -82,6 +82,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
+  const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const securityReady = Boolean(health?.security?.ready);
 
@@ -673,6 +674,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               loading={detailsLoading}
               busy={busy}
               canWrite={canWrite}
+              canComment={canComment}
               canApprove={canApprove}
               securityReady={securityReady}
               securityLabel={health?.security?.ready ? `${health.security.engine || "ClamAV"}${health.security.engineVersion ? ` ${health.security.engineVersion}` : ""}` : health?.security?.errorCode || "Scanner nem elérhető"}

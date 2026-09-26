@@ -30,11 +30,11 @@ const contributor=roleBlock("CONTRIBUTOR","REVIEWER");
 const reviewer=roleBlock("REVIEWER","VIEWER");
 const viewer=roleBlock("VIEWER",null);
 
-check("OWNER can read write approve and issue documents",()=>{assert.match(owner,/document\.read/);assert.match(owner,/document\.write/);assert.match(owner,/document\.approve/);assert.match(owner,/document\.issue/);});
-check("PROJECT_MANAGER can read write approve and issue documents",()=>{assert.match(manager,/document\.read/);assert.match(manager,/document\.write/);assert.match(manager,/document\.approve/);assert.match(manager,/document\.issue/);});
-check("CONTRIBUTOR can write but cannot approve or issue",()=>{assert.match(contributor,/document\.read/);assert.match(contributor,/document\.write/);assert.doesNotMatch(contributor,/document\.approve/);assert.doesNotMatch(contributor,/document\.issue/);});
-check("REVIEWER can approve but cannot write or issue",()=>{assert.match(reviewer,/document\.read/);assert.match(reviewer,/document\.approve/);assert.doesNotMatch(reviewer,/document\.write/);assert.doesNotMatch(reviewer,/document\.issue/);});
-check("VIEWER is document read only",()=>{assert.match(viewer,/document\.read/);assert.doesNotMatch(viewer,/document\.write/);assert.doesNotMatch(viewer,/document\.approve/);assert.doesNotMatch(viewer,/document\.issue/);});
+check("OWNER can read write comment approve and issue documents",()=>{assert.match(owner,/document\.read/);assert.match(owner,/document\.write/);assert.match(owner,/document\.comment/);assert.match(owner,/document\.approve/);assert.match(owner,/document\.issue/);});
+check("PROJECT_MANAGER can read write comment approve and issue documents",()=>{assert.match(manager,/document\.read/);assert.match(manager,/document\.write/);assert.match(manager,/document\.comment/);assert.match(manager,/document\.approve/);assert.match(manager,/document\.issue/);});
+check("CONTRIBUTOR can write and comment but cannot approve or issue",()=>{assert.match(contributor,/document\.read/);assert.match(contributor,/document\.write/);assert.match(contributor,/document\.comment/);assert.doesNotMatch(contributor,/document\.approve/);assert.doesNotMatch(contributor,/document\.issue/);});
+check("REVIEWER can comment and approve but cannot write or issue",()=>{assert.match(reviewer,/document\.read/);assert.match(reviewer,/document\.comment/);assert.match(reviewer,/document\.approve/);assert.doesNotMatch(reviewer,/document\.write/);assert.doesNotMatch(reviewer,/document\.issue/);});
+check("VIEWER is document read only",()=>{assert.match(viewer,/document\.read/);assert.doesNotMatch(viewer,/document\.write/);assert.doesNotMatch(viewer,/document\.comment/);assert.doesNotMatch(viewer,/document\.approve/);assert.doesNotMatch(viewer,/document\.issue/);});
 
 check("backend permission denial is 403",()=>assert.match(auth,/status: 403/));
 check("DRIVE tree returns authoritative API permissions",()=>assert.match(tree,/permissions: access\.access\.permissions/));
@@ -51,10 +51,10 @@ console.log(JSON.stringify({
   pass,
   fail:0,
   currentPolicy:{
-    owner:"read/write/approve/issue",
-    projectManager:"read/write/approve/issue",
-    contributor:"read/write",
-    reviewer:"read/approve",
+    owner:"read/write/comment/approve/issue",
+    projectManager:"read/write/comment/approve/issue",
+    contributor:"read/write/comment",
+    reviewer:"read/comment/approve",
     viewer:"read",
     formalDocumentIssuePermission:"document.issue"
   }

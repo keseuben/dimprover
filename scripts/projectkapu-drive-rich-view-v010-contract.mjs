@@ -6,6 +6,8 @@ const ui = readFileSync("components/project-gate/DriveWorkspace.tsx", "utf8");
 const css = readFileSync("components/project-gate/DriveWorkspace.module.css", "utf8");
 const complete = readFileSync("app/api/projects/[projectId]/drive/uploads/[uploadId]/complete/route.ts", "utf8");
 const viewer = readFileSync("components/drive/DriveDocumentViewer.tsx", "utf8");
+const detailsPanel = readFileSync("components/drive/DetailsPanel.tsx", "utf8");
+const noteRoute = readFileSync("app/api/projects/[projectId]/drive/documents/[documentId]/note/route.ts", "utf8");
 const types = readFileSync("components/drive/driveTypes.ts", "utf8");
 
 let pass = 0;
@@ -15,9 +17,11 @@ const check = (name, fn) => {
   console.log("PASS " + name);
 };
 
-check("ProjectGate reuses shared DriveDocumentViewer", () => {
-  assert.match(ui, /import DriveDocumentViewer/);
-  assert.match(ui, /<DriveDocumentViewer projectId=\{projectId\} document=\{selectedDocument\}/);
+check("ProjectGate reuses shared DetailsPanel and its DriveDocumentViewer", () => {
+  assert.match(ui, /import DetailsPanel/);
+  assert.match(ui, /<DetailsPanel/);
+  assert.match(detailsPanel, /import DriveDocumentViewer/);
+  assert.match(detailsPanel, /<DriveDocumentViewer projectId=\{projectId\} document=\{document\}/);
 });
 check("List split and viewer modes exist", () => {
   assert.match(ui, /type BrowserViewMode = "list" \| "split" \| "viewer"/);
@@ -27,7 +31,7 @@ check("List split and viewer modes exist", () => {
 });
 check("Document selection opens viewer", () => {
   assert.match(ui, /setSelectedDocumentId\(document\.id\)/);
-  assert.match(ui, /data-project-gate-drive-viewer="0\.1\.0"/);
+  assert.match(ui, /data-project-gate-drive-viewer="0\.2\.0"/);
 });
 check("Shared viewer uses permission-guarded preview API", () => {
   assert.match(viewer, /\/drive\/documents\/\$\{encodeURIComponent\(document\.id\)\}\/preview/);
@@ -68,6 +72,18 @@ check("Rich view CSS includes selection viewer and version-upload states", () =>
   assert.match(css, /\.previewPane/);
   assert.match(css, /\.documentSelected/);
   assert.match(css, /\.versionUploadButton/);
+});
+check("Shared DetailsPanel exposes versions and notes tabs", () => {
+  assert.match(detailsPanel, /Verziók \(/);
+  assert.match(detailsPanel, />Megjegyzések<\/button>/);
+  assert.match(ui, /loadDetails\(selectedDocumentId\)/);
+});
+check("Reviewer comments are separated from document write permission", () => {
+  assert.match(ui, /canComment = effectivePermissions\.includes\("document\.comment"\)/);
+  assert.match(ui, /canComment=\{canComment\}/);
+  assert.match(noteRoute, /requireProjectPermission\(request, projectId, "document\.comment"\)/);
+  assert.match(detailsPanel, /readOnly=\{!canComment\}/);
+  assert.match(detailsPanel, /disabled=\{!canComment \|\| busy\}/);
 });
 check("Viewer mode preserves workflow actions", () => {
   assert.match(ui, /browserViewMode === "viewer" \? styles\.listHidden/);

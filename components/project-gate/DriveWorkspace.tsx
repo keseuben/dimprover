@@ -29,7 +29,8 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import DriveDocumentViewer from "@/components/drive/DriveDocumentViewer";
+import DetailsPanel from "@/components/drive/DetailsPanel";
+import type { DriveDocumentDetails } from "@/components/drive/driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveFolder = {
@@ -335,6 +336,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
+  const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -355,6 +358,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
   const effectivePermissions = [...new Set([...permissions, ...apiPermissions])];
   const canWrite = effectivePermissions.includes("document.write");
+  const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
   const reviewReady = Boolean(health?.review?.ready);
@@ -405,6 +409,32 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   }, [projectId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const loadDetails = useCallback(async (documentId: string) => {
+    if (!documentId) {
+      setDetails(null);
+      return;
+    }
+    setDetailsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(documentId)}/details`,
+        { credentials: "same-origin", cache: "no-store" },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string; details?: DriveDocumentDetails };
+      if (!response.ok || !payload.ok || !payload.details) {
+        throw new Error(payload.error || "A dokumentum részletei nem tölthetők be.");
+      }
+      setDetails(payload.details);
+    } catch (caught) {
+      setDetails(null);
+      setError(caught instanceof Error ? caught.message : "A dokumentum részletei nem tölthetők be.");
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => { void loadDetails(selectedDocumentId); }, [loadDetails, selectedDocumentId]);
 
   const selectedFolder = tree?.folders.find((folder) => folder.id === selectedFolderId) || null;
   const folderScope = useMemo(() => {
@@ -876,6 +906,78 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function saveSelectedMetadata(input: Record<string, string>) {
+    if (!selectedDocument || !canWrite) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/metadata`,
+        {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mérnöki metaadat mentése sikertelen.");
+      setNotice("Mérnöki metaadatok mentve és auditálva.");
+      await loadDetails(selectedDocument.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mérnöki metaadat mentése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSelectedNote(note: string) {
+    if (!selectedDocument || !canComment) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/note`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ note, versionId: selectedDocument.currentVersion?.id || "" }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A megjegyzés mentése sikertelen.");
+      setNotice("Megjegyzés mentve és auditálva.");
+      await loadDetails(selectedDocument.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A megjegyzés mentése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function ensureSelectedQr() {
+    if (!selectedDocument || !canWrite) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/qr`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ versionId: selectedDocument.currentVersion?.id || "" }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string; idempotent?: boolean };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A QR azonosító létrehozása sikertelen.");
+      setNotice(payload.idempotent ? "Ehhez a verzióhoz már tartozik aktív QR azonosító." : "QR azonosító létrehozva és auditálva.");
+      await loadDetails(selectedDocument.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A QR azonosító létrehozása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function scanDocumentVersion(document: DriveDocument) {
     const version = document.currentVersion;
     if (!version) return;
@@ -898,6 +1000,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         setNotice(`Vírusellenőrzési állapot: ${payload.scan?.status || "ismeretlen"}.`);
       }
       await load();
+      await loadDetails(document.id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A DRIVE vírusvizsgálat sikertelen.");
     } finally {
@@ -938,6 +1041,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         setNotice(`A dokumentumverzió elutasítva. ${payload.cleanup?.error || "Az objektumtörlés függőben maradt."}`);
       }
       await load();
+      await loadDetails(document.id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A karanténdöntés sikertelen.");
     } finally {
@@ -1401,18 +1505,37 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
-          {browserViewMode !== "list" && <aside className={styles.previewPane} data-project-gate-drive-viewer="0.1.0">
+          {browserViewMode !== "list" && <section className={styles.previewPane} data-project-gate-drive-viewer="0.2.0">
             <header className={styles.previewHeader}>
-              <div><span>Tervnéző</span><strong>{selectedDocument?.name || "Válassz dokumentumot"}</strong></div>
+              <div><span>Tervnéző és dokumentumadatok</span><strong>{selectedDocument?.name || "Válassz dokumentumot"}</strong></div>
               <div>
                 {selectedDocument && canWrite && <button type="button" onClick={() => startVersionUpload(selectedDocument)} disabled={uploadBatchBusy || !storageWriteEnabled}><FileUp size={14} /> Új verzió</button>}
                 <button type="button" onClick={() => setBrowserViewMode("list")}><X size={14} /> Bezárás</button>
               </div>
             </header>
             {selectedDocument
-              ? <DriveDocumentViewer projectId={projectId} document={selectedDocument} />
+              ? <DetailsPanel
+                  projectId={projectId}
+                  document={selectedDocument}
+                  details={details}
+                  loading={detailsLoading}
+                  busy={busy}
+                  canWrite={canWrite}
+                  canComment={canComment}
+                  canApprove={canApprove}
+                  securityReady={securityScannerReady}
+                  securityLabel={securityScannerReady
+                    ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
+                    : health?.security?.errorCode || "Scanner nem elérhető"}
+                  onScan={async () => { await scanDocumentVersion(selectedDocument); }}
+                  onReview={async (action) => { await reviewDocumentVersion(selectedDocument, action); }}
+                  onSaveMetadata={saveSelectedMetadata}
+                  onSaveNote={saveSelectedNote}
+                  onEnsureQr={ensureSelectedQr}
+                  onDownload={async () => { await downloadDocument(selectedDocument); }}
+                />
               : <div className={styles.previewEmpty}><Eye size={28} /><strong>Nincs kiválasztott terv</strong><span>Kattints egy dokumentum nevére vagy a szem ikonra.</span></div>}
-          </aside>}
+          </section>}
         </div>
       </div>
 

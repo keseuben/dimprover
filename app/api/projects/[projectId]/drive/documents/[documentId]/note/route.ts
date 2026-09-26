@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   const { projectId, documentId } = await context.params;
-  const access = await requireProjectPermission(request, projectId, "document.write");
+  const access = await requireProjectPermission(request, projectId, "document.comment");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
