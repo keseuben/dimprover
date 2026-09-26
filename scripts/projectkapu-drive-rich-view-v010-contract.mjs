@@ -24,7 +24,7 @@ check("ProjectGate reuses shared DetailsPanel and its DriveDocumentViewer", () =
   assert.match(detailsPanel, /<DriveDocumentViewer projectId=\{projectId\} document=\{document\}/);
 });
 check("List split and viewer modes exist", () => {
-  assert.match(ui, /type BrowserViewMode = "list" \| "split" \| "viewer"/);
+  assert.match(ui, /type BrowserViewMode = "list" \| "engineering" \| "split" \| "viewer" \| "compare"/);
   assert.match(ui, /> Lista<\/button>/);
   assert.match(ui, /> Osztott<\/button>/);
   assert.match(ui, /> Tervnéző<\/button>/);
@@ -86,7 +86,7 @@ check("Reviewer comments are separated from document write permission", () => {
   assert.match(detailsPanel, /disabled=\{!canComment \|\| busy\}/);
 });
 check("Viewer and compare modes preserve workflow actions", () => {
-  assert.match(ui, /browserViewMode === "viewer" \|\| browserViewMode === "compare" \? styles\.listHidden/);
+  assert.match(ui, /browserViewMode === "viewer" \|\| browserViewMode === "compare" \|\| browserViewMode === "engineering" \? styles\.listHidden/);
   assert.match(ui, /canApprove && document\.currentVersion\?\.status === "QUARANTINED"/);
   assert.match(ui, /canIssue && documentFlowReady/);
 });

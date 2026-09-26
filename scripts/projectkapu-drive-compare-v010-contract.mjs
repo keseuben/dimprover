@@ -12,7 +12,7 @@ let pass=0;
 const check=(name,fn)=>{fn();pass++;console.log("PASS "+name);};
 
 check("ProjectGate imports shared CompareWorkspace",()=>assert.match(ui,/import CompareWorkspace/));
-check("ProjectGate exposes compare view mode",()=>assert.match(ui,/BrowserViewMode = "list" \| "split" \| "viewer" \| "compare"/)&&assert.match(ui,/Összehasonlítás/));
+check("ProjectGate exposes compare view mode",()=>assert.match(ui,/BrowserViewMode = "list" \| "engineering" \| "split" \| "viewer" \| "compare"/)&&assert.match(ui,/Összehasonlítás/));
 check("Compare opens from selected document with fallback seed",()=>assert.match(ui,/function openCompare\(\)/)&&assert.match(ui,/setCompareSeedItems\(seeds\)/)&&assert.match(ui,/setBrowserViewMode\("compare"\)/));
 check("ProjectGate renders shared compare workspace",()=>assert.match(ui,/data-project-gate-drive-compare="0\.1\.0"/)&&assert.match(ui,/<CompareWorkspace/));
 check("CompareWorkspace supports revision selectors on both sides",()=>assert.match(compare,/A dokumentum revíziója/)&&assert.match(compare,/B dokumentum revíziója/)&&assert.match(compare,/details\.versions/));

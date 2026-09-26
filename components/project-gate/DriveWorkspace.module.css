@@ -674,3 +674,34 @@
 .compareHost > section {
   min-height: 560px;
 }
+
+.engineeringHost {
+  min-width: 0;
+  padding: 10px;
+  border-top: 1px solid var(--pg-border);
+  background: var(--pg-bg-secondary);
+}
+.engineeringHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.engineeringHeader span,
+.engineeringHeader strong { display: block; }
+.engineeringHeader span {
+  color: var(--pg-primary-active);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.engineeringHeader strong {
+  margin-top: 2px;
+  color: var(--pg-heading);
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .engineeringHeader { align-items: flex-start; flex-direction: column; }
+}

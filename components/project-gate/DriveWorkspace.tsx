@@ -30,9 +30,14 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
+import CommanderPanel from "@/components/drive/CommanderPanel";
 import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
-import type { DriveCompareSeed, DriveDocumentDetails } from "@/components/drive/driveTypes";
+import FileGridPanel from "@/components/drive/FileGridPanel";
+import FolderTreePanel from "@/components/drive/FolderTreePanel";
+import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
+import type { DriveCompareSeed, DriveDocumentDetails, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
+import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveFolder = {
@@ -179,6 +184,14 @@ type HealthPayload = {
     warning: string;
     nextStep: string;
   };
+  workspace?: {
+    version: string;
+    databaseReady: boolean;
+    expectedSchemaVersion?: string;
+    actualSchemaVersion?: string | null;
+    migrationCount?: number | null;
+    nextStep: string;
+  };
   security?: {
     version: string;
     scannerSource: string;
@@ -251,7 +264,7 @@ type DownloadPayload = {
 };
 
 type BusinessFilter = "all" | "review" | "valid" | "issued" | "rejected" | "archived";
-type BrowserViewMode = "list" | "split" | "viewer" | "compare";
+type BrowserViewMode = "list" | "engineering" | "split" | "viewer" | "compare";
 
 function matchesBusinessFilter(governance: DriveDocumentGovernance | undefined, filter: BusinessFilter) {
   if (filter === "all") return true;
@@ -336,6 +349,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [sourceFilter, setSourceFilter] = useState<"all" | "drop" | "other">("all");
   const [businessFilter, setBusinessFilter] = useState<BusinessFilter>("all");
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
+  const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
+  const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -482,6 +497,17 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       return folderMatch && sourceMatch && queryMatch;
     });
   }, [folderScope, query, sourceFilter, tree]);
+  const engineeringBrowserClass = [
+    richStyles.browser,
+    engineeringLayoutMode === "two" ? richStyles.layoutTwo : "",
+    engineeringLayoutMode === "one" ? richStyles.layoutOne : "",
+    engineeringLayoutMode === "split" ? richStyles.layoutSplit : "",
+    engineeringLayoutMode === "commander" ? richStyles.layoutCommander : "",
+  ].filter(Boolean).join(" ");
+  const engineeringFolderHidden = engineeringLayoutMode !== "three";
+  const engineeringDetailsHidden = engineeringLayoutMode === "one";
+  const engineeringTitle = selectedFolder?.name || "Teljes dokumentumtár";
+
   const businessFilterCounts = useMemo(() => {
     const counts: Record<BusinessFilter, number> = { all: baseVisibleDocuments.length, review: 0, valid: 0, issued: 0, rejected: 0, archived: 0 };
     for (const document of baseVisibleDocuments) {
@@ -779,6 +805,37 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setUploadQueue((current) => [...prepared, ...current]);
     const runnable = prepared.filter((item) => item.status === "QUEUED");
     if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  async function moveDocument(document: DriveDocument, targetFolderId: string) {
+    if (!canWrite || !health?.workspace?.databaseReady || !targetFolderId) return;
+    if (document.folderId === targetFolderId) {
+      setNotice(`${document.name} már ebben a mappában található.`);
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/move`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ targetFolderId }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string; idempotent?: boolean };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentum áthelyezése sikertelen.");
+      const targetName = tree?.folders.find((folder) => folder.id === targetFolderId)?.name || "célmappa";
+      setNotice(payload.idempotent ? `${document.name} már a kiválasztott mappában volt.` : `${document.name} áthelyezve: ${targetName}`);
+      await load();
+      setSelectedDocumentId(document.id);
+      await loadDetails(document.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentum áthelyezése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openCompare() {
@@ -1413,6 +1470,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             <div className={styles.documentTools}>
               <div className={styles.viewModeSwitcher} aria-label="DRIVE megjelenítési mód">
                 <button type="button" className={browserViewMode === "list" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("list")} title="Lista nézet"><List size={14} /> Lista</button>
+                <button type="button" className={browserViewMode === "engineering" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("engineering")} title="Mérnöki Drive nézet"><SlidersHorizontal size={14} /> Mérnöki</button>
                 <button type="button" className={browserViewMode === "split" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("split")} title="Lista és tervnéző"><Columns2 size={14} /> Osztott</button>
                 <button type="button" className={browserViewMode === "viewer" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("viewer")} title="Tervnéző" disabled={!selectedDocument}><Eye size={14} /> Tervnéző</button>
                 <button type="button" className={browserViewMode === "compare" ? styles.filterActive : ""} onClick={openCompare} title="Terv- és revízió-összehasonlítás" disabled={!tree?.documents.length}><GitCompareArrows size={14} /> Összehasonlítás</button>
@@ -1439,8 +1497,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <span><Folder size={18} /></span><div><strong>{folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
             </button>)}
           </div>}
-          <div className={`${styles.tableHeader} ${browserViewMode === "viewer" || browserViewMode === "compare" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
-          <div className={`${styles.documentList} ${browserViewMode === "viewer" || browserViewMode === "compare" ? styles.listHidden : ""}`}>
+          <div className={`${styles.tableHeader} ${browserViewMode === "viewer" || browserViewMode === "compare" || browserViewMode === "engineering" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
+          <div className={`${styles.documentList} ${browserViewMode === "viewer" || browserViewMode === "compare" || browserViewMode === "engineering" ? styles.listHidden : ""}`}>
             {visibleDocuments.map((document) => {
               const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
               const formalIssue = document.currentVersion ? documentIssueByVersion[document.currentVersion.id] : undefined;
@@ -1520,6 +1578,72 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
+          {browserViewMode === "engineering" && <section className={styles.engineeringHost} data-project-gate-drive-engineering="0.1.0">
+            <header className={styles.engineeringHeader}>
+              <div>
+                <span>Mérnöki Drive</span>
+                <strong>{engineeringTitle}</strong>
+              </div>
+              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} />
+            </header>
+            <div className={engineeringBrowserClass}>
+              {engineeringLayoutMode === "commander" ? (
+                <CommanderPanel
+                  folders={tree?.folders || []}
+                  documents={tree?.documents || []}
+                  selectedDocumentId={selectedDocumentId}
+                  canWrite={canWrite}
+                  moveReady={Boolean(health?.workspace?.databaseReady)}
+                  busy={busy}
+                  onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+                  onMoveDocument={moveDocument}
+                />
+              ) : (
+                <>
+                  <FolderTreePanel
+                    folders={tree?.folders || []}
+                    selectedFolderId={selectedFolderId}
+                    documentCounts={folderDocumentCounts}
+                    totalDocumentCount={tree?.summary.documentCount || 0}
+                    onSelectFolder={setSelectedFolderId}
+                    responsiveClassName={`${richStyles.folderPanelResponsive} ${engineeringFolderHidden ? richStyles.hiddenPanel : ""}`}
+                  />
+                  <FileGridPanel
+                    title={engineeringTitle}
+                    subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+                    documents={visibleDocuments}
+                    selectedDocumentId={selectedDocumentId}
+                    viewMode={engineeringViewMode}
+                    onViewModeChange={setEngineeringViewMode}
+                    onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+                    onRefresh={() => void load()}
+                  />
+                  <DetailsPanel
+                    projectId={projectId}
+                    document={selectedDocument}
+                    details={details}
+                    loading={detailsLoading}
+                    busy={busy}
+                    canWrite={canWrite}
+                    canComment={canComment}
+                    canApprove={canApprove}
+                    securityReady={securityScannerReady}
+                    securityLabel={securityScannerReady
+                      ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
+                      : health?.security?.errorCode || "Scanner nem elérhető"}
+                    onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }}
+                    onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }}
+                    onSaveMetadata={saveSelectedMetadata}
+                    onSaveNote={saveSelectedNote}
+                    onEnsureQr={ensureSelectedQr}
+                    onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
+                    responsiveClassName={`${richStyles.detailsResponsive} ${engineeringDetailsHidden ? richStyles.hiddenPanel : ""}`}
+                  />
+                </>
+              )}
+            </div>
+          </section>}
+
           {(browserViewMode === "split" || browserViewMode === "viewer") && <section className={styles.previewPane} data-project-gate-drive-viewer="0.2.0">
             <header className={styles.previewHeader}>
               <div><span>Tervnéző és dokumentumadatok</span><strong>{selectedDocument?.name || "Válassz dokumentumot"}</strong></div>
