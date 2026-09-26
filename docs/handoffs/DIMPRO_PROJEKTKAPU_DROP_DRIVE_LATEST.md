@@ -1208,3 +1208,29 @@ Fontos:
 - a 3,713 GiB candidate reclaim önmagában nem elég;
 - további takarítás kizárólag külön approved guard/workflow-val vagy DEV storage bővítéssel;
 - PROD: DENY.
+
+## 2026-09-26 – DXF szakági fájl DROP → DRIVE runtime acceptance PASS
+
+Valós DEV Beküldőkapu E2E:
+- package: `bc089ba6-064c-4296-9ee3-ccaedf03d438`;
+- file: `1d0a6f9b-4e78-4db6-8329-263498a16976`;
+- filename: `D6_DXF_DROP_DRIVE_E2E_20260926T110558Z.dxf`;
+- MIME: `application/dxf`;
+- size: 131 byte;
+- SHA-256: `f9a082342059f7bfea0acb35be1cdd027315e4f440f53a02e57da17f0619ff4a`;
+- S3 multipart: PASS;
+- scan-pending finalize: 7× HTTP 425 / `DROP_PUBLIC_FILES_NOT_READY`;
+- scan után finalize: HTTP 200;
+- DRIVE incoming: `completed`;
+- imported: 1;
+- document: `drive-document-0caf7b2fd4a6`;
+- version: `drive-version-544c31d41304`;
+- DB source: `DROP`;
+- folder: `Beérkező Drop`;
+- MIME: `application/dxf`;
+- technical status: `QUARANTINED`;
+- business status: `ELLENORZES_ALATT`;
+- review decision: `PENDING`;
+- source channel: `DROP`.
+
+Ezzel a korábbi PDF mellett mérnöki/szakági DXF fájl runtime E2E-je is PASS. A Beküldőkapu nem kép-only workflow.
