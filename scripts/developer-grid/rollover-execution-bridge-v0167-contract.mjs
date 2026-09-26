@@ -13,8 +13,8 @@ const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0;
 const check=(label,fn)=>{fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop v0.1.70",()=>assert.equal(pkg.version,"0.1.74"));
-check("backend v0.1.71-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0.1.74-dev"/));
+check("desktop v0.1.70",()=>assert.equal(pkg.version,"0.1.75"));
+check("backend v0.1.71-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0.1.75-dev"/));
 check("rollover bootstrap requires ACK-only first response",()=>assert.match(rollover,/első assistant-válasz KIZÁRÓLAG/));
 check("rollover bootstrap forbids tools before ACK",()=>assert.match(rollover,/NE hívj semmilyen eszközt, MCP-t, VPS-t, shellt/));
 check("rollover bootstrap waits for automatic ready continuation",()=>assert.match(rollover,/CONVERSATION_ROLLOVER_READY_V1/));

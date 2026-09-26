@@ -12,6 +12,9 @@ const SNAPSHOT_FILE = process.env.BENJADMIN_BUILD_NODE_SNAPSHOT_FILE?.trim() || 
 const LOCAL_ROOT = process.env.DIMPRO_BUILD_ARTIFACT_ROOT?.trim() || "/srv/dimpro-dev/artifacts/build-runs";
 const TEMP_ROOT = process.env.DIMPRO_BUILD_DISPATCH_TEMP_ROOT?.trim() || "/srv/dimpro-dev/coordination/build-dispatch";
 const REFRESH_SCRIPT = path.join(ROOT, "refresh-build-gateway-snapshot.mjs");
+const PROJECT_ROOT = path.resolve(ROOT, "../..");
+const STORAGE_PREBUILD = path.join(PROJECT_ROOT, "scripts/dimpro-dev-storage-prebuild.sh");
+const STORAGE_ADMISSION = path.join(ROOT, "dev-storage-admission.mjs");
 const GIT_BIN = process.env.DIMPRO_REMOTE_BUILD_GIT_BIN?.trim() || "/usr/bin/git";
 const RUNNER_PRIORITY = ["build01", "build02"];
 const MAX_AGE_MS = 60_000;
@@ -116,6 +119,14 @@ const requestedRunnerId=safeRunner(args["runner-id"]);
 const branchRef=`refs/heads/${sourceBranch}`;
 const actualHead=execText(GIT_BIN,[`--git-dir=${REPO}`,"rev-parse",`${branchRef}^{commit}`]);
 if(actualHead!==sourceCommit) fail("SOURCE_BASELINE_MISMATCH",`Canonical branch HEAD ${actualHead} != ${sourceCommit}.`);
+
+try {
+  execFileSync(STORAGE_PREBUILD, [], { stdio:"inherit", timeout:15*60*1000 });
+  execFileSync(process.execPath, [STORAGE_ADMISSION, "--operation", "remote-build"], { stdio:"inherit", timeout:60_000 });
+} catch (error) {
+  fail("DEV_STORAGE_ADMISSION_BLOCKED", "A DEV szerver tárhely admission blokkolta a remote build dispatchot: " + String(error?.status ?? error?.code ?? "UNKNOWN") + ".");
+}
+
 
 fs.mkdirSync(LOCAL_ROOT,{recursive:true,mode:0o750}); fs.chmodSync(LOCAL_ROOT,0o750);
 const localDir=path.join(LOCAL_ROOT,runId);

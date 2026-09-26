@@ -53,5 +53,10 @@
   "artifacts": {
     "autoDelete": false
   },
-  "preBuildHardMinFreeGiB": 15
+  "preBuildHardMinFreeGiB": 15,
+  "developerGridAdmission": {
+    "remoteBuildReserveGiB": 3,
+    "windowsPackageReserveGiB": 1,
+    "maxOnlineRuntimeCandidatesBeforeBuild": 3
+  }
 }

@@ -24,6 +24,10 @@ HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 [[ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]] || fail "SOURCE_WORKTREE_DIRTY" 45
 [[ "$ROOT" == /srv/dimpro-dev/* ]] || fail "PROD_DENY" 46
 
+STORAGE_ADMISSION="$ROOT/scripts/developer-grid/dev-storage-admission.mjs"
+[[ -f "$STORAGE_ADMISSION" ]] || fail "WINDOWS_STORAGE_ADMISSION_MISSING" 46
+node "$STORAGE_ADMISSION" --operation windows-package || fail "WINDOWS_STORAGE_ADMISSION_BLOCKED" 75
+
 VERSION="$(node -p "require('$DESKTOP/package.json').version")"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "WINDOWS_VERSION_INVALID" 47
 BUILD_ID="$(cat "$ROOT/.next/BUILD_ID" 2>/dev/null || true)"
