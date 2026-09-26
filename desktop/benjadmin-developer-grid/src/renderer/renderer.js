@@ -960,23 +960,66 @@ function healthOverallTone(health) {
   return "unknown";
 }
 
+function footerDiskTone(percent) {
+  const value = numericMetric(percent);
+  if (value === null) return "unknown";
+  if (value >= 90) return "critical";
+  if (value >= 75) return "warning";
+  return "normal";
+}
+
+function renderFooterDiskMeter(server, meterId) {
+  const meter = $(meterId);
+  if (!meter) return;
+  const metrics = server?.metrics || {};
+  const percent = capacityPercent(metrics.diskUsedBytes, metrics.diskTotalBytes, metrics.diskPercent);
+  const used = numericMetric(metrics.diskUsedBytes);
+  const total = numericMetric(metrics.diskTotalBytes);
+  const explicitAvailable = numericMetric(metrics.diskAvailableBytes);
+  const available = explicitAvailable !== null ? explicitAvailable
+    : used !== null && total !== null && total >= used ? total - used
+    : null;
+  const tone = footerDiskTone(percent);
+  const fill = meter.querySelector(".footer-disk-fill");
+  const value = meter.querySelector(".footer-disk-value");
+  meter.classList.remove("is-normal", "is-warning", "is-critical", "is-unknown");
+  meter.classList.add(`is-${tone}`);
+  const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
+  if (fill) fill.style.width = `${clamped}%`;
+  if (value) value.textContent = percent === null ? "—" : metricText(percent);
+  const title = percent === null
+    ? "Tárhelyadat nem elérhető"
+    : `Tárhely · Foglalt: ${formatBytes(used)} / ${formatBytes(total)} · Szabad: ${formatBytes(available)} · ${metricText(percent)}`;
+  meter.title = title;
+  meter.setAttribute("aria-label", title);
+}
+
 function renderSystemHealth() {
   const health = state.systemHealth.data;
   const authBlocked = !health && state.systemHealth.unauthorized === true;
   const unavailableLabel = authBlocked ? "PÁROSÍTÁS" : "—";
-  const serverStatus = (id, dotId, textId, formatter) => {
+  const serverStatus = (id, dotId, textId, meterId, formatter) => {
     const server = healthServer(id);
-    const ready = server?.state === "READY";
-    setFooterDot(dotId, ready ? "online" : server ? "warning" : authBlocked ? "warning" : "offline");
+    const serverState = String(server?.state || "").toUpperCase();
+    const tone = serverState === "READY" ? "online"
+      : serverState === "BUSY" ? "warning"
+      : server ? "error"
+      : authBlocked ? "warning"
+      : "offline";
+    setFooterDot(dotId, tone);
     const text = $(textId);
-    if (text) text.textContent = server ? formatter(server) : unavailableLabel;
+    if (text) {
+      text.textContent = server ? formatter(server) : unavailableLabel;
+      text.classList.toggle("is-empty", text.textContent === "");
+    }
+    renderFooterDiskMeter(server, meterId);
   };
 
-  serverStatus("build01", "#footerBuild01Dot", "#footerBuild01Status", (s) => s.state === "READY" ? "READY" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
-  serverStatus("build02", "#footerBuild02Dot", "#footerBuild02Status", (s) => s.state === "READY" ? "READY" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
-  serverStatus("dev-vps", "#footerDevDot", "#footerDevStatus", (s) => Number.isFinite(Number(s.metrics?.diskPercent)) ? `${metricText(s.metrics.diskPercent)} disk` : s.state);
-  serverStatus("prod-vps", "#footerProdDot", "#footerProdStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
-  serverStatus("db-vps", "#footerDbDot", "#footerDbStatus", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
+  serverStatus("build01", "#footerBuild01Dot", "#footerBuild01Status", "#footerBuild01Disk", (s) => s.state === "READY" ? "" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
+  serverStatus("build02", "#footerBuild02Dot", "#footerBuild02Status", "#footerBuild02Disk", (s) => s.state === "READY" ? "" : s.state === "BUSY" ? "BUSY" : "NINCS KAPCS.");
+  serverStatus("dev-vps", "#footerDevDot", "#footerDevStatus", "#footerDevDisk", () => "");
+  serverStatus("prod-vps", "#footerProdDot", "#footerProdStatus", "#footerProdDisk", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
+  serverStatus("db-vps", "#footerDbDot", "#footerDbStatus", "#footerDbDisk", (s) => s.state === "READY" ? "ONLINE" : "ELLENŐRIZD");
 
   const storages = Array.isArray(health?.storage) ? health.storage : [];
   const objectStorage = storages.find((item) => item.id === "hetzner-object-storage") || null;

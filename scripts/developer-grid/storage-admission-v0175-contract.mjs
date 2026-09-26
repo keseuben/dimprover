@@ -15,8 +15,8 @@ const GiB = 1024 ** 3;
 let n=0;
 const check=(label,fn)=>{fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.77"));
-check("backend version v0.1.75-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.77-dev"/));
+check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.78"));
+check("backend version v0.1.75-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.78-dev"/));
 check("hard minimum remains 15 GiB",()=>assert.equal(config.preBuildHardMinFreeGiB,15));
 check("remote build reserve is 3 GiB",()=>assert.equal(operationReserveGiB(config,"remote-build"),3));
 check("windows package reserve is 1 GiB",()=>assert.equal(operationReserveGiB(config,"windows-package"),1));

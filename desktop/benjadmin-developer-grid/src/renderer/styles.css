@@ -3035,3 +3035,73 @@ body.has-health-drawer .central-panel {
 
 :root[data-theme="light"] .task-inspector-section { background:#fbfdfe; border-color:#dce9ee; }
 @media (max-width:920px) { .task-inspector-body { grid-template-columns:1fr; } .task-inspector-guard-banner { grid-template-columns:1fr; } }
+
+
+/* v0.1.78 · compact footer server storage meters */
+.footer-server-status {
+  flex:1.25 1 0 !important;
+  gap:clamp(4px,.28vw,8px);
+}
+.footer-server-status > em.is-empty {
+  display:none;
+}
+.footer-disk-meter {
+  min-width:72px;
+  max-width:126px;
+  flex:1 1 88px;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  overflow:hidden;
+}
+.footer-disk-track {
+  position:relative;
+  min-width:38px;
+  height:6px;
+  flex:1 1 auto;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(148,163,184,.22);
+  box-shadow:inset 0 0 0 1px rgba(148,163,184,.10);
+}
+.footer-disk-fill {
+  display:block;
+  width:0;
+  height:100%;
+  border-radius:inherit;
+  background:#28c984;
+  transition:width .28s ease, background-color .18s ease;
+}
+.footer-disk-value {
+  min-width:34px;
+  flex:0 0 auto;
+  text-align:right;
+  font-size:clamp(9px,.28vw,11px);
+  line-height:1;
+  font-style:normal;
+  font-weight:850;
+  font-variant-numeric:tabular-nums;
+  color:#8edfb9;
+}
+.footer-disk-meter.is-normal .footer-disk-fill { background:#28c984; }
+.footer-disk-meter.is-normal .footer-disk-value { color:#8edfb9; }
+.footer-disk-meter.is-warning .footer-disk-fill { background:#f59e0b; }
+.footer-disk-meter.is-warning .footer-disk-value { color:#f5c96a; }
+.footer-disk-meter.is-critical .footer-disk-fill { background:#ef4444; }
+.footer-disk-meter.is-critical .footer-disk-value { color:#ff9aa5; }
+.footer-disk-meter.is-unknown .footer-disk-fill { background:#64748b; }
+.footer-disk-meter.is-unknown .footer-disk-value { color:#8192a4; }
+:root[data-theme="light"] .footer-disk-track {
+  background:rgba(15,42,61,.13);
+  box-shadow:inset 0 0 0 1px rgba(15,42,61,.08);
+}
+:root[data-theme="light"] .footer-disk-meter.is-normal .footer-disk-value { color:#087653; }
+:root[data-theme="light"] .footer-disk-meter.is-warning .footer-disk-value { color:#9a6300; }
+:root[data-theme="light"] .footer-disk-meter.is-critical .footer-disk-value { color:#a52538; }
+:root[data-theme="light"] .footer-disk-meter.is-unknown .footer-disk-value { color:#64748b; }
+@media (max-width: 1500px) {
+  .footer-server-status { padding-inline:5px; gap:4px; }
+  .footer-disk-meter { min-width:58px; max-width:88px; flex-basis:68px; gap:3px; }
+  .footer-disk-track { min-width:30px; height:5px; }
+  .footer-disk-value { min-width:29px; font-size:8.5px; }
+}
