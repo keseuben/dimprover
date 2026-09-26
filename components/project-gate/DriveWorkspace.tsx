@@ -592,7 +592,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     return matchesBusinessFilter(governance, businessFilter);
   }), [baseVisibleDocuments, businessFilter, documentFlowByVersion]);
 
-  const reviewRows = useMemo(() => visibleDocuments.map((document) => {
+  const allReviewRows = useMemo(() => visibleDocuments.map((document) => {
     const metadata = metadataByDocument[document.id];
     const inherited = effectiveFolderClassification.get(document.folderId);
     const effectiveDiscipline = metadata?.discipline || inherited?.discipline || "";
@@ -601,10 +601,11 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
     const observations = value("reviewObservations") || value("hageObservations");
     return { document, metadata, effectiveDiscipline, effectiveTopic, checked: value("reviewChecked") || value("hageChecked"), result: value("reviewResult") || value("hageResult"), observations, workflow: value("workflowStatus") || metadata?.approvalStatus || "", internalNote: value("internalNote") || value("hageNote"), customer: value("customerApproval") || value("clientApproval"), customerNote: value("customerNote") || value("clientNote"), revisionChange: value("revisionChange") || value("change"), observationCount: Number(extra.openObservationCount || (observations ? 1 : 0)) };
-  }).filter((row) => (reviewDiscipline === "all" || row.effectiveDiscipline === reviewDiscipline) && (reviewTopic === "all" || row.effectiveTopic === reviewTopic) && (reviewStatus === "all" || (reviewStatus === "not-approved" ? !row.customer.toLocaleLowerCase("hu-HU").includes("jóváhagy") && row.customer.toLocaleLowerCase("hu-HU") !== "igen" : row.workflow === reviewStatus))), [visibleDocuments, metadataByDocument, effectiveFolderClassification, reviewDiscipline, reviewTopic, reviewStatus]);
-  const reviewDisciplines = useMemo(() => [...new Set(reviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [reviewRows]);
-  const reviewTopics = useMemo(() => [...new Set(reviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [reviewRows]);
-  const reviewStatuses = useMemo(() => [...new Set(Object.values(metadataByDocument).map((item) => item.approvalStatus).filter(Boolean))].sort(), [metadataByDocument]);
+  }), [visibleDocuments, metadataByDocument, effectiveFolderClassification]);
+  const reviewRows = useMemo(() => allReviewRows.filter((row) => (reviewDiscipline === "all" || row.effectiveDiscipline === reviewDiscipline) && (reviewTopic === "all" || row.effectiveTopic === reviewTopic) && (reviewStatus === "all" || (reviewStatus === "not-approved" ? !row.customer.toLocaleLowerCase("hu-HU").includes("jóváhagy") && row.customer.toLocaleLowerCase("hu-HU") !== "igen" : row.workflow === reviewStatus))), [allReviewRows, reviewDiscipline, reviewTopic, reviewStatus]);
+  const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
+  const reviewTopics = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [allReviewRows]);
+  const reviewStatuses = useMemo(() => [...new Set(allReviewRows.map((row) => row.workflow).filter(Boolean))].sort(), [allReviewRows]);
   const reviewMark = (value: string) => { const v = value.toLocaleLowerCase("hu-HU"); if (!v) return "—"; if (v.includes("megfelelő") || v.includes("jóváhagy") || v === "igen") return "✓"; if (v.includes("javítandó") || v.includes("elutas")) return "⚠"; if (v.includes("visszaad")) return "↩"; if (v.includes("vár") || v.includes("folyamat")) return "◷"; return "—"; };
 
   const selectedDocument = useMemo(
