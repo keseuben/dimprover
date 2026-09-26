@@ -40,6 +40,11 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function fileNameWithoutExtension(name: string) {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 function FileKindIcon({ extension }: { extension: string }) {
   const ext = extension.toLowerCase();
   if (["xlsx", "xls", "csv"].includes(ext)) return <FileSpreadsheet size={13} />;
@@ -137,7 +142,8 @@ export default function FileGridPanel({
     const observationCountRaw = Number(extra.openObservationCount ?? (observations ? 1 : 0));
     return {
       document,
-      planTitle: value("planTitle") || value("drawingTitle") || document.name,
+      explicitName: value("planTitle") || value("drawingTitle"),
+      displayName: (value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
       effectiveTopic: value("topic") || inherited?.topic || "",
       checked: value("reviewChecked") || value("hageChecked"),
@@ -156,7 +162,7 @@ export default function FileGridPanel({
     const q = reviewSearch.trim().toLocaleLowerCase("hu-HU");
     return allReviewRows.filter((row) => {
       const matchesSearch = !q || [
-        row.planTitle,
+        row.displayName,
         row.document.name,
         row.effectiveDiscipline,
         row.effectiveTopic,
@@ -208,7 +214,7 @@ export default function FileGridPanel({
             <div className={styles.reviewLegend}>✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat</div>
           </header>
           <div className={styles.reviewFilters}>
-            <label>Keresés<input className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Terv, fájlnév, észrevétel…" /></label>
+            <label>Keresés<input className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Név, fájlnév, észrevétel…" /></label>
             <label>Szakág<select value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Témakör<select value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Workflow állapot<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Mind</option><option value="not-approved">Nincs még jóváhagyva</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -217,23 +223,34 @@ export default function FileGridPanel({
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
               <colgroup>
-                <col style={{ width: "300px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "150px" }} />
-                <col style={{ width: "90px" }} />
-                <col style={{ width: "90px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "100px" }} />
-                <col style={{ width: "130px" }} />
-                <col style={{ width: "110px" }} />
+                <col style={{ width: "250px" }} />
+                <col style={{ width: "260px" }} />
+                <col style={{ width: "95px" }} />
+                <col style={{ width: "120px" }} />
+                <col style={{ width: "70px" }} />
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "95px" }} />
+                <col style={{ width: "85px" }} />
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "95px" }} />
+                <col style={{ width: "80px" }} />
               </colgroup>
-              <thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead>
+              <thead><tr><th>Név</th><th>Fájlnév</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
               <tbody>
                 {reviewRows.map((row) => (
                   <tr key={row.document.id}>
-                    <td><button type="button" className={styles.reviewName} onClick={() => openDetail(row.document, "checked")}>{row.planTitle}</button>{row.planTitle !== row.document.name && <small title={row.document.name}>{row.document.name}</small>}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`${styles.reviewName} ${row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback}`}
+                        title={row.explicitName ? "Megadott név" : "Automatikus név a fájlnévből"}
+                        onClick={() => openDetail(row.document, "checked")}
+                      >
+                        {row.displayName}
+                      </button>
+                    </td>
+                    <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>

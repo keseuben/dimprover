@@ -1092,7 +1092,7 @@
   background: #fff;
 }
 .reviewTable {
-  min-width: 1420px;
+  min-width: 1390px;
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
@@ -1143,7 +1143,6 @@
   max-width: 100%;
   border: 0;
   background: transparent;
-  color: #27425f;
   padding: 0;
   font: inherit;
   font-size: var(--drive-font-sm);
@@ -1154,18 +1153,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.reviewTable td:first-child small {
-  display: block;
-  max-width: 280px;
-  margin-top: 2px;
-  color: #8393a4;
-  font-size: var(--drive-font-xs);
-  font-weight: 500;
-  overfow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.reviewNameExplicit { color: #111827; }
+.reviewNameFallback { color: #5f6b76; font-weight: 700; }
 .reviewName:hover { color: #1765d7; text-decoration: underline; }
+.reviewFileName {
+  color: #52677c !important;
+  text-align: left !important;
+  font-size: var(--drive-font-xs);
+  font-weight: 600;
+}
 .reviewSymbol {
   min-width: 28px;
   min-height: 26px;
