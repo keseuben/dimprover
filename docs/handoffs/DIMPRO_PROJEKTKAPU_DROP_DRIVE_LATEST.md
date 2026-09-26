@@ -829,3 +829,33 @@ Következő sorrend:
 4. preflight várhatóan 0 blocker;
 5. ugyanazzal a D6 gate-tel új DROP → S3 → ClamAV → finalize → DRIVE Beérkező Drop fizikai E2E;
 6. utána külön javítandó a túl korai finalize 5 perces `DROP_PUBLIC_FINALIZE_IN_PROGRESS` lock UX.
+
+
+### 2026-09-26 – ce9eeb55 candidate build/publish
+
+A `ce9eeb55d8bcbe513089ce96f9848dd5c6ab4873` commitból teljes Next.js candidate build készült.
+
+- build ID: `Oyg-Ub66jlSSQTaPLbsBx`;
+- compile: PASS;
+- TypeScript: PASS;
+- standalone asset sync: PASS;
+- 260 statikus chunk ellenőrizve;
+- dedikált PM2: `dimpro-projectkapu-drop-drive-pilot-dev`;
+- bind: `127.0.0.1:3299`;
+- csak a Projektkapu/Drop DEV candidate processz lett újraindítva.
+
+Publikus smoke:
+- `https://drop.dev.dimpro.hu/bekuldes/project-7a50edfcae` → HTTP 200;
+- `https://projektkapu.dev.dimpro.hu/login` → HTTP 200;
+- DROP health:
+  - `tokenSecurity=true`;
+  - `uploadSessionTokenSecurity=true`;
+  - `resumableUpload=true`;
+  - `publicUpload=true`;
+  - `submissionGate=true`;
+  - `driveIncomingEnabled=true`.
+
+A DB migration továbbra sincs alkalmazva. Az egyetlen ismert pilot blocker:
+`DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY`.
+
+PROD nem változott.
