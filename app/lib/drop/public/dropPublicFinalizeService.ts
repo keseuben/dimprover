@@ -116,13 +116,14 @@ export async function finalizeDropPublicPackageById(input: {
     );
     if (pending.length) {
       await updateDropPackageWorkflow(input.packageId, {
-        // Csak kifejezett felhasználói véglegesítési kísérlet után kerülhet a worker retry-sorába.
-        // A puszta fájlfeltöltés nem indíthat automatikus kézbesítést.
-        notificationStatus: "pending",
-        notificationDetail: `${pending.length} fájl vírusellenőrzése vagy feldolgozása még folyamatban van.`,
+        // A claim itt csak előfeltétel-ellenőrzésig jutott. Engedjük vissza azonnal,
+        // hogy a felhasználó a scan befejezése után rögtön újrapróbálhassa.
+        // A valódi kézbesítés alatti párhuzamos finalize-védelmet a pending claim továbbra is biztosítja.
+        notificationStatus: "not_requested",
+        notificationDetail: `WAITING_FILES: ${pending.length} fájl vírusellenőrzése vagy feldolgozása még folyamatban van.`,
       });
       throw finalizeError(
-        "A fájlok vírusellenőrzése még folyamatban van. A rendszer rövidesen újra próbálkozhat.",
+        "A fájlok vírusellenőrzése még folyamatban van. Próbálja újra néhány másodperc múlva.",
         "DROP_PUBLIC_FILES_NOT_READY",
         425,
         {
