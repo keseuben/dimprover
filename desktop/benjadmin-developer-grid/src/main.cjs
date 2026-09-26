@@ -3945,18 +3945,23 @@ function conversationMemoryTaskForWorker(workerCode) {
   const surfaceType = normalizeWorkerSurfaceType(task.surfaceType || "CHATGPT");
   if (surfaceType !== "CHATGPT") return null;
   const local = loadTaskLaunchRecords()[String(task.id)] || {};
-  const expectedConversationId = String(
-    local.conversationRolloverConversationId
-    || local.surfaceConversationId
-    || task.surfaceConversationId
+  const authoritativeConversationId = String(
+    task.surfaceConversationId
     || task.chatConversationId
     || task.chatSessionId
     || task.chatLaunch?.surfaceConversationId
     || task.chatLaunch?.chatSessionId
     || ""
   ).trim();
+  const localConversationId = String(
+    local.conversationRolloverConversationId
+    || local.surfaceConversationId
+    || local.chatSessionId
+    || ""
+  ).trim();
+  const expectedConversationId = localConversationId || authoritativeConversationId;
   if (!expectedConversationId) return null;
-  return { task, presence, surfaceType, expectedConversationId };
+  return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId };
 }
 
 async function syncConversationMemoryForWorker(workerCode) {
@@ -3969,16 +3974,37 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (!view || view.webContents.isDestroyed()) return null;
   const currentId = chatConversationIdFromUrl(view.webContents.getURL());
   const memoryState = chatRefreshCell(cell.id);
-  if (!currentId || currentId !== live.expectedConversationId) {
-    const manualRollover = currentId ? await observeManualConversationRollover({ view, workerCode:code, task:live.task, currentConversationId:currentId }).catch(() => null) : null;
-    if (manualRollover?.observed || manualRollover?.pending) return null;
-    const orphanRollover = currentId ? await recoverOrphanConversationRollover({
+  const localRolloverIdentityRecord = loadTaskLaunchRecords()[String(live.task.id)] || {};
+  const manualClipboardActive = String(localRolloverIdentityRecord.conversationRolloverMode || "") === "MANUAL_CLIPBOARD"
+    && String(localRolloverIdentityRecord.conversationRolloverState || "").toUpperCase() === ROLLOVER_STATES.CLIPBOARD_COPIED;
+
+  if (currentId
+    && live.authoritativeConversationId
+    && currentId !== live.authoritativeConversationId
+    && !manualClipboardActive) {
+    const authoritativeOrphan = await recoverOrphanConversationRollover({
       view,
       workerCode:code,
       task:live.task,
       currentConversationId:currentId,
-      previousConversationId:live.expectedConversationId,
-    }).catch(() => null) : null;
+      previousConversationId:live.authoritativeConversationId,
+    }).catch(() => null);
+    if (authoritativeOrphan?.observed || authoritativeOrphan?.pending) return null;
+  }
+
+  if (!currentId || currentId !== live.expectedConversationId) {
+    const manualRollover = currentId ? await observeManualConversationRollover({ view, workerCode:code, task:live.task, currentConversationId:currentId }).catch(() => null) : null;
+    if (manualRollover?.observed || manualRollover?.pending) return null;
+    const orphanPreviousConversationId = live.authoritativeConversationId || live.expectedConversationId;
+    const orphanRollover = currentId && (!live.authoritativeConversationId || currentId === live.authoritativeConversationId)
+      ? await recoverOrphanConversationRollover({
+          view,
+          workerCode:code,
+          task:live.task,
+          currentConversationId:currentId,
+          previousConversationId:orphanPreviousConversationId,
+        }).catch(() => null)
+      : null;
     if (orphanRollover?.observed || orphanRollover?.pending) return null;
     const mismatchKey = `${live.task.id}:${live.expectedConversationId}:${currentId || "NONE"}`;
     const changed = memoryState.conversationMemoryMismatchKey !== mismatchKey;
