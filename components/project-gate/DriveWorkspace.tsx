@@ -48,6 +48,8 @@ type DriveFolder = {
   name: string;
   path: string;
   sortOrder: number;
+  discipline?: string;
+  topic?: string;
 };
 type DriveVersion = {
   id: string;
