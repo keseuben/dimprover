@@ -21,6 +21,7 @@ import {
   Loader2,
   Link2,
   List,
+  PackageCheck,
   RefreshCw,
   Search,
   Send,
@@ -30,13 +31,14 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
+import BoxShelf from "@/components/drive/BoxShelf";
 import CommanderPanel from "@/components/drive/CommanderPanel";
 import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
-import type { DriveCompareSeed, DriveDocumentDetails, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
+import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
 
@@ -354,6 +356,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
+  const [boxes, setBoxes] = useState<DriveBox[]>([]);
+  const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -386,6 +390,27 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const storageWriteEnabled = Boolean(health?.storage?.realObjectWriteEnabled);
   const storageDownloadEnabled = Boolean(health?.storage?.realObjectDownloadEnabled);
 
+  const loadBoxes = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/boxes`,
+        { credentials: "same-origin", cache: "no-store" },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string; boxes?: DriveBox[] };
+      if (!response.ok || !payload.ok) {
+        if (response.status === 503) {
+          setBoxes([]);
+          return;
+        }
+        throw new Error(payload.error || "A CsomagBOX lista nem tölthető be.");
+      }
+      setBoxes(payload.boxes || []);
+    } catch (caught) {
+      setBoxes([]);
+      setError(caught instanceof Error ? caught.message : "A CsomagBOX lista nem tölthető be.");
+    }
+  }, [projectId]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -404,6 +429,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
+      if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
 
       if (healthPayload.documentFlow?.ready) {
         const flowResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/document-flow`, {
@@ -424,7 +450,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [loadBoxes, projectId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -497,6 +523,18 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       return folderMatch && sourceMatch && queryMatch;
     });
   }, [folderScope, query, sourceFilter, tree]);
+  const boxColorsByDocument = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    for (const box of boxes) {
+      for (const item of box.items) {
+        const colors = result[item.documentId] || [];
+        if (!colors.includes(box.colorToken)) colors.push(box.colorToken);
+        result[item.documentId] = colors;
+      }
+    }
+    return result;
+  }, [boxes]);
+
   const engineeringBrowserClass = [
     richStyles.browser,
     engineeringLayoutMode === "two" ? richStyles.layoutTwo : "",
@@ -805,6 +843,82 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setUploadQueue((current) => [...prepared, ...current]);
     const runnable = prepared.filter((item) => item.status === "QUEUED");
     if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  async function createBox(input: { name: string; purpose: DriveBoxPurpose; colorToken: string; iconKey: string; note: string }) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A CsomagBOX létrehozása sikertelen.");
+      setNotice(`CsomagBOX létrehozva: ${input.name}`);
+      await loadBoxes();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A CsomagBOX létrehozása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addDocumentToBox(boxId: string, document: DriveDocument) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/items`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ documentId: document.id, versionId: document.currentVersion?.id || null }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string; idempotent?: boolean };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A terv CsomagBOX-hoz adása sikertelen.");
+      const boxName = boxes.find((box) => box.id === boxId)?.name || "CsomagBOX";
+      setNotice(payload.idempotent
+        ? `${document.name} már szerepel ebben a BOX-ban.`
+        : `${document.name} hozzáadva: ${boxName}`);
+      await loadBoxes();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A terv CsomagBOX-hoz adása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeBoxItem(boxId: string, itemId: string) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/items/${encodeURIComponent(itemId)}`,
+        { method: "DELETE", credentials: "same-origin", cache: "no-store" },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A terv eltávolítása a CsomagBOX-ból sikertelen.");
+      setNotice("Terv eltávolítva a CsomagBOX-ból.");
+      await loadBoxes();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A terv eltávolítása a CsomagBOX-ból sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openCompareBox(box: DriveBox) {
+    const seeds = box.items.slice(0, 2).map((item) => ({
+      documentId: item.documentId,
+      versionId: item.versionId || null,
+    }));
+    setCompareSeedItems(seeds);
+    setBrowserViewMode("compare");
   }
 
   async function moveDocument(document: DriveDocument, targetFolderId: string) {
@@ -1275,6 +1389,11 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         </div>
         <div className={styles.actions}>
           <button type="button" onClick={() => void load()} title="Dokumentumtár frissítése"><RefreshCw size={16} /> Frissítés</button>
+          <button
+            type="button"
+            onClick={() => setBoxShelfOpen((value) => !value)}
+            title={health?.workspace?.databaseReady ? "CsomagBOX polc megnyitása" : health?.workspace?.nextStep || "A CsomagBOX még nem aktív."}
+          ><PackageCheck size={16} /> CsomagBOX {boxes.length ? `(${boxes.length})` : ""}</button>
           {canWrite && <button type="button" onClick={() => void toggleProjectGateForm()} title={dropDriveIncomingReady ? "Projekt Beküldőkapu létrehozása és kezelése" : health?.dropDriveIncoming?.nextStep || "A Beküldőkapu fogadási lánca még nem kész."}><Send size={16} /> Beküldőkapu</button>}
           {canWrite && <button type="button" onClick={() => setShowFolderForm((value) => !value)}><FolderPlus size={16} /> Új mappa</button>}
           {canWrite && <button
@@ -1388,6 +1507,21 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           </article>)}
         </div>
       </section>}
+
+      <BoxShelf
+        open={boxShelfOpen}
+        onOpenChange={setBoxShelfOpen}
+        boxes={boxes}
+        documents={tree?.documents || []}
+        selectedDocument={selectedDocument}
+        canWrite={canWrite}
+        databaseReady={Boolean(health?.workspace?.databaseReady)}
+        busy={busy}
+        onCreateBox={createBox}
+        onAddDocument={addDocumentToBox}
+        onRemoveItem={removeBoxItem}
+        onOpenCompareBox={openCompareBox}
+      />
 
       {(showFolderForm || showDocumentForm || showUploadForm || showGateForm) && (
         <div className={styles.formsRow}>
@@ -1617,6 +1751,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onViewModeChange={setEngineeringViewMode}
                     onSelectDocument={(document) => setSelectedDocumentId(document.id)}
                     onRefresh={() => void load()}
+                    boxColorsByDocument={boxColorsByDocument}
                   />
                   <DetailsPanel
                     projectId={projectId}
@@ -1679,7 +1814,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             <CompareWorkspace
               projectId={projectId}
               documents={tree?.documents || []}
-              boxes={[]}
+              boxes={boxes}
               seedItems={compareSeedItems}
               onClose={() => setBrowserViewMode("list")}
             />
