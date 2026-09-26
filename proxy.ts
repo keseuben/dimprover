@@ -204,7 +204,7 @@ export async function proxy(request: NextRequest) {
     if (pathname === "/kiadas") {
       const url = request.nextUrl.clone();
       url.pathname = "/projektkapu/kiadas";
-      return NextResponse.rewrite(url);
+      return NextResponse.redirect(url, 307);
     }
     return response;
   }
