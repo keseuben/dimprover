@@ -15,6 +15,7 @@ const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspa
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
 const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverPrompt, validateConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
+const { ROLLOVER_REACK_PROMPT_MARKER, ROLLOVER_REACK_KEY_MARKER, buildConversationRolloverReAckPrompt } = require("./context-workspace/rollover-reack.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
@@ -3195,6 +3196,103 @@ function markConversationRolloverBlocked(task, workerCode, code, detail = "") {
   }, "conversation-rollover-blocked");
 }
 
+async function requestConversationRolloverReAck({ view, task, workerCode, identity, currentConversationId, currentConversationUrl }) {
+  const taskId = String(task?.id || "");
+  if (!view || view.webContents.isDestroyed() || !taskId || !currentConversationId || !currentConversationUrl) {
+    return { sent:false, verified:false, reason:"REACK_IDENTITY_INCOMPLETE" };
+  }
+  if (chatConversationIdFromUrl(currentConversationUrl) !== currentConversationId || !isChatGptUrl(currentConversationUrl)) {
+    return { sent:false, verified:false, reason:"REACK_CONVERSATION_IDENTITY_INVALID" };
+  }
+
+  const request = buildConversationRolloverReAckPrompt(identity);
+  const record = loadTaskLaunchRecords()[taskId] || {};
+  if (String(record.conversationRolloverReAckState || "").toUpperCase() === "SENT"
+      && String(record.conversationRolloverReAckKey || "") === request.key
+      && String(record.conversationRolloverReAckConversationId || "") === currentConversationId) {
+    return { sent:true, verified:true, duplicate:true, key:request.key };
+  }
+
+  const beforeCapture = await captureConversationTranscript(view).catch(() => null);
+  if (!beforeCapture?.ok || beforeCapture.generating) {
+    return { sent:false, verified:false, pending:true, reason:"REACK_TRANSCRIPT_NOT_READY", key:request.key };
+  }
+  if (String(beforeCapture.conversationId || "") !== currentConversationId
+      || chatConversationIdFromUrl(String(beforeCapture.conversationUrl || "")) !== currentConversationId) {
+    return { sent:false, verified:false, reason:"REACK_TRANSCRIPT_CONVERSATION_MISMATCH", key:request.key };
+  }
+  const alreadySent = [...(beforeCapture.messages || [])].reverse().find((item) =>
+    String(item?.role || "").toUpperCase() === "USER"
+    && String(item?.text || "").includes(request.verificationMarker)
+  );
+  if (alreadySent) {
+    publishTaskLaunchPatch(task, workerCode, {
+      conversationRolloverReAckState:"SENT",
+      conversationRolloverReAckKey:request.key,
+      conversationRolloverReAckConversationId:currentConversationId,
+      conversationRolloverReAckPromptMessageId:alreadySent.messageId || null,
+      conversationRolloverReAckVerifiedAt:new Date().toISOString(),
+      conversationRolloverReAckError:null,
+    }, "conversation-rollover-reack-recovered");
+    return { sent:true, verified:true, duplicate:true, recovered:true, key:request.key };
+  }
+
+  const sendKey = taskId + ":" + String(task?.sessionId || "") + ":rollover-reack:" + request.key;
+  if (conversationRolloverProcessingKeys.has(sendKey)) {
+    return { sent:false, verified:false, pending:true, reason:"REACK_ALREADY_SENDING", key:request.key };
+  }
+  conversationRolloverProcessingKeys.add(sendKey);
+  try {
+    publishTaskLaunchPatch(task, workerCode, {
+      conversationRolloverReAckState:"SENDING",
+      conversationRolloverReAckKey:request.key,
+      conversationRolloverReAckConversationId:currentConversationId,
+      conversationRolloverReAckRequestedAt:new Date().toISOString(),
+      conversationRolloverReAckError:null,
+    }, "conversation-rollover-reack-start");
+
+    const insertion = await insertWorkerTaskPrompt(view, request.prompt, request.verificationMarker);
+    if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+      publishTaskLaunchPatch(task, workerCode, {
+        conversationRolloverReAckState:"WAITING_RETRY",
+        conversationRolloverReAckError:String(insertion?.reason || "REACK_INSERT_FAILED").slice(0, 800),
+      }, "conversation-rollover-reack-insert-failed");
+      return { sent:false, verified:false, reason:insertion?.reason || "REACK_INSERT_FAILED", key:request.key };
+    }
+
+    const sent = await sendPreparedChatPrompt(view, request.verificationMarker);
+    if (sent?.sent !== true) {
+      publishTaskLaunchPatch(task, workerCode, {
+        conversationRolloverReAckState:"WAITING_RETRY",
+        conversationRolloverReAckError:String(sent?.reason || "REACK_SEND_FAILED").slice(0, 800),
+      }, "conversation-rollover-reack-send-failed");
+      return { sent:false, verified:false, reason:sent?.reason || "REACK_SEND_FAILED", key:request.key };
+    }
+
+    const transcript = await verifyPromptMarkerInTranscript(view, request.verificationMarker, 12000);
+    if (transcript?.verified !== true || String(transcript.conversationId || "") !== currentConversationId) {
+      publishTaskLaunchPatch(task, workerCode, {
+        conversationRolloverReAckState:"WAITING_RETRY",
+        conversationRolloverReAckError:String(transcript?.reason || "REACK_TRANSCRIPT_VERIFY_FAILED").slice(0, 800),
+      }, "conversation-rollover-reack-verify-failed");
+      return { sent:true, verified:false, reason:transcript?.reason || "REACK_TRANSCRIPT_VERIFY_FAILED", key:request.key };
+    }
+
+    publishTaskLaunchPatch(task, workerCode, {
+      conversationRolloverReAckState:"SENT",
+      conversationRolloverReAckKey:request.key,
+      conversationRolloverReAckConversationId:currentConversationId,
+      conversationRolloverReAckPromptMessageId:transcript.messageId || null,
+      conversationRolloverReAckSentAt:new Date().toISOString(),
+      conversationRolloverReAckVerifiedAt:new Date().toISOString(),
+      conversationRolloverReAckError:null,
+    }, "conversation-rollover-reack-sent");
+    return { sent:true, verified:true, key:request.key, messageId:transcript.messageId || null };
+  } finally {
+    conversationRolloverProcessingKeys.delete(sendKey);
+  }
+}
+
 async function processConversationRolloverAck({ view, body, workerCode, task, observedConversationId = "", observedConversationUrl = "" }) {
   const taskId = String(task?.id || "");
   const record = loadTaskLaunchRecords()[taskId] || {};
@@ -4115,6 +4213,7 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
   });
 
   let ackRecovery = null;
+  let reAck = null;
   if (ackEvidenceMessage) {
     ackRecovery = await processConversationRolloverAck({
       view,
@@ -4124,6 +4223,19 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
       observedConversationId:currentConversationId,
       observedConversationUrl:currentUrl,
     }).catch(() => null);
+  } else if (evidenceMode === "LOCAL_FROZEN_MEMORY_USER_REBIND") {
+    reAck = await requestConversationRolloverReAck({
+      view,
+      task,
+      workerCode,
+      identity,
+      currentConversationId,
+      currentConversationUrl:currentUrl,
+    }).catch((error) => ({
+      sent:false,
+      verified:false,
+      reason:error instanceof Error ? error.message : "REACK_REQUEST_FAILED",
+    }));
   }
   return {
     observed:true,
@@ -4133,6 +4245,7 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     validation,
     evidenceMode,
     ackRecovery,
+    reAck,
   };
 }
 
@@ -4276,6 +4389,28 @@ async function syncConversationMemoryForWorker(workerCode) {
       task:live.task,
       observedConversationId:currentId,
       observedConversationUrl:currentConversationUrl,
+    }).catch(() => undefined);
+  } else if (rolloverState === ROLLOVER_STATES.ACK_WAIT
+      && String(localRolloverRecord.conversationRolloverRecoveryEvidenceMode || "") === "LOCAL_FROZEN_MEMORY_USER_REBIND") {
+    const frozenIdentity = {
+      workerCode:code === "BENAI" ? "BENJAMINAI" : code,
+      taskId:String(live.task.id || ""),
+      sessionId:String(live.task.sessionId || ""),
+      previousConversationId:String(localRolloverRecord.conversationRolloverPreviousConversationId || ""),
+      contextSnapshotId:String(localRolloverRecord.conversationRolloverContextSnapshotId || ""),
+      contextRevision:Number(localRolloverRecord.conversationRolloverContextRevision || 0),
+      handoffPackId:String(localRolloverRecord.conversationRolloverHandoffPackId || ""),
+      sourceHead:String(localRolloverRecord.conversationRolloverSourceHead || live.task.sourceHead || "").toLowerCase(),
+      sourceProofSha256:String(localRolloverRecord.conversationRolloverSourceProofSha256 || "").toLowerCase(),
+      productionAccess:"DENY",
+    };
+    await requestConversationRolloverReAck({
+      view,
+      task:live.task,
+      workerCode:code,
+      identity:frozenIdentity,
+      currentConversationId:currentId,
+      currentConversationUrl:currentConversationUrl,
     }).catch(() => undefined);
   }
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
