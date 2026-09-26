@@ -974,3 +974,34 @@ A következő pilot-réshez új, migráció nélküli controlled issue access r�
 Contract: `scripts/drive-issue-access-v010-contract.mjs` → 16/16 PASS.
 Releváns Document Flow / DRIVE / object storage / Projektkapu regressziók: PASS.
 PROD: DENY.
+
+### Controlled issue recipient download runtime acceptance
+
+Candidate build / publish:
+- source commit: `5fb8c4676e3ec55c8ea422a904cb8419786f0205`
+- build ID: `lQn3OT7CeQ5JL0TFX0iqM`
+- compile: PASS
+- TypeScript: PASS
+- route generation: PASS
+- standalone: PASS
+- 260 static chunk
+- PM2 `dimpro-projectkapu-drop-drive-pilot-dev` újraindítva kizárólag DEV 3299-en
+- publikus issue route token nélkül: HTTP 400
+- DROP health: HTTP 200
+
+A `KIA-00001` szintetikus DEV kiadás egy címzettjén kontrollált runtime teszt történt:
+- recipient: `drive-doc-recipient-fb52eb71ecf94297`
+- rövid DEV tesztlejárat beállítva
+- purpose-separated HMAC token előállítva szerveroldalon, tokenérték kiírása nélkül
+- `/api/drive/public/issue-download` → rövid életű S3 signed redirect
+- végső HTTP: 200
+- letöltött méret: 59 byte
+- letöltött SHA-256: `6baf0b72a777fbcf48131454bca796c4cfbf14a3c0938bdcf7b387e158c45e84`
+- SHA-256 egyezik a DRIVE verzió hitelesített hashével
+- `downloaded_at`: rögzítve
+- Project Core audit event: `DRIVE_DOCUMENT_ISSUE_RECIPIENT_DOWNLOADED`
+- audit entity: `document_version / drive-version-5e676309f194`
+- hibás token smoke: HTTP 401 / `DRIVE_ISSUE_ACCESS_TOKEN_INVALID`
+
+Ezzel a kontrollált kiadási címzetti letöltés backend lánca runtime szinten PASS.
+A Projektkapu UI Link ikon / újrageneráló endpoint böngészős kézi acceptance külön követhető, de a build, jogosultsági guard és contract teszt PASS.
