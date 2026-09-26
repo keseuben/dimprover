@@ -29,6 +29,7 @@ async function syncIdentityMemberships(projectId: string, actorUserId: string) {
         ready: provisioned.ready,
         folderCount: provisioned.folderCount,
         incomingDropFolder: provisioned.incomingDropFolder,
+        pilotFolder: provisioned.pilotFolder,
       };
     }
     if (!drive.ready || !drive.incomingDropFolder) {

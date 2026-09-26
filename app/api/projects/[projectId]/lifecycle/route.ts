@@ -32,6 +32,7 @@ async function syncIdentityLifecycle(projectId: string, actorUserId: string, nex
         ready: provisioned.ready,
         folderCount: provisioned.folderCount,
         incomingDropFolder: provisioned.incomingDropFolder,
+        pilotFolder: provisioned.pilotFolder,
       };
     }
     if (!drive.ready || !drive.incomingDropFolder) {
