@@ -199,6 +199,7 @@ export default function DetailsPanel({
           </>
         ) : tab === "review" ? (
           <div className={styles.versionList}>
+            <div className={styles.infoBox}><strong>Besorolás forrása</strong><br />Szakág: {metadata.discipline ? "fájl felülírás: " + metadata.discipline : inheritedDiscipline ? "mappából örökölt: " + inheritedDiscipline : "—"}<br />Témakör: {metadata.topic ? "fájl felülírás: " + metadata.topic : inheritedTopic ? "mappából örökölt: " + inheritedTopic : "—"}</div>
             {[
               ["Ellenőrzés", details?.metadata?.extra?.reviewChecked ?? details?.metadata?.extra?.hageChecked],
               ["Eredmény", details?.metadata?.extra?.reviewResult ?? details?.metadata?.extra?.hageResult],
