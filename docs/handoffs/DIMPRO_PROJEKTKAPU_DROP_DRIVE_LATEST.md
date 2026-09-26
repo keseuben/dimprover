@@ -650,3 +650,52 @@ Ellenőrzés:
 - `git diff --check`: PASS.
 
 Nginx publish még nem történt meg. A következő lépés full candidate build, majd külön Projektkapu + Drop DEV host routing a candidate processre.
+
+
+## 2026-09-26 – Projektkapu + Drop DEV publikus candidate routing
+
+A `4dbeb8d059d1d67d417b4f4817b6681dd12ab8f9` commitból készített candidate teljes buildje sikeres:
+
+- Next.js/Turbopack compile: PASS;
+- TypeScript: PASS;
+- page generation: PASS;
+- standalone asset sync: PASS;
+- build ID: `KDjU5PahIIAMufqa2Plty`;
+- release metadata commit: `4dbeb8d059d1d67d417b4f4817b6681dd12ab8f9`;
+- 260 statikus chunk ellenőrizve.
+
+A külön candidate PM2 processz:
+- név: `dimpro-projectkapu-drop-drive-pilot-dev`;
+- bind: `127.0.0.1:3299`;
+- a közös 3100-as DEV runtime nem került restartolásra.
+
+DEV-only Nginx routing publikálva:
+- `projektkapu.dev.dimpro.hu` → candidate `127.0.0.1:3299`;
+- `drop.dev.dimpro.hu` → candidate `127.0.0.1:3299`;
+- az összes többi DEV host a közös `127.0.0.1:3100` runtime-on maradt;
+- PROD routing nem változott.
+
+Nginx biztonsági pontok:
+- publish előtti aktív config backup:
+  `/etc/nginx/backups/dimpro-dev.enabled.before-projectkapu-auth-publish-20260926T072311Z`;
+- aktív config SHA-256 publish után:
+  `9aa14daeaf698d3a72ac0c3bb9b8946265ef81f2741b7e98ec6e62c587d3e5d5`;
+- `nginx -t`: PASS;
+- reload: PASS;
+- nginx status: active.
+
+Publikus DEV smoke:
+- `https://projektkapu.dev.dimpro.hu/login` → HTTP 200;
+- dedikált `DIMPRO Projektkapu` login marker: PASS;
+- 6 számjegyű kódos UI marker: PASS;
+- `https://projektkapu.dev.dimpro.hu/` → 307 `/login`;
+- code-auth session kód nélkül → `authenticated:false`;
+- `/api/projects` kód nélkül → 401;
+- `https://drop.dev.dimpro.hu/bekuldes` → HTTP 200;
+- `app.dev.dimpro.hu/login` → HTTP 200 a közös DEV runtime-on;
+- `admin.dev.dimpro.hu/` → elvárt 307 `/admin`;
+- Projektkapu válaszfejlécek: `X-DIMPRO-ProjectGate-Candidate: DEV`, `X-DIMPRO-Production-Access: DENY`.
+
+A sikeres kódos belépés automatikus HTTP tesztjét a platform credential-biztonsági rétege blokkolta; nem került megkerülésre. A kód scrypt-verifierének megfelelősége ellenőrzött, a mechanikai/auth contractok PASS. A következő manuális acceptance pont: böngészőből egy sikeres belépés, majd a `d6-irodaepulet` projekt megjelenésének ellenőrzése.
+
+A belépési kód plaintext formában nincs Gitben és nincs handoff dokumentumban.
