@@ -1652,7 +1652,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             <strong>Mappa besorolása</strong>
             <label>Szakág<input value={folderDiscipline} onChange={(event) => setFolderDiscipline(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.discipline || "Nincs megadva"} /></label>
             <label>Témakör<input value={folderTopic} onChange={(event) => setFolderTopic(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.topic || "Nincs megadva"} /></label>
-            <small>Az üres mező a legközelebbi szülőmappa értékét örökli.</small>
+            <small>Az üres mező a legközelebbi szülőmappa értékét örökli. Aktív: Szakág = {effectiveFolderClassification.get(selectedFolder.id)?.discipline || "—"} ({folderDiscipline ? "saját" : effectiveFolderClassification.get(selectedFolder.id)?.discipline ? "örökölt" : "nincs"}), Témakör = {effectiveFolderClassification.get(selectedFolder.id)?.topic || "—"} ({folderTopic ? "saját" : effectiveFolderClassification.get(selectedFolder.id)?.topic ? "örökölt" : "nincs"}).</small>
             <button type="button" disabled={!canWrite || busy} onClick={() => void saveFolderClassification()}>Besorolás mentése</button>
           </div>}
         </aside>
