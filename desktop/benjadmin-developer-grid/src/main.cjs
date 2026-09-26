@@ -3855,10 +3855,20 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
   if (!capture?.ok) return { observed:false };
   if (capture.generating) return { observed:false, pending:true };
   if (String(capture.conversationId || "") !== currentConversationId) return { observed:false };
-  const markerMessage = [...(capture.messages || [])].reverse().find((item) =>
+
+  const messages = Array.isArray(capture.messages) ? capture.messages : [];
+  const markerMessage = [...messages].reverse().find((item) =>
     String(item?.role || "").toUpperCase() === "USER" && String(item?.text || "").includes(ROLLOVER_PROMPT_MARKER)
+  ) || null;
+  const assistantMessages = [...messages].reverse().filter((item) =>
+    String(item?.role || "").toUpperCase() === "ASSISTANT" && String(item?.text || "").trim()
   );
-  if (!markerMessage) return { observed:false };
+  const markedAckMessage = assistantMessages.find((item) => String(item?.text || "").includes(ROLLOVER_ACK_MARKER)) || null;
+  const latestAssistant = assistantMessages[0] || null;
+  const markerlessAckMessage = !markedAckMessage && latestAssistant && parseConversationRolloverAck(latestAssistant.text)?.ok
+    ? latestAssistant
+    : null;
+  const ackEvidenceMessage = markedAckMessage || markerlessAckMessage;
 
   const expected = {
     taskId:String(task?.id || ""),
@@ -3870,34 +3880,75 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     handoffPackId:String(task?.handoffPackId || ""),
     sourceHead:String(task?.sourceHead || "").toLowerCase(),
   };
-  const validation = validateConversationRolloverPrompt(markerMessage.text, expected);
-  if (!validation?.validated) {
-    send("live:connection", {
-      kind:"conversation-rollover-orphan-recovery",
-      workerCode,
-      taskId:String(task?.id || ""),
-      ok:false,
-      code:"ORPHAN_ROLLOVER_PROMPT_IDENTITY_MISMATCH",
-      mismatches:Array.isArray(validation?.mismatches) ? validation.mismatches : [],
-      currentConversationId,
-    });
-    return { observed:false, rejected:true, validation };
+
+  let validation = null;
+  let identity = null;
+  let evidenceMode = "";
+  if (markerMessage) {
+    validation = validateConversationRolloverPrompt(markerMessage.text, expected);
+    if (validation?.validated) {
+      const parsed = parseConversationRolloverPrompt(markerMessage.text);
+      identity = parsed?.prompt || null;
+      evidenceMode = "USER_BOOTSTRAP";
+    }
   }
 
-  const parsed = parseConversationRolloverPrompt(markerMessage.text);
-  const prompt = parsed?.prompt || {};
+  if (!identity && ackEvidenceMessage) {
+    const parsedAck = parseConversationRolloverAck(ackEvidenceMessage.text);
+    const ack = parsedAck?.ack || {};
+    const ackProofSha256 = String(ack.sourceProofSha256 || "").toLowerCase();
+    const ackValidation = /^[0-9a-f]{64}$/.test(ackProofSha256)
+      ? validateConversationRolloverAck(ackEvidenceMessage.text, { ...expected, sourceProofSha256:ackProofSha256 })
+      : { validated:false, mismatches:["sourceProofSha256"] };
+    if (ackValidation?.validated) {
+      validation = ackValidation;
+      identity = {
+        workerCode:String(ack.workerCode || ""),
+        taskId:String(ack.taskId || ""),
+        sessionId:String(ack.sessionId || ""),
+        previousConversationId:String(ack.previousConversationId || ""),
+        contextSnapshotId:String(ack.contextSnapshotId || ""),
+        contextRevision:Number(ack.contextRevision || 0),
+        handoffPackId:String(ack.handoffPackId || ""),
+        sourceHead:String(ack.sourceHead || "").toLowerCase(),
+        sourceProofSha256:ackProofSha256,
+        productionAccess:String(ack.productionAccess || "").toUpperCase(),
+      };
+      evidenceMode = "ASSISTANT_ACK";
+    }
+  }
+
+  if (!identity) {
+    if (markerMessage || ackEvidenceMessage) {
+      const mismatches = Array.isArray(validation?.mismatches) ? validation.mismatches : ["ORPHAN_ROLLOVER_EVIDENCE_INVALID"];
+      send("live:connection", {
+        kind:"conversation-rollover-orphan-recovery",
+        workerCode,
+        taskId:String(task?.id || ""),
+        ok:false,
+        code:"ORPHAN_ROLLOVER_EVIDENCE_IDENTITY_MISMATCH",
+        mismatches,
+        currentConversationId,
+      });
+      return { observed:false, rejected:true, validation };
+    }
+    return { observed:false };
+  }
+
   const info = await getConversationInfo(view, null, config?.cells).catch(() => ({ chatTitle:"" }));
   const record = {
     conversationRolloverMode:"ORPHAN_RECOVERY",
     conversationRolloverOrphanRecovery:true,
+    conversationRolloverRecoveryEvidenceMode:evidenceMode,
     conversationRolloverReason:"MANUAL_CONTINUATION",
     conversationRolloverPreviousConversationId:previousConversationId,
-    conversationRolloverContextSnapshotId:String(prompt.contextSnapshotId || ""),
-    conversationRolloverContextRevision:Number(prompt.contextRevision || 0),
-    conversationRolloverHandoffPackId:String(prompt.handoffPackId || ""),
-    conversationRolloverSourceHead:String(prompt.sourceHead || "").toLowerCase(),
-    conversationRolloverSourceProofSha256:String(prompt.sourceProofSha256 || "").toLowerCase(),
-    conversationRolloverPromptMessageId:markerMessage.messageId || null,
+    conversationRolloverContextSnapshotId:String(identity.contextSnapshotId || ""),
+    conversationRolloverContextRevision:Number(identity.contextRevision || 0),
+    conversationRolloverHandoffPackId:String(identity.handoffPackId || ""),
+    conversationRolloverSourceHead:String(identity.sourceHead || "").toLowerCase(),
+    conversationRolloverSourceProofSha256:String(identity.sourceProofSha256 || "").toLowerCase(),
+    conversationRolloverPromptMessageId:markerMessage?.messageId || null,
+    conversationRolloverAckEvidenceMessageId:ackEvidenceMessage?.messageId || null,
   };
   const binding = await bindDeveloperGridConversation({
     baseUrl:config.benjadminBaseUrl,
@@ -3935,8 +3986,27 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     taskId:String(task?.id || ""),
     workerCode,
     conversationId:currentConversationId,
+    evidenceMode,
   });
-  return { observed:true, bound:true, state:ROLLOVER_STATES.ACK_WAIT, binding, validation };
+
+  let ackRecovery = null;
+  if (ackEvidenceMessage) {
+    ackRecovery = await processConversationRolloverAck({
+      view,
+      body:ackEvidenceMessage.text,
+      workerCode,
+      task,
+    }).catch(() => null);
+  }
+  return {
+    observed:true,
+    bound:true,
+    state:ackRecovery?.ready === true ? ROLLOVER_STATES.READY : ROLLOVER_STATES.ACK_WAIT,
+    binding,
+    validation,
+    evidenceMode,
+    ackRecovery,
+  };
 }
 
 function conversationMemoryTaskForWorker(workerCode) {
