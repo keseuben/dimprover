@@ -65,7 +65,10 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
   const [rotation, setRotation] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  const canPreview = kind !== "UNSUPPORTED" && document.currentVersion?.status === "AVAILABLE" && Boolean(versionId);
+  const previewStatus = document.currentVersion?.status;
+  const canPreview = kind !== "UNSUPPORTED"
+    && (previewStatus === "AVAILABLE" || previewStatus === "QUARANTINED")
+    && Boolean(versionId);
 
   const loadPreview = useCallback(async () => {
     if (!canPreview) {
@@ -202,7 +205,7 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
       <div className={`${styles.driveViewerUnsupported} ${compact ? styles.driveViewerCompact : ""}`}>
         <FileSearch2 size={compact ? 22 : 28} />
         <strong>Az aktuális verzió még nem előnézhető.</strong>
-        <span>Inline megjelenítéshez AVAILABLE állapotú tárhelyverzió szükséges.</span>
+        <span>Inline megjelenítéshez AVAILABLE, vagy sikeres CLEAN vírusellenőrzéssel rendelkező ellenőrzés alatti verzió szükséges.</span>
       </div>
     );
   }

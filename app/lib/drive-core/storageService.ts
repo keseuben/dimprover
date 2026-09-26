@@ -459,14 +459,15 @@ async function resolveDrivePreviewRecord(input: {
   if (!status.objectDownloadEnabled && !trustedDropArchive) {
     throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_PREVIEW_DISABLED", 503);
   }
-  if (record.version.status !== "AVAILABLE" || record.version.storageProvider !== "S3" || !record.version.storageKey) {
+  const previewableStatus = record.version.status === "AVAILABLE" || record.version.status === "QUARANTINED";
+  if (!previewableStatus || record.version.storageProvider !== "S3" || !record.version.storageKey) {
     throw new DriveCoreRepositoryError(
       "Ez a dokumentumverzió még nem jeleníthető meg a privát DRIVE tárhelyről.",
       "DRIVE_PREVIEW_NOT_AVAILABLE",
       409,
     );
   }
-  if (!trustedDropArchive) {
+  if (record.version.status === "QUARANTINED" || !trustedDropArchive) {
     await requireDriveCleanSecurityScan({
       projectId: input.projectId,
       documentId: input.documentId,

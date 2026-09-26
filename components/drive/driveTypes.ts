@@ -6,6 +6,7 @@ export type DrivePermission =
   | "document.read"
   | "document.write"
   | "document.approve"
+  | "document.issue"
   | "calendar.read"
   | "calendar.write"
   | "dialog.read"

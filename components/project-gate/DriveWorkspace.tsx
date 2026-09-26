@@ -1,21 +1,25 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import {
   AlertTriangle,
   Archive,
   Check,
   ChevronRight,
+  Columns2,
   Database,
   Download,
+  Eye,
   File,
   FilePlus2,
+  FileUp,
   Folder,
   FolderPlus,
   HardDrive,
   History,
   Loader2,
   Link2,
+  List,
   RefreshCw,
   Search,
   Send,
@@ -25,6 +29,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
+import DriveDocumentViewer from "@/components/drive/DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveFolder = {
@@ -41,9 +46,12 @@ type DriveVersion = {
   originalName: string;
   mimeType: string;
   sizeBytes: number;
+  sha256: string | null;
   status: string;
   storageProvider?: string;
   storageKey?: string | null;
+  changeNote?: string;
+  createdBy?: string;
   createdAt: string;
 };
 type DriveDocument = {
@@ -240,6 +248,7 @@ type DownloadPayload = {
 };
 
 type BusinessFilter = "all" | "review" | "valid" | "issued" | "rejected" | "archived";
+type BrowserViewMode = "list" | "split" | "viewer";
 
 function matchesBusinessFilter(governance: DriveDocumentGovernance | undefined, filter: BusinessFilter) {
   if (filter === "all") return true;
@@ -266,6 +275,11 @@ type UploadQueueItem = {
   message: string;
   error?: string;
   documentId?: string;
+  existingDocumentId?: string;
+  expectedCurrentVersion?: number;
+  revisionCode?: string;
+  changeNote?: string;
+  targetDocumentName?: string;
 };
 
 function putSignedFile(
@@ -318,6 +332,9 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "drop" | "other">("all");
   const [businessFilter, setBusinessFilter] = useState<BusinessFilter>("all");
+  const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -334,6 +351,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [uploadBatchBusy, setUploadBatchBusy] = useState(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
   const dragDepthRef = useRef(0);
+  const versionFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const effectivePermissions = [...new Set([...permissions, ...apiPermissions])];
   const canWrite = effectivePermissions.includes("document.write");
@@ -445,6 +463,18 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
     return matchesBusinessFilter(governance, businessFilter);
   }), [baseVisibleDocuments, businessFilter, documentFlowByVersion]);
+
+  const selectedDocument = useMemo(
+    () => tree?.documents.find((document) => document.id === selectedDocumentId) || null,
+    [selectedDocumentId, tree],
+  );
+
+  useEffect(() => {
+    if (selectedDocumentId && tree && !tree.documents.some((document) => document.id === selectedDocumentId)) {
+      setSelectedDocumentId("");
+      setBrowserViewMode("list");
+    }
+  }, [selectedDocumentId, tree]);
 
   async function loadProjectSubmissionGates() {
     setGateLoading(true);
@@ -594,14 +624,20 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          folderId: item.targetFolderId,
-          documentName: item.file.name,
+          folderId: item.existingDocumentId ? undefined : item.targetFolderId,
+          documentId: item.existingDocumentId || undefined,
+          expectedCurrentVersion: item.existingDocumentId ? item.expectedCurrentVersion : undefined,
+          documentName: item.targetDocumentName || item.file.name,
           originalName: item.file.name,
           mimeType: item.file.type || "application/octet-stream",
           sizeBytes: item.file.size,
-          description: "Többfájlos / drag & drop webes feltöltés a Projektkapu DRIVE felületéről.",
-          revisionCode: "V1",
-          changeNote: "Drive Web Upload UX 1.1 feltöltés.",
+          description: item.existingDocumentId
+            ? "Meglévő Projektkapu DRIVE dokumentum új fizikai verziója."
+            : "Többfájlos / drag & drop webes feltöltés a Projektkapu DRIVE felületéről.",
+          revisionCode: item.revisionCode || "V1",
+          changeNote: item.changeNote || (item.existingDocumentId
+            ? "Új tervverzió feltöltése a Projektkapu DRIVE felületéről."
+            : "Drive Web Upload UX 1.1 feltöltés."),
           source: "WEB",
         }),
       });
@@ -625,6 +661,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         error?: string;
         session?: { finalVersionStatus?: string };
         document?: { id?: string };
+        documentFlow?: { ok?: boolean; governance?: { businessStatus?: string; reviewDecision?: string }; error?: string };
         securityScan?: { scan?: { status?: string } };
       };
       if (!completeResponse.ok || !completePayload.ok) throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
@@ -635,8 +672,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         progress: 100,
         documentId: completePayload.document?.id,
         message: scanStatus === "CLEAN"
-          ? `Feltöltve · CLEAN · ${finalStatus}`
-          : `Feltöltve · ${finalStatus}`,
+          ? `Feltöltve · CLEAN · ${finalStatus}${completePayload.documentFlow?.ok ? " · Ellenőrzésre vár" : ""}`
+          : `Feltöltve · ${finalStatus}${completePayload.documentFlow?.ok ? " · Ellenőrzésre vár" : ""}`,
       });
       return completePayload.document?.id || null;
     } catch (caught) {
@@ -709,6 +746,59 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setUploadQueue((current) => [...prepared, ...current]);
     const runnable = prepared.filter((item) => item.status === "QUEUED");
     if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  function startVersionUpload(document: DriveDocument) {
+    if (!canWrite || uploadBatchBusy) return;
+    if (!storageWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+    setVersionTargetDocument(document);
+    if (versionFileInputRef.current) {
+      versionFileInputRef.current.value = "";
+      versionFileInputRef.current.click();
+    }
+  }
+
+  function handleVersionFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const document = versionTargetDocument;
+    event.target.value = "";
+    setVersionTargetDocument(null);
+    if (!file || !document) return;
+    if (file.size <= 0) {
+      setError("Üres fájl nem tölthető fel új verzióként.");
+      return;
+    }
+    const maxUploadBytes = health?.storage?.maxUploadBytes || Number.MAX_SAFE_INTEGER;
+    if (file.size > maxUploadBytes) {
+      setError(`A fájl meghaladja a ${health?.storage?.maxUploadMb || 0} MB-os Drive feltöltési korlátot.`);
+      return;
+    }
+    const suggestedRevision = `V${document.currentVersionNumber + 1}`;
+    const revisionCode = window.prompt("Új verzió revíziókódja:", suggestedRevision);
+    if (revisionCode === null) return;
+    const changeNote = window.prompt("Változás rövid leírása (opcionális):", "") ?? "";
+    const folder = tree?.folders.find((entry) => entry.id === document.folderId);
+    const now = Date.now();
+    const item: UploadQueueItem = {
+      id: `drive-version-upload-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      targetFolderId: document.folderId,
+      targetFolderPath: folder?.path || "Dokumentum mappája",
+      status: "QUEUED",
+      progress: 0,
+      message: `${document.name} · új verzió feltöltésre vár`,
+      existingDocumentId: document.id,
+      expectedCurrentVersion: document.currentVersionNumber,
+      revisionCode: revisionCode.trim() || suggestedRevision,
+      changeNote: changeNote.trim(),
+      targetDocumentName: document.name,
+    };
+    setUploadQueue((current) => [item, ...current]);
+    setSelectedDocumentId(document.id);
+    void processUploadBatch([item]);
   }
 
   function submitFileUpload(event: FormEvent<HTMLFormElement>) {
@@ -1179,6 +1269,14 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         </div>
       )}
 
+      <input
+        ref={versionFileInputRef}
+        type="file"
+        hidden
+        onChange={handleVersionFileSelected}
+        aria-label="Új dokumentumverzió fájl kiválasztása"
+      />
+
       {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat a feltöltéshez</strong><span>{selectedFolder ? `Célmappa: ${selectedFolder.path}` : "Előbb válassz célmappát a bal oldalon"}</span></div></div>}
 
       <div className={styles.browser}>
@@ -1195,6 +1293,11 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           <header className={styles.documentHeader}>
             <div><small>{selectedFolder ? selectedFolder.path : "Projektfájlok"}</small><strong>{selectedFolder?.name || "Teljes dokumentumtár"} · {visibleDocuments.length} fájl</strong></div>
             <div className={styles.documentTools}>
+              <div className={styles.viewModeSwitcher} aria-label="DRIVE megjelenítési mód">
+                <button type="button" className={browserViewMode === "list" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("list")} title="Lista nézet"><List size={14} /> Lista</button>
+                <button type="button" className={browserViewMode === "split" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("split")} title="Lista és tervnéző"><Columns2 size={14} /> Osztott</button>
+                <button type="button" className={browserViewMode === "viewer" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("viewer")} title="Tervnéző" disabled={!selectedDocument}><Eye size={14} /> Tervnéző</button>
+              </div>
               <div className={styles.sourceFilters} aria-label="Dokumentumforrás szűrése">
                 <button type="button" className={sourceFilter === "all" ? styles.filterActive : ""} onClick={() => setSourceFilter("all")}>Mind</button>
                 <button type="button" className={sourceFilter === "drop" ? styles.filterActive : ""} onClick={() => setSourceFilter("drop")}>Drop</button>
@@ -1217,16 +1320,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <span><Folder size={18} /></span><div><strong>{folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
             </button>)}
           </div>}
-          <div className={styles.tableHeader}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
-          <div className={styles.documentList}>
+          <div className={`${styles.tableHeader} ${browserViewMode === "viewer" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
+          <div className={`${styles.documentList} ${browserViewMode === "viewer" ? styles.listHidden : ""}`}>
             {visibleDocuments.map((document) => {
               const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
               const formalIssue = document.currentVersion ? documentIssueByVersion[document.currentVersion.id] : undefined;
               return (
-              <article key={document.id}>
+              <article key={document.id} className={selectedDocumentId === document.id ? styles.documentSelected : ""}>
                 <span className={styles.fileIcon}>{document.extension ? document.extension.toUpperCase().slice(0, 4) : "FILE"}</span>
                 <div>
-                  <strong>{document.name}</strong>
+                  <button type="button" className={styles.documentNameButton} onClick={() => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }} title={`${document.name} megnyitása tervnézőben`}><strong>{document.name}</strong></button>
                   <small>{document.description || document.mimeType}</small>
                   {document.currentVersion && <span className={`${styles.versionStatus} ${styles[`versionStatus${document.currentVersion.status}`] || ""}`}>{document.currentVersion.status}</span>}
                   {governance?.businessStatus && <span className={`${styles.businessStatus} ${styles[`businessStatus${governance.businessStatus}`] || ""}`}>
@@ -1238,6 +1341,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 <span>{formatBytes(document.currentVersion?.sizeBytes || 0)}</span>
                 <time>{formatDate(document.updatedAt)}</time>
                 <div className={styles.rowActions}>
+                  <button type="button" className={styles.previewButton} title="Megnyitás tervnézőben" onClick={() => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }} aria-label={`${document.name} megnyitása tervnézőben`}><Eye size={15} /></button>
+                  {canWrite && <button type="button" className={styles.versionUploadButton} disabled={busy || uploadBatchBusy || !storageWriteEnabled} title="Új tervverzió feltöltése ehhez a dokumentumhoz" onClick={() => startVersionUpload(document)} aria-label={`${document.name} új verzió feltöltése`}><FileUp size={15} /></button>}
                   <button
                     type="button"
                     className={styles.downloadButton}
@@ -1296,6 +1401,18 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
+          {browserViewMode !== "list" && <aside className={styles.previewPane} data-project-gate-drive-viewer="0.1.0">
+            <header className={styles.previewHeader}>
+              <div><span>Tervnéző</span><strong>{selectedDocument?.name || "Válassz dokumentumot"}</strong></div>
+              <div>
+                {selectedDocument && canWrite && <button type="button" onClick={() => startVersionUpload(selectedDocument)} disabled={uploadBatchBusy || !storageWriteEnabled}><FileUp size={14} /> Új verzió</button>}
+                <button type="button" onClick={() => setBrowserViewMode("list")}><X size={14} /> Bezárás</button>
+              </div>
+            </header>
+            {selectedDocument
+              ? <DriveDocumentViewer projectId={projectId} document={selectedDocument} />
+              : <div className={styles.previewEmpty}><Eye size={28} /><strong>Nincs kiválasztott terv</strong><span>Kattints egy dokumentum nevére vagy a szem ikonra.</span></div>}
+          </aside>}
         </div>
       </div>
 
