@@ -150,6 +150,7 @@ PASS:
 - DRIVE object storage contract;
 - DRIVE document flow contract;
 - DRIVE issue-access contract;
+- Projektkapu DRIVE role-matrix contract: 14/14 PASS;
 - full Next compile;
 - full TypeScript;
 - route generation;
@@ -164,6 +165,9 @@ A következő pontok nem blokkálják a backend E2E-t, de valós felhasználói 
 2. `KIADOTT` dokumentumnál a Link ikon megjelenik-e, és a címzetti linkpanel jól használható-e.
 3. Link másolás mobilon és desktopon.
 4. PROJECT_MANAGER / REVIEWER / CONTRIBUTOR / VIEWER szerepkörök UI-szintű jogosultsági acceptance.
+   - Automatikus backend/UI guard contract: PASS.
+   - Jelenlegi policy szerint a REVIEWER rendelkezik `document.approve` joggal, ezért formális dokumentumkiadást is indíthat.
+   - Valós multi-role pilot előtt üzleti döntés szükséges arról, hogy a `KIADOTT` művelet maradjon-e minden approver számára elérhető, vagy csak OWNER / PROJECT_MANAGER adhasson ki dokumentumot.
 5. Valós projektből 1 PDF + 1 kép + 1 tipikus szakági fájl feltöltése.
 6. Lejáró Beküldőkapu vizuális üzenete.
 7. Címzetti link lejárati / visszavont issue felhasználói hibaoldalának UX-e.
