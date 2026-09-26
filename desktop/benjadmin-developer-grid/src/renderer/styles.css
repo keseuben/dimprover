@@ -3046,9 +3046,9 @@ body.has-health-drawer .central-panel {
   display:none;
 }
 .footer-disk-meter {
-  min-width:72px;
-  max-width:126px;
-  flex:1 1 88px;
+  min-width:68px;
+  max-width:112px;
+  flex:1 1 80px;
   display:inline-flex;
   align-items:center;
   gap:5px;
@@ -3076,7 +3076,7 @@ body.has-health-drawer .central-panel {
   min-width:34px;
   flex:0 0 auto;
   text-align:right;
-  font-size:clamp(9px,.28vw,11px);
+  font-size:clamp(10px,.34vw,12px);
   line-height:1;
   font-style:normal;
   font-weight:850;
@@ -3101,7 +3101,7 @@ body.has-health-drawer .central-panel {
 :root[data-theme="light"] .footer-disk-meter.is-unknown .footer-disk-value { color:#64748b; }
 @media (max-width: 1500px) {
   .footer-server-status { padding-inline:5px; gap:4px; }
-  .footer-disk-meter { min-width:58px; max-width:88px; flex-basis:68px; gap:3px; }
-  .footer-disk-track { min-width:30px; height:5px; }
-  .footer-disk-value { min-width:29px; font-size:8.5px; }
+  .footer-disk-meter { min-width:56px; max-width:82px; flex-basis:64px; gap:3px; }
+  .footer-disk-track { min-width:27px; height:5px; }
+  .footer-disk-value { min-width:32px; font-size:10px; }
 }
