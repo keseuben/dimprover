@@ -121,8 +121,8 @@ const actualHead=execText(GIT_BIN,[`--git-dir=${REPO}`,"rev-parse",`${branchRef}
 if(actualHead!==sourceCommit) fail("SOURCE_BASELINE_MISMATCH",`Canonical branch HEAD ${actualHead} != ${sourceCommit}.`);
 
 try {
-  execFileSync(STORAGE_PREBUILD, [], { stdio:"inherit", timeout:15*60*1000 });
-  execFileSync(process.execPath, [STORAGE_ADMISSION, "--operation", "remote-build"], { stdio:"inherit", timeout:60_000 });
+  execFileSync(STORAGE_PREBUILD, [], { stdio:["ignore","ignore","inherit"], timeout:15*60*1000 });
+  execFileSync(process.execPath, [STORAGE_ADMISSION, "--operation", "remote-build"], { stdio:["ignore","ignore","inherit"], timeout:60_000 });
 } catch (error) {
   fail("DEV_STORAGE_ADMISSION_BLOCKED", "A DEV szerver tárhely admission blokkolta a remote build dispatchot: " + String(error?.status ?? error?.code ?? "UNKNOWN") + ".");
 }

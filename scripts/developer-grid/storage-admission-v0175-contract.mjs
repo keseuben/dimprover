@@ -50,6 +50,10 @@ check("remote dispatch runs storage cleanup/admission before local artifact dire
   assert.ok(sourceValidation>0 && pre>sourceValidation && admission>pre && local>admission);
 });
 check("remote dispatch maps storage failure to explicit block code",()=>assert.match(dispatch,/DEV_STORAGE_ADMISSION_BLOCKED/));
+check("remote dispatch keeps stdout JSON-only during storage gates",()=>{
+  assert.match(dispatch,/execFileSync\(STORAGE_PREBUILD, \[\], \{ stdio:\["ignore","ignore","inherit"\]/);
+  assert.match(dispatch,/execFileSync\(process\.execPath, \[STORAGE_ADMISSION, "--operation", "remote-build"\], \{ stdio:\["ignore","ignore","inherit"\]/);
+});
 check("windows admission runs before preflight PASS and desktop checks",()=>{
   const admission=windows.indexOf('node "$STORAGE_ADMISSION" --operation windows-package');
   const preflight=windows.indexOf('if [[ "${1:-}" == "--preflight-only" ]]');
