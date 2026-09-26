@@ -20,7 +20,8 @@ function runtimeRoot() {
   return cwd;
 }
 
-const dataRoot = path.join(runtimeRoot(), ".data", "dimpro-project-core");
+const configuredDataRoot = process.env.PROJECT_CORE_FILE_DATA_ROOT?.trim();
+const dataRoot = configuredDataRoot ? path.resolve(configuredDataRoot) : path.join(runtimeRoot(), ".data", "dimpro-project-core");
 const statePath = path.join(dataRoot, "state.json");
 
 function nowIso() {
