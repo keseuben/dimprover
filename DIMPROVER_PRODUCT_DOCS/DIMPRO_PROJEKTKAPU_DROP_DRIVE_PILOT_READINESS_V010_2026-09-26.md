@@ -157,20 +157,60 @@ PASS:
 - standalone build;
 - `git diff --check`.
 
-## 4. Még szükséges kézi pilot acceptance
+## 4. Pilot UI acceptance
 
-A következő pontok nem blokkálják a backend E2E-t, de valós felhasználói pilot előtt böngészőből ellenőrizendők:
+Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
 
-1. DRIVE-ban a Beérkező Drop dokumentum review gombjai és státuszcímkéi vizuálisan megfelelőek-e.
-2. `KIADOTT` dokumentumnál a Link ikon megjelenik-e, és a címzetti linkpanel jól használható-e.
-3. Link másolás mobilon és desktopon.
-4. PROJECT_MANAGER / REVIEWER / CONTRIBUTOR / VIEWER szerepkörök UI-szintű jogosultsági acceptance.
-   - Automatikus backend/UI guard contract: PASS.
-   - Jelenlegi policy szerint a REVIEWER rendelkezik `document.approve` joggal, ezért formális dokumentumkiadást is indíthat.
-   - Valós multi-role pilot előtt üzleti döntés szükséges arról, hogy a `KIADOTT` művelet maradjon-e minden approver számára elérhető, vagy csak OWNER / PROJECT_MANAGER adhasson ki dokumentumot.
-5. Valós projektből 1 PDF + 1 kép + 1 tipikus szakági fájl feltöltése.
-6. Lejáró Beküldőkapu vizuális üzenete.
-7. Címzetti link lejárati / inaktív kiadási hibaoldal UX: PASS. A publikus `/kiadas` oldal hibás, lejárt és nem aktív kiadásnál emberi magyar üzenetet ad; a projekt többi része továbbra is login-védett.
+1. DRIVE / Beérkező Drop review műveletek: **PASS action-level**.
+   - bejelentkezés a külön Projektkapu loginon: PASS;
+   - D6 Irodaépület → DRIVE betöltés: PASS;
+   - `D6_PDF_DROP_DRIVE_E2E_20260926T093816Z.pdf` látható: PASS;
+   - `Beérkező Drop` látható: PASS;
+   - a PDF mellett a `vírusellenőrzése`, `jóváhagyása`, `elutasítása` műveleti gombok ténylegesen megjelentek.
+   - A business státuszkódokat a UI nem nyers `ELLENORZES_ALATT/PENDING` szövegként jeleníti meg; a mélyebb DOM státuszszöveg-ellenőrzést a platform biztonsági rétege blokkolta, ezért ezt nem kerülgettük.
+2. `KIADOTT` dokumentum Link ikon + címzetti panel: **PASS**.
+   - a kiadott E2E dokumentum látható;
+   - `kiadási linkjei` művelet megjelent;
+   - kattintás után a `data-drive-issue-access="0.1.0"` panel megjelent;
+   - 1 címzett, 1 kiadási link, 1 `Link másolása` gomb;
+   - technikai browser error nem jelent meg.
+3. Link másolás: desktop UI gomb jelenléte PASS; tényleges clipboard-write és mobil acceptance még nyitott.
+4. PROJECT_MANAGER / REVIEWER / CONTRIBUTOR / VIEWER:
+   - automatikus backend/UI guard contract: 14/14 PASS;
+   - élő multi-role böngészős acceptance még nyitott;
+   - jelenlegi policy szerint a REVIEWER rendelkezik `document.approve` joggal, ezért formális dokumentumkiadást is indíthat;
+   - valós multi-role pilot előtt üzleti döntés szükséges arról, hogy a `KIADOTT` művelet maradjon-e minden approver számára elérhető, vagy csak OWNER / PROJECT_MANAGER adhasson ki dokumentumot.
+5. Valós projektfájl acceptance: szintetikus PDF runtime PASS, képfolyamat korábban tesztelve; egy tipikus valós szakági fájl még nyitott.
+6. Lejáró Beküldőkapu vizuális üzenete még nyitott.
+7. Címzetti link lejárati / inaktív kiadási hibaoldal UX: **PASS**. A publikus `/kiadas` oldal hibás, lejárt és nem aktív kiadásnál emberi magyar üzenetet ad; a projekt többi része továbbra is login-védett.
+
+## 4/A. DEV tárhely – pilot operációs blokk
+
+2026-09-26 aktuális DEV állapot:
+- filesystem: 118 GiB;
+- használt: kb. 107 GiB;
+- szabad: kb. 4,6 GiB;
+- kihasználtság: 96%;
+- canonical `preBuildHardMinFreeGiB`: 15 GiB;
+- target free: 30 GiB.
+
+Következmény: **új full build nem indítható biztonságosan**, amíg a szabad hely nincs rendezve.
+
+Read-only / dry-run audit:
+- Projektkapu candidate root teljes méret: kb. 8,0 GiB;
+- candidate `.next` build outputok összesen: kb. 5,574 GiB;
+- approved V2 retention worktree dry-run: 0 build candidate, 0 dependency candidate, 34 build védett;
+- backups/artifacts/worktrees automatikus törlése tiltott;
+- candidate retention inventory: 12 build;
+- current runtime: 1 PROTECTED;
+- rollback candidate: 1 PROTECTED;
+- 6 régi teljes build: `PROVEN_REGENERABLE_PENDING_APPROVAL`;
+- 4 candidate: `UNKNOWN_DENY`;
+- külön dry-run candidate guard potenciális visszanyerése: 3,713 GiB;
+- `--apply` szándékosan nincs implementálva és RC=77 DENY.
+
+A Safe Delete skill és directive SHA-256 ellenőrzése PASS. **Törlés nem történt.**
+A 3,713 GiB potenciális reclaim önmagában sem éri el a 15 GiB pre-build minimumot; a további tárhelykezeléshez külön jóváhagyott retention workflow vagy DEV volumenbővítés szükséges.
 
 ## 5. Tudatosan későbbre hagyott elemek
 
@@ -190,4 +230,4 @@ A fő dokumentumforgalmi backend lánc DEV környezetben teljes E2E-vel működi
 
 Beküldőkapu → DROP → S3 → azonnali ClamAV → DRIVE Beérkező Drop → ellenőrzés → ERVENYES → KIADOTT → kontrollált letöltés.
 
-A következő fejlesztési munka elsődlegesen UX- és szerepkör-acceptance, nem alap backend hiány.
+A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A következő fejlesztési munka elsődlegesen a maradék multi-role/mobil/valós szakági acceptance és az operációs tárhely rendezése; új full build addig nem indul.

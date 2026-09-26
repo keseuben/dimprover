@@ -1134,3 +1134,77 @@ Publikus runtime acceptance:
 
 A címzetti link lejárati / inaktív kiadási hibaoldal pilot UX pont backend + publikus runtime szinten PASS.
 PROD: DENY.
+
+
+## 2026-09-26 – DRIVE böngészős UI acceptance + DEV storage pressure checkpoint
+
+### Puppeteer DEV UI acceptance
+
+Tényleges headless Chromium/Puppeteer session a `projektkapu.dev.dimpro.hu` felületen:
+- külön Projektkapu login oldal: PASS;
+- pilot code login: PASS;
+- login után `/projektkapu/projects`: PASS;
+- D6 Irodaépület DRIVE: PASS;
+- `Beérkező Drop`: látható;
+- PDF E2E dokumentum: látható;
+- PDF review műveletek: letöltés / vírusellenőrzés / jóváhagyás / elutasítás látható;
+- KIADOTT E2E dokumentum: látható;
+- `kiadási linkjei` gomb: látható és kattintható;
+- kattintás után recipient linkpanel: látható;
+- címzett: 1;
+- generált link: 1;
+- `Link másolása` gomb: 1;
+- technikai böngészőoldali hiba: nincs.
+
+A második, mély DOM-státuszszöveg olvasást a platform security layer blokkolta; nem került megkerülésre.
+
+### DEV storage pressure
+
+Aktuális fájlrendszer:
+- 118 GiB teljes;
+- kb. 107 GiB használt;
+- kb. 4,6 GiB szabad;
+- 96% used.
+
+Canonical retention config:
+- emergency threshold: 90%;
+- preBuildHardMinFreeGiB: 15;
+- targetFreeGiB: 30;
+- backups.autoDelete: false;
+- artifacts.autoDelete: false;
+- worktrees.reportOnly: true.
+
+Gyökérok:
+- Projektkapu candidate root kb. 8,0 GiB;
+- ebből a historical candidate `.next` build output kb. 5,574 GiB;
+- egy teljes build tipikusan kb. 0,62 GiB.
+
+Safe Delete:
+- canonical skill elolvasva;
+- skill SHA-256 PASS: `d4da2a3a0917d1046d1a9f397ea22a46d2d1cac2038d4ee6f1d8bf7ea084f3cb`;
+- approved V2 retention script SHA-256 PASS: `6dc03a019efc9ccbfd12fa48dcfabe420d80ca838c16c41fc03d8f595d7c4aaa`;
+- approved V2 dry-run: 0 build candidate / 0 dependency candidate;
+- backup/artifact/worktree ad-hoc törlés: DENY.
+
+Candidate-retention V0.1 dry-run guard készült:
+- `scripts/projectkapu-candidate-retention-v010.mjs`;
+- `scripts/projectkapu-candidate-retention-v010-contract.mjs`;
+- contract: 12/12 PASS;
+- apply nincs implementálva;
+- `--apply` teszt: RC=77 DENY;
+- current runtime + newest previous complete candidate rollbackként védett;
+- UNKNOWN mindig DENY;
+- 6 régi teljes candidate `.next`: pozitívan regenerálható, de PENDING APPROVAL;
+- potential reclaim: 3,713 GiB;
+- törlés: 0 byte.
+
+Checkpoint reportok:
+- `/srv/dimpro-dev/coordination/checkpoints/PROJECTKAPU_CANDIDATE_RETENTION_INVENTORY_20260926.json`;
+- `/srv/dimpro-dev/coordination/checkpoints/PROJECTKAPU_CANDIDATE_RETENTION_GUARD_V010_DRYRUN_20260926.json`;
+- `/srv/dimpro-dev/coordination/checkpoints/PROJECTKAPU_STORAGE_PRESSURE_V2_DRYRUN_20260926T1240.json`.
+
+Fontos:
+- új full build addig nem indítható, amíg a szabad hely nem éri el legalább a 15 GiB pre-build minimumot;
+- a 3,713 GiB candidate reclaim önmagában nem elég;
+- további takarítás kizárólag külön approved guard/workflow-val vagy DEV storage bővítéssel;
+- PROD: DENY.
