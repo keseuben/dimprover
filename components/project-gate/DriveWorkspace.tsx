@@ -529,8 +529,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const byId = new Map(tree.folders.map((folder) => [folder.id, folder]));
     const result = new Map<string, { discipline: string; topic: string }>();
     for (const folder of tree.folders) {
-      let current = folder; let discipline = ""; let topic = ""; const visited = new Set<string>();
-      while (current && !visited.has(current.id) && (!discipline || !topic)) { visited.add(current.id); discipline ||= current.discipline || ""; topic ||= current.topic || ""; current = current.parentId ? byId.get(current.parentId)! : undefined as never; }
+      let current: typeof folder | undefined = folder; let discipline = ""; let topic = ""; const visited = new Set<string>();
+      while (current && !visited.has(current.id) && (!discipline || !topic)) { visited.add(current.id); discipline ||= current.discipline || ""; topic ||= current.topic || ""; current = current.parentId ? byId.get(current.parentId) : undefined; }
       result.set(folder.id, { discipline, topic });
     }
     return result;
