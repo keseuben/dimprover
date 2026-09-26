@@ -29,6 +29,7 @@ const stagedValues = {
   DROP_STORAGE_CORE_ENABLED: "true",
   DROP_QUARANTINE_UPLOAD_ENABLED: "true",
   DROP_RESUMABLE_UPLOAD_ENABLED: "true",
+  DIMPRO_DROP_SCAN_TRIGGER_DIR: "/srv/dimpro-dev/runtime/drop-worker-trigger",
   DROP_SUBMISSION_GATE_ENABLED: "true",
   DROP_DRIVE_INCOMING_ENABLED: "true",
   DROP_SUBMISSION_GATE_DELIVERY_MODE: "manual-link",
