@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   isDriveDevAccessConfigured,
-  PROJECT_GATE_DEV_ACCESS_COOKIE,
+  DRIVE_DEV_ACCESS_COOKIE,
   verifyProjectGateDevAccessToken,
 } from "@/app/lib/project-gate/devAccess";
 import DriveShell from "@/components/drive/DriveShell";
@@ -13,7 +13,7 @@ export default async function DrivePage() {
 
   if (isDriveDevAccessConfigured(host)) {
     const cookieStore = await cookies();
-    const token = cookieStore.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value;
+    const token = cookieStore.get(DRIVE_DEV_ACCESS_COOKIE)?.value;
     if (!verifyProjectGateDevAccessToken(token)) redirect("/login");
   }
 

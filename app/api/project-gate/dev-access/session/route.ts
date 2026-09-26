@@ -3,6 +3,7 @@ import {
   createProjectGateDevAccessToken,
   isDriveDevAccessConfigured,
   isSimpleDevAccessConfigured,
+  DRIVE_DEV_ACCESS_COOKIE,
   PROJECT_GATE_DEV_ACCESS_COOKIE,
   projectGateDevAccessCookieOptions,
   requestHasSimpleDevAccess,
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
     next: isDriveDevAccessConfigured(host) ? "/drive" : "/projektkapu/projects",
   });
   response.cookies.set(
-    PROJECT_GATE_DEV_ACCESS_COOKIE,
+    driveMode ? DRIVE_DEV_ACCESS_COOKIE : PROJECT_GATE_DEV_ACCESS_COOKIE,
     session.token,
     projectGateDevAccessCookieOptions(host, session.maxAge),
   );
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const host = hostOf(request);
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(PROJECT_GATE_DEV_ACCESS_COOKIE, "", {
+  const driveMode = isDriveDevAccessConfigured(host);
+  response.cookies.set(driveMode ? DRIVE_DEV_ACCESS_COOKIE : PROJECT_GATE_DEV_ACCESS_COOKIE, "", {
     ...projectGateDevAccessCookieOptions(host, 0),
     expires: new Date(0),
   });

@@ -2,6 +2,7 @@ import { createHmac, scryptSync, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 export const PROJECT_GATE_DEV_ACCESS_COOKIE = "dimpro_project_gate_dev_access";
+export const DRIVE_DEV_ACCESS_COOKIE = "dimpro_drive_dev_access";
 export const PROJECT_GATE_DEV_ACCESS_USER_ID = "dev-web-user";
 
 const TOKEN_VERSION = "v1";
@@ -170,13 +171,18 @@ export function requestHasProjectGateDevAccess(request: NextRequest) {
 export function requestHasDriveDevAccess(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
   if (!isDriveDevAccessConfigured(host)) return false;
-  return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
+  return verifyProjectGateDevAccessToken(request.cookies.get(DRIVE_DEV_ACCESS_COOKIE)?.value);
 }
 
 export function requestHasSimpleDevAccess(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
-  if (!isSimpleDevAccessConfigured(host)) return false;
-  return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
+  if (isDriveDevAccessConfigured(host)) {
+    return verifyProjectGateDevAccessToken(request.cookies.get(DRIVE_DEV_ACCESS_COOKIE)?.value);
+  }
+  if (isProjectGateDevAccessConfigured(host)) {
+    return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
+  }
+  return false;
 }
 
 export function projectGateDevAccessCookieOptions(hostValue: string | null | undefined, maxAge: number) {
