@@ -37,6 +37,8 @@ type Props = {
   onDownload: () => Promise<void>;
   responsiveClassName?: string;
   focusTab?: "details" | "review" | "versions" | "notes";
+  inheritedDiscipline?: string;
+  inheritedTopic?: string;
 };
 
 const emptyMetadata: MetadataForm = {
@@ -70,6 +72,8 @@ export default function DetailsPanel({
   onDownload,
   responsiveClassName = "",
   focusTab,
+  inheritedDiscipline = "",
+  inheritedTopic = "",
 }: Props) {
   const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
@@ -128,6 +132,8 @@ export default function DetailsPanel({
         ) : tab === "details" ? (
           <>
             <DriveDocumentViewer projectId={projectId} document={document} />
+
+            <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"} · Témakör: {inheritedTopic || "—"}</div>
 
             <div className={styles.metaGrid}>
               {([
