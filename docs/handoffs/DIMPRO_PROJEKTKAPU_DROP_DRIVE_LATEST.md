@@ -1005,3 +1005,47 @@ A `KIA-00001` szintetikus DEV kiadás egy címzettjén kontrollált runtime tesz
 
 Ezzel a kontrollált kiadási címzetti letöltés backend lánca runtime szinten PASS.
 A Projektkapu UI Link ikon / újrageneráló endpoint böngészős kézi acceptance külön követhető, de a build, jogosultsági guard és contract teszt PASS.
+
+## 2026-09-26 – DROP finalize retry-lock runtime acceptance PASS
+
+Javítás commit:
+`e301d6f361e2e38e451a382113187bfd7fa3867b`
+
+Candidate build:
+- build ID: `YXlEFhl4-jxQjPfQ2U49c`
+- compile: PASS
+- TypeScript: PASS
+- route generation: PASS
+- standalone: PASS
+- PM2 candidate: `dimpro-projectkapu-drop-drive-pilot-dev` online, DEV 3299
+
+Friss szintetikus acceptance package:
+- package ID: `206dfe87-388a-4441-bfb3-838f0a7858e9`
+- public code: `DMP-2609-EJLGSR`
+- file ID: `12404de3-3ebe-43d5-8644-11317d0dbc13`
+- SHA-256: `28e96fd1bd00240cb64217b9b0de40be8a12dc0ca681ce2e9bc089fe9ff92fad`
+
+Bizonyított viselkedés közvetlenül upload complete után:
+- finalize #1: HTTP 425 / `DROP_PUBLIC_FILES_NOT_READY`
+- finalize #2 azonnal utána: HTTP 425 / `DROP_PUBLIC_FILES_NOT_READY`
+- további 15 retry: mind HTTP 425 / `DROP_PUBLIC_FILES_NOT_READY`
+- `DROP_PUBLIC_FINALIZE_IN_PROGRESS` előfordulás: 0
+- workflow lock-state: `notification_status=not_requested`
+- notification detail: `WAITING_FILES: ...`
+
+Ez bizonyítja, hogy scan-pending előfeltételhiba után a finalize claim azonnal felszabadul, és nincs korábbi 5 perces beragadás.
+
+A scanner később a fájlt `clean/clean` állapotba vitte. Ugyanazon package + publikus session következő finalize:
+- HTTP 200
+- finalized: true
+- DRIVE incoming: `completed`
+- project: `d6-irodaepulet`
+- folder: `drive-folder-a4dde979-edc`
+- imported: 1
+- document: `drive-document-8c7ae7af0006`
+- version: `drive-version-0b4ce1c8c3d5`
+- business status: `ELLENORZES_ALATT`
+- review decision: `PENDING`
+
+A retry-lock javítás ezzel teljes runtime E2E szinten PASS.
+PROD: DENY.
