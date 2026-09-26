@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { File, FileSpreadsheet, FileText, FolderUp, RefreshCw } from "lucide-react";
+import { File, FileSpreadsheet, FileText, Folder, FolderUp, RefreshCw } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -17,7 +17,9 @@ type Props = {
   boxColorsByDocument?: Record<string, string[]>;
   metadataByDocument?: Record<string, DriveEngineeringMetadata>;
   folders?: DriveFolder[];
+  selectedFolderId?: string;
   currentFolder?: DriveFolder | null;
+  onFolderChange?: (folderId: string) => void;
   onNavigateParent?: () => void;
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
 };
@@ -109,7 +111,9 @@ export default function FileGridPanel({
   boxColorsByDocument = {},
   metadataByDocument = {},
   folders = [],
+  selectedFolderId = "all",
   currentFolder = null,
+  onFolderChange,
   onNavigateParent,
   onOpenReviewDetail,
 }: Props) {
@@ -184,6 +188,10 @@ export default function FileGridPanel({
   const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
   const reviewTopics = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [allReviewRows]);
   const reviewStatuses = useMemo(() => [...new Set(allReviewRows.map((row) => row.workflow).filter(Boolean))].sort(), [allReviewRows]);
+  const folderOptions = useMemo(
+    () => [...folders].sort((a, b) => a.path.localeCompare(b.path, "hu-HU")),
+    [folders],
+  );
 
   const openDetail = (document: DriveDocument, field: string) => {
     onSelectDocument(document);
@@ -210,6 +218,33 @@ export default function FileGridPanel({
           <button type="button" onClick={onRefresh} title="Fájllista frissítése"><RefreshCw size={12} /></button>
         </div>
       </header>
+
+      <div className={styles.fileFolderNav}>
+        <div className={styles.fileFolderNavLabel}><Folder size={14} /><strong>Mappa</strong></div>
+        <select
+          value={selectedFolderId}
+          onChange={(event) => onFolderChange?.(event.target.value)}
+          aria-label="Aktív mappa"
+        >
+          <option value="all">Dokumentumtár / összes fájl</option>
+          {folderOptions.map((folder) => (
+            <option key={folder.id} value={folder.id}>
+              {folder.path.split("/").filter(Boolean).join(" / ")}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={styles.fileFolderUpButton}
+          onClick={onNavigateParent}
+          disabled={!currentFolder || !onNavigateParent}
+          title={currentFolder ? "Vissza a szülőmappába" : "Már a Dokumentumtárban vagy"}
+          aria-label="Vissza a szülőmappába"
+        >
+          <FolderUp size={14} />
+        </button>
+        <span className={styles.fileFolderPath}>{currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
+      </div>
 
       {viewMode === "review" ? (
         <div className={styles.reviewHost}>

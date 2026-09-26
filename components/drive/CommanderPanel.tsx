@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   FileText,
   Folder,
+  FolderUp,
   GripVertical,
 } from "lucide-react";
 import type { DriveDocument, DriveFolder } from "./driveTypes";
@@ -82,6 +83,11 @@ function CommanderPane({
     () => folders.filter((entry) => entry.parentId === folderId),
     [folders, folderId],
   );
+  const directDocumentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const document of documents) counts.set(document.folderId, (counts.get(document.folderId) || 0) + 1);
+    return counts;
+  }, [documents]);
 
   async function onDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
@@ -112,9 +118,14 @@ function CommanderPane({
       </header>
       <div className={styles.commanderPath}>{folder?.path || "Dokumentumtár"}</div>
       <div className={styles.commanderList}>
+        {folder?.parentId && (
+          <button type="button" className={styles.commanderFolderRow} onClick={() => onFolderChange(folder.parentId || "")} title="Vissza a szülőmappába">
+            <FolderUp size={13} /><strong>[..] Szülőmappa</strong><span>Vissza</span>
+          </button>
+        )}
         {childFolders.map((child) => (
           <button key={child.id} type="button" className={styles.commanderFolderRow} onDoubleClick={() => onFolderChange(child.id)} onClick={() => onFolderChange(child.id)}>
-            <Folder size={13} /><strong>{child.name}</strong><span>Mappa</span>
+            <Folder size={13} /><strong>{child.name}</strong><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
           </button>
         ))}
         {paneDocuments.map((document) => {

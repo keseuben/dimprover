@@ -174,22 +174,6 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const selectedFolder = tree?.folders.find((folder) => folder.id === selectedFolderId) || null;
   const selectedDocument = tree?.documents.find((document) => document.id === selectedDocumentId) || null;
 
-  const folderScope = useMemo(() => {
-    if (!tree || selectedFolderId === "all") return null;
-    const ids = new Set<string>([selectedFolderId]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const folder of tree.folders) {
-        if (folder.parentId && ids.has(folder.parentId) && !ids.has(folder.id)) {
-          ids.add(folder.id);
-          changed = true;
-        }
-      }
-    }
-    return ids;
-  }, [selectedFolderId, tree]);
-
   const folderDocumentCounts = useMemo(() => {
     const counts = new Map<string, number>();
     if (!tree) return counts;
@@ -213,14 +197,14 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return (tree?.documents || []).filter((document) => {
-      const folderMatch = folderScope === null || folderScope.has(document.folderId);
+      const folderMatch = selectedFolderId === "all" || document.folderId === selectedFolderId;
       const queryMatch = !normalized || [document.name, document.description, document.extension, document.source, document.currentVersion?.revisionCode || ""]
         .join(" ")
         .toLocaleLowerCase("hu-HU")
         .includes(normalized);
       return folderMatch && queryMatch;
     });
-  }, [folderScope, query, tree]);
+  }, [query, selectedFolderId, tree]);
 
   async function createFolder() {
     if (!canWrite) return;
@@ -700,7 +684,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               boxColorsByDocument={boxColorsByDocument}
               metadataByDocument={metadataByDocument}
               folders={tree?.folders || []}
+              selectedFolderId={selectedFolderId}
               currentFolder={selectedFolder}
+              onFolderChange={(folderId) => {
+                setSelectedDocumentId("");
+                setSelectedFolderId(folderId);
+              }}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
                 setSelectedDocumentId("");
