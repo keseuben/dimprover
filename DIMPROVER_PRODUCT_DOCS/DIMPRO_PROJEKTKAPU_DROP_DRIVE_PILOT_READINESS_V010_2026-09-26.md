@@ -183,14 +183,49 @@ Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
    - automatikus magyar role-label contract: 8/8 PASS;
    - automatikus backend/UI guard contract: 14/14 PASS;
    - élő multi-role böngészős acceptance még nyitott;
-   - **végleges jogosultsági döntés:** REVIEWER ellenőrizhet, jóváhagyhat és elutasíthat, de formális dokumentumkiadást nem indíthat;
-   - új külön permission: `document.issue`;
-   - `document.issue` kizárólag OWNER és PROJECT_MANAGER szerepkörhöz tartozik;
-   - formális `KIADOTT` művelet és a kiadási címzetti linkek újragenerálása `document.issue` jogosultságot igényel;
-   - CONTRIBUTOR továbbra is read/write, VIEWER read-only.
+   - **végleges jogosultsági döntés:** REVIEWER / **Ellenőrző** olvashat, megjegyzést írhat, jóváhagyhat és elutasíthat, de fájlt/metaadatot nem szerkeszthet és formális dokumentumkiadást nem indíthat;
+   - külön permission: document.comment – OWNER, PROJECT_MANAGER, CONTRIBUTOR és REVIEWER;
+   - külön permission: document.issue – kizárólag OWNER és PROJECT_MANAGER;
+   - formális KIADOTT művelet és a kiadási címzetti linkek újragenerálása document.issue jogosultságot igényel;
+   - CONTRIBUTOR read/write/comment, VIEWER read-only.
 5. Projektfájl acceptance: szintetikus PDF runtime PASS, képfolyamat korábban tesztelve, valamint szakági DXF runtime E2E PASS (`application/dxf` → S3 → ClamAV → DRIVE / Beérkező Drop). Valós céges fájl pilot-próba még javasolt, de a fájltípus-folyamat technikailag bizonyított.
 6. Lejáró Beküldőkapu vizuális üzenete még nyitott.
 7. Címzetti link lejárati / inaktív kiadási hibaoldal UX: **PASS**. A publikus `/kiadas` oldal hibás, lejárt és nem aktív kiadásnál emberi magyar üzenetet ad; a projekt többi része továbbra is login-védett.
+
+### Projektkapu DRIVE – gazdag tervkezelő integráció
+
+Aktív DEV candidate-ben:
+- Lista / Osztott / Tervnéző mód;
+- közös DIMPRO Drive PDF/kép viewer;
+- CLEAN vírusellenőrzésű, még QUARANTINED / ELLENORZES_ALATT terv belső előnézete engedélyezett;
+- letöltés továbbra is csak kontrollált/AVAILABLE állapotban;
+- meglévő dokumentumhoz Új verzió feltöltés;
+- V2/V3 feltöltés documentId + expectedCurrentVersion ütközésvédelemmel;
+- webes új dokumentum/új verzió feltöltés után automatikus Document Flow governance-regisztráció;
+- új verzió automatikusan az ellenőrzési munkafolyamatba kerül;
+- közös Részletek / Verziók / Megjegyzések panel;
+- mérnöki metaadatok szerkesztése csak document.write joggal;
+- tervhez kapcsolt véleményezési megjegyzés külön document.comment joggal;
+- Ellenőrző megjegyzést írhat anélkül, hogy dokumentumot szerkeszthetne;
+- verziótörténet megjelenítése a közös DetailsPanelben.
+
+Aktuális build:
+- source commit: ccd2e6a92b11c34c41295a3c8a48830686528b9d;
+- build ID: o5EM5575t9-VBZ-xzu2en;
+- compile / TypeScript / route generation / standalone: PASS;
+- 262 statikus chunk;
+- PM2 3299 online;
+- login 200, DROP health 200, projektlista auth-védelem PASS;
+- PROD: DENY.
+
+Automatikus bizonyíték:
+- rich-view contract: 15/15 PASS;
+- comment permission contract: 9/9 PASS;
+- role matrix: 14/14 PASS;
+- Project Core: 19/19 PASS;
+- Drive Core: 24/24 PASS;
+- document-flow API/UI: 12/12 PASS;
+- object storage: 29/29 PASS.
 
 ## 4/A. DEV tárhely – pilot operációs blokk
 
@@ -209,9 +244,10 @@ OutminAI tárhelyrendezése utáni aktuális állapot:
 - szabad: kb. 18 GiB;
 - kihasználtság: kb. 85%;
 - a 15 GiB-os pre-build hard minimum teljesül;
-- a Projektkapu full candidate build sikeresen lefutott;
-- build ID: `xGKy6L_yn5eWkUNrkwS-d`;
-- buildelt source commit: `86e9a96bcad79eaad0fc200940574985df7629d4`.
+- a Projektkapu full candidate build(ek) sikeresen lefutottak;
+- jelenlegi aktív build ID: o5EM5575t9-VBZ-xzu2en;
+- jelenlegi aktív buildelt source commit: ccd2e6a92b11c34c41295a3c8a48830686528b9d;
+- aktuális szabad hely a második rich-view build után kb. 16 GiB; minden további full build előtt kötelező a 15 GiB pre-build hard minimum újraellenőrzése.
 
 Read-only / dry-run audit:
 - Projektkapu candidate root teljes méret: kb. 8,0 GiB;
@@ -246,4 +282,4 @@ A fő dokumentumforgalmi backend lánc DEV környezetben teljes E2E-vel működi
 
 Beküldőkapu → DROP → S3 → azonnali ClamAV → DRIVE Beérkező Drop → ellenőrzés → ERVENYES → KIADOTT → kontrollált letöltés.
 
-A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A magyar szerepkör-nevek és a külön `document.issue` jogosultság már a publikus DEV candidate-ben aktív. A következő fejlesztési munka elsődlegesen a maradék multi-role/mobil és lejáró Beküldőkapu UI acceptance.
+A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A Projektkapu DRIVE már tartalmazza a közös tervnézőt, új verzió feltöltést, verziótörténetet és megjegyzés/véleményezés panelt. A következő fejlesztési prioritás a már meglévő összehasonlítás/overlay funkció visszakötése, majd a teljes 1/2/3 paneles mérnöki nézet és CsomagBOX integráció; a maradék multi-role/mobil és lejáró Beküldőkapu UI acceptance továbbra is szükséges.

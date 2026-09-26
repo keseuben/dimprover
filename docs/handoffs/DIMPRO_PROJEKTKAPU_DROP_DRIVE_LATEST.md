@@ -1334,3 +1334,66 @@ Buildelt runtime artifact ellenőrzés:
 - release metadata pontosan a `86e9a96b...` commitra mutat.
 
 A magyar szerepkör-nevek és a REVIEWER / formális KIADOTT jogosultsági szétválasztás ezzel a publikus DEV candidate-ben aktív.
+
+
+## 2026-09-26 – Projektkapu DRIVE rich-view + revízió + véleményezés publish PASS
+
+Első rich-view feature commit: f92036b66d4be81e06fc819a1bbd86254deca7e5
+- Lista / Osztott / Tervnéző mód.
+- Közös DriveDocumentViewer.
+- Meglévő dokumentumhoz Új verzió feltöltés.
+- documentId + expectedCurrentVersion konfliktusvédelem.
+- Webes upload complete automatikusan regisztrálja a Document Flow governance rekordot.
+- CLEAN vírusellenőrzésű QUARANTINED terv belső előnézete engedélyezett.
+- Letöltés szabálya nem lazult.
+
+Második feature commit: ccd2e6a92b11c34c41295a3c8a48830686528b9d
+- Projektkapu a közös DetailsPanel komponenst használja.
+- Részletek fül: viewer + mérnöki metaadat.
+- Verziók fül: V1/V2/V3 történet, revízió, státusz, változásleírás.
+- Megjegyzések fül: tervhez/verzióhoz kapcsolt auditált megjegyzés.
+- Új document.comment permission.
+- OWNER / PROJECT_MANAGER / CONTRIBUTOR / REVIEWER kommentelhet.
+- VIEWER nem kommentelhet.
+- REVIEWER továbbra sem kap document.write vagy document.issue jogot.
+- Megjegyzés API document.comment jogot kér.
+- Metaadat szerkesztés továbbra is document.write.
+
+Aktuális szerepkör-policy:
+- OWNER / Beruházási projektvezető: read/write/comment/approve/issue.
+- PROJECT_MANAGER / Projektvezető: read/write/comment/approve/issue.
+- CONTRIBUTOR / Közreműködő: read/write/comment.
+- REVIEWER / Ellenőrző: read/comment/approve.
+- VIEWER / Megtekintő: read.
+
+Aktív DEV publish:
+- build source: ccd2e6a92b11c34c41295a3c8a48830686528b9d;
+- build ID: o5EM5575t9-VBZ-xzu2en;
+- compile, TypeScript, route generation, standalone: PASS;
+- 262 statikus chunk;
+- PM2 dimpro-projectkapu-drop-drive-pilot-dev: online;
+- port 3299: listening;
+- login: HTTP 200;
+- DROP health: HTTP 200;
+- session nélküli projektlista: 307 → /login;
+- X-DIMPRO-Production-Access: DENY.
+
+Regression:
+- targeted TS: 7/7 PASS;
+- comment permission: 9/9 PASS;
+- role matrix: 14/14 PASS;
+- rich view: 15/15 PASS;
+- Project Core: 19/19 PASS;
+- Drive Core: 24/24 PASS;
+- document flow API/UI: 12/12 PASS;
+- object storage: 29/29 PASS;
+- git diff --check: PASS.
+
+Következő prioritás:
+1. CompareWorkspace + vizuális tervösszehasonlítás/overlay visszakötése.
+2. Teljes mérnöki 1/2/3 panel + Commander nézet.
+3. CsomagBOX / tervátadási csomag.
+4. Élő multi-role és mobil acceptance.
+
+A következő full build előtt a 15 GiB pre-build hard minimumot újra ellenőrizni kell. Tárhely-cleanup továbbra is OutminAI felelőssége; BenjaminAI ad-hoc törlést nem végez.
+PROD: DENY.
