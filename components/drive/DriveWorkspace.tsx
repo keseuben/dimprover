@@ -379,7 +379,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     } finally { setBusy(false); }
   }
 
-  async function saveMetadata(input: Record<string, string>) {
+  async function saveMetadata(input: Record<string, unknown>) {
     if (!selectedDocument || !canWrite) return;
     setBusy(true); setError("");
     try {
