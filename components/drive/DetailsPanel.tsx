@@ -192,7 +192,7 @@ export default function DetailsPanel({
             )}
 
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, planTitle: metadata.planTitle } }))}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, planTitle: metadata.planTitle } })}>
                 <Save size={12} /> Metaadat mentése
               </button>
               <button type="button" className={styles.smallButton} disabled={busy || document.currentVersion?.status !== "AVAILABLE"} onClick={() => void onDownload()}>
