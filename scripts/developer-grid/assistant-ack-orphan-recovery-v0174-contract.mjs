@@ -24,8 +24,8 @@ const expected={taskId:TASK,sessionId:SESSION,workerCode:"JAZMINAI",previousConv
 
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-check("desktop version v0.1.74",()=>assert.equal(pkg.version,"0.1.75"));
-check("backend version v0.1.74-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.75-dev"/));
+check("desktop version v0.1.74",()=>assert.equal(pkg.version,"0.1.76"));
+check("backend version v0.1.74-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.76-dev"/));
 check("physical rev13 markerless assistant ACK remains strict-valid",()=>{
   const v=rollover.validateConversationRolloverAck(ackBody,expected);
   assert.equal(v.validated,true);
@@ -33,13 +33,13 @@ check("physical rev13 markerless assistant ACK remains strict-valid",()=>{
 });
 check("assistant evidence is considered only after USER bootstrap path",()=>{
   const p=main.indexOf("if (markerMessage)");
-  const a=main.indexOf("if (!identity && ackEvidenceMessage)",p);
+  const a=main.indexOf("if (!identity && ackCandidates.length)",p);
   assert.ok(p>0 && a>p);
 });
 check("assistant fallback requires ASSISTANT role",()=>assert.match(main,/toUpperCase\(\) === "ASSISTANT"/));
 check("assistant fallback uses canonical ACK parser and validator",()=>{
-  assert.match(main,/parseConversationRolloverAck\(ackEvidenceMessage\.text\)/);
-  assert.match(main,/validateConversationRolloverAck\(ackEvidenceMessage\.text/);
+  assert.match(main,/parseConversationRolloverAck\(candidate\.text\)/);
+  assert.match(main,/validateConversationRolloverAck\(candidate\.text/);
 });
 check("assistant fallback requires 64-hex source proof before bind",()=>assert.match(main,/\^\[0-9a-f\]\{64\}\$\/\.test\(ackProofSha256\)/));
 check("assistant proof is carried to backend rather than converted to current proof",()=>{

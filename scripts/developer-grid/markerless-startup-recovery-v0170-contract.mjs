@@ -9,14 +9,14 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, "desktop/benjadmin-develo
 const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts"), "utf8");
 let n=0; const check=(label,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
 
-check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.75"));
-check("backend version v0.1.72-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.75-dev"/));
+check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.76"));
+check("backend version v0.1.72-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.76-dev"/));
 check("conversation monitor reads local rollover record before server state",()=>{
   assert.match(main,/const localRolloverRecord = loadTaskLaunchRecords\(\)\[String\(live\.task\.id\)\] \|\| \{\};/);
   assert.match(main,/const rolloverState = String\(localRolloverRecord\.conversationRolloverState \|\| live\.task\?\.conversationRolloverState \|\| live\.task\?\.chatLaunch\?\.conversationRolloverState \|\| ""\)\.toUpperCase\(\);/);
 });
 check("markerless ACK detection remains gated by ACK_WAIT",()=>assert.match(main,/rolloverState === ROLLOVER_STATES\.ACK_WAIT/));
-check("strict markerless parser remains the detector",()=>assert.match(main,/parseConversationRolloverAck\(latestAssistant\.text\)\?\.ok/));
+check("strict markerless parser remains the detector",()=>assert.match(main,/assistantMessages\.find\(\(item\) => parseConversationRolloverAck\(item\.text\)\?\.ok\)/));
 check("ACK processor itself still prefers local rollover state",()=>assert.match(main,/const state = String\(record\.conversationRolloverState \|\| task\?\.conversationRolloverState \|\| task\?\.chatLaunch\?\.conversationRolloverState \|\| ""\)\.toUpperCase\(\);/));
 check("execution bridge remains blocked while rollover pending",()=>assert.match(main,/CONVERSATION_ROLLOVER_ACK_REQUIRED/));
 check("PROD remains denied in rollover binding",()=>assert.match(main,/productionAccess:"DENY"/));

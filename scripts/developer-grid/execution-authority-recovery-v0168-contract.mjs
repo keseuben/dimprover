@@ -24,7 +24,7 @@ const end = workStart.indexOf("export async function recordDeveloperGridBootAck"
 assert.ok(start >= 0 && end > start);
 const recovery = workStart.slice(start,end);
 
-check("version is 0.1.70",()=>{ assert.equal(pkg.version,"0.1.75"); assert.match(types,/0\.1\.75-dev/); });
+check("version is 0.1.70",()=>{ assert.equal(pkg.version,"0.1.76"); assert.match(types,/0\.1\.76-dev/); });
 check("recovery requires explicit task session worker and proof",()=>{
   for (const token of ["rawInput.taskId","rawInput.sessionId","rawInput.workerCode","rawInput.sourceProofSha256"]) assert.ok(recovery.includes(token),token);
 });

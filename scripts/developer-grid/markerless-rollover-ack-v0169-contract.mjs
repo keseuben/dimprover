@@ -91,11 +91,11 @@ check("main ACK handler delegates ACK_WAIT bodies to validator without marker pr
   assert.doesNotMatch(main, /ACK_WAIT \|\| !String\(body \|\| ""\)\.includes\(ROLLOVER_ACK_MARKER\)/);
 });
 
-check("conversation monitor retains marker recovery and recognizes latest strict JSON fallback", () => {
+check("conversation monitor retains marker recovery and recognizes mounted strict JSON fallback", () => {
   assert.match(main, /const markedRolloverAck = assistantMessages\.find/);
   assert.match(main, /rolloverState === ROLLOVER_STATES\.ACK_WAIT/);
-  assert.match(main, /parseConversationRolloverAck\(latestAssistant\.text\)\?\.ok/);
-  assert.match(main, /markedRolloverAck \|\| markerlessLatestAck/);
+  assert.match(main, /assistantMessages\.find\(\(item\) => parseConversationRolloverAck\(item\.text\)\?\.ok\)/);
+  assert.match(main, /markedRolloverAck \|\| markerlessMountedAck/);
 });
 
 console.log(`Developer Grid markerless rollover ACK v0.1.69 contract PASS · ${n}/${n}`);
