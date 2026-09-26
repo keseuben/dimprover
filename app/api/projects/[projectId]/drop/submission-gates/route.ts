@@ -12,6 +12,7 @@ import {
 } from "@/app/lib/drop/public/dropPublicRepository";
 import { getDriveDocumentFlowHealth } from "@/app/lib/drive-core/documentFlowRepository";
 import { getDriveObjectStorageHealth } from "@/app/lib/drive-core/storageService";
+import { getDriveDropIncomingSourceDatabaseHealth } from "@/app/lib/drive-core/storageRepository";
 import { getDriveQuarantineReviewHealth } from "@/app/lib/drive-core/reviewService";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +28,10 @@ function publicUrl(slug: string) {
 async function assertProjectIncomingGateReady(projectId: string) {
   assertDropFeatureEnabled("submissionGateEnabled");
   assertDropFeatureEnabled("driveIncomingEnabled");
-  const [drop, flow, storage, review] = await Promise.all([
+  const [drop, flow, sourceSchema, storage, review] = await Promise.all([
     getDropRuntimeHealth(),
     getDriveDocumentFlowHealth(),
+    getDriveDropIncomingSourceDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
   ]);
@@ -39,6 +41,7 @@ async function assertProjectIncomingGateReady(projectId: string) {
   if (!drop.readiness.virusScanner) blockers.push("DROP_VIRUS_SCANNER_NOT_READY");
   if (!drop.readiness.objectStorage) blockers.push("DROP_OBJECT_STORAGE_NOT_READY");
   if (!flow.ready) blockers.push("DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY");
+  if (!sourceSchema.ready) blockers.push("DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY");
   if (!storage.uploadReady) blockers.push("DRIVE_OBJECT_STORAGE_NOT_READY");
   if (!review.ready) blockers.push("DRIVE_REVIEW_NOT_READY");
   if (blockers.length) {

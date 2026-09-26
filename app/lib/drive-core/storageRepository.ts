@@ -9,6 +9,12 @@ import {
   getDriveObjectStorageSchemaSelect,
 } from "./storageSchema";
 import type { DriveUploadSession } from "./types";
+import {
+  DRIVE_DROP_INCOMING_SOURCE_BOOTSTRAP_ID,
+  DRIVE_DROP_INCOMING_SOURCE_COMPONENT,
+  DRIVE_DROP_INCOMING_SOURCE_MIGRATION_COUNT,
+  DRIVE_DROP_INCOMING_SOURCE_SCHEMA_VERSION,
+} from "./dropIncomingSchema";
 
 type DbUploadSession = {
   id: string;
@@ -158,6 +164,40 @@ export async function getDriveObjectStorageDatabaseHealth() {
         errorMessage: null,
       })),
       errorCode: error instanceof DriveCoreRepositoryError ? error.code : "DRIVE_OBJECT_DATABASE_ERROR",
+    };
+  }
+}
+
+export async function getDriveDropIncomingSourceDatabaseHealth() {
+  try {
+    const client = getDatabaseClient();
+    const { data: marker, error } = await client
+      .from("drive_storage_schema_meta")
+      .select("schema_version,migration_count,bootstrap_id")
+      .eq("component", DRIVE_DROP_INCOMING_SOURCE_COMPONENT)
+      .maybeSingle();
+    const ready = !error
+      && marker?.schema_version === DRIVE_DROP_INCOMING_SOURCE_SCHEMA_VERSION
+      && Number(marker?.migration_count) === DRIVE_DROP_INCOMING_SOURCE_MIGRATION_COUNT
+      && marker?.bootstrap_id === DRIVE_DROP_INCOMING_SOURCE_BOOTSTRAP_ID;
+    return {
+      configured: true,
+      ready,
+      expectedSchemaVersion: DRIVE_DROP_INCOMING_SOURCE_SCHEMA_VERSION,
+      actualSchemaVersion: marker?.schema_version || null,
+      migrationCount: marker?.migration_count == null ? null : Number(marker.migration_count),
+      bootstrapId: marker?.bootstrap_id || null,
+      errorCode: error?.code || (ready ? null : "DRIVE_DROP_INCOMING_SOURCE_SCHEMA_VERSION_MISMATCH"),
+    };
+  } catch (error) {
+    return {
+      configured: !(error instanceof DriveCoreRepositoryError && error.code === "DRIVE_OBJECT_DATABASE_NOT_CONFIGURED"),
+      ready: false,
+      expectedSchemaVersion: DRIVE_DROP_INCOMING_SOURCE_SCHEMA_VERSION,
+      actualSchemaVersion: null,
+      migrationCount: null,
+      bootstrapId: null,
+      errorCode: error instanceof DriveCoreRepositoryError ? error.code : "DRIVE_DROP_INCOMING_SOURCE_DATABASE_ERROR",
     };
   }
 }

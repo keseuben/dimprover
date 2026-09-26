@@ -6,6 +6,7 @@ import {
   createDriveUploadSessionRecord,
   finalizeDriveUploadSessionRecord,
   findDriveUploadSessionByIncomingKey,
+  getDriveDropIncomingSourceDatabaseHealth,
 } from "@/app/lib/drive-core/storageRepository";
 import { provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
 import {
@@ -252,12 +253,16 @@ export async function processDropDriveIncomingPackage(packageId: string) {
     throw new DropDriveIncomingError("A Beküldőkapu fájljai még nem állnak biztonságosan importálható állapotban.", "DROP_DRIVE_INCOMING_FILES_NOT_READY", 425, true);
   }
 
-  const [flowHealth, storage] = await Promise.all([
+  const [flowHealth, sourceSchema, storage] = await Promise.all([
     getDriveDocumentFlowHealth(),
+    getDriveDropIncomingSourceDatabaseHealth(),
     Promise.resolve(getDriveObjectStorageSafeStatus()),
   ]);
   if (!flowHealth.ready) {
     throw new DropDriveIncomingError("A DRIVE Document Flow adatbázisséma még nincs alkalmazva.", "DROP_DRIVE_INCOMING_SCHEMA_NOT_READY", 503, false);
+  }
+  if (!sourceSchema.ready) {
+    throw new DropDriveIncomingError("A DRIVE DROP-forrású feltöltési séma még nincs alkalmazva.", "DROP_DRIVE_INCOMING_SOURCE_SCHEMA_NOT_READY", 503, false);
   }
   if (!storage.storageConfigured || !storage.objectWriteEnabled) {
     throw new DropDriveIncomingError("A DRIVE Object Storage írási kapcsolata nem áll készen.", "DROP_DRIVE_INCOMING_STORAGE_NOT_READY", 503, true);

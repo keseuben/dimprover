@@ -8,7 +8,9 @@ check("writes only candidates path by default",()=>assert.match(source,/\/srv\/d
 check("does not write integration env",()=>assert.doesNotMatch(source,/writeFileSync\(baseEnv|renameSync\([^,]+,\s*baseEnv/));
 check("uses three-reference secret consensus",()=>assert.match(source,/dimpro-one-health-v1/)&&assert.match(source,/diag-health-v019-ts/)&&assert.match(source,/new Set\(vals\)\.size !== 1/));
 check("does not embed secret literals",()=>assert.doesNotMatch(source,/DROP_TOKEN_HMAC_SECRET:\s*["'][^"']{16}/));
+check("stages upload session secret through DEV consensus",()=>assert.match(source,/DROP_UPLOAD_SESSION_SECRET/));
 check("stages submission and drive incoming flags",()=>assert.match(source,/DROP_SUBMISSION_GATE_ENABLED: "true"/)&&assert.match(source,/DROP_DRIVE_INCOMING_ENABLED: "true"/));
+check("stages resumable S3 upload flag",()=>assert.match(source,/DROP_RESUMABLE_UPLOAD_ENABLED: "true"/));
 check("stages manual-link submission delivery",()=>assert.match(source,/DROP_SUBMISSION_GATE_DELIVERY_MODE: "manual-link"/)&&assert.match(source,/DROP_EMAIL_NOTIFICATIONS_ENABLED: "false"/));
 check("pins public DROP URL to DEV",()=>assert.match(source,/DROP_PUBLIC_BASE_URL: "https:\/\/drop\.dev\.dimpro\.hu"/)&&assert.doesNotMatch(source,/DROP_PUBLIC_BASE_URL: "https:\/\/drop\.dimpro\.hu"/));
 check("stages DEV-only Projectkapu code auth flags",()=>assert.match(source,/PROJECTKAPU_DEV_CODE_AUTH_ENABLED: "true"/)&&assert.match(source,/projektkapu\.dev\.dimpro\.hu,localhost,127\.0\.0\.1/));

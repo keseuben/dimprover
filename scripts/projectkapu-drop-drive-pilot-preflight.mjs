@@ -58,6 +58,7 @@ const uploadFlagReady = ["DROP_IMAGE_DROP_ENABLED","DROP_FILE_DROP_ENABLED","DRO
 requireCheck("dropPublicUploadFeature", uploadFlagReady, "DROP_PUBLIC_UPLOAD_FEATURE_DISABLED");
 
 requireCheck("dropTokenSecurity", secretReady("DROP_TOKEN_HMAC_SECRET") && secretReady("DROP_SESSION_SECRET"), "DROP_TOKEN_SECURITY_NOT_CONFIGURED");
+requireCheck("dropUploadSessionToken", secretReady("DROP_UPLOAD_SESSION_SECRET","DROP_TOKEN_PEPPER"), "DROP_UPLOAD_SESSION_TOKEN_NOT_CONFIGURED");
 requireCheck("dropWorkerSecret", secretReady("DROP_WORKER_SECRET"), "DROP_WORKER_SECRET_NOT_CONFIGURED");
 const scannerCommand = value("DIMPRO_DROP_VIRUS_SCANNER_COMMAND","DROP_VIRUS_SCANNER_COMMAND").toLowerCase();
 requireCheck("dropScannerMode", scannerCommand === "clamd-instream", "DROP_SCANNER_MODE_NOT_READY");
@@ -66,6 +67,12 @@ requireCheck("clamdSocket", path.isAbsolute(clamdSocket) && existsSync(clamdSock
 
 const dropProvider = (value("DIMPRO_DROP_STORAGE_PROVIDER","DROP_STORAGE_PROVIDER") || "local-private").toLowerCase();
 const dropMode = value("DIMPRO_DROP_STORAGE_MODE","DROP_STORAGE_MODE").toLowerCase();
+requireCheck(
+  "dropS3MultipartFeature",
+  dropProvider !== "s3-compatible" || (releaseGate && enabled("DROP_RESUMABLE_UPLOAD_ENABLED")),
+  "DROP_S3_MULTIPART_FEATURE_DISABLED",
+  { provider: dropProvider },
+);
 const dropBucket = value("DIMPRO_DROP_S3_BUCKET","DROP_STORAGE_BUCKET");
 const dropAccess = value("DIMPRO_DROP_S3_ACCESS_KEY_ID","DROP_STORAGE_ACCESS_KEY_ID");
 const driveBucket = value("DIMPRO_DRIVE_S3_BUCKET");
@@ -153,11 +160,12 @@ requireCheck("dropPublicWorkflowSchema", dropMarkers["drop-public-workflows"]?.s
 const publicGateTable = await rest("drop_public_submission_gates?select=id&limit=0");
 requireCheck("dropPublicGateTable", publicGateTable.ok, "DROP_PUBLIC_GATE_TABLE_NOT_READY", { status: publicGateTable.status });
 
-const driveMarkersRes = await rest("drive_storage_schema_meta?select=component,schema_version,migration_count,bootstrap_id&component=in.(drive-object-storage,drive-quarantine-review,drive-document-flow)");
+const driveMarkersRes = await rest("drive_storage_schema_meta?select=component,schema_version,migration_count,bootstrap_id&component=in.(drive-object-storage,drive-quarantine-review,drive-document-flow,drive-drop-incoming-source)");
 const driveMarkers = Array.isArray(driveMarkersRes.body) ? Object.fromEntries(driveMarkersRes.body.map((row)=>[row.component,row])) : {};
 requireCheck("driveObjectStorageSchema", driveMarkers["drive-object-storage"]?.schema_version === "0.4.0", "DRIVE_OBJECT_STORAGE_SCHEMA_NOT_READY", { version: driveMarkers["drive-object-storage"]?.schema_version || null });
 requireCheck("driveReviewSchema", driveMarkers["drive-quarantine-review"]?.schema_version === "0.4.1", "DRIVE_REVIEW_SCHEMA_NOT_READY", { version: driveMarkers["drive-quarantine-review"]?.schema_version || null });
 requireCheck("driveDocumentFlowSchema", driveMarkers["drive-document-flow"]?.schema_version === "0.1.0", "DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY", { version: driveMarkers["drive-document-flow"]?.schema_version || null });
+requireCheck("driveDropIncomingSourceSchema", driveMarkers["drive-drop-incoming-source"]?.schema_version === "0.1.0", "DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY", { version: driveMarkers["drive-drop-incoming-source"]?.schema_version || null });
 
 const hasDbCredential = Boolean(value("DRIVE_DOCUMENT_FLOW_DB_PASSWORD","PGPASSWORD")) || existsSync(value("PGPASSFILE") || path.join(process.env.HOME || "/root", ".pgpass"));
 if (!checks.driveDocumentFlowSchema?.ready && !hasDbCredential) warnings.push("DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION");

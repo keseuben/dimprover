@@ -16,6 +16,7 @@ check("link PIN protection is forced",()=>assert.match(source,/downloadProtectio
 check("creation requires submission gate feature",()=>assert.match(source,/assertDropFeatureEnabled\("submissionGateEnabled"\)/));
 check("creation requires drive incoming feature",()=>assert.match(source,/assertDropFeatureEnabled\("driveIncomingEnabled"\)/));
 check("creation gates Document Flow readiness",()=>assert.match(source,/DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY/));
+check("creation gates DROP source schema readiness",()=>assert.match(source,/DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY/) && assert.match(source,/getDriveDropIncomingSourceDatabaseHealth/));
 check("creation gates Drive review readiness",()=>assert.match(source,/DRIVE_REVIEW_NOT_READY/));
 check("creation gates Drive storage readiness",()=>assert.match(source,/DRIVE_OBJECT_STORAGE_NOT_READY/));
 check("GET filters gates by project scope",()=>assert.match(source,/gate\.type === "project" && gate\.projectId === projectId/));

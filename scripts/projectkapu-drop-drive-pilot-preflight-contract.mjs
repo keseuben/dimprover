@@ -17,4 +17,6 @@ check("DROP schema markers are checked",()=>assert.match(source,/drop-storage/)&
 check("DRIVE schema markers are checked",()=>assert.match(source,/drive-object-storage/)&&assert.match(source,/drive-quarantine-review/)&&assert.match(source,/drive-document-flow/));
 check("Document Flow credential need is warning-only until schema exists",()=>assert.match(source,/DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION/));
 check("no configuration mutation exists",()=>assert.doesNotMatch(source,/writeFile|appendFile|process\.env\[[^\]]+\]\s*=/));
+check("requires DROP upload-session token security",()=>assert.match(source,/DROP_UPLOAD_SESSION_TOKEN_NOT_CONFIGURED/)&&assert.match(source,/DROP_UPLOAD_SESSION_SECRET/));
+check("requires multipart feature for S3",()=>assert.match(source,/DROP_S3_MULTIPART_FEATURE_DISABLED/)&&assert.match(source,/DROP_RESUMABLE_UPLOAD_ENABLED/));
 console.log(JSON.stringify({total:pass,pass,fail:0},null,2));

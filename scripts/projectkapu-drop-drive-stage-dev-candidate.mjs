@@ -18,6 +18,7 @@ const targetEnv = join(targetDir, ".env.local");
 const secretKeys = [
   "DROP_TOKEN_HMAC_SECRET",
   "DROP_SESSION_SECRET",
+  "DROP_UPLOAD_SESSION_SECRET",
   "DROP_WORKER_SECRET",
 ];
 const stagedValues = {
@@ -27,6 +28,7 @@ const stagedValues = {
   DROP_EMAIL_NOTIFICATIONS_ENABLED: "false",
   DROP_STORAGE_CORE_ENABLED: "true",
   DROP_QUARANTINE_UPLOAD_ENABLED: "true",
+  DROP_RESUMABLE_UPLOAD_ENABLED: "true",
   DROP_SUBMISSION_GATE_ENABLED: "true",
   DROP_DRIVE_INCOMING_ENABLED: "true",
   DROP_SUBMISSION_GATE_DELIVERY_MODE: "manual-link",

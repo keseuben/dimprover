@@ -9,6 +9,8 @@ export {
   upsertDriveSyncCursor,
 } from "./databaseRepository";
 
+export { getDriveDropIncomingSourceDatabaseHealth } from "./storageRepository";
+
 export {
   abortDriveObjectUpload,
   completeDriveObjectUpload,

@@ -47,7 +47,8 @@ export async function getDropRuntimeHealth() {
   ]);
   const spacePackageSchema = await getDropSpacePackageSchemaHealth().catch(() => ({ ready: false, spaces: spacesSchema }));
   const databaseConfigured = hasEnv("NEXT_PUBLIC_SUPABASE_URL") && hasEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const tokenSecurityReady = isDropTokenSecurityConfigured();
+  const uploadSessionTokenSecurityReady = hasEnv("DROP_UPLOAD_SESSION_SECRET") || hasEnv("DROP_TOKEN_PEPPER");
+  const tokenSecurityReady = isDropTokenSecurityConfigured() && uploadSessionTokenSecurityReady;
   const scannerReady = Boolean(scannerHealth?.ping === "PONG");
   const workerReady = Boolean(workerConfig.enabled && workerSchema.ready && scannerReady);
   const dropMailProfile = mailConfig?.profiles.find((profile) => profile.id === "drop");
@@ -151,6 +152,7 @@ export async function getDropRuntimeHealth() {
       virusScanner: scannerReady,
       publicDownload: publicDownloadReady,
       tokenSecurity: tokenSecurityReady,
+      uploadSessionTokenSecurity: uploadSessionTokenSecurityReady,
       worker: workerReady,
       packageEngine: coreReady,
       publicAccessGate: coreReady,

@@ -5,6 +5,7 @@ import {
   getDriveCoreDatabaseHealth,
   getDriveCompareFindingsHealth,
   getDriveDocumentFlowHealth,
+  getDriveDropIncomingSourceDatabaseHealth,
   getDriveObjectStorageHealth,
   getDriveQuarantineReviewHealth,
   getDriveSecurityScannerHealth,
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
-  const [database, objectStorage, review, security, workspace, compareFindings, documentFlow, dropRuntime] = await Promise.all([
+  const [database, objectStorage, review, security, workspace, compareFindings, documentFlow, dropIncomingSource, dropRuntime] = await Promise.all([
     getDriveCoreDatabaseHealth(),
     getDriveObjectStorageHealth(),
     getDriveQuarantineReviewHealth(projectId),
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     getDriveWorkspaceDatabaseHealth(),
     getDriveCompareFindingsHealth(),
     getDriveDocumentFlowHealth(),
+    getDriveDropIncomingSourceDatabaseHealth(),
     getDropRuntimeHealth().catch(() => null),
   ]);
   const storageNextStep = !objectStorage.database.ready
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!dropRuntime?.readiness?.virusScanner) dropDriveBlockers.push("DROP_VIRUS_SCANNER_NOT_READY");
   if (!dropRuntime?.readiness?.objectStorage) dropDriveBlockers.push("DROP_OBJECT_STORAGE_NOT_READY");
   if (!documentFlow.ready) dropDriveBlockers.push("DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY");
+  if (!dropIncomingSource.ready) dropDriveBlockers.push("DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY");
   if (!review.ready) dropDriveBlockers.push("DRIVE_REVIEW_NOT_READY");
   if (!objectStorage.uploadReady) dropDriveBlockers.push("DRIVE_OBJECT_STORAGE_NOT_READY");
   const dropDriveIncomingReady = dropDriveBlockers.length === 0;
@@ -56,6 +59,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     ? "A külső Beküldőkapu → Beérkező Drop → DRIVE karantén → jóváhagyás lánc pilotra kész."
     : !documentFlow.ready
       ? "A DRIVE Document Flow 0.1.0 DEV SQL-séma alkalmazása szükséges."
+      : !dropIncomingSource.ready
+        ? "A DRIVE DROP-forrású feltöltési V0.1.0 DEV SQL-séma alkalmazása szükséges."
       : !dropRuntime?.featureGate?.flags?.driveIncomingEnabled
         ? "A DROP_DRIVE_INCOMING_ENABLED feature flag csak a readiness ellenőrzések után aktiválható."
         : !dropRuntime?.readiness?.submissionGate
@@ -121,6 +126,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       signatureDate: security.signatureDate,
       errorCode: security.errorCode,
       releaseRule: "WEB/DESKTOP feltöltés csak CLEAN ClamAV eredmény után hagyható jóvá.",
+    },
+    dropIncomingSource: {
+      ready: dropIncomingSource.ready,
+      expectedSchemaVersion: dropIncomingSource.expectedSchemaVersion,
+      actualSchemaVersion: dropIncomingSource.actualSchemaVersion,
+      migrationCount: dropIncomingSource.migrationCount,
+      bootstrapId: dropIncomingSource.bootstrapId,
+      errorCode: dropIncomingSource.errorCode,
     },
     documentFlow: {
       version: documentFlow.expectedSchemaVersion,

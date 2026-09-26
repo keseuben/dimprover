@@ -699,3 +699,133 @@ Publikus DEV smoke:
 A sikeres kódos belépés automatikus HTTP tesztjét a platform credential-biztonsági rétege blokkolta; nem került megkerülésre. A kód scrypt-verifierének megfelelősége ellenőrzött, a mechanikai/auth contractok PASS. A következő manuális acceptance pont: böngészőből egy sikeres belépés, majd a `d6-irodaepulet` projekt megjelenésének ellenőrzése.
 
 A belépési kód plaintext formában nincs Gitben és nincs handoff dokumentumban.
+
+
+## 2026-09-26 – D6 valós Beküldőkapu teszt · multipart és DRIVE source schema checkpoint
+
+### Emberi böngészős acceptance
+
+A felhasználó a `D6 DROP–DRIVE E2E teszt` Projekt Beküldőkapun keresztül 4 JPG fájlt próbált feltölteni. A kapu:
+- gate id: `gate_2c72f986-670`;
+- slug: `project-7a50edfcae`;
+- projekt: `d6-irodaepulet / D6 Irodaépület`;
+- célmappa: `Beérkező Drop`;
+- aktív és újra felhasználható.
+
+A kapulink NEM egyszer használatos. Az adatbázisban ugyanahhoz az aktív gate-hez több külön public session és több külön package létrejött. A one-package-per-session szabály külön dolog: ugyanazon public session csak egy package-hez köthető.
+
+### A felhasználói 4 JPG sikertelenségének bizonyított oka
+
+Mind a négy fájlrekord létrejött, de 0 bájt került feltöltésre. A rögzített hiba:
+- `DROP_UPLOAD_CANCELLED`;
+- `Az S3 feltöltéshez multipart munkamenet szükséges.`
+
+Gyökérok:
+- DROP tárhely: `s3-compatible`;
+- a candidate-ben a `DROP_RESUMABLE_UPLOAD_ENABLED` flag ki volt kapcsolva;
+- ezért az init `single` protokollt adott, amit a kliens S3 provider mellett helyesen elutasított.
+
+### Javítások
+
+1. Candidate staging:
+   - `DROP_RESUMABLE_UPLOAD_ENABLED=true`;
+   - `DROP_UPLOAD_SESSION_SECRET` bekerült a három canonical DEV referencia alapján működő secret-consensus listába.
+2. Runtime health:
+   - `tokenSecurity` már az upload-session secret readiness-t is megköveteli;
+   - külön `uploadSessionTokenSecurity` health mező.
+3. Preflight:
+   - `DROP_UPLOAD_SESSION_TOKEN_NOT_CONFIGURED`;
+   - S3 esetén kötelező resumable/multipart gate: `DROP_S3_MULTIPART_FEATURE_DISABLED`.
+4. Beküldőkapu reuse:
+   - új beküldésnél submission-gate módban fresh public session indul;
+   - a kapu maga továbbra is lejáratig/revokálásig újra használható.
+5. Fájlfeltöltő UX:
+   - mixed Projekt Beküldőkapu nem kényszerít image/camera módot;
+   - dokumentum- és fájlközpontú feliratok;
+   - PDF, Office, CAD/BIM, ZIP, kép és más engedélyezett fájl egyértelműen támogatott;
+   - mixed mód alapértelmezett fájlnév-szabálya `safe_original`.
+
+### Fizikai DEV E2E bizonyíték
+
+A resumable flag és upload-session secret bekötése után:
+- upload intent: HTTP 201;
+- upload init: HTTP 201;
+- protocol: `multipart`;
+- storage provider: `s3-compatible`;
+- presigned S3 PUT: HTTP 200;
+- ETag: jelen;
+- part confirm: HTTP 200;
+- `allPartsReceived=true`;
+- upload complete: HTTP 200;
+- karantén: PASS;
+- ClamAV scan: `ready / ready / clean / clean`;
+- package finalize: HTTP 200, `finalized=true`.
+
+### Megmaradt blocker – DROP → DRIVE import
+
+A tiszta, véglegesített Beküldőkapu package DRIVE-importja:
+- `driveIncoming.ok=false`;
+- PostgreSQL code: `23514`;
+- hiba: `A DRIVE feltöltési munkamenet létrehozása sikertelen.`
+
+Aktuális DEV constraint bizonyíték:
+- `drive_core_documents.source`: `WEB, DESKTOP, DROP, SYSTEM`;
+- `drive_core_upload_sessions.source`: csak `WEB, DESKTOP`.
+
+A DROP incoming worker helyesen `source: "DROP"` értéket használ. Nem szabad WEB-re maszkolni, mert elveszne a provenance/audit jelentés.
+
+### Additív DB candidate – MÉG NINCS ALKALMAZVA
+
+Új migration:
+`supabase/migrations/20260926_drive_drop_incoming_source_v010.sql`
+
+Mirrored bootstrap:
+`supabase/DIMPRO_PROJEKTKAPU_DRIVE_DROP_INCOMING_SOURCE_V010_BOOTSTRAP.sql`
+
+Bootstrap SHA-256:
+`bb3c7476aeaf8eb683d3ea0f891d965c25a612ed96fc875576217e1863e1740d`
+
+A migration:
+- a `drive_core_upload_source_check` constraintet `WEB, DESKTOP, DROP, SYSTEM` készletre bővíti;
+- külön schema markert ír:
+  - component: `drive-drop-incoming-source`;
+  - version: `0.1.0`;
+  - migration_count: `1`;
+  - bootstrap id: `drive-drop-incoming-source-v010-20260926`.
+
+A kód fail-closed módon ellenőrzi ezt a markert:
+- DROP → DRIVE import;
+- új Projekt Beküldőkapu létrehozás;
+- DRIVE health;
+- Projektkapu pilot preflight.
+
+A candidate env-vel futtatott preflight jelenleg pontosan 1 blockerrel áll:
+`DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY`
+
+SQL migrációt automatikusan NEM futtattunk.
+
+### Tesztek
+
+- DRIVE DROP source contract: 11/11 PASS;
+- gate reuse + mixed file UX: 6/6 PASS;
+- upload-session security: 6/6 PASS;
+- candidate staging: 17/17 PASS;
+- pilot preflight contract: 16/16 PASS;
+- project gate contract: 17/17 PASS;
+- Drop incoming: 22/22 PASS;
+- pilot readiness: 11/11 PASS;
+- Document Flow API/UI: 12/12 PASS;
+- Document Flow SQL: 23/23 PASS;
+- DRIVE Object Storage V0.4.0: 29/29 PASS;
+- DRIVE Core V0.3.0: 24/24 PASS;
+- DECIDE V0.7.0: 82/82 PASS;
+- módosított TS/TSX syntactic check: PASS;
+- `git diff --check`: PASS.
+
+Következő sorrend:
+1. commit/push/Grid checkpoint;
+2. új candidate build + DEV publish az UI/session/readiness javításokkal;
+3. emberi jóváhagyás után a fenti DEV SQL migration alkalmazása;
+4. preflight várhatóan 0 blocker;
+5. ugyanazzal a D6 gate-tel új DROP → S3 → ClamAV → finalize → DRIVE Beérkező Drop fizikai E2E;
+6. utána külön javítandó a túl korai finalize 5 perces `DROP_PUBLIC_FINALIZE_IN_PROGRESS` lock UX.
