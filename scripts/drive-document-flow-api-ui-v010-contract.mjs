@@ -12,7 +12,7 @@ const ui=fs.readFileSync(path.join(root,"components/project-gate/DriveWorkspace.
 
 const checks=[];const check=(name,fn)=>{try{fn();checks.push({name,pass:true})}catch(error){checks.push({name,pass:false,error:error instanceof Error?error.message:String(error)})}};
 check("list permission document.read",()=>assert.match(list,/requireProjectPermission\(request, projectId, "document\.read"\)/));
-check("issue permission document.approve",()=>assert.match(issue,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
+check("issue permission document.issue",()=>assert.match(issue,/requireProjectPermission\(request, projectId, "document\.issue"\)/));
 check("issue recipient literals remain typed",()=>assert.match(issue,/type NormalizedRecipient/) && assert.match(issue,/NormalizedRecipient\["type"\] \| null/));
 check("list repository",()=>assert.match(repo,/export async function listDriveDocumentFlow/));
 check("issue repository",()=>assert.match(repo,/export async function issueDriveDocumentVersion/));
@@ -21,7 +21,7 @@ check("recipient cap",()=>assert.match(repo,/slice\(0, 200\)/));
 check("health exposes document flow",()=>assert.match(health,/documentFlow:/));
 check("ui loads document flow",()=>assert.match(ui,/\/drive\/document-flow/));
 check("ui issue route",()=>assert.match(ui,/\/issue/));
-check("ui only offers issue from ERVENYES",()=>assert.match(ui,/businessStatus === "ERVENYES"/));
+check("ui only offers issue from ERVENYES with issue permission",()=>assert.match(ui,/canIssue && documentFlowReady/) && assert.match(ui,/businessStatus === "ERVENYES"/));
 check("ui displays KIADOTT",()=>assert.match(ui,/KIADOTT/));
 const pass=checks.filter(x=>x.pass).length;
 console.log(JSON.stringify({pass,total:checks.length,checks},null,2));

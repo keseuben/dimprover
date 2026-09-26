@@ -30,32 +30,32 @@ const contributor=roleBlock("CONTRIBUTOR","REVIEWER");
 const reviewer=roleBlock("REVIEWER","VIEWER");
 const viewer=roleBlock("VIEWER",null);
 
-check("OWNER can read write approve documents",()=>{assert.match(owner,/document\.read/);assert.match(owner,/document\.write/);assert.match(owner,/document\.approve/);});
-check("PROJECT_MANAGER can read write approve documents",()=>{assert.match(manager,/document\.read/);assert.match(manager,/document\.write/);assert.match(manager,/document\.approve/);});
-check("CONTRIBUTOR can write but cannot approve",()=>{assert.match(contributor,/document\.read/);assert.match(contributor,/document\.write/);assert.doesNotMatch(contributor,/document\.approve/);});
-check("REVIEWER can approve but cannot write",()=>{assert.match(reviewer,/document\.read/);assert.match(reviewer,/document\.approve/);assert.doesNotMatch(reviewer,/document\.write/);});
-check("VIEWER is document read only",()=>{assert.match(viewer,/document\.read/);assert.doesNotMatch(viewer,/document\.write/);assert.doesNotMatch(viewer,/document\.approve/);});
+check("OWNER can read write approve and issue documents",()=>{assert.match(owner,/document\.read/);assert.match(owner,/document\.write/);assert.match(owner,/document\.approve/);assert.match(owner,/document\.issue/);});
+check("PROJECT_MANAGER can read write approve and issue documents",()=>{assert.match(manager,/document\.read/);assert.match(manager,/document\.write/);assert.match(manager,/document\.approve/);assert.match(manager,/document\.issue/);});
+check("CONTRIBUTOR can write but cannot approve or issue",()=>{assert.match(contributor,/document\.read/);assert.match(contributor,/document\.write/);assert.doesNotMatch(contributor,/document\.approve/);assert.doesNotMatch(contributor,/document\.issue/);});
+check("REVIEWER can approve but cannot write or issue",()=>{assert.match(reviewer,/document\.read/);assert.match(reviewer,/document\.approve/);assert.doesNotMatch(reviewer,/document\.write/);assert.doesNotMatch(reviewer,/document\.issue/);});
+check("VIEWER is document read only",()=>{assert.match(viewer,/document\.read/);assert.doesNotMatch(viewer,/document\.write/);assert.doesNotMatch(viewer,/document\.approve/);assert.doesNotMatch(viewer,/document\.issue/);});
 
 check("backend permission denial is 403",()=>assert.match(auth,/status: 403/));
 check("DRIVE tree returns authoritative API permissions",()=>assert.match(tree,/permissions: access\.access\.permissions/));
-check("UI derives write and approve independently",()=>assert.match(drive,/canWrite = effectivePermissions\.includes\("document\.write"\)/)&&assert.match(drive,/canApprove = effectivePermissions\.includes\("document\.approve"\)/));
+check("UI derives write approve and issue independently",()=>assert.match(drive,/canWrite = effectivePermissions\.includes\("document\.write"\)/)&&assert.match(drive,/canApprove = effectivePermissions\.includes\("document\.approve"\)/)&&assert.match(drive,/canIssue = effectivePermissions\.includes\("document\.issue"\)/));
 check("submission gate mutation requires document.write",()=>assert.match(gate,/requireProjectPermission\(request, projectId, "document\.write"\)/));
 check("review requires document.approve",()=>assert.match(review,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
 check("security scan requires document.approve",()=>assert.match(scan,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
-check("formal document issue currently requires document.approve",()=>assert.match(issue,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
-check("recipient link regeneration requires document.approve",()=>assert.match(accessLinks,/requireProjectPermission\(request, projectId, "document\.approve"\)/));
-check("issue and link UI actions use canApprove",()=>assert.match(drive,/canApprove && documentFlowReady/)&&assert.match(drive,/canApprove && documentFlowReady && formalIssue/));
+check("formal document issue requires document.issue",()=>assert.match(issue,/requireProjectPermission\(request, projectId, "document\.issue"\)/));
+check("recipient link regeneration requires document.issue",()=>assert.match(accessLinks,/requireProjectPermission\(request, projectId, "document\.issue"\)/));
+check("issue and link UI actions use canIssue",()=>assert.match(drive,/canIssue && documentFlowReady/)&&assert.match(drive,/canIssue && documentFlowReady && formalIssue/));
 
 console.log(JSON.stringify({
   total:pass,
   pass,
   fail:0,
   currentPolicy:{
-    owner:"read/write/approve",
-    projectManager:"read/write/approve",
+    owner:"read/write/approve/issue",
+    projectManager:"read/write/approve/issue",
     contributor:"read/write",
     reviewer:"read/approve",
     viewer:"read",
-    formalDocumentIssuePermission:"document.approve"
+    formalDocumentIssuePermission:"document.issue"
   }
 },null,2));

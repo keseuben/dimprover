@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const { projectId, issueId } = await context.params;
-  const access = await requireProjectPermission(request, projectId, "document.approve");
+  const access = await requireProjectPermission(request, projectId, "document.issue");
   if (!access.ok) {
     return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   }

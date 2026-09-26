@@ -1250,3 +1250,33 @@ Ugyanazon aktív kapu mellett egymástól függetlenül több DEV küldemény j�
 - `bc089ba6-064c-4296-9ee3-ccaedf03d438` – DXF E2E.
 
 Következtetés: a Projekt Beküldőkapu linkje nem egyszer használatos. Minden megnyitás új publikus session/package workflow-t hozhat létre, miközben maga a gate aktív marad a lejáratig vagy visszavonásig.
+
+
+## 2026-09-26 – Végleges REVIEWER / KIADOTT jogosultsági döntés
+
+Végleges üzleti szabály:
+- REVIEWER: dokumentumot olvashat, ellenőrizhet, jóváhagyhat és elutasíthat;
+- REVIEWER **nem** végezhet formális dokumentumkiadást;
+- OWNER + PROJECT_MANAGER: jóváhagyás mellett formális `KIADOTT` műveletet is végezhet;
+- CONTRIBUTOR: read/write, de approve/issue nélkül;
+- VIEWER: read-only.
+
+Technikai megvalósítás:
+- új ProjectPermission: `document.issue`;
+- `document.issue` csak OWNER és PROJECT_MANAGER role permission mapben;
+- review + security scan marad `document.approve`;
+- formal issue API: `document.issue`;
+- recipient access-link regeneration API: `document.issue`;
+- Projektkapu DRIVE UI külön `canApprove` és `canIssue` guardot használ;
+- REVIEWER számára a jóváhagyás/elutasítás megmarad, de a formális kiadás és kiadási link gomb nem jelenhet meg.
+
+Bizonyíték:
+- role-matrix contract: 14/14 PASS;
+- issue-access contract: 19/19 PASS;
+- document-flow API/UI contract: 12/12 PASS;
+- Project Core contract: 19/19 PASS;
+- célzott TypeScript transpile: 5/5 PASS;
+- git diff --check: PASS.
+
+DB migration nem szükséges.
+A futó DEV candidate frissítése full buildet igényel; ez a DEV tárhely rendezéséig szándékosan halasztva. PROD: DENY.

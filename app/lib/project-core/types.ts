@@ -24,6 +24,7 @@ export type ProjectPermission =
   | "document.read"
   | "document.write"
   | "document.approve"
+  | "document.issue"
   | "issue.read"
   | "issue.write"
   | "calendar.read"

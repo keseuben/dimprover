@@ -46,7 +46,7 @@ function normalizeRecipients(value: unknown): NormalizedRecipient[] {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const { projectId, documentId, versionId } = await context.params;
-  const access = await requireProjectPermission(request, projectId, "document.approve");
+  const access = await requireProjectPermission(request, projectId, "document.issue");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   let body: Record<string, unknown>;

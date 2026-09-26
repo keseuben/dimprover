@@ -338,6 +338,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const effectivePermissions = [...new Set([...permissions, ...apiPermissions])];
   const canWrite = effectivePermissions.includes("document.write");
   const canApprove = effectivePermissions.includes("document.approve");
+  const canIssue = effectivePermissions.includes("document.issue");
   const reviewReady = Boolean(health?.review?.ready);
   const dropDriveIncomingReady = Boolean(health?.dropDriveIncoming?.ready);
   const documentFlowReady = Boolean(health?.documentFlow?.ready);
@@ -1247,7 +1248,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onClick={() => void downloadDocument(document)}
                     aria-label={`${document.name} letöltése`}
                   ><Download size={15} /></button>
-                  {canApprove && documentFlowReady && governance?.businessStatus === "ERVENYES" && governance.reviewDecision === "APPROVED" && governance.issueStatus !== "ISSUED" && document.currentVersion?.status === "AVAILABLE" && <button
+                  {canIssue && documentFlowReady && governance?.businessStatus === "ERVENYES" && governance.reviewDecision === "APPROVED" && governance.issueStatus !== "ISSUED" && document.currentVersion?.status === "AVAILABLE" && <button
                     type="button"
                     className={styles.issueButton}
                     disabled={busy}
@@ -1255,7 +1256,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onClick={() => void issueDocumentVersion(document)}
                     aria-label={`${document.name} formális kiadása`}
                   ><Send size={15} /></button>}
-                  {canApprove && documentFlowReady && formalIssue?.status === "ISSUED" && governance?.issueStatus === "ISSUED" && <button
+                  {canIssue && documentFlowReady && formalIssue?.status === "ISSUED" && governance?.issueStatus === "ISSUED" && <button
                     type="button"
                     className={styles.issueButton}
                     disabled={busy}

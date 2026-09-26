@@ -180,8 +180,11 @@ Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
 4. PROJECT_MANAGER / REVIEWER / CONTRIBUTOR / VIEWER:
    - automatikus backend/UI guard contract: 14/14 PASS;
    - élő multi-role böngészős acceptance még nyitott;
-   - jelenlegi policy szerint a REVIEWER rendelkezik `document.approve` joggal, ezért formális dokumentumkiadást is indíthat;
-   - valós multi-role pilot előtt üzleti döntés szükséges arról, hogy a `KIADOTT` művelet maradjon-e minden approver számára elérhető, vagy csak OWNER / PROJECT_MANAGER adhasson ki dokumentumot.
+   - **végleges jogosultsági döntés:** REVIEWER ellenőrizhet, jóváhagyhat és elutasíthat, de formális dokumentumkiadást nem indíthat;
+   - új külön permission: `document.issue`;
+   - `document.issue` kizárólag OWNER és PROJECT_MANAGER szerepkörhöz tartozik;
+   - formális `KIADOTT` művelet és a kiadási címzetti linkek újragenerálása `document.issue` jogosultságot igényel;
+   - CONTRIBUTOR továbbra is read/write, VIEWER read-only.
 5. Projektfájl acceptance: szintetikus PDF runtime PASS, képfolyamat korábban tesztelve, valamint szakági DXF runtime E2E PASS (`application/dxf` → S3 → ClamAV → DRIVE / Beérkező Drop). Valós céges fájl pilot-próba még javasolt, de a fájltípus-folyamat technikailag bizonyított.
 6. Lejáró Beküldőkapu vizuális üzenete még nyitott.
 7. Címzetti link lejárati / inaktív kiadási hibaoldal UX: **PASS**. A publikus `/kiadas` oldal hibás, lejárt és nem aktív kiadásnál emberi magyar üzenetet ad; a projekt többi része továbbra is login-védett.

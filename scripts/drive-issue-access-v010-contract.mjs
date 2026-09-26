@@ -26,7 +26,7 @@ check("issue route returns access links",()=>assert.match(issueRoute,/accessLink
 check("generated recipient links use human landing page",()=>assert.match(access,/new URL\("\/kiadas", origin\)/)&&assert.doesNotMatch(access,/new URL\("\/api\/drive\/public\/issue-download", origin\)/));
 check("landing inspect does not mark download",()=>assert.match(access,/export async function inspectDriveIssueAccess/)&&assert.match(landing,/inspectDriveIssueAccess/)&&assert.match(landing,/Dokumentum letöltése/));
 check("landing page explains expired and inactive links",()=>assert.match(landing,/A hivatkozás lejárt/)&&assert.match(landing,/A dokumentumkiadás már nem aktív/));
-check("issued documents can regenerate access links through permission-guarded API",()=>assert.match(accessRoute,/requireProjectPermission/)&&assert.match(accessRoute,/document\.approve/)&&assert.match(accessRoute,/createDriveIssueAccessLinks/));
+check("issued documents regenerate access links only with issue permission",()=>assert.match(accessRoute,/requireProjectPermission/)&&assert.match(accessRoute,/document\.issue/)&&assert.match(accessRoute,/createDriveIssueAccessLinks/));
 check("Drive UI renders, copies and regenerates recipient links",()=>assert.match(ui,/data-drive-issue-access="0\.1\.0"/)&&assert.match(ui,/copyIssueAccessLink/)&&assert.match(ui,/loadIssueAccessLinks/)&&assert.match(ui,/Link másolása/)&&assert.match(ui,/Link2/));
 check("public drive API remains proxy-public but token-guarded in route",()=>assert.match(proxy,/pathname\.startsWith\("\/api\/drive\/"\)/)&&assert.match(route,/resolveDriveIssueAccessDownload/));
 console.log(JSON.stringify({total:pass,pass,fail:0},null,2));
