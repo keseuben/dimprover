@@ -3843,18 +3843,20 @@ async function observeManualConversationRollover(input) {
   return { observed:true, bound:true, state:ROLLOVER_STATES.ACK_WAIT, binding };
 }
 
-async function recoverOrphanConversationRollover({ view, workerCode, task, currentConversationId, previousConversationId }) {
+async function recoverOrphanConversationRollover({ view, workerCode, task, currentConversationId, previousConversationId, observedConversationUrl = "" }) {
   if (!view || view.webContents.isDestroyed() || !currentConversationId || !previousConversationId || currentConversationId === previousConversationId) {
     return { observed:false };
   }
-  const currentUrl = String(view.webContents.getURL() || "");
-  const authoritativeUrl = String(task?.surfaceConversationUrl || task?.chatConversationUrl || task?.chatLaunch?.surfaceConversationUrl || "");
-  if (!sameChatProjectConversation(authoritativeUrl, currentUrl)) return { observed:false };
 
   const capture = await captureConversationTranscript(view).catch(() => null);
   if (!capture?.ok) return { observed:false };
   if (capture.generating) return { observed:false, pending:true };
   if (String(capture.conversationId || "") !== currentConversationId) return { observed:false };
+  const captureUrl = String(capture.conversationUrl || observedConversationUrl || view.webContents.getURL() || "");
+  if (chatConversationIdFromUrl(captureUrl) !== currentConversationId) return { observed:false };
+  const authoritativeUrl = String(task?.surfaceConversationUrl || task?.chatConversationUrl || task?.chatLaunch?.surfaceConversationUrl || "");
+  if (!sameChatProjectConversation(authoritativeUrl, captureUrl)) return { observed:false };
+  const currentUrl = captureUrl;
 
   const messages = Array.isArray(capture.messages) ? capture.messages : [];
   const markerMessage = [...messages].reverse().find((item) =>
@@ -4042,7 +4044,20 @@ async function syncConversationMemoryForWorker(workerCode) {
   if (!live) return null;
   const view = chatViews.get(cell.id);
   if (!view || view.webContents.isDestroyed()) return null;
-  const currentId = chatConversationIdFromUrl(view.webContents.getURL());
+  const webContentsUrl = String(view.webContents.getURL() || "");
+  const webContentsConversationId = chatConversationIdFromUrl(webContentsUrl);
+  const domObservation = await inspectChatGptDom(view).catch(() => null);
+  const domConversationUrl = String(domObservation?.url || "");
+  const domConversationId = String(domObservation?.conversationId || "").trim();
+  const domConversationVerified = Boolean(
+    domConversationId
+    && domConversationUrl
+    && chatConversationIdFromUrl(domConversationUrl) === domConversationId
+    && isChatGptUrl(domConversationUrl)
+  );
+  const currentId = domConversationVerified ? domConversationId : webContentsConversationId;
+  const currentConversationUrl = domConversationVerified ? domConversationUrl : webContentsUrl;
+  const currentObservationSource = domConversationVerified ? "DOM_LOCATION" : "WEBCONTENTS_URL";
   const memoryState = chatRefreshCell(cell.id);
   const localRolloverIdentityRecord = loadTaskLaunchRecords()[String(live.task.id)] || {};
   const manualClipboardActive = String(localRolloverIdentityRecord.conversationRolloverMode || "") === "MANUAL_CLIPBOARD"
@@ -4058,6 +4073,7 @@ async function syncConversationMemoryForWorker(workerCode) {
       task:live.task,
       currentConversationId:currentId,
       previousConversationId:live.authoritativeConversationId,
+      observedConversationUrl:currentConversationUrl,
     }).catch(() => null);
     if (authoritativeOrphan?.observed || authoritativeOrphan?.pending) return null;
   }
@@ -4073,6 +4089,7 @@ async function syncConversationMemoryForWorker(workerCode) {
           task:live.task,
           currentConversationId:currentId,
           previousConversationId:orphanPreviousConversationId,
+          observedConversationUrl:currentConversationUrl,
         }).catch(() => null)
       : null;
     if (orphanRollover?.observed || orphanRollover?.pending) return null;
@@ -4091,7 +4108,15 @@ async function syncConversationMemoryForWorker(workerCode) {
         code:"CONVERSATION_MEMORY_MISMATCH_OBSERVED_NO_NAVIGATION",
         taskId:live.task.id,
         expectedConversationId:live.expectedConversationId,
+        authoritativeConversationId:live.authoritativeConversationId || null,
         currentConversationId:currentId || null,
+        currentObservationSource,
+        webContentsConversationId:webContentsConversationId || null,
+        domConversationId:domConversationVerified ? domConversationId : null,
+        webContentsUrl:webContentsUrl || null,
+        domConversationUrl:domConversationVerified ? domConversationUrl : null,
+        domRoute:String(domObservation?.route || ""),
+        domOk:domObservation?.ok === true,
       });
       emitChatRefreshState();
     }
@@ -4103,6 +4128,7 @@ async function syncConversationMemoryForWorker(workerCode) {
   memoryState.conversationMemoryCurrentId = "";
   const capture = await captureConversationTranscript(view);
   if (!capture?.ok || capture.generating || capture.conversationId !== currentId || !Array.isArray(capture.messages) || !capture.messages.length) return null;
+  if (chatConversationIdFromUrl(String(capture.conversationUrl || "")) !== currentId) return null;
   const transcriptHash = createHash("sha256").update(JSON.stringify(capture.messages.map((item) => [item.messageId, item.role, item.text]))).digest("hex");
   const cacheKey = live.task.id + ":" + live.task.sessionId + ":" + live.surfaceType + ":" + currentId;
   const bodyWithBootAck = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && isBootAckCandidateText(item.text));

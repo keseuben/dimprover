@@ -38,7 +38,7 @@ check("no new task session worktree is created by detection",()=>{
 check("orphan recovery still requires strict v0.1.72 bootstrap validator",()=>{
   assert.match(main,/validateConversationRolloverPrompt\(markerMessage\.text, expected\)/);
 });
-check("orphan recovery remains same-project only",()=>assert.match(main,/sameChatProjectConversation\(authoritativeUrl, currentUrl\)/));
+check("orphan recovery remains same-project only",()=>assert.match(main,/sameChatProjectConversation\(authoritativeUrl, captureUrl\)/));
 check("PROD safeguards remain explicit",()=>assert.match(main,/productionAccess/));
 
 console.log(`Developer Grid authoritative orphan detection v0.1.73 contract PASS · ${n}/${n}`);

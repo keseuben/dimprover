@@ -58,7 +58,7 @@ check("orphan fallback still binds ACK_WAIT before ACK processing",()=>{
   assert.ok(bind>0 && proc>bind);
 });
 check("existing ACK processor is reused to reach READY and continuation",()=>assert.match(main,/ackRecovery = await processConversationRolloverAck/));
-check("same-project guard remains mandatory",()=>assert.match(main,/sameChatProjectConversation\(authoritativeUrl, currentUrl\)/));
+check("same-project guard remains mandatory and transcript-verified",()=>assert.match(main,/sameChatProjectConversation\(authoritativeUrl, captureUrl\)/));
 check("no new Grid task/session/worktree/TASK_LAUNCH is created",()=>{
   const start=main.indexOf("async function recoverOrphanConversationRollover");
   const end=main.indexOf("function conversationMemoryTaskForWorker",start);
