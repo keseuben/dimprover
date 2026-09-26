@@ -30,7 +30,9 @@ PASS:
 - aktív gate;
 - publikus URL kizárólag `https://drop.dev.dimpro.hu`;
 - ugyanaz az aktív kapulink több külön publikus sessionből használható;
-- package és sender metadata elkülönül sessionenként.
+- package és sender metadata elkülönül sessionenként;
+- runtime újrafelhasználhatóság bizonyított: ugyanazon `project-7a50edfcae` gate-en külön finalize-lock, scan-trigger, PDF és DXF csomag jött létre, miközben a gate továbbra is `active`;
+- a projekt Beküldőkapu tehát nem egyszer használatos link.
 
 ### Fájlfeltöltés
 

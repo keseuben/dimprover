@@ -1234,3 +1234,19 @@ Valós DEV Beküldőkapu E2E:
 - source channel: `DROP`.
 
 Ezzel a korábbi PDF mellett mérnöki/szakági DXF fájl runtime E2E-je is PASS. A Beküldőkapu nem kép-only workflow.
+
+## 2026-09-26 – Beküldőkapu újrafelhasználhatóság runtime bizonyíték
+
+A D6 projekt aktív Beküldőkapuja:
+- gate ID: `gate_2c72f986-670`;
+- slug: `project-7a50edfcae`;
+- status: `active`;
+- expiresAt: `2026-12-25 07:56:48.79+00`.
+
+Ugyanazon aktív kapu mellett egymástól függetlenül több DEV küldemény jött létre, például:
+- `206dfe87-388a-4441-bfb3-838f0a7858e9` – finalize-lock E2E;
+- `5602ba9c-e6d7-4264-a6f5-0d3862d29fff` – immediate scan-trigger E2E;
+- `36e8b89b-0f90-4c49-afbd-a4282bd2fe5a` – PDF E2E;
+- `bc089ba6-064c-4296-9ee3-ccaedf03d438` – DXF E2E.
+
+Következtetés: a Projekt Beküldőkapu linkje nem egyszer használatos. Minden megnyitás új publikus session/package workflow-t hozhat létre, miközben maga a gate aktív marad a lejáratig vagy visszavonásig.
