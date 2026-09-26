@@ -3,10 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { isDriveApiAuthorized } from "@/app/lib/drive/driveApi";
 import { DEV_DESKTOP_USER_ID, DEV_WEB_USER_ID, uniqueUserIds } from "./notificationAccess";
+import { requestHasProjectGateDevAccess } from "@/app/lib/project-gate/devAccess";
 
 export type NotificationAuthContext = {
   ok: boolean;
-  mode: "web-session" | "desktop-token" | "admin" | "unauthorized";
+  mode: "web-session" | "desktop-token" | "admin" | "project-gate-dev" | "unauthorized";
   userId: string;
   userAliases: string[];
   displayName: string;
@@ -91,6 +92,17 @@ export async function resolveNotificationAuth(request: NextRequest): Promise<Not
       displayName: headerValue(request, "x-dimpro-notification-user-name") || clientId,
       email: explicitEmail || undefined,
       clientId,
+    };
+  }
+
+  if (requestHasProjectGateDevAccess(request)) {
+    return {
+      ok: true,
+      mode: "project-gate-dev",
+      userId: DEV_WEB_USER_ID,
+      userAliases: uniqueUserIds([DEV_WEB_USER_ID]),
+      displayName: "Projektkapu DEV pilot",
+      clientId: "project-gate-dev",
     };
   }
 

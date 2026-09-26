@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
+import {
+  isProjectGateDevAccessConfigured,
+  requestHasProjectGateDevAccess,
+} from "@/app/lib/project-gate/devAccess";
 
 function safeHttpsOrigin(value: string | undefined) {
   const candidate = value?.trim();
@@ -75,6 +79,9 @@ export async function proxy(request: NextRequest) {
   const isLocalInternalHost = host === "127.0.0.1" || host === "localhost";
   const isDropInternalWorkerApi = isLocalInternalHost && pathname === "/api/drop/worker/run";
   const isProjectGateHost = host === "projektkapu.dimpro.hu" || host === "www.projektkapu.dimpro.hu" || host === "projektkapu.dev.dimpro.hu";
+  const isProjectGateDevAccessApi = pathname === "/api/project-gate/dev-access/session";
+  const projectGateDevAccessConfigured = isProjectGateHost && isProjectGateDevAccessConfigured(host);
+  const projectGateDevSession = projectGateDevAccessConfigured && requestHasProjectGateDevAccess(request);
   const isProjectGateBrandHost = host === "door.dimpro.hu" || host === "www.door.dimpro.hu";
   let projectGateRewriteUrl: URL | null = null;
   const isDropPublicPage =
@@ -162,6 +169,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/aruter/") ||
     pathname.startsWith("/api/dimpro-account/") ||
     pathname.startsWith("/api/dimpro-auth/") ||
+    isProjectGateDevAccessApi ||
     pathname.startsWith("/api/dimpro-identity/") ||
     pathname.startsWith("/api/license/") ||
     pathname.startsWith("/api/hage-ai/") ||
@@ -191,7 +199,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isProjectGateHost && pathname === "/account/modules") {
-    return NextResponse.redirect(new URL("/", "https://projektkapu.dimpro.hu"), 307);
+    const url = request.nextUrl.clone();
+    url.pathname = "/projektkapu/projects";
+    url.search = "";
+    return NextResponse.redirect(url, 307);
   }
 
   if (isProjectGateHost && !pathname.startsWith("/api/") && !isLoginPage) {
@@ -199,6 +210,31 @@ export async function proxy(request: NextRequest) {
     if (pathname === "/") url.pathname = "/projektkapu";
     else if (!pathname.startsWith("/projektkapu")) url.pathname = `/projektkapu${pathname}`;
     projectGateRewriteUrl = url;
+  }
+
+  if (isProjectGateDevAccessApi) {
+    return response;
+  }
+
+  if (projectGateDevAccessConfigured) {
+    if (isLoginPage) {
+      if (projectGateDevSession) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/projektkapu/projects";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+      return response;
+    }
+    if (!projectGateDevSession && !pathname.startsWith("/api/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    if (projectGateDevSession && projectGateRewriteUrl) {
+      return NextResponse.rewrite(projectGateRewriteUrl, { request: { headers: request.headers } });
+    }
   }
 
   if (isDropInternalRewrite && isDropInternalPage) {
@@ -394,7 +430,7 @@ export async function proxy(request: NextRequest) {
 
   if (isLoggedIn && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = isProjectGateHost ? "/projektkapu" : "/account/modules";
+    url.pathname = isProjectGateHost ? "/projektkapu/projects" : "/account/modules";
     return NextResponse.redirect(url);
   }
 

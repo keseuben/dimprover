@@ -23,6 +23,12 @@ export default function SessionGuardClient() {
     if (pathname.startsWith("/teams/meeting-assistant")) return;
 
     async function logout() {
+      if (window.location.hostname === "projektkapu.dev.dimpro.hu") {
+        await fetch("/api/project-gate/dev-access/session", {
+          method: "DELETE",
+          credentials: "same-origin",
+        }).catch(() => undefined);
+      }
       await supabase.auth.signOut();
       localStorage.removeItem("dimprover_login_started_at");
       window.location.href = "/login";

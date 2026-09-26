@@ -574,3 +574,79 @@ Publikus DEV cím:
 - login: `https://projektkapu.dev.dimpro.hu/login`
 
 Fontos: a fenti candidate még nincs rákapcsolva a shared/public DEV runtime-ra. A következő külön lépés a DEV candidate publikálása a `projektkapu.dev.dimpro.hu` mögé, majd hitelesített valós Beküldőkapu → DROP → DRIVE E2E teszt. PROD továbbra is DENY.
+
+
+## 2026-09-26 – Ideiglenes külön Projektkapu DEV belépés V0.1.0
+
+A Projektkapu DEV host leválasztásának első lépéseként külön, minimális 6 számjegyű kódos belépési réteg készült.
+
+Elv:
+- csak `projektkapu.dev.dimpro.hu` hoston aktív;
+- PROD host alapértelmezetten nem engedélyezett;
+- külön Projektkapu login UI;
+- a közös DIMPRO OTP login változatlan marad az app hostokon;
+- a kód maga nincs Gitben;
+- a kód ellenőrzése scrypt salt + hash alapján történik;
+- session cookie HMAC aláírt, HttpOnly, SameSite=Strict és lejáratos;
+- brute-force védelem: 5 hibás próbálkozás / 10 perc;
+- sikeres belépés célja: `/projektkapu/projects`;
+- logout a kódos session cookie-t is törli.
+
+Jogosultsági bridge:
+- az ideiglenes session a meglévő `dev-web-user` DEV identitást használja;
+- read-only ellenőrzéssel igazolva: 1 aktív Project Core tagság, projekt `d6-irodaepulet`, szerepkör OWNER;
+- nem jött létre új user vagy új jogosultsági adatmodell.
+
+Candidate konfiguráció:
+- `PROJECTKAPU_DEV_CODE_AUTH_ENABLED=true`;
+- hostok: `projektkapu.dev.dimpro.hu,localhost,127.0.0.1`;
+- scrypt verifier material candidate env-be stage-elve;
+- session signing kulcs a meglévő DEV `DROP_SESSION_SECRET`-ből külön HMAC derivációval készül;
+- `DROP_PUBLIC_BASE_URL=https://drop.dev.dimpro.hu` explicit DEV pin.
+
+Ellenőrzés:
+- Projektkapu DEV code auth contract: 16/16 PASS;
+- candidate staging contract: 15/15 PASS;
+- módosított auth/proxy/login fájlok TypeScript syntactic check: PASS;
+- Projektkapu / DROP / DRIVE / DECIDE releváns regresszió: PASS;
+- `git diff --check`: PASS.
+
+Nginx publish még nem történt meg. A meglévő aktív DEV config backup elkészült; a következő lépés full candidate build, majd külön Projektkapu + Drop DEV host routing a candidate processre.
+
+
+## 2026-09-26 – Ideiglenes külön Projektkapu DEV belépés V0.1.0
+
+A Projektkapu DEV host leválasztásának első lépéseként külön, minimális 6 számjegyű kódos belépési réteg készült.
+
+Fő szabályok:
+- csak `projektkapu.dev.dimpro.hu` hoston aktív;
+- PROD host nincs engedélyezve;
+- külön Projektkapu login UI;
+- a közös DIMPRO OTP login változatlan marad;
+- a kód maga nincs Gitben;
+- a kód ellenőrzése scrypt salt + hash alapján történik;
+- session cookie HMAC-aláírt, HttpOnly, SameSite=Strict és lejáratos;
+- brute-force védelem: 5 hibás próbálkozás / 10 perc;
+- sikeres belépés célja: `/projektkapu/projects`;
+- logout a kódos session cookie-t is törli.
+
+Jogosultsági bridge:
+- az ideiglenes session a meglévő `dev-web-user` DEV identitást használja;
+- read-only ellenőrzéssel igazolva: 1 aktív Project Core tagság, projekt `d6-irodaepulet`, szerepkör OWNER;
+- nem jött létre új user vagy új jogosultsági adatmodell.
+
+Candidate konfiguráció:
+- `PROJECTKAPU_DEV_CODE_AUTH_ENABLED=true`;
+- hostok: `projektkapu.dev.dimpro.hu,localhost,127.0.0.1`;
+- scrypt verifier material candidate env-be stage-elve;
+- session signing kulcs a meglévő DEV `DROP_SESSION_SECRET`-ből külön HMAC derivációval készül;
+- `DROP_PUBLIC_BASE_URL=https://drop.dev.dimpro.hu` explicit DEV pin.
+
+Ellenőrzés:
+- Projektkapu DEV code auth contract: 16/16 PASS;
+- candidate staging contract: 15/15 PASS;
+- módosított auth/proxy/login fájlok TypeScript syntactic check: PASS;
+- Projektkapu / DROP / DRIVE / DECIDE releváns regresszió: PASS;
+- `git diff --check`: PASS.
+
+Nginx publish még nem történt meg. A következő lépés full candidate build, majd külön Projektkapu + Drop DEV host routing a candidate processre.
