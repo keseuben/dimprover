@@ -85,8 +85,8 @@ check("Reviewer comments are separated from document write permission", () => {
   assert.match(detailsPanel, /readOnly=\{!canComment\}/);
   assert.match(detailsPanel, /disabled=\{!canComment \|\| busy\}/);
 });
-check("Viewer mode preserves workflow actions", () => {
-  assert.match(ui, /browserViewMode === "viewer" \? styles\.listHidden/);
+check("Viewer and compare modes preserve workflow actions", () => {
+  assert.match(ui, /browserViewMode === "viewer" \|\| browserViewMode === "compare" \? styles\.listHidden/);
   assert.match(ui, /canApprove && document\.currentVersion\?\.status === "QUARANTINED"/);
   assert.match(ui, /canIssue && documentFlowReady/);
 });

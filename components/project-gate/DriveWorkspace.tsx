@@ -17,6 +17,7 @@ import {
   FolderPlus,
   HardDrive,
   History,
+  GitCompareArrows,
   Loader2,
   Link2,
   List,
@@ -29,8 +30,9 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
+import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
-import type { DriveDocumentDetails } from "@/components/drive/driveTypes";
+import type { DriveCompareSeed, DriveDocumentDetails } from "@/components/drive/driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveFolder = {
@@ -249,7 +251,7 @@ type DownloadPayload = {
 };
 
 type BusinessFilter = "all" | "review" | "valid" | "issued" | "rejected" | "archived";
-type BrowserViewMode = "list" | "split" | "viewer";
+type BrowserViewMode = "list" | "split" | "viewer" | "compare";
 
 function matchesBusinessFilter(governance: DriveDocumentGovernance | undefined, filter: BusinessFilter) {
   if (filter === "all") return true;
@@ -336,6 +338,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
+  const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -776,6 +779,17 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setUploadQueue((current) => [...prepared, ...current]);
     const runnable = prepared.filter((item) => item.status === "QUEUED");
     if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  function openCompare() {
+    const documents = tree?.documents || [];
+    const selected = documents.find((document) => document.id === selectedDocumentId) || documents[0] || null;
+    const fallback = documents.find((document) => document.id !== selected?.id) || selected;
+    const seeds: DriveCompareSeed[] = [];
+    if (selected) seeds.push({ documentId: selected.id, versionId: selected.currentVersion?.id || null });
+    if (fallback) seeds.push({ documentId: fallback.id, versionId: fallback.currentVersion?.id || null });
+    setCompareSeedItems(seeds);
+    setBrowserViewMode("compare");
   }
 
   function startVersionUpload(document: DriveDocument) {
@@ -1401,6 +1415,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 <button type="button" className={browserViewMode === "list" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("list")} title="Lista nézet"><List size={14} /> Lista</button>
                 <button type="button" className={browserViewMode === "split" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("split")} title="Lista és tervnéző"><Columns2 size={14} /> Osztott</button>
                 <button type="button" className={browserViewMode === "viewer" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("viewer")} title="Tervnéző" disabled={!selectedDocument}><Eye size={14} /> Tervnéző</button>
+                <button type="button" className={browserViewMode === "compare" ? styles.filterActive : ""} onClick={openCompare} title="Terv- és revízió-összehasonlítás" disabled={!tree?.documents.length}><GitCompareArrows size={14} /> Összehasonlítás</button>
               </div>
               <div className={styles.sourceFilters} aria-label="Dokumentumforrás szűrése">
                 <button type="button" className={sourceFilter === "all" ? styles.filterActive : ""} onClick={() => setSourceFilter("all")}>Mind</button>
@@ -1424,8 +1439,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <span><Folder size={18} /></span><div><strong>{folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
             </button>)}
           </div>}
-          <div className={`${styles.tableHeader} ${browserViewMode === "viewer" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
-          <div className={`${styles.documentList} ${browserViewMode === "viewer" ? styles.listHidden : ""}`}>
+          <div className={`${styles.tableHeader} ${browserViewMode === "viewer" || browserViewMode === "compare" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>
+          <div className={`${styles.documentList} ${browserViewMode === "viewer" || browserViewMode === "compare" ? styles.listHidden : ""}`}>
             {visibleDocuments.map((document) => {
               const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
               const formalIssue = document.currentVersion ? documentIssueByVersion[document.currentVersion.id] : undefined;
@@ -1505,7 +1520,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
-          {browserViewMode !== "list" && <section className={styles.previewPane} data-project-gate-drive-viewer="0.2.0">
+          {(browserViewMode === "split" || browserViewMode === "viewer") && <section className={styles.previewPane} data-project-gate-drive-viewer="0.2.0">
             <header className={styles.previewHeader}>
               <div><span>Tervnéző és dokumentumadatok</span><strong>{selectedDocument?.name || "Válassz dokumentumot"}</strong></div>
               <div>
@@ -1536,6 +1551,15 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 />
               : <div className={styles.previewEmpty}><Eye size={28} /><strong>Nincs kiválasztott terv</strong><span>Kattints egy dokumentum nevére vagy a szem ikonra.</span></div>}
           </section>}
+          {browserViewMode === "compare" && <div className={styles.compareHost} data-project-gate-drive-compare="0.1.0">
+            <CompareWorkspace
+              projectId={projectId}
+              documents={tree?.documents || []}
+              boxes={[]}
+              seedItems={compareSeedItems}
+              onClose={() => setBrowserViewMode("list")}
+            />
+          </div>}
         </div>
       </div>
 

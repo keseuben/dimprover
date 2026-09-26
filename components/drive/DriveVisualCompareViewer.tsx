@@ -792,7 +792,8 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
 
   const fetchPreview = useCallback(async (side: Side, document: DriveDocument) => {
     const versionId = document.currentVersion?.id;
-    if (!versionId || document.currentVersion?.status !== "AVAILABLE") {
+    const previewStatus = document.currentVersion?.status;
+    if (!versionId || (previewStatus !== "AVAILABLE" && previewStatus !== "QUARANTINED")) {
       throw new Error(`${side === "left" ? "A" : "B"} dokumentum aktuális verziója nem előnézhető.`);
     }
     const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/preview`, {

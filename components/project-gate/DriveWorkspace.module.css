@@ -664,3 +664,13 @@
   .viewModeSwitcher button { flex: 1; width: auto; }
   .previewHeader > div:last-child { flex-wrap: wrap; }
 }
+
+.compareHost {
+  min-width: 0;
+  padding: 10px;
+  border-top: 1px solid var(--pg-border);
+  background: var(--pg-bg-secondary);
+}
+.compareHost > section {
+  min-height: 560px;
+}
