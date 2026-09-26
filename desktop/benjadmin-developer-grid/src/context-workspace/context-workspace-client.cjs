@@ -53,7 +53,13 @@ async function jsonRequest(url, options, timeoutMs = 10000) {
   try {
     const response = await fetch(url, { ...options, signal: controller.signal, cache: "no-store", redirect: "error" });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) throw new Error(payload?.error || `BENJADMIN HTTP ${response.status}`);
+    if (!response.ok || !payload?.ok) {
+      const error = new Error(payload?.error || `BENJADMIN HTTP ${response.status}`);
+      error.code = String(payload?.code || `BENJADMIN_HTTP_${response.status}`);
+      error.status = Number(response.status) || 500;
+      error.payload = payload && typeof payload === "object" ? payload : null;
+      throw error;
+    }
     return payload;
   } finally { clearTimeout(timer); }
 }

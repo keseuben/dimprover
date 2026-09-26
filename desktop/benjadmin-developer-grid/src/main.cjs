@@ -106,6 +106,7 @@ const bootAckProcessingKeys = new Set();
 const processedExecutionRequestHashes = new Set();
 const executionRequestProcessingKeys = new Set();
 const executionRequestRecoveryKeys = new Set();
+const heartbeatAuthorityRecoveryKeys = new Set();
 const conversationRolloverProcessingKeys = new Set();
 const chatLatestAlignmentTokens = new Map();
 const CHAT_CONVERSATION_NAVIGATION_GRACE_MS = 10_000;
@@ -4660,29 +4661,90 @@ async function heartbeatCodexTaskBridgesOnce() {
   return results;
 }
 
+async function recoverExecutionAuthorityFromHeartbeat({ task, session, workerCode, errorCode }) {
+  if (String(errorCode || "") !== "DEVELOPER_GRID_ENGINE_HEARTBEAT_ENGINE_SESSION_MISMATCH") {
+    return { recovered:false, attempted:false, reason:"HEARTBEAT_ERROR_NOT_RECOVERABLE" };
+  }
+  const launchTask = launchTaskFromWork({ task, session });
+  if (!launchTask?.id || !launchTask?.sessionId) {
+    return { recovered:false, attempted:false, reason:"HEARTBEAT_RECOVERY_GRID_IDENTITY_MISSING" };
+  }
+  const code = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const key = `${launchTask.id}:${launchTask.sessionId}:${code}:heartbeat-authority-recovery`;
+  if (heartbeatAuthorityRecoveryKeys.has(key)) return { recovered:false, attempted:true, pending:true, reason:"HEARTBEAT_RECOVERY_PENDING" };
+  heartbeatAuthorityRecoveryKeys.add(key);
+  try {
+    const authority = await recoverConversationExecutionAuthority(launchTask, code);
+    const refreshedTask = authority?.refreshedTask || null;
+    if (!refreshedTask) throw new Error("HEARTBEAT_RECOVERY_REFRESHED_TASK_MISSING");
+
+    let continuation = { sent:false, verified:false, reason:"HEARTBEAT_RECOVERY_BOUND_CONVERSATION_UNAVAILABLE" };
+    const cell = config?.cells?.find((item) => String(item?.workerCode || "").toUpperCase() === code && item.enabled !== false) || null;
+    const view = cell ? chatViews.get(cell.id) : null;
+    const expectedConversationId = String(refreshedTask.surfaceConversationId || refreshedTask.chatConversationId || refreshedTask.chatLaunch?.surfaceConversationId || "");
+    const currentConversationId = view && !view.webContents.isDestroyed() ? chatConversationIdFromUrl(view.webContents.getURL()) : "";
+    if (view && !view.webContents.isDestroyed() && expectedConversationId && currentConversationId === expectedConversationId) {
+      continuation = await sendExecutionAuthorityRecoveredContinuation(view, refreshedTask, code, authority);
+    }
+
+    publishTaskLaunchPatch(refreshedTask, code, continuation?.sent === true && continuation?.verified === true ? {
+      conversationRolloverReadyContinuationState:"SENT",
+      conversationRolloverReadyContinuationSentAt:new Date().toISOString(),
+      conversationRolloverReadyContinuationError:null,
+      conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+      executionAuthorityRecoveryPromptKind:"EXECUTION_AUTHORITY_RECOVERED_V1",
+      heartbeatAuthorityRecoveryVersion:"V0171",
+      heartbeatAuthorityRecoveryState:"RECOVERED",
+      heartbeatAuthorityRecoveryAt:new Date().toISOString(),
+    } : {
+      conversationRolloverReadyContinuationState:"MANUAL_REQUIRED",
+      conversationRolloverReadyContinuationError:String(continuation?.reason || "not-verified").slice(0,800),
+      conversationRolloverReadyContinuationAuthorityVersion:"V0168",
+      heartbeatAuthorityRecoveryVersion:"V0171",
+      heartbeatAuthorityRecoveryState:"RECOVERED_CONTINUATION_PENDING",
+      heartbeatAuthorityRecoveryAt:new Date().toISOString(),
+    }, "engine-heartbeat-authority-recovery");
+
+    const heartbeat = await heartbeatDeveloperGridSession({
+      baseUrl:config.benjadminBaseUrl,
+      deviceToken:readDeviceToken(),
+      input:{ taskId:String(refreshedTask.id), sessionId:String(refreshedTask.sessionId), workerCode:code }
+    });
+    return { recovered:true, attempted:true, authority, refreshedTask, continuation, heartbeat };
+  } finally {
+    heartbeatAuthorityRecoveryKeys.delete(key);
+  }
+}
+
 async function sendEngineSessionHeartbeatOnce(explicit = null) {
   if (engineSessionHeartbeatTimer) clearTimeout(engineSessionHeartbeatTimer);
   engineSessionHeartbeatTimer = null;
   if (!unlocked || engineSessionHeartbeatBusy || !readDeviceToken() || !config?.benjadminBaseUrl) return null;
   engineSessionHeartbeatBusy = true;
   let nextDelay = ENGINE_SESSION_HEARTBEAT_INTERVAL_MS;
+  let heartbeatTask = null;
+  let heartbeatSession = null;
+  let taskId = String(explicit?.taskId || "").trim();
+  let sessionId = String(explicit?.sessionId || "").trim();
+  let workerCode = String(explicit?.workerCode || "").trim().toUpperCase();
   try {
-    let taskId = String(explicit?.taskId || "").trim();
-    let sessionId = String(explicit?.sessionId || "").trim();
-    let workerCode = String(explicit?.workerCode || "").trim().toUpperCase();
     if (workerCode === "BENAI") workerCode = "BENJAMINAI";
     if (!taskId || !sessionId || !workerCode) {
       const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      const task = activeWork?.task || null;
-      const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === String(task?.id || "")) || null;
-      const status = String(task?.status || "").toUpperCase();
-      if (!task || !session || !["RUNNING", "REVIEW"].includes(status) || String(session?.developmentContext?.bootAckState || "").toUpperCase() !== "VALIDATED" || session?.developmentContext?.bootAckCodingAllowed !== true) {
+      heartbeatTask = activeWork?.task || null;
+      heartbeatSession = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === String(heartbeatTask?.id || "")) || null;
+      const status = String(heartbeatTask?.status || "").toUpperCase();
+      if (!heartbeatTask || !heartbeatSession || !["RUNNING", "REVIEW"].includes(status) || String(heartbeatSession?.developmentContext?.bootAckState || "").toUpperCase() !== "VALIDATED" || heartbeatSession?.developmentContext?.bootAckCodingAllowed !== true) {
         const taskBridgeHeartbeats=await heartbeatCodexTaskBridgesOnce();
         return taskBridgeHeartbeats.length?taskBridgeHeartbeats:null;
       }
-      taskId = String(task.id || "");
-      sessionId = String(session.id || "");
-      workerCode = String(session.workerCode || "").toUpperCase();
+      taskId = String(heartbeatTask.id || "");
+      sessionId = String(heartbeatSession.id || "");
+      workerCode = String(heartbeatSession.workerCode || "").toUpperCase();
+    } else {
+      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      heartbeatTask = activeWork?.task && String(activeWork.task.id || "") === taskId ? activeWork.task : null;
+      heartbeatSession = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.id || "") === sessionId && String(item?.taskId || "") === taskId) || null;
     }
     const heartbeat = await heartbeatDeveloperGridSession({
       baseUrl:config.benjadminBaseUrl,
@@ -4693,8 +4755,24 @@ async function sendEngineSessionHeartbeatOnce(explicit = null) {
     await heartbeatCodexTaskBridgesOnce();
     return heartbeat;
   } catch (error) {
+    const errorCode = String(error?.code || "");
+    if (heartbeatTask && heartbeatSession && errorCode === "DEVELOPER_GRID_ENGINE_HEARTBEAT_ENGINE_SESSION_MISMATCH") {
+      try {
+        const recovered = await recoverExecutionAuthorityFromHeartbeat({ task:heartbeatTask, session:heartbeatSession, workerCode, errorCode });
+        if (recovered?.recovered === true && recovered?.heartbeat) {
+          const heartbeat = recovered.heartbeat;
+          send("connection:engine-heartbeat", { ok:true, recovered:true, recoveryVersion:"V0171", taskId, sessionId, workerCode, at:heartbeat?.heartbeatAt || new Date().toISOString(), leaseSeconds:heartbeat?.leaseSeconds || null });
+          send("context:refresh", { reason:"engine-session-heartbeat-authority-recovered", taskId, sessionId, workerCode });
+          nextDelay = ENGINE_SESSION_HEARTBEAT_INTERVAL_MS;
+          await heartbeatCodexTaskBridgesOnce();
+          return heartbeat;
+        }
+      } catch (recoveryError) {
+        send("connection:engine-heartbeat", { ok:false, recoveryVersion:"V0171", recoveryAttempted:true, error:recoveryError instanceof Error ? recoveryError.message.slice(0,240) : "A heartbeat authority recovery sikertelen." });
+      }
+    }
     nextDelay = ENGINE_SESSION_HEARTBEAT_RETRY_MS;
-    send("connection:engine-heartbeat", { ok:false, error:error instanceof Error ? error.message.slice(0,240) : "A Developer Grid engine heartbeat sikertelen." });
+    send("connection:engine-heartbeat", { ok:false, code:errorCode || null, status:Number(error?.status) || null, error:error instanceof Error ? error.message.slice(0,240) : "A Developer Grid engine heartbeat sikertelen." });
     send("context:refresh", { reason:"engine-session-heartbeat-failed" });
     return null;
   } finally {
@@ -4702,6 +4780,7 @@ async function sendEngineSessionHeartbeatOnce(explicit = null) {
     if (engineSessionHeartbeatEnabled) scheduleEngineSessionHeartbeat(nextDelay);
   }
 }
+
 function startEngineSessionHeartbeat() {
   stopEngineSessionHeartbeat();
   if (!unlocked || !readDeviceToken()) return;

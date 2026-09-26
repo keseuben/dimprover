@@ -13,8 +13,8 @@ const smoke = read("scripts/developer-grid/candidate-smoke.mjs");
 let n = 0;
 function check(label, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2, "0")} ${label}`); }
 
-check("package version v0.1.70", () => assert.equal(pkg.version, "0.1.70"));
-check("backend version v0.1.70-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.70-dev"/));
+check("package version v0.1.71", () => assert.equal(pkg.version, "0.1.71"));
+check("backend version v0.1.71-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.71-dev"/));
 check("materializer active task statuses are exact", () => {
   assert.match(materializer, /\["claimed", "in_progress", "testing"\]\.includes\(taskStatus\)/);
 });
