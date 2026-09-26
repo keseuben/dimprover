@@ -1397,3 +1397,45 @@ Következő prioritás:
 
 A következő full build előtt a 15 GiB pre-build hard minimumot újra ellenőrizni kell. Tárhely-cleanup továbbra is OutminAI felelőssége; BenjaminAI ad-hoc törlést nem végez.
 PROD: DENY.
+
+
+## 2026-09-26 – Projektkapu DRIVE tervösszehasonlítás publish PASS
+
+Feature commit:
+- 794aeb27c555309d17157ce3ea5ad65192a7deda
+
+Aktív DEV build:
+- build ID: lEDg3zpMleMMujn0I5v-S
+- source commit: 794aeb27c555309d17157ce3ea5ad65192a7deda
+- compile / TypeScript / route generation / standalone: PASS
+- 260 statikus chunk
+- PM2 3299 online
+- login 200
+- DROP health 200
+- projektlista session nélkül 307 → /login
+- PROD: DENY
+
+Funkció:
+- Projektkapu DRIVE nézetváltóban új Összehasonlítás mód.
+- A meglévő közös CompareWorkspace újrahasználva.
+- Kiválasztott dokumentum automatikusan A oldali seed.
+- Másik dokumentum/revízió választható B oldalnak.
+- Ugyanazon dokumentum két külön revíziója összehasonlítható.
+- DriveVisualCompareViewer párhuzamos és overlay módjai használhatók.
+- CLEAN vírusellenőrzésű QUARANTINED revízió kliensoldalon is preview-candidate.
+- Backend CLEAN scan guard továbbra is authoritative.
+
+Bizonyíték:
+- compare contract: 10/10 PASS
+- rich-view contract: 15/15 PASS
+- comment permission: 9/9 PASS
+- role matrix: 14/14 PASS
+- targeted TypeScript: 3/3 PASS
+- Drive Core: 24/24 PASS
+- git diff --check: PASS
+
+Tárhely:
+- publish után free bytes: 16304820224
+- kb. 15,19 GiB szabad
+- új full build nem indul újabb tárhelytartalék nélkül
+- cleanup továbbra is OutminAI feladata

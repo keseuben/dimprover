@@ -208,6 +208,10 @@ Aktív DEV candidate-ben:
 - tervhez kapcsolt véleményezési megjegyzés külön document.comment joggal;
 - Ellenőrző megjegyzést írhat anélkül, hogy dokumentumot szerkeszthetne;
 - verziótörténet megjelenítése a közös DetailsPanelben.
+- aktív Összehasonlítás nézet a közös CompareWorkspace-szel;
+- ugyanazon terv külön revíziói, illetve két külön dokumentum összevethetők;
+- párhuzamos és overlay vizuális összehasonlítás;
+- CLEAN ellenőrzés alatti revíziók összehasonlítása támogatott a backend CLEAN guard megtartásával.
 
 Aktuális build:
 - source commit: ccd2e6a92b11c34c41295a3c8a48830686528b9d;
@@ -245,9 +249,9 @@ OutminAI tárhelyrendezése utáni aktuális állapot:
 - kihasználtság: kb. 85%;
 - a 15 GiB-os pre-build hard minimum teljesül;
 - a Projektkapu full candidate build(ek) sikeresen lefutottak;
-- jelenlegi aktív build ID: o5EM5575t9-VBZ-xzu2en;
-- jelenlegi aktív buildelt source commit: ccd2e6a92b11c34c41295a3c8a48830686528b9d;
-- aktuális szabad hely a második rich-view build után kb. 16 GiB; minden további full build előtt kötelező a 15 GiB pre-build hard minimum újraellenőrzése.
+- jelenlegi aktív build ID: lEDg3zpMleMMujn0I5v-S;
+- jelenlegi aktív buildelt source commit: 794aeb27c555309d17157ce3ea5ad65192a7deda;
+- összehasonlítás publish után kb. 15,19 GiB szabad hely maradt; további full build csak újabb tárhelytartalék után indulhat.
 
 Read-only / dry-run audit:
 - Projektkapu candidate root teljes méret: kb. 8,0 GiB;
@@ -282,4 +286,4 @@ A fő dokumentumforgalmi backend lánc DEV környezetben teljes E2E-vel működi
 
 Beküldőkapu → DROP → S3 → azonnali ClamAV → DRIVE Beérkező Drop → ellenőrzés → ERVENYES → KIADOTT → kontrollált letöltés.
 
-A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A Projektkapu DRIVE már tartalmazza a közös tervnézőt, új verzió feltöltést, verziótörténetet és megjegyzés/véleményezés panelt. A következő fejlesztési prioritás a már meglévő összehasonlítás/overlay funkció visszakötése, majd a teljes 1/2/3 paneles mérnöki nézet és CsomagBOX integráció; a maradék multi-role/mobil és lejáró Beküldőkapu UI acceptance továbbra is szükséges.
+A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A Projektkapu DRIVE már tartalmazza a közös tervnézőt, új verzió feltöltést, verziótörténetet, megjegyzés/véleményezést és vizuális összehasonlítás/overlay módot. A következő fejlesztési prioritás a teljes 1/2/3 paneles mérnöki nézet és Commander/CsomagBOX integráció; a maradék multi-role/mobil és lejáró Beküldőkapu UI acceptance továbbra is szükséges.
