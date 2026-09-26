@@ -1090,3 +1090,47 @@ Operációs megjegyzés:
 - pilot szinten ez runtime teszttel kompatibilisnek bizonyult; systemd worker source refaktor most nem szükséges.
 
 PROD: DENY.
+
+## 2026-09-26 – Publikus KIADOTT dokumentum landing + auditált letöltés PASS
+
+Forrás:
+- landing feature commit: `e3b4641e7bd27db9caca242398587f8b63e29646`
+- self-proxy fix commit: `cebb2cb9ce57e8bb928305f848991ba7558ca903`
+- candidate build ID: `VPSO_IMS4N1Xt2S9dYSkq`
+- candidate runtime: DEV 3299 / `projektkapu.dev.dimpro.hu`
+
+Megvalósítás:
+- a címzettnek generált link már nem közvetlen API-JSON végpont, hanem emberi `/kiadas?token=...` landing oldal;
+- a vanity `/kiadas` 307-tel a kanonikus `/projektkapu/kiadas` oldalra irányít, self-rewrite nélkül;
+- csak ez az egy publikus Projektkapu oldal kap auth-kivételt;
+- a projektlista és a többi Projektkapu oldal továbbra is login-védett;
+- landing inspect csak validál és metaadatot jelenít meg, nem számít letöltésnek;
+- tényleges letöltés külön `/api/drive/public/issue-download?token=...` művelet;
+- lejárt / inaktív / hibás linkhez magyar, emberi hibaoldal;
+- noindex + no-referrer.
+
+Contract/regresszió:
+- DRIVE issue-access contract: 19/19 PASS;
+- Projektkapu issue-access landing contract: 8/8 PASS;
+- Projektkapu DEV auth contract: 18/18 PASS;
+- DRIVE role-matrix contract: 14/14 PASS;
+- DRIVE flow/core/storage regresszió: PASS;
+- full Next compile + TypeScript + route generation + standalone: PASS.
+
+Publikus runtime acceptance:
+- `/kiadas` token nélkül: HTTP 200, `Hiányzó hozzáférési hivatkozás`;
+- hibás token: HTTP 200, `A hivatkozás nem használható`;
+- `/projektkapu/projects` session nélkül: HTTP 307 → `/login`;
+- szintetikus valid címzett landing: HTTP 200;
+- dokumentum marker: `D6_DROP_DRIVE_POSTMIG_E2E_20260926T084319Z.txt`;
+- kiadási marker: `KIA-00001`;
+- `Dokumentum letöltése` gomb: megjelent;
+- landing megnyitása előtt és után a `downloaded_at` változatlan maradt (`2026-09-26 09:05:38.888+00`), tehát az inspect nem fogyasztja el / nem naplózza letöltésként a linket;
+- külön letöltési API hívás: HTTP 200, 59 byte;
+- SHA-256: `6baf0b72a777fbcf48131454bca796c4cfbf14a3c0938bdcf7b387e158c45e84`, pontos egyezés a DRIVE verzióval;
+- tényleges letöltés után `downloaded_at`: `2026-09-26 10:04:20.631+00`;
+- új Project Core audit esemény: `DRIVE_DOCUMENT_ISSUE_RECIPIENT_DOWNLOADED`;
+- audit entity: `document_version / drive-version-5e676309f194`.
+
+A címzetti link lejárati / inaktív kiadási hibaoldal pilot UX pont backend + publikus runtime szinten PASS.
+PROD: DENY.

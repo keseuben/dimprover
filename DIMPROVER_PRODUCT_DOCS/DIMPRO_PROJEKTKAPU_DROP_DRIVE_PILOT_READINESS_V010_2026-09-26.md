@@ -170,7 +170,7 @@ A következő pontok nem blokkálják a backend E2E-t, de valós felhasználói 
    - Valós multi-role pilot előtt üzleti döntés szükséges arról, hogy a `KIADOTT` művelet maradjon-e minden approver számára elérhető, vagy csak OWNER / PROJECT_MANAGER adhasson ki dokumentumot.
 5. Valós projektből 1 PDF + 1 kép + 1 tipikus szakági fájl feltöltése.
 6. Lejáró Beküldőkapu vizuális üzenete.
-7. Címzetti link lejárati / visszavont issue felhasználói hibaoldalának UX-e.
+7. Címzetti link lejárati / inaktív kiadási hibaoldal UX: PASS. A publikus `/kiadas` oldal hibás, lejárt és nem aktív kiadásnál emberi magyar üzenetet ad; a projekt többi része továbbra is login-védett.
 
 ## 5. Tudatosan későbbre hagyott elemek
 
