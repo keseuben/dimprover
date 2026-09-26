@@ -17,6 +17,7 @@ type MetadataForm = {
   level: string;
   zone: string;
   topic: string;
+  planTitle: string;
 };
 
 type Props = {
@@ -53,6 +54,7 @@ const emptyMetadata: MetadataForm = {
   level: "",
   zone: "",
   topic: "",
+  planTitle: "",
 };
 
 export default function DetailsPanel({
@@ -96,6 +98,7 @@ export default function DetailsPanel({
       level: source.level,
       zone: source.zone,
       topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
+      planTitle: typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
     } : emptyMetadata);
     setNote(details?.notes?.[0]?.note || "");
   }, [details?.document.id, details?.metadata, details?.notes]);
@@ -141,6 +144,7 @@ export default function DetailsPanel({
             <div className={styles.metaGrid}>
               {([
                 ["planNo", "Tervszám"],
+                ["planTitle", "Tervlap pontos neve"],
                 ["discipline", "Szakág"],
                 ["documentType", "Dokumentumtípus"],
                 ["revision", "Revízió"],
@@ -185,7 +189,7 @@ export default function DetailsPanel({
             )}
 
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic } }))}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, planTitle: metadata.planTitle } }))}>
                 <Save size={12} /> Metaadat mentése
               </button>
               <button type="button" className={styles.smallButton} disabled={busy || document.currentVersion?.status !== "AVAILABLE"} onClick={() => void onDownload()}>
