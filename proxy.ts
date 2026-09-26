@@ -68,6 +68,7 @@ export async function proxy(request: NextRequest) {
   const isLegacyMeetingAssistantPath = pathname.startsWith("/jegyzokonyvek/ertekezleti-kisero");
   const isDevEnvironment = host === "dev.dimpro.hu" || host === "dev.dimprover.hu" || host.endsWith(".dev.dimpro.hu");
   const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu" || host === "app.dev.dimpro.hu";
+  const isDriveHost = host === "drive.dimpro.hu" || host === "www.drive.dimpro.hu" || host === "drive.dev.dimpro.hu";
   const isDimproHost = host === "dimpro.hu" || host === "www.dimpro.hu";
   const isDimproPublicHome = isDimproHost && pathname === "/";
   const isDimproLegalPage = pathname === "/adatvedelem" || pathname === "/felhasznalasi-feltetelek";
@@ -185,6 +186,13 @@ export async function proxy(request: NextRequest) {
     isDropInternalWorkerApi;
   const isPublicAruterPage = pathname === "/aruter/kovacs-kerteszet";
   const isTeamsMeetingAssistantPage = pathname.startsWith("/teams/meeting-assistant");
+
+  if (isDriveHost && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/drive";
+    url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
 
   if (isBenjadminHost && pathname === "/login") {
     const url = request.nextUrl.clone();
