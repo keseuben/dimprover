@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const access=readFileSync("app/lib/drive-core/issueAccess.ts","utf8");
+const route=readFileSync("app/api/drive/public/issue-download/route.ts","utf8");
+const issueRoute=readFileSync("app/api/projects/[projectId]/drive/documents/[documentId]/versions/[versionId]/issue/route.ts","utf8");
+const accessRoute=readFileSync("app/api/projects/[projectId]/drive/issues/[issueId]/access-links/route.ts","utf8");
+const ui=readFileSync("components/project-gate/DriveWorkspace.tsx","utf8");
+const proxy=readFileSync("proxy.ts","utf8");
+let pass=0; const check=(name,fn)=>{fn();pass++;console.log("PASS "+name);};
+check("token uses purpose-separated HMAC",()=>assert.match(access,/dimpro-drive-issue-access-v1/)&&assert.match(access,/createHmac\("sha256"/));
+check("token uses timing-safe signature comparison",()=>assert.match(access,/timingSafeEqual/));
+check("token has bounded expiry",()=>assert.match(access,/DEFAULT_TTL_HOURS/)&&assert.match(access,/MAX_TTL_HOURS/));
+check("secret is not embedded",()=>assert.match(access,/DIMPRO_DRIVE_ISSUE_LINK_SECRET/)&&assert.match(access,/DROP_SESSION_SECRET/));
+check("recipient must retain DOWNLOAD permission",()=>assert.match(access,/recipient\.permission !== "DOWNLOAD"/));
+check("issue must remain ISSUED",()=>assert.match(access,/issue\.status !== "ISSUED"/));
+check("governance must remain KIADOTT and ISSUED",()=>assert.match(access,/business_status !== "KIADOTT"/)&&assert.match(access,/issue_status !== "ISSUED"/));
+check("version must remain AVAILABLE S3",()=>assert.match(access,/version\.status !== "AVAILABLE"/)&&assert.match(access,/version\.storage_provider !== "S3"/));
+check("recipient expiry and download audit are persisted",()=>assert.match(access,/access_expires_at/)&&assert.match(access,/downloaded_at/)&&assert.match(access,/DRIVE_DOCUMENT_ISSUE_RECIPIENT_DOWNLOADED/));
+check("download audit uses existing document_version entity type",()=>assert.match(access,/entity_type: "document_version"/)&&assert.match(access,/entity_id: context\.issue\.version_id/)&&assert.doesNotMatch(access,/entity_type: "document_issue"/));
+check("public route returns fresh signed redirect with no-referrer",()=>assert.match(route,/NextResponse\.redirect\(resolved\.url, 307\)/)&&assert.match(route,/referrer-policy/));
+check("issue route does not undo a successful issue when link generation fails",()=>assert.match(issueRoute,/accessLinkError/)&&assert.match(issueRoute,/ok: true/));
+check("issue route returns access links",()=>assert.match(issueRoute,/accessLinks/)&&assert.match(issueRoute,/accessExpiresAt/));
+check("issued documents can regenerate access links through permission-guarded API",()=>assert.match(accessRoute,/requireProjectPermission/)&&assert.match(accessRoute,/document\.approve/)&&assert.match(accessRoute,/createDriveIssueAccessLinks/));
+check("Drive UI renders, copies and regenerates recipient links",()=>assert.match(ui,/data-drive-issue-access="0\.1\.0"/)&&assert.match(ui,/copyIssueAccessLink/)&&assert.match(ui,/loadIssueAccessLinks/)&&assert.match(ui,/Link másolása/)&&assert.match(ui,/Link2/));
+check("public drive API remains proxy-public but token-guarded in route",()=>assert.match(proxy,/pathname\.startsWith\("\/api\/drive\/"\)/)&&assert.match(route,/resolveDriveIssueAccessDownload/));
+console.log(JSON.stringify({total:pass,pass,fail:0},null,2));

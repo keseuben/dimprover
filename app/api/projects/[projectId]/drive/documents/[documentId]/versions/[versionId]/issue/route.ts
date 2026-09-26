@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
 import { issueDriveDocumentVersion } from "@/app/lib/drive-core/documentFlowRepository";
+import { createDriveIssueAccessLinks } from "@/app/lib/drive-core/issueAccess";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 
 type RouteContext = {
@@ -65,7 +66,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
       recipients: normalizeRecipients(body.recipients),
       actorUserId: access.actor.userId,
     });
-    return NextResponse.json({ ok: true, ...result }, { headers: { "cache-control": "no-store" } });
+    let accessLinks: Awaited<ReturnType<typeof createDriveIssueAccessLinks>>["links"] = [];
+    let accessExpiresAt: string | null = null;
+    let accessLinkError: string | null = null;
+    try {
+      const accessResult = await createDriveIssueAccessLinks({
+        projectId,
+        issueId: result.issue.id,
+        origin: request.nextUrl.origin,
+      });
+      accessLinks = accessResult.links;
+      accessExpiresAt = accessResult.expiresAt;
+    } catch (accessError) {
+      accessLinkError = accessError instanceof Error
+        ? accessError.message
+        : "A kiadás sikeres, de a címzetti letöltési linkek nem készültek el.";
+    }
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      accessLinks,
+      accessExpiresAt,
+      accessLinkError,
+    }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
   }

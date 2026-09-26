@@ -923,3 +923,54 @@ DRIVE eredmény:
 Ez az első bizonyított teljes Projektkapu Beküldőkapu → DROP → S3 → vírusellenőrzés → finalize → DRIVE `Beérkező Drop` E2E PASS ezen a pilot ágon.
 
 PROD továbbra is DENY; PROD adatbázis/routing/deploy nem változott.
+
+## 2026-09-26 – DRIVE review → ERVENYES → KIADOTT + címzetti hozzáférés
+
+A saját DEV E2E tesztdokumentumon a teljes dokumentuméletciklus bizonyítva:
+
+- DROP incoming dokumentum: `drive-document-c31d1ecd59ea`
+- version: `drive-version-5e676309f194`
+- upload session: `drive-upload-incoming-92c538a522a24652`
+- DRIVE objektum méret: 59 byte
+- SHA-256: `6baf0b72a777fbcf48131454bca796c4cfbf14a3c0938bdcf7b387e158c45e84`
+- DEV S3 objektum-visszaolvasás: PASS
+- SHA-256 egyezés: PASS
+- ClamAV 1.5.4 / signature 28135: CLEAN
+
+Review transition:
+- előtte: `QUARANTINED | ELLENORZES_ALATT | PENDING | NOT_ISSUED`
+- technikai review RPC: `QUARANTINED → AVAILABLE`
+- üzleti review RPC: `ELLENORZES_ALATT/PENDING → ERVENYES/APPROVED`
+- reviewer: `dev-web-user`
+
+Formális issue transition:
+- issue ID: `drive-doc-issue-debd632b00c64e67`
+- issue number: `KIA-00001`
+- 1 DEV tesztcímzett
+- eredmény: `AVAILABLE | KIADOTT | APPROVED | ISSUED`
+
+Project Core auditlánc:
+- `DRIVE_DOCUMENT_INCOMING_REGISTERED`
+- `DRIVE_DOCUMENT_MARKED_VALID`
+- `DRIVE_DOCUMENT_VERSION_APPROVED`
+- `DRIVE_DOCUMENT_VERSION_ISSUED`
+
+A következő pilot-réshez új, migráció nélküli controlled issue access réteg készült:
+- meglévő `drive_core_document_issue_recipients` rekordok használata;
+- `access_expires_at` és `downloaded_at` mezők használata;
+- lejáratos, HMAC-aláírt recipient token;
+- purpose-separated signing key;
+- a token csak a saját recipient rekordot oldja fel;
+- minden letöltéskor új rövid életű S3 signed URL készül;
+- csak aktív `ISSUED` issue + `KIADOTT/ISSUED` governance + `AVAILABLE` S3 verzió tölthető le;
+- issue visszavonás/supersede esetén a link automatikusan megszűnik működni;
+- letöltés `downloaded_at` és Project Core audit eseményben naplózódik;
+- az audit entity típusa a már engedélyezett `document_version`, issue/recipient ID metadata-ban marad;
+- publikus endpoint: `/api/drive/public/issue-download?token=...`;
+- Projektkapu issue API a sikeres kiadástól külön kezeli a linkgenerálási hibát;
+- DRIVE UI-ban kiadás után címzettenként másolható linkek jelennek meg;
+- már korábban kiadott dokumentumnál Link ikonról újragenerálhatók a linkek, `document.approve` jogosultsággal.
+
+Contract: `scripts/drive-issue-access-v010-contract.mjs` → 16/16 PASS.
+Releváns Document Flow / DRIVE / object storage / Projektkapu regressziók: PASS.
+PROD: DENY.

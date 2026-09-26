@@ -15,6 +15,7 @@ import {
   HardDrive,
   History,
   Loader2,
+  Link2,
   RefreshCw,
   Search,
   Send,
@@ -88,6 +89,14 @@ type DriveDocumentIssue = {
   issueNumber: string;
   status: "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
   issuedAt: string;
+};
+type DriveIssueAccessLink = {
+  recipientId: string;
+  email: string | null;
+  name: string;
+  organization: string;
+  url: string;
+  expiresAt: string;
 };
 type DocumentFlowPayload = {
   ok?: boolean;
@@ -313,6 +322,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [issueAccessLinks, setIssueAccessLinks] = useState<DriveIssueAccessLink[]>([]);
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [showDocumentForm, setShowDocumentForm] = useState(false);
   const [showUploadForm, setShowUploadForm] = useState(false);
@@ -844,6 +854,47 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function copyIssueAccessLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("A címzetti kiadási link a vágólapra került.");
+    } catch {
+      setError("A címzetti kiadási link nem másolható automatikusan.");
+    }
+  }
+
+  async function loadIssueAccessLinks(issue: DriveDocumentIssue) {
+    setBusy(true); setError(""); setNotice(""); setIssueAccessLinks([]);
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/issues/${encodeURIComponent(issue.id)}/access-links`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        },
+      );
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        links?: DriveIssueAccessLink[];
+        expiresAt?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "A kiadási linkek nem készíthetők el.");
+      }
+      setIssueAccessLinks(payload.links || []);
+      setNotice(payload.links?.length
+        ? `${issue.issueNumber}: ${payload.links.length} lejáratos címzetti link elkészült.`
+        : `${issue.issueNumber}: nincs megjeleníthető címzetti link.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A kiadási linkek nem készíthetők el.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function issueDocumentVersion(document: DriveDocument) {
     const version = document.currentVersion;
     if (!version) return;
@@ -871,7 +922,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     if (purpose === null) return;
     const note = window.prompt("Kiadási megjegyzés (opcionális):", "") ?? "";
 
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setError(""); setNotice(""); setIssueAccessLinks([]);
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/versions/${encodeURIComponent(version.id)}/issue`, {
         method: "POST",
@@ -889,11 +940,20 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         idempotent?: boolean;
         recipientCount?: number;
         issue?: { issueNumber?: string };
+        accessLinks?: DriveIssueAccessLink[];
+        accessExpiresAt?: string | null;
+        accessLinkError?: string | null;
       };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentum kiadása sikertelen.");
-      setNotice(payload.idempotent
+      setIssueAccessLinks(payload.accessLinks || []);
+      const baseNotice = payload.idempotent
         ? `A dokumentumverzió már kiadott: ${payload.issue?.issueNumber || "kiadási rekord"}.`
-        : `Formális kiadás rögzítve: ${payload.issue?.issueNumber || "kiadási rekord"} · ${payload.recipientCount || emails.length} címzett.`);
+        : `Formális kiadás rögzítve: ${payload.issue?.issueNumber || "kiadási rekord"} · ${payload.recipientCount || emails.length} címzett.`;
+      setNotice(payload.accessLinkError
+        ? `${baseNotice} A kiadás sikeres, de a címzetti linkeknél hiba történt: ${payload.accessLinkError}`
+        : payload.accessLinks?.length
+          ? `${baseNotice} ${payload.accessLinks.length} lejáratos címzetti letöltési link elkészült.`
+          : baseNotice);
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A dokumentum kiadása sikertelen.");
@@ -1030,6 +1090,19 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       </details>
 
       {(error || notice) && <div className={error ? styles.errorNotice : styles.successNotice}>{error || notice}</div>}
+      {issueAccessLinks.length > 0 && <section className={styles.gateList} data-drive-issue-access="0.1.0">
+        <div className={styles.gateListHeader}><strong>Kiadási letöltési linkek</strong><span>{issueAccessLinks.length} címzett</span></div>
+        {issueAccessLinks.map((link) => <article key={link.recipientId}>
+          <div>
+            <strong>{link.name || link.email || "Kiadási címzett"}</strong>
+            <small>{link.email || link.organization || "Kiadási hozzáférés"} · lejár: {formatDate(link.expiresAt)}</small>
+            <code>{link.url}</code>
+          </div>
+          <b>DOWNLOAD</b>
+          <button type="button" onClick={() => void copyIssueAccessLink(link.url)}>Link másolása</button>
+          <a href={link.url} target="_blank" rel="noreferrer">Teszt</a>
+        </article>)}
+      </section>}
 
       {uploadQueue.length > 0 && <section className={styles.uploadQueue} data-drive-upload-queue="1.1.0">
         <header>
@@ -1182,6 +1255,14 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onClick={() => void issueDocumentVersion(document)}
                     aria-label={`${document.name} formális kiadása`}
                   ><Send size={15} /></button>}
+                  {canApprove && documentFlowReady && formalIssue?.status === "ISSUED" && governance?.issueStatus === "ISSUED" && <button
+                    type="button"
+                    className={styles.issueButton}
+                    disabled={busy}
+                    title="Kiadási címzetti letöltési linkek megjelenítése / újragenerálása"
+                    onClick={() => void loadIssueAccessLinks(formalIssue)}
+                    aria-label={`${document.name} kiadási linkjei`}
+                  ><Link2 size={15} /></button>}
                   {canApprove && document.currentVersion?.status === "QUARANTINED" && <>
                     <button
                       type="button"
