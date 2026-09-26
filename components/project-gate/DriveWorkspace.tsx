@@ -354,6 +354,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
   const [reviewStatus, setReviewStatus] = useState("all");
+  const [folderDiscipline, setFolderDiscipline] = useState("");
+  const [folderTopic, setFolderTopic] = useState("");
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
@@ -488,6 +490,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   useEffect(() => { void loadDetails(selectedDocumentId); }, [loadDetails, selectedDocumentId]);
 
   const selectedFolder = tree?.folders.find((folder) => folder.id === selectedFolderId) || null;
+  useEffect(() => { setFolderDiscipline(selectedFolder?.discipline || ""); setFolderTopic(selectedFolder?.topic || ""); }, [selectedFolder]);
   const folderScope = useMemo(() => {
     if (!tree || selectedFolderId === "all") return null;
     const ids = new Set<string>([selectedFolderId]);
@@ -519,6 +522,27 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
     return counts;
   }, [tree]);
+  const effectiveFolderClassification = useMemo(() => {
+    if (!tree) return new Map<string, { discipline: string; topic: string }>();
+    const byId = new Map(tree.folders.map((folder) => [folder.id, folder]));
+    const result = new Map<string, { discipline: string; topic: string }>();
+    for (const folder of tree.folders) {
+      let current = folder; let discipline = ""; let topic = ""; const visited = new Set<string>();
+      while (current && !visited.has(current.id) && (!discipline || !topic)) { visited.add(current.id); discipline ||= current.discipline || ""; topic ||= current.topic || ""; current = current.parentId ? byId.get(current.parentId)! : undefined as never; }
+      result.set(folder.id, { discipline, topic });
+    }
+    return result;
+  }, [tree]);
+  const saveFolderClassification = async () => {
+    if (!selectedFolder || !canWrite) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(selectedFolder.id)}/classification`, { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ discipline: folderDiscipline, topic: folderTopic }) });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa besorolása nem menthető.");
+      await loadWorkspace();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A mappa besorolása nem menthető."); } finally { setBusy(false); }
+  };
   const childFolders = useMemo(() => (tree?.folders || []).filter((folder) => (selectedFolderId === "all" ? folder.parentId === null : folder.parentId === selectedFolderId)), [selectedFolderId, tree]);
   const dropDocumentCount = useMemo(() => (tree?.documents || []).filter((document) => document.source === "DROP").length, [tree]);
   const baseVisibleDocuments = useMemo(() => {
@@ -570,13 +594,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
   const reviewRows = useMemo(() => visibleDocuments.map((document) => {
     const metadata = metadataByDocument[document.id];
+    const inherited = effectiveFolderClassification.get(document.folderId);
+    const effectiveDiscipline = metadata?.discipline || inherited?.discipline || "";
+    const effectiveTopic = String(metadata?.extra?.topic || "").trim() || inherited?.topic || "";
     const extra = metadata?.extra || {};
     const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
     const observations = value("reviewObservations") || value("hageObservations");
-    return { document, metadata, checked: value("reviewChecked") || value("hageChecked"), result: value("reviewResult") || value("hageResult"), observations, workflow: value("workflowStatus") || metadata?.approvalStatus || "", internalNote: value("internalNote") || value("hageNote"), customer: value("customerApproval") || value("clientApproval"), customerNote: value("customerNote") || value("clientNote"), revisionChange: value("revisionChange") || value("change"), observationCount: Number(extra.openObservationCount || (observations ? 1 : 0)) };
-  }).filter((row) => (reviewDiscipline === "all" || row.metadata?.discipline === reviewDiscipline) && (reviewTopic === "all" || row.metadata?.building === reviewTopic || row.metadata?.documentType === reviewTopic) && (reviewStatus === "all" || row.workflow === reviewStatus)), [visibleDocuments, metadataByDocument, reviewDiscipline, reviewTopic, reviewStatus]);
-  const reviewDisciplines = useMemo(() => [...new Set(Object.values(metadataByDocument).map((item) => item.discipline).filter(Boolean))].sort(), [metadataByDocument]);
-  const reviewTopics = useMemo(() => [...new Set(Object.values(metadataByDocument).flatMap((item) => [item.building, item.documentType]).filter(Boolean))].sort(), [metadataByDocument]);
+    return { document, metadata, effectiveDiscipline, effectiveTopic, checked: value("reviewChecked") || value("hageChecked"), result: value("reviewResult") || value("hageResult"), observations, workflow: value("workflowStatus") || metadata?.approvalStatus || "", internalNote: value("internalNote") || value("hageNote"), customer: value("customerApproval") || value("clientApproval"), customerNote: value("customerNote") || value("clientNote"), revisionChange: value("revisionChange") || value("change"), observationCount: Number(extra.openObservationCount || (observations ? 1 : 0)) };
+  }).filter((row) => (reviewDiscipline === "all" || row.effectiveDiscipline === reviewDiscipline) && (reviewTopic === "all" || row.effectiveTopic === reviewTopic) && (reviewStatus === "all" || row.workflow === reviewStatus)), [visibleDocuments, metadataByDocument, effectiveFolderClassification, reviewDiscipline, reviewTopic, reviewStatus]);
+  const reviewDisciplines = useMemo(() => [...new Set(reviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [reviewRows]);
+  const reviewTopics = useMemo(() => [...new Set(reviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [reviewRows]);
   const reviewStatuses = useMemo(() => [...new Set(Object.values(metadataByDocument).map((item) => item.approvalStatus).filter(Boolean))].sort(), [metadataByDocument]);
   const reviewMark = (value: string) => { const v = value.toLocaleLowerCase("hu-HU"); if (!v) return "—"; if (v.includes("megfelelő") || v.includes("jóváhagy") || v === "igen") return "✓"; if (v.includes("javítandó") || v.includes("elutas")) return "⚠"; if (v.includes("visszaad")) return "↩"; if (v.includes("vár") || v.includes("folyamat")) return "◷"; return "—"; };
 
@@ -1615,6 +1642,13 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             const depth = folder.path.split("/").length - 1;
             return <button key={folder.id} type="button" style={{ paddingLeft: 13 + depth * 17 }} className={selectedFolderId === folder.id ? styles.folderActive : ""} onClick={() => setSelectedFolderId(folder.id)}><Folder size={15} /><span>{folder.name}</span><small>{folderDocumentCounts.get(folder.id) || 0}</small></button>;
           })}
+          {selectedFolder && <div className={styles.folderClassification}>
+            <strong>Mappa besorolása</strong>
+            <label>Szakág<input value={folderDiscipline} onChange={(event) => setFolderDiscipline(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.discipline || "Nincs megadva"} /></label>
+            <label>Témakör<input value={folderTopic} onChange={(event) => setFolderTopic(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.topic || "Nincs megadva"} /></label>
+            <small>Az üres mező a legközelebbi szülőmappa értékét örökli.</small>
+            <button type="button" disabled={!canWrite || busy} onClick={() => void saveFolderClassification()}>Besorolás mentése</button>
+          </div>}
         </aside>
 
         <div className={styles.documentPanel}>
@@ -1740,7 +1774,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <label>Workflow állapot<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Mind</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             </div>
             <div className={styles.reviewWorkspace}>
-            <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.document.name}</button></td><td>{row.metadata?.discipline || "—"}</td><td>{row.metadata?.building || row.metadata?.documentType || "—"}</td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.revisionChange && row.revisionChange !== "—" ? "●" : "—"}</button></td></tr>)}</tbody></table></div>
+            <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.document.name}</button></td><td>{row.effectiveDiscipline || "—"}</td><td>{row.effectiveTopic || "—"}</td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.revisionChange && row.revisionChange !== "—" ? "●" : "—"}</button></td></tr>)}</tbody></table></div>
             <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} securityReady={securityScannerReady} securityLabel={securityScannerReady ? `${health?.security?.engine || "ClamAV"}` : health?.security?.errorCode || "Scanner nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" />
             </div>
           </section>}
