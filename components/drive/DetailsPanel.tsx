@@ -16,6 +16,7 @@ type MetadataForm = {
   building: string;
   level: string;
   zone: string;
+  topic: string;
 };
 
 type Props = {
@@ -31,7 +32,7 @@ type Props = {
   securityLabel: string;
   onScan: () => Promise<void>;
   onReview: (action: "APPROVE" | "REJECT") => Promise<void>;
-  onSaveMetadata: (input: MetadataForm) => Promise<void>;
+  onSaveMetadata: (input: Record<string, unknown>) => Promise<void>;
   onSaveNote: (note: string) => Promise<void>;
   onEnsureQr: () => Promise<void>;
   onDownload: () => Promise<void>;
@@ -51,6 +52,7 @@ const emptyMetadata: MetadataForm = {
   building: "",
   level: "",
   zone: "",
+  topic: "",
 };
 
 export default function DetailsPanel({
@@ -93,6 +95,7 @@ export default function DetailsPanel({
       building: source.building,
       level: source.level,
       zone: source.zone,
+      topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
     } : emptyMetadata);
     setNote(details?.notes?.[0]?.note || "");
   }, [details?.document.id, details?.metadata, details?.notes]);
@@ -146,6 +149,7 @@ export default function DetailsPanel({
                 ["building", "Épület"],
                 ["level", "Szint"],
                 ["zone", "Zóna"],
+                ["topic", "Témakör felülírás"],
               ] as Array<[keyof MetadataForm, string]>).map(([key, label]) => (
                 <div className={styles.metaItem} key={key}>
                   <label htmlFor={`drive-meta-${key}`}>{label}</label>
@@ -181,7 +185,7 @@ export default function DetailsPanel({
             )}
 
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata(metadata)}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic } }))}>
                 <Save size={12} /> Metaadat mentése
               </button>
               <button type="button" className={styles.smallButton} disabled={busy || document.currentVersion?.status !== "AVAILABLE"} onClick={() => void onDownload()}>

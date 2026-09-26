@@ -1137,7 +1137,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
-  async function saveSelectedMetadata(input: Record<string, string>) {
+  async function saveSelectedMetadata(input: Record<string, unknown>) {
     if (!selectedDocument || !canWrite) return;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -1153,7 +1153,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       const payload = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A mérnöki metaadat mentése sikertelen.");
       setNotice("Mérnöki metaadatok mentve és auditálva.");
-      await loadDetails(selectedDocument.id);
+      await Promise.all([loadDetails(selectedDocument.id), loadWorkspace()]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A mérnöki metaadat mentése sikertelen.");
     } finally {
