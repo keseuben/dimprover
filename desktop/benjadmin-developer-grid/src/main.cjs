@@ -656,21 +656,45 @@ function conversationPinForCell(cell) {
   const { task } = liveContextForWorker(String(cell.workerCode || "").toUpperCase());
   if (!task || isTerminalDeveloperTask(task)) return null;
   const record = loadTaskLaunchRecords()[String(task.id || "")] || {};
-  const rolloverState = String(record.conversationRolloverState || task.conversationRolloverState || "").toUpperCase();
-  if (["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT", "CLIPBOARD_COPIED", "ACK_WAIT"].includes(rolloverState)) {
-    return { taskId:String(task.id || ""), suspended:true, reason:"ROLLOVER_TRANSITION", rolloverState };
-  }
-  const conversationId = String(
-    record.conversationRolloverConversationId
-    || task.conversationRolloverConversationId
-    || record.surfaceConversationId
-    || record.chatSessionId
-    || task.surfaceConversationId
+  const authoritativeConversationId = String(
+    task.surfaceConversationId
     || task.chatConversationId
+    || task.chatSessionId
     || task.chatLaunch?.surfaceConversationId
     || task.chatLaunch?.chatSessionId
     || ""
   ).trim();
+  const localConversationId = String(
+    record.conversationRolloverConversationId
+    || record.surfaceConversationId
+    || record.chatSessionId
+    || ""
+  ).trim();
+  const authoritativeRolloverState = String(
+    task.conversationRolloverState
+    || task.chatLaunch?.conversationRolloverState
+    || ""
+  ).toUpperCase();
+  const localRolloverState = String(record.conversationRolloverState || "").toUpperCase();
+  const transitionStates = ["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT", "CLIPBOARD_COPIED", "ACK_WAIT"];
+  const localTargetsDifferentConversation = Boolean(
+    authoritativeConversationId
+    && localConversationId
+    && localConversationId !== authoritativeConversationId
+  );
+  const rolloverState = authoritativeRolloverState || localRolloverState;
+  const shouldSuspendForAuthoritativeTransition = transitionStates.includes(authoritativeRolloverState);
+  const shouldSuspendForLocalTransition = transitionStates.includes(localRolloverState)
+    && (!authoritativeConversationId || !localTargetsDifferentConversation);
+  if (shouldSuspendForAuthoritativeTransition || shouldSuspendForLocalTransition) {
+    return {
+      taskId:String(task.id || ""),
+      suspended:true,
+      reason:"ROLLOVER_TRANSITION",
+      rolloverState:shouldSuspendForAuthoritativeTransition ? authoritativeRolloverState : localRolloverState,
+    };
+  }
+  const conversationId = String(authoritativeConversationId || localConversationId).trim();
   if (!conversationId) return null;
   const currentUrl = chatViews.get(cell.id)?.webContents?.getURL?.() || "";
   const candidates = [
@@ -3911,7 +3935,7 @@ async function observeManualConversationRollover(input) {
   const capture = await captureConversationTranscript(view).catch(() => null);
   if (!capture?.ok || capture.generating || String(capture.conversationId || "") !== String(currentConversationId)) return { observed:false, pending:true };
   const markerMessage = [...(capture.messages || [])].reverse().find((item) => String(item?.role || "").toUpperCase() === "USER" && String(item?.text || "").includes(ROLLOVER_PROMPT_MARKER));
-  if (!markerMessage) return { observed:false, pending:true };
+  if (!markerMessage) return { observed:false, pending:false, markerMissing:true };
   const currentUrl = String(capture.conversationUrl || view.webContents.getURL() || "");
   if (!sameChatProjectConversation(String(record.conversationRolloverPreviousConversationUrl || ""), currentUrl)) {
     markConversationRolloverBlocked(task, workerCode, "CONVERSATION_ROLLOVER_PROJECT_MISMATCH", currentUrl);
@@ -4269,7 +4293,7 @@ function conversationMemoryTaskForWorker(workerCode) {
     || local.chatSessionId
     || ""
   ).trim();
-  const expectedConversationId = localConversationId || authoritativeConversationId;
+  const expectedConversationId = authoritativeConversationId || localConversationId;
   if (!expectedConversationId) return null;
   return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId };
 }
@@ -4303,8 +4327,16 @@ async function syncConversationMemoryForWorker(workerCode) {
 
   if (currentId
     && live.authoritativeConversationId
-    && currentId !== live.authoritativeConversationId
-    && !manualClipboardActive) {
+    && currentId !== live.authoritativeConversationId) {
+    if (manualClipboardActive) {
+      const manualRollover = await observeManualConversationRollover({
+        view,
+        workerCode:code,
+        task:live.task,
+        currentConversationId:currentId,
+      }).catch(() => null);
+      if (manualRollover?.observed || manualRollover?.pending) return null;
+    }
     const authoritativeOrphan = await recoverOrphanConversationRollover({
       view,
       workerCode:code,

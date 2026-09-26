@@ -9,8 +9,8 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, "desktop/benjadmin-develo
 const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts"), "utf8");
 let n=0; const check=(label,fn)=>{fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
 
-check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.76"));
-check("backend version v0.1.72-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.76-dev"/));
+check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.77"));
+check("backend version v0.1.72-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.77-dev"/));
 check("conversation monitor reads local rollover record before server state",()=>{
   assert.match(main,/const localRolloverRecord = loadTaskLaunchRecords\(\)\[String\(live\.task\.id\)\] \|\| \{\};/);
   assert.match(main,/const rolloverState = String\(localRolloverRecord\.conversationRolloverState \|\| live\.task\?\.conversationRolloverState \|\| live\.task\?\.chatLaunch\?\.conversationRolloverState \|\| ""\)\.toUpperCase\(\);/);
