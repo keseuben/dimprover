@@ -542,7 +542,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(selectedFolder.id)}/classification`, { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ discipline: folderDiscipline, topic: folderTopic }) });
       const payload = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa besorolása nem menthető.");
-      await loadWorkspace();
+      await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "A mappa besorolása nem menthető."); } finally { setBusy(false); }
   };
   const childFolders = useMemo(() => (tree?.folders || []).filter((folder) => (selectedFolderId === "all" ? folder.parentId === null : folder.parentId === selectedFolderId)), [selectedFolderId, tree]);
@@ -1161,7 +1161,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       const payload = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A mérnöki metaadat mentése sikertelen.");
       setNotice("Mérnöki metaadatok mentve és auditálva.");
-      await Promise.all([loadDetails(selectedDocument.id), loadWorkspace()]);
+      await Promise.all([loadDetails(selectedDocument.id), load()]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A mérnöki metaadat mentése sikertelen.");
     } finally {
