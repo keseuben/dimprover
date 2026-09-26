@@ -543,6 +543,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       const payload = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa besorolása nem menthető.");
       await load();
+      setNotice("Mappa besorolása mentve. Az öröklött Szakág/Témakör frissült.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "A mappa besorolása nem menthető."); } finally { setBusy(false); }
   };
   const childFolders = useMemo(() => (tree?.folders || []).filter((folder) => (selectedFolderId === "all" ? folder.parentId === null : folder.parentId === selectedFolderId)), [selectedFolderId, tree]);
