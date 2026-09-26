@@ -38,7 +38,7 @@ import DetailsPanel from "@/components/drive/DetailsPanel";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
-import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
+import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
 
@@ -266,7 +266,7 @@ type DownloadPayload = {
 };
 
 type BusinessFilter = "all" | "review" | "valid" | "issued" | "rejected" | "archived";
-type BrowserViewMode = "list" | "engineering" | "split" | "viewer" | "compare";
+type BrowserViewMode = "list" | "engineering" | "review" | "split" | "viewer" | "compare";
 
 function matchesBusinessFilter(governance: DriveDocumentGovernance | undefined, filter: BusinessFilter) {
   if (filter === "all") return true;
@@ -350,6 +350,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "drop" | "other">("all");
   const [businessFilter, setBusinessFilter] = useState<BusinessFilter>("all");
+  const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
+  const [reviewDiscipline, setReviewDiscipline] = useState("all");
+  const [reviewTopic, setReviewTopic] = useState("all");
+  const [reviewStatus, setReviewStatus] = useState("all");
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
@@ -428,6 +432,9 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
+      const metadataResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" });
+      const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
+      setMetadataByDocument(metadataResponse.ok && metadataPayload.ok ? Object.fromEntries((metadataPayload.metadata || []).map((item) => [item.documentId, item])) : {});
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
 
@@ -560,6 +567,18 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const governance = document.currentVersion ? documentFlowByVersion[document.currentVersion.id] : undefined;
     return matchesBusinessFilter(governance, businessFilter);
   }), [baseVisibleDocuments, businessFilter, documentFlowByVersion]);
+
+  const reviewRows = useMemo(() => visibleDocuments.map((document) => {
+    const metadata = metadataByDocument[document.id];
+    const extra = metadata?.extra || {};
+    const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
+    const observations = value("reviewObservations") || value("hageObservations");
+    return { document, metadata, checked: value("reviewChecked") || value("hageChecked"), result: value("reviewResult") || value("hageResult"), observations, workflow: value("workflowStatus") || metadata?.approvalStatus || "", internalNote: value("internalNote") || value("hageNote"), customer: value("customerApproval") || value("clientApproval"), customerNote: value("customerNote") || value("clientNote"), revisionChange: value("revisionChange") || value("change"), observationCount: Number(extra.openObservationCount || (observations ? 1 : 0)) };
+  }).filter((row) => (reviewDiscipline === "all" || row.metadata?.discipline === reviewDiscipline) && (reviewTopic === "all" || row.metadata?.building === reviewTopic || row.metadata?.documentType === reviewTopic) && (reviewStatus === "all" || row.workflow === reviewStatus)), [visibleDocuments, metadataByDocument, reviewDiscipline, reviewTopic, reviewStatus]);
+  const reviewDisciplines = useMemo(() => [...new Set(Object.values(metadataByDocument).map((item) => item.discipline).filter(Boolean))].sort(), [metadataByDocument]);
+  const reviewTopics = useMemo(() => [...new Set(Object.values(metadataByDocument).flatMap((item) => [item.building, item.documentType]).filter(Boolean))].sort(), [metadataByDocument]);
+  const reviewStatuses = useMemo(() => [...new Set(Object.values(metadataByDocument).map((item) => item.approvalStatus).filter(Boolean))].sort(), [metadataByDocument]);
+  const reviewMark = (value: string) => { const v = value.toLocaleLowerCase("hu-HU"); if (!v) return "—"; if (v.includes("megfelelő") || v.includes("jóváhagy") || v === "igen") return "✓"; if (v.includes("javítandó") || v.includes("elutas")) return "⚠"; if (v.includes("visszaad")) return "↩"; if (v.includes("vár") || v.includes("folyamat")) return "◷"; return "—"; };
 
   const selectedDocument = useMemo(
     () => tree?.documents.find((document) => document.id === selectedDocumentId) || null,
@@ -1605,6 +1624,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               <div className={styles.viewModeSwitcher} aria-label="DRIVE megjelenítési mód">
                 <button type="button" className={browserViewMode === "list" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("list")} title="Lista nézet"><List size={14} /> Lista</button>
                 <button type="button" className={browserViewMode === "engineering" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("engineering")} title="Mérnöki Drive nézet"><SlidersHorizontal size={14} /> Mérnöki</button>
+                <button type="button" className={browserViewMode === "review" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("review")} title="Tervellenőrzési nézet"><Check size={14} /> Tervellenőrzés</button>
                 <button type="button" className={browserViewMode === "split" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("split")} title="Lista és tervnéző"><Columns2 size={14} /> Osztott</button>
                 <button type="button" className={browserViewMode === "viewer" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("viewer")} title="Tervnéző" disabled={!selectedDocument}><Eye size={14} /> Tervnéző</button>
                 <button type="button" className={browserViewMode === "compare" ? styles.filterActive : ""} onClick={openCompare} title="Terv- és revízió-összehasonlítás" disabled={!tree?.documents.length}><GitCompareArrows size={14} /> Összehasonlítás</button>
@@ -1712,6 +1732,16 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             })}
             {!visibleDocuments.length && <div className={styles.empty}><File size={28} /><strong>Nincs megjeleníthető dokumentum</strong><span>A kiválasztott mappaágban és szűrésben nincs dokumentum.</span></div>}
           </div>
+          {browserViewMode === "review" && <section className={styles.reviewHost}>
+            <header className={styles.reviewHeader}><div><span>Tervellenőrzés</span><strong>{reviewRows.length} terv</strong></div><div className={styles.reviewLegend}>✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · ● új változás · — nincs adat</div></header>
+            <div className={styles.reviewFilters}>
+              <label>Szakág<select value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+              <label>Témakör<select value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+              <label>Workflow állapot<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Mind</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            </div>
+            <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.document.name}</button></td><td>{row.metadata?.discipline || "—"}</td><td>{row.metadata?.building || row.metadata?.documentType || "—"}</td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} onClick={() => setSelectedDocumentId(row.document.id)}>{row.revisionChange && row.revisionChange !== "—" ? "●" : "—"}</button></td></tr>)}</tbody></table></div>
+          </section>}
+
           {browserViewMode === "engineering" && <section className={styles.engineeringHost} data-project-gate-drive-engineering="0.1.0">
             <header className={styles.engineeringHeader}>
               <div>
