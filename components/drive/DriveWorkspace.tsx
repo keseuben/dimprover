@@ -21,6 +21,7 @@ import type {
   DriveDocument,
   DriveDocumentDetails,
   DriveHealth,
+  DriveEngineeringMetadata,
   DriveLayoutMode,
   DrivePermission,
   DriveTree,
@@ -75,6 +76,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("three");
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
+  const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
+  const [reviewFocus, setReviewFocus] = useState("");
   const [boxShelfOpen, setBoxShelfOpen] = useState(true);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -105,17 +108,20 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setLoading(true);
     setError("");
     try {
-      const [healthResponse, treeResponse] = await Promise.all([
+      const [healthResponse, treeResponse, metadataResponse] = await Promise.all([
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/health`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
       ]);
       const healthPayload = await healthResponse.json() as DriveHealth;
       const treePayload = await treeResponse.json() as TreePayload;
+      const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
       if (!healthResponse.ok || !healthPayload.ok) throw new Error(healthPayload.error || "A Drive rendszerállapot nem tölthető be.");
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setHealth(healthPayload);
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
+      setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       setSelectedDocumentId((current) => {
@@ -134,6 +140,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setHealth(null);
     setBoxes([]);
     setDetails(null);
+    setMetadataByDocument({});
+    setReviewFocus("");
     setSelectedFolderId("all");
     setSelectedDocumentId("");
     void load();
@@ -451,6 +459,30 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  const effectiveFolderClassification = useMemo(() => {
+    const result = new Map<string, { discipline: string; topic: string }>();
+    const byId = new Map((tree?.folders || []).map((folder) => [folder.id, folder]));
+    for (const folder of tree?.folders || []) {
+      const visited = new Set<string>();
+      let discipline = "";
+      let topic = "";
+      let current: typeof folder | undefined = folder;
+      while (current && !visited.has(current.id) && (!discipline || !topic)) {
+        visited.add(current.id);
+        discipline ||= String(current.discipline || "").trim();
+        topic ||= String(current.topic || "").trim();
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+      }
+      result.set(folder.id, { discipline, topic });
+    }
+    return result;
+  }, [tree]);
+
+  const openReviewDetail = useCallback((document: DriveDocument, field: string) => {
+    setSelectedDocumentId(document.id);
+    setReviewFocus(field);
+  }, []);
+
   const boxColorsByDocument = useMemo(() => {
     const result: Record<string, string[]> = {};
     for (const box of boxes) {
@@ -666,6 +698,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
+              metadataByDocument={metadataByDocument}
+              folders={tree?.folders || []}
+              onOpenReviewDetail={openReviewDetail}
             />
             <DetailsPanel
               projectId={projectId}
@@ -685,6 +720,10 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onEnsureQr={ensureQr}
               onDownload={downloadSelected}
               responsiveClassName={`${styles.detailsResponsive} ${detailsHidden ? styles.hiddenPanel : ""}`}
+              focusTab={viewMode === "review" ? "review" : undefined}
+              reviewFocus={reviewFocus}
+              inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
+              inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
             />
           </>
         )}

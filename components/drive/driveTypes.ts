@@ -238,7 +238,7 @@ export type DriveDocumentDetails = {
 };
 
 export type DriveLayoutMode = "three" | "two" | "one" | "split" | "commander";
-export type DriveViewMode = "simple" | "engineering";
+export type DriveViewMode = "simple" | "engineering" | "review";
 
 export type DriveHealth = {
   ok?: boolean;
