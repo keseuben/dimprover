@@ -15,6 +15,18 @@ function enabledFlag() {
   return process.env.PROJECTKAPU_DEV_CODE_AUTH_ENABLED?.trim().toLowerCase() === "true";
 }
 
+function driveEnabledFlag() {
+  return process.env.DRIVE_DEV_PASSWORD_AUTH_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function configuredDrivePasswordSalt() {
+  return process.env.DRIVE_DEV_PASSWORD_SALT?.trim() || "";
+}
+
+function configuredDrivePasswordHash() {
+  return process.env.DRIVE_DEV_PASSWORD_HASH?.trim().toLowerCase() || "";
+}
+
 function baseSecret() {
   const explicit = process.env.PROJECTKAPU_DEV_ACCESS_SESSION_SECRET?.trim() || "";
   const fallback = process.env.DROP_SESSION_SECRET?.trim() || "";
@@ -45,6 +57,14 @@ function allowedHosts() {
   const values = configured
     ? configured.split(",")
     : ["projektkapu.dev.dimpro.hu", "localhost", "127.0.0.1"];
+  return new Set(values.map(normalizeHost).filter(Boolean));
+}
+
+function driveAllowedHosts() {
+  const configured = process.env.DRIVE_DEV_ACCESS_HOSTS?.trim();
+  const values = configured
+    ? configured.split(",")
+    : ["drive.dev.dimpro.hu", "localhost", "127.0.0.1"];
   return new Set(values.map(normalizeHost).filter(Boolean));
 }
 
@@ -81,12 +101,42 @@ export function isProjectGateDevAccessConfigured(hostValue: string | null | unde
   );
 }
 
+export function isDriveDevAccessConfigured(hostValue: string | null | undefined) {
+  const host = normalizeHost(hostValue);
+  return Boolean(
+    driveEnabledFlag()
+      && host
+      && driveAllowedHosts().has(host)
+      && configuredDrivePasswordSalt()
+      && configuredDrivePasswordHash()
+      && derivedSessionSecret(),
+  );
+}
+
+export function isSimpleDevAccessConfigured(hostValue: string | null | undefined) {
+  return isProjectGateDevAccessConfigured(hostValue) || isDriveDevAccessConfigured(hostValue);
+}
+
 export function verifyProjectGateDevAccessCode(input: unknown) {
   const provided = typeof input === "string" ? input.trim() : "";
   if (!/^\d{6}$/.test(provided)) return false;
   const expected = configuredCodeHash();
   const actual = hashAccessCode(provided);
   return Boolean(expected && actual && safeEqual(actual, expected));
+}
+
+export function verifyDriveDevAccessPassword(input: unknown) {
+  const provided = typeof input === "string" ? input : "";
+  if (!provided || provided.length > 128) return false;
+  const salt = configuredDrivePasswordSalt();
+  const expected = configuredDrivePasswordHash();
+  if (!salt || !expected) return false;
+  try {
+    const calculated = scryptSync(provided, salt, 32).toString("hex");
+    return safeEqual(calculated, expected);
+  } catch {
+    return false;
+  }
 }
 
 export function createProjectGateDevAccessToken(nowMs = Date.now()) {
@@ -114,6 +164,18 @@ export function verifyProjectGateDevAccessToken(rawValue: string | null | undefi
 export function requestHasProjectGateDevAccess(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
   if (!isProjectGateDevAccessConfigured(host)) return false;
+  return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
+}
+
+export function requestHasDriveDevAccess(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (!isDriveDevAccessConfigured(host)) return false;
+  return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
+}
+
+export function requestHasSimpleDevAccess(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (!isSimpleDevAccessConfigured(host)) return false;
   return verifyProjectGateDevAccessToken(request.cookies.get(PROJECT_GATE_DEV_ACCESS_COOKIE)?.value);
 }
 

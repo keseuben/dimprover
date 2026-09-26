@@ -171,6 +171,55 @@ export type DriveBox = {
   items: DriveBoxItem[];
 };
 
+export type DriveDocumentGovernance = {
+  versionId: string;
+  documentId: string;
+  businessStatus: "BEJOVO" | "ELLENORZES_ALATT" | "ERVENYES" | "KIADOTT" | "ARCHIV" | null;
+  reviewDecision: "PENDING" | "APPROVED" | "REJECTED";
+  issueStatus: "NOT_ISSUED" | "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
+  sourceChannel: "DRIVE" | "DROP" | "DESKTOP" | "SYSTEM";
+  dropPackageId: string | null;
+  dropFileId: string | null;
+  reviewedAt: string | null;
+  validAt: string | null;
+};
+
+export type DriveDocumentIssue = {
+  id: string;
+  versionId: string;
+  issueNumber: string;
+  status: "ISSUED" | "WITHDRAWN" | "SUPERSEDED";
+  issuedAt: string;
+};
+
+export type DriveIssueAccessLink = {
+  recipientId: string;
+  email: string | null;
+  name: string;
+  organization: string;
+  url: string;
+  expiresAt: string;
+};
+
+export type DriveProjectDropGate = {
+  id: string;
+  slug: string;
+  type: "project";
+  title: string;
+  description: string;
+  status: "active" | "revoked" | "expired";
+  recipients: Array<{ id?: string; name: string; email: string; label?: string; company?: string; projectRole?: string }>;
+  projectId: string | null;
+  projectName: string | null;
+  targetFolder: string | null;
+  retentionDays: number;
+  expiresAt: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  publicUrl: string;
+};
+
 export type DriveDocumentDetails = {
   projectId: string;
   document: Omit<DriveDocument, "currentVersion"> & {
@@ -218,5 +267,37 @@ export type DriveHealth = {
     signatureDate: string | null;
     errorCode: string | null;
     releaseRule: string;
+  };
+  documentFlow?: {
+    version: string;
+    databaseReady: boolean;
+    ready: boolean;
+    nextStep: string;
+    errorCode?: string | null;
+  };
+  dropDriveIncoming?: {
+    version: string;
+    ready: boolean;
+    runtimeAvailable: boolean;
+    releaseGateEnabled: boolean;
+    featureEnabled: boolean;
+    deliveryMode: "email" | "manual-link";
+    emailRequired: boolean;
+    emailReady: boolean;
+    submissionGateReady: boolean;
+    publicUploadReady: boolean;
+    virusScannerReady: boolean;
+    dropStorageReady: boolean;
+    driveStorageReady: boolean;
+    documentFlowReady: boolean;
+    reviewReady: boolean;
+    blockers: string[];
+    nextStep: string;
+  };
+  review?: {
+    version: string;
+    databaseReady: boolean;
+    ready: boolean;
+    nextStep: string;
   };
 };

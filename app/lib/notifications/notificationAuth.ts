@@ -3,11 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { isDriveApiAuthorized } from "@/app/lib/drive/driveApi";
 import { DEV_DESKTOP_USER_ID, DEV_WEB_USER_ID, uniqueUserIds } from "./notificationAccess";
-import { requestHasProjectGateDevAccess } from "@/app/lib/project-gate/devAccess";
+import { isDriveDevAccessConfigured, requestHasSimpleDevAccess } from "@/app/lib/project-gate/devAccess";
 
 export type NotificationAuthContext = {
   ok: boolean;
-  mode: "web-session" | "desktop-token" | "admin" | "project-gate-dev" | "unauthorized";
+  mode: "web-session" | "desktop-token" | "admin" | "project-gate-dev" | "drive-dev" | "unauthorized";
   userId: string;
   userAliases: string[];
   displayName: string;
@@ -95,14 +95,16 @@ export async function resolveNotificationAuth(request: NextRequest): Promise<Not
     };
   }
 
-  if (requestHasProjectGateDevAccess(request)) {
+  if (requestHasSimpleDevAccess(request)) {
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const driveMode = isDriveDevAccessConfigured(host);
     return {
       ok: true,
-      mode: "project-gate-dev",
+      mode: driveMode ? "drive-dev" : "project-gate-dev",
       userId: DEV_WEB_USER_ID,
       userAliases: uniqueUserIds([DEV_WEB_USER_ID]),
-      displayName: "Projektkapu DEV pilot",
-      clientId: "project-gate-dev",
+      displayName: driveMode ? "DIMPRO Drive DEV pilot" : "Projektkapu DEV pilot",
+      clientId: driveMode ? "drive-dev" : "project-gate-dev",
     };
   }
 

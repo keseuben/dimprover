@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   PackageCheck,
   Pin,
+  Plus,
   Settings,
   UploadCloud,
 } from "lucide-react";
@@ -23,6 +24,7 @@ type Props = {
   selectedProjectId: string;
   pinned: boolean;
   onProjectChange: (projectId: string) => void;
+  onCreateProject: () => void;
   onClose: () => void;
   onTogglePinned: () => void;
   onHoverEnter: () => void;
@@ -34,6 +36,7 @@ export default function FloatingProjectBoard({
   selectedProjectId,
   pinned,
   onProjectChange,
+  onCreateProject,
   onClose,
   onTogglePinned,
   onHoverEnter,
@@ -79,6 +82,9 @@ export default function FloatingProjectBoard({
             <option key={project.id} value={project.id}>{project.name}</option>
           ))}
         </select>
+        <button type="button" className={styles.projectCreateButton} onClick={onCreateProject}>
+          <Plus size={14} /> Új projekt
+        </button>
 
         <div className={styles.boardNav}>
           <Link href="/drive"><FolderOpen size={16} /> Drive</Link>

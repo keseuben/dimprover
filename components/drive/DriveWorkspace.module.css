@@ -943,3 +943,58 @@
 .visualCompareFindingIssueAction { grid-column: 1 / -1; min-height: 24px; border: 1px solid #8fc4d2; border-radius: 5px; background: #eefafd; color: #166174; padding: 3px 6px; font: inherit; font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .035em; cursor: pointer; }
 .visualCompareFindingIssueAction:hover:not(:disabled) { background: #dff5fa; border-color: #65aebf; }
 .visualCompareFindingIssueAction:disabled { cursor: default; opacity: .62; background: #f4f7f8; border-color: #d6e0e4; color: #70858e; }
+
+.projectCreateButton {
+  width: 100%;
+  margin-top: 7px;
+  border: 1px solid rgba(52,139,255,.5);
+  border-radius: 9px;
+  background: rgba(17,103,238,.12);
+  color: #9bc4ff;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.projectCreateButton:hover { background: rgba(17,103,238,.22); color: #fff; }
+
+.projectCreateOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3,18,34,.58);
+  backdrop-filter: blur(4px);
+}
+.projectCreatePanel {
+  width: min(620px,100%);
+  border: 1px solid #cad9e6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(4,24,43,.28);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+.projectCreatePanel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.projectCreatePanel header small { display: block; color: #1765c7; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.projectCreatePanel header strong { display: block; margin-top: 4px; color: #1f344b; font-size: 18px; }
+.projectCreatePanel header span { display: block; margin-top: 5px; color: #718397; font-size: 10px; line-height: 1.45; }
+.projectCreatePanel header button { width: 32px; height: 32px; border: 1px solid #d6e1ea; border-radius: 8px; background: #fff; color: #65798c; display: grid; place-items: center; cursor: pointer; }
+.projectCreatePanel label { color: #53697e; font-size: 9px; font-weight: 900; }
+.projectCreatePanel input,.projectCreatePanel textarea { width: 100%; margin-top: 5px; border: 1px solid #d4e0e9; border-radius: 8px; background: #fbfdff; color: #253c53; padding: 9px 10px; font: inherit; outline: none; }
+.projectCreatePanel input:focus,.projectCreatePanel textarea:focus { border-color: #8bb7ef; box-shadow: 0 0 0 3px rgba(17,103,238,.08); }
+.projectCreateGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.projectPilotHint { border: 1px solid #bad8c5; border-radius: 8px; background: #f1fbf5; color: #35704b; padding: 9px 10px; font-size: 9px; font-weight: 800; }
+.projectCreatePanel footer { display: flex; justify-content: flex-end; gap: 8px; }
+.projectCreatePanel footer button { min-height: 34px; border: 1px solid #d3dfe8; border-radius: 8px; background: #fff; color: #53687b; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 9px; font-weight: 900; cursor: pointer; }
+.projectCreatePanel footer button[type="submit"] { border-color: #0e59dc; background: #1167ee; color: #fff; }
+.projectCreatePanel footer button:disabled { opacity: .5; cursor: not-allowed; }
+.shellNotice { position: relative; z-index: 5; border-bottom: 1px solid #b8ddc8; background: #eefaf3; color: #24683e; padding: 8px 18px; font-size: 10px; font-weight: 800; }
+@media (max-width: 620px) { .projectCreateGrid { grid-template-columns: 1fr; } }

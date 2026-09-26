@@ -3,7 +3,7 @@ import { resolveProjectCoreAuth } from "@/app/lib/project-core/auth";
 import { projectCoreErrorResponse } from "@/app/lib/project-core/api";
 import { createProject, listAccessibleProjects } from "@/app/lib/project-core/store";
 import { normalizeDriveCoreError } from "@/app/lib/drive-core/errors";
-import { provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
+import { DRIVE_PROJECT_PROVISIONING_VERSION, provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
 import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       const normalized = normalizeDriveCoreError(driveError);
       driveProvisioning = {
         ok: false,
-        version: "1.1.0",
+        version: DRIVE_PROJECT_PROVISIONING_VERSION,
         projectId: result.project.id,
         ready: false,
         retryRequired: true,

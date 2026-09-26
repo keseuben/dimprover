@@ -1,10 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   createProjectGateDevAccessToken,
-  isProjectGateDevAccessConfigured,
+  isDriveDevAccessConfigured,
+  isSimpleDevAccessConfigured,
   PROJECT_GATE_DEV_ACCESS_COOKIE,
   projectGateDevAccessCookieOptions,
-  requestHasProjectGateDevAccess,
+  requestHasSimpleDevAccess,
+  verifyDriveDevAccessPassword,
   verifyProjectGateDevAccessCode,
 } from "@/app/lib/project-gate/devAccess";
 
@@ -47,16 +49,16 @@ function rateState(key: string) {
 
 export async function GET(request: NextRequest) {
   const host = hostOf(request);
-  if (!isProjectGateDevAccessConfigured(host)) {
+  if (!isSimpleDevAccessConfigured(host)) {
     return noStore(NextResponse.json({ ok: false, code: "PROJECTKAPU_DEV_ACCESS_DISABLED" }, { status: 404 }));
   }
-  return noStore(NextResponse.json({ ok: true, authenticated: requestHasProjectGateDevAccess(request) }));
+  return noStore(NextResponse.json({ ok: true, authenticated: requestHasSimpleDevAccess(request) }));
 }
 
 export async function POST(request: NextRequest) {
   const host = hostOf(request);
-  if (!isProjectGateDevAccessConfigured(host)) {
-    return noStore(NextResponse.json({ ok: false, error: "Az ideiglenes Projektkapu belépés ezen a hoston nem aktív.", code: "PROJECTKAPU_DEV_ACCESS_DISABLED" }, { status: 404 }));
+  if (!isSimpleDevAccessConfigured(host)) {
+    return noStore(NextResponse.json({ ok: false, error: "Az ideiglenes DIMPRO belépés ezen a hoston nem aktív.", code: "PROJECTKAPU_DEV_ACCESS_DISABLED" }, { status: 404 }));
   }
 
   const key = clientKey(request);
@@ -65,16 +67,27 @@ export async function POST(request: NextRequest) {
     return noStore(NextResponse.json({ ok: false, error: "Túl sok hibás próbálkozás. Próbáld újra később.", code: "PROJECTKAPU_DEV_ACCESS_RATE_LIMITED" }, { status: 429 }));
   }
 
-  const body = await request.json().catch(() => null) as { code?: unknown } | null;
-  if (!verifyProjectGateDevAccessCode(body?.code)) {
+  const body = await request.json().catch(() => null) as { code?: unknown; password?: unknown } | null;
+  const driveMode = isDriveDevAccessConfigured(host);
+  const validCredential = driveMode
+    ? verifyDriveDevAccessPassword(body?.password)
+    : verifyProjectGateDevAccessCode(body?.code);
+  if (!validCredential) {
     state.count += 1;
     attempts.set(key, state);
-    return noStore(NextResponse.json({ ok: false, error: "Hibás belépési kód.", code: "PROJECTKAPU_DEV_ACCESS_CODE_INVALID" }, { status: 401 }));
+    return noStore(NextResponse.json({
+      ok: false,
+      error: driveMode ? "Hibás jelszó." : "Hibás belépési kód.",
+      code: driveMode ? "DRIVE_DEV_PASSWORD_INVALID" : "PROJECTKAPU_DEV_ACCESS_CODE_INVALID",
+    }, { status: 401 }));
   }
 
   attempts.delete(key);
   const session = createProjectGateDevAccessToken();
-  const response = NextResponse.json({ ok: true, next: "/projektkapu/projects" });
+  const response = NextResponse.json({
+    ok: true,
+    next: isDriveDevAccessConfigured(host) ? "/drive" : "/projektkapu/projects",
+  });
   response.cookies.set(
     PROJECT_GATE_DEV_ACCESS_COOKIE,
     session.token,

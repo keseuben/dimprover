@@ -9,6 +9,12 @@ function isProjectGateDevDomain(host: string) {
     && process.env.PROJECTKAPU_DEV_CODE_AUTH_ENABLED?.trim().toLowerCase() === "true";
 }
 
+function isDriveDevDomain(host: string) {
+  const normalizedHost = host.toLowerCase().split(":")[0];
+  const enabled = process.env.DRIVE_DEV_PASSWORD_AUTH_ENABLED?.trim().toLowerCase() === "true";
+  return normalizedHost === "drive.dev.dimpro.hu" && enabled;
+}
+
 function isDimproDomain(host: string) {
   const normalizedHost = host.toLowerCase().split(":")[0];
   return (
@@ -25,6 +31,10 @@ export default async function LoginPage() {
 
   if (isProjectGateDevDomain(host)) {
     return <ProjectGateCodeLogin />;
+  }
+
+  if (isDriveDevDomain(host)) {
+    return <ProjectGateCodeLogin mode="drive" />;
   }
 
   if (isDimproDomain(host)) {
