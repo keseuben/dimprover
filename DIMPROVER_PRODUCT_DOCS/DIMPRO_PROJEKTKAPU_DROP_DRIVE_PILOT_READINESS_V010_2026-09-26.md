@@ -194,7 +194,7 @@ Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
 
 ## 4/A. DEV tárhely – pilot operációs blokk
 
-2026-09-26 aktuális DEV állapot:
+2026-09-26 tárhelynyomáskor mért állapot:
 - filesystem: 118 GiB;
 - használt: kb. 107 GiB;
 - szabad: kb. 4,6 GiB;
@@ -202,7 +202,16 @@ Headless Chromium/Puppeteer böngészős acceptance a tényleges DEV felületen:
 - canonical `preBuildHardMinFreeGiB`: 15 GiB;
 - target free: 30 GiB.
 
-Következmény: **új full build nem indítható biztonságosan**, amíg a szabad hely nincs rendezve.
+Ebben az állapotban új full build nem indulhatott.
+
+OutminAI tárhelyrendezése utáni aktuális állapot:
+- használt: kb. 94 GiB;
+- szabad: kb. 18 GiB;
+- kihasználtság: kb. 85%;
+- a 15 GiB-os pre-build hard minimum teljesül;
+- a Projektkapu full candidate build sikeresen lefutott;
+- build ID: `xGKy6L_yn5eWkUNrkwS-d`;
+- buildelt source commit: `86e9a96bcad79eaad0fc200940574985df7629d4`.
 
 Read-only / dry-run audit:
 - Projektkapu candidate root teljes méret: kb. 8,0 GiB;
@@ -217,8 +226,7 @@ Read-only / dry-run audit:
 - külön dry-run candidate guard potenciális visszanyerése: 3,713 GiB;
 - `--apply` szándékosan nincs implementálva és RC=77 DENY.
 
-A Safe Delete skill és directive SHA-256 ellenőrzése PASS. **Törlés nem történt.**
-A 3,713 GiB potenciális reclaim önmagában sem éri el a 15 GiB pre-build minimumot; a további tárhelykezeléshez külön jóváhagyott retention workflow vagy DEV volumenbővítés szükséges.
+A Safe Delete skill és directive SHA-256 ellenőrzése PASS. A BenjaminAI által készített candidate-retention guard dry-run-only maradt; abból törlés nem történt. A tényleges DEV tárhelyrendezést OutminAI kezelte külön approved cleanup workflow-val.
 
 ## 5. Tudatosan későbbre hagyott elemek
 
@@ -238,4 +246,4 @@ A fő dokumentumforgalmi backend lánc DEV környezetben teljes E2E-vel működi
 
 Beküldőkapu → DROP → S3 → azonnali ClamAV → DRIVE Beérkező Drop → ellenőrzés → ERVENYES → KIADOTT → kontrollált letöltés.
 
-A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A következő fejlesztési munka elsődlegesen a maradék multi-role/mobil/valós szakági acceptance és az operációs tárhely rendezése; új full build addig nem indul.
+A fő backend és az elsődleges DRIVE UI műveletek pilot szinten működnek. A magyar szerepkör-nevek és a külön `document.issue` jogosultság már a publikus DEV candidate-ben aktív. A következő fejlesztési munka elsődlegesen a maradék multi-role/mobil és lejáró Beküldőkapu UI acceptance.

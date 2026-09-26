@@ -1307,3 +1307,30 @@ Ellenőrzés:
 - git diff --check: PASS.
 
 A futó DEV candidate frissítéséhez full build szükséges; a build a DEV tárhely OutminAI általi rendezéséig halasztva. PROD: DENY.
+
+## 2026-09-26 – Magyar szerepkörök + document.issue DEV candidate publish PASS
+
+Buildelt forrás:
+- commit: `86e9a96bcad79eaad0fc200940574985df7629d4`;
+- build ID: `xGKy6L_yn5eWkUNrkwS-d`;
+- compile: PASS;
+- TypeScript: PASS;
+- route generation: PASS;
+- standalone: PASS;
+- 260 statikus chunk ellenőrizve.
+
+DEV publish:
+- PM2: `dimpro-projectkapu-drop-drive-pilot-dev` online;
+- port: `127.0.0.1:3299`;
+- Projektkapu login: HTTP 200;
+- DROP health: HTTP 200;
+- session nélküli projektlista továbbra is login-védett;
+- PROD: DENY.
+
+Buildelt runtime artifact ellenőrzés:
+- `Beruházási projektvezető` jelen van a server/client chunkokban;
+- `Projektvezető`, `Ellenőrző`, `Közreműködő`, `Megtekintő` magyar labelek jelen vannak;
+- `document.issue` külön permission jelen van a buildelt runtime-ban;
+- release metadata pontosan a `86e9a96b...` commitra mutat.
+
+A magyar szerepkör-nevek és a REVIEWER / formális KIADOTT jogosultsági szétválasztás ezzel a publikus DEV candidate-ben aktív.
