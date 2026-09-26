@@ -859,3 +859,67 @@ A DB migration továbbra sincs alkalmazva. Az egyetlen ismert pilot blocker:
 `DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY`.
 
 PROD nem változott.
+
+## 2026-09-26 – DEV migration + teljes DROP → DRIVE E2E PASS
+
+Felhasználói engedéllyel lefutott a DEV adatbázison a következő migration:
+`supabase/DIMPRO_PROJEKTKAPU_DRIVE_DROP_INCOMING_SOURCE_V010_BOOTSTRAP.sql`
+
+Migration forrás SHA-256:
+`bb3c7476aeaf8eb683d3ea0f891d965c25a612ed96fc875576217e1863e1740d`
+
+Migration előtti célzott backup:
+`/srv/dimpro-dev/backups/drive-drop-incoming-source-v010/20260926T084230Z/drive-drop-incoming-source-before.dump`
+
+Backup SHA-256:
+`52e14bc4deacb1192980e71469c80384167049b7d1f85810cc0793e004142568`
+
+Migration eredmény:
+- BEGIN: PASS
+- prerequisite DO: PASS
+- régi `drive_core_upload_source_check` eltávolítás: PASS
+- új constraint létrehozás: PASS
+- schema marker insert/upsert: PASS
+- COMMIT: PASS
+
+Post-migration constraint:
+`source IN (WEB,DESKTOP,DROP,SYSTEM)`
+
+Schema marker:
+`drive-drop-incoming-source | 0.1.0 | 1 | drive-drop-incoming-source-v010-20260926`
+
+### Friss teljes E2E acceptance
+
+Beküldőkapu: `project-7a50edfcae`
+Projekt: `d6-irodaepulet` / D6 Irodaépület
+
+Friss E2E package:
+`fb6d0dfb-423f-4015-9435-285bc3bc6b09`
+
+Folyamat:
+- új publikus gate session: PASS
+- új submission_gate package: PASS
+- robotvédelmi intent: PASS
+- S3 multipart init: PASS
+- direct S3 PUT: PASS
+- part confirm / ETag / SHA-256: PASS
+- upload complete: PASS
+- ClamAV: `clean`
+- finalize: HTTP 200 / PASS
+- DRIVE incoming import: `completed`
+- importált dokumentumok: 1
+
+DRIVE eredmény:
+- folder: `Beérkező Drop`
+- source: `DROP`
+- source_channel: `DROP`
+- document id: `drive-document-c31d1ecd59ea`
+- version id: `drive-version-5e676309f194`
+- technical version status: `QUARANTINED`
+- business status: `ELLENORZES_ALATT`
+- review decision: `PENDING`
+- DROP package provenance megőrizve
+
+Ez az első bizonyított teljes Projektkapu Beküldőkapu → DROP → S3 → vírusellenőrzés → finalize → DRIVE `Beérkező Drop` E2E PASS ezen a pilot ágon.
+
+PROD továbbra is DENY; PROD adatbázis/routing/deploy nem változott.
