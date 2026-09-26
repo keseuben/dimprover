@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
 import {
+  isDriveDevAccessConfigured,
   isProjectGateDevAccessConfigured,
+  requestHasDriveDevAccess,
   requestHasProjectGateDevAccess,
 } from "@/app/lib/project-gate/devAccess";
 
@@ -85,6 +87,8 @@ export async function proxy(request: NextRequest) {
     isProjectGateHost && (pathname === "/kiadas" || pathname === "/projektkapu/kiadas");
   const projectGateDevAccessConfigured = isProjectGateHost && isProjectGateDevAccessConfigured(host);
   const projectGateDevSession = projectGateDevAccessConfigured && requestHasProjectGateDevAccess(request);
+  const driveDevAccessConfigured = isDriveHost && isDriveDevAccessConfigured(host);
+  const driveDevSession = driveDevAccessConfigured && requestHasDriveDevAccess(request);
   const isProjectGateBrandHost = host === "door.dimpro.hu" || host === "www.door.dimpro.hu";
   let projectGateRewriteUrl: URL | null = null;
   const isDropPublicPage =
@@ -233,6 +237,25 @@ export async function proxy(request: NextRequest) {
 
   if (isProjectGateDevAccessApi) {
     return response;
+  }
+
+  if (driveDevAccessConfigured) {
+    if (isLoginPage) {
+      if (driveDevSession) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/drive";
+        url.search = "";
+        return NextResponse.redirect(url, 307);
+      }
+      return response;
+    }
+    if (!driveDevSession && !pathname.startsWith("/api/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.redirect(url, 307);
+    }
+    if (driveDevSession) return response;
   }
 
   if (projectGateDevAccessConfigured) {
