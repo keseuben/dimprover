@@ -216,6 +216,19 @@ export default function FileGridPanel({
           </div>
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
+              <colgroup>
+                <col style={{ width: "300px" }} />
+                <col style={{ width: "110px" }} />
+                <col style={{ width: "150px" }} />
+                <col style={{ width: "90px" }} />
+                <col style={{ width: "90px" }} />
+                <col style={{ width: "100px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "110px" }} />
+                <col style={{ width: "100px" }} />
+                <col style={{ width: "130px" }} />
+                <col style={{ width: "110px" }} />
+              </colgroup>
               <thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead>
               <tbody>
                 {reviewRows.map((row) => (

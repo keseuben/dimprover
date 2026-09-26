@@ -11,7 +11,9 @@ export default async function Home() {
 
   const normalizedHost = host.toLowerCase().replace(/:\d+$/, "");
   const isBenjadminHost = normalizedHost === "admin.dimpro.hu" || normalizedHost === "admin.dev.dimpro.hu" || normalizedHost === "admin.stag.dimpro.hu";
+  const isDriveHost = normalizedHost === "drive.dev.dimpro.hu" || normalizedHost === "drive.dimpro.hu";
 
+  if (isDriveHost) redirect("/drive");
   if (isBenjadminHost) redirect("/admin");
 
   if (host === "dimpro.hu" || host === "www.dimpro.hu") {
