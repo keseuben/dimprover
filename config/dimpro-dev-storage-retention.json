@@ -23,14 +23,14 @@
     "autoPrune": false
   },
   "worktrees": {
-    "reportOnly": false,
+    "reportOnly": true,
     "minInactiveHours": 336,
     "retireRegenerablesAfterHours": 12,
     "requireMergedIntoAnyRef": [
       "integration/benjadmin-dev",
       "feat/benjadmin-operator-ui-v2"
     ],
-    "autoPrune": true,
+    "autoPrune": false,
     "keepNewestPerFamily": 3,
     "backupStatusFile": "/var/log/dimpro-backup/latest-status.env",
     "backupMaxAgeHours": 30,
