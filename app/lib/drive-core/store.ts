@@ -3,6 +3,7 @@ export {
   bootstrapDriveProject,
   createDriveDocument,
   createDriveFolder,
+  setDriveFolderClassification,
   getDriveCoreDatabaseHealth,
   listDriveChanges,
   listDriveTree,

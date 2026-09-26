@@ -38,6 +38,8 @@ export type DriveFolder = {
   name: string;
   path: string;
   sortOrder: number;
+  discipline?: string;
+  topic?: string;
 };
 
 export type DriveVersion = {

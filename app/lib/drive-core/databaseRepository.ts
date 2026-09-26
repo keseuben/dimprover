@@ -20,7 +20,7 @@ import type {
 
 type DbFolder = {
   id: string; project_id: string; parent_id: string | null; name: string; path: string;
-  sort_order: number; status: DriveFolder["status"]; created_by: string; created_at: string; updated_at: string;
+  sort_order: number; discipline?: string | null; topic?: string | null; status: DriveFolder["status"]; created_by: string; created_at: string; updated_at: string;
 };
 type DbDocument = {
   id: string; project_id: string; folder_id: string; name: string; extension: string; mime_type: string;
@@ -95,7 +95,7 @@ function extensionFromName(name: string) {
 function mapFolder(row: DbFolder): DriveFolder {
   return {
     id: row.id, projectId: row.project_id, parentId: row.parent_id, name: row.name, path: row.path,
-    sortOrder: Number(row.sort_order || 0), status: row.status, createdBy: row.created_by,
+    sortOrder: Number(row.sort_order || 0), discipline: row.discipline || "", topic: row.topic || "", status: row.status, createdBy: row.created_by,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -406,4 +406,17 @@ export async function bootstrapDriveProject(projectId: string, actorUserId: stri
   });
   if (error) databaseError("A DRIVE alapmappák létrehozása sikertelen.", error);
   return data as { projectId: string; folders: number; alreadyBootstrapped: boolean };
+}
+
+export async function setDriveFolderClassification(projectId: string, folderId: string, discipline: string, topic: string, actorUserId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client.rpc("drive_core_set_folder_classification", {
+    p_project_id: projectId,
+    p_folder_id: folderId,
+    p_discipline: normalizeText(discipline),
+    p_topic: normalizeText(topic),
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A DRIVE mappa besorolása nem menthető.", error);
+  return { ok: true as const, folder: mapFolder(data as DbFolder) };
 }
