@@ -18,7 +18,8 @@ const check=(label,fn)=>{fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")
 check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.80"));
 check("backend version v0.1.75-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.80-dev"/));
 check("hard minimum remains 15 GiB",()=>assert.equal(config.preBuildHardMinFreeGiB,15));
-check("remote build reserve is 3 GiB",()=>assert.equal(operationReserveGiB(config,"remote-build"),3));
+check("remote FULL BUILD dispatch reserves only DEV-side transfer space",()=>assert.equal(operationReserveGiB(config,"remote-build"),1));
+check("local small build fallback keeps larger DEV reserve",()=>assert.equal(operationReserveGiB(config,"local-small-build"),3));
 check("windows package reserve is 1 GiB",()=>assert.equal(operationReserveGiB(config,"windows-package"),1));
 check("runtime admission allows at most three online candidates",()=>{
   assert.equal(config.developerGridAdmission.maxOnlineRuntimeCandidatesBeforeBuild,3);
@@ -26,11 +27,16 @@ check("runtime admission allows at most three online candidates",()=>{
   const blocked=evaluateRuntimeRetention({onlineCount:4,maxOnline:3});
   assert.equal(blocked.ok,false); assert.equal(blocked.reason,"RUNTIME_RETENTION_LIMIT");
 });
-check("remote build requires 18 GiB free before admission",()=>{
-  const ok=evaluateStorageAdmission({freeBytes:18*GiB,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:3,emergencyUsedPercent:90});
-  const blocked=evaluateStorageAdmission({freeBytes:18*GiB-1,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:3,emergencyUsedPercent:90});
+check("remote build dispatch requires 16 GiB free before admission",()=>{
+  const ok=evaluateStorageAdmission({freeBytes:16*GiB,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:1,emergencyUsedPercent:90});
+  const blocked=evaluateStorageAdmission({freeBytes:16*GiB-1,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:1,emergencyUsedPercent:90});
   assert.equal(ok.ok,true); assert.equal(ok.projectedFreeBytes,15*GiB);
   assert.equal(blocked.ok,false); assert.ok(blocked.reasons.includes("PROJECTED_FREE_BELOW_HARD_MIN"));
+});
+check("local small build requires 18 GiB free before admission",()=>{
+  const ok=evaluateStorageAdmission({freeBytes:18*GiB,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:3,emergencyUsedPercent:90});
+  const blocked=evaluateStorageAdmission({freeBytes:18*GiB-1,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:3,emergencyUsedPercent:90});
+  assert.equal(ok.ok,true); assert.equal(blocked.ok,false);
 });
 check("windows package requires 16 GiB free before admission",()=>{
   const ok=evaluateStorageAdmission({freeBytes:16*GiB,totalBytes:100*GiB,hardMinGiB:15,reserveGiB:1,emergencyUsedPercent:90});
