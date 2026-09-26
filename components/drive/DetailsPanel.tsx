@@ -41,6 +41,7 @@ type Props = {
   focusTab?: "details" | "review" | "versions" | "notes";
   inheritedDiscipline?: string;
   inheritedTopic?: string;
+  reviewFocus?: string;
 };
 
 const emptyMetadata: MetadataForm = {
@@ -78,12 +79,14 @@ export default function DetailsPanel({
   focusTab,
   inheritedDiscipline = "",
   inheritedTopic = "",
+  reviewFocus = "",
 }: Props) {
   const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
   const [note, setNote] = useState("");
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
+  useEffect(() => { if (!reviewFocus || tab !== "review") return; const element = document?.id ? window.document.getElementById("drive-review-" + document.id + "-" + reviewFocus) : null; element?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [document?.id, reviewFocus, tab]);
 
   useEffect(() => {
     const source = details?.metadata;
@@ -213,7 +216,7 @@ export default function DetailsPanel({
               ["Megrendelő", details?.metadata?.extra?.customerApproval ?? details?.metadata?.extra?.clientApproval],
               ["Megrendelői megjegyzés", details?.metadata?.extra?.customerNote ?? details?.metadata?.extra?.clientNote],
               ["Revízióváltozás", details?.metadata?.extra?.revisionChange ?? details?.metadata?.extra?.change],
-            ].map(([label, value]) => <div className={styles.infoBox} key={String(label)}><strong>{String(label)}</strong><br />{value ? String(value) : "—"}</div>)}
+            ].map(([label, value], index) => { const keys = ["checked", "result", "observations", "workflow", "internal", "customer", "customer-note", "revision"]; const key = keys[index]; return <div id={"drive-review-" + document.id + "-" + key} className={styles.infoBox} key={String(label)} data-review-focused={reviewFocus === key ? "true" : undefined}><strong>{String(label)}</strong><br />{value ? String(value) : "—"}</div>; })}
           </div>
         ) : tab === "versions" ? (
           <div className={styles.versionList}>
