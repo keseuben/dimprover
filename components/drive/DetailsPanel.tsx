@@ -36,6 +36,7 @@ type Props = {
   onEnsureQr: () => Promise<void>;
   onDownload: () => Promise<void>;
   responsiveClassName?: string;
+  focusTab?: "details" | "review" | "versions" | "notes";
 };
 
 const emptyMetadata: MetadataForm = {
@@ -68,10 +69,13 @@ export default function DetailsPanel({
   onEnsureQr,
   onDownload,
   responsiveClassName = "",
+  focusTab,
 }: Props) {
-  const [tab, setTab] = useState<"details" | "versions" | "notes">("details");
+  const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
   const [note, setNote] = useState("");
+
+  useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
 
   useEffect(() => {
     const source = details?.metadata;
@@ -113,6 +117,7 @@ export default function DetailsPanel({
 
       <div className={styles.detailsTabs}>
         <button type="button" className={tab === "details" ? styles.detailsTabActive : ""} onClick={() => setTab("details")}>Részletek</button>
+        <button type="button" className={tab === "review" ? styles.detailsTabActive : ""} onClick={() => setTab("review")}>Tervellenőrzés</button>
         <button type="button" className={tab === "versions" ? styles.detailsTabActive : ""} onClick={() => setTab("versions")}>Verziók ({details?.versions.length || 0})</button>
         <button type="button" className={tab === "notes" ? styles.detailsTabActive : ""} onClick={() => setTab("notes")}>Megjegyzések</button>
       </div>
@@ -182,6 +187,19 @@ export default function DetailsPanel({
             </div>
             {activeQr && <div className={styles.infoBox}>QR azonosító aktív. A publikus QR feloldó oldal és vizuális QR-kép későbbi vertikális szeletben kapcsolódik hozzá.</div>}
           </>
+        ) : tab === "review" ? (
+          <div className={styles.versionList}>
+            {[
+              ["Ellenőrzés", details?.metadata?.extra?.reviewChecked ?? details?.metadata?.extra?.hageChecked],
+              ["Eredmény", details?.metadata?.extra?.reviewResult ?? details?.metadata?.extra?.hageResult],
+              ["Észrevételek", details?.metadata?.extra?.reviewObservations ?? details?.metadata?.extra?.hageObservations],
+              ["Workflow állapot", details?.metadata?.extra?.workflowStatus ?? details?.metadata?.approvalStatus],
+              ["Belső megjegyzés", details?.metadata?.extra?.internalNote ?? details?.metadata?.extra?.hageNote],
+              ["Megrendelő", details?.metadata?.extra?.customerApproval ?? details?.metadata?.extra?.clientApproval],
+              ["Megrendelői megjegyzés", details?.metadata?.extra?.customerNote ?? details?.metadata?.extra?.clientNote],
+              ["Revízióváltozás", details?.metadata?.extra?.revisionChange ?? details?.metadata?.extra?.change],
+            ].map(([label, value]) => <div className={styles.infoBox} key={String(label)}><strong>{String(label)}</strong><br />{value ? String(value) : "—"}</div>)}
+          </div>
         ) : tab === "versions" ? (
           <div className={styles.versionList}>
             {(details?.versions || []).map((version) => (
