@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { File, FileSpreadsheet, FileText, RefreshCw } from "lucide-react";
+import { File, FileSpreadsheet, FileText, FolderUp, RefreshCw } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -17,6 +17,8 @@ type Props = {
   boxColorsByDocument?: Record<string, string[]>;
   metadataByDocument?: Record<string, DriveEngineeringMetadata>;
   folders?: DriveFolder[];
+  currentFolder?: DriveFolder | null;
+  onNavigateParent?: () => void;
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
 };
 
@@ -107,6 +109,8 @@ export default function FileGridPanel({
   boxColorsByDocument = {},
   metadataByDocument = {},
   folders = [],
+  currentFolder = null,
+  onNavigateParent,
   onOpenReviewDetail,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
@@ -225,6 +229,7 @@ export default function FileGridPanel({
               <colgroup>
                 <col style={{ width: "250px" }} />
                 <col style={{ width: "260px" }} />
+                <col style={{ width: "58px" }} />
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "120px" }} />
                 <col style={{ width: "70px" }} />
@@ -236,8 +241,19 @@ export default function FileGridPanel({
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "80px" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Fájlnév</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
+              <thead><tr><th>Név</th><th>Fájlnév</th><th>Típus</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
               <tbody>
+                {currentFolder && onNavigateParent && (
+                  <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
+                    <td colSpan={13}>
+                      <div className={styles.folderUpCell}>
+                        <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
+                        <strong>[..]</strong>
+                        <span>{currentFolder.parentId ? "Szülőmappa" : "Dokumentumtár"}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {reviewRows.map((row) => (
                   <tr key={row.document.id}>
                     <td>
@@ -251,6 +267,11 @@ export default function FileGridPanel({
                       </button>
                     </td>
                     <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
+                    <td>
+                      <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
+                        <FileKindIcon extension={row.document.extension} />
+                      </span>
+                    </td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
@@ -277,6 +298,17 @@ export default function FileGridPanel({
               </colgroup>
               <thead><tr><th>Név</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
+                {currentFolder && onNavigateParent && (
+                  <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
+                    <td colSpan={8}>
+                      <div className={styles.folderUpCell}>
+                        <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
+                        <strong>[..]</strong>
+                        <span>{currentFolder.parentId ? "Szülőmappa" : "Dokumentumtár"}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
@@ -303,6 +335,17 @@ export default function FileGridPanel({
               </colgroup>
               <thead><tr><th>Név</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
+                {currentFolder && onNavigateParent && (
+                  <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
+                    <td colSpan={9}>
+                      <div className={styles.folderUpCell}>
+                        <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
+                        <strong>[..]</strong>
+                        <span>{currentFolder.parentId ? "Szülőmappa" : "Dokumentumtár"}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;

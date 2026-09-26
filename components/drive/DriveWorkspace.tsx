@@ -78,7 +78,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [reviewFocus, setReviewFocus] = useState("");
-  const [boxShelfOpen, setBoxShelfOpen] = useState(true);
+  const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -700,6 +700,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               boxColorsByDocument={boxColorsByDocument}
               metadataByDocument={metadataByDocument}
               folders={tree?.folders || []}
+              currentFolder={selectedFolder}
+              onNavigateParent={() => {
+                if (!selectedFolder) return;
+                setSelectedDocumentId("");
+                setSelectedFolderId(selectedFolder.parentId || "all");
+              }}
               onOpenReviewDetail={openReviewDetail}
             />
             <DetailsPanel
