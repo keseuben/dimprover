@@ -217,7 +217,7 @@ export async function createDriveIssueAccessLinks(input: {
     expiresAt,
     links: recipients.map((recipient) => {
       const token = encodeToken(recipient.id, expiresAtSeconds);
-      const url = new URL("/api/drive/public/issue-download", origin);
+      const url = new URL("/kiadas", origin);
       url.searchParams.set("token", token);
       return {
         recipientId: recipient.id,
@@ -299,15 +299,50 @@ async function getRecipientContext(recipientId: string) {
   return { client, recipient, issue, version, document };
 }
 
+function assertRecipientAccessExpiry(
+  accessExpiresAt: string | null,
+  tokenExpiresAtSeconds: number,
+) {
+  const configuredExpiry = accessExpiresAt ? new Date(accessExpiresAt).getTime() : 0;
+  const tokenExpiry = tokenExpiresAtSeconds * 1000;
+  if (!configuredExpiry || configuredExpiry <= Date.now() || tokenExpiry <= Date.now()) {
+    throw new DriveCoreRepositoryError(
+      "A kiadási hozzáférési link lejárt.",
+      "DRIVE_ISSUE_ACCESS_TOKEN_EXPIRED",
+      410,
+    );
+  }
+  return new Date(Math.min(configuredExpiry, tokenExpiry)).toISOString();
+}
+
+export async function inspectDriveIssueAccess(token: string) {
+  const verified = decodeToken(token);
+  const context = await getRecipientContext(verified.recipientId);
+  const expiresAt = assertRecipientAccessExpiry(
+    context.recipient.access_expires_at,
+    verified.expiresAtSeconds,
+  );
+  return {
+    issueNumber: context.issue.issue_number,
+    issuedAt: context.issue.issued_at,
+    documentName: context.document.name || context.version.original_name,
+    mimeType: context.version.mime_type,
+    recipientId: context.recipient.id,
+    recipientName: context.recipient.name || "",
+    recipientEmail: context.recipient.email,
+    recipientOrganization: context.recipient.organization || "",
+    expiresAt,
+    downloadedAt: context.recipient.downloaded_at,
+  };
+}
+
 export async function resolveDriveIssueAccessDownload(token: string) {
   const verified = decodeToken(token);
   const context = await getRecipientContext(verified.recipientId);
-  const configuredExpiry = context.recipient.access_expires_at
-    ? new Date(context.recipient.access_expires_at).getTime()
-    : 0;
-  if (!configuredExpiry || configuredExpiry <= Date.now()) {
-    throw new DriveCoreRepositoryError("A kiadási hozzáférési link lejárt.", "DRIVE_ISSUE_ACCESS_TOKEN_EXPIRED", 410);
-  }
+  assertRecipientAccessExpiry(
+    context.recipient.access_expires_at,
+    verified.expiresAtSeconds,
+  );
 
   const signed = await createDriveSignedGetUrl({
     storageKey: context.version.storage_key!,

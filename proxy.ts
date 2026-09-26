@@ -80,6 +80,8 @@ export async function proxy(request: NextRequest) {
   const isDropInternalWorkerApi = isLocalInternalHost && pathname === "/api/drop/worker/run";
   const isProjectGateHost = host === "projektkapu.dimpro.hu" || host === "www.projektkapu.dimpro.hu" || host === "projektkapu.dev.dimpro.hu";
   const isProjectGateDevAccessApi = pathname === "/api/project-gate/dev-access/session";
+  const isProjectGatePublicIssuePage =
+    isProjectGateHost && (pathname === "/kiadas" || pathname === "/projektkapu/kiadas");
   const projectGateDevAccessConfigured = isProjectGateHost && isProjectGateDevAccessConfigured(host);
   const projectGateDevSession = projectGateDevAccessConfigured && requestHasProjectGateDevAccess(request);
   const isProjectGateBrandHost = host === "door.dimpro.hu" || host === "www.door.dimpro.hu";
@@ -196,6 +198,15 @@ export async function proxy(request: NextRequest) {
     url.hostname = "projektkapu.dimpro.hu";
     url.port = "";
     return NextResponse.redirect(url, 301);
+  }
+
+  if (isProjectGatePublicIssuePage) {
+    if (pathname === "/kiadas") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/projektkapu/kiadas";
+      return NextResponse.rewrite(url);
+    }
+    return response;
   }
 
   if (isProjectGateHost && pathname === "/account/modules") {

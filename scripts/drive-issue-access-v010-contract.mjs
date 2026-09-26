@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const access=readFileSync("app/lib/drive-core/issueAccess.ts","utf8");
 const route=readFileSync("app/api/drive/public/issue-download/route.ts","utf8");
+const landing=readFileSync("app/projektkapu/kiadas/page.tsx","utf8");
 const issueRoute=readFileSync("app/api/projects/[projectId]/drive/documents/[documentId]/versions/[versionId]/issue/route.ts","utf8");
 const accessRoute=readFileSync("app/api/projects/[projectId]/drive/issues/[issueId]/access-links/route.ts","utf8");
 const ui=readFileSync("components/project-gate/DriveWorkspace.tsx","utf8");
@@ -22,6 +23,9 @@ check("download audit uses existing document_version entity type",()=>assert.mat
 check("public route returns fresh signed redirect with no-referrer",()=>assert.match(route,/NextResponse\.redirect\(resolved\.url, 307\)/)&&assert.match(route,/referrer-policy/));
 check("issue route does not undo a successful issue when link generation fails",()=>assert.match(issueRoute,/accessLinkError/)&&assert.match(issueRoute,/ok: true/));
 check("issue route returns access links",()=>assert.match(issueRoute,/accessLinks/)&&assert.match(issueRoute,/accessExpiresAt/));
+check("generated recipient links use human landing page",()=>assert.match(access,/new URL\("\/kiadas", origin\)/)&&assert.doesNotMatch(access,/new URL\("\/api\/drive\/public\/issue-download", origin\)/));
+check("landing inspect does not mark download",()=>assert.match(access,/export async function inspectDriveIssueAccess/)&&assert.match(landing,/inspectDriveIssueAccess/)&&assert.match(landing,/Dokumentum letöltése/));
+check("landing page explains expired and inactive links",()=>assert.match(landing,/A hivatkozás lejárt/)&&assert.match(landing,/A dokumentumkiadás már nem aktív/));
 check("issued documents can regenerate access links through permission-guarded API",()=>assert.match(accessRoute,/requireProjectPermission/)&&assert.match(accessRoute,/document\.approve/)&&assert.match(accessRoute,/createDriveIssueAccessLinks/));
 check("Drive UI renders, copies and regenerates recipient links",()=>assert.match(ui,/data-drive-issue-access="0\.1\.0"/)&&assert.match(ui,/copyIssueAccessLink/)&&assert.match(ui,/loadIssueAccessLinks/)&&assert.match(ui,/Link másolása/)&&assert.match(ui,/Link2/));
 check("public drive API remains proxy-public but token-guarded in route",()=>assert.match(proxy,/pathname\.startsWith\("\/api\/drive\/"\)/)&&assert.match(route,/resolveDriveIssueAccessDownload/));
