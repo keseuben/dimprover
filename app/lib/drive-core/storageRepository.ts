@@ -283,6 +283,20 @@ export async function createDriveUploadSessionRecord(input: DriveUploadSession, 
     p_actor_user_id: actorUserId,
   });
   if (error) {
+    const marker = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toUpperCase();
+    if (marker.includes("DRIVE_CORE_VERSION_CONFLICT")) {
+      throw new DriveCoreRepositoryError(
+        "A dokumentum közben újabb verziót kapott. Frissítsd a dokumentumlistát, majd indítsd újra a feltöltést.",
+        "DRIVE_CORE_VERSION_CONFLICT",
+        409,
+      );
+    }
+    if (marker.includes("DRIVE_CORE_DOCUMENT_NOT_FOUND")) {
+      throw new DriveCoreRepositoryError("A dokumentum nem található vagy már nem aktív.", "DRIVE_CORE_DOCUMENT_NOT_FOUND", 404);
+    }
+    if (marker.includes("DRIVE_CORE_FOLDER_NOT_FOUND")) {
+      throw new DriveCoreRepositoryError("A célmappa nem található vagy már nem aktív.", "DRIVE_CORE_FOLDER_NOT_FOUND", 404);
+    }
     if (error.code === "23505") {
       throw new DriveCoreRepositoryError("Ehhez a célhoz már létezik aktív feltöltési munkamenet.", "DRIVE_UPLOAD_SESSION_CONFLICT", 409);
     }
