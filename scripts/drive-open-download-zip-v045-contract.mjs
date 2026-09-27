@@ -10,6 +10,7 @@ const details = readFileSync('components/drive/DetailsPanel.tsx', 'utf8');
 const viewer = readFileSync('components/drive/DriveDocumentViewer.tsx', 'utf8');
 const projectGate = readFileSync('components/project-gate/DriveWorkspace.tsx', 'utf8');
 const storage = readFileSync('app/lib/drive-core/storageService.ts', 'utf8');
+const storageRepository = readFileSync('app/lib/drive-core/storageRepository.ts', 'utf8');
 const securityRepo = readFileSync('app/lib/drive-core/securityScanRepository.ts', 'utf8');
 const zipService = readFileSync('app/lib/drive-core/folderDownloadService.ts', 'utf8');
 const zipRoute = readFileSync('app/api/projects/[projectId]/drive/folders/[folderId]/download/route.ts', 'utf8');
@@ -40,6 +41,7 @@ check('folder ZIP writes a manifest', () => assert.match(zipService, /DIMPRO_faj
 check('folder ZIP service is exported from store', () => assert.match(store, /openDriveFolderZip/));
 check('CLEAN quarantined file can reach signed download path', () => assert.match(storage, /status === "AVAILABLE" \|\| record\.version\.status === "QUARANTINED"/));
 check('individual download still requires a clean security scan', () => assert.match(storage, /await requireDriveCleanSecurityScan/));
+check('CLEAN quarantined download has audited fallback path', () => { assert.match(storageRepository, /logCleanQuarantinedDriveDownload/); assert.match(storageRepository, /scan\.status !== "CLEAN"/); assert.match(storageRepository, /quarantinedClean: true/); });
 check('details allows non-rejected quarantined download attempt', () => assert.match(details, /\["REJECTED", "STAGED", "METADATA_ONLY"\]\.includes/));
 check('ordinary Drive UI hides ClamAV branding', () => {
   for (const [name, source] of [['workspace',workspace],['details',details],['viewer',viewer],['projectGate',projectGate]]) {

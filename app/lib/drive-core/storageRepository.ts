@@ -651,6 +651,75 @@ export async function getDriveDownloadVersionRecord(input: {
   };
 }
 
+async function logCleanQuarantinedDriveDownload(
+  client: SupabaseClient,
+  input: { projectId: string; documentId: string; versionId: string; actorUserId: string; clientId?: string | null },
+) {
+  const versionResult = await client
+    .from("drive_core_document_versions")
+    .select("id,project_id,document_id,version_number,sha256,status")
+    .eq("project_id", input.projectId)
+    .eq("document_id", input.documentId)
+    .eq("id", input.versionId)
+    .maybeSingle();
+  if (versionResult.error) databaseError("A DRIVE karanténverzió auditellenőrzése sikertelen.", versionResult.error);
+  const version = versionResult.data as { id: string; version_number: number; sha256: string | null; status: string } | null;
+  if (!version || version.status !== "QUARANTINED") {
+    throw new DriveCoreRepositoryError(
+      "Ez a dokumentumverzió még nem tölthető le a privát DRIVE tárhelyről.",
+      "DRIVE_DOWNLOAD_NOT_AVAILABLE",
+      409,
+    );
+  }
+
+  const sessionResult = await client
+    .from("drive_core_upload_sessions")
+    .select("id,metadata")
+    .eq("project_id", input.projectId)
+    .eq("finalized_version_id", input.versionId)
+    .eq("status", "FINALIZED")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (sessionResult.error) databaseError("A DRIVE biztonsági ellenőrzési auditadata nem tölthető be.", sessionResult.error);
+  const metadata = (sessionResult.data?.metadata || {}) as Record<string, unknown>;
+  const scan = (metadata.driveSecurityScan || {}) as { status?: string; sha256?: string | null };
+  const versionSha = (version.sha256 || "").toLowerCase();
+  const scanSha = (scan.sha256 || "").toLowerCase();
+  if (scan.status !== "CLEAN" || !versionSha || !scanSha || versionSha !== scanSha) {
+    throw new DriveCoreRepositoryError(
+      "A dokumentumverzió csak sikeres biztonsági ellenőrzés után tölthető le.",
+      "DRIVE_REVIEW_SECURITY_SCAN_REQUIRED",
+      409,
+    );
+  }
+
+  const auditId = `project-audit-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  const auditResult = await client
+    .from("project_core_audit_events")
+    .insert({
+      id: auditId,
+      project_id: input.projectId,
+      actor_user_id: input.actorUserId,
+      event_type: "DRIVE_DOCUMENT_DOWNLOADED",
+      entity_type: "document_version",
+      entity_id: input.versionId,
+      summary: `DRIVE biztonságilag ellenőrzött dokumentum letöltési link kiadva · V${Number(version.version_number || 0)}`,
+      metadata: {
+        documentId: input.documentId,
+        versionId: input.versionId,
+        version: Number(version.version_number || 0),
+        clientId: input.clientId || null,
+        signedUrlIssued: true,
+        quarantinedClean: true,
+      },
+    })
+    .select("*")
+    .single();
+  if (auditResult.error) databaseError("A DRIVE karanténletöltési auditnapló rögzítése sikertelen.", auditResult.error);
+  return auditResult.data as Record<string, unknown>;
+}
+
 export async function logDriveDownloadRecord(input: {
   projectId: string;
   documentId: string;
@@ -666,6 +735,10 @@ export async function logDriveDownloadRecord(input: {
     p_actor_user_id: input.actorUserId,
     p_client_id: input.clientId || null,
   });
-  if (error) databaseError("A DRIVE letöltési auditnapló rögzítése sikertelen.", error);
+  if (error) {
+    const candidate = error as { code?: string } | null;
+    if (candidate?.code === "P0001") return logCleanQuarantinedDriveDownload(client, input);
+    databaseError("A DRIVE letöltési auditnapló rögzítése sikertelen.", error);
+  }
   return data as Record<string, unknown>;
 }
