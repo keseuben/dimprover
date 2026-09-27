@@ -183,19 +183,47 @@ function lifecycleRowClass(metadata: DriveEngineeringMetadata | undefined) {
   return "";
 }
 
-function ReviewStateIcons({ metadata }: { metadata?: DriveEngineeringMetadata }) {
+function approvalFocus(kind: ReturnType<typeof approvalVisual>["kind"]) {
+  if (kind === "investor") return "investor-project-manager";
+  if (kind === "manager") return "project-manager";
+  if (kind === "customer") return "customer";
+  if (kind === "returned") return "result";
+  return "workflow";
+}
+
+function ReviewStateIcons({
+  metadata,
+  onApprovalClick,
+  onLifecycleClick,
+}: {
+  metadata?: DriveEngineeringMetadata;
+  onApprovalClick?: () => void;
+  onLifecycleClick?: () => void;
+}) {
   const approval = approvalVisual(metadata);
   const lifecycle = lifecycleVisual(metadata);
   const ApprovalIcon = approval.Icon;
   const LifecycleIcon = lifecycle.Icon;
   return (
     <span className={styles.reviewStateIcons} aria-label={approval.title + "; " + lifecycle.title}>
-      <span className={styles.reviewApprovalIcon + " " + styles["reviewApproval_" + approval.kind]} title={approval.title}>
+      <button
+        type="button"
+        className={styles.reviewStateButton + " " + styles.reviewApprovalIcon + " " + styles["reviewApproval_" + approval.kind]}
+        title={approval.title + (onApprovalClick ? " – kattints a részletekhez" : "")}
+        onClick={(event) => { event.stopPropagation(); onApprovalClick?.(); }}
+        aria-label={approval.title}
+      >
         <ApprovalIcon size={12} />
-      </span>
-      <span className={styles.reviewLifecycleIcon + " " + styles["reviewLifecycle_" + lifecycle.kind]} title={lifecycle.title}>
+      </button>
+      <button
+        type="button"
+        className={styles.reviewStateButton + " " + styles.reviewLifecycleIcon + " " + styles["reviewLifecycle_" + lifecycle.kind]}
+        title={lifecycle.title + (onLifecycleClick ? " – kattints a részletekhez" : "")}
+        onClick={(event) => { event.stopPropagation(); onLifecycleClick?.(); }}
+        aria-label={lifecycle.title}
+      >
         <LifecycleIcon size={11} />
-      </span>
+      </button>
     </span>
   );
 }
@@ -417,6 +445,18 @@ export default function FileGridPanel({
         <span className={styles.fileFolderPath}>{currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
       </div>
 
+      <div className={styles.fileStatusLegend} aria-label="Tervállapot jelmagyarázat">
+        <span className={styles.fileStatusLegendTitle}>Tervállapot</span>
+        <span><i className={styles.legendSwatchPending} /> ellenőrzésre vár</span>
+        <span><i className={styles.legendSwatchReview} /> ellenőrzés alatt</span>
+        <span><i className={styles.legendSwatchReturned} /> visszaadva</span>
+        <span><i className={styles.legendSwatchApproved} /> jóváhagyási szint</span>
+        <span className={styles.fileStatusLegendDivider}>|</span>
+        <span><i className={styles.legendRowCurrent} /> aktuális</span>
+        <span><i className={styles.legendRowApproved} /> jóváhagyott aktuális</span>
+        <span><i className={styles.legendRowArchive} /> archív</span>
+      </div>
+
       {viewMode === "review" ? (
         <div className={styles.reviewHost}>
           <header className={styles.reviewHeader}>
@@ -528,7 +568,11 @@ export default function FileGridPanel({
                     </td>
                     <td>
                       <div className={styles.fileNameCell}>
-                        <ReviewStateIcons metadata={metadataByDocument[row.document.id]} />
+                        <ReviewStateIcons
+                          metadata={metadataByDocument[row.document.id]}
+                          onApprovalClick={() => openDetail(row.document, approvalFocus(approvalVisual(metadataByDocument[row.document.id]).kind))}
+                          onLifecycleClick={() => openDetail(row.document, "lifecycle")}
+                        />
                         <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
                           <FileKindIcon extension={row.document.extension} />
                         </span>
@@ -589,7 +633,7 @@ export default function FileGridPanel({
                   const displayName = displayDocumentName(document, metadata);
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
@@ -629,7 +673,7 @@ export default function FileGridPanel({
                   const displayName = displayDocumentName(document, metadata);
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>

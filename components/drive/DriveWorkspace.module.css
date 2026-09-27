@@ -1298,6 +1298,44 @@
   gap: 3px;
   flex: 0 0 auto;
 }
+.reviewStateButton {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.reviewStateButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(18, 62, 100, .18);
+}
+.reviewStateButton:focus-visible {
+  outline: 2px solid #1765d7;
+  outline-offset: 2px;
+}
+.fileStatusLegend {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 10px;
+  border-bottom: 1px solid #e7edf3;
+  background: #fcfdff;
+  color: #667b90;
+  font-size: var(--drive-font-xs);
+}
+.fileStatusLegendTitle { color: #36516d; font-weight: 900; }
+.fileStatusLegend > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fileStatusLegendDivider { color: #c7d1db; }
+.fileStatusLegend i { width: 11px; height: 11px; display: inline-block; border: 1px solid transparent; border-radius: 3px; }
+.legendSwatchPending { background: #eef2f6; border-color: #d7e0e8 !important; }
+.legendSwatchReview { background: #e8f2ff; border-color: #bdd8fb !important; }
+.legendSwatchReturned { background: #fff3e3; border-color: #f3cf9d !important; }
+.legendSwatchApproved { background: #e9f8ef; border-color: #bee7cc !important; }
+.legendRowCurrent { width: 20px !important; background: #eef6ff; border-color: #c6ddf8 !important; }
+.legendRowApproved { width: 20px !important; background: #edf9f1; border-color: #c7e9d2 !important; }
+.legendRowArchive { width: 20px !important; background: #f1f3f5; border-color: #d9dde1 !important; }
 .reviewApprovalIcon,
 .reviewLifecycleIcon {
   width: 19px;
