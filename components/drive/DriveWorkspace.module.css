@@ -149,7 +149,9 @@
 .searchBox { min-width: 180px; max-width: 340px; flex: 1 1 260px; height: 34px; border: 1px solid #d6e0e8; border-radius: 8px; background: #fbfdff; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: #718397; }
 .searchBox input { width: 100%; border: 0; background: transparent; outline: 0; font-size: var(--drive-font-sm); color: #23364d; }
 
-.workspaceWrap { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.workspaceWrap { min-height: 0; flex: 1; display: flex; flex-direction: column; transition: padding-bottom 160ms ease; }
+.workspaceWrapShelfCollapsed { padding-bottom: 38px; }
+.workspaceWrapShelfOpen { padding-bottom: 190px; }
 .breadcrumb { min-height: 40px; background: white; border-bottom: 1px solid #edf1f5; display: flex; align-items: center; gap: 7px; padding: 0 18px; color: #64758a; font-size: var(--drive-font-sm); }
 .breadcrumb strong { color: #1167ee; }
 
@@ -277,8 +279,30 @@
 .dropWrap:hover .dropDescription { display: block; }
 .dropDescription strong { display: block; color: #1c765e; margin-bottom: 4px; }
 
-.boxShelf { min-height: 158px; background: white; border-top: 1px solid var(--line); padding: 10px 16px 14px; }
-.boxShelfCollapsed { min-height: 38px; padding-bottom: 8px; }
+.boxShelf {
+  position: fixed;
+  left: var(--rail-width);
+  right: 0;
+  bottom: 0;
+  z-index: 34;
+  height: 190px;
+  max-height: 38vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: white;
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(31, 52, 73, .10);
+  padding: 10px 16px 14px;
+  transition: height 160ms ease, padding 160ms ease, box-shadow 160ms ease;
+}
+.boxShelfCollapsed {
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  overflow: hidden;
+  padding: 7px 16px 6px;
+  box-shadow: 0 -3px 10px rgba(31, 52, 73, .07);
+}
 .boxShelfHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .boxShelfTitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .boxShelfTitle strong { font-size: var(--drive-font-sm); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
@@ -376,7 +400,9 @@
   .searchBox { flex-basis: 180px; min-width: 160px; }
   .browser,.layoutTwo { grid-template-columns: minmax(0,1fr); }
   .detailsResponsive { display: none !important; }
-  .boxShelf { min-height: 132px; }
+  .workspaceWrapShelfOpen { padding-bottom: 170px; }
+  .boxShelf { height: 170px; max-height: 42vh; }
+  .boxShelfCollapsed { height: 38px; min-height: 38px; max-height: 38px; }
   .boxCard { min-width: 170px; }
   .boxComposerBody { grid-template-columns: 1fr; }
   .boxComposerCreate { justify-self: start; }

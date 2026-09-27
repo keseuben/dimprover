@@ -643,7 +643,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const breadcrumbParts = selectedFolder?.path.split("/").filter(Boolean) || [];
 
   return (
-    <div className={styles.workspaceWrap}>
+    <div className={`${styles.workspaceWrap} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}>
       <header className={styles.projectHeader}>
         <div className={styles.projectIdentity}>
           <div className={styles.projectIcon}><Building2 size={18} /></div>
