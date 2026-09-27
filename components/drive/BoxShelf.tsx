@@ -14,7 +14,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { DriveBox, DriveBoxPurpose, DriveDocument } from "./driveTypes";
+import type { DriveBox, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
 type NewBoxInput = {
@@ -30,6 +30,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   boxes: DriveBox[];
   documents: DriveDocument[];
+  metadataByDocument: Record<string, DriveEngineeringMetadata>;
   selectedDocument: DriveDocument | null;
   canWrite: boolean;
   databaseReady: boolean;
@@ -55,6 +56,21 @@ const purposeConfig: Record<DriveBoxPurpose, {
   MEETING: { label: "Értekezleti csomag", description: "Kooperációhoz kapcsolt dokumentumok", colorToken: "cyan", iconKey: "meeting", icon: Users },
 };
 
+function fileNameWithoutExtension(name: string) {
+  const index = name.lastIndexOf(".");
+  return index > 0 ? name.slice(0, index) : name;
+}
+
+function boxDisplayName(document: DriveDocument, metadata?: DriveEngineeringMetadata) {
+  const extra = metadata?.extra || {};
+  const explicit = typeof extra.planTitle === "string" && extra.planTitle.trim()
+    ? extra.planTitle.trim()
+    : typeof extra.drawingTitle === "string" && extra.drawingTitle.trim()
+      ? extra.drawingTitle.trim()
+      : "";
+  return explicit || fileNameWithoutExtension(document.name);
+}
+
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0 B";
   if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
@@ -79,6 +95,7 @@ export default function BoxShelf({
   onOpenChange,
   boxes,
   documents,
+  metadataByDocument,
   selectedDocument,
   canWrite,
   databaseReady,
@@ -203,8 +220,12 @@ export default function BoxShelf({
                     {itemDocuments.map(({ item, document }) => {
                       const versionLabel = item.version?.revisionCode || (item.version ? `V${item.version.versionNumber}` : document?.currentVersion?.revisionCode || "Aktuális");
                       return (
-                        <div key={item.id} className={styles.boxItemRow} title={`${document?.name || ""} · ${versionLabel}`}>
-                          <FileText size={11} /><span>{document?.name}</span>
+                        <div key={item.id} className={styles.boxItemRow} title={[boxDisplayName(document!, metadataByDocument[document!.id]), document?.name || "", versionLabel].join(" · ")}>
+                          <FileText size={11} />
+                          <span className={styles.boxItemNames}>
+                            <strong title={boxDisplayName(document!, metadataByDocument[document!.id])}>{boxDisplayName(document!, metadataByDocument[document!.id])}</strong>
+                            <small title={document?.name}>{document?.name}</small>
+                          </span>
                           <small className={styles.boxItemRevision}>{versionLabel}</small>
                           {canWrite && <button type="button" onClick={() => void onRemoveItem(box.id, item.id)} disabled={busy} title="Eltávolítás a BOX-ból"><Trash2 size={10} /></button>}
                         </div>

@@ -569,29 +569,29 @@ export default function FileGridPanel({
                   <th colSpan={6}>Dokumentum</th>
                   <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
                   <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
-                  <th className={styles.reviewGroupManager}>Projektvezető</th>
-                  <th className={styles.reviewGroupInvestor}>Beruházói PV</th>
+                  <th className={styles.reviewGroupManager} title="Projektvezető">Projektv.</th>
+                  <th className={styles.reviewGroupInvestor} title="Beruházói projektvezető">Ber. PV.</th>
                   <th className={styles.reviewGroupLifecycle}>Terv</th>
                 </tr>
                 <tr className={styles.reviewColumnHeader}>
                   <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleReviewSelected} onChange={toggleVisibleReviewSelection} aria-label="Látható tervek kijelölése" /></th>
-                  <th>Név</th>
-                  <th className={styles.reviewFileNameHeader}>Fájlnév</th>
-                  <th>Feltöltő</th>
-                  <th>Szakág</th>
-                  <th>Témakör</th>
-                  <th>Ell.</th>
-                  <th>Eredm.</th>
-                  <th>Észr.</th>
-                  <th>Áll.</th>
-                  <th>Belső</th>
-                  <th>Rev.</th>
-                  <th>Jóváh.</th>
-                  <th>Észr.</th>
-                  <th>Belső</th>
-                  <th>Jóváh.</th>
-                  <th>Jóváh.</th>
-                  <th>Életc.</th>
+                  <th title="Megjelenített tervnév">Név</th>
+                  <th className={styles.reviewFileNameHeader} title="Eredeti fájlnév">Fájlnév</th>
+                  <th title="Feltöltő">Feltöltő</th>
+                  <th title="Szakág">Szakág</th>
+                  <th title="Témakör">Témakör</th>
+                  <th title="Ellenőrzés">Ell.</th>
+                  <th title="Eredmény">Eredm.</th>
+                  <th title="Észrevételek">Észr.</th>
+                  <th title="Workflow állapot">Áll.</th>
+                  <th title="Belső megjegyzés">Belső</th>
+                  <th title="Revízióváltozás">Rev.</th>
+                  <th title="Megrendelői jóváhagyás">Jóváh.</th>
+                  <th title="Megrendelői észrevételek">Észr.</th>
+                  <th title="Megrendelői belső megjegyzés">Belső</th>
+                  <th title="Projektvezetői jóváhagyás">Jóváh.</th>
+                  <th title="Beruházói projektvezetői jóváhagyás">Jóváh.</th>
+                  <th title="Terv életciklusa">Életc.</th>
                 </tr>
               </thead>
               <tbody>
@@ -630,7 +630,7 @@ export default function FileGridPanel({
                         <button
                           type="button"
                           className={styles.reviewName + " " + (row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback)}
-                          title={row.explicitName ? "Megadott név" : "Automatikus név a fájlnévből"}
+                          title={row.displayName}
                           onClick={() => openDetail(row.document, "checked")}
                         >
                           {row.displayName}

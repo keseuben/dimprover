@@ -819,6 +819,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onOpenChange={setBoxShelfOpen}
         boxes={boxes}
         documents={tree?.documents || []}
+        metadataByDocument={metadataByDocument}
         selectedDocument={selectedDocument}
         canWrite={canWrite}
         databaseReady={Boolean(health?.workspace?.databaseReady)}

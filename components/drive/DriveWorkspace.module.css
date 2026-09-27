@@ -1953,3 +1953,7 @@
 .detailsSplitCard .metaItem input,
 .detailsSplitCard .metaItem textarea { padding: 5px 6px; font-size: 10px; }
 .detailsSplitCard .previewPlaceholder { min-height: 90px; padding: 8px; }
+
+.boxItemNames { min-width: 0; display: grid; gap: 1px; }
+.boxItemNames strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #263e57; font-size: var(--drive-font-xs); }
+.boxItemNames small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #73869a; font-size: 9px; }
