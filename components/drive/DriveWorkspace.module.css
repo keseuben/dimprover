@@ -1292,3 +1292,38 @@
   .reviewBulkGrid { grid-template-columns: 1fr; }
   .reviewBulkActions { align-items: stretch; flex-direction: column; }
 }
+.reviewStateIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.reviewApprovalIcon,
+.reviewLifecycleIcon {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+.reviewApproval_pending { background: #eef2f6; border-color: #d7e0e8; color: #687b8f; }
+.reviewApproval_review { background: #e8f2ff; border-color: #bdd8fb; color: #1765d7; }
+.reviewApproval_returned { background: #fff3e3; border-color: #f3cf9d; color: #c77213; }
+.reviewApproval_customer { background: #e7f8fb; border-color: #b7e5ed; color: #087c8f; }
+.reviewApproval_manager { background: #f0ebff; border-color: #d5c8ff; color: #6543c7; }
+.reviewApproval_investor { background: #e9f8ef; border-color: #bee7cc; color: #20864c; }
+.reviewLifecycleIcon { border-radius: 50%; }
+.reviewLifecycle_working { background: #f0f3f6; border-color: #d9e0e6; color: #718094; }
+.reviewLifecycle_current { background: #e7f1ff; border-color: #bad5fb; color: #1765d7; }
+.reviewLifecycle_archive { background: #eceff2; border-color: #d3d8dd; color: #666f79; }
+.rowLifecycleApprovedCurrent td { background: #edf9f1; }
+.rowLifecycleApprovedCurrent:hover td { background: #e6f5eb; }
+.rowLifecycleCurrent td { background: #eef6ff; }
+.rowLifecycleCurrent:hover td { background: #e7f2ff; }
+.rowLifecycleArchive td { background: #f1f3f5; color: #66717d; }
+.rowLifecycleArchive:hover td { background: #ebedef; }
+.reviewRowSelected td { background: #dfefff !important; }
+.reviewRowSelected:hover td { background: #d8eaff !important; }
+.fileSelected td { background: #dfefff !important; }

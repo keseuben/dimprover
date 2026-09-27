@@ -29,6 +29,9 @@ type ReviewForm = {
   customer: string;
   customerNote: string;
   revisionChange: string;
+  projectManager: string;
+  investorProjectManager: string;
+  lifecycle: string;
   openObservationCount: string;
 };
 
@@ -41,6 +44,9 @@ const emptyReview: ReviewForm = {
   customer: "",
   customerNote: "",
   revisionChange: "",
+  projectManager: "",
+  investorProjectManager: "",
+  lifecycle: "",
   openObservationCount: "0",
 };
 
@@ -138,6 +144,9 @@ export default function DetailsPanel({
       customer: typeof extra.customerApproval === "string" ? extra.customerApproval : typeof extra.clientApproval === "string" ? extra.clientApproval : "",
       customerNote: typeof extra.customerNote === "string" ? extra.customerNote : typeof extra.clientNote === "string" ? extra.clientNote : "",
       revisionChange: typeof extra.revisionChange === "string" ? extra.revisionChange : typeof extra.change === "string" ? extra.change : "",
+      projectManager: typeof extra.projectManagerApproval === "string" ? extra.projectManagerApproval : "",
+      investorProjectManager: typeof extra.investorProjectManagerApproval === "string" ? extra.investorProjectManagerApproval : "",
+      lifecycle: typeof extra.lifecycleStatus === "string" ? extra.lifecycleStatus : "",
       openObservationCount: String(Number.isFinite(Number(extra.openObservationCount)) ? Number(extra.openObservationCount) : 0),
     });
     setNote(details?.notes?.[0]?.note || "");
@@ -282,6 +291,24 @@ export default function DetailsPanel({
                   <option value="">—</option><option value="ÚJ">ÚJ</option><option value="MÓDOSULT">MÓDOSULT</option><option value="ÁTHELYEZVE">ÁTHELYEZVE</option><option value="NEM TALÁLHATÓ">NEM TALÁLHATÓ</option>
                 </select>
               </div>
+              <div id={"drive-review-" + document.id + "-project-manager"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "project-manager" ? "true" : undefined}>
+                <label htmlFor="drive-review-project-manager">Projektvezetői jóváhagyás</label>
+                <select id="drive-review-project-manager" value={review.projectManager} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, projectManager: event.target.value }))}>
+                  <option value="">—</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-investor-project-manager"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "investor-project-manager" ? "true" : undefined}>
+                <label htmlFor="drive-review-investor-project-manager">Beruházói projektvezető</label>
+                <select id="drive-review-investor-project-manager" value={review.investorProjectManager} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, investorProjectManager: event.target.value }))}>
+                  <option value="">—</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-lifecycle"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "lifecycle" ? "true" : undefined}>
+                <label htmlFor="drive-review-lifecycle">Terv életciklusa</label>
+                <select id="drive-review-lifecycle" value={review.lifecycle} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, lifecycle: event.target.value }))}>
+                  <option value="">—</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option>
+                </select>
+              </div>
               <div className={styles.reviewEditorItem}>
                 <label htmlFor="drive-review-count">Nyitott észrevételek</label>
                 <input id="drive-review-count" type="number" min="0" value={review.openObservationCount} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, openObservationCount: event.target.value }))} />
@@ -320,6 +347,9 @@ export default function DetailsPanel({
                     customerApproval: review.customer,
                     customerNote: review.customerNote,
                     revisionChange: review.revisionChange,
+                    projectManagerApproval: review.projectManager,
+                    investorProjectManagerApproval: review.investorProjectManager,
+                    lifecycleStatus: review.lifecycle,
                     openObservationCount: Math.max(0, Number(review.openObservationCount) || 0),
                   },
                 })}

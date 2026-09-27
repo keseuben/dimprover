@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { File, FileSpreadsheet, FileText, Folder, FolderUp, RefreshCw } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -133,6 +133,71 @@ function revisionMark(value: string) {
 function isApprovedReviewValue(value: string) {
   const normalized = value.trim().toLocaleLowerCase("hu-HU");
   return ["igen", "jóváhagyva", "jóváhagyott", "approved", "elfogadva", "elfogadott"].includes(normalized);
+}
+
+function reviewMetadataValue(metadata: DriveEngineeringMetadata | undefined, key: string) {
+  const value = metadata?.extra?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function approvalVisual(metadata: DriveEngineeringMetadata | undefined) {
+  const investor = reviewMetadataValue(metadata, "investorProjectManagerApproval");
+  const manager = reviewMetadataValue(metadata, "projectManagerApproval");
+  const customer = reviewMetadataValue(metadata, "customerApproval") || reviewMetadataValue(metadata, "clientApproval");
+  const workflow = reviewMetadataValue(metadata, "workflowStatus") || metadata?.approvalStatus || "";
+  const result = reviewMetadataValue(metadata, "reviewResult") || reviewMetadataValue(metadata, "hageResult");
+  const checked = reviewMetadataValue(metadata, "reviewChecked") || reviewMetadataValue(metadata, "hageChecked");
+  const normalizedWorkflow = workflow.toLocaleLowerCase("hu-HU");
+  const normalizedResult = result.toLocaleLowerCase("hu-HU");
+
+  if (isApprovedReviewValue(investor)) return { kind: "investor" as const, title: "Beruházói projektvezető által jóváhagyva", Icon: ShieldCheck };
+  if (isApprovedReviewValue(manager)) return { kind: "manager" as const, title: "Projektvezető által jóváhagyva", Icon: BadgeCheck };
+  if (isApprovedReviewValue(customer)) return { kind: "customer" as const, title: "Megrendelő által jóváhagyva", Icon: CheckCircle2 };
+  if (normalizedWorkflow.includes("visszaad") || normalizedResult.includes("javítand") || normalizedResult.includes("visszaad")) {
+    return { kind: "returned" as const, title: "Javításra visszaadva", Icon: RotateCcw };
+  }
+  if (normalizedWorkflow.includes("alatt") || normalizedWorkflow.includes("folyamat") || checked.toLocaleLowerCase("hu-HU") === "igen") {
+    return { kind: "review" as const, title: "Ellenőrzés alatt", Icon: Search };
+  }
+  return { kind: "pending" as const, title: workflow || "Feltöltve / ellenőrzésre vár", Icon: Clock3 };
+}
+
+function lifecycleVisual(metadata: DriveEngineeringMetadata | undefined) {
+  const lifecycle = reviewMetadataValue(metadata, "lifecycleStatus");
+  const normalized = lifecycle.toLocaleLowerCase("hu-HU");
+  if (normalized.includes("arch")) return { kind: "archive" as const, title: "Archív terv", Icon: Archive };
+  if (normalized.includes("aktu")) return { kind: "current" as const, title: "Aktuális terv", Icon: CheckCircle2 };
+  return { kind: "working" as const, title: lifecycle || "Munkaközi terv", Icon: Clock3 };
+}
+
+function lifecycleRowClass(metadata: DriveEngineeringMetadata | undefined) {
+  const lifecycle = reviewMetadataValue(metadata, "lifecycleStatus").toLocaleLowerCase("hu-HU");
+  if (lifecycle.includes("arch")) return styles.rowLifecycleArchive;
+  if (lifecycle.includes("aktu")) {
+    const manager = reviewMetadataValue(metadata, "projectManagerApproval");
+    const investor = reviewMetadataValue(metadata, "investorProjectManagerApproval");
+    return isApprovedReviewValue(investor) || isApprovedReviewValue(manager)
+      ? styles.rowLifecycleApprovedCurrent
+      : styles.rowLifecycleCurrent;
+  }
+  return "";
+}
+
+function ReviewStateIcons({ metadata }: { metadata?: DriveEngineeringMetadata }) {
+  const approval = approvalVisual(metadata);
+  const lifecycle = lifecycleVisual(metadata);
+  const ApprovalIcon = approval.Icon;
+  const LifecycleIcon = lifecycle.Icon;
+  return (
+    <span className={styles.reviewStateIcons} aria-label={approval.title + "; " + lifecycle.title}>
+      <span className={styles.reviewApprovalIcon + " " + styles["reviewApproval_" + approval.kind]} title={approval.title}>
+        <ApprovalIcon size={12} />
+      </span>
+      <span className={styles.reviewLifecycleIcon + " " + styles["reviewLifecycle_" + lifecycle.kind]} title={lifecycle.title}>
+        <LifecycleIcon size={11} />
+      </span>
+    </span>
+  );
 }
 
 export default function FileGridPanel({
@@ -440,7 +505,7 @@ export default function FileGridPanel({
                   </tr>
                 )}
                 {reviewRows.map((row) => (
-                  <tr key={row.document.id} className={selectedReviewSet.has(row.document.id) ? styles.reviewRowSelected : ""}>
+                  <tr key={row.document.id} className={(selectedReviewSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])}>
                     <td className={styles.reviewSelectCell}>
                       <input
                         type="checkbox"
@@ -452,6 +517,7 @@ export default function FileGridPanel({
                     </td>
                     <td>
                       <div className={styles.fileNameCell}>
+                        <ReviewStateIcons metadata={metadataByDocument[row.document.id]} />
                         <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
                           <FileKindIcon extension={row.document.extension} />
                         </span>
@@ -508,10 +574,11 @@ export default function FileGridPanel({
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
                   const sourceClass = document.source === "DROP" ? styles.sourceDrop : document.source === "DESKTOP" ? styles.sourceDesktop : "";
-                  const displayName = displayDocumentName(document, metadataByDocument[document.id]);
+                  const metadata = metadataByDocument[document.id];
+                  const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
+                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
@@ -547,10 +614,11 @@ export default function FileGridPanel({
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
-                  const displayName = displayDocumentName(document, metadataByDocument[document.id]);
+                  const metadata = metadataByDocument[document.id];
+                  const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
+                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
