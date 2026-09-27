@@ -17,6 +17,7 @@ import {
   finalizeDriveUploadSessionRecord,
   getDriveDownloadVersionRecord,
   getDriveObjectStorageDatabaseHealth,
+  getDriveProjectStorageUsageRecord,
   getDriveUploadSessionRecord,
   logDriveDownloadRecord,
 } from "./storageRepository";
@@ -69,6 +70,30 @@ export async function getDriveObjectStorageHealth() {
   };
 }
 
+export async function getDriveProjectStorageQuota(projectId: string) {
+  const config = getDriveObjectStorageConfig();
+  const usage = await getDriveProjectStorageUsageRecord(projectId);
+  const quotaBytes = config.projectDefaultQuotaBytes;
+  const usedBytes = Math.max(0, usage.usedBytes);
+  const reservedBytes = Math.max(0, usage.reservedBytes);
+  const occupiedBytes = usedBytes + reservedBytes;
+  const remainingBytes = Math.max(0, quotaBytes - occupiedBytes);
+  const usagePercent = quotaBytes > 0 ? Math.min(100, (occupiedBytes / quotaBytes) * 100) : 0;
+  return {
+    projectId,
+    quotaBytes,
+    usedBytes,
+    reservedBytes,
+    occupiedBytes,
+    remainingBytes,
+    usagePercent,
+    warningPercent: 80,
+    criticalPercent: 95,
+    hardLimit: true,
+    source: "PROJECT_DEFAULT" as const,
+  };
+}
+
 export async function initDriveObjectUpload(input: {
   projectId: string;
   body: Record<string, unknown>;
@@ -109,6 +134,16 @@ export async function initDriveObjectUpload(input: {
       `A fájl meghaladja a ${status.maxUploadMb} MB-os DRIVE feltöltési korlátot.`,
       "DRIVE_UPLOAD_TOO_LARGE",
       413,
+    );
+  }
+
+  const quota = await getDriveProjectStorageQuota(input.projectId);
+  if (quota.hardLimit && quota.occupiedBytes + sizeBytes > quota.quotaBytes) {
+    throw new DriveCoreRepositoryError(
+      "A projekt " + Math.round(quota.quotaBytes / 1024 ** 3) + " GB-os tárhelykerete megtelt vagy a feltöltéssel túllépésre kerülne.",
+      "DRIVE_PROJECT_QUOTA_EXCEEDED",
+      507,
+      quota,
     );
   }
 

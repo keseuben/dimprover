@@ -117,6 +117,42 @@ function mapUploadSession(row: DbUploadSession): DriveUploadSession {
   };
 }
 
+async function sumDriveProjectSizeBytes(
+  client: SupabaseClient,
+  table: "drive_core_document_versions" | "drive_core_upload_sessions",
+  projectId: string,
+  configure: (query: any) => any,
+) {
+  const pageSize = 1000;
+  let from = 0;
+  let total = 0;
+  while (true) {
+    let query = client.from(table).select("size_bytes").eq("project_id", projectId);
+    query = configure(query);
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) databaseError("A DRIVE tárhelyhasználat lekérdezése sikertelen.", error);
+    const rows = data || [];
+    total += rows.reduce((sum: number, row: { size_bytes?: number | string | null }) => sum + Math.max(0, Number(row.size_bytes || 0)), 0);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return total;
+}
+
+export async function getDriveProjectStorageUsageRecord(projectId: string) {
+  const client = await requireReadyClient();
+  const now = new Date().toISOString();
+  const [usedBytes, reservedBytes] = await Promise.all([
+    sumDriveProjectSizeBytes(client, "drive_core_document_versions", projectId, (query) =>
+      query.eq("storage_provider", "S3").in("status", ["AVAILABLE", "QUARANTINED"])
+    ),
+    sumDriveProjectSizeBytes(client, "drive_core_upload_sessions", projectId, (query) =>
+      query.eq("status", "INITIATED").gt("expires_at", now)
+    ),
+  ]);
+  return { usedBytes, reservedBytes };
+}
+
 export async function getDriveObjectStorageDatabaseHealth() {
   try {
     const client = getDatabaseClient();

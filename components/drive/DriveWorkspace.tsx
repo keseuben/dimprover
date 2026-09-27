@@ -24,6 +24,7 @@ import type {
   DriveEngineeringMetadata,
   DriveLayoutMode,
   DrivePermission,
+  DriveStorageQuota,
   DriveTree,
   DriveViewMode,
 } from "./driveTypes";
@@ -67,6 +68,7 @@ function formatBytes(value: number) {
 export default function DriveWorkspace({ projectId, projectName, projectCode, projectStatus = "ACTIVE", permissions = [] }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
+  const [storageQuota, setStorageQuota] = useState<DriveStorageQuota | null>(null);
   const [boxes, setBoxes] = useState<DriveBox[]>([]);
   const [apiPermissions, setApiPermissions] = useState<DrivePermission[]>([]);
   const [membershipRole, setMembershipRole] = useState<ProjectMembershipRole | "">("");
@@ -115,17 +117,20 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setLoading(true);
     setError("");
     try {
-      const [healthResponse, treeResponse, metadataResponse] = await Promise.all([
+      const [healthResponse, treeResponse, metadataResponse, storageResponse] = await Promise.all([
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/health`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, { credentials: "same-origin", cache: "no-store" }),
       ]);
       const healthPayload = await healthResponse.json() as DriveHealth;
       const treePayload = await treeResponse.json() as TreePayload;
       const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
+      const storagePayload = await storageResponse.json().catch(() => ({})) as { ok?: boolean; storage?: DriveStorageQuota };
       if (!healthResponse.ok || !healthPayload.ok) throw new Error(healthPayload.error || "A Drive rendszerállapot nem tölthető be.");
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setHealth(healthPayload);
+      setStorageQuota(storageResponse.ok && storagePayload.ok && storagePayload.storage ? storagePayload.storage : null);
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
       setMembershipRole(treePayload.membershipRole || "");
@@ -147,6 +152,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   useEffect(() => {
     setTree(null);
     setHealth(null);
+    setStorageQuota(null);
     setBoxes([]);
     setDetails(null);
     setMetadataByDocument({});
@@ -653,7 +659,17 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             <div className={styles.projectMeta}>
               <span>Projekt azonosító: {projectCode || projectId}</span>
               <span className={styles.activeBadge}>{projectStatus === "ACTIVE" ? "Aktív projekt" : projectStatus}</span>
-              <span>{tree?.summary.documentCount || 0} fájl · {formatBytes(tree?.summary.totalSizeBytes || 0)}</span>
+              <span>{tree?.summary.documentCount || 0} fájl</span>
+              {storageQuota && (
+                <span
+                  className={styles.projectStorageMeter}
+                  data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}
+                  title={`Foglalt: ${formatBytes(storageQuota.usedBytes)} · Függőben: ${formatBytes(storageQuota.reservedBytes)} · Keret: ${formatBytes(storageQuota.quotaBytes)}`}
+                >
+                  <span className={styles.projectStorageLabel}>Tárhely {formatBytes(storageQuota.occupiedBytes)} / {formatBytes(storageQuota.quotaBytes)}</span>
+                  <i><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i>
+                </span>
+              )}
             </div>
           </div>
         </div>

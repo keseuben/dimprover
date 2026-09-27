@@ -6,6 +6,7 @@ export type DriveObjectStorageConfig = {
   mode: DriveObjectStorageMode;
   bucket: string;
   maxUploadBytes: number;
+  projectDefaultQuotaBytes: number;
   signedUrlTtlSeconds: number;
   forcePathStyle: boolean;
   s3: {
@@ -37,12 +38,14 @@ export function getDriveObjectStorageConfig(): DriveObjectStorageConfig {
   const bucket = process.env.DIMPRO_DRIVE_S3_BUCKET?.trim() || "";
   const maxUploadMb = positiveInteger(process.env.DIMPRO_DRIVE_MAX_UPLOAD_MB, 100, 1, 5_120);
   const signedUrlTtlSeconds = positiveInteger(process.env.DIMPRO_DRIVE_SIGNED_URL_TTL_SECONDS, 600, 60, 900);
+  const projectDefaultQuotaGb = positiveInteger(process.env.DIMPRO_DRIVE_PROJECT_DEFAULT_QUOTA_GB, 10, 1, 10_240);
 
   return {
     provider: "s3-compatible",
     mode: normalizeMode(process.env.DIMPRO_DRIVE_STORAGE_MODE),
     bucket,
     maxUploadBytes: maxUploadMb * 1024 * 1024,
+    projectDefaultQuotaBytes: projectDefaultQuotaGb * 1024 * 1024 * 1024,
     signedUrlTtlSeconds,
     forcePathStyle: process.env.DIMPRO_DRIVE_S3_FORCE_PATH_STYLE?.trim().toLowerCase() === "true",
     s3: endpoint && region && accessKeyId && secretAccessKey
@@ -68,6 +71,7 @@ export function getDriveObjectStorageSafeStatus(config = getDriveObjectStorageCo
     objectDownloadEnabled,
     maxUploadBytes: config.maxUploadBytes,
     maxUploadMb: Math.floor(config.maxUploadBytes / 1024 / 1024),
+    projectDefaultQuotaBytes: config.projectDefaultQuotaBytes,
     signedUrlTtlSeconds: config.signedUrlTtlSeconds,
     forcePathStyle: config.forcePathStyle,
     quarantineRequired: config.mode === "quarantine",

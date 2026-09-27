@@ -2218,3 +2218,33 @@
   margin: 0;
 }
 .detailsSplitCard .detailsActions .smallButton { min-height: 26px; height: 26px; padding: 3px 7px; font-size: 9px; }
+
+.projectStorageMeter {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 190px;
+  color: #536a7f;
+}
+.projectStorageLabel {
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 800;
+}
+.projectStorageMeter i {
+  display: block;
+  width: 70px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4ebf1;
+}
+.projectStorageMeter i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #39a96b;
+  transition: width 180ms ease;
+}
+.projectStorageMeter[data-level="warning"] i b { background: #e6a23c; }
+.projectStorageMeter[data-level="critical"] i b { background: #d9534f; }

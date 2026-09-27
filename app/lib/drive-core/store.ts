@@ -16,6 +16,7 @@ export {
   abortDriveObjectUpload,
   completeDriveObjectUpload,
   getDriveObjectStorageHealth,
+  getDriveProjectStorageQuota,
   initDriveObjectDownload,
   initDriveObjectPreview,
   initDriveObjectUpload,

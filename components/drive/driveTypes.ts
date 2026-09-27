@@ -240,6 +240,20 @@ export type DriveDocumentDetails = {
 export type DriveLayoutMode = "three" | "two" | "one" | "split" | "commander";
 export type DriveViewMode = "simple" | "engineering" | "review";
 
+export type DriveStorageQuota = {
+  projectId: string;
+  quotaBytes: number;
+  usedBytes: number;
+  reservedBytes: number;
+  occupiedBytes: number;
+  remainingBytes: number;
+  usagePercent: number;
+  warningPercent: number;
+  criticalPercent: number;
+  hardLimit: boolean;
+  source: "PROJECT_DEFAULT" | "PLAN" | "OVERRIDE";
+};
+
 export type DriveHealth = {
   ok?: boolean;
   error?: string;

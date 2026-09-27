@@ -38,7 +38,7 @@ import DetailsPanel from "@/components/drive/DetailsPanel";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
-import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveViewMode } from "@/components/drive/driveTypes";
+import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
 
@@ -344,6 +344,7 @@ function formatDate(value: string) {
 
 export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [storageQuota, setStorageQuota] = useState<DriveStorageQuota | null>(null);
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [apiPermissions, setApiPermissions] = useState<string[]>([]);
   const [documentFlowByVersion, setDocumentFlowByVersion] = useState<Record<string, DriveDocumentGovernance>>({});
@@ -431,16 +432,22 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setHealth(healthPayload);
       if (!healthPayload.database?.ready) {
         setTree(null);
+        setStorageQuota(null);
         return;
       }
-      const treeResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" });
+      const [treeResponse, metadataResponse, storageResponse] = await Promise.all([
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, { credentials: "same-origin", cache: "no-store" }),
+      ]);
       const treePayload = await treeResponse.json() as { ok?: boolean; error?: string; tree?: DriveTree; permissions?: string[] };
+      const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
+      const storagePayload = await storageResponse.json().catch(() => ({})) as { ok?: boolean; storage?: DriveStorageQuota };
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
-      const metadataResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" });
-      const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
       setMetadataByDocument(metadataResponse.ok && metadataPayload.ok ? Object.fromEntries((metadataPayload.metadata || []).map((item) => [item.documentId, item])) : {});
+      setStorageQuota(storageResponse.ok && storagePayload.ok && storagePayload.storage ? storagePayload.storage : null);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
 
@@ -1488,7 +1495,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         <article><Folder size={18} /><div><strong>{tree?.summary.folderCount || 0}</strong><span>Projektmappa</span></div></article>
         <article><File size={18} /><div><strong>{tree?.summary.documentCount || 0}</strong><span>Dokumentum</span></div></article>
         <article><Archive size={18} /><div><strong>{dropDocumentCount}</strong><span>Dropból archivált</span></div></article>
-        <article><UploadCloud size={18} /><div><strong>{formatBytes(tree?.summary.totalSizeBytes || 0)}</strong><span>Összes fájlméret</span></div></article>
+        <article><HardDrive size={18} /><div><strong>{storageQuota ? `${formatBytes(storageQuota.occupiedBytes)} / ${formatBytes(storageQuota.quotaBytes)}` : formatBytes(tree?.summary.totalSizeBytes || 0)}</strong><span>Tárhely</span>{storageQuota && <i className={styles.storageQuotaBar} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i>}</div></article>
       </div>
 
       <details className={styles.systemDetails}>
