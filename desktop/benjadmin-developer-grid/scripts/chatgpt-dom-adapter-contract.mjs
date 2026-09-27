@@ -16,7 +16,7 @@ const handoff=read("src/context-workspace/chatgpt-handoff.cjs");
 let n=0;
 function check(label,fn){fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)}
 
-check("DOM adapter has explicit version",()=>assert.equal(adapter.CHATGPT_DOM_ADAPTER_VERSION,"1.0.0"));
+check("DOM adapter has explicit version",()=>assert.equal(adapter.CHATGPT_DOM_ADAPTER_VERSION,"1.1.0"));
 check("composer selectors are centralized",()=>assert.ok(Array.isArray(adapter.CHATGPT_SELECTORS.composer)&&adapter.CHATGPT_SELECTORS.composer.length>=4));
 check("send stop microphone selectors are centralized",()=>{
   assert.ok(adapter.CHATGPT_SELECTORS.sendButton.length>=3);
@@ -26,6 +26,8 @@ check("send stop microphone selectors are centralized",()=>{
 check("message and conversation selectors are centralized",()=>{
   assert.ok(adapter.CHATGPT_SELECTORS.messageRole.includes("data-message-author-role"));
   assert.ok(adapter.CHATGPT_SELECTORS.conversationLink.includes("/c/"));
+  assert.ok(adapter.CHATGPT_SELECTORS.conversationTurn.includes("conversation-turn-"));
+  assert.ok(adapter.CHATGPT_SELECTORS.modernTurnRoleAttrs.includes("data-turn"));
 });
 check("DOM health probe checks composer route and messages",()=>{
   assert.ok(adapter.DOM_HEALTH_SCRIPT.includes("missing"));
@@ -115,4 +117,4 @@ check("missing composer fails refresh closed",()=>{
   assert.ok(adapter.REFRESH_SAFETY_SCRIPT.includes("busy: !composer || generating || hasDraft"));
   assert.ok(main.includes("ChatGPT DOM adapter nem kész"));
 });
-console.log(`Developer Grid ChatGPT DOM adapter v1.0 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid ChatGPT DOM adapter v1.1 contract PASS · ${n}/${n}`);

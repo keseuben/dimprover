@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+const require=createRequire(import.meta.url);
+const root=path.resolve(import.meta.dirname,"../..");
+const adapter=require(path.join(root,"desktop/benjadmin-developer-grid/src/chatgpt/chatgpt-dom-adapter.cjs"));
+const main=fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("DOM adapter version is 1.1.0",()=>assert.equal(adapter.CHATGPT_DOM_ADAPTER_VERSION,"1.1.0"));
+check("modern conversation turn selector is supported",()=>assert.match(adapter.CHATGPT_SELECTORS.conversationTurn,/conversation-turn-/));
+check("modern data-turn role is supported",()=>assert.ok(adapter.CHATGPT_SELECTORS.modernTurnRoleAttrs.includes("data-turn")));
+check("shared scripts infer turn role from modern attributes",()=>{assert.ok(adapter.TRANSCRIPT_SCRIPT.includes("data-turn"));assert.ok(adapter.TRANSCRIPT_SCRIPT.includes("collectConversationTurns"));});
+check("latest assistant capture uses unified turns",()=>assert.ok(adapter.LATEST_ASSISTANT_SCRIPT.includes("collectConversationTurns().filter")));
+check("conversation transcript uses unified turns",()=>assert.ok(adapter.TRANSCRIPT_SCRIPT.includes("messages.push({ messageId:turn.messageId")));
+check("BOOT ACK monitor has transcript-history fallback",()=>{assert.ok(main.includes("captureLatestBootAckCandidate"));assert.ok(main.includes('candidateSource:"TRANSCRIPT_HISTORY"'));});
+check("conversation memory also replays captured BOOT ACK",()=>{assert.ok(main.includes('source:"CONVERSATION_MEMORY"'));assert.ok(main.includes("bodyWithBootAck"));});
+console.log(`Developer Grid v0.1.82 ChatGPT turn capture contract PASS · ${n}/${n}`);
