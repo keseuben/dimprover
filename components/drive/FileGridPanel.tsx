@@ -463,44 +463,52 @@ export default function FileGridPanel({
         <span className={styles.fileFolderPath}>{currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
       </div>
 
-      <div className={styles.fileStatusLegend} aria-label="Tervállapot jelmagyarázat">
-        <span className={styles.fileStatusLegendTitle}>Tervállapot</span>
-        <span><i className={styles.legendSwatchPending} /> ellenőrzésre vár</span>
-        <span><i className={styles.legendSwatchReview} /> ellenőrzés alatt</span>
-        <span><i className={styles.legendSwatchReturned} /> visszaadva</span>
-        <span><i className={styles.legendSwatchApproved} /> jóváhagyási szint</span>
-        <span className={styles.fileStatusLegendDivider}>|</span>
-        <span><i className={styles.legendRowCurrent} /> aktuális</span>
-        <span><i className={styles.legendRowApproved} /> jóváhagyott aktuális</span>
-        <span><i className={styles.legendRowArchive} /> archív</span>
+      <div className={styles.fileCompactControls}>
+        {viewMode === "review" ? (
+          <>
+            <div className={styles.reviewCompactActions}>
+              <strong>Tervellenőrzés <span>{reviewRows.length}/{allReviewRows.length}</span></strong>
+              <button
+                type="button"
+                className={styles.reviewBulkPrimary}
+                disabled={!canAnyBulkReview || busy || !currentFolder}
+                onClick={() => { resetBulkForm(); setBulkScope("folder"); }}
+                title={currentFolder ? "A mappában lévő tervek csoportos ellenőrzése" : "Előbb válassz ki egy mappát"}
+              >
+                Mappa
+              </button>
+              <button type="button" disabled={!canAnyBulkReview || busy || !selectedReviewIds.length} onClick={() => { resetBulkForm(); setBulkScope("selection"); }} title="Kijelölt fájlok csoportos ellenőrzése">Kijelöltek</button>
+              <span title="Kijelölt fájlok száma">{selectedReviewIds.length} kij.</span>
+              <button type="button" disabled={!selectedReviewIds.length || busy} onClick={() => setSelectedReviewIds([])} title="Kijelölés törlése">Törlés</button>
+              <span className={styles.reviewLegendCompact} title="✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat">Jelmagyarázat ⓘ</span>
+            </div>
+            <div className={styles.reviewCompactFilters}>
+              <input aria-label="Keresés" className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Keresés…" />
+              <select aria-label="Szakág" title="Szakág" value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Szakág: mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+              <select aria-label="Témakör" title="Témakör" value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Témakör: mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+              <select aria-label="Workflow állapot" title="Workflow állapot" value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Állapot: mind</option><option value="not-approved">Nincs még jóváhagyva</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+              <select aria-label="Jóváhagyási szint" title="Jóváhagyási szint" value={reviewApprovalStage} onChange={(event) => setReviewApprovalStage(event.target.value)}><option value="all">Jóváh.: mind</option><option value="pending">Ellenőrzésre vár</option><option value="review">Ellenőrzés alatt</option><option value="returned">Visszaadva</option><option value="customer">Megrendelő jóváhagyta</option><option value="manager">Projektvezető jóváhagyta</option><option value="investor">Beruházói PV jóváhagyta</option></select>
+              <select aria-label="Életciklus" title="Életciklus" value={reviewLifecycle} onChange={(event) => setReviewLifecycle(event.target.value)}><option value="all">Életc.: mind</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select>
+              <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }} title="Szűrők törlése">×</button>
+            </div>
+          </>
+        ) : (
+          <div className={styles.fileStatusLegend} aria-label="Tervállapot jelmagyarázat">
+            <span className={styles.fileStatusLegendTitle}>Tervállapot</span>
+            <span><i className={styles.legendSwatchPending} /> ellenőrzésre vár</span>
+            <span><i className={styles.legendSwatchReview} /> ellenőrzés alatt</span>
+            <span><i className={styles.legendSwatchReturned} /> visszaadva</span>
+            <span><i className={styles.legendSwatchApproved} /> jóváhagyási szint</span>
+            <span className={styles.fileStatusLegendDivider}>|</span>
+            <span><i className={styles.legendRowCurrent} /> aktuális</span>
+            <span><i className={styles.legendRowApproved} /> jóváhagyott aktuális</span>
+            <span><i className={styles.legendRowArchive} /> archív</span>
+          </div>
+        )}
       </div>
 
       {viewMode === "review" ? (
         <div className={styles.reviewHost}>
-          <header className={styles.reviewHeader}>
-            <div><span>Tervellenőrzés</span><strong>{reviewRows.length} / {allReviewRows.length} terv</strong></div>
-            <div className={styles.reviewLegend}>✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat</div>
-          </header>
-          <div className={styles.reviewBulkBar}>
-            <button
-              type="button"
-              className={styles.reviewBulkPrimary}
-              disabled={!canAnyBulkReview || busy || !currentFolder}
-              onClick={() => { resetBulkForm(); setBulkScope("folder"); }}
-              title={currentFolder ? "A mappában lévő tervek csoportos ellenőrzése" : "Előbb válassz ki egy mappát"}
-            >
-              Mappa ellenőrzése
-            </button>
-            <button
-              type="button"
-              disabled={!canAnyBulkReview || busy || !selectedReviewIds.length}
-              onClick={() => { resetBulkForm(); setBulkScope("selection"); }}
-            >
-              Kijelöltek ellenőrzése
-            </button>
-            <span><strong>{selectedReviewIds.length}</strong> fájl kijelölve</span>
-            <button type="button" disabled={!selectedReviewIds.length || busy} onClick={() => setSelectedReviewIds([])}>Kijelölés törlése</button>
-          </div>
           {bulkScope && (
             <div className={styles.reviewBulkEditor}>
               <div className={styles.reviewBulkEditorHead}>
@@ -533,15 +541,6 @@ export default function FileGridPanel({
               </div>
             </div>
           )}
-          <div className={styles.reviewFilters}>
-            <label>Keresés<input className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Név, fájlnév, észrevétel…" /></label>
-            <label>Szakág<select value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label>Témakör<select value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label>Workflow állapot<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Mind</option><option value="not-approved">Nincs még jóváhagyva</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label>Jóváhagyási szint<select value={reviewApprovalStage} onChange={(event) => setReviewApprovalStage(event.target.value)}><option value="all">Mind</option><option value="pending">Ellenőrzésre vár</option><option value="review">Ellenőrzés alatt</option><option value="returned">Visszaadva</option><option value="customer">Megrendelő jóváhagyta</option><option value="manager">Projektvezető jóváhagyta</option><option value="investor">Beruházói PV jóváhagyta</option></select></label>
-            <label>Életciklus<select value={reviewLifecycle} onChange={(event) => setReviewLifecycle(event.target.value)}><option value="all">Mind</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select></label>
-            <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }}>Szűrők törlése</button>
-          </div>
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
               <colgroup>

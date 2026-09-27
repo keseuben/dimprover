@@ -81,7 +81,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
-  const [splitDetailsHeight, setSplitDetailsHeight] = useState(340);
+  const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [reviewFocus, setReviewFocus] = useState("");

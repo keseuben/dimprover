@@ -1990,3 +1990,231 @@
 .reviewProgressReturned time { color: #a66318; }
 
 .observationNotice { padding: 6px 8px; border-radius: 6px; background: #eef6ff; color: #315f8d; border: 1px solid #ccdef0; font-size: var(--drive-font-xs); line-height: 1.35; }
+
+/* 2026-09-27 Drive density pass: mindhárom fájlnézet azonos, kompakt táblázatkezdést kap. */
+.filePanelTop {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 9px;
+}
+.filePanelTitle strong { font-size: 10px; }
+.filePanelTitle span { margin-top: 0; font-size: 9px; }
+.viewToggle { gap: 3px; }
+.viewToggle button { min-height: 24px; padding: 3px 6px; font-size: 9px; }
+.fileFolderNav {
+  min-height: 34px;
+  height: 34px;
+  grid-template-columns: auto minmax(210px, 390px) 28px minmax(0,1fr);
+  gap: 6px;
+  padding: 3px 8px;
+}
+.fileFolderNav select { height: 27px; font-size: 9px; }
+.fileFolderUpButton { width: 27px; height: 27px; }
+.fileFolderPath,.fileFolderNavLabel strong { font-size: 9px; }
+.fileCompactControls {
+  min-width: 0;
+  min-height: 39px;
+  height: 39px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #e5edf3;
+  background: #fbfdff;
+  overflow: hidden;
+}
+.fileCompactControls .fileStatusLegend {
+  width: 100%;
+  min-height: 31px;
+  height: 31px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.reviewCompactActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.reviewCompactActions > strong { color: #314b64; font-size: 9px; }
+.reviewCompactActions > strong span { color: #1765d7; }
+.reviewCompactActions button {
+  min-height: 27px;
+  border: 1px solid #d3dfe9;
+  border-radius: 6px;
+  background: #fff;
+  color: #405971;
+  padding: 0 7px;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.reviewCompactActions button:disabled { opacity: .42; cursor: default; }
+.reviewCompactActions > span { color: #6a7d91; font-size: 9px; }
+.reviewLegendCompact { cursor: help; }
+.reviewCompactFilters {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  overflow: hidden;
+}
+.reviewCompactFilters input,
+.reviewCompactFilters select {
+  min-width: 0;
+  height: 27px;
+  border: 1px solid #d5e0e9;
+  border-radius: 6px;
+  background: #fff;
+  color: #304860;
+  padding: 0 6px;
+  font-size: 9px;
+  outline: none;
+}
+.reviewCompactFilters .reviewSearch { width: 128px; flex: 0 1 128px; }
+.reviewCompactFilters select { width: 112px; flex: 0 1 112px; }
+.reviewCompactFilters select:nth-of-type(3) { width: 122px; flex-basis: 122px; }
+.reviewCompactFilters .reviewReset {
+  width: 27px;
+  min-width: 27px;
+  min-height: 27px;
+  height: 27px;
+  padding: 0;
+}
+.reviewHost { border-top: 0; }
+.reviewTableWrap,.fileTableWrap { flex: 1 1 auto; min-height: 0; }
+
+/* A workline ismét csak állapotot mutat; a pontos időpontok külön, alapból csukott időnaplóban vannak. */
+.reviewProgress { padding-bottom: 4px; }
+.reviewProgressStep { min-height: 43px; }
+.reviewProgressStep time { display: none !important; }
+.reviewTimeline {
+  min-width: 0;
+  border: 1px solid #dde7ef;
+  border-radius: 7px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+.reviewTimelineToggle {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  background: #f7fafc;
+  color: #3f5870;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.reviewTimelineToggle:hover { background: #eef5fb; }
+.reviewTimelineToggle span { font-size: 10px; font-weight: 900; }
+.reviewTimelineToggle small { font-size: 9px; color: #75889a; }
+.reviewTimelineTableWrap { border-top: 1px solid #e4ebf1; }
+.reviewTimelineTable { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.reviewTimelineTable th {
+  height: 25px;
+  background: #f4f8fb;
+  color: #60758a;
+  font-size: 9px;
+  text-align: left;
+  padding: 0 8px;
+}
+.reviewTimelineTable td {
+  height: 27px;
+  border-top: 1px solid #edf1f4;
+  color: #314b64;
+  font-size: 10px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reviewTimelineTable th:nth-child(1),.reviewTimelineTable td:nth-child(1) { width: 28%; }
+.reviewTimelineTable th:nth-child(2),.reviewTimelineTable td:nth-child(2) { width: 36%; }
+
+/* Osztott nézet külön alsó munkakártya: nincs belső függőleges görgetés, a kártya fogantyúval méretezhető. */
+.detailsSplitCard .reviewWorkspace {
+  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0,1fr) auto;
+  gap: 5px 7px;
+  overflow: hidden;
+}
+.detailsSplitCard .reviewWorkspace > .infoBox:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  padding: 5px 7px;
+  font-size: 9px;
+  line-height: 1.25;
+}
+.detailsSplitCard .reviewWorkspace > .reviewProgress {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  padding: 0 0 2px;
+}
+.detailsSplitCard .reviewProgressStep { min-height: 39px; padding: 3px 2px; font-size: 8px; }
+.detailsSplitCard .reviewProgress::before { top: 18px; }
+.detailsSplitCard .reviewWorkspace > .reviewRoleInfo {
+  grid-column: 1;
+  grid-row: 2;
+  padding: 4px 6px;
+  gap: 1px;
+}
+.detailsSplitCard .reviewRoleInfo span { font-size: 8px; }
+.detailsSplitCard .reviewRoleInfo strong { font-size: 9px; }
+.detailsSplitCard .reviewWorkspace > .reviewTimeline {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+}
+.detailsSplitCard .reviewTimelineToggle { min-height: 27px; }
+.detailsSplitCard .reviewTimelineTable th { height: 22px; font-size: 8px; }
+.detailsSplitCard .reviewTimelineTable td { height: 23px; font-size: 9px; }
+.detailsSplitCard .reviewWorkspace > .reviewCategoryMenu {
+  grid-column: 1;
+  grid-row: 3;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  align-content: start;
+}
+.detailsSplitCard .reviewCategoryButton { min-height: 27px; height: 27px; }
+.detailsSplitCard .reviewWorkspace > .reviewSection {
+  grid-column: 2;
+  grid-row: 3;
+  min-height: 0;
+  height: auto;
+  align-self: stretch;
+  overflow: hidden;
+}
+.detailsSplitCard .reviewSectionHeader { min-height: 31px; height: 31px; }
+.detailsSplitCard .reviewSection .reviewEditorGrid {
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 4px;
+  padding: 5px;
+}
+.detailsSplitCard .reviewEditorItem { padding: 4px 5px; }
+.detailsSplitCard .reviewEditorItem label { margin-bottom: 2px; font-size: 9px; }
+.detailsSplitCard .reviewChoice { min-height: 24px; font-size: 8px; }
+.detailsSplitCard .reviewEditorItem textarea { min-height: 31px; height: 31px; }
+.detailsSplitCard .observationEditorHead { min-height: 22px; }
+.detailsSplitCard .observationEditorHead strong,.detailsSplitCard .observationEditorHead span { font-size: 9px; }
+.detailsSplitCard .observationEditorHead button { min-height: 22px; height: 22px; }
+.detailsSplitCard .observationItem textarea { min-height: 29px; height: 29px; }
+.detailsSplitCard .reviewWorkspace > .detailsActions {
+  grid-column: 2;
+  grid-row: 4;
+  margin: 0;
+}
+.detailsSplitCard .detailsActions .smallButton { min-height: 26px; height: 26px; padding: 3px 7px; font-size: 9px; }

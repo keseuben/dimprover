@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
+import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails } from "./driveTypes";
 import DriveDocumentViewer from "./DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
@@ -114,6 +114,14 @@ function formatAuditDate(value: unknown) {
 
 function reviewAuditTime(extra: Record<string, unknown>, prefix: string) {
   return formatAuditDate(extra[prefix + "At"]);
+}
+
+function reviewAuditActor(extra: Record<string, unknown>, prefix: string) {
+  const name = extra[prefix + "ByName"];
+  const userId = extra[prefix + "ByUserId"];
+  if (typeof name === "string" && name.trim()) return name.trim();
+  if (typeof userId === "string" && userId.trim()) return userId.trim();
+  return "—";
 }
 
 function isApprovedDecision(value: string) {
@@ -418,8 +426,10 @@ export default function DetailsPanel({
   const [review, setReview] = useState<ReviewForm>(emptyReview);
   const [note, setNote] = useState("");
   const [reviewSection, setReviewSection] = useState<ReviewSectionKey>("technical");
+  const [reviewTimelineOpen, setReviewTimelineOpen] = useState(false);
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
+  useEffect(() => { setReviewTimelineOpen(false); }, [document?.id]);
   useEffect(() => {
     if (!reviewFocus || tab !== "review") return;
     const sectionByFocus: Record<string, ReviewSectionKey> = {
@@ -596,20 +606,47 @@ export default function DetailsPanel({
 
             <div className={styles.reviewProgress} aria-label="Tervellenőrzési folyamat">
               {([
-                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false, target: "", at: formatAuditDate(document.currentVersion?.createdAt || document.updatedAt) },
-                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone, target: "technical", at: reviewAuditTime(reviewExtra, "technicalReview") || reviewAuditTime(reviewExtra, "workflowChanged") },
-                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone, target: "customer", at: reviewAuditTime(reviewExtra, "customerReview") || reviewAuditTime(reviewExtra, "customerApproval") },
-                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone, target: "manager", at: reviewAuditTime(reviewExtra, "projectManagerApproval") },
-                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone, target: "investor", at: reviewAuditTime(reviewExtra, "investorProjectManagerApproval") },
-                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle", at: reviewAuditTime(reviewExtra, "lifecycleChanged") },
+                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false, target: "" },
+                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone, target: "technical" },
+                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone, target: "customer" },
+                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone, target: "manager" },
+                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone, target: "investor" },
+                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle" },
               ] as const).map((step, index, steps) => (
                 <div className={styles.reviewProgressStepWrap} key={step.key}>
-                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={[step.label, step.at].filter(Boolean).join(" · ")} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
-                    <step.Icon size={15} /><span>{step.label}</span><time>{step.at || "—"}</time>
+                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={step.label} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
+                    <step.Icon size={15} /><span>{step.label}</span>
                   </button>
                   {index < steps.length - 1 && <span className={styles.reviewProgressLine} data-done={step.done ? "true" : undefined} />}
                 </div>
               ))}
+            </div>
+
+            <div className={styles.reviewTimeline}>
+              <button type="button" className={styles.reviewTimelineToggle} aria-expanded={reviewTimelineOpen} onClick={() => setReviewTimelineOpen((current) => !current)}>
+                <span>Időnapló</span>
+                <small>jóváhagyások és állapotváltások</small>
+                {reviewTimelineOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {reviewTimelineOpen && (
+                <div className={styles.reviewTimelineTableWrap}>
+                  <table className={styles.reviewTimelineTable}>
+                    <thead><tr><th>Esemény</th><th>Dátum / idő</th><th>Rögzítette</th></tr></thead>
+                    <tbody>
+                      {[
+                        { label: "Feltöltve", at: formatAuditDate(document.currentVersion?.createdAt || document.updatedAt), actor: document.currentVersion?.createdBy || "—" },
+                        { label: "Műszaki ellenőrzés", at: reviewAuditTime(reviewExtra, "technicalReview") || reviewAuditTime(reviewExtra, "workflowChanged"), actor: reviewAuditActor(reviewExtra, reviewAuditTime(reviewExtra, "technicalReview") ? "technicalReview" : "workflowChanged") },
+                        { label: "Megrendelő", at: reviewAuditTime(reviewExtra, "customerReview") || reviewAuditTime(reviewExtra, "customerApproval"), actor: reviewAuditActor(reviewExtra, reviewAuditTime(reviewExtra, "customerReview") ? "customerReview" : "customerApproval") },
+                        { label: "Projektvezető", at: reviewAuditTime(reviewExtra, "projectManagerApproval"), actor: reviewAuditActor(reviewExtra, "projectManagerApproval") },
+                        { label: "Beruházói PV", at: reviewAuditTime(reviewExtra, "investorProjectManagerApproval"), actor: reviewAuditActor(reviewExtra, "investorProjectManagerApproval") },
+                        { label: "Életciklus", at: reviewAuditTime(reviewExtra, "lifecycleChanged"), actor: reviewAuditActor(reviewExtra, "lifecycleChanged") },
+                      ].map((row) => (
+                        <tr key={row.label}><td>{row.label}</td><td>{row.at || "—"}</td><td>{row.actor}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className={styles.reviewRoleInfo}>
