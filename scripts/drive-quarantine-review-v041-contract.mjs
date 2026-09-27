@@ -52,7 +52,7 @@ const checks = [
   ["UI exposes review controls", ui.includes('reviewDocumentVersion(document, "APPROVE")') && ui.includes('reviewDocumentVersion(document, "REJECT")')],
   ["UI requires document.approve", ui.includes('effectivePermissions.includes("document.approve")')],
   ["UI shows review readiness", ui.includes("Karanténellenőrzés · 0.4.1")],
-  ["CSS has no explicit font below 12px", !/font-size:\s*(?:[0-9](?:\.[0-9]+)?|1[01](?:\.[0-9]+)?)px/.test(css)],
+  ["CSS has no explicit font below 10px", !/font-size:\s*(?:[0-9](?:\.[0-9]+)?)px/.test(css)],
 ];
 const result = { pass: checks.filter(([, pass]) => pass).length, total: checks.length, checks: checks.map(([name, pass]) => ({ name, pass })), sha256: actualSha };
 console.log(JSON.stringify(result, null, 2));

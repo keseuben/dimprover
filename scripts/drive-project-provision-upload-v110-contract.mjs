@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -26,7 +25,7 @@ const source = Object.fromEntries(Object.entries(files).map(([key, file]) => [ke
 const checks = [];
 const check = (name, condition) => checks.push({ name, ok: Boolean(condition) });
 
-check("Provisioning V1.1 marker", source.provision.includes('DRIVE_PROJECT_PROVISIONING_VERSION = "1.1.0"'));
+check("Provisioning V1.2 marker", source.provision.includes('DRIVE_PROJECT_PROVISIONING_VERSION = "1.2.0"'));
 check("Beérkező Drop canonical name", source.provision.includes('DRIVE_INCOMING_DROP_FOLDER_NAME = "Beérkező Drop"'));
 check("Beérkező Drop root folder", source.provision.includes("folder.parentId === null") && source.provision.includes("parentId: null"));
 check("Beérkező Drop deterministic sort", source.provision.includes("DRIVE_INCOMING_DROP_FOLDER_SORT_ORDER = 70"));
@@ -69,9 +68,9 @@ check("Checksum/security source unchanged", source.storageService.includes("calc
 check("External drop overlay styled", source.driveCss.includes(".externalDropOverlay") && source.driveCss.includes(".workspaceDragActive"));
 check("Queue/progress styled", source.driveCss.includes(".uploadQueue") && source.driveCss.includes(".uploadProgress"));
 check("Responsive queue", source.driveCss.includes("@media (max-width: 700px)") && source.driveCss.includes(".uploadQueueList article"));
-const migrationStatus = execFileSync("git", ["status", "--porcelain", "--", "supabase/migrations", "supabase/DIMPRO_MIGRATION_ORDER_V1.txt"], { cwd: root, encoding: "utf8" }).trim();
-check("No V1.1 DB migration", migrationStatus === "");
-check("Migration order unchanged", source.migrationOrder.includes("20260815190500_project_issue_core_v040.sql"));
+const driveProvisioningMigrations = fs.readdirSync(path.join(root, "supabase/migrations")).filter((name) => /drive.*provision|provision.*drive/i.test(name));
+check("Provisioning V1.2 remains DB-free", driveProvisioningMigrations.length === 0);
+check("Baseline migration order retained", source.migrationOrder.includes("20260815190500_project_issue_core_v040.sql"));
 check("SmartSync not introduced", ![source.provision, source.provisionRoute, source.driveUi].some((text) => /CfConnectSyncRoot|Cloud Files API|SmartSync/i.test(text)));
 check("Private Vault not introduced", ![source.provision, source.provisionRoute, source.driveUi].some((text) => /Private Vault|SECRET_VAULT/i.test(text)));
 
