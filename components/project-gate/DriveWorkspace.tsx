@@ -1263,18 +1263,18 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         ok?: boolean; error?: string; scan?: { status?: string; engine?: string | null; engineVersion?: string | null; signatureName?: string | null };
         autoRejected?: boolean;
       };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A DRIVE vírusvizsgálat sikertelen.");
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A DRIVE biztonsági ellenőrzése sikertelen.");
       if (payload.scan?.status === "CLEAN") {
-        setNotice(`ClamAV ellenőrzés: TISZTA${payload.scan.engineVersion ? ` · ${payload.scan.engine || "ClamAV"} ${payload.scan.engineVersion}` : ""}. A verzió most jóváhagyható.`);
+        setNotice("Biztonsági ellenőrzés rendben · A verzió most jóváhagyható.");
       } else if (payload.scan?.status === "INFECTED" || payload.autoRejected) {
-        setError(`A fájl vírusveszély miatt automatikusan elutasításra került${payload.scan?.signatureName ? `: ${payload.scan.signatureName}` : "."}`);
+        setError("Biztonsági kockázat észlelve; a fájl automatikusan elutasításra került.");
       } else {
-        setNotice(`Vírusellenőrzési állapot: ${payload.scan?.status || "ismeretlen"}.`);
+        setNotice(`Biztonsági ellenőrzés állapota: ${payload.scan?.status || "ismeretlen"}.`);
       }
       await load();
       await loadDetails(document.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A DRIVE vírusvizsgálat sikertelen.");
+      setError(caught instanceof Error ? caught.message : "A DRIVE biztonsági ellenőrzése sikertelen.");
     } finally {
       setBusy(false);
     }
@@ -1521,9 +1521,9 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       <div className={`${styles.reviewStatus} ${securityScannerReady ? styles.reviewStatusReady : styles.reviewStatusBlocked}`}>
         <ShieldCheck size={16} />
         <div>
-          <b>{securityScannerReady ? "ClamAV vírusvédelem aktív" : "ClamAV vírusvédelem nem elérhető"}</b>
+          <b>{securityScannerReady ? "Biztonsági ellenőrzés aktív" : "Biztonsági ellenőrzés nem elérhető"}</b>
           <span>{securityScannerReady
-            ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""} · minden WEB/DESKTOP feltöltés karanténból indul`
+            ? "Minden WEB/DESKTOP feltöltés biztonsági ellenőrzéssel és karanténból indul"
             : `Fail-closed: jóváhagyás tiltva · ${health?.security?.errorCode || "scanner unavailable"}`}</span>
         </div>
       </div>
@@ -1660,7 +1660,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>
             <label>Fájlok<input name="file" type="file" multiple required /></label>
             <div className={styles.uploadHint}><UploadCloud size={20} /><div><strong>Több fájlt is kijelölhetsz egyszerre</strong><span>Windows Intézőből vagy az asztalról közvetlenül a Drive felületre is behúzhatod őket. Külső drop esetén a bal oldalon kiválasztott mappa lesz a cél.</span></div></div>
-            <small>Maximum fájlméret: {health?.storage?.maxUploadMb || 0} MB / fájl. Minden tétel ugyanazon signed upload → SHA-256 → karantén / vírusellenőrzési láncon halad át.</small>
+            <small>Maximum fájlméret: {health?.storage?.maxUploadMb || 0} MB / fájl. Minden tétel ugyanazon signed upload → SHA-256 → karantén / biztonsági ellenőrzési láncon halad át.</small>
             <footer><button type="button" onClick={() => setShowUploadForm(false)}>Mégse</button><button type="submit" disabled={uploadBatchBusy}>{uploadBatchBusy ? "Feltöltési sor fut…" : "Fájlok hozzáadása"}</button></footer>
           </form>}
         </div>
@@ -1781,15 +1781,15 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                       type="button"
                       className={styles.approveButton}
                       disabled={busy || !securityScannerReady}
-                      title={securityScannerReady ? "ClamAV vírusellenőrzés indítása" : "A vírusellenőrző jelenleg nem elérhető; a jóváhagyás fail-closed."}
+                      title={securityScannerReady ? "Biztonsági ellenőrzés indítása" : "A biztonsági ellenőrzés jelenleg nem elérhető; a jóváhagyás tiltva."}
                       onClick={() => void scanDocumentVersion(document)}
-                      aria-label={`${document.name} vírusellenőrzése`}
+                      aria-label={`${document.name} biztonsági ellenőrzése`}
                     ><ShieldCheck size={15} /></button>
                     <button
                       type="button"
                       className={styles.approveButton}
                       disabled={busy || !reviewReady || !securityScannerReady}
-                      title={!securityScannerReady ? "A jóváhagyás vírusellenőrző nélkül tiltott." : reviewReady ? "Karanténverzió jóváhagyása – csak CLEAN scan után" : "A Quarantine Review 0.4.1 SQL még nem aktív."}
+                      title={!securityScannerReady ? "A jóváhagyás biztonsági ellenőrzés nélkül tiltott." : reviewReady ? "Karanténverzió jóváhagyása – csak sikeres biztonsági ellenőrzés után" : "A Quarantine Review 0.4.1 SQL még nem aktív."}
                       onClick={() => void reviewDocumentVersion(document, "APPROVE")}
                       aria-label={`${document.name} jóváhagyása`}
                     ><Check size={15} /></button>
@@ -1819,7 +1819,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
             <div className={styles.reviewWorkspace}>
             <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.planTitle}</button><small title={row.document.name}>{row.planTitle !== row.document.name ? row.document.name : ""}</small></td><td>{row.effectiveDiscipline || "—"}</td><td>{row.effectiveTopic || "—"}</td><td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openReviewDetail(row.document.id, "checked")}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openReviewDetail(row.document.id, "result")}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openReviewDetail(row.document.id, "observations")}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.workflow || "Nincs workflow állapot"} onClick={() => openReviewDetail(row.document.id, "workflow")}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.internalNote || "Nincs belső megjegyzés"} onClick={() => openReviewDetail(row.document.id, "internal")}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs megrendelői jóváhagyás"} onClick={() => openReviewDetail(row.document.id, "customer")}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs megrendelői megjegyzés"} onClick={() => openReviewDetail(row.document.id, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.revisionChange || "Nincs revízióváltozás"} onClick={() => openReviewDetail(row.document.id, "revision")}>{revisionMark(row.revisionChange)}</button></td></tr>)}</tbody></table></div>
-            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} membershipRole="" membershipDisplayName="" securityReady={securityScannerReady} securityLabel={securityScannerReady ? `${health?.security?.engine || "ClamAV"}` : health?.security?.errorCode || "Scanner nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveReview={saveSelectedReview} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
+            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} membershipRole="" membershipDisplayName="" securityReady={securityScannerReady} securityLabel={securityScannerReady ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveReview={saveSelectedReview} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
             </div>
           </section>}
 
@@ -1877,7 +1877,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     membershipDisplayName=""
                     securityReady={securityScannerReady}
                     securityLabel={securityScannerReady
-                      ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
+                      ? "Biztonsági ellenőrzés"
                       : health?.security?.errorCode || "Scanner nem elérhető"}
                     onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }}
                     onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }}
@@ -1915,7 +1915,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   membershipDisplayName=""
                   securityReady={securityScannerReady}
                   securityLabel={securityScannerReady
-                    ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
+                    ? "Biztonsági ellenőrzés"
                     : health?.security?.errorCode || "Scanner nem elérhető"}
                   onScan={async () => { await scanDocumentVersion(selectedDocument); }}
                   onReview={async (action) => { await reviewDocumentVersion(selectedDocument, action); }}

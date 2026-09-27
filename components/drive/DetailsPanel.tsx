@@ -570,13 +570,13 @@ export default function DetailsPanel({
             {document.currentVersion?.status === "QUARANTINED" && (
               <div className={styles.infoBox}>
                 <strong>Biztonsági karantén</strong><br />
-                {securityReady ? `${securityLabel} elérhető. CLEAN eredmény után a terv belső ellenőrzésre megnyitható; letöltéshez és kiadáshoz továbbra is a dokumentumfolyamat szabályai érvényesek.` : `Vírusellenőrző nem elérhető (${securityLabel}). Az előnézet és kiadás fail-closed tiltva.`}
+                {securityReady ? `${securityLabel} aktív. Sikeres ellenőrzés után a fájl megnyitható és letölthető; a végleges kiadáshoz továbbra is a dokumentumfolyamat szabályai érvényesek.` : `Biztonsági ellenőrzés nem elérhető (${securityLabel}). Az előnézet, letöltés és kiadás biztonsági okból tiltva.`}
               </div>
             )}
             {canApprove && document.currentVersion?.status === "QUARANTINED" && (
               <div className={styles.detailsActions}>
                 <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={busy || !securityReady} onClick={() => void onScan()}>
-                  <ShieldCheck size={12} /> Vírusellenőrzés
+                  <ShieldCheck size={12} /> Biztonsági ellenőrzés
                 </button>
                 <button type="button" className={styles.smallButton} disabled={busy || !securityReady} onClick={() => void onReview("APPROVE")}>
                   <Check size={12} /> Jóváhagyás
@@ -591,7 +591,7 @@ export default function DetailsPanel({
               <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, planTitle: metadata.planTitle } })}>
                 <Save size={12} /> Metaadat mentése
               </button>
-              <button type="button" className={styles.smallButton} disabled={busy || document.currentVersion?.status !== "AVAILABLE"} onClick={() => void onDownload()}>
+              <button type="button" className={styles.smallButton} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()}>
                 <Download size={12} /> Letöltés
               </button>
               <button type="button" className={styles.smallButton} disabled={!canWrite || busy} onClick={() => void onEnsureQr()}>

@@ -12,6 +12,8 @@ export {
 
 export { getDriveDropIncomingSourceDatabaseHealth } from "./storageRepository";
 
+export { openDriveFolderZip } from "./folderDownloadService";
+
 export {
   abortDriveObjectUpload,
   completeDriveObjectUpload,

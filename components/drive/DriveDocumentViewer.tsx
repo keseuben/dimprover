@@ -205,7 +205,7 @@ export default function DriveDocumentViewer({ projectId, document, compact = fal
       <div className={`${styles.driveViewerUnsupported} ${compact ? styles.driveViewerCompact : ""}`}>
         <FileSearch2 size={compact ? 22 : 28} />
         <strong>Az aktuális verzió még nem előnézhető.</strong>
-        <span>Inline megjelenítéshez AVAILABLE, vagy sikeres CLEAN vírusellenőrzéssel rendelkező ellenőrzés alatti verzió szükséges.</span>
+        <span>Inline megjelenítéshez elérhető vagy sikeres biztonsági ellenőrzéssel rendelkező verzió szükséges.</span>
       </div>
     );
   }

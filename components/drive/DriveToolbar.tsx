@@ -2,6 +2,9 @@
 
 import {
   BrainCircuit,
+  Download,
+  ExternalLink,
+  FolderDown,
   FolderPlus,
   GitCompareArrows,
   PackageCheck,
@@ -22,6 +25,12 @@ type Props = {
   canWrite: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
+  canOpenSelected: boolean;
+  canDownloadSelected: boolean;
+  canDownloadFolder: boolean;
+  onOpenSelected: () => void;
+  onDownloadSelected: () => void;
+  onDownloadFolder: () => void;
   boxCount: number;
   boxShelfOpen: boolean;
   boxReady: boolean;
@@ -38,6 +47,12 @@ export default function DriveToolbar({
   canWrite,
   onCreateFolder,
   onUpload,
+  canOpenSelected,
+  canDownloadSelected,
+  canDownloadFolder,
+  onOpenSelected,
+  onDownloadSelected,
+  onDownloadFolder,
   boxCount,
   boxShelfOpen,
   boxReady,
@@ -64,6 +79,33 @@ export default function DriveToolbar({
         title={canWrite ? "Fájl feltöltése" : "Nincs írási jogosultságod"}
       >
         <UploadCloud size={14} /> <span>Feltöltés</span>
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        onClick={onOpenSelected}
+        disabled={!canOpenSelected}
+        title={canOpenSelected ? "Kijelölt fájl megnyitása (dupla kattintással is)" : "Jelölj ki egy megnyitható fájlt"}
+      >
+        <ExternalLink size={14} /> <span>Megnyitás</span>
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        onClick={onDownloadSelected}
+        disabled={!canDownloadSelected}
+        title={canDownloadSelected ? "Kijelölt fájl letöltése" : "Jelölj ki egy letölthető fájlt"}
+      >
+        <Download size={14} /> <span>Letöltés</span>
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        onClick={onDownloadFolder}
+        disabled={!canDownloadFolder}
+        title={canDownloadFolder ? "Kiválasztott mappa és almappái letöltése ZIP-ben" : "ZIP letöltéshez válassz ki egy mappát"}
+      >
+        <FolderDown size={14} /> <span>Mappa ZIP</span>
       </button>
       <button
         type="button"

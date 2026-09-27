@@ -23,6 +23,7 @@ type Props = {
   moveReady: boolean;
   busy: boolean;
   onSelectDocument: (document: DriveDocument) => void;
+  onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
 };
 
@@ -38,6 +39,7 @@ type PaneProps = {
   busy: boolean;
   onFolderChange: (folderId: string) => void;
   onSelectDocument: (document: DriveDocument) => void;
+  onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
 };
 
@@ -82,6 +84,7 @@ function CommanderPane({
   busy,
   onFolderChange,
   onSelectDocument,
+  onOpenDocument,
   onMoveDocument,
 }: PaneProps) {
   const folder = folders.find((entry) => entry.id === folderId) || null;
@@ -151,6 +154,8 @@ function CommanderPane({
                 event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: document.currentVersion?.id || null, sourceFolderId: document.folderId }));
               }}
               onClick={() => onSelectDocument(document)}
+              onDoubleClick={() => onOpenDocument(document)}
+              title="Kattintás: kijelölés · Dupla kattintás: megnyitás"
             >
               <GripVertical size={11} className={styles.commanderGrip} />
               <span className={commanderFileIconClass(document.extension)}>{fileIcon(document.extension)}</span>
@@ -187,6 +192,7 @@ export default function CommanderPanel({
   moveReady,
   busy,
   onSelectDocument,
+  onOpenDocument,
   onMoveDocument,
 }: Props) {
   const initialLeft = folders[0]?.id || "";
@@ -220,6 +226,7 @@ export default function CommanderPanel({
           busy={busy}
           onFolderChange={setLeftFolderId}
           onSelectDocument={onSelectDocument}
+          onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
         />
         <div className={styles.commanderDivider} aria-hidden="true" />
@@ -235,6 +242,7 @@ export default function CommanderPanel({
           busy={busy}
           onFolderChange={setRightFolderId}
           onSelectDocument={onSelectDocument}
+          onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
         />
       </div>

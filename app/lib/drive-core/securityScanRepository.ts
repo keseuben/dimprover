@@ -241,7 +241,7 @@ export async function requireDriveCleanSecurityScan(input: {
   const scan = context.scan;
   if (!scan || scan.status !== "CLEAN") {
     throw new DriveCoreRepositoryError(
-      "A dokumentumverzió csak sikeres ClamAV vírusellenőrzés után hagyható jóvá.",
+      "A dokumentumverzió csak sikeres biztonsági ellenőrzés után használható fel.",
       "DRIVE_REVIEW_SECURITY_SCAN_REQUIRED",
       409,
       { securityStatus: scan?.status || "PENDING" },
@@ -249,7 +249,7 @@ export async function requireDriveCleanSecurityScan(input: {
   }
   if (!context.version.sha256 || !scan.sha256 || context.version.sha256.toLowerCase() !== scan.sha256.toLowerCase()) {
     throw new DriveCoreRepositoryError(
-      "A vírusellenőrzés SHA-256 lenyomata nem egyezik a dokumentumverzió hitelesített lenyomatával.",
+      "A biztonsági ellenőrzés SHA-256 lenyomata nem egyezik a dokumentumverzió hitelesített lenyomatával.",
       "DRIVE_REVIEW_SECURITY_HASH_MISMATCH",
       409,
     );

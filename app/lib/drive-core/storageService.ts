@@ -488,7 +488,8 @@ export async function initDriveObjectDownload(input: {
   if (!status.objectDownloadEnabled && !trustedDropArchive) {
     throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_DOWNLOAD_DISABLED", 503);
   }
-  if (record.version.status !== "AVAILABLE" || record.version.storageProvider !== "S3" || !record.version.storageKey) {
+  const downloadableStatus = record.version.status === "AVAILABLE" || record.version.status === "QUARANTINED";
+  if (!downloadableStatus || record.version.storageProvider !== "S3" || !record.version.storageKey) {
     throw new DriveCoreRepositoryError(
       "Ez a dokumentumverzió még nem tölthető le a privát DRIVE tárhelyről.",
       "DRIVE_DOWNLOAD_NOT_AVAILABLE",

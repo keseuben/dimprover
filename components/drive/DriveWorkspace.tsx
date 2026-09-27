@@ -66,6 +66,21 @@ function formatBytes(value: number) {
   return `${value} B`;
 }
 
+const browserPreviewExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
+
+function nativeOfficeProtocol(extension: string) {
+  const ext = extension.toLowerCase();
+  if (["doc", "docx", "docm", "dot", "dotx"].includes(ext)) return "ms-word";
+  if (["xls", "xlsx", "xlsm", "xlsb", "xlt", "xltx", "csv"].includes(ext)) return "ms-excel";
+  if (["ppt", "pptx", "pptm", "pps", "ppsx"].includes(ext)) return "ms-powerpoint";
+  return "";
+}
+
+function isPotentiallyReadableVersion(document: DriveDocument | null) {
+  const status = document?.currentVersion?.status || "";
+  return Boolean(document?.currentVersion) && !["REJECTED", "STAGED", "METADATA_ONLY"].includes(status);
+}
+
 export default function DriveWorkspace({ projectId, projectName, projectCode, projectStatus = "ACTIVE", permissions = [] }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
@@ -360,10 +375,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         setError(`${failures.length}/${files.length} fájl feltöltése sikertelen. ${failures.slice(0, 3).join(" · ")}${failures.length > 3 ? ` · +${failures.length - 3} további hiba` : ""}`);
       } else if (files.length > 1) {
         setError("");
-        setNotice(`${uploadedCount}/${files.length} fájl feltöltve${cleanCount === uploadedCount ? " és ClamAV szerint tiszta" : ""}. Jóváhagyásig karanténban maradnak.`);
+        setNotice(cleanCount === uploadedCount
+          ? uploadedCount + "/" + files.length + " fájl feltöltve · Biztonsági ellenőrzés rendben. Jóváhagyásig karanténban maradnak."
+          : uploadedCount + "/" + files.length + " fájl feltöltve. Jóváhagyásig karanténban maradnak.");
       } else if (cleanCount === 1) {
         setError("");
-        setNotice("A fájl feltöltődött és ClamAV szerint tiszta. Jóváhagyásig karanténban marad.");
+        setNotice("Feltöltés kész · Biztonsági ellenőrzés rendben. Jóváhagyásig karanténban marad.");
       } else {
         setError("");
         setNotice("A fájl feltöltődött és biztonsági ellenőrzésre vár. Jóváhagyásig karanténban marad.");
@@ -377,7 +394,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   async function scanSelectedVersion() {
     const version = selectedDocument?.currentVersion;
     if (!selectedDocument || !version || !canApprove) return;
-    setBusy(true); setError(""); setNotice("ClamAV vírusellenőrzés folyamatban…");
+    setBusy(true); setError(""); setNotice("Biztonsági ellenőrzés folyamatban…");
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/versions/${encodeURIComponent(version.id)}/security-scan`, {
         method: "POST",
@@ -389,18 +406,18 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         scan?: { status?: string; engine?: string | null; engineVersion?: string | null; signatureName?: string | null };
         autoRejected?: boolean;
       };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A vírusellenőrzés sikertelen.");
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A biztonsági ellenőrzés sikertelen.");
       if (payload.scan?.status === "CLEAN") {
-        setNotice(`ClamAV: TISZTA${payload.scan.engineVersion ? ` · ${payload.scan.engine || "ClamAV"} ${payload.scan.engineVersion}` : ""}. A verzió jóváhagyható.`);
+        setNotice("Biztonsági ellenőrzés rendben · A verzió jóváhagyható.");
       } else if (payload.scan?.status === "INFECTED" || payload.autoRejected) {
-        setError(`Vírusveszély észlelve; a verzió automatikusan elutasításra került${payload.scan?.signatureName ? ` · ${payload.scan.signatureName}` : ""}.`);
+        setError("Biztonsági kockázat észlelve; a verzió automatikusan elutasításra került.");
       } else {
-        setNotice(`Biztonsági vizsgálat állapota: ${payload.scan?.status || "ismeretlen"}.`);
+        setNotice("Biztonsági ellenőrzés állapota: " + (payload.scan?.status || "ismeretlen") + ".");
       }
       await load();
       await loadDetails(selectedDocument.id);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A vírusellenőrzés sikertelen.");
+      setError(caught instanceof Error ? caught.message : "A biztonsági ellenőrzés sikertelen.");
       setNotice("");
     } finally { setBusy(false); }
   }
@@ -409,7 +426,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     const version = selectedDocument?.currentVersion;
     if (!selectedDocument || !version || !canApprove) return;
     const promptText = action === "APPROVE" ? "Jóváhagyási megjegyzés:" : "Elutasítás indoka:";
-    const note = window.prompt(promptText, action === "APPROVE" ? "ClamAV ellenőrizve, kiadható." : "");
+    const note = window.prompt(promptText, action === "APPROVE" ? "Biztonsági ellenőrzés rendben, kiadható." : "");
     if (note === null) return;
     if (action === "REJECT" && note.trim().length < 3) {
       setError("Elutasításkor legalább rövid indoklás szükséges.");
@@ -426,7 +443,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       const payload = await response.json() as { ok?: boolean; error?: string; cleanup?: { deleted?: boolean; error?: string | null } };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A karanténdöntés sikertelen.");
       setNotice(action === "APPROVE"
-        ? "A CLEAN vírusvizsgálatú verzió jóváhagyva és AVAILABLE állapotba került."
+        ? "A biztonságilag ellenőrzött verzió jóváhagyva és AVAILABLE állapotba került."
         : payload.cleanup?.deleted ? "A verzió elutasítva és az objektum törölve." : `A verzió elutasítva. ${payload.cleanup?.error || "Objektumtörlés függőben."}`);
       await load();
       await loadDetails(selectedDocument.id);
@@ -489,22 +506,104 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  async function requestDownloadLink(document: DriveDocument) {
+    const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/documents/" + encodeURIComponent(document.id) + "/download", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ versionId: document.currentVersion?.id || null }),
+    });
+    const payload = await response.json() as { ok?: boolean; error?: string; download?: { url?: string; fileName?: string } };
+    if (!response.ok || !payload.ok || !payload.download?.url) {
+      throw new Error(payload.error || "A letöltési link nem hozható létre.");
+    }
+    return payload.download as { url: string; fileName?: string };
+  }
+
+  async function openDocument(document: DriveDocument | null = selectedDocument) {
+    if (!document?.currentVersion) return;
+    const extension = (document.extension || "").toLowerCase();
+    setBusy(true);
+    setError("");
+    setNotice("");
+
+    let previewWindow: Window | null = null;
+    if (browserPreviewExtensions.has(extension)) {
+      previewWindow = window.open("", "_blank");
+      if (previewWindow) previewWindow.opener = null;
+    }
+
+    try {
+      if (browserPreviewExtensions.has(extension)) {
+        const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/documents/" + encodeURIComponent(document.id) + "/preview", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ versionId: document.currentVersion.id }),
+        });
+        const payload = await response.json() as { ok?: boolean; error?: string; preview?: { url?: string } };
+        if (!response.ok || !payload.ok || !payload.preview?.url) {
+          throw new Error(payload.error || "Az előnézet nem nyitható meg.");
+        }
+        if (previewWindow) previewWindow.location.href = payload.preview.url;
+        else window.open(payload.preview.url, "_blank", "noopener,noreferrer");
+        setNotice("Megnyitva új lapon: " + document.name);
+        return;
+      }
+
+      const download = await requestDownloadLink(document);
+      const protocol = nativeOfficeProtocol(extension);
+      if (protocol) {
+        window.location.href = protocol + ":ofe|u|" + download.url;
+        setNotice("Megnyitás a Windows alkalmazásban: " + (download.fileName || document.name) + ". Ha az alkalmazás nem indul el, használd a Letöltés gombot.");
+        return;
+      }
+
+      window.location.assign(download.url);
+      setNotice("A fájltípushoz nincs böngészős előnézet; letöltés indítva: " + (download.fileName || document.name));
+    } catch (caught) {
+      previewWindow?.close();
+      setError(caught instanceof Error ? caught.message : "A fájl megnyitása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function downloadSelected() {
     if (!selectedDocument) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/download`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ versionId: selectedDocument.currentVersion?.id || null }),
-      });
-      const payload = await response.json() as { ok?: boolean; error?: string; download?: { url?: string; fileName?: string } };
-      if (!response.ok || !payload.ok || !payload.download?.url) throw new Error(payload.error || "A letöltési link nem hozható létre.");
-      window.location.assign(payload.download.url);
-      setNotice(`Letöltés előkészítve: ${payload.download.fileName || selectedDocument.name}`);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "A letöltés sikertelen."); }
-    finally { setBusy(false); }
+      const download = await requestDownloadLink(selectedDocument);
+      window.location.assign(download.url);
+      setNotice("Letöltés indítva: " + (download.fileName || selectedDocument.name));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A letöltés sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadSelectedFolder() {
+    if (!selectedFolder) {
+      setError("ZIP letöltéshez válassz ki egy konkrét mappát.");
+      return;
+    }
+    setError("");
+    const url = "/api/projects/" + encodeURIComponent(projectId) + "/drive/folders/" + encodeURIComponent(selectedFolder.id) + "/download";
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "";
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setNotice("Mappa ZIP letöltés indítva: " + selectedFolder.name);
+  }
+
+  function selectFolder(folderId: string) {
+    setSelectedDocumentId("");
+    setSelectedFolderId(folderId);
   }
 
   const effectiveFolderClassification = useMemo(() => {
@@ -735,6 +834,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         canWrite={canWrite}
         onCreateFolder={() => void createFolder()}
         onUpload={requestUpload}
+        canOpenSelected={isPotentiallyReadableVersion(selectedDocument)}
+        canDownloadSelected={isPotentiallyReadableVersion(selectedDocument)}
+        canDownloadFolder={Boolean(selectedFolder)}
+        onOpenSelected={() => void openDocument()}
+        onDownloadSelected={() => void downloadSelected()}
+        onDownloadFolder={downloadSelectedFolder}
         boxCount={boxes.length}
         boxShelfOpen={boxShelfOpen}
         boxReady={Boolean(health?.workspace?.databaseReady)}
@@ -774,6 +879,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             moveReady={Boolean(health?.workspace?.databaseReady)}
             busy={busy}
             onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+            onOpenDocument={(document) => void openDocument(document)}
             onMoveDocument={moveDocument}
           />
         ) : (
@@ -783,7 +889,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               selectedFolderId={selectedFolderId}
               documentCounts={folderDocumentCounts}
               totalDocumentCount={tree?.summary.documentCount || 0}
-              onSelectFolder={setSelectedFolderId}
+              onSelectFolder={selectFolder}
               responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`}
             />
             <FileGridPanel
@@ -794,20 +900,17 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onOpenDocument={(document) => void openDocument(document)}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               metadataByDocument={metadataByDocument}
               folders={tree?.folders || []}
               selectedFolderId={selectedFolderId}
               currentFolder={selectedFolder}
-              onFolderChange={(folderId) => {
-                setSelectedDocumentId("");
-                setSelectedFolderId(folderId);
-              }}
+              onFolderChange={selectFolder}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
-                setSelectedDocumentId("");
-                setSelectedFolderId(selectedFolder.parentId || "all");
+                selectFolder(selectedFolder.parentId || "all");
               }}
               canWrite={canWrite}
               canApprove={canApprove}
@@ -859,7 +962,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               membershipRole={membershipRole}
               membershipDisplayName={membershipDisplayName}
               securityReady={securityReady}
-              securityLabel={health?.security?.ready ? `${health.security.engine || "ClamAV"}${health.security.engineVersion ? ` ${health.security.engineVersion}` : ""}` : health?.security?.errorCode || "Scanner nem elérhető"}
+              securityLabel={health?.security?.ready ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"}
               onScan={scanSelectedVersion}
               onReview={reviewSelectedVersion}
               onSaveMetadata={saveMetadata}
