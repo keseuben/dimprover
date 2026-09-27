@@ -1611,7 +1611,7 @@
 }
 
 /* Grouped headers keep the review matrix compact while exposing more approval stages. */
-.reviewTable { min-width: 1630px; }
+.reviewTable { min-width: 1742px; }
 .reviewGroupHeader th {
   top: 0;
   height: 24px;
@@ -1636,16 +1636,16 @@
 .reviewGroupManager { background: #f4f1ff !important; color: #5e4aa8 !important; border-left: 2px solid #d9d0f5 !important; }
 .reviewGroupInvestor { background: #eef8f1 !important; color: #33724c !important; border-left: 2px solid #c9e2d2 !important; }
 .reviewGroupLifecycle { background: #f4f6f8 !important; color: #526273 !important; border-left: 2px solid #d7dfe6 !important; }
-.reviewColumnHeader th:nth-child(7),
-.reviewColumnHeader th:nth-child(13),
-.reviewColumnHeader th:nth-child(16),
+.reviewColumnHeader th:nth-child(8),
+.reviewColumnHeader th:nth-child(14),
 .reviewColumnHeader th:nth-child(17),
 .reviewColumnHeader th:nth-child(18),
-.reviewTable td:nth-child(7),
-.reviewTable td:nth-child(13),
-.reviewTable td:nth-child(16),
+.reviewColumnHeader th:nth-child(19),
+.reviewTable td:nth-child(8),
+.reviewTable td:nth-child(14),
 .reviewTable td:nth-child(17),
-.reviewTable td:nth-child(18) {
+.reviewTable td:nth-child(18),
+.reviewTable td:nth-child(19) {
   border-left: 2px solid #dde6ee;
 }
 
@@ -1865,11 +1865,11 @@
   align-self: stretch;
 }
 .detailsSplitCard .reviewProgressStep {
-  min-height: 38px;
+  min-height: 52px;
   padding: 4px 2px 3px;
   border-radius: 7px;
 }
-.detailsSplitCard .reviewProgress::before { top: 18px; }
+.detailsSplitCard .reviewProgress::before { top: 20px; }
 .detailsSplitCard .reviewWorkspace > .reviewRoleInfo {
   grid-column: 1;
   grid-row: 2;
@@ -1957,3 +1957,21 @@
 .boxItemNames { min-width: 0; display: grid; gap: 1px; }
 .boxItemNames strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #263e57; font-size: var(--drive-font-xs); }
 .boxItemNames small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #73869a; font-size: 9px; }
+
+
+.reviewProgressStep time {
+  display: block;
+  max-width: 100%;
+  color: #6f8192;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: 0;
+  white-space: normal;
+  text-align: center;
+}
+.reviewProgressDone time { color: #3c7856; }
+.reviewProgressActive time { color: #2c6fc9; }
+.reviewProgressReturned time { color: #a66318; }
+
+.observationNotice { padding: 6px 8px; border-radius: 6px; background: #eef6ff; color: #315f8d; border: 1px solid #ccdef0; font-size: var(--drive-font-xs); line-height: 1.35; }

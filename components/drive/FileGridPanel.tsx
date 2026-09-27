@@ -549,6 +549,7 @@ export default function FileGridPanel({
                 <col style={{ width: "300px" }} />
                 <col style={{ width: "160px" }} />
                 <col style={{ width: "105px" }} />
+                <col style={{ width: "112px" }} />
                 <col style={{ width: "85px" }} />
                 <col style={{ width: "105px" }} />
                 <col style={{ width: "55px" }} />
@@ -566,7 +567,7 @@ export default function FileGridPanel({
               </colgroup>
               <thead>
                 <tr className={styles.reviewGroupHeader}>
-                  <th colSpan={6}>Dokumentum</th>
+                  <th colSpan={7}>Dokumentum</th>
                   <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
                   <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
                   <th className={styles.reviewGroupManager} title="Projektvezető">Projektv.</th>
@@ -578,6 +579,7 @@ export default function FileGridPanel({
                   <th title="Megjelenített tervnév">Név</th>
                   <th className={styles.reviewFileNameHeader} title="Eredeti fájlnév">Fájlnév</th>
                   <th title="Feltöltő">Feltöltő</th>
+                  <th title="Fájlfeltöltés dátuma és ideje">Feltöltve</th>
                   <th title="Szakág">Szakág</th>
                   <th title="Témakör">Témakör</th>
                   <th title="Ellenőrzés">Ell.</th>
@@ -597,7 +599,7 @@ export default function FileGridPanel({
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={18}>
+                    <td colSpan={19}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -639,6 +641,7 @@ export default function FileGridPanel({
                     </td>
                     <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
                     <td>{uploaderLabel(row.document.currentVersion?.createdBy)}</td>
+                    <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>

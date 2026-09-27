@@ -536,12 +536,53 @@ function stampReviewAudit(
   extra[prefix + "Decision"] = nextValue;
 }
 
+function reviewFieldFingerprint(value: unknown) {
+  if (Array.isArray(value)) return JSON.stringify(value);
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return String(value ?? "").trim();
+}
+
+function stampReviewActivity(
+  extra: Record<string, unknown>,
+  currentExtra: Record<string, unknown>,
+  keys: string[],
+  prefix: string,
+  label: string,
+  actor: DriveAuditActor,
+  now: string,
+) {
+  const changed = keys.some((key) => reviewFieldFingerprint(extra[key]) !== reviewFieldFingerprint(currentExtra[key]));
+  if (!changed) return;
+  extra[prefix + "ByUserId"] = actor.userId;
+  extra[prefix + "ByName"] = actor.displayName?.trim() || actor.userId;
+  extra[prefix + "At"] = now;
+  extra[prefix + "Decision"] = label;
+}
+
 function applyReviewAuditTrail(
   extra: Record<string, unknown>,
   currentExtra: Record<string, unknown>,
   actor: DriveAuditActor,
   now = new Date().toISOString(),
 ) {
+  stampReviewActivity(
+    extra,
+    currentExtra,
+    ["reviewChecked", "reviewResult", "reviewObservations", "reviewObservationItems", "workflowStatus", "internalNote", "revisionChange"],
+    "technicalReview",
+    "Műszaki ellenőrzés módosítva",
+    actor,
+    now,
+  );
+  stampReviewActivity(
+    extra,
+    currentExtra,
+    ["customerApproval", "customerObservations", "customerObservationItems", "customerNote"],
+    "customerReview",
+    "Megrendelői ellenőrzés módosítva",
+    actor,
+    now,
+  );
   stampReviewAudit(extra, currentExtra, "workflowStatus", "workflowChanged", actor, now);
   stampReviewAudit(extra, currentExtra, "customerApproval", "customerApproval", actor, now);
   stampReviewAudit(extra, currentExtra, "projectManagerApproval", "projectManagerApproval", actor, now);

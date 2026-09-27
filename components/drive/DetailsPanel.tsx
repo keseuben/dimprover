@@ -24,6 +24,19 @@ type ReviewSectionKey = "technical" | "customer" | "manager" | "investor" | "lif
 
 type ReviewObservationItem = { id: string; text: string; source: "text" | "voice" };
 
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: unknown) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type BrowserSpeechRecognitionCtor = new () => BrowserSpeechRecognition;
+
 type ReviewForm = {
   checked: string;
   result: string;
@@ -89,7 +102,18 @@ function formatAuditDate(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("hu-HU", { dateStyle: "short", timeStyle: "short" }).format(date);
+  return new Intl.DateTimeFormat("hu-HU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
+function reviewAuditTime(extra: Record<string, unknown>, prefix: string) {
+  return formatAuditDate(extra[prefix + "At"]);
 }
 
 function isApprovedDecision(value: string) {
@@ -177,9 +201,12 @@ function ObservationEditor({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const dictationRef = useRef<BrowserSpeechRecognition | null>(null);
+  const dictationTextRef = useRef("");
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const addEmpty = () => onChange([...items, { id: newObservationId(), text: "", source: "text" }]);
   const updateItem = (id: string, text: string) => onChange(items.map((item) => item.id === id ? { ...item, text } : item));
@@ -207,8 +234,66 @@ function ObservationEditor({
     }
   };
 
+  const startBrowserDictation = () => {
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionCtor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+    };
+    const SpeechCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!SpeechCtor) {
+      setError("A szerveres DIMPRO hangátírás nincs konfigurálva, és ez a böngésző nem támogatja a diktálási tartalék módot.");
+      return false;
+    }
+    try {
+      const recognition = new SpeechCtor();
+      dictationTextRef.current = "";
+      recognition.lang = "hu-HU";
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onresult = (event: unknown) => {
+        const payload = event as { resultIndex?: number; results?: ArrayLike<unknown> };
+        const results = payload.results;
+        if (!results) return;
+        for (let index = payload.resultIndex || 0; index < results.length; index += 1) {
+          const result = results[index] as { isFinal?: boolean; 0?: { transcript?: string } } | undefined;
+          const transcript = result?.[0]?.transcript?.trim() || "";
+          if (transcript && result?.isFinal !== false) dictationTextRef.current += (dictationTextRef.current ? " " : "") + transcript;
+        }
+      };
+      recognition.onerror = (event: unknown) => {
+        const code = (event as { error?: string })?.error || "ismeretlen hiba";
+        setError("A böngésző diktálása megszakadt: " + code + ".");
+      };
+      recognition.onend = () => {
+        const text = dictationTextRef.current.trim();
+        dictationRef.current = null;
+        setRecording(false);
+        if (text) onChange([...items, { id: newObservationId(), text, source: "voice" }]);
+      };
+      dictationRef.current = recognition;
+      setNotice("Böngésző diktálási mód aktív. A hang feldolgozását a böngésző beszédfelismerő szolgáltatása végzi.");
+      setRecording(true);
+      recognition.start();
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A böngésző diktálása nem indítható.");
+      return false;
+    }
+  };
+
   const startRecording = async () => {
     setError("");
+    setNotice("");
+    try {
+      const configResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/transcription`, { credentials: "same-origin" });
+      const config = await configResponse.json().catch(() => ({})) as { configured?: boolean };
+      if (configResponse.ok && config.configured === false) {
+        startBrowserDictation();
+        return;
+      }
+    } catch {
+      // Ha a konfiguráció lekérése nem sikerül, megpróbáljuk a szerveres hangrögzítést.
+    }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setError("A böngésző nem támogatja a hangrögzítést.");
       return;
@@ -237,11 +322,17 @@ function ObservationEditor({
   };
 
   const stopRecording = () => {
+    const dictation = dictationRef.current;
+    if (dictation) {
+      dictation.stop();
+      return;
+    }
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
   };
 
   useEffect(() => () => {
+    try { dictationRef.current?.abort(); } catch {}
     if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
@@ -276,6 +367,7 @@ function ObservationEditor({
         ))}
         {!items.length && <div className={styles.observationEmpty}>Nincs rögzített észrevétel.</div>}
       </div>
+      {notice && <div className={styles.observationNotice}>{notice}</div>}
       {error && <div className={styles.observationError}>{error}</div>}
     </div>
   );
@@ -504,16 +596,16 @@ export default function DetailsPanel({
 
             <div className={styles.reviewProgress} aria-label="Tervellenőrzési folyamat">
               {([
-                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false, target: "" },
-                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone, target: "technical" },
-                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone, target: "customer" },
-                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone, target: "manager" },
-                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone, target: "investor" },
-                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle" },
+                { key: "upload", label: "Feltöltve", Icon: UploadCloud, done: true, active: false, target: "", at: formatAuditDate(document.currentVersion?.createdAt || document.updatedAt) },
+                { key: "technical", label: reviewReturned ? "Visszaadva" : "Ellenőrzés", Icon: ClipboardCheck, done: technicalDone && !reviewReturned, active: reviewReturned || !technicalDone, target: "technical", at: reviewAuditTime(reviewExtra, "technicalReview") || reviewAuditTime(reviewExtra, "workflowChanged") },
+                { key: "customer", label: "Megrendelő", Icon: UserCheck, done: customerDone, active: technicalDone && !customerDone, target: "customer", at: reviewAuditTime(reviewExtra, "customerReview") || reviewAuditTime(reviewExtra, "customerApproval") },
+                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, done: managerDone, active: customerDone && !managerDone, target: "manager", at: reviewAuditTime(reviewExtra, "projectManagerApproval") },
+                { key: "investor", label: "Beruházói PV", Icon: ShieldCheck, done: investorDone, active: managerDone && !investorDone, target: "investor", at: reviewAuditTime(reviewExtra, "investorProjectManagerApproval") },
+                { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle", at: reviewAuditTime(reviewExtra, "lifecycleChanged") },
               ] as const).map((step, index, steps) => (
                 <div className={styles.reviewProgressStepWrap} key={step.key}>
-                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={step.label} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
-                    <step.Icon size={15} /><span>{step.label}</span>
+                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={[step.label, step.at].filter(Boolean).join(" · ")} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
+                    <step.Icon size={15} /><span>{step.label}</span><time>{step.at || "—"}</time>
                   </button>
                   {index < steps.length - 1 && <span className={styles.reviewProgressLine} data-done={step.done ? "true" : undefined} />}
                 </div>
