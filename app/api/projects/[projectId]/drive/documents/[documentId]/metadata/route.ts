@@ -17,6 +17,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const result = await upsertDriveEngineeringMetadata(projectId, documentId, input, {
       userId: access.actor.userId,
       displayName: access.actor.displayName,
+      role: access.access.membership.role,
     });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

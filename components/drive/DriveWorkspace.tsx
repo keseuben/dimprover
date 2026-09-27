@@ -37,11 +37,15 @@ type Props = {
   permissions?: DrivePermission[];
 };
 
+type ProjectMembershipRole = "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
+
 type TreePayload = {
   ok?: boolean;
   error?: string;
   tree?: DriveTree;
   permissions?: DrivePermission[];
+  membershipRole?: ProjectMembershipRole;
+  membershipDisplayName?: string;
 };
 
 type UploadInitPayload = {
@@ -65,6 +69,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [health, setHealth] = useState<DriveHealth | null>(null);
   const [boxes, setBoxes] = useState<DriveBox[]>([]);
   const [apiPermissions, setApiPermissions] = useState<DrivePermission[]>([]);
+  const [membershipRole, setMembershipRole] = useState<ProjectMembershipRole | "">("");
+  const [membershipDisplayName, setMembershipDisplayName] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -121,6 +127,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       setHealth(healthPayload);
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
+      setMembershipRole(treePayload.membershipRole || "");
+      setMembershipDisplayName(treePayload.membershipDisplayName || "");
       setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
@@ -141,6 +149,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setBoxes([]);
     setDetails(null);
     setMetadataByDocument({});
+    setMembershipRole("");
+    setMembershipDisplayName("");
     setReviewFocus("");
     setSelectedFolderId("all");
     setSelectedDocumentId("");
@@ -471,7 +481,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     documentIds?: string[];
     folderId?: string;
     includeDescendants?: boolean;
-    fields: Record<string, string>;
+    fields: Record<string, string | number>;
   }) => {
     setBusy(true);
     setError("");
@@ -497,6 +507,11 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       setBusy(false);
     }
   }, [load, loadDetails, projectId, selectedDocumentId]);
+
+  const saveSelectedReview = useCallback(async (fields: Record<string, string | number>) => {
+    if (!selectedDocumentId) throw new Error("Nincs kijelölt dokumentum.");
+    await bulkReview({ documentIds: [selectedDocumentId], fields });
+  }, [bulkReview, selectedDocumentId]);
 
 
   const boxColorsByDocument = useMemo(() => {
@@ -728,6 +743,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 setSelectedFolderId(selectedFolder.parentId || "all");
               }}
               canWrite={canWrite}
+              canApprove={canApprove}
+              membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
               onOpenReviewDetail={openReviewDetail}
@@ -741,11 +758,14 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               canWrite={canWrite}
               canComment={canComment}
               canApprove={canApprove}
+              membershipRole={membershipRole}
+              membershipDisplayName={membershipDisplayName}
               securityReady={securityReady}
               securityLabel={health?.security?.ready ? `${health.security.engine || "ClamAV"}${health.security.engineVersion ? ` ${health.security.engineVersion}` : ""}` : health?.security?.errorCode || "Scanner nem elérhető"}
               onScan={scanSelectedVersion}
               onReview={reviewSelectedVersion}
               onSaveMetadata={saveMetadata}
+              onSaveReview={saveSelectedReview}
               onSaveNote={saveNote}
               onEnsureQr={ensureQr}
               onDownload={downloadSelected}

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
+import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
 import {
   DRIVE_WORKSPACE_BOOTSTRAP_ID,
   DRIVE_WORKSPACE_MIGRATION_COUNT,
@@ -458,7 +459,60 @@ export async function getDriveDocumentWorkspaceDetails(projectId: string, docume
   };
 }
 
-type DriveAuditActor = { userId: string; displayName?: string };
+type DriveAuditActor = { userId: string; displayName?: string; role?: ProjectMembershipRole };
+
+const TECHNICAL_REVIEW_FIELDS = new Set([
+  "reviewChecked", "reviewResult", "reviewObservations", "workflowStatus",
+  "internalNote", "revisionChange", "openObservationCount",
+]);
+const CUSTOMER_REVIEW_FIELDS = new Set(["customerApproval", "customerNote"]);
+const PROJECT_MANAGER_FIELDS = new Set(["projectManagerApproval"]);
+const INVESTOR_MANAGER_FIELDS = new Set(["investorProjectManagerApproval"]);
+const LIFECYCLE_FIELDS = new Set(["lifecycleStatus"]);
+
+function reviewFieldChanges(currentExtra: Record<string, unknown>, nextExtra: Record<string, unknown>) {
+  const result: Record<string, unknown> = {};
+  const keys = new Set([
+    ...TECHNICAL_REVIEW_FIELDS,
+    ...CUSTOMER_REVIEW_FIELDS,
+    ...PROJECT_MANAGER_FIELDS,
+    ...INVESTOR_MANAGER_FIELDS,
+    ...LIFECYCLE_FIELDS,
+  ]);
+  for (const key of keys) {
+    const current = currentExtra[key];
+    const next = nextExtra[key];
+    if (JSON.stringify(current ?? null) !== JSON.stringify(next ?? null)) result[key] = next;
+  }
+  return result;
+}
+
+function assertReviewFieldPermissions(fields: Record<string, unknown>, actor: DriveAuditActor) {
+  const role = actor.role;
+  const changedKeys = Object.keys(fields);
+  const hasAny = (set: Set<string>) => changedKeys.some((key) => set.has(key));
+  const technicalAllowed = role === "REVIEWER" || role === "PROJECT_MANAGER" || role === "OWNER";
+  const customerAllowed = role === "PROJECT_MANAGER" || role === "OWNER";
+  const managerAllowed = role === "PROJECT_MANAGER" || role === "OWNER";
+  const investorAllowed = role === "OWNER";
+  const lifecycleAllowed = role === "PROJECT_MANAGER" || role === "OWNER";
+
+  if (hasAny(TECHNICAL_REVIEW_FIELDS) && !technicalAllowed) {
+    throw new DriveCoreRepositoryError("A műszaki tervellenőrzéshez nincs megfelelő jogosultságod.", "DRIVE_REVIEW_TECHNICAL_FORBIDDEN", 403);
+  }
+  if (hasAny(CUSTOMER_REVIEW_FIELDS) && !customerAllowed) {
+    throw new DriveCoreRepositoryError("A megrendelői jóváhagyás módosításához nincs megfelelő jogosultságod.", "DRIVE_REVIEW_CUSTOMER_FORBIDDEN", 403);
+  }
+  if (hasAny(PROJECT_MANAGER_FIELDS) && !managerAllowed) {
+    throw new DriveCoreRepositoryError("A projektvezetői jóváhagyás módosításához nincs megfelelő jogosultságod.", "DRIVE_REVIEW_MANAGER_FORBIDDEN", 403);
+  }
+  if (hasAny(INVESTOR_MANAGER_FIELDS) && !investorAllowed) {
+    throw new DriveCoreRepositoryError("A beruházói projektvezetői jóváhagyás módosításához nincs megfelelő jogosultságod.", "DRIVE_REVIEW_INVESTOR_FORBIDDEN", 403);
+  }
+  if (hasAny(LIFECYCLE_FIELDS) && !lifecycleAllowed) {
+    throw new DriveCoreRepositoryError("A terv életciklusának módosításához nincs megfelelő jogosultságod.", "DRIVE_REVIEW_LIFECYCLE_FORBIDDEN", 403);
+  }
+}
 
 function normalizedExtraText(extra: Record<string, unknown>, key: string) {
   const value = extra[key];
@@ -509,6 +563,7 @@ export async function bulkUpdateDriveReviewMetadata(
   const fields = input.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
     ? input.fields as Record<string, unknown>
     : {};
+  assertReviewFieldPermissions(fields, actor);
 
   const targetIds = new Set(explicitIds);
   if (folderId) {
@@ -557,12 +612,18 @@ export async function bulkUpdateDriveReviewMetadata(
   const stringField = (name: string) => typeof fields[name] === "string" ? String(fields[name]).trim() : undefined;
   const reviewChecked = stringField("reviewChecked");
   const reviewResult = stringField("reviewResult");
+  const reviewObservations = stringField("reviewObservations");
   const workflowStatus = stringField("workflowStatus");
+  const internalNote = stringField("internalNote");
   const customerApproval = stringField("customerApproval");
+  const customerNote = stringField("customerNote");
   const revisionChange = stringField("revisionChange");
   const projectManagerApproval = stringField("projectManagerApproval");
   const investorProjectManagerApproval = stringField("investorProjectManagerApproval");
   const lifecycleStatus = stringField("lifecycleStatus");
+  const openObservationCount = fields.openObservationCount !== undefined
+    ? Math.max(0, Number(fields.openObservationCount) || 0)
+    : undefined;
 
   let updated = 0;
   for (let offset = 0; offset < documentIds.length; offset += 10) {
@@ -573,12 +634,16 @@ export async function bulkUpdateDriveReviewMetadata(
       const extra: Record<string, unknown> = { ...currentExtra };
       if (reviewChecked !== undefined) extra.reviewChecked = reviewChecked;
       if (reviewResult !== undefined) extra.reviewResult = reviewResult;
+      if (reviewObservations !== undefined) extra.reviewObservations = reviewObservations;
       if (workflowStatus !== undefined) extra.workflowStatus = workflowStatus;
+      if (internalNote !== undefined) extra.internalNote = internalNote;
       if (customerApproval !== undefined) extra.customerApproval = customerApproval;
+      if (customerNote !== undefined) extra.customerNote = customerNote;
       if (revisionChange !== undefined) extra.revisionChange = revisionChange;
       if (projectManagerApproval !== undefined) extra.projectManagerApproval = projectManagerApproval;
       if (investorProjectManagerApproval !== undefined) extra.investorProjectManagerApproval = investorProjectManagerApproval;
       if (lifecycleStatus !== undefined) extra.lifecycleStatus = lifecycleStatus;
+      if (openObservationCount !== undefined) extra.openObservationCount = openObservationCount;
 
       applyReviewAuditTrail(extra, currentExtra, actor);
 
@@ -632,6 +697,7 @@ export async function upsertDriveEngineeringMetadata(
   const extra: Record<string, unknown> = input.extra && typeof input.extra === "object" && !Array.isArray(input.extra)
     ? { ...(input.extra as Record<string, unknown>) }
     : {};
+  assertReviewFieldPermissions(reviewFieldChanges(currentExtra, extra), actor);
   applyReviewAuditTrail(extra, currentExtra, actor);
   const payload = {
     planNo: typeof input.planNo === "string" ? input.planNo.trim() : "",

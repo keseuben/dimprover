@@ -13,7 +13,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
     const tree = await listDriveTree(projectId);
-    return NextResponse.json({ ok: true, tree, permissions: access.access.permissions }, { headers: { "cache-control": "no-store" } });
+    return NextResponse.json({
+      ok: true,
+      tree,
+      permissions: access.access.permissions,
+      membershipRole: access.access.membership.role,
+      membershipDisplayName: access.access.membership.displayName,
+    }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
   }

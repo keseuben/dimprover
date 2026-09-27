@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const { projectId } = await context.params;
-  const access = await requireProjectPermission(request, projectId, "document.write");
+  const access = await requireProjectPermission(request, projectId, "document.approve");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const result = await bulkUpdateDriveReviewMetadata(projectId, input, {
       userId: access.actor.userId,
       displayName: access.actor.displayName,
+      role: access.access.membership.role,
     });
     if (!result.ok) return NextResponse.json(result, { status: 400 });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });

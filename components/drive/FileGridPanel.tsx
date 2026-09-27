@@ -22,12 +22,14 @@ type Props = {
   onFolderChange?: (folderId: string) => void;
   onNavigateParent?: () => void;
   canWrite?: boolean;
+  canApprove?: boolean;
+  membershipRole?: "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER" | "";
   busy?: boolean;
   onBulkReview?: (input: {
     documentIds?: string[];
     folderId?: string;
     includeDescendants?: boolean;
-    fields: Record<string, string>;
+    fields: Record<string, string | number>;
   }) => Promise<number>;
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
 };
@@ -245,6 +247,8 @@ export default function FileGridPanel({
   onFolderChange,
   onNavigateParent,
   canWrite = false,
+  canApprove = false,
+  membershipRole = "",
   busy = false,
   onBulkReview,
   onOpenReviewDetail,
@@ -267,6 +271,12 @@ export default function FileGridPanel({
     investorProjectManagerApproval: "__KEEP__",
     lifecycleStatus: "__KEEP__",
   });
+  const canBulkTechnical = canApprove;
+  const canBulkCustomer = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
+  const canBulkManager = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
+  const canBulkInvestor = canApprove && membershipRole === "OWNER";
+  const canBulkLifecycle = membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER";
+  const canAnyBulkReview = canBulkTechnical || canBulkCustomer || canBulkManager || canBulkInvestor || canBulkLifecycle;
 
   const effectiveFolderClassification = useMemo(() => {
     const result = new Map<string, { discipline: string; topic: string }>();
@@ -467,7 +477,7 @@ export default function FileGridPanel({
             <button
               type="button"
               className={styles.reviewBulkPrimary}
-              disabled={!canWrite || busy || !currentFolder}
+              disabled={!canAnyBulkReview || busy || !currentFolder}
               onClick={() => { resetBulkForm(); setBulkScope("folder"); }}
               title={currentFolder ? "A mappában lévő tervek csoportos ellenőrzése" : "Előbb válassz ki egy mappát"}
             >
@@ -475,7 +485,7 @@ export default function FileGridPanel({
             </button>
             <button
               type="button"
-              disabled={!canWrite || busy || !selectedReviewIds.length}
+              disabled={!canAnyBulkReview || busy || !selectedReviewIds.length}
               onClick={() => { resetBulkForm(); setBulkScope("selection"); }}
             >
               Kijelöltek ellenőrzése
@@ -499,13 +509,13 @@ export default function FileGridPanel({
                 </label>
               )}
               <div className={styles.reviewBulkGrid}>
-                <label>Ellenőrzés<select value={bulkForm.reviewChecked} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, reviewChecked: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Igen">Igen</option><option value="Nem">Nem</option></select></label>
-                <label>Eredmény<select value={bulkForm.reviewResult} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, reviewResult: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Megfelelő">Megfelelő</option><option value="Javítandó">Javítandó</option><option value="Visszaadva">Visszaadva</option></select></label>
-                <label>Workflow állapot<select value={bulkForm.workflowStatus} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, workflowStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Ellenőrzésre vár">Ellenőrzésre vár</option><option value="Ellenőrzés alatt">Ellenőrzés alatt</option><option value="Javításra visszaadva">Javításra visszaadva</option><option value="Megrendelői jóváhagyásra vár">Megrendelői jóváhagyásra vár</option><option value="Jóváhagyva">Jóváhagyva</option></select></label>
-                <label>Megrendelő<select value={bulkForm.customerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, customerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
-                <label>Projektvezető<select value={bulkForm.projectManagerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, projectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
-                <label>Beruházói projektvezető<select value={bulkForm.investorProjectManagerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, investorProjectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
-                <label>Életciklus<select value={bulkForm.lifecycleStatus} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, lifecycleStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select></label>
+                <label>Ellenőrzés<select value={bulkForm.reviewChecked} disabled={busy || !canBulkTechnical} onChange={(event) => setBulkForm((current) => ({ ...current, reviewChecked: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Igen">Igen</option><option value="Nem">Nem</option></select></label>
+                <label>Eredmény<select value={bulkForm.reviewResult} disabled={busy || !canBulkTechnical} onChange={(event) => setBulkForm((current) => ({ ...current, reviewResult: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Megfelelő">Megfelelő</option><option value="Javítandó">Javítandó</option><option value="Visszaadva">Visszaadva</option></select></label>
+                <label>Workflow állapot<select value={bulkForm.workflowStatus} disabled={busy || !canBulkTechnical} onChange={(event) => setBulkForm((current) => ({ ...current, workflowStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Ellenőrzésre vár">Ellenőrzésre vár</option><option value="Ellenőrzés alatt">Ellenőrzés alatt</option><option value="Javításra visszaadva">Javításra visszaadva</option><option value="Megrendelői jóváhagyásra vár">Megrendelői jóváhagyásra vár</option><option value="Jóváhagyva">Jóváhagyva</option></select></label>
+                <label>Megrendelő<select value={bulkForm.customerApproval} disabled={busy || !canBulkCustomer} onChange={(event) => setBulkForm((current) => ({ ...current, customerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Projektvezető<select value={bulkForm.projectManagerApproval} disabled={busy || !canBulkManager} onChange={(event) => setBulkForm((current) => ({ ...current, projectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Beruházói projektvezető<select value={bulkForm.investorProjectManagerApproval} disabled={busy || !canBulkInvestor} onChange={(event) => setBulkForm((current) => ({ ...current, investorProjectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Életciklus<select value={bulkForm.lifecycleStatus} disabled={busy || !canBulkLifecycle} onChange={(event) => setBulkForm((current) => ({ ...current, lifecycleStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select></label>
               </div>
               <div className={styles.reviewBulkActions}>
                 <span>Csak a „Nem módosítom” értéktől eltérő mezők kerülnek csoportosan átírva.</span>
