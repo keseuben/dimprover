@@ -224,6 +224,8 @@ export default function FileGridPanel({
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
   const [reviewStatus, setReviewStatus] = useState("all");
+  const [reviewApprovalStage, setReviewApprovalStage] = useState("all");
+  const [reviewLifecycle, setReviewLifecycle] = useState("all");
   const [reviewSearch, setReviewSearch] = useState("");
   const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([]);
   const [bulkScope, setBulkScope] = useState<"selection" | "folder" | null>(null);
@@ -264,8 +266,13 @@ export default function FileGridPanel({
     const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
     const observations = value("reviewObservations") || value("hageObservations");
     const observationCountRaw = Number(extra.openObservationCount ?? (observations ? 1 : 0));
+    const approval = approvalVisual(metadata);
+    const lifecycle = value("lifecycleStatus") || "Munkaközi";
     return {
       document,
+      approvalStage: approval.kind,
+      approvalTitle: approval.title,
+      lifecycle,
       explicitName: value("planTitle") || value("drawingTitle"),
       displayName: (value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
@@ -297,9 +304,11 @@ export default function FileGridPanel({
       return matchesSearch
         && (reviewDiscipline === "all" || row.effectiveDiscipline === reviewDiscipline)
         && (reviewTopic === "all" || row.effectiveTopic === reviewTopic)
-        && (reviewStatus === "all" || (reviewStatus === "not-approved" ? !isApprovedReviewValue(row.customer) : row.workflow === reviewStatus));
+        && (reviewStatus === "all" || (reviewStatus === "not-approved" ? !isApprovedReviewValue(row.customer) : row.workflow === reviewStatus))
+        && (reviewApprovalStage === "all" || row.approvalStage === reviewApprovalStage)
+        && (reviewLifecycle === "all" || row.lifecycle === reviewLifecycle);
     });
-  }, [allReviewRows, reviewDiscipline, reviewSearch, reviewStatus, reviewTopic]);
+  }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
 
   const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
   const reviewTopics = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [allReviewRows]);
@@ -471,7 +480,9 @@ export default function FileGridPanel({
             <label>Szakág<select value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Témakör<select value={reviewTopic} onChange={(event) => setReviewTopic(event.target.value)}><option value="all">Mind</option>{reviewTopics.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Workflow állapot<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="all">Mind</option><option value="not-approved">Nincs még jóváhagyva</option>{reviewStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); }}>Szűrők törlése</button>
+            <label>Jóváhagyási szint<select value={reviewApprovalStage} onChange={(event) => setReviewApprovalStage(event.target.value)}><option value="all">Mind</option><option value="pending">Ellenőrzésre vár</option><option value="review">Ellenőrzés alatt</option><option value="returned">Visszaadva</option><option value="customer">Megrendelő jóváhagyta</option><option value="manager">Projektvezető jóváhagyta</option><option value="investor">Beruházói PV jóváhagyta</option></select></label>
+            <label>Életciklus<select value={reviewLifecycle} onChange={(event) => setReviewLifecycle(event.target.value)}><option value="all">Mind</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select></label>
+            <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }}>Szűrők törlése</button>
           </div>
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
