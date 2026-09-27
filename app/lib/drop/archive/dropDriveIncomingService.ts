@@ -162,7 +162,7 @@ async function importFile(input: {
         documentFlowVersion: "0.1.0",
       },
     };
-    session = await createDriveUploadSessionRecord(record, ACTOR);
+    session = await createDriveUploadSessionRecord(record, ACTOR, config.projectDefaultQuotaBytes);
   }
 
   let finalized = false;

@@ -363,7 +363,7 @@ async function archiveSource(input: {
         archiveVersion: "DROP 1.2.13",
       },
     };
-    session = await createDriveUploadSessionRecord(record, ARCHIVE_ACTOR);
+    session = await createDriveUploadSessionRecord(record, ARCHIVE_ACTOR, driveConfig.projectDefaultQuotaBytes);
   }
 
   let driveFinalized = false;

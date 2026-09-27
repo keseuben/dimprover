@@ -1,0 +1,42 @@
+import fs from "node:fs";
+import crypto from "node:crypto";
+
+const hotfixPath = "supabase/DIMPRO_PROJEKTKAPU_DRIVE_OBJECT_STORAGE_V042_QUOTA_HOTFIX.sql";
+const migrationPath = "supabase/migrations/20260927_drive_project_quota_atomic_v042.sql";
+const shaPath = `${hotfixPath}.sha256`;
+const hotfix = fs.readFileSync(hotfixPath, "utf8");
+const migration = fs.readFileSync(migrationPath, "utf8");
+const expectedSha = fs.readFileSync(shaPath, "utf8").trim();
+const actualSha = crypto.createHash("sha256").update(hotfix).digest("hex");
+const repository = fs.readFileSync("app/lib/drive-core/storageRepository.ts", "utf8");
+const service = fs.readFileSync("app/lib/drive-core/storageService.ts", "utf8");
+const schema = fs.readFileSync("app/lib/drive-core/storageSchema.ts", "utf8");
+const incoming = fs.readFileSync("app/lib/drop/archive/dropDriveIncomingService.ts", "utf8");
+const archive = fs.readFileSync("app/lib/drop/archive/dropDriveArchiveService.ts", "utf8");
+
+const checks = [];
+const check = (name, value) => checks.push({ name, pass: Boolean(value) });
+check("Hotfix begins with transaction", hotfix.startsWith("begin;"));
+check("Hotfix ends with commit", hotfix.trimEnd().endsWith("commit;"));
+check("Migration copy identical", hotfix === migration);
+check("SHA-256 matches", expectedSha === actualSha);
+check("Create-session RPC replaced", hotfix.includes("create or replace function public.drive_core_create_upload_session_atomic"));
+check("Per-project transaction advisory lock", hotfix.includes("pg_advisory_xact_lock(hashtext('drive-project-quota-v042'), hashtext(p_project_id))"));
+check("Expired reservations released before quota sum", hotfix.indexOf("status = 'EXPIRED'") < hotfix.indexOf("select coalesce(sum(size_bytes),0)::bigint into v_reserved_bytes"));
+check("Used S3 versions counted", hotfix.includes("storage_provider = 'S3'") && hotfix.includes("status in ('AVAILABLE','QUARANTINED')"));
+check("Active reservations counted", hotfix.includes("status = 'INITIATED'") && hotfix.includes("expires_at > now()"));
+check("Atomic quota includes new upload", hotfix.includes("v_used_bytes + v_reserved_bytes + v_new_size_bytes > v_quota_bytes"));
+check("Quota is mandatory in RPC", hotfix.includes("DRIVE_PROJECT_QUOTA_REQUIRED"));
+check("Quota overflow has dedicated marker", hotfix.includes("DRIVE_PROJECT_QUOTA_EXCEEDED"));
+check("Runtime schema marker advanced", schema.includes('DRIVE_OBJECT_STORAGE_SCHEMA_VERSION = "0.4.2"') && schema.includes("DRIVE_OBJECT_STORAGE_MIGRATION_COUNT = 2") && schema.includes('drive-object-storage-v042-quota-20260927'));
+check("Web upload passes resolved quota", service.includes("createDriveUploadSessionRecord(session, input.actorUserId, quota.quotaBytes)"));
+check("DROP incoming passes project default quota", incoming.includes("createDriveUploadSessionRecord(record, ACTOR, config.projectDefaultQuotaBytes)"));
+check("DROP archive passes project default quota", archive.includes("createDriveUploadSessionRecord(record, ARCHIVE_ACTOR, driveConfig.projectDefaultQuotaBytes)"));
+check("Repository serializes quota into RPC session", repository.includes("quota_bytes: Math.max(0, Math.round(quotaBytes))"));
+check("Repository maps quota overflow to 507", repository.includes('"DRIVE_PROJECT_QUOTA_EXCEEDED",\n        507'));
+check("Repository fails closed without quota", repository.includes('"DRIVE_PROJECT_QUOTA_REQUIRED",\n        503'));
+check("Name conflict remains distinguishable", repository.includes('"DRIVE_DOCUMENT_NAME_CONFLICT",\n        409'));
+
+const result = { pass: checks.filter((x) => x.pass).length, total: checks.length, checks, sha256: actualSha };
+console.log(JSON.stringify(result, null, 2));
+if (checks.some((x) => !x.pass)) process.exitCode = 1;

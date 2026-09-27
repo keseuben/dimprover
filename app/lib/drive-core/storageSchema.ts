@@ -1,6 +1,6 @@
-export const DRIVE_OBJECT_STORAGE_SCHEMA_VERSION = "0.4.0";
-export const DRIVE_OBJECT_STORAGE_MIGRATION_COUNT = 1;
-export const DRIVE_OBJECT_STORAGE_BOOTSTRAP_ID = "drive-object-storage-v040-20260802";
+export const DRIVE_OBJECT_STORAGE_SCHEMA_VERSION = "0.4.2";
+export const DRIVE_OBJECT_STORAGE_MIGRATION_COUNT = 2;
+export const DRIVE_OBJECT_STORAGE_BOOTSTRAP_ID = "drive-object-storage-v042-quota-20260927";
 
 export const DRIVE_OBJECT_STORAGE_TABLES = [
   "drive_storage_schema_meta",

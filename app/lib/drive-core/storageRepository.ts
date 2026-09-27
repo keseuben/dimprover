@@ -71,7 +71,7 @@ function getDatabaseClient(): SupabaseClient {
   }
   return createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-client-info": "dimpro-drive-object-storage/0.4.0" } },
+    global: { headers: { "x-client-info": "dimpro-drive-object-storage/0.4.2" } },
   });
 }
 
@@ -251,7 +251,7 @@ async function requireReadyClient() {
   return getDatabaseClient();
 }
 
-export async function createDriveUploadSessionRecord(input: DriveUploadSession, actorUserId: string) {
+export async function createDriveUploadSessionRecord(input: DriveUploadSession, actorUserId: string, quotaBytes: number) {
   const client = await requireReadyClient();
   const session = {
     id: input.id,
@@ -276,6 +276,7 @@ export async function createDriveUploadSessionRecord(input: DriveUploadSession, 
     created_at: input.createdAt,
     updated_at: input.updatedAt,
     metadata: input.metadata,
+    quota_bytes: Math.max(0, Math.round(quotaBytes)),
   };
   const { data, error } = await client.rpc("drive_core_create_upload_session_atomic", {
     p_project_id: input.projectId,
@@ -288,6 +289,27 @@ export async function createDriveUploadSessionRecord(input: DriveUploadSession, 
       throw new DriveCoreRepositoryError(
         "A dokumentum közben újabb verziót kapott. Frissítsd a dokumentumlistát, majd indítsd újra a feltöltést.",
         "DRIVE_CORE_VERSION_CONFLICT",
+        409,
+      );
+    }
+    if (marker.includes("DRIVE_PROJECT_QUOTA_EXCEEDED")) {
+      throw new DriveCoreRepositoryError(
+        "A projekt tárhelykerete a párhuzamos foglalásokkal együtt megtelt vagy a feltöltéssel túllépésre kerülne.",
+        "DRIVE_PROJECT_QUOTA_EXCEEDED",
+        507,
+      );
+    }
+    if (marker.includes("DRIVE_PROJECT_QUOTA_REQUIRED")) {
+      throw new DriveCoreRepositoryError(
+        "A projekt tárhelykerete nem ellenőrizhető, ezért a feltöltés biztonsági okból nem indítható.",
+        "DRIVE_PROJECT_QUOTA_REQUIRED",
+        503,
+      );
+    }
+    if (marker.includes("DRIVE_DOCUMENT_NAME_CONFLICT")) {
+      throw new DriveCoreRepositoryError(
+        "A célmappában már létezik aktív dokumentum ezzel a névvel.",
+        "DRIVE_DOCUMENT_NAME_CONFLICT",
         409,
       );
     }

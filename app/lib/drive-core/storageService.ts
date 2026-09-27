@@ -61,7 +61,7 @@ export async function getDriveObjectStorageHealth() {
   ]);
   return {
     component: "drive-object-storage",
-    version: "0.4.0",
+    version: "0.4.2",
     database,
     ...safeStatus,
     ready: database.ready && safeStatus.storageConfigured,
@@ -184,11 +184,11 @@ export async function initDriveObjectUpload(input: {
       revisionCode: normalizeText(input.body.revisionCode).slice(0, 40),
       changeNote: normalizeText(input.body.changeNote).slice(0, 1000),
       checksumVerified: false,
-      signedUploadVersion: "0.4.0",
+      signedUploadVersion: "0.4.2",
     },
   };
 
-  const storedSession = await createDriveUploadSessionRecord(session, input.actorUserId);
+  const storedSession = await createDriveUploadSessionRecord(session, input.actorUserId, quota.quotaBytes);
   try {
     const signed = await createDriveSignedPutUrl({
       storageKey: storedSession.storageKey,
