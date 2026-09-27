@@ -1750,3 +1750,206 @@
 .observationDelete:hover:not(:disabled) { background: #fff2f2; border-color: #e2baba; color: #b13c3c; }
 .observationEmpty { padding: 9px; border: 1px dashed #d4dfe9; border-radius: 7px; color: #7b8c9c; font-size: var(--drive-font-xs); text-align: center; }
 .observationError { padding: 6px 8px; border-radius: 6px; background: #fff0f0; color: #a53636; font-size: var(--drive-font-xs); }
+
+/* Osztott nézet: a részletező egy alsó, egérrel méretezhető kártya a CsomagBOX fölött. */
+.workspaceWrapSplit {
+  box-sizing: border-box;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+.workspaceWrapSplit .browser {
+  min-height: 0;
+  overflow: hidden;
+}
+.layoutSplit {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+.layoutSplit .filePanel {
+  min-height: 0;
+  overflow: hidden;
+}
+.splitResizeHandle {
+  position: relative;
+  min-height: 10px;
+  height: 10px;
+  cursor: row-resize;
+  background: #f7fafc;
+  border-top: 1px solid #e3eaf0;
+  border-bottom: 1px solid #e3eaf0;
+  z-index: 5;
+}
+.splitResizeHandle::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.splitResizeHandle span {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 76px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #a9bacb;
+}
+.splitResizeHandle:hover span { background: #1765d7; }
+.detailsSplitCard {
+  min-width: 0;
+  min-height: 0;
+  height: calc(100% - 8px);
+  margin: 0 10px 8px;
+  border: 1px solid #d6e1ea;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 5px 18px rgba(27, 53, 78, .08);
+  background: #fff;
+}
+.detailsSplitCard .detailsHeader {
+  min-height: 42px;
+  height: 42px;
+  padding: 4px 10px;
+}
+.detailsSplitCard .detailsHeaderIcon {
+  width: 28px;
+  height: 30px;
+}
+.detailsSplitCard .detailsHeaderText strong { font-size: 12px; }
+.detailsSplitCard .detailsHeaderText span { margin-top: 1px; font-size: 10px; }
+.detailsSplitCard .detailsTabs {
+  min-height: 31px;
+  height: 31px;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 1px;
+  overflow: hidden;
+  padding: 0 8px;
+}
+.detailsSplitCard .detailsTabs button {
+  flex: 0 0 auto;
+  min-width: 92px;
+  padding: 6px 9px 5px;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.detailsSplitCard .detailsBody {
+  min-height: 0;
+  height: calc(100% - 73px);
+  overflow: hidden;
+  padding: 7px 9px 8px;
+}
+.detailsSplitCard .reviewWorkspace {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 225px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  align-items: start;
+}
+.detailsSplitCard .reviewWorkspace > .infoBox:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 0;
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+.detailsSplitCard .reviewWorkspace > .reviewProgress {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+  align-self: stretch;
+}
+.detailsSplitCard .reviewProgressStep {
+  min-height: 38px;
+  padding: 4px 2px 3px;
+  border-radius: 7px;
+}
+.detailsSplitCard .reviewProgress::before { top: 18px; }
+.detailsSplitCard .reviewWorkspace > .reviewRoleInfo {
+  grid-column: 1;
+  grid-row: 2;
+  padding: 5px 7px;
+}
+.detailsSplitCard .reviewWorkspace > .reviewCategoryMenu {
+  grid-column: 1;
+  grid-row: 3 / span 2;
+  align-self: start;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 0;
+}
+.detailsSplitCard .reviewCategoryButton {
+  min-height: 30px;
+  grid-template-columns: 18px minmax(0,1fr);
+  grid-template-rows: 1fr;
+  justify-items: start;
+  padding: 3px 8px;
+  font-size: 9px;
+}
+.detailsSplitCard .reviewCategoryButton span {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detailsSplitCard .reviewWorkspace > .reviewSection {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.detailsSplitCard .reviewSectionHeader {
+  min-height: 35px;
+  height: 35px;
+  padding: 4px 7px;
+}
+.detailsSplitCard .reviewSectionHeader small { display: none; }
+.detailsSplitCard .reviewSection .reviewEditorGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  padding: 6px;
+  align-content: start;
+}
+.detailsSplitCard .reviewSection .reviewEditorFull { grid-column: span 2; }
+.detailsSplitCard .reviewEditorItem {
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+.detailsSplitCard .reviewEditorItem label { margin-bottom: 3px; font-size: 10px; }
+.detailsSplitCard .reviewEditorItem select,
+.detailsSplitCard .reviewEditorItem input,
+.detailsSplitCard .reviewEditorItem textarea {
+  padding: 5px 6px;
+  font-size: 10px;
+}
+.detailsSplitCard .reviewEditorItem textarea { min-height: 38px; }
+.detailsSplitCard .reviewChoice { min-height: 26px; padding: 0 6px; font-size: 9px; }
+.detailsSplitCard .observationEditor { gap: 4px; }
+.detailsSplitCard .observationEditorHead button { min-height: 24px; font-size: 9px; }
+.detailsSplitCard .observationItem { grid-template-columns: 20px minmax(0,1fr) 14px 24px; gap: 3px; }
+.detailsSplitCard .observationIndex { width: 20px; height: 20px; margin-top: 2px; }
+.detailsSplitCard .observationItem textarea { min-height: 32px; height: 32px; }
+.detailsSplitCard .observationDelete { width: 24px; height: 24px; }
+.detailsSplitCard .reviewWorkspace > .detailsActions {
+  grid-column: 2;
+  grid-row: 4;
+  margin-top: 0;
+  justify-content: flex-end;
+}
+.detailsSplitCard .detailsActions .smallButton { min-height: 28px; padding: 5px 8px; font-size: 10px; }
+.detailsSplitCard .metaGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px 7px;
+  margin-top: 6px;
+}
+.detailsSplitCard .metaItem label { font-size: 10px; }
+.detailsSplitCard .metaItem input,
+.detailsSplitCard .metaItem textarea { padding: 5px 6px; font-size: 10px; }
+.detailsSplitCard .previewPlaceholder { min-height: 90px; padding: 8px; }

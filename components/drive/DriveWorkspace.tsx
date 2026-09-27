@@ -81,6 +81,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
+  const [splitDetailsHeight, setSplitDetailsHeight] = useState(340);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [reviewFocus, setReviewFocus] = useState("");
@@ -643,7 +644,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const breadcrumbParts = selectedFolder?.path.split("/").filter(Boolean) || [];
 
   return (
-    <div className={`${styles.workspaceWrap} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}>
+    <div className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}>
       <header className={styles.projectHeader}>
         <div className={styles.projectIdentity}>
           <div className={styles.projectIcon}><Building2 size={18} /></div>
@@ -689,7 +690,10 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       {!error && notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
       {!error && !notice && health?.workspace && !health.workspace.databaseReady && <div className={`${styles.notice} ${styles.noticeInfo}`}>{health.workspace.nextStep}</div>}
 
-      <div className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}>
+      <div
+        className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}
+        style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}
+      >
         {compareActive ? (
           <CompareWorkspace
             projectId={projectId}
@@ -749,6 +753,37 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onBulkReview={bulkReview}
               onOpenReviewDetail={openReviewDetail}
             />
+            {layoutMode === "split" && (
+              <div
+                className={styles.splitResizeHandle}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Részletező panel magasságának módosítása"
+                title="Húzd fel vagy le a részletező panel méretezéséhez"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  const startY = event.clientY;
+                  const startHeight = splitDetailsHeight;
+                  const onMove = (moveEvent: PointerEvent) => {
+                    const delta = startY - moveEvent.clientY;
+                    const maxHeight = Math.max(300, window.innerHeight - 300);
+                    setSplitDetailsHeight(Math.max(250, Math.min(maxHeight, startHeight + delta)));
+                  };
+                  const onUp = () => {
+                    document.body.style.cursor = "";
+                    document.body.style.userSelect = "";
+                    window.removeEventListener("pointermove", onMove);
+                    window.removeEventListener("pointerup", onUp);
+                  };
+                  document.body.style.cursor = "row-resize";
+                  document.body.style.userSelect = "none";
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", onUp, { once: true });
+                }}
+              >
+                <span />
+              </div>
+            )}
             <DetailsPanel
               projectId={projectId}
               document={selectedDocument}
@@ -769,7 +804,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onSaveNote={saveNote}
               onEnsureQr={ensureQr}
               onDownload={downloadSelected}
-              responsiveClassName={`${styles.detailsResponsive} ${detailsHidden ? styles.hiddenPanel : ""}`}
+              responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
               focusTab={viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}
               inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}

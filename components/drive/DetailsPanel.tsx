@@ -499,7 +499,7 @@ export default function DetailsPanel({
             {activeQr && <div className={styles.infoBox}>QR azonosító aktív. A publikus QR feloldó oldal és vizuális QR-kép későbbi vertikális szeletben kapcsolódik hozzá.</div>}
           </>
         ) : tab === "review" ? (
-          <div className={styles.versionList}>
+          <div className={`${styles.versionList} ${styles.reviewWorkspace}`}>
             <div className={styles.infoBox}><strong>Besorolás forrása</strong><br />Szakág: {metadata.discipline ? "fájl felülírás: " + metadata.discipline : inheritedDiscipline ? "mappából örökölt: " + inheritedDiscipline : "—"}<br />Témakör: {metadata.topic ? "fájl felülírás: " + metadata.topic : inheritedTopic ? "mappából örökölt: " + inheritedTopic : "—"}</div>
 
             <div className={styles.reviewProgress} aria-label="Tervellenőrzési folyamat">
