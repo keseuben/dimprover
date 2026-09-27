@@ -258,72 +258,116 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     fileInputRef.current?.click();
   }
 
-  async function uploadFile(file: File) {
-    if (!file || !selectedFolder || !canWrite) return;
-    setBusy(true); setError(""); setNotice(`Feltöltés előkészítése: ${file.name}`);
-    let abortUrl = "";
-    try {
-      const initResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/uploads/init`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          folderId: selectedFolder.id,
-          documentName: file.name,
-          originalName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          revisionCode: "V1",
-          description: "Webes feltöltés a DIMPRO Drive Workspace felületéről.",
-          changeNote: "Web Drive feltöltés.",
-          source: "WEB",
-        }),
-      });
-      const initPayload = await initResponse.json() as UploadInitPayload;
-      const uploadTarget = initPayload.browserUpload || initPayload.signedUpload;
-      if (!initResponse.ok || !initPayload.ok || !uploadTarget || !initPayload.completeUrl) {
-        throw new Error(initPayload.error || "A feltöltési munkamenet nem hozható létre.");
-      }
-      abortUrl = initPayload.abortUrl || "";
-      setNotice(`Feltöltés a privát tárhelyre: ${file.name}`);
-      const objectResponse = await fetch(uploadTarget.url, {
-        method: uploadTarget.method,
-        credentials: initPayload.browserUpload ? "same-origin" : "omit",
-        headers: uploadTarget.headers,
-        body: file,
-      });
-      if (!objectResponse.ok) throw new Error(`A privát tárhely feltöltése sikertelen (${objectResponse.status}).`);
+  async function uploadFiles(files: File[]) {
+    if (!files.length || !selectedFolder || !canWrite) return;
+    const targetFolder = selectedFolder;
+    setBusy(true);
+    setError("");
+    setNotice("");
 
-      setNotice("Szerveroldali méret- és SHA-256 ellenőrzés…");
-      const completeResponse = await fetch(initPayload.completeUrl, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      });
-      const completePayload = await completeResponse.json() as {
-        ok?: boolean;
-        error?: string;
-        session?: { finalVersionStatus?: string };
-        document?: { id?: string };
-        securityScan?: { ok?: boolean; error?: string; code?: string; scan?: { status?: string; engine?: string | null; engineVersion?: string | null } };
-      };
-      if (!completeResponse.ok || !completePayload.ok) throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
-      if (completePayload.securityScan?.scan?.status === "CLEAN") {
-        setNotice(`A fájl feltöltődött és ClamAV szerint tiszta. Jóváhagyásig karanténban marad${completePayload.securityScan.scan.engineVersion ? ` · ${completePayload.securityScan.scan.engine || "ClamAV"} ${completePayload.securityScan.scan.engineVersion}` : ""}.`);
-      } else if (completePayload.securityScan?.ok === false) {
-        setNotice(`A fájl feltöltődött és karanténban maradt. A vírusvizsgálat nem futott le: ${completePayload.securityScan.error || completePayload.securityScan.code || "ismeretlen scanner hiba"}.`);
+    let uploadedCount = 0;
+    let cleanCount = 0;
+    let lastDocumentId = "";
+    const failures: string[] = [];
+
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        let abortUrl = "";
+        try {
+          const progressLabel = files.length > 1 ? `${index + 1}/${files.length} · ` : "";
+          setNotice(`${progressLabel}Feltöltés előkészítése: ${file.name}`);
+
+          const initResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/uploads/init`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              folderId: targetFolder.id,
+              documentName: file.name,
+              originalName: file.name,
+              mimeType: file.type || "application/octet-stream",
+              sizeBytes: file.size,
+              revisionCode: "V1",
+              description: "Webes feltöltés a DIMPRO Drive Workspace felületéről.",
+              changeNote: files.length > 1 ? "Web Drive tömeges feltöltés." : "Web Drive feltöltés.",
+              source: "WEB",
+            }),
+          });
+          const initPayload = await initResponse.json() as UploadInitPayload;
+          const uploadTarget = initPayload.browserUpload || initPayload.signedUpload;
+          if (!initResponse.ok || !initPayload.ok || !uploadTarget || !initPayload.completeUrl) {
+            throw new Error(initPayload.error || "A feltöltési munkamenet nem hozható létre.");
+          }
+
+          abortUrl = initPayload.abortUrl || "";
+          setNotice(`${progressLabel}Feltöltés a privát tárhelyre: ${file.name}`);
+          const objectResponse = await fetch(uploadTarget.url, {
+            method: uploadTarget.method,
+            credentials: initPayload.browserUpload ? "same-origin" : "omit",
+            headers: uploadTarget.headers,
+            body: file,
+          });
+          if (!objectResponse.ok) {
+            throw new Error(`A privát tárhely feltöltése sikertelen (${objectResponse.status}).`);
+          }
+
+          setNotice(`${progressLabel}SHA-256 és biztonsági ellenőrzés: ${file.name}`);
+          const completeResponse = await fetch(initPayload.completeUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          });
+          const completePayload = await completeResponse.json() as {
+            ok?: boolean;
+            error?: string;
+            session?: { finalVersionStatus?: string };
+            document?: { id?: string };
+            securityScan?: {
+              ok?: boolean;
+              error?: string;
+              code?: string;
+              scan?: { status?: string; engine?: string | null; engineVersion?: string | null };
+            };
+          };
+          if (!completeResponse.ok || !completePayload.ok) {
+            throw new Error(completePayload.error || "A feltöltés véglegesítése sikertelen.");
+          }
+
+          uploadedCount += 1;
+          if (completePayload.securityScan?.scan?.status === "CLEAN") cleanCount += 1;
+          if (completePayload.document?.id) lastDocumentId = completePayload.document.id;
+        } catch (caught) {
+          if (abortUrl) {
+            await fetch(abortUrl, {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ reason: "Web Drive kliensoldali feltöltés megszakadt." }),
+            }).catch(() => undefined);
+          }
+          const message = caught instanceof Error ? caught.message : "A fájlfeltöltés sikertelen.";
+          failures.push(`${file.name}: ${message}`);
+        }
+      }
+
+      await load();
+      if (lastDocumentId) setSelectedDocumentId(lastDocumentId);
+
+      if (failures.length) {
+        setNotice(uploadedCount ? `${uploadedCount}/${files.length} fájl sikeresen feltöltve.` : "");
+        setError(`${failures.length}/${files.length} fájl feltöltése sikertelen. ${failures.slice(0, 3).join(" · ")}${failures.length > 3 ? ` · +${failures.length - 3} további hiba` : ""}`);
+      } else if (files.length > 1) {
+        setError("");
+        setNotice(`${uploadedCount}/${files.length} fájl feltöltve${cleanCount === uploadedCount ? " és ClamAV szerint tiszta" : ""}. Jóváhagyásig karanténban maradnak.`);
+      } else if (cleanCount === 1) {
+        setError("");
+        setNotice("A fájl feltöltődött és ClamAV szerint tiszta. Jóváhagyásig karanténban marad.");
       } else {
+        setError("");
         setNotice("A fájl feltöltődött és biztonsági ellenőrzésre vár. Jóváhagyásig karanténban marad.");
       }
-      await load();
-      if (completePayload.document?.id) setSelectedDocumentId(completePayload.document.id);
-    } catch (caught) {
-      if (abortUrl) {
-        await fetch(abortUrl, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ reason: "Web Drive kliensoldali feltöltés megszakadt." }) }).catch(() => undefined);
-      }
-      setError(caught instanceof Error ? caught.message : "A fájlfeltöltés sikertelen.");
-      setNotice("");
     } finally {
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -698,7 +742,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         compareActive={compareActive}
         onToggleCompare={toggleCompare}
       />
-      <input ref={fileInputRef} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file); }} />
+      <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
 
       <div className={styles.breadcrumb}>
         <span>Dokumentumtár</span>

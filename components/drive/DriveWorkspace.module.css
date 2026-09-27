@@ -214,6 +214,7 @@
 .fileIcon { width: 21px; height: 24px; border-radius: 4px; background: #ffe9e9; color: #e64545; display: grid; place-items: center; flex: 0 0 auto; font-size: var(--drive-font-xs); font-weight: 900; }
 .fileIconDoc { background: #e8f6ff; color: #2484c5; }
 .fileIconSheet { background: #e9f8ef; color: #18985a; }
+.fileIconImage { background: #f1ecff; color: #7354c8; }
 .sourceDot { width: 7px; height: 7px; display: inline-block; border-radius: 50%; margin-right: 4px; background: #176bff; }
 .sourceDrop { background: #ff8a1f; }
 .sourceDesktop { background: #23a57a; }
@@ -452,6 +453,7 @@
 .commanderFileSelected { background: #e8f2ff !important; }
 .commanderGrip { color: #a4b1bd; cursor: grab; }
 .commanderFileIcon { width: 22px; height: 25px; border-radius: 4px; background: #eef5ff; color: #2873cf; display: grid; place-items: center; }
+.commanderFileIconImage { background: #f1ecff; color: #7354c8; }
 .commanderFileName { min-width: 0; }
 .commanderFileName strong { display: block; font-size: var(--drive-font-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .commanderFileName span { display: block; margin-top: 2px; color: #8393a3; font-size: var(--drive-font-xs); }

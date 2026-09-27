@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -87,8 +87,11 @@ function displayDocumentName(document: DriveDocument, metadata?: DriveEngineerin
   return { explicit, value: explicit || fileNameWithoutExtension(document.name) };
 }
 
+const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif", "heic", "heif", "tif", "tiff"]);
+
 function FileKindIcon({ extension }: { extension: string }) {
   const ext = extension.toLowerCase();
+  if (imageExtensions.has(ext)) return <ImageIcon size={13} />;
   if (["xlsx", "xls", "csv"].includes(ext)) return <FileSpreadsheet size={13} />;
   if (["doc", "docx", "txt", "rtf"].includes(ext)) return <FileText size={13} />;
   return <File size={13} />;
@@ -107,6 +110,7 @@ function boxDotClass(token: string) {
 
 function fileIconClass(extension: string) {
   const ext = extension.toLowerCase();
+  if (imageExtensions.has(ext)) return `${styles.fileIcon} ${styles.fileIconImage}`;
   if (["xlsx", "xls", "csv"].includes(ext)) return `${styles.fileIcon} ${styles.fileIconSheet}`;
   if (["doc", "docx", "txt", "rtf", "dwg", "dxf"].includes(ext)) return `${styles.fileIcon} ${styles.fileIconDoc}`;
   return styles.fileIcon;

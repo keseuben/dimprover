@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   FileText,
   Folder,
+  Image as ImageIcon,
   FolderUp,
   GripVertical,
 } from "lucide-react";
@@ -48,11 +49,20 @@ function formatBytes(value: number) {
   return `${value} B`;
 }
 
+const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif", "heic", "heif", "tif", "tiff"]);
+
 function fileIcon(extension: string) {
   const ext = extension.toLowerCase();
+  if (imageExtensions.has(ext)) return <ImageIcon size={13} />;
   if (["xlsx", "xls", "csv"].includes(ext)) return <FileSpreadsheet size={13} />;
   if (["doc", "docx", "txt", "rtf"].includes(ext)) return <FileText size={13} />;
   return <File size={13} />;
+}
+
+function commanderFileIconClass(extension: string) {
+  return imageExtensions.has(extension.toLowerCase())
+    ? `${styles.commanderFileIcon} ${styles.commanderFileIconImage}`
+    : styles.commanderFileIcon;
 }
 
 function folderLabel(folder: DriveFolder) {
@@ -143,7 +153,7 @@ function CommanderPane({
               onClick={() => onSelectDocument(document)}
             >
               <GripVertical size={11} className={styles.commanderGrip} />
-              <span className={styles.commanderFileIcon}>{fileIcon(document.extension)}</span>
+              <span className={commanderFileIconClass(document.extension)}>{fileIcon(document.extension)}</span>
               <div className={styles.commanderFileName}><strong>{document.name}</strong><span>{document.extension.toUpperCase() || "FILE"} · {formatBytes(document.currentVersion?.sizeBytes || 0)}</span></div>
               <span className={styles.commanderRevision}>{document.currentVersion?.revisionCode || `V${document.currentVersionNumber}`}</span>
               {canMoveAcross && (
