@@ -1863,6 +1863,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     canWrite={canWrite}
                     canComment={canComment}
                     canApprove={canApprove}
+                    membershipRole=""
+                    membershipDisplayName=""
                     securityReady={securityScannerReady}
                     securityLabel={securityScannerReady
                       ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
@@ -1870,6 +1872,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }}
                     onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }}
                     onSaveMetadata={saveSelectedMetadata}
+                    onSaveReview={saveSelectedReview}
                     onSaveNote={saveSelectedNote}
                     onEnsureQr={ensureSelectedQr}
                     onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
@@ -1898,6 +1901,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   canWrite={canWrite}
                   canComment={canComment}
                   canApprove={canApprove}
+                  membershipRole=""
+                  membershipDisplayName=""
                   securityReady={securityScannerReady}
                   securityLabel={securityScannerReady
                     ? `${health?.security?.engine || "ClamAV"}${health?.security?.engineVersion ? ` ${health.security.engineVersion}` : ""}`
@@ -1905,6 +1910,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onScan={async () => { await scanDocumentVersion(selectedDocument); }}
                   onReview={async (action) => { await reviewDocumentVersion(selectedDocument, action); }}
                   onSaveMetadata={saveSelectedMetadata}
+                  onSaveReview={saveSelectedReview}
                   onSaveNote={saveSelectedNote}
                   onEnsureQr={ensureSelectedQr}
                   onDownload={async () => { await downloadDocument(selectedDocument); }}
