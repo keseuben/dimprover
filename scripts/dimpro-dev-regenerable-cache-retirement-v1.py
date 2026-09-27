@@ -99,6 +99,13 @@ def running_process_in(wt):
         if real==target or real.startswith(target+os.sep): return True
     return False
 
+def path_covered(required,roots):
+    target=pathlib.Path(required).resolve()
+    for raw in roots:
+        base=pathlib.Path(raw).resolve()
+        if target==base or base in target.parents:return True
+    return False
+
 def latest_source_backup():
     marker=pathlib.Path('/var/log/dimpro-backup/latest-status.env')
     if not marker.is_file(): fail('missing daily backup marker')
@@ -112,7 +119,41 @@ def latest_source_backup():
     except Exception: fail('invalid backup timestamp')
     age=(datetime.now(timezone.utc)-stamp).total_seconds()
     if age<0 or age>36*3600: fail('daily source backup is stale')
-    return {'snapshotId':values['SNAPSHOT_ID'],'finishedAt':values['FINISHED_AT']}
+    snapid=values['SNAPSHOT_ID']
+    cmd='source /etc/dimpro-backup/backup.env; export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE RESTIC_CACHE_DIR; restic snapshots '+snapid+' --json'
+    raw=run(['/bin/bash','-lc',cmd]).stdout
+    try: snaps=json.loads(raw)
+    except Exception: fail('cannot read source-backup snapshot metadata')
+    if not snaps: fail('source-backup snapshot not found')
+    paths=[str(x) for x in (snaps[-1].get('paths') or [])]
+    if not path_covered(WORKTREES,paths): fail('daily source backup does not cover worktrees')
+    return {'snapshotId':snapid,'finishedAt':values['FINISHED_AT'],'paths':paths}
+
+def nginx_references(wt):
+    root=pathlib.Path('/etc/nginx')
+    if not root.exists(): return []
+    target=str(wt.resolve()); hits=[]
+    for p in root.rglob('*'):
+        if not p.is_file() or p.is_symlink(): continue
+        try:
+            if target in p.read_text(errors='ignore'): hits.append(str(p))
+        except Exception: pass
+    return hits
+
+def pointer_references(wt,cache):
+    names={'active-next-release','rollback-next-release','previous-next-release'}
+    hits=[]; target=cache.resolve()
+    for p in wt.rglob('*'):
+        if p.name not in names or not p.is_file(): continue
+        try:
+            raw=p.read_text().strip()
+            if not raw: continue
+            q=pathlib.Path(raw)
+            if not q.is_absolute(): q=(p.parent.parent/q).resolve()
+            else: q=q.resolve()
+            if q==target or q in target.parents or target in q.parents: hits.append(str(p))
+        except Exception: pass
+    return hits
 
 def allowed_cache(wt,path):
     rel=path.relative_to(wt).as_posix()
@@ -137,6 +178,11 @@ def validate(entry,pm2,central):
         if str(wt) in pm2: reasons.append('pm2-reference')
         if str(wt) in central: reasons.append('central-active-session')
         if running_process_in(wt): reasons.append('running-process')
+        if nginx_references(wt): reasons.append('nginx-reference')
+        active=COORD/'active-development.json'
+        if active.is_file():
+            op=read_json(active); command=str(op.get('command') or '')
+            if str(wt) in command: reasons.append('active-operation')
         if not any((wt/x).is_file() for x in ('package-lock.json','pnpm-lock.yaml','yarn.lock')): reasons.append('lockfile-missing')
     caches=[]
     if not reasons:
@@ -147,6 +193,9 @@ def validate(entry,pm2,central):
             elif not allowed_cache(wt,p): creasons.append('cache-path-not-allowlisted')
             elif not p.is_dir(): creasons.append('cache-missing')
             shared=False
+            if not creasons:
+                refs=pointer_references(wt,p)
+                if refs: creasons.append('active-or-rollback-pointer')
             if not creasons:
                 shared=has_shared_hardlinks(p)
                 if shared: creasons.append('shared-hardlinks')
