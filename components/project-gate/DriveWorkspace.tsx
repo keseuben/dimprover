@@ -1495,7 +1495,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         <article><Folder size={18} /><div><strong>{tree?.summary.folderCount || 0}</strong><span>Projektmappa</span></div></article>
         <article><File size={18} /><div><strong>{tree?.summary.documentCount || 0}</strong><span>Dokumentum</span></div></article>
         <article><Archive size={18} /><div><strong>{dropDocumentCount}</strong><span>Dropból archivált</span></div></article>
-        <article><HardDrive size={18} /><div><strong>{storageQuota ? `${formatBytes(storageQuota.occupiedBytes)} / ${formatBytes(storageQuota.quotaBytes)}` : formatBytes(tree?.summary.totalSizeBytes || 0)}</strong><span>Tárhely</span>{storageQuota && <i className={styles.storageQuotaBar} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i>}</div></article>
+        <article><HardDrive size={18} /><div><strong>{storageQuota ? `${formatBytes(storageQuota.occupiedBytes)} / ${formatBytes(storageQuota.quotaBytes)}` : formatBytes(tree?.summary.totalSizeBytes || 0)}</strong><span>{storageQuota ? `Foglalt / projektkeret · Szabad ${formatBytes(storageQuota.remainingBytes)}` : "Tárhely"}</span>{storageQuota && <i className={styles.storageQuotaBar} data-level={storageQuota.usagePercent >= storageQuota.criticalPercent ? "critical" : storageQuota.usagePercent >= storageQuota.warningPercent ? "warning" : "normal"}><b style={{ width: `${Math.max(0, Math.min(100, storageQuota.usagePercent))}%` }} /></i>}</div></article>
       </div>
 
       <details className={styles.systemDetails}>

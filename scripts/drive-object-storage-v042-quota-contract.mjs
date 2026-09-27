@@ -47,6 +47,7 @@ check("Default project quota remains 10 GB configurable", config.includes("DIMPR
 check("Storage health version follows schema marker", service.includes("version: database.expectedSchemaVersion"));
 check("Health guidance uses runtime storage version", healthRoute.includes('"A DRIVE Object Storage " + objectStorage.version + " SQL-séma alkalmazása szükséges."'));
 check("Drive UI renders runtime storage version", ui.includes('Privát objektumtárhely · {health?.storage?.version || "—"}'));
+check("Drive UI labels occupied quota and remaining space", ui.includes("Foglalt / projektkeret · Szabad") && ui.includes("storageQuota.remainingBytes"));
 check("Pilot preflight pins exact V042 marker", pilotPreflight.includes('schema_version === "0.4.2"') && pilotPreflight.includes('migration_count) === 2') && pilotPreflight.includes('drive-object-storage-v042-quota-20260927'));
 check("Pilot preflight reports missing V042 DB credential", pilotPreflight.includes("DRIVE_OBJECT_STORAGE_V042_DB_PASSWORD") && pilotPreflight.includes("DEV_DB_CREDENTIAL_REQUIRED_FOR_DRIVE_OBJECT_STORAGE_V042_MIGRATION"));
 check("Desktop contract advertises V042 atomic quota", desktopContract.includes('version: "0.4.2"') && desktopContract.includes('defaultGb: 10') && desktopContract.includes('atomic-used-plus-active-reservations'));
