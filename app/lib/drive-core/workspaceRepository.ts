@@ -458,6 +458,121 @@ export async function getDriveDocumentWorkspaceDetails(projectId: string, docume
   };
 }
 
+export async function bulkUpdateDriveReviewMetadata(
+  projectId: string,
+  input: Record<string, unknown>,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const explicitIds = Array.isArray(input.documentIds)
+    ? input.documentIds.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim())
+    : [];
+  const folderId = typeof input.folderId === "string" ? input.folderId.trim() : "";
+  const includeDescendants = input.includeDescendants === true;
+  const fields = input.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
+    ? input.fields as Record<string, unknown>
+    : {};
+
+  const targetIds = new Set(explicitIds);
+  if (folderId) {
+    const [folderResult, documentResult] = await Promise.all([
+      client.from("drive_core_folders").select("id,parent_id").eq("project_id", projectId).neq("status", "ARCHIVED"),
+      client.from("drive_core_documents").select("id,folder_id").eq("project_id", projectId).neq("status", "DELETED"),
+    ]);
+    if (folderResult.error) databaseError("A DRIVE mappák nem tölthetők be a csoportos ellenőrzéshez.", folderResult.error);
+    if (documentResult.error) databaseError("A DRIVE dokumentumok nem tölthetők be a csoportos ellenőrzéshez.", documentResult.error);
+
+    const folderIds = new Set<string>([folderId]);
+    if (includeDescendants) {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const row of (folderResult.data || []) as Array<{ id: string; parent_id: string | null }>) {
+          if (row.parent_id && folderIds.has(row.parent_id) && !folderIds.has(row.id)) {
+            folderIds.add(row.id);
+            changed = true;
+          }
+        }
+      }
+    }
+    for (const row of (documentResult.data || []) as Array<{ id: string; folder_id: string }>) {
+      if (folderIds.has(row.folder_id)) targetIds.add(row.id);
+    }
+  }
+
+  const documentIds = [...targetIds];
+  if (!documentIds.length) {
+    return { ok: false as const, error: "Nincs kijelölt dokumentum a csoportos ellenőrzéshez." };
+  }
+  if (documentIds.length > 1000) {
+    return { ok: false as const, error: "Egy művelettel legfeljebb 1000 dokumentum módosítható." };
+  }
+
+  const existingResult = await client
+    .from("drive_core_document_metadata")
+    .select("*")
+    .eq("project_id", projectId);
+  if (existingResult.error) databaseError("A DRIVE metaadatok nem tölthetők be a csoportos ellenőrzéshez.", existingResult.error);
+  const existingByDocument = new Map(
+    ((existingResult.data || []) as DbMetadata[]).map((row) => [row.document_id, row] as const),
+  );
+
+  const stringField = (name: string) => typeof fields[name] === "string" ? String(fields[name]).trim() : undefined;
+  const reviewChecked = stringField("reviewChecked");
+  const reviewResult = stringField("reviewResult");
+  const workflowStatus = stringField("workflowStatus");
+  const customerApproval = stringField("customerApproval");
+  const revisionChange = stringField("revisionChange");
+  const projectManagerApproval = stringField("projectManagerApproval");
+  const investorProjectManagerApproval = stringField("investorProjectManagerApproval");
+  const lifecycleStatus = stringField("lifecycleStatus");
+
+  let updated = 0;
+  for (let offset = 0; offset < documentIds.length; offset += 10) {
+    const batch = documentIds.slice(offset, offset + 10);
+    await Promise.all(batch.map(async (documentId) => {
+      const current = existingByDocument.get(documentId);
+      const extra: Record<string, unknown> = { ...(current?.extra || {}) };
+      if (reviewChecked !== undefined) extra.reviewChecked = reviewChecked;
+      if (reviewResult !== undefined) extra.reviewResult = reviewResult;
+      if (workflowStatus !== undefined) extra.workflowStatus = workflowStatus;
+      if (customerApproval !== undefined) extra.customerApproval = customerApproval;
+      if (revisionChange !== undefined) extra.revisionChange = revisionChange;
+      if (projectManagerApproval !== undefined) extra.projectManagerApproval = projectManagerApproval;
+      if (investorProjectManagerApproval !== undefined) extra.investorProjectManagerApproval = investorProjectManagerApproval;
+      if (lifecycleStatus !== undefined) extra.lifecycleStatus = lifecycleStatus;
+
+      const payload = {
+        planNo: current?.plan_no || "",
+        discipline: current?.discipline || "",
+        documentType: current?.document_type || "",
+        revision: current?.revision || "",
+        issueStatus: current?.issue_status || "",
+        approvalStatus: workflowStatus !== undefined ? workflowStatus : current?.approval_status || "",
+        building: current?.building || "",
+        level: current?.level || "",
+        zone: current?.zone || "",
+        extra,
+      };
+      const { error } = await client.rpc("drive_workspace_upsert_metadata_atomic", {
+        p_project_id: projectId,
+        p_document_id: documentId,
+        p_payload: payload,
+        p_actor_user_id: actorUserId,
+      });
+      if (error) databaseError("A DRIVE csoportos tervellenőrzés mentése sikertelen.", error);
+      updated += 1;
+    }));
+  }
+
+  return {
+    ok: true as const,
+    updated,
+    documentIds,
+    scope: folderId ? (includeDescendants ? "FOLDER_RECURSIVE" : "FOLDER") : "SELECTION",
+  };
+}
+
 export async function upsertDriveEngineeringMetadata(
   projectId: string,
   documentId: string,

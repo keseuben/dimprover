@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { File, FileSpreadsheet, FileText, Folder, FolderUp, RefreshCw } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
@@ -21,6 +21,14 @@ type Props = {
   currentFolder?: DriveFolder | null;
   onFolderChange?: (folderId: string) => void;
   onNavigateParent?: () => void;
+  canWrite?: boolean;
+  busy?: boolean;
+  onBulkReview?: (input: {
+    documentIds?: string[];
+    folderId?: string;
+    includeDescendants?: boolean;
+    fields: Record<string, string>;
+  }) => Promise<number>;
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
 };
 
@@ -143,12 +151,27 @@ export default function FileGridPanel({
   currentFolder = null,
   onFolderChange,
   onNavigateParent,
+  canWrite = false,
+  busy = false,
+  onBulkReview,
   onOpenReviewDetail,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
   const [reviewStatus, setReviewStatus] = useState("all");
   const [reviewSearch, setReviewSearch] = useState("");
+  const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([]);
+  const [bulkScope, setBulkScope] = useState<"selection" | "folder" | null>(null);
+  const [bulkIncludeDescendants, setBulkIncludeDescendants] = useState(true);
+  const [bulkForm, setBulkForm] = useState({
+    reviewChecked: "__KEEP__",
+    reviewResult: "__KEEP__",
+    workflowStatus: "__KEEP__",
+    customerApproval: "__KEEP__",
+    projectManagerApproval: "__KEEP__",
+    investorProjectManagerApproval: "__KEEP__",
+    lifecycleStatus: "__KEEP__",
+  });
 
   const effectiveFolderClassification = useMemo(() => {
     const result = new Map<string, { discipline: string; topic: string }>();
@@ -220,6 +243,52 @@ export default function FileGridPanel({
     () => [...folders].sort((a, b) => a.path.localeCompare(b.path, "hu-HU")),
     [folders],
   );
+  const selectedReviewSet = useMemo(() => new Set(selectedReviewIds), [selectedReviewIds]);
+  const allVisibleReviewSelected = reviewRows.length > 0 && reviewRows.every((row) => selectedReviewSet.has(row.document.id));
+
+  useEffect(() => {
+    const available = new Set(documents.map((document) => document.id));
+    setSelectedReviewIds((current) => current.filter((id) => available.has(id)));
+  }, [documents]);
+
+  const toggleReviewSelection = (documentId: string) => {
+    setSelectedReviewIds((current) => current.includes(documentId)
+      ? current.filter((id) => id !== documentId)
+      : [...current, documentId]);
+  };
+
+  const toggleVisibleReviewSelection = () => {
+    const visibleIds = reviewRows.map((row) => row.document.id);
+    setSelectedReviewIds((current) => {
+      const next = new Set(current);
+      const select = !visibleIds.every((id) => next.has(id));
+      for (const id of visibleIds) select ? next.add(id) : next.delete(id);
+      return [...next];
+    });
+  };
+
+  const resetBulkForm = () => setBulkForm({
+    reviewChecked: "__KEEP__",
+    reviewResult: "__KEEP__",
+    workflowStatus: "__KEEP__",
+    customerApproval: "__KEEP__",
+    projectManagerApproval: "__KEEP__",
+    investorProjectManagerApproval: "__KEEP__",
+    lifecycleStatus: "__KEEP__",
+  });
+
+  const applyBulkReview = async () => {
+    if (!bulkScope || !onBulkReview) return;
+    const fields = Object.fromEntries(Object.entries(bulkForm).filter(([, value]) => value !== "__KEEP__"));
+    if (!Object.keys(fields).length) return;
+    const input = bulkScope === "folder" && currentFolder
+      ? { folderId: currentFolder.id, includeDescendants: bulkIncludeDescendants, fields }
+      : { documentIds: selectedReviewIds, fields };
+    await onBulkReview(input);
+    setBulkScope(null);
+    setSelectedReviewIds([]);
+    resetBulkForm();
+  };
 
   const openDetail = (document: DriveDocument, field: string) => {
     onSelectDocument(document);
@@ -280,6 +349,58 @@ export default function FileGridPanel({
             <div><span>Tervellenőrzés</span><strong>{reviewRows.length} / {allReviewRows.length} terv</strong></div>
             <div className={styles.reviewLegend}>✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat</div>
           </header>
+          <div className={styles.reviewBulkBar}>
+            <button
+              type="button"
+              className={styles.reviewBulkPrimary}
+              disabled={!canWrite || busy || !currentFolder}
+              onClick={() => { resetBulkForm(); setBulkScope("folder"); }}
+              title={currentFolder ? "A mappában lévő tervek csoportos ellenőrzése" : "Előbb válassz ki egy mappát"}
+            >
+              Mappa ellenőrzése
+            </button>
+            <button
+              type="button"
+              disabled={!canWrite || busy || !selectedReviewIds.length}
+              onClick={() => { resetBulkForm(); setBulkScope("selection"); }}
+            >
+              Kijelöltek ellenőrzése
+            </button>
+            <span><strong>{selectedReviewIds.length}</strong> fájl kijelölve</span>
+            <button type="button" disabled={!selectedReviewIds.length || busy} onClick={() => setSelectedReviewIds([])}>Kijelölés törlése</button>
+          </div>
+          {bulkScope && (
+            <div className={styles.reviewBulkEditor}>
+              <div className={styles.reviewBulkEditorHead}>
+                <div>
+                  <strong>{bulkScope === "folder" ? "Mappa csoportos tervellenőrzése" : "Kijelölt fájlok csoportos tervellenőrzése"}</strong>
+                  <span>{bulkScope === "folder" ? (currentFolder?.path || "—") : selectedReviewIds.length + " kijelölt fájl"}</span>
+                </div>
+                <button type="button" onClick={() => setBulkScope(null)} disabled={busy}>Bezárás</button>
+              </div>
+              {bulkScope === "folder" && (
+                <label className={styles.reviewBulkRecursive}>
+                  <input type="checkbox" checked={bulkIncludeDescendants} onChange={(event) => setBulkIncludeDescendants(event.target.checked)} disabled={busy} />
+                  Almappák fájljait is vegye bele
+                </label>
+              )}
+              <div className={styles.reviewBulkGrid}>
+                <label>Ellenőrzés<select value={bulkForm.reviewChecked} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, reviewChecked: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Igen">Igen</option><option value="Nem">Nem</option></select></label>
+                <label>Eredmény<select value={bulkForm.reviewResult} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, reviewResult: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Megfelelő">Megfelelő</option><option value="Javítandó">Javítandó</option><option value="Visszaadva">Visszaadva</option></select></label>
+                <label>Workflow állapot<select value={bulkForm.workflowStatus} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, workflowStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Ellenőrzésre vár">Ellenőrzésre vár</option><option value="Ellenőrzés alatt">Ellenőrzés alatt</option><option value="Javításra visszaadva">Javításra visszaadva</option><option value="Megrendelői jóváhagyásra vár">Megrendelői jóváhagyásra vár</option><option value="Jóváhagyva">Jóváhagyva</option></select></label>
+                <label>Megrendelő<select value={bulkForm.customerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, customerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Projektvezető<select value={bulkForm.projectManagerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, projectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Beruházói projektvezető<select value={bulkForm.investorProjectManagerApproval} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, investorProjectManagerApproval: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select></label>
+                <label>Életciklus<select value={bulkForm.lifecycleStatus} disabled={busy} onChange={(event) => setBulkForm((current) => ({ ...current, lifecycleStatus: event.target.value }))}><option value="__KEEP__">Nem módosítom</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select></label>
+              </div>
+              <div className={styles.reviewBulkActions}>
+                <span>Csak a „Nem módosítom” értéktől eltérő mezők kerülnek csoportosan átírva.</span>
+                <button type="button" className={styles.reviewBulkPrimary} disabled={busy || !Object.values(bulkForm).some((value) => value !== "__KEEP__")} onClick={() => void applyBulkReview()}>
+                  {busy ? "Mentés…" : "Csoportos mentés"}
+                </button>
+              </div>
+            </div>
+          )}
           <div className={styles.reviewFilters}>
             <label>Keresés<input className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Név, fájlnév, észrevétel…" /></label>
             <label>Szakág<select value={reviewDiscipline} onChange={(event) => setReviewDiscipline(event.target.value)}><option value="all">Mind</option>{reviewDisciplines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -290,6 +411,7 @@ export default function FileGridPanel({
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
               <colgroup>
+                <col style={{ width: "38px" }} />
                 <col style={{ width: "330px" }} />
                 <col style={{ width: "180px" }} />
                 <col style={{ width: "120px" }} />
@@ -304,11 +426,11 @@ export default function FileGridPanel({
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "80px" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th className={styles.reviewFileNameHeader}>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleReviewSelected} onChange={toggleVisibleReviewSelection} aria-label="Látható tervek kijelölése" /></th><th>Név</th><th className={styles.reviewFileNameHeader}>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={13}>
+                    <td colSpan={14}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -318,7 +440,16 @@ export default function FileGridPanel({
                   </tr>
                 )}
                 {reviewRows.map((row) => (
-                  <tr key={row.document.id}>
+                  <tr key={row.document.id} className={selectedReviewSet.has(row.document.id) ? styles.reviewRowSelected : ""}>
+                    <td className={styles.reviewSelectCell}>
+                      <input
+                        type="checkbox"
+                        checked={selectedReviewSet.has(row.document.id)}
+                        onChange={() => toggleReviewSelection(row.document.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={row.displayName + " kijelölése"}
+                      />
+                    </td>
                     <td>
                       <div className={styles.fileNameCell}>
                         <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>

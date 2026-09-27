@@ -467,6 +467,38 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setReviewFocus(field);
   }, []);
 
+  const bulkReview = useCallback(async (input: {
+    documentIds?: string[];
+    folderId?: string;
+    includeDescendants?: boolean;
+    fields: Record<string, string>;
+  }) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/review/bulk`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; updated?: number };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A csoportos tervellenőrzés mentése sikertelen.");
+      setNotice(`Csoportos tervellenőrzés mentve: ${payload.updated || 0} fájl frissítve.`);
+      await load();
+      if (selectedDocumentId) await loadDetails(selectedDocumentId);
+      return payload.updated || 0;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A csoportos tervellenőrzés mentése sikertelen.";
+      setError(message);
+      throw caught;
+    } finally {
+      setBusy(false);
+    }
+  }, [load, loadDetails, projectId, selectedDocumentId]);
+
+
   const boxColorsByDocument = useMemo(() => {
     const result: Record<string, string[]> = {};
     for (const box of boxes) {
@@ -695,6 +727,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 setSelectedDocumentId("");
                 setSelectedFolderId(selectedFolder.parentId || "all");
               }}
+              canWrite={canWrite}
+              busy={busy}
+              onBulkReview={bulkReview}
               onOpenReviewDetail={openReviewDetail}
             />
             <DetailsPanel

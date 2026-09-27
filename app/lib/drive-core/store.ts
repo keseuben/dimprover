@@ -35,6 +35,7 @@ export {
   getDriveDocumentWorkspaceDetails,
   getDriveWorkspaceDatabaseHealth,
   listDriveBoxes,
+  bulkUpdateDriveReviewMetadata,
   moveDriveDocument,
   removeDriveBoxItem,
   upsertDriveEngineeringMetadata,
