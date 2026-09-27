@@ -13,12 +13,14 @@ const service = fs.readFileSync("app/lib/drive-core/storageService.ts", "utf8");
 const schema = fs.readFileSync("app/lib/drive-core/storageSchema.ts", "utf8");
 const incoming = fs.readFileSync("app/lib/drop/archive/dropDriveIncomingService.ts", "utf8");
 const archive = fs.readFileSync("app/lib/drop/archive/dropDriveArchiveService.ts", "utf8");
+const migrationOrder = fs.readFileSync("supabase/DIMPRO_MIGRATION_ORDER_V1.txt", "utf8");
 
 const checks = [];
 const check = (name, value) => checks.push({ name, pass: Boolean(value) });
 check("Hotfix begins with transaction", hotfix.startsWith("begin;"));
 check("Hotfix ends with commit", hotfix.trimEnd().endsWith("commit;"));
 check("Migration copy identical", hotfix === migration);
+check("Migration order includes V042 quota hotfix", migrationOrder.split(/\r?\n/).includes(migrationPath));
 check("SHA-256 matches", expectedSha === actualSha);
 check("Create-session RPC replaced", hotfix.includes("create or replace function public.drive_core_create_upload_session_atomic"));
 check("Per-project transaction advisory lock", hotfix.includes("pg_advisory_xact_lock(hashtext('drive-project-quota-v042'), hashtext(p_project_id))"));
