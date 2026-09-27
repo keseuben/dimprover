@@ -338,6 +338,7 @@ export default function DetailsPanel({
       internal: "technical",
       revision: "technical",
       customer: "customer",
+      "customer-observations": "customer",
       "customer-note": "customer",
       "project-manager": "manager",
       "investor-project-manager": "investor",
@@ -554,12 +555,12 @@ export default function DetailsPanel({
               </header>
               <div className={styles.reviewEditorGrid}>
                 <div id={"drive-review-" + document.id + "-checked"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "checked" ? "true" : undefined}>
-                  <label htmlFor="drive-review-checked">Ellenőrzés</label>
-                  <select id="drive-review-checked" value={review.checked} disabled={!canTechnicalReview || busy} onChange={(event) => setReview((current) => ({ ...current, checked: event.target.value }))}><option value="">—</option><option value="Igen">Igen</option><option value="Nem">Nem</option></select>
+                  <label>Ellenőrzés</label>
+                  <ChoiceButtons value={review.checked} disabled={!canTechnicalReview || busy} options={[{ value: "Igen", label: "Ellenőrizve", tone: "ok" }, { value: "Nem", label: "Nincs ellenőrizve", tone: "neutral" }]} onChange={(value) => setReview((current) => ({ ...current, checked: value }))} />
                 </div>
                 <div id={"drive-review-" + document.id + "-result"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "result" ? "true" : undefined}>
-                  <label htmlFor="drive-review-result">Eredmény</label>
-                  <select id="drive-review-result" value={review.result} disabled={!canTechnicalReview || busy} onChange={(event) => setReview((current) => ({ ...current, result: event.target.value }))}><option value="">—</option><option value="Megfelelő">Megfelelő</option><option value="Javítandó">Javítandó</option><option value="Visszaadva">Visszaadva</option></select>
+                  <label>Eredmény</label>
+                  <ChoiceButtons value={review.result} disabled={!canTechnicalReview || busy} options={[{ value: "Megfelelő", label: "Megfelelő", tone: "ok" }, { value: "Javítandó", label: "Javítandó", tone: "warn" }, { value: "Visszaadva", label: "Visszaadva", tone: "danger" }]} onChange={(value) => setReview((current) => ({ ...current, result: value }))} />
                 </div>
                 <div id={"drive-review-" + document.id + "-workflow"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "workflow" ? "true" : undefined}>
                   <label htmlFor="drive-review-workflow">Workflow állapot</label>
@@ -569,16 +570,11 @@ export default function DetailsPanel({
                   {reviewAuditLine(reviewExtra, "workflowChanged") && <small className={styles.reviewAuditLine}>{reviewAuditLine(reviewExtra, "workflowChanged")}</small>}
                 </div>
                 <div id={"drive-review-" + document.id + "-revision"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "revision" ? "true" : undefined}>
-                  <label htmlFor="drive-review-revision">Revízióváltozás</label>
-                  <select id="drive-review-revision" value={review.revisionChange} disabled={!canTechnicalReview || busy} onChange={(event) => setReview((current) => ({ ...current, revisionChange: event.target.value }))}><option value="">—</option><option value="ÚJ">ÚJ</option><option value="MÓDOSULT">MÓDOSULT</option><option value="ÁTHELYEZVE">ÁTHELYEZVE</option><option value="NEM TALÁLHATÓ">NEM TALÁLHATÓ</option></select>
-                </div>
-                <div className={styles.reviewEditorItem}>
-                  <label htmlFor="drive-review-count">Nyitott észrevételek</label>
-                  <input id="drive-review-count" type="number" min="0" value={review.openObservationCount} disabled={!canTechnicalReview || busy} onChange={(event) => setReview((current) => ({ ...current, openObservationCount: event.target.value }))} />
+                  <label>Revízióváltozás</label>
+                  <ChoiceButtons value={review.revisionChange} disabled={!canTechnicalReview || busy} options={[{ value: "ÚJ", label: "Új", tone: "ok" }, { value: "MÓDOSULT", label: "Módosult", tone: "warn" }, { value: "ÁTHELYEZVE", label: "Áthelyezve", tone: "neutral" }, { value: "NEM TALÁLHATÓ", label: "Nem található", tone: "danger" }]} onChange={(value) => setReview((current) => ({ ...current, revisionChange: value }))} />
                 </div>
                 <div id={"drive-review-" + document.id + "-observations"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "observations" ? "true" : undefined}>
-                  <label htmlFor="drive-review-observations">Észrevételek</label>
-                  <textarea id="drive-review-observations" rows={4} value={review.observations} readOnly={!canTechnicalReview} disabled={busy} onChange={(event) => setReview((current) => ({ ...current, observations: event.target.value }))} />
+                  <ObservationEditor projectId={projectId} title="Észrevételek" items={review.observationItems} disabled={!canTechnicalReview} busy={busy} onChange={(items) => setReview((current) => ({ ...current, observationItems: items, openObservationCount: String(items.length) }))} />
                 </div>
                 <div id={"drive-review-" + document.id + "-internal"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "internal" ? "true" : undefined}>
                   <label htmlFor="drive-review-internal">Belső megjegyzés</label>
@@ -596,12 +592,15 @@ export default function DetailsPanel({
               </header>
               <div className={styles.reviewEditorGrid}>
                 <div id={"drive-review-" + document.id + "-customer"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "customer" ? "true" : undefined}>
-                  <label htmlFor="drive-review-customer">Megrendelő</label>
-                  <select id="drive-review-customer" value={review.customer} disabled={!canCustomerApproval || busy} onChange={(event) => setReview((current) => ({ ...current, customer: event.target.value }))}><option value="">—</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select>
+                  <label>Jóváhagyás</label>
+                  <ChoiceButtons value={review.customer} disabled={!canCustomerApproval || busy} options={[{ value: "Jóváhagyva", label: "Jóváhagyva", tone: "ok" }, { value: "Elutasítva", label: "Elutasítva", tone: "danger" }]} onChange={(value) => setReview((current) => ({ ...current, customer: value }))} />
                   {reviewAuditLine(reviewExtra, "customerApproval") && <small className={styles.reviewAuditLine}>{reviewAuditLine(reviewExtra, "customerApproval")}</small>}
                 </div>
+                <div id={"drive-review-" + document.id + "-customer-observations"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "customer-observations" ? "true" : undefined}>
+                  <ObservationEditor projectId={projectId} title="Észrevételek" items={review.customerObservationItems} disabled={!canCustomerApproval} busy={busy} onChange={(items) => setReview((current) => ({ ...current, customerObservationItems: items }))} />
+                </div>
                 <div id={"drive-review-" + document.id + "-customer-note"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "customer-note" ? "true" : undefined}>
-                  <label htmlFor="drive-review-customer-note">Megrendelői megjegyzés</label>
+                  <label htmlFor="drive-review-customer-note">Belső megjegyzés</label>
                   <textarea id="drive-review-customer-note" rows={3} value={review.customerNote} readOnly={!canCustomerApproval} disabled={busy} onChange={(event) => setReview((current) => ({ ...current, customerNote: event.target.value }))} />
                 </div>
               </div>
@@ -616,8 +615,8 @@ export default function DetailsPanel({
               </header>
               <div className={styles.reviewEditorGrid}>
                 <div id={"drive-review-" + document.id + "-project-manager"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "project-manager" ? "true" : undefined}>
-                  <label htmlFor="drive-review-project-manager">Projektvezetői jóváhagyás</label>
-                  <select id="drive-review-project-manager" value={review.projectManager} disabled={!canProjectManagerApproval || busy} onChange={(event) => setReview((current) => ({ ...current, projectManager: event.target.value }))}><option value="">—</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select>
+                  <label>Jóváhagyás</label>
+                  <ChoiceButtons value={review.projectManager} disabled={!canProjectManagerApproval || busy} options={[{ value: "Jóváhagyva", label: "Jóváhagyva", tone: "ok" }, { value: "Elutasítva", label: "Elutasítva", tone: "danger" }]} onChange={(value) => setReview((current) => ({ ...current, projectManager: value }))} />
                   {reviewAuditLine(reviewExtra, "projectManagerApproval") && <small className={styles.reviewAuditLine}>{reviewAuditLine(reviewExtra, "projectManagerApproval")}</small>}
                 </div>
               </div>
@@ -632,8 +631,8 @@ export default function DetailsPanel({
               </header>
               <div className={styles.reviewEditorGrid}>
                 <div id={"drive-review-" + document.id + "-investor-project-manager"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "investor-project-manager" ? "true" : undefined}>
-                  <label htmlFor="drive-review-investor-project-manager">Beruházói projektvezető</label>
-                  <select id="drive-review-investor-project-manager" value={review.investorProjectManager} disabled={!canInvestorProjectManagerApproval || busy} onChange={(event) => setReview((current) => ({ ...current, investorProjectManager: event.target.value }))}><option value="">—</option><option value="Jóváhagyva">Jóváhagyva</option><option value="Elutasítva">Elutasítva</option></select>
+                  <label>Jóváhagyás</label>
+                  <ChoiceButtons value={review.investorProjectManager} disabled={!canInvestorProjectManagerApproval || busy} options={[{ value: "Jóváhagyva", label: "Jóváhagyva", tone: "ok" }, { value: "Elutasítva", label: "Elutasítva", tone: "danger" }]} onChange={(value) => setReview((current) => ({ ...current, investorProjectManager: value }))} />
                   {reviewAuditLine(reviewExtra, "investorProjectManagerApproval") && <small className={styles.reviewAuditLine}>{reviewAuditLine(reviewExtra, "investorProjectManagerApproval")}</small>}
                 </div>
               </div>
@@ -648,8 +647,8 @@ export default function DetailsPanel({
               </header>
               <div className={styles.reviewEditorGrid}>
                 <div id={"drive-review-" + document.id + "-lifecycle"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "lifecycle" ? "true" : undefined}>
-                  <label htmlFor="drive-review-lifecycle">Terv életciklusa</label>
-                  <select id="drive-review-lifecycle" value={review.lifecycle} disabled={!canLifecycleEdit || busy} onChange={(event) => setReview((current) => ({ ...current, lifecycle: event.target.value }))}><option value="">—</option><option value="Munkaközi">Munkaközi</option><option value="Aktuális">Aktuális</option><option value="Archív">Archív</option></select>
+                  <label>Terv életciklusa</label>
+                  <ChoiceButtons value={review.lifecycle} disabled={!canLifecycleEdit || busy} options={[{ value: "Munkaközi", label: "Munkaközi", tone: "neutral" }, { value: "Aktuális", label: "Aktuális", tone: "ok" }, { value: "Archív", label: "Archív", tone: "neutral" }]} onChange={(value) => setReview((current) => ({ ...current, lifecycle: value }))} />
                   {reviewAuditLine(reviewExtra, "lifecycleChanged") && <small className={styles.reviewAuditLine}>{reviewAuditLine(reviewExtra, "lifecycleChanged")}</small>}
                 </div>
               </div>
@@ -665,13 +664,12 @@ export default function DetailsPanel({
                   ...(canTechnicalReview ? {
                     reviewChecked: review.checked,
                     reviewResult: review.result,
-                    reviewObservations: review.observations,
+                    reviewObservationItems: review.observationItems,
                     workflowStatus: review.workflow,
                     internalNote: review.internal,
                     revisionChange: review.revisionChange,
-                    openObservationCount: Math.max(0, Number(review.openObservationCount) || 0),
                   } : {}),
-                  ...(canCustomerApproval ? { customerApproval: review.customer, customerNote: review.customerNote } : {}),
+                  ...(canCustomerApproval ? { customerApproval: review.customer, customerObservationItems: review.customerObservationItems, customerNote: review.customerNote } : {}),
                   ...(canProjectManagerApproval ? { projectManagerApproval: review.projectManager } : {}),
                   ...(canInvestorProjectManagerApproval ? { investorProjectManagerApproval: review.investorProjectManager } : {}),
                   ...(canLifecycleEdit ? { lifecycleStatus: review.lifecycle } : {}),
