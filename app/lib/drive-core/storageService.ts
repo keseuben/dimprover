@@ -61,7 +61,7 @@ export async function getDriveObjectStorageHealth() {
   ]);
   return {
     component: "drive-object-storage",
-    version: "0.4.2",
+    version: database.expectedSchemaVersion,
     database,
     ...safeStatus,
     ready: database.ready && safeStatus.storageConfigured,

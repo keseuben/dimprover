@@ -13,6 +13,11 @@ const service = fs.readFileSync("app/lib/drive-core/storageService.ts", "utf8");
 const schema = fs.readFileSync("app/lib/drive-core/storageSchema.ts", "utf8");
 const incoming = fs.readFileSync("app/lib/drop/archive/dropDriveIncomingService.ts", "utf8");
 const archive = fs.readFileSync("app/lib/drop/archive/dropDriveArchiveService.ts", "utf8");
+const config = fs.readFileSync("app/lib/drive-core/storageConfig.ts", "utf8");
+const healthRoute = fs.readFileSync("app/api/projects/[projectId]/drive/health/route.ts", "utf8");
+const ui = fs.readFileSync("components/project-gate/DriveWorkspace.tsx", "utf8");
+const pilotPreflight = fs.readFileSync("scripts/projectkapu-drop-drive-pilot-preflight.mjs", "utf8");
+const desktopContract = fs.readFileSync("app/api/drive/desktop-contract/route.ts", "utf8");
 const migrationOrder = fs.readFileSync("supabase/DIMPRO_MIGRATION_ORDER_V1.txt", "utf8");
 
 const checks = [];
@@ -38,6 +43,13 @@ check("Repository serializes quota into RPC session", repository.includes("quota
 check("Repository maps quota overflow to 507", repository.includes('"DRIVE_PROJECT_QUOTA_EXCEEDED",\n        507'));
 check("Repository fails closed without quota", repository.includes('"DRIVE_PROJECT_QUOTA_REQUIRED",\n        503'));
 check("Name conflict remains distinguishable", repository.includes('"DRIVE_DOCUMENT_NAME_CONFLICT",\n        409'));
+check("Default project quota remains 10 GB configurable", config.includes("DIMPRO_DRIVE_PROJECT_DEFAULT_QUOTA_GB") && config.includes("positiveInteger(process.env.DIMPRO_DRIVE_PROJECT_DEFAULT_QUOTA_GB, 10"));
+check("Storage health version follows schema marker", service.includes("version: database.expectedSchemaVersion"));
+check("Health guidance uses runtime storage version", healthRoute.includes('"A DRIVE Object Storage " + objectStorage.version + " SQL-séma alkalmazása szükséges."'));
+check("Drive UI renders runtime storage version", ui.includes('Privát objektumtárhely · {health?.storage?.version || "—"}'));
+check("Pilot preflight pins exact V042 marker", pilotPreflight.includes('schema_version === "0.4.2"') && pilotPreflight.includes('migration_count) === 2') && pilotPreflight.includes('drive-object-storage-v042-quota-20260927'));
+check("Pilot preflight reports missing V042 DB credential", pilotPreflight.includes("DRIVE_OBJECT_STORAGE_V042_DB_PASSWORD") && pilotPreflight.includes("DEV_DB_CREDENTIAL_REQUIRED_FOR_DRIVE_OBJECT_STORAGE_V042_MIGRATION"));
+check("Desktop contract advertises V042 atomic quota", desktopContract.includes('version: "0.4.2"') && desktopContract.includes('defaultGb: 10') && desktopContract.includes('atomic-used-plus-active-reservations'));
 
 const result = { pass: checks.filter((x) => x.pass).length, total: checks.length, checks, sha256: actualSha };
 console.log(JSON.stringify(result, null, 2));

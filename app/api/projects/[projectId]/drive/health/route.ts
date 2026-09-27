@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     getDropRuntimeHealth().catch(() => null),
   ]);
   const storageNextStep = !objectStorage.database.ready
-    ? "A DRIVE Object Storage 0.4.0 SQL-séma alkalmazása szükséges."
+    ? "A DRIVE Object Storage " + objectStorage.version + " SQL-séma alkalmazása szükséges."
     : !objectStorage.storageConfigured
       ? "Külön privát DRIVE S3-kompatibilis bucket és szerveroldali hozzáférési adatok beállítása szükséges."
       : objectStorage.mode === "disabled"

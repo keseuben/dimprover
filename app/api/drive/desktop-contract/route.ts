@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     service: "DIMPRO Drive Desktop API Contract",
-    version: "2026.08.02-projectgate-drive-quarantine-review-v041",
+    version: "2026.09.27-projectgate-drive-quota-v042",
     mode: "desktop-client-contract-preview",
     clientId: auth.clientId,
     clientTargets: ["DIMPRO Drive Desktop", "DIMPRO Fájlműhely", "DIMPROVER webes admin előnézet"],
@@ -35,12 +35,13 @@ export async function GET(request: NextRequest) {
       state: "active",
       storageMode: "metadata-plus-private-object-storage",
       objectStorage: {
-        version: "0.4.0",
-        state: "storage-config-required",
+        version: "0.4.2",
+        state: "active-0.4.2",
         provider: "s3-compatible",
-        databaseSchema: "active-0.4.0",
-        objectWrites: "disabled-until-private-storage-config",
+        databaseSchema: "active-0.4.2",
+        objectWrites: "enabled-with-project-quota-and-quarantine",
         secretLocation: "server-only",
+        projectQuota: { defaultGb: 10, enforcement: "atomic-used-plus-active-reservations", source: "DIMPRO_DRIVE_PROJECT_DEFAULT_QUOTA_GB" },
         uploadStrategy: "short-lived-presigned-put",
         downloadStrategy: "short-lived-presigned-get",
         quarantineReview: {

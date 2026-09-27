@@ -162,12 +162,13 @@ requireCheck("dropPublicGateTable", publicGateTable.ok, "DROP_PUBLIC_GATE_TABLE_
 
 const driveMarkersRes = await rest("drive_storage_schema_meta?select=component,schema_version,migration_count,bootstrap_id&component=in.(drive-object-storage,drive-quarantine-review,drive-document-flow,drive-drop-incoming-source)");
 const driveMarkers = Array.isArray(driveMarkersRes.body) ? Object.fromEntries(driveMarkersRes.body.map((row)=>[row.component,row])) : {};
-requireCheck("driveObjectStorageSchema", driveMarkers["drive-object-storage"]?.schema_version === "0.4.0", "DRIVE_OBJECT_STORAGE_SCHEMA_NOT_READY", { version: driveMarkers["drive-object-storage"]?.schema_version || null });
+requireCheck("driveObjectStorageSchema", driveMarkers["drive-object-storage"]?.schema_version === "0.4.2" && Number(driveMarkers["drive-object-storage"]?.migration_count) === 2 && driveMarkers["drive-object-storage"]?.bootstrap_id === "drive-object-storage-v042-quota-20260927", "DRIVE_OBJECT_STORAGE_SCHEMA_NOT_READY", { version: driveMarkers["drive-object-storage"]?.schema_version || null, migrationCount: Number(driveMarkers["drive-object-storage"]?.migration_count || 0), bootstrapId: driveMarkers["drive-object-storage"]?.bootstrap_id || null });
 requireCheck("driveReviewSchema", driveMarkers["drive-quarantine-review"]?.schema_version === "0.4.1", "DRIVE_REVIEW_SCHEMA_NOT_READY", { version: driveMarkers["drive-quarantine-review"]?.schema_version || null });
 requireCheck("driveDocumentFlowSchema", driveMarkers["drive-document-flow"]?.schema_version === "0.1.0", "DRIVE_DOCUMENT_FLOW_SCHEMA_NOT_READY", { version: driveMarkers["drive-document-flow"]?.schema_version || null });
 requireCheck("driveDropIncomingSourceSchema", driveMarkers["drive-drop-incoming-source"]?.schema_version === "0.1.0", "DRIVE_DROP_INCOMING_SOURCE_SCHEMA_NOT_READY", { version: driveMarkers["drive-drop-incoming-source"]?.schema_version || null });
 
-const hasDbCredential = Boolean(value("DRIVE_DOCUMENT_FLOW_DB_PASSWORD","PGPASSWORD")) || existsSync(value("PGPASSFILE") || path.join(process.env.HOME || "/root", ".pgpass"));
+const hasDbCredential = Boolean(value("DRIVE_OBJECT_STORAGE_V042_DB_PASSWORD","DRIVE_DOCUMENT_FLOW_DB_PASSWORD","PGPASSWORD")) || existsSync(value("PGPASSFILE") || path.join(process.env.HOME || "/root", ".pgpass"));
+if (!checks.driveObjectStorageSchema?.ready && !hasDbCredential) warnings.push("DEV_DB_CREDENTIAL_REQUIRED_FOR_DRIVE_OBJECT_STORAGE_V042_MIGRATION");
 if (!checks.driveDocumentFlowSchema?.ready && !hasDbCredential) warnings.push("DEV_DB_CREDENTIAL_REQUIRED_FOR_DOCUMENT_FLOW_MIGRATION");
 warningCheck(dropProvider !== "s3-compatible", "DROP_STORAGE_PROVIDER_IS_NOT_EXTERNAL_S3");
 warningCheck(dropMarkers["drop-public-workflows"]?.metadata?.activeStore !== "postgresql", "DROP_PUBLIC_WORKFLOW_POSTGRES_ACTIVATION_NOT_CONFIRMED");

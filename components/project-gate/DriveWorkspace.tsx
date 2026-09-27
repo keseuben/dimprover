@@ -1508,7 +1508,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       <div className={`${styles.storageStatus} ${storageWriteEnabled ? styles.storageStatusReady : styles.storageStatusBlocked}`}>
         <span><HardDrive size={17} /></span>
         <div>
-          <strong>Privát objektumtárhely · 0.4.0</strong>
+          <strong>Privát objektumtárhely · {health?.storage?.version || "—"}</strong>
           <p>{health?.storage?.warning || "A tárhelyállapot nem érhető el."}</p>
         </div>
         <b>{health?.storage?.databaseReady ? "SQL kész" : "SQL szükséges"}</b>
