@@ -97,7 +97,14 @@ class BenjadminLiveClient {
           authAttempts += 1;
           continue;
         }
+        const degradedFoundation = pathname === "/api/dev/grid/foundation"
+          && response.status === 409
+          && payload?.foundation
+          && typeof payload.foundation === "object";
         if (!response.ok || !payload?.ok) {
+          if (degradedFoundation) {
+            return { ...payload, ok: true, degraded: true, degradedReason: payload?.error || "FOUNDATION_PROVENANCE_WARNING" };
+          }
           const error = new Error(payload?.error || `BENJADMIN HTTP ${response.status} · ${pathname}`);
           error.status = response.status;
           error.code = response.status === 401 || response.status === 403 ? "AUTH_REJECTED" : `HTTP_${response.status}`;

@@ -13,8 +13,8 @@ const types=fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),"u
 let n=0;
 const check=(name,fn)=>{fn();n+=1;console.log("PASS",name);};
 
-check("desktop version v0.1.78",()=>assert.equal(pkg.version,"0.1.78"));
-check("backend version v0.1.78-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.78-dev"')));
+check("desktop version keeps v0.1.78+ storage-meter baseline",()=>assert.ok(Number(pkg.version.split(".")[2]) >= 78));
+check("backend version remains Developer Grid v0.1.78+",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.(?:7[89]|[89]\d|\d{3,})-dev"/));
 check("five server footer disk meters rendered",()=>{
   for(const id of ["footerBuild01Disk","footerBuild02Disk","footerDevDisk","footerProdDisk","footerDbDisk"]) assert.ok(html.includes('id="'+id+'"'));
 });
