@@ -1841,6 +1841,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   moveReady={Boolean(health?.workspace?.databaseReady)}
                   busy={busy}
                   onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+                  onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                   onMoveDocument={moveDocument}
                 />
               ) : (
@@ -1861,6 +1862,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     viewMode={engineeringViewMode}
                     onViewModeChange={setEngineeringViewMode}
                     onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+                    onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                     onRefresh={() => void load()}
                     boxColorsByDocument={boxColorsByDocument}
                   />
@@ -1878,7 +1880,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     securityReady={securityScannerReady}
                     securityLabel={securityScannerReady
                       ? "Biztonsági ellenőrzés"
-                      : health?.security?.errorCode || "Scanner nem elérhető"}
+                      : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"}
                     onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }}
                     onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }}
                     onSaveMetadata={saveSelectedMetadata}
@@ -1916,7 +1918,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   securityReady={securityScannerReady}
                   securityLabel={securityScannerReady
                     ? "Biztonsági ellenőrzés"
-                    : health?.security?.errorCode || "Scanner nem elérhető"}
+                    : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"}
                   onScan={async () => { await scanDocumentVersion(selectedDocument); }}
                   onReview={async (action) => { await reviewDocumentVersion(selectedDocument, action); }}
                   onSaveMetadata={saveSelectedMetadata}
