@@ -206,6 +206,9 @@
 .folderUpIcon { width: 23px; height: 23px; border-radius: 5px; display: grid; place-items: center; background: #e6f0fb; color: #1765c7; flex: 0 0 auto; }
 .fileNameCell { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .fileNameCell strong { overflow: hidden; text-overflow: ellipsis; }
+.fileDisplayNameExplicit { color: #111827; }
+.fileDisplayNameFallback { color: #5f6b76; font-weight: 700 !important; }
+.fileRawName { color: #52677c; font-size: var(--drive-font-xs); }
 .fileIcon { width: 21px; height: 24px; border-radius: 4px; background: #ffe9e9; color: #e64545; display: grid; place-items: center; flex: 0 0 auto; font-size: var(--drive-font-xs); font-weight: 900; }
 .fileIconDoc { background: #e8f6ff; color: #2484c5; }
 .fileIconSheet { background: #e9f8ef; color: #18985a; }
@@ -1116,7 +1119,7 @@
   background: #fff;
 }
 .reviewTable {
-  min-width: 1448px;
+  min-width: 1510px;
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
@@ -1200,6 +1203,18 @@
   cursor: pointer;
 }
 .reviewSymbol:hover { border-color: #bfd2e5; background: #eef5fb; color: #1765d7; }
+.reviewEditorGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+.reviewEditorItem { border-radius: 8px; background: #f4f8fb; padding: 9px 10px; }
+.reviewEditorItem[data-review-focused="true"] { outline: 2px solid #1765d7; outline-offset: 2px; background: #eef6ff; }
+.reviewEditorItem label { display: block; margin-bottom: 5px; color: #435c75; font-size: var(--drive-font-sm); font-weight: 900; }
+.reviewEditorItem select,
+.reviewEditorItem input,
+.reviewEditorItem textarea { width: 100%; border: 1px solid #d2dde8; border-radius: 6px; background: #fff; color: #20374f; padding: 7px 8px; font-size: var(--drive-font-sm); outline: none; }
+.reviewEditorItem select:focus,
+.reviewEditorItem input:focus,
+.reviewEditorItem textarea:focus { border-color: #8db9f3; box-shadow: 0 0 0 2px rgba(23,101,215,.08); }
+.reviewEditorItem textarea { resize: vertical; min-height: 68px; }
+.reviewEditorFull { grid-column: 1 / -1; }
 
 @media (max-width: 1100px) {
   .reviewHeader { align-items: flex-start; flex-direction: column; }
@@ -1209,4 +1224,9 @@
 @media (max-width: 900px) {
   .fileFolderNav { grid-template-columns: auto minmax(160px,1fr) 32px; }
   .fileFolderPath { display: none; }
+}
+
+@media (max-width: 900px) {
+  .reviewEditorGrid { grid-template-columns: 1fr; }
+  .reviewEditorFull { grid-column: auto; }
 }

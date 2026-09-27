@@ -49,6 +49,34 @@ function fileNameWithoutExtension(name: string) {
   return dot > 0 ? name.slice(0, dot) : name;
 }
 
+function versionStatusLabel(value: string | undefined) {
+  switch ((value || "").toUpperCase()) {
+    case "AVAILABLE": return "Elérhető";
+    case "QUARANTINED": return "Biztonsági ellenőrzés alatt";
+    case "REJECTED": return "Elutasítva";
+    case "STAGED": return "Feldolgozás alatt";
+    case "METADATA_ONLY": return "Csak metaadat";
+    default: return value || "—";
+  }
+}
+
+function uploaderLabel(value: string | undefined) {
+  const actor = (value || "").trim();
+  if (!actor) return "—";
+  if (actor === "dev-web-user") return "DIMPRO felhasználó";
+  return actor;
+}
+
+function displayDocumentName(document: DriveDocument, metadata?: DriveEngineeringMetadata) {
+  const extra = metadata?.extra || {};
+  const explicit = typeof extra.planTitle === "string" && extra.planTitle.trim()
+    ? extra.planTitle.trim()
+    : typeof extra.drawingTitle === "string" && extra.drawingTitle.trim()
+      ? extra.drawingTitle.trim()
+      : "";
+  return { explicit, value: explicit || fileNameWithoutExtension(document.name) };
+}
+
 function FileKindIcon({ extension }: { extension: string }) {
   const ext = extension.toLowerCase();
   if (["xlsx", "xls", "csv"].includes(ext)) return <FileSpreadsheet size={13} />;
@@ -264,7 +292,7 @@ export default function FileGridPanel({
               <colgroup>
                 <col style={{ width: "250px" }} />
                 <col style={{ width: "260px" }} />
-                <col style={{ width: "58px" }} />
+                <col style={{ width: "120px" }} />
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "120px" }} />
                 <col style={{ width: "70px" }} />
@@ -276,7 +304,7 @@ export default function FileGridPanel({
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "80px" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Fájlnév</th><th>Típus</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
+              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
@@ -292,21 +320,22 @@ export default function FileGridPanel({
                 {reviewRows.map((row) => (
                   <tr key={row.document.id}>
                     <td>
-                      <button
-                        type="button"
-                        className={`${styles.reviewName} ${row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback}`}
-                        title={row.explicitName ? "Megadott név" : "Automatikus név a fájlnévből"}
-                        onClick={() => openDetail(row.document, "checked")}
-                      >
-                        {row.displayName}
-                      </button>
+                      <div className={styles.fileNameCell}>
+                        <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
+                          <FileKindIcon extension={row.document.extension} />
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.reviewName + " " + (row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback)}
+                          title={row.explicitName ? "Megadott név" : "Automatikus név a fájlnévből"}
+                          onClick={() => openDetail(row.document, "checked")}
+                        >
+                          {row.displayName}
+                        </button>
+                      </div>
                     </td>
                     <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
-                    <td>
-                      <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
-                        <FileKindIcon extension={row.document.extension} />
-                      </span>
-                    </td>
+                    <td>{uploaderLabel(row.document.currentVersion?.createdBy)}</td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
@@ -329,13 +358,13 @@ export default function FileGridPanel({
           {viewMode === "simple" ? (
             <table className={styles.fileTable}>
               <colgroup>
-                <col style={{ width: "34%" }} /><col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "9%" }} /><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "9%" }} /><col style={{ width: "8%" }} />
+                <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "11%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "4%" }} /><col style={{ width: "10%" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={8}>
+                    <td colSpan={10}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -348,16 +377,19 @@ export default function FileGridPanel({
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
                   const sourceClass = document.source === "DROP" ? styles.sourceDrop : document.source === "DESKTOP" ? styles.sourceDesktop : "";
+                  const displayName = displayDocumentName(document, metadataByDocument[document.id]);
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong>{document.name}</strong></div></td>
+                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td className={styles.fileRawName} title={document.name}>{document.name}</td>
+                      <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td>{version?.revisionCode || `V${document.currentVersionNumber}`}</td>
                       <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td>{formatDate(document.updatedAt)}</td>
                       <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
-                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{version?.status || "–"}</span></td>
+                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{versionStatusLabel(version?.status)}</span></td>
                     </tr>
                   );
                 })}
@@ -366,13 +398,13 @@ export default function FileGridPanel({
           ) : (
             <table className={styles.fileTable}>
               <colgroup>
-                <col style={{ width: "28%" }} /><col style={{ width: "8%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "9%" }} /><col style={{ width: "10%" }} /><col style={{ width: "10%" }} /><col style={{ width: "8%" }} />
+                <col style={{ width: "22%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={9}>
+                    <td colSpan={11}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -384,9 +416,12 @@ export default function FileGridPanel({
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
+                  const displayName = displayDocumentName(document, metadataByDocument[document.id]);
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""}`} onClick={() => onSelectDocument(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kijelöléshez kattints; CsomagBOX-hoz húzd a fájlt a polcra.">
-                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong>{document.name}</strong></div></td>
+                      <td><div className={styles.fileNameCell}><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td className={styles.fileRawName} title={document.name}>{document.name}</td>
+                      <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td title={document.mimeType}>{document.mimeType || "–"}</td>
                       <td>{version?.revisionCode || "–"}</td>
@@ -394,7 +429,7 @@ export default function FileGridPanel({
                       <td>{document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
-                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{version?.status || "–"}</span></td>
+                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{versionStatusLabel(version?.status)}</span></td>
                     </tr>
                   );
                 })}

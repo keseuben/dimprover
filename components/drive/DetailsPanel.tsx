@@ -20,6 +20,30 @@ type MetadataForm = {
   planTitle: string;
 };
 
+type ReviewForm = {
+  checked: string;
+  result: string;
+  observations: string;
+  workflow: string;
+  internal: string;
+  customer: string;
+  customerNote: string;
+  revisionChange: string;
+  openObservationCount: string;
+};
+
+const emptyReview: ReviewForm = {
+  checked: "",
+  result: "",
+  observations: "",
+  workflow: "",
+  internal: "",
+  customer: "",
+  customerNote: "",
+  revisionChange: "",
+  openObservationCount: "0",
+};
+
 type Props = {
   projectId: string;
   document: DriveDocument | null;
@@ -83,6 +107,7 @@ export default function DetailsPanel({
 }: Props) {
   const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
+  const [review, setReview] = useState<ReviewForm>(emptyReview);
   const [note, setNote] = useState("");
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
@@ -103,6 +128,18 @@ export default function DetailsPanel({
       topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
       planTitle: typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
     } : emptyMetadata);
+    const extra = source?.extra || {};
+    setReview({
+      checked: typeof extra.reviewChecked === "string" ? extra.reviewChecked : typeof extra.hageChecked === "string" ? extra.hageChecked : "",
+      result: typeof extra.reviewResult === "string" ? extra.reviewResult : typeof extra.hageResult === "string" ? extra.hageResult : "",
+      observations: typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "",
+      workflow: typeof extra.workflowStatus === "string" ? extra.workflowStatus : source?.approvalStatus || "",
+      internal: typeof extra.internalNote === "string" ? extra.internalNote : typeof extra.hageNote === "string" ? extra.hageNote : "",
+      customer: typeof extra.customerApproval === "string" ? extra.customerApproval : typeof extra.clientApproval === "string" ? extra.clientApproval : "",
+      customerNote: typeof extra.customerNote === "string" ? extra.customerNote : typeof extra.clientNote === "string" ? extra.clientNote : "",
+      revisionChange: typeof extra.revisionChange === "string" ? extra.revisionChange : typeof extra.change === "string" ? extra.change : "",
+      openObservationCount: String(Number.isFinite(Number(extra.openObservationCount)) ? Number(extra.openObservationCount) : 0),
+    });
     setNote(details?.notes?.[0]?.note || "");
   }, [details?.document.id, details?.metadata, details?.notes]);
 
@@ -207,16 +244,89 @@ export default function DetailsPanel({
         ) : tab === "review" ? (
           <div className={styles.versionList}>
             <div className={styles.infoBox}><strong>Besorolás forrása</strong><br />Szakág: {metadata.discipline ? "fájl felülírás: " + metadata.discipline : inheritedDiscipline ? "mappából örökölt: " + inheritedDiscipline : "—"}<br />Témakör: {metadata.topic ? "fájl felülírás: " + metadata.topic : inheritedTopic ? "mappából örökölt: " + inheritedTopic : "—"}</div>
-            {[
-              ["Ellenőrzés", details?.metadata?.extra?.reviewChecked ?? details?.metadata?.extra?.hageChecked],
-              ["Eredmény", details?.metadata?.extra?.reviewResult ?? details?.metadata?.extra?.hageResult],
-              ["Észrevételek", details?.metadata?.extra?.reviewObservations ?? details?.metadata?.extra?.hageObservations],
-              ["Workflow állapot", details?.metadata?.extra?.workflowStatus ?? details?.metadata?.approvalStatus],
-              ["Belső megjegyzés", details?.metadata?.extra?.internalNote ?? details?.metadata?.extra?.hageNote],
-              ["Megrendelő", details?.metadata?.extra?.customerApproval ?? details?.metadata?.extra?.clientApproval],
-              ["Megrendelői megjegyzés", details?.metadata?.extra?.customerNote ?? details?.metadata?.extra?.clientNote],
-              ["Revízióváltozás", details?.metadata?.extra?.revisionChange ?? details?.metadata?.extra?.change],
-            ].map(([label, value], index) => { const keys = ["checked", "result", "observations", "workflow", "internal", "customer", "customer-note", "revision"]; const key = keys[index]; return <div id={"drive-review-" + document.id + "-" + key} className={styles.infoBox} key={String(label)} data-review-focused={reviewFocus === key ? "true" : undefined}><strong>{String(label)}</strong><br />{value ? String(value) : "—"}</div>; })}
+
+            <div className={styles.reviewEditorGrid}>
+              <div id={"drive-review-" + document.id + "-checked"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "checked" ? "true" : undefined}>
+                <label htmlFor="drive-review-checked">Ellenőrzés</label>
+                <select id="drive-review-checked" value={review.checked} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, checked: event.target.value }))}>
+                  <option value="">—</option><option value="Igen">Igen</option><option value="Nem">Nem</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-result"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "result" ? "true" : undefined}>
+                <label htmlFor="drive-review-result">Eredmény</label>
+                <select id="drive-review-result" value={review.result} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, result: event.target.value }))}>
+                  <option value="">—</option><option value="Megfelelő">Megfelelő</option><option value="Javítandó">Javítandó</option><option value="Visszaadva">Visszaadva</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-workflow"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "workflow" ? "true" : undefined}>
+                <label htmlFor="drive-review-workflow">Workflow állapot</label>
+                <select id="drive-review-workflow" value={review.workflow} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, workflow: event.target.value }))}>
+                  <option value="">—</option>
+                  <option value="Ellenőrzésre vár">Ellenőrzésre vár</option>
+                  <option value="Folyamatban">Folyamatban</option>
+                  <option value="Javításra visszaadva">Javításra visszaadva</option>
+                  <option value="Jóváhagyásra vár">Jóváhagyásra vár</option>
+                  <option value="Jóváhagyva">Jóváhagyva</option>
+                  <option value="Elutasítva">Elutasítva</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-customer"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "customer" ? "true" : undefined}>
+                <label htmlFor="drive-review-customer">Megrendelő</label>
+                <select id="drive-review-customer" value={review.customer} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, customer: event.target.value }))}>
+                  <option value="">—</option><option value="Igen">Igen</option><option value="Nem">Nem</option>
+                </select>
+              </div>
+              <div id={"drive-review-" + document.id + "-revision"} className={styles.reviewEditorItem} data-review-focused={reviewFocus === "revision" ? "true" : undefined}>
+                <label htmlFor="drive-review-revision">Revízióváltozás</label>
+                <select id="drive-review-revision" value={review.revisionChange} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, revisionChange: event.target.value }))}>
+                  <option value="">—</option><option value="ÚJ">ÚJ</option><option value="MÓDOSULT">MÓDOSULT</option><option value="ÁTHELYEZVE">ÁTHELYEZVE</option><option value="NEM TALÁLHATÓ">NEM TALÁLHATÓ</option>
+                </select>
+              </div>
+              <div className={styles.reviewEditorItem}>
+                <label htmlFor="drive-review-count">Nyitott észrevételek</label>
+                <input id="drive-review-count" type="number" min="0" value={review.openObservationCount} disabled={!canWrite || busy} onChange={(event) => setReview((current) => ({ ...current, openObservationCount: event.target.value }))} />
+              </div>
+              <div id={"drive-review-" + document.id + "-observations"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "observations" ? "true" : undefined}>
+                <label htmlFor="drive-review-observations">Észrevételek</label>
+                <textarea id="drive-review-observations" rows={4} value={review.observations} readOnly={!canWrite} disabled={busy} onChange={(event) => setReview((current) => ({ ...current, observations: event.target.value }))} />
+              </div>
+              <div id={"drive-review-" + document.id + "-internal"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "internal" ? "true" : undefined}>
+                <label htmlFor="drive-review-internal">Belső megjegyzés</label>
+                <textarea id="drive-review-internal" rows={3} value={review.internal} readOnly={!canWrite} disabled={busy} onChange={(event) => setReview((current) => ({ ...current, internal: event.target.value }))} />
+              </div>
+              <div id={"drive-review-" + document.id + "-customer-note"} className={styles.reviewEditorItem + " " + styles.reviewEditorFull} data-review-focused={reviewFocus === "customer-note" ? "true" : undefined}>
+                <label htmlFor="drive-review-customer-note">Megrendelői megjegyzés</label>
+                <textarea id="drive-review-customer-note" rows={3} value={review.customerNote} readOnly={!canWrite} disabled={busy} onChange={(event) => setReview((current) => ({ ...current, customerNote: event.target.value }))} />
+              </div>
+            </div>
+
+            <div className={styles.detailsActions}>
+              <button
+                type="button"
+                className={styles.smallButton + " " + styles.smallPrimary}
+                disabled={!canWrite || busy}
+                onClick={() => void onSaveMetadata({
+                  ...metadata,
+                  approvalStatus: review.workflow || metadata.approvalStatus,
+                  extra: {
+                    ...(details?.metadata?.extra || {}),
+                    topic: metadata.topic,
+                    planTitle: metadata.planTitle,
+                    reviewChecked: review.checked,
+                    reviewResult: review.result,
+                    reviewObservations: review.observations,
+                    workflowStatus: review.workflow,
+                    internalNote: review.internal,
+                    customerApproval: review.customer,
+                    customerNote: review.customerNote,
+                    revisionChange: review.revisionChange,
+                    openObservationCount: Math.max(0, Number(review.openObservationCount) || 0),
+                  },
+                })}
+              >
+                <Save size={12} /> Tervellenőrzés mentése
+              </button>
+            </div>
           </div>
         ) : tab === "versions" ? (
           <div className={styles.versionList}>

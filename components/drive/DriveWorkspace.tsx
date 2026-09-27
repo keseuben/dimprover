@@ -376,15 +376,15 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     setBusy(true); setError("");
     try {
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(selectedDocument.id)}/metadata`, {
-        method: "PUT",
+        method: "PATCH",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
       const payload = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A metaadat mentése sikertelen.");
-      setNotice("Mérnöki metaadatok mentve és auditálva.");
-      await loadDetails(selectedDocument.id);
+      setNotice("Mérnöki és tervellenőrzési metaadatok mentve és auditálva.");
+      await Promise.all([loadDetails(selectedDocument.id), load()]);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "A metaadat mentése sikertelen."); }
     finally { setBusy(false); }
   }
