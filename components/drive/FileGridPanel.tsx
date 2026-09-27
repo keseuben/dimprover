@@ -290,8 +290,8 @@ export default function FileGridPanel({
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
               <colgroup>
-                <col style={{ width: "250px" }} />
-                <col style={{ width: "260px" }} />
+                <col style={{ width: "330px" }} />
+                <col style={{ width: "180px" }} />
                 <col style={{ width: "120px" }} />
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "120px" }} />
@@ -304,7 +304,7 @@ export default function FileGridPanel({
                 <col style={{ width: "95px" }} />
                 <col style={{ width: "80px" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
+              <thead><tr><th>Név</th><th className={styles.reviewFileNameHeader}>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
