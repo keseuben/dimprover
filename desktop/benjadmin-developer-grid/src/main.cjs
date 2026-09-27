@@ -2053,31 +2053,83 @@ async function clearStaleOwnedTaskLaunchDraft(view, { taskId, sessionId, current
     currentSourceProofSha256,
   });
   if (!decision.replace) return { ok:true, cleared:false, decision };
-  const clearResult = await view.webContents.executeJavaScript(`(() => {
+
+  const expectedTextLiteral = JSON.stringify(String(captured.text || ""));
+  const clearResult = await view.webContents.executeJavaScript(`(async () => {
     const selectors = ${composerSelectorLiteral()};
+    const expectedText = ${expectedTextLiteral};
     let composer = null;
     for (const selector of selectors) {
       const candidate = document.querySelector(selector);
       if (candidate && candidate.getClientRects().length) { composer = candidate; break; }
     }
     if (!composer) return { cleared:false, reason:'composer-not-found' };
+
     const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
-    const before = read();
-    if (composer instanceof HTMLTextAreaElement) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-      if (setter) setter.call(composer, ''); else composer.value = '';
-      composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'deleteContentBackward', data:null }));
-    } else {
-      composer.focus();
-      composer.replaceChildren();
-      composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'deleteContentBackward', data:null }));
+    const initial = read();
+    if (initial.trim() !== expectedText.trim()) {
+      return { cleared:false, reason:'composer-changed-before-clear', beforeLength:initial.length, expectedLength:expectedText.length };
     }
-    const after = read();
-    return { cleared: after.trim().length === 0, reason: after.trim().length === 0 ? '' : 'composer-clear-not-observed', beforeLength:before.length, afterLength:after.length };
+
+    const fireInput = () => {
+      try {
+        composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'deleteContentBackward', data:null }));
+      } catch {
+        composer.dispatchEvent(new Event('input', { bubbles:true }));
+      }
+      composer.dispatchEvent(new Event('change', { bubbles:true }));
+    };
+
+    const clearOnce = () => {
+     composer.focus();
+      if (composer instanceof HTMLTextAreaElement) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        if (setter) setter.call(composer, ''); else composer.value = '';
+        fireInput();
+        return;
+      }
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(composer);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      let deleted = false;
+      try { deleted = document.execCommand('delete', false); } catch { deleted = false; }
+      if (!deleted || read().trim()) {
+        try { document.execCommand('selectAll', false); document.execCommand('delete', false); } catch {}
+      }
+      if (read().trim()) {
+        composer.replaceChildren();
+      }
+      fireInput();
+      selection?.removeAllRanges();
+    };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let attempts = 0;
+    for (; attempts < 3; attempts += 1) {
+      const current = read();
+      if (!current.trim()) break;
+      if (current.trim() !== expectedText.trim()) {
+        return { cleared:false, reason:'composer-changed-during-clear', attempts, currentLength:current.length };
+      }
+      clearOnce();
+      await sleep(180);
+    }
+
+    if (read().trim())   { return { cleared:false, reason:'composer-clear-not-observed', attempts:attempts + 1, afterLength:read().length }; }
+
+    for (const delay of [250, 500, 900]) {
+      await sleep(delay);
+      if (read().trim()) {
+        return { cleared:false, reason:'composer-restored-after-clear', attempts:attempts + 1, restoredLength:read().length, delay };
+      }
+    }
+    return { cleared:true, reason:'', attempts:attempts + 1, beforeLength:initial.length, afterLength:0, stableEmptyMs:1650 };
   })()`, true).catch(() => ({ cleared:false, reason:"execute-failed" }));
+
   if (clearResult?.cleared !== true) {
-    return { ok:false, code:"STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED", error:"Stale TASK_LAUNCH draft could not be safely cleared.", decision, clearResult };
-  }
+    return { ok:false, code:"STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED", error:"Stale TASK_LAUNCH draft could not be safely and persistently cleared.", decision, clearResult }; }
   return { ok:true, cleared:true, decision, clearResult };
 }
 

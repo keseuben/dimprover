@@ -14,8 +14,8 @@ const { BenjadminLiveClient, synthesizeGridSnapshot }=require(path.join(desktop,
 let n=0;
 const check=(name,fn)=>{fn();n+=1;console.log("PASS",name);};
 
-check("desktop version v0.1.80",()=>assert.equal(pkg.version,"0.1.80"));
-check("backend version v0.1.80-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.80-dev"')));
+check("desktop version v0.1.81",()=>assert.equal(pkg.version,"0.1.81"));
+check("backend version v0.1.81-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.81-dev"')));
 check("foundation 409 is recoverable only with foundation payload",()=>{
   assert.match(liveSource,/pathname === "\/api\/dev\/grid\/foundation"/);
   assert.match(liveSource,/response\.status === 409/);
@@ -86,4 +86,4 @@ try {
   global.fetch=originalFetch;
 }
 
-console.log("Developer Grid native delta foundation recovery v0.1.80 contract PASS · "+n+"/"+n);
+console.log("Developer Grid native delta foundation recovery v0.1.81 contract PASS · "+n+"/"+n);

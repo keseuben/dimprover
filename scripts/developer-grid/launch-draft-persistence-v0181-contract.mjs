@@ -1,0 +1,25 @@
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+const require=createRequire(import.meta.url);
+const root=path.resolve(import.meta.dirname,"../..");
+const main=fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+const mod=require(path.join(root,"desktop/benjadmin-developer-grid/src/task-launch/draft-recovery.cjs"));
+const task="dev-task-grid-c3e320247ef1e25df784";
+const session="grid-work-dev-task-grid-c3e320247ef1e25df784-arminai";
+const oldProof="28501805854172993f39053902f2293036887fc89c1a1873d7fa5c61d9f3a42f";
+const currentProof="f13ca41f05fe87aaaa9cc0f6dfb5ebb55b8cc29f51c50fcaa130a786204f8c57";
+const draft=["BENJADMIN_PROMPT_KIND: TASK_LAUNCH_V3","Task: "+task,"Session: "+session,"Source proof: "+oldProof].join("\n");
+const checks=[];
+function check(name,ok){if(!ok){console.error("FAIL",name);process.exitCode=1;}else{checks.push(name);console.log("PASS",String(checks.length).padStart(2,"0"),name);}}
+const decision=mod.shouldReplaceStaleTaskLaunchDraft({draft,taskId:task,sessionId:session,currentSourceProofSha256:currentProof});
+check("stale same-task draft is positively identified",decision.replace===true && decision.reason==="stale-source-proof");
+check("persistent clear validates exact captured draft before deletion",main.includes("composer-changed-before-clear") && main.includes("expectedText.trim()"));
+check("contenteditable clear uses selection/delete before DOM fallback",main.includes("document.execCommand('delete', false)") && main.includes("composer.replaceChildren()"));
+check("persistent clear fires controlled input/change events",main.includes("inputType:'deleteContentBackward'") && main.includes("new Event('change'"));
+check("persistent clear retries instead of one-shot mutation",main.includes("attempts < 3") && main.includes("await sleep(180)"));
+check("React/ProseMirror restoration is explicitly detected",main.includes("composer-restored-after-clear"));
+check("stable empty state is required across multiple render ticks",main.includes("[250, 500, 900]") && main.includes("stableEmptyMs:1650"));
+check("failed persistent clear remains fail-closed",main.includes("STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED") && main.includes("safely and persistently cleared"));
+if(process.exitCode)process.exit(process.exitCode);
+console.log("Developer Grid v0.1.81 persistent launch-draft clear contract PASS - "+checks.length+"/"+checks.length);
