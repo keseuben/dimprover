@@ -16,7 +16,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
 
   try {
-    const result = await bulkUpdateDriveReviewMetadata(projectId, input, access.actor.userId);
+    const result = await bulkUpdateDriveReviewMetadata(projectId, input, {
+      userId: access.actor.userId,
+      displayName: access.actor.displayName,
+    });
     if (!result.ok) return NextResponse.json(result, { status: 400 });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

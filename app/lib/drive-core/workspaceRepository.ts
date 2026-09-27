@@ -458,10 +458,47 @@ export async function getDriveDocumentWorkspaceDetails(projectId: string, docume
   };
 }
 
+type DriveAuditActor = { userId: string; displayName?: string };
+
+function normalizedExtraText(extra: Record<string, unknown>, key: string) {
+  const value = extra[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stampReviewAudit(
+  extra: Record<string, unknown>,
+  currentExtra: Record<string, unknown>,
+  key: string,
+  prefix: string,
+  actor: DriveAuditActor,
+  now: string,
+) {
+  const nextValue = normalizedExtraText(extra, key);
+  const currentValue = normalizedExtraText(currentExtra, key);
+  if (nextValue === currentValue) return;
+  extra[prefix + "ByUserId"] = actor.userId;
+  extra[prefix + "ByName"] = actor.displayName?.trim() || actor.userId;
+  extra[prefix + "At"] = now;
+  extra[prefix + "Decision"] = nextValue;
+}
+
+function applyReviewAuditTrail(
+  extra: Record<string, unknown>,
+  currentExtra: Record<string, unknown>,
+  actor: DriveAuditActor,
+  now = new Date().toISOString(),
+) {
+  stampReviewAudit(extra, currentExtra, "workflowStatus", "workflowChanged", actor, now);
+  stampReviewAudit(extra, currentExtra, "customerApproval", "customerApproval", actor, now);
+  stampReviewAudit(extra, currentExtra, "projectManagerApproval", "projectManagerApproval", actor, now);
+  stampReviewAudit(extra, currentExtra, "investorProjectManagerApproval", "investorProjectManagerApproval", actor, now);
+  stampReviewAudit(extra, currentExtra, "lifecycleStatus", "lifecycleChanged", actor, now);
+}
+
 export async function bulkUpdateDriveReviewMetadata(
   projectId: string,
   input: Record<string, unknown>,
-  actorUserId: string,
+  actor: DriveAuditActor,
 ) {
   const client = await requireReadyClient();
   const explicitIds = Array.isArray(input.documentIds)
@@ -532,7 +569,8 @@ export async function bulkUpdateDriveReviewMetadata(
     const batch = documentIds.slice(offset, offset + 10);
     await Promise.all(batch.map(async (documentId) => {
       const current = existingByDocument.get(documentId);
-      const extra: Record<string, unknown> = { ...(current?.extra || {}) };
+      const currentExtra: Record<string, unknown> = { ...(current?.extra || {}) };
+      const extra: Record<string, unknown> = { ...currentExtra };
       if (reviewChecked !== undefined) extra.reviewChecked = reviewChecked;
       if (reviewResult !== undefined) extra.reviewResult = reviewResult;
       if (workflowStatus !== undefined) extra.workflowStatus = workflowStatus;
@@ -541,6 +579,8 @@ export async function bulkUpdateDriveReviewMetadata(
       if (projectManagerApproval !== undefined) extra.projectManagerApproval = projectManagerApproval;
       if (investorProjectManagerApproval !== undefined) extra.investorProjectManagerApproval = investorProjectManagerApproval;
       if (lifecycleStatus !== undefined) extra.lifecycleStatus = lifecycleStatus;
+
+      applyReviewAuditTrail(extra, currentExtra, actor);
 
       const payload = {
         planNo: current?.plan_no || "",
@@ -558,7 +598,7 @@ export async function bulkUpdateDriveReviewMetadata(
         p_project_id: projectId,
         p_document_id: documentId,
         p_payload: payload,
-        p_actor_user_id: actorUserId,
+        p_actor_user_id: actor.userId,
       });
       if (error) databaseError("A DRIVE csoportos tervellenőrzés mentése sikertelen.", error);
       updated += 1;
@@ -577,9 +617,22 @@ export async function upsertDriveEngineeringMetadata(
   projectId: string,
   documentId: string,
   input: Record<string, unknown>,
-  actorUserId: string,
+  actor: DriveAuditActor,
 ) {
   const client = await requireReadyClient();
+  const currentResult = await client
+    .from("drive_core_document_metadata")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("document_id", documentId)
+    .maybeSingle();
+  if (currentResult.error) databaseError("A DRIVE metaadat előzmény nem tölthető be.", currentResult.error);
+  const current = currentResult.data as DbMetadata | null;
+  const currentExtra: Record<string, unknown> = { ...(current?.extra || {}) };
+  const extra: Record<string, unknown> = input.extra && typeof input.extra === "object" && !Array.isArray(input.extra)
+    ? { ...(input.extra as Record<string, unknown>) }
+    : {};
+  applyReviewAuditTrail(extra, currentExtra, actor);
   const payload = {
     planNo: typeof input.planNo === "string" ? input.planNo.trim() : "",
     discipline: typeof input.discipline === "string" ? input.discipline.trim() : "",
@@ -590,13 +643,13 @@ export async function upsertDriveEngineeringMetadata(
     building: typeof input.building === "string" ? input.building.trim() : "",
     level: typeof input.level === "string" ? input.level.trim() : "",
     zone: typeof input.zone === "string" ? input.zone.trim() : "",
-    extra: input.extra && typeof input.extra === "object" && !Array.isArray(input.extra) ? input.extra : {},
+    extra,
   };
   const { data, error } = await client.rpc("drive_workspace_upsert_metadata_atomic", {
     p_project_id: projectId,
     p_document_id: documentId,
     p_payload: payload,
-    p_actor_user_id: actorUserId,
+    p_actor_user_id: actor.userId,
   });
   if (error) databaseError("A DRIVE mérnöki metaadat mentése sikertelen.", error);
   return { ok: true as const, metadata: mapMetadata(data as DbMetadata) };

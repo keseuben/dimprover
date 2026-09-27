@@ -1215,6 +1215,13 @@
 .reviewEditorItem input:focus,
 .reviewEditorItem textarea:focus { border-color: #8db9f3; box-shadow: 0 0 0 2px rgba(23,101,215,.08); }
 .reviewEditorItem textarea { resize: vertical; min-height: 68px; }
+.reviewAuditLine {
+  display: block;
+  margin-top: 5px;
+  color: #6c7f92;
+  font-size: var(--drive-font-xs);
+  line-height: 1.35;
+}
 .reviewEditorFull { grid-column: 1 / -1; }
 
 @media (max-width: 1100px) {

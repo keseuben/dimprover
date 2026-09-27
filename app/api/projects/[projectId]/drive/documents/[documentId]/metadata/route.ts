@@ -14,7 +14,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
   try {
-    const result = await upsertDriveEngineeringMetadata(projectId, documentId, input, access.actor.userId);
+    const result = await upsertDriveEngineeringMetadata(projectId, documentId, input, {
+      userId: access.actor.userId,
+      displayName: access.actor.displayName,
+    });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
