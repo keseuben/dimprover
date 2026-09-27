@@ -1172,6 +1172,27 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function saveSelectedReview(fields: Record<string, string | number>) {
+    if (!selectedDocument || !canApprove) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/review/bulk`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ documentIds: [selectedDocument.id], fields }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; updated?: number };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A tervellenőrzés mentése sikertelen.");
+      setNotice(`Tervellenőrzés mentve: ${payload.updated || 0} fájl frissítve.`);
+      await Promise.all([loadDetails(selectedDocument.id), load()]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A tervellenőrzés mentése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveSelectedNote(note: string) {
     if (!selectedDocument || !canComment) return;
     setBusy(true); setError(""); setNotice("");
@@ -1788,7 +1809,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
             <div className={styles.reviewWorkspace}>
             <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.planTitle}</button><small title={row.document.name}>{row.planTitle !== row.document.name ? row.document.name : ""}</small></td><td>{row.effectiveDiscipline || "—"}</td><td>{row.effectiveTopic || "—"}</td><td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openReviewDetail(row.document.id, "checked")}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openReviewDetail(row.document.id, "result")}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openReviewDetail(row.document.id, "observations")}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.workflow || "Nincs workflow állapot"} onClick={() => openReviewDetail(row.document.id, "workflow")}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.internalNote || "Nincs belső megjegyzés"} onClick={() => openReviewDetail(row.document.id, "internal")}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs megrendelői jóváhagyás"} onClick={() => openReviewDetail(row.document.id, "customer")}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs megrendelői megjegyzés"} onClick={() => openReviewDetail(row.document.id, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.revisionChange || "Nincs revízióváltozás"} onClick={() => openReviewDetail(row.document.id, "revision")}>{revisionMark(row.revisionChange)}</button></td></tr>)}</tbody></table></div>
-            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} securityReady={securityScannerReady} securityLabel={securityScannerReady ? `${health?.security?.engine || "ClamAV"}` : health?.security?.errorCode || "Scanner nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
+            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} membershipRole="" membershipDisplayName="" securityReady={securityScannerReady} securityLabel={securityScannerReady ? `${health?.security?.engine || "ClamAV"}` : health?.security?.errorCode || "Scanner nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveReview={saveSelectedReview} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
             </div>
           </section>}
 
