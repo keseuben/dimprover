@@ -17,6 +17,7 @@ const { captureConversationTranscript } = require("./context-workspace/chatgpt-t
 const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverPrompt, validateConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
 const { ROLLOVER_REACK_PROMPT_MARKER, ROLLOVER_REACK_KEY_MARKER, buildConversationRolloverReAckPrompt } = require("./context-workspace/rollover-reack.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
+const { shouldReplaceStaleTaskLaunchDraft } = require("./task-launch/draft-recovery.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
 const { EXECUTION_REQUEST_START, EXECUTION_REQUEST_END, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
@@ -2026,6 +2027,60 @@ async function insertWorkerTaskPrompt(view, prompt, expectedMarker = "") {
   })()`, true).catch(() => ({ inserted: false, reason: "execute-failed", existingKind: "NONE" }));
 }
 
+async function captureComposerDraftText(view) {
+  if (!view || view.webContents.isDestroyed()) return { ok:false, reason:"chat-unavailable", text:"" };
+  await waitForChatComposer(view);
+  return view.webContents.executeJavaScript(`(() => {
+    const selectors = ${composerSelectorLiteral()};
+    let composer = null;
+    for (const selector of selectors) {
+      const candidate = document.querySelector(selector);
+      if (candidate && candidate.getClientRects().length) { composer = candidate; break; }
+    }
+    if (!composer) return { ok:false, reason:'composer-not-found', text:'' };
+    const text = String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    return { ok:true, reason:'', text };
+  })()`, true).catch(() => ({ ok:false, reason:"execute-failed", text:"" }));
+}
+
+async function clearStaleOwnedTaskLaunchDraft(view, { taskId, sessionId, currentSourceProofSha256 }) {
+  const captured = await captureComposerDraftText(view);
+  if (!captured?.ok) return { ok:false, code:"TASK_DRAFT_INSPECTION_FAILED", error:"ChatGPT draft inspection failed.", capture:captured };
+  const decision = shouldReplaceStaleTaskLaunchDraft({
+    draft:captured.text,
+    taskId,
+    sessionId,
+    currentSourceProofSha256,
+  });
+  if (!decision.replace) return { ok:true, cleared:false, decision };
+  const clearResult = await view.webContents.executeJavaScript(`(() => {
+    const selectors = ${composerSelectorLiteral()};
+    let composer = null;
+    for (const selector of selectors) {
+      const candidate = document.querySelector(selector);
+      if (candidate && candidate.getClientRects().length) { composer = candidate; break; }
+    }
+    if (!composer) return { cleared:false, reason:'composer-not-found' };
+    const read = () => String(composer instanceof HTMLTextAreaElement ? composer.value : (composer.innerText || composer.textContent || ''));
+    const before = read();
+    if (composer instanceof HTMLTextAreaElement) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      if (setter) setter.call(composer, ''); else composer.value = '';
+      composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'deleteContentBackward', data:null }));
+    } else {
+      composer.focus();
+      composer.replaceChildren();
+      composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'deleteContentBackward', data:null }));
+    }
+    const after = read();
+    return { cleared: after.trim().length === 0, reason: after.trim().length === 0 ? '' : 'composer-clear-not-observed', beforeLength:before.length, afterLength:after.length };
+  })()`, true).catch(() => ({ cleared:false, reason:"execute-failed" }));
+  if (clearResult?.cleared !== true) {
+    return { ok:false, code:"STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED", error:"Stale TASK_LAUNCH draft could not be safely cleared.", decision, clearResult };
+  }
+  return { ok:true, cleared:true, decision, clearResult };
+}
+
 async function sendPreparedChatPrompt(view, expectedMarker = "") {
   if (!view || view.webContents.isDestroyed()) return { sent: false, reason: "chat-unavailable" };
   await waitForChatComposer(view);
@@ -2802,8 +2857,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
   if (baselineCapture?.generating) {
     const launchInFlight = Boolean(launchRecord.sentAt)
-      || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase())
-      || String(launchRecord.ackState || "").toUpperCase() === "WAITING";
+      || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
     const chatLaunch = saveTaskLaunchPatch(task, code, {
       surfaceType,
       generationObservedAt: new Date().toISOString(),
@@ -6046,10 +6100,15 @@ function registerIpc() {
               const preRecoveryAssistant = await captureLatestBootAckCandidate(preRecoveryView);
               if (preRecoveryAssistant?.generating) {
                 const launchRecord = loadTaskLaunchRecords()[task.id] || {};
-                saveTaskLaunchPatch(preRecoveryLaunchTask, preRecoveryCode, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
-                void monitorWorkerBootAck({ view:preRecoveryView, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
-                send("context:refresh", { reason:"chatgpt-response-pending-before-recovery", taskId:task.id, sessionId:session.id });
-                return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, message:"A ChatGPT még a jelenlegi Launch Packet válaszát generálja. A source proof nem változott; a Grid ugyanennek a BOOT ACK-jára vár." } };
+                const launchInFlight = Boolean(launchRecord.sentAt)
+                  || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
+                if (launchInFlight) {
+                  saveTaskLaunchPatch(preRecoveryLaunchTask, preRecoveryCode, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
+                  void monitorWorkerBootAck({ view:preRecoveryView, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+                  send("context:refresh", { reason:"chatgpt-response-pending-before-recovery", taskId:task.id, sessionId:session.id });
+                  return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, message:"ChatGPT is generating a response to a launch packet with verified send evidence." } };
+                }
+                return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"ChatGPT is generating, but no launch send evidence exists. RESPONSE_PENDING is denied." };
               }
               if (preRecoveryAssistant?.ok && isBootAckCandidateText(preRecoveryAssistant.text)) {
                 const preRecovered = await processCapturedBootAck({ view:preRecoveryView, body:preRecoveryAssistant.text, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, source:"RESUME_PRE_RECOVERY_ACK" });
@@ -6106,8 +6165,7 @@ function registerIpc() {
         if (sourceProofRefreshed) return { ok:false, code:"CHATGPT_GENERATION_ACTIVE_RECOVERY", error:"A Central Core source proof frissült, de a ChatGPT még a korábbi válaszon dolgozik. Várd meg vagy állítsd le a generálást, majd nyomd meg újra az INDÍTÁS FOLYTATÁSA gombot; a régi BOOT ACK nem kerül újrafelhasználásra." };
         const launchRecord = loadTaskLaunchRecords()[task.id] || {};
         const launchInFlight = Boolean(launchRecord.sentAt)
-          || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase())
-          || String(launchRecord.ackState || "").toUpperCase() === "WAITING";
+          || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
         if (launchInFlight) {
           const chatLaunch = saveTaskLaunchPatch(launchTask, code, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
           void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
@@ -6132,6 +6190,27 @@ function registerIpc() {
           sourceProofRecoveredAt:new Date().toISOString(),
         });
       }
+      const staleDraftRecovery = await clearStaleOwnedTaskLaunchDraft(view, {
+        taskId:task.id,
+        sessionId:launchTask.sessionId || session.id,
+        currentSourceProofSha256,
+      });
+      if (!staleDraftRecovery?.ok) {
+        return { ok:false, code:staleDraftRecovery?.code || "STALE_TASK_LAUNCH_DRAFT_RECOVERY_FAILED", error:staleDraftRecovery?.error || "Stale TASK_LAUNCH draft recovery failed." };
+      }
+      if (staleDraftRecovery.cleared) {
+        saveTaskLaunchPatch(launchTask, code, {
+          staleDraftClearedAt:new Date().toISOString(),
+          staleDraftPreviousSourceProofSha256:staleDraftRecovery?.decision?.previousSourceProofSha256 || null,
+          sourceProofSha256:currentSourceProofSha256,
+          autoSendState:"RECOVERY_READY",
+          sentAt:null,
+          ackState:"WAITING",
+          ackSha256:null,
+          ackMismatches:[],
+        });
+      }
+
       if (!expectedConversationId) {
         const bound = await bindCurrentTaskConversation(code, task.id, { automatic:true, taskOverride:launchTask, launchAfterBind:true });
         if (!bound?.ok) return bound;
