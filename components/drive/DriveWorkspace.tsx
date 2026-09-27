@@ -53,6 +53,7 @@ type UploadInitPayload = {
   ok?: boolean;
   error?: string;
   signedUpload?: { method: "PUT"; url: string; headers: Record<string, string>; expiresAt: string };
+  browserUpload?: { method: "PUT"; url: string; headers: Record<string, string>; expiresAt: string };
   completeUrl?: string;
   abortUrl?: string;
 };
@@ -279,14 +280,16 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         }),
       });
       const initPayload = await initResponse.json() as UploadInitPayload;
-      if (!initResponse.ok || !initPayload.ok || !initPayload.signedUpload || !initPayload.completeUrl) {
+      const uploadTarget = initPayload.browserUpload || initPayload.signedUpload;
+      if (!initResponse.ok || !initPayload.ok || !uploadTarget || !initPayload.completeUrl) {
         throw new Error(initPayload.error || "A feltöltési munkamenet nem hozható létre.");
       }
       abortUrl = initPayload.abortUrl || "";
       setNotice(`Feltöltés a privát tárhelyre: ${file.name}`);
-      const objectResponse = await fetch(initPayload.signedUpload.url, {
-        method: initPayload.signedUpload.method,
-        headers: initPayload.signedUpload.headers,
+      const objectResponse = await fetch(uploadTarget.url, {
+        method: uploadTarget.method,
+        credentials: initPayload.browserUpload ? "same-origin" : "omit",
+        headers: uploadTarget.headers,
         body: file,
       });
       if (!objectResponse.ok) throw new Error(`A privát tárhely feltöltése sikertelen (${objectResponse.status}).`);

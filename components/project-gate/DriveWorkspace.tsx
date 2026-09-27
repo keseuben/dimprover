@@ -257,6 +257,7 @@ type UploadInitPayload = {
   error?: string;
   upload?: { id: string; status: string; finalVersionStatus: string };
   signedUpload?: { method: "PUT"; url: string; headers: Record<string, string>; expiresAt: string };
+  browserUpload?: { method: "PUT"; url: string; headers: Record<string, string>; expiresAt: string };
   completeUrl?: string;
   abortUrl?: string;
 };
@@ -302,15 +303,15 @@ type UploadQueueItem = {
   targetDocumentName?: string;
 };
 
-function putSignedFile(
+function putUploadFile(
   file: File,
-  signedUpload: NonNullable<UploadInitPayload["signedUpload"]>,
+  uploadTarget: { method: "PUT"; url: string; headers: Record<string, string>; expiresAt: string },
   onProgress: (progress: number) => void,
 ) {
   return new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open(signedUpload.method, signedUpload.url, true);
-    for (const [key, value] of Object.entries(signedUpload.headers || {})) request.setRequestHeader(key, value);
+    request.open(uploadTarget.method, uploadTarget.url, true);
+    for (const [key, value] of Object.entries(uploadTarget.headers || {})) request.setRequestHeader(key, value);
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable || event.total <= 0) return;
       onProgress(Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))));
@@ -803,12 +804,13 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         }),
       });
       const initPayload = await initResponse.json() as UploadInitPayload;
-      if (!initResponse.ok || !initPayload.ok || !initPayload.signedUpload || !initPayload.completeUrl) {
+      const uploadTarget = initPayload.browserUpload || initPayload.signedUpload;
+      if (!initResponse.ok || !initPayload.ok || !uploadTarget || !initPayload.completeUrl) {
         throw new Error(initPayload.error || "A feltöltési munkamenet nem hozható létre.");
       }
       abortUrl = initPayload.abortUrl || "";
       patchUploadQueueItem(item.id, { message: "Feltöltés a privát tárhelyre…" });
-      await putSignedFile(item.file, initPayload.signedUpload, (progress) => patchUploadQueueItem(item.id, { progress }));
+      await putUploadFile(item.file, uploadTarget, (progress) => patchUploadQueueItem(item.id, { progress }));
 
       patchUploadQueueItem(item.id, { status: "VERIFYING", progress: 100, message: "SHA-256 és biztonsági ellenőrzés…" });
       const completeResponse = await fetch(initPayload.completeUrl, {

@@ -20,6 +20,7 @@ export {
   initDriveObjectDownload,
   initDriveObjectPreview,
   initDriveObjectUpload,
+  uploadDriveObjectThroughServer,
   openDriveObjectPreviewContent,
 } from "./storageService";
 

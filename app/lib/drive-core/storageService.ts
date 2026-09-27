@@ -8,6 +8,7 @@ import {
   deleteDriveObject,
   getDriveObjectStream,
   headDriveObject,
+  putDriveObjectStream,
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
 import { requireDriveCleanSecurityScan } from "./securityScanRepository";
@@ -218,6 +219,12 @@ export async function initDriveObjectUpload(input: {
         headers: { "content-type": storedSession.mimeType },
         expiresAt: signed.expiresAt,
       },
+      browserUpload: {
+        method: "PUT" as const,
+        url: `/api/projects/${encodeURIComponent(input.projectId)}/drive/uploads/${encodeURIComponent(storedSession.id)}/object`,
+        headers: { "content-type": storedSession.mimeType },
+        expiresAt: storedSession.expiresAt,
+      },
       completeUrl: `/api/projects/${encodeURIComponent(input.projectId)}/drive/uploads/${encodeURIComponent(storedSession.id)}/complete`,
       abortUrl: `/api/projects/${encodeURIComponent(input.projectId)}/drive/uploads/${encodeURIComponent(storedSession.id)}/abort`,
     };
@@ -230,6 +237,72 @@ export async function initDriveObjectUpload(input: {
     }).catch(() => undefined);
     throw error;
   }
+}
+
+export async function uploadDriveObjectThroughServer(input: {
+  projectId: string;
+  uploadId: string;
+  actorUserId: string;
+  contentLength: number;
+  contentType?: string | null;
+  body: AsyncIterable<Uint8Array>;
+}) {
+  const config = getDriveObjectStorageConfig();
+  const status = getDriveObjectStorageSafeStatus(config);
+  if (!status.objectWriteEnabled) {
+    throw new DriveCoreRepositoryError(status.warning, "DRIVE_OBJECT_WRITE_DISABLED", 503);
+  }
+
+  const session = await getDriveUploadSessionRecord(input.projectId, input.uploadId);
+  if (!session) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.", "DRIVE_UPLOAD_NOT_FOUND", 404);
+  }
+  if (session.createdBy !== input.actorUserId) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet más felhasználóhoz tartozik.", "DRIVE_UPLOAD_ACTOR_MISMATCH", 403);
+  }
+  if (session.status !== "INITIATED") {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet már nem fogad fájlt.", "DRIVE_UPLOAD_INVALID_STATE", 409);
+  }
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet lejárt.", "DRIVE_UPLOAD_EXPIRED", 410);
+  }
+  if (session.storageBucket !== config.bucket) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet tárhelye eltér az aktív DRIVE buckettől.", "DRIVE_OBJECT_BUCKET_MISMATCH", 409);
+  }
+  if (!Number.isSafeInteger(input.contentLength) || input.contentLength <= 0) {
+    throw new DriveCoreRepositoryError("A böngészős feltöltés Content-Length értéke hiányzik vagy érvénytelen.", "DRIVE_UPLOAD_CONTENT_LENGTH_REQUIRED", 411);
+  }
+  if (input.contentLength !== session.sizeBytes) {
+    throw new DriveCoreRepositoryError(
+      `A böngészős feltöltés mérete eltér az előkészített fájlmérettől (várt ${session.sizeBytes}, kapott ${input.contentLength}).`,
+      "DRIVE_UPLOAD_SIZE_MISMATCH",
+      409,
+    );
+  }
+
+  const object = await putDriveObjectStream({
+    storageKey: session.storageKey,
+    body: input.body,
+    contentType: session.mimeType,
+    contentLength: session.sizeBytes,
+    metadata: {
+      "dimpro-source": "web-proxy-upload",
+      "dimpro-upload-id": session.id,
+    },
+  });
+
+  return {
+    ok: true as const,
+    upload: {
+      id: session.id,
+      projectId: session.projectId,
+      sizeBytes: session.sizeBytes,
+      mimeType: session.mimeType,
+      status: session.status,
+      storageProvider: session.storageProvider,
+      etag: object.etag,
+    },
+  };
 }
 
 export async function completeDriveObjectUpload(input: {
