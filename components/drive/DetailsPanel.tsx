@@ -20,6 +20,8 @@ type MetadataForm = {
   planTitle: string;
 };
 
+type ReviewSectionKey = "technical" | "customer" | "manager" | "investor" | "lifecycle";
+
 type ReviewForm = {
   checked: string;
   result: string;
@@ -141,9 +143,27 @@ export default function DetailsPanel({
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
   const [review, setReview] = useState<ReviewForm>(emptyReview);
   const [note, setNote] = useState("");
+  const [reviewSection, setReviewSection] = useState<ReviewSectionKey>("technical");
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
-  useEffect(() => { if (!reviewFocus || tab !== "review") return; const element = document?.id ? window.document.getElementById("drive-review-" + document.id + "-" + reviewFocus) : null; element?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [document?.id, reviewFocus, tab]);
+  useEffect(() => {
+    if (!reviewFocus || tab !== "review") return;
+    const sectionByFocus: Record<string, ReviewSectionKey> = {
+      checked: "technical",
+      result: "technical",
+      observations: "technical",
+      workflow: "technical",
+      internal: "technical",
+      revision: "technical",
+      customer: "customer",
+      "customer-note": "customer",
+      "project-manager": "manager",
+      "investor-project-manager": "investor",
+      lifecycle: "lifecycle",
+    };
+    const nextSection = sectionByFocus[reviewFocus];
+    if (nextSection) setReviewSection(nextSection);
+  }, [reviewFocus, tab]);
 
   useEffect(() => {
     const source = details?.metadata;
@@ -303,7 +323,7 @@ export default function DetailsPanel({
                 { key: "current", label: "Aktuális", Icon: CheckCircle2, done: lifecycleDone, active: investorDone && !lifecycleDone, target: "lifecycle" },
               ] as const).map((step, index, steps) => (
                 <div className={styles.reviewProgressStepWrap} key={step.key}>
-                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={step.label} onClick={() => { if (!step.target) return; window.document.getElementById("drive-review-section-" + document.id + "-" + step.target)?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }}>
+                  <button type="button" className={styles.reviewProgressStep + " " + (step.done ? styles.reviewProgressDone : step.active ? (reviewReturned && step.key === "technical" ? styles.reviewProgressReturned : styles.reviewProgressActive) : styles.reviewProgressPending)} title={step.label} onClick={() => { if (step.target) setReviewSection(step.target as ReviewSectionKey); }}>
                     <step.Icon size={15} /><span>{step.label}</span>
                   </button>
                   {index < steps.length - 1 && <span className={styles.reviewProgressLine} data-done={step.done ? "true" : undefined} />}
@@ -316,6 +336,29 @@ export default function DetailsPanel({
               <strong>{membershipDisplayName || "DIMPRO felhasználó"} · {membershipRole === "OWNER" ? "Beruházási projektvezető" : membershipRole === "PROJECT_MANAGER" ? "Projektvezető" : membershipRole === "REVIEWER" ? "Ellenőrző" : membershipRole === "CONTRIBUTOR" ? "Közreműködő" : membershipRole === "VIEWER" ? "Megtekintő" : "Projekt résztvevő"}</strong>
             </div>
 
+            <nav className={styles.reviewCategoryMenu} aria-label="Tervellenőrzési kategóriák">
+              {([
+                { key: "technical", label: "Ellenőrzés", Icon: ClipboardCheck, allowed: canTechnicalReview },
+                { key: "customer", label: "Megrendelő", Icon: UserCheck, allowed: canCustomerApproval },
+                { key: "manager", label: "Projektvezető", Icon: BadgeCheck, allowed: canProjectManagerApproval },
+                { key: "investor", label: "Beruházói", Icon: ShieldCheck, allowed: canInvestorProjectManagerApproval },
+                { key: "lifecycle", label: "Életciklus", Icon: CheckCircle2, allowed: canLifecycleEdit },
+              ] as const).map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={styles.reviewCategoryButton + (reviewSection === item.key ? " " + styles.reviewCategoryButtonActive : "")}
+                  onClick={() => setReviewSection(item.key)}
+                  title={item.allowed ? item.label : item.label + " – csak megtekinthető"}
+                >
+                  <item.Icon size={14} />
+                  <span>{item.label}</span>
+                  {!item.allowed && <Lock size={9} />}
+                </button>
+              ))}
+            </nav>
+
+            {reviewSection === "technical" && (
             <section id={"drive-review-section-" + document.id + "-technical"} className={styles.reviewSection}>
               <header className={styles.reviewSectionHeader}>
                 <div><ClipboardCheck size={16} /><span><strong>Műszaki ellenőrzés</strong><small>Ellenőrzési eredmény, észrevételek és revízió</small></span></div>
@@ -355,7 +398,9 @@ export default function DetailsPanel({
                 </div>
               </div>
             </section>
+            )}
 
+            {reviewSection === "customer" && (
             <section id={"drive-review-section-" + document.id + "-customer"} className={styles.reviewSection}>
               <header className={styles.reviewSectionHeader}>
                 <div><UserCheck size={16} /><span><strong>Megrendelői jóváhagyás</strong><small>Megrendelői döntés és megjegyzés</small></span></div>
@@ -373,7 +418,9 @@ export default function DetailsPanel({
                 </div>
               </div>
             </section>
+            )}
 
+            {reviewSection === "manager" && (
             <section id={"drive-review-section-" + document.id + "-manager"} className={styles.reviewSection}>
               <header className={styles.reviewSectionHeader}>
                 <div><BadgeCheck size={16} /><span><strong>Projektvezetői jóváhagyás</strong><small>Projektvezetői döntési szint</small></span></div>
@@ -387,7 +434,9 @@ export default function DetailsPanel({
                 </div>
               </div>
             </section>
+            )}
 
+            {reviewSection === "investor" && (
             <section id={"drive-review-section-" + document.id + "-investor"} className={styles.reviewSection}>
               <header className={styles.reviewSectionHeader}>
                 <div><ShieldCheck size={16} /><span><strong>Beruházói projektvezetői jóváhagyás</strong><small>Végső beruházói döntési szint</small></span></div>
@@ -401,7 +450,9 @@ export default function DetailsPanel({
                 </div>
               </div>
             </section>
+            )}
 
+            {reviewSection === "lifecycle" && (
             <section id={"drive-review-section-" + document.id + "-lifecycle"} className={styles.reviewSection}>
               <header className={styles.reviewSectionHeader}>
                 <div><CheckCircle2 size={16} /><span><strong>Terv életciklusa</strong><small>Munkaközi, aktuális vagy archív állapot</small></span></div>
@@ -415,6 +466,8 @@ export default function DetailsPanel({
                 </div>
               </div>
             </section>
+            )}
+
             <div className={styles.detailsActions}>
               <button
                 type="button"

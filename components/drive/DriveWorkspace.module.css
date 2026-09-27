@@ -1462,3 +1462,124 @@
   cursor: not-allowed;
   opacity: .82;
 }
+
+/* Compact, paged review editor: no horizontal scrolling in the right panel. */
+.detailsTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  overflow-x: hidden;
+  padding: 0 6px;
+}
+.detailsTabs button {
+  min-width: 0;
+  padding: 8px 3px 7px;
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+  font-size: 9px;
+}
+.detailsBody {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.versionList,
+.reviewSection,
+.reviewSectionHeader,
+.reviewEditorItem {
+  min-width: 0;
+}
+.reviewProgress {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  overflow: visible;
+  padding: 8px 1px 10px;
+}
+.reviewProgress::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: 7%;
+  right: 7%;
+  height: 2px;
+  background: #dce3e9;
+  z-index: 0;
+}
+.reviewProgressStepWrap {
+  min-width: 0;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+.reviewProgressStep {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 2px 5px;
+  gap: 2px;
+  font-size: 8px;
+  line-height: 1.05;
+  text-align: center;
+}
+.reviewProgressStep span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.reviewProgressLine { display: none; }
+.reviewCategoryMenu {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px 0 2px;
+}
+.reviewCategoryButton {
+  position: relative;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #d8e2eb;
+  border-radius: 8px;
+  background: #f7f9fb;
+  color: #65798d;
+  padding: 5px 2px;
+  display: grid;
+  grid-template-rows: auto auto;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.05;
+  cursor: pointer;
+}
+.reviewCategoryButton span {
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.reviewCategoryButton svg:last-child:not(:first-child) {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.reviewCategoryButtonActive {
+  border-color: #8db9f3;
+  background: #eaf3ff;
+  color: #1765d7;
+  box-shadow: inset 0 -2px 0 #1765d7;
+}
+.reviewCategoryButton:hover { border-color: #a9c5e2; background: #f0f6fc; }
+.reviewCategoryButtonActive:hover { background: #eaf3ff; }
+.reviewSection .reviewEditorGrid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.reviewSection .reviewEditorFull { grid-column: auto; }
+.reviewEditorItem select,
+.reviewEditorItem input,
+.reviewEditorItem textarea {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
