@@ -1172,7 +1172,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
-  async function saveSelectedReview(fields: Record<string, string | number>) {
+  async function saveSelectedReview(fields: Record<string, unknown>) {
     if (!selectedDocument || !canApprove) return;
     setBusy(true); setError(""); setNotice("");
     try {

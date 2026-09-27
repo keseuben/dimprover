@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, FileSearch2, Lock, QrCode, Save, ShieldCheck, StickyNote, UploadCloud, UserCheck, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BadgeCheck, Check, CheckCircle2, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
 import type { DriveDocument, DriveDocumentDetails } from "./driveTypes";
 import DriveDocumentViewer from "./DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
@@ -22,14 +22,18 @@ type MetadataForm = {
 
 type ReviewSectionKey = "technical" | "customer" | "manager" | "investor" | "lifecycle";
 
+type ReviewObservationItem = { id: string; text: string; source: "text" | "voice" };
+
 type ReviewForm = {
   checked: string;
   result: string;
   observations: string;
+  observationItems: ReviewObservationItem[];
   workflow: string;
   internal: string;
   customer: string;
   customerNote: string;
+  customerObservationItems: ReviewObservationItem[];
   revisionChange: string;
   projectManager: string;
   investorProjectManager: string;
@@ -41,10 +45,12 @@ const emptyReview: ReviewForm = {
   checked: "",
   result: "",
   observations: "",
+  observationItems: [],
   workflow: "",
   internal: "",
   customer: "",
   customerNote: "",
+  customerObservationItems: [],
   revisionChange: "",
   projectManager: "",
   investorProjectManager: "",
@@ -68,7 +74,7 @@ type Props = {
   onScan: () => Promise<void>;
   onReview: (action: "APPROVE" | "REJECT") => Promise<void>;
   onSaveMetadata: (input: Record<string, unknown>) => Promise<void>;
-  onSaveReview: (fields: Record<string, string | number>) => Promise<void>;
+  onSaveReview: (fields: Record<string, unknown>) => Promise<void>;
   onSaveNote: (note: string) => Promise<void>;
   onEnsureQr: () => Promise<void>;
   onDownload: () => Promise<void>;
@@ -97,6 +103,182 @@ function reviewAuditLine(extra: Record<string, unknown>, prefix: string) {
   const decision = typeof extra[prefix + "Decision"] === "string" ? String(extra[prefix + "Decision"]).trim() : "";
   if (!name && !at && !decision) return "";
   return [decision, name, at].filter(Boolean).join(" · ");
+}
+
+function newObservationId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `obs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function observationItems(value: unknown, legacyText: string): ReviewObservationItem[] {
+  if (Array.isArray(value)) {
+    const parsed = value.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const row = item as Record<string, unknown>;
+      const text = typeof row.text === "string" ? row.text.trim() : "";
+      if (!text) return null;
+      return {
+        id: typeof row.id === "string" && row.id.trim() ? row.id : newObservationId(),
+        text,
+        source: row.source === "voice" ? "voice" as const : "text" as const,
+      };
+    }).filter((item): item is ReviewObservationItem => Boolean(item));
+    if (parsed.length) return parsed;
+  }
+  return legacyText.trim() ? [{ id: "legacy-observation-1", text: legacyText.trim(), source: "text" }] : [];
+}
+
+function ChoiceButtons({
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string; tone?: "ok" | "warn" | "danger" | "neutral" }>;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className={styles.reviewChoiceGrid}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          disabled={disabled}
+          className={styles.reviewChoice + (value === option.value ? " " + styles.reviewChoiceActive : "")}
+          data-tone={option.tone || "neutral"}
+          onClick={() => onChange(value === option.value ? "" : option.value)}
+        >
+          {value === option.value && <Check size={11} />}
+          <span>{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ObservationEditor({
+  projectId,
+  title,
+  items,
+  disabled,
+  busy,
+  onChange,
+}: {
+  projectId: string;
+  title: string;
+  items: ReviewObservationItem[];
+  disabled: boolean;
+  busy: boolean;
+  onChange: (items: ReviewObservationItem[]) => void;
+}) {
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [error, setError] = useState("");
+
+  const addEmpty = () => onChange([...items, { id: newObservationId(), text: "", source: "text" }]);
+  const updateItem = (id: string, text: string) => onChange(items.map((item) => item.id === id ? { ...item, text } : item));
+  const removeItem = (id: string) => onChange(items.filter((item) => item.id !== id));
+
+  const transcribe = async (blob: Blob) => {
+    setTranscribing(true);
+    setError("");
+    try {
+      const form = new FormData();
+      const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
+      form.append("file", new File([blob], `drive-observation.${extension}`, { type: blob.type || "audio/webm" }));
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/transcription`, {
+        method: "POST",
+        credentials: "same-origin",
+        body: form,
+      });
+      const payload = await response.json() as { ok?: boolean; text?: string; error?: string };
+      if (!response.ok || !payload.ok || !payload.text?.trim()) throw new Error(payload.error || "A hangátírás sikertelen.");
+      onChange([...items, { id: newObservationId(), text: payload.text.trim(), source: "voice" }]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A hangátírás sikertelen.");
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const startRecording = async () => {
+    setError("");
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setError("A böngésző nem támogatja a hangrögzítést.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+        if (blob.size) void transcribe(blob);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mikrofon nem érhető el.");
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+  };
+
+  useEffect(() => () => {
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  return (
+    <div className={styles.observationEditor}>
+      <div className={styles.observationEditorHead}>
+        <div><strong>{title}</strong><span>{items.length} db</span></div>
+        <div>
+          <button type="button" disabled={disabled || busy || transcribing || recording} onClick={addEmpty}><Plus size={12} /> Új</button>
+          <button type="button" className={recording ? styles.voiceButtonActive : ""} disabled={disabled || busy || transcribing} onClick={recording ? stopRecording : startRecording}>
+            {recording ? <Square size={12} /> : <Mic size={12} />}
+            {recording ? "Leállítás" : transcribing ? "Átírás…" : "Hangból"}
+          </button>
+        </div>
+      </div>
+      <div className={styles.observationList}>
+        {items.map((item, index) => (
+          <div key={item.id} className={styles.observationItem}>
+            <div className={styles.observationIndex}>{index + 1}</div>
+            <textarea
+              rows={2}
+              value={item.text}
+              readOnly={disabled}
+              disabled={busy}
+              placeholder="Írd le az észrevételt…"
+              onChange={(event) => updateItem(item.id, event.target.value)}
+            />
+            <span className={styles.observationSource} title={item.source === "voice" ? "Hangátírásból" : "Szöveges bevitel"}>{item.source === "voice" ? <Mic size={10} /> : null}</span>
+            <button type="button" className={styles.observationDelete} disabled={disabled || busy} onClick={() => removeItem(item.id)} title="Észrevétel törlése"><Trash2 size={12} /></button>
+          </div>
+        ))}
+        {!items.length && <div className={styles.observationEmpty}>Nincs rögzített észrevétel.</div>}
+      </div>
+      {error && <div className={styles.observationError}>{error}</div>}
+    </div>
+  );
 }
 
 const emptyMetadata: MetadataForm = {
@@ -181,19 +363,25 @@ export default function DetailsPanel({
       planTitle: typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
     } : emptyMetadata);
     const extra = source?.extra || {};
+    const legacyObservations = typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "";
+    const technicalObservationItems = observationItems(extra.reviewObservationItems, legacyObservations);
+    const legacyCustomerObservations = typeof extra.customerObservations === "string" ? extra.customerObservations : "";
+    const customerObservationItems = observationItems(extra.customerObservationItems, legacyCustomerObservations);
     setReview({
       checked: typeof extra.reviewChecked === "string" ? extra.reviewChecked : typeof extra.hageChecked === "string" ? extra.hageChecked : "",
       result: typeof extra.reviewResult === "string" ? extra.reviewResult : typeof extra.hageResult === "string" ? extra.hageResult : "",
-      observations: typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "",
+      observations: legacyObservations,
+      observationItems: technicalObservationItems,
       workflow: typeof extra.workflowStatus === "string" ? extra.workflowStatus : source?.approvalStatus || "",
       internal: typeof extra.internalNote === "string" ? extra.internalNote : typeof extra.hageNote === "string" ? extra.hageNote : "",
       customer: typeof extra.customerApproval === "string" ? extra.customerApproval : typeof extra.clientApproval === "string" ? extra.clientApproval : "",
       customerNote: typeof extra.customerNote === "string" ? extra.customerNote : typeof extra.clientNote === "string" ? extra.clientNote : "",
+      customerObservationItems,
       revisionChange: typeof extra.revisionChange === "string" ? extra.revisionChange : typeof extra.change === "string" ? extra.change : "",
       projectManager: typeof extra.projectManagerApproval === "string" ? extra.projectManagerApproval : "",
       investorProjectManager: typeof extra.investorProjectManagerApproval === "string" ? extra.investorProjectManagerApproval : "",
       lifecycle: typeof extra.lifecycleStatus === "string" ? extra.lifecycleStatus : "",
-      openObservationCount: String(Number.isFinite(Number(extra.openObservationCount)) ? Number(extra.openObservationCount) : 0),
+      openObservationCount: String(technicalObservationItems.length),
     });
     setNote(details?.notes?.[0]?.note || "");
   }, [details?.document.id, details?.metadata, details?.notes]);

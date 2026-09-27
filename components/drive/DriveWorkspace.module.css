@@ -1609,3 +1609,42 @@
   max-width: 100%;
   box-sizing: border-box;
 }
+
+/* Grouped headers keep the review matrix compact while exposing more approval stages. */
+.reviewTable { min-width: 1630px; }
+.reviewGroupHeader th {
+  top: 0;
+  height: 24px;
+  padding: 0 5px;
+  text-align: center !important;
+  text-transform: none;
+  letter-spacing: .01em;
+  font-size: 9px;
+  color: #34506a;
+  border-bottom: 1px solid #ccd9e5;
+}
+.reviewColumnHeader th {
+  top: 24px;
+  height: 29px;
+  padding: 0 5px;
+  font-size: 9px;
+}
+.reviewGroupHeader th:first-child,
+.reviewColumnHeader th:first-child { z-index: 6; }
+.reviewGroupTechnical { background: #eef6ff !important; color: #245f9e !important; border-left: 2px solid #c5daf0 !important; }
+.reviewGroupCustomer { background: #f0fbf7 !important; color: #28755a !important; border-left: 2px solid #c8e6d9 !important; }
+.reviewGroupManager { background: #f4f1ff !important; color: #5e4aa8 !important; border-left: 2px solid #d9d0f5 !important; }
+.reviewGroupInvestor { background: #eef8f1 !important; color: #33724c !important; border-left: 2px solid #c9e2d2 !important; }
+.reviewGroupLifecycle { background: #f4f6f8 !important; color: #526273 !important; border-left: 2px solid #d7dfe6 !important; }
+.reviewColumnHeader th:nth-child(7),
+.reviewColumnHeader th:nth-child(13),
+.reviewColumnHeader th:nth-child(16),
+.reviewColumnHeader th:nth-child(17),
+.reviewColumnHeader th:nth-child(18),
+.reviewTable td:nth-child(7),
+.reviewTable td:nth-child(13),
+.reviewTable td:nth-child(16),
+.reviewTable td:nth-child(17),
+.reviewTable td:nth-child(18) {
+  border-left: 2px solid #dde6ee;
+}

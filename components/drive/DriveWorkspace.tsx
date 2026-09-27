@@ -481,7 +481,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     documentIds?: string[];
     folderId?: string;
     includeDescendants?: boolean;
-    fields: Record<string, string | number>;
+    fields: Record<string, unknown>;
   }) => {
     setBusy(true);
     setError("");
@@ -508,7 +508,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     }
   }, [load, loadDetails, projectId, selectedDocumentId]);
 
-  const saveSelectedReview = useCallback(async (fields: Record<string, string | number>) => {
+  const saveSelectedReview = useCallback(async (fields: Record<string, unknown>) => {
     if (!selectedDocumentId) throw new Error("Nincs kijelölt dokumentum.");
     await bulkReview({ documentIds: [selectedDocumentId], fields });
   }, [bulkReview, selectedDocumentId]);

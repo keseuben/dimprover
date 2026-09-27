@@ -462,10 +462,10 @@ export async function getDriveDocumentWorkspaceDetails(projectId: string, docume
 type DriveAuditActor = { userId: string; displayName?: string; role?: ProjectMembershipRole };
 
 const TECHNICAL_REVIEW_FIELDS = new Set([
-  "reviewChecked", "reviewResult", "reviewObservations", "workflowStatus",
+  "reviewChecked", "reviewResult", "reviewObservations", "reviewObservationItems", "workflowStatus",
   "internalNote", "revisionChange", "openObservationCount",
 ]);
-const CUSTOMER_REVIEW_FIELDS = new Set(["customerApproval", "customerNote"]);
+const CUSTOMER_REVIEW_FIELDS = new Set(["customerApproval", "customerNote", "customerObservations", "customerObservationItems"]);
 const PROJECT_MANAGER_FIELDS = new Set(["projectManagerApproval"]);
 const INVESTOR_MANAGER_FIELDS = new Set(["investorProjectManagerApproval"]);
 const LIFECYCLE_FIELDS = new Set(["lifecycleStatus"]);
@@ -610,13 +610,30 @@ export async function bulkUpdateDriveReviewMetadata(
   );
 
   const stringField = (name: string) => typeof fields[name] === "string" ? String(fields[name]).trim() : undefined;
+  const observationItemsField = (name: string) => {
+    if (!Array.isArray(fields[name])) return undefined;
+    return (fields[name] as unknown[])
+      .slice(0, 200)
+      .map((item, index) => {
+        const value = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+        const text = typeof value.text === "string" ? value.text.trim().slice(0, 4000) : "";
+        if (!text) return null;
+        const id = typeof value.id === "string" && value.id.trim() ? value.id.trim().slice(0, 160) : `obs-${index + 1}`;
+        const source = value.source === "voice" ? "voice" : "text";
+        return { id, text, source };
+      })
+      .filter((item): item is { id: string; text: string; source: "text" | "voice" } => Boolean(item));
+  };
   const reviewChecked = stringField("reviewChecked");
   const reviewResult = stringField("reviewResult");
   const reviewObservations = stringField("reviewObservations");
+  const reviewObservationItems = observationItemsField("reviewObservationItems");
   const workflowStatus = stringField("workflowStatus");
   const internalNote = stringField("internalNote");
   const customerApproval = stringField("customerApproval");
   const customerNote = stringField("customerNote");
+  const customerObservations = stringField("customerObservations");
+  const customerObservationItems = observationItemsField("customerObservationItems");
   const revisionChange = stringField("revisionChange");
   const projectManagerApproval = stringField("projectManagerApproval");
   const investorProjectManagerApproval = stringField("investorProjectManagerApproval");
@@ -635,15 +652,25 @@ export async function bulkUpdateDriveReviewMetadata(
       if (reviewChecked !== undefined) extra.reviewChecked = reviewChecked;
       if (reviewResult !== undefined) extra.reviewResult = reviewResult;
       if (reviewObservations !== undefined) extra.reviewObservations = reviewObservations;
+      if (reviewObservationItems !== undefined) {
+        extra.reviewObservationItems = reviewObservationItems;
+        extra.reviewObservations = reviewObservationItems.map((item, index) => `${index + 1}. ${item.text}`).join("\n");
+        extra.openObservationCount = reviewObservationItems.length;
+      }
       if (workflowStatus !== undefined) extra.workflowStatus = workflowStatus;
       if (internalNote !== undefined) extra.internalNote = internalNote;
       if (customerApproval !== undefined) extra.customerApproval = customerApproval;
       if (customerNote !== undefined) extra.customerNote = customerNote;
+      if (customerObservations !== undefined) extra.customerObservations = customerObservations;
+      if (customerObservationItems !== undefined) {
+        extra.customerObservationItems = customerObservationItems;
+        extra.customerObservations = customerObservationItems.map((item, index) => `${index + 1}. ${item.text}`).join("\n");
+      }
       if (revisionChange !== undefined) extra.revisionChange = revisionChange;
       if (projectManagerApproval !== undefined) extra.projectManagerApproval = projectManagerApproval;
       if (investorProjectManagerApproval !== undefined) extra.investorProjectManagerApproval = investorProjectManagerApproval;
       if (lifecycleStatus !== undefined) extra.lifecycleStatus = lifecycleStatus;
-      if (openObservationCount !== undefined) extra.openObservationCount = openObservationCount;
+      if (openObservationCount !== undefined && reviewObservationItems === undefined) extra.openObservationCount = openObservationCount;
 
       applyReviewAuditTrail(extra, currentExtra, actor);
 

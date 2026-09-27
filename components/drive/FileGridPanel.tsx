@@ -303,7 +303,10 @@ export default function FileGridPanel({
     const extra = metadata?.extra || {};
     const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
     const observations = value("reviewObservations") || value("hageObservations");
-    const observationCountRaw = Number(extra.openObservationCount ?? (observations ? 1 : 0));
+    const observationItems = Array.isArray(extra.reviewObservationItems) ? extra.reviewObservationItems : [];
+    const customerObservations = value("customerObservations");
+    const customerObservationItems = Array.isArray(extra.customerObservationItems) ? extra.customerObservationItems : [];
+    const observationCountRaw = Number(extra.openObservationCount ?? (observationItems.length || (observations ? 1 : 0)));
     const approval = approvalVisual(metadata);
     const lifecycle = value("lifecycleStatus") || "Munkaközi";
     return {
@@ -321,7 +324,11 @@ export default function FileGridPanel({
       workflow: value("workflowStatus") || metadata?.approvalStatus || "",
       internalNote: value("internalNote") || value("hageNote"),
       customer: value("customerApproval") || value("clientApproval"),
+      customerObservations,
+      customerObservationCount: customerObservationItems.length || (customerObservations ? 1 : 0),
       customerNote: value("customerNote") || value("clientNote"),
+      projectManager: value("projectManagerApproval"),
+      investorProjectManager: value("investorProjectManagerApproval"),
       revisionChange: value("revisionChange") || value("change"),
       observationCount: Number.isFinite(observationCountRaw) ? observationCountRaw : 0,
     };
@@ -337,6 +344,7 @@ export default function FileGridPanel({
         row.effectiveTopic,
         row.observations,
         row.internalNote,
+        row.customerObservations,
         row.customerNote,
       ].some((value) => value.toLocaleLowerCase("hu-HU").includes(q));
       return matchesSearch
@@ -537,26 +545,59 @@ export default function FileGridPanel({
           <div className={styles.reviewTableWrap}>
             <table className={styles.reviewTable}>
               <colgroup>
-                <col style={{ width: "38px" }} />
-                <col style={{ width: "330px" }} />
-                <col style={{ width: "180px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "95px" }} />
-                <col style={{ width: "120px" }} />
-                <col style={{ width: "70px" }} />
-                <col style={{ width: "80px" }} />
-                <col style={{ width: "80px" }} />
-                <col style={{ width: "95px" }} />
+                <col style={{ width: "34px" }} />
+                <col style={{ width: "300px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "105px" }} />
                 <col style={{ width: "85px" }} />
-                <col style={{ width: "80px" }} />
-                <col style={{ width: "95px" }} />
-                <col style={{ width: "80px" }} />
+                <col style={{ width: "105px" }} />
+                <col style={{ width: "55px" }} />
+                <col style={{ width: "65px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "65px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "58px" }} />
+                <col style={{ width: "62px" }} />
+                <col style={{ width: "62px" }} />
+                <col style={{ width: "64px" }} />
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleReviewSelected} onChange={toggleVisibleReviewSelection} aria-label="Látható tervek kijelölése" /></th><th>Név</th><th className={styles.reviewFileNameHeader}>Fájlnév</th><th>Feltöltő</th><th>Szakág</th><th>Témakör</th><th>Ell.</th><th>Eredmény</th><th>Észrev.</th><th>Állapot</th><th>Belső megj.</th><th>Megrend.</th><th>Megr. megj.</th><th>Revízió</th></tr></thead>
+              <thead>
+                <tr className={styles.reviewGroupHeader}>
+                  <th colSpan={6}>Dokumentum</th>
+                  <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
+                  <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
+                  <th className={styles.reviewGroupManager}>Projektvezető</th>
+                  <th className={styles.reviewGroupInvestor}>Beruházói PV</th>
+                  <th className={styles.reviewGroupLifecycle}>Terv</th>
+                </tr>
+                <tr className={styles.reviewColumnHeader}>
+                  <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleReviewSelected} onChange={toggleVisibleReviewSelection} aria-label="Látható tervek kijelölése" /></th>
+                  <th>Név</th>
+                  <th className={styles.reviewFileNameHeader}>Fájlnév</th>
+                  <th>Feltöltő</th>
+                  <th>Szakág</th>
+                  <th>Témakör</th>
+                  <th>Ell.</th>
+                  <th>Eredm.</th>
+                  <th>Észr.</th>
+                  <th>Áll.</th>
+                  <th>Belső</th>
+                  <th>Rev.</th>
+                  <th>Jóváh.</th>
+                  <th>Észr.</th>
+                  <th>Belső</th>
+                  <th>Jóváh.</th>
+                  <th>Jóváh.</th>
+                  <th>Életc.</th>
+                </tr>
+              </thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={14}>
+                    <td colSpan={18}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -605,9 +646,13 @@ export default function FileGridPanel({
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.workflow || "Nincs workflow állapot"} onClick={() => openDetail(row.document, "workflow")}>{reviewMark(row.workflow)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.internalNote || "Nincs belső megjegyzés"} onClick={() => openDetail(row.document, "internal")}>{row.internalNote ? "●" : "—"}</button></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs megrendelői jóváhagyás"} onClick={() => openDetail(row.document, "customer")}>{reviewMark(row.customer)}</button></td>
-                    <td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs megrendelői megjegyzés"} onClick={() => openDetail(row.document, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.revisionChange || "Nincs revízióváltozás"} onClick={() => openDetail(row.document, "revision")}>{revisionMark(row.revisionChange)}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs jóváhagyás"} onClick={() => openDetail(row.document, "customer")}>{reviewMark(row.customer)}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.customerObservations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "customer-observations")}>{row.customerObservationCount || "—"}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs belső megjegyzés"} onClick={() => openDetail(row.document, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.projectManager || "Nincs projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "project-manager")}>{reviewMark(row.projectManager)}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.investorProjectManager || "Nincs beruházói projektvezetői jóváhagyás"} onClick={() => openDetail(row.document, "investor-project-manager")}>{reviewMark(row.investorProjectManager)}</button></td>
+                    <td><button type="button" className={styles.reviewSymbol} title={row.lifecycle || "Nincs életciklus állapot"} onClick={() => openDetail(row.document, "lifecycle")}>{row.lifecycle === "Aktuális" ? "✓" : row.lifecycle === "Archív" ? "▣" : row.lifecycle === "Munkaközi" ? "◷" : "—"}</button></td>
                   </tr>
                 ))}
               </tbody>
