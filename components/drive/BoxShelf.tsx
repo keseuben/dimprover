@@ -143,18 +143,36 @@ export default function BoxShelf({
 
   return (
     <section className={`${styles.boxShelf} ${open ? "" : styles.boxShelfCollapsed}`} aria-label="CsomagBOX polc">
-      <header className={styles.boxShelfHeader}>
+      <header
+        className={styles.boxShelfHeader}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        title={open ? "Kattints ide a CsomagBOX polc összecsukásához" : "Kattints ide a CsomagBOX polc megnyitásához"}
+        onClick={() => onOpenChange(!open)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onOpenChange(!open);
+        }}
+      >
         <div className={styles.boxShelfTitle}>
           <strong>CsomagBOX polc</strong>
           <span>{databaseReady ? `${boxes.length} aktív BOX · virtuális file/version hivatkozások` : "A Workspace SQL aktiválása után használható"}</span>
         </div>
-        <div className={styles.boxShelfHeaderActions}>
+        <div className={styles.boxShelfHeaderActions} onClick={(event) => event.stopPropagation()}>
           {open && canWrite && databaseReady && (
             <button type="button" className={styles.boxShelfNewButton} onClick={() => setComposerOpen((current) => !current)}>
               <Plus size={13} /> Új BOX
             </button>
           )}
-          <button type="button" className={styles.boxShelfToggle} onClick={() => onOpenChange(!open)} title={open ? "Polc elrejtése" : "Polc megnyitása"}>
+          <button
+            type="button"
+            className={styles.boxShelfToggle}
+            onClick={() => onOpenChange(!open)}
+            title={open ? "Polc elrejtése" : "Polc megnyitása"}
+            aria-label={open ? "CsomagBOX polc összecsukása" : "CsomagBOX polc megnyitása"}
+          >
             {open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
           </button>
         </div>

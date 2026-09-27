@@ -303,7 +303,22 @@
   padding: 7px 16px 6px;
   box-shadow: 0 -3px 10px rgba(31, 52, 73, .07);
 }
-.boxShelfHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.boxShelfHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+  margin: -4px -6px 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.boxShelfHeader:hover { background: #f3f8fd; }
+.boxShelfHeader:focus-visible { outline: 2px solid #8db9f3; outline-offset: 1px; }
+.boxShelfCollapsed .boxShelfHeader { min-height: 25px; margin-top: -2px; }
+.boxShelfCollapsed .boxShelfHeader:hover { background: #eef6ff; }
 .boxShelfTitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .boxShelfTitle strong { font-size: var(--drive-font-sm); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
 .boxShelfTitle span { font-size: var(--drive-font-xs); color: #63778b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
