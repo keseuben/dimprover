@@ -32,6 +32,10 @@ with tempfile.TemporaryDirectory(dir='/srv/dimpro-dev') as td:
         r=m.validate(entry,'',{str(wt.resolve())}); check('Central active worktree blocks','central-active-session' in r['reasons'] and not r['entrySafe'])
     with patch.object(m,'run',side_effect=fake_run), patch.object(m,'running_process_in',return_value=True), patch.object(m,'has_shared_hardlinks',return_value=False):
         r=m.validate(entry,'',set()); check('running process blocks','running-process' in r['reasons'])
+    with patch.object(m,'run',side_effect=fake_run), patch.object(m,'running_process_in',return_value=False), patch.object(m,'nginx_references',return_value=['/etc/nginx/test']):
+        r=m.validate(entry,'',set()); check('nginx reference blocks','nginx-reference' in r['reasons'])
+    with patch.object(m,'run',side_effect=fake_run), patch.object(m,'running_process_in',return_value=False), patch.object(m,'nginx_references',return_value=[]), patch.object(m,'pointer_references',return_value=['pointer']), patch.object(m,'has_shared_hardlinks',return_value=False):
+        r=m.validate(entry,'',set()); check('active rollback pointer blocks cache only',r['entrySafe'] and not r['eligible'] and 'active-or-rollback-pointer' in r['caches'][0]['reasons'])
     with patch.object(m,'run',side_effect=fake_run), patch.object(m,'running_process_in',return_value=False), patch.object(m,'has_shared_hardlinks',return_value=True):
         r=m.validate(entry,'',set()); check('shared hardlink blocks cache only',r['entrySafe'] and not r['eligible'] and r['blockedCacheCount']==1 and 'shared-hardlinks' in r['caches'][0]['reasons'])
     bad={'id':'bad','worktree':str(wt),'paths':['node_modules']}
