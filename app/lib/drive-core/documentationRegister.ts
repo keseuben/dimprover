@@ -124,9 +124,9 @@ const CUSTOM_STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 </styleSheet>`;
 
 function withCellStyle(xml: string, ref: string, styleId: number) {
-  const pattern = new RegExp(`<c([^>]*\\br="${ref}"[^>]*?)(\\/?)>`);
+  const pattern = new RegExp(`<c([^>]*\\br="${ref}"[^>]*?)(/?)>`);
   return xml.replace(pattern, (_match, attrs: string, closing: string) => {
-    const clean = attrs.replace(/\\s+s="\\d+"/g, "");
+    const clean = attrs.replace(/\s+s="\d+"/g, "");
     return `<c${clean} s="${styleId}"${closing}>`;
   });
 }
@@ -143,11 +143,11 @@ function styleRange(xml: string, startRow: number, endRow: number, startColumn: 
 
 function freezeRows(xml: string, split: number, topLeftCell: string) {
   const pane = `<pane ySplit="${split}" topLeftCell="${topLeftCell}" activePane="bottomLeft" state="frozen"/>`;
-  if (/<sheetView\\b[^>]*\\/>/.test(xml)) {
-    return xml.replace(/<sheetView\\b([^>]*)\\/>/, `<sheetView$1>${pane}</sheetView>`);
+  if (/<sheetView\b[^>]*\/>/.test(xml)) {
+    return xml.replace(/<sheetView\b([^>]*)\/>/, `<sheetView$1>${pane}</sheetView>`);
   }
-  if (/<sheetView\\b[^>]*>/.test(xml) && !/<pane\\b/.test(xml)) {
-    return xml.replace(/(<sheetView\\b[^>]*>)/, `$1${pane}`);
+  if (/<sheetView\b[^>]*>/.test(xml) && !/<pane\b/.test(xml)) {
+    return xml.replace(/(<sheetView\b[^>]*>)/, `$1${pane}`);
   }
   return xml;
 }
