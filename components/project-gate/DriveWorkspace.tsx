@@ -1202,6 +1202,35 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function bulkReview(input: {
+    documentIds?: string[];
+    folderId?: string;
+    includeDescendants?: boolean;
+    fields: Record<string, string | number>;
+  }) {
+    if (!canApprove) return 0;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/review/bulk`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; updated?: number };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A csoportos tervellenőrzés mentése sikertelen.");
+      setNotice(`Csoportos tervellenőrzés mentve: ${payload.updated || 0} fájl frissítve.`);
+      await load();
+      if (selectedDocumentId) await loadDetails(selectedDocumentId);
+      return payload.updated || 0;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A csoportos tervellenőrzés mentése sikertelen.");
+      throw caught;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveSelectedReview(fields: Record<string, unknown>) {
     if (!selectedDocument || !canApprove) return;
     setBusy(true); setError(""); setNotice("");
