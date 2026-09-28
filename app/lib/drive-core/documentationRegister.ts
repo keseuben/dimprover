@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import JSZip from "jszip";
 import type { DriveDocument, DriveDocumentVersion, DriveFolder } from "./types";
 import type { DriveEngineeringMetadata } from "./workspaceRepository";
 
@@ -80,6 +81,146 @@ const SECTION_STYLE = {
 const BODY_WRAP_STYLE = {
   alignment: { vertical: "top", wrapText: true },
 };
+const CUSTOM_STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="0"/>
+  <fonts count="5">
+    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>
+    <font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FF1F4E78"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FF44546A"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="9">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF2F75B5"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF548235"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF666666"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEAF2F8"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF5B9BD5"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD9E2F3"/></left><right style="thin"><color rgb="FFD9E2F3"/></right><top style="thin"><color rgb="FFD9E2F3"/></top><bottom style="thin"><color rgb="FFD9E2F3"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="9">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="4" fillId="7" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="8" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+  <dxfs count="0"/>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="TableStyleMedium4"/>
+</styleSheet>`;
+
+function withCellStyle(xml: string, ref: string, styleId: number) {
+  const pattern = new RegExp(`<c([^>]*\\br="${ref}"[^>]*?)(\\/?)>`);
+  return xml.replace(pattern, (_match, attrs: string, closing: string) => {
+    const clean = attrs.replace(/\\s+s="\\d+"/g, "");
+    return `<c${clean} s="${styleId}"${closing}>`;
+  });
+}
+
+function styleRange(xml: string, startRow: number, endRow: number, startColumn: number, endColumn: number, styleId: number) {
+  let output = xml;
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let column = startColumn; column <= endColumn; column += 1) {
+      output = withCellStyle(output, XLSX.utils.encode_cell({ r: row - 1, c: column }), styleId);
+    }
+  }
+  return output;
+}
+
+function freezeRows(xml: string, split: number, topLeftCell: string) {
+  const pane = `<pane ySplit="${split}" topLeftCell="${topLeftCell}" activePane="bottomLeft" state="frozen"/>`;
+  if (/<sheetView\\b[^>]*\\/>/.test(xml)) {
+    return xml.replace(/<sheetView\\b([^>]*)\\/>/, `<sheetView$1>${pane}</sheetView>`);
+  }
+  if (/<sheetView\\b[^>]*>/.test(xml) && !/<pane\\b/.test(xml)) {
+    return xml.replace(/(<sheetView\\b[^>]*>)/, `$1${pane}`);
+  }
+  return xml;
+}
+
+function registerFolderDepth(input: RegisterInput) {
+  const displaySegments = buildRelativeDisplaySegments(input.rootFolder, input.folders);
+  return Math.max(1, ...input.files.map((item) => displaySegments.get(item.document.folderId)?.length || 1));
+}
+
+function folderStructureShape(input: RegisterInput) {
+  const byId = new Map(input.folders.map((folder) => [folder.id, folder]));
+  const descendants = input.folders.filter((folder) => {
+    let current: DriveFolder | undefined = folder;
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+      if (current.id === input.rootFolder.id) return true;
+      seen.add(current.id);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+    return false;
+  });
+  const displaySegments = buildRelativeDisplaySegments(input.rootFolder, descendants);
+  return {
+    count: descendants.length,
+    depth: Math.max(1, ...descendants.map((folder) => displaySegments.get(folder.id)?.length || 1)),
+  };
+}
+
+async function applyOoxmlFormatting(buffer: Buffer, input: RegisterInput) {
+  const archive = await JSZip.loadAsync(buffer);
+  archive.file("xl/styles.xml", CUSTOM_STYLES_XML);
+
+  const sheet1File = archive.file("xl/worksheets/sheet1.xml");
+  const sheet2File = archive.file("xl/worksheets/sheet2.xml");
+  const sheet3File = archive.file("xl/worksheets/sheet3.xml");
+  if (!sheet1File || !sheet2File || !sheet3File) return buffer;
+
+  const registerDepth = registerFolderDepth(input);
+  const registerColumnCount = registerDepth + 21;
+  const registerTechnicalStart = registerDepth + 13;
+  let sheet1 = await sheet1File.async("string");
+  sheet1 = withCellStyle(sheet1, "A1", 1);
+  sheet1 = withCellStyle(sheet1, "A2", 2);
+  sheet1 = styleRange(sheet1, 3, 6, 0, registerColumnCount - 1, 8);
+  sheet1 = styleRange(sheet1, 8, 8, 0, registerColumnCount - 1, 3);
+  sheet1 = styleRange(sheet1, 8, 8, 0, registerDepth - 1, 4);
+  sheet1 = styleRange(sheet1, 8, 8, registerTechnicalStart, registerColumnCount - 1, 5);
+  if (input.files.length) sheet1 = styleRange(sheet1, 9, 8 + input.files.length, 0, registerColumnCount - 1, 8);
+  sheet1 = freezeRows(sheet1, 8, "A9");
+  archive.file("xl/worksheets/sheet1.xml", sheet1);
+
+  const structure = folderStructureShape(input);
+  const structureColumnCount = structure.depth + 6;
+  let sheet2 = await sheet2File.async("string");
+  sheet2 = withCellStyle(sheet2, "A1", 1);
+  sheet2 = styleRange(sheet2, 4, 4, 0, structureColumnCount - 1, 3);
+  sheet2 = styleRange(sheet2, 4, 4, 0, structure.depth - 1, 4);
+  sheet2 = styleRange(sheet2, 4, 4, structure.depth + 2, structureColumnCount - 1, 5);
+  if (structure.count) sheet2 = styleRange(sheet2, 5, 4 + structure.count, 0, structureColumnCount - 1, 8);
+  sheet2 = freezeRows(sheet2, 4, "A5");
+  archive.file("xl/worksheets/sheet2.xml", sheet2);
+
+  let sheet3 = await sheet3File.async("string");
+  sheet3 = withCellStyle(sheet3, "A1", 1);
+  sheet3 = styleRange(sheet3, 3, 14, 0, 0, 6);
+  sheet3 = styleRange(sheet3, 3, 14, 1, 1, 8);
+  sheet3 = withCellStyle(sheet3, "A16", 7);
+  sheet3 = styleRange(sheet3, 17, 17, 0, 1, 3);
+  sheet3 = styleRange(sheet3, 18, 17 + Math.max(1, input.skipped.length), 0, 1, 8);
+  archive.file("xl/worksheets/sheet3.xml", sheet3);
+
+  return archive.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+}
 
 function applyStyle(ws: XLSX.WorkSheet, ref: string, style: Record<string, unknown>) {
   const cell = ws[ref] as StyleCell | undefined;
@@ -384,7 +525,7 @@ function buildPackageInfoSheet(input: RegisterInput) {
   return ws;
 }
 
-export function buildDigitalDocumentationRegister(input: RegisterInput) {
+export async function buildDigitalDocumentationRegister(input: RegisterInput) {
   const workbook = XLSX.utils.book_new();
   workbook.Props = {
     Title: "DIMPRO Digitális műszaki dokumentáció átadási jegyzéke",
@@ -404,7 +545,8 @@ export function buildDigitalDocumentationRegister(input: RegisterInput) {
     compression: true,
     cellStyles: true,
   });
-  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+  const baseBuffer = Buffer.isBuffer(output) ? output : Buffer.from(output);
+  return applyOoxmlFormatting(baseBuffer, input);
 }
 
 export const DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME = "DIMPRO_Digitalis_Dokumentaciojegyzek.xlsx";

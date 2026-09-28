@@ -213,7 +213,7 @@ export async function openDriveFolderZip(input: {
   }
 
   const manifestFolder = safeArchiveSegment(root.name, "DIMPRO_Drive");
-  const registerBuffer = buildDigitalDocumentationRegister({
+  const registerBuffer = await buildDigitalDocumentationRegister({
     projectId: input.projectId,
     projectCode: input.projectCode,
     projectName: input.projectName,

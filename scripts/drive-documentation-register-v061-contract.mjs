@@ -37,6 +37,12 @@ check("register separates original and safe file identity", () => {
 check("register contains traceability fields", () => {
   for (const label of ["Dokumentumazonosító", "Verzióazonosító", "SHA-256", "Feltöltés időpontja"]) assert.ok(register.includes(label), label);
 });
+check("OOXML styles survive SheetJS serialization", () => {
+  assert.match(register, /CUSTOM_STYLES_XML/);
+  assert.match(register, /applyOoxmlFormatting/);
+  assert.match(register, /archive\.file\("xl\/styles\.xml", CUSTOM_STYLES_XML\)/);
+  assert.match(register, /freezeRows\(sheet1, 8, "A9"\)/);
+});
 check("register is visibly formatted and filterable", () => {
   for (const marker of ["TITLE_STYLE", "HEADER_STYLE", "!autofilter", "!cols", "!merges"]) assert.ok(register.includes(marker), marker);
 });
