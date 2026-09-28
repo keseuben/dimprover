@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { probeBuildNodes } from "./build-nodes";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
+import { getDeveloperGridTaskById } from "./work-start";
 import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { scheduleBuildRun } from "./build-runner-scheduler";
 import { appendGridEvent, readGridState, upsertWorkerSession } from "./state-store";
@@ -162,7 +163,8 @@ export async function requestDeveloperGridFullBuild(input: Record<string, unknow
   const taskId = String(input.taskId || "").trim();
   const sessionId = String(input.sessionId || "").trim();
   const state = await readGridState();
-  if (!state.task || state.task.id !== taskId) errorWith("BUILD_TASK_MISMATCH", "A FULL BUILD csak az authoritative aktív taskhoz kérhető.");
+  const task = await getDeveloperGridTaskById(taskId);
+  if (!task) errorWith("BUILD_TASK_MISMATCH", "A FULL BUILD task nem található a Central Core authoritative taskállapotában.");
   const session = activeSessionForTask(state.sessions, taskId, sessionId);
   if (!session) errorWith("BUILD_SESSION_REQUIRED", "A FULL BUILD-hez aktív worker session szükséges.");
   if (session.developmentContext.bootAckState !== "VALIDATED" || !session.developmentContext.bootAckValidatedAt) errorWith("BUILD_BOOT_ACK_REQUIRED", "FULL BUILD csak validált BOOT ACK után indítható.");

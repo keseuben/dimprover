@@ -3,6 +3,7 @@
 import { heartbeatSessionAtomic, DEV_ENGINE_DEFAULT_LEASE_SECONDS } from "@/app/lib/dev-center/orchestration-repository";
 import { getDevCenterEngineState } from "@/app/lib/dev-center/engine-repository";
 import { readGridState } from "./state-store";
+import { getDeveloperGridTaskById } from "./work-start";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import type { RoutableWorkerCode } from "./types";
 
@@ -26,8 +27,9 @@ export async function heartbeatDeveloperGridEngineSession(rawInput: Record<strin
   if (!taskId || !sessionId) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_ID_REQUIRED", "A taskId és sessionId kötelező.", 400);
 
   const state = await readGridState();
-  if (!state.task || state.task.id !== taskId) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_MISMATCH", "Az authoritative Developer Grid task megváltozott.");
-  if (!["RUNNING", "REVIEW"].includes(state.task.status)) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_NOT_ACTIVE", "Engine heartbeat csak futó vagy review Developer Grid tasknál engedélyezett.");
+  const task = await getDeveloperGridTaskById(taskId);
+  if (!task) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_MISMATCH", "A Developer Grid task nem található a Central Core authoritative taskállapotában.");
+  if (!["RUNNING", "REVIEW"].includes(task.status)) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_NOT_ACTIVE", "Engine heartbeat csak futó vagy review Developer Grid tasknál engedélyezett.");
   const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === worker && item.endedAt === null) || null;
   if (!session) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_SESSION_MISMATCH", "Az authoritative Developer Grid session nem található.");
   if (session.developmentContext.bootAckState !== "VALIDATED" || session.developmentContext.bootAckCodingAllowed !== true) {

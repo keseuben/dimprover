@@ -28,8 +28,8 @@ const expected={taskId:TASK,sessionId:SESSION,workerCode:"JAZMINAI",previousConv
 let n=0;
 const check=async(label,fn)=>{await fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.87"));
-await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.87-dev"/));
+await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.88"));
+await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.88-dev"/));
 await check("real rev13 rollover bootstrap parses exactly", async()=>{
   const p=rollover.parseConversationRolloverPrompt(prompt);
   assert.equal(p.ok,true);

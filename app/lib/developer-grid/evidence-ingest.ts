@@ -5,6 +5,7 @@ import { setDevEngineTaskTesting } from "@/app/lib/dev-center/engine-repository"
 import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { appendGridEvent, readGridState, upsertWorkerSession } from "./state-store";
 import { verifySourceHeadAdvance } from "./source-provenance";
+import { getDeveloperGridTaskById } from "./work-start";
 import type { GridEvidenceKind, GridEvidenceStatus, WorkerCode } from "./types";
 
 const allowedKinds = new Set<GridEvidenceKind>(["FILE", "TEST", "ERROR"]);
@@ -24,7 +25,8 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   const reportedHead = text(rawInput.head, 80).toLowerCase();
   const reportedStage = Number(rawInput.stage);
   const reportedResult = text(rawInput.result, 40).toUpperCase();
-  if (!state.task || state.task.id !== taskId) fail("DEVELOPER_GRID_EVIDENCE_TASK_MISMATCH", "A worker evidence nem az authoritative aktuális taskhoz tartozik.");
+  const task = await getDeveloperGridTaskById(taskId);
+  if (!task) fail("DEVELOPER_GRID_EVIDENCE_TASK_MISMATCH", "A worker evidence task nem található a Central Core authoritative taskállapotában.");
   if (!workers.has(workerCode)) fail("DEVELOPER_GRID_EVIDENCE_WORKER_INVALID", "Ismeretlen Developer Grid evidence worker.", 400);
   const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === workerCode && item.endedAt === null);
   if (!session) fail("DEVELOPER_GRID_EVIDENCE_SESSION_MISMATCH", "Az evidence-hez tartozó aktív worker session nem található.");
@@ -61,14 +63,14 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     authoritativeSession = { ...authoritativeSession, sourceProvenance: advanced };
     await upsertWorkerSession(authoritativeSession);
     await appendGridEvent({
-      kind: "commit", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
+      kind: "commit", origin: "LIVE", workerCode, taskId, projectId: task.projectId, productionAccess: "DENY",
       developmentContext: authoritativeSession.developmentContext, branch: advanced.branch, worktree: advanced.worktree, head: advanced.head,
       delta: { eventType: "SOURCE_HEAD_ADVANCED", summary: `Authoritative source HEAD előrehaladt: ${session.sourceProvenance.head.slice(0,12)} → ${advanced.head.slice(0,12)}.`, previousHead: session.sourceProvenance.head, currentHead: advanced.head, sessionId, sanitized: true },
     });
   } else if (reportedStage !== previousStage) {
     await upsertWorkerSession(authoritativeSession);
     await appendGridEvent({
-      kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
+      kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: task.projectId, productionAccess: "DENY",
       developmentContext: authoritativeSession.developmentContext, branch: authoritativeSession.sourceProvenance.branch, worktree: authoritativeSession.sourceProvenance.worktree, head: authoritativeSession.sourceProvenance.head,
       delta: { eventType: "WORK_STAGE_ADVANCED", summary: `Fejlesztési szakasz előrehaladt: ${previousStage}/6 → ${reportedStage}/6.`, status: "PASS", severity: "INFO", sessionId, workStageIndex: reportedStage, sanitized: true },
     });
@@ -88,7 +90,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
       severity: row.severity,
       source: "WORKER_STAGE_REPORT",
       taskId,
-      projectId: state.task.projectId,
+      projectId: task.projectId,
       workerCode,
       sessionId,
       branch: authoritativeSession.sourceProvenance.branch,

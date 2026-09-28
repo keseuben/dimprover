@@ -3,6 +3,7 @@
 import { finalizeDevEngineTask } from "@/app/lib/dev-center/engine-repository";
 import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
+import { getDeveloperGridTaskById } from "./work-start";
 import { appendGridEvent, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
 
 function fail(code: string, message: string, status = 409): never {
@@ -13,7 +14,8 @@ export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) 
   const taskId = String(rawInput.taskId || "").trim().slice(0, 220);
   const sessionId = String(rawInput.sessionId || "").trim().slice(0, 240);
   const state = await readGridState();
-  if (!taskId || !state.task || state.task.id !== taskId) fail("DEVELOPER_GRID_CLOSE_TASK_MISMATCH", "Csak az authoritative aktuális task zárható le.");
+  const task = taskId ? await getDeveloperGridTaskById(taskId) : null;
+  if (!taskId || !task) fail("DEVELOPER_GRID_CLOSE_TASK_MISMATCH", "A lezárandó task nem található a Central Core authoritative taskállapotában.");
   const session = state.sessions.find((item) => item.taskId === taskId && item.endedAt === null && (!sessionId || item.id === sessionId)) || null;
   if (!session) fail("DEVELOPER_GRID_CLOSE_SESSION_REQUIRED", "A lezáráshoz aktív worker session szükséges.");
   if (Number(session.developmentContext.workStageIndex || 1) !== 6) fail("DEVELOPER_GRID_CLOSE_STAGE_REQUIRED", "A lezárás csak a 6/6 LEZÁRÁS fázisban engedélyezett.");
@@ -26,11 +28,11 @@ export async function closeDeveloperGridWork(rawInput: Record<string, unknown>) 
     fail("DEVELOPER_GRID_CLOSURE_GATE_BLOCKED", `A lezárási kapu BLOCKED: ${missing || "ismeretlen hiány"}.`);
   }
 
-  const summary = memory?.handoff?.summary || memory?.context?.summary || session.developmentContext.contextSnapshotSummary || state.task.title;
+  const summary = memory?.handoff?.summary || memory?.context?.summary || session.developmentContext.contextSnapshotSummary || task.title;
   const engine = await finalizeDevEngineTask({ taskId, outcome: "completed", note: String(summary || "").slice(0, 1000) });
   const closedAt = new Date().toISOString();
-  const completedTask = { ...state.task, status: "COMPLETED" as const };
-  await upsertGridTask(completedTask);
+  const completedTask = { ...task, status: "COMPLETED" as const };
+  if (state.task?.id === taskId) await upsertGridTask(completedTask);
   const latestState = await readGridState();
   const latestSession = latestState.sessions.find((item) => item.id === session.id) || session;
   const closedSession = {

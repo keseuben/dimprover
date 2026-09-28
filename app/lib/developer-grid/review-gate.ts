@@ -3,6 +3,7 @@
 import { getGridEvidenceSummary, listGridEvidence } from "./evidence";
 import { readGridState } from "./state-store";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
+import { getDeveloperGridTaskById } from "./work-start";
 import type { GridEvidence, WorkerSession } from "./types";
 
 export type DeveloperGridReviewGateTarget = "REVIEW" | "BUILD" | "CLOSURE";
@@ -23,8 +24,9 @@ export async function evaluateDeveloperGridReviewGate(input: { taskId?: string; 
   const state = await readGridState();
   const taskId = String(input.taskId || state.task?.id || "").trim();
   const checks: DeveloperGridReviewGateCheck[] = [];
-  if (!taskId || !state.task || state.task.id !== taskId) {
-    return { taskId: taskId || null, target, state: "BLOCKED" as const, ready: false, sourceHead: null, baseHead: null, workerCode: null, checks: [{ id:"TASK", label:"Authoritative task", required:true, pass:false, detail:"Nincs egyező authoritative aktív task." }], evidenceSummary: null, productionAccess:"DENY" as const };
+  const task = taskId ? await getDeveloperGridTaskById(taskId) : null;
+  if (!taskId || !task) {
+    return { taskId: taskId || null, target, state: "BLOCKED" as const, ready: false, sourceHead: null, baseHead: null, workerCode: null, checks: [{ id:"TASK", label:"Authoritative task", required:true, pass:false, detail:"Nincs egyező authoritative task." }], evidenceSummary: null, productionAccess:"DENY" as const };
   }
   const session = activeSession(state.sessions, taskId);
   checks.push({ id:"SESSION", label:"Aktív worker session", required:true, pass:Boolean(session), detail:session ? `${session.workerCode} · ${session.id}` : "Nincs aktív worker session." });

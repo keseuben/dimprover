@@ -8,7 +8,8 @@ import { promisify } from "node:util";
 import { analyzeTechnicalScope } from "@/app/lib/dev-center/ai-worker/scope-analyzer";
 import { classifyScopePath } from "@/app/lib/dev-center/ai-worker/scope-policy";
 import { assertDevEngineOperation } from "@/app/lib/dev-center/engine-repository";
-import { getDeveloperGridActiveWork } from "./work-start";
+import { getDeveloperGridTaskById } from "./work-start";
+import { readGridState } from "./state-store";
 
 const execFileAsync = promisify(execFile);
 const EXECUTION_ROOT = process.env.BENJADMIN_DEVELOPER_GRID_EXECUTION_ROOT?.trim() || "/srv/dimpro-dev/coordination/developer-grid/execution";
@@ -226,10 +227,10 @@ async function validateContext(input: Input) {
   const action = actionName(input.action);
   if (!taskId || !sessionId || !INTERNAL_WORKERS.has(worker) || !/^[0-9a-f]{64}$/.test(proofSha)) throw new DeveloperGridExecutionError("Hiányos execution identity.", "EXECUTION_IDENTITY_INVALID", 400);
 
-  const active = await getDeveloperGridActiveWork();
-  const task = active.task;
-  const gridSession = (active.sessions || []).find((session) => session.id === sessionId) || null;
-  if (!task || task.id !== taskId || !gridSession) throw new DeveloperGridExecutionError("Az execution request nem az authoritative aktív Grid task/sessionhöz tartozik.", "EXECUTION_ACTIVE_WORK_MISMATCH", 409);
+  const state = await readGridState();
+  const task = await getDeveloperGridTaskById(taskId);
+  const gridSession = state.sessions.find((session) => session.id === sessionId && session.taskId === taskId && session.endedAt === null) || null;
+  if (!task || !gridSession) throw new DeveloperGridExecutionError("Az execution request task/session identity nem authoritative.", "EXECUTION_ACTIVE_WORK_MISMATCH", 409);
   if (workerCode(gridSession.workerCode) !== worker) throw new DeveloperGridExecutionError("A worker identity eltér az authoritative Grid sessiontől.", "EXECUTION_WORKER_MISMATCH", 409);
 
   const context = gridSession.developmentContext || {};

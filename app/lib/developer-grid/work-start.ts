@@ -369,6 +369,17 @@ function gridTaskFromEngine(task: Record<string, unknown>): DeveloperGridTask {
   };
 }
 
+export async function getDeveloperGridTaskById(taskIdValue: unknown): Promise<DeveloperGridTask | null> {
+  const taskId = text(taskIdValue, 240);
+  if (!taskId) return null;
+  const state = await readGridState();
+  if (state.task?.id === taskId) return state.task;
+  const engineState = await getDevCenterEngineState();
+  const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+  if (!engineTask) return null;
+  return gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+}
+
 export async function getDeveloperGridActiveWork() {
   let state = await readGridState();
   let task = state.task;
@@ -905,8 +916,9 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
     throw error;
   }
   const state = await readGridState();
-  if (!state.task || state.task.id !== taskId) {
-    const error = new Error("A BOOT ACK nem az authoritative aktuális taskhoz tartozik.");
+  const authoritativeTask = await getDeveloperGridTaskById(taskId);
+  if (!authoritativeTask) {
+    const error = new Error("A BOOT ACK task nem található a Central Core authoritative taskállapotában.");
     Object.assign(error, { code: "DEVELOPER_GRID_BOOT_ACK_TASK_MISMATCH", status: 409 });
     throw error;
   }
@@ -975,10 +987,10 @@ export async function recordDeveloperGridBootAck(rawInput: Record<string, unknow
   let next = await upsertWorkerSession(updated);
   if (validated) {
     await syncEngineBridgeTarget(taskId, "RUNNING");
-    if (state.task) next = await upsertGridTask({ ...state.task, status: "RUNNING" });
+    if (state.task?.id === taskId) next = await upsertGridTask({ ...state.task, status: "RUNNING" });
   }
   await appendGridEvent({
-    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: state.task.projectId, productionAccess: "DENY",
+    kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: authoritativeTask.projectId, productionAccess: "DENY",
     developmentContext: updated.developmentContext,
     branch: expected.branch, worktree: expected.worktree, head: expected.head,
     delta: {

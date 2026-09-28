@@ -14,6 +14,7 @@ import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
 import { listGridEvidence } from "./evidence";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
+import { getDeveloperGridTaskById } from "./work-start";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIFF_BYTES = 512 * 1024;
@@ -68,8 +69,9 @@ export async function requestDeveloperGridVGuardReview(input: Record<string, unk
   if (!readiness.gate.ready) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_GATE_BLOCKED", error:"A Developer Grid review-readiness gate BLOCKED.", readiness };
   const resolvedTaskId = String(readiness.gate.taskId || taskId || "");
   const state = await readGridState();
-  if (!state.task || state.task.id !== resolvedTaskId) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_TASK_MISMATCH", error:"Az authoritative task megváltozott." };
-  const session = state.sessions.find((item)=>item.id===readiness.gate.sessionId && item.endedAt===null);
+  const task = await getDeveloperGridTaskById(resolvedTaskId);
+  if (!task) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_TASK_MISMATCH", error:"Az authoritative task nem található." };
+  const session = state.sessions.find((item)=>item.id===readiness.gate.sessionId && item.taskId===resolvedTaskId && item.endedAt===null);
   if (!session) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_SESSION_MISSING", error:"Az authoritative worker session nem található." };
   if (Number(session.developmentContext.workStageIndex || 1) !== 4) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_STAGE_REQUIRED", error:"A független ELLENŐRZÉS csak a 4/6 fázisban indítható." };
   await verifyCurrentSourceExecutionState(session.sourceProvenance,{requireClean:true});
@@ -96,7 +98,7 @@ export async function requestDeveloperGridVGuardReview(input: Record<string, unk
     dailyLimitHuf:config.dailyLimitHuf, monthlyLimitHuf:config.monthlyLimitHuf, maxActiveMinutes:config.maxActiveMinutesPerWorker, maxRetries:config.maxFixRounds });
   if (budget.hardStop) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_VGUARD_BUDGET_BLOCKED", error:`V.Guard budget hard stop: ${budget.reasons.join(" · ")}`, budget };
 
-  const built = buildPrompt({ taskId:resolvedTaskId, title:state.task.title, goal:session.developmentContext.sourcePrompt || state.task.title, baseHead, head, changedPaths, diff });
+  const built = buildPrompt({ taskId:resolvedTaskId, title:task.title, goal:session.developmentContext.sourcePrompt || task.title, baseHead, head, changedPaths, diff });
   const reviewId = `grid-review-${randomUUID().slice(0,12)}`;
   const runId = newExternalAiRunId("VGUARD");
   try {
@@ -106,19 +108,19 @@ export async function requestDeveloperGridVGuardReview(input: Record<string, unk
     await recordExternalAiUsage({ taskId:resolvedTaskId,workerCode:"VGUARD",provider:result.provider,model:result.modelId,runId:result.providerRunId||runId,inputTokens:result.inputTokens,outputTokens:result.outputTokens,totalTokens:result.totalTokens,costHuf:result.costHuf,wallTimeMs:result.durationMs,activeTimeMs:result.durationMs,retryIndex:taskUsage.maxRetryIndex,changedFiles:changedPaths.length,testsPassed:review.result==="FAIL"?0:1,testsFailed:review.result==="FAIL"?1:0,reviewResult:review.result,stopReason:result.stopReason,finishedAt:new Date().toISOString() });
     const priorFail = (await listGridEvidence({taskId:resolvedTaskId,kind:"REVIEW",limit:50})).find((item)=>item.head===head && (item.status==="FAIL"||item.status==="BLOCKED"));
     const severity = review.result === "FAIL" ? "HIGH" : review.result === "PASS_WITH_NOTES" ? "WARNING" : "INFO";
-    await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:state.task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
+    await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
       delta:{eventType:"VGUARD_REVIEW_COMPLETED",summary:`V.Guard ${review.result} · ${review.findings.length} finding.`,status:review.result,severity,sessionId:session.id,reviewId,reviewResult:review.result,resolvesFingerprint:review.result!=="FAIL"?priorFail?.fingerprintSha256||null:null,
         provider:result.provider,modelId:result.modelId,promptSha256:built.sha256,changedFileCount:changedPaths.length,inputTokens:result.inputTokens,outputTokens:result.outputTokens,costHuf:result.costHuf,durationMs:result.durationMs,sanitized:true} });
     if (review.result !== "FAIL") {
       const advanced = { ...session, developmentContext: { ...session.developmentContext, workStageIndex: 5, resolvedAt: new Date().toISOString() } };
       await upsertWorkerSession(advanced);
-      await appendGridEvent({ kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:state.task.projectId,developmentContext:advanced.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
+      await appendGridEvent({ kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:advanced.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
         delta:{eventType:"WORK_STAGE_ADVANCED",summary:"Független ellenőrzés PASS; fejlesztési szakasz: 4/6 → 5/6 BUILD / KIADÁS.",status:"PASS",severity:"INFO",sessionId:session.id,workStageIndex:5,sanitized:true} });
     }
     await refreshDerivedConversationMemory(resolvedTaskId, session.id).catch(() => null);
     return { ok:true as const,state:review.result==="FAIL"?"BLOCKED" as const:"PASS" as const,taskId:resolvedTaskId,reviewId,sourceHead:head,baseHead,provider:{provider:result.provider,modelId:result.modelId},review,promptSha256:built.sha256,usage:{inputTokens:result.inputTokens,outputTokens:result.outputTokens,totalTokens:result.totalTokens,costHuf:result.costHuf,durationMs:result.durationMs},productionAccess:"DENY" as const };
   } catch (error) {
-    await appendGridEvent({ kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:state.task.projectId,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
+    await appendGridEvent({ kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
       delta:{eventType:"VGUARD_REVIEW_EXECUTION_FAILED",summary:"V.Guard review végrehajtás sikertelen; review-result nem került elfogadásra.",status:"BLOCKED",severity:"WARNING",sessionId:session.id,errorCode:"VGUARD_EXECUTION_FAILED",sanitized:true} }).catch(()=>undefined);
     throw error;
   }
