@@ -1013,7 +1013,6 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             onOpenDocument={(document) => void openDocument(document)}
             onMoveDocument={moveDocument}
             tableZoom={tableZoom}
-            dragPanEnabled
           />
         ) : (
           <>

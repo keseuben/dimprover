@@ -2003,7 +2003,6 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                   onMoveDocument={moveDocument}
                   tableZoom={tableZoom}
-                  dragPanEnabled
                 />
               ) : (
                 <>

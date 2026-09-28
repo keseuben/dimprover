@@ -44,21 +44,26 @@ check("Commander supports zoom", () => {
   assert.match(commander, /tableZoom\?: number/);
   assert.match(commander, /style=\{\{ zoom: tableZoom \/ 100 \}\}/);
 });
-check("Commander supports long-press pan", () => {
-  assert.match(commander, /}, 180\)/);
-  assert.match(commander, /scrollLeft = state\.startLeft - dx/);
-  assert.match(commander, /scrollTop = state\.startTop - dy/);
+check("Commander deliberately has no long-press pan", () => {
+  assert.doesNotMatch(commander, /handlePanPointerDown/);
+  assert.doesNotMatch(commander, /dragPanEnabled/);
 });
-check("Commander preserves file move with dedicated grip", () => {
-  assert.match(commander, /draggable=\{false\}/);
-  assert.match(commander, /className=\{styles\.commanderGrip\}[\s\S]*?draggable=\{canWrite && moveReady\}/);
+check("Commander preserves direct row drag-and-drop", () => {
+  assert.match(commander, /draggable=\{canWrite && moveReady\}/);
+  assert.match(commander, /onDragStart=\{\(event\) =>/);
   assert.match(commander, /application\/x-dimpro-drive-document/);
 });
-check("main Commander gets pan and zoom", () => {
-  assert.match(workspace, /<CommanderPanel[\s\S]*?tableZoom=\{tableZoom\}[\s\S]*?dragPanEnabled/);
+check("main Commander receives zoom but no pan flag", () => {
+  const start = workspace.indexOf("<CommanderPanel");
+  const block = workspace.slice(start, workspace.indexOf("/>", start) + 2);
+  assert.match(block, /tableZoom=\{tableZoom\}/);
+  assert.doesNotMatch(block, /dragPanEnabled/);
 });
-check("Projectkapu Commander gets pan and zoom", () => {
-  assert.match(projectDrive, /<CommanderPanel[\s\S]*?tableZoom=\{tableZoom\}[\s\S]*?dragPanEnabled/);
+check("Projectkapu Commander receives zoom but no pan flag", () => {
+  const start = projectDrive.indexOf("<CommanderPanel", projectDrive.indexOf('!tableFullscreen && <section'));
+  const block = projectDrive.slice(start, projectDrive.indexOf("/>", start) + 2);
+  assert.match(block, /tableZoom=\{tableZoom\}/);
+  assert.doesNotMatch(block, /dragPanEnabled/);
 });
 check("file grid long press remains enabled outside fullscreen", () => {
   assert.match(grid, /dragPanEnabled \? styles\.tablePanEnabled/);
