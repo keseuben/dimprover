@@ -418,6 +418,7 @@ export default function DetailsPanel({
   onSaveNote,
   onEnsureQr,
   onDownload,
+  onDelete,
   responsiveClassName = "",
   focusTab,
   inheritedDiscipline = "",
