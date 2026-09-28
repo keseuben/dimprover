@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+const work=read("app/lib/developer-grid/work-start.ts");
+const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
+const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
+let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
+check("desktop v0.1.90",()=>assert.equal(pkg.version,"0.1.90"));
+check("pair requires engine session id",()=>assert.match(work,/engineSessionId = text\(session\.developmentContext\.engineSessionId/));
+check("pair requires active engine session",()=>assert.match(work,/engineSession\.status === "active"/));
+check("pair requires READY engine handshake",()=>assert.match(work,/engineSession\.handshakeStage === "READY"/));
+check("pair requires exact engine task identity",()=>assert.match(work,/engineSession\.taskId === session\.taskId/));
+check("pair requires current task claim",()=>assert.match(work,/engineTask\.claimedBySessionId === engineSessionId/));
+check("pair requires worker ownership",()=>assert.match(work,/engineTask\.assignedWorkerId === engineSession\.workerId/));
+check("pair requires active engine task status",()=>assert.match(work,/\["claimed", "in_progress", "testing"\]\.includes\(engineTask\.status\)/));
+check("stale Grid sessions are excluded",()=>assert.match(work,/if \(!engineBindingLive\) return \[\];/));
+check("desktop still heartbeats filtered pairs",()=>assert.match(main,/activeWork\?\.activeSessionTasks/));
+console.log("Developer Grid v0.1.90 live engine-session filter contract PASS · "+n+"/"+n);

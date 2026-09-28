@@ -15,4 +15,4 @@ check("latest assistant capture uses unified turns",()=>assert.ok(adapter.LATEST
 check("conversation transcript uses unified turns",()=>assert.ok(adapter.TRANSCRIPT_SCRIPT.includes("messages.push({ messageId:turn.messageId")));
 check("BOOT ACK monitor has transcript-history fallback",()=>{assert.ok(main.includes("captureLatestBootAckCandidate"));assert.ok(main.includes('candidateSource:"TRANSCRIPT_HISTORY"'));});
 check("conversation memory also replays captured BOOT ACK",()=>{assert.ok(main.includes('source:"CONVERSATION_MEMORY"'));assert.ok(main.includes("bodyWithBootAck"));});
-console.log(`Developer Grid v0.1.89 ChatGPT turn capture contract PASS · ${n}/${n}`);
+console.log(`Developer Grid v0.1.90 ChatGPT turn capture contract PASS · ${n}/${n}`);

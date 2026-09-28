@@ -23,4 +23,4 @@ check("stale owned draft is recovered without overwriting foreign user content",
 check("manual send is accepted only with verified send evidence",()=>{assert.match(main,/sendPreparedChatPrompt\(view, TASK_LAUNCH_PROMPT_MARKER\)/);assert.match(main,/sent\?\.sent !== true \|\| sent\?\.verified !== true/);assert.match(main,/MANUAL_LAUNCH_SEND_NOT_VERIFIED/);});
 check("verified manual send starts BOOT ACK monitoring",()=>{assert.match(main,/manualDispatchAt:now/);assert.match(main,/monitorWorkerBootAck\(\{ view, task:launchTask/);});
 check("AUTO recovery path is still available",()=>assert.match(ui,/resumeDeveloperGridTaskLaunch/));
-console.log("Developer Grid v0.1.89 manual central launch contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.90 manual central launch contract PASS · "+n+"/"+n);

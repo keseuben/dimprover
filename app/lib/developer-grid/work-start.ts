@@ -431,13 +431,24 @@ export async function getDeveloperGridActiveWork() {
     try {
       const engineState = await getDevCenterEngineState();
       activeSessionTasks = allActiveSessions.flatMap((session) => {
+        const engineSessionId = text(session.developmentContext.engineSessionId, 220);
+        const engineSession = engineSessionId ? engineState.sessions.find((item) => item.id === engineSessionId) || null : null;
+        const engineTask = engineState.tasks.find((item) => item.id === session.taskId) || null;
+        const engineBindingLive = Boolean(
+          engineSession
+          && engineTask
+          && engineSession.status === "active"
+          && engineSession.handshakeStage === "READY"
+          && engineSession.taskId === session.taskId
+          && engineTask.claimedBySessionId === engineSessionId
+          && engineTask.assignedWorkerId === engineSession.workerId
+          && ["claimed", "in_progress", "testing"].includes(engineTask.status)
+        );
+        if (!engineBindingLive) return [];
         const resolvedTask = state.task?.id === session.taskId
           ? state.task
-          : (() => {
-              const engineTask = engineState.tasks.find((item) => item.id === session.taskId) || null;
-              return engineTask ? gridTaskFromEngine(engineTask as unknown as Record<string, unknown>) : null;
-            })();
-        return resolvedTask ? [{ task: resolvedTask, session }] : [];
+          : gridTaskFromEngine(engineTask as unknown as Record<string, unknown>);
+        return [{ task: resolvedTask, session }];
       });
     } catch {
       activeSessionTasks = task && activeSession ? [{ task, session: activeSession }] : [];
