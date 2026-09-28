@@ -3189,11 +3189,24 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
   if (!view || view.webContents.isDestroyed()) return { ok:false, code:"MANUAL_LAUNCH_CHAT_UNAVAILABLE", error:"A worker ChatGPT felülete nem érhető el." };
 
-  const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+  const webContentsUrl = String(view.webContents.getURL() || "");
+  const webContentsConversationId = chatConversationIdFromUrl(webContentsUrl);
+  const domObservation = await inspectChatGptDom(view).catch(() => null);
+  const domConversationUrl = String(domObservation?.url || "");
+  const domConversationId = String(domObservation?.conversationId || "").trim();
+  const domConversationVerified = Boolean(
+    domConversationId
+    && domConversationUrl
+    && chatConversationIdFromUrl(domConversationUrl) === domConversationId
+    && isChatGptUrl(domConversationUrl)
+  );
+  const currentConversationId = domConversationVerified ? domConversationId : webContentsConversationId;
+  const currentConversationSource = domConversationVerified ? "DOM_LOCATION" : "WEBCONTENTS_URL";
   const ctx = session.developmentContext || {};
   const expectedConversationId = String(ctx.surfaceConversationId || ctx.chatConversationId || "").trim();
+  if (!expectedConversationId) return { ok:false, code:"MANUAL_LAUNCH_CONVERSATION_BINDING_REQUIRED", error:"A task authoritative ChatGPT csevegése nincs rögzítve. Központi küldés előtt rögzítsd a csevegést." };
   if (!currentConversationId) return { ok:false, code:"MANUAL_LAUNCH_CHAT_REQUIRED", error:"Nyisd meg a taskhoz tartozó ChatGPT /c/... csevegést." };
-  if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"MANUAL_LAUNCH_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva." };
+  if (currentConversationId !== expectedConversationId) return { ok:false, code:"MANUAL_LAUNCH_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva." };
 
   const launchRecord = loadTaskLaunchRecords()[id] || {};
   const capture = await captureLatestBootAckCandidate(view);
@@ -3283,6 +3296,7 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
     sourceProofSha256:currentProof,
     sendMode:sent?.mode || "verified",
     transcriptMessageId:sent?.transcriptProof?.messageId || null,
+    conversationObservationSource:currentConversationSource,
   });
   void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256 }).catch(() => undefined);
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
