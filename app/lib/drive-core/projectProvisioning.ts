@@ -4,6 +4,7 @@ import {
   listDriveTree,
 } from "./databaseRepository";
 import { DriveCoreRepositoryError } from "./errors";
+import type { DriveFolder } from "./types";
 
 export const DRIVE_PROJECT_PROVISIONING_VERSION = "1.2.0";
 export const DRIVE_INCOMING_DROP_FOLDER_NAME = "Beérkező Drop";
@@ -13,6 +14,16 @@ export const DRIVE_PILOT_FOLDER_SORT_ORDER = 5;
 
 function pilotModeEnabled() {
   return process.env.DRIVE_PILOT_MODE_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function folderMatchesCanonicalName(folder: DriveFolder, expectedName: string) {
+  return [folder.originalName, folder.displayName, folder.name]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .some((value) => value.localeCompare(expectedName, "hu-HU", { sensitivity: "base" }) === 0);
+}
+
+function humanFolderName(folder: DriveFolder) {
+  return folder.displayName || folder.originalName || folder.name;
 }
 
 export type DriveProjectProvisioningState = {
@@ -36,11 +47,11 @@ async function readProvisioningState(projectId: string): Promise<DriveProjectPro
   const tree = await listDriveTree(projectId);
   const incoming = tree.folders.find((folder) =>
     folder.parentId === null
-    && folder.name.localeCompare(DRIVE_INCOMING_DROP_FOLDER_NAME, "hu-HU", { sensitivity: "base" }) === 0,
+    && folderMatchesCanonicalName(folder, DRIVE_INCOMING_DROP_FOLDER_NAME),
   ) || null;
   const pilot = tree.folders.find((folder) =>
     folder.parentId === null
-    && folder.name.localeCompare(DRIVE_PILOT_FOLDER_NAME, "hu-HU", { sensitivity: "base" }) === 0,
+    && folderMatchesCanonicalName(folder, DRIVE_PILOT_FOLDER_NAME),
   ) || null;
   const pilotRequired = pilotModeEnabled();
   return {
@@ -48,8 +59,8 @@ async function readProvisioningState(projectId: string): Promise<DriveProjectPro
     projectId,
     ready: tree.folders.length > 0 && Boolean(incoming) && (!pilotRequired || Boolean(pilot)),
     folderCount: tree.folders.length,
-    incomingDropFolder: incoming ? { id: incoming.id, name: incoming.name, path: incoming.path } : null,
-    pilotFolder: pilot ? { id: pilot.id, name: pilot.name, path: pilot.path } : null,
+    incomingDropFolder: incoming ? { id: incoming.id, name: humanFolderName(incoming), path: incoming.path } : null,
+    pilotFolder: pilot ? { id: pilot.id, name: humanFolderName(pilot), path: pilot.path } : null,
   };
 }
 
