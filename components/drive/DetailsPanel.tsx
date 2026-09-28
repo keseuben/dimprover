@@ -18,7 +18,10 @@ type MetadataForm = {
   zone: string;
   topic: string;
   planTitle: string;
+  scales: string[];
 };
+
+type MetadataTextKey = Exclude<keyof MetadataForm, "scales">;
 
 type ReviewSectionKey = "technical" | "customer" | "manager" | "investor" | "lifecycle";
 
@@ -116,6 +119,33 @@ function formatAuditDate(value: unknown) {
 
 function reviewAuditTime(extra: Record<string, unknown>, prefix: string) {
   return formatAuditDate(extra[prefix + "At"]);
+}
+
+function scaleDenominator(value: unknown) {
+  const text = String(value || "").trim().replace(/^M\s*=\s*1\s*:\s*/i, "");
+  return text.replace(/\D+/g, "");
+}
+
+function scalesFromExtra(extra: Record<string, unknown> | undefined) {
+  const source = extra?.scales;
+  const values = Array.isArray(source)
+    ? source
+    : typeof source === "string"
+      ? source.split(/[,;\n]+/)
+      : typeof extra?.scale === "string"
+        ? [extra.scale]
+        : [];
+  const denominators = values.map(scaleDenominator).filter(Boolean).slice(0, 3);
+  return denominators.length ? denominators : [""];
+}
+
+function scalesForSave(values: string[]) {
+  return values
+    .map(scaleDenominator)
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .slice(0, 3)
+    .map((value) => "M=1:" + value);
 }
 
 function reviewAuditActor(extra: Record<string, unknown>, prefix: string) {
@@ -468,6 +498,7 @@ export default function DetailsPanel({
       zone: source.zone,
       topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
       planTitle: typeof source.extra?.displayName === "string" ? source.extra.displayName : typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
+      scales: scalesFromExtra(source.extra),
     } : emptyMetadata);
     const extra = source?.extra || {};
     const legacyObservations = typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "";
@@ -557,7 +588,7 @@ export default function DetailsPanel({
                 ["level", "Szint"],
                 ["zone", "Zóna"],
                 ["topic", "Témakör felülírás"],
-              ] as Array<[keyof MetadataForm, string]>).map(([key, label]) => (
+              ] as Array<[MetadataTextKey, string]>).map(([key, label]) => (
                 <div className={styles.metaItem} key={key}>
                   <label htmlFor={`drive-meta-${key}`}>{label}</label>
                   <input
@@ -569,6 +600,53 @@ export default function DetailsPanel({
                   />
                 </div>
               ))}
+            </div>
+
+            <div className={styles.scaleEditor}>
+              <div className={styles.scaleEditorHead}>
+                <div>
+                  <strong>Tervlépték</strong>
+                  <span>Legfeljebb 3 lépték rögzíthető.</span>
+                </div>
+                {canWrite && metadata.scales.length < 3 && (
+                  <button type="button" onClick={() => setMetadata((current) => ({ ...current, scales: [...current.scales, ""] }))}>
+                    <Plus size={12} /> Lépték hozzáadása
+                  </button>
+                )}
+              </div>
+              <div className={styles.scaleEditorList}>
+                {metadata.scales.map((scale, index) => (
+                  <div className={styles.scaleEditorRow} key={"scale-" + index}>
+                    <span>M=1:</span>
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={scale}
+                      readOnly={!canWrite}
+                      onChange={(event) => {
+                        const value = event.target.value.replace(/\D+/g, "").slice(0, 8);
+                        setMetadata((current) => ({
+                          ...current,
+                          scales: current.scales.map((entry, entryIndex) => entryIndex === index ? value : entry),
+                        }));
+                      }}
+                      placeholder="100"
+                      aria-label={"Lépték " + (index + 1)}
+                    />
+                    {canWrite && index > 0 && (
+                      <button
+                        type="button"
+                        className={styles.scaleRemove}
+                        onClick={() => setMetadata((current) => ({ ...current, scales: current.scales.filter((_, entryIndex) => entryIndex !== index) }))}
+                        title="Lépték eltávolítása"
+                        aria-label={"Lépték " + (index + 1) + " eltávolítása"}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {document.currentVersion?.status === "QUARANTINED" && (
@@ -592,7 +670,7 @@ export default function DetailsPanel({
             )}
 
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, displayName: metadata.planTitle, planTitle: metadata.planTitle } })}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, displayName: metadata.planTitle, planTitle: metadata.planTitle, scales: scalesForSave(metadata.scales) } })}>
                 <Save size={12} /> Metaadat mentése
               </button>
               <button type="button" className={styles.smallButton} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()}>

@@ -96,6 +96,36 @@ function displayDocumentName(document: DriveDocument, metadata?: DriveEngineerin
   return { explicit, value: explicit || fileNameWithoutExtension(document.name) };
 }
 
+function normalizePlanScale(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const withoutPrefix = text.replace(/^M\s*=\s*1\s*:\s*/i, "");
+  const denominator = withoutPrefix.replace(/\D+/g, "");
+  return denominator ? "M=1:" + denominator : "";
+}
+
+function documentPlanScales(metadata?: DriveEngineeringMetadata) {
+  const extra = metadata?.extra || {};
+  const source = extra.scales;
+  const values = Array.isArray(source)
+    ? source
+    : typeof source === "string"
+      ? source.split(/[,;\n]+/)
+      : typeof extra.scale === "string"
+        ? [extra.scale]
+        : [];
+  return values.map(normalizePlanScale).filter(Boolean).slice(0, 3);
+}
+
+function scaleSummary(metadata?: DriveEngineeringMetadata) {
+  const scales = documentPlanScales(metadata);
+  return {
+    scales,
+    text: !scales.length ? "—" : scales.length === 1 ? scales[0] : scales[0] + ", …",
+    title: scales.length ? scales.join(", ") : "Nincs rögzített lépték",
+  };
+}
+
 const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif", "heic", "heif", "tif", "tiff"]);
 
 function FileKindIcon({ extension }: { extension: string }) {
@@ -420,6 +450,7 @@ export default function FileGridPanel({
       displayName: (value("displayName") || value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
       effectiveTopic: value("topic") || inherited?.topic || "",
+      scale: scaleSummary(metadata),
       checked: value("reviewChecked") || value("hageChecked"),
       result: value("reviewResult") || value("hageResult"),
       observations,
@@ -678,6 +709,7 @@ export default function FileGridPanel({
                 <col style={{ width: "112px" }} />
                 <col style={{ width: "85px" }} />
                 <col style={{ width: "105px" }} />
+                <col style={{ width: "92px" }} />
                 <col style={{ width: "55px" }} />
                 <col style={{ width: "65px" }} />
                 <col style={{ width: "58px" }} />
@@ -693,7 +725,7 @@ export default function FileGridPanel({
               </colgroup>
               <thead>
                 <tr className={styles.reviewGroupHeader}>
-                  <th colSpan={7}>Dokumentum</th>
+                  <th colSpan={8}>Dokumentum</th>
                   <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
                   <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
                   <th className={styles.reviewGroupManager} title="Projektvezető">Projektv.</th>
@@ -708,6 +740,7 @@ export default function FileGridPanel({
                   <th title="Fájlfeltöltés dátuma és ideje">Feltöltve</th>
                   <th title="Szakág">Szakág</th>
                   <th title="Témakör">Témakör</th>
+                  <th title="Tervlépték">Lépték</th>
                   <th title="Ellenőrzés">Ell.</th>
                   <th title="Eredmény">Eredm.</th>
                   <th title="Észrevételek">Észr.</th>
@@ -725,7 +758,7 @@ export default function FileGridPanel({
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={19}>
+                    <td colSpan={20}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -770,6 +803,7 @@ export default function FileGridPanel({
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
+                    <td className={styles.planScaleCell} title={row.scale.title}>{row.scale.text}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openDetail(row.document, "result")}>{reviewMark(row.result)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>
@@ -838,13 +872,13 @@ export default function FileGridPanel({
             <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
-                <col style={{ width: "22%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
+                <col style={{ width: "20%" }} /><col style={{ width: "16%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "8%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Lépték</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={12}>
+                    <td colSpan={13}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -867,6 +901,7 @@ export default function FileGridPanel({
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td title={document.mimeType}>{document.mimeType || "–"}</td>
                       <td>{version?.revisionCode || "–"}</td>
+                      <td className={styles.planScaleCell} title={scaleSummary(metadata).title}>{scaleSummary(metadata).text}</td>
                       <td>V{document.currentVersionNumber}</td>
                       <td>{document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
