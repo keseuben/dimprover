@@ -23,6 +23,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       projectId,
       folderId,
       actorUserId: access.actor.userId,
+      actorDisplayName: access.actor.displayName,
+      projectCode: access.access.project.code,
+      projectName: access.access.project.name,
       clientId: request.headers.get("x-dimpro-drive-client-id"),
     });
     const nodeStream = archive.stream as unknown as Readable;
@@ -36,6 +39,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         "x-content-type-options": "nosniff",
         "x-dimpro-drive-zip-files": String(archive.sourceFileCount),
         "x-dimpro-drive-zip-skipped": String(archive.skippedFileCount),
+        "x-dimpro-drive-download-package-id": archive.packageId,
+        "x-dimpro-drive-document-register": archive.registerFileName,
       },
     });
   } catch (error) {

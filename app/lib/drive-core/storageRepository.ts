@@ -742,3 +742,40 @@ export async function logDriveDownloadRecord(input: {
   }
   return data as Record<string, unknown>;
 }
+
+
+export async function logDriveDownloadPackageAudit(input: {
+  projectId: string;
+  folderId: string;
+  packageId: string;
+  actorUserId: string;
+  clientId?: string | null;
+  fileCount: number;
+  skippedFileCount: number;
+  totalBytes: number;
+  registerFileName: string;
+  files: Array<{ documentId: string; versionId: string; zipName: string }>;
+}) {
+  const client = await requireReadyClient();
+  const auditId = `project-audit-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const { error } = await client.from("project_core_audit_events").insert({
+    id: auditId,
+    project_id: input.projectId,
+    actor_user_id: input.actorUserId,
+    event_type: "DRIVE_DOWNLOAD_PACKAGE_CREATED",
+    entity_type: "folder",
+    entity_id: input.folderId,
+    summary: `Digitális dokumentációcsomag összeállítva: ${input.packageId}`,
+    metadata: {
+      packageId: input.packageId,
+      clientId: input.clientId || null,
+      fileCount: input.fileCount,
+      skippedFileCount: input.skippedFileCount,
+      totalBytes: input.totalBytes,
+      registerFileName: input.registerFileName,
+      files: input.files,
+    },
+  });
+  if (error) databaseError("A DRIVE letöltési csomag auditnaplója nem menthető.", error);
+  return { auditId, packageId: input.packageId };
+}
