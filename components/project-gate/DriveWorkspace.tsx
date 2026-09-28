@@ -40,6 +40,7 @@ import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import TableFullscreenBar from "@/components/drive/TableFullscreenBar";
 import TableZoomControls from "@/components/drive/TableZoomControls";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
+import { prepareDroppedDriveUpload } from "@/components/drive/externalFileDrop";
 import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
@@ -929,7 +930,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setNotice(`${successCount}/${items.length} fájl feltöltése sikeres. A hibás tételek külön újrapróbálhatók.`);
   }
 
-  function enqueueFiles(files: File[], targetFolderId: string) {
+  function enqueueFileGroups(groups: Array<{ files: File[]; folder: DriveFolder }>) {
     if (!canWrite || uploadBatchBusy) {
       if (uploadBatchBusy) setError("Már fut egy feltöltési sor. Várd meg a befejezését, majd adj hozzá új fájlokat.");
       return;
@@ -938,30 +939,46 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
       return;
     }
-    const folder = tree?.folders.find((entry) => entry.id === targetFolderId);
-    if (!folder) {
-      setError("Feltöltés előtt válassz ki egy konkrét célmappát.");
-      return;
-    }
+
     const maxUploadBytes = health?.storage?.maxUploadBytes || Number.MAX_SAFE_INTEGER;
     const now = Date.now();
-    const prepared = files.filter((file) => file.size > 0).map((file, index) => ({
-      id: `drive-upload-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-      file,
-      targetFolderId: folder.id,
-      targetFolderPath: folder.path,
-      status: file.size > maxUploadBytes ? "ERROR" as const : "QUEUED" as const,
-      progress: 0,
-      message: file.size > maxUploadBytes ? `Túl nagy fájl · maximum ${health?.storage?.maxUploadMb || 0} MB` : "Feltöltésre vár",
-      error: file.size > maxUploadBytes ? "A fájl meghaladja a Drive feltöltési méretkorlátját." : undefined,
-    }));
+    let itemIndex = 0;
+    const prepared: UploadQueueItem[] = [];
+
+    for (const group of groups) {
+      const folder = group.folder;
+      for (const file of group.files.filter((entry) => entry.size > 0)) {
+        const tooLarge = file.size > maxUploadBytes;
+        prepared.push({
+          id: `drive-upload-${now}-${itemIndex++}-${Math.random().toString(36).slice(2, 8)}`,
+          file,
+          targetFolderId: folder.id,
+          targetFolderPath: folder.path,
+          status: tooLarge ? "ERROR" as const : "QUEUED" as const,
+          progress: 0,
+          message: tooLarge ? `Túl nagy fájl · maximum ${health?.storage?.maxUploadMb || 0} MB` : "Feltöltésre vár",
+          error: tooLarge ? "A fájl meghaladja a Drive feltöltési méretkorlátját." : undefined,
+        });
+      }
+    }
+
     if (!prepared.length) {
       setError("Nincs feltölthető, nem üres fájl a kiválasztásban.");
       return;
     }
+
     setUploadQueue((current) => [...prepared, ...current]);
     const runnable = prepared.filter((item) => item.status === "QUEUED");
     if (runnable.length) void processUploadBatch(runnable);
+  }
+
+  function enqueueFiles(files: File[], targetFolderId: string) {
+    const folder = tree?.folders.find((entry) => entry.id === targetFolderId);
+    if (!folder) {
+      setError("A feltöltés célmappája nem található.");
+      return;
+    }
+    enqueueFileGroups([{ files, folder }]);
   }
 
   async function createBox(input: { name: string; purpose: DriveBoxPurpose; colorToken: string; iconKey: string; note: string }) {
@@ -1198,17 +1215,52 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     if (dragDepthRef.current === 0) setExternalDragActive(false);
   }
 
-  function handleExternalDrop(event: DragEvent<HTMLElement>) {
-    if (!isExternalFileDrag(event)) return;
+  async function handleExternalDrop(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event) || !canWrite) return;
     event.preventDefault();
     dragDepthRef.current = 0;
     setExternalDragActive(false);
-    const files = Array.from(event.dataTransfer.files || []);
-    if (selectedFolderId === "all") {
-      setError("A behúzott fájlok feltöltése előtt válassz ki egy célmappát a bal oldali mappafában.");
+
+    if (!storageWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
       return;
     }
-    enqueueFiles(files, selectedFolderId);
+    if (uploadBatchBusy) {
+      setError("Már fut egy feltöltési sor. Várd meg a befejezését, majd húzd be az új fájlokat vagy mappákat.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setNotice("A behúzott fájl- és mappastruktúra feldolgozása…");
+    try {
+      const prepared = await prepareDroppedDriveUpload({
+        projectId,
+        dataTransfer: event.dataTransfer,
+        selectedFolderId,
+        selectedFolder,
+        existingFolders: tree?.folders || [],
+      });
+
+      if (!prepared.fileCount) {
+        await load();
+        setNotice(
+          `${prepared.createdFolderCount} mappa létrehozva.${prepared.reusedFolderCount ? ` ${prepared.reusedFolderCount} meglévő mappa újrahasználva.` : ""}`,
+        );
+        return;
+      }
+
+      setBusy(false);
+      enqueueFileGroups(prepared.groups);
+      setNotice(
+        `${prepared.fileCount} fájl sorba állítva${prepared.createdFolderCount ? ` · ${prepared.createdFolderCount} mappa létrehozva.` : "."}`,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A behúzott fájlok vagy mappák feldolgozása sikertelen.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function downloadDocument(document: DriveDocument) {
@@ -1549,7 +1601,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       <section className={styles.setupPanel}>
         <div className={styles.setupIcon}><Database size={30} /></div>
         <div>
-          <span>DRIVE CORE 0.3.0 · ADATBÁZIS ELŐKÉSZÍTÉS</span>
+          <span>DRIVE CORE 0.5.0 · ADATBÁZIS ELŐKÉSZÍTÉS</span>
           <h2>A Projektkapu dokumentumtár kódja elkészült</h2>
           <p>A működés biztonságosan le van tiltva, amíg a DRIVE Core Supabase-sémája nincs alkalmazva. A Project Core és a többi modul változatlanul működik.</p>
           <div className={styles.setupChecks}>
@@ -1779,7 +1831,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         aria-label="Új dokumentumverzió fájl kiválasztása"
       />
 
-      {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat a feltöltéshez</strong><span>{selectedFolder ? `Célmappa: ${selectedFolder.path}` : "Előbb válassz célmappát a bal oldalon"}</span></div></div>}
+      {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat vagy mappákat a feltöltéshez</strong><span>{selectedFolder ? "Célmappa: " + selectedFolder.path : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span></div></div>}
 
       <div className={styles.browser}>
         <aside className={styles.folderPanel}>

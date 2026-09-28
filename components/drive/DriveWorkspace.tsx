@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   Bell,
   Building2,
@@ -16,6 +16,7 @@ import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
+import { prepareDroppedDriveUpload } from "./externalFileDrop";
 import type {
   DriveBox,
   DriveBoxPurpose,
@@ -24,6 +25,7 @@ import type {
   DriveDocumentDetails,
   DriveHealth,
   DriveEngineeringMetadata,
+  DriveFolder,
   DriveLayoutMode,
   DrivePermission,
   DriveStorageQuota,
@@ -113,6 +115,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [externalDragActive, setExternalDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
@@ -309,6 +313,77 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     } finally { setBusy(false); }
   }
 
+  function isExternalFileDrag(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types || []).includes("Files");
+  }
+
+  function handleExternalDragEnter(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event) || !canWrite) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setExternalDragActive(true);
+  }
+
+  function handleExternalDragOver(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event) || !canWrite) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleExternalDragLeave(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setExternalDragActive(false);
+  }
+
+  async function handleExternalDrop(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event) || !canWrite) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setExternalDragActive(false);
+
+    if (!health?.storage?.realObjectWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setNotice("A behúzott fájl- és mappastruktúra feldolgozása…");
+    try {
+      const prepared = await prepareDroppedDriveUpload({
+        projectId,
+        dataTransfer: event.dataTransfer,
+        selectedFolderId,
+        selectedFolder,
+        existingFolders: tree?.folders || [],
+      });
+
+      if (!prepared.fileCount) {
+        await load();
+        setNotice(
+          `${prepared.createdFolderCount} mappa létrehozva.${prepared.reusedFolderCount ? ` ${prepared.reusedFolderCount} meglévő mappa újrahasználva.` : ""}`,
+        );
+        return;
+      }
+
+      setBusy(false);
+      for (const group of prepared.groups) {
+        await uploadFiles(group.files, group.folder);
+      }
+      await load();
+      setNotice(
+        `${prepared.fileCount} fájl feldolgozva${prepared.createdFolderCount ? ` · ${prepared.createdFolderCount} mappa létrehozva.` : "."}`,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A behúzott fájlok vagy mappák feldolgozása sikertelen.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function requestUpload() {
     if (!canWrite) return;
     if (selectedFolderId === "all") {
@@ -322,9 +397,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     fileInputRef.current?.click();
   }
 
-  async function uploadFiles(files: File[]) {
-    if (!files.length || !selectedFolder || !canWrite) return;
-    const targetFolder = selectedFolder;
+  async function uploadFiles(files: File[], targetFolderOverride?: DriveFolder | null) {
+    const targetFolder = targetFolderOverride || selectedFolder;
+    if (!files.length || !targetFolder || !canWrite) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -868,7 +943,14 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const breadcrumbParts = selectedFolder?.path.split("/").filter(Boolean) || [];
 
   return (
-    <div className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}>
+
+<div
+  className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}
+  onDragEnter={handleExternalDragEnter}
+  onDragOver={handleExternalDragOver}
+  onDragLeave={handleExternalDragLeave}
+  onDrop={(event) => void handleExternalDrop(event)}
+>
       <header className={styles.projectHeader}>
         <div className={styles.projectIdentity}>
           <div className={styles.projectIcon}><Building2 size={18} /></div>
@@ -925,6 +1007,15 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onToggleCompare={toggleCompare}
       />
       <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
+
+{externalDragActive && (
+  <div className={styles.externalDropOverlay} aria-live="polite">
+    <div>
+      <strong>Engedd el a fájlokat vagy mappákat</strong>
+      <span>{selectedFolder ? "Cél: " + selectedFolder.path : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span>
+    </div>
+  </div>
+)}
 
       <div className={styles.breadcrumb}>
         <span>Dokumentumtár</span>
@@ -1132,6 +1223,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               canWrite={canWrite}
               canComment={canComment}
               canApprove={canApprove}
+              canDelete={canDelete}
               membershipRole={membershipRole}
               membershipDisplayName={membershipDisplayName}
               securityReady={securityReady}
