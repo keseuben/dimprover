@@ -496,3 +496,11 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A normál ChatGPT conversation linkek továbbra is ugyanabban a worker-cellában maradnak, más külső HTTPS linkek az operációs rendszer böngészőjében nyílnak.
 - A Work first-party adapter aktiválása v0.1.61-re került; a v0.1.60 célzott Task Inspector olvashatósági patch.
 - DEV ONLY · PROD DENY.
+
+
+## v0.1.85 Launch resume — current draft send + stable proof reuse
+
+- Az INDÍTÁS FOLYTATÁSA nem forgat új Central Core source proofot, ha a jelenlegi task/session már VERIFIED + READY, scope lockkal és worktree lease-szel rendelkezik, és a source provenance pontosan egyezik.
+- Ha a ChatGPT composerben már a jelenlegi task/session/current source proof saját TASK_LAUNCH_V3 draftja van, a Grid nem próbál új promptot ráírni. A meglévő draftot közvetlenül, ellenőrzött automatikus send útvonalon küldi el.
+- Stale source proofos draft esetén a korábbi fail-closed törlés + friss prompt logika marad. Idegen task/session vagy nem igazolható draft továbbra sem írható felül.
+- Sikeres automatikus küldés után SENT + BOOT ACK WAITING állapot és a meglévő BOOT ACK monitor indul. DEV ONLY · PROD DENY.

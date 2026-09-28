@@ -2945,6 +2945,91 @@ function assignedWorkerCodeFromWork(work) {
   return raw === "BENJAMINAI" ? "BENAI" : raw;
 }
 
+function reusableLaunchExecutionProof(task, session) {
+  const ctx = session?.developmentContext || {};
+  const proof = ctx?.sourceExecutionProof || null;
+  const provenance = session?.sourceProvenance || null;
+  const proofSha256 = String(proof?.sha256 || "").trim().toLowerCase();
+  const proofReady = Boolean(
+    proof?.state === "VERIFIED"
+    && proof?.authority === "CENTRAL_CORE"
+    && proof?.handshakeStage === "READY"
+    && Number(proof?.activeScopeLockCount || 0) >= 1
+    && Number(proof?.activeWorktreeLeaseCount || 0) >= 1
+    && proof?.productionAccess === "DENY"
+    && /^[0-9a-f]{64}$/.test(proofSha256)
+  );
+  const provenanceReady = Boolean(
+    provenance?.sourceState === "VERIFIED"
+    && !provenance?.blockCode
+    && String(provenance?.taskId || "") === String(task?.id || "")
+    && String(provenance?.sessionId || "") === String(session?.id || "")
+    && String(provenance?.worker || "").toUpperCase() === String(session?.workerCode || "").toUpperCase()
+    && String(provenance?.repository || "") === String(proof?.repository || "")
+    && String(provenance?.worktree || "") === String(proof?.worktree || "")
+    && String(provenance?.branch || "") === String(proof?.branch || "")
+    && String(provenance?.head || "") === String(proof?.head || "")
+  );
+  return {
+    ok: proofReady && provenanceReady,
+    proofSha256,
+    proof,
+    provenance,
+    reason: proofReady ? (provenanceReady ? "ready" : "provenance-mismatch") : "proof-not-ready",
+  };
+}
+
+async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launchTask, decision, baselineResponseSha256 = "" }) {
+  const identity = decision?.identity || {};
+  if (
+    decision?.reason !== "current-proof"
+    || identity?.kind !== "TASK_LAUNCH_V3"
+    || String(identity?.taskId || "") !== String(task?.id || "")
+    || String(identity?.sessionId || "") !== String(launchTask?.sessionId || "")
+    || !/^[0-9a-f]{64}$/.test(String(identity?.sourceProofSha256 || "").toLowerCase())
+  ) {
+    return { ok:false, code:"OWNED_TASK_DRAFT_NOT_CURRENT", error:"A meglévő TASK_LAUNCH draft nem bizonyítottan a jelenlegi task/session/source proof példánya." };
+  }
+
+  const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
+  if (sent?.sent !== true || sent?.verified !== true) {
+    const chatLaunch = saveTaskLaunchPatch(task, workerCode, {
+      autoSendState:"AUTO_SEND_BLOCKED",
+      autoSendError:sent?.reason || "not-verified",
+      ackState:"WAITING",
+      sourceProofSha256:String(identity.sourceProofSha256 || "").toLowerCase(),
+    });
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    return {
+      ok:false,
+      code:"OWNED_TASK_DRAFT_SEND_NOT_VERIFIED",
+      chatLaunch,
+      sendResult:sent,
+      error:"A jelenlegi task saját Launch Packet draftja megvan, de az automatikus elküldés nem volt igazolható.",
+    };
+  }
+
+  const chatLaunch = saveTaskLaunchPatch(task, workerCode, {
+    preparedAt:new Date().toISOString(),
+    sentAt:new Date().toISOString(),
+    autoSendState:"SENT",
+    ackState:"WAITING",
+    ackMismatches:[],
+    sourceProofSha256:String(identity.sourceProofSha256 || "").toLowerCase(),
+    baselineResponseSha256:String(baselineResponseSha256 || ""),
+    existingDraftResumedAt:new Date().toISOString(),
+  });
+  void monitorWorkerBootAck({ view, task:launchTask, workerCode, baselineResponseSha256:String(baselineResponseSha256 || "") }).catch(() => undefined);
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  return {
+    ok:true,
+    mode:"sent-existing-draft",
+    chatLaunch,
+    sendResult:sent,
+    message:"A jelenlegi task saját, aktuális source proofhoz tartozó Launch Packet draftja automatikusan elküldve. BOOT ACK validáció folyamatban.",
+  };
+}
+
 async function initializeTaskChatPlan(work, requestedMode, conversationGuards = []) {
   const task = work?.task;
   const code = assignedWorkerCodeFromWork(work);
@@ -6289,16 +6374,23 @@ function registerIpc() {
       }
 
       const previousSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
+      const reusableProof = reusableLaunchExecutionProof(task, session);
+      let sourceProofRefreshed = false;
 
-      const recoveredExecution = await recoverDeveloperGridLaunchExecution({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      activeWork = recoveredExecution?.activeWork || await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-      task = activeWork?.task || null;
-      session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
-      if (!task || !session) return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az authoritative task/session nem olvasható." };
-      if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"A READY recovery után a task source provenance állapota nem aktuális. Launch Packet nem küldhető." };
+      if (!reusableProof.ok) {
+        const recoveredExecution = await recoverDeveloperGridLaunchExecution({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+        activeWork = recoveredExecution?.activeWork || await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+        task = activeWork?.task || null;
+        session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
+        if (!task || !session) return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az authoritative task/session nem olvasható." };
+        if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"A READY recovery után a task source provenance állapota nem aktuális. Launch Packet nem küldhető." };
+        const recoveredProof = reusableLaunchExecutionProof(task, session);
+        if (!recoveredProof.ok) return { ok:false, code:"ACTIVE_TASK_SOURCE_PROOF_REQUIRED", error:"A READY recovery után sincs újrahasználható, VERIFIED/READY Central Core source proof; Launch Packet tiltva." };
+        sourceProofRefreshed = recoveredProof.proofSha256 !== previousSourceProofSha256;
+      }
+
       const currentSourceProofSha256 = String(session?.developmentContext?.sourceExecutionProof?.sha256 || "").toLowerCase();
-      if (!currentSourceProofSha256) return { ok:false, code:"ACTIVE_TASK_SOURCE_PROOF_REQUIRED", error:"A READY recovery nem adott Central Core source proofot; Launch Packet tiltva." };
-      const sourceProofRefreshed = currentSourceProofSha256 !== previousSourceProofSha256;
+      if (!currentSourceProofSha256) return { ok:false, code:"ACTIVE_TASK_SOURCE_PROOF_REQUIRED", error:"A task nem rendelkezik Central Core source prooffal; Launch Packet tiltva." };
       const work = { task, session };
       const code = assignedWorkerCodeFromWork(work);
       const launchTask = launchTaskFromWork(work, null);
@@ -6365,6 +6457,21 @@ function registerIpc() {
           ackSha256:null,
           ackMismatches:[],
         });
+      } else if (staleDraftRecovery?.decision?.reason === "current-proof") {
+        const baselineCapture = await captureLatestAssistantText(view).catch(() => null);
+        const baselineResponseSha256 = baselineCapture?.ok
+          ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex")
+          : "";
+        const resumedDraft = await sendExistingOwnedTaskLaunchDraft({
+          view,
+          task,
+          workerCode:code,
+          launchTask,
+          decision:staleDraftRecovery.decision,
+          baselineResponseSha256,
+        });
+        send("context:refresh", { reason:resumedDraft?.ok ? "task-launch-existing-draft-sent" : "task-launch-existing-draft-blocked", taskId:task.id, sessionId:session.id });
+        return { ok:resumedDraft?.ok === true, activeWork, taskLaunch:resumedDraft, error:resumedDraft?.ok ? null : resumedDraft?.error };
       }
 
       if (!expectedConversationId) {

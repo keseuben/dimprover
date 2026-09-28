@@ -9,8 +9,8 @@ const types = fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),
 const pkg = JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package.json"),"utf8"));
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-check("desktop version v0.1.73",()=>assert.equal(pkg.version,"0.1.84"));
-check("backend version v0.1.73-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.84-dev"/));
+check("desktop version v0.1.73",()=>assert.equal(pkg.version,"0.1.85"));
+check("backend version v0.1.73-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.85-dev"/));
 check("memory identity keeps authoritative and local conversation ids separate",()=>{
   assert.match(main,/const authoritativeConversationId = String\(/);
   assert.match(main,/const localConversationId = String\(/);
