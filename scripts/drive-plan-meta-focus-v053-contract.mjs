@@ -11,11 +11,11 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log("PASS " + name); };
 
-check("engineering columns are Name PlanNo Scale FileName", () => {
-  assert.match(grid, /<th>Név<\/th><th>Tervszám<\/th><th>Lépték<\/th><th>Fájlnév<\/th>/);
+check("engineering columns are PlanNo Name Scale FileName", () => {
+  assert.match(grid, /<th>Tervszám<\/th><th>Név<\/th><th>Lépték<\/th><th>Fájlnév<\/th>/);
 });
-check("review columns are Name PlanNo Scale FileName", () => {
-  assert.match(grid, /Megjelenített tervnév">Név<\/th>[\s\S]{0,250}Tervszám">Tervszám<\/th>[\s\S]{0,250}Tervlépték">Lépték<\/th>[\s\S]{0,250}Eredeti fájlnév">Fájlnév<\/th>/);
+check("review columns are PlanNo Name Scale FileName", () => {
+  assert.match(grid, /Tervszám">Tervszám<\/th>[\s\S]{0,250}Megjelenített tervnév">Név<\/th>[\s\S]{0,250}Tervlépték">Lépték<\/th>[\s\S]{0,250}Eredeti fájlnév">Fájlnév<\/th>/);
 });
 check("review document group and folder row account for new column", () => {
   assert.match(grid, /<th colSpan=\{9\}>Dokumentum<\/th>/);
@@ -57,7 +57,7 @@ check("project workspace routes metadata cells to Details tab", () => {
   assert.match(project, /setDetailsFocus\(\{ documentId, field \}\)/);
 });
 check("project legacy review also exposes plan number and scale", () => {
-  assert.match(project, /<th>Terv<\/th><th>Tervszám<\/th><th>Lépték<\/th><th>Szakág<\/th>/);
+  assert.match(project, /<th>Tervszám<\/th><th>Név<\/th><th>Lépték<\/th><th>Szakág<\/th>/);
   assert.match(project, /openReviewDetail\(row\.document\.id, "planNo"\)/);
   assert.match(project, /openReviewDetail\(row\.document\.id, "scales"\)/);
 });
