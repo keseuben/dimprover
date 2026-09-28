@@ -15,6 +15,7 @@ import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
+import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import type {
   DriveBox,
   DriveBoxPurpose,
@@ -868,6 +869,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         <div className={styles.headerActions}>
           <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
+          <HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} />
           <div className={styles.userPill}><span className={styles.avatar}>D</span><div><strong>DIMPRO felhasználó</strong><span>Projekt hozzáférés</span></div></div>
         </div>
       </header>
@@ -879,6 +881,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onLayoutModeChange={setLayoutMode}
         tableFullscreen={tableFullscreen}
         onToggleTableFullscreen={toggleTableFullscreen}
+        tableZoom={tableZoom}
+        onTableZoomChange={setTableZoom}
         canWrite={canWrite}
         onCreateFolder={() => void createFolder()}
         onUpload={requestUpload}
@@ -1008,6 +1012,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             onSelectDocument={(document) => setSelectedDocumentId(document.id)}
             onOpenDocument={(document) => void openDocument(document)}
             onMoveDocument={moveDocument}
+            tableZoom={tableZoom}
+            dragPanEnabled
           />
         ) : (
           <>
@@ -1045,6 +1051,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               busy={busy}
               onBulkReview={bulkReview}
               onOpenReviewDetail={openReviewDetail}
+              tableZoom={tableZoom}
+              dragPanEnabled
             />
             {layoutMode === "split" && (
               <div

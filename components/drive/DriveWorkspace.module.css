@@ -125,6 +125,22 @@
 .headerActions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .headerAction { border: 0; background: transparent; color: #273a51; display: inline-flex; align-items: center; gap: 6px; font-size: var(--drive-font-sm); font-weight: 800; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
 .headerAction:hover { background: #f3f7fa; }
+.headerLogout {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #f1b7b7;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #d62d2d;
+  cursor: pointer;
+}
+.headerLogout:hover {
+  border-color: #e35f5f;
+  background: #ffeaea;
+  color: #b71919;
+}
 .userPill { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
 .avatar { width: 30px; height: 30px; border-radius: 50%; background: #176bff; color: white; display: grid; place-items: center; font-size: var(--drive-font-sm); font-weight: 900; }
 .userPill strong { font-size: var(--drive-font-sm); display: block; }
@@ -2453,3 +2469,24 @@
     display: none;
   }
 }
+
+.tableZoomControlsCompact {
+  height: 34px;
+  border-radius: 8px;
+}
+.tableZoomControlsCompact button {
+  height: 32px;
+}
+.commanderListInner {
+  min-width: 100%;
+  width: max-content;
+}
+.commanderGrip {
+  width: 14px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: #a4b1bd;
+  cursor: grab;
+}
+.commanderGrip:active { cursor: grabbing; }

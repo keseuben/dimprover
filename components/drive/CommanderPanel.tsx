@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -25,6 +25,8 @@ type Props = {
   onSelectDocument: (document: DriveDocument) => void;
   onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
+  tableZoom?: number;
+  dragPanEnabled?: boolean;
 };
 
 type PaneProps = {
@@ -41,6 +43,8 @@ type PaneProps = {
   onSelectDocument: (document: DriveDocument) => void;
   onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
+  tableZoom: number;
+  dragPanEnabled: boolean;
 };
 
 function formatBytes(value: number) {
@@ -86,6 +90,8 @@ function CommanderPane({
   onSelectDocument,
   onOpenDocument,
   onMoveDocument,
+  tableZoom,
+  dragPanEnabled,
 }: PaneProps) {
   const folder = folders.find((entry) => entry.id === folderId) || null;
   const paneDocuments = useMemo(
@@ -101,6 +107,83 @@ function CommanderPane({
     for (const document of documents) counts.set(document.folderId, (counts.get(document.folderId) || 0) + 1);
     return counts;
   }, [documents]);
+
+  const panStateRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    startTop: 0,
+    active: false,
+    moved: false,
+    timer: null as ReturnType<typeof setTimeout> | null,
+  });
+  const suppressPanClickRef = useRef(false);
+  const [panning, setPanning] = useState(false);
+
+  const clearPanTimer = () => {
+    if (panStateRef.current.timer) clearTimeout(panStateRef.current.timer);
+    panStateRef.current.timer = null;
+  };
+
+  const handlePanPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragPanEnabled || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button,input,select,textarea,a,label,[draggable='true']")) return;
+    clearPanTimer();
+    suppressPanClickRef.current = false;
+    const scroller = event.currentTarget;
+    const pointerId = event.pointerId;
+    panStateRef.current = {
+      pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: scroller.scrollLeft,
+      startTop: scroller.scrollTop,
+      active: false,
+      moved: false,
+      timer: setTimeout(() => {
+        if (panStateRef.current.pointerId !== pointerId) return;
+        panStateRef.current.active = true;
+        setPanning(true);
+        try { scroller.setPointerCapture(pointerId); } catch { /* optional */ }
+      }, 180),
+    };
+  };
+
+  const handlePanPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panStateRef.current;
+    if (!dragPanEnabled || state.pointerId !== event.pointerId || !state.active) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) state.moved = true;
+    event.currentTarget.scrollLeft = state.startLeft - dx;
+    event.currentTarget.scrollTop = state.startTop - dy;
+    event.preventDefault();
+  };
+
+  const finishPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panStateRef.current;
+    if (state.pointerId !== event.pointerId) return;
+    clearPanTimer();
+    if (state.active && state.moved) suppressPanClickRef.current = true;
+    setPanning(false);
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch { /* optional */ }
+    panStateRef.current.pointerId = -1;
+    panStateRef.current.active = false;
+    window.setTimeout(() => { suppressPanClickRef.current = false; }, 0);
+  };
+
+  const suppressPanClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressPanClickRef.current) return;
+    suppressPanClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  useEffect(() => () => clearPanTimer(), []);
 
   async function onDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
@@ -130,7 +213,15 @@ function CommanderPane({
         </select>
       </header>
       <div className={styles.commanderPath}>{folder?.path || "Dokumentumtár"}</div>
-      <div className={styles.commanderList}>
+      <div
+        className={`${styles.commanderList} ${dragPanEnabled ? styles.tablePanEnabled : ""} ${panning ? styles.tablePanning : ""}`}
+        onPointerDown={handlePanPointerDown}
+        onPointerMove={handlePanPointerMove}
+        onPointerUp={finishPan}
+        onPointerCancel={finishPan}
+        onClickCapture={suppressPanClick}
+      >
+        <div className={styles.commanderListInner} style={{ zoom: tableZoom / 100 }}>
         {folder?.parentId && (
           <button type="button" className={styles.commanderFolderRow} onClick={() => onFolderChange(folder.parentId || "")} title="Vissza a szülőmappába">
             <FolderUp size={13} /><strong>[..] Szülőmappa</strong><span>Vissza</span>
@@ -148,16 +239,20 @@ function CommanderPane({
             <div
               key={document.id}
               className={`${styles.commanderFileRow} ${selected ? styles.commanderFileSelected : ""}`}
-              draggable={canWrite && moveReady}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: document.currentVersion?.id || null, sourceFolderId: document.folderId }));
-              }}
+              draggable={false}
               onClick={() => onSelectDocument(document)}
               onDoubleClick={() => onOpenDocument(document)}
               title="Kattintás: kijelölés · Dupla kattintás: megnyitás"
             >
-              <GripVertical size={11} className={styles.commanderGrip} />
+              <span
+                className={styles.commanderGrip}
+                draggable={canWrite && moveReady}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: document.currentVersion?.id || null, sourceFolderId: document.folderId }));
+                }}
+                title="Fogd meg itt a fájl áthelyezéséhez"
+              ><GripVertical size={11} /></span>
               <span className={commanderFileIconClass(document.extension)}>{fileIcon(document.extension)}</span>
               <div className={styles.commanderFileName}><strong>{document.name}</strong><span>{document.extension.toUpperCase() || "FILE"} · {formatBytes(document.currentVersion?.sizeBytes || 0)}</span></div>
               <span className={styles.commanderRevision}>{document.currentVersion?.revisionCode || `V${document.currentVersionNumber}`}</span>
@@ -175,6 +270,7 @@ function CommanderPane({
           );
         })}
         {!childFolders.length && !paneDocuments.length && <div className={styles.commanderEmpty}>A mappa üres. Fájlt a másik panelből ide húzhatsz.</div>}
+        </div>
       </div>
       <footer className={styles.commanderPaneFooter}>
         <span>{childFolders.length} mappa</span><span>{paneDocuments.length} fájl</span>
@@ -194,6 +290,8 @@ export default function CommanderPanel({
   onSelectDocument,
   onOpenDocument,
   onMoveDocument,
+  tableZoom = 100,
+  dragPanEnabled = false,
 }: Props) {
   const initialLeft = folders[0]?.id || "";
   const initialRight = folders.find((folder) => folder.id !== initialLeft)?.id || initialLeft;
@@ -228,6 +326,8 @@ export default function CommanderPanel({
           onSelectDocument={onSelectDocument}
           onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
+          tableZoom={tableZoom}
+          dragPanEnabled={dragPanEnabled}
         />
         <div className={styles.commanderDivider} aria-hidden="true" />
         <CommanderPane
@@ -244,6 +344,8 @@ export default function CommanderPanel({
           onSelectDocument={onSelectDocument}
           onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
+          tableZoom={tableZoom}
+          dragPanEnabled={dragPanEnabled}
         />
       </div>
     </div>

@@ -13,6 +13,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import DropActionButton from "./DropActionButton";
+import TableZoomControls from "./TableZoomControls";
 import ViewLayoutSwitcher from "./ViewLayoutSwitcher";
 import type { DriveLayoutMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
@@ -24,6 +25,8 @@ type Props = {
   onLayoutModeChange: (value: DriveLayoutMode) => void;
   tableFullscreen?: boolean;
   onToggleTableFullscreen?: () => void;
+  tableZoom?: number;
+  onTableZoomChange?: (value: number) => void;
   canWrite: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
@@ -48,6 +51,8 @@ export default function DriveToolbar({
   onLayoutModeChange,
   tableFullscreen = false,
   onToggleTableFullscreen,
+  tableZoom = 100,
+  onTableZoomChange,
   canWrite,
   onCreateFolder,
   onUpload,
@@ -149,6 +154,7 @@ export default function DriveToolbar({
           aria-label="Drive keresés"
         />
       </label>
+      {onTableZoomChange && <TableZoomControls zoom={tableZoom} onZoomChange={onTableZoomChange} compact />}
       <ViewLayoutSwitcher value={layoutMode} onChange={onLayoutModeChange} tableFullscreen={tableFullscreen} onToggleTableFullscreen={onToggleTableFullscreen} />
     </div>
   );

@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
+import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import {
   D6_MODULES,
   DEFAULT_PROJECT_ID,
@@ -534,6 +535,7 @@ export default function ProjectGateShell({ projectId = DEFAULT_PROJECT_ID, activ
             </button>
             <button type="button" className={styles.headerIconButton} title="Értesítések" aria-label="Értesítések"><Bell size={18} /><b>3</b></button>
             <button type="button" className={styles.headerIconButton} title="Súgó" aria-label="Súgó"><HelpCircle size={18} /></button>
+            <HeaderLogoutIconButton className={`${styles.headerIconButton} ${styles.headerLogout}`} iconSize={18} />
             <div className={styles.userPill}>
               <span className={styles.avatar}>{userInitials(displayName)}</span>
               <div><strong>{displayName}</strong><span>{displayRole}</span></div>

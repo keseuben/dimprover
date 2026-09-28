@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const switcher = readFileSync("components/drive/ViewLayoutSwitcher.tsx", "utf8");
 const bar = readFileSync("components/drive/TableFullscreenBar.tsx", "utf8");
+const zoomControls = readFileSync("components/drive/TableZoomControls.tsx", "utf8");
 const toolbar = readFileSync("components/drive/DriveToolbar.tsx", "utf8");
 const grid = readFileSync("components/drive/FileGridPanel.tsx", "utf8");
 const workspace = readFileSync("components/drive/DriveWorkspace.tsx", "utf8");
@@ -28,11 +29,11 @@ check("Projectkapu Drive renders fullscreen table overlay", () => assert.match(p
 check("main Drive exits fullscreen table with Escape", () => assert.match(workspace, /fullscreenchange/));
 check("Projectkapu Drive exits fullscreen table with Escape", () => assert.match(projectGate, /fullscreenchange/));
 check("fullscreen table has 70-150 percent zoom limits", () => {
-  assert.match(bar, /Math\.max\(70, Math\.min\(150/);
-  assert.match(bar, /zoom <= 70/);
-  assert.match(bar, /zoom >= 150/);
+  assert.match(zoomControls, /Math\.max\(70, Math\.min\(150/);
+  assert.match(zoomControls, /zoom <= 70/);
+  assert.match(zoomControls, /zoom >= 150/);
 });
-check("zoom value resets to 100 percent", () => assert.match(bar, /onZoomChange\(100\)/));
+check("zoom value resets to 100 percent", () => assert.match(zoomControls, /onZoomChange\(100\)/));
 check("zoom is applied to engineering and review tables", () => {
   assert.match(grid, /reviewTable} style=\{\{ zoom: tableZoom \/ 100 \}\}/);
   assert.match(grid, /fileTable} style=\{\{ zoom: tableZoom \/ 100 \}\}/);

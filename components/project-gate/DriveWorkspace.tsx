@@ -38,6 +38,7 @@ import DetailsPanel from "@/components/drive/DetailsPanel";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
 import TableFullscreenBar from "@/components/drive/TableFullscreenBar";
+import TableZoomControls from "@/components/drive/TableZoomControls";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
 import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
@@ -1984,7 +1985,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 <span>Mérnöki Drive</span>
                 <strong>{engineeringTitle}</strong>
               </div>
-              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={toggleTableFullscreen} />
+              <div className={styles.engineeringHeaderActions}>
+                <TableZoomControls zoom={tableZoom} onZoomChange={setTableZoom} compact />
+                <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={toggleTableFullscreen} />
+              </div>
             </header>
             <div className={engineeringBrowserClass}>
               {engineeringLayoutMode === "commander" ? (
@@ -1998,6 +2002,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onSelectDocument={(document) => setSelectedDocumentId(document.id)}
                   onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                   onMoveDocument={moveDocument}
+                  tableZoom={tableZoom}
+                  dragPanEnabled
                 />
               ) : (
                 <>
@@ -2020,6 +2026,22 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                     onRefresh={() => void load()}
                     boxColorsByDocument={boxColorsByDocument}
+                    metadataByDocument={metadataByDocument}
+                    folders={tree?.folders || []}
+                    selectedFolderId={selectedFolderId}
+                    currentFolder={selectedFolder}
+                    onFolderChange={setSelectedFolderId}
+                    onNavigateParent={() => {
+                      if (!selectedFolder) return;
+                      setSelectedFolderId(selectedFolder.parentId || "all");
+                    }}
+                    canWrite={canWrite}
+                    canApprove={canApprove}
+                    busy={busy}
+                    onBulkReview={bulkReview}
+                    onOpenReviewDetail={(document, field) => openReviewDetail(document.id, field)}
+                    tableZoom={tableZoom}
+                    dragPanEnabled
                   />
                   <DetailsPanel
                     projectId={projectId}
