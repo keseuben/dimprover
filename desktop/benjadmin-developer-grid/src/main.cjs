@@ -2137,7 +2137,7 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
   if (!view || view.webContents.isDestroyed()) return { sent: false, reason: "chat-unavailable" };
   await waitForChatComposer(view);
   const markerLiteral = JSON.stringify(String(expectedMarker || ""));
-  return view.webContents.executeJavaScript(`(async () => {
+  const firstAttempt = await view.webContents.executeJavaScript(`(async () => {
     const marker = ${markerLiteral};
     const selectors = ${composerSelectorLiteral()};
     let composer = null;
@@ -2168,6 +2168,35 @@ async function sendPreparedChatPrompt(view, expectedMarker = "") {
     }
     return { sent:true, verified:false, reason:'send-not-observed' };
   })()`, true).catch(() => ({ sent:false, reason:"execute-failed" }));
+
+  if (firstAttempt?.verified === true) return firstAttempt;
+  if (["marker-mismatch","composer-not-found","execute-failed"].includes(String(firstAttempt?.reason || ""))) return firstAttempt;
+
+  const draft = await captureComposerDraftText(view).catch(() => null);
+  if (!draft?.ok || (marker && !String(draft.text || "").includes(marker))) {
+    if (draft?.ok && !String(draft.text || "").trim()) {
+      return { sent:true, verified:true, mode:"dom-send-late-observed", firstAttempt };
+    }
+    return { ...firstAttempt, verified:false, nativeFallback:false, draft };
+  }
+
+  try {
+    view.webContents.focus();
+    view.webContents.sendInputEvent({ type:"keyDown", keyCode:"ENTER" });
+    view.webContents.sendInputEvent({ type:"keyUp", keyCode:"ENTER" });
+  } catch {
+    return { sent:false, verified:false, reason:"native-enter-failed", firstAttempt };
+  }
+
+  const transcriptProof = await verifyPromptMarkerInTranscript(view, marker, 8000).catch(() => null);
+  if (transcriptProof?.verified) {
+    return { sent:true, verified:true, mode:"native-enter", firstAttempt, transcriptProof };
+  }
+  const afterNative = await captureComposerDraftText(view).catch(() => null);
+  if (afterNative?.ok && !String(afterNative.text || "").trim()) {
+    return { sent:true, verified:true, mode:"native-enter-composer-cleared", firstAttempt, transcriptProof, afterNative };
+  }
+  return { sent:false, verified:false, reason:"native-enter-not-observed", firstAttempt, transcriptProof, afterNative };
 }
 
 
@@ -2520,10 +2549,27 @@ async function captureLatestBootAckCandidate(view) {
   if (latest?.generating) return latest;
   if (latest?.ok && isBootAckCandidateText(latest.text)) return { ...latest, candidateSource:"LATEST_ASSISTANT" };
   const transcript = await captureConversationTranscript(view);
-  if (!transcript?.ok || transcript.generating || !Array.isArray(transcript.messages)) return latest;
-  const candidate = [...transcript.messages].reverse().find((item) => item?.role === "ASSISTANT" && isBootAckCandidateText(item?.text));
-  if (!candidate) return latest;
-  return { ok:true, generating:false, text:String(candidate.text || ""), candidateSource:"TRANSCRIPT_HISTORY", messageId:candidate.messageId || null };
+  if (transcript?.ok && !transcript.generating && Array.isArray(transcript.messages)) {
+    const candidate = [...transcript.messages].reverse().find((item) => item?.role === "ASSISTANT" && isBootAckCandidateText(item?.text));
+    if (candidate) return { ok:true, generating:false, text:String(candidate.text || ""), candidateSource:"TRANSCRIPT_HISTORY", messageId:candidate.messageId || null };
+  }
+
+  if (!view || view.webContents.isDestroyed()) return latest;
+  const rawFallback = await view.webContents.executeJavaScript(`(() => {
+    const nodes = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"],[data-message-id],article'));
+    for (let i = nodes.length - 1; i >= 0; i -= 1) {
+      const node = nodes[i];
+      const text = String(node.innerText || node.textContent || '').trim();
+      if (!/BOOT\s+ACKNOWLEDGEMENT/i.test(text)) continue;
+      if (!/MUNKAFELV[ÉE]TEL\s*:\s*\d{4}[.\/-]\d{2}[.\/-]\d{2}/i.test(text)) continue;
+      if (!/Coding\s+allowed\s*:\s*(YES|NO)\b/i.test(text)) continue;
+      if (!/Source\s+proof\s*:\s*[a-f0-9]{64}\b/i.test(text)) continue;
+      return { ok:true, generating:false, text:text.slice(0,190000), messageId:String(node.getAttribute?.('data-message-id') || node.getAttribute?.('data-testid') || 'raw-turn-'+i) };
+    }
+    return { ok:false, generating:false, reason:'boot-ack-raw-turn-not-found' };
+  })()`, true).catch(() => ({ ok:false, generating:false, reason:"raw-turn-execute-failed" }));
+  if (rawFallback?.ok) return { ...rawFallback, candidateSource:"RAW_TURN_FALLBACK" };
+  return latest;
 }
 
 async function processCapturedBootAck({ view, body, task, workerCode, baselineResponseSha256 = "", sendContinuation = true, source = "MONITOR" }) {
