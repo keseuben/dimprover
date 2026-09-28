@@ -13,7 +13,7 @@ const css=readFileSync("components/project-gate/DriveWorkspace.module.css","utf8
 let pass=0;
 const check=(name,fn)=>{fn();pass++;console.log("PASS "+name);};
 
-check("ProjectGate exposes engineering browser mode",()=>assert.match(ui,/BrowserViewMode = "list" \| "engineering" \| "split" \| "viewer" \| "compare"/)&&assert.match(ui,/> Mérnöki<\/button>/));
+check("ProjectGate exposes engineering browser mode",()=>assert.match(ui,/BrowserViewMode = "list" \| "engineering" \| "review" \| "split" \| "viewer" \| "compare"/)&&assert.match(ui,/> Mérnöki<\/button>/));
 check("ProjectGate reuses shared layout switcher",()=>assert.match(ui,/import ViewLayoutSwitcher/)&&assert.match(ui,/<ViewLayoutSwitcher value=\{engineeringLayoutMode\}/));
 check("Shared layout switcher contains 3 2 1 split commander modes",()=>{
   assert.match(layout,/value: "three"/);

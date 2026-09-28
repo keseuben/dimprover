@@ -16,8 +16,13 @@ const modes: Array<{ value: DriveLayoutMode; label: string; icon: typeof Columns
   { value: "two", label: "2 paneles nézet", icon: Columns2 },
   { value: "one", label: "1 paneles nézet", icon: Square },
   { value: "split", label: "Osztott nézet", icon: Rows3 },
-  { value: "commander", label: "Commander – kétpaneles fájlkezelő", icon: PanelsLeftRight },
 ];
+
+const commanderMode: { value: DriveLayoutMode; label: string; icon: typeof Columns3 } = {
+  value: "commander",
+  label: "Commander – kétpaneles fájlkezelő",
+  icon: PanelsLeftRight,
+};
 
 export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = false, onToggleTableFullscreen }: Props) {
   return (
@@ -49,6 +54,15 @@ export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = 
           <Table2 size={14} />
         </button>
       )}
+      <button
+        type="button"
+        className={value === commanderMode.value ? styles.layoutActive : ""}
+        onClick={() => onChange(commanderMode.value)}
+        title={commanderMode.label}
+        aria-label={commanderMode.label}
+      >
+        <PanelsLeftRight size={14} />
+      </button>
     </div>
   );
 }

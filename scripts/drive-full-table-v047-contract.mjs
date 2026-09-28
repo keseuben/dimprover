@@ -15,11 +15,11 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log(`PASS ${name}`); };
 
-check("full table special button is after Commander", () => {
-  const commander = switcher.indexOf('value: "commander"');
-  const modesEnd = switcher.indexOf("];", commander);
+check("full table special button is between Split and Commander", () => {
+  const split = switcher.indexOf('value: "split"');
   const table = switcher.indexOf("onToggleTableFullscreen &&");
-  assert.ok(commander >= 0 && modesEnd > commander && table > modesEnd);
+  const commander = switcher.indexOf("onChange(commanderMode.value)", table);
+  assert.ok(split >= 0 && table > split && commander > table);
 });
 
 check("full table button has a dedicated visual class", () => assert.match(switcher, /layoutTableSpecial/));

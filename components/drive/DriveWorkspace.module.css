@@ -447,9 +447,9 @@
 .commanderHeader strong { display: block; font-size: 11px; color: #243950; }
 .commanderHeader span { display: block; margin-top: 3px; color: #6c8094; font-size: var(--drive-font-xs); }
 .commanderHeaderActions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
-.commanderHeaderActions > button { min-height: 28px; border: 1px solid #d7e1ea; border-radius: 6px; background: #fff; color: #4d647b; padding: 0 8px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.commanderHeaderActions > button { min-height: 28px; border: 1px solid #d7e1ea; border-radius: 6px; background: #fff; color: #4d647b; padding: 0 8px; font-size: var(--drive-font-xs); font-weight: 800; cursor: pointer; }
 .commanderHeaderActions > button:disabled { opacity: .42; cursor: default; }
-.commanderSelectAll { display: inline-flex; align-items: center; gap: 5px; color: #50677e; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.commanderSelectAll { display: inline-flex; align-items: center; gap: 5px; color: #50677e; font-size: var(--drive-font-xs); font-weight: 800; white-space: nowrap; }
 .commanderSelectAll input { width: 14px; height: 14px; accent-color: #5b48d8; }
 .commanderDeleteButton { border-color: #efb6b6 !important; background: #fff5f5 !important; color: #c92727 !important; display: inline-flex; align-items: center; gap: 4px; }
 .commanderDeleteButton:hover:not(:disabled) { background: #ffe9e9 !important; border-color: #e16b6b !important; }
@@ -1474,7 +1474,7 @@
   display: grid;
   place-items: center;
   gap: 3px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   font-weight: 900;
   line-height: 1.1;
   cursor: pointer;
@@ -1516,7 +1516,7 @@
   gap: 4px;
   padding: 0 7px;
   white-space: nowrap;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   font-weight: 900;
 }
 .reviewPermissionActive { background: #e9f8ef; color: #207748; border: 1px solid #bee4cc; }
@@ -1545,7 +1545,7 @@
   white-space: normal;
   line-height: 1.15;
   text-align: center;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
 }
 .detailsBody {
   overflow-y: auto;
@@ -1587,7 +1587,7 @@
   min-height: 48px;
   padding: 6px 2px 5px;
   gap: 2px;
-  font-size: 8px;
+  font-size: var(--drive-font-xs);
   line-height: 1.05;
   text-align: center;
 }
@@ -1616,7 +1616,7 @@
   place-items: center;
   align-content: center;
   gap: 2px;
-  font-size: 8px;
+  font-size: var(--drive-font-xs);
   font-weight: 900;
   line-height: 1.05;
   cursor: pointer;
@@ -1661,7 +1661,7 @@
   text-align: center !important;
   text-transform: none;
   letter-spacing: .01em;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   color: #34506a;
   border-bottom: 1px solid #ccd9e5;
 }
@@ -1669,7 +1669,7 @@
   top: 24px;
   height: 29px;
   padding: 0 5px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
 }
 .reviewGroupHeader th:first-child,
 .reviewColumnHeader th:first-child { z-index: 6; }
@@ -1931,7 +1931,7 @@
   grid-template-rows: 1fr;
   justify-items: start;
   padding: 3px 8px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
 }
 .detailsSplitCard .reviewCategoryButton span {
   text-align: left;
@@ -1972,9 +1972,9 @@
   font-size: 10px;
 }
 .detailsSplitCard .reviewEditorItem textarea { min-height: 38px; }
-.detailsSplitCard .reviewChoice { min-height: 26px; padding: 0 6px; font-size: 9px; }
+.detailsSplitCard .reviewChoice { min-height: 26px; padding: 0 6px; font-size: var(--drive-font-xs); }
 .detailsSplitCard .observationEditor { gap: 4px; }
-.detailsSplitCard .observationEditorHead button { min-height: 24px; font-size: 9px; }
+.detailsSplitCard .observationEditorHead button { min-height: 24px; font-size: var(--drive-font-xs); }
 .detailsSplitCard .observationItem { grid-template-columns: 20px minmax(0,1fr) 14px 24px; gap: 3px; }
 .detailsSplitCard .observationIndex { width: 20px; height: 20px; margin-top: 2px; }
 .detailsSplitCard .observationItem textarea { min-height: 32px; height: 32px; }
@@ -1998,7 +1998,7 @@
 
 .boxItemNames { min-width: 0; display: grid; gap: 1px; }
 .boxItemNames strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #263e57; font-size: var(--drive-font-xs); }
-.boxItemNames small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #73869a; font-size: 9px; }
+.boxItemNames small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #73869a; font-size: var(--drive-font-xs); }
 
 
 .reviewProgressStep time {
@@ -2025,9 +2025,9 @@
   padding: 0 9px;
 }
 .filePanelTitle strong { font-size: 10px; }
-.filePanelTitle span { margin-top: 0; font-size: 9px; }
+.filePanelTitle span { margin-top: 0; font-size: var(--drive-font-xs); }
 .viewToggle { gap: 3px; }
-.viewToggle button { min-height: 24px; padding: 3px 6px; font-size: 9px; }
+.viewToggle button { min-height: 24px; padding: 3px 6px; font-size: var(--drive-font-xs); }
 .fileFolderNav {
   min-height: 34px;
   height: 34px;
@@ -2035,9 +2035,9 @@
   gap: 6px;
   padding: 3px 8px;
 }
-.fileFolderNav select { height: 27px; font-size: 9px; }
+.fileFolderNav select { height: 27px; font-size: var(--drive-font-xs); }
 .fileFolderUpButton { width: 27px; height: 27px; }
-.fileFolderPath,.fileFolderNavLabel strong { font-size: 9px; }
+.fileFolderPath,.fileFolderNavLabel strong { font-size: var(--drive-font-xs); }
 .fileSelectionBar {
   min-height: 31px;
   display: flex;
@@ -2047,9 +2047,9 @@
   border-bottom: 1px solid #e5edf3;
   background: #f7f9ff;
 }
-.fileSelectionBar label { display: inline-flex; align-items: center; gap: 5px; color: #415b74; font-size: 9px; font-weight: 900; white-space: nowrap; }
+.fileSelectionBar label { display: inline-flex; align-items: center; gap: 5px; color: #415b74; font-size: var(--drive-font-xs); font-weight: 900; white-space: nowrap; }
 .fileSelectionBar input { width: 14px; height: 14px; accent-color: #5b48d8; }
-.fileSelectionBar button { min-height: 24px; border: 1px solid #d6e0e9; border-radius: 6px; background: #fff; color: #52687d; padding: 0 7px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.fileSelectionBar button { min-height: 24px; border: 1px solid #d6e0e9; border-radius: 6px; background: #fff; color: #52687d; padding: 0 7px; font-size: var(--drive-font-xs); font-weight: 800; cursor: pointer; }
 .fileSelectionBar button:disabled { opacity: .42; cursor: default; }
 .fileDeleteSelected { border-color: #efb7b7 !important; background: #fff5f5 !important; color: #c92727 !important; display: inline-flex; align-items: center; gap: 4px; }
 .fileDeleteSelected:hover:not(:disabled) { background: #ffe8e8 !important; border-color: #e16b6b !important; }
@@ -2084,7 +2084,7 @@
   min-width: 0;
   white-space: nowrap;
 }
-.reviewCompactActions > strong { color: #314b64; font-size: 9px; }
+.reviewCompactActions > strong { color: #314b64; font-size: var(--drive-font-xs); }
 .reviewCompactActions > strong span { color: #1765d7; }
 .reviewCompactActions button {
   min-height: 27px;
@@ -2093,12 +2093,12 @@
   background: #fff;
   color: #405971;
   padding: 0 7px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   font-weight: 900;
   cursor: pointer;
 }
 .reviewCompactActions button:disabled { opacity: .42; cursor: default; }
-.reviewCompactActions > span { color: #6a7d91; font-size: 9px; }
+.reviewCompactActions > span { color: #6a7d91; font-size: var(--drive-font-xs); }
 .reviewLegendCompact { cursor: help; }
 .reviewCompactFilters {
   min-width: 0;
@@ -2118,7 +2118,7 @@
   background: #fff;
   color: #304860;
   padding: 0 6px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   outline: none;
 }
 .reviewCompactFilters .reviewSearch { width: 128px; flex: 0 1 128px; }
@@ -2161,14 +2161,14 @@
 }
 .reviewTimelineToggle:hover { background: #eef5fb; }
 .reviewTimelineToggle span { font-size: 10px; font-weight: 900; }
-.reviewTimelineToggle small { font-size: 9px; color: #75889a; }
+.reviewTimelineToggle small { font-size: var(--drive-font-xs); color: #75889a; }
 .reviewTimelineTableWrap { border-top: 1px solid #e4ebf1; }
 .reviewTimelineTable { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .reviewTimelineTable th {
   height: 25px;
   background: #f4f8fb;
   color: #60758a;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   text-align: left;
   padding: 0 8px;
 }
@@ -2197,7 +2197,7 @@
   grid-row: 1;
   margin: 0;
   padding: 5px 7px;
-  font-size: 9px;
+  font-size: var(--drive-font-xs);
   line-height: 1.25;
 }
 .detailsSplitCard .reviewWorkspace > .reviewProgress {
@@ -2206,7 +2206,7 @@
   margin: 0;
   padding: 0 0 2px;
 }
-.detailsSplitCard .reviewProgressStep { min-height: 39px; padding: 3px 2px; font-size: 8px; }
+.detailsSplitCard .reviewProgressStep { min-height: 39px; padding: 3px 2px; font-size: var(--drive-font-xs); }
 .detailsSplitCard .reviewProgress::before { top: 18px; }
 .detailsSplitCard .reviewWorkspace > .reviewRoleInfo {
   grid-column: 1;
@@ -2214,16 +2214,16 @@
   padding: 4px 6px;
   gap: 1px;
 }
-.detailsSplitCard .reviewRoleInfo span { font-size: 8px; }
-.detailsSplitCard .reviewRoleInfo strong { font-size: 9px; }
+.detailsSplitCard .reviewRoleInfo span { font-size: var(--drive-font-xs); }
+.detailsSplitCard .reviewRoleInfo strong { font-size: var(--drive-font-xs); }
 .detailsSplitCard .reviewWorkspace > .reviewTimeline {
   grid-column: 2;
   grid-row: 2;
   align-self: start;
 }
 .detailsSplitCard .reviewTimelineToggle { min-height: 27px; }
-.detailsSplitCard .reviewTimelineTable th { height: 22px; font-size: 8px; }
-.detailsSplitCard .reviewTimelineTable td { height: 23px; font-size: 9px; }
+.detailsSplitCard .reviewTimelineTable th { height: 22px; font-size: var(--drive-font-xs); }
+.detailsSplitCard .reviewTimelineTable td { height: 23px; font-size: var(--drive-font-xs); }
 .detailsSplitCard .reviewWorkspace > .reviewCategoryMenu {
   grid-column: 1;
   grid-row: 3;
@@ -2247,11 +2247,11 @@
   padding: 5px;
 }
 .detailsSplitCard .reviewEditorItem { padding: 4px 5px; }
-.detailsSplitCard .reviewEditorItem label { margin-bottom: 2px; font-size: 9px; }
-.detailsSplitCard .reviewChoice { min-height: 24px; font-size: 8px; }
+.detailsSplitCard .reviewEditorItem label { margin-bottom: 2px; font-size: var(--drive-font-xs); }
+.detailsSplitCard .reviewChoice { min-height: 24px; font-size: var(--drive-font-xs); }
 .detailsSplitCard .reviewEditorItem textarea { min-height: 31px; height: 31px; }
 .detailsSplitCard .observationEditorHead { min-height: 22px; }
-.detailsSplitCard .observationEditorHead strong,.detailsSplitCard .observationEditorHead span { font-size: 9px; }
+.detailsSplitCard .observationEditorHead strong,.detailsSplitCard .observationEditorHead span { font-size: var(--drive-font-xs); }
 .detailsSplitCard .observationEditorHead button { min-height: 22px; height: 22px; }
 .detailsSplitCard .observationItem textarea { min-height: 29px; height: 29px; }
 .detailsSplitCard .reviewWorkspace > .detailsActions {
@@ -2259,7 +2259,7 @@
   grid-row: 4;
   margin: 0;
 }
-.detailsSplitCard .detailsActions .smallButton { min-height: 26px; height: 26px; padding: 3px 7px; font-size: 9px; }
+.detailsSplitCard .detailsActions .smallButton { min-height: 26px; height: 26px; padding: 3px 7px; font-size: var(--drive-font-xs); }
 
 .projectStorageMeter {
   display: inline-flex !important;
