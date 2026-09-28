@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DriveCoreRepositoryError } from "./errors";
+import { normalizeDriveFileName } from "./nameNormalizer";
 import {
   buildDriveStorageKey,
   calculateDriveObjectSha256,
@@ -121,11 +122,18 @@ export async function initDriveObjectUpload(input: {
   if (uploadKind === "NEW_DOCUMENT" && !folderId) {
     throw new DriveCoreRepositoryError("Új dokumentum feltöltéséhez célmappa szükséges.", "DRIVE_UPLOAD_FOLDER_REQUIRED", 400);
   }
-  const originalName = normalizeFileName(input.body.originalName || input.body.fileName || input.body.name);
-  const documentName = normalizeFileName(input.body.documentName || input.body.name || originalName);
-  if (!originalName || !documentName) {
-    throw new DriveCoreRepositoryError("A feltöltendő fájl és a dokumentum neve kötelező.", "DRIVE_UPLOAD_NAME_REQUIRED", 400);
+  const rawOriginalName = typeof (input.body.originalName || input.body.fileName || input.body.name) === "string"
+    ? String(input.body.originalName || input.body.fileName || input.body.name).slice(0, 2000)
+    : "";
+  if (!rawOriginalName.trim()) {
+    throw new DriveCoreRepositoryError("A feltöltendő fájl eredeti neve kötelező.", "DRIVE_UPLOAD_NAME_REQUIRED", 400);
   }
+  const normalizedFileName = normalizeDriveFileName(rawOriginalName);
+  const originalName = normalizeFileName(rawOriginalName);
+  const requestedDocumentName = normalizeFileName(input.body.documentName || input.body.name || "");
+  const documentName = uploadKind === "NEW_DOCUMENT"
+    ? normalizedFileName.safeFileName
+    : requestedDocumentName || normalizedFileName.safeFileName;
   const sizeBytes = normalizeInteger(input.body.sizeBytes ?? input.body.fileSizeBytes, 0, 0, config.maxUploadBytes + 1);
   if (sizeBytes <= 0) {
     throw new DriveCoreRepositoryError("Üres vagy ismeretlen méretű fájl nem tölthető fel.", "DRIVE_UPLOAD_SIZE_REQUIRED", 400);
@@ -153,7 +161,7 @@ export async function initDriveObjectUpload(input: {
   const expiresAt = new Date(now.getTime() + Math.max(config.signedUrlTtlSeconds + 300, 1_200) * 1000).toISOString();
   // WEB/DESKTOP feltöltés mindig karanténba kerül. AVAILABLE csak sikeres vírusvizsgálat + jóváhagyás után lehet.
   const finalVersionStatus = "QUARANTINED" as const;
-  const storageKey = buildDriveStorageKey({ projectId: input.projectId, uploadId, fileName: originalName });
+  const storageKey = buildDriveStorageKey({ projectId: input.projectId, uploadId, fileName: normalizedFileName.safeFileName });
   const session: DriveUploadSession = {
     id: uploadId,
     projectId: input.projectId,
@@ -184,6 +192,14 @@ export async function initDriveObjectUpload(input: {
       description: normalizeText(input.body.description).slice(0, 2000),
       revisionCode: normalizeText(input.body.revisionCode).slice(0, 40),
       changeNote: normalizeText(input.body.changeNote).slice(0, 1000),
+      originalFileName: normalizedFileName.originalFileName,
+      safeFileName: normalizedFileName.safeFileName,
+      displayName: normalizedFileName.displayName,
+      nameNormalizationVersion: normalizedFileName.normalizationVersion,
+      nameWasSanitized: normalizedFileName.nameWasSanitized,
+      nameWasShortened: normalizedFileName.nameWasShortened,
+      originalRelativePath: typeof input.body.originalRelativePath === "string" ? input.body.originalRelativePath.slice(0, 4000) : "",
+      safeRelativePath: typeof input.body.safeRelativePath === "string" ? input.body.safeRelativePath.slice(0, 4000) : "",
       checksumVerified: false,
       signedUploadVersion: "0.4.2",
     },

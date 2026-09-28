@@ -5,6 +5,7 @@ import {
   getDriveDocumentFlowHealth,
   registerDriveIncomingDocument,
   scanDriveQuarantinedVersion,
+  upsertDriveEngineeringMetadata,
 } from "@/app/lib/drive-core/store";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 
@@ -21,8 +22,48 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const result = await completeDriveObjectUpload({ projectId, uploadId, actorUserId: access.actor.userId });
     let documentFlow: Record<string, unknown> | null = null;
     let securityScan: Record<string, unknown> | null = null;
+    let namingMetadata: Record<string, unknown> | null = null;
     const documentId = result.session.finalizedDocumentId;
     const versionId = result.session.finalizedVersionId;
+
+    if (documentId && result.session.uploadKind === "NEW_DOCUMENT") {
+      try {
+        const sessionMeta = result.session.metadata || {};
+        const originalFileName = typeof sessionMeta.originalFileName === "string" ? sessionMeta.originalFileName : result.session.originalName;
+        const safeFileName = typeof sessionMeta.safeFileName === "string" ? sessionMeta.safeFileName : result.session.documentName;
+        const displayName = typeof sessionMeta.displayName === "string" && sessionMeta.displayName.trim()
+          ? sessionMeta.displayName.trim()
+          : originalFileName.replace(/\.[^.]+$/, "");
+        const metadataResult = await upsertDriveEngineeringMetadata(
+          projectId,
+          documentId,
+          {
+            extra: {
+              originalFileName,
+              safeFileName,
+              displayName,
+              planTitle: displayName,
+              originalRelativePath: typeof sessionMeta.originalRelativePath === "string" ? sessionMeta.originalRelativePath : "",
+              safeRelativePath: typeof sessionMeta.safeRelativePath === "string" ? sessionMeta.safeRelativePath : "",
+              nameNormalizationVersion: sessionMeta.nameNormalizationVersion || "1",
+              nameWasSanitized: Boolean(sessionMeta.nameWasSanitized),
+              nameWasShortened: Boolean(sessionMeta.nameWasShortened),
+            },
+          },
+          {
+            userId: access.actor.userId,
+            displayName: access.actor.displayName,
+            role: access.access.membership.role,
+          },
+        );
+        namingMetadata = { ok: true, metadata: metadataResult.metadata };
+      } catch (namingError) {
+        namingMetadata = {
+          ok: false,
+          error: namingError instanceof Error ? namingError.message : "A fájlnév-metaadat inicializálása sikertelen.",
+        };
+      }
+    }
 
     if (documentId && versionId) {
       try {
@@ -81,7 +122,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     return NextResponse.json(
-      { ...result, documentFlow, securityScan },
+      { ...result, documentFlow, securityScan, namingMetadata },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {

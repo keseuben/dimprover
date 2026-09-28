@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
+import { normalizeDriveFileName } from "./nameNormalizer";
 import {
   DRIVE_CORE_BOOTSTRAP_ID,
   DRIVE_CORE_MIGRATION_COUNT,
@@ -256,7 +257,9 @@ export async function createDriveFolder(projectId: string, input: Record<string,
 export async function createDriveDocument(projectId: string, input: Record<string, unknown>, actorUserId: string) {
   const client = await requireReadyClient();
   const folderId = normalizeText(input.folderId);
-  const name = normalizeFileName(input.name || input.originalName);
+  const rawOriginalName = normalizeText(input.originalName || input.name);
+  const normalizedName = rawOriginalName ? normalizeDriveFileName(rawOriginalName) : null;
+  const name = normalizedName?.safeFileName || "";
   if (!folderId) return { ok: false as const, error: "A célmappa kiválasztása kötelező." };
   if (!name) return { ok: false as const, error: "A dokumentum neve kötelező." };
   const now = new Date().toISOString();
@@ -271,7 +274,7 @@ export async function createDriveDocument(projectId: string, input: Record<strin
   };
   const version = {
     id: versionId, version_number: 1, revision_code: normalizeText(input.revisionCode, "V1").slice(0, 40),
-    original_name: normalizeFileName(input.originalName || name), mime_type: mimeType,
+    original_name: normalizeFileName(rawOriginalName || name), mime_type: mimeType,
     size_bytes: normalizeInteger(input.sizeBytes, 0), sha256: normalizeSha256(input.sha256),
     storage_provider: "METADATA_ONLY", status: "METADATA_ONLY",
     change_note: normalizeText(input.changeNote, "Első dokumentumverzió – metaadat rekord.").slice(0, 1000),

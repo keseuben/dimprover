@@ -765,6 +765,18 @@ export async function upsertDriveEngineeringMetadata(
   const extra: Record<string, unknown> = input.extra && typeof input.extra === "object" && !Array.isArray(input.extra)
     ? { ...(input.extra as Record<string, unknown>) }
     : {};
+  const immutableSourceNameKeys = [
+    "originalFileName",
+    "safeFileName",
+    "originalRelativePath",
+    "safeRelativePath",
+    "nameNormalizationVersion",
+    "nameWasSanitized",
+    "nameWasShortened",
+  ] as const;
+  for (const key of immutableSourceNameKeys) {
+    if (currentExtra[key] !== undefined) extra[key] = currentExtra[key];
+  }
   assertReviewFieldPermissions(reviewFieldChanges(currentExtra, extra), actor);
   applyReviewAuditTrail(extra, currentExtra, actor);
   const payload = {

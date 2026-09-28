@@ -93,7 +93,8 @@ function displayDocumentName(document: DriveDocument, metadata?: DriveEngineerin
       : typeof extra.drawingTitle === "string" && extra.drawingTitle.trim()
         ? extra.drawingTitle.trim()
         : "";
-  return { explicit, value: explicit || fileNameWithoutExtension(document.name) };
+  const originalName = document.currentVersion?.originalName || document.name;
+  return { explicit, value: explicit || fileNameWithoutExtension(originalName) };
 }
 
 function normalizePlanScale(value: unknown) {

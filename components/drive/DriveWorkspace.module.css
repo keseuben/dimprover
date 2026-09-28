@@ -2667,3 +2667,25 @@
   gap: 5px;
   min-width: 0;
 }
+
+.fileNameAuditBox {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid #dde6ee;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.fileNameAuditBox > div { display: grid; gap: 2px; min-width: 0; }
+.fileNameAuditBox span {
+  color: #7b8fa3;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+}
+.fileNameAuditBox strong {
+  color: #324d66;
+  font-size: var(--drive-font-xs);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}

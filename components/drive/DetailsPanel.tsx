@@ -122,6 +122,10 @@ function reviewAuditTime(extra: Record<string, unknown>, prefix: string) {
   return formatAuditDate(extra[prefix + "At"]);
 }
 
+function fileNameWithoutExtensionForDisplay(value: string) {
+  return value.replace(/\.[^.]+$/, "");
+}
+
 function scaleDenominator(value: unknown) {
   const text = String(value || "").trim().replace(/^M\s*=\s*1\s*:\s*/i, "");
   return text.replace(/\D+/g, "");
@@ -569,7 +573,7 @@ export default function DetailsPanel({
       <header className={styles.detailsHeader}>
         <div className={styles.detailsHeaderIcon}>{document.extension?.toUpperCase().slice(0, 4) || "FILE"}</div>
         <div className={styles.detailsHeaderText}>
-          <strong>{document.name}</strong>
+          <strong>{metadata.planTitle || fileNameWithoutExtensionForDisplay(document.currentVersion?.originalName || document.name)}</strong>
           <span>{document.extension?.toUpperCase() || "FILE"} · {document.currentVersion?.revisionCode || `V${document.currentVersionNumber}`}</span>
         </div>
       </header>
@@ -589,6 +593,11 @@ export default function DetailsPanel({
             <DriveDocumentViewer projectId={projectId} document={document} />
 
             <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"} · Témakör: {inheritedTopic || "—"}</div>
+
+            <div className={styles.fileNameAuditBox}>
+              <div><span>Eredeti fájlnév</span><strong>{typeof details?.metadata?.extra?.originalFileName === "string" ? details.metadata.extra.originalFileName : document.currentVersion?.originalName || "—"}</strong></div>
+              <div><span>DIMPRO technikai fájlnév</span><strong>{typeof details?.metadata?.extra?.safeFileName === "string" ? details.metadata.extra.safeFileName : document.name}</strong></div>
+            </div>
 
             <div className={styles.metaGrid}>
               {([
