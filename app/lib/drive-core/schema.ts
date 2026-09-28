@@ -1,6 +1,6 @@
-export const DRIVE_CORE_SCHEMA_VERSION = "0.3.0";
-export const DRIVE_CORE_MIGRATION_COUNT = 1;
-export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v030-20260802";
+export const DRIVE_CORE_SCHEMA_VERSION = "0.5.0";
+export const DRIVE_CORE_MIGRATION_COUNT = 2;
+export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v050-soft-delete-20260928";
 
 export const DRIVE_CORE_TABLES = [
   "drive_core_schema_meta",

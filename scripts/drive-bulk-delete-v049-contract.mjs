@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const permissions = readFileSync("app/lib/project-core/permissions.ts", "utf8");
 const permissionTypes = readFileSync("app/lib/project-core/types.ts", "utf8");
+const coreSchema = readFileSync("app/lib/drive-core/schema.ts", "utf8");
 const driveTypes = readFileSync("components/drive/driveTypes.ts", "utf8");
 const repository = readFileSync("app/lib/drive-core/databaseRepository.ts", "utf8");
 const store = readFileSync("app/lib/drive-core/store.ts", "utf8");
@@ -19,6 +20,12 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log(`PASS ${name}`); };
 const roleBase = permissions.indexOf("const ROLE_PERMISSIONS");
+
+check("Drive Core runtime expects migrated V0.5.0 marker", () => {
+  assert.match(coreSchema, /DRIVE_CORE_SCHEMA_VERSION = "0\.5\.0"/);
+  assert.match(coreSchema, /DRIVE_CORE_MIGRATION_COUNT = 2/);
+  assert.match(coreSchema, /DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v050-soft-delete-20260928"/);
+});
 
 check("document.delete exists in project permission type", () => assert.match(permissionTypes, /"document\.delete"/));
 check("document.delete exists in Drive permission type", () => assert.match(driveTypes, /"document\.delete"/));
