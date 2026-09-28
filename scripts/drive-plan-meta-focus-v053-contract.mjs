@@ -11,18 +11,24 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log("PASS " + name); };
 
+check("status and file icons have their own column before plan number", () => {
+  assert.match(grid, /statusIconColumn[\s\S]{0,180}<th>Tervszám<\/th><th>Név<\/th><th>Lépték<\/th>/);
+  assert.match(grid, /<td className=\{styles\.statusIconColumn\}>/);
+  assert.match(grid, /<ReviewStateIcons/);
+  assert.match(grid, /metadataCellButton[\s\S]{0,220}planNo/);
+});
 check("engineering columns are PlanNo Name Scale FileName", () => {
-  assert.match(grid, /<th>Tervszám<\/th><th>Név<\/th><th>Lépték<\/th><th>Fájlnév<\/th>/);
+  assert.match(grid, /statusIconColumn[^>]*><\/th><th>Tervszám<\/th><th>Név<\/th><th>Lépték<\/th><th>Fájlnév<\/th>/);
 });
 check("review columns are PlanNo Name Scale FileName", () => {
-  assert.match(grid, /Tervszám">Tervszám<\/th>[\s\S]{0,250}Megjelenített tervnév">Név<\/th>[\s\S]{0,250}Tervlépték">Lépték<\/th>[\s\S]{0,250}Eredeti fájlnév">Fájlnév<\/th>/);
+  assert.match(grid, /statusIconColumn[\s\S]{0,250}Tervszám">Tervszám<\/th>[\s\S]{0,250}Megjelenített tervnév">Név<\/th>[\s\S]{0,250}Tervlépték">Lépték<\/th>[\s\S]{0,250}Eredeti fájlnév">Fájlnév<\/th>/);
 });
 check("review document group and folder row account for new column", () => {
-  assert.match(grid, /<th colSpan=\{9\}>Dokumentum<\/th>/);
-  assert.match(grid, /<td colSpan=\{21\}>/);
+  assert.match(grid, /<th colSpan=\{10\}>Dokumentum<\/th>/);
+  assert.match(grid, /<td colSpan=\{22\}>/);
 });
 check("engineering folder row accounts for new column", () => {
-  assert.match(grid, /<td colSpan=\{14\}>/);
+  assert.match(grid, /<td colSpan=\{15\}>/);
 });
 check("plan number table cells open metadata detail", () => {
   assert.match(grid, /openDetail\(row\.document, "planNo"\)/);

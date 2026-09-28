@@ -706,6 +706,7 @@ export default function FileGridPanel({
             <table className={styles.reviewTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
+                <col style={{ width: "78px" }} />
                 <col style={{ width: "110px" }} />
                 <col style={{ width: "280px" }} />
                 <col style={{ width: "92px" }} />
@@ -729,7 +730,7 @@ export default function FileGridPanel({
               </colgroup>
               <thead>
                 <tr className={styles.reviewGroupHeader}>
-                  <th colSpan={9}>Dokumentum</th>
+                  <th colSpan={10}>Dokumentum</th>
                   <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
                   <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
                   <th className={styles.reviewGroupManager} title="Projektvezető">Projektv.</th>
@@ -738,6 +739,7 @@ export default function FileGridPanel({
                 </tr>
                 <tr className={styles.reviewColumnHeader}>
                   <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható tervek kijelölése" /></th>
+                  <th className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" aria-label="Állapotjelzők és fájltípus"></th>
                   <th title="Tervszám">Tervszám</th>
                   <th title="Megjelenített tervnév">Név</th>
                   <th title="Tervlépték">Lépték</th>
@@ -763,7 +765,7 @@ export default function FileGridPanel({
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={21}>
+                    <td colSpan={22}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -783,9 +785,8 @@ export default function FileGridPanel({
                         aria-label={row.displayName + " kijelölése"}
                       />
                     </td>
-                    <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
-                    <td>
-                      <div className={styles.fileNameCell}>
+                    <td className={styles.statusIconColumn}>
+                      <div className={styles.statusIconStrip}>
                         <ReviewStateIcons
                           metadata={metadataByDocument[row.document.id]}
                           onApprovalClick={() => openDetail(row.document, approvalFocus(approvalVisual(metadataByDocument[row.document.id]).kind))}
@@ -794,15 +795,18 @@ export default function FileGridPanel({
                         <span className={fileIconClass(row.document.extension)} title={row.document.extension?.toUpperCase() || "Fájl"}>
                           <FileKindIcon extension={row.document.extension} />
                         </span>
-                        <button
-                          type="button"
-                          className={styles.reviewName + " " + (row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback)}
-                          title={row.displayName}
-                          onClick={() => openDetail(row.document, "checked")}
-                        >
-                          {row.displayName}
-                        </button>
                       </div>
+                    </td>
+                    <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
+                    <td>
+                      <button
+                        type="button"
+                        className={styles.reviewName + " " + (row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback)}
+                        title={row.displayName}
+                        onClick={() => openDetail(row.document, "checked")}
+                      >
+                        {row.displayName}
+                      </button>
                     </td>
                     <td><button type="button" className={styles.metadataCellButton} title={row.scale.title} onClick={() => openDetail(row.document, "scales")}>{row.scale.text}</button></td>
                     <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
@@ -878,13 +882,14 @@ export default function FileGridPanel({
             <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
+                <col style={{ width: "78px" }} />
                 <col style={{ width: "9%" }} /><col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col style={{ width: "16%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Tervszám</th><th>Név</th><th>Lépték</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" aria-label="Állapotjelzők és fájltípus"></th><th>Tervszám</th><th>Név</th><th>Lépték</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={14}>
+                    <td colSpan={15}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -901,8 +906,9 @@ export default function FileGridPanel({
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
+                      <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span></div></td>
                       <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
-                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></td>
                       <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>

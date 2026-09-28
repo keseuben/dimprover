@@ -2651,3 +2651,19 @@
   box-shadow: 0 0 0 2px rgba(23, 107, 255, .2);
   background: #f2f7ff;
 }
+
+.statusIconColumn {
+  width: 78px !important;
+  min-width: 78px;
+  max-width: 78px;
+  text-align: center !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+.statusIconStrip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
