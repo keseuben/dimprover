@@ -1111,7 +1111,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 responsiveClassName={styles.fullTableInspectorPanel}
                 focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
                 reviewFocus={reviewFocus}
-                detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus.field : ""}
+                detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}
                 inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
                 inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
               />
@@ -1248,7 +1248,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
               focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}
-              detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus.field : ""}
+              detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}
               inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
               inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
             />
