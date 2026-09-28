@@ -17,7 +17,7 @@ const { captureConversationTranscript } = require("./context-workspace/chatgpt-t
 const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverPrompt, validateConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
 const { ROLLOVER_REACK_PROMPT_MARKER, ROLLOVER_REACK_KEY_MARKER, buildConversationRolloverReAckPrompt } = require("./context-workspace/rollover-reack.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
-const { shouldReplaceStaleTaskLaunchDraft } = require("./task-launch/draft-recovery.cjs");
+const { parseTaskLaunchDraftIdentity, shouldReplaceStaleTaskLaunchDraft } = require("./task-launch/draft-recovery.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
 const { EXECUTION_REQUEST_START, EXECUTION_REQUEST_END, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
@@ -2760,7 +2760,11 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   });
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   let taskLaunch = null;
-  if (launchAfterBind) taskLaunch = await prepareWorkerTaskLaunch(code, id, { autoSend:true, taskOverride:taskOverride || task });
+  if (launchAfterBind) {
+    const dispatchMode = String(record.dispatchMode || "MANUAL").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
+    taskLaunch = await prepareWorkerTaskLaunch(code, id, { autoSend:dispatchMode === "AUTO", taskOverride:taskOverride || task });
+    saveTaskLaunchPatch(taskOverride || task, code, { dispatchMode });
+  }
   return {
     ok: true, binding, chatLaunch: taskLaunch?.chatLaunch || chatLaunch, taskLaunch,
     message: taskLaunch?.ok && taskLaunch?.mode === "sent"
@@ -3151,6 +3155,141 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
       : "A TASK_LAUNCH prompt igazoltan a worker ChatGPT mezőjében van. Ellenőrizd, majd kézzel küldd el."
   };
 }
+
+async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride = null } = {}) {
+  if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+  const code = String(workerCode || "").toUpperCase();
+  const id = String(taskId || "");
+  if (!id || !code) return { ok:false, code:"MANUAL_LAUNCH_IDENTITY_REQUIRED", error:"A kézi központi küldéshez task és worker kötelező." };
+
+  let activeWork = null;
+  try {
+    activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+  } catch (error) {
+    return { ok:false, code:"MANUAL_LAUNCH_ACTIVE_WORK_UNAVAILABLE", error:error instanceof Error ? error.message : "Az authoritative task állapot nem olvasható." };
+  }
+  const task = activeWork?.task || null;
+  const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && String(item?.taskId || "") === id) || null;
+  if (!task || String(task.id || "") !== id || !session) return { ok:false, code:"MANUAL_LAUNCH_ACTIVE_TASK_REQUIRED", error:"A kézi küldéshez az authoritative aktív task/session szükséges." };
+  if (String(session?.workerCode || "").toUpperCase() !== code) return { ok:false, code:"MANUAL_LAUNCH_WORKER_MISMATCH", error:"A kijelölt worker nem egyezik az authoritative session workerével." };
+  if (String(task.status || "").toUpperCase() !== "READY") return { ok:false, code:"MANUAL_LAUNCH_TASK_NOT_READY", error:"A task nincs READY állapotban." };
+  if (String(session?.developmentContext?.bootAckState || "").toUpperCase() === "VALIDATED") return { ok:false, code:"BOOT_ACK_ALREADY_VALIDATED", error:"A BOOT ACK már validált; Launch Packet nem küldhető újra." };
+
+  const launchTask = taskOverride || launchTaskFromWork({ task, session }, null);
+  if (!launchTask) return { ok:false, code:"MANUAL_LAUNCH_CONTEXT_MISSING", error:"A Launch Packet authoritative kontextusa hiányos." };
+  const launchGate = taskLaunchGate(launchTask);
+  if (!launchGate.ok) return launchGate;
+
+  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  if (!cell) return { ok:false, code:"MANUAL_LAUNCH_CELL_MISSING", error:"Az assigned worker nincs aktív Developer Grid cellában." };
+  const surfaceType = normalizeWorkerSurfaceType(session?.developmentContext?.surfaceType || cell.surfaceType || "CHATGPT");
+  const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
+  if (!adapterGate.ok) return adapterGate;
+  let view = chatViews.get(cell.id);
+  if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
+  if (!view || view.webContents.isDestroyed()) return { ok:false, code:"MANUAL_LAUNCH_CHAT_UNAVAILABLE", error:"A worker ChatGPT felülete nem érhető el." };
+
+  const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+  const ctx = session.developmentContext || {};
+  const expectedConversationId = String(ctx.surfaceConversationId || ctx.chatConversationId || "").trim();
+  if (!currentConversationId) return { ok:false, code:"MANUAL_LAUNCH_CHAT_REQUIRED", error:"Nyisd meg a taskhoz tartozó ChatGPT /c/... csevegést." };
+  if (expectedConversationId && currentConversationId !== expectedConversationId) return { ok:false, code:"MANUAL_LAUNCH_CHAT_MISMATCH", error:"Nem a taskhoz rögzített ChatGPT csevegés van nyitva." };
+
+  const launchRecord = loadTaskLaunchRecords()[id] || {};
+  const capture = await captureLatestBootAckCandidate(view);
+  if (capture?.generating) {
+    const launchInFlight = Boolean(launchRecord.sentAt) || ["SENT","RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
+    if (launchInFlight) {
+      const chatLaunch = saveTaskLaunchPatch(launchTask, code, { dispatchMode:"MANUAL", autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
+      void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+      return { ok:true, mode:"response-pending", pending:true, chatLaunch, message:"A Launch Packet már elküldött állapotú; a ChatGPT válaszára vár." };
+    }
+    return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"A ChatGPT jelenleg választ generál. Kézi központi küldés közben új Launch Packet nem küldhető." };
+  }
+
+  const currentProof = resolvedExecutionProofSha256(launchTask);
+  if (!/^[0-9a-f]{64}$/.test(currentProof)) return { ok:false, code:"MANUAL_LAUNCH_SOURCE_PROOF_REQUIRED", error:"A Central Core source proof hiányzik vagy érvénytelen." };
+
+  let draft = await captureComposerDraftText(view);
+  let identity = draft?.ok ? parseTaskLaunchDraftIdentity(draft.text) : { kind:"EMPTY", taskId:"", sessionId:"", sourceProofSha256:"" };
+
+  const draftMatchesCurrent = () =>
+    identity?.kind === "TASK_LAUNCH_V3"
+    && identity.taskId === id
+    && identity.sessionId === String(session.id || "")
+    && identity.sourceProofSha256 === currentProof;
+
+  if (!draftMatchesCurrent()) {
+    if (identity?.kind === "EMPTY") {
+      const prepared = await prepareWorkerTaskLaunch(code, id, { autoSend:false, taskOverride:launchTask });
+      if (!prepared?.ok) return prepared;
+    } else {
+      const stale = shouldReplaceStaleTaskLaunchDraft({
+        draft:draft?.text || "",
+        taskId:id,
+        sessionId:String(session.id || ""),
+        currentSourceProofSha256:currentProof,
+      });
+      if (!stale?.replace) {
+        return {
+          ok:false,
+          code:"MANUAL_LAUNCH_COMPOSER_BLOCKED",
+          error: stale?.reason === "current-proof"
+            ? "A jelenlegi Launch Packet azonosítása nem volt konzisztens; küldés fail-closed."
+            : "A ChatGPT beviteli mező nem a jelenlegi authoritative task Launch Packetjét tartalmazza. A Grid nem írja felül.",
+        };
+      }
+      const cleared = await clearStaleOwnedTaskLaunchDraft(view, {
+        taskId:id,
+        sessionId:String(session.id || ""),
+        currentSourceProofSha256:currentProof,
+      });
+      if (!cleared?.ok || !cleared?.cleared) return { ok:false, code:cleared?.code || "MANUAL_LAUNCH_STALE_DRAFT_CLEAR_FAILED", error:cleared?.error || "A régi Launch Packet nem törölhető biztonságosan." };
+      const prepared = await prepareWorkerTaskLaunch(code, id, { autoSend:false, taskOverride:launchTask });
+      if (!prepared?.ok) return prepared;
+    }
+    draft = await captureComposerDraftText(view);
+    identity = draft?.ok ? parseTaskLaunchDraftIdentity(draft.text) : { kind:"EMPTY", taskId:"", sessionId:"", sourceProofSha256:"" };
+  }
+
+  if (!draftMatchesCurrent()) {
+    return { ok:false, code:"MANUAL_LAUNCH_PREPARED_IDENTITY_MISMATCH", error:"A központi küldés előtt a composerben lévő Launch Packet task/session/source proof azonossága nem igazolható." };
+  }
+
+  const baselineCapture = await captureLatestAssistantText(view);
+  const baselineResponseSha256 = String(launchRecord.baselineResponseSha256 || (baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : ""));
+  const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
+  if (sent?.sent !== true || sent?.verified !== true) {
+    const chatLaunch = saveTaskLaunchPatch(launchTask, code, {
+      dispatchMode:"MANUAL",
+      autoSendState:"MANUAL_SEND_FAILED",
+      autoSendError:sent?.reason || "not-verified",
+      manualDispatchAttemptAt:new Date().toISOString(),
+      sourceProofSha256:currentProof,
+    });
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    return { ok:false, code:"MANUAL_LAUNCH_SEND_NOT_VERIFIED", chatLaunch, error:"A központi KÜLDÉS gomb lefutott, de a ChatGPT USER üzenet elküldése nem igazolható. A Grid fail-closed." };
+  }
+
+  const now = new Date().toISOString();
+  const chatLaunch = saveTaskLaunchPatch(launchTask, code, {
+    dispatchMode:"MANUAL",
+    sentAt:now,
+    manualDispatchAt:now,
+    autoSendState:"SENT",
+    ackState:"WAITING",
+    ackMismatches:[],
+    baselineResponseSha256,
+    sourceProofSha256:currentProof,
+    sendMode:sent?.mode || "verified",
+    transcriptMessageId:sent?.transcriptProof?.messageId || null,
+  });
+  void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256 }).catch(() => undefined);
+  if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+  send("context:refresh", { reason:"manual-central-launch-sent", taskId:id, sessionId:String(session.id || ""), workerCode:code });
+  return { ok:true, mode:"sent", manual:true, chatLaunch, sendEvidence:sent, message:"A Launch Packetet a központi KÜLDÉS gomb igazoltan elküldte. BOOT ACK-ra vár." };
+}
+
 
 const EXECUTION_RECOVERY_ACTIONS = new Set(["LIST_FILES","READ_FILE","SEARCH_FILES","GIT_STATUS","GIT_DIFF","GIT_DIFF_CHECK"]);
 
@@ -6305,13 +6444,32 @@ function registerIpc() {
       let taskLaunch = null;
       const launchTask = launchTaskFromWork(work, chatPlan);
       const launchWorkerCode = assignedWorkerCodeFromWork(work);
+      const launchDispatchMode = String(payload?.launchDispatchMode || "MANUAL").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
+      if (launchTask && launchWorkerCode) saveTaskLaunchPatch(launchTask, launchWorkerCode, { dispatchMode:launchDispatchMode });
       if (work?.routingState === "ROUTED" && launchTask && launchWorkerCode && chatPlan?.conversationBound === true) {
-        taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:true, taskOverride:launchTask });
+        taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:launchDispatchMode === "AUTO", taskOverride:launchTask });
+        if (taskLaunch?.chatLaunch) {
+          saveTaskLaunchPatch(launchTask, launchWorkerCode, { dispatchMode:launchDispatchMode });
+        }
       }
       send("context:refresh", { reason: "work-started", taskId: work?.task?.id || null });
       return { ok: true, work, chatPlan, taskLaunch };
     } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "A Developer Grid munkaindítás sikertelen." }; }
   });
+  ipcMain.handle("work-start:send-prepared-launch", async () => {
+    if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
+    try {
+      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      const task = activeWork?.task || null;
+      const session = (activeWork?.sessions || []).find((item) => item?.endedAt == null && item?.taskId === task?.id) || null;
+      if (!task || !session) return { ok:false, code:"ACTIVE_TASK_SESSION_REQUIRED", error:"Nincs küldhető authoritative task + worker session." };
+      const code = String(session.workerCode || "").toUpperCase();
+      return await sendPreparedWorkerTaskLaunch(code, task.id);
+    } catch (error) {
+      return { ok:false, error:error instanceof Error ? error.message : "A központi Launch Packet küldése sikertelen." };
+    }
+  });
+
   ipcMain.handle("work-start:resume-launch", async () => {
     if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
     try {

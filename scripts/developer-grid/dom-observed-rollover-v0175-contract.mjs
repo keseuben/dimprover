@@ -10,8 +10,8 @@ const types=fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),"u
 const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package.json"),"utf8"));
 let n=0; const check=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.85"));
-check("backend version v0.1.75-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.85-dev"')));
+check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.86"));
+check("backend version v0.1.75-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.86-dev"')));
 check("DOM adapter derives conversation id from page location",()=>{assert.match(dom,/location\.href/);assert.match(dom,/conversationId/);});
 check("conversation sync observes DOM before mismatch decisions",()=>{
   const fn=main.indexOf("async function syncConversationMemoryForWorker");
