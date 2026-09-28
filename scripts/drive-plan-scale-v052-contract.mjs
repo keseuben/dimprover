@@ -9,6 +9,9 @@ const css = readFileSync("components/drive/DriveWorkspace.module.css", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log("PASS " + name); };
 
+check("empty metadata starts with one scale input", () => {
+  assert.match(details, /const emptyMetadata:[\s\S]*?scales: \[""\]/);
+});
 check("details metadata keeps up to three scales", () => {
   assert.match(details, /scales: string\[\]/);
   assert.match(details, /slice\(0, 3\)/);

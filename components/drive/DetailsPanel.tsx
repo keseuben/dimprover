@@ -425,6 +425,7 @@ const emptyMetadata: MetadataForm = {
   zone: "",
   topic: "",
   planTitle: "",
+  scales: [""],
 };
 
 export default function DetailsPanel({
