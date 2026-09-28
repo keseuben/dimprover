@@ -2605,12 +2605,12 @@ function isBootAckCandidateText(value) {
 async function captureLatestBootAckCandidate(view) {
   const latest = await captureLatestAssistantText(view);
   if (latest?.generating) return latest;
-  if (latest?.ok && isBootAckCandidateText(latest.text)) return { ...latest, candidateSource:"LATEST_ASSISTANT" };
   const transcript = await captureConversationTranscript(view);
   if (transcript?.ok && !transcript.generating && Array.isArray(transcript.messages)) {
     const candidate = [...transcript.messages].reverse().find((item) => item?.role === "ASSISTANT" && isBootAckCandidateText(item?.text));
     if (candidate) return { ok:true, generating:false, text:String(candidate.text || ""), candidateSource:"TRANSCRIPT_HISTORY", messageId:candidate.messageId || null };
   }
+  if (latest?.ok && isBootAckCandidateText(latest.text)) return { ...latest, candidateSource:"LATEST_ASSISTANT_FALLBACK" };
 
   if (!view || view.webContents.isDestroyed()) return latest;
   const rawFallback = await view.webContents.executeJavaScript(`(() => {
@@ -2630,7 +2630,7 @@ async function captureLatestBootAckCandidate(view) {
   return latest;
 }
 
-async function processCapturedBootAck({ view, body, task, workerCode, baselineResponseSha256 = "", sendContinuation = true, source = "MONITOR" }) {
+async function processCapturedBootAck({ view, body, task, workerCode, baselineResponseSha256 = "", baselineResponseMessageId = "", responseMessageId = "", sendContinuation = true, source = "MONITOR" }) {
   const taskId = String(task?.id || "");
   const sessionId = String(task?.sessionId || "");
   const text = String(body || "").trim();
@@ -2638,7 +2638,12 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
   const hasStageReport = text.includes(STAGE_REPORT_START);
   if (!taskId || !sessionId || !text || (!hasBootAck && !hasStageReport)) return { processed:false, validated:false, reason:"BOOT_ACK_NOT_FOUND" };
   const responseSha256 = createHash("sha256").update(text).digest("hex");
-  if (baselineResponseSha256 && responseSha256 === baselineResponseSha256) return { processed:false, validated:false, reason:"BOOT_ACK_BASELINE_RESPONSE" };
+  const responseTurnId = String(responseMessageId || "").trim();
+  const baselineTurnId = String(baselineResponseMessageId || "").trim();
+  if (baselineResponseSha256 && responseSha256 === baselineResponseSha256
+      && (!responseTurnId || !baselineTurnId || responseTurnId === baselineTurnId)) {
+    return { processed:false, validated:false, reason:"BOOT_ACK_BASELINE_RESPONSE" };
+  }
   const processKey = `${taskId}:${sessionId}:${responseSha256}`;
   const launchRecord = loadTaskLaunchRecords()[taskId] || {};
   if (processedBootAckHashes.has(processKey) || (String(launchRecord.ackState || "").toUpperCase() === "VALIDATED" && String(launchRecord.ackSha256 || "") === responseSha256)) {
@@ -2707,7 +2712,7 @@ async function processCapturedBootAck({ view, body, task, workerCode, baselineRe
   }
 }
 
-async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSha256 = "" }) {
+async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSha256 = "", baselineResponseMessageId = "" }) {
   const taskId = String(task?.id || "");
   if (!taskId || !task?.sessionId) return;
   const deadline = Date.now() + 5 * 60_000;
@@ -2715,7 +2720,10 @@ async function monitorWorkerBootAck({ view, task, workerCode, baselineResponseSh
     await new Promise((resolve) => setTimeout(resolve, 1800));
     const capture = await captureLatestBootAckCandidate(view);
     if (!capture?.ok || capture.generating || !String(capture.text || "").trim()) continue;
-    const result = await processCapturedBootAck({ view, body:capture.text, task, workerCode, baselineResponseSha256, source:"LAUNCH_MONITOR" });
+    const result = await processCapturedBootAck({
+      view, body:capture.text, task, workerCode, baselineResponseSha256, baselineResponseMessageId,
+      responseMessageId:String(capture.messageId || ""), source:"LAUNCH_MONITOR"
+    });
     if (result?.validated || result?.blocked) return;
   }
   saveTaskLaunchPatch(task, workerCode, { ackState:"BLOCKED", autoSendState:"RESPONSE_TIMEOUT", ackMismatches:["BOOT_ACK_TIMEOUT"], ackAt:new Date().toISOString() });
@@ -2983,7 +2991,7 @@ function reusableLaunchExecutionProof(task, session) {
   };
 }
 
-async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launchTask, decision, baselineResponseSha256 = "" }) {
+async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launchTask, decision, baselineResponseSha256 = "", baselineResponseMessageId = "" }) {
   const identity = decision?.identity || {};
   if (
     decision?.reason !== "current-proof"
@@ -3021,9 +3029,10 @@ async function sendExistingOwnedTaskLaunchDraft({ view, task, workerCode, launch
     ackMismatches:[],
     sourceProofSha256:String(identity.sourceProofSha256 || "").toLowerCase(),
     baselineResponseSha256:String(baselineResponseSha256 || ""),
+    baselineResponseMessageId:String(baselineResponseMessageId || ""),
     existingDraftResumedAt:new Date().toISOString(),
   });
-  void monitorWorkerBootAck({ view, task:launchTask, workerCode, baselineResponseSha256:String(baselineResponseSha256 || "") }).catch(() => undefined);
+  void monitorWorkerBootAck({ view, task:launchTask, workerCode, baselineResponseSha256:String(baselineResponseSha256 || ""), baselineResponseMessageId:String(baselineResponseMessageId || "") }).catch(() => undefined);
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   return {
     ok:true,
@@ -3098,8 +3107,9 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   view.webContents.focus();
 
   const presence = snapshot?.workerPresence?.find((item) => item.workerCode === code) || null;
-  const baselineCapture = await captureLatestAssistantText(view);
+  const baselineCapture = await captureLatestBootAckCandidate(view);
   const baselineResponseSha256 = baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : "";
+  const baselineResponseMessageId = baselineCapture?.ok ? String(baselineCapture.messageId || "") : "";
   if (baselineCapture?.generating) {
     const launchInFlight = Boolean(launchRecord.sentAt)
       || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
@@ -3111,7 +3121,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
     });
     if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
     if (launchInFlight) {
-      void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || baselineResponseSha256 || "") }).catch(() => undefined);
+      void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || baselineResponseSha256 || ""), baselineResponseMessageId:String(launchRecord.baselineResponseMessageId || baselineResponseMessageId || "") }).catch(() => undefined);
       return {
         ok:true, mode:"response-pending", pending:true, chatLaunch,
         message:"A Launch Packet már elküldött állapotú, a ChatGPT még választ generál. Új prompt nem kerül beszúrásra; a rendszer ugyanennek a tasknak a BOOT ACK-jára vár.",
@@ -3136,7 +3146,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
     return { ok: false, code: "TASK_PROMPT_NOT_INSERTED", error: detail, insertion };
   }
   const mode = "inserted";
-  let chatLaunch = saveTaskLaunchPatch(task, code, { surfaceType, preparedAt: new Date().toISOString(), mode, baselineResponseSha256 });
+  let chatLaunch = saveTaskLaunchPatch(task, code, { surfaceType, preparedAt: new Date().toISOString(), mode, baselineResponseSha256, baselineResponseMessageId });
   if (autoSend) {
     const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
     if (sent?.sent !== true || sent?.verified !== true) {
@@ -3145,7 +3155,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
       return { ok:false, code:"TASK_PROMPT_SEND_NOT_VERIFIED", chatLaunch, error:"A Launch Packet a ChatGPT mezőben van, de az automatikus elküldés nem volt igazolható. A rendszer fail-closed; ellenőrizd és küldd el kézzel." };
     }
     chatLaunch = saveTaskLaunchPatch(task, code, { sentAt:new Date().toISOString(), autoSendState:"SENT", ackState:"WAITING", ackMismatches:[] });
-    void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256 }).catch(() => undefined);
+    void monitorWorkerBootAck({ view, task, workerCode:code, baselineResponseSha256, baselineResponseMessageId }).catch(() => undefined);
   }
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   return {
@@ -3214,7 +3224,7 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
     const launchInFlight = Boolean(launchRecord.sentAt) || ["SENT","RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
     if (launchInFlight) {
       const chatLaunch = saveTaskLaunchPatch(launchTask, code, { dispatchMode:"MANUAL", autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
-      void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+      void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || ""), baselineResponseMessageId:String(launchRecord.baselineResponseMessageId || "") }).catch(() => undefined);
       return { ok:true, mode:"response-pending", pending:true, chatLaunch, message:"A Launch Packet már elküldött állapotú; a ChatGPT válaszára vár." };
     }
     return { ok:false, code:"CHATGPT_GENERATION_ACTIVE", error:"A ChatGPT jelenleg választ generál. Kézi központi küldés közben új Launch Packet nem küldhető." };
@@ -3269,8 +3279,9 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
     return { ok:false, code:"MANUAL_LAUNCH_PREPARED_IDENTITY_MISMATCH", error:"A központi küldés előtt a composerben lévő Launch Packet task/session/source proof azonossága nem igazolható." };
   }
 
-  const baselineCapture = await captureLatestAssistantText(view);
+  const baselineCapture = await captureLatestBootAckCandidate(view);
   const baselineResponseSha256 = String(launchRecord.baselineResponseSha256 || (baselineCapture?.ok ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex") : ""));
+  const baselineResponseMessageId = String(launchRecord.baselineResponseMessageId || (baselineCapture?.ok ? baselineCapture.messageId || "" : ""));
   const sent = await sendPreparedChatPrompt(view, TASK_LAUNCH_PROMPT_MARKER);
   if (sent?.sent !== true || sent?.verified !== true) {
     const chatLaunch = saveTaskLaunchPatch(launchTask, code, {
@@ -3293,12 +3304,13 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
     ackState:"WAITING",
     ackMismatches:[],
     baselineResponseSha256,
+    baselineResponseMessageId,
     sourceProofSha256:currentProof,
     sendMode:sent?.mode || "verified",
     transcriptMessageId:sent?.transcriptProof?.messageId || null,
     conversationObservationSource:currentConversationSource,
   });
-  void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256 }).catch(() => undefined);
+  void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256, baselineResponseMessageId }).catch(() => undefined);
   if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
   send("context:refresh", { reason:"manual-central-launch-sent", taskId:id, sessionId:String(session.id || ""), workerCode:code });
   return { ok:true, mode:"sent", manual:true, chatLaunch, sendEvidence:sent, message:"A Launch Packetet a központi KÜLDÉS gomb igazoltan elküldte. BOOT ACK-ra vár." };
@@ -6517,7 +6529,7 @@ function registerIpc() {
                   || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
                 if (launchInFlight) {
                   saveTaskLaunchPatch(preRecoveryLaunchTask, preRecoveryCode, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
-                  void monitorWorkerBootAck({ view:preRecoveryView, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+                  void monitorWorkerBootAck({ view:preRecoveryView, task:preRecoveryLaunchTask, workerCode:preRecoveryCode, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || ""), baselineResponseMessageId:String(launchRecord.baselineResponseMessageId || "") }).catch(() => undefined);
                   send("context:refresh", { reason:"chatgpt-response-pending-before-recovery", taskId:task.id, sessionId:session.id });
                   return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, message:"ChatGPT is generating a response to a launch packet with verified send evidence." } };
                 }
@@ -6588,7 +6600,7 @@ function registerIpc() {
           || ["SENT", "RESPONSE_PENDING"].includes(String(launchRecord.autoSendState || "").toUpperCase());
         if (launchInFlight) {
           const chatLaunch = saveTaskLaunchPatch(launchTask, code, { autoSendState:"RESPONSE_PENDING", ackState:"WAITING", generationObservedAt:new Date().toISOString() });
-          void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || "") }).catch(() => undefined);
+          void monitorWorkerBootAck({ view, task:launchTask, workerCode:code, baselineResponseSha256:String(launchRecord.baselineResponseSha256 || ""), baselineResponseMessageId:String(launchRecord.baselineResponseMessageId || "") }).catch(() => undefined);
           send("context:refresh", { reason:"chatgpt-response-pending", taskId:task.id, sessionId:session.id });
           return { ok:true, pending:true, activeWork, taskLaunch:{ ok:true, mode:"response-pending", pending:true, chatLaunch, message:"A Launch Packet már elküldött állapotú; a ChatGPT még választ generál. Újraküldés nem történt." } };
         }
@@ -6630,10 +6642,11 @@ function registerIpc() {
           ackMismatches:[],
         });
       } else if (staleDraftRecovery?.decision?.reason === "current-proof") {
-        const baselineCapture = await captureLatestAssistantText(view).catch(() => null);
+        const baselineCapture = await captureLatestBootAckCandidate(view).catch(() => null);
         const baselineResponseSha256 = baselineCapture?.ok
           ? createHash("sha256").update(String(baselineCapture.text || "")).digest("hex")
           : "";
+        const baselineResponseMessageId = baselineCapture?.ok ? String(baselineCapture.messageId || "") : "";
         const resumedDraft = await sendExistingOwnedTaskLaunchDraft({
           view,
           task,
@@ -6641,6 +6654,7 @@ function registerIpc() {
           launchTask,
           decision:staleDraftRecovery.decision,
           baselineResponseSha256,
+          baselineResponseMessageId,
         });
         send("context:refresh", { reason:resumedDraft?.ok ? "task-launch-existing-draft-sent" : "task-launch-existing-draft-blocked", taskId:task.id, sessionId:session.id });
         return { ok:resumedDraft?.ok === true, activeWork, taskLaunch:resumedDraft, error:resumedDraft?.ok ? null : resumedDraft?.error };

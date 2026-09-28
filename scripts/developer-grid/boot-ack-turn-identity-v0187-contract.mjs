@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const main=fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/src/main.cjs"),"utf8");
+const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package.json"),"utf8"));
+const types=fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),"utf8");
+let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
+check("desktop v0.1.87",()=>assert.equal(pkg.version,"0.1.87"));
+check("backend v0.1.87-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.87-dev"/));
+check("BOOT ACK candidate prefers transcript history",()=>assert.ok(main.indexOf("const transcript = await captureConversationTranscript(view);") < main.indexOf('LATEST_ASSISTANT_FALLBACK')));
+check("BOOT ACK processor accepts baseline/response message ids",()=>assert.match(main,/baselineResponseMessageId = "", responseMessageId = ""/));
+check("identical text on a different turn is not suppressed",()=>assert.match(main,/responseTurnId === baselineTurnId/));
+check("monitor forwards captured messageId",()=>assert.match(main,/responseMessageId:String\(capture\.messageId \|\| ""\)/));
+check("manual launch captures baseline message id",()=>assert.match(main,/const baselineResponseMessageId = String\(launchRecord\.baselineResponseMessageId/));
+check("manual launch persists baseline message id",()=>assert.match(main,/baselineResponseMessageId,\n    sourceProofSha256:currentProof/));
+check("manual launch monitor receives baseline message id",()=>assert.match(main,/baselineResponseSha256, baselineResponseMessageId \}\)/));
+check("resume current draft passes baseline message id",()=>assert.match(main,/decision:staleDraftRecovery\.decision,\n          baselineResponseSha256,\n          baselineResponseMessageId/));
+console.log("Developer Grid v0.1.87 BOOT ACK turn identity contract PASS · "+n+"/"+n);
