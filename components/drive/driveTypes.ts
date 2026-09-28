@@ -38,6 +38,10 @@ export type DriveFolder = {
   parentId: string | null;
   name: string;
   path: string;
+  originalName?: string;
+  displayName?: string;
+  safeName?: string;
+  displayPath?: string;
   sortOrder: number;
   discipline?: string;
   topic?: string;

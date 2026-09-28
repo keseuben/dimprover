@@ -40,7 +40,7 @@ export default function FolderTreePanel({
           <span className={styles.folderCount}>{totalDocumentCount}</span>
         </button>
         {folders.map((folder) => {
-          const depth = Math.max(0, folder.path.split("/").filter(Boolean).length - 1);
+          const depth = Math.max(0, (folder.displayPath || folder.path).split("/").filter(Boolean).length - 1);
           return (
             <button
               key={folder.id}
@@ -48,10 +48,10 @@ export default function FolderTreePanel({
               className={`${styles.folderRow} ${selectedFolderId === folder.id ? styles.folderActive : ""}`}
               style={{ paddingLeft: 10 + depth * 15 }}
               onClick={() => onSelectFolder(folder.id)}
-              title={folder.path}
+              title={folder.displayPath || folder.path}
             >
               <Folder size={13} />
-              <span>{folder.name}</span>
+              <span>{folder.displayName || folder.name}</span>
               <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
             </button>
           );

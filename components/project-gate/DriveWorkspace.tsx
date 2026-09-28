@@ -50,6 +50,10 @@ type DriveFolder = {
   parentId: string | null;
   name: string;
   path: string;
+  originalName?: string;
+  displayName?: string;
+  safeName?: string;
+  displayPath?: string;
   sortOrder: number;
   discipline?: string;
   topic?: string;
@@ -822,6 +826,33 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "A mappa létrehozása sikertelen."); }
     finally { setBusy(false); }
+  }
+
+  async function renameSelectedFolder() {
+    if (!selectedFolder || !canWrite) return;
+    const currentName = selectedFolder.displayName || selectedFolder.name;
+    const displayName = window.prompt("Mappa megjelenítési neve:", currentName)?.trim();
+    if (!displayName || displayName === currentName) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(selectedFolder.id)}/display-name`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ displayName }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa átnevezése sikertelen.");
+      setNotice(`Mappa megjelenítési neve módosítva: ${displayName}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappa átnevezése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitDocument(event: FormEvent<HTMLFormElement>) {
@@ -1659,6 +1690,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           ><PackageCheck size={16} /> CsomagBOX {boxes.length ? `(${boxes.length})` : ""}</button>
           {canWrite && <button type="button" onClick={() => void toggleProjectGateForm()} title={dropDriveIncomingReady ? "Projekt Beküldőkapu létrehozása és kezelése" : health?.dropDriveIncoming?.nextStep || "A Beküldőkapu fogadási lánca még nem kész."}><Send size={16} /> Beküldőkapu</button>}
           {canWrite && <button type="button" onClick={() => setShowFolderForm((value) => !value)}><FolderPlus size={16} /> Új mappa</button>}
+          {canWrite && selectedFolder && <button type="button" onClick={() => void renameSelectedFolder()} disabled={busy}>Mappa átnevezése</button>}
           {canWrite && <button
             type="button"
             className={styles.primary}
@@ -1818,13 +1850,13 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           </form>}
           {showFolderForm && <form onSubmit={submitFolder} className={styles.formCard}>
             <header><FolderPlus size={17} /><strong>Új projektmappa</strong></header>
-            <label>Szülőmappa<select name="parentId" defaultValue={selectedFolderId === "all" ? "" : selectedFolderId}><option value="">Projekt gyökér</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>
+            <label>Szülőmappa<select name="parentId" defaultValue={selectedFolderId === "all" ? "" : selectedFolderId}><option value="">Projekt gyökér</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.displayPath || folder.path}</option>)}</select></label>
             <label>Mappa neve<input name="name" required maxLength={120} placeholder="például Kiviteli tervek" /></label>
             <footer><button type="button" onClick={() => setShowFolderForm(false)}>Mégse</button><button type="submit" disabled={busy}>{busy ? "Mentés…" : "Mappa létrehozása"}</button></footer>
           </form>}
           {showDocumentForm && <form onSubmit={submitDocument} className={styles.formCard}>
             <header><FilePlus2 size={17} /><strong>Dokumentum metaadat</strong></header>
-            <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>
+            <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.displayPath || folder.path}</option>)}</select></label>
             <label>Dokumentumnév<input name="name" required maxLength={240} placeholder="például E-03_Alaprajz.pdf" /></label>
             <div className={styles.formSplit}><label>Revízió<input name="revisionCode" defaultValue="V1" maxLength={40} /></label><label>MIME-típus<input name="mimeType" defaultValue="application/pdf" /></label></div>
             <label>Leírás<textarea name="description" rows={2} placeholder="Rövid tartalmi leírás" /></label>
@@ -1833,7 +1865,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           </form>}
           {showUploadForm && storageWriteEnabled && <form onSubmit={submitFileUpload} className={`${styles.formCard} ${styles.uploadForm}`}>
             <header><UploadCloud size={17} /><strong>Többfájlos feltöltés a privát DRIVE tárhelyre</strong></header>
-            <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}</select></label>
+            <label>Célmappa<select name="folderId" required defaultValue={selectedFolderId === "all" ? tree?.folders[0]?.id || "" : selectedFolderId}><option value="" disabled>Válassz mappát</option>{tree?.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.displayPath || folder.path}</option>)}</select></label>
             <label>Fájlok<input name="file" type="file" multiple required /></label>
             <div className={styles.uploadHint}><UploadCloud size={20} /><div><strong>Több fájlt is kijelölhetsz egyszerre</strong><span>Windows Intézőből vagy az asztalról közvetlenül a Drive felületre is behúzhatod őket. Külső drop esetén a bal oldalon kiválasztott mappa lesz a cél.</span></div></div>
             <small>Maximum fájlméret: {health?.storage?.maxUploadMb || 0} MB / fájl. Minden tétel ugyanazon signed upload → SHA-256 → karantén / biztonsági ellenőrzési láncon halad át.</small>
@@ -1850,18 +1882,19 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         aria-label="Új dokumentumverzió fájl kiválasztása"
       />
 
-      {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat vagy mappákat a feltöltéshez</strong><span>{selectedFolder ? "Célmappa: " + selectedFolder.path : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span></div></div>}
+      {externalDragActive && <div className={styles.externalDropOverlay} aria-live="polite"><div><UploadCloud size={34} /><strong>Engedd el a fájlokat vagy mappákat a feltöltéshez</strong><span>{selectedFolder ? "Célmappa: " + (selectedFolder.displayPath || selectedFolder.path) : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span></div></div>}
 
       <div className={styles.browser}>
         <aside className={styles.folderPanel}>
           <header><strong>Projektmappák</strong><span>{tree?.folders.length || 0}</span></header>
           <button type="button" className={selectedFolderId === "all" ? styles.folderActive : ""} onClick={() => setSelectedFolderId("all")}><HardDrive size={16} /><span>Teljes dokumentumtár</span></button>
           {tree?.folders.map((folder) => {
-            const depth = folder.path.split("/").length - 1;
-            return <button key={folder.id} type="button" style={{ paddingLeft: 13 + depth * 17 }} className={selectedFolderId === folder.id ? styles.folderActive : ""} onClick={() => setSelectedFolderId(folder.id)}><Folder size={15} /><span>{folder.name}</span><small>{folderDocumentCounts.get(folder.id) || 0}</small></button>;
+            const depth = (folder.displayPath || folder.path).split("/").length - 1;
+            return <button key={folder.id} type="button" style={{ paddingLeft: 13 + depth * 17 }} className={selectedFolderId === folder.id ? styles.folderActive : ""} onClick={() => setSelectedFolderId(folder.id)}><Folder size={15} /><span>{folder.displayName || folder.name}</span><small>{folderDocumentCounts.get(folder.id) || 0}</small></button>;
           })}
           {selectedFolder && <div className={styles.folderClassification}>
             <strong>Mappa besorolása</strong>
+            <small>Megjelenítési név: <b>{selectedFolder.displayName || selectedFolder.name}</b> · Eredeti: {selectedFolder.originalName || selectedFolder.name} · Technikai: {selectedFolder.safeName || selectedFolder.name}</small>
             <label>Szakág<input value={folderDiscipline} onChange={(event) => setFolderDiscipline(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.discipline || "Nincs megadva"} /></label>
             <label>Témakör<input value={folderTopic} onChange={(event) => setFolderTopic(event.target.value)} placeholder={effectiveFolderClassification.get(selectedFolder.id)?.topic || "Nincs megadva"} /></label>
             <small>Az üres mező a legközelebbi szülőmappa értékét örökli. Aktív: Szakág = {effectiveFolderClassification.get(selectedFolder.id)?.discipline || "—"} ({folderDiscipline ? "saját" : effectiveFolderClassification.get(selectedFolder.id)?.discipline ? "örökölt" : "nincs"}), Témakör = {effectiveFolderClassification.get(selectedFolder.id)?.topic || "—"} ({folderTopic ? "saját" : effectiveFolderClassification.get(selectedFolder.id)?.topic ? "örökölt" : "nincs"}).</small>
@@ -1871,7 +1904,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
         <div className={styles.documentPanel}>
           <header className={styles.documentHeader}>
-            <div><small>{selectedFolder ? selectedFolder.path : "Projektfájlok"}</small><strong>{selectedFolder?.name || "Teljes dokumentumtár"} · {visibleDocuments.length} fájl</strong></div>
+            <div><small>{selectedFolder ? selectedFolder.displayPath || selectedFolder.path : "Projektfájlok"}</small><strong>{selectedFolder?.displayName || selectedFolder?.name || "Teljes dokumentumtár"} · {visibleDocuments.length} fájl</strong></div>
             <div className={styles.documentTools}>
               <div className={styles.viewModeSwitcher} aria-label="DRIVE megjelenítési mód">
                 <button type="button" className={browserViewMode === "list" ? styles.filterActive : ""} onClick={() => setBrowserViewMode("list")} title="Lista nézet"><List size={14} /> Lista</button>
@@ -1900,7 +1933,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           </div>}
           {childFolders.length > 0 && <div className={styles.folderCards}>
             {childFolders.map((folder) => <button key={folder.id} type="button" onClick={() => setSelectedFolderId(folder.id)}>
-              <span><Folder size={18} /></span><div><strong>{folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
+              <span><Folder size={18} /></span><div><strong>{folder.displayName || folder.name}</strong><small>{folderDocumentCounts.get(folder.id) || 0} fájl az almappákkal együtt</small></div><ChevronRight size={16} />
             </button>)}
           </div>}
           <div className={`${styles.tableHeader} ${browserViewMode === "viewer" || browserViewMode === "compare" || browserViewMode === "engineering" ? styles.listHidden : ""}`}><span>Név</span><span>Verzió</span><span>Forrás</span><span>Méret</span><span>Módosítva</span><span>Művelet</span></div>

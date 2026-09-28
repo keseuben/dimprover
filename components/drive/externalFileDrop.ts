@@ -158,7 +158,7 @@ export async function ensureDroppedDriveFolders(input: {
 }) {
   const byKey = new Map<string, DriveFolder>();
   for (const folder of input.existingFolders) {
-    byKey.set(folderLookupKey(folder.parentId, folder.name), folder);
+    byKey.set(folderLookupKey(folder.parentId, folder.displayName || folder.name), folder);
   }
 
   const byRelativePath = new Map<string, DriveFolder>();

@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import JSZip from "jszip";
 import { listDriveTree } from "./databaseRepository";
 import { DriveCoreRepositoryError } from "./errors";
+import { normalizeDriveFileName } from "./nameNormalizer";
 import { requireDriveCleanSecurityScan } from "./securityScanRepository";
 import { getDriveObjectStream } from "./s3ObjectStorage";
 import { logDriveDownloadRecord } from "./storageRepository";
@@ -88,7 +89,7 @@ function buildManifest(input: {
   const lines = [
     "DIMPRO Drive – mappaletöltés",
     "",
-    `Mappa: ${input.folder.path || input.folder.name}`,
+    `Mappa: ${input.folder.displayPath || input.folder.displayName || input.folder.path || input.folder.name}`,
     `Létrehozva: ${new Date().toLocaleString("hu-HU")}`,
     `Letöltött fájlok: ${input.files.length}`,
     `Kihagyott fájlok: ${input.skipped.length}`,
@@ -99,6 +100,7 @@ function buildManifest(input: {
   ];
   input.files.forEach((item, index) => {
     lines.push(`${index + 1}. ${item.zipName}`);
+    lines.push(`   Eredeti fájlnév: ${item.version.originalName || item.document.name}`);
     lines.push(`   Méret: ${item.version.sizeBytes} byte`);
     lines.push(`   MIME: ${item.version.mimeType || "application/octet-stream"}`);
     if (item.version.sha256) lines.push(`   SHA-256: ${item.version.sha256}`);
@@ -168,7 +170,8 @@ export async function openDriveFolderZip(input: {
       );
     }
     const folderPath = folderPaths.get(document.folderId) || safeArchiveSegment(root.name, "DIMPRO_Drive");
-    accepted.push({ document, version, zipName: uniqueZipEntryName(folderPath, version.originalName || document.name, usedNames) });
+    const technicalFileName = normalizeDriveFileName(document.name || version.originalName).safeFileName;
+    accepted.push({ document, version, zipName: uniqueZipEntryName(folderPath, technicalFileName, usedNames) });
   }
 
   const zip = new JSZip();

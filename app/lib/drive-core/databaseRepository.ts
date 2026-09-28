@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
-import { normalizeDriveFileName } from "./nameNormalizer";
+import { normalizeDriveFileName, normalizeDriveFolderName } from "./nameNormalizer";
 import {
   DRIVE_CORE_BOOTSTRAP_ID,
   DRIVE_CORE_MIGRATION_COUNT,
@@ -21,6 +21,7 @@ import type {
 
 type DbFolder = {
   id: string; project_id: string; parent_id: string | null; name: string; path: string;
+  original_name?: string | null; display_name?: string | null;
   sort_order: number; discipline?: string | null; topic?: string | null; status: DriveFolder["status"]; created_by: string; created_at: string; updated_at: string;
 };
 type DbDocument = {
@@ -96,6 +97,10 @@ function extensionFromName(name: string) {
 function mapFolder(row: DbFolder): DriveFolder {
   return {
     id: row.id, projectId: row.project_id, parentId: row.parent_id, name: row.name, path: row.path,
+    originalName: row.original_name || row.display_name || row.name,
+    displayName: row.display_name || row.original_name || row.name,
+    safeName: row.name,
+    displayPath: row.display_name || row.original_name || row.name,
     sortOrder: Number(row.sort_order || 0), discipline: row.discipline || "", topic: row.topic || "", status: row.status, createdBy: row.created_by,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
@@ -216,9 +221,24 @@ export async function listDriveTree(projectId: string): Promise<DriveTree> {
     const document = row as DbDocument;
     return mapDocument(document, versionByDocument.get(document.id) || null);
   });
+  const mappedFolders = (folderResult.data || []).map((row) => mapFolder(row as DbFolder));
+  const folderById = new Map(mappedFolders.map((folder) => [folder.id, folder]));
+  const displayPathCache = new Map<string, string>();
+  const resolveDisplayPath = (folder: DriveFolder, visiting = new Set<string>()): string => {
+    const cached = displayPathCache.get(folder.id);
+    if (cached) return cached;
+    if (visiting.has(folder.id)) return folder.displayName;
+    visiting.add(folder.id);
+    const parent = folder.parentId ? folderById.get(folder.parentId) : undefined;
+    const value = parent ? resolveDisplayPath(parent, visiting) + "/" + folder.displayName : folder.displayName;
+    displayPathCache.set(folder.id, value);
+    visiting.delete(folder.id);
+    return value;
+  };
+  const folders = mappedFolders.map((folder) => ({ ...folder, displayPath: resolveDisplayPath(folder) }));
   return {
     projectId,
-    folders: (folderResult.data || []).map((row) => mapFolder(row as DbFolder)),
+    folders,
     documents,
     summary: {
       folderCount: folderResult.data?.length || 0,
@@ -233,12 +253,24 @@ export async function listDriveTree(projectId: string): Promise<DriveTree> {
 
 export async function createDriveFolder(projectId: string, input: Record<string, unknown>, actorUserId: string) {
   const client = await requireReadyClient();
-  const name = normalizeText(input.name).replace(/[\\/\u0000-\u001f]/g, " ").replace(/\s+/g, " ").slice(0, 120);
-  if (!name) return { ok: false as const, error: "A mappa neve kötelező." };
+  const originalName = normalizeText(input.originalName || input.displayName || input.name)
+    .replace(/[\/\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 1000);
+  if (!originalName) return { ok: false as const, error: "A mappa neve kötelező." };
+
+  const normalizedName = normalizeDriveFolderName(originalName);
+  const displayName = normalizeText(input.displayName || originalName)
+    .replace(/[\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 240) || originalName.slice(0, 240);
+
   const folder = {
     id: normalizeText(input.id) || `drive-folder-${randomUUID().slice(0, 12)}`,
     parent_id: normalizeText(input.parentId) || null,
-    name,
+    name: normalizedName.safeFolderName,
+    original_name: originalName,
+    display_name: displayName,
     sort_order: normalizeInteger(input.sortOrder, 100, 0, 999999),
     created_by: actorUserId,
   };
@@ -248,9 +280,31 @@ export async function createDriveFolder(projectId: string, input: Record<string,
     p_actor_user_id: actorUserId,
   });
   if (error) {
-    if (error.code === "23505") return { ok: false as const, error: "Ebben a mappában már létezik ilyen nevű mappa." };
+    if (error.code === "23505") return { ok: false as const, error: "Ebben a mappában már létezik ilyen technikai nevű mappa." };
     databaseError("A DRIVE mappa létrehozása sikertelen.", error);
   }
+  return { ok: true as const, folder: mapFolder(data as DbFolder) };
+}
+
+export async function updateDriveFolderDisplayName(
+  projectId: string,
+  folderId: string,
+  displayName: string,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const cleanDisplayName = normalizeText(displayName)
+    .replace(/[\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 240);
+  if (!cleanDisplayName) return { ok: false as const, error: "A mappa megjelenítési neve kötelező." };
+  const { data, error } = await client.rpc("drive_core_update_folder_display_name", {
+    p_project_id: projectId,
+    p_folder_id: folderId,
+    p_display_name: cleanDisplayName,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A DRIVE mappa megjelenítési neve nem módosítható.", error);
   return { ok: true as const, folder: mapFolder(data as DbFolder) };
 }
 

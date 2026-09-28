@@ -591,7 +591,7 @@ export default function FileGridPanel({
           <option value="all">Dokumentumtár / összes fájl</option>
           {folderOptions.map((folder) => (
             <option key={folder.id} value={folder.id}>
-              {folder.path.split("/").filter(Boolean).join(" / ")}
+              {(folder.displayPath || folder.path).split("/").filter(Boolean).join(" / ")}
             </option>
           ))}
         </select>
@@ -605,7 +605,7 @@ export default function FileGridPanel({
         >
           <FolderUp size={14} />
         </button>
-        <span className={styles.fileFolderPath}>{currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
+        <span className={styles.fileFolderPath}>{currentFolder?.displayPath || currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
       </div>
 
       <div className={styles.fileSelectionBar}>

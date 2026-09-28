@@ -2689,3 +2689,21 @@
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+
+.folderRenameButton {
+  margin-left: auto;
+  border: 1px solid #cfdce8;
+  border-radius: 6px;
+  background: #fff;
+  color: #46617b;
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  cursor: pointer;
+}
+.folderRenameButton:hover:not(:disabled) {
+  border-color: #9fbce0;
+  background: #eef5ff;
+  color: #1765d7;
+}

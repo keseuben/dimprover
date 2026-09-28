@@ -77,8 +77,8 @@ function commanderFileIconClass(extension: string) {
 }
 
 function folderLabel(folder: DriveFolder) {
-  const path = folder.path.split("/").filter(Boolean);
-  return path.length > 1 ? path.join(" / ") : folder.name;
+  const path = (folder.displayPath || folder.path).split("/").filter(Boolean);
+  return path.length > 1 ? path.join(" / ") : folder.displayName || folder.name;
 }
 
 function CommanderPane({
@@ -141,7 +141,7 @@ function CommanderPane({
           {folders.map((entry) => <option key={entry.id} value={entry.id}>{folderLabel(entry)}</option>)}
         </select>
       </header>
-      <div className={styles.commanderPath}>{folder?.path || "Dokumentumtár"}</div>
+      <div className={styles.commanderPath}>{folder?.displayPath || folder?.path || "Dokumentumtár"}</div>
       <div className={styles.commanderList}>
         <div className={styles.commanderListInner} style={{ zoom: tableZoom / 100 }}>
         {folder?.parentId && (
@@ -151,7 +151,7 @@ function CommanderPane({
         )}
         {childFolders.map((child) => (
           <button key={child.id} type="button" className={styles.commanderFolderRow} onDoubleClick={() => onFolderChange(child.id)} onClick={() => onFolderChange(child.id)}>
-            <Folder size={13} /><strong>{child.name}</strong><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
+            <Folder size={13} /><strong>{child.displayName || child.name}</strong><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
           </button>
         ))}
         {paneDocuments.map((document) => {

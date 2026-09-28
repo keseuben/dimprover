@@ -1,6 +1,6 @@
-export const DRIVE_CORE_SCHEMA_VERSION = "0.5.0";
-export const DRIVE_CORE_MIGRATION_COUNT = 2;
-export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v050-soft-delete-20260928";
+export const DRIVE_CORE_SCHEMA_VERSION = "0.6.0";
+export const DRIVE_CORE_MIGRATION_COUNT = 3;
+export const DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v060-safe-folder-names-20260928";
 
 export const DRIVE_CORE_TABLES = [
   "drive_core_schema_meta",
@@ -17,7 +17,7 @@ export type DriveCoreTable = typeof DRIVE_CORE_TABLES[number];
 export function getDriveCoreSchemaSelect(table: DriveCoreTable) {
   const selects: Record<DriveCoreTable, string> = {
     drive_core_schema_meta: "component,schema_version,migration_count,bootstrap_id",
-    drive_core_folders: "id,project_id,parent_id,name,path,status",
+    drive_core_folders: "id,project_id,parent_id,name,path,original_name,display_name,status",
     drive_core_documents: "id,project_id,folder_id,name,status,current_version_number",
     drive_core_document_versions: "id,project_id,document_id,version_number,status",
     drive_core_change_events: "sequence,id,project_id,event_type,entity_type,entity_id",

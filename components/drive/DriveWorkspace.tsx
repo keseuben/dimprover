@@ -314,6 +314,33 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     } finally { setBusy(false); }
   }
 
+  async function renameSelectedFolder() {
+    if (!selectedFolder || !canWrite) return;
+    const currentName = selectedFolder.displayName || selectedFolder.name;
+    const displayName = window.prompt("Mappa megjelenítési neve:", currentName)?.trim();
+    if (!displayName || displayName === currentName) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(selectedFolder.id)}/display-name`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ displayName }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa átnevezése sikertelen.");
+      setNotice(`Mappa megjelenítési neve módosítva: ${displayName}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappa átnevezése sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function isExternalFileDrag(event: DragEvent<HTMLElement>) {
     return Array.from(event.dataTransfer.types || []).includes("Files");
   }
@@ -723,7 +750,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    setNotice("Mappa ZIP letöltés indítva: " + selectedFolder.name);
+    setNotice("Mappa ZIP letöltés indítva: " + (selectedFolder.displayName || selectedFolder.name));
   }
 
   function selectFolder(folderId: string) {
@@ -947,8 +974,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   const folderHidden = layoutMode !== "three";
   const detailsHidden = layoutMode === "one";
-  const title = selectedFolder?.name || "Teljes dokumentumtár";
-  const breadcrumbParts = selectedFolder?.path.split("/").filter(Boolean) || [];
+  const title = selectedFolder?.displayName || selectedFolder?.name || "Teljes dokumentumtár";
+  const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
 
   return (
 
@@ -1020,7 +1047,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   <div className={styles.externalDropOverlay} aria-live="polite">
     <div>
       <strong>Engedd el a fájlokat vagy mappákat</strong>
-      <span>{selectedFolder ? "Cél: " + selectedFolder.path : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span>
+      <span>{selectedFolder ? "Cél: " + (selectedFolder.displayPath || selectedFolder.path) : "Mappa behúzásakor a teljes struktúra létrejön a projekt gyökerében."}</span>
     </div>
   </div>
 )}
@@ -1028,6 +1055,11 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       <div className={styles.breadcrumb}>
         <span>Dokumentumtár</span>
         {breadcrumbParts.map((part, index) => <span key={`${part}-${index}`}>› <strong>{part}</strong></span>)}
+        {canWrite && selectedFolder && (
+          <button type="button" className={styles.folderRenameButton} onClick={() => void renameSelectedFolder()} disabled={busy}>
+            Mappa átnevezése
+          </button>
+        )}
       </div>
 
       {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
