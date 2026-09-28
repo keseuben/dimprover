@@ -25,7 +25,7 @@ type LegacyFileEntry = {
   };
 };
 
-type DataTransferItemWithEntry = DataTransferItem & {
+type DataTransferItemWithEntry = {
   webkitGetAsEntry?: () => LegacyFileEntry | null;
 };
 
@@ -119,7 +119,7 @@ export async function collectDroppedDriveEntries(
   const items = Array.from(dataTransfer.items || []);
   const entries = items
     .filter((item) => item.kind === "file")
-    .map((item) => (item as DataTransferItemWithEntry).webkitGetAsEntry?.() || null)
+    .map((item) => (item as unknown as DataTransferItemWithEntry).webkitGetAsEntry?.() || null)
     .filter((entry): entry is LegacyFileEntry => Boolean(entry));
 
   if (entries.length) {
