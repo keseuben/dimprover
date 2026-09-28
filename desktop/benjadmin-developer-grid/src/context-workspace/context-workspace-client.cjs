@@ -119,9 +119,9 @@ async function startDeveloperGridWork({ baseUrl, deviceToken, input }) {
   const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 20000);
   return payload.work || null;
 }
-async function recoverDeveloperGridLaunchExecution({ baseUrl, deviceToken }) {
+async function recoverDeveloperGridLaunchExecution({ baseUrl, deviceToken, input }) {
   const base = ensureDevBase(baseUrl);
-  const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify({action:"RECOVER_LAUNCH_EXECUTION"}) }, 30000);
+  const payload = await jsonRequest(`${base}/api/dev/grid/work-start`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify({action:"RECOVER_LAUNCH_EXECUTION", ...(input || {})}) }, 30000);
   return { recovery:payload.recovery || null, activeWork:payload.activeWork || null };
 }
 async function recoverDeveloperGridExecutionAuthority({ baseUrl, deviceToken, input }) {

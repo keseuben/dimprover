@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const action = body && typeof body === "object" ? String((body as Record<string, unknown>).action || "").toUpperCase() : "";
     if (action === "RECOVER_LAUNCH_EXECUTION") {
-      const recovery = await recoverDeveloperGridLaunchExecution();
+      const recovery = await recoverDeveloperGridLaunchExecution(body as Record<string, unknown>);
       return json({ ok:true, recovery, activeWork:await getDeveloperGridActiveWork() });
     }
     if (action === "RECOVER_EXECUTION_AUTHORITY") {

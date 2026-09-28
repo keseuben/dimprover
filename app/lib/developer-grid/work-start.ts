@@ -664,12 +664,21 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
 }
 
 
-export async function recoverDeveloperGridLaunchExecution() {
+export async function recoverDeveloperGridLaunchExecution(rawInput: Record<string, unknown> = {}) {
   const state = await readGridState();
-  const task = state.task;
+  const requestedTaskId = text(rawInput.taskId, 240);
+  const requestedSessionId = text(rawInput.sessionId, 260);
+  const requestedWorker = rawInput.workerCode ? routableWorkerCode(rawInput.workerCode) : null;
+  const taskId = requestedTaskId || state.task?.id || "";
+  const task = taskId ? await getDeveloperGridTaskById(taskId) : null;
   if (!task) throw Object.assign(new Error("Nincs helyreállítható authoritative Developer Grid task."), { code:"DEVELOPER_GRID_RECOVERY_TASK_MISSING", status:409 });
-  const session = state.sessions.find((item) => item.taskId === task.id && item.endedAt === null) || null;
-  if (!session) throw Object.assign(new Error("A helyreállításhoz aktív Developer Grid worker session szükséges."), { code:"DEVELOPER_GRID_RECOVERY_SESSION_MISSING", status:409 });
+  const session = state.sessions.find((item) =>
+    item.taskId === task.id
+    && item.endedAt === null
+    && (!requestedSessionId || item.id === requestedSessionId)
+    && (!requestedWorker || routableWorkerCode(item.workerCode) === requestedWorker)
+  ) || null;
+  if (!session) throw Object.assign(new Error("A helyreállításhoz exact aktív Developer Grid worker session szükséges."), { code:"DEVELOPER_GRID_RECOVERY_SESSION_MISSING", status:409 });
   if (session.developmentContext.bootAckState === "VALIDATED") {
     throw Object.assign(new Error("A task BOOT ACK-ja már validált; execution recovery nem szükséges."), { code:"DEVELOPER_GRID_RECOVERY_ACK_ALREADY_VALIDATED", status:409 });
   }
@@ -733,7 +742,7 @@ export async function recoverDeveloperGridLaunchExecution() {
       activeScopeLockCount:sourceExecutionProof.activeScopeLockCount, activeWorktreeLeaseCount:sourceExecutionProof.activeWorktreeLeaseCount,
     },
   });
-  return { task:next.task, session:recoveredSession, sourceExecutionProof, revision:next.revision, productionAccess:"DENY" as const };
+  return { task, session:recoveredSession, sourceExecutionProof, revision:next.revision, productionAccess:"DENY" as const };
 }
 
 

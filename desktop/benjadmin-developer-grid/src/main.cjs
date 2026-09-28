@@ -6562,12 +6562,21 @@ function registerIpc() {
       let sourceProofRefreshed = false;
 
       if (!reusableProof.ok) {
-        const recoveredExecution = await recoverDeveloperGridLaunchExecution({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-        activeWork = recoveredExecution?.activeWork || await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
-        task = activeWork?.task || null;
-        session = (activeWork?.sessions || []).find((item) => item?.endedAt === null && item?.taskId === task?.id) || null;
-        if (!task || !session) return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az authoritative task/session nem olvasható." };
-        if (String(activeWork?.reconciliation?.state || "").toUpperCase() !== "CURRENT") return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"A READY recovery után a task source provenance állapota nem aktuális. Launch Packet nem küldhető." };
+        const recoveredExecution = await recoverDeveloperGridLaunchExecution({
+          baseUrl:config.benjadminBaseUrl,
+          deviceToken:readDeviceToken(),
+          input:{ taskId:task?.id, sessionId:session?.id, workerCode:session?.workerCode },
+        });
+        const recoveredTask = recoveredExecution?.recovery?.task || null;
+        const recoveredSession = recoveredExecution?.recovery?.session || null;
+        if (!recoveredTask || !recoveredSession || recoveredTask.id !== task?.id || recoveredSession.id !== session?.id) {
+          return { ok:false, code:"ACTIVE_TASK_RECOVERY_SESSION_REQUIRED", error:"A READY recovery után az exact task/session nem olvasható." };
+        }
+        task = recoveredTask;
+        session = recoveredSession;
+        activeWork = recoveredExecution?.activeWork || activeWork;
+        const recoveryHead = String(session?.sourceProvenance?.head || "").toLowerCase();
+        if (!/^[0-9a-f]{40}$/.test(recoveryHead)) return { ok:false, code:"ACTIVE_TASK_SOURCE_STALE", error:"A READY recovery source HEAD érvénytelen." };
         const recoveredProof = reusableLaunchExecutionProof(task, session);
         if (!recoveredProof.ok) return { ok:false, code:"ACTIVE_TASK_SOURCE_PROOF_REQUIRED", error:"A READY recovery után sincs újrahasználható, VERIFIED/READY Central Core source proof; Launch Packet tiltva." };
         sourceProofRefreshed = recoveredProof.proofSha256 !== previousSourceProofSha256;
