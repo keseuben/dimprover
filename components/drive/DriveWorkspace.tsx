@@ -972,7 +972,6 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               }}
               canWrite={canWrite}
               canApprove={canApprove}
-              canDelete={canDelete}
               membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
@@ -1082,7 +1081,6 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               }}
               canWrite={canWrite}
               canApprove={canApprove}
-              canDelete={canDelete}
               membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
