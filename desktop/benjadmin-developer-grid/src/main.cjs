@@ -30,6 +30,7 @@ const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
 const CHAT_PARTITION_PREFIX = "persist:benjadmin-developer-grid-chatgpt-cell-";
 const CHAT_COOKIE_SYNC_SUPPRESS_MS = 5000;
+const CHAT_AUTH_REFRESH_DELAY_MS = 900;
 const APP_BAR_HEIGHT = 44;
 const CELL_HEADER_HEIGHT = 108;
 const DEVELOPER_FOOTER_HEIGHT = 42;
@@ -61,6 +62,7 @@ let chatViews = new Map();
 let chatSessionPartitions = new Map();
 let chatCookieSyncSuppressions = new Map();
 let chatCookieSyncListeners = [];
+let chatAuthRefreshTimers = new Map();
 let liveClient = null;
 let reporterKeyMemory = "";
 let deviceTokenMemory = "";
@@ -1273,9 +1275,65 @@ async function applyChatCookieToPartition(partition, cookie) {
   suppressChatCookieEvent(partition, cookie);
   try {
     await targetSession.cookies.set(normalized);
+    scheduleChatAuthRefreshForPartition(partition);
   } catch {
     chatCookieSyncSuppressions.delete(chatCookieFingerprint(partition, cookie));
   }
+}
+
+function chatIdForPartition(partition) {
+  for (const [chatId, value] of chatSessionPartitions.entries()) {
+    if (value === partition) return chatId;
+  }
+  return "";
+}
+
+async function chatViewShowsLoggedOutState(view) {
+  if (!view || view.webContents.isDestroyed()) return false;
+  const currentUrl = String(view.webContents.getURL() || "");
+  if (/^https:\/\/(?:auth|login|auth0)\.openai\.com\//i.test(currentUrl)) return true;
+  if (!isChatGptUrl(currentUrl)) return false;
+  return view.webContents.executeJavaScript(`(() => {
+    const visible = (node) => Boolean(node && node.getClientRects().length && getComputedStyle(node).visibility !== "hidden");
+    const explicit = [
+      '[data-testid="login-button"]',
+      'button[data-testid*="login"]',
+      'a[href*="/auth/login"]',
+      'a[href*="/login"]',
+      'a[href*="auth.openai.com"]'
+    ].some((selector) => Array.from(document.querySelectorAll(selector)).some(visible));
+    if (explicit) return true;
+    return Array.from(document.querySelectorAll('button,a'))
+      .filter(visible)
+      .some((node) => /^(log\s*in|sign\s*in|bejelentkez(?:és)?|belépés)$/i.test(String(node.textContent || node.getAttribute('aria-label') || '').trim()));
+  })()`, true).catch(() => false);
+}
+
+function scheduleChatAuthRefreshForPartition(partition, reason = "auth-cookie-sync") {
+  const chatId = chatIdForPartition(partition);
+  if (!chatId) return;
+  const previous = chatAuthRefreshTimers.get(chatId);
+  if (previous) clearTimeout(previous);
+  const timer = setTimeout(async () => {
+    chatAuthRefreshTimers.delete(chatId);
+    const view = chatViews.get(chatId);
+    if (!view || view.webContents.isDestroyed()) return;
+    const loggedOut = await chatViewShowsLoggedOutState(view);
+    if (!loggedOut || view.webContents.isLoading()) return;
+    const currentUrl = String(view.webContents.getURL() || "");
+    try {
+      const state = chatRefreshCell(chatId);
+      state.lastReason = reason;
+      state.error = "";
+      view.webContents.reload();
+      send("live:connection", { kind:"chat-auth-sync", cellId:chatId, ok:true, code:"CHAT_AUTH_SYNC_REFRESHED", reason, url:currentUrl });
+    } catch (error) {
+      const state = chatRefreshCell(chatId);
+      state.error = String(error?.message || error || "Chat auth refresh failed").slice(0,500);
+      send("live:connection", { kind:"chat-auth-sync", cellId:chatId, ok:false, code:"CHAT_AUTH_SYNC_REFRESH_FAILED", reason });
+    }
+  }, CHAT_AUTH_REFRESH_DELAY_MS);
+  chatAuthRefreshTimers.set(chatId, timer);
 }
 
 function configureChatSession(chatSession) {
@@ -6549,6 +6607,8 @@ app.on("will-quit", () => {
     try { session.fromPartition(partition).cookies.removeListener("changed", listener); } catch {}
   }
   chatCookieSyncListeners = [];
+  for (const timer of chatAuthRefreshTimers.values()) clearTimeout(timer);
+  chatAuthRefreshTimers.clear();
   globalShortcut.unregisterAll();
 });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

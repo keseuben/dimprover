@@ -15,8 +15,8 @@ const GiB = 1024 ** 3;
 let n=0;
 const check=(label,fn)=>{fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.83"));
-check("backend version v0.1.75-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.83-dev"/));
+check("desktop version v0.1.75",()=>assert.equal(pkg.version,"0.1.84"));
+check("backend version v0.1.75-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.84-dev"/));
 check("hard minimum remains 15 GiB",()=>assert.equal(config.preBuildHardMinFreeGiB,15));
 check("remote FULL BUILD dispatch reserves only DEV-side transfer space",()=>assert.equal(operationReserveGiB(config,"remote-build"),1));
 check("local small build fallback keeps larger DEV reserve",()=>assert.equal(operationReserveGiB(config,"local-small-build"),3));

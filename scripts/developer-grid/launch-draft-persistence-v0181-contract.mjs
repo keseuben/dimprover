@@ -22,4 +22,4 @@ check("React/ProseMirror restoration is explicitly detected",main.includes("comp
 check("stable empty state is required across multiple render ticks",main.includes("[250, 500, 900]") && main.includes("stableEmptyMs:1650"));
 check("failed persistent clear remains fail-closed",main.includes("STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED") && main.includes("safely and persistently cleared"));
 if(process.exitCode)process.exit(process.exitCode);
-console.log("Developer Grid v0.1.83 persistent launch-draft clear contract PASS - "+checks.length+"/"+checks.length);
+console.log("Developer Grid v0.1.84 persistent launch-draft clear contract PASS - "+checks.length+"/"+checks.length);
