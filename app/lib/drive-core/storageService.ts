@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DriveCoreRepositoryError } from "./errors";
-import { normalizeDriveFileName } from "./nameNormalizer";
+import { normalizeDriveFileName, normalizeDriveRelativePath } from "./nameNormalizer";
 import {
   buildDriveStorageKey,
   calculateDriveObjectSha256,
@@ -129,6 +129,10 @@ export async function initDriveObjectUpload(input: {
     throw new DriveCoreRepositoryError("A feltöltendő fájl eredeti neve kötelező.", "DRIVE_UPLOAD_NAME_REQUIRED", 400);
   }
   const normalizedFileName = normalizeDriveFileName(rawOriginalName);
+  const requestedRelativePath = typeof input.body.originalRelativePath === "string" && input.body.originalRelativePath.trim()
+    ? input.body.originalRelativePath.slice(0, 4000)
+    : rawOriginalName;
+  const normalizedRelativePath = normalizeDriveRelativePath(requestedRelativePath);
   const originalName = normalizeFileName(rawOriginalName);
   const requestedDocumentName = normalizeFileName(input.body.documentName || input.body.name || "");
   const documentName = uploadKind === "NEW_DOCUMENT"
@@ -198,8 +202,9 @@ export async function initDriveObjectUpload(input: {
       nameNormalizationVersion: normalizedFileName.normalizationVersion,
       nameWasSanitized: normalizedFileName.nameWasSanitized,
       nameWasShortened: normalizedFileName.nameWasShortened,
-      originalRelativePath: typeof input.body.originalRelativePath === "string" ? input.body.originalRelativePath.slice(0, 4000) : "",
-      safeRelativePath: typeof input.body.safeRelativePath === "string" ? input.body.safeRelativePath.slice(0, 4000) : "",
+      originalRelativePath: normalizedRelativePath.originalRelativePath,
+      safeRelativePath: normalizedRelativePath.safeRelativePath,
+      pathWasCompacted: Boolean(normalizedRelativePath.pathWasCompacted),
       checksumVerified: false,
       signedUploadVersion: "0.4.2",
     },

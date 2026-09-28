@@ -1,4 +1,3 @@
-import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import JSZip from "jszip";
@@ -6,7 +5,14 @@ import { listDriveTree } from "./databaseRepository";
 import { DriveCoreRepositoryError } from "./errors";
 import { DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME, buildDigitalDocumentationRegister } from "./documentationRegister";
 import { listDriveEngineeringMetadata, type DriveEngineeringMetadata } from "./workspaceRepository";
-import { normalizeDriveFileName } from "./nameNormalizer";
+import {
+  DRIVE_SAFE_PATH_TARGET_MAX,
+  buildDriveSafeArchiveFolderPath,
+  buildDriveSafeArchivePath,
+  compactDriveSafeFileName,
+  ensureDriveSafeFolderName,
+  ensureDriveSafeFileName,
+} from "./nameNormalizer";
 import { requireDriveCleanSecurityScan } from "./securityScanRepository";
 import { getDriveObjectStream } from "./s3ObjectStorage";
 import { logDriveDownloadPackageAudit, logDriveDownloadRecord } from "./storageRepository";
@@ -20,61 +26,55 @@ function downloadPackageId(now = new Date()) {
   return `DLP-${day}-${randomBytes(3).toString("hex").toUpperCase()}`;
 }
 
-function safeArchiveSegment(value: string, fallback = "mappa") {
-  const safe = (value || "")
-    .normalize("NFKC")
-    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "_")
-    .replace(/\.{2,}/g, ".")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120);
-  return safe && safe !== "." ? safe : fallback;
+function splitSafeFileName(value: string) {
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0 || dot === value.length - 1) return { stem: value || "file", extension: "" };
+  return { stem: value.slice(0, dot), extension: value.slice(dot) };
 }
 
-function safeArchiveFileName(value: string) {
-  const base = path.basename(value || "")
-    .normalize("NFKC")
-    .replace(/[\u0000-\u001f\u007f]/g, "")
-    .replace(/[\\/:*?"<>|]/g, "_")
-    .replace(/\.{2,}/g, ".")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
-  return base && base !== "." ? base : "dimpro-drive-file";
-}
-
-function splitName(value: string) {
-  const extension = path.extname(value).slice(0, 32);
-  const stem = extension ? value.slice(0, -extension.length) : value;
-  return { stem: stem || "dimpro-drive-file", extension };
+function folderLineage(folder: DriveFolder, byId: Map<string, DriveFolder>, rootId: string) {
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let current: DriveFolder | undefined = folder;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    segments.push(current.name);
+    if (current.id === rootId) break;
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return segments.reverse();
 }
 
 function buildFolderPaths(root: DriveFolder, folders: DriveFolder[]) {
-  const relative = new Map<string, string>([[root.id, safeArchiveSegment(root.name, "DIMPRO_Drive")]]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const folder of folders) {
-      if (relative.has(folder.id) || !folder.parentId) continue;
-      const parent = relative.get(folder.parentId);
-      if (!parent) continue;
-      relative.set(folder.id, `${parent}/${safeArchiveSegment(folder.name)}`);
-      changed = true;
-    }
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  byId.set(root.id, root);
+  const relative = new Map<string, string>();
+  for (const folder of byId.values()) {
+    const lineage = folderLineage(folder, byId, root.id);
+    if (!lineage.length || lineage[0] !== root.name) continue;
+    const safe = buildDriveSafeArchiveFolderPath(lineage, DRIVE_SAFE_PATH_TARGET_MAX);
+    relative.set(folder.id, safe.relativePath);
+  }
+  if (!relative.has(root.id)) {
+    relative.set(root.id, ensureDriveSafeFolderName(root.name));
   }
   return relative;
 }
 
 function uniqueZipEntryName(folderPath: string, fileName: string, used: Set<string>) {
-  const safe = safeArchiveFileName(fileName);
-  const { stem, extension } = splitName(safe);
-  let leaf = safe;
-  let candidate = `${folderPath}/${leaf}`;
+  const folderSegments = folderPath.split("/").filter(Boolean);
+  const safeFile = ensureDriveSafeFileName(fileName);
+  const first = buildDriveSafeArchivePath(folderSegments, safeFile, DRIVE_SAFE_PATH_TARGET_MAX);
+  let candidate = first.relativePath;
   let counter = 2;
   while (used.has(candidate.toLocaleLowerCase("hu-HU"))) {
-    const suffix = ` (${counter})`;
-    leaf = `${stem.slice(0, Math.max(1, 180 - extension.length - suffix.length))}${suffix}${extension}`;
-    candidate = `${folderPath}/${leaf}`;
+    const { stem, extension } = splitSafeFileName(safeFile);
+    const suffix = "_" + counter;
+    const renamed = compactDriveSafeFileName(
+      stem + suffix + extension,
+      Math.max(10, DRIVE_SAFE_PATH_TARGET_MAX - folderPath.length - 1),
+    );
+    candidate = buildDriveSafeArchivePath(folderSegments, renamed, DRIVE_SAFE_PATH_TARGET_MAX).relativePath;
     counter += 1;
   }
   used.add(candidate.toLocaleLowerCase("hu-HU"));
@@ -191,8 +191,8 @@ export async function openDriveFolderZip(input: {
         413,
       );
     }
-    const folderPath = folderPaths.get(document.folderId) || safeArchiveSegment(root.name, "DIMPRO_Drive");
-    const technicalFileName = normalizeDriveFileName(document.name || version.originalName).safeFileName;
+    const folderPath = folderPaths.get(document.folderId) || ensureDriveSafeFolderName(root.name);
+    const technicalFileName = ensureDriveSafeFileName(document.name || version.originalName);
     accepted.push({
       document,
       version,
@@ -212,7 +212,7 @@ export async function openDriveFolderZip(input: {
     });
   }
 
-  const manifestFolder = safeArchiveSegment(root.name, "DIMPRO_Drive");
+  const manifestFolder = folderPaths.get(root.id) || ensureDriveSafeFolderName(root.name);
   const registerBuffer = await buildDigitalDocumentationRegister({
     projectId: input.projectId,
     projectCode: input.projectCode,
@@ -278,7 +278,7 @@ export async function openDriveFolderZip(input: {
     folder: root,
     packageId,
     registerFileName: DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME,
-    fileName: `${safeArchiveSegment(root.name, "DIMPRO_Drive")}.zip`,
+    fileName: `${ensureDriveSafeFolderName(root.name)}.zip`,
     sourceFileCount: accepted.length,
     skippedFileCount: skipped.length,
     totalBytes,

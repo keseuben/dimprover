@@ -773,6 +773,7 @@ export async function upsertDriveEngineeringMetadata(
     "nameNormalizationVersion",
     "nameWasSanitized",
     "nameWasShortened",
+    "pathWasCompacted",
   ] as const;
   for (const key of immutableSourceNameKeys) {
     if (currentExtra[key] !== undefined) extra[key] = currentExtra[key];

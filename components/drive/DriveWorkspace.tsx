@@ -398,7 +398,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
       setBusy(false);
       for (const group of prepared.groups) {
-        await uploadFiles(group.files, group.folder);
+        await uploadFiles(group.files, group.folder, group.originalRelativePaths);
       }
       await load();
       setNotice(
@@ -425,7 +425,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     fileInputRef.current?.click();
   }
 
-  async function uploadFiles(files: File[], targetFolderOverride?: DriveFolder | null) {
+  async function uploadFiles(files: File[], targetFolderOverride?: DriveFolder | null, originalRelativePaths?: string[]) {
     const targetFolder = targetFolderOverride || selectedFolder;
     if (!files.length || !targetFolder || !canWrite) return;
     setBusy(true);
@@ -453,6 +453,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               folderId: targetFolder.id,
               documentName: file.name,
               originalName: file.name,
+              originalRelativePath: originalRelativePaths?.[index] || file.name,
               mimeType: file.type || "application/octet-stream",
               sizeBytes: file.size,
               revisionCode: "V1",

@@ -48,6 +48,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
               nameNormalizationVersion: sessionMeta.nameNormalizationVersion || "1",
               nameWasSanitized: Boolean(sessionMeta.nameWasSanitized),
               nameWasShortened: Boolean(sessionMeta.nameWasShortened),
+              pathWasCompacted: Boolean(sessionMeta.pathWasCompacted),
             },
           },
           {

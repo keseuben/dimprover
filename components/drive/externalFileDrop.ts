@@ -197,6 +197,7 @@ export async function ensureDroppedDriveFolders(input: {
 export type PreparedDriveDropGroup = {
   folder: DriveFolder;
   files: File[];
+  originalRelativePaths: string[];
 };
 
 export async function prepareDroppedDriveUpload(input: {
@@ -241,8 +242,9 @@ export async function prepareDroppedDriveUpload(input: {
       ? folderResult.byRelativePath.get(entry.directoryPath) || null
       : input.selectedFolder;
     if (!folder) throw new Error('A fájl célmappája nem található: ' + entry.relativePath);
-    const current = grouped.get(folder.id) || { folder, files: [] };
+    const current = grouped.get(folder.id) || { folder, files: [], originalRelativePaths: [] };
     current.files.push(entry.file);
+    current.originalRelativePaths.push(entry.relativePath);
     grouped.set(folder.id, current);
   }
 

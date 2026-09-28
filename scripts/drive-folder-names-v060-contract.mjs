@@ -88,8 +88,8 @@ check("folder drag-drop reuses folders by human display name", () => {
   assert.match(drop, /folder\.displayName \|\| folder\.name/);
 });
 check("ZIP uses technical folder and file names", () => {
-  assert.match(zip, /safeArchiveSegment\(root\.name/);
-  assert.match(zip, /normalizeDriveFileName\(document\.name \|\| version\.originalName\)\.safeFileName/);
+  assert.match(zip, /ensureDriveSafeFolderName\(root\.name\)/);
+  assert.match(zip, /ensureDriveSafeFileName\(document\.name \|\| version\.originalName\)/);
 });
 check("ZIP manifest still records original filenames", () => {
   assert.match(zip, /Eredeti fájlnév:/);

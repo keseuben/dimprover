@@ -104,6 +104,121 @@ export function normalizeDriveFileName(originalFileName: string): DriveSafeFileN
   };
 }
 
+export function ensureDriveSafeFileName(value: string) {
+  const input = String(value || "").trim();
+  const parts = splitFileName(input);
+  const extension = parts.extension;
+  const safeExtensionValue = safeExtension(extension);
+  const safeStemValue = parts.stem;
+  const extensionIsSafe = extension ? /^[A-Za-z0-9]+$/.test(extension) && extension.length <= 16 : true;
+  const stemIsSafe = /^[A-Za-z0-9_-]+$/.test(safeStemValue)
+    && !WINDOWS_RESERVED.test(safeStemValue)
+    && safeStemValue.length > 0;
+  if (stemIsSafe && extensionIsSafe && input.length <= DRIVE_SAFE_FILE_NAME_MAX) return input;
+  return normalizeDriveFileName(input).safeFileName;
+}
+
+export function compactDriveSafeFileName(value: string, maxLength: number) {
+  const safe = ensureDriveSafeFileName(value);
+  if (safe.length <= maxLength) return safe;
+  const parts = splitFileName(safe);
+  const extension = safeExtension(parts.extension);
+  const extPart = extension ? "." + extension : "";
+  const minLength = extPart.length + 6;
+  const target = Math.max(minLength, maxLength);
+  const stemBudget = Math.max(5, target - extPart.length);
+  const hash = shortStableHash(safe);
+  const compactStem = stemBudget <= 6
+    ? hash.slice(0, stemBudget)
+    : truncateWithHash(parts.stem, hash, stemBudget);
+  return compactStem.slice(0, stemBudget) + extPart;
+}
+
+export function ensureDriveSafeFolderName(value: string) {
+  const input = String(value || "").trim();
+  if (/^[A-Za-z0-9_-]+$/.test(input) && !WINDOWS_RESERVED.test(input) && input.length <= DRIVE_SAFE_FOLDER_NAME_MAX) {
+    return input;
+  }
+  return normalizeDriveFolderName(input).safeFolderName;
+}
+
+export function compactDriveSafeFolderName(value: string, maxLength: number) {
+  const safe = ensureDriveSafeFolderName(value);
+  if (safe.length <= maxLength) return safe;
+  const target = Math.max(3, maxLength);
+  const hash = shortStableHash(safe);
+  if (target <= 6) return hash.slice(0, target);
+  return truncateWithHash(safe, hash, target).slice(0, target);
+}
+
+export function buildDriveSafeArchiveFolderPath(
+  folderSegments: string[],
+  maxLength = DRIVE_SAFE_PATH_TARGET_MAX,
+) {
+  const safeFolders = folderSegments.map(ensureDriveSafeFolderName);
+  const initial = safeFolders.join("/");
+  if (initial.length <= maxLength) {
+    return { folderSegments: safeFolders, relativePath: initial, pathWasCompacted: false };
+  }
+
+  const depth = Math.max(1, safeFolders.length);
+  const separatorCount = Math.max(0, depth - 1);
+  const availableChars = Math.max(depth, maxLength - separatorCount);
+  const segmentBudget = Math.max(3, Math.min(DRIVE_SAFE_FOLDER_NAME_MAX, Math.floor(availableChars / depth)));
+  const compactFolders = safeFolders.map((segment) => compactDriveSafeFolderName(segment, segmentBudget));
+  const compactPath = compactFolders.join("/");
+  if (compactPath.length <= maxLength) {
+    return { folderSegments: compactFolders, relativePath: compactPath, pathWasCompacted: true };
+  }
+
+  const emergencyFolders = safeFolders.map((segment) => compactDriveSafeFolderName(segment, 3));
+  const emergencyPath = emergencyFolders.join("/");
+  if (emergencyPath.length <= maxLength) {
+    return { folderSegments: emergencyFolders, relativePath: emergencyPath, pathWasCompacted: true };
+  }
+
+  const flattened = "P_" + shortStableHash(safeFolders.join("/"));
+  return { folderSegments: [flattened], relativePath: flattened, pathWasCompacted: true };
+}
+
+export function buildDriveSafeArchivePath(
+  folderSegments: string[],
+  fileName: string,
+  maxLength = DRIVE_SAFE_PATH_TARGET_MAX,
+) {
+  const safeFile = ensureDriveSafeFileName(fileName);
+  const folderTarget = Math.max(24, maxLength - 73);
+  const folderPath = buildDriveSafeArchiveFolderPath(folderSegments, folderTarget);
+  const separatorCount = folderPath.folderSegments.length ? 1 : 0;
+  const availableFileChars = Math.max(10, maxLength - folderPath.relativePath.length - separatorCount);
+  const compactFile = compactDriveSafeFileName(safeFile, availableFileChars);
+  let relativePath = folderPath.relativePath
+    ? folderPath.relativePath + "/" + compactFile
+    : compactFile;
+
+  if (relativePath.length <= maxLength) {
+    return {
+      folderSegments: folderPath.folderSegments,
+      fileName: compactFile,
+      relativePath,
+      pathWasCompacted: folderPath.pathWasCompacted || compactFile !== safeFile,
+    };
+  }
+
+  const fallbackFolder = folderPath.folderSegments.length
+    ? ["P_" + shortStableHash(folderPath.folderSegments.join("/"))]
+    : [];
+  const fallbackPrefix = fallbackFolder.length ? fallbackFolder[0].length + 1 : 0;
+  const fallbackFile = compactDriveSafeFileName(safeFile, Math.max(10, maxLength - fallbackPrefix));
+  relativePath = fallbackFolder.length ? fallbackFolder[0] + "/" + fallbackFile : fallbackFile;
+  return {
+    folderSegments: fallbackFolder,
+    fileName: fallbackFile,
+    relativePath: relativePath.slice(0, maxLength),
+    pathWasCompacted: true,
+  };
+}
+
 export type DriveSafeFolderName = {
   originalFolderName: string;
   displayFolderName: string;
@@ -145,9 +260,15 @@ export function normalizeDriveRelativePath(relativePath: string) {
 
   const file = normalizeDriveFileName(parts.at(-1) || "file");
   const folders = parts.slice(0, -1).map(normalizeDriveFolderName);
+  const compacted = buildDriveSafeArchivePath(
+    folders.map((entry) => entry.safeFolderName),
+    file.safeFileName,
+    DRIVE_SAFE_PATH_TARGET_MAX,
+  );
   return {
     originalRelativePath: parts.join("/"),
-    safeRelativePath: [...folders.map((entry) => entry.safeFolderName), file.safeFileName].join("/"),
+    safeRelativePath: compacted.relativePath,
+    pathWasCompacted: compacted.pathWasCompacted,
     file,
     folders,
   };

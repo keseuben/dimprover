@@ -308,6 +308,7 @@ type UploadQueueItem = {
   revisionCode?: string;
   changeNote?: string;
   targetDocumentName?: string;
+  originalRelativePath?: string;
 };
 
 function putUploadFile(
@@ -895,6 +896,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
           expectedCurrentVersion: item.existingDocumentId ? item.expectedCurrentVersion : undefined,
           documentName: item.targetDocumentName || item.file.name,
           originalName: item.file.name,
+          originalRelativePath: item.originalRelativePath || item.file.name,
           mimeType: item.file.type || "application/octet-stream",
           sizeBytes: item.file.size,
           description: item.existingDocumentId
@@ -980,7 +982,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     setNotice(`${successCount}/${items.length} fájl feltöltése sikeres. A hibás tételek külön újrapróbálhatók.`);
   }
 
-  function enqueueFileGroups(groups: Array<{ files: File[]; folder: DriveFolder }>) {
+  function enqueueFileGroups(groups: Array<{ files: File[]; folder: DriveFolder; originalRelativePaths?: string[] }>) {
     if (!canWrite || uploadBatchBusy) {
       if (uploadBatchBusy) setError("Már fut egy feltöltési sor. Várd meg a befejezését, majd adj hozzá új fájlokat.");
       return;
@@ -997,13 +999,15 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
     for (const group of groups) {
       const folder = group.folder;
-      for (const file of group.files.filter((entry) => entry.size > 0)) {
+      for (const [groupFileIndex, file] of group.files.entries()) {
+        if (file.size <= 0) continue;
         const tooLarge = file.size > maxUploadBytes;
         prepared.push({
           id: `drive-upload-${now}-${itemIndex++}-${Math.random().toString(36).slice(2, 8)}`,
           file,
           targetFolderId: folder.id,
           targetFolderPath: folder.path,
+          originalRelativePath: group.originalRelativePaths?.[groupFileIndex] || file.name,
           status: tooLarge ? "ERROR" as const : "QUEUED" as const,
           progress: 0,
           message: tooLarge ? `Túl nagy fájl · maximum ${health?.storage?.maxUploadMb || 0} MB` : "Feltöltésre vár",

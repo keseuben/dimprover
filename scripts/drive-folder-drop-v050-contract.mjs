@@ -43,7 +43,7 @@ check("main Drive handles native file drag events", () => {
 });
 check("main Drive uploads groups to their created folders", () => {
   assert.match(main, /targetFolderOverride\?: DriveFolder/);
-  assert.match(main, /uploadFiles\(group\.files, group\.folder\)/);
+  assert.match(main, /uploadFiles\(group\.files, group\.folder, group\.originalRelativePaths\)/);
 });
 check("main Drive displays folder drag overlay", () => {
   assert.match(main, /Engedd el a fájlokat vagy mappákat/);
@@ -51,7 +51,7 @@ check("main Drive displays folder drag overlay", () => {
 });
 
 check("Projectkapu Drive uses the shared folder-drop helper", () => assert.match(project, /prepareDroppedDriveUpload/));
-check("Projectkapu queue accepts multiple target folders", () => assert.match(project, /enqueueFileGroups\(groups: Array<\{ files: File\[\]; folder: DriveFolder \}>\)/));
+check("Projectkapu queue accepts multiple target folders", () => assert.match(project, /enqueueFileGroups\(groups: Array<\{ files: File\[\]; folder: DriveFolder; originalRelativePaths\?: string\[\] \}>\)/));
 check("Projectkapu queues dropped folder groups", () => assert.match(project, /enqueueFileGroups\(prepared\.groups\)/));
 check("Projectkapu overlay mentions folders", () => assert.match(project, /Engedd el a fájlokat vagy mappákat a feltöltéshez/));
 
