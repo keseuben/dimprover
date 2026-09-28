@@ -279,7 +279,7 @@ check("XLSX original CON", con_row is not None)
 check("XLSX technical CON differs", con_row is not None and cell(con_row, tf) != "CON" and re.fullmatch(r"[A-Za-z0-9_-]+", str(cell(con_row, tf))) is not None)
 
 package_rows = xlsx_sheet_rows(xlsx, 3)
-package_map = {r[0]: (r[1] if len(r) > 1 else "") for r in package_rows if len(r) >= 1}
+package_map = {r[0]: r[1] for r in package_rows if len(r) >= 2 and str(r[1]).strip() != ""}
 check("XLSX package id", package_map.get("Csomagazonosító") == package_id)
 check("XLSX document count", int(float(package_map.get("Dokumentumok száma", "-1"))) == len(files))
 check("XLSX skipped 0", int(float(package_map.get("Kihagyott tételek", "-1"))) == 0)

@@ -73,11 +73,18 @@ const tableResults = await Promise.all(requiredTables.map(async (table) => {
 }));
 
 const marker = markerResult.data || null;
-const ready = !markerResult.error
-  && marker?.component === "dimpro-identity-core"
-  && marker?.schema_version === "0.2.1"
+const bridgeMarkerReady = (
+  marker?.schema_version === "0.2.1"
   && Number(marker?.migration_count || 0) >= 5
   && marker?.bootstrap_id === "dimpro-identity-project-drive-v021-20260816"
+) || (
+  marker?.schema_version === "0.2.2"
+  && Number(marker?.migration_count || 0) >= 6
+  && marker?.bootstrap_id === "dimpro-identity-project-drive-safe-folder-v022-20260928"
+);
+const ready = !markerResult.error
+  && marker?.component === "dimpro-identity-core"
+  && bridgeMarkerReady
   && tableResults.every((item) => item.ready);
 
 console.log(JSON.stringify({

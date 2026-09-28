@@ -32,6 +32,14 @@ const FORWARD_SCHEMA = {
   bootstrapId: "dimpro-identity-project-drive-v021-20260816",
 } as const;
 
+
+const LATEST_SCHEMA = {
+  component: "dimpro-identity-core",
+  schemaVersion: "0.2.2",
+  migrationCount: 6,
+  bootstrapId: "dimpro-identity-project-drive-safe-folder-v022-20260928",
+} as const;
+
 const REQUIRED_TABLE_CHECKS = [
   "dimpro_users",
   "dimpro_organizations",
@@ -606,6 +614,12 @@ export async function getDimproIdentitySchemaHealth(): Promise<DimproIdentitySch
       && marker?.schemaVersion === FORWARD_SCHEMA.schemaVersion
       && marker?.migrationCount >= FORWARD_SCHEMA.migrationCount
       && marker?.bootstrapId === FORWARD_SCHEMA.bootstrapId
+    )
+    || (
+      marker?.component === LATEST_SCHEMA.component
+      && marker?.schemaVersion === LATEST_SCHEMA.schemaVersion
+      && marker?.migrationCount >= LATEST_SCHEMA.migrationCount
+      && marker?.bootstrapId === LATEST_SCHEMA.bootstrapId
     )
   );
   const ready = !markerResult.error
