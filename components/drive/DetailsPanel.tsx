@@ -101,6 +101,7 @@ type Props = {
   inheritedDiscipline?: string;
   inheritedTopic?: string;
   reviewFocus?: string;
+  detailsFocus?: "planNo" | "scales" | "";
 };
 
 function formatAuditDate(value: unknown) {
@@ -455,6 +456,7 @@ export default function DetailsPanel({
   inheritedDiscipline = "",
   inheritedTopic = "",
   reviewFocus = "",
+  detailsFocus = "",
 }: Props) {
   const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
@@ -464,6 +466,18 @@ export default function DetailsPanel({
   const [reviewTimelineOpen, setReviewTimelineOpen] = useState(false);
 
   useEffect(() => { if (focusTab) setTab(focusTab); }, [focusTab]);
+  useEffect(() => { if (detailsFocus) setTab("details"); }, [detailsFocus]);
+  useEffect(() => {
+    if (!detailsFocus || tab !== "details" || !document) return;
+    const targetId = detailsFocus === "planNo" ? "drive-meta-planNo" : "drive-meta-scale-0";
+    const frame = requestAnimationFrame(() => {
+      const target = globalThis.document?.getElementById(targetId) as HTMLInputElement | null;
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+      target?.focus({ preventScroll: true });
+      target?.select?.();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detailsFocus, document?.id, tab]);
   useEffect(() => { setReviewTimelineOpen(false); }, [document?.id]);
   useEffect(() => {
     if (!reviewFocus || tab !== "review") return;
@@ -590,7 +604,7 @@ export default function DetailsPanel({
                 ["zone", "Zóna"],
                 ["topic", "Témakör felülírás"],
               ] as Array<[MetadataTextKey, string]>).map(([key, label]) => (
-                <div className={styles.metaItem} key={key}>
+                <div className={styles.metaItem} key={key} data-details-focused={detailsFocus === key ? "true" : undefined}>
                   <label htmlFor={`drive-meta-${key}`}>{label}</label>
                   <input
                     id={`drive-meta-${key}`}
@@ -603,7 +617,7 @@ export default function DetailsPanel({
               ))}
             </div>
 
-            <div className={styles.scaleEditor}>
+            <div className={styles.scaleEditor} data-details-focused={detailsFocus === "scales" ? "true" : undefined}>
               <div className={styles.scaleEditorHead}>
                 <div>
                   <strong>Tervlépték</strong>
@@ -620,6 +634,7 @@ export default function DetailsPanel({
                   <div className={styles.scaleEditorRow} key={"scale-" + index}>
                     <span>M=1:</span>
                     <input
+                      id={"drive-meta-scale-" + index}
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={scale}

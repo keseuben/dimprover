@@ -40,11 +40,11 @@ check("legacy single scale metadata can still be read", () => {
 });
 check("engineering table has scale column", () => {
   assert.match(grid, /<th>Lépték<\/th>/);
-  assert.match(grid, /className=\{styles\.planScaleCell\} title=\{scaleSummary\(metadata\)\.title\}/);
+  assert.match(grid, /className=\{styles\.metadataCellButton\} title=\{scaleSummary\(metadata\)\.title\}[\s\S]{0,180}openDetail\(document, \"scales\"\)/);
 });
 check("review table has scale column", () => {
   assert.match(grid, /title="Tervlépték">Lépték/);
-  assert.match(grid, /title=\{row\.scale\.title\}>\{row\.scale\.text\}/);
+  assert.match(grid, /className=\{styles\.metadataCellButton\} title=\{row\.scale\.title\}[\s\S]{0,180}openDetail\(row\.document, \"scales\"\)/);
 });
 check("single scale displays fully and multiple scales collapse", () => {
   assert.match(grid, /scales\.length === 1 \? scales\[0\] : scales\[0\] \+ ", …"/);

@@ -2622,3 +2622,32 @@
   color: #405b74;
   font-weight: 800;
 }
+
+.metadataCellButton {
+  width: 100%;
+  min-height: 24px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #365675;
+  padding: 2px 5px;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.metadataCellButton:hover,
+.metadataCellButton:focus-visible {
+  background: #eaf3ff;
+  color: #1765d7;
+  outline: 1px solid #b8d2f1;
+}
+.metaItem[data-details-focused="true"],
+.scaleEditor[data-details-focused="true"] {
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(23, 107, 255, .2);
+  background: #f2f7ff;
+}

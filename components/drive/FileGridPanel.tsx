@@ -448,6 +448,7 @@ export default function FileGridPanel({
       lifecycle,
       explicitName: value("planTitle") || value("drawingTitle"),
       displayName: (value("displayName") || value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
+      planNo: metadata?.planNo || "",
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
       effectiveTopic: value("topic") || inherited?.topic || "",
       scale: scaleSummary(metadata),
@@ -472,6 +473,8 @@ export default function FileGridPanel({
     return allReviewRows.filter((row) => {
       const matchesSearch = !q || [
         row.displayName,
+        row.planNo,
+        row.scale.title,
         row.document.name,
         row.effectiveDiscipline,
         row.effectiveTopic,
@@ -703,13 +706,14 @@ export default function FileGridPanel({
             <table className={styles.reviewTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
-                <col style={{ width: "300px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "110px" }} />
+                <col style={{ width: "92px" }} />
                 <col style={{ width: "160px" }} />
                 <col style={{ width: "105px" }} />
                 <col style={{ width: "112px" }} />
                 <col style={{ width: "85px" }} />
                 <col style={{ width: "105px" }} />
-                <col style={{ width: "92px" }} />
                 <col style={{ width: "55px" }} />
                 <col style={{ width: "65px" }} />
                 <col style={{ width: "58px" }} />
@@ -725,7 +729,7 @@ export default function FileGridPanel({
               </colgroup>
               <thead>
                 <tr className={styles.reviewGroupHeader}>
-                  <th colSpan={8}>Dokumentum</th>
+                  <th colSpan={9}>Dokumentum</th>
                   <th colSpan={6} className={styles.reviewGroupTechnical}>Ellenőrzés</th>
                   <th colSpan={3} className={styles.reviewGroupCustomer}>Megrendelő</th>
                   <th className={styles.reviewGroupManager} title="Projektvezető">Projektv.</th>
@@ -735,12 +739,13 @@ export default function FileGridPanel({
                 <tr className={styles.reviewColumnHeader}>
                   <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható tervek kijelölése" /></th>
                   <th title="Megjelenített tervnév">Név</th>
+                  <th title="Tervszám">Tervszám</th>
+                  <th title="Tervlépték">Lépték</th>
                   <th className={styles.reviewFileNameHeader} title="Eredeti fájlnév">Fájlnév</th>
                   <th title="Feltöltő">Feltöltő</th>
                   <th title="Fájlfeltöltés dátuma és ideje">Feltöltve</th>
                   <th title="Szakág">Szakág</th>
                   <th title="Témakör">Témakör</th>
-                  <th title="Tervlépték">Lépték</th>
                   <th title="Ellenőrzés">Ell.</th>
                   <th title="Eredmény">Eredm.</th>
                   <th title="Észrevételek">Észr.</th>
@@ -758,7 +763,7 @@ export default function FileGridPanel({
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={20}>
+                    <td colSpan={21}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -798,12 +803,13 @@ export default function FileGridPanel({
                         </button>
                       </div>
                     </td>
+                    <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
+                    <td><button type="button" className={styles.metadataCellButton} title={row.scale.title} onClick={() => openDetail(row.document, "scales")}>{row.scale.text}</button></td>
                     <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
                     <td>{uploaderLabel(row.document.currentVersion?.createdBy)}</td>
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
                     <td>{row.effectiveDiscipline || "—"}</td>
                     <td>{row.effectiveTopic || "—"}</td>
-                    <td className={styles.planScaleCell} title={row.scale.title}>{row.scale.text}</td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openDetail(row.document, "result")}>{reviewMark(row.result)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>
@@ -872,13 +878,13 @@ export default function FileGridPanel({
             <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
-                <col style={{ width: "20%" }} /><col style={{ width: "16%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "8%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
+                <col style={{ width: "20%" }} /><col style={{ width: "9%" }} /><col style={{ width: "8%" }} /><col style={{ width: "16%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Lépték</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Tervszám</th><th>Lépték</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={13}>
+                    <td colSpan={14}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -896,12 +902,13 @@ export default function FileGridPanel({
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
+                      <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
+                      <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td title={document.mimeType}>{document.mimeType || "–"}</td>
                       <td>{version?.revisionCode || "–"}</td>
-                      <td className={styles.planScaleCell} title={scaleSummary(metadata).title}>{scaleSummary(metadata).text}</td>
                       <td>V{document.currentVersionNumber}</td>
                       <td>{document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>

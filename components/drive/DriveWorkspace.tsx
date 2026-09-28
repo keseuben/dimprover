@@ -111,6 +111,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [reviewFocus, setReviewFocus] = useState("");
+  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "scales" } | null>(null);
   const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -751,8 +752,15 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   const openReviewDetail = useCallback((document: DriveDocument, field: string) => {
     setSelectedDocumentId(document.id);
+    if (field === "planNo" || field === "scales") {
+      setDetailsFocus({ documentId: document.id, field });
+      setReviewFocus("");
+      if (layoutMode === "one") setLayoutMode("two");
+      return;
+    }
+    setDetailsFocus(null);
     setReviewFocus(field);
-  }, []);
+  }, [layoutMode]);
 
   const bulkReview = useCallback(async (input: {
     documentIds?: string[];
@@ -1101,8 +1109,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 onDownload={downloadSelected}
                 onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
                 responsiveClassName={styles.fullTableInspectorPanel}
-                focusTab={viewMode === "review" ? "review" : undefined}
+                focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
                 reviewFocus={reviewFocus}
+                detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus.field : ""}
                 inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
                 inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
               />
@@ -1237,8 +1246,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onDownload={downloadSelected}
               onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
               responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
-              focusTab={viewMode === "review" ? "review" : undefined}
+              focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}
+              detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus.field : ""}
               inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
               inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
             />
