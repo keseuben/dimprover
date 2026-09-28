@@ -24,7 +24,7 @@ export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = 
     <div className={styles.layoutSwitcher} aria-label="Drive nézetváltó">
       {modes.map((mode) => {
         const Icon = mode.icon;
-        const button = (
+        return (
           <button
             key={mode.value}
             type="button"
@@ -36,22 +36,19 @@ export default function ViewLayoutSwitcher({ value, onChange, tableFullscreen = 
             <Icon size={14} />
           </button>
         );
-        if (mode.value !== "split" || !onToggleTableFullscreen) return button;
-        return [
-          button,
-          <button
-            key="fullscreen-table"
-            type="button"
-            className={`${styles.layoutTableSpecial} ${tableFullscreen ? styles.layoutTableSpecialActive : ""}`}
-            onClick={onToggleTableFullscreen}
-            title={tableFullscreen ? "Teljes ablak táblázati nézet bezárása (Esc)" : "Teljes ablak táblázati nézet"}
-            aria-label={tableFullscreen ? "Teljes ablak táblázati nézet bezárása" : "Teljes ablak táblázati nézet"}
-            aria-pressed={tableFullscreen}
-          >
-            <Table2 size={14} />
-          </button>,
-        ];
       })}
+      {onToggleTableFullscreen && (
+        <button
+          type="button"
+          className={`${styles.layoutTableSpecial} ${tableFullscreen ? styles.layoutTableSpecialActive : ""}`}
+          onClick={onToggleTableFullscreen}
+          title={tableFullscreen ? "Teljes ablak táblázati nézet bezárása (Esc)" : "Teljes ablak táblázati nézet"}
+          aria-label={tableFullscreen ? "Teljes ablak táblázati nézet bezárása" : "Teljes ablak táblázati nézet"}
+          aria-pressed={tableFullscreen}
+        >
+          <Table2 size={14} />
+        </button>
+      )}
     </div>
   );
 }

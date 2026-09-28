@@ -101,6 +101,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
   const [tableFullscreen, setTableFullscreen] = useState(false);
+  const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
   const [tableZoom, setTableZoom] = useState(100);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
@@ -117,19 +118,47 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const canApprove = effectivePermissions.includes("document.approve");
   const securityReady = Boolean(health?.security?.ready);
 
+  const closeTableFullscreen = useCallback(() => {
+    setTableFullscreen(false);
+    setFullTableInspectorOpen(false);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, []);
+
+  const toggleTableFullscreen = useCallback(() => {
+    if (tableFullscreen) {
+      closeTableFullscreen();
+      return;
+    }
+    setTableFullscreen(true);
+    setFullTableInspectorOpen(false);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  }, [closeTableFullscreen, tableFullscreen]);
+
   useEffect(() => {
     if (!tableFullscreen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTableFullscreen(false);
+      if (event.key === "Escape" && !document.fullscreenElement) closeTableFullscreen();
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setTableFullscreen(false);
+        setFullTableInspectorOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [tableFullscreen]);
+  }, [closeTableFullscreen, tableFullscreen]);
 
   const loadBoxes = useCallback(async () => {
     try {
@@ -849,7 +878,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
         tableFullscreen={tableFullscreen}
-        onToggleTableFullscreen={() => setTableFullscreen((current) => !current)}
+        onToggleTableFullscreen={toggleTableFullscreen}
         canWrite={canWrite}
         onCreateFolder={() => void createFolder()}
         onUpload={requestUpload}
@@ -883,10 +912,13 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             title={title}
             subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
             layoutMode={layoutMode}
-            onLayoutModeChange={(next) => { setLayoutMode(next); setTableFullscreen(false); }}
+            onLayoutModeChange={(next) => { setLayoutMode(next); closeTableFullscreen(); }}
             zoom={tableZoom}
             onZoomChange={setTableZoom}
-            onToggleFullscreen={() => setTableFullscreen(false)}
+            onToggleFullscreen={closeTableFullscreen}
+            inspectorOpen={fullTableInspectorOpen}
+            inspectorDisabled={!selectedDocument}
+            onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
           />
           <div className={styles.fullTableBody}>
             <FileGridPanel
@@ -897,7 +929,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onSelectDocument={(document) => setSelectedDocumentId(document.id)}
-              onOpenDocument={(document) => { setTableFullscreen(false); void openDocument(document); }}
+              onOpenDocument={(document) => { closeTableFullscreen(); void openDocument(document); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
               metadataByDocument={metadataByDocument}
@@ -914,11 +946,42 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
-              onOpenReviewDetail={openReviewDetail}
+              onOpenReviewDetail={(document, field) => { openReviewDetail(document, field); setFullTableInspectorOpen(true); }}
               tableZoom={tableZoom}
               dragPanEnabled
             />
           </div>
+          {fullTableInspectorOpen && (
+            <aside className={styles.fullTableInspector} aria-label="Dokumentumadatok">
+              <button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
+              <DetailsPanel
+                projectId={projectId}
+                document={selectedDocument}
+                details={details}
+                loading={detailsLoading}
+                busy={busy}
+                canWrite={canWrite}
+                canComment={canComment}
+                canApprove={canApprove}
+                membershipRole={membershipRole}
+                membershipDisplayName={membershipDisplayName}
+                securityReady={securityReady}
+                securityLabel={health?.security?.ready ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"}
+                onScan={scanSelectedVersion}
+                onReview={reviewSelectedVersion}
+                onSaveMetadata={saveMetadata}
+                onSaveReview={saveSelectedReview}
+                onSaveNote={saveNote}
+                onEnsureQr={ensureQr}
+                onDownload={downloadSelected}
+                responsiveClassName={styles.fullTableInspectorPanel}
+                focusTab={viewMode === "review" ? "review" : undefined}
+                reviewFocus={reviewFocus}
+                inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
+                inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
+              />
+            </aside>
+          )}
         </section>
       )}
 

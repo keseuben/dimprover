@@ -2358,3 +2358,98 @@
 .tablePanEnabled { cursor: grab; overscroll-behavior: contain; }
 .tablePanning { cursor: grabbing !important; user-select: none; }
 .tablePanning * { cursor: grabbing !important; }
+
+
+.fullTableInspectorButton {
+  flex: 0 0 auto;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #ccd9e6;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #435c75;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.fullTableInspectorButton:hover:not(:disabled) {
+  border-color: #97b8d8;
+  background: #f4f8fc;
+  color: #245d96;
+}
+.fullTableInspectorButton:disabled {
+  opacity: .42;
+  cursor: default;
+}
+.fullTableInspectorButtonActive {
+  border-color: #6d3fc0 !important;
+  background: #f1eaff !important;
+  color: #6136b0 !important;
+}
+
+.fullTableInspector {
+  position: absolute;
+  z-index: 2515;
+  top: 58px;
+  right: 8px;
+  bottom: 8px;
+  width: min(500px, calc(100vw - 36px));
+  min-width: 360px;
+  display: flex;
+  border: 1px solid #cdd9e5;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 42px rgba(20, 45, 72, .22);
+  overflow: hidden;
+}
+.fullTableInspectorPanel {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+}
+.fullTableInspector .detailsPanel {
+  width: 100%;
+  height: 100%;
+}
+.fullTableInspector .detailsHeader {
+  padding-right: 44px;
+}
+.fullTableInspectorClose {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d5dee7;
+  border-radius: 7px;
+  background: rgba(255,255,255,.96);
+  color: #5a6f84;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(20,45,72,.08);
+}
+.fullTableInspectorClose:hover {
+  background: #f3f7fb;
+  color: #233d57;
+  border-color: #b8c8d6;
+}
+
+@media (max-width: 760px) {
+  .fullTableInspector {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    min-width: 0;
+  }
+  .fullTableInspectorButton span {
+    display: none;
+  }
+}

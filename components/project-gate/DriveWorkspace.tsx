@@ -366,6 +366,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
   const [tableFullscreen, setTableFullscreen] = useState(false);
+  const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
   const [tableZoom, setTableZoom] = useState(100);
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
@@ -629,23 +630,51 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
   const openReviewDetail = (documentId: string, field: string) => { setSelectedDocumentId(documentId); setReviewFocus(field); };
 
+  const closeTableFullscreen = useCallback(() => {
+    setTableFullscreen(false);
+    setFullTableInspectorOpen(false);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, []);
+
+  const toggleTableFullscreen = useCallback(() => {
+    if (tableFullscreen) {
+      closeTableFullscreen();
+      return;
+    }
+    setTableFullscreen(true);
+    setFullTableInspectorOpen(false);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  }, [closeTableFullscreen, tableFullscreen]);
+
   useEffect(() => {
     if (!tableFullscreen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTableFullscreen(false);
+      if (event.key === "Escape" && !document.fullscreenElement) closeTableFullscreen();
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setTableFullscreen(false);
+        setFullTableInspectorOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [tableFullscreen]);
+  }, [closeTableFullscreen, tableFullscreen]);
 
   useEffect(() => {
-    if (browserViewMode !== "engineering" && tableFullscreen) setTableFullscreen(false);
-  }, [browserViewMode, tableFullscreen]);
+    if (browserViewMode !== "engineering" && tableFullscreen) closeTableFullscreen();
+  }, [browserViewMode, closeTableFullscreen, tableFullscreen]);
 
   const selectedDocument = useMemo(
     () => tree?.documents.find((document) => document.id === selectedDocumentId) || null,
@@ -1878,10 +1907,13 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               title={engineeringTitle}
               subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
               layoutMode={engineeringLayoutMode}
-              onLayoutModeChange={(next) => { setEngineeringLayoutMode(next); setTableFullscreen(false); }}
+              onLayoutModeChange={(next) => { setEngineeringLayoutMode(next); closeTableFullscreen(); }}
               zoom={tableZoom}
               onZoomChange={setTableZoom}
-              onToggleFullscreen={() => setTableFullscreen(false)}
+              onToggleFullscreen={closeTableFullscreen}
+              inspectorOpen={fullTableInspectorOpen}
+              inspectorDisabled={!selectedDocument}
+              onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
             />
             <div className={richStyles.fullTableBody}>
               <FileGridPanel
@@ -1892,7 +1924,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 viewMode={engineeringViewMode}
                 onViewModeChange={setEngineeringViewMode}
                 onSelectDocument={(document) => setSelectedDocumentId(document.id)}
-                onOpenDocument={(document) => { setSelectedDocumentId(document.id); setTableFullscreen(false); setBrowserViewMode("split"); }}
+                onOpenDocument={(document) => { setSelectedDocumentId(document.id); closeTableFullscreen(); setBrowserViewMode("split"); }}
                 onRefresh={() => void load()}
                 boxColorsByDocument={boxColorsByDocument}
                 metadataByDocument={metadataByDocument}
@@ -1908,11 +1940,42 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 canApprove={canApprove}
                 busy={busy}
                 onBulkReview={bulkReview}
-                onOpenReviewDetail={(document, field) => openReviewDetail(document.id, field)}
+                onOpenReviewDetail={(document, field) => { openReviewDetail(document.id, field); setFullTableInspectorOpen(true); }}
                 tableZoom={tableZoom}
                 dragPanEnabled
               />
             </div>
+            {fullTableInspectorOpen && (
+              <aside className={richStyles.fullTableInspector} aria-label="Dokumentumadatok">
+                <button type="button" className={richStyles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
+                <DetailsPanel
+                  projectId={projectId}
+                  document={selectedDocument}
+                  details={details}
+                  loading={detailsLoading}
+                  busy={busy}
+                  canWrite={canWrite}
+                  canComment={canComment}
+                  canApprove={canApprove}
+                  membershipRole=""
+                  membershipDisplayName=""
+                  securityReady={securityScannerReady}
+                  securityLabel={securityScannerReady ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"}
+                  onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }}
+                  onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }}
+                  onSaveMetadata={saveSelectedMetadata}
+                  onSaveReview={saveSelectedReview}
+                  onSaveNote={saveSelectedNote}
+                  onEnsureQr={ensureSelectedQr}
+                  onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
+                  responsiveClassName={richStyles.fullTableInspectorPanel}
+                  focusTab={engineeringViewMode === "review" ? "review" : undefined}
+                  reviewFocus={reviewFocus}
+                  inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""}
+                  inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""}
+                />
+              </aside>
+            )}
           </section>}
 
           {browserViewMode === "engineering" && !tableFullscreen && <section className={styles.engineeringHost} data-project-gate-drive-engineering="0.1.0">
@@ -1921,7 +1984,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 <span>Mérnöki Drive</span>
                 <strong>{engineeringTitle}</strong>
               </div>
-              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={() => setTableFullscreen((current) => !current)} />
+              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={toggleTableFullscreen} />
             </header>
             <div className={engineeringBrowserClass}>
               {engineeringLayoutMode === "commander" ? (
