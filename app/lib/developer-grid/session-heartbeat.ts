@@ -29,14 +29,22 @@ export async function heartbeatDeveloperGridEngineSession(rawInput: Record<strin
   const state = await readGridState();
   const task = await getDeveloperGridTaskById(taskId);
   if (!task) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_MISMATCH", "A Developer Grid task nem található a Central Core authoritative taskállapotában.");
-  if (!["RUNNING", "REVIEW"].includes(task.status)) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_NOT_ACTIVE", "Engine heartbeat csak futó vagy review Developer Grid tasknál engedélyezett.");
+  if (!["READY", "RUNNING", "REVIEW"].includes(task.status)) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_TASK_NOT_ACTIVE", "Engine heartbeat csak READY, RUNNING vagy REVIEW Developer Grid tasknál engedélyezett.");
   const session = state.sessions.find((item) => item.id === sessionId && item.taskId === taskId && item.workerCode === worker && item.endedAt === null) || null;
   if (!session) fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_SESSION_MISMATCH", "Az authoritative Developer Grid session nem található.");
-  if (session.developmentContext.bootAckState !== "VALIDATED" || session.developmentContext.bootAckCodingAllowed !== true) {
-    fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_BOOT_ACK_REQUIRED", "Engine heartbeat csak VALIDATED BOOT ACK után engedélyezett.");
+  const bootAckState = String(session.developmentContext.bootAckState || "").toUpperCase();
+  const executionHeartbeat = bootAckState === "VALIDATED" && session.developmentContext.bootAckCodingAllowed === true;
+  const preAckKeepalive = bootAckState === "WAITING" && session.developmentContext.bootAckCodingAllowed !== true;
+  if (!executionHeartbeat && !preAckKeepalive) {
+    fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_BOOT_ACK_REQUIRED", "Engine heartbeat csak WAITING BOOT ACK keepalive vagy VALIDATED BOOT ACK execution módban engedélyezett.");
   }
   const engineSessionId = text(session.developmentContext.engineSessionId, 220);
   if (!engineSessionId) fail("DEVELOPER_GRID_ENGINE_SESSION_ID_MISSING", "A DevCenter engine session azonosító hiányzik.");
+  const proof = session.developmentContext.sourceExecutionProof || null;
+  if (!proof || proof.state !== "VERIFIED" || proof.authority !== "CENTRAL_CORE" || proof.handshakeStage !== "READY" || proof.productionAccess !== "DENY"
+      || proof.engineSessionId !== engineSessionId || Number(proof.activeScopeLockCount || 0) < 1 || Number(proof.activeWorktreeLeaseCount || 0) < 1) {
+    fail("DEVELOPER_GRID_ENGINE_HEARTBEAT_SOURCE_PROOF_REQUIRED", "A heartbeathez VERIFIED/READY Central Core source proof és aktív scope/worktree authority szükséges.");
+  }
 
   await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean: false });
   const engineState = await getDevCenterEngineState();
@@ -62,6 +70,9 @@ export async function heartbeatDeveloperGridEngineSession(rawInput: Record<strin
     engineSessionId,
     workerCode: worker,
     state: "ALIVE" as const,
+    heartbeatMode: executionHeartbeat ? "EXECUTION" as const : "PRE_ACK_KEEPALIVE" as const,
+    bootAckState,
+    codingAllowed: executionHeartbeat,
     leaseSeconds: result.leaseSeconds || DEV_ENGINE_DEFAULT_LEASE_SECONDS,
     heartbeatAt: new Date().toISOString(),
     productionAccess: "DENY" as const,

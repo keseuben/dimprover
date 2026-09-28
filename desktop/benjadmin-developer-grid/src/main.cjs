@@ -5711,6 +5711,59 @@ async function sendEngineSessionHeartbeatOnce(explicit = null) {
   let workerCode = String(explicit?.workerCode || "").trim().toUpperCase();
   try {
     if (workerCode === "BENAI") workerCode = "BENJAMINAI";
+    if (!taskId && !sessionId && !workerCode) {
+      const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
+      const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks : [];
+      if (pairs.length > 0) {
+        const results = [];
+        for (const pair of pairs) {
+          const pairTask = pair?.task || null;
+          const pairSession = pair?.session || null;
+          const pairTaskId = String(pairTask?.id || pairSession?.taskId || "").trim();
+          const pairSessionId = String(pairSession?.id || "").trim();
+          const pairWorkerCode = String(pairSession?.workerCode || "").trim().toUpperCase() === "BENAI" ? "BENJAMINAI" : String(pairSession?.workerCode || "").trim().toUpperCase();
+          const pairStatus = String(pairTask?.status || "").toUpperCase();
+          const pairBootAck = String(pairSession?.developmentContext?.bootAckState || "").toUpperCase();
+          if (!pairTaskId || !pairSessionId || !pairWorkerCode || !["READY", "RUNNING", "REVIEW"].includes(pairStatus) || !["WAITING", "VALIDATED"].includes(pairBootAck)) continue;
+          try {
+            const heartbeat = await heartbeatDeveloperGridSession({
+              baseUrl:config.benjadminBaseUrl,
+              deviceToken:readDeviceToken(),
+              input:{ taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode }
+            });
+            results.push({ ok:true, taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode, heartbeat });
+            send("connection:engine-heartbeat", {
+              ok:true,
+              multiSession:true,
+              taskId:pairTaskId,
+              sessionId:pairSessionId,
+              workerCode:pairWorkerCode,
+              heartbeatMode:heartbeat?.heartbeatMode || null,
+              at:heartbeat?.heartbeatAt || new Date().toISOString(),
+              leaseSeconds:heartbeat?.leaseSeconds || null
+            });
+          } catch (error) {
+            const pairErrorCode = String(error?.code || "");
+            if (pairErrorCode === "DEVELOPER_GRID_ENGINE_HEARTBEAT_ENGINE_SESSION_MISMATCH") {
+              try {
+                const recovered = await recoverExecutionAuthorityFromHeartbeat({ task:pairTask, session:pairSession, workerCode:pairWorkerCode, errorCode:pairErrorCode });
+                if (recovered?.recovered === true && recovered?.heartbeat) {
+                  results.push({ ok:true, recovered:true, taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode, heartbeat:recovered.heartbeat });
+                  send("connection:engine-heartbeat", { ok:true, multiSession:true, recovered:true, recoveryVersion:"V0189", taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode, at:recovered.heartbeat?.heartbeatAt || new Date().toISOString(), leaseSeconds:recovered.heartbeat?.leaseSeconds || null });
+                  continue;
+                }
+              } catch (recoveryError) {
+                results.push({ ok:false, taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode, code:pairErrorCode, error:recoveryError instanceof Error ? recoveryError.message : "Heartbeat authority recovery failed." });
+                continue;
+              }
+            }
+            results.push({ ok:false, taskId:pairTaskId, sessionId:pairSessionId, workerCode:pairWorkerCode, code:pairErrorCode || null, error:error instanceof Error ? error.message : "Developer Grid multi-session heartbeat failed." });
+          }
+        }
+        const taskBridgeHeartbeats = await heartbeatCodexTaskBridgesOnce();
+        return { multiSession:true, results, taskBridgeHeartbeats };
+      }
+    }
     if (!taskId || !sessionId || !workerCode) {
       const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() });
       heartbeatTask = activeWork?.task || null;

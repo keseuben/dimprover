@@ -426,7 +426,32 @@ export async function getDeveloperGridActiveWork() {
     }
     if (ageHours !== null && ageHours > 72) { executionState = "STALE"; reasons.push("AUTHORITATIVE_STATE_OLDER_THAN_72H"); }
   }
-  return { task, sessions, revision: state.revision, updatedAt: state.updatedAt, reconciliation: { state: executionState, reasons: [...new Set(reasons)], ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10, authoritativeHead: activeSession?.sourceProvenance.head || null, actualHead, reconciledFromActiveSession } };
+  let activeSessionTasks: Array<{ task: DeveloperGridTask; session: WorkerSession }> = [];
+  if (allActiveSessions.length > 0) {
+    try {
+      const engineState = await getDevCenterEngineState();
+      activeSessionTasks = allActiveSessions.flatMap((session) => {
+        const resolvedTask = state.task?.id === session.taskId
+          ? state.task
+          : (() => {
+              const engineTask = engineState.tasks.find((item) => item.id === session.taskId) || null;
+              return engineTask ? gridTaskFromEngine(engineTask as unknown as Record<string, unknown>) : null;
+            })();
+        return resolvedTask ? [{ task: resolvedTask, session }] : [];
+      });
+    } catch {
+      activeSessionTasks = task && activeSession ? [{ task, session: activeSession }] : [];
+    }
+  }
+  return {
+    task,
+    sessions,
+    allActiveSessions,
+    activeSessionTasks,
+    revision: state.revision,
+    updatedAt: state.updatedAt,
+    reconciliation: { state: executionState, reasons: [...new Set(reasons)], ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10, authoritativeHead: activeSession?.sourceProvenance.head || null, actualHead, reconciledFromActiveSession },
+  };
 }
 
 export async function startDeveloperGridWork(rawInput: Record<string, unknown>) {

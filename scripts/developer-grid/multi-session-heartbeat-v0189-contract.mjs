@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+const work=read("app/lib/developer-grid/work-start.ts");
+const hb=read("app/lib/developer-grid/session-heartbeat.ts");
+const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
+const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
+let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
+check("desktop v0.1.89",()=>assert.equal(pkg.version,"0.1.89"));
+check("active work exposes all active sessions",()=>assert.match(work,/allActiveSessions,/));
+check("active work exposes task-session pairs",()=>assert.match(work,/activeSessionTasks,/));
+check("heartbeat allows READY tasks",()=>assert.match(hb,/\["READY", "RUNNING", "REVIEW"\]/));
+check("heartbeat recognizes WAITING keepalive",()=>assert.match(hb,/preAckKeepalive = bootAckState === "WAITING"/));
+check("heartbeat requires verified Central proof",()=>assert.match(hb,/DEVELOPER_GRID_ENGINE_HEARTBEAT_SOURCE_PROOF_REQUIRED/));
+check("heartbeat reports PRE_ACK_KEEPALIVE",()=>assert.match(hb,/PRE_ACK_KEEPALIVE/));
+check("desktop iterates activeSessionTasks",()=>assert.match(main,/Array\.isArray\(activeWork\?\.activeSessionTasks\)/));
+check("desktop includes WAITING and VALIDATED",()=>assert.match(main,/\["WAITING", "VALIDATED"\]\.includes\(pairBootAck\)/));
+check("desktop emits multiSession heartbeat state",()=>assert.match(main,/multiSession:true/));
+console.log("Developer Grid v0.1.89 multi-session heartbeat contract PASS · "+n+"/"+n);
