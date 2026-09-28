@@ -98,6 +98,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [query, setQuery] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
@@ -115,6 +116,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
+  const canDelete = effectivePermissions.includes("document.delete");
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const securityReady = Boolean(health?.security?.ready);
@@ -773,6 +775,29 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  async function deleteDocuments(documentIds: string[]) {
+    if (!canDelete || !documentIds.length || busy) return;
+    const uniqueIds = [...new Set(documentIds)];
+    const confirmed = window.confirm(`${uniqueIds.length} dokumentum lomtárba helyezése?\n\nA fájlok nem törlődnek fizikailag, a művelet auditálva lesz.`);
+    if (!confirmed) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/bulk-delete`, {
+        method: "DELETE", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentIds: uniqueIds }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedIds?: string[]; blockedCount?: number };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
+      const deletedIds = payload.deletedIds || [];
+      setSelectedDocumentIds((current) => current.filter((id) => !deletedIds.includes(id)));
+      if (deletedIds.includes(selectedDocumentId)) { setSelectedDocumentId(""); setDetails(null); }
+      const blocked = Number(payload.blockedCount || 0);
+      setNotice(`${payload.deletedCount || 0} dokumentum lomtárba helyezve.${blocked ? ` ${blocked} formálisan kiadott dokumentum nem törölhető; előbb vissza kell vonni a kiadást.` : ""}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentumok törlése sikertelen.");
+    } finally { setBusy(false); }
+  }
+
   async function moveDocument(document: DriveDocument, targetFolderId: string) {
     if (!canWrite || !health?.workspace?.databaseReady || !targetFolderId) return;
     if (document.folderId === targetFolderId) {
@@ -947,12 +972,17 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               }}
               canWrite={canWrite}
               canApprove={canApprove}
+              canDelete={canDelete}
               membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
               onOpenReviewDetail={(document, field) => { openReviewDetail(document, field); setFullTableInspectorOpen(true); }}
               tableZoom={tableZoom}
               dragPanEnabled
+              selectedDocumentIds={selectedDocumentIds}
+              onSelectionChange={setSelectedDocumentIds}
+              canDelete={canDelete}
+              onDeleteSelected={deleteDocuments}
             />
           </div>
           {fullTableInspectorOpen && (
@@ -967,6 +997,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 canWrite={canWrite}
                 canComment={canComment}
                 canApprove={canApprove}
+                canDelete={canDelete}
                 membershipRole={membershipRole}
                 membershipDisplayName={membershipDisplayName}
                 securityReady={securityReady}
@@ -978,6 +1009,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 onSaveNote={saveNote}
                 onEnsureQr={ensureQr}
                 onDownload={downloadSelected}
+                onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
                 responsiveClassName={styles.fullTableInspectorPanel}
                 focusTab={viewMode === "review" ? "review" : undefined}
                 reviewFocus={reviewFocus}
@@ -1013,6 +1045,10 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             onOpenDocument={(document) => void openDocument(document)}
             onMoveDocument={moveDocument}
             tableZoom={tableZoom}
+            selectedDocumentIds={selectedDocumentIds}
+            onSelectionChange={setSelectedDocumentIds}
+            canDelete={canDelete}
+            onDeleteSelected={deleteDocuments}
           />
         ) : (
           <>
@@ -1046,12 +1082,17 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               }}
               canWrite={canWrite}
               canApprove={canApprove}
+              canDelete={canDelete}
               membershipRole={membershipRole}
               busy={busy}
               onBulkReview={bulkReview}
               onOpenReviewDetail={openReviewDetail}
               tableZoom={tableZoom}
               dragPanEnabled
+              selectedDocumentIds={selectedDocumentIds}
+              onSelectionChange={setSelectedDocumentIds}
+              canDelete={canDelete}
+              onDeleteSelected={deleteDocuments}
             />
             {layoutMode === "split" && (
               <div
@@ -1104,6 +1145,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onSaveNote={saveNote}
               onEnsureQr={ensureQr}
               onDownload={downloadSelected}
+              onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
               responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`}
               focusTab={viewMode === "review" ? "review" : undefined}
               reviewFocus={reviewFocus}

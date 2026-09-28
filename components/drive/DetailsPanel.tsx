@@ -80,6 +80,7 @@ type Props = {
   canWrite: boolean;
   canComment: boolean;
   canApprove: boolean;
+  canDelete?: boolean;
   membershipRole?: "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER" | "";
   membershipDisplayName?: string;
   securityReady: boolean;
@@ -91,6 +92,7 @@ type Props = {
   onSaveNote: (note: string) => Promise<void>;
   onEnsureQr: () => Promise<void>;
   onDownload: () => Promise<void>;
+  onDelete?: () => Promise<void>;
   responsiveClassName?: string;
   focusTab?: "details" | "review" | "versions" | "notes";
   inheritedDiscipline?: string;
@@ -404,6 +406,7 @@ export default function DetailsPanel({
   canWrite,
   canComment,
   canApprove,
+  canDelete = false,
   membershipRole = "",
   membershipDisplayName = "",
   securityReady,
@@ -463,7 +466,7 @@ export default function DetailsPanel({
       level: source.level,
       zone: source.zone,
       topic: typeof source.extra?.topic === "string" ? source.extra.topic : "",
-      planTitle: typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
+      planTitle: typeof source.extra?.displayName === "string" ? source.extra.displayName : typeof source.extra?.planTitle === "string" ? source.extra.planTitle : typeof source.extra?.drawingTitle === "string" ? source.extra.drawingTitle : "",
     } : emptyMetadata);
     const extra = source?.extra || {};
     const legacyObservations = typeof extra.reviewObservations === "string" ? extra.reviewObservations : typeof extra.hageObservations === "string" ? extra.hageObservations : "";
@@ -543,7 +546,7 @@ export default function DetailsPanel({
             <div className={styles.metaGrid}>
               {([
                 ["planNo", "Tervszám"],
-                ["planTitle", "Tervlap pontos neve"],
+                ["planTitle", "Egyedi megjelenítési név / tervlap neve"],
                 ["discipline", "Szakág"],
                 ["documentType", "Dokumentumtípus"],
                 ["revision", "Revízió"],
@@ -588,12 +591,17 @@ export default function DetailsPanel({
             )}
 
             <div className={styles.detailsActions}>
-              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, planTitle: metadata.planTitle } })}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canWrite || busy} onClick={() => void onSaveMetadata({ ...metadata, extra: { ...(details?.metadata?.extra || {}), topic: metadata.topic, displayName: metadata.planTitle, planTitle: metadata.planTitle } })}>
                 <Save size={12} /> Metaadat mentése
               </button>
               <button type="button" className={styles.smallButton} disabled={busy || !document.currentVersion || ["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion.status)} onClick={() => void onDownload()}>
                 <Download size={12} /> Letöltés
               </button>
+              {canDelete && onDelete && (
+                <button type="button" className={`${styles.smallButton} ${styles.smallDanger}`} disabled={busy} onClick={() => void onDelete()} title="Dokumentum lomtárba helyezése">
+                  <Trash2 size={12} /> Lomtárba
+                </button>
+              )}
               <button type="button" className={styles.smallButton} disabled={!canWrite || busy} onClick={() => void onEnsureQr()}>
                 <QrCode size={12} /> {activeQr ? "QR elérhető" : "QR létrehozása"}
               </button>

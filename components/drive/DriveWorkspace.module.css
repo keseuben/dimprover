@@ -446,6 +446,13 @@
 .commanderHeader { min-height: 52px; border-bottom: 1px solid #dce6ef; background: #fff; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .commanderHeader strong { display: block; font-size: 11px; color: #243950; }
 .commanderHeader span { display: block; margin-top: 3px; color: #6c8094; font-size: var(--drive-font-xs); }
+.commanderHeaderActions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.commanderHeaderActions > button { min-height: 28px; border: 1px solid #d7e1ea; border-radius: 6px; background: #fff; color: #4d647b; padding: 0 8px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.commanderHeaderActions > button:disabled { opacity: .42; cursor: default; }
+.commanderSelectAll { display: inline-flex; align-items: center; gap: 5px; color: #50677e; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.commanderSelectAll input { width: 14px; height: 14px; accent-color: #5b48d8; }
+.commanderDeleteButton { border-color: #efb6b6 !important; background: #fff5f5 !important; color: #c92727 !important; display: inline-flex; align-items: center; gap: 4px; }
+.commanderDeleteButton:hover:not(:disabled) { background: #ffe9e9 !important; border-color: #e16b6b !important; }
 .commanderReady,.commanderWaiting { flex: 0 0 auto; border-radius: 999px; padding: 4px 8px; font-size: var(--drive-font-xs) !important; font-weight: 900; margin-top: 0 !important; }
 .commanderReady { background: #e8f8ef; color: #16834c !important; }
 .commanderWaiting { background: #fff4db; color: #946300 !important; }
@@ -464,9 +471,11 @@
 .commanderFolderRow svg { color: #3d83ce; }
 .commanderFolderRow strong { font-size: var(--drive-font-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .commanderFolderRow span { font-size: var(--drive-font-xs); color: #8394a6; }
-.commanderFileRow { min-height: 36px; display: grid; grid-template-columns: 14px 24px minmax(0,1fr) 54px 26px; align-items: center; gap: 4px; border-bottom: 1px solid #eef2f6; padding: 0 5px; cursor: default; color: #3c5268; }
+.commanderFileRow { min-height: 36px; display: grid; grid-template-columns: 18px 14px 24px minmax(0,1fr) 54px 26px; align-items: center; gap: 4px; border-bottom: 1px solid #eef2f6; padding: 0 5px; cursor: default; color: #3c5268; }
 .commanderFileRow:hover { background: #f8fbfe; }
 .commanderFileSelected { background: #e8f2ff !important; }
+.commanderFileChecked { box-shadow: inset 3px 0 0 #6c5ce7; background: #f5f2ff; }
+.commanderSelect { width: 14px; height: 14px; margin: 0; accent-color: #5b48d8; cursor: pointer; }
 .commanderGrip { color: #a4b1bd; cursor: grab; }
 .commanderFileIcon { width: 22px; height: 25px; border-radius: 4px; background: #eef5ff; color: #2873cf; display: grid; place-items: center; }
 .commanderFileIconImage { background: #f1ecff; color: #7354c8; }
@@ -2029,6 +2038,21 @@
 .fileFolderNav select { height: 27px; font-size: 9px; }
 .fileFolderUpButton { width: 27px; height: 27px; }
 .fileFolderPath,.fileFolderNavLabel strong { font-size: 9px; }
+.fileSelectionBar {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #e5edf3;
+  background: #f7f9ff;
+}
+.fileSelectionBar label { display: inline-flex; align-items: center; gap: 5px; color: #415b74; font-size: 9px; font-weight: 900; white-space: nowrap; }
+.fileSelectionBar input { width: 14px; height: 14px; accent-color: #5b48d8; }
+.fileSelectionBar button { min-height: 24px; border: 1px solid #d6e0e9; border-radius: 6px; background: #fff; color: #52687d; padding: 0 7px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.fileSelectionBar button:disabled { opacity: .42; cursor: default; }
+.fileDeleteSelected { border-color: #efb7b7 !important; background: #fff5f5 !important; color: #c92727 !important; display: inline-flex; align-items: center; gap: 4px; }
+.fileDeleteSelected:hover:not(:disabled) { background: #ffe8e8 !important; border-color: #e16b6b !important; }
 .fileCompactControls {
   min-width: 0;
   min-height: 39px;
@@ -2490,3 +2514,14 @@
   cursor: grab;
 }
 .commanderGrip:active { cursor: grabbing; }
+
+.smallDanger {
+  border-color: #efb5b5 !important;
+  background: #fff5f5 !important;
+  color: #c62828 !important;
+}
+.smallDanger:hover:not(:disabled) {
+  border-color: #e26b6b !important;
+  background: #ffe8e8 !important;
+  color: #a91f1f !important;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -35,6 +35,10 @@ type Props = {
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
   tableZoom?: number;
   dragPanEnabled?: boolean;
+  selectedDocumentIds?: string[];
+  onSelectionChange?: (documentIds: string[]) => void;
+  canDelete?: boolean;
+  onDeleteSelected?: (documentIds: string[]) => Promise<void>;
 };
 
 function formatBytes(value: number) {
@@ -82,11 +86,13 @@ function uploaderLabel(value: string | undefined) {
 
 function displayDocumentName(document: DriveDocument, metadata?: DriveEngineeringMetadata) {
   const extra = metadata?.extra || {};
-  const explicit = typeof extra.planTitle === "string" && extra.planTitle.trim()
-    ? extra.planTitle.trim()
-    : typeof extra.drawingTitle === "string" && extra.drawingTitle.trim()
-      ? extra.drawingTitle.trim()
-      : "";
+  const explicit = typeof extra.displayName === "string" && extra.displayName.trim()
+    ? extra.displayName.trim()
+    : typeof extra.planTitle === "string" && extra.planTitle.trim()
+      ? extra.planTitle.trim()
+      : typeof extra.drawingTitle === "string" && extra.drawingTitle.trim()
+        ? extra.drawingTitle.trim()
+        : "";
   return { explicit, value: explicit || fileNameWithoutExtension(document.name) };
 }
 
@@ -262,6 +268,10 @@ export default function FileGridPanel({
   onOpenReviewDetail,
   tableZoom = 100,
   dragPanEnabled = false,
+  selectedDocumentIds,
+  onSelectionChange,
+  canDelete = false,
+  onDeleteSelected,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
@@ -269,7 +279,13 @@ export default function FileGridPanel({
   const [reviewApprovalStage, setReviewApprovalStage] = useState("all");
   const [reviewLifecycle, setReviewLifecycle] = useState("all");
   const [reviewSearch, setReviewSearch] = useState("");
-  const [selectedReviewIds, setSelectedReviewIds] = useState<string[]>([]);
+  const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
+  const selectedIds = selectedDocumentIds ?? internalSelectedIds;
+  const setSelectedIds = (next: string[] | ((current: string[]) => string[])) => {
+    const resolved = typeof next === "function" ? next(selectedIds) : next;
+    if (onSelectionChange) onSelectionChange(resolved);
+    else setInternalSelectedIds(resolved);
+  };
   const [bulkScope, setBulkScope] = useState<"selection" | "folder" | null>(null);
   const [bulkIncludeDescendants, setBulkIncludeDescendants] = useState(true);
   const [bulkForm, setBulkForm] = useState({
@@ -401,7 +417,7 @@ export default function FileGridPanel({
       approvalTitle: approval.title,
       lifecycle,
       explicitName: value("planTitle") || value("drawingTitle"),
-      displayName: (value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
+      displayName: (value("displayName") || value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
       effectiveTopic: value("topic") || inherited?.topic || "",
       checked: value("reviewChecked") || value("hageChecked"),
@@ -449,28 +465,36 @@ export default function FileGridPanel({
     () => [...folders].sort((a, b) => a.path.localeCompare(b.path, "hu-HU")),
     [folders],
   );
-  const selectedReviewSet = useMemo(() => new Set(selectedReviewIds), [selectedReviewIds]);
-  const allVisibleReviewSelected = reviewRows.length > 0 && reviewRows.every((row) => selectedReviewSet.has(row.document.id));
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const visibleSelectionIds = viewMode === "review"
+    ? reviewRows.map((row) => row.document.id)
+    : documents.map((document) => document.id);
+  const allVisibleSelected = visibleSelectionIds.length > 0 && visibleSelectionIds.every((id) => selectedSet.has(id));
 
   useEffect(() => {
+    if (selectedDocumentIds) return;
     const available = new Set(documents.map((document) => document.id));
-    setSelectedReviewIds((current) => current.filter((id) => available.has(id)));
-  }, [documents]);
+    setInternalSelectedIds((current) => current.filter((id) => available.has(id)));
+  }, [documents, selectedDocumentIds]);
 
-  const toggleReviewSelection = (documentId: string) => {
-    setSelectedReviewIds((current) => current.includes(documentId)
+  const toggleDocumentSelection = (documentId: string) => {
+    setSelectedIds((current) => current.includes(documentId)
       ? current.filter((id) => id !== documentId)
       : [...current, documentId]);
   };
 
-  const toggleVisibleReviewSelection = () => {
-    const visibleIds = reviewRows.map((row) => row.document.id);
-    setSelectedReviewIds((current) => {
+  const toggleVisibleSelection = () => {
+    setSelectedIds((current) => {
       const next = new Set(current);
-      const select = !visibleIds.every((id) => next.has(id));
-      for (const id of visibleIds) select ? next.add(id) : next.delete(id);
+      const select = !visibleSelectionIds.every((id) => next.has(id));
+      for (const id of visibleSelectionIds) select ? next.add(id) : next.delete(id);
       return [...next];
     });
+  };
+
+  const deleteSelected = async () => {
+    if (!canDelete || !onDeleteSelected || !selectedIds.length || busy) return;
+    await onDeleteSelected(selectedIds);
   };
 
   const resetBulkForm = () => setBulkForm({
@@ -489,10 +513,10 @@ export default function FileGridPanel({
     if (!Object.keys(fields).length) return;
     const input = bulkScope === "folder" && currentFolder
       ? { folderId: currentFolder.id, includeDescendants: bulkIncludeDescendants, fields }
-      : { documentIds: selectedReviewIds, fields };
+      : { documentIds: selectedIds, fields };
     await onBulkReview(input);
     setBulkScope(null);
-    setSelectedReviewIds([]);
+    setSelectedIds([]);
     resetBulkForm();
   };
 
@@ -549,6 +573,25 @@ export default function FileGridPanel({
         <span className={styles.fileFolderPath}>{currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
       </div>
 
+      <div className={styles.fileSelectionBar}>
+        <label>
+          <input
+            type="checkbox"
+            checked={allVisibleSelected}
+            onChange={toggleVisibleSelection}
+            disabled={!visibleSelectionIds.length}
+            aria-label="Látható fájlok kijelölése"
+          />
+          <span>{selectedIds.length} kijelölt</span>
+        </label>
+        <button type="button" disabled={!selectedIds.length || busy} onClick={() => setSelectedIds([])} title="Kijelölés törlése">Kijelölés törlése</button>
+        {canDelete && onDeleteSelected && (
+          <button type="button" className={styles.fileDeleteSelected} disabled={!selectedIds.length || busy} onClick={() => void deleteSelected()} title="Kijelölt dokumentumok lomtárba helyezése">
+            <Trash2 size={12} /> Törlés
+          </button>
+        )}
+      </div>
+
       <div className={styles.fileCompactControls}>
         {viewMode === "review" ? (
           <>
@@ -563,9 +606,7 @@ export default function FileGridPanel({
               >
                 Mappa
               </button>
-              <button type="button" disabled={!canAnyBulkReview || busy || !selectedReviewIds.length} onClick={() => { resetBulkForm(); setBulkScope("selection"); }} title="Kijelölt fájlok csoportos ellenőrzése">Kijelöltek</button>
-              <span title="Kijelölt fájlok száma">{selectedReviewIds.length} kij.</span>
-              <button type="button" disabled={!selectedReviewIds.length || busy} onClick={() => setSelectedReviewIds([])} title="Kijelölés törlése">Törlés</button>
+              <button type="button" disabled={!canAnyBulkReview || busy || !selectedIds.length} onClick={() => { resetBulkForm(); setBulkScope("selection"); }} title="Kijelölt fájlok csoportos ellenőrzése">Kijelöltek</button>
               <span className={styles.reviewLegendCompact} title="✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat">Jelmagyarázat ⓘ</span>
             </div>
             <div className={styles.reviewCompactFilters}>
@@ -600,7 +641,7 @@ export default function FileGridPanel({
               <div className={styles.reviewBulkEditorHead}>
                 <div>
                   <strong>{bulkScope === "folder" ? "Mappa csoportos tervellenőrzése" : "Kijelölt fájlok csoportos tervellenőrzése"}</strong>
-                  <span>{bulkScope === "folder" ? (currentFolder?.path || "—") : selectedReviewIds.length + " kijelölt fájl"}</span>
+                  <span>{bulkScope === "folder" ? (currentFolder?.path || "—") : selectedIds.length + " kijelölt fájl"}</span>
                 </div>
                 <button type="button" onClick={() => setBulkScope(null)} disabled={busy}>Bezárás</button>
               </div>
@@ -660,7 +701,7 @@ export default function FileGridPanel({
                   <th className={styles.reviewGroupLifecycle}>Terv</th>
                 </tr>
                 <tr className={styles.reviewColumnHeader}>
-                  <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleReviewSelected} onChange={toggleVisibleReviewSelection} aria-label="Látható tervek kijelölése" /></th>
+                  <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható tervek kijelölése" /></th>
                   <th title="Megjelenített tervnév">Név</th>
                   <th className={styles.reviewFileNameHeader} title="Eredeti fájlnév">Fájlnév</th>
                   <th title="Feltöltő">Feltöltő</th>
@@ -694,12 +735,12 @@ export default function FileGridPanel({
                   </tr>
                 )}
                 {reviewRows.map((row) => (
-                  <tr key={row.document.id} className={(selectedReviewSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás">
+                  <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás">
                     <td className={styles.reviewSelectCell}>
                       <input
                         type="checkbox"
-                        checked={selectedReviewSet.has(row.document.id)}
-                        onChange={() => toggleReviewSelection(row.document.id)}
+                        checked={selectedSet.has(row.document.id)}
+                        onChange={() => toggleDocumentSelection(row.document.id)}
                         onClick={(event) => event.stopPropagation()}
                         aria-label={row.displayName + " kijelölése"}
                       />
@@ -753,13 +794,14 @@ export default function FileGridPanel({
           {viewMode === "simple" ? (
             <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
+                <col style={{ width: "34px" }} />
                 <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "11%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "4%" }} /><col style={{ width: "10%" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={10}>
+                    <td colSpan={11}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -775,7 +817,8 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                      <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
@@ -794,13 +837,14 @@ export default function FileGridPanel({
           ) : (
             <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
+                <col style={{ width: "34px" }} />
                 <col style={{ width: "22%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
-              <thead><tr><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={11}>
+                    <td colSpan={12}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -815,7 +859,8 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                                            <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>

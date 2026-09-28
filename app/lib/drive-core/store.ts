@@ -4,6 +4,7 @@ export {
   createDriveDocument,
   createDriveFolder,
   setDriveFolderClassification,
+  softDeleteDriveDocuments,
   getDriveCoreDatabaseHealth,
   listDriveChanges,
   listDriveTree,

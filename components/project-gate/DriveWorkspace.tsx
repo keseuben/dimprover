@@ -371,6 +371,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [tableZoom, setTableZoom] = useState(100);
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const [boxes, setBoxes] = useState<DriveBox[]>([]);
@@ -397,6 +398,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
 
   const effectivePermissions = [...new Set([...permissions, ...apiPermissions])];
   const canWrite = effectivePermissions.includes("document.write");
+  const canDelete = effectivePermissions.includes("document.delete");
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
@@ -618,7 +620,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     const extra = metadata?.extra || {};
     const value = (key: string) => typeof extra[key] === "string" ? String(extra[key]).trim() : "";
     const observations = value("reviewObservations") || value("hageObservations");
-    const planTitle = value("planTitle") || value("drawingTitle") || document.name;
+    const planTitle = value("displayName") || value("planTitle") || value("drawingTitle") || document.name;
     return { document, metadata, planTitle, effectiveDiscipline, effectiveTopic, checked: value("reviewChecked") || value("hageChecked"), result: value("reviewResult") || value("hageResult"), observations, workflow: value("workflowStatus") || metadata?.approvalStatus || "", internalNote: value("internalNote") || value("hageNote"), customer: value("customerApproval") || value("clientApproval"), customerNote: value("customerNote") || value("clientNote"), revisionChange: value("revisionChange") || value("change"), observationCount: Number(extra.openObservationCount || (observations ? 1 : 0)) };
   }), [visibleDocuments, metadataByDocument, effectiveFolderClassification]);
   const isApprovedReviewValue = (value: string) => { const normalized = value.trim().toLocaleLowerCase("hu-HU"); return normalized === "igen" || normalized === "jóváhagyva" || normalized === "jóváhagyott" || normalized === "approved" || normalized === "elfogadva" || normalized === "elfogadott"; };
@@ -1036,6 +1038,29 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }));
     setCompareSeedItems(seeds);
     setBrowserViewMode("compare");
+  }
+
+  async function deleteDocuments(documentIds: string[]) {
+    if (!canDelete || !documentIds.length || busy) return;
+    const uniqueIds = [...new Set(documentIds)];
+    const confirmed = window.confirm(`${uniqueIds.length} dokumentum lomtárba helyezése?\n\nA fájlok nem törlődnek fizikailag, a művelet auditálva lesz.`);
+    if (!confirmed) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/bulk-delete`, {
+        method: "DELETE", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentIds: uniqueIds }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedIds?: string[]; blockedCount?: number };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
+      const deletedIds = payload.deletedIds || [];
+      setSelectedDocumentIds((current) => current.filter((id) => !deletedIds.includes(id)));
+      if (deletedIds.includes(selectedDocumentId)) { setSelectedDocumentId(""); setDetails(null); }
+      const blocked = Number(payload.blockedCount || 0);
+      setNotice(`${payload.deletedCount || 0} dokumentum lomtárba helyezve.${blocked ? ` ${blocked} formálisan kiadott dokumentum nem törölhető; előbb vissza kell vonni a kiadást.` : ""}`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentumok törlése sikertelen.");
+    } finally { setBusy(false); }
   }
 
   async function moveDocument(document: DriveDocument, targetFolderId: string) {
@@ -1899,7 +1924,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
             <div className={styles.reviewWorkspace}>
             <div className={styles.reviewTableWrap}><table className={styles.reviewTable}><thead><tr><th>Terv</th><th>Szakág</th><th>Témakör</th><th>Ellenőrzés</th><th>Eredmény</th><th>Észrevételek</th><th>Workflow állapot</th><th>Belső megjegyzés</th><th>Megrendelő</th><th>Megrendelői megjegyzés</th><th>Revízióváltozás</th></tr></thead><tbody>{reviewRows.map((row) => <tr key={row.document.id}><td><button type="button" className={styles.reviewName} onClick={() => setSelectedDocumentId(row.document.id)}>{row.planTitle}</button><small title={row.document.name}>{row.planTitle !== row.document.name ? row.document.name : ""}</small></td><td>{row.effectiveDiscipline || "—"}</td><td>{row.effectiveTopic || "—"}</td><td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openReviewDetail(row.document.id, "checked")}>{reviewMark(row.checked)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openReviewDetail(row.document.id, "result")}>{reviewMark(row.result)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openReviewDetail(row.document.id, "observations")}>{row.observationCount || "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.workflow || "Nincs workflow állapot"} onClick={() => openReviewDetail(row.document.id, "workflow")}>{reviewMark(row.workflow)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.internalNote || "Nincs belső megjegyzés"} onClick={() => openReviewDetail(row.document.id, "internal")}>{row.internalNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customer || "Nincs megrendelői jóváhagyás"} onClick={() => openReviewDetail(row.document.id, "customer")}>{reviewMark(row.customer)}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.customerNote || "Nincs megrendelői megjegyzés"} onClick={() => openReviewDetail(row.document.id, "customer-note")}>{row.customerNote ? "●" : "—"}</button></td><td><button type="button" className={styles.reviewSymbol} title={row.revisionChange || "Nincs revízióváltozás"} onClick={() => openReviewDetail(row.document.id, "revision")}>{revisionMark(row.revisionChange)}</button></td></tr>)}</tbody></table></div>
-            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} membershipRole="" membershipDisplayName="" securityReady={securityScannerReady} securityLabel={securityScannerReady ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveReview={saveSelectedReview} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
+            <DetailsPanel projectId={projectId} document={selectedDocument} details={details} loading={detailsLoading} busy={busy} canWrite={canWrite} canComment={canComment} canApprove={canApprove} canDelete={canDelete} membershipRole="" membershipDisplayName="" securityReady={securityScannerReady} securityLabel={securityScannerReady ? "Biztonsági ellenőrzés" : health?.security?.errorCode || "Biztonsági ellenőrzés nem elérhető"} onScan={async () => { if (selectedDocument) await scanDocumentVersion(selectedDocument); }} onReview={async (action) => { if (selectedDocument) await reviewDocumentVersion(selectedDocument, action); }} onSaveMetadata={saveSelectedMetadata} onSaveReview={saveSelectedReview} onSaveNote={saveSelectedNote} onEnsureQr={ensureSelectedQr} onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }} onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }} focusTab="review" reviewFocus={reviewFocus} inheritedDiscipline={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.discipline || "" : ""} inheritedTopic={selectedDocument ? effectiveFolderClassification.get(selectedDocument.folderId)?.topic || "" : ""} />
             </div>
           </section>}
 
@@ -1944,6 +1969,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 onOpenReviewDetail={(document, field) => { openReviewDetail(document.id, field); setFullTableInspectorOpen(true); }}
                 tableZoom={tableZoom}
                 dragPanEnabled
+                selectedDocumentIds={selectedDocumentIds}
+                onSelectionChange={setSelectedDocumentIds}
+                canDelete={canDelete}
+                onDeleteSelected={deleteDocuments}
               />
             </div>
             {fullTableInspectorOpen && (
@@ -1958,6 +1987,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   canWrite={canWrite}
                   canComment={canComment}
                   canApprove={canApprove}
+                  canDelete={canDelete}
                   membershipRole=""
                   membershipDisplayName=""
                   securityReady={securityScannerReady}
@@ -1969,6 +1999,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onSaveNote={saveSelectedNote}
                   onEnsureQr={ensureSelectedQr}
                   onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
+                  onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
                   responsiveClassName={richStyles.fullTableInspectorPanel}
                   focusTab={engineeringViewMode === "review" ? "review" : undefined}
                   reviewFocus={reviewFocus}
@@ -2003,6 +2034,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onOpenDocument={(document) => { setSelectedDocumentId(document.id); setBrowserViewMode("split"); }}
                   onMoveDocument={moveDocument}
                   tableZoom={tableZoom}
+                  selectedDocumentIds={selectedDocumentIds}
+                  onSelectionChange={setSelectedDocumentIds}
+                  canDelete={canDelete}
+                  onDeleteSelected={deleteDocuments}
                 />
               ) : (
                 <>
@@ -2041,6 +2076,10 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onOpenReviewDetail={(document, field) => openReviewDetail(document.id, field)}
                     tableZoom={tableZoom}
                     dragPanEnabled
+                    selectedDocumentIds={selectedDocumentIds}
+                    onSelectionChange={setSelectedDocumentIds}
+                    canDelete={canDelete}
+                    onDeleteSelected={deleteDocuments}
                   />
                   <DetailsPanel
                     projectId={projectId}
@@ -2051,6 +2090,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     canWrite={canWrite}
                     canComment={canComment}
                     canApprove={canApprove}
+                    canDelete={canDelete}
                     membershipRole=""
                     membershipDisplayName=""
                     securityReady={securityScannerReady}
@@ -2064,6 +2104,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onSaveNote={saveSelectedNote}
                     onEnsureQr={ensureSelectedQr}
                     onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
+                    onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
                     responsiveClassName={`${richStyles.detailsResponsive} ${engineeringDetailsHidden ? richStyles.hiddenPanel : ""}`}
                   />
                 </>
@@ -2089,6 +2130,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   canWrite={canWrite}
                   canComment={canComment}
                   canApprove={canApprove}
+                  canDelete={canDelete}
                   membershipRole=""
                   membershipDisplayName=""
                   securityReady={securityScannerReady}
@@ -2102,6 +2144,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onSaveNote={saveSelectedNote}
                   onEnsureQr={ensureSelectedQr}
                   onDownload={async () => { await downloadDocument(selectedDocument); }}
+                  onDelete={async () => { await deleteDocuments([selectedDocument.id]); }}
                 />
               : <div className={styles.previewEmpty}><Eye size={28} /><strong>Nincs kiválasztott terv</strong><span>Kattints egy dokumentum nevére vagy a szem ikonra.</span></div>}
           </section>}

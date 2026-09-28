@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   FolderUp,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import type { DriveDocument, DriveFolder } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
@@ -26,6 +27,10 @@ type Props = {
   onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
   tableZoom?: number;
+  selectedDocumentIds?: string[];
+  onSelectionChange?: (documentIds: string[]) => void;
+  canDelete?: boolean;
+  onDeleteSelected?: (documentIds: string[]) => Promise<void>;
 };
 
 type PaneProps = {
@@ -43,6 +48,8 @@ type PaneProps = {
   onOpenDocument: (document: DriveDocument) => void;
   onMoveDocument: (document: DriveDocument, targetFolderId: string) => Promise<void>;
   tableZoom: number;
+  selectedSet: Set<string>;
+  onToggleSelection: (documentId: string) => void;
 };
 
 function formatBytes(value: number) {
@@ -89,6 +96,8 @@ function CommanderPane({
   onOpenDocument,
   onMoveDocument,
   tableZoom,
+  selectedSet,
+  onToggleSelection,
 }: PaneProps) {
   const folder = folders.find((entry) => entry.id === folderId) || null;
   const paneDocuments = useMemo(
@@ -151,7 +160,7 @@ function CommanderPane({
           return (
             <div
               key={document.id}
-              className={`${styles.commanderFileRow} ${selected ? styles.commanderFileSelected : ""}`}
+              className={`${styles.commanderFileRow} ${selected ? styles.commanderFileSelected : ""} ${selectedSet.has(document.id) ? styles.commanderFileChecked : ""}`}
               draggable={canWrite && moveReady}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
@@ -161,6 +170,16 @@ function CommanderPane({
               onDoubleClick={() => onOpenDocument(document)}
               title="Kattintás: kijelölés · Dupla kattintás: megnyitás · Húzás: áthelyezés"
             >
+              <input
+                type="checkbox"
+                className={styles.commanderSelect}
+                checked={selectedSet.has(document.id)}
+                draggable={false}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => onToggleSelection(document.id)}
+                aria-label={document.name + " kijelölése"}
+              />
               <GripVertical size={11} className={styles.commanderGrip} />
               <span className={commanderFileIconClass(document.extension)}>{fileIcon(document.extension)}</span>
               <div className={styles.commanderFileName}><strong>{document.name}</strong><span>{document.extension.toUpperCase() || "FILE"} · {formatBytes(document.currentVersion?.sizeBytes || 0)}</span></div>
@@ -200,11 +219,38 @@ export default function CommanderPanel({
   onOpenDocument,
   onMoveDocument,
   tableZoom = 100,
+  selectedDocumentIds = [],
+  onSelectionChange,
+  canDelete = false,
+  onDeleteSelected,
 }: Props) {
   const initialLeft = folders[0]?.id || "";
   const initialRight = folders.find((folder) => folder.id !== initialLeft)?.id || initialLeft;
   const [leftFolderId, setLeftFolderId] = useState(initialLeft);
   const [rightFolderId, setRightFolderId] = useState(initialRight);
+  const selectedSet = useMemo(() => new Set(selectedDocumentIds), [selectedDocumentIds]);
+
+  const toggleSelection = (documentId: string) => {
+    if (!onSelectionChange) return;
+    onSelectionChange(selectedSet.has(documentId)
+      ? selectedDocumentIds.filter((id) => id !== documentId)
+      : [...selectedDocumentIds, documentId]);
+  };
+
+  const visibleIds = useMemo(() => {
+    const ids = documents
+      .filter((document) => document.folderId === leftFolderId || document.folderId === rightFolderId)
+      .map((document) => document.id);
+    return [...new Set(ids)];
+  }, [documents, leftFolderId, rightFolderId]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
+  const toggleVisibleSelection = () => {
+    if (!onSelectionChange) return;
+    const next = new Set(selectedDocumentIds);
+    const select = !allVisibleSelected;
+    for (const id of visibleIds) select ? next.add(id) : next.delete(id);
+    onSelectionChange([...next]);
+  };
 
   useEffect(() => {
     if (!folders.some((folder) => folder.id === leftFolderId)) setLeftFolderId(folders[0]?.id || "");
@@ -217,7 +263,12 @@ export default function CommanderPanel({
     <div className={styles.commanderWorkspace}>
       <div className={styles.commanderHeader}>
         <div><strong>Commander / kétpaneles fájlkezelő</strong><span>Válassz két projektmappát. A fájlok húzással vagy a nyílgombbal helyezhetők át a panelek között.</span></div>
-        <span className={moveReady ? styles.commanderReady : styles.commanderWaiting}>{moveReady ? "Áthelyezés aktív" : "Olvasási mód"}</span>
+        <div className={styles.commanderHeaderActions}>
+          <label className={styles.commanderSelectAll}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} disabled={!visibleIds.length || !onSelectionChange} /> {selectedDocumentIds.length} kijelölt</label>
+          <button type="button" disabled={!selectedDocumentIds.length || !onSelectionChange || busy} onClick={() => onSelectionChange?.([])}>Kijelölés törlése</button>
+          {canDelete && onDeleteSelected && <button type="button" className={styles.commanderDeleteButton} disabled={!selectedDocumentIds.length || busy} onClick={() => void onDeleteSelected(selectedDocumentIds)}><Trash2 size={12} /> Törlés</button>}
+          <span className={moveReady ? styles.commanderReady : styles.commanderWaiting}>{moveReady ? "Áthelyezés aktív" : "Olvasási mód"}</span>
+        </div>
       </div>
       <div className={styles.commanderColumns}>
         <CommanderPane
@@ -235,6 +286,8 @@ export default function CommanderPanel({
           onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
           tableZoom={tableZoom}
+          selectedSet={selectedSet}
+          onToggleSelection={toggleSelection}
         />
         <div className={styles.commanderDivider} aria-hidden="true" />
         <CommanderPane
@@ -252,6 +305,8 @@ export default function CommanderPanel({
           onOpenDocument={onOpenDocument}
           onMoveDocument={onMoveDocument}
           tableZoom={tableZoom}
+          selectedSet={selectedSet}
+          onToggleSelection={toggleSelection}
         />
       </div>
     </div>

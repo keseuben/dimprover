@@ -292,6 +292,17 @@ export async function createDriveDocument(projectId: string, input: Record<strin
   return { ok: true as const, document: mapDocument(result.document, mappedVersion), version: mappedVersion };
 }
 
+export async function softDeleteDriveDocuments(projectId: string, documentIds: string[], actorUserId: string) {
+  const client = await requireReadyClient();
+  const ids = [...new Set(documentIds.map((value) => normalizeText(value)).filter(Boolean))];
+  if (!ids.length) return { ok: false as const, error: "Legalább egy dokumentum kijelölése kötelező." };
+  if (ids.length > 500) return { ok: false as const, error: "Egyszerre legfeljebb 500 dokumentum törölhető." };
+  const { data, error } = await client.rpc("drive_core_soft_delete_documents_atomic", { p_project_id: projectId, p_document_ids: ids, p_actor_user_id: actorUserId });
+  if (error) databaseError("A DRIVE dokumentumok törlése sikertelen.", error);
+  const result = (data || {}) as { deletedIds?: string[]; deletedCount?: number; blockedIds?: string[]; blockedCount?: number };
+  return { ok: true as const, deletedIds: result.deletedIds || [], deletedCount: Number(result.deletedCount || 0), blockedIds: result.blockedIds || [], blockedCount: Number(result.blockedCount || 0) };
+}
+
 export async function addDriveDocumentVersion(
   projectId: string,
   documentId: string,
