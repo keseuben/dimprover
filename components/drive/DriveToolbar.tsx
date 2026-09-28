@@ -22,6 +22,8 @@ type Props = {
   onQueryChange: (value: string) => void;
   layoutMode: DriveLayoutMode;
   onLayoutModeChange: (value: DriveLayoutMode) => void;
+  tableFullscreen?: boolean;
+  onToggleTableFullscreen?: () => void;
   canWrite: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
@@ -44,6 +46,8 @@ export default function DriveToolbar({
   onQueryChange,
   layoutMode,
   onLayoutModeChange,
+  tableFullscreen = false,
+  onToggleTableFullscreen,
   canWrite,
   onCreateFolder,
   onUpload,
@@ -145,7 +149,7 @@ export default function DriveToolbar({
           aria-label="Drive keresés"
         />
       </label>
-      <ViewLayoutSwitcher value={layoutMode} onChange={onLayoutModeChange} />
+      <ViewLayoutSwitcher value={layoutMode} onChange={onLayoutModeChange} tableFullscreen={tableFullscreen} onToggleTableFullscreen={onToggleTableFullscreen} />
     </div>
   );
 }

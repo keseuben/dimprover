@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
@@ -33,6 +33,8 @@ type Props = {
     fields: Record<string, string | number>;
   }) => Promise<number>;
   onOpenReviewDetail?: (document: DriveDocument, field: string) => void;
+  tableZoom?: number;
+  dragPanEnabled?: boolean;
 };
 
 function formatBytes(value: number) {
@@ -258,6 +260,8 @@ export default function FileGridPanel({
   busy = false,
   onBulkReview,
   onOpenReviewDetail,
+  tableZoom = 100,
+  dragPanEnabled = false,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
@@ -277,6 +281,82 @@ export default function FileGridPanel({
     investorProjectManagerApproval: "__KEEP__",
     lifecycleStatus: "__KEEP__",
   });
+  const panStateRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    startTop: 0,
+    active: false,
+    moved: false,
+    timer: null as ReturnType<typeof setTimeout> | null,
+  });
+  const suppressPanClickRef = useRef(false);
+  const [tablePanning, setTablePanning] = useState(false);
+
+  const clearPanTimer = () => {
+    if (panStateRef.current.timer) clearTimeout(panStateRef.current.timer);
+    panStateRef.current.timer = null;
+  };
+
+  const handlePanPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragPanEnabled || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button,input,select,textarea,a,label")) return;
+    clearPanTimer();
+    suppressPanClickRef.current = false;
+    const scroller = event.currentTarget;
+    const pointerId = event.pointerId;
+    panStateRef.current = {
+      pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: scroller.scrollLeft,
+      startTop: scroller.scrollTop,
+      active: false,
+      moved: false,
+      timer: setTimeout(() => {
+        if (panStateRef.current.pointerId !== pointerId) return;
+        panStateRef.current.active = true;
+        setTablePanning(true);
+        try { scroller.setPointerCapture(pointerId); } catch { /* optional */ }
+      }, 180),
+    };
+  };
+
+  const handlePanPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panStateRef.current;
+    if (!dragPanEnabled || state.pointerId !== event.pointerId || !state.active) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) state.moved = true;
+    event.currentTarget.scrollLeft = state.startLeft - dx;
+    event.currentTarget.scrollTop = state.startTop - dy;
+    event.preventDefault();
+  };
+
+  const finishPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panStateRef.current;
+    if (state.pointerId !== event.pointerId) return;
+    clearPanTimer();
+    if (state.active && state.moved) suppressPanClickRef.current = true;
+    setTablePanning(false);
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch { /* optional */ }
+    panStateRef.current.pointerId = -1;
+    panStateRef.current.active = false;
+    window.setTimeout(() => { suppressPanClickRef.current = false; }, 0);
+  };
+
+  const suppressPanClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!suppressPanClickRef.current) return;
+    suppressPanClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  useEffect(() => () => clearPanTimer(), []);
   const canBulkTechnical = canApprove;
   const canBulkCustomer = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
   const canBulkManager = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
@@ -547,8 +627,8 @@ export default function FileGridPanel({
               </div>
             </div>
           )}
-          <div className={styles.reviewTableWrap}>
-            <table className={styles.reviewTable}>
+          <div className={`${styles.reviewTableWrap} ${dragPanEnabled ? styles.tablePanEnabled : ""} ${tablePanning ? styles.tablePanning : ""}`} onPointerDown={handlePanPointerDown} onPointerMove={handlePanPointerMove} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={suppressPanClick}>
+            <table className={styles.reviewTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "34px" }} />
                 <col style={{ width: "300px" }} />
@@ -669,9 +749,9 @@ export default function FileGridPanel({
           </div>
         </div>
       ) : (
-        <div className={styles.fileTableWrap}>
+        <div className={`${styles.fileTableWrap} ${dragPanEnabled ? styles.tablePanEnabled : ""} ${tablePanning ? styles.tablePanning : ""}`} onPointerDown={handlePanPointerDown} onPointerMove={handlePanPointerMove} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={suppressPanClick}>
           {viewMode === "simple" ? (
-            <table className={styles.fileTable}>
+            <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "11%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "4%" }} /><col style={{ width: "10%" }} />
               </colgroup>
@@ -695,7 +775,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
@@ -712,7 +792,7 @@ export default function FileGridPanel({
               </tbody>
             </table>
           ) : (
-            <table className={styles.fileTable}>
+            <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
               <colgroup>
                 <col style={{ width: "22%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "10%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
               </colgroup>
@@ -735,7 +815,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} draggable={!dragPanEnabled} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-dimpro-drive-document", JSON.stringify({ documentId: document.id, versionId: version?.id || null })); }} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · CsomagBOX-hoz húzd a fájlt a polcra.">
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span className={fileIconClass(document.extension)}><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>

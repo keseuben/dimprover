@@ -2250,3 +2250,111 @@
 }
 .projectStorageMeter[data-level="warning"] i b { background: #e6a23c; }
 .projectStorageMeter[data-level="critical"] i b { background: #d9534f; }
+
+
+/* Teljes ablakos táblázati munkamód */
+.layoutTableSpecial {
+  border-color: #9a78e8 !important;
+  background: #f6f1ff !important;
+  color: #6f42c1 !important;
+  box-shadow: inset 0 0 0 1px rgba(111,66,193,.06);
+}
+.layoutTableSpecial:hover {
+  border-color: #805bd5 !important;
+  background: #eee5ff !important;
+  color: #5d31b2 !important;
+}
+.layoutTableSpecialActive {
+  border-color: #6d3fc0 !important;
+  background: linear-gradient(180deg,#8657d9,#6738b9) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(103,56,185,.24);
+}
+.fullTableOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f4f7fa;
+}
+.fullTableBar {
+  flex: 0 0 auto;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #d8e2eb;
+  background: #fff;
+  padding: 7px 12px;
+  box-shadow: 0 2px 8px rgba(25,48,72,.06);
+}
+.fullTableIdentity {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 2px;
+}
+.fullTableIdentity strong {
+  color: #243b54;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fullTableIdentity span {
+  color: #718397;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tableZoomControls {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d6e0e8;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+.tableZoomControls button {
+  min-width: 30px;
+  height: 30px;
+  border: 0;
+  border-right: 1px solid #e1e8ef;
+  background: #fff;
+  color: #536a82;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+.tableZoomControls button:last-child { border-right: 0; }
+.tableZoomControls button:hover:not(:disabled) { background: #eef5fb; color: #245d96; }
+.tableZoomControls button:disabled { opacity: .35; cursor: default; }
+.tableZoomControls .tableZoomValue { min-width: 48px; color: #3b4f65; }
+.fullTableBody {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
+  padding: 8px;
+}
+.fullTableBody .filePanel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #d7e1ea;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(24,51,78,.06);
+}
+.tablePanEnabled { cursor: grab; overscroll-behavior: contain; }
+.tablePanning { cursor: grabbing !important; user-select: none; }
+.tablePanning * { cursor: grabbing !important; }

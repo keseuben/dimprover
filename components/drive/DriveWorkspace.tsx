@@ -14,6 +14,7 @@ import DetailsPanel from "./DetailsPanel";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
+import TableFullscreenBar from "./TableFullscreenBar";
 import type {
   DriveBox,
   DriveBoxPurpose,
@@ -99,6 +100,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
+  const [tableFullscreen, setTableFullscreen] = useState(false);
+  const [tableZoom, setTableZoom] = useState(100);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
@@ -113,6 +116,20 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const securityReady = Boolean(health?.security?.ready);
+
+  useEffect(() => {
+    if (!tableFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTableFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [tableFullscreen]);
 
   const loadBoxes = useCallback(async () => {
     try {
@@ -831,6 +848,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onQueryChange={setQuery}
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
+        tableFullscreen={tableFullscreen}
+        onToggleTableFullscreen={() => setTableFullscreen((current) => !current)}
         canWrite={canWrite}
         onCreateFolder={() => void createFolder()}
         onUpload={requestUpload}
@@ -857,6 +876,51 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       {error && <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div>}
       {!error && notice && <div className={`${styles.notice} ${styles.noticeSuccess}`}>{notice}</div>}
       {!error && !notice && health?.workspace && !health.workspace.databaseReady && <div className={`${styles.notice} ${styles.noticeInfo}`}>{health.workspace.nextStep}</div>}
+
+      {tableFullscreen && (
+        <section className={styles.fullTableOverlay} data-drive-full-table="0.1.0">
+          <TableFullscreenBar
+            title={title}
+            subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+            layoutMode={layoutMode}
+            onLayoutModeChange={(next) => { setLayoutMode(next); setTableFullscreen(false); }}
+            zoom={tableZoom}
+            onZoomChange={setTableZoom}
+            onToggleFullscreen={() => setTableFullscreen(false)}
+          />
+          <div className={styles.fullTableBody}>
+            <FileGridPanel
+              title={title}
+              subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+              documents={visibleDocuments}
+              selectedDocumentId={selectedDocumentId}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+              onOpenDocument={(document) => { setTableFullscreen(false); void openDocument(document); }}
+              onRefresh={() => void load()}
+              boxColorsByDocument={boxColorsByDocument}
+              metadataByDocument={metadataByDocument}
+              folders={tree?.folders || []}
+              selectedFolderId={selectedFolderId}
+              currentFolder={selectedFolder}
+              onFolderChange={selectFolder}
+              onNavigateParent={() => {
+                if (!selectedFolder) return;
+                selectFolder(selectedFolder.parentId || "all");
+              }}
+              canWrite={canWrite}
+              canApprove={canApprove}
+              membershipRole={membershipRole}
+              busy={busy}
+              onBulkReview={bulkReview}
+              onOpenReviewDetail={openReviewDetail}
+              tableZoom={tableZoom}
+              dragPanEnabled
+            />
+          </div>
+        </section>
+      )}
 
       <div
         className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}

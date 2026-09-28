@@ -37,6 +37,7 @@ import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
 import FileGridPanel from "@/components/drive/FileGridPanel";
 import FolderTreePanel from "@/components/drive/FolderTreePanel";
+import TableFullscreenBar from "@/components/drive/TableFullscreenBar";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
 import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
@@ -364,6 +365,8 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [folderTopic, setFolderTopic] = useState("");
   const [browserViewMode, setBrowserViewMode] = useState<BrowserViewMode>("list");
   const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
+  const [tableFullscreen, setTableFullscreen] = useState(false);
+  const [tableZoom, setTableZoom] = useState(100);
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [versionTargetDocument, setVersionTargetDocument] = useState<DriveDocument | null>(null);
@@ -625,6 +628,24 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const revisionMark = (value: string) => { const v = value.trim().toLocaleUpperCase("hu-HU"); if (!v || v === "—") return "—"; if (v.includes("NEM TALÁLHATÓ")) return "✕"; if (v.includes("ÁTHELYEZVE")) return "↪"; if (v.includes("MÓDOSULT")) return "●"; if (v.includes("ÚJ")) return "+"; return "●"; };
 
   const openReviewDetail = (documentId: string, field: string) => { setSelectedDocumentId(documentId); setReviewFocus(field); };
+
+  useEffect(() => {
+    if (!tableFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTableFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [tableFullscreen]);
+
+  useEffect(() => {
+    if (browserViewMode !== "engineering" && tableFullscreen) setTableFullscreen(false);
+  }, [browserViewMode, tableFullscreen]);
 
   const selectedDocument = useMemo(
     () => tree?.documents.find((document) => document.id === selectedDocumentId) || null,
@@ -1823,13 +1844,55 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
           </section>}
 
-          {browserViewMode === "engineering" && <section className={styles.engineeringHost} data-project-gate-drive-engineering="0.1.0">
+          {browserViewMode === "engineering" && tableFullscreen && <section className={richStyles.fullTableOverlay} data-project-gate-drive-full-table="0.1.0">
+            <TableFullscreenBar
+              title={engineeringTitle}
+              subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+              layoutMode={engineeringLayoutMode}
+              onLayoutModeChange={(next) => { setEngineeringLayoutMode(next); setTableFullscreen(false); }}
+              zoom={tableZoom}
+              onZoomChange={setTableZoom}
+              onToggleFullscreen={() => setTableFullscreen(false)}
+            />
+            <div className={richStyles.fullTableBody}>
+              <FileGridPanel
+                title={engineeringTitle}
+                subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+                documents={visibleDocuments}
+                selectedDocumentId={selectedDocumentId}
+                viewMode={engineeringViewMode}
+                onViewModeChange={setEngineeringViewMode}
+                onSelectDocument={(document) => setSelectedDocumentId(document.id)}
+                onOpenDocument={(document) => { setSelectedDocumentId(document.id); setTableFullscreen(false); setBrowserViewMode("split"); }}
+                onRefresh={() => void load()}
+                boxColorsByDocument={boxColorsByDocument}
+                metadataByDocument={metadataByDocument}
+                folders={tree?.folders || []}
+                selectedFolderId={selectedFolderId}
+                currentFolder={selectedFolder}
+                onFolderChange={setSelectedFolderId}
+                onNavigateParent={() => {
+                  if (!selectedFolder) return;
+                  setSelectedFolderId(selectedFolder.parentId || "all");
+                }}
+                canWrite={canWrite}
+                canApprove={canApprove}
+                busy={busy}
+                onBulkReview={bulkReview}
+                onOpenReviewDetail={(document, field) => openReviewDetail(document.id, field)}
+                tableZoom={tableZoom}
+                dragPanEnabled
+              />
+            </div>
+          </section>}
+
+          {browserViewMode === "engineering" && !tableFullscreen && <section className={styles.engineeringHost} data-project-gate-drive-engineering="0.1.0">
             <header className={styles.engineeringHeader}>
               <div>
                 <span>Mérnöki Drive</span>
                 <strong>{engineeringTitle}</strong>
               </div>
-              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} />
+              <ViewLayoutSwitcher value={engineeringLayoutMode} onChange={setEngineeringLayoutMode} tableFullscreen={tableFullscreen} onToggleTableFullscreen={() => setTableFullscreen((current) => !current)} />
             </header>
             <div className={engineeringBrowserClass}>
               {engineeringLayoutMode === "commander" ? (
