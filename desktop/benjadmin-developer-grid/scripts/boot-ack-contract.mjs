@@ -43,10 +43,12 @@ check("missing PROD DENY fails closed", () => {
   const result = validateBootAcknowledgement(validBody.replaceAll("PROD DENY", "PRODUCTION"), expected);
   assert.equal(result.validated, false); assert.ok(result.mismatches.includes("PROD_DENY"));
 });
-check("central MUNKA INDÍTÁSA sends Launch Packet automatically only after explicit action", () => {
-  assert.match(main, /prepareWorkerTaskLaunch\(launchWorkerCode, launchTask\.id, \{ autoSend:true/);
+check("central MUNKA INDÍTÁSA prepares Launch Packet; manual is default and AUTO remains explicit", () => {
+  assert.match(main, /payload\?\.launchDispatchMode \|\| "MANUAL"/);
+  assert.match(main, /autoSend:launchDispatchMode === "AUTO"/);
+  assert.match(main, /work-start:send-prepared-launch/);
   assert.match(main, /sendPreparedChatPrompt/);
-  assert.match(main, /TASK_PROMPT_SEND_NOT_VERIFIED/);
+  assert.match(main, /MANUAL_LAUNCH_SEND_NOT_VERIFIED/);
 });
 check("desktop monitors assistant response and records structured BOOT ACK", () => {
   assert.match(main, /monitorWorkerBootAck/); assert.match(main, /captureLatestAssistantText/); assert.match(main, /recordDeveloperGridBootAck/);

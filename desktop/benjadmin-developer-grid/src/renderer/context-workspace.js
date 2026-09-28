@@ -10,9 +10,11 @@
   const detached = document.body.dataset.contextWorkspaceWindow === "detached";
   const WORKERS = ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"];
   const DOC_LABELS = { specification:"Specifikáció", concept:"Koncepció", coding_guide:"Kódolási segédlet", reference:"Referencia", handoff:"Átadó", other:"Egyéb" };
-  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
+  const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"MANUAL", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
+  try { if (localStorage.getItem("benjadminWorkLaunchDispatchMode") === "AUTO") state.workLaunchDispatchMode="AUTO"; } catch {}
+  const workerDisplayName = code => ({ARMINAI:"ÁrminAI",OUTMINAI:"OutminAI",BENJAMINAI:"BenjáminAI",BENAI:"BenjáminAI",JAZMINAI:"JázminAI"}[String(code||"").toUpperCase()]||String(code||"AI"));
   const fmtDuration = m => { const n=Math.max(0,Number(m)||0), h=Math.floor(n/60); return h ? `${h} ó ${n%60} p` : `${n} p`; };
   const fmtBytes = v => Number(v)>=1048576 ? `${(Number(v)/1048576).toFixed(1)} MB` : Number(v)>=1024 ? `${Math.round(Number(v)/1024)} KB` : `${Number(v)||0} B`;
   const workerUiCode = code => String(code||"").toUpperCase()==="BENJAMINAI"?"BENAI":String(code||"").toUpperCase();
@@ -34,6 +36,10 @@
     const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
     const bootAckState=String(activeSession?.developmentContext?.bootAckState||"").toUpperCase();
     const canResumeLaunch=Boolean(task&&activeSession&&String(task.status||"").toUpperCase()==="READY"&&bootAckState!=="VALIDATED");
+    const launchDispatchAuto=state.workLaunchDispatchMode==="AUTO";
+    const activeWorkerCode=String(activeSession?.workerCode||state.workStartWorkerCode||"").toUpperCase();
+    const activeWorkerLabel=workerDisplayName(activeWorkerCode);
+    const resumeLabel=launchDispatchAuto?"AUTOMATIKUS INDÍTÁS FOLYTATÁSA":("KÜLDÉS "+activeWorkerLabel+"-NAK");
     const workerSelected=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(state.workStartWorkerCode);
     const surfaceType=selectedWorkerSurface();
     const isCodex=surfaceType==="CODEX";
@@ -64,7 +70,10 @@
       : isWork
         ? `<fieldset class="cw-chat-mode"><legend>ChatGPT Work</legend><label class="is-selected"><span><strong>OPENAI FIRST-PARTY · WORK</strong><small>A Work adapter v0.1.68-ban aktiválódik. A v0.1.61 patchben taskindítás továbbra is tiltott.</small></span></label></fieldset>`
         : `<fieldset class="cw-chat-mode"><legend>Csevegési mód</legend><label class="${existing?"is-selected":""}"><input type="radio" name="workStartChatMode" value="EXISTING_CHAT" ${existing?"checked":""}><span><strong>MEGLÉVŐ CSEVEGÉS FOLYTATÁSA</strong><small>Az assigned worker jelenlegi /c/... beszélgetése marad. Jó előző napi munka folytatására és kontextusmegőrzésre.</small></span></label><label class="${existing?"":"is-selected"}"><input type="radio" name="workStartChatMode" value="NEW_PROJECT_CHAT" ${existing?"":"checked"}><span><strong>ÚJ PROJEKTCSEVEGÉS</strong><small>A task kiosztása után te hozod létre a ChatGPT Projektben az új csevegést, majd a worker fejlécben rögzíted.</small></span></label></fieldset>`;
-    return `<section class="cw-work-start" data-cw-section="work" data-work-status="${esc(status)}"><header><div><strong>Mit fejlesszünk?</strong><span>A napi fejlesztési munka elsődleges indítópontja · Central Core koordináció</span></div><b>${esc(status)}</b></header>${task?`<div class="cw-active-work"><strong>${stale?"KORÁBBI / ELAVULT MUNKA":"AKTÍV MUNKA"}</strong><span>${esc(task.title||task.id)}</span><small>${esc(task.id)} · ${esc(task.status||"")} · state r${Number(state.activeWork?.revision)||0}</small></div>`:""}${bridgeCard}${staleNote}<label class="cw-work-prompt">Új fejlesztési feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a mai fejlesztési feladatot vagy a következő konkrét lépést…">${esc(state.workStartDraft)}</textarea></label><div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}" placeholder="project_dimprover"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}" placeholder="Developer Grid V1"></label><label class="cw-work-worker">Kódoló AI · kötelező<select id="workStartWorkerCode"><option value="" ${state.workStartWorkerCode?"":"selected"} disabled>Válassz kódmérnököt…</option><option value="ARMINAI" ${state.workStartWorkerCode==="ARMINAI"?"selected":""}>ÁrminAI</option><option value="OUTMINAI" ${state.workStartWorkerCode==="OUTMINAI"?"selected":""}>OutminAI</option><option value="BENJAMINAI" ${state.workStartWorkerCode==="BENJAMINAI"?"selected":""}>BenjáminAI</option><option value="JAZMINAI" ${state.workStartWorkerCode==="JAZMINAI"?"selected":""}>JázminAI</option></select><small>Explicit worker kötelező. Worker-identitás és OpenAI surface külön adat. Kijelölt surface: ${esc(surfaceType)}.</small></label></div>${launchOptions}${state.workStartNotice?`<div class="cw-work-start-notice" data-tone="${esc(state.workStartNoticeTone)}"><strong>${state.workStartNoticeTone==="error"?"INDÍTÁS BLOKKOLT":state.workStartNoticeTone==="warning"?"VÁRAKOZIK":"MUNKAINDÍTÁS"}</strong><span>${esc(state.workStartNotice)}</span></div>`:""}<div class="cw-work-actions"><small>${isCodex?"Codex: task → branch/worktree → scope-lock → TASK.md/task.json → result.json import → review/build gate":canResumeLaunch?"A kiosztott task BOOT ACK előtt áll · folytatás új task nélkül":"Ctrl+Enter: indítás · Enter: új sor · a csevegési mód a taskhoz rögzül"}</small>${!isCodex&&canResumeLaunch?`<button id="workResumeButton" type="button" ${state.workResumeBusy?'disabled="true"':''}>${state.workResumeBusy?"KÜLDÉS…":"INDÍTÁS FOLYTATÁSA"}</button>`:""}<button id="workStartButton" type="button" ${state.workStartBusy||state.workResumeBusy||state.taskBridgeBusy||!valid?'disabled="true"':''}>${state.workStartBusy||state.taskBridgeBusy?"ELŐKÉSZÍTÉS…":isCodex?"CODEX TASK INDÍTÁSA":"MUNKA INDÍTÁSA"}</button></div></section>`;
+    const dispatchOptions=(isCodex||isWork)?"":('<fieldset class="cw-chat-mode cw-launch-dispatch"><legend>Launch Packet küldése</legend>'
+      +'<label class="'+(launchDispatchAuto?"":"is-selected")+'"><input type="radio" name="workLaunchDispatchMode" value="MANUAL" '+(launchDispatchAuto?"":"checked")+'><span><strong>KÖZPONTI KÜLDÉS · AJÁNLOTT</strong><small>A Central Core előkészíti a Launch Packetet, de csak a központi KÜLDÉS &lt;AI&gt;-NAK gomb megnyomásakor küldi el. A ChatGPT saját küldés gombját nem kell használnod.</small></span></label>'
+      +'<label class="'+(launchDispatchAuto?"is-selected":"")+'"><input type="radio" name="workLaunchDispatchMode" value="AUTO" '+(launchDispatchAuto?"checked":"")+'><span><strong>AUTOMATIKUS KÜLDÉS · KÍSÉRLETI</strong><small>Ez marad a hosszú távú cél. A Grid előkészítés után emberi kattintás nélkül próbálja elküldeni és igazolni a USER üzenetet.</small></span></label></fieldset>');
+    return `<section class="cw-work-start" data-cw-section="work" data-work-status="${esc(status)}"><header><div><strong>Mit fejlesszünk?</strong><span>A napi fejlesztési munka elsődleges indítópontja · Central Core koordináció</span></div><b>${esc(status)}</b></header>${task?`<div class="cw-active-work"><strong>${stale?"KORÁBBI / ELAVULT MUNKA":"AKTÍV MUNKA"}</strong><span>${esc(task.title||task.id)}</span><small>${esc(task.id)} · ${esc(task.status||"")} · state r${Number(state.activeWork?.revision)||0}</small></div>`:""}${bridgeCard}${staleNote}<label class="cw-work-prompt">Új fejlesztési feladat<textarea id="workStartPrompt" rows="5" placeholder="Írd le a mai fejlesztési feladatot vagy a következő konkrét lépést…">${esc(state.workStartDraft)}</textarea></label><div class="cw-work-meta"><label>Projekt<input id="workStartProjectId" value="${esc(state.workStartProjectId)}" placeholder="project_dimprover"></label><label>Modul<input id="workStartModuleName" value="${esc(state.workStartModuleName)}" placeholder="Developer Grid V1"></label><label class="cw-work-worker">Kódoló AI · kötelező<select id="workStartWorkerCode"><option value="" ${state.workStartWorkerCode?"":"selected"} disabled>Válassz kódmérnököt…</option><option value="ARMINAI" ${state.workStartWorkerCode==="ARMINAI"?"selected":""}>ÁrminAI</option><option value="OUTMINAI" ${state.workStartWorkerCode==="OUTMINAI"?"selected":""}>OutminAI</option><option value="BENJAMINAI" ${state.workStartWorkerCode==="BENJAMINAI"?"selected":""}>BenjáminAI</option><option value="JAZMINAI" ${state.workStartWorkerCode==="JAZMINAI"?"selected":""}>JázminAI</option></select><small>Explicit worker kötelező. Worker-identitás és OpenAI surface külön adat. Kijelölt surface: ${esc(surfaceType)}.</small></label></div>${launchOptions}${dispatchOptions}${state.workStartNotice?`<div class="cw-work-start-notice" data-tone="${esc(state.workStartNoticeTone)}"><strong>${state.workStartNoticeTone==="error"?"INDÍTÁS BLOKKOLT":state.workStartNoticeTone==="warning"?"VÁRAKOZIK":"MUNKAINDÍTÁS"}</strong><span>${esc(state.workStartNotice)}</span></div>`:""}<div class="cw-work-actions"><small>${isCodex?"Codex: task → branch/worktree → scope-lock → TASK.md/task.json → result.json import → review/build gate":canResumeLaunch?"A kiosztott task BOOT ACK előtt áll · folytatás új task nélkül":"Ctrl+Enter: indítás · Enter: új sor · a csevegési mód a taskhoz rögzül"}</small>${!isCodex&&canResumeLaunch?`<button id="workResumeButton" type="button" ${state.workResumeBusy?'disabled="true"':''}>${state.workResumeBusy?"KÜLDÉS…":resumeLabel}</button>`:""}<button id="workStartButton" type="button" ${state.workStartBusy||state.workResumeBusy||state.taskBridgeBusy||!valid?'disabled="true"':''}>${state.workStartBusy||state.taskBridgeBusy?"ELŐKÉSZÍTÉS…":isCodex?"CODEX TASK INDÍTÁSA":"MUNKA INDÍTÁSA"}</button></div></section>`;
   }
   function ensureWorkStartKey(){if(!state.workStartKey)state.workStartKey=(globalThis.crypto?.randomUUID?.()||`grid-${Date.now()}-${Math.random().toString(16).slice(2)}`);return state.workStartKey;}
   async function startWork(){
@@ -85,7 +94,7 @@
       const bridge=result.taskBridge?.bridge||{};state.workStartNotice=`Codex Task Bridge READY_FOR_WORKER. Branch: ${bridge.branchName||"—"}. TASK.md: ${bridge.taskMarkdownPath||"—"}`;state.workStartNoticeTone="success";render();return;
     }
     state.workStartBusy=true;state.workStartStatus="ELŐKÉSZÍTÉS";state.workStartNotice="A Central Core létrehozza vagy újrapróbálja a taskot és ellenőrzi a worker rendelkezésre állását…";state.workStartNoticeTone="info";render();
-    const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,surfaceType,idempotencyKey:ensureWorkStartKey()});
+    const result=await api.startDeveloperGridWork?.({sourcePrompt:prompt,projectId:state.workStartProjectId.trim()||"project_dimprover",moduleName:state.workStartModuleName.trim()||"Developer Grid V1",preferredWorkerCode:state.workStartWorkerCode,chatLaunchMode:state.workStartChatMode,launchDispatchMode:state.workLaunchDispatchMode,surfaceType,idempotencyKey:ensureWorkStartKey()});
     state.workStartBusy=false;
     if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A munkaindítás sikertelen.");state.workStartNoticeTone="error";render();return;}
     if(result.work?.routingState==="WAITING_FOR_WORKER"){
@@ -113,9 +122,22 @@
     const plan=result.chatPlan||{};const launch=result.taskLaunch||null;
     const responsePending=launch?.ok&&launch?.mode==="response-pending";
     const chatBusy=launch?.code==="CHATGPT_GENERATION_ACTIVE";
-    state.workStartStatus=launch?.ok&&launch?.mode==="sent"?"BOOT ACK VÁR":responsePending?"CHATGPT VÁLASZRA VÁR":chatBusy?"CHATGPT FOGLALT":launch&&launch.ok===false?"INDÍTÁS BLOKKOLT":"AKTÍV";
+    const launchPrepared=launch?.ok&&launch?.mode==="inserted";
+    state.workStartStatus=launch?.ok&&launch?.mode==="sent"?"BOOT ACK VÁR":launchPrepared?"KÜLDÉSRE KÉSZ":responsePending?"CHATGPT VÁLASZRA VÁR":chatBusy?"CHATGPT FOGLALT":launch&&launch.ok===false?"INDÍTÁS BLOKKOLT":"AKTÍV";
     state.workStartDraft="";state.workStartKey="";const continuityNote=continuityBound?" A legfrissebb modul-átadó automatikusan bekerült a worker Context Packjába.":"";
-    const launchNote=launch?.ok&&launch?.mode==="sent"?"A Launch Packet automatikusan elküldve a kijelölt workernek. A rendszer BOOT ACK-ra vár; kódolás csak validált ACK után indul.":responsePending?"A Launch Packet már elküldött állapotú. A ChatGPT még választ generál; a Grid nem küld duplikált promptot és ugyanennek a tasknak a BOOT ACK-jára vár.":chatBusy?"A ChatGPT már választ generál ebben a worker-csevegésben. A task megmaradt; várd meg vagy állítsd le a generálást, majd használd az INDÍTÁS FOLYTATÁSA gombot.":launch&&launch.ok===false?`A task létrejött, de a ${surfaceType} indítás fail-closed: ${contextErrorMessage(launch.error||"az automatikus küldés nem igazolható")}`:plan?.surfaceBlockError?`A task surface-e ${surfaceType}; automatikus indítás blokkolva: ${contextErrorMessage(plan.surfaceBlockError)}`:"";
+    const launchNote=launch?.ok&&launch?.mode==="sent"
+      ?"A Launch Packet elküldve a kijelölt workernek. A rendszer BOOT ACK-ra vár; kódolás csak validált ACK után indul."
+      :launchPrepared
+        ?"A Launch Packet authoritative task/session/source proof alapján előkészítve. Küldéshez használd a központi KÜLDÉS <AI>-NAK gombot; a ChatGPT saját küldés gombját ne nyomd meg."
+        :responsePending
+          ?"A Launch Packet már elküldött állapotú. A ChatGPT még választ generál; a Grid nem küld duplikált promptot és ugyanennek a tasknak a BOOT ACK-jára vár."
+          :chatBusy
+            ?"A ChatGPT már választ generál ebben a worker-csevegésben. A task megmaradt; várd meg vagy állítsd le a generálást, majd használd a központi küldés/folytatás gombot."
+            :launch&&launch.ok===false
+              ?("A task létrejött, de a "+surfaceType+" indítás fail-closed: "+contextErrorMessage(launch.error||"a Launch Packet előkészítése/küldése nem igazolható"))
+              :plan?.surfaceBlockError
+                ?("A task surface-e "+surfaceType+"; indítás blokkolva: "+contextErrorMessage(plan.surfaceBlockError))
+                :"";
     let baseNotice="";
     if(result.work?.reused)baseNotice="A már létrehozott munka authoritative állapota visszatöltve.";
     else if(launchNote)baseNotice=launchNote;
@@ -190,16 +212,29 @@
   }
   async function resumeWorkLaunch(){
     if(state.workResumeBusy)return;
-    state.workResumeBusy=true;state.workStartStatus="INDÍTÁS";state.workStartNotice="A Central Core ugyanahhoz a task/sessionhöz újraküldi a Launch Packetet; új task nem jön létre.";state.workStartNoticeTone="info";render();
-    const result=await api.resumeDeveloperGridTaskLaunch?.();
+    const manual=state.workLaunchDispatchMode!=="AUTO";
+    state.workResumeBusy=true;
+    state.workStartStatus=manual?"KÜLDÉS":"INDÍTÁS";
+    state.workStartNotice=manual
+      ?"A Central Core ellenőrzi ugyanazt a task/session/source proof láncot, majd a központi gombbal elküldi a Launch Packetet. Új task nem jön létre."
+      :"Az automatikus mód ugyanahhoz a task/sessionhöz folytatja a Launch Packet indítást; új task nem jön létre.";
+    state.workStartNoticeTone="info";render();
+    const result=manual
+      ?await api.sendPreparedDeveloperGridTaskLaunch?.()
+      :await api.resumeDeveloperGridTaskLaunch?.();
     state.workResumeBusy=false;
-    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||"A Launch Packet folytatása sikertelen.");state.workStartNoticeTone="error";render();return;}
-    const pending=result?.taskLaunch?.mode==="response-pending";
+    if(!result?.ok){state.workStartStatus="BLOKKOLT";state.workStartNotice=contextErrorMessage(result?.error||(manual?"A központi Launch Packet küldése sikertelen.":"A Launch Packet automatikus folytatása sikertelen."));state.workStartNoticeTone="error";render();return;}
+    const pending=result?.taskLaunch?.mode==="response-pending"||result?.mode==="response-pending";
     state.workStartStatus=pending?"CHATGPT VÁLASZRA VÁR":"BOOT ACK VÁR";
-    state.workStartNotice=pending?"A Launch Packet már elküldött állapotú; a ChatGPT még generál. A Grid nem küldött duplikált promptot, ugyanennek a tasknak a BOOT ACK-jára vár.":"A Launch Packet automatikusan elküldve a rögzített worker-csevegésbe. A rendszer BOOT ACK válaszra vár.";
+    state.workStartNotice=pending
+      ?"A Launch Packet már elküldött állapotú; a ChatGPT még generál. A Grid nem küldött duplikált promptot."
+      :manual
+        ?"A központi KÜLDÉS gomb igazoltan elküldte a Launch Packetet. BOOT ACK válaszra vár."
+        :"Az automatikus Launch Packet küldés igazolt. A rendszer BOOT ACK válaszra vár.";
     state.workStartNoticeTone=pending?"warning":"success";
     await refresh(false);
   }
+
   function setNotice(message, tone="info") { state.notice=message||""; const el=root.querySelector("[data-context-notice]"); if (el) { el.textContent=state.notice; el.dataset.tone=tone; el.hidden=!state.notice; } }
   function memoryView() {
     const task=state.activeWork?.task||null;
@@ -292,6 +327,7 @@
     root.querySelector("#workStartWorkerCode")?.addEventListener("change",e=>{state.workStartWorkerCode=["ARMINAI","OUTMINAI","BENJAMINAI","JAZMINAI"].includes(e.target.value)?e.target.value:"";state.workStartKey="";state.workStartNotice="";state.taskBridge=null;render();if(selectedWorkerSurface()==="CODEX")void refreshTaskBridge();});
     root.querySelector("#workStartAllowedPaths")?.addEventListener("input",e=>{state.workStartAllowedPaths=e.target.value;state.workStartKey="";state.workStartNotice="";});
     root.querySelectorAll('input[name="workStartChatMode"]').forEach(r=>r.addEventListener("change",e=>{state.workStartChatMode=e.target.value==="NEW_PROJECT_CHAT"?"NEW_PROJECT_CHAT":"EXISTING_CHAT";state.workStartKey="";state.workStartNotice="";render();}));
+    root.querySelectorAll('input[name="workLaunchDispatchMode"]').forEach(r=>r.addEventListener("change",e=>{state.workLaunchDispatchMode=e.target.value==="AUTO"?"AUTO":"MANUAL";try{localStorage.setItem("benjadminWorkLaunchDispatchMode",state.workLaunchDispatchMode);}catch{}state.workStartKey="";state.workStartNotice="";render();}));
     root.querySelector("#workStartButton")?.addEventListener("click",()=>void startWork());
     root.querySelector("#taskBridgeCopyButton")?.addEventListener("click",()=>void copyTaskBridgeToCodex());
     root.querySelector("#taskBridgeRefreshButton")?.addEventListener("click",()=>void refreshTaskBridge());
