@@ -167,6 +167,7 @@ project_id = (create.get("project") or {}).get("id")
 check("project id", isinstance(project_id, str) and project_id.startswith("project-"))
 print(json.dumps({"projectId": project_id, "driveProvisioning": create.get("driveProvisioning"), "identityProvisioning": create.get("identityProvisioning")}, ensure_ascii=False, indent=2), flush=True)
 check("auto provision", (create.get("driveProvisioning") or {}).get("ready") is True)
+check("identity provision", (create.get("identityProvisioning") or {}).get("ready") is True)
 
 folder_names = [
     "00 V0.6.2 E2E – Őrült hosszú projektmappa + #2026 (A) – dokumentáció és tervellenőrzés",

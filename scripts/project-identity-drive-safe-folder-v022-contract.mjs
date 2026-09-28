@@ -38,4 +38,8 @@ check("V0.2.2 gate targets safe-folder marker", gate.includes('schemaVersion: "0
 check("V0.2.2 gate requires human-name sentinel", gate.includes("driveHumanNameSentinel") && gate.includes("original_name='Beérkező Drop'") && gate.includes("display_name='Beérkező Drop'"));
 check("V0.2.2 gate requires explicit DEV approval", gate.includes("DEV_ONLY_IDENTITY_PROJECT_DRIVE_V022_APPLY_APPROVED"));
 check("V0.2.2 gate retains backup verification", gate.includes('run("pg_dump"') && gate.includes('run("pg_restore"') && gate.includes("identity-project-drive-v022-before.dump"));
+check("V0.2.1 runtime adapter validates human folder identity", service.includes("resolveLegacyV021IncomingFolderBindingName") && service.includes("original_name") && service.includes("display_name") && service.includes("parent_id == null"));
+check("V0.2.1 runtime adapter sends technical name only to legacy RPC", service.includes('schemaVersion === "0.2.1"') && service.includes("rpcIncomingFolderName") && service.includes("p_incoming_folder_name: rpcIncomingFolderName"));
+check("V0.2.1 runtime adapter restores human Drop name", service.includes("restoreHumanIncomingFolderName") && service.includes("incoming_folder_name: requestedHumanName"));
+check("Identity response always exposes requested human name", service.includes("incomingFolderName: requestedIncomingFolderName"));
 console.log(JSON.stringify({ok:true,contract:"DIMPRO Identity Core V0.2.2 safe Drive folder bridge",pass,fail:0},null,2));

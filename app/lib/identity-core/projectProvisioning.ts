@@ -127,7 +127,71 @@ async function requireIdentityClient() {
       503,
     );
   }
-  return getDimproIdentitySupabaseClient();
+  return {
+    client: getDimproIdentitySupabaseClient(),
+    schemaVersion: health.marker?.schemaVersion || "",
+  };
+}
+
+function normalizedFolderIdentity(value: string | null | undefined) {
+  return (value || "").trim().toLocaleLowerCase("hu-HU");
+}
+
+async function resolveLegacyV021IncomingFolderBindingName(
+  client: SupabaseClient,
+  projectId: string,
+  folderId: string,
+  requestedHumanName: string,
+) {
+  const folderResult = await client
+    .from("drive_core_folders")
+    .select("id,project_id,parent_id,name,original_name,display_name,status")
+    .eq("id", folderId)
+    .eq("project_id", projectId)
+    .eq("status", "ACTIVE")
+    .maybeSingle();
+  if (folderResult.error) {
+    databaseError("A Drive célmappa nem ellenőrizhető a legacy Identity bridge számára.", folderResult.error, 409);
+  }
+  const folder = folderResult.data as {
+    id?: string;
+    parent_id?: string | null;
+    name?: string | null;
+    original_name?: string | null;
+    display_name?: string | null;
+  } | null;
+  const expected = normalizedFolderIdentity(requestedHumanName);
+  const originalName = normalizedFolderIdentity(folder?.original_name);
+  const displayName = normalizedFolderIdentity(folder?.display_name);
+  const technicalName = String(folder?.name || "").trim();
+  const humanIdentityMatches = Boolean(folder)
+    && folder?.parent_id == null
+    && expected.length > 0
+    && (originalName === expected || displayName === expected || (!originalName && !displayName && normalizedFolderIdentity(technicalName) === expected));
+  if (!humanIdentityMatches || !technicalName) {
+    throw new DimproIdentityError(
+      "A Drive Beérkező Drop célmappa emberi és technikai azonosítója nem egyezik.",
+      "DIMPRO_PROJECT_BIND_DRIVE_FOLDER_INVALID",
+      409,
+    );
+  }
+  return technicalName;
+}
+
+async function restoreHumanIncomingFolderName(
+  client: SupabaseClient,
+  identityProjectId: string,
+  driveFolderId: string,
+  requestedHumanName: string,
+) {
+  const updated = await client
+    .from("dimpro_project_drop_settings")
+    .update({ incoming_folder_name: requestedHumanName, updated_at: new Date().toISOString() })
+    .eq("project_id", identityProjectId)
+    .eq("drive_folder_id", driveFolderId);
+  if (updated.error) {
+    databaseError("A projekt emberi Drop mappaneve nem állítható helyre.", updated.error, 409);
+  }
 }
 
 async function loadCoreProject(client: SupabaseClient, projectId: string) {
@@ -277,7 +341,7 @@ async function writeProjectAudit(client: SupabaseClient, projectId: string, acto
 }
 
 export async function getProjectIdentityProvisioningState(projectId: string) {
-  const client = await requireIdentityClient();
+  const { client } = await requireIdentityClient();
   const core = await loadCoreProject(client, projectId);
   const identityProject = await loadIdentityProject(client, core);
   if (!identityProject) {
@@ -335,10 +399,14 @@ export async function provisionProjectIdentityBridge(input: {
   driveFolderId: string;
   incomingFolderName?: string;
 }) {
-  const client = await requireIdentityClient();
+  const { client, schemaVersion } = await requireIdentityClient();
   const core = await loadCoreProject(client, input.projectId);
   const actor = await resolveCanonicalUser(client, input.actorUserId);
   const organizationId = await resolveCanonicalOrganization(client, core.organization_id);
+  const requestedIncomingFolderName = input.incomingFolderName || DIMPRO_PROJECT_INCOMING_FOLDER_NAME;
+  const rpcIncomingFolderName = schemaVersion === "0.2.1"
+    ? await resolveLegacyV021IncomingFolderBindingName(client, core.id, input.driveFolderId, requestedIncomingFolderName)
+    : requestedIncomingFolderName;
   const rpc = await client.rpc("dimpro_bind_project_core_atomic", {
     p_project_core_id: core.id,
     p_project_core_code: core.code,
@@ -348,7 +416,7 @@ export async function provisionProjectIdentityBridge(input: {
     p_organization_id: organizationId,
     p_created_by: actor?.id || null,
     p_drive_folder_id: input.driveFolderId,
-    p_incoming_folder_name: input.incomingFolderName || DIMPRO_PROJECT_INCOMING_FOLDER_NAME,
+    p_incoming_folder_name: rpcIncomingFolderName,
   });
   if (rpc.error) databaseError("A Project Core és canonical DIMPRO projekt összekötése sikertelen.", rpc.error, 409);
   const result = (rpc.data || {}) as BindRpcPayload;
@@ -356,6 +424,9 @@ export async function provisionProjectIdentityBridge(input: {
   const publicCode = String(result.project?.publicCode || "");
   if (!result.ok || !normalizeUuid(identityProjectId) || !publicCode) {
     throw new DimproIdentityError("A projektbinding válasza hiányos.", "DIMPRO_PROJECT_IDENTITY_BIND_RESPONSE_INVALID", 500);
+  }
+  if (schemaVersion === "0.2.1" && rpcIncomingFolderName !== requestedIncomingFolderName) {
+    await restoreHumanIncomingFolderName(client, identityProjectId, input.driveFolderId, requestedIncomingFolderName);
   }
   const memberships = await syncMemberships(client, core.id, identityProjectId);
   const active = core.status === "ACTIVE";
@@ -387,7 +458,7 @@ export async function provisionProjectIdentityBridge(input: {
     },
     destination: {
       driveFolderId: String(result.destination?.driveFolderId || input.driveFolderId),
-      incomingFolderName: String(result.destination?.incomingFolderName || input.incomingFolderName || DIMPRO_PROJECT_INCOMING_FOLDER_NAME),
+      incomingFolderName: requestedIncomingFolderName,
       enabled: result.destination?.enabled === true,
       preserveGroups: result.destination?.preserveGroups !== false,
       requireVirusScan: result.destination?.requireVirusScan !== false,
