@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { listDriveTree } from "./databaseRepository";
 import { DriveCoreRepositoryError } from "./errors";
 import { DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME, buildDigitalDocumentationRegister } from "./documentationRegister";
-import { getDriveBoxPackageSource, listDriveEngineeringMetadata, type DriveBoxFolder, type DriveEngineeringMetadata } from "./workspaceRepository";
+import { getDriveBoxPackageSource, listDriveEngineeringMetadata, setDriveBoxLifecycle, type DriveBoxFolder, type DriveEngineeringMetadata } from "./workspaceRepository";
 import {
   DRIVE_SAFE_PATH_TARGET_MAX,
   buildDriveSafeArchiveFolderPath,
@@ -287,7 +287,7 @@ export async function openDriveFolderZip(input: {
 }
 
 function normalizeBoxArchiveBase(value: string | undefined, fallback: string) {
-  const raw = (value || fallback || "DIMPRO_CsomagBOX").trim().replace(/.zip$/i, "").trim();
+  const raw = (value || fallback || "DIMPRO_CsomagBOX").trim().replace(/\.zip$/i, "").trim();
   return ensureDriveSafeFolderName(raw || "DIMPRO_CsomagBOX");
 }
 
@@ -382,7 +382,7 @@ export async function openDriveBoxZip(input: {
   const generatedAt = new Date().toISOString();
   const packageId = downloadPackageId(new Date(generatedAt));
   const rootName = normalizeBoxArchiveBase(input.archiveName, box.name);
-  const displayName = (input.archiveName || box.name || rootName).trim().replace(/.zip$/i, "") || rootName;
+  const displayName = (input.archiveName || box.name || rootName).trim().replace(/\.zip$/i, "") || rootName;
   const virtual = buildBoxVirtualFolders({
     projectId: input.projectId,
     boxId: box.id,
@@ -501,6 +501,10 @@ export async function openDriveBoxZip(input: {
     }),
     { binary: false, compression: "DEFLATE", compressionOptions: { level: 6 } },
   );
+
+  if (box.lifecycleFeatureReady && box.lifecycleStatus === "DRAFT") {
+    await setDriveBoxLifecycle(input.projectId, box.id, "READY", input.actorUserId);
+  }
 
   await Promise.all(accepted.map((item) => logDriveDownloadRecord({
     projectId: input.projectId,
