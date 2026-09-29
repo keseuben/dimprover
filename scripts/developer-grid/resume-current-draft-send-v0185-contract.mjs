@@ -9,7 +9,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 let n=0;
 function check(name,fn){fn();n+=1;console.log("PASS "+String(n).padStart(2,"0")+" "+name);}
 
-check("desktop version v0.1.92",()=>assert.equal(pkg.version,"0.1.92"));
+check("desktop version v0.1.93",()=>assert.equal(pkg.version,"0.1.93"));
 check("READY Central proof can be reused without rotation",()=>{
   assert.ok(main.includes("function reusableLaunchExecutionProof(task, session)"));
   assert.ok(main.includes('proof?.state === "VERIFIED"'));
@@ -58,4 +58,4 @@ check("fail-closed behavior remains for unverifiable direct send",()=>{
   assert.ok(main.includes("OWNED_TASK_DRAFT_NOT_CURRENT"));
 });
 
-console.log("Developer Grid v0.1.92 resume current-draft send contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.93 resume current-draft send contract PASS · "+n+"/"+n);

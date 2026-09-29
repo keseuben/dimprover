@@ -10,7 +10,7 @@ import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundat
 import { encodeEventCursor } from "./events";
 import { findLatestContinuationContext } from "./conversation-memory";
 import { verifyCurrentSourceExecutionState, verifySourceProvenance } from "./source-provenance";
-import { ensureDeveloperWorkerWorkspace } from "./worker-workspace";
+import { ensureDeveloperWorkerWorkspace, retargetDeveloperWorkerWorkspace } from "./worker-workspace";
 import { appendGridEvent, listGridEvents, materializeGridTaskSession, readGridState, upsertGridTask, upsertWorkerSession } from "./state-store";
 import type { ChatLaunchMode, CoreWorkerCode, DevelopmentContext, DeveloperGridTask, RoutableWorkerCode, SourceExecutionProof, WorkerSession, WorkerSurfaceType } from "./types";
 
@@ -944,6 +944,199 @@ export async function recoverDeveloperGridExecutionAuthority(rawInput: Record<st
   };
 }
 
+
+
+export async function retargetDeveloperGridPreBootSource(rawInput: Record<string, unknown>) {
+  const taskId = text(rawInput.taskId, 240);
+  const sessionId = text(rawInput.sessionId, 260);
+  const workerCode = routableWorkerCode(rawInput.workerCode);
+  const targetHead = text(rawInput.targetHead, 40).toLowerCase();
+  if (!taskId || !sessionId || !workerCode || !/^[0-9a-f]{40}$/.test(targetHead)) {
+    throw Object.assign(new Error("A pre-BOOT source retarget identity vagy target HEAD hiányos."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_IDENTITY_INVALID", status:400 });
+  }
+
+  const state = await readGridState();
+  const session = state.sessions.find((item) =>
+    item.id === sessionId
+    && item.taskId === taskId
+    && item.endedAt === null
+    && routableWorkerCode(item.workerCode) === workerCode
+  ) || null;
+  if (!session) {
+    throw Object.assign(new Error("A pre-BOOT source retarget Grid session nem authoritative."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_SESSION_MISMATCH", status:409 });
+  }
+  if (session.developmentContext.bootAckState === "VALIDATED" || session.developmentContext.bootAckCodingAllowed === true) {
+    throw Object.assign(new Error("Validált BOOT ACK után source baseline retarget tiltott."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_BOOT_ACK_DENIED", status:409 });
+  }
+  if (Number(session.developmentContext.workStageIndex || 1) !== 1) {
+    throw Object.assign(new Error("Source baseline retarget csak az 1/6 ELEMZÉS szakaszban engedélyezett."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_STAGE_DENIED", status:409 });
+  }
+  if (session.sourceProvenance.sourceState !== "VERIFIED" || session.sourceProvenance.blockCode) {
+    throw Object.assign(new Error("A pre-BOOT source retarget kiinduló provenance állapota nem VERIFIED."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_SOURCE_NOT_VERIFIED", status:409 });
+  }
+
+  const previousHead = String(session.sourceProvenance.head || "").toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(previousHead)) {
+    throw Object.assign(new Error("A pre-BOOT source retarget kinduló HEAD érvénytelen."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_CURRENT_HEAD_INVALID", status:409 });
+  }
+  if (previousHead === targetHead) {
+    return { taskId, sessionId, workerCode, previousHead, targetHead, changed:false, productionAccess:"DENY" as const };
+  }
+
+  await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:true });
+
+  const engineSessionId = text(session.developmentContext.engineSessionId, 240);
+  if (!engineSessionId) {
+    throw Object.assign(new Error("A pre-BOOT source retargethoz hiányzik a Dev Center engine session."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_ENGINE_SESSION_MISSING", status:409 });
+  }
+  const engineState = await getDevCenterEngineState();
+  const engineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+  const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+  if (!engineSession || !engineTask
+      || engineSession.status !== "active"
+      || engineSession.handshakeStage !== "READY"
+      || engineSession.taskId !== taskId
+      || engineTask.claimedBySessionId !== engineSessionId
+      || engineTask.assignedWorkerId !== engineSession.workerId) {
+    throw Object.assign(new Error("A pre-BOOT source retarget engine ownership/READY kötése érvénytelen."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_ENGINE_BINDING_INVALID", status:409 });
+  }
+
+  const operation = await assertDevEngineOperation(engineSessionId, "write");
+  const workspace = await retargetDeveloperWorkerWorkspace({
+    workerCode,
+    taskId,
+    expectedCurrentHead:previousHead,
+    targetCommit:targetHead,
+  });
+
+  let provenance;
+  try {
+    provenance = await verifySourceProvenance({
+      repository:workspace.repository,
+      worktree:workspace.worktreePath,
+      branch:workspace.branchName,
+      expectedHead:targetHead,
+      worker:workerCode,
+      taskId,
+      sessionId,
+    });
+  } catch (error) {
+    await retargetDeveloperWorkerWorkspace({
+      workerCode,
+      taskId,
+      expectedCurrentHead:targetHead,
+      targetCommit:previousHead,
+    });
+    throw error;
+  }
+  if (provenance.sourceState !== "VERIFIED" || provenance.blockCode) {
+    await retargetDeveloperWorkerWorkspace({
+      workerCode,
+      taskId,
+      expectedCurrentHead:targetHead,
+      targetCommit:previousHead,
+    });
+    throw Object.assign(new Error("A retarget utáni source provenance nem VERIFIED."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_VERIFY_FAILED", status:409 });
+  }
+
+  const proofBase: Omit<SourceExecutionProof, "sha256"> = {
+    schemaVersion:1,
+    state:"VERIFIED",
+    authority:"CENTRAL_CORE",
+    verifiedAt:new Date().toISOString(),
+    repository:provenance.repository,
+    worktree:provenance.worktree,
+    branch:provenance.branch,
+    head:provenance.head,
+    engineSessionId,
+    handshakeStage:"READY",
+    activeScopeLockCount:Number(operation.activeLockCount || 0),
+    activeWorktreeLeaseCount:Number(operation.activeWorktreeLeaseCount || 0),
+    productionAccess:"DENY",
+  };
+  if (proofBase.activeScopeLockCount < 1 || proofBase.activeWorktreeLeaseCount < 1) {
+    await retargetDeveloperWorkerWorkspace({
+      workerCode,
+      taskId,
+      expectedCurrentHead:targetHead,
+      targetCommit:previousHead,
+    });
+    throw Object.assign(new Error("A pre-BOOT source retargethoz aktív scope lock és worktree lease szükséges."), { code:"DEVELOPER_GRID_PREBOOT_RETARGET_LOCK_REQUIRED", status:409 });
+  }
+  const proof: SourceExecutionProof = { ...proofBase, sha256:sourceExecutionProofSha256(proofBase) };
+  const now = new Date().toISOString();
+  const updatedSession: WorkerSession = {
+    ...session,
+    sourceProvenance:{
+      ...provenance,
+      baseHead:targetHead,
+      worker:workerCode,
+      taskId,
+      sessionId,
+    },
+    developmentContext:{
+      ...session.developmentContext,
+      sourceExecutionProof:proof,
+      bootAckState:"WAITING",
+      bootAckValidatedAt:null,
+      bootAckSha256:null,
+      bootAckCodingAllowed:null,
+      bootAckMismatches:[],
+      resolvedAt:now,
+    },
+  };
+
+  let next;
+  try {
+    next = await upsertWorkerSession(updatedSession);
+  } catch (error) {
+    await retargetDeveloperWorkerWorkspace({
+      workerCode,
+      taskId,
+      expectedCurrentHead:targetHead,
+      targetCommit:previousHead,
+    });
+    throw error;
+  }
+
+  const task = await getDeveloperGridTaskById(taskId);
+  await appendGridEvent({
+    kind:"analysis",
+    origin:"LIVE",
+    workerCode,
+    taskId,
+    projectId:task?.projectId || session.developmentContext.projectId,
+    productionAccess:"DENY",
+    developmentContext:updatedSession.developmentContext,
+    branch:updatedSession.sourceProvenance.branch,
+    worktree:updatedSession.sourceProvenance.worktree,
+    head:updatedSession.sourceProvenance.head,
+    delta:{
+      eventType:"SOURCE_BASELINE_RETARGETED_PRE_BOOT",
+      summary:"Central Core corrected the clean task source baseline before BOOT ACK.",
+      status:"PASS",
+      severity:"INFO",
+      sessionId,
+      engineSessionId,
+      previousHead,
+      targetHead,
+      sourceProofSha256:proof.sha256,
+    },
+  });
+
+  return {
+    taskId,
+    sessionId,
+    workerCode,
+    previousHead,
+    targetHead,
+    sourceProvenance:updatedSession.sourceProvenance,
+    sourceExecutionProof:proof,
+    stateRevision:next.revision,
+    changed:true,
+    productionAccess:"DENY" as const,
+  };
+}
 
 export async function recordDeveloperGridBootAck(rawInput: Record<string, unknown>) {
   const taskId = text(rawInput.taskId, 240);
