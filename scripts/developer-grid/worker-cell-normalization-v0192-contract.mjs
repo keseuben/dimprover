@@ -33,4 +33,4 @@ check("no raw BENAI/BENJAMINAI worker-to-cell equality remains", () => {
   assert.ok(!main.includes("config.cells.find((item) => item.workerCode === workerCode)"));
 });
 
-console.log("Developer Grid v0.1.92 worker-cell normalization contract PASS · " + n + "/" + n);
+console.log("Developer Grid v0.1.93 worker-cell normalization contract PASS · " + n + "/" + n);

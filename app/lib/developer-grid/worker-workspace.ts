@@ -27,6 +27,47 @@ export function developerWorkerWorktreePath(workerCode: string, taskId: string) 
   return path.join(DEVELOPER_WORKER_WORKTREE_ROOT, developerWorkerBranchName(workerCode, taskId).replaceAll("/", "-"));
 }
 
+export async function retargetDeveloperWorkerWorkspace(input: { workerCode: string; taskId: string; expectedCurrentHead: string; targetCommit: string }) {
+  const expectedCurrentHead = String(input.expectedCurrentHead || "").toLowerCase();
+  const targetCommit = String(input.targetCommit || "").toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(expectedCurrentHead) || !/^[0-9a-f]{40}$/.test(targetCommit)) {
+    throw Object.assign(new Error("A worker workspace retarget teljes 40 karakteres commitokat igényel."), { code:"DEVELOPER_WORKSPACE_RETARGET_HEAD_INVALID" });
+  }
+  const branchName = developerWorkerBranchName(input.workerCode, input.taskId);
+  const worktreePath = developerWorkerWorktreePath(input.workerCode, input.taskId);
+  if (!(await exists(worktreePath))) {
+    throw Object.assign(new Error("A retarget cél task-worktree nem található."), { code:"DEVELOPER_WORKSPACE_RETARGET_WORKTREE_MISSING" });
+  }
+  const target = await git(["--git-dir", DEVELOPER_WORKER_REPOSITORY, "rev-parse", "--verify", targetCommit]);
+  if (target !== targetCommit) {
+    throw Object.assign(new Error("A retarget cél commit nem érhető el a canonical DEV repositoryban."), { code:"DEVELOPER_WORKSPACE_RETARGET_TARGET_MISSING" });
+  }
+  const [branch, head, dirty] = await Promise.all([
+    git(["-C", worktreePath, "branch", "--show-current"]),
+    git(["-C", worktreePath, "rev-parse", "HEAD"]),
+    git(["-C", worktreePath, "status", "--porcelain", "--untracked-files=normal"]),
+  ]);
+  if (branch !== branchName || head !== expectedCurrentHead || dirty.trim()) {
+    throw Object.assign(new Error("A retarget csak exact, tiszta, változatlan task-worktree-n engedélyezett."), {
+      code:"DEVELOPER_WORKSPACE_RETARGET_SOURCE_MISMATCH",
+      details:{ branch, expectedBranch:branchName, head, expectedCurrentHead, dirty:Boolean(dirty.trim()) },
+    });
+  }
+  await git(["-C", worktreePath, "reset", "--hard", targetCommit]);
+  const [nextBranch, nextHead, nextDirty] = await Promise.all([
+    git(["-C", worktreePath, "branch", "--show-current"]),
+    git(["-C", worktreePath, "rev-parse", "HEAD"]),
+    git(["-C", worktreePath, "status", "--porcelain", "--untracked-files=normal"]),
+  ]);
+  if (nextBranch !== branchName || nextHead !== targetCommit || nextDirty.trim()) {
+    throw Object.assign(new Error("A worker workspace retarget utóellenőrzése sikertelen."), {
+      code:"DEVELOPER_WORKSPACE_RETARGET_VERIFY_FAILED",
+      details:{ branch:nextBranch, head:nextHead, dirty:Boolean(nextDirty.trim()) },
+    });
+  }
+  return { ok:true as const, repository:DEVELOPER_WORKER_REPOSITORY, branchName, worktreePath, previousHead:expectedCurrentHead, head:nextHead };
+}
+
 export async function ensureDeveloperWorkerWorkspace(input: { workerCode: string; taskId: string; baseCommit: string }) {
   const baseCommit = String(input.baseCommit || "").toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(baseCommit)) throw Object.assign(new Error("A worker workspace teljes 40 karakteres base commitot igényel."), { code:"DEVELOPER_WORKSPACE_BASE_INVALID" });

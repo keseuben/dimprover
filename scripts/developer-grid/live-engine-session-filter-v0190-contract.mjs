@@ -9,7 +9,7 @@ const work=read("app/lib/developer-grid/work-start.ts");
 const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
-check("desktop v0.1.92",()=>assert.equal(pkg.version,"0.1.92"));
+check("desktop v0.1.93",()=>assert.equal(pkg.version,"0.1.93"));
 check("pair requires engine session id",()=>assert.match(work,/engineSessionId = text\(session\.developmentContext\.engineSessionId/));
 check("pair requires active engine session",()=>assert.match(work,/engineSession\.status === "active"/));
 check("pair requires READY engine handshake",()=>assert.match(work,/engineSession\.handshakeStage === "READY"/));
@@ -19,4 +19,4 @@ check("pair requires worker ownership",()=>assert.match(work,/engineTask\.assign
 check("pair requires active engine task status",()=>assert.match(work,/\["claimed", "in_progress", "testing"\]\.includes\(engineTask\.status\)/));
 check("stale Grid sessions are excluded",()=>assert.match(work,/if \(!engineBindingLive\) return \[\];/));
 check("desktop still heartbeats filtered pairs",()=>assert.match(main,/activeWork\?\.activeSessionTasks/));
-console.log("Developer Grid v0.1.92 live engine-session filter contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.93 live engine-session filter contract PASS · "+n+"/"+n);

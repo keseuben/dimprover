@@ -514,3 +514,15 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Új regression contract: `worker-cell-normalization-v0192-contract.mjs`; a közvetlen nyers workerCode→cell egyenlőségeket tiltja.
 - A task/session/source proof, BOOT ACK és PROD DENY szabályok változatlanok.
 - DEV ONLY · PROD DENY.
+
+## v0.1.93 · Pre-BOOT source baseline retarget
+
+- Új Central Core művelet: `RETARGET_PRE_BOOT_SOURCE`.
+- A művelet ugyanazt a task/session/worker/conversation identitást tartja meg, és csak a worker task-specifikus branch/worktree source baseline-ját korrigálja.
+- Engedélyezési feltételek: aktív authoritative session, 1/6 ELEMZÉS szakasz, BOOT ACK még nem VALIDATED, codingAllowed nem true, VERIFIED jelenlegi provenance, tiszta worktree, exact jelenlegi HEAD, aktív READY Dev Engine ownership, legalább 1 scope lock és 1 worktree lease.
+- A cél commitnak teljes 40 karakteres SHA-val elérhetőnek kell lennie a canonical DEV repositoryban.
+- A retarget után új VERIFIED source provenance és CENTRAL_CORE source execution proof készül; BOOT ACK visszaáll WAITING állapotba.
+- Verifikáció vagy state update hiba esetén a worktree visszaáll a korábbi HEAD-re.
+- Audit event: `SOURCE_BASELINE_RETARGETED_PRE_BOOT`.
+- Regression contract: `preboot-source-retarget-v0193-contract.mjs` (10/10).
+- DEV ONLY · PROD DENY.
