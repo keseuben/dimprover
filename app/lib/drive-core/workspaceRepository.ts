@@ -55,12 +55,26 @@ export type DriveQrCode = {
 
 export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
 
+export type DriveBoxFolder = {
+  id: string;
+  projectId: string;
+  boxId: string;
+  parentId: string | null;
+  name: string;
+  sortOrder: number;
+  status: "ACTIVE" | "ARCHIVED";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DriveBoxItem = {
   id: string;
   projectId: string;
   boxId: string;
   documentId: string;
   versionId: string | null;
+  folderId: string | null;
   version: {
     id: string;
     versionNumber: number;
@@ -90,6 +104,8 @@ export type DriveBox = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  folderFeatureReady: boolean;
+  folders: DriveBoxFolder[];
   items: DriveBoxItem[];
 };
 
@@ -151,12 +167,26 @@ type DbBox = {
   updated_at: string;
 };
 
+type DbBoxFolder = {
+  id: string;
+  project_id: string;
+  box_id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number | string;
+  status: "ACTIVE" | "ARCHIVED";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type DbBoxItem = {
   id: string;
   project_id: string;
   box_id: string;
   document_id: string;
   version_id: string | null;
+  folder_id?: string | null;
   sort_order: number | string;
   added_by: string;
   added_at: string;
@@ -211,6 +241,26 @@ function getDatabaseClient(): SupabaseClient {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { "x-client-info": "dimpro-drive-workspace/1.0.0" } },
   });
+}
+
+function isOptionalBoxFolderFeatureMissing(error: unknown) {
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  const code = candidate?.code || "";
+  const marker = [candidate?.message, candidate?.details, candidate?.hint].filter(Boolean).join(" ").toLowerCase();
+  return ["PGRST205", "PGRST202", "42P01", "42703", "42883"].includes(code)
+    || marker.includes("drive_core_box_folders")
+    || marker.includes("drive_workspace_create_box_folder_atomic")
+    || marker.includes("drive_workspace_move_box_item_atomic");
+}
+
+function boxFolderFeatureNotReady(error?: unknown): never {
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  throw new DriveCoreRepositoryError(
+    "A CsomagBOX mappastruktúra még nincs aktiválva ebben a DEV adatbázisban.",
+    "DRIVE_BOX_FOLDER_FEATURE_NOT_READY",
+    503,
+    candidate ? { message: candidate.message, details: candidate.details, hint: candidate.hint } : undefined,
+  );
 }
 
 function databaseError(message: string, error: unknown, status = 500): never {
@@ -279,6 +329,21 @@ function mapQr(row: DbQr): DriveQrCode {
   };
 }
 
+function mapBoxFolder(row: DbBoxFolder): DriveBoxFolder {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    boxId: row.box_id,
+    parentId: row.parent_id,
+    name: row.name,
+    sortOrder: Number(row.sort_order || 0),
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapBoxItem(row: DbBoxItem, version: DbVersion | null = null): DriveBoxItem {
   return {
     id: row.id,
@@ -286,6 +351,7 @@ function mapBoxItem(row: DbBoxItem, version: DbVersion | null = null): DriveBoxI
     boxId: row.box_id,
     documentId: row.document_id,
     versionId: row.version_id,
+    folderId: row.folder_id || null,
     version: version ? {
       id: version.id,
       versionNumber: Number(version.version_number || 0),
@@ -303,7 +369,12 @@ function mapBoxItem(row: DbBoxItem, version: DbVersion | null = null): DriveBoxI
   };
 }
 
-function mapBox(row: DbBox, items: DriveBoxItem[] = []): DriveBox {
+function mapBox(
+  row: DbBox,
+  items: DriveBoxItem[] = [],
+  folders: DriveBoxFolder[] = [],
+  folderFeatureReady = false,
+): DriveBox {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -317,6 +388,8 @@ function mapBox(row: DbBox, items: DriveBoxItem[] = []): DriveBox {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    folderFeatureReady,
+    folders,
     items,
   };
 }
@@ -852,6 +925,19 @@ export async function listDriveBoxes(projectId: string) {
   ]);
   if (boxResult.error) databaseError("A CsomagBOX lista nem tölthető be.", boxResult.error);
   if (itemResult.error) databaseError("A CsomagBOX elemek nem tölthetők be.", itemResult.error);
+
+  const folderResult = await client
+    .from("drive_core_box_folders")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("status", "ACTIVE")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  const folderFeatureReady = !folderResult.error;
+  if (folderResult.error && !isOptionalBoxFolderFeatureMissing(folderResult.error)) {
+    databaseError("A CsomagBOX mappastruktúra nem tölthető be.", folderResult.error);
+  }
+
   const rawItems = (itemResult.data || []) as DbBoxItem[];
   const versionIds = [...new Set(rawItems.map((item) => item.version_id).filter((value): value is string => Boolean(value)))];
   const versionMap = new Map<string, DbVersion>();
@@ -871,9 +957,24 @@ export async function listDriveBoxes(projectId: string) {
     bucket.push(item);
     byBox.set(item.boxId, bucket);
   }
+
+  const byBoxFolders = new Map<string, DriveBoxFolder[]>();
+  if (folderFeatureReady) {
+    for (const row of (folderResult.data || []) as DbBoxFolder[]) {
+      const folder = mapBoxFolder(row);
+      const bucket = byBoxFolders.get(folder.boxId) || [];
+      bucket.push(folder);
+      byBoxFolders.set(folder.boxId, bucket);
+    }
+  }
+
   return {
     ok: true as const,
-    boxes: (boxResult.data || []).map((row) => mapBox(row as DbBox, byBox.get((row as DbBox).id) || [])),
+    folderFeatureReady,
+    boxes: (boxResult.data || []).map((row) => {
+      const box = row as DbBox;
+      return mapBox(box, byBox.get(box.id) || [], byBoxFolders.get(box.id) || [], folderFeatureReady);
+    }),
   };
 }
 
@@ -924,6 +1025,53 @@ export async function addDriveBoxItem(
   if (error) databaseError("A fájl CsomagBOX-hoz adása sikertelen.", error);
   const result = data as { item: DbBoxItem; idempotent?: boolean };
   return { ok: true as const, item: mapBoxItem(result.item), idempotent: Boolean(result.idempotent) };
+}
+
+export async function createDriveBoxFolder(
+  projectId: string,
+  boxId: string,
+  input: Record<string, unknown>,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
+  const parentId = typeof input.parentId === "string" && input.parentId.trim() ? input.parentId.trim() : null;
+  if (!name) throw new DriveCoreRepositoryError("A CsomagBOX mappa neve kötelező.", "DRIVE_BOX_FOLDER_NAME_REQUIRED", 400);
+  const { data, error } = await client.rpc("drive_workspace_create_box_folder_atomic", {
+    p_project_id: projectId,
+    p_box_id: boxId,
+    p_parent_id: parentId || "",
+    p_name: name,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    if (isOptionalBoxFolderFeatureMissing(error)) boxFolderFeatureNotReady(error);
+    databaseError("A CsomagBOX mappa létrehozása sikertelen.", error);
+  }
+  return { ok: true as const, folder: mapBoxFolder(data as DbBoxFolder) };
+}
+
+export async function moveDriveBoxItemToFolder(
+  projectId: string,
+  boxId: string,
+  itemId: string,
+  input: Record<string, unknown>,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const folderId = typeof input.folderId === "string" && input.folderId.trim() ? input.folderId.trim() : null;
+  const { data, error } = await client.rpc("drive_workspace_move_box_item_atomic", {
+    p_project_id: projectId,
+    p_box_id: boxId,
+    p_item_id: itemId,
+    p_folder_id: folderId || "",
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    if (isOptionalBoxFolderFeatureMissing(error)) boxFolderFeatureNotReady(error);
+    databaseError("A CsomagBOX elem áthelyezése sikertelen.", error);
+  }
+  return { ok: true as const, item: mapBoxItem(data as DbBoxItem) };
 }
 
 export async function removeDriveBoxItem(

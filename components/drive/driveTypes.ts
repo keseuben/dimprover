@@ -135,12 +135,26 @@ export type DriveQrCode = {
 
 export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
 
+export type DriveBoxFolder = {
+  id: string;
+  projectId: string;
+  boxId: string;
+  parentId: string | null;
+  name: string;
+  sortOrder: number;
+  status: "ACTIVE" | "ARCHIVED";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DriveBoxItem = {
   id: string;
   projectId: string;
   boxId: string;
   documentId: string;
   versionId: string | null;
+  folderId: string | null;
   version?: {
     id: string;
     versionNumber: number;
@@ -175,6 +189,8 @@ export type DriveBox = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  folderFeatureReady: boolean;
+  folders: DriveBoxFolder[];
   items: DriveBoxItem[];
 };
 

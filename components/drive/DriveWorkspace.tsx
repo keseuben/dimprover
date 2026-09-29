@@ -872,6 +872,38 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     finally { setBusy(false); }
   }
 
+  async function createBoxFolder(boxId: string, parentId: string | null, name: string) {
+    if (!canWrite || !health?.workspace?.databaseReady || !name.trim()) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/folders`, {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), parentId }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A CsomagBOX mappa létrehozása sikertelen.");
+      setNotice(`CsomagBOX mappa létrehozva: ${name.trim()}`);
+      await loadBoxes();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A CsomagBOX mappa létrehozása sikertelen."); }
+    finally { setBusy(false); }
+  }
+
+  async function moveBoxItemToFolder(boxId: string, itemId: string, folderId: string | null) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/items/${encodeURIComponent(itemId)}/move`, {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folderId }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A CsomagBOX elem áthelyezése sikertelen.");
+      setNotice(folderId ? "Fájl CsomagBOX mappába helyezve." : "Fájl visszahelyezve a CsomagBOX gyökerébe.");
+      await loadBoxes();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "A CsomagBOX elem áthelyezése sikertelen."); }
+    finally { setBusy(false); }
+  }
+
   async function removeBoxItem(boxId: string, itemId: string) {
     if (!canWrite || !health?.workspace?.databaseReady) return;
     setBusy(true); setError(""); setNotice("");
@@ -1148,6 +1180,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                   onCreateBox={createBox}
                   onAddDocument={addDocumentToBox}
                   onRemoveItem={removeBoxItem}
+                  onCreateFolder={createBoxFolder}
+                  onMoveItem={moveBoxItemToFolder}
                   onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
                 />
               </aside>
@@ -1339,6 +1373,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         onCreateBox={createBox}
         onAddDocument={addDocumentToBox}
         onRemoveItem={removeBoxItem}
+        onCreateFolder={createBoxFolder}
+        onMoveItem={moveBoxItemToFolder}
         onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
       />
     </div>

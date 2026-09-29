@@ -2839,3 +2839,58 @@
   background: #eef5ff;
   color: #1765d7;
 }
+
+/* Drive V0.6.6 · CsomagBOX internal folder structure */
+.boxFolderTree {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid rgba(100,120,145,.14);
+}
+.boxFolderRow {
+  min-width: 0;
+  min-height: 25px;
+  display: grid;
+  grid-template-columns: 15px minmax(0,1fr) 24px;
+  align-items: center;
+  gap: 4px;
+  border-radius: 5px;
+  color: #536b82;
+  background: rgba(245,249,252,.72);
+}
+.boxFolderRow > svg { color: #d79b26; }
+.boxFolderRow strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--drive-font-xs);
+}
+.boxFolderRow button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #6b8195;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.boxFolderRow button:hover:not(:disabled) { background: #e7f0f7; color: #245f93; }
+.boxFolderRow button:disabled { opacity: .4; cursor: default; }
+.boxItemFolderSelect {
+  grid-column: 2 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid #d4e0e9;
+  border-radius: 5px;
+  background: #f9fbfd;
+  color: #536b82;
+  padding: 0 5px;
+  font-size: var(--drive-font-xs);
+  outline: none;
+}
+.boxItemFolderSelect:focus { border-color: #8ab4da; box-shadow: 0 0 0 2px rgba(55,120,180,.08); }
+.boxItemFolderSelect:disabled { opacity: .55; cursor: default; }

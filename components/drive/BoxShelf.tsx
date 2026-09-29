@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  Folder,
+  FolderPlus,
   GitCompareArrows,
   PackageCheck,
   Plus,
@@ -14,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { DriveBox, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
+import type { DriveBox, DriveBoxFolder, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
 type NewBoxInput = {
@@ -39,6 +41,8 @@ type Props = {
   onCreateBox: (input: NewBoxInput) => Promise<void>;
   onAddDocument: (boxId: string, document: DriveDocument) => Promise<void>;
   onRemoveItem: (boxId: string, itemId: string) => Promise<void>;
+  onCreateFolder?: (boxId: string, parentId: string | null, name: string) => Promise<void>;
+  onMoveItem?: (boxId: string, itemId: string, folderId: string | null) => Promise<void>;
   onOpenCompareBox: (box: DriveBox) => void;
 };
 
@@ -80,6 +84,33 @@ function formatBytes(value: number) {
   return `${value} B`;
 }
 
+function orderedBoxFolders(folders: DriveBoxFolder[]) {
+  const children = new Map<string, DriveBoxFolder[]>();
+  for (const folder of folders) {
+    const key = folder.parentId || "";
+    const bucket = children.get(key) || [];
+    bucket.push(folder);
+    children.set(key, bucket);
+  }
+  for (const bucket of children.values()) bucket.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "hu-HU"));
+
+  const result: Array<{ folder: DriveBoxFolder; depth: number }> = [];
+  const visited = new Set<string>();
+  const walk = (parentId: string | null, depth: number) => {
+    for (const folder of children.get(parentId || "") || []) {
+      if (visited.has(folder.id)) continue;
+      visited.add(folder.id);
+      result.push({ folder, depth });
+      walk(folder.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  for (const folder of folders) {
+    if (!visited.has(folder.id)) result.push({ folder, depth: 0 });
+  }
+  return result;
+}
+
 function colorClass(token: string) {
   switch (token) {
     case "orange": return styles.boxCardOrange;
@@ -105,6 +136,8 @@ export default function BoxShelf({
   onCreateBox,
   onAddDocument,
   onRemoveItem,
+  onCreateFolder,
+  onMoveItem,
   onOpenCompareBox,
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
@@ -127,6 +160,14 @@ export default function BoxShelf({
     setName("");
     setPurpose("GENERAL");
     setComposerOpen(false);
+  }
+
+  async function promptNewFolder(boxId: string, parentId: string | null = null) {
+    if (!onCreateFolder || busy) return;
+    const raw = window.prompt(parentId ? "Új almappa neve:" : "Új CsomagBOX mappa neve:");
+    const folderName = raw?.trim() || "";
+    if (!folderName) return;
+    await onCreateFolder(boxId, parentId, folderName);
   }
 
   async function handleDrop(event: DragEvent<HTMLElement>, boxId: string) {
@@ -236,6 +277,11 @@ export default function BoxShelf({
                 <div className={styles.boxCardStats}>{box.items.length} fájl · {formatBytes(totalBytes)}</div>
                 <div className={styles.boxCardActions}>
                   <button type="button" onClick={() => setExpandedBoxId(expanded ? "" : box.id)}>{expanded ? "Bezárás" : "Megnyitás"}</button>
+                  {box.folderFeatureReady && canWrite && onCreateFolder && (
+                    <button type="button" onClick={() => void promptNewFolder(box.id)} disabled={busy} title="Új mappa a CsomagBOX-ban">
+                      <FolderPlus size={11} /> Mappa
+                    </button>
+                  )}
                   {box.purpose === "COMPARE" && box.items.length >= 2 && (
                     <button type="button" onClick={() => onOpenCompareBox(box)}>Összevetés</button>
                   )}
@@ -247,6 +293,21 @@ export default function BoxShelf({
                 {expanded && (
                   <div className={styles.boxItemList}>
                     {!itemDocuments.length && <span className={styles.boxItemEmpty}>Húzz ide fájlt, vagy jelölj ki egyet a listában.</span>}
+                    {box.folderFeatureReady && box.folders.length > 0 && (
+                      <div className={styles.boxFolderTree} aria-label="CsomagBOX mappák">
+                        {orderedBoxFolders(box.folders).map(({ folder, depth }) => (
+                          <div key={folder.id} className={styles.boxFolderRow} style={{ paddingLeft: `${6 + depth * 14}px` }}>
+                            <Folder size={12} />
+                            <strong title={folder.name}>{folder.name}</strong>
+                            {canWrite && onCreateFolder && (
+                              <button type="button" onClick={() => void promptNewFolder(box.id, folder.id)} disabled={busy} title="Almappa létrehozása">
+                                <FolderPlus size={10} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {itemDocuments.map(({ item, document }) => {
                       const versionLabel = item.version?.revisionCode || (item.version ? `V${item.version.versionNumber}` : document?.currentVersion?.revisionCode || "Aktuális");
                       return (
@@ -258,6 +319,21 @@ export default function BoxShelf({
                           </span>
                           <small className={styles.boxItemRevision}>{versionLabel}</small>
                           {canWrite && <button type="button" onClick={() => void onRemoveItem(box.id, item.id)} disabled={busy} title="Eltávolítás a BOX-ból"><Trash2 size={10} /></button>}
+                          {box.folderFeatureReady && onMoveItem && (
+                            <select
+                              className={styles.boxItemFolderSelect}
+                              value={item.folderId || ""}
+                              onChange={(event) => void onMoveItem(box.id, item.id, event.target.value || null)}
+                              disabled={!canWrite || busy}
+                              title="Célmappa a CsomagBOX-on belül"
+                              aria-label={`${document?.name || "Fájl"} célmappája`}
+                            >
+                              <option value="">BOX gyökér</option>
+                              {orderedBoxFolders(box.folders).map(({ folder, depth }) => (
+                                <option key={folder.id} value={folder.id}>{`${"— ".repeat(depth)}${folder.name}`}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       );
                     })}
