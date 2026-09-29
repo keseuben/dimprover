@@ -12,8 +12,8 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 const reAck=require(path.join(root,"desktop/benjadmin-developer-grid/src/context-workspace/rollover-reack.cjs"));
 let n=0; const check=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop version v0.1.76",()=>assert.equal(pkg.version,"0.1.93"));
-check("backend version v0.1.76-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.93-dev"')));
+check("desktop version v0.1.76",()=>assert.equal(pkg.version,"0.1.94"));
+check("backend version v0.1.76-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.94-dev"')));
 check("local frozen helper exists",()=>assert.match(main,/async function recoverLocalFrozenRolloverIdentity/));
 check("fallback requires explicit REBIND_PENDING",()=>assert.match(main,/conversationGuardState === "REBIND_PENDING"/));
 check("rebind task previous and current ids must match",()=>{

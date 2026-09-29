@@ -19,7 +19,7 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer
 let n=0;
 function check(name,fn){fn();n+=1;console.log("PASS",name);}
 
-check("desktop v0.1.93",()=>assert.equal(pkg.version,"0.1.93"));
+check("desktop v0.1.94",()=>assert.equal(pkg.version,"0.1.94"));
 const task={id:"task-1",sessionId:"session-1",sourceHead:"a".repeat(40),branchName:"worker/test",worktreePath:"/srv/dimpro-dev/worktrees/test"};
 const reviewPrompt=promptBuilder.buildInternalReviewFallbackPrompt({workerCode:"BENAI",workerLabel:"BenjáminAI",task,presence:{branch:"worker/test",worktree:"/srv/dimpro-dev/worktrees/test"}});
 check("internal review prompt is explicit non-independent fallback",()=>{assert.match(reviewPrompt,/INTERNAL_REVIEW_FALLBACK/);assert.match(reviewPrompt,/NEM független V\.Guard review/);assert.match(reviewPrompt,/DEV ONLY · PROD DENY/);});
@@ -42,4 +42,4 @@ check("review gate accepts audited review evidence",()=>{assert.match(gate,/item
 check("review route has explicit internal fallback action",()=>assert.match(route,/INTERNAL_REVIEW_FALLBACK/));
 check("README declares autonomous no-folytasd workflow",()=>{assert.match(readme,/desktop autopilot PASS után automatikusan folytatja az 1\/6→6\/6 láncot/);assert.match(readme,/nincs köztes felhasználói „folytasd”/);});
 
-console.log("Developer Grid v0.1.93 autonomous 1/6→6/6 workflow contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.94 autonomous 1/6→6/6 workflow contract PASS · "+n+"/"+n);

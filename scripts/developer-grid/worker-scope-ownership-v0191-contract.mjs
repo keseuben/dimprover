@@ -20,4 +20,4 @@ check("stage advance requires no user continue click", () => assert.match(stage,
 check("manual stage send wording removed", () => assert.doesNotMatch(stage, /Az elküldés csak kézzel történhet/));
 check("review excludes Grid infrastructure outside Grid tasks", () => assert.match(review, /NE review-zd és NE javítsd a Developer Grid task\/session\/stage\/build\/recovery\/handoff infrastruktúrát/));
 check("review treats coordination as observation", () => assert.match(review, /GRID_COORDINATION_OBSERVED/));
-console.log("Developer Grid v0.1.93 worker scope ownership contract PASS · " + n + "/" + n);
+console.log("Developer Grid v0.1.94 worker scope ownership contract PASS · " + n + "/" + n);

@@ -526,3 +526,15 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Audit event: `SOURCE_BASELINE_RETARGETED_PRE_BOOT`.
 - Regression contract: `preboot-source-retarget-v0193-contract.mjs` (10/10).
 - DEV ONLY · PROD DENY.
+
+## v0.1.94 · Central Core recovery endpoint
+
+- Új admin-only DEV endpoint: `POST /api/dev/grid/central-core/recovery`.
+- Hitelesítés: kizárólag BENJADMIN / Dev Center admin auth; reporter és anonim hozzáférés tiltott.
+- Engedélyezett műveletek:
+  - `RECOVER_LAUNCH_EXECUTION`
+  - `RETARGET_PRE_BOOT_SOURCE`
+- Cél: a Central Core fizikai ChatGrid device token nélkül is végre tudja hajtani a saját szerveroldali task/session helyreállítási műveleteit.
+- A normál user/worker launch, conversation bind és BOOT ACK útvonalak továbbra is device-auth mögött maradnak.
+- PROD DENY változatlan.
+- Regression contract: `central-core-recovery-v0194-contract.mjs` · 7/7 PASS.
