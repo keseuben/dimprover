@@ -10,7 +10,7 @@ const { cloneDefaultConfig, sanitizeConfig, clampZoom, DEFAULT_USAGE_GUIDE } = r
 const { BenjadminLiveClient } = require("./live/benjadmin-live-client.cjs");
 const { isTaskAwaitingChatLaunch, taskLaunchGate, TASK_LAUNCH_PROMPT_MARKER, buildWorkerTaskPrompt } = require("./task-launch/prompt-builder.cjs");
 const { fetchReviewRoomSnapshot } = require("./review/review-room-client.cjs");
-const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
+const { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult } = require("./context-workspace/context-workspace-client.cjs");
 const { HANDOFF_PROMPT_MARKER, buildHandoffPrompt } = require("./context-workspace/handoff-prompt-builder.cjs");
 const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantMarkdown, parseHandoffV2, renderHandoffMarkdown, handoffStatusForTask, extractHandoffTimestamp, extractCommit } = require("./context-workspace/chatgpt-handoff.cjs");
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
@@ -19,6 +19,8 @@ const { ROLLOVER_REACK_PROMPT_MARKER, ROLLOVER_REACK_KEY_MARKER, buildConversati
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { parseTaskLaunchDraftIdentity, shouldReplaceStaleTaskLaunchDraft } = require("./task-launch/draft-recovery.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
+const { buildInternalReviewFallbackPrompt } = require("./internal-review-prompt-builder.cjs");
+const { INTERNAL_REVIEW_REPORT_START, parseDeveloperGridInternalReviewReport } = require("./task-launch/internal-review-report.cjs");
 const { STAGE_REPORT_START, parseDeveloperGridStageReport, validateStageReportAsBootAck } = require("./task-launch/stage-report.cjs");
 const { EXECUTION_REQUEST_START, EXECUTION_REQUEST_END, parseDeveloperGridExecutionRequest, buildDeveloperGridExecutionResultPrompt } = require("./task-launch/execution-request.cjs");
 const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.cjs");
@@ -94,6 +96,8 @@ const watermarkCssKeys = new Map();
 const chatRefreshCells = new Map();
 const pendingChatRefreshReasons = new Map();
 const stageReportMonitorKeys = new Set();
+const internalReviewMonitorKeys = new Set();
+const developerGridAutopilotKeys = new Set();
 let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
@@ -3610,6 +3614,7 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
     }, passed ? "checkpoint-pass" : "checkpoint-blocked");
   }
   send("context:refresh", { reason: result?.error ? "stage-report-evidence-blocked" : "stage-report-evidence-recorded", taskId:task.id, workerCode:backendWorkerCode, count:result?.count || 0 });
+  if (!result?.error && report.result === "PASS") setTimeout(() => void continueDeveloperGridAutopilot(uiWorkerCode, task.id), 700);
   return { processed:true, result };
 }
 
@@ -4758,7 +4763,7 @@ function conversationMemoryTaskForWorker(workerCode) {
   return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId };
 }
 
-async function syncConversationMemoryForWorker(workerCode) {
+async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false) {
   const code = String(workerCode || "").toUpperCase();
   const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
   if (!cell) return null;
@@ -4907,9 +4912,11 @@ async function syncConversationMemoryForWorker(workerCode) {
   }
   const bodyWithStageReport = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(STAGE_REPORT_START));
   if (bodyWithStageReport) await processCapturedStageReport({ body:bodyWithStageReport.text, workerCode:code, task:live.task }).catch(() => undefined);
+  const bodyWithInternalReview = [...capture.messages].reverse().find((item) => item.role === "ASSISTANT" && String(item.text || "").includes(INTERNAL_REVIEW_REPORT_START));
+  if (bodyWithInternalReview) await processCapturedInternalReviewReport({ body:bodyWithInternalReview.text, workerCode:code, task:live.task }).catch(() => undefined);
 
   let memory = null;
-  if (conversationMemoryHashes.get(cacheKey) !== transcriptHash) {
+  if (forceSnapshot || conversationMemoryHashes.get(cacheKey) !== transcriptHash) {
     memory = await saveDeveloperGridConversationMemory({
       baseUrl:config.benjadminBaseUrl,
       deviceToken:readDeviceToken(),
@@ -4940,12 +4947,198 @@ async function syncConversationMemoryForWorker(workerCode) {
   return memory;
 }
 
+
+function authoritativeAutopilotContext(activeWork, workerCode, taskId = "") {
+  const uiCode = String(workerCode || "").toUpperCase();
+  const backendCode = uiCode === "BENAI" ? "BENJAMINAI" : uiCode;
+  const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks : [];
+  const pair = pairs.find((item) => String(item?.session?.workerCode || "").toUpperCase() === backendCode && (!taskId || String(item?.task?.id || "") === String(taskId))) || null;
+  if (!pair?.task || !pair?.session) return null;
+  const session = pair.session;
+  const ctx = session.developmentContext || {};
+  const src = session.sourceProvenance || {};
+  return {
+    presence:{ ...ctx, branch:src.branch || null, worktree:src.worktree || null, workStageIndex:Number(ctx.workStageIndex)||1 },
+    task:{
+      ...pair.task,
+      sessionId:session.id,
+      assignedWorkerId:session.workerCode,
+      sourceHead:src.head || "",
+      branchName:src.branch || "",
+      worktreePath:src.worktree || "",
+      sourceState:src.sourceState || "",
+      bootAckState:ctx.bootAckState || null,
+      bootAckCodingAllowed:ctx.bootAckCodingAllowed === true,
+      surfaceConversationId:ctx.surfaceConversationId || ctx.chatConversationId || null,
+      chatConversationId:ctx.chatConversationId || ctx.surfaceConversationId || null,
+      surfaceConversationUrl:ctx.surfaceConversationUrl || ctx.chatConversationUrl || null,
+      workStageIndex:Number(ctx.workStageIndex)||1,
+    },
+    session,
+  };
+}
+
+async function prepareInternalReviewFallback(workerCode, contextOverride) {
+  const code = String(workerCode || "").toUpperCase();
+  const cell = config?.cells?.find((item)=>item.workerCode===code && item.enabled!==false);
+  const presence = contextOverride?.presence || null;
+  const task = contextOverride?.task || null;
+  if (!cell || !task?.id || !task?.sessionId || Number(presence?.workStageIndex || task?.workStageIndex || 0) !== 4) return {ok:false,error:"INTERNAL_REVIEW_CONTEXT_INVALID"};
+  let view = chatViews.get(cell.id);
+  if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
+  if (!view || view.webContents.isDestroyed()) return {ok:false,error:"INTERNAL_REVIEW_CHAT_UNAVAILABLE"};
+  const expectedConversationId = String(task.surfaceConversationId || task.chatConversationId || "").trim();
+  const currentConversationId = chatConversationIdFromUrl(view.webContents.getURL());
+  if (!expectedConversationId || currentConversationId !== expectedConversationId) return {ok:false,error:"INTERNAL_REVIEW_CONVERSATION_MISMATCH"};
+  const baseline = await captureLatestAssistantText(view);
+  const baselineResponseSha256 = baseline?.ok ? createHash("sha256").update(String(baseline.text || "")).digest("hex") : "";
+  const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_INTERNAL_REVIEW_FALLBACK_V1";
+  const prompt = buildInternalReviewFallbackPrompt({workerCode:code,workerLabel:cell.label,task,presence});
+  const insertion = await insertWorkerTaskPrompt(view,prompt,marker);
+  if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) return {ok:false,error:insertion?.reason || "INTERNAL_REVIEW_INSERT_NOT_VERIFIED"};
+  const sent = await sendPreparedChatPrompt(view,marker);
+  if (sent?.sent !== true || sent?.verified !== true) return {ok:false,error:sent?.reason || "INTERNAL_REVIEW_SEND_NOT_VERIFIED"};
+  void monitorInternalReviewReport({view,workerCode:code,task,baselineResponseSha256}).catch(()=>undefined);
+  return {ok:true,mode:"sent"};
+}
+
+async function processCapturedInternalReviewReport({body,workerCode,task,baselineResponseSha256=""}) {
+  const textBody=String(body || "");
+  if (!textBody.includes(INTERNAL_REVIEW_REPORT_START) || !task?.id || !task?.sessionId) return {processed:false};
+  const responseSha256=createHash("sha256").update(textBody).digest("hex");
+  if (baselineResponseSha256 && responseSha256===baselineResponseSha256) return {processed:false,reason:"baseline"};
+  const parsed=parseDeveloperGridInternalReviewReport(textBody);
+  if (!parsed?.ok || !parsed.report) return {processed:false,reason:parsed?.code || "parse"};
+  const report=parsed.report;
+  const backendWorkerCode=String(workerCode || "").toUpperCase()==="BENAI"?"BENJAMINAI":String(workerCode || "").toUpperCase();
+  if (report.workerCode!==backendWorkerCode || report.taskId!==String(task.id) || report.sessionId!==String(task.sessionId)) return {processed:true,error:"identity-mismatch"};
+  const review=await submitDeveloperGridInternalReviewFallback({
+    baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),
+    input:{action:"INTERNAL_REVIEW_FALLBACK",reviewMode:report.reviewMode,workerCode:report.workerCode,taskId:report.taskId,sessionId:report.sessionId,head:report.head,result:report.result,summary:report.summary,findings:report.findings,tests:report.tests}
+  }).catch((error)=>({ok:false,state:"BLOCKED",code:error?.code || "INTERNAL_REVIEW_HTTP_FAILED",error:error instanceof Error?error.message:"INTERNAL_REVIEW_HTTP_FAILED"}));
+  send("context:refresh",{reason:review?.ok?"internal-review-recorded":"internal-review-blocked",taskId:task.id,workerCode:backendWorkerCode,reviewMode:"INTERNAL_REVIEW_FALLBACK"});
+  const uiCode=backendWorkerCode==="BENJAMINAI"?"BENAI":backendWorkerCode;
+  if (review?.ok && review?.state==="PASS") setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
+  else if (review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
+    const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
+    const context=authoritativeAutopilotContext(activeWork,uiCode,task.id);
+    if (context) await prepareWorkerStageAction(uiCode,"review-rework",context).catch(()=>undefined);
+  },700);
+  return {processed:true,review};
+}
+
+async function monitorInternalReviewReport({view,workerCode,task,baselineResponseSha256=""}) {
+  const backendWorkerCode=String(workerCode || "").toUpperCase()==="BENAI"?"BENJAMINAI":String(workerCode || "").toUpperCase();
+  const key=`${backendWorkerCode}:${task?.id || ""}:${task?.sessionId || ""}`;
+  if (!task?.id || !task?.sessionId || !view || view.webContents.isDestroyed() || internalReviewMonitorKeys.has(key)) return;
+  internalReviewMonitorKeys.add(key);
+  const deadline=Date.now()+30*60_000;
+  try {
+    while(Date.now()<deadline && view && !view.webContents.isDestroyed()) {
+      await new Promise((resolve)=>setTimeout(resolve,1800));
+      const capture=await captureLatestAssistantText(view);
+      if(!capture?.ok || capture.generating) continue;
+      const processed=await processCapturedInternalReviewReport({body:capture.text,workerCode,task,baselineResponseSha256});
+      if(processed?.processed) return;
+    }
+  } finally { internalReviewMonitorKeys.delete(key); }
+}
+
+async function continueDeveloperGridAutopilot(workerCode, taskId = "") {
+  if (!unlocked || !readDeviceToken()) return {ok:false,reason:"locked"};
+  const uiCode=String(workerCode || "").toUpperCase();
+  const key=`${uiCode}:${taskId || "*"}`;
+  if(developerGridAutopilotKeys.has(key)) return {ok:false,reason:"busy"};
+  developerGridAutopilotKeys.add(key);
+  try {
+    const activeWork=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()});
+    const context=authoritativeAutopilotContext(activeWork,uiCode,taskId);
+    if(!context) return {ok:false,reason:"no-live-pair"};
+    const {task,presence,session}=context;
+    if(String(task.bootAckState || "").toUpperCase()!=="VALIDATED" || task.bootAckCodingAllowed!==true) return {ok:false,reason:"boot-ack"};
+    const stage=Number(presence.workStageIndex || 1);
+    const record=loadTaskLaunchRecords()[String(task.id)] || {};
+    const head=String(task.sourceHead || "");
+
+    if(stage>=1 && stage<=3) {
+      const stageKey=`${stage}:${head}`;
+      if(String(record.autopilotStagePromptKey || "")===stageKey && String(record.autopilotState || "")==="WAITING_STAGE_REPORT") return {ok:true,state:"WAITING_STAGE_REPORT",stage};
+      publishTaskLaunchPatch(task,uiCode,{autopilotState:"PREPARING_STAGE",autopilotStagePromptKey:stageKey,autopilotAt:new Date().toISOString()}, "autopilot-stage-preparing");
+      const sent=await prepareWorkerStageAction(uiCode,"advance-stage",context);
+      publishTaskLaunchPatch(task,uiCode,{autopilotState:sent?.ok&&sent?.mode==="sent"?"WAITING_STAGE_REPORT":"BLOCKED",autopilotError:sent?.ok&&sent?.mode==="sent"?null:(sent?.error || sent?.mode || "STAGE_SEND_NOT_VERIFIED"),autopilotAt:new Date().toISOString()}, sent?.ok&&sent?.mode==="sent"?"autopilot-stage-sent":"autopilot-stage-blocked");
+      return {ok:sent?.ok===true&&sent?.mode==="sent",state:sent?.mode||"BLOCKED",stage};
+    }
+
+    if(stage===4) {
+      const gate=await fetchDeveloperGridReviewGate({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),taskId:task.id,target:"REVIEW"});
+      if(!gate?.gate?.ready) return {ok:false,state:"REVIEW_READINESS_BLOCKED"};
+      if(gate?.vguard?.providerReady===true) {
+        const reviewKey=`external:${head}`;
+        if(String(record.autopilotReviewKey || "")===reviewKey && String(record.autopilotState || "")==="EXTERNAL_REVIEW") return {ok:true,state:"WAITING_EXTERNAL_REVIEW"};
+        publishTaskLaunchPatch(task,uiCode,{autopilotReviewKey:reviewKey,autopilotState:"EXTERNAL_REVIEW",autopilotAt:new Date().toISOString()}, "autopilot-external-review");
+        const review=await requestDeveloperGridVGuardReview({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id}});
+        if(review?.ok && review?.state==="PASS") setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
+        else if(review?.ok && review?.review?.result==="FAIL") setTimeout(async()=> {
+          const refreshed=await fetchDeveloperGridActiveWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()}).catch(()=>null);
+          const reworkContext=authoritativeAutopilotContext(refreshed,uiCode,task.id);
+          if(reworkContext) await prepareWorkerStageAction(uiCode,"review-rework",reworkContext).catch(()=>undefined);
+        },700);
+        return {ok:review?.ok===true,state:review?.state||"BLOCKED"};
+      }
+      const reviewKey=`internal:${head}`;
+      if(String(record.autopilotReviewKey || "")===reviewKey && String(record.autopilotState || "")==="INTERNAL_REVIEW_FALLBACK") return {ok:true,state:"WAITING_INTERNAL_REVIEW"};
+      publishTaskLaunchPatch(task,uiCode,{autopilotReviewKey:reviewKey,autopilotState:"INTERNAL_REVIEW_FALLBACK",autopilotAt:new Date().toISOString()}, "autopilot-internal-review");
+      const sent=await prepareInternalReviewFallback(uiCode,context);
+      if(!sent?.ok) publishTaskLaunchPatch(task,uiCode,{autopilotState:"BLOCKED",autopilotError:sent?.error || "INTERNAL_REVIEW_SEND_FAILED",autopilotAt:new Date().toISOString()}, "autopilot-internal-review-blocked");
+      return {ok:sent?.ok===true,state:sent?.ok?"WAITING_INTERNAL_REVIEW":"BLOCKED"};
+    }
+
+    if(stage===5) {
+      const buildRuns=await fetchDeveloperGridBuildRuns({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken()});
+      const runs=(Array.isArray(buildRuns?.runs)?buildRuns.runs:[]).filter((run)=>String(run.taskId||"")===String(task.id) && String(run.sessionId||"")===String(session.id) && String(run.sourceCommit||"").toLowerCase()===head.toLowerCase()).sort((a,b)=>Date.parse(b.queuedAt||0)-Date.parse(a.queuedAt||0));
+      const latest=runs[0] || null;
+      if(!latest) {
+        const build=await requestDeveloperGridFullBuild({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}});
+        publishTaskLaunchPatch(task,uiCode,{autopilotState:"BUILD_REQUESTED",autopilotBuildRunId:build?.run?.id || null,autopilotAt:new Date().toISOString()}, "autopilot-build-requested");
+        return {ok:true,state:"BUILD_REQUESTED",runId:build?.run?.id || null};
+      }
+      const status=String(latest.status || "").toUpperCase();
+      if(["QUEUED","ASSIGNED","RUNNING"].includes(status)) return {ok:true,state:`BUILD_${status}`,runId:latest.id};
+      if(status==="PASS") {
+        setTimeout(()=>void continueDeveloperGridAutopilot(uiCode,task.id),700);
+        return {ok:true,state:"BUILD_PASS",runId:latest.id};
+      }
+      if(["FAIL","BLOCKED"].includes(status)) {
+        const reworkKey=`${latest.id}:${head}`;
+        if(String(record.autopilotBuildReworkKey || "")===reworkKey && String(record.autopilotState || "")==="BUILD_REWORK") return {ok:true,state:"WAITING_BUILD_REWORK"};
+        publishTaskLaunchPatch(task,uiCode,{autopilotBuildReworkKey:reworkKey,autopilotState:"BUILD_REWORK",autopilotAt:new Date().toISOString()}, "autopilot-build-rework");
+        const sent=await prepareWorkerStageAction(uiCode,"build-rework",context);
+        return {ok:sent?.ok===true&&sent?.mode==="sent",state:sent?.mode||"BLOCKED"};
+      }
+    }
+
+    if(stage===6) {
+      await syncConversationMemoryForWorker(uiCode,true).catch(()=>null);
+      const close=await closeDeveloperGridWork({baseUrl:config.benjadminBaseUrl,deviceToken:readDeviceToken(),input:{taskId:task.id,sessionId:session.id}}).catch((error)=>({error:error instanceof Error?error.message:"CLOSURE_BLOCKED"}));
+      if(close?.task?.status==="COMPLETED" || close?.session?.endedAt) {
+        publishTaskLaunchPatch(task,uiCode,{autopilotState:"COMPLETED",autopilotError:null,autopilotAt:new Date().toISOString()}, "autopilot-completed");
+        send("context:refresh",{reason:"autopilot-work-closed",taskId:task.id,workerCode:uiCode});
+        return {ok:true,state:"COMPLETED"};
+      }
+      publishTaskLaunchPatch(task,uiCode,{autopilotState:"CLOSURE_WAIT",autopilotError:close?.error || null,autopilotAt:new Date().toISOString()}, "autopilot-closure-wait");
+      return {ok:false,state:"CLOSURE_WAIT",error:close?.error || null};
+    }
+    return {ok:true,state:"NOOP",stage};
+  } finally { developerGridAutopilotKeys.delete(key); }
+}
+
 async function syncConversationMemoryOnce() {
   if (!unlocked || conversationMemoryBusy || !readDeviceToken()) return;
   conversationMemoryBusy = true;
   try {
     for (const code of ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"]) {
       await syncConversationMemoryForWorker(code).catch(() => undefined);
+      await continueDeveloperGridAutopilot(code).catch(() => undefined);
     }
   } finally { conversationMemoryBusy = false; }
 }
@@ -4986,7 +5179,7 @@ function checkpointGuard(task, workerCode, view) {
   return { ok:blockers.length === 0, blockers, proofSha, expectedConversationId, currentConversationId };
 }
 
-async function prepareWorkerStageAction(workerCode, action) {
+async function prepareWorkerStageAction(workerCode, action, contextOverride = null) {
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   try {
     if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Stage action kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
@@ -4994,7 +5187,7 @@ async function prepareWorkerStageAction(workerCode, action) {
   const code = String(workerCode || "").toUpperCase();
   const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
-  const { presence, task } = liveContextForWorker(code);
+  const { presence, task } = contextOverride || liveContextForWorker(code);
   if (!task) return { ok: false, error: "Nincs authoritative aktuális task ehhez a workerhez." };
   if (!task.sessionId || !/^[0-9a-f]{40}$/i.test(String(task.sourceHead || ""))) return { ok:false, error:"A stage actionhoz authoritative sessionId és 40 karakteres source HEAD szükséges." };
   let view = chatViews.get(cell.id);
@@ -5071,7 +5264,7 @@ async function prepareWorkerStageAction(workerCode, action) {
   const marker = "BENJADMIN_PROMPT_KIND: DEVELOPER_GRID_STAGE_ACTION_V1";
   const insertion = await insertWorkerTaskPrompt(view, prompt, marker);
   if (insertion?.inserted === true && insertion?.verifiedMarker === true) {
-    if (action === "advance-stage") {
+    if (action === "advance-stage" || action === "review-rework" || action === "build-rework") {
       const sent = await sendPreparedChatPrompt(view, marker);
       if (sent?.sent !== true || sent?.verified !== true) return { ok:false, code:"STAGE_PROMPT_SEND_NOT_VERIFIED", error:"A fázislépési prompt a ChatGPT mezőben van, de az automatikus elküldés nem volt igazolható. Ellenőrizd és küldd el kézzel." };
       void monitorWorkerStageReport({ view, workerCode:code, task, baselineResponseSha256 }).catch(() => undefined);

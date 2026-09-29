@@ -12,7 +12,7 @@ import { newExternalAiRunId, recordExternalAiUsage, summarizeExternalAiTaskUsage
 import { appendGridEvent, readGridState, upsertWorkerSession } from "./state-store";
 import { refreshDerivedConversationMemory } from "./conversation-memory";
 import { evaluateDeveloperGridReviewGate } from "./review-gate";
-import { listGridEvidence } from "./evidence";
+import { appendGridEvidence, listGridEvidence } from "./evidence";
 import { verifyCurrentSourceExecutionState } from "./source-provenance";
 import { getDeveloperGridTaskById } from "./work-start";
 
@@ -61,6 +61,74 @@ export async function getDeveloperGridVGuardReadiness(taskId?: string) {
   const probes = await probeWorkerModelAdapters();
   const readyProviders = probes.filter((item) => item.provider !== "mock" && item.roles.includes("VGUARD") && item.ready);
   return { gate, providerReady:readyProviders.length > 0, providers:probes.map((item)=>({provider:item.provider,label:item.label,ready:item.ready,modelId:item.modelId,executionGateEnabled:item.executionGateEnabled,detail:item.detail})), productionAccess:"DENY" as const };
+}
+
+
+export async function submitDeveloperGridInternalReviewFallback(input: Record<string, unknown>) {
+  const taskId = text(input.taskId,220);
+  const readiness = await getDeveloperGridVGuardReadiness(taskId || undefined);
+  if (readiness.providerReady) {
+    return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_EXTERNAL_VGUARD_READY", error:"READY külső V.Guard provider elérhető; az INTERNAL_REVIEW_FALLBACK nem használható.", readiness };
+  }
+  if (!readiness.gate.ready) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_GATE_BLOCKED", error:"A Developer Grid review-readiness gate BLOCKED.", readiness };
+  const resolvedTaskId = String(readiness.gate.taskId || taskId || "");
+  const state = await readGridState();
+  const task = await getDeveloperGridTaskById(resolvedTaskId);
+  if (!task) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_TASK_MISMATCH", error:"Az authoritative task nem található." };
+  const session = state.sessions.find((item)=>item.id===readiness.gate.sessionId && item.taskId===resolvedTaskId && item.endedAt===null);
+  if (!session) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_SESSION_MISSING", error:"Az authoritative worker session nem található." };
+  if (Number(session.developmentContext.workStageIndex || 1) !== 4) return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_REVIEW_STAGE_REQUIRED", error:"Az INTERNAL_REVIEW_FALLBACK kizárólag a 4/6 ELLENŐRZÉS fázisban fogadható el." };
+  if (session.developmentContext.bootAckState !== "VALIDATED" || session.developmentContext.bootAckCodingAllowed !== true) {
+    return { ok:false as const, state:"BLOCKED" as const, code:"DEVELOPER_GRID_INTERNAL_REVIEW_BOOT_ACK_REQUIRED", error:"Belső review csak VALIDATED BOOT ACK + codingAllowed=true állapotban fogadható el." };
+  }
+  await verifyCurrentSourceExecutionState(session.sourceProvenance,{requireClean:true});
+  const head = session.sourceProvenance.head.toLowerCase();
+  const baseHead = session.sourceProvenance.baseHead || head;
+  const inputHead = text(input.head,80).toLowerCase();
+  const inputSessionId = text(input.sessionId,240);
+  const rawWorker = text(input.workerCode,40).toUpperCase();
+  const workerCode = rawWorker === "BENAI" ? "BENJAMINAI" : rawWorker;
+  const reviewMode = text(input.reviewMode,80).toUpperCase();
+  const result = text(input.result,40).toUpperCase();
+  const summary = text(input.summary,1200);
+  if (reviewMode !== "INTERNAL_REVIEW_FALLBACK") return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_MODE_INVALID",error:"reviewMode csak INTERNAL_REVIEW_FALLBACK lehet." };
+  if (inputSessionId !== session.id || workerCode !== session.workerCode || inputHead !== head) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_IDENTITY_MISMATCH",error:"A belső review task/session/worker/current HEAD identity eltér az authoritative állapottól." };
+  if (!["PASS","PASS_WITH_NOTES","FAIL"].includes(result)) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_RESULT_INVALID",error:"Érvénytelen belső review result." };
+
+  const changedPaths = baseHead === head ? [] : (await git(session.sourceProvenance.worktree,["diff","--name-only","--diff-filter=ACDMRTUXB",baseHead,head])).split("\n").map((item)=>item.trim()).filter(Boolean);
+  if (!changedPaths.length) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_EMPTY_DIFF",error:"Nincs review-zható base → current változás." };
+  const findings = (Array.isArray(input.findings) ? input.findings : []).slice(0,100).map((value) => {
+    const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string,unknown> : {};
+    return { severity:text(row.severity,40).toUpperCase(), category:text(row.category,80).toUpperCase(), message:text(row.message,800), path:text(row.path,800) || null };
+  });
+  const tests = (Array.isArray(input.tests) ? input.tests : []).slice(0,100).map((value)=>text(value,500)).filter(Boolean);
+  const changedSet = new Set(changedPaths);
+  if (findings.some((item)=>item.path && !changedSet.has(item.path))) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_SCOPE_MISMATCH",error:"A belső review finding scope-on kívüli pathot tartalmaz." };
+  const hasHigh = findings.some((item)=>["HIGH","BLOCKER","CRITICAL"].includes(item.severity));
+  if (result !== "FAIL" && hasHigh) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_PASS_WITH_BLOCKER",error:"PASS/PASS_WITH_NOTES nem tartalmazhat HIGH/BLOCKER/CRITICAL findingot." };
+  if (result === "FAIL" && !hasHigh) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_FAIL_WITHOUT_BLOCKER",error:"FAIL eredményhez HIGH/BLOCKER/CRITICAL finding szükséges." };
+  if (scanSensitiveText(JSON.stringify({summary,findings,tests})).length) return { ok:false as const,state:"BLOCKED" as const,code:"DEVELOPER_GRID_INTERNAL_REVIEW_SECRET_BLOCKED",error:"A belső review report érzékeny mintát tartalmaz." };
+
+  const reviewId = `grid-internal-review-${randomUUID().slice(0,12)}`;
+  const priorFail = (await listGridEvidence({taskId:resolvedTaskId,kind:"REVIEW",limit:50})).find((item)=>item.head===head && (item.status==="FAIL"||item.status==="BLOCKED"));
+  const severity = result === "FAIL" ? "HIGH" : result === "PASS_WITH_NOTES" ? "WARNING" : "INFO";
+  const evidence = await appendGridEvidence({
+    kind:"REVIEW", status:result, severity, source:"REVIEW_GATE", taskId:resolvedTaskId, projectId:task.projectId,
+    workerCode:session.workerCode, sessionId:session.id, branch:session.sourceProvenance.branch, worktree:session.sourceProvenance.worktree, head,
+    summary:`INTERNAL_REVIEW_FALLBACK · ${result} · ${summary || `${findings.length} finding`}`,
+    attributes:{ reviewId, reviewResult:result, reviewMode:"INTERNAL_REVIEW_FALLBACK", reviewerWorkerCode:session.workerCode, resolvesFingerprint:result!=="FAIL"?priorFail?.fingerprintSha256||null:null }
+  });
+  await appendGridEvent({ kind:"review",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:session.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
+    delta:{eventType:"INTERNAL_REVIEW_FALLBACK_COMPLETED",summary:`INTERNAL_REVIEW_FALLBACK ${result} · ${findings.length} finding.`,status:result,severity,sessionId:session.id,reviewId,reviewMode:"INTERNAL_REVIEW_FALLBACK",reviewerWorkerCode:session.workerCode,reviewResult:result,changedFileCount:changedPaths.length,findingCount:findings.length,testCount:tests.length,sanitized:true} });
+
+  if (result !== "FAIL") {
+    const advanced = { ...session, developmentContext:{...session.developmentContext,workStageIndex:5,resolvedAt:new Date().toISOString()} };
+    await upsertWorkerSession(advanced);
+    await appendGridEvent({kind:"analysis",origin:"LIVE",workerCode:session.workerCode,taskId:resolvedTaskId,projectId:task.projectId,developmentContext:advanced.developmentContext,branch:session.sourceProvenance.branch,worktree:session.sourceProvenance.worktree,head,productionAccess:"DENY",
+      delta:{eventType:"WORK_STAGE_ADVANCED",summary:"INTERNAL_REVIEW_FALLBACK PASS; fejlesztési szakasz: 4/6 → 5/6 BUILD / KIADÁS.",status:"PASS",severity:"INFO",sessionId:session.id,workStageIndex:5,reviewId,reviewMode:"INTERNAL_REVIEW_FALLBACK",sanitized:true}});
+  }
+  await refreshDerivedConversationMemory(resolvedTaskId,session.id).catch(()=>null);
+  return { ok:true as const,state:result==="FAIL"?"BLOCKED" as const:"PASS" as const,taskId:resolvedTaskId,sessionId:session.id,reviewId,sourceHead:head,baseHead,reviewMode:"INTERNAL_REVIEW_FALLBACK" as const,review:{result,summary,findings,tests},evidenceId:evidence.id,productionAccess:"DENY" as const };
 }
 
 export async function requestDeveloperGridVGuardReview(input: Record<string, unknown>) {

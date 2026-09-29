@@ -239,6 +239,8 @@ export type GridEvidence = {
     outputSha256: string | null;
     resolvesFingerprint: string | null;
     reviewResult: string | null;
+    reviewMode: string | null;
+    reviewerWorkerCode: string | null;
     handoffStatus: string | null;
   };
   fingerprintSha256: string;

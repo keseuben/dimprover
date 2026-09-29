@@ -85,6 +85,8 @@ function normalizeAttributes(input: Record<string, unknown>) {
     outputSha256: safeSha(input.outputSha256, 64),
     resolvesFingerprint: safeSha(input.resolvesFingerprint, 64),
     reviewResult: ["PASS", "PASS_WITH_NOTES", "FAIL", "PENDING"].includes(reviewResultRaw) ? reviewResultRaw : null,
+    reviewMode: safeText(input.reviewMode, 100) || null,
+    reviewerWorkerCode: safeText(input.reviewerWorkerCode, 40) || null,
     handoffStatus: ["COMPLETED", "PARTIAL", "BLOCKED", "FAILED"].includes(handoffStatusRaw) ? handoffStatusRaw : null,
   };
 }

@@ -185,6 +185,11 @@ async function requestDeveloperGridVGuardReview({ baseUrl, deviceToken, input })
   const payload = await jsonRequest(`${base}/api/dev/grid/review-gate`, { method: "POST", headers: headers(deviceToken, true), body: JSON.stringify(input || {}) }, 360000);
   return payload.review || null;
 }
+async function submitDeveloperGridInternalReviewFallback({ baseUrl, deviceToken, input }) {
+  const base = ensureDevBase(baseUrl);
+  const payload = await jsonRequest(`${base}/api/dev/grid/review-gate`, { method:"POST", headers:headers(deviceToken,true), body:JSON.stringify({ action:"INTERNAL_REVIEW_FALLBACK", ...(input || {}) }) }, 30000);
+  return payload.review || null;
+}
 async function fetchDeveloperGridWindowsE2E({ baseUrl, deviceToken }) {
   const base = ensureDevBase(baseUrl);
   const payload = await jsonRequest(`${base}/api/dev/grid/windows-e2e`, { method:"GET", headers:headers(deviceToken) }, 15000);
@@ -263,4 +268,4 @@ async function importDeveloperGridTaskBridgeResult({ baseUrl, deviceToken, taskI
   return payload.result || null;
 }
 
-module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult, sanitizeSnapshot };
+module.exports = { fetchContextWorkspace, saveHandoff, downloadHandoff, uploadResources, fetchDeveloperGridActiveWork, startDeveloperGridWork, recoverDeveloperGridLaunchExecution, recoverDeveloperGridExecutionAuthority, bindDeveloperGridConversation, recordDeveloperGridBootAck, heartbeatDeveloperGridSession, executeDeveloperGridRequest, fetchDeveloperGridBuildRuns, requestDeveloperGridFullBuild, submitDeveloperGridEvidence, fetchDeveloperGridEvidence, fetchDeveloperGridReviewGate, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback, fetchDeveloperGridWindowsE2E, saveDeveloperGridConversationMemory, fetchDeveloperGridConversationMemory, closeDeveloperGridWork, fetchDeveloperGridTaskBridge, startDeveloperGridTaskBridge, fetchDeveloperGridTaskBridgeBootstrap, markDeveloperGridTaskBridgeWorkerStarted, fetchDeveloperGridTaskBridgeReview, markDeveloperGridTaskBridgeReviewStarted, resumeDeveloperGridTaskBridgeRework, importDeveloperGridTaskBridgeReview, requestDeveloperGridTaskBridgeBuild, importDeveloperGridTaskBridgeAcceptance, heartbeatDeveloperGridTaskBridge, importDeveloperGridTaskBridgeResult, sanitizeSnapshot };

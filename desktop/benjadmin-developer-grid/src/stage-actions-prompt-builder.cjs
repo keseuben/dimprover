@@ -49,6 +49,22 @@ const ACTIONS = Object.freeze({
       "A végén rögzíts PASS/FAIL összesítést és a következő fejlesztési lépést."
     ]
   },
+  "review-rework": {
+    title: "4/6 ELLENŐRZÉS · REVIEW FAIL JAVÍTÁSI KÖR",
+    body: [
+      "Az előző INTERNAL_REVIEW_FALLBACK vagy review kapu FAIL eredményt adott. Javítsd a jelenlegi beszélgetésben felsorolt blokkoló findingokat a kijelölt DEV scope-on belül.",
+      "A javítás után futtasd újra a releváns célzott teszteket és git diff --check-et, majd készíts stabil checkpoint commitot/pusht.",
+      "A stage report maradjon 4/6; a head mező már a javított current HEAD legyen. Adj FILE és TEST evidence-et. FAIL/BLOCKED esetén ne állíts PASS-t."
+    ]
+  },
+  "build-rework": {
+    title: "5/6 BUILD / KIADÁS · BUILD FAIL JAVÍTÁSI KÖR",
+    body: [
+      "A Central Core FULL BUILD FAIL/BLOCKED eredményt adott. Azonosítsd és javítsd a build hibát a kijelölt DEV scope-on belül.",
+      "Futtasd újra a releváns célzott teszteket és git diff --check-et, majd commit/push után adj current-HEAD stage reportot.",
+      "A stage report maradjon 5/6. A FULL BUILD-et ne indítsd közvetlenül; PASS stage report után a Central Core automatikusan újrakéri BUILD01/BUILD02 runneren."
+    ]
+  },
   "build-runtime": {
     title: "BUILD / RUNTIME DEV KAPU",
     body: [

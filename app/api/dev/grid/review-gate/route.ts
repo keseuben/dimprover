@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isChatGridDeviceAuthorized } from "@/app/lib/dev-center/chatgrid-device-auth";
 import { evaluateDeveloperGridReviewGate, type DeveloperGridReviewGateTarget } from "@/app/lib/developer-grid/review-gate";
-import { getDeveloperGridVGuardReadiness, requestDeveloperGridVGuardReview } from "@/app/lib/developer-grid/vguard-review";
+import { getDeveloperGridVGuardReadiness, requestDeveloperGridVGuardReview, submitDeveloperGridInternalReviewFallback } from "@/app/lib/developer-grid/vguard-review";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   if (!(await isChatGridDeviceAuthorized(request.headers))) return json({ok:false,error:"A Developer Grid eszköz nincs párosítva."},401);
   try {
-    const review = await requestDeveloperGridVGuardReview(await request.json().catch(()=>({})));
+    const body = await request.json().catch(()=>({})) as Record<string,unknown>;
+    const review = String(body.action || "").toUpperCase() === "INTERNAL_REVIEW_FALLBACK"
+      ? await submitDeveloperGridInternalReviewFallback(body)
+      : await requestDeveloperGridVGuardReview(body);
     return json({ok:review.ok,review},review.ok?200:409);
   } catch (error) {
     const code=error&&typeof error==="object"&&"code" in error?String((error as {code?:unknown}).code||"DEVELOPER_GRID_VGUARD_REVIEW_FAILED"):"DEVELOPER_GRID_VGUARD_REVIEW_FAILED";

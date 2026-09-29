@@ -708,8 +708,8 @@ function renderStageTimeline(cell, stageIndex, task) {
     1: "ELEMZÉS lezárása és továbblépés a FEJLESZTÉS fázisba",
     2: "FEJLESZTÉS lezárása és továbblépés a TESZTELÉS fázisba",
     3: "TESZTELÉS lezárása és továbblépés az ELLENŐRZÉS fázisba",
-    4: "Független V.Guard ellenőrzés indítása; PASS után 5/6 BUILD",
-    5: "Central Core FULL BUILD indítása BUILD01 / BUILD02 runneren",
+    4: "Automatikus review: külső V.Guard, ennek hiányában auditált INTERNAL_REVIEW_FALLBACK; PASS után 5/6 BUILD",
+    5: "Automatikus Central Core FULL BUILD · BUILD01 elsődleges / BUILD02 fallback",
     6: "Lezárási kapu: handoff, build, review és evidence ellenőrzése, majd task lezárás",
   };
   for (const step of host.querySelectorAll("[data-stage-step]")) {

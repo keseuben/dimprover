@@ -71,7 +71,8 @@ export async function evaluateDeveloperGridReviewGate(input: { taskId?: string; 
 
   const review = latestMatching(headEvidence, (item) => item.kind === "REVIEW" && terminalPass.has(item.status));
   const reviewRequired = target === "BUILD" || target === "CLOSURE";
-  checks.push({ id:"VGUARD", label:"V.Guard review", required:reviewRequired, pass:Boolean(review) || !reviewRequired, detail:review ? `${review.status} · ${review.summary}` : reviewRequired ? `Nincs V.Guard PASS/PASS_WITH_NOTES evidence a ${sourceHead.slice(0,12)} HEAD-hez.` : "A review-readiness kapuhoz még nem kötelező review-result.", evidenceId:review?.id || null });
+  const reviewMode = review?.attributes.reviewMode || (review ? "VGUARD_EXTERNAL" : null);
+  checks.push({ id:"VGUARD", label:"Review gate", required:reviewRequired, pass:Boolean(review) || !reviewRequired, detail:review ? `${review.status} · ${reviewMode} · ${review.summary}` : reviewRequired ? `Nincs review PASS/PASS_WITH_NOTES evidence a ${sourceHead.slice(0,12)} HEAD-hez.` : "A review-readiness kapuhoz még nem kötelező review-result.", evidenceId:review?.id || null });
 
   const build = latestMatching(headEvidence, (item) => item.kind === "BUILD" && item.status === "PASS");
   const buildRequired = target === "CLOSURE";
