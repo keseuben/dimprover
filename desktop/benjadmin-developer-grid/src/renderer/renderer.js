@@ -1208,9 +1208,11 @@ function renderChatRefreshStatus() {
   const guardRestoring = Number(refresh.conversationGuardRestoringCount || 0);
   const rebindPending = Number(refresh.conversationRebindPendingCount || 0);
   const navigationGrace = Number(refresh.conversationNavigationGraceCount || 0);
+  const streamErrors = Number(refresh.streamErrorCount || 0);
   const pinned = Number(refresh.pinnedConversationCount || 0);
   let label = `frissítve: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
-  if (domBlocked > 0) label = `DOM BLOCKED: ${domBlocked}`;
+  if (streamErrors > 0) label = `chat stream HIBA: ${streamErrors}`;
+  else if (domBlocked > 0) label = `DOM BLOCKED: ${domBlocked}`;
   else if (guardBlocked > 0) label = `chat guard BLOCKED: ${guardBlocked}`;
   else if (guardRestoring > 0) label = `chat visszaállítás: ${guardRestoring}`;
   else if (navigationGrace > 0) label = `chat navigáció: ${navigationGrace}`;
@@ -1237,7 +1239,9 @@ function renderChatRefreshStatus() {
   const settingsStatus = $("#chatRefreshSettingsStatus");
   if (settingsStatus) settingsStatus.textContent = `Legutóbbi frissítés: ${latest}${latestReason ? ` · ${latestReason}` : ""}`;
   const settingsDetail = $("#chatRefreshSettingsDetail");
-  if (settingsDetail) settingsDetail.textContent = domBlocked > 0
+  if (settingsDetail) settingsDetail.textContent = streamErrors > 0
+    ? `${streamErrors} ChatGPT nézeten stream-hiba látható. A diagnosztika külön rögzíti, hogy Grid-navigáció, betöltési hiba vagy renderer-probléma előzte-e meg.`
+    : domBlocked > 0
     ? `${domBlocked} ChatGPT nézet DOM-adaptere nem egészséges. Selector/UI változás gyanú; automatikus műveletek fail-closed állapotban.`
     : guardBlocked > 0 ? `${guardBlocked} aktív worker conversation guardja blokkolt; az authoritative /c/... útvonal nem volt visszaállítható.`
     : guardRestoring > 0 ? `${guardRestoring} worker csevegése automatikus visszaállítás alatt van.`

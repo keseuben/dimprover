@@ -23,7 +23,7 @@ check("only ChatGPT conversation routes are persisted",()=>assert.match(remember
 check("visible conversation URL is persisted to cell config",()=>assert.match(rememberCode,/target\.url = url/));
 check("startup memory is independent from executable task-pin lookup",()=>assert.ok(!rememberCode.includes("const pin = conversationPinForCell(")));
 check("startup loads persisted cell URL",()=>assert.match(main,/const targetUrl = cell\.url \|\| defaultWorkerSurfaceUrl/));
-check("normal navigation records visible URL",()=>assert.match(main,/did-navigate", \(_event, url\) => \{\s*rememberChatNavigation\(cell\.id, url\)/));
+check("normal navigation records visible URL",()=>assert.match(main,/did-navigate", \(_event, url\) => \{[\s\S]*?rememberChatNavigation\(cell\.id, url\)/));
 check("in-page navigation records visible URL",()=>assert.match(main,/did-navigate-in-page", \(_event, url, isMainFrame\) => \{[\s\S]*rememberChatNavigation\(cell\.id, url\)/));
 check("task pin remains a separate authority function",()=>assert.match(main,/function conversationPinForCell\(cell\)/));
 check("same-project drift remains REBIND_PENDING",()=>assert.match(main,/sameChatProjectConversation\(pin\.conversationUrl, currentUrl\)[\s\S]*conversationGuardState = "REBIND_PENDING"/));

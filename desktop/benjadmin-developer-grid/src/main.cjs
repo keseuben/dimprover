@@ -123,6 +123,36 @@ let desktopArtifactProbeState = { status: "UNAVAILABLE", packagedWindows: false,
 const avatarDataUriCache = new Map();
 
 function userDataPath() { return app.getPath("userData"); }
+function chatDiagnosticPath() { return path.join(userDataPath(), "benjadmin-chat-stream-diagnostics.jsonl"); }
+function chatDiagnosticLocation(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ""));
+    const conversationId = chatConversationIdFromUrl(url.href);
+    return {
+      host: url.hostname,
+      route: conversationId ? "conversation" : url.pathname.includes("/g/") ? "project" : url.pathname === "/" ? "home" : "other",
+      conversationIdHash: conversationId ? createHash("sha256").update(conversationId).digest("hex").slice(0, 16) : "",
+    };
+  } catch { return { host:"", route:"invalid", conversationIdHash:"" }; }
+}
+function appendChatDiagnostic(kind, payload = {}) {
+  try {
+    const safe = { ...payload };
+    if (Object.prototype.hasOwnProperty.call(safe, "url")) { safe.location = chatDiagnosticLocation(safe.url); delete safe.url; }
+    if (safe.error) safe.error = String(safe.error).slice(0, 500);
+    if (safe.description) safe.description = String(safe.description).slice(0, 300);
+    const entry = { schemaVersion:1, at:new Date().toISOString(), appVersion:app.getVersion(), kind:String(kind || "UNKNOWN"), ...safe };
+    fs.appendFileSync(chatDiagnosticPath(), JSON.stringify(entry) + "\n", { encoding:"utf8", mode:0o600 });
+    return entry;
+  } catch { return null; }
+}
+function markGridChatNavigationIntent(cellId, intent, reason, url = "") {
+  const state = chatRefreshCell(cellId);
+  state.lastNavigationIntent = String(intent || "GRID_NAVIGATION");
+  state.lastNavigationReason = String(reason || "");
+  state.lastNavigationIntentAt = new Date().toISOString();
+  appendChatDiagnostic("GRID_NAVIGATION_INTENT", { cellId, intent:state.lastNavigationIntent, reason:state.lastNavigationReason, url });
+}
 function configPath() { return path.join(userDataPath(), "developer-grid-config.json"); }
 function reporterKeyPath() { return path.join(userDataPath(), "benjadmin-developer-grid-reporter-key.bin"); }
 function deviceTokenPath() { return path.join(userDataPath(), "benjadmin-developer-grid-device-token.bin"); }
@@ -1329,6 +1359,7 @@ function scheduleChatAuthRefreshForPartition(partition, reason = "auth-cookie-sy
       const state = chatRefreshCell(chatId);
       state.lastReason = reason;
       state.error = "";
+      markGridChatNavigationIntent(chatId, "AUTH_SYNC_RELOAD", reason, currentUrl);
       view.webContents.reload();
       send("live:connection", { kind:"chat-auth-sync", cellId:chatId, ok:true, code:"CHAT_AUTH_SYNC_REFRESHED", reason, url:currentUrl });
     } catch (error) {
@@ -1647,6 +1678,7 @@ function publicChatRefreshState() {
     conversationGuardRestoringCount: values.filter((item) => item.conversationGuardState === "RESTORING").length,
     conversationRebindPendingCount: values.filter((item) => item.conversationGuardState === "REBIND_PENDING").length,
     conversationNavigationGraceCount: values.filter((item) => item.conversationGuardState === "NAVIGATION_GRACE").length,
+    streamErrorCount: values.filter((item) => Boolean(item.streamErrorCode)).length,
     pinnedConversationCount: values.filter((item) => item.conversationGuardState === "PINNED").length,
     domAdapterVersion: CHATGPT_DOM_ADAPTER_VERSION,
   };
@@ -1660,6 +1692,37 @@ function emitChatRefreshState() {
 
 async function inspectChatRefreshSafety(view) {
   return inspectChatRefreshSafetyViaAdapter(view);
+}
+
+async function probeChatStreamUiError(cellId, view) {
+  if (!view || view.webContents.isDestroyed()) return null;
+  const detected = await view.webContents.executeJavaScript(`(() => {
+    const text = String(document.body?.innerText || '').toLowerCase();
+    const signatures = [
+      ['RESUME_STREAM_UNAVAILABLE', 'resume stream unavailable'],
+      ['MESSAGE_STREAM_ERROR', 'error in message stream'],
+      ['NETWORK_ERROR', 'network error'],
+      ['ERROR_GENERATING_RESPONSE', 'there was an error generating a response']
+    ];
+    for (const [code, needle] of signatures) if (text.includes(needle)) return { code };
+    return null;
+  })()`, true).catch(() => null);
+  const cellState = chatRefreshCell(cellId);
+  const previous = String(cellState.streamErrorCode || '');
+  const next = String(detected?.code || '');
+  if (next && next !== previous) {
+    cellState.streamErrorCode = next;
+    cellState.lastStreamErrorCode = next;
+    cellState.lastStreamErrorAt = new Date().toISOString();
+    appendChatDiagnostic("CHAT_STREAM_UI_ERROR", { cellId, code:next, url:view.webContents.getURL() });
+    send("live:connection", { kind:"chat-stream", cellId, ok:false, code:next, at:cellState.lastStreamErrorAt });
+  } else if (!next && previous) {
+    cellState.streamErrorCode = '';
+    cellState.streamRecoveredAt = new Date().toISOString();
+    appendChatDiagnostic("CHAT_STREAM_UI_RECOVERED", { cellId, previousCode:previous, url:view.webContents.getURL() });
+    send("live:connection", { kind:"chat-stream", cellId, ok:true, code:"STREAM_RECOVERED", previousCode:previous, at:cellState.streamRecoveredAt });
+  }
+  return detected;
 }
 
 async function probeChatRefresh(cellId, view) {
@@ -1726,11 +1789,13 @@ async function requestChatRefresh(cellId, reason = "manual") {
     return { refreshed:false, deferred:true, rebindPending:true, error:cellState.error };
   }
   if (pin && !pin.suspended && pin.conversationUrl) {
+    markGridChatNavigationIntent(cellId, "SAFE_REFRESH_PINNED_LOAD", reason, pin.conversationUrl);
     await view.webContents.loadURL(pin.conversationUrl).catch((error) => {
       cellState.loading = false;
       cellState.error = String(error?.message || error || "Pinned conversation refresh failed").slice(0, 500);
     });
   } else {
+    markGridChatNavigationIntent(cellId, "SAFE_REFRESH_RELOAD", reason, view.webContents.getURL());
     view.webContents.reloadIgnoringCache();
   }
   emitChatRefreshState();
@@ -1757,6 +1822,7 @@ async function maintainChatRefresh() {
     for (const [cellId, view] of chatViews.entries()) {
       const cellState = chatRefreshCell(cellId);
       let inspection = null;
+      await probeChatStreamUiError(cellId, view);
       if (!cellState.lastProbedAt || now - cellState.lastProbedAt >= CHAT_REFRESH_PROBE_MS) inspection = await probeChatRefresh(cellId, view);
       if (config?.chatRefresh?.dailyEnabled === false || cellState.lastDailyDay === today) continue;
       if (!inspection) inspection = await probeChatRefresh(cellId, view);
@@ -1833,9 +1899,8 @@ function createChatView(cell) {
       setImmediate(() => {
         if (!view.webContents.isDestroyed()) {
           const navState = chatRefreshCell(cell.id);
-          navState.lastNavigationIntent = "WINDOW_OPEN_SAME_VIEW";
+          markGridChatNavigationIntent(cell.id, "WINDOW_OPEN_SAME_VIEW", "window-open-handler", url);
           navState.lastNavigationIntentUrl = url;
-          navState.lastNavigationIntentAt = new Date().toISOString();
           void view.webContents.loadURL(url).catch((error) => {
             navState.error = String(error?.message || error || "ChatGPT same-view navigation failed").slice(0, 500);
             emitChatRefreshState();
@@ -1851,11 +1916,17 @@ function createChatView(cell) {
     if (!allowedChatUrl(url)) event.preventDefault();
   });
   view.webContents.on("did-navigate", (_event, url) => {
+    const navState = chatRefreshCell(cell.id);
+    const intentAgeMs = navState.lastNavigationIntentAt ? Date.now() - Date.parse(navState.lastNavigationIntentAt) : Number.POSITIVE_INFINITY;
+    appendChatDiagnostic("CHAT_DID_NAVIGATE", { cellId:cell.id, source:intentAgeMs >= 0 && intentAgeMs <= 15000 ? "GRID" : "WEB_OR_USER", intent:navState.lastNavigationIntent || "", reason:navState.lastNavigationReason || "", url });
     rememberChatNavigation(cell.id, url);
     schedulePinnedConversationGuard(cell, view, "did-navigate", 120);
   });
   view.webContents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
     if (!isMainFrame) return;
+    const navState = chatRefreshCell(cell.id);
+    const intentAgeMs = navState.lastNavigationIntentAt ? Date.now() - Date.parse(navState.lastNavigationIntentAt) : Number.POSITIVE_INFINITY;
+    appendChatDiagnostic("CHAT_DID_NAVIGATE_IN_PAGE", { cellId:cell.id, source:intentAgeMs >= 0 && intentAgeMs <= 15000 ? "GRID" : "WEB_OR_USER", intent:navState.lastNavigationIntent || "", reason:navState.lastNavigationReason || "", url });
     rememberChatNavigation(cell.id, url);
     schedulePinnedConversationGuard(cell, view, "did-navigate-in-page", 120);
   });
@@ -1864,10 +1935,16 @@ function createChatView(cell) {
       const refreshState = chatRefreshCell(cell.id);
       refreshState.loading = false;
       refreshState.error = `${description} (${code})`;
+      appendChatDiagnostic("CHAT_DID_FAIL_LOAD", { cellId:cell.id, code, description, isMainFrame:true, url });
       send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: refreshState.error, url });
       emitChatRefreshState();
     }
   });
+  view.webContents.on("render-process-gone", (_event, details) => {
+    appendChatDiagnostic("CHAT_RENDER_PROCESS_GONE", { cellId:cell.id, reason:details?.reason || "unknown", exitCode:Number(details?.exitCode || 0), url:view.webContents.getURL() });
+  });
+  view.webContents.on("unresponsive", () => appendChatDiagnostic("CHAT_WEB_CONTENTS_UNRESPONSIVE", { cellId:cell.id, url:view.webContents.getURL() }));
+  view.webContents.on("responsive", () => appendChatDiagnostic("CHAT_WEB_CONTENTS_RESPONSIVE", { cellId:cell.id, url:view.webContents.getURL() }));
   view.webContents.on("did-finish-load", () => {
     const refreshState = chatRefreshCell(cell.id);
     refreshState.lastRefreshedAt = new Date().toISOString();
@@ -1910,7 +1987,11 @@ function createChatView(cell) {
   hostWindow.contentView.addChildView(view);
   chatViews.set(cell.id, view);
   const targetUrl = cell.url || defaultWorkerSurfaceUrl(surfaceType) || "https://chatgpt.com/";
-  void view.webContents.loadURL(targetUrl).catch((error) => send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: error.message }));
+  markGridChatNavigationIntent(cell.id, "STARTUP_LOAD", "create-chat-view", targetUrl);
+  void view.webContents.loadURL(targetUrl).catch((error) => {
+    appendChatDiagnostic("CHAT_STARTUP_LOAD_FAILED", { cellId:cell.id, error:error?.message || error, url:targetUrl });
+    send("live:connection", { kind: "chat", cellId: cell.id, ok: false, error: error.message });
+  });
 }
 
 function createEnabledChatViews() {
