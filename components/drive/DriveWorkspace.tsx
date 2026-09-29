@@ -16,6 +16,8 @@ import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
 import TableFullscreenBar from "./TableFullscreenBar";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
+import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
+import { projectRoleLabel } from "@/app/lib/project-core/permissions";
 import { prepareDroppedDriveUpload } from "./externalFileDrop";
 import type {
   DriveBox,
@@ -1059,8 +1061,15 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         <div className={styles.headerActions}>
           <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
+          <ProjectAccessMenu projectId={projectId} compact />
+          <div className={styles.userPill}>
+            <span className={styles.avatar}>{(membershipDisplayName || "D").trim().charAt(0).toUpperCase() || "D"}</span>
+            <div>
+              <strong>{membershipDisplayName || "DIMPRO felhasználó"}</strong>
+              <span>{projectRoleLabel(membershipRole)}</span>
+            </div>
+          </div>
           <HeaderLogoutIconButton className={styles.headerLogout} iconSize={16} />
-          <div className={styles.userPill}><span className={styles.avatar}>D</span><div><strong>DIMPRO felhasználó</strong><span>Projekt hozzáférés</span></div></div>
         </div>
       </header>
 

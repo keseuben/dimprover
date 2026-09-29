@@ -40,6 +40,7 @@ import ProjectPulsePlaceholder from "./ProjectPulsePlaceholder";
 import ProjectGateNavigationRail from "./ProjectGateNavigationRail";
 import ProjectGateProjectBoard from "./ProjectGateProjectBoard";
 import ProjectGateModuleSwitcher from "./ProjectGateModuleSwitcher";
+import ProjectAccessMenu from "./ProjectAccessMenu";
 import styles from "./ProjectGateShell.module.css";
 
 type ProjectGateShellProps = {
@@ -535,11 +536,12 @@ export default function ProjectGateShell({ projectId = DEFAULT_PROJECT_ID, activ
             </button>
             <button type="button" className={styles.headerIconButton} title="Értesítések" aria-label="Értesítések"><Bell size={18} /><b>3</b></button>
             <button type="button" className={styles.headerIconButton} title="Súgó" aria-label="Súgó"><HelpCircle size={18} /></button>
-            <HeaderLogoutIconButton className={`${styles.headerIconButton} ${styles.headerLogout}`} iconSize={18} />
+            <ProjectAccessMenu projectId={projectId} fallbackCount={activeMemberCount} compact />
             <div className={styles.userPill}>
               <span className={styles.avatar}>{userInitials(displayName)}</span>
               <div><strong>{displayName}</strong><span>{displayRole}</span></div>
             </div>
+            <HeaderLogoutIconButton className={`${styles.headerIconButton} ${styles.headerLogout}`} iconSize={18} />
           </div>
         </header>
 

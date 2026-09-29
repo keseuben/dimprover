@@ -1,0 +1,218 @@
+.root {
+  position: relative;
+  flex: 0 0 auto;
+}
+.trigger {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #273a51;
+  cursor: pointer;
+}
+.trigger:hover,
+.triggerOpen {
+  background: #f0f6fb;
+  color: #1765a8;
+}
+.triggerCompact {
+  width: 32px;
+  height: 32px;
+}
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #176bff;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+}
+.chevron {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  opacity: .62;
+}
+.popover {
+  position: absolute;
+  z-index: 3600;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(390px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 90px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cfdce8;
+  border-radius: 12px;
+  background: #fff;
+  color: #273a51;
+  box-shadow: 0 18px 48px rgba(22, 48, 74, .22);
+}
+.header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e1e8ef;
+  background: #f8fbfd;
+}
+.header div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.header span {
+  color: #6a7e91;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.header strong {
+  color: #253e58;
+  font-size: 13px;
+}
+.header button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #61778c;
+  cursor: pointer;
+}
+.header button:hover { background: #eaf1f7; color: #274763; }
+.body {
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+.member {
+  display: grid;
+  grid-template-columns: 30px minmax(0,1fr);
+  gap: 8px;
+  padding: 9px 8px;
+  border-radius: 8px;
+}
+.member + .member { border-top: 1px solid #edf2f6; }
+.member:hover { background: #f7fafc; }
+.memberIcon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eaf4ff;
+  color: #176bff;
+}
+.memberMain {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.memberMain > strong {
+  overflow: hidden;
+  color: #263e56;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memberMain small {
+  overflow: hidden;
+  color: #7b8b9b;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role {
+  width: fit-content;
+  margin-top: 2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef4fa;
+  color: #3c6386;
+  font-size: 10px;
+  font-weight: 900;
+}
+.memberMain p {
+  margin: 2px 0 0;
+  color: #586d80;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.message {
+  padding: 16px 12px;
+  color: #6b7d8e;
+  font-size: 11px;
+  text-align: center;
+}
+.footer {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 12px;
+  border-top: 1px solid #e1e8ef;
+  background: #fbfcfd;
+  color: #6a7d8f;
+  font-size: 10px;
+}
+.footer strong { color: #294761; }
+:global([data-theme="dark"]) .trigger { color: #d8e4ee; }
+:global([data-theme="dark"]) .trigger:hover,
+:global([data-theme="dark"]) .triggerOpen { background: rgba(255,255,255,.08); color: #9bc4ff; }
+:global([data-theme="dark"]) .badge { border-color: #102238; }
+@media (max-width: 640px) {
+  .popover {
+    position: fixed;
+    top: 66px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100vh - 82px);
+  }
+}
+:global([data-theme="dark"]) .popover {
+  border-color: #314861;
+  background: #11263c;
+  color: #dce8f2;
+  box-shadow: 0 18px 48px rgba(0,0,0,.34);
+}
+:global([data-theme="dark"]) .header {
+  border-bottom-color: #30465c;
+  background: #152c43;
+}
+:global([data-theme="dark"]) .header span,
+:global([data-theme="dark"]) .memberMain small,
+:global([data-theme="dark"]) .memberMain p,
+:global([data-theme="dark"]) .message,
+:global([data-theme="dark"]) .footer { color: #9bb0c2; }
+:global([data-theme="dark"]) .header strong,
+:global([data-theme="dark"]) .memberMain > strong,
+:global([data-theme="dark"]) .footer strong { color: #e8f2f9; }
+:global([data-theme="dark"]) .header button { color: #b9cbd9; }
+:global([data-theme="dark"]) .header button:hover,
+:global([data-theme="dark"]) .member:hover { background: rgba(255,255,255,.06); }
+:global([data-theme="dark"]) .member + .member,
+:global([data-theme="dark"]) .footer { border-color: #2d4358; }
+:global([data-theme="dark"]) .memberIcon { background: rgba(23,107,255,.16); color: #82b5ff; }
+:global([data-theme="dark"]) .role { background: #203a52; color: #b8d6ef; }
+:global([data-theme="dark"]) .footer { background: #102338; }

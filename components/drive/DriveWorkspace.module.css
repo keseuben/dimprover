@@ -2277,7 +2277,7 @@
   display: inline-flex !important;
   align-items: center;
   gap: 6px;
-  min-width: 190px;
+  min-width: 235px;
   color: #536a7f;
 }
 .projectStorageLabel {
@@ -2287,7 +2287,7 @@
 }
 .projectStorageMeter i {
   display: block;
-  width: 70px;
+  width: 115px;
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
