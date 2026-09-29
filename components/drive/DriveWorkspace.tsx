@@ -1222,6 +1222,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             {boxShelfOpen && (
               <aside className={styles.fullTableBoxPanel} aria-label="CsomagBOX">
                 <BoxShelf
+                  projectId={projectId}
                   variant="panel"
                   open
                   onOpenChange={setBoxShelfOpen}
@@ -1419,6 +1420,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       </div>
 
       <BoxShelf
+                  projectId={projectId}
         open={boxShelfOpen}
         onOpenChange={setBoxShelfOpen}
         boxes={boxes}

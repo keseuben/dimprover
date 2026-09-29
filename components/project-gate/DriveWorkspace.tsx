@@ -1902,6 +1902,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
       </section>}
 
       <BoxShelf
+                  projectId={projectId}
         open={boxShelfOpen}
         onOpenChange={setBoxShelfOpen}
         boxes={boxes}
@@ -2199,6 +2200,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               {boxShelfOpen && (
                 <aside className={richStyles.fullTableBoxPanel} aria-label="CsomagBOX">
                   <BoxShelf
+                  projectId={projectId}
                     variant="panel"
                     open
                     onOpenChange={setBoxShelfOpen}

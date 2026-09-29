@@ -2696,6 +2696,40 @@
   max-width: none;
 }
 .boxShelfPanel .boxItemList { max-height: 210px; }
+.boxHistoryPanel {
+  margin-top: 7px;
+  border: 1px solid #dce5ed;
+  border-radius: 8px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+.boxHistoryHeader {
+  min-height: 34px;
+  padding: 5px 7px 5px 9px;
+  border-bottom: 1px solid #e2e9ef;
+  background: #f3f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.boxHistoryHeader > div { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.boxHistoryHeader strong { font-size: var(--drive-font-sm); color: #334c64; }
+.boxHistoryHeader span { font-size: var(--drive-font-xs); color: #7b8c9e; }
+.boxHistoryHeader button { width: 25px; height: 25px; border: 1px solid #d5dfe8; border-radius: 6px; background: #fff; color: #5c7186; display: grid; place-items: center; cursor: pointer; }
+.boxHistoryList { max-height: 240px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding: 4px 7px 7px 12px; }
+.boxHistoryRow { position: relative; display: grid; grid-template-columns: 10px minmax(0,1fr); gap: 6px; padding: 7px 0; border-bottom: 1px solid #edf1f5; }
+.boxHistoryRow:last-child { border-bottom: 0; }
+.boxHistoryMarker { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #397bd1; box-shadow: 0 0 0 3px #e8f1fb; }
+.boxHistoryContent { min-width: 0; }
+.boxHistoryMeta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.boxHistoryMeta strong { font-size: var(--drive-font-xs); color: #38516b; }
+.boxHistoryMeta time { flex: 0 0 auto; font-size: 9px; color: #8998a8; }
+.boxHistoryContent p { margin: 3px 0 0; color: #50677d; font-size: var(--drive-font-xs); line-height: 1.35; }
+.boxHistoryFooter { margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 9px; color: #8392a1; }
+.boxHistoryFooter b { color: #4c6f91; font-weight: 800; }
+.boxHistoryLoading,.boxHistoryError,.boxHistoryEmpty { min-height: 54px; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; font-size: var(--drive-font-xs); color: #6f8193; }
+.boxHistoryError { color: #a74747; background: #fff4f4; }
 @media (max-width: 900px) {
   .fullTableBoxPanel { flex-basis: min(360px, 42vw); min-width: 260px; }
   .boxShelfPanel .boxShelfTitle span { display: none; }

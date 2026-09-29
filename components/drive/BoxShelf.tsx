@@ -10,6 +10,7 @@ import {
   Folder,
   FolderPlus,
   GitCompareArrows,
+  History,
   PackageCheck,
   Plus,
   Send,
@@ -18,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import type { DriveBox, DriveBoxFolder, DriveBoxLifecycleStatus, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
+import BoxHistoryPanel from "./BoxHistoryPanel";
 import styles from "./DriveWorkspace.module.css";
 
 type NewBoxInput = {
@@ -29,6 +31,7 @@ type NewBoxInput = {
 };
 
 type Props = {
+  projectId: string;
   variant?: "shelf" | "panel";
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -145,6 +148,7 @@ function colorClass(token: string) {
 }
 
 export default function BoxShelf({
+  projectId,
   variant = "shelf",
   open,
   onOpenChange,
@@ -166,6 +170,7 @@ export default function BoxShelf({
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [expandedBoxId, setExpandedBoxId] = useState("");
+  const [historyBoxId, setHistoryBoxId] = useState("");
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState<DriveBoxPurpose>("GENERAL");
   const [lifecycleFilter, setLifecycleFilter] = useState<"ALL" | DriveBoxLifecycleStatus>("ALL");
@@ -345,6 +350,9 @@ export default function BoxShelf({
                 <div className={styles.boxCardStats}>{box.items.length} fájl · {formatBytes(totalBytes)}</div>
                 <div className={styles.boxCardActions}>
                   <button type="button" onClick={() => setExpandedBoxId(expanded ? "" : box.id)}>{expanded ? "Bezárás" : "Megnyitás"}</button>
+                  <button type="button" onClick={() => setHistoryBoxId(historyBoxId === box.id ? "" : box.id)} title="CsomagBOX előzmények">
+                    <History size={11} /> Előzmények
+                  </button>
                   {box.lifecycleFeatureReady && canWrite && onSetLifecycle && (
                     <select
                       className={styles.boxLifecycleSelect}
@@ -377,6 +385,9 @@ export default function BoxShelf({
                   )}
                   {selectedIncluded && <span className={styles.boxIncludedBadge}>Kijelölt fájl benne</span>}
                 </div>
+                {historyBoxId === box.id && (
+                  <BoxHistoryPanel projectId={projectId} boxId={box.id} onClose={() => setHistoryBoxId("")} />
+                )}
                 {expanded && (
                   <div className={styles.boxItemList}>
                     {!itemDocuments.length && <span className={styles.boxItemEmpty}>Húzz ide fájlt, vagy jelölj ki egyet a listában.</span>}
