@@ -271,6 +271,57 @@
 .detailsTabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 9px 8px 8px; color: #566d84; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; white-space: nowrap; }
 .detailsTabs .detailsTabActive { border-bottom-color: #176bff; color: #176bff; }
 .detailsBody { min-height: 0; overflow: auto; padding: 12px; }
+.detailsBodyStructured {
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 0;
+}
+.detailsWorkspace {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(210px, 38%) minmax(0, 1fr);
+  overflow: hidden;
+  background: #fff;
+}
+.detailsPreviewPane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid #dbe5ed;
+  background: #edf2f6;
+}
+.detailsPreviewPane .driveViewer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+}
+.detailsPreviewPane .driveViewerStage {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+.detailsPreviewPane .driveViewerUnsupported {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.detailsFieldsPane {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px 18px;
+  scrollbar-gutter: stable;
+}
 .previewPlaceholder { min-height: 190px; border: 1px solid #dbe5ed; background: linear-gradient(145deg, #fbfcfd, #f1f5f8); border-radius: 7px; display: grid; place-items: center; text-align: center; padding: 18px; color: #7a8da0; }
 .previewPlaceholder strong { display: block; color: #3a4e64; font-size: 12px; margin-top: 7px; }
 .previewPlaceholder span { display: block; font-size: var(--drive-font-sm); margin-top: 5px; line-height: 1.5; }
@@ -1563,6 +1614,9 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.detailsBody.detailsBodyStructured {
+  overflow: hidden;
+}
 .versionList,
 .reviewSection,
 .reviewSectionHeader,
@@ -2504,7 +2558,9 @@
   left: auto;
   width: auto;
   min-width: 0;
-  flex: 0 0 clamp(230px, 33vh, 430px);
+  min-height: 230px;
+  max-height: calc(100vh - 190px);
+  flex: 0 0 50%;
   margin: 0 8px 8px;
   border-radius: 9px;
   box-shadow: 0 5px 18px rgba(27, 53, 78, .11);
@@ -2523,7 +2579,44 @@
   border-radius: 0;
   box-shadow: none;
 }
+.detailsSplitCard .detailsWorkspace {
+  grid-template-columns: minmax(360px, 44%) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.detailsSplitCard .detailsPreviewPane {
+  border-right: 1px solid #dbe5ed;
+  border-bottom: 0;
+}
+.detailsSplitCard .detailsFieldsPane {
+  padding: 10px 12px 18px;
+}
 .fullTableInspectorBottom .detailsHeader { padding-right: 44px; }
+.fullTableInspectorResizeHandle {
+  position: absolute;
+  z-index: 8;
+  top: -8px;
+  left: 50%;
+  width: 92px;
+  height: 16px;
+  transform: translateX(-50%);
+  border: 1px solid #ccd8e3;
+  border-radius: 999px;
+  background: rgba(255,255,255,.98);
+  color: #74879a;
+  box-shadow: 0 2px 8px rgba(25,48,72,.12);
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+}
+.fullTableInspectorResizeHandle:hover,
+.fullTableInspectorResizeHandle:focus-visible {
+  border-color: #8eadd0;
+  color: #2f659d;
+  background: #f6faff;
+  outline: none;
+}
 .fullTableInspector .detailsPanel {
   width: 100%;
   height: 100%;
@@ -2618,8 +2711,18 @@
   .fullTableInspectorBottom {
     left: auto;
     right: auto;
-    flex-basis: clamp(240px, 42vh, 390px);
+    flex-basis: 50%;
+    min-height: 240px;
+    max-height: calc(100vh - 150px);
     margin: 0 6px 6px;
+  }
+  .detailsSplitCard .detailsWorkspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 38%) minmax(0, 1fr);
+  }
+  .detailsSplitCard .detailsPreviewPane {
+    border-right: 0;
+    border-bottom: 1px solid #dbe5ed;
   }
   .fullTableInspectorButton span {
     display: none;

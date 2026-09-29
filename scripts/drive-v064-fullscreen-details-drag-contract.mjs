@@ -30,7 +30,7 @@ check("Projectkapu Drive stores fullscreen inspector layout", gate.includes('ful
 check("main Drive switches bottom inspector class", drive.includes("fullTableInspectorBottom") && drive.includes("fullTableOverlayBottomInspector"));
 check("Projectkapu Drive switches bottom inspector class", gate.includes("fullTableInspectorBottom") && gate.includes("fullTableOverlayBottomInspector"));
 check("bottom inspector reuses horizontal details layout", drive.includes("detailsSplitCard") && gate.includes("detailsSplitCard") && css.includes(".fullTableInspectorPanelBottom.detailsSplitCard"));
-check("bottom inspector takes about one third viewport height", css.includes("clamp(230px, 33vh, 430px)"));
+check("bottom inspector defaults to one half workspace height", css.includes("flex: 0 0 50%"));
 check("table keeps existing pan gesture", grid.includes("handlePanPointerDown") && grid.includes("dragPanEnabled") && css.includes(".tablePanEnabled"));
 check("whole table rows are no longer draggable", !grid.includes("draggable={!dragPanEnabled}"));
 check("file icon is the drag handle", (grid.match(/styles\.fileDragHandle/g) || []).length >= 3 && (grid.match(/\bdraggable\b/g) || []).length >= 3);

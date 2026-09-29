@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import BoxShelf from "@/components/drive/BoxShelf";
+import BottomInspectorResizeHandle from "@/components/drive/BottomInspectorResizeHandle";
 import CommanderPanel from "@/components/drive/CommanderPanel";
 import CompareWorkspace from "@/components/drive/CompareWorkspace";
 import DetailsPanel from "@/components/drive/DetailsPanel";
@@ -2222,6 +2223,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
             {fullTableInspectorOpen && (
               <aside className={`${richStyles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? richStyles.fullTableInspectorBottom : richStyles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">
+                {fullTableInspectorLayout === "bottom" && <BottomInspectorResizeHandle />}
                 <button type="button" className={richStyles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
                 <DetailsPanel
                   projectId={projectId}

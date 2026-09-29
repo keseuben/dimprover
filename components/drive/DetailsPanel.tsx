@@ -585,13 +585,15 @@ export default function DetailsPanel({
         <button type="button" className={tab === "notes" ? styles.detailsTabActive : ""} onClick={() => setTab("notes")}>Megjegyzések</button>
       </div>
 
-      <div className={styles.detailsBody}>
+      <div className={`${styles.detailsBody} ${tab === "details" ? styles.detailsBodyStructured : ""}`}>
         {loading ? (
           <div className={styles.previewPlaceholder}><div><FileSearch2 size={24} /><strong>Részletek betöltése…</strong></div></div>
         ) : tab === "details" ? (
-          <>
-            <DriveDocumentViewer projectId={projectId} document={document} />
-
+          <div className={styles.detailsWorkspace}>
+            <section className={styles.detailsPreviewPane} aria-label="Fájl előnézet">
+              <DriveDocumentViewer projectId={projectId} document={document} />
+            </section>
+            <section className={styles.detailsFieldsPane} aria-label="Dokumentumadatok szerkesztése">
             <div className={styles.infoBox}><strong>Öröklött mappabesorolás</strong><br />Szakág: {inheritedDiscipline || "—"} · Témakör: {inheritedTopic || "—"}</div>
 
             <div className={styles.fileNameAuditBox}>
@@ -711,7 +713,8 @@ export default function DetailsPanel({
               </button>
             </div>
             {activeQr && <div className={styles.infoBox}>QR azonosító aktív. A publikus QR feloldó oldal és vizuális QR-kép későbbi vertikális szeletben kapcsolódik hozzá.</div>}
-          </>
+            </section>
+          </div>
         ) : tab === "review" ? (
           <div className={`${styles.versionList} ${styles.reviewWorkspace}`}>
             <div className={styles.infoBox}><strong>Besorolás forrása</strong><br />Szakág: {metadata.discipline ? "fájl felülírás: " + metadata.discipline : inheritedDiscipline ? "mappából örökölt: " + inheritedDiscipline : "—"}<br />Témakör: {metadata.topic ? "fájl felülírás: " + metadata.topic : inheritedTopic ? "mappából örökölt: " + inheritedTopic : "—"}</div>
