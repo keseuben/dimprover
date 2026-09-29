@@ -1081,8 +1081,22 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             inspectorOpen={fullTableInspectorOpen}
             inspectorDisabled={!selectedDocument}
             inspectorLayout={fullTableInspectorLayout}
-            onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
-            onInspectorLayoutChange={setFullTableInspectorLayout}
+            onToggleInspector={() => {
+              const next = !fullTableInspectorOpen;
+              if (next && fullTableInspectorLayout === "side") setBoxShelfOpen(false);
+              setFullTableInspectorOpen(next);
+            }}
+            onInspectorLayoutChange={(layout) => {
+              setFullTableInspectorLayout(layout);
+              if (layout === "side" && fullTableInspectorOpen) setBoxShelfOpen(false);
+            }}
+            boxPanelOpen={boxShelfOpen}
+            boxCount={boxes.length}
+            onToggleBoxPanel={() => {
+              const next = !boxShelfOpen;
+              if (next && fullTableInspectorOpen && fullTableInspectorLayout === "side") setFullTableInspectorOpen(false);
+              setBoxShelfOpen(next);
+            }}
           />
           <div className={styles.fullTableBody}>
             <FileGridPanel
@@ -1118,6 +1132,26 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               canDelete={canDelete}
               onDeleteSelected={deleteDocuments}
             />
+            {boxShelfOpen && (
+              <aside className={styles.fullTableBoxPanel} aria-label="CsomagBOX">
+                <BoxShelf
+                  variant="panel"
+                  open
+                  onOpenChange={setBoxShelfOpen}
+                  boxes={boxes}
+                  documents={tree?.documents || []}
+                  metadataByDocument={metadataByDocument}
+                  selectedDocument={selectedDocument}
+                  canWrite={canWrite}
+                  databaseReady={Boolean(health?.workspace?.databaseReady)}
+                  busy={busy}
+                  onCreateBox={createBox}
+                  onAddDocument={addDocumentToBox}
+                  onRemoveItem={removeBoxItem}
+                  onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
+                />
+              </aside>
+            )}
           </div>
           {fullTableInspectorOpen && (
             <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">

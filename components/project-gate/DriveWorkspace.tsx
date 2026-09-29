@@ -2049,8 +2049,22 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               inspectorOpen={fullTableInspectorOpen}
               inspectorDisabled={!selectedDocument}
               inspectorLayout={fullTableInspectorLayout}
-              onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
-              onInspectorLayoutChange={setFullTableInspectorLayout}
+              onToggleInspector={() => {
+                const next = !fullTableInspectorOpen;
+                if (next && fullTableInspectorLayout === "side") setBoxShelfOpen(false);
+                setFullTableInspectorOpen(next);
+              }}
+              onInspectorLayoutChange={(layout) => {
+                setFullTableInspectorLayout(layout);
+                if (layout === "side" && fullTableInspectorOpen) setBoxShelfOpen(false);
+              }}
+              boxPanelOpen={boxShelfOpen}
+              boxCount={boxes.length}
+              onToggleBoxPanel={() => {
+                const next = !boxShelfOpen;
+                if (next && fullTableInspectorOpen && fullTableInspectorLayout === "side") setFullTableInspectorOpen(false);
+                setBoxShelfOpen(next);
+              }}
             />
             <div className={richStyles.fullTableBody}>
               <FileGridPanel
@@ -2085,6 +2099,26 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                 canDelete={canDelete}
                 onDeleteSelected={deleteDocuments}
               />
+              {boxShelfOpen && (
+                <aside className={richStyles.fullTableBoxPanel} aria-label="CsomagBOX">
+                  <BoxShelf
+                    variant="panel"
+                    open
+                    onOpenChange={setBoxShelfOpen}
+                    boxes={boxes}
+                    documents={tree?.documents || []}
+                    metadataByDocument={metadataByDocument}
+                    selectedDocument={selectedDocument}
+                    canWrite={canWrite}
+                    databaseReady={Boolean(health?.workspace?.databaseReady)}
+                    busy={busy}
+                    onCreateBox={createBox}
+                    onAddDocument={addDocumentToBox}
+                    onRemoveItem={removeBoxItem}
+                    onOpenCompareBox={openCompareBox}
+                  />
+                </aside>
+              )}
             </div>
             {fullTableInspectorOpen && (
               <aside className={`${richStyles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? richStyles.fullTableInspectorBottom : richStyles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">

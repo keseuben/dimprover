@@ -2395,6 +2395,7 @@
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
+  gap: 8px;
   overflow: hidden;
   padding: 8px;
 }
@@ -2440,6 +2441,11 @@
   border-color: #6d3fc0 !important;
   background: #f1eaff !important;
   color: #6136b0 !important;
+}
+.fullTableBoxButtonActive {
+  border-color: #2b7a67 !important;
+  background: #eaf8f3 !important;
+  color: #17634f !important;
 }
 .fullTableInspectorLayoutToggle {
   flex: 0 0 auto;
@@ -2547,6 +2553,59 @@
   background: #f3f7fb;
   color: #233d57;
   border-color: #b8c8d6;
+}
+
+
+.fullTableBoxPanel {
+  flex: 0 0 clamp(300px, 28vw, 420px);
+  min-width: 280px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.boxShelfPanel {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  border: 1px solid #cddce7;
+  border-radius: 9px;
+  box-shadow: 0 4px 16px rgba(24,51,78,.06);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.boxShelfPanel .boxShelfHeader { flex: 0 0 auto; }
+.boxShelfPanel .boxComposer { flex: 0 0 auto; }
+.boxShelfPanel .boxComposerBody { grid-template-columns: 1fr; }
+.boxShelfPanel .boxCards {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.boxShelfPanel .boxCard,
+.boxShelfPanel .boxAdd,
+.boxShelfPanel .boxEmptyCreate,
+.boxShelfPanel .boxDisabledInfo {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+.boxShelfPanel .boxItemList { max-height: 210px; }
+@media (max-width: 900px) {
+  .fullTableBoxPanel { flex-basis: min(360px, 42vw); min-width: 260px; }
+  .boxShelfPanel .boxShelfTitle span { display: none; }
 }
 
 @media (max-width: 760px) {

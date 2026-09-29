@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelBottomOpen, PanelRightOpen } from "lucide-react";
+import { PackageCheck, PanelBottomOpen, PanelRightOpen } from "lucide-react";
 import type { DriveLayoutMode } from "./driveTypes";
 import TableZoomControls from "./TableZoomControls";
 import ViewLayoutSwitcher from "./ViewLayoutSwitcher";
@@ -19,9 +19,12 @@ type Props = {
   inspectorLayout?: "side" | "bottom";
   onToggleInspector?: () => void;
   onInspectorLayoutChange?: (layout: "side" | "bottom") => void;
+  boxPanelOpen?: boolean;
+  boxCount?: number;
+  onToggleBoxPanel?: () => void;
 };
 
-export default function TableFullscreenBar({ title, subtitle, layoutMode, onLayoutModeChange, zoom, onZoomChange, onToggleFullscreen, inspectorOpen = false, inspectorDisabled = false, inspectorLayout = "side", onToggleInspector, onInspectorLayoutChange }: Props) {
+export default function TableFullscreenBar({ title, subtitle, layoutMode, onLayoutModeChange, zoom, onZoomChange, onToggleFullscreen, inspectorOpen = false, inspectorDisabled = false, inspectorLayout = "side", onToggleInspector, onInspectorLayoutChange, boxPanelOpen = false, boxCount = 0, onToggleBoxPanel }: Props) {
   return (
     <header className={styles.fullTableBar}>
       <div className={styles.fullTableIdentity}>
@@ -67,6 +70,19 @@ export default function TableFullscreenBar({ title, subtitle, layoutMode, onLayo
             <PanelBottomOpen size={14} />
           </button>
         </div>
+      )}
+      {onToggleBoxPanel && (
+        <button
+          type="button"
+          className={`${styles.fullTableInspectorButton} ${boxPanelOpen ? styles.fullTableBoxButtonActive : ""}`}
+          onClick={onToggleBoxPanel}
+          title={boxPanelOpen ? "CsomagBOX panel bezárása" : "CsomagBOX jobb oldali panel megnyitása"}
+          aria-label="CsomagBOX panel"
+          aria-pressed={boxPanelOpen}
+        >
+          <PackageCheck size={14} />
+          <span>CsomagBOX{boxCount > 0 ? ` (${boxCount})` : ""}</span>
+        </button>
       )}
       <TableZoomControls zoom={zoom} onZoomChange={onZoomChange} />
       <ViewLayoutSwitcher value={layoutMode} onChange={onLayoutModeChange} tableFullscreen onToggleTableFullscreen={onToggleFullscreen} />

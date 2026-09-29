@@ -26,6 +26,7 @@ type NewBoxInput = {
 };
 
 type Props = {
+  variant?: "shelf" | "panel";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   boxes: DriveBox[];
@@ -91,6 +92,7 @@ function colorClass(token: string) {
 }
 
 export default function BoxShelf({
+  variant = "shelf",
   open,
   onOpenChange,
   boxes,
@@ -152,7 +154,7 @@ export default function BoxShelf({
   }
 
   return (
-    <section className={`${styles.boxShelf} ${open ? "" : styles.boxShelfCollapsed}`} aria-label="CsomagBOX polc">
+    <section className={`${styles.boxShelf} ${variant === "panel" ? styles.boxShelfPanel : ""} ${open ? "" : styles.boxShelfCollapsed}`} aria-label={variant === "panel" ? "CsomagBOX panel" : "CsomagBOX polc"}>
       <header
         className={styles.boxShelfHeader}
         role="button"
