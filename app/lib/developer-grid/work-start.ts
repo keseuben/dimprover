@@ -1441,13 +1441,60 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_PROJECT_MISMATCH", status: 409 });
       throw error;
     }
-    if (ctx.bootAckState !== "VALIDATED" || ctx.bootAckCodingAllowed !== true) {
-      const error = new Error("Kézi rebind csak validált BOOT ACK és engedélyezett coding állapot mellett végezhető.");
+    const validatedManualRebind = ctx.bootAckState === "VALIDATED" && ctx.bootAckCodingAllowed === true;
+    const preBootManualRebind = ctx.bootAckState === "WAITING" && ctx.bootAckCodingAllowed !== true;
+    if (!validatedManualRebind && !preBootManualRebind) {
+      const error = new Error("Kézi rebind csak validált BOOT ACK mellett vagy szigorúan ellenőrzött pre-BOOT WAITING állapotban végezhető.");
       Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_BOOT_ACK_REQUIRED", status: 409 });
       throw error;
     }
-    if (!ctx.contextSnapshotId || !ctx.handoffPackId) {
-      const error = new Error("Kézi rebindhez Context Snapshot és Handoff Pack continuity szükséges.");
+    if (preBootManualRebind) {
+      if (Number(ctx.workStageIndex || 1) !== 1) {
+        const error = new Error("Pre-BOOT conversation rebind csak az 1/6 ELEMZÉS szakaszban engedélyezett.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_STAGE_DENIED", status: 409 });
+        throw error;
+      }
+      if (String(session.sourceProvenance.sourceState || "").toUpperCase() !== "VERIFIED" || session.sourceProvenance.blockCode) {
+        const error = new Error("Pre-BOOT conversation rebind csak VERIFIED source provenance mellett engedélyezett.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_SOURCE_NOT_VERIFIED", status: 409 });
+        throw error;
+      }
+      await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:true });
+      const engineSessionId = text(ctx.engineSessionId, 240);
+      if (!engineSessionId) {
+        const error = new Error("Pre-BOOT conversation rebindhoz hiányzik az engine session.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_ENGINE_SESSION_MISSING", status: 409 });
+        throw error;
+      }
+      const engineState = await getDevCenterEngineState();
+      const engineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+      const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+      if (!engineSession || !engineTask
+          || engineSession.status !== "active"
+          || engineSession.handshakeStage !== "READY"
+          || engineSession.taskId !== taskId
+          || engineTask.claimedBySessionId !== engineSessionId
+          || engineTask.assignedWorkerId !== engineSession.workerId) {
+        const error = new Error("Pre-BOOT conversation rebind engine ownership/READY kötése érvénytelen.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_ENGINE_BINDING_INVALID", status: 409 });
+        throw error;
+      }
+      const operation = await assertDevEngineOperation(engineSessionId, "write");
+      if (Number(operation.activeLockCount || 0) < 1 || Number(operation.activeWorktreeLeaseCount || 0) < 1) {
+        const error = new Error("Pre-BOOT conversation rebindhoz aktív scope lock és worktree lease szükséges.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_LOCK_REQUIRED", status: 409 });
+        throw error;
+      }
+      const sourceProof = ctx.sourceExecutionProof;
+      if (!sourceProof || sourceProof.state !== "VERIFIED" || sourceProof.authority !== "CENTRAL_CORE"
+          || sourceProof.head !== session.sourceProvenance.head || sourceProof.productionAccess !== "DENY") {
+        const error = new Error("Pre-BOOT conversation rebind source execution proof érvénytelen.");
+        Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_SOURCE_PROOF_INVALID", status: 409 });
+        throw error;
+      }
+    }
+    if (validatedManualRebind && (!ctx.contextSnapshotId || !ctx.handoffPackId)) {
+      const error = new Error("Validált BOOT ACK utáni kézi rebindhez Context Snapshot és Handoff Pack continuity szükséges.");
       Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_CONTINUITY_REQUIRED", status: 409 });
       throw error;
     }
