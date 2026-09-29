@@ -364,7 +364,7 @@ export default function BoxShelf({
                       <FolderPlus size={11} /> Mappa
                     </button>
                   )}
-                  {box.items.length > 0 && onDownloadBox && (
+                  {box.items.length > 0 && canWrite && onDownloadBox && (
                     <button type="button" onClick={() => promptDownloadBox(box)} title="CsomagBOX letöltése ZIP fájlként">
                       <Download size={11} /> ZIP
                     </button>

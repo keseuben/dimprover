@@ -93,6 +93,7 @@ export type ProjectAuditEntityType =
   | "qr"
   | "box"
   | "box_item"
+  | "box_folder"
   | "saved_view"
   | "compare_job"
   | "compare_finding"

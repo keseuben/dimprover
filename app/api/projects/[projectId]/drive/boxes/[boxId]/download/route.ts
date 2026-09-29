@@ -15,7 +15,7 @@ function safeDownloadName(value: string) {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const { projectId, boxId } = await context.params;
-  const access = await requireProjectPermission(request, projectId, "document.read");
+  const access = await requireProjectPermission(request, projectId, "document.write");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   const archiveName = request.nextUrl.searchParams.get("name")?.trim() || undefined;

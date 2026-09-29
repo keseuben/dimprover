@@ -42,13 +42,13 @@ check("BOX ZIP logs package against BOX entity", service.includes('entityType: "
 check("package audit supports folder and box without breaking folder default", storage.includes('entityType?: "folder" | "box"') && storage.includes('const entityType = input.entityType || "folder"'));
 check("package audit records custom package name", storage.includes("packageName: input.packageName || null"));
 
-check("BOX ZIP route requires document.read", route.includes('requireProjectPermission(request, projectId, "document.read")'));
+check("BOX ZIP route requires document.write", route.includes('requireProjectPermission(request, projectId, "document.write")'));
 check("BOX ZIP route accepts custom name query", route.includes('searchParams.get("name")') && route.includes("archiveName"));
 check("BOX ZIP route streams application/zip", route.includes('"content-type": "application/zip"') && route.includes("Readable.toWeb"));
 check("BOX ZIP route exposes package audit headers", route.includes("x-dimpro-drive-download-package-id") && route.includes("x-dimpro-drive-package-source"));
 
 check("CsomagBOX asks for ZIP name", shelf.includes('window.prompt("ZIP fájl neve:"') && shelf.includes("onDownloadBox"));
-check("CsomagBOX exposes ZIP action only for non-empty box", shelf.includes("box.items.length > 0 && onDownloadBox"));
+check("CsomagBOX exposes ZIP action only for writable non-empty box", shelf.includes("box.items.length > 0 && canWrite && onDownloadBox"));
 check("main Drive uses direct browser download instead of Blob buffering", drive.includes("document.createElement(\"a\")") && !drive.includes("await response.blob()"));
 check("Projectkapu uses direct browser download instead of Blob buffering", gate.includes("document.createElement(\"a\")") && !gate.includes("await response.blob()"));
 check("main Drive wires ZIP in shelf and fullscreen panel", (drive.match(/onDownloadBox=\{downloadBoxArchive\}/g) || []).length >= 2);
