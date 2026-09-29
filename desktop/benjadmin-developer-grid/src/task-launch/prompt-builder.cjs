@@ -156,13 +156,15 @@ ${continuityContextSummary}`);
     "Ne írj fájlt, amíg a BOOT ACK nincs validálva.",
     "Ha minden egyezik, az ACK után ugyanabban a válaszban csak az elemzési/preflight eredményt add meg; tényleges fájlírást csak az ACK érvényessége után kezdj.",
     "MUNKAFELVÉTEL: YYYY.MM.DD. HH:MM",
-    "Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát: mit végeztél, mely fájlokon/területen, milyen teszt/commit/build eredménnyel és mi a következő lépés. Ne csak a munka végén legyen központi nyoma.",
-    "A 6 lépcsős folyamat minden állomásának végén kötelező a DEVELOPER_GRID_STAGE_ACTION_V1 által kért BENJADMIN_STAGE_REPORT_V1 gépi blokk. A desktop ezt automatikusan evidence-ként rögzíti; stage-et szöveges állítással átugrani tilos.",
-    "Munka végén: MUNKA VISSZAADVA: YYYY.MM.DD. HH:MM; add meg az eltelt időt és az állapotot is.",
-    `Lezáráskor frissítsd a worker tartós handoffját is: /srv/dimpro-dev/handoffs/${cleanText(workerCode, 40) || "WORKER"}_LATEST.md`,
-    "A LATEST handoff tartalmazza: task, branch/worktree, HEAD commit, tesztek, blokkolók, aktuális állapot és következő lépés.",
+    "WORKER FELELŐSSÉGI HATÁR: a te feladatod kizárólag a kijelölt fejlesztési scope forrásmunkája, célzott tesztelése és szükség esetén kód-review/javítása.",
+    "TILOS worker-oldali Grid-üzemeltetés: ne hozz létre, ne javíts és ne rekonstruálj taskot/sessiont/worktree lease-t/scope lockot; ne módosíts Central Grid state-et; ne indíts stage recoveryt; ne keress vagy indíts BUILD01/BUILD02 runnert; ne készíts külön Grid release/build taskot; és ne kezeld a központi handoff persistence-et.",
+    "A task/session/HEAD reconciliation, BOOT ACK recovery, stage-advance, evidence ingest, build orchestration, release koordináció, Conversation Memory és handoff persistence a Central Core/Desktop háttérfolyam felelőssége.",
+    "Ha Grid-koordinációs eltérést észlelsz, ne térj át Grid-fejlesztésre és ne állj le miatta, ha a source proof VERIFIED/READY és codingAllowed=true. Röviden jelöld GRID_COORDINATION_OBSERVED állapotként, majd folytasd a saját fejlesztési scope-ot.",
+    "A 6 lépcsős folyamat végén csak a DEVELOPER_GRID_STAGE_ACTION_V1 által kért BENJADMIN_STAGE_REPORT_V1 gépi blokkot add vissza. A desktop automatikusan ingestálja és PASS esetén továbbviszi a következő fázist; neked nem kell Grid state-et írnod vagy stage-et kézzel átállítanod.",
+    "A FULL BUILD-et, BUILD01/BUILD02 kiválasztását, DEV release-t és task/session lezárást a Central Core végzi. Ezeket ne vedd át a saját fejlesztési feladatodból.",
+    "Munka végén röviden add meg: current HEAD, elvégzett forrásmunka, tesztek, blocker és fejlesztési eredmény. A tartós handoffot a Grid készíti és menti.",
     "",
-    "A feladatot most vedd fel, ellenőrizd a DEV aktuális állapotát és csak ezután kezdj módosítani."
+    "A feladatot most vedd fel, ellenőrizd a Launch Packet source proofját és a saját DEV source scope-odat, majd kezdj a tényleges fejlesztési feladattal. Grid-infrastruktúra diagnosztikába csak explicit Developer Grid fejlesztési task esetén kezdj."
   );
   return lines.join("\n");
 }

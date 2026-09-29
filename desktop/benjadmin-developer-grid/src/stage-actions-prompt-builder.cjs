@@ -117,10 +117,10 @@ function buildStageActionPrompt({ action, workerCode, workerLabel, task, presenc
     "BENJADMIN_STAGE_REPORT_END",
     "",
     phaseAdvance
-      ? "A fázislépést BenjAdmin a felső 6-lépcsős sávból explicit indította. A desktop a promptot ellenőrzötten elküldheti és a stage reportot automatikusan validálja/evidence-ként rögzíti."
+      ? "A fázislépést a Developer Grid Central Core/Desktop autopilot indította. Nincs szükség BenjAdmin kattintására vagy újabb „folytasd” üzenetre. A worker kizárólag a fenti szakmai feladatot végzi; a desktop a stage reportot automatikusan validálja, evidence-ként rögzíti és PASS esetén továbblép."
       : action === "checkpoint"
-        ? "A checkpointot BenjAdmin explicit kérte. A desktop exact task/session/worker + DEV provenance guard után ellenőrzötten elküldi, USER transcript markerrel igazolja, majd a BENJADMIN_STAGE_REPORT_V1 választ automatikusan validálja és evidence-ként rögzíti. FULL BUILD és PROD művelet ebből a workflow-ból tilos."
-        : "A promptot a Developer Grid készítette elő. Az elküldés csak kézzel történhet; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
+        ? "A checkpoint szakmai source-checkpoint. A desktop exact task/session/worker + DEV provenance guard mellett kezeli az evidence-et. A worker ne végezzen Grid state/session/stage/build/handoff adminisztrációt. FULL BUILD és PROD művelet ebből a worker workflow-ból tilos."
+        : "A promptot a Developer Grid Central Core/Desktop készítette és automatikusan koordinálja. A workernek nem kell kézi stage-kezelést, Grid recoveryt vagy build-orchestrationt végeznie; a stage reportot a desktop automatikusan validálja és evidence-ként rögzíti."
   ];
   return lines.join("\n");
 }

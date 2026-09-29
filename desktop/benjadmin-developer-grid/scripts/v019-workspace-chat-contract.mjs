@@ -49,7 +49,7 @@ check(renderer.includes('api.contextWorkspaceMode?.("open")') && !renderer.inclu
 check(!main.includes("prepareBenAiDailyStart") && !main.includes('daily:prepare-start') && !preload.includes("prepareDailyStart"),"legacy BenAI coordinator daily-start IPC is removed, not merely hidden");
 check(live.includes("continuityPreviousWorkerCode") && live.includes("continuityHandoffId"),"continuity metadata survives authoritative live adapter");
 check(taskPrompt.includes("FOLYTATÁSI KONTEXTUS – CENTRAL CORE") && taskPrompt.includes("Legfrissebb hiteles handoff ID"),"worker task prompt carries continuity handoff context");
-check(taskPrompt.includes("Minden érdemi munkarész után frissítsd a Developer Grid központi fejlesztési állapotát"),"worker is required to report work segments to central state");
+check(taskPrompt.includes("TILOS worker-oldali Grid-üzemeltetés") && taskPrompt.includes("Central Core/Desktop háttérfolyam felelőssége"),"worker source task stays separate from Central Core Grid administration");
 
 check(main.includes("async function applyWorkspaceStandbyLock"),"workspace standby lock has native controller");
 check(main.includes("__benjadmin_workspace_standby__"),"standby overlay is injected into ChatGPT WebContents");

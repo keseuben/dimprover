@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, "../..");
+const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const launch = read("desktop/benjadmin-developer-grid/src/task-launch/prompt-builder.cjs");
+const stage = read("desktop/benjadmin-developer-grid/src/stage-actions-prompt-builder.cjs");
+const review = read("desktop/benjadmin-developer-grid/src/internal-review-prompt-builder.cjs");
+let n = 0;
+function check(name, fn) { fn(); n += 1; console.log("PASS", name); }
+check("worker responsibility is source scope only", () => assert.match(launch, /WORKER FELELŐSSÉGI HATÁR: a te feladatod kizárólag/));
+check("worker Grid operations are explicitly prohibited", () => assert.match(launch, /TILOS worker-oldali Grid-üzemeltetés/));
+check("central core owns reconciliation and orchestration", () => assert.match(launch, /task\/session\/HEAD reconciliation, BOOT ACK recovery, stage-advance, evidence ingest, build orchestration/));
+check("grid discrepancy does not redirect source worker", () => assert.match(launch, /GRID_COORDINATION_OBSERVED/));
+check("central core owns full build and closure", () => assert.match(launch, /FULL BUILD-et, BUILD01\/BUILD02 kiválasztását, DEV release-t és task\/session lezárást a Central Core végzi/));
+check("stage advance is autopilot-owned", () => assert.match(stage, /Central Core\/Desktop autopilot indította/));
+check("stage advance requires no user continue click", () => assert.match(stage, /Nincs szükség BenjAdmin kattintására vagy újabb „folytasd” üzenetre/));
+check("manual stage send wording removed", () => assert.doesNotMatch(stage, /Az elküldés csak kézzel történhet/));
+check("review excludes Grid infrastructure outside Grid tasks", () => assert.match(review, /NE review-zd és NE javítsd a Developer Grid task\/session\/stage\/build\/recovery\/handoff infrastruktúrát/));
+check("review treats coordination as observation", () => assert.match(review, /GRID_COORDINATION_OBSERVED/));
+console.log("Developer Grid v0.1.91 worker scope ownership contract PASS · " + n + "/" + n);
