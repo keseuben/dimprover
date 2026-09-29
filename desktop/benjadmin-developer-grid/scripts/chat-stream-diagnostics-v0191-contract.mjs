@@ -52,4 +52,4 @@ check("stream failures are surfaced in the Grid status UI", () => {
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name}${item.error ? ` — ${item.error}` : ""}`);
 if (checks.some((item) => !item.ok)) process.exit(1);
-console.log(`Developer Grid v0.1.91 chat stream diagnostics contract PASS · ${checks.length}/${checks.length}`);
+console.log(`Developer Grid v0.1.92 chat stream diagnostics contract PASS · ${checks.length}/${checks.length}`);

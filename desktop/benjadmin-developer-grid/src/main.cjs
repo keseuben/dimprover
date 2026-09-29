@@ -1162,6 +1162,15 @@ function normalizeDesktopWorkerCode(value) {
   return code === "BENJAMINAI" ? "BENAI" : code;
 }
 
+function workerCellForCode(workerCode) {
+  const normalized = normalizeDesktopWorkerCode(workerCode);
+  if (!normalized) return null;
+  return config?.cells?.find((item) =>
+    normalizeDesktopWorkerCode(item?.workerCode) === normalized
+    && item.enabled !== false
+  ) || null;
+}
+
 function workerHasAssignedDevelopment(snapshot, workerCode) {
   const code = normalizeDesktopWorkerCode(workerCode);
   const activePresence = (snapshot?.workerPresence || []).some((item) => normalizeDesktopWorkerCode(item?.workerCode) === code && item?.active !== false && String(item?.lifecycleState || "").toUpperCase() !== "COMPLETED");
@@ -2820,7 +2829,7 @@ async function bindCurrentTaskConversation(workerCode, taskId, { automatic = fal
   if (!unlocked) return { ok: false, error: "A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
   const task = taskOverride || latestLiveSnapshot?.tasks?.find((item) => String(item.id) === id);
   if (!task) return { ok: false, error: "A BENJADMIN task nem érhető el az élő állapotban." };
@@ -2949,7 +2958,7 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
   if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok:false, error:"A worker nincs aktív Developer Grid cellához rendelve." };
   const task = latestLiveSnapshot?.tasks?.find((item) => String(item.id) === id);
   if (!task) return { ok:false, error:"A BENJADMIN task nem érhető el az élő állapotban." };
@@ -3132,7 +3141,7 @@ async function initializeTaskChatPlan(work, requestedMode, conversationGuards = 
   const task = work?.task;
   const code = assignedWorkerCodeFromWork(work);
   if (!task?.id || !code) return null;
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   const surfaceType = normalizeWorkerSurfaceType(work?.session?.developmentContext?.surfaceType || cell?.surfaceType || "CHATGPT");
   const guard = cell ? conversationGuards.find((item) => item.cellId === cell.id) : null;
   const previousConversationId = surfaceType === "CHATGPT" ? chatConversationIdFromUrl(guard?.url || "") : "";
@@ -3154,7 +3163,7 @@ async function prepareWorkerTaskLaunch(workerCode, taskId, { autoSend = false, t
   } catch { return { ok: false, error: "Érvénytelen BENJADMIN DEV kapcsolat. Worker Task Launch tiltva." }; }
   const code = String(workerCode || "").toUpperCase();
   const id = String(taskId || "");
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
   const surfaceType = normalizeWorkerSurfaceType(taskOverride?.surfaceType || cell.surfaceType || "CHATGPT");
   const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
@@ -3275,7 +3284,7 @@ async function sendPreparedWorkerTaskLaunch(workerCode, taskId, { taskOverride =
   const launchGate = taskLaunchGate(launchTask);
   if (!launchGate.ok) return launchGate;
 
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok:false, code:"MANUAL_LAUNCH_CELL_MISSING", error:"Az assigned worker nincs aktív Developer Grid cellában." };
   const surfaceType = normalizeWorkerSurfaceType(session?.developmentContext?.surfaceType || cell.surfaceType || "CHATGPT");
   const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();
@@ -4294,7 +4303,7 @@ function blockManualConversationRollover(task, workerCode, code, error, extra = 
 async function prepareManualConversationRollover(workerCode) {
   if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   const live = liveContextForWorker(code);
   const task = live.task;
   if (!cell || !task?.id || !task?.sessionId || isTerminalDeveloperTask(task)) {
@@ -4522,7 +4531,7 @@ async function recoverLocalFrozenRolloverIdentity({ workerCode, task, currentCon
   const taskId = String(task?.id || "");
   if (!taskId || !task?.sessionId || !currentConversationId || !previousConversationId || !currentConversationUrl) return null;
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return null;
   const refreshState = chatRefreshCell(cell.id);
   const rebindVerified = Boolean(
@@ -4846,7 +4855,7 @@ function conversationMemoryTaskForWorker(workerCode) {
 
 async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false) {
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return null;
   const live = conversationMemoryTaskForWorker(code);
   if (!live) return null;
@@ -5061,7 +5070,7 @@ function authoritativeAutopilotContext(activeWork, workerCode, taskId = "") {
 
 async function prepareInternalReviewFallback(workerCode, contextOverride) {
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item)=>item.workerCode===code && item.enabled!==false);
+  const cell = workerCellForCode(code);
   const presence = contextOverride?.presence || null;
   const task = contextOverride?.task || null;
   if (!cell || !task?.id || !task?.sessionId || Number(presence?.workStageIndex || task?.workStageIndex || 0) !== 4) return {ok:false,error:"INTERNAL_REVIEW_CONTEXT_INVALID"};
@@ -5266,7 +5275,7 @@ async function prepareWorkerStageAction(workerCode, action, contextOverride = nu
     if (new URL(config?.benjadminBaseUrl || "").hostname !== "admin.dev.dimpro.hu") return { ok: false, error: "Stage action kizárólag BENJADMIN DEV kapcsolaton engedélyezett. PROD DENY." };
   } catch { return { ok: false, error: "Érvénytelen BENJADMIN DEV kapcsolat." }; }
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok: false, error: "A worker nincs aktív Developer Grid cellához rendelve." };
   const { presence, task } = contextOverride || liveContextForWorker(code);
   if (!task) return { ok: false, error: "Nincs authoritative aktuális task ehhez a workerhez." };
@@ -5389,7 +5398,7 @@ function contextWorkspaceDocked() {
 async function prepareWorkerHandoff(workerCode) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   if (!cell) return { ok: false, error: "A worker nincs aktív ChatGrid cellához rendelve." };
   let view = chatViews.get(cell.id);
   if (!view) { createChatView(cell); updateViewBounds(); view = chatViews.get(cell.id); }
@@ -5460,7 +5469,7 @@ async function promptHandoffDownload(handoffId, preferredFileName = "") {
 async function captureAndSaveWorkerHandoff(workerCode) {
   if (!unlocked) return { ok: false, error: "A ChatGrid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   const view = cell ? chatViews.get(cell.id) : null;
   if (!cell || !view) return { ok: false, error: "A worker ChatGPT felülete nem érhető el." };
   const conversation = await getConversationInfo(view, cell, config.cells || []);
@@ -5550,7 +5559,7 @@ async function captureAndSaveWorkerHandoff(workerCode) {
 
 async function inspectWorkerHandoffState(workerCode) {
   const code = String(workerCode || "").toUpperCase();
-  const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+  const cell = workerCellForCode(code);
   const view = cell ? chatViews.get(cell.id) : null;
   if (!cell || !view || view.webContents.isDestroyed()) return null;
   const conversation = await getConversationInfo(view, cell, config.cells || []);
@@ -5935,7 +5944,7 @@ async function recoverExecutionAuthorityFromHeartbeat({ task, session, workerCod
     if (!refreshedTask) throw new Error("HEARTBEAT_RECOVERY_REFRESHED_TASK_MISSING");
 
     let continuation = { sent:false, verified:false, reason:"HEARTBEAT_RECOVERY_BOUND_CONVERSATION_UNAVAILABLE" };
-    const cell = config?.cells?.find((item) => String(item?.workerCode || "").toUpperCase() === code && item.enabled !== false) || null;
+    const cell = workerCellForCode(code);
     const view = cell ? chatViews.get(cell.id) : null;
     const expectedConversationId = String(refreshedTask.surfaceConversationId || refreshedTask.chatConversationId || refreshedTask.chatLaunch?.surfaceConversationId || "");
     const currentConversationId = view && !view.webContents.isDestroyed() ? chatConversationIdFromUrl(view.webContents.getURL()) : "";
@@ -6244,7 +6253,7 @@ function startLiveClient() {
   if (credential.mode === "device") { startDeviceHeartbeat(); startEngineSessionHeartbeat(); }
 }
 function workerLabel(workerCode) {
-  const cell = config.cells.find((item) => item.workerCode === workerCode);
+  const cell = workerCellForCode(workerCode);
   return cell?.label || workerCode || "Kódmérnök";
 }
 
@@ -6839,7 +6848,7 @@ function registerIpc() {
       const preRecoveryCode = assignedWorkerCodeFromWork(preRecoveryWork);
       const preRecoveryLaunchTask = launchTaskFromWork(preRecoveryWork, null);
       if (preRecoveryCode && preRecoveryLaunchTask) {
-        const preRecoveryCell = config?.cells?.find((item) => item.workerCode === preRecoveryCode && item.enabled !== false);
+        const preRecoveryCell = workerCellForCode(preRecoveryCode);
         const preRecoverySurface = normalizeWorkerSurfaceType(preRecoveryLaunchTask.surfaceType || session?.developmentContext?.surfaceType || preRecoveryCell?.surfaceType || "CHATGPT");
         if (preRecoveryCell && preRecoverySurface === "CHATGPT") {
           let preRecoveryView = chatViews.get(preRecoveryCell.id);
@@ -6915,7 +6924,7 @@ function registerIpc() {
       const code = assignedWorkerCodeFromWork(work);
       const launchTask = launchTaskFromWork(work, null);
       if (!code || !launchTask) return { ok:false, code:"ACTIVE_TASK_LAUNCH_CONTEXT_MISSING", error:"A folytatható task Launch Packet kontextusa hiányos." };
-      const cell = config?.cells?.find((item) => item.workerCode === code && item.enabled !== false);
+      const cell = workerCellForCode(code);
       if (!cell) return { ok:false, code:"ACTIVE_TASK_WORKER_CELL_MISSING", error:"Az assigned worker nincs aktív Developer Grid cellában." };
       const surfaceType = normalizeWorkerSurfaceType(launchTask.surfaceType || session?.developmentContext?.surfaceType || cell.surfaceType || "CHATGPT");
       const adapterGate = workerSurfaceAdapter(surfaceType).automationBlock();

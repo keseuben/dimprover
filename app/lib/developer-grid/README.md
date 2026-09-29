@@ -504,3 +504,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Ha a ChatGPT composerben már a jelenlegi task/session/current source proof saját TASK_LAUNCH_V3 draftja van, a Grid nem próbál új promptot ráírni. A meglévő draftot közvetlenül, ellenőrzött automatikus send útvonalon küldi el.
 - Stale source proofos draft esetén a korábbi fail-closed törlés + friss prompt logika marad. Idegen task/session vagy nem igazolható draft továbbra sem írható felül.
 - Sikeres automatikus küldés után SENT + BOOT ACK WAITING állapot és a meglévő BOOT ACK monitor indul. DEV ONLY · PROD DENY.
+
+## v0.1.92 · BenjáminAI worker-cell identity hotfix
+
+- A backend/Grid canonical worker identity továbbra is `BENJAMINAI`, míg a desktop cella azonosítója kompatibilitási okból `BENAI` marad.
+- A desktop main processben minden worker→cell feloldás a közös `workerCellForCode()` helperen keresztül történik, amely a `normalizeDesktopWorkerCode()` szabállyal egységesen kezeli a `BENJAMINAI` ↔ `BENAI` aliaspárt.
+- A javítás lefedi a központi kézi Launch Packet küldést, az aktív task resume/recovery útvonalat, conversation bind/rebind/rollover, Conversation Memory, stage action és handoff worker-cell feloldásokat.
+- A korábbi hiba, amelyben létező BenjáminAI cella mellett `Az assigned worker nincs aktív Developer Grid cellában.` blocker jelent meg, nem állhat elő pusztán a backend/desktop worker-kód eltéréséből.
+- Új regression contract: `worker-cell-normalization-v0192-contract.mjs`; a közvetlen nyers workerCode→cell egyenlőségeket tiltja.
+- A task/session/source proof, BOOT ACK és PROD DENY szabályok változatlanok.
+- DEV ONLY · PROD DENY.
