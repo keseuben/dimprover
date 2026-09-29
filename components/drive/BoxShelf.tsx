@@ -5,6 +5,7 @@ import {
   BrainCircuit,
   ChevronDown,
   ChevronUp,
+  Download,
   FileText,
   Folder,
   FolderPlus,
@@ -43,6 +44,7 @@ type Props = {
   onRemoveItem: (boxId: string, itemId: string) => Promise<void>;
   onCreateFolder?: (boxId: string, parentId: string | null, name: string) => Promise<void>;
   onMoveItem?: (boxId: string, itemId: string, folderId: string | null) => Promise<void>;
+  onDownloadBox?: (box: DriveBox, archiveName: string) => void;
   onOpenCompareBox: (box: DriveBox) => void;
 };
 
@@ -138,6 +140,7 @@ export default function BoxShelf({
   onRemoveItem,
   onCreateFolder,
   onMoveItem,
+  onDownloadBox,
   onOpenCompareBox,
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
@@ -160,6 +163,14 @@ export default function BoxShelf({
     setName("");
     setPurpose("GENERAL");
     setComposerOpen(false);
+  }
+
+  function promptDownloadBox(box: DriveBox) {
+    if (!onDownloadBox || !box.items.length) return;
+    const raw = window.prompt("ZIP fájl neve:", box.name);
+    const archiveName = raw?.trim() || "";
+    if (!archiveName) return;
+    onDownloadBox(box, archiveName);
   }
 
   async function promptNewFolder(boxId: string, parentId: string | null = null) {
@@ -280,6 +291,11 @@ export default function BoxShelf({
                   {box.folderFeatureReady && canWrite && onCreateFolder && (
                     <button type="button" onClick={() => void promptNewFolder(box.id)} disabled={busy} title="Új mappa a CsomagBOX-ban">
                       <FolderPlus size={11} /> Mappa
+                    </button>
+                  )}
+                  {box.items.length > 0 && onDownloadBox && (
+                    <button type="button" onClick={() => promptDownloadBox(box)} title="CsomagBOX letöltése ZIP fájlként">
+                      <Download size={11} /> ZIP
                     </button>
                   )}
                   {box.purpose === "COMPARE" && box.items.length >= 2 && (

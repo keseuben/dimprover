@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
 import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
+import type { DriveDocument, DriveDocumentVersion } from "./types";
 import {
   DRIVE_WORKSPACE_BOOTSTRAP_ID,
   DRIVE_WORKSPACE_MIGRATION_COUNT,
@@ -391,6 +392,46 @@ function mapBox(
     folderFeatureReady,
     folders,
     items,
+  };
+}
+
+function mapPackageVersion(row: DbVersion): DriveDocumentVersion {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    documentId: row.document_id,
+    versionNumber: Number(row.version_number || 0),
+    revisionCode: row.revision_code || "",
+    originalName: row.original_name,
+    mimeType: row.mime_type,
+    sizeBytes: Number(row.size_bytes || 0),
+    sha256: row.sha256,
+    storageProvider: row.storage_provider as DriveDocumentVersion["storageProvider"],
+    storageBucket: row.storage_bucket,
+    storageKey: row.storage_key,
+    status: row.status as DriveDocumentVersion["status"],
+    changeNote: row.change_note || "",
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
+function mapPackageDocument(row: DbDocument, version: DriveDocumentVersion | null): DriveDocument {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    folderId: row.folder_id,
+    name: row.name,
+    extension: row.extension || "",
+    mimeType: row.mime_type,
+    description: row.description || "",
+    status: row.status as DriveDocument["status"],
+    source: row.source as DriveDocument["source"],
+    currentVersionNumber: Number(row.current_version_number || 0),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    currentVersion: version,
   };
 }
 
@@ -976,6 +1017,52 @@ export async function listDriveBoxes(projectId: string) {
       return mapBox(box, byBox.get(box.id) || [], byBoxFolders.get(box.id) || [], folderFeatureReady);
     }),
   };
+}
+
+export async function getDriveBoxPackageSource(projectId: string, boxId: string) {
+  const listed = await listDriveBoxes(projectId);
+  const box = listed.boxes.find((entry) => entry.id === boxId);
+  if (!box) throw new DriveCoreRepositoryError("A CsomagBOX nem található.", "DRIVE_BOX_NOT_FOUND", 404);
+
+  if (!box.items.length) {
+    return { ok: true as const, box, entries: [] as Array<{ item: DriveBoxItem; document: DriveDocument | null; version: DriveDocumentVersion | null }> };
+  }
+
+  const client = await requireReadyClient();
+  const documentIds = [...new Set(box.items.map((item) => item.documentId))];
+  const [documentResult, versionResult] = await Promise.all([
+    client.from("drive_core_documents").select("*").eq("project_id", projectId).in("id", documentIds).neq("status", "DELETED"),
+    client.from("drive_core_document_versions").select("*").eq("project_id", projectId).in("document_id", documentIds),
+  ]);
+  if (documentResult.error) databaseError("A CsomagBOX dokumentumai nem tölthetők be.", documentResult.error);
+  if (versionResult.error) databaseError("A CsomagBOX dokumentumverziói nem tölthetők be.", versionResult.error);
+
+  const documents = new Map<string, DbDocument>();
+  for (const row of (documentResult.data || []) as DbDocument[]) documents.set(row.id, row);
+
+  const versionsById = new Map<string, DbVersion>();
+  const versionsByDocumentNumber = new Map<string, DbVersion>();
+  for (const row of (versionResult.data || []) as DbVersion[]) {
+    versionsById.set(row.id, row);
+    versionsByDocumentNumber.set(`${row.document_id}::${Number(row.version_number || 0)}`, row);
+  }
+
+  const entries = box.items.map((item) => {
+    const documentRow = documents.get(item.documentId) || null;
+    const versionRow = item.versionId
+      ? versionsById.get(item.versionId) || null
+      : documentRow
+        ? versionsByDocumentNumber.get(`${documentRow.id}::${Number(documentRow.current_version_number || 0)}`) || null
+        : null;
+    const version = versionRow ? mapPackageVersion(versionRow) : null;
+    return {
+      item,
+      document: documentRow ? mapPackageDocument(documentRow, version) : null,
+      version,
+    };
+  });
+
+  return { ok: true as const, box, entries };
 }
 
 export async function createDriveBox(

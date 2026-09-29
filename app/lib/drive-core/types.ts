@@ -145,6 +145,7 @@ export type DriveChangeEntityType =
   | "qr"
   | "box"
   | "box_item"
+  | "box_folder"
   | "saved_view"
   | "compare_job"
   | "ai_job";

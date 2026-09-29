@@ -14,7 +14,7 @@ export {
 
 export { getDriveDropIncomingSourceDatabaseHealth } from "./storageRepository";
 
-export { openDriveFolderZip } from "./folderDownloadService";
+export { openDriveBoxZip, openDriveFolderZip } from "./folderDownloadService";
 
 export {
   abortDriveObjectUpload,
@@ -39,6 +39,7 @@ export {
   createDriveBox,
   createDriveBoxFolder,
   ensureDriveQrCode,
+  getDriveBoxPackageSource,
   getDriveDocumentWorkspaceDetails,
   getDriveWorkspaceDatabaseHealth,
   listDriveBoxes,

@@ -1132,6 +1132,20 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  function downloadBoxArchive(box: DriveBox, archiveName: string) {
+    const normalized = archiveName.trim();
+    if (!normalized) return;
+    const url = `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(box.id)}/download?name=${encodeURIComponent(normalized)}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${normalized.replace(/\.zip$/i, "") || "DIMPRO_CsomagBOX"}.zip`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setNotice(`ZIP csomag előkészítése: ${normalized}`);
+  }
+
   async function removeBoxItem(boxId: string, itemId: string) {
     if (!canWrite || !health?.workspace?.databaseReady) return;
     setBusy(true); setError(""); setNotice("");
@@ -1871,6 +1885,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         onRemoveItem={removeBoxItem}
         onCreateFolder={createBoxFolder}
         onMoveItem={moveBoxItemToFolder}
+        onDownloadBox={downloadBoxArchive}
         onOpenCompareBox={openCompareBox}
       />
 
@@ -2167,6 +2182,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onRemoveItem={removeBoxItem}
                     onCreateFolder={createBoxFolder}
                     onMoveItem={moveBoxItemToFolder}
+                    onDownloadBox={downloadBoxArchive}
                     onOpenCompareBox={openCompareBox}
                   />
                 </aside>

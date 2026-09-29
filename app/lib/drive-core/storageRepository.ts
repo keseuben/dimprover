@@ -746,7 +746,9 @@ export async function logDriveDownloadRecord(input: {
 
 export async function logDriveDownloadPackageAudit(input: {
   projectId: string;
-  folderId: string;
+  folderId?: string;
+  entityType?: "folder" | "box";
+  entityId?: string;
   packageId: string;
   actorUserId: string;
   clientId?: string | null;
@@ -754,20 +756,26 @@ export async function logDriveDownloadPackageAudit(input: {
   skippedFileCount: number;
   totalBytes: number;
   registerFileName: string;
+  packageName?: string;
   files: Array<{ documentId: string; versionId: string; zipName: string }>;
 }) {
   const client = await requireReadyClient();
   const auditId = `project-audit-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const entityType = input.entityType || "folder";
+  const entityId = input.entityId || input.folderId || "";
+  if (!entityId) throw new DriveCoreRepositoryError("A csomagaudit entitásazonosítója hiányzik.", "DRIVE_PACKAGE_AUDIT_ENTITY_REQUIRED", 500);
   const { error } = await client.from("project_core_audit_events").insert({
     id: auditId,
     project_id: input.projectId,
     actor_user_id: input.actorUserId,
     event_type: "DRIVE_DOWNLOAD_PACKAGE_CREATED",
-    entity_type: "folder",
-    entity_id: input.folderId,
+    entity_type: entityType,
+    entity_id: entityId,
     summary: `Digitális dokumentációcsomag összeállítva: ${input.packageId}`,
     metadata: {
       packageId: input.packageId,
+      packageName: input.packageName || null,
+      packageEntityType: entityType,
       clientId: input.clientId || null,
       fileCount: input.fileCount,
       skippedFileCount: input.skippedFileCount,

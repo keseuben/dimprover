@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { listDriveTree } from "./databaseRepository";
 import { DriveCoreRepositoryError } from "./errors";
 import { DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME, buildDigitalDocumentationRegister } from "./documentationRegister";
-import { listDriveEngineeringMetadata, type DriveEngineeringMetadata } from "./workspaceRepository";
+import { getDriveBoxPackageSource, listDriveEngineeringMetadata, type DriveBoxFolder, type DriveEngineeringMetadata } from "./workspaceRepository";
 import {
   DRIVE_SAFE_PATH_TARGET_MAX,
   buildDriveSafeArchiveFolderPath,
@@ -279,6 +279,262 @@ export async function openDriveFolderZip(input: {
     packageId,
     registerFileName: DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME,
     fileName: `${ensureDriveSafeFolderName(root.name)}.zip`,
+    sourceFileCount: accepted.length,
+    skippedFileCount: skipped.length,
+    totalBytes,
+    stream: zip.generateNodeStream({ streamFiles: true, compression: "STORE", platform: "UNIX" }),
+  };
+}
+
+function normalizeBoxArchiveBase(value: string | undefined, fallback: string) {
+  const raw = (value || fallback || "DIMPRO_CsomagBOX").trim().replace(/.zip$/i, "").trim();
+  return ensureDriveSafeFolderName(raw || "DIMPRO_CsomagBOX");
+}
+
+function buildBoxVirtualFolders(input: {
+  projectId: string;
+  boxId: string;
+  rootName: string;
+  displayName: string;
+  actorUserId: string;
+  folders: DriveBoxFolder[];
+  generatedAt: string;
+}) {
+  const root: DriveFolder = {
+    id: `drive-box-root-${input.boxId}`,
+    projectId: input.projectId,
+    parentId: null,
+    name: input.rootName,
+    path: input.rootName,
+    originalName: input.displayName,
+    displayName: input.displayName,
+    safeName: input.rootName,
+    displayPath: input.displayName,
+    sortOrder: 0,
+    discipline: "",
+    topic: "",
+    status: "ACTIVE",
+    createdBy: input.actorUserId,
+    createdAt: input.generatedAt,
+    updatedAt: input.generatedAt,
+  };
+
+  const sourceById = new Map(input.folders.map((folder) => [folder.id, folder]));
+  const lineage = (folder: DriveBoxFolder) => {
+    const chain: DriveBoxFolder[] = [];
+    const seen = new Set<string>();
+    let current: DriveBoxFolder | undefined = folder;
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      chain.push(current);
+      current = current.parentId ? sourceById.get(current.parentId) : undefined;
+    }
+    return chain.reverse();
+  };
+
+  const folders = input.folders.map((folder): DriveFolder => {
+    const chain = lineage(folder);
+    const safeSegments = [input.rootName, ...chain.map((item) => ensureDriveSafeFolderName(item.name))];
+    const displaySegments = [input.displayName, ...chain.map((item) => item.name)];
+    return {
+      id: folder.id,
+      projectId: input.projectId,
+      parentId: folder.parentId && sourceById.has(folder.parentId) ? folder.parentId : root.id,
+      name: ensureDriveSafeFolderName(folder.name),
+      path: safeSegments.join("/"),
+      originalName: folder.name,
+      displayName: folder.name,
+      safeName: ensureDriveSafeFolderName(folder.name),
+      displayPath: displaySegments.join("/"),
+      sortOrder: folder.sortOrder,
+      discipline: "",
+      topic: "",
+      status: "ACTIVE",
+      createdBy: folder.createdBy,
+      createdAt: folder.createdAt,
+      updatedAt: folder.updatedAt,
+    };
+  });
+
+  return { root, folders: [root, ...folders], folderIds: new Set(folders.map((folder) => folder.id)) };
+}
+
+export async function openDriveBoxZip(input: {
+  projectId: string;
+  boxId: string;
+  archiveName?: string;
+  actorUserId: string;
+  actorDisplayName?: string;
+  projectCode?: string;
+  projectName?: string;
+  clientId?: string | null;
+}) {
+  const source = await getDriveBoxPackageSource(input.projectId, input.boxId);
+  const box = source.box;
+  if (source.entries.length > DRIVE_FOLDER_ZIP_MAX_FILES) {
+    throw new DriveCoreRepositoryError(
+      `A CsomagBOX export legfeljebb ${DRIVE_FOLDER_ZIP_MAX_FILES} fájlt tartalmazhat ebben a pilot verzióban.`,
+      "DRIVE_BOX_ZIP_FILE_LIMIT",
+      413,
+    );
+  }
+
+  const generatedAt = new Date().toISOString();
+  const packageId = downloadPackageId(new Date(generatedAt));
+  const rootName = normalizeBoxArchiveBase(input.archiveName, box.name);
+  const displayName = (input.archiveName || box.name || rootName).trim().replace(/.zip$/i, "") || rootName;
+  const virtual = buildBoxVirtualFolders({
+    projectId: input.projectId,
+    boxId: box.id,
+    rootName,
+    displayName,
+    actorUserId: input.actorUserId,
+    folders: box.folders || [],
+    generatedAt,
+  });
+  const folderPaths = buildFolderPaths(virtual.root, virtual.folders);
+  const engineeringMetadata = await listDriveEngineeringMetadata(input.projectId);
+  const metadataByDocument = new Map(engineeringMetadata.map((metadata) => [metadata.documentId, metadata]));
+
+  const accepted: Array<{ document: DriveDocument; version: DriveDocumentVersion; zipName: string; metadata: DriveEngineeringMetadata | null }> = [];
+  const skipped: Array<{ name: string; reason: string }> = [];
+  const usedNames = new Set<string>();
+  let totalBytes = 0;
+
+  for (const entry of source.entries) {
+    const document = entry.document;
+    const version = entry.version;
+    if (!document) {
+      skipped.push({ name: entry.item.documentId, reason: "a CsomagBOX dokumentum nem található" });
+      continue;
+    }
+    if (!version || version.storageProvider !== "S3" || !version.storageKey) {
+      skipped.push({ name: document.name, reason: "a rögzített dokumentumverzióhoz nincs letölthető tárhelyobjektum" });
+      continue;
+    }
+    if (version.status !== "AVAILABLE" && version.status !== "QUARANTINED") {
+      skipped.push({ name: document.name, reason: `nem letölthető verzióállapot: ${version.status}` });
+      continue;
+    }
+
+    const trustedDropArchive = document.source === "DROP" && version.status === "AVAILABLE";
+    if (!trustedDropArchive) {
+      try {
+        await requireDriveCleanSecurityScan({
+          projectId: input.projectId,
+          documentId: document.id,
+          versionId: version.id,
+        });
+      } catch {
+        skipped.push({ name: document.name, reason: "a biztonsági ellenőrzés még nem megfelelő" });
+        continue;
+      }
+    }
+
+    totalBytes += version.sizeBytes;
+    if (totalBytes > DRIVE_FOLDER_ZIP_MAX_BYTES) {
+      throw new DriveCoreRepositoryError(
+        "A CsomagBOX export összesített mérete meghaladja a 2 GB-os pilot biztonsági korlátot.",
+        "DRIVE_BOX_ZIP_SIZE_LIMIT",
+        413,
+      );
+    }
+
+    const virtualFolderId = entry.item.folderId && virtual.folderIds.has(entry.item.folderId)
+      ? entry.item.folderId
+      : virtual.root.id;
+    const virtualDocument: DriveDocument = {
+      ...document,
+      folderId: virtualFolderId,
+      currentVersion: version,
+      currentVersionNumber: version.versionNumber,
+    };
+    const folderPath = folderPaths.get(virtualFolderId) || rootName;
+    const technicalFileName = ensureDriveSafeFileName(document.name || version.originalName);
+    accepted.push({
+      document: virtualDocument,
+      version,
+      zipName: uniqueZipEntryName(folderPath, technicalFileName, usedNames),
+      metadata: metadataByDocument.get(document.id) || null,
+    });
+  }
+
+  const zip = new JSZip();
+  for (const folderPath of folderPaths.values()) zip.folder(folderPath);
+  for (const item of accepted) {
+    zip.file(item.zipName, lazyDriveStream(item.version), {
+      binary: true,
+      compression: "STORE",
+      date: new Date(item.version.createdAt),
+      createFolders: true,
+    });
+  }
+
+  const registerBuffer = await buildDigitalDocumentationRegister({
+    projectId: input.projectId,
+    projectCode: input.projectCode,
+    projectName: input.projectName,
+    packageId,
+    generatedAt,
+    actorUserId: input.actorUserId,
+    actorDisplayName: input.actorDisplayName,
+    rootFolder: virtual.root,
+    folders: virtual.folders,
+    files: accepted,
+    skipped,
+    totalBytes,
+  });
+  zip.file(`${rootName}/${DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME}`, registerBuffer, {
+    binary: true,
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+  zip.file(
+    `${rootName}/DIMPRO_fajllista.txt`,
+    buildManifest({
+      folder: virtual.root,
+      packageId,
+      projectName: input.projectName,
+      projectCode: input.projectCode,
+      files: accepted,
+      skipped,
+    }),
+    { binary: false, compression: "DEFLATE", compressionOptions: { level: 6 } },
+  );
+
+  await Promise.all(accepted.map((item) => logDriveDownloadRecord({
+    projectId: input.projectId,
+    documentId: item.document.id,
+    versionId: item.version.id,
+    actorUserId: input.actorUserId,
+    clientId: input.clientId || "drive-box-zip",
+  })));
+
+  await logDriveDownloadPackageAudit({
+    projectId: input.projectId,
+    entityType: "box",
+    entityId: box.id,
+    packageId,
+    packageName: displayName,
+    actorUserId: input.actorUserId,
+    clientId: input.clientId || "drive-box-zip",
+    fileCount: accepted.length,
+    skippedFileCount: skipped.length,
+    totalBytes,
+    registerFileName: DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME,
+    files: accepted.map((item) => ({
+      documentId: item.document.id,
+      versionId: item.version.id,
+      zipName: item.zipName,
+    })),
+  });
+
+  return {
+    ok: true as const,
+    box,
+    packageId,
+    registerFileName: DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME,
+    fileName: `${rootName}.zip`,
     sourceFileCount: accepted.length,
     skippedFileCount: skipped.length,
     totalBytes,
