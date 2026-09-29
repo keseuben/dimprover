@@ -47,6 +47,7 @@ export {
   moveDriveDocument,
   moveDriveBoxItemToFolder,
   removeDriveBoxItem,
+  setDriveBoxLifecycle,
   upsertDriveEngineeringMetadata,
   upsertDriveFileNote,
 } from "./workspaceRepository";

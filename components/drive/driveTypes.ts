@@ -134,6 +134,7 @@ export type DriveQrCode = {
 };
 
 export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
+export type DriveBoxLifecycleStatus = "DRAFT" | "READY" | "SENT" | "ARCHIVED";
 
 export type DriveBoxFolder = {
   id: string;
@@ -186,6 +187,11 @@ export type DriveBox = {
   note: string;
   sortOrder: number;
   status: "ACTIVE" | "ARCHIVED";
+  lifecycleStatus: DriveBoxLifecycleStatus;
+  lifecycleFeatureReady: boolean;
+  readyAt: string | null;
+  sentAt: string | null;
+  archivedAt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

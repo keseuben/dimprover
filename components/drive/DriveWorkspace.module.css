@@ -2894,3 +2894,78 @@
 }
 .boxItemFolderSelect:focus { border-color: #8ab4da; box-shadow: 0 0 0 2px rgba(55,120,180,.08); }
 .boxItemFolderSelect:disabled { opacity: .55; cursor: default; }
+
+/* Drive V0.6.9 · CsomagBOX lifecycle / history */
+.boxLifecycleFilters {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.boxLifecycleFilters button {
+  flex: 0 0 auto;
+  min-height: 26px;
+  border: 1px solid #d5e0e9;
+  border-radius: 999px;
+  background: #fff;
+  color: #5b7084;
+  padding: 3px 8px;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  cursor: pointer;
+}
+.boxLifecycleFilters button:hover { border-color: #9dbbd5; background: #f3f8fc; color: #315f87; }
+.boxLifecycleFilters button b {
+  min-width: 16px;
+  display: inline-grid;
+  place-items: center;
+  margin-left: 3px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #edf3f8;
+  color: #526c83;
+  font-size: var(--drive-font-xs);
+}
+.boxLifecycleFilters .boxLifecycleFilterActive {
+  border-color: #4387c5;
+  background: #eaf4ff;
+  color: #1765a8;
+}
+.boxCardTop { grid-template-columns: 28px minmax(0,1fr) auto auto; }
+.boxLifecycleBadge {
+  max-width: 80px;
+  overflow: hidden;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: var(--drive-font-xs);
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boxLifecycleDRAFT { border-color: #cbd6df; background: #f4f7f9; color: #647789; }
+.boxLifecycleREADY { border-color: #8fc0ec; background: #eaf5ff; color: #236aab; }
+.boxLifecycleSENT { border-color: #87cfad; background: #eaf9f1; color: #26734e; }
+.boxLifecycleARCHIVED { border-color: #c6b6db; background: #f5f0fb; color: #71558e; }
+.boxLifecycleSelect {
+  max-width: 112px;
+  min-height: 24px;
+  border: 1px solid #cedce7;
+  border-radius: 999px;
+  background: rgba(255,255,255,.8);
+  color: #4f677d;
+  padding: 2px 7px;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  cursor: pointer;
+  outline: none;
+}
+.boxLifecycleSelect:focus { border-color: #77a9d4; box-shadow: 0 0 0 2px rgba(55,120,180,.08); }
+.boxLifecycleSelect:disabled { opacity: .5; cursor: default; }
+@media (max-width: 720px) {
+  .boxCardTop { grid-template-columns: 28px minmax(0,1fr) auto; }
+  .boxLifecycleBadge { grid-column: 2 / -1; justify-self: start; }
+}

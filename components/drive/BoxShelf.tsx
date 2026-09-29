@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { DriveBox, DriveBoxFolder, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
+import type { DriveBox, DriveBoxFolder, DriveBoxLifecycleStatus, DriveBoxPurpose, DriveDocument, DriveEngineeringMetadata } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
 type NewBoxInput = {
@@ -45,8 +45,28 @@ type Props = {
   onCreateFolder?: (boxId: string, parentId: string | null, name: string) => Promise<void>;
   onMoveItem?: (boxId: string, itemId: string, folderId: string | null) => Promise<void>;
   onDownloadBox?: (box: DriveBox, archiveName: string) => void;
+  onSetLifecycle?: (boxId: string, nextStatus: DriveBoxLifecycleStatus) => Promise<void>;
   onOpenCompareBox: (box: DriveBox) => void;
 };
+
+const lifecycleConfig: Record<DriveBoxLifecycleStatus, { label: string; shortLabel: string }> = {
+  DRAFT: { label: "Piszkozat", shortLabel: "Piszkozat" },
+  READY: { label: "Elkészített", shortLabel: "Kész" },
+  SENT: { label: "Kiküldött", shortLabel: "Kiküldött" },
+  ARCHIVED: { label: "Archivált", shortLabel: "Archív" },
+};
+
+const lifecycleOrder: DriveBoxLifecycleStatus[] = ["DRAFT", "READY", "SENT", "ARCHIVED"];
+
+function lifecycleTargets(current: DriveBoxLifecycleStatus) {
+  const transitions: Record<DriveBoxLifecycleStatus, DriveBoxLifecycleStatus[]> = {
+    DRAFT: ["DRAFT", "READY", "ARCHIVED"],
+    READY: ["READY", "DRAFT", "SENT", "ARCHIVED"],
+    SENT: ["SENT", "READY", "ARCHIVED"],
+    ARCHIVED: ["ARCHIVED", "DRAFT"],
+  };
+  return transitions[current];
+}
 
 const purposeConfig: Record<DriveBoxPurpose, {
   label: string;
@@ -141,13 +161,23 @@ export default function BoxShelf({
   onCreateFolder,
   onMoveItem,
   onDownloadBox,
+  onSetLifecycle,
   onOpenCompareBox,
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [expandedBoxId, setExpandedBoxId] = useState("");
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState<DriveBoxPurpose>("GENERAL");
+  const [lifecycleFilter, setLifecycleFilter] = useState<"ALL" | DriveBoxLifecycleStatus>("ALL");
   const documentMap = useMemo(() => new Map(documents.map((document) => [document.id, document])), [documents]);
+  const lifecycleFeatureReady = boxes.some((box) => box.lifecycleFeatureReady);
+  const lifecycleCounts = useMemo(() => Object.fromEntries(
+    lifecycleOrder.map((status) => [status, boxes.filter((box) => box.lifecycleStatus === status).length]),
+  ) as Record<DriveBoxLifecycleStatus, number>, [boxes]);
+  const visibleBoxes = useMemo(
+    () => lifecycleFilter === "ALL" ? boxes : boxes.filter((box) => box.lifecycleStatus === lifecycleFilter),
+    [boxes, lifecycleFilter],
+  );
 
   async function submitNewBox() {
     const normalized = name.trim();
@@ -222,7 +252,11 @@ export default function BoxShelf({
       >
         <div className={styles.boxShelfTitle}>
           <strong>CsomagBOX polc</strong>
-          <span>{databaseReady ? `${boxes.length} aktív BOX · virtuális file/version hivatkozások` : "A Workspace SQL aktiválása után használható"}</span>
+          <span>{databaseReady
+            ? lifecycleFeatureReady
+              ? `${boxes.length} BOX · ${lifecycleCounts.SENT} kiküldött · virtuális file/version hivatkozások`
+              : `${boxes.length} aktív BOX · virtuális file/version hivatkozások`
+            : "A Workspace SQL aktiválása után használható"}</span>
         </div>
         <div className={styles.boxShelfHeaderActions} onClick={(event) => event.stopPropagation()}>
           {open && canWrite && databaseReady && (
@@ -264,9 +298,27 @@ export default function BoxShelf({
         </div>
       )}
 
+      {open && lifecycleFeatureReady && (
+        <nav className={styles.boxLifecycleFilters} aria-label="CsomagBOX állapotszűrő">
+          <button type="button" className={lifecycleFilter === "ALL" ? styles.boxLifecycleFilterActive : ""} onClick={() => setLifecycleFilter("ALL")}>
+            Mind <b>{boxes.length}</b>
+          </button>
+          {lifecycleOrder.map((status) => (
+            <button
+              type="button"
+              key={status}
+              className={lifecycleFilter === status ? styles.boxLifecycleFilterActive : ""}
+              onClick={() => setLifecycleFilter(status)}
+            >
+              {lifecycleConfig[status].shortLabel} <b>{lifecycleCounts[status]}</b>
+            </button>
+          ))}
+        </nav>
+      )}
+
       {open && (
         <div className={styles.boxCards}>
-          {boxes.map((box) => {
+          {visibleBoxes.map((box) => {
             const config = purposeConfig[box.purpose] || purposeConfig.GENERAL;
             const Icon = config.icon;
             const itemDocuments = box.items.map((item) => ({ item, document: documentMap.get(item.documentId) })).filter((entry) => entry.document);
@@ -284,10 +336,29 @@ export default function BoxShelf({
                   <span className={styles.boxCardIcon}><Icon size={15} /></span>
                   <div><strong>{box.name}</strong><span>{config.label}</span></div>
                   <span className={styles.boxCardCount}>{box.items.length}</span>
+                  {box.lifecycleFeatureReady && (
+                    <span className={`${styles.boxLifecycleBadge} ${styles[`boxLifecycle${box.lifecycleStatus}`] || ""}`}>
+                      {lifecycleConfig[box.lifecycleStatus].label}
+                    </span>
+                  )}
                 </div>
                 <div className={styles.boxCardStats}>{box.items.length} fájl · {formatBytes(totalBytes)}</div>
                 <div className={styles.boxCardActions}>
                   <button type="button" onClick={() => setExpandedBoxId(expanded ? "" : box.id)}>{expanded ? "Bezárás" : "Megnyitás"}</button>
+                  {box.lifecycleFeatureReady && canWrite && onSetLifecycle && (
+                    <select
+                      className={styles.boxLifecycleSelect}
+                      value={box.lifecycleStatus}
+                      onChange={(event) => void onSetLifecycle(box.id, event.target.value as DriveBoxLifecycleStatus)}
+                      disabled={busy}
+                      title="CsomagBOX állapot"
+                      aria-label={`${box.name} állapota`}
+                    >
+                      {lifecycleTargets(box.lifecycleStatus).map((status) => (
+                        <option key={status} value={status}>{lifecycleConfig[status].label}</option>
+                      ))}
+                    </select>
+                  )}
                   {box.folderFeatureReady && canWrite && onCreateFolder && (
                     <button type="button" onClick={() => void promptNewFolder(box.id)} disabled={busy} title="Új mappa a CsomagBOX-ban">
                       <FolderPlus size={11} /> Mappa
@@ -358,6 +429,12 @@ export default function BoxShelf({
               </article>
             );
           })}
+
+          {boxes.length > 0 && !visibleBoxes.length && lifecycleFeatureReady && (
+            <div className={styles.boxDisabledInfo}>
+              <PackageCheck size={20} /><strong>Nincs csomag ebben az állapotban</strong><span>Válassz másik CsomagBOX állapotszűrőt.</span>
+            </div>
+          )}
 
           {!boxes.length && databaseReady && (
             <button type="button" className={styles.boxEmptyCreate} onClick={() => setComposerOpen(true)}>

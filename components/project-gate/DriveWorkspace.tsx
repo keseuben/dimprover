@@ -41,7 +41,7 @@ import TableFullscreenBar from "@/components/drive/TableFullscreenBar";
 import TableZoomControls from "@/components/drive/TableZoomControls";
 import ViewLayoutSwitcher from "@/components/drive/ViewLayoutSwitcher";
 import { prepareDroppedDriveUpload } from "@/components/drive/externalFileDrop";
-import type { DriveBox, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
+import type { DriveBox, DriveBoxLifecycleStatus, DriveBoxPurpose, DriveCompareSeed, DriveDocumentDetails, DriveEngineeringMetadata, DriveLayoutMode, DriveStorageQuota, DriveViewMode } from "@/components/drive/driveTypes";
 import richStyles from "@/components/drive/DriveWorkspace.module.css";
 import styles from "./DriveWorkspace.module.css";
 
@@ -1132,6 +1132,36 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
     }
   }
 
+  async function setBoxLifecycle(boxId: string, nextStatus: DriveBoxLifecycleStatus) {
+    if (!canWrite || !health?.workspace?.databaseReady) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/lifecycle`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ nextStatus }),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A CsomagBOX állapot módosítása sikertelen.");
+      const label: Record<DriveBoxLifecycleStatus, string> = {
+        DRAFT: "Piszkozat",
+        READY: "Elkészített",
+        SENT: "Kiküldött",
+        ARCHIVED: "Archivált",
+      };
+      setNotice(`CsomagBOX állapot: ${label[nextStatus]}`);
+      await loadBoxes();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A CsomagBOX állapot módosítása sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function downloadBoxArchive(box: DriveBox, archiveName: string) {
     const normalized = archiveName.trim();
     if (!normalized) return;
@@ -1886,6 +1916,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
         onCreateFolder={createBoxFolder}
         onMoveItem={moveBoxItemToFolder}
         onDownloadBox={downloadBoxArchive}
+        onSetLifecycle={setBoxLifecycle}
         onOpenCompareBox={openCompareBox}
       />
 
@@ -2183,6 +2214,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                     onCreateFolder={createBoxFolder}
                     onMoveItem={moveBoxItemToFolder}
                     onDownloadBox={downloadBoxArchive}
+                    onSetLifecycle={setBoxLifecycle}
                     onOpenCompareBox={openCompareBox}
                   />
                 </aside>

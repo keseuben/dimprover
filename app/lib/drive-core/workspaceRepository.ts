@@ -55,6 +55,7 @@ export type DriveQrCode = {
 };
 
 export type DriveBoxPurpose = "GENERAL" | "DROP" | "COMPARE" | "AI_ANALYSIS" | "ISSUE" | "MEETING";
+export type DriveBoxLifecycleStatus = "DRAFT" | "READY" | "SENT" | "ARCHIVED";
 
 export type DriveBoxFolder = {
   id: string;
@@ -102,6 +103,11 @@ export type DriveBox = {
   note: string;
   sortOrder: number;
   status: "ACTIVE" | "ARCHIVED";
+  lifecycleStatus: DriveBoxLifecycleStatus;
+  lifecycleFeatureReady: boolean;
+  readyAt: string | null;
+  sentAt: string | null;
+  archivedAt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -163,6 +169,10 @@ type DbBox = {
   note: string;
   sort_order: number | string;
   status: "ACTIVE" | "ARCHIVED";
+  lifecycle_status?: DriveBoxLifecycleStatus;
+  ready_at?: string | null;
+  sent_at?: string | null;
+  archived_at?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -242,6 +252,25 @@ function getDatabaseClient(): SupabaseClient {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { "x-client-info": "dimpro-drive-workspace/1.0.0" } },
   });
+}
+
+function isOptionalBoxLifecycleFeatureMissing(error: unknown) {
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  const code = candidate?.code || "";
+  const marker = [candidate?.message, candidate?.details, candidate?.hint].filter(Boolean).join(" ").toLowerCase();
+  return ["PGRST202", "PGRST204", "42703", "42883"].includes(code)
+    || marker.includes("lifecycle_status")
+    || marker.includes("drive_workspace_set_box_lifecycle_atomic");
+}
+
+function boxLifecycleFeatureNotReady(error?: unknown): never {
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  throw new DriveCoreRepositoryError(
+    "A CsomagBOX életciklus még nincs aktiválva ebben a DEV adatbázisban.",
+    "DRIVE_BOX_LIFECYCLE_FEATURE_NOT_READY",
+    503,
+    candidate ? { message: candidate.message, details: candidate.details, hint: candidate.hint } : undefined,
+  );
 }
 
 function isOptionalBoxFolderFeatureMissing(error: unknown) {
@@ -375,6 +404,7 @@ function mapBox(
   items: DriveBoxItem[] = [],
   folders: DriveBoxFolder[] = [],
   folderFeatureReady = false,
+  lifecycleFeatureReady = false,
 ): DriveBox {
   return {
     id: row.id,
@@ -386,6 +416,11 @@ function mapBox(
     note: row.note || "",
     sortOrder: Number(row.sort_order || 0),
     status: row.status,
+    lifecycleStatus: row.lifecycle_status || "DRAFT",
+    lifecycleFeatureReady,
+    readyAt: row.ready_at || null,
+    sentAt: row.sent_at || null,
+    archivedAt: row.archived_at || null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -979,6 +1014,17 @@ export async function listDriveBoxes(projectId: string) {
     databaseError("A CsomagBOX mappastruktúra nem tölthető be.", folderResult.error);
   }
 
+  const lifecycleProbe = await client
+    .from("drive_core_boxes")
+    .select("id,lifecycle_status,ready_at,sent_at,archived_at")
+    .eq("project_id", projectId)
+    .eq("status", "ACTIVE")
+    .limit(1);
+  const lifecycleFeatureReady = !lifecycleProbe.error;
+  if (lifecycleProbe.error && !isOptionalBoxLifecycleFeatureMissing(lifecycleProbe.error)) {
+    databaseError("A CsomagBOX életciklus nem tölthető be.", lifecycleProbe.error);
+  }
+
   const rawItems = (itemResult.data || []) as DbBoxItem[];
   const versionIds = [...new Set(rawItems.map((item) => item.version_id).filter((value): value is string => Boolean(value)))];
   const versionMap = new Map<string, DbVersion>();
@@ -1012,9 +1058,10 @@ export async function listDriveBoxes(projectId: string) {
   return {
     ok: true as const,
     folderFeatureReady,
+    lifecycleFeatureReady,
     boxes: (boxResult.data || []).map((row) => {
       const box = row as DbBox;
-      return mapBox(box, byBox.get(box.id) || [], byBoxFolders.get(box.id) || [], folderFeatureReady);
+      return mapBox(box, byBox.get(box.id) || [], byBoxFolders.get(box.id) || [], folderFeatureReady, lifecycleFeatureReady);
     }),
   };
 }
@@ -1112,6 +1159,26 @@ export async function addDriveBoxItem(
   if (error) databaseError("A fájl CsomagBOX-hoz adása sikertelen.", error);
   const result = data as { item: DbBoxItem; idempotent?: boolean };
   return { ok: true as const, item: mapBoxItem(result.item), idempotent: Boolean(result.idempotent) };
+}
+
+export async function setDriveBoxLifecycle(
+  projectId: string,
+  boxId: string,
+  nextStatus: DriveBoxLifecycleStatus,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const { data, error } = await client.rpc("drive_workspace_set_box_lifecycle_atomic", {
+    p_project_id: projectId,
+    p_box_id: boxId,
+    p_next_status: nextStatus,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    if (isOptionalBoxLifecycleFeatureMissing(error)) boxLifecycleFeatureNotReady(error);
+    databaseError("A CsomagBOX állapotának módosítása sikertelen.", error);
+  }
+  return { ok: true as const, box: mapBox(data as DbBox, [], [], false, true) };
 }
 
 export async function createDriveBoxFolder(
