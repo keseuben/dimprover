@@ -35,7 +35,7 @@
     const active=Boolean(task&&!terminalTask&&!stale);
     const activeSession=(state.activeWork?.sessions||[]).find(s=>s.taskId===task?.id&&s.endedAt==null)||null;
     const bootAckState=String(activeSession?.developmentContext?.bootAckState||"").toUpperCase();
-    const canResumeLaunch=Boolean(task&&activeSession&&String(task.status||"").toUpperCase()==="READY"&&bootAckState!=="VALIDATED");
+    const canResumeLaunch=Boolean(task&&activeSession&&["READY","RUNNING"].includes(String(task.status||"").toUpperCase())&&bootAckState!=="VALIDATED");
     const launchDispatchAuto=state.workLaunchDispatchMode==="AUTO";
     const activeWorkerCode=String(activeSession?.workerCode||state.workStartWorkerCode||"").toUpperCase();
     const activeWorkerLabel=workerDisplayName(activeWorkerCode);

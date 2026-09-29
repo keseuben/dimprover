@@ -12,8 +12,8 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, "desktop/benjadmin-develo
 const types = fs.readFileSync(path.join(root, "app/lib/developer-grid/types.ts"), "utf8");
 let n=0; const check=async(label,fn)=>{await fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
 
-await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.90"));
-await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.90-dev"/));
+await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.91"));
+await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.91-dev"/));
 
 await check("HTTP client preserves backend code and status", async()=>{
   const originalFetch = globalThis.fetch;
