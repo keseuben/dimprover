@@ -25,8 +25,8 @@ check("full table special button is between Split and Commander", () => {
 check("full table button has a dedicated visual class", () => assert.match(switcher, /layoutTableSpecial/));
 check("special button has active state", () => assert.match(switcher, /layoutTableSpecialActive/));
 check("Drive toolbar exposes fullscreen table toggle", () => assert.match(toolbar, /onToggleTableFullscreen/));
-check("main Drive renders fullscreen table overlay", () => assert.match(workspace, /data-drive-full-table="0\.1\.0"/));
-check("Projectkapu Drive renders fullscreen table overlay", () => assert.match(projectGate, /data-project-gate-drive-full-table="0\.1\.0"/));
+check("main Drive renders fullscreen table overlay", () => assert.match(workspace, /data-drive-full-table="0\.2\.0"/));
+check("Projectkapu Drive renders fullscreen table overlay", () => assert.match(projectGate, /data-project-gate-drive-full-table="0\.2\.0"/));
 
 check("main Drive requests real browser fullscreen", () => assert.match(workspace, /document\.documentElement\.requestFullscreen\(\)/));
 check("Projectkapu Drive requests real browser fullscreen", () => assert.match(projectGate, /document\.documentElement\.requestFullscreen\(\)/));
@@ -48,7 +48,7 @@ check("zoom is applied to engineering and review tables", () => {
 check("long-press drag pan waits before activation", () => assert.match(grid, /}, 180\)/));
 check("drag pan moves table horizontally", () => assert.match(grid, /scrollLeft = state\.startLeft - dx/));
 check("drag pan moves table vertically", () => assert.match(grid, /scrollTop = state\.startTop - dy/));
-check("fullscreen pan mode disables native row drag", () => assert.match(grid, /draggable=\{!dragPanEnabled\}/));
+check("fullscreen pan coexists with file-icon drag handle", () => { assert.doesNotMatch(grid, /draggable=\{!dragPanEnabled\}/); assert.match(grid, /fileDragHandle/); });
 
 check("fullscreen overlay covers the complete application window", () => {
   assert.match(css, /\.fullTableOverlay\s*\{[\s\S]*?position: fixed;[\s\S]*?inset: 0;/);
@@ -64,8 +64,8 @@ check("fullscreen inspector floats above table instead of resizing it", () => {
   assert.match(css, /\.fullTableInspector\s*\{[\s\S]*?position: absolute;/);
   assert.match(css, /box-shadow:/);
 });
-check("main Drive inspector renders DetailsPanel", () => assert.match(workspace, /className=\{styles\.fullTableInspector\}[\s\S]*?<DetailsPanel/));
-check("Projectkapu inspector renders DetailsPanel", () => assert.match(projectGate, /className=\{richStyles\.fullTableInspector\}[\s\S]*?<DetailsPanel/));
+check("main Drive inspector renders DetailsPanel", () => assert.match(workspace, /fullTableInspectorBottom[^]*?<DetailsPanel/));
+check("Projectkapu inspector renders DetailsPanel", () => assert.match(projectGate, /fullTableInspectorBottom[^]*?<DetailsPanel/));
 check("review symbol action opens fullscreen inspector", () => {
   assert.match(workspace, /openReviewDetail\(document, field\); setFullTableInspectorOpen\(true\)/);
   assert.match(projectGate, /openReviewDetail\(document\.id, field\); setFullTableInspectorOpen\(true\)/);

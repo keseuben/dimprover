@@ -375,6 +375,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
   const [engineeringLayoutMode, setEngineeringLayoutMode] = useState<DriveLayoutMode>("three");
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
+  const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
   const [tableZoom, setTableZoom] = useState(100);
   const [engineeringViewMode, setEngineeringViewMode] = useState<DriveViewMode>("engineering");
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
@@ -2036,7 +2037,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
             </div>
           </section>}
 
-          {browserViewMode === "engineering" && tableFullscreen && <section className={richStyles.fullTableOverlay} data-project-gate-drive-full-table="0.1.0">
+          {browserViewMode === "engineering" && tableFullscreen && <section className={`${richStyles.fullTableOverlay} ${fullTableInspectorOpen && fullTableInspectorLayout === "bottom" ? richStyles.fullTableOverlayBottomInspector : ""}`} data-project-gate-drive-full-table="0.2.0">
             <TableFullscreenBar
               title={engineeringTitle}
               subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
@@ -2047,7 +2048,9 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               onToggleFullscreen={closeTableFullscreen}
               inspectorOpen={fullTableInspectorOpen}
               inspectorDisabled={!selectedDocument}
+              inspectorLayout={fullTableInspectorLayout}
               onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
+              onInspectorLayoutChange={setFullTableInspectorLayout}
             />
             <div className={richStyles.fullTableBody}>
               <FileGridPanel
@@ -2084,7 +2087,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
               />
             </div>
             {fullTableInspectorOpen && (
-              <aside className={richStyles.fullTableInspector} aria-label="Dokumentumadatok">
+              <aside className={`${richStyles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? richStyles.fullTableInspectorBottom : richStyles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">
                 <button type="button" className={richStyles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
                 <DetailsPanel
                   projectId={projectId}
@@ -2108,7 +2111,7 @@ export default function DriveWorkspace({ projectId, permissions = [] }: Props) {
                   onEnsureQr={ensureSelectedQr}
                   onDownload={async () => { if (selectedDocument) await downloadDocument(selectedDocument); }}
                   onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
-                  responsiveClassName={richStyles.fullTableInspectorPanel}
+                  responsiveClassName={`${richStyles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${richStyles.detailsSplitCard} ${richStyles.fullTableInspectorPanelBottom}` : ""}`}
                   focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : engineeringViewMode === "review" ? "review" : undefined}
                   reviewFocus={reviewFocus}
                   detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}

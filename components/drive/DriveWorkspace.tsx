@@ -106,6 +106,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [layoutMode, setLayoutMode] = useState<DriveLayoutMode>("two");
   const [tableFullscreen, setTableFullscreen] = useState(false);
   const [fullTableInspectorOpen, setFullTableInspectorOpen] = useState(false);
+  const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
   const [tableZoom, setTableZoom] = useState(100);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
@@ -1068,7 +1069,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       {!error && !notice && health?.workspace && !health.workspace.databaseReady && <div className={`${styles.notice} ${styles.noticeInfo}`}>{health.workspace.nextStep}</div>}
 
       {tableFullscreen && (
-        <section className={styles.fullTableOverlay} data-drive-full-table="0.1.0">
+        <section className={`${styles.fullTableOverlay} ${fullTableInspectorOpen && fullTableInspectorLayout === "bottom" ? styles.fullTableOverlayBottomInspector : ""}`} data-drive-full-table="0.2.0">
           <TableFullscreenBar
             title={title}
             subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
@@ -1079,7 +1080,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             onToggleFullscreen={closeTableFullscreen}
             inspectorOpen={fullTableInspectorOpen}
             inspectorDisabled={!selectedDocument}
+            inspectorLayout={fullTableInspectorLayout}
             onToggleInspector={() => setFullTableInspectorOpen((current) => !current)}
+            onInspectorLayoutChange={setFullTableInspectorLayout}
           />
           <div className={styles.fullTableBody}>
             <FileGridPanel
@@ -1117,7 +1120,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             />
           </div>
           {fullTableInspectorOpen && (
-            <aside className={styles.fullTableInspector} aria-label="Dokumentumadatok">
+            <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`} aria-label="Dokumentumadatok">
               <button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} title="Dokumentumadatok bezárása" aria-label="Dokumentumadatok bezárása">×</button>
               <DetailsPanel
                 projectId={projectId}
@@ -1141,7 +1144,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
                 onEnsureQr={ensureQr}
                 onDownload={downloadSelected}
                 onDelete={async () => { if (selectedDocument) await deleteDocuments([selectedDocument.id]); }}
-                responsiveClassName={styles.fullTableInspectorPanel}
+                responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`}
                 focusTab={detailsFocus?.documentId === selectedDocument?.id ? "details" : viewMode === "review" ? "review" : undefined}
                 reviewFocus={reviewFocus}
                 detailsFocus={detailsFocus?.documentId === selectedDocument?.id ? detailsFocus?.field || "" : ""}

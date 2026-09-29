@@ -133,9 +133,19 @@ export default function BoxShelf({
     const raw = event.dataTransfer.getData("application/x-dimpro-drive-document");
     if (!raw) return;
     try {
-      const payload = JSON.parse(raw) as { documentId?: string };
-      const document = payload.documentId ? documentMap.get(payload.documentId) : undefined;
-      if (document) await onAddDocument(boxId, document);
+      const payload = JSON.parse(raw) as { documentId?: string; documentIds?: string[] };
+      const sourceIds = Array.isArray(payload.documentIds) && payload.documentIds.length
+        ? payload.documentIds
+        : payload.documentId
+          ? [payload.documentId]
+          : [];
+      const targetBox = boxes.find((box) => box.id === boxId);
+      const existingIds = new Set((targetBox?.items || []).map((item) => item.documentId));
+      const uniqueIds = [...new Set(sourceIds)].filter((documentId) => !existingIds.has(documentId));
+      for (const documentId of uniqueIds) {
+        const document = documentMap.get(documentId);
+        if (document) await onAddDocument(boxId, document);
+      }
     } catch {
       // Idegen drag payloadot figyelmen kívül hagyunk.
     }
