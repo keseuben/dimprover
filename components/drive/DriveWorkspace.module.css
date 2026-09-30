@@ -260,6 +260,65 @@
 .fileTableWrap { min-height: 0; overflow: auto; flex: 1; }
 .fileTable { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--drive-font-sm); }
 .fileTable th { position: sticky; top: 0; z-index: 2; height: 31px; background: #fbfcfe; border-bottom: 1px solid #e6edf3; color: #6a7c8f; font-size: var(--drive-font-xs); text-transform: uppercase; letter-spacing: 0.03em; text-align: left; padding: 0 7px; }
+.resizableTableHeader {
+  overflow: visible;
+  padding-right: 13px !important;
+}
+.sortableHeaderButton {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+.sortableHeaderButton > span:first-child,
+.tableHeaderLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sortableHeaderButton:hover { color: #1765c7; }
+.sortableHeaderButton:focus-visible { outline: 2px solid #80afe4; outline-offset: -2px; border-radius: 4px; }
+.sortDirectionIndicator { width: 13px; min-width: 13px; height: 16px; display: inline-grid; place-items: center; opacity: 0; flex: 0 0 auto; }
+.sortDirectionActive { opacity: 1; color: #1765c7; }
+.columnResizeHandle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 10px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 7;
+}
+.columnResizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+}
+.columnResizeHandle:hover::after,
+.columnResizeHandle:active::after { background: #4f8fd1; }
 .fileTable td { height: 34px; border-bottom: 1px solid #eef2f6; padding: 0 7px; color: #33465d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fileRow { cursor: pointer; }
 .fileRow:hover td { background: #f8fbfe; }
@@ -1454,6 +1513,8 @@
   font-weight: 600;
 }
 .reviewFileNameHeader { text-align: left !important; }
+.reviewFileNameHeader .sortableHeaderButton { justify-content: flex-start; text-align: left; }
+.reviewColumnHeader .resizableTableHeader { padding-right: 13px !important; }
 .reviewSymbol {
   min-width: 28px;
   min-height: 26px;

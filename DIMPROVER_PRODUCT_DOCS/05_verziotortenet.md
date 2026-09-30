@@ -1,3 +1,16 @@
+## 2026-09-30 – DIMPRO Drive V0.7.6 – Table Sort & Resize UX
+
+- A Simple, Engineering és Review táblanézet közös rendezési motort kapott.
+- A `Név` és `Fájlnév` oszlop mindhárom nézetben rendezhető; a meglévő `Feltöltve` oszlop Simple és Review nézetben rendezhető.
+- Az aktív rendezési oszlop irányjelzőt és `aria-sort` állapotot kapott.
+- A táblák nézetenként külön, kliensoldali pixel-alapú oszlopszélesség state-et használnak; a meglévő `colgroup` struktúra maradt authoritative.
+- Az oszlopok pointerrel átméretezhetők, a minimum szélesség korlátozott, a delta a táblazoomot figyelembe veszi.
+- A resize handle izolált a rendezési kattintástól és a meglévő table-pan működéstől.
+- Engineering nézetben nem került be új Feltöltve oszlop; az oszlopszámok változatlanok: Simple 11, Engineering 15, Review 22.
+- Nincs oszlop-átrendezés és nincs backend/localStorage/sessionStorage szélességperzisztencia ebben a verzióban.
+- Új regressziós contract: `scripts/drive-v076-table-sort-resize-contract.mjs` – 36/36 PASS.
+- Projektkapu és Drive Core backend szemantika változatlan.
+
 ## 2026-09-30 – DIMPRO Drive V0.7.5 – Workspace Selector UX
 
 - A közös DIMPRO Drive fejlécébe ideiglenes, középre igazított `Munkatér` választó került.

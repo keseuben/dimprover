@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -280,6 +280,154 @@ function ReviewStateIcons({
   );
 }
 
+type TableSortKey = "name" | "fileName" | "uploadedAt";
+type SortDirection = "asc" | "desc";
+type TableViewKey = "simple" | "engineering" | "review";
+type TableSortState = { key: TableSortKey; direction: SortDirection };
+
+type TableColumnConfig = {
+  id: string;
+  defaultWidth: number;
+  minWidth: number;
+  resizable?: boolean;
+};
+
+type ColumnWidthsByView = Record<TableViewKey, Record<string, number>>;
+
+const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
+  { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
+  { id: "name", defaultWidth: 260, minWidth: 160 },
+  { id: "fileName", defaultWidth: 220, minWidth: 140 },
+  { id: "uploader", defaultWidth: 120, minWidth: 90 },
+  { id: "type", defaultWidth: 80, minWidth: 65 },
+  { id: "revision", defaultWidth: 85, minWidth: 70 },
+  { id: "source", defaultWidth: 90, minWidth: 70 },
+  { id: "size", defaultWidth: 90, minWidth: 70 },
+  { id: "uploadedAt", defaultWidth: 125, minWidth: 110 },
+  { id: "box", defaultWidth: 60, minWidth: 50 },
+  { id: "status", defaultWidth: 110, minWidth: 90 },
+];
+
+const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
+  { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
+  { id: "statusIcons", defaultWidth: 78, minWidth: 64 },
+  { id: "planNo", defaultWidth: 100, minWidth: 90 },
+  { id: "name", defaultWidth: 240, minWidth: 160 },
+  { id: "scale", defaultWidth: 90, minWidth: 75 },
+  { id: "fileName", defaultWidth: 180, minWidth: 140 },
+  { id: "uploader", defaultWidth: 110, minWidth: 90 },
+  { id: "type", defaultWidth: 80, minWidth: 65 },
+  { id: "mime", defaultWidth: 130, minWidth: 120 },
+  { id: "revision", defaultWidth: 80, minWidth: 70 },
+  { id: "version", defaultWidth: 70, minWidth: 60 },
+  { id: "source", defaultWidth: 85, minWidth: 70 },
+  { id: "size", defaultWidth: 85, minWidth: 70 },
+  { id: "box", defaultWidth: 60, minWidth: 50 },
+  { id: "status", defaultWidth: 110, minWidth: 90 },
+];
+
+const REVIEW_COLUMNS: readonly TableColumnConfig[] = [
+  { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
+  { id: "statusIcons", defaultWidth: 78, minWidth: 64 },
+  { id: "planNo", defaultWidth: 110, minWidth: 80 },
+  { id: "name", defaultWidth: 280, minWidth: 160 },
+  { id: "scale", defaultWidth: 92, minWidth: 70 },
+  { id: "fileName", defaultWidth: 160, minWidth: 130 },
+  { id: "uploader", defaultWidth: 105, minWidth: 90 },
+  { id: "uploadedAt", defaultWidth: 112, minWidth: 105 },
+  { id: "discipline", defaultWidth: 85, minWidth: 80 },
+  { id: "topic", defaultWidth: 105, minWidth: 90 },
+  { id: "checked", defaultWidth: 55, minWidth: 50 },
+  { id: "result", defaultWidth: 65, minWidth: 50 },
+  { id: "observations", defaultWidth: 58, minWidth: 50 },
+  { id: "workflow", defaultWidth: 65, minWidth: 50 },
+  { id: "internal", defaultWidth: 58, minWidth: 50 },
+  { id: "revisionChange", defaultWidth: 58, minWidth: 50 },
+  { id: "customer", defaultWidth: 58, minWidth: 50 },
+  { id: "customerObservations", defaultWidth: 58, minWidth: 50 },
+  { id: "customerNote", defaultWidth: 58, minWidth: 50 },
+  { id: "projectManager", defaultWidth: 62, minWidth: 52 },
+  { id: "investorProjectManager", defaultWidth: 62, minWidth: 52 },
+  { id: "lifecycle", defaultWidth: 64, minWidth: 54 },
+];
+
+const TABLE_COLUMN_CONFIGS: Record<TableViewKey, readonly TableColumnConfig[]> = {
+  simple: SIMPLE_COLUMNS,
+  engineering: ENGINEERING_COLUMNS,
+  review: REVIEW_COLUMNS,
+};
+
+function createColumnWidthMap(columns: readonly TableColumnConfig[]) {
+  return Object.fromEntries(columns.map((column) => [column.id, column.defaultWidth])) as Record<string, number>;
+}
+
+function compareTableText(a: unknown, b: unknown) {
+  return String(a || "").localeCompare(String(b || ""), "hu-HU", { sensitivity: "base", numeric: true });
+}
+
+function compareTableDates(a: string | null | undefined, b: string | null | undefined, direction: SortDirection) {
+  const aTime = a ? Date.parse(a) : Number.NaN;
+  const bTime = b ? Date.parse(b) : Number.NaN;
+  const aValid = Number.isFinite(aTime);
+  const bValid = Number.isFinite(bTime);
+  if (!aValid && !bValid) return 0;
+  if (!aValid) return 1;
+  if (!bValid) return -1;
+  return (aTime - bTime) * (direction === "asc" ? 1 : -1);
+}
+
+type SortableResizableHeaderProps = {
+  label: string;
+  title?: string;
+  className?: string;
+  sortKey?: TableSortKey;
+  sortState: TableSortState;
+  onSort: (key: TableSortKey) => void;
+  resizeLabel: string;
+  onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+};
+
+function SortableResizableHeader({
+  label,
+  title,
+  className = "",
+  sortKey,
+  sortState,
+  onSort,
+  resizeLabel,
+  onResizeStart,
+}: SortableResizableHeaderProps) {
+  const active = Boolean(sortKey && sortState.key === sortKey);
+  const ariaSort = sortKey ? (active ? (sortState.direction === "asc" ? "ascending" : "descending") : "none") : undefined;
+  const headerClassName = (styles.resizableTableHeader + " " + className).trim();
+
+  return (
+    <th className={headerClassName} title={title} aria-sort={ariaSort}>
+      {sortKey ? (
+        <button type="button" className={styles.sortableHeaderButton} onClick={() => onSort(sortKey)}>
+          <span>{label}</span>
+          <span className={styles.sortDirectionIndicator + (active ? " " + styles.sortDirectionActive : "")} aria-hidden="true">
+            {active ? (sortState.direction === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
+          </span>
+        </button>
+      ) : (
+        <span className={styles.tableHeaderLabel}>{label}</span>
+      )}
+      <button
+        type="button"
+        className={styles.columnResizeHandle}
+        aria-label={resizeLabel}
+        title={resizeLabel}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerDown={onResizeStart}
+      />
+    </th>
+  );
+}
+
 type InlineNewFolderRowProps = {
   open: boolean;
   colSpan: number;
@@ -407,6 +555,59 @@ export default function FileGridPanel({
   });
   const suppressPanClickRef = useRef(false);
   const [tablePanning, setTablePanning] = useState(false);
+  const [sortState, setSortState] = useState<TableSortState>({ key: "name", direction: "asc" });
+  const [columnWidths, setColumnWidths] = useState<ColumnWidthsByView>(() => ({
+    simple: createColumnWidthMap(SIMPLE_COLUMNS),
+    engineering: createColumnWidthMap(ENGINEERING_COLUMNS),
+    review: createColumnWidthMap(REVIEW_COLUMNS),
+  }));
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  const toggleSort = (key: TableSortKey) => {
+    setSortState((current) => {
+      if (current.key === key) return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+      return { key, direction: key === "uploadedAt" ? "desc" : "asc" };
+    });
+  };
+
+  const tableMinWidth = (view: TableViewKey) => TABLE_COLUMN_CONFIGS[view].reduce(
+    (total, column) => total + (columnWidths[view][column.id] ?? column.defaultWidth),
+    0,
+  );
+
+  const startColumnResize = (view: TableViewKey, columnId: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const config = TABLE_COLUMN_CONFIGS[view].find((column) => column.id === columnId);
+    if (!config || config.resizable === false) return;
+
+    resizeCleanupRef.current?.();
+    const startX = event.clientX;
+    const startWidth = columnWidths[view][columnId] ?? config.defaultWidth;
+    const zoomFactor = Math.max(0.01, tableZoom / 100);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const delta = (moveEvent.clientX - startX) / zoomFactor;
+      const nextWidth = Math.max(config.minWidth, Math.round(startWidth + delta));
+      setColumnWidths((current) => ({
+        ...current,
+        [view]: { ...current[view], [columnId]: nextWidth },
+      }));
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      if (resizeCleanupRef.current === cleanup) resizeCleanupRef.current = null;
+    };
+    const handlePointerUp = () => cleanup();
+
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  };
 
   const clearPanTimer = () => {
     if (panStateRef.current.timer) clearTimeout(panStateRef.current.timer);
@@ -471,6 +672,7 @@ export default function FileGridPanel({
   };
 
   useEffect(() => () => clearPanTimer(), []);
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
   const canBulkTechnical = canApprove;
   const canBulkCustomer = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
   const canBulkManager = canApprove && (membershipRole === "PROJECT_MANAGER" || membershipRole === "OWNER");
@@ -560,6 +762,32 @@ export default function FileGridPanel({
     });
   }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
 
+  const sortedDocuments = useMemo(() => {
+    return [...documents].sort((a, b) => {
+      if (sortState.key === "uploadedAt") return compareTableDates(a.updatedAt, b.updatedAt, sortState.direction);
+      const aValue = sortState.key === "fileName" ? a.name : displayDocumentName(a, metadataByDocument[a.id]).value;
+      const bValue = sortState.key === "fileName" ? b.name : displayDocumentName(b, metadataByDocument[b.id]).value;
+      const result = compareTableText(aValue, bValue);
+      return result * (sortState.direction === "asc" ? 1 : -1);
+    });
+  }, [documents, metadataByDocument, sortState]);
+
+  const sortedReviewRows = useMemo(() => {
+    return [...reviewRows].sort((a, b) => {
+      if (sortState.key === "uploadedAt") {
+        return compareTableDates(
+          a.document.currentVersion?.createdAt || a.document.updatedAt,
+          b.document.currentVersion?.createdAt || b.document.updatedAt,
+          sortState.direction,
+        );
+      }
+      const aValue = sortState.key === "fileName" ? a.document.name : a.displayName;
+      const bValue = sortState.key === "fileName" ? b.document.name : b.displayName;
+      const result = compareTableText(aValue, bValue);
+      return result * (sortState.direction === "asc" ? 1 : -1);
+    });
+  }, [reviewRows, sortState]);
+
   const reviewDisciplines = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveDiscipline).filter(Boolean))].sort(), [allReviewRows]);
   const reviewTopics = useMemo(() => [...new Set(allReviewRows.map((row) => row.effectiveTopic).filter(Boolean))].sort(), [allReviewRows]);
   const reviewStatuses = useMemo(() => [...new Set(allReviewRows.map((row) => row.workflow).filter(Boolean))].sort(), [allReviewRows]);
@@ -569,8 +797,8 @@ export default function FileGridPanel({
   );
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const visibleSelectionIds = viewMode === "review"
-    ? reviewRows.map((row) => row.document.id)
-    : documents.map((document) => document.id);
+    ? sortedReviewRows.map((row) => row.document.id)
+    : sortedDocuments.map((document) => document.id);
   const allVisibleSelected = visibleSelectionIds.length > 0 && visibleSelectionIds.every((id) => selectedSet.has(id));
 
   const beginDocumentDrag = (event: ReactDragEvent<HTMLElement>, document: DriveDocument) => {
@@ -786,30 +1014,11 @@ export default function FileGridPanel({
             </div>
           )}
           <div className={`${styles.reviewTableWrap} ${dragPanEnabled ? styles.tablePanEnabled : ""} ${tablePanning ? styles.tablePanning : ""}`} onPointerDown={handlePanPointerDown} onPointerMove={handlePanPointerMove} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={suppressPanClick}>
-            <table className={styles.reviewTable} style={{ zoom: tableZoom / 100 }}>
+            <table className={styles.reviewTable} style={{ zoom: tableZoom / 100, minWidth: Math.max(1742, tableMinWidth("review")) + "px" }}>
               <colgroup>
-                <col style={{ width: "34px" }} />
-                <col style={{ width: "78px" }} />
-                <col style={{ width: "110px" }} />
-                <col style={{ width: "280px" }} />
-                <col style={{ width: "92px" }} />
-                <col style={{ width: "160px" }} />
-                <col style={{ width: "105px" }} />
-                <col style={{ width: "112px" }} />
-                <col style={{ width: "85px" }} />
-                <col style={{ width: "105px" }} />
-                <col style={{ width: "55px" }} />
-                <col style={{ width: "65px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "65px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "58px" }} />
-                <col style={{ width: "62px" }} />
-                <col style={{ width: "62px" }} />
-                <col style={{ width: "64px" }} />
+                {REVIEW_COLUMNS.map((column) => (
+                  <col key={column.id} style={{ width: (columnWidths.review[column.id] ?? column.defaultWidth) + "px" }} />
+                ))}
               </colgroup>
               <thead>
                 <tr className={styles.reviewGroupHeader}>
@@ -822,27 +1031,27 @@ export default function FileGridPanel({
                 </tr>
                 <tr className={styles.reviewColumnHeader}>
                   <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható tervek kijelölése" /></th>
-                  <th className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" aria-label="Állapotjelzők és fájltípus"></th>
-                  <th title="Tervszám">Tervszám</th>
-                  <th title="Megjelenített tervnév">Név</th>
-                  <th title="Tervlépték">Lépték</th>
-                  <th className={styles.reviewFileNameHeader} title="Eredeti fájlnév">Fájlnév</th>
-                  <th title="Feltöltő">Feltöltő</th>
-                  <th title="Fájlfeltöltés dátuma és ideje">Feltöltve</th>
-                  <th title="Szakág">Szakág</th>
-                  <th title="Témakör">Témakör</th>
-                  <th title="Ellenőrzés">Ell.</th>
-                  <th title="Eredmény">Eredm.</th>
-                  <th title="Észrevételek">Észr.</th>
-                  <th title="Workflow állapot">Áll.</th>
-                  <th title="Belső megjegyzés">Belső</th>
-                  <th title="Revízióváltozás">Rev.</th>
-                  <th title="Megrendelői jóváhagyás">Jóváh.</th>
-                  <th title="Megrendelői észrevételek">Észr.</th>
-                  <th title="Megrendelői belső megjegyzés">Belső</th>
-                  <th title="Projektvezetői jóváhagyás">Jóváh.</th>
-                  <th title="Beruházói projektvezetői jóváhagyás">Jóváh.</th>
-                  <th title="Terv életciklusa">Életc.</th>
+                  <SortableResizableHeader label="" className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "statusIcons", event)} />
+                  <SortableResizableHeader label="Tervszám" title="Tervszám" sortState={sortState} onSort={toggleSort} resizeLabel="Tervszám oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "planNo", event)} />
+                  <SortableResizableHeader label="Név" title="Megjelenített tervnév" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "name", event)} />
+                  <SortableResizableHeader label="Lépték" title="Tervlépték" sortState={sortState} onSort={toggleSort} resizeLabel="Lépték oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "scale", event)} />
+                  <SortableResizableHeader label="Fájlnév" className={styles.reviewFileNameHeader} title="Eredeti fájlnév" sortKey="fileName" sortState={sortState} onSort={toggleSort} resizeLabel="Fájlnév oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "fileName", event)} />
+                  <SortableResizableHeader label="Feltöltő" title="Feltöltő" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltő oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "uploader", event)} />
+                  <SortableResizableHeader label="Feltöltve" title="Fájlfeltöltés dátuma és ideje" sortKey="uploadedAt" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltve oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "uploadedAt", event)} />
+                  <SortableResizableHeader label="Szakág" title="Szakág" sortState={sortState} onSort={toggleSort} resizeLabel="Szakág oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "discipline", event)} />
+                  <SortableResizableHeader label="Témakör" title="Témakör" sortState={sortState} onSort={toggleSort} resizeLabel="Témakör oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "topic", event)} />
+                  <SortableResizableHeader label="Ell." title="Ellenőrzés" sortState={sortState} onSort={toggleSort} resizeLabel="Ellenőrzés oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "checked", event)} />
+                  <SortableResizableHeader label="Eredm." title="Eredmény" sortState={sortState} onSort={toggleSort} resizeLabel="Eredmény oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "result", event)} />
+                  <SortableResizableHeader label="Észr." title="Észrevételek" sortState={sortState} onSort={toggleSort} resizeLabel="Észrevételek oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "observations", event)} />
+                  <SortableResizableHeader label="Áll." title="Workflow állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Workflow oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "workflow", event)} />
+                  <SortableResizableHeader label="Belső" title="Belső megjegyzés" sortState={sortState} onSort={toggleSort} resizeLabel="Belső megjegyzés oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "internal", event)} />
+                  <SortableResizableHeader label="Rev." title="Revízióváltozás" sortState={sortState} onSort={toggleSort} resizeLabel="Revízió oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "revisionChange", event)} />
+                  <SortableResizableHeader label="Jóváh." title="Megrendelői jóváhagyás" sortState={sortState} onSort={toggleSort} resizeLabel="Megrendelői jóváhagyás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "customer", event)} />
+                  <SortableResizableHeader label="Észr." title="Megrendelői észrevételek" sortState={sortState} onSort={toggleSort} resizeLabel="Megrendelői észrevételek oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "customerObservations", event)} />
+                  <SortableResizableHeader label="Belső" title="Megrendelői belső megjegyzés" sortState={sortState} onSort={toggleSort} resizeLabel="Megrendelői belső megjegyzés oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "customerNote", event)} />
+                  <SortableResizableHeader label="Jóváh." title="Projektvezetői jóváhagyás" sortState={sortState} onSort={toggleSort} resizeLabel="Projektvezetői jóváhagyás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "projectManager", event)} />
+                  <SortableResizableHeader label="Jóváh." title="Beruházói projektvezetői jóváhagyás" sortState={sortState} onSort={toggleSort} resizeLabel="Beruházói jóváhagyás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "investorProjectManager", event)} />
+                  <SortableResizableHeader label="Életc." title="Terv életciklusa" sortState={sortState} onSort={toggleSort} resizeLabel="Életciklus oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "lifecycle", event)} />
                 </tr>
               </thead>
               <tbody>
@@ -866,7 +1075,7 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
-                {reviewRows.map((row) => (
+                {sortedReviewRows.map((row) => (
                   <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                     <td className={styles.reviewSelectCell}>
                       <input
@@ -935,12 +1144,25 @@ export default function FileGridPanel({
       ) : (
         <div className={`${styles.fileTableWrap} ${dragPanEnabled ? styles.tablePanEnabled : ""} ${tablePanning ? styles.tablePanning : ""}`} onPointerDown={handlePanPointerDown} onPointerMove={handlePanPointerMove} onPointerUp={finishPan} onPointerCancel={finishPan} onClickCapture={suppressPanClick}>
           {viewMode === "simple" ? (
-            <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
+            <table className={styles.fileTable} style={{ zoom: tableZoom / 100, minWidth: tableMinWidth("simple") + "px" }}>
               <colgroup>
-                <col style={{ width: "34px" }} />
-                <col style={{ width: "24%" }} /><col style={{ width: "20%" }} /><col style={{ width: "11%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col style={{ width: "8%" }} /><col style={{ width: "4%" }} /><col style={{ width: "10%" }} />
+                {SIMPLE_COLUMNS.map((column) => (
+                  <col key={column.id} style={{ width: (columnWidths.simple[column.id] ?? column.defaultWidth) + "px" }} />
+                ))}
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th>Név</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>Revízió</th><th>Forrás</th><th>Méret</th><th>Feltöltve</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr>
+                <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th>
+                <SortableResizableHeader label="Név" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "name", event)} />
+                <SortableResizableHeader label="Fájlnév" sortKey="fileName" sortState={sortState} onSort={toggleSort} resizeLabel="Fájlnév oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "fileName", event)} />
+                <SortableResizableHeader label="Feltöltő" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltő oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "uploader", event)} />
+                <SortableResizableHeader label="Típus" sortState={sortState} onSort={toggleSort} resizeLabel="Típus oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "type", event)} />
+                <SortableResizableHeader label="Revízió" sortState={sortState} onSort={toggleSort} resizeLabel="Revízió oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "revision", event)} />
+                <SortableResizableHeader label="Forrás" sortState={sortState} onSort={toggleSort} resizeLabel="Forrás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "source", event)} />
+                <SortableResizableHeader label="Méret" sortState={sortState} onSort={toggleSort} resizeLabel="Méret oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "size", event)} />
+                <SortableResizableHeader label="Feltöltve" sortKey="uploadedAt" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltve oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "uploadedAt", event)} />
+                <SortableResizableHeader label="BOX" sortState={sortState} onSort={toggleSort} resizeLabel="BOX oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "box", event)} />
+                <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "status", event)} />
+              </tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
@@ -962,7 +1184,7 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
-                {documents.map((document) => {
+                {sortedDocuments.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
                   const sourceClass = document.source === "DROP" ? styles.sourceDrop : document.source === "DESKTOP" ? styles.sourceDesktop : "";
@@ -994,13 +1216,29 @@ export default function FileGridPanel({
               </tbody>
             </table>
           ) : (
-            <table className={styles.fileTable} style={{ zoom: tableZoom / 100 }}>
+            <table className={styles.fileTable} style={{ zoom: tableZoom / 100, minWidth: tableMinWidth("engineering") + "px" }}>
               <colgroup>
-                <col style={{ width: "34px" }} />
-                <col style={{ width: "78px" }} />
-                <col style={{ width: "9%" }} /><col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col style={{ width: "16%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "9%" }} /><col style={{ width: "6%" }} /><col style={{ width: "6%" }} /><col style={{ width: "7%" }} /><col style={{ width: "7%" }} /><col style={{ width: "4%" }} /><col style={{ width: "9%" }} />
+                {ENGINEERING_COLUMNS.map((column) => (
+                  <col key={column.id} style={{ width: (columnWidths.engineering[column.id] ?? column.defaultWidth) + "px" }} />
+                ))}
               </colgroup>
-              <thead><tr><th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th><th className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" aria-label="Állapotjelzők és fájltípus"></th><th>Tervszám</th><th>Név</th><th>Lépték</th><th>Fájlnév</th><th>Feltöltő</th><th>Típus</th><th>MIME</th><th>Revízió</th><th>Verzió</th><th>Forrás</th><th>Méret</th><th>BOX</th><th>Állapot</th></tr></thead>
+              <thead><tr>
+                <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th>
+                <SortableResizableHeader label="" className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "statusIcons", event)} />
+                <SortableResizableHeader label="Tervszám" sortState={sortState} onSort={toggleSort} resizeLabel="Tervszám oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "planNo", event)} />
+                <SortableResizableHeader label="Név" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "name", event)} />
+                <SortableResizableHeader label="Lépték" sortState={sortState} onSort={toggleSort} resizeLabel="Lépték oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "scale", event)} />
+                <SortableResizableHeader label="Fájlnév" sortKey="fileName" sortState={sortState} onSort={toggleSort} resizeLabel="Fájlnév oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "fileName", event)} />
+                <SortableResizableHeader label="Feltöltő" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltő oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "uploader", event)} />
+                <SortableResizableHeader label="Típus" sortState={sortState} onSort={toggleSort} resizeLabel="Típus oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "type", event)} />
+                <SortableResizableHeader label="MIME" sortState={sortState} onSort={toggleSort} resizeLabel="MIME oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "mime", event)} />
+                <SortableResizableHeader label="Revízió" sortState={sortState} onSort={toggleSort} resizeLabel="Revízió oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "revision", event)} />
+                <SortableResizableHeader label="Verzió" sortState={sortState} onSort={toggleSort} resizeLabel="Verzió oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "version", event)} />
+                <SortableResizableHeader label="Forrás" sortState={sortState} onSort={toggleSort} resizeLabel="Forrás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "source", event)} />
+                <SortableResizableHeader label="Méret" sortState={sortState} onSort={toggleSort} resizeLabel="Méret oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "size", event)} />
+                <SortableResizableHeader label="BOX" sortState={sortState} onSort={toggleSort} resizeLabel="BOX oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "box", event)} />
+                <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "status", event)} />
+              </tr></thead>
               <tbody>
                 {currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
@@ -1022,7 +1260,7 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
-                {documents.map((document) => {
+                {sortedDocuments.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
                   const metadata = metadataByDocument[document.id];
