@@ -121,6 +121,8 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const browserRef = useRef<HTMLDivElement>(null);
+  const splitDetailsInitializedRef = useRef(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
   const dragDepthRef = useRef(0);
 
@@ -150,6 +152,22 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       void document.documentElement.requestFullscreen().catch(() => undefined);
     }
   }, [closeTableFullscreen, tableFullscreen]);
+
+  useEffect(() => {
+    if (layoutMode !== "split" || splitDetailsInitializedRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const measuredHeight = browserRef.current?.getBoundingClientRect().height || 0;
+      const workspaceHeight = measuredHeight > 0 ? measuredHeight : Math.max(500, window.innerHeight - 260);
+      const minDetailsHeight = 250;
+      const minMainHeight = 220;
+      const resizeHandleHeight = 10;
+      const maxDetailsHeight = Math.max(minDetailsHeight, workspaceHeight - minMainHeight - resizeHandleHeight);
+      const halfDetailsHeight = Math.round((workspaceHeight - resizeHandleHeight) / 2);
+      setSplitDetailsHeight(Math.max(minDetailsHeight, Math.min(maxDetailsHeight, halfDetailsHeight)));
+      splitDetailsInitializedRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [layoutMode]);
 
   useEffect(() => {
     if (!tableFullscreen) return;
@@ -1284,6 +1302,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       )}
 
       <div
+        ref={browserRef}
         className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`}
         style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}
       >

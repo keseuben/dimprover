@@ -1,3 +1,12 @@
+## 2026-09-30 – DIMPRO Drive V0.7 – részletpanel 50/50 layout és stabil scroll
+
+- A normál split Részletek/Adatok panel első megnyitáskor a rendelkezésre álló munkaterületből számított, közel 50%-os alapmagasságot kap a korábbi fix 390 px helyett.
+- A meglévő függőleges pointeres átméretezés megmaradt, minimum 250 px részletpanel- és minimum 220 px főpanel-korláttal.
+- Fekvő Details nézetben a fájlelőnézet és az adatmezők alaparányát 50/50-re módosítottuk.
+- Az adatmező panel saját függőleges scrollt használ, a preview külön panelben marad és nem fedheti át az adatmezőket.
+- A teljes táblázatos alsó inspector 50%-os alapmérete, resize működése, mobil/tablet egyoszlopos töréspontja és a CsomagBOX/history működés változatlan maradt.
+- Validáció: TypeScript PASS; Details layout contract 22/22 PASS; CsomagBOX history contract 18/18 PASS; controlled DEV build PASS. A teljes repository lint meglévő baseline hibák miatt nem zöld, de a jelenlegi módosítás nem vezetett be új lint hibát.
+
 ## 2026-08-07 – DIMPRO Identity Core 0.1.0 – központi adatbázismag, security hardening
 
 - Elkészült a teljes DIMPRO/DIMPROVER termékcsalád közös felhasználó-, szervezet-, licenc-, modul-, Send-jogosultság- és projektkód-adatmodellje.
