@@ -544,6 +544,7 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A `CSEVEGŐ ÁTKÖTÉSE` korábban deadlockba került: a desktop helyesen `REBIND_PENDING` állapotot adott, de a backend `manualRebind` csak VALIDATED BOOT ACK után engedte az átkötést, miközben a Launch Packet / BOOT ACK már az új csevegést igényelte.
 - Új szigorúan ellenőrzött pre-BOOT rebind ág működik `BOOT ACK = WAITING` állapotban.
 - A pre-BOOT rebind kizárólag 1/6 ELEMZÉS szakaszban, VERIFIED és tiszta source provenance mellett, aktív READY Dev Engine ownership, érvényes scope lock + worktree lease, CENTRAL_CORE VERIFIED source proof, azonos ChatGPT Project és PROD DENY mellett engedélyezett.
+- Ha az explicit pre-BOOT rebind pillanatára a Dev Engine lease már lejárt, a rebind út ugyanazon Grid task/session és változatlan source HEAD/worktree mellett a hivatalos launch-execution recovery mechanizmussal friss READY engine sessiont, scope lockot és worktree lease-t állít helyre; identity-eltérés esetén fail-closed. Új Grid task/session nem készül.
 - A már VALIDATED BOOT ACK utáni normál kézi rebind szabályai változatlanok: Context Snapshot + Handoff Pack continuity továbbra is kötelező.
-- Új regression contract: `preboot-manual-rebind-v0195-contract.mjs` · 10/10 PASS.
+- Új regression contract: `preboot-manual-rebind-v0195-contract.mjs` · 12/12 PASS.
 - DEV ONLY · PROD DENY.

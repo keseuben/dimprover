@@ -24,6 +24,22 @@ check("pre-BOOT rebind requires clean source", () => {
 check("pre-BOOT rebind requires active READY engine ownership", () => {
   assert.ok(workStart.includes("DEVELOPER_GRID_PREBOOT_REBIND_ENGINE_BINDING_INVALID"));
 });
+check("pre-BOOT rebind self-recovers expired engine execution without changing Grid identity", () => {
+  const manual = workStart.slice(workStart.indexOf("  if (manualRebind) {"), workStart.indexOf("  if (conversationRollover) {", workStart.indexOf("  if (manualRebind) {")));
+  assert.ok(manual.includes("recoverDeveloperGridLaunchExecution({"));
+  assert.ok(manual.includes("sessionId: session.id"));
+  assert.ok(manual.includes("recoveredSession.id !== session.id"));
+  assert.ok(manual.includes("recoveredSession.taskId !== taskId"));
+  assert.ok(manual.includes("DEVELOPER_GRID_PREBOOT_REBIND_RECOVERY_IDENTITY_MISMATCH"));
+});
+check("pre-BOOT rebind recovery preserves exact source HEAD and worktree", () => {
+  const manual = workStart.slice(workStart.indexOf("  if (manualRebind) {"), workStart.indexOf("  if (conversationRollover) {", workStart.indexOf("  if (manualRebind) {")));
+  assert.ok(manual.includes("sourceHeadBeforeRecovery"));
+  assert.ok(manual.includes("sourceWorktreeBeforeRecovery"));
+  assert.ok(manual.includes("recoveredHead !== sourceHeadBeforeRecovery"));
+  assert.ok(manual.includes("recoveredWorktree !== sourceWorktreeBeforeRecovery"));
+  assert.ok(manual.includes('recoveredSession.developmentContext.bootAckState !== "WAITING"'));
+});
 check("pre-BOOT rebind requires write gate + lock + worktree lease", () => {
   assert.ok(workStart.includes('assertDevEngineOperation(engineSessionId, "write")'));
   assert.ok(workStart.includes("DEVELOPER_GRID_PREBOOT_REBIND_LOCK_REQUIRED"));

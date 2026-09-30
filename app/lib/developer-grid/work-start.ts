@@ -1334,7 +1334,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     throw error;
   }
   const state = await readGridState();
-  const session = state.sessions.find((item) =>
+  let session = state.sessions.find((item) =>
     item.taskId === taskId
     && item.workerCode === workerCode
     && item.endedAt === null
@@ -1421,7 +1421,7 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_SURFACE_INVALID", status: 409 });
       throw error;
     }
-    const ctx = session.developmentContext;
+    let ctx = session.developmentContext;
     const authoritativeConversationId = text(ctx.surfaceConversationId ?? ctx.chatConversationId, 180);
     const authoritativeConversationUrl = text(ctx.surfaceConversationUrl ?? ctx.chatConversationUrl, 1000);
     if (!surfacePreviousConversationId || !authoritativeConversationId || surfacePreviousConversationId !== authoritativeConversationId) {
@@ -1460,21 +1460,64 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
         throw error;
       }
       await verifyCurrentSourceExecutionState(session.sourceProvenance, { requireClean:true });
-      const engineSessionId = text(ctx.engineSessionId, 240);
+      const sourceHeadBeforeRecovery = String(session.sourceProvenance.head || "").toLowerCase();
+      const sourceWorktreeBeforeRecovery = String(session.sourceProvenance.worktree || "");
+      let engineSessionId = text(ctx.engineSessionId, 240);
       if (!engineSessionId) {
         const error = new Error("Pre-BOOT conversation rebindhoz hiányzik az engine session.");
         Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_ENGINE_SESSION_MISSING", status: 409 });
         throw error;
       }
-      const engineState = await getDevCenterEngineState();
-      const engineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
-      const engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
-      if (!engineSession || !engineTask
-          || engineSession.status !== "active"
-          || engineSession.handshakeStage !== "READY"
-          || engineSession.taskId !== taskId
-          || engineTask.claimedBySessionId !== engineSessionId
-          || engineTask.assignedWorkerId !== engineSession.workerId) {
+
+      let engineState = await getDevCenterEngineState();
+      let engineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+      let engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+      let engineBindingValid = Boolean(
+        engineSession && engineTask
+        && engineSession.status === "active"
+        && engineSession.handshakeStage === "READY"
+        && engineSession.taskId === taskId
+        && engineTask.claimedBySessionId === engineSessionId
+        && engineTask.assignedWorkerId === engineSession.workerId
+      );
+
+      if (!engineBindingValid) {
+        const recovery = await recoverDeveloperGridLaunchExecution({
+          taskId,
+          sessionId: session.id,
+          workerCode,
+        });
+        const recoveredSession = recovery.session;
+        const recoveredHead = String(recoveredSession?.sourceProvenance?.head || "").toLowerCase();
+        const recoveredWorktree = String(recoveredSession?.sourceProvenance?.worktree || "");
+        if (!recoveredSession
+            || recoveredSession.id !== session.id
+            || recoveredSession.taskId !== taskId
+            || recoveredHead !== sourceHeadBeforeRecovery
+            || recoveredWorktree !== sourceWorktreeBeforeRecovery
+            || recoveredSession.developmentContext.bootAckState !== "WAITING"
+            || recoveredSession.developmentContext.bootAckCodingAllowed === true) {
+          const error = new Error("Pre-BOOT conversation rebind execution recovery közben a task/session/source identity megváltozott.");
+          Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_RECOVERY_IDENTITY_MISMATCH", status: 409 });
+          throw error;
+        }
+        session = recoveredSession;
+        ctx = session.developmentContext;
+        engineSessionId = text(ctx.engineSessionId, 240);
+        engineState = await getDevCenterEngineState();
+        engineSession = engineState.sessions.find((item) => item.id === engineSessionId) || null;
+        engineTask = engineState.tasks.find((item) => item.id === taskId) || null;
+        engineBindingValid = Boolean(
+          engineSession && engineTask
+          && engineSession.status === "active"
+          && engineSession.handshakeStage === "READY"
+          && engineSession.taskId === taskId
+          && engineTask.claimedBySessionId === engineSessionId
+          && engineTask.assignedWorkerId === engineSession.workerId
+        );
+      }
+
+      if (!engineBindingValid || !engineSession || !engineTask) {
         const error = new Error("Pre-BOOT conversation rebind engine ownership/READY kötése érvénytelen.");
         Object.assign(error, { code: "DEVELOPER_GRID_PREBOOT_REBIND_ENGINE_BINDING_INVALID", status: 409 });
         throw error;
