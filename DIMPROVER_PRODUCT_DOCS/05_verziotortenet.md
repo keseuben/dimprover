@@ -1,3 +1,13 @@
+## 2026-09-30 – DIMPRO Drive V0.7.2 – külső fájl/mappa drag-and-drop P0 javítás
+
+- A külső OS drag-and-drop felismerés közös `hasExternalDriveFiles()` helperre került, amely a `DataTransfer.types` mellett `items` és `files` fallbacket is használ.
+- Érvényes külső drop esetén a Workspace azonnal `preventDefault()` + `stopPropagation()` védelmet alkalmaz, így a böngésző alapértelmezett navigációja vagy belső drop cél nem viheti el az eseményt.
+- A jogosultság- és célmappa-hibák többé nem csendes no-op ágak: látható Drive hibaüzenetet adnak.
+- A drop után ténylegesen előkészített fájlok száma külön validált; 0 feltölthető fájl esetén látható hiba jelenik meg.
+- A meglévő közös `prepareDroppedDriveUpload()` és `uploadFiles()` feltöltési pipeline megmaradt; Projektkapu-specifikus implementáció nem készült.
+- Új regressziós contract: `scripts/drive-v072-external-drop-contract.mjs`.
+- Validáció: V0.7.2 contract 11/11 PASS; folder-drop 22/22 PASS; path-safety 16/16 PASS; layout 22/22 PASS; CsomagBOX history 18/18 PASS; TypeScript PASS; lint regresszió nélkül.
+
 ## 2026-09-30 – DIMPRO Drive V0.7 – részletpanel 50/50 layout és stabil scroll
 
 - A normál split Részletek/Adatok panel első megnyitáskor a rendelkezésre álló munkaterületből számított, közel 50%-os alapmagasságot kap a korábbi fix 390 px helyett.

@@ -19,7 +19,7 @@ import TableFullscreenBar from "./TableFullscreenBar";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
-import { prepareDroppedDriveUpload } from "./externalFileDrop";
+import { hasExternalDriveFiles, prepareDroppedDriveUpload } from "./externalFileDrop";
 import type {
   DriveBox,
   DriveBoxLifecycleStatus,
@@ -365,7 +365,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   }
 
   function isExternalFileDrag(event: DragEvent<HTMLElement>) {
-    return Array.from(event.dataTransfer.types || []).includes("Files");
+    return hasExternalDriveFiles(event.dataTransfer);
   }
 
   function handleExternalDragEnter(event: DragEvent<HTMLElement>) {
@@ -389,10 +389,18 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   }
 
   async function handleExternalDrop(event: DragEvent<HTMLElement>) {
-    if (!isExternalFileDrag(event) || !canWrite) return;
+    const hasExternalFiles = hasExternalDriveFiles(event.dataTransfer);
+    if (!hasExternalFiles) return;
+
     event.preventDefault();
+    event.stopPropagation();
     dragDepthRef.current = 0;
     setExternalDragActive(false);
+
+    if (!canWrite) {
+      setError("Nincs jogosultságod fájl feltöltésére ebbe a mappába.");
+      return;
+    }
 
     if (!health?.storage?.realObjectWriteEnabled) {
       setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
@@ -411,11 +419,11 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         existingFolders: tree?.folders || [],
       });
 
-      if (!prepared.fileCount) {
+      const preparedFileCount = prepared.groups.reduce((sum, group) => sum + group.files.length, 0);
+      if (preparedFileCount === 0) {
         await load();
-        setNotice(
-          `${prepared.createdFolderCount} mappa létrehozva.${prepared.reusedFolderCount ? ` ${prepared.reusedFolderCount} meglévő mappa újrahasználva.` : ""}`,
-        );
+        setError("A behúzott elem nem tartalmaz feltölthető fájlt.");
+        setNotice("");
         return;
       }
 
@@ -425,7 +433,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
       }
       await load();
       setNotice(
-        `${prepared.fileCount} fájl feldolgozva${prepared.createdFolderCount ? ` · ${prepared.createdFolderCount} mappa létrehozva.` : "."}`,
+        `${preparedFileCount} fájl feldolgozva${prepared.createdFolderCount ? ` · ${prepared.createdFolderCount} mappa létrehozva.` : "."}`,
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A behúzott fájlok vagy mappák feldolgozása sikertelen.");
@@ -450,7 +458,15 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
 
   async function uploadFiles(files: File[], targetFolderOverride?: DriveFolder | null, originalRelativePaths?: string[]) {
     const targetFolder = targetFolderOverride || selectedFolder;
-    if (!files.length || !targetFolder || !canWrite) return;
+    if (!files.length) return;
+    if (!canWrite) {
+      setError("Nincs jogosultságod fájl feltöltésére ebbe a mappába.");
+      return;
+    }
+    if (!targetFolder) {
+      setError("A feltöltés célmappája nem található. Válassz ki egy célmappát, majd próbáld újra.");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");

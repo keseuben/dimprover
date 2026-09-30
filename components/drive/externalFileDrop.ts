@@ -33,6 +33,18 @@ const DEFAULT_MAX_FILES = 500;
 const DEFAULT_MAX_DIRECTORIES = 250;
 const DEFAULT_MAX_DEPTH = 24;
 
+export function hasExternalDriveFiles(dataTransfer: DataTransfer | null | undefined): boolean {
+  if (!dataTransfer) return false;
+
+  const types = Array.from(dataTransfer.types ?? []);
+  if (types.some((type) => type === "Files")) return true;
+
+  const items = Array.from(dataTransfer.items ?? []);
+  if (items.some((item) => item.kind === "file")) return true;
+
+  return (dataTransfer.files?.length ?? 0) > 0;
+}
+
 function normalizeRelativePath(value: string) {
   return value
     .replaceAll("\\", "/")
