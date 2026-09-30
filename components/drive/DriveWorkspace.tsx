@@ -38,12 +38,22 @@ import type {
 } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
+type DriveWorkspaceOption = {
+  id: string;
+  label: string;
+  code?: string | null;
+  kind: "PROJECT";
+};
+
 type Props = {
   projectId: string;
   projectName: string;
   projectCode: string;
   projectStatus?: string;
   permissions?: DrivePermission[];
+  workspaceOptions?: DriveWorkspaceOption[];
+  selectedWorkspaceId?: string;
+  onWorkspaceChange?: (workspaceId: string) => void;
 };
 
 type ProjectMembershipRole = "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
@@ -89,7 +99,16 @@ function isPotentiallyReadableVersion(document: DriveDocument | null) {
   return Boolean(document?.currentVersion) && !["REJECTED", "STAGED", "METADATA_ONLY"].includes(status);
 }
 
-export default function DriveWorkspace({ projectId, projectName, projectCode, projectStatus = "ACTIVE", permissions = [] }: Props) {
+export default function DriveWorkspace({
+  projectId,
+  projectName,
+  projectCode,
+  projectStatus = "ACTIVE",
+  permissions = [],
+  workspaceOptions = [],
+  selectedWorkspaceId = "",
+  onWorkspaceChange,
+}: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
   const [storageQuota, setStorageQuota] = useState<DriveStorageQuota | null>(null);
@@ -1162,6 +1181,24 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
             </div>
           </div>
         </div>
+        {workspaceOptions.length > 0 && selectedWorkspaceId ? (
+          <div className={styles.workspaceSelectorWrap}>
+            <label className={styles.workspaceSelectorLabel} htmlFor="drive-workspace-selector">Munkatér</label>
+            <select
+              id="drive-workspace-selector"
+              className={styles.workspaceSelector}
+              value={selectedWorkspaceId}
+              onChange={(event) => onWorkspaceChange?.(event.target.value)}
+              aria-label="Drive munkatér kiválasztása"
+            >
+              {workspaceOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}{option.code ? " · " + option.code : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className={styles.headerActions}>
           <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>

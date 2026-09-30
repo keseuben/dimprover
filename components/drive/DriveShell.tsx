@@ -8,6 +8,13 @@ import FloatingProjectBoard from "./FloatingProjectBoard";
 import type { DriveProject } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
+type DriveWorkspaceOption = {
+  id: string;
+  label: string;
+  code?: string | null;
+  kind: "PROJECT";
+};
+
 type ProjectsPayload = {
   ok?: boolean;
   error?: string;
@@ -207,6 +214,16 @@ export default function DriveShell({
     [projects, selectedProjectId],
   );
 
+  const workspaceOptions = useMemo<DriveWorkspaceOption[]>(
+    () => projects.map((project) => ({
+      id: project.id,
+      label: project.name,
+      code: project.code || null,
+      kind: "PROJECT",
+    })),
+    [projects],
+  );
+
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
 
   useEffect(() => {
@@ -371,6 +388,9 @@ export default function DriveShell({
             projectCode={selectedProject.code}
             projectStatus={selectedProject.status}
             permissions={selectedProject.permissions}
+            workspaceOptions={workspaceOptions}
+            selectedWorkspaceId={selectedProjectId}
+            onWorkspaceChange={setSelectedProjectId}
           />
         )}
       </main>

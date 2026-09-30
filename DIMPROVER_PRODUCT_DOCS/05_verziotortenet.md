@@ -1,3 +1,14 @@
+## 2026-09-30 – DIMPRO Drive V0.7.5 – Workspace Selector UX
+
+- A közös DIMPRO Drive fejlécébe ideiglenes, középre igazított `Munkatér` választó került.
+- A kiválasztás authoritative állapota továbbra is kizárólag a `DriveShell.selectedProjectId`; a fejlécválasztó és a FloatingProjectBoard ugyanazt az állapotot módosítja.
+- A választó jelenleg csak a `GET /api/projects` által visszaadott, ténylegesen hozzáférhető Project Core projekteket listázza.
+- Személyes Drive rekord, vendég/projektfelhasználói hitelesítés és projektenkénti quota-előnézet ebben a verzióban nem került kliensoldalon kitalálásra vagy implementálásra.
+- A meglévő V0.7.3 provisioning projektváltási refresh és AbortController stale-response védelem változatlan maradt.
+- Desktopon a választó valódi vizuális középre igazítást használ; mobilon külön, teljes szélességű második fejlécsorba rendeződik.
+- Új regressziós contract: `scripts/drive-v075-workspace-selector-contract.mjs` – 24/24 PASS.
+- Projektkapu, Project Core backend és Drive Core backend szemantika változatlan.
+
 ## 2026-09-30 – DIMPRO Drive V0.7.4 – Inline mappalétrehozás és hierarchikus mappafa
 
 - A közös DIMPRO Drive normál `Új mappa` művelete többé nem böngésző `window.prompt` ablakot használ: a fájltáblában jelenik meg inline szerkeszthető új-mappa sor.
