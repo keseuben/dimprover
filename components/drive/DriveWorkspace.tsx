@@ -103,6 +103,9 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState("all");
+  const [newFolderEditorOpen, setNewFolderEditorOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("Új mappa");
+  const [newFolderSaving, setNewFolderSaving] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [details, setDetails] = useState<DriveDocumentDetails | null>(null);
@@ -121,6 +124,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
   const [externalDragActive, setExternalDragActive] = useState(false);
@@ -316,25 +320,59 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
     });
   }, [query, selectedFolderId, tree]);
 
-  async function createFolder() {
-    if (!canWrite) return;
-    const name = window.prompt("Új mappa neve:", "Új mappa")?.trim();
-    if (!name) return;
-    setBusy(true); setError(""); setNotice("");
+  useEffect(() => {
+    if (previousSelectedFolderIdRef.current === selectedFolderId) return;
+    previousSelectedFolderIdRef.current = selectedFolderId;
+    if (newFolderSaving) return;
+    setNewFolderEditorOpen(false);
+    setNewFolderName("Új mappa");
+  }, [selectedFolderId, newFolderSaving]);
+
+  function openNewFolderEditor() {
+    if (!canWrite || newFolderSaving) return;
+    setError("");
+    setNotice("");
+    setNewFolderName("Új mappa");
+    setNewFolderEditorOpen(true);
+  }
+
+  function cancelNewFolderEditor() {
+    if (newFolderSaving) return;
+    setNewFolderEditorOpen(false);
+    setNewFolderName("Új mappa");
+  }
+
+  async function saveNewFolder() {
+    if (!canWrite || newFolderSaving) return;
+    const name = newFolderName.trim();
+    if (!name) {
+      setError("A mappa neve kötelező.");
+      return;
+    }
+
+    setNewFolderSaving(true);
+    setError("");
+    setNotice("");
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders`, {
+      const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/folders", {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, parentId: selectedFolderId === "all" ? null : selectedFolderId }),
       });
-      const payload = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa létrehozása sikertelen.");
-      setNotice(`Mappa létrehozva: ${name}`);
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || payload.message || "A mappa létrehozása nem sikerült.");
+      }
+      setNewFolderEditorOpen(false);
+      setNewFolderName("Új mappa");
+      setNotice("Mappa létrehozva: " + name);
       await load();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A mappa létrehozása sikertelen.");
-    } finally { setBusy(false); }
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "A mappa létrehozása nem sikerült.");
+    } finally {
+      setNewFolderSaving(false);
+    }
   }
 
   async function renameSelectedFolder() {
@@ -1149,7 +1187,7 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
         tableZoom={tableZoom}
         onTableZoomChange={setTableZoom}
         canWrite={canWrite}
-        onCreateFolder={() => void createFolder()}
+        onCreateFolder={openNewFolderEditor}
         onUpload={requestUpload}
         canOpenSelected={isPotentiallyReadableVersion(selectedDocument)}
         canDownloadSelected={isPotentiallyReadableVersion(selectedDocument)}
@@ -1252,6 +1290,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onSelectionChange={setSelectedDocumentIds}
               canDelete={canDelete}
               onDeleteSelected={deleteDocuments}
+              newFolderEditorOpen={newFolderEditorOpen}
+              newFolderName={newFolderName}
+              newFolderSaving={newFolderSaving}
+              onNewFolderNameChange={setNewFolderName}
+              onSaveNewFolder={() => void saveNewFolder()}
+              onCancelNewFolder={cancelNewFolderEditor}
             />
             {boxShelfOpen && (
               <aside className={styles.fullTableBoxPanel} aria-label="CsomagBOX">
@@ -1389,6 +1433,12 @@ export default function DriveWorkspace({ projectId, projectName, projectCode, pr
               onSelectionChange={setSelectedDocumentIds}
               canDelete={canDelete}
               onDeleteSelected={deleteDocuments}
+              newFolderEditorOpen={newFolderEditorOpen}
+              newFolderName={newFolderName}
+              newFolderSaving={newFolderSaving}
+              onNewFolderNameChange={setNewFolderName}
+              onSaveNewFolder={() => void saveNewFolder()}
+              onCancelNewFolder={cancelNewFolderEditor}
             />
             {layoutMode === "split" && (
               <div

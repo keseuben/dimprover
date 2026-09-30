@@ -39,6 +39,12 @@ type Props = {
   onSelectionChange?: (documentIds: string[]) => void;
   canDelete?: boolean;
   onDeleteSelected?: (documentIds: string[]) => Promise<void>;
+  newFolderEditorOpen?: boolean;
+  newFolderName?: string;
+  newFolderSaving?: boolean;
+  onNewFolderNameChange?: (value: string) => void;
+  onSaveNewFolder?: () => void;
+  onCancelNewFolder?: () => void;
 };
 
 function formatBytes(value: number) {
@@ -274,6 +280,61 @@ function ReviewStateIcons({
   );
 }
 
+type InlineNewFolderRowProps = {
+  open: boolean;
+  colSpan: number;
+  name: string;
+  saving: boolean;
+  onNameChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+};
+
+function InlineNewFolderRow({ open, colSpan, name, saving, onNameChange, onSave, onCancel }: InlineNewFolderRowProps) {
+  if (!open) return null;
+
+  return (
+    <tr className={styles.newFolderRow}>
+      <td colSpan={colSpan} className={styles.newFolderCell}>
+        <div
+          className={styles.newFolderEditor}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <span className={styles.newFolderIcon}><Folder size={15} /></span>
+          <input
+            className={styles.newFolderInput}
+            value={name}
+            autoFocus
+            disabled={saving}
+            aria-label="Új mappa neve"
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => onNameChange(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!saving && name.trim()) onSave();
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!saving) onCancel();
+              }
+            }}
+          />
+          <span className={saving ? styles.newFolderSaving : styles.newFolderHint}>
+            {saving ? "Mentés…" : "Enter: mentés · Esc: mégse"}
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function FileGridPanel({
   title,
   subtitle,
@@ -303,6 +364,12 @@ export default function FileGridPanel({
   onSelectionChange,
   canDelete = false,
   onDeleteSelected,
+  newFolderEditorOpen = false,
+  newFolderName = "",
+  newFolderSaving = false,
+  onNewFolderNameChange = () => undefined,
+  onSaveNewFolder = () => undefined,
+  onCancelNewFolder = () => undefined,
 }: Props) {
   const [reviewDiscipline, setReviewDiscipline] = useState("all");
   const [reviewTopic, setReviewTopic] = useState("all");
@@ -790,6 +857,15 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
+                <InlineNewFolderRow
+                  open={newFolderEditorOpen}
+                  colSpan={22}
+                  name={newFolderName}
+                  saving={newFolderSaving}
+                  onNameChange={onNewFolderNameChange}
+                  onSave={onSaveNewFolder}
+                  onCancel={onCancelNewFolder}
+                />
                 {reviewRows.map((row) => (
                   <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                     <td className={styles.reviewSelectCell}>
@@ -877,6 +953,15 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
+                <InlineNewFolderRow
+                  open={newFolderEditorOpen}
+                  colSpan={11}
+                  name={newFolderName}
+                  saving={newFolderSaving}
+                  onNameChange={onNewFolderNameChange}
+                  onSave={onSaveNewFolder}
+                  onCancel={onCancelNewFolder}
+                />
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
@@ -928,6 +1013,15 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
+                <InlineNewFolderRow
+                  open={newFolderEditorOpen}
+                  colSpan={15}
+                  name={newFolderName}
+                  saving={newFolderSaving}
+                  onNameChange={onNewFolderNameChange}
+                  onSave={onSaveNewFolder}
+                  onCancel={onCancelNewFolder}
+                />
                 {documents.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;

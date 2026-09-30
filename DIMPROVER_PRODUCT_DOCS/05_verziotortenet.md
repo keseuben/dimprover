@@ -1,3 +1,16 @@
+## 2026-09-30 – DIMPRO Drive V0.7.4 – Inline mappalétrehozás és hierarchikus mappafa
+
+- A közös DIMPRO Drive normál `Új mappa` művelete többé nem böngésző `window.prompt` ablakot használ: a fájltáblában jelenik meg inline szerkeszthető új-mappa sor.
+- Az inline editor `Enter` billentyűvel ment, `Esc` billentyűvel megszakít, blur eseményre nem ment automatikusan; mentési hiba után szerkeszthető állapotban marad.
+- Az új mappa továbbra is a meglévő `/api/projects/[projectId]/drive/folders` POST API-t használja `name` + `parentId` payload-dal; a technikai/safe névképzés változatlanul szerveroldali.
+- Az inline új-mappa sor az Egyszerű, Mérnöki és Tervellenőrzés táblanézetben is megjelenik, valamint teljes táblázatos Drive nézetben is ugyanazt a közös `FileGridPanel` motort használja.
+- A bal oldali mappafa valódi `parentId`-alapú hierarchiára váltott, Windows-szerű külön kibontás/összecsukás vezérléssel.
+- A meglévő ágak első betöltéskor alapból nyitottak, a felhasználó által összecsukott ágak normál adatfrissítésnél nem nyílnak vissza automatikusan, az új ágak alapból nyitva jelenhetnek meg.
+- Mély mappa kiválasztásakor annak ősei automatikusan kinyílnak; hibás ciklikus mappakapcsolat ellen visited/path guard védi a renderelést.
+- Projektkapu-forrás, CsomagBOX prompt-flow, mappaátnevezés, backend jogosultság- és folder API szemantika nem változott.
+- Új regressziós contract: `scripts/drive-v074-folder-inline-tree-contract.mjs` – 25/25 PASS.
+- Validáció: V0.7.3 20/20; V0.7.2 11/11; folder-drop 22/22; path-safety 16/16; layout 22/22; CsomagBOX history 18/18; TypeScript PASS; lint regresszió nélkül; controlled DEV build PASS (`rLdbFB7t5LoZZEu9ep4yJ`).
+
 ## 2026-09-30 – DIMPRO Drive V0.7.3 – Provisioning Health & Repair UX
 
 - A közös DIMPRO Drive projektboard projektváltáskor lekéri a Drive provisioning állapotát a meglévő `/api/projects/[projectId]/drive/provision` GET végpontról.
