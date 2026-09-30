@@ -19,6 +19,17 @@ import {
 import type { DriveProject } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
 
+type DriveProvisioningInfo = {
+  version: string;
+  projectId: string;
+  ready: boolean;
+  folderCount: number;
+  incomingDropFolder: unknown | null;
+  pilotFolder: unknown | null;
+};
+
+type DriveProvisioningStatus = "checking" | "ready" | "repair-required" | "error";
+
 type Props = {
   projects: DriveProject[];
   selectedProjectId: string;
@@ -29,6 +40,13 @@ type Props = {
   onTogglePinned: () => void;
   onHoverEnter: () => void;
   onHoverLeave: () => void;
+  provisioning?: DriveProvisioningInfo | null;
+  provisioningStatus?: DriveProvisioningStatus;
+  provisioningError?: string | null;
+  provisioningNotice?: string | null;
+  provisioningRepairBusy?: boolean;
+  canRepairProvisioning?: boolean;
+  onRepairProvisioning?: () => void | Promise<void>;
 };
 
 export default function FloatingProjectBoard({
@@ -41,6 +59,13 @@ export default function FloatingProjectBoard({
   onTogglePinned,
   onHoverEnter,
   onHoverLeave,
+  provisioning = null,
+  provisioningStatus = "checking",
+  provisioningError = null,
+  provisioningNotice = null,
+  provisioningRepairBusy = false,
+  canRepairProvisioning = false,
+  onRepairProvisioning,
 }: Props) {
   return (
     <aside
@@ -85,6 +110,62 @@ export default function FloatingProjectBoard({
         <button type="button" className={styles.projectCreateButton} onClick={onCreateProject}>
           <Plus size={14} /> Új projekt
         </button>
+
+        <section className={styles.provisioningCard} aria-label="Drive projektkörnyezet">
+          <div className={styles.provisioningCardHeader}>
+            <strong>Drive projektkörnyezet</strong>
+            <span className={styles.provisioningStatusBadge + " " + (
+              provisioningStatus === "ready"
+                ? styles.provisioningStatusReady
+                : provisioningStatus === "repair-required"
+                  ? styles.provisioningStatusWarning
+                  : provisioningStatus === "error"
+                    ? styles.provisioningStatusError
+                    : styles.provisioningStatusChecking
+            )}>
+              {provisioningStatus === "ready"
+                ? "Kész"
+                : provisioningStatus === "repair-required"
+                  ? "Javítandó"
+                  : provisioningStatus === "error"
+                    ? "Hiba"
+                    : "Ellenőrzés…"}
+            </span>
+          </div>
+
+          {provisioningStatus === "checking" ? (
+            <div className={styles.provisioningMessage}>A projektkörnyezet ellenőrzése folyamatban…</div>
+          ) : null}
+
+          {provisioning && provisioningStatus !== "checking" ? (
+            <div className={styles.provisioningMeta}>
+              <div><span>Verzió</span><strong>{provisioning.version}</strong></div>
+              <div><span>Mappák</span><strong>{provisioning.folderCount}</strong></div>
+              <div><span>Beérkező Drop</span><strong>{provisioning.incomingDropFolder ? "Elérhető" : "Nincs"}</strong></div>
+              {provisioning.pilotFolder ? <div><span>PILOT</span><strong>Elérhető</strong></div> : null}
+            </div>
+          ) : null}
+
+          {provisioningStatus === "repair-required" ? (
+            <div className={styles.provisioningMessage + " " + styles.provisioningWarning}>
+              A Drive projektkörnyezet javítást igényel.
+            </div>
+          ) : null}
+
+          {provisioningStatus === "error" && provisioningError ? (
+            <div className={styles.provisioningMessage + " " + styles.provisioningError}>{provisioningError}</div>
+          ) : null}
+
+          {provisioningNotice ? (
+            <div className={styles.provisioningMessage + " " + styles.provisioningSuccess}>{provisioningNotice}</div>
+          ) : null}
+
+          {canRepairProvisioning && (provisioningStatus === "repair-required" || provisioningStatus === "error") ? (
+            <button type="button" className={styles.provisioningRepairButton} disabled={provisioningRepairBusy} onClick={() => { void onRepairProvisioning?.(); }}>
+              {provisioningRepairBusy ? "Javítás…" : "Javítás / újrapróbálás"}
+            </button>
+          ) : null}
+        </section>
 
         <div className={styles.boardNav}>
           <Link href="/drive"><FolderOpen size={16} /> Drive</Link>

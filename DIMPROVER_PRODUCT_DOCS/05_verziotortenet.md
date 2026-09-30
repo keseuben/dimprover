@@ -1,3 +1,14 @@
+## 2026-09-30 – DIMPRO Drive V0.7.3 – Provisioning Health & Repair UX
+
+- A közös DIMPRO Drive projektboard projektváltáskor lekéri a Drive provisioning állapotát a meglévő `/api/projects/[projectId]/drive/provision` GET végpontról.
+- A projektváltási lekérés AbortController guardot használ, és az előző projekt provisioning állapota azonnal törlődik.
+- Új `Drive projektkörnyezet` állapotkártya készült: ellenőrzés, kész, javítandó és hiba állapottal, verzió-, mappaszám-, Beérkező Drop- és opcionális PILOT információval.
+- A `Javítás / újrapróbálás` művelet kizárólag pontos `project.update` jogosultságnál érhető el, és a meglévő POST provisioning végpontot használja.
+- Sikeres javítás után a DriveWorkspace `workspaceRevision` alapú remounttal azonnal frissül, teljes oldal újratöltése nélkül.
+- A backend provisioning szemantika és a Projektkapu implementáció változatlan maradt.
+- Új regressziós contract: `scripts/drive-v073-provisioning-repair-contract.mjs` – 20/20 PASS.
+- Validáció: V0.7.2 11/11; folder-drop 22/22; path-safety 16/16; layout 22/22; CsomagBOX history 18/18; TypeScript PASS; célzott lint PASS; controlled DEV Next build PASS.
+
 ## 2026-09-30 – DIMPRO Drive V0.7.2 – külső fájl/mappa drag-and-drop P0 javítás
 
 - A külső OS drag-and-drop felismerés közös `hasExternalDriveFiles()` helperre került, amely a `DataTransfer.types` mellett `items` és `files` fallbacket is használ.

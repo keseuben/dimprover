@@ -1123,6 +1123,46 @@
 }
 .projectCreateButton:hover { background: rgba(17,103,238,.22); color: #fff; }
 
+.provisioningCard {
+  margin-top: 10px;
+  border: 1px solid rgba(148,163,184,.2);
+  border-radius: 10px;
+  background: rgba(255,255,255,.045);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.provisioningCardHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.provisioningCardHeader strong { color: #dce9f5; font-size: var(--drive-font-sm); min-width: 0; }
+.provisioningStatusBadge { flex: 0 0 auto; border-radius: 999px; padding: 3px 7px; font-size: var(--drive-font-xs); font-weight: 900; }
+.provisioningStatusReady { background: rgba(33,164,102,.18); color: #86e0b2; border: 1px solid rgba(78,203,137,.26); }
+.provisioningStatusWarning { background: rgba(219,146,30,.16); color: #ffd18b; border: 1px solid rgba(240,173,62,.28); }
+.provisioningStatusError { background: rgba(210,66,66,.16); color: #ffabab; border: 1px solid rgba(229,94,94,.28); }
+.provisioningStatusChecking { background: rgba(74,132,201,.16); color: #a9cff9; border: 1px solid rgba(104,160,225,.24); }
+.provisioningMeta { display: grid; gap: 4px; min-width: 0; }
+.provisioningMeta > div { display: flex; justify-content: space-between; gap: 8px; min-width: 0; font-size: var(--drive-font-xs); }
+.provisioningMeta span { color: #87a2b9; }
+.provisioningMeta strong { color: #d7e5f0; text-align: right; overflow-wrap: anywhere; }
+.provisioningMessage { border-radius: 7px; padding: 6px 7px; background: rgba(76,123,174,.12); color: #b9cee1; font-size: var(--drive-font-xs); line-height: 1.4; overflow-wrap: anywhere; }
+.provisioningWarning { background: rgba(219,146,30,.12); color: #ffd18b; }
+.provisioningError { background: rgba(210,66,66,.12); color: #ffb0b0; }
+.provisioningSuccess { background: rgba(33,164,102,.12); color: #91e1b8; }
+.provisioningRepairButton {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid rgba(52,139,255,.5);
+  border-radius: 8px;
+  background: rgba(17,103,238,.15);
+  color: #a9ceff;
+  padding: 7px 9px;
+  font-size: var(--drive-font-xs);
+  font-weight: 900;
+  cursor: pointer;
+}
+.provisioningRepairButton:hover:not(:disabled) { background: rgba(17,103,238,.26); color: #fff; }
+.provisioningRepairButton:disabled { opacity: .55; cursor: progress; }
+
 .projectCreateOverlay {
   position: fixed;
   inset: 0;
@@ -1158,7 +1198,13 @@
 .projectCreatePanel footer button[type="submit"] { border-color: #0e59dc; background: #1167ee; color: #fff; }
 .projectCreatePanel footer button:disabled { opacity: .5; cursor: not-allowed; }
 .shellNotice { position: relative; z-index: 5; border-bottom: 1px solid #b8ddc8; background: #eefaf3; color: #24683e; padding: 8px 18px; font-size: var(--drive-font-sm); font-weight: 800; }
-@media (max-width: 620px) { .projectCreateGrid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+  .projectCreateGrid { grid-template-columns: 1fr; }
+  .provisioningCardHeader { align-items: flex-start; flex-direction: column; }
+  .provisioningStatusBadge { align-self: flex-start; }
+  .provisioningMeta > div { flex-wrap: wrap; }
+  .provisioningRepairButton { width: 100%; }
+}
 .infoBox[data-review-focused="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* Drive Tervellenőrzés – a normál fájltáblával azonos vizuális rendszer */

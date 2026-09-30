@@ -23,6 +23,24 @@ type ProjectsPayload = {
   }>;
 };
 
+type DriveProvisioningInfo = {
+  version: string;
+  projectId: string;
+  ready: boolean;
+  folderCount: number;
+  incomingDropFolder: unknown | null;
+  pilotFolder: unknown | null;
+};
+
+type DriveProvisioningStatus = "checking" | "ready" | "repair-required" | "error";
+
+type DriveProvisioningPayload = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  provisioning?: DriveProvisioningInfo;
+};
+
 type CreateProjectPayload = {
   ok?: boolean;
   error?: string;
@@ -50,6 +68,12 @@ export default function DriveShell({
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
   const [notice, setNotice] = useState("");
+  const [provisioning, setProvisioning] = useState<DriveProvisioningInfo | null>(null);
+  const [provisioningStatus, setProvisioningStatus] = useState<DriveProvisioningStatus>("checking");
+  const [provisioningError, setProvisioningError] = useState<string | null>(null);
+  const [provisioningNotice, setProvisioningNotice] = useState<string | null>(null);
+  const [provisioningRepairBusy, setProvisioningRepairBusy] = useState(false);
+  const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const boardOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boardCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -183,6 +207,79 @@ export default function DriveShell({
     [projects, selectedProjectId],
   );
 
+  const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
+
+  useEffect(() => {
+    const projectId = selectedProject?.id;
+    setProvisioning(null);
+    setProvisioningError(null);
+    setProvisioningNotice(null);
+    setProvisioningRepairBusy(false);
+
+    if (!projectId) {
+      setProvisioningStatus("checking");
+      return;
+    }
+
+    setProvisioningStatus("checking");
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/provision", {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = await response.json() as DriveProvisioningPayload;
+        if (!response.ok || payload.ok !== true || !payload.provisioning) {
+          throw new Error(payload.error || payload.message || "A Drive projektkörnyezet állapota nem kérhető le.");
+        }
+        if (controller.signal.aborted) return;
+        setProvisioning(payload.provisioning);
+        setProvisioningStatus(payload.provisioning.ready ? "ready" : "repair-required");
+      } catch (caught) {
+        if (controller.signal.aborted || (caught instanceof DOMException && caught.name === "AbortError")) return;
+        setProvisioning(null);
+        setProvisioningStatus("error");
+        setProvisioningError(caught instanceof Error ? caught.message : "A Drive projektkörnyezet állapota nem kérhető le.");
+      }
+    })();
+
+    return () => controller.abort();
+  }, [selectedProject?.id]);
+
+  async function handleRepairProvisioning() {
+    if (!selectedProject || !canRepairProvisioning || provisioningRepairBusy) return;
+
+    const projectId = selectedProject.id;
+    setProvisioningRepairBusy(true);
+    setProvisioningError(null);
+    setProvisioningNotice(null);
+    try {
+      const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/provision", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { accept: "application/json" },
+      });
+      const payload = await response.json() as DriveProvisioningPayload;
+      if (!response.ok || payload.ok !== true || !payload.provisioning) {
+        throw new Error(payload.error || payload.message || "A Drive projektkörnyezet javítása sikertelen.");
+      }
+      setProvisioning(payload.provisioning);
+      setProvisioningStatus(payload.provisioning.ready ? "ready" : "repair-required");
+      setProvisioningError(null);
+      setProvisioningNotice("A Drive projektkörnyezet javítása sikeresen lefutott.");
+      setWorkspaceRevision((value) => value + 1);
+    } catch (caught) {
+      setProvisioningStatus("error");
+      setProvisioningError(caught instanceof Error ? caught.message : "A Drive projektkörnyezet javítása sikertelen.");
+    } finally {
+      setProvisioningRepairBusy(false);
+    }
+  }
+
   return (
     <div className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}>
       <DriveNavigationRail
@@ -210,6 +307,13 @@ export default function DriveShell({
         onTogglePinned={toggleBoardPinned}
         onHoverEnter={keepBoardOpen}
         onHoverLeave={closeBoardSoon}
+        provisioning={provisioning}
+        provisioningStatus={provisioningStatus}
+        provisioningError={provisioningError}
+        provisioningNotice={provisioningNotice}
+        provisioningRepairBusy={provisioningRepairBusy}
+        canRepairProvisioning={canRepairProvisioning}
+        onRepairProvisioning={handleRepairProvisioning}
       />
       <main className={styles.main}>
         {showCreateProject && (
@@ -261,7 +365,7 @@ export default function DriveShell({
           <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>Nincs elérhető projekt</strong><span>Hozz létre új Drive projektet a jobb oldali board „Új projekt” gombjával.</span></div></div>
         ) : (
           <DriveWorkspace
-            key={selectedProject.id}
+            key={selectedProject.id + ":" + workspaceRevision}
             projectId={selectedProject.id}
             projectName={selectedProject.name}
             projectCode={selectedProject.code}
