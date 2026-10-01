@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const baseline = "0b27451764db0ec7106ed5b0142394662ab03f75";
 const read = (file) => readFileSync(file, "utf8");
+const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 
 const migration = read("supabase/migrations/20261001_drive_folder_acl_v070.sql");
 const schema = read("app/lib/drive-core/schema.ts");
@@ -177,18 +179,24 @@ check("migration gate exists with preflight apply verify and DEV guard", () => {
   assert.match(gate, /pbgyuznivqvestuksvif/);
   assert.match(gate, /PROD_TARGET_BLOCKED/);
   assert.match(gate, /DRIVE_FOLDER_ACL_V070_MIGRATION_APPROVED/);
-  assert.match(gate, /17066a24e4ef0ddb60643a7c1d5f9cb99647199b79491e86c68d5ee793904c96/);
+  const migrationSha = sha256(migration);
+  assert.match(gate, new RegExp('const expectedSha = "' + migrationSha + '";'));
 });
 check("Projectkapu and Developer Grid sources are untouched", () => {
-  const status = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" });
-  const changed = status.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3));
+  const committed = execFileSync("git", ["diff", "--name-only", baseline + "..HEAD"], { encoding: "utf8" });
+  const working = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" });
+  const changed = [
+    ...committed.split(/\r?\n/).filter(Boolean),
+    ...working.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3)),
+  ];
   assert.ok(changed.length > 0);
   assert.equal(changed.some((file) => file.startsWith("components/project-gate/")), false);
   assert.equal(changed.some((file) => file.includes("developer-grid")), false);
 });
-check("baseline HEAD is still the expected source before commit", () => {
+check("baseline is an ancestor of the current implementation HEAD", () => {
+  execFileSync("git", ["merge-base", "--is-ancestor", baseline, "HEAD"], { stdio: "ignore" });
   const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  assert.equal(head, baseline);
+  assert.notEqual(head, baseline);
 });
 
 console.log(JSON.stringify({
