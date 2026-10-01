@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const wrapper=fs.readFileSync(path.join(root,"scripts/dimpro-dev-storage-retention.sh"),"utf8");
+const prebuild=fs.readFileSync(path.join(root,"scripts/dimpro-dev-storage-prebuild.sh"),"utf8");
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`);};
+check("wrapper uses central approved Safe Delete engine",()=>assert.match(wrapper,/benjadmin-operator-ui-v2\/scripts\/dimpro-dev-storage-retention\.mjs/));
+check("wrapper pins approved Safe Delete skill hash",()=>assert.match(wrapper,/1250a0440c9231b6aacdbf6943977f5547aae486fc6c3fade8148134bfc1c211/));
+check("wrapper pins approved retention engine hash",()=>assert.match(wrapper,/6dc03a019efc9ccbfd12fa48dcfabe420d80ca838c16c41fc03d8f595d7c4aaa/));
+check("wrapper verifies directive authority",()=>assert.match(wrapper,/SAFE_DELETE_SKILL_REQUIRED\.md/));
+check("wrapper fails closed on hash mismatch",()=>assert.match(wrapper,/SAFE_DELETE_PREFLIGHT_FAILED/));
+check("wrapper no longer executes local retention engine",()=>assert.doesNotMatch(wrapper,/node \"\$ROOT\/scripts\/dimpro-dev-storage-retention\.mjs\"/));
+check("prebuild still uses coordinated retention wrapper",()=>assert.match(prebuild,/dimpro-dev-storage-retention\.sh/));
+check("PROD is not a retention target",()=>assert.match(prebuild,/DEV-only/));
+console.log(`Developer Grid Safe Delete build preflight v0.1.96 contract PASS · ${n}/${n}`);
