@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import JSZip from "jszip";
-import { listDriveTree } from "./databaseRepository";
+import type { ProjectAccessContext } from "@/app/lib/project-core/types";
+import { listDriveTreeForAccess, requireDriveFolderAccess } from "./folderAccess";
 import { DriveCoreRepositoryError } from "./errors";
 import { DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME, buildDigitalDocumentationRegister } from "./documentationRegister";
 import { getDriveBoxPackageSource, listDriveEngineeringMetadata, setDriveBoxLifecycle, type DriveBoxFolder, type DriveEngineeringMetadata } from "./workspaceRepository";
@@ -136,8 +137,10 @@ export async function openDriveFolderZip(input: {
   projectCode?: string;
   projectName?: string;
   clientId?: string | null;
+  access: ProjectAccessContext;
 }) {
-  const tree = await listDriveTree(input.projectId);
+  await requireDriveFolderAccess(input.projectId, input.folderId, input.access);
+  const tree = await listDriveTreeForAccess(input.projectId, input.access);
   const root = tree.folders.find((folder) => folder.id === input.folderId);
   if (!root) throw new DriveCoreRepositoryError("A letöltendő DRIVE mappa nem található.", "DRIVE_FOLDER_DOWNLOAD_NOT_FOUND", 404);
 

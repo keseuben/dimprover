@@ -27,6 +27,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       documentId,
       versionId,
       range,
+      access: access.access,
     });
     const source = result.object.body;
     const nodeStream = source instanceof Readable ? source : Readable.from(source);

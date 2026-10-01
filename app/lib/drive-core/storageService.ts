@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ProjectAccessContext } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
 import { normalizeDriveFileName, normalizeDriveRelativePath } from "./nameNormalizer";
 import {
@@ -489,6 +490,7 @@ export async function initDriveObjectDownload(input: {
   versionId?: string | null;
   actorUserId: string;
   clientId?: string | null;
+  access: ProjectAccessContext;
 }) {
   const config = getDriveObjectStorageConfig();
   const status = getDriveObjectStorageSafeStatus(config);
@@ -500,6 +502,7 @@ export async function initDriveObjectDownload(input: {
     projectId: input.projectId,
     documentId: input.documentId,
     versionId: input.versionId,
+    access: input.access,
   });
   if (!record) throw new DriveCoreRepositoryError("A dokumentumverzió nem található.", "DRIVE_DOWNLOAD_NOT_FOUND", 404);
   const trustedDropArchive = record.documentSource === "DROP"
@@ -569,6 +572,7 @@ async function resolveDrivePreviewRecord(input: {
   projectId: string;
   documentId: string;
   versionId?: string | null;
+  access: ProjectAccessContext;
 }) {
   const config = getDriveObjectStorageConfig();
   const status = getDriveObjectStorageSafeStatus(config);
@@ -580,6 +584,7 @@ async function resolveDrivePreviewRecord(input: {
     projectId: input.projectId,
     documentId: input.documentId,
     versionId: input.versionId,
+    access: input.access,
   });
   if (!record) throw new DriveCoreRepositoryError("A dokumentumverzió nem található.", "DRIVE_PREVIEW_NOT_FOUND", 404);
   const trustedDropArchive = record.documentSource === "DROP"
@@ -624,6 +629,7 @@ export async function initDriveObjectPreview(input: {
   projectId: string;
   documentId: string;
   versionId?: string | null;
+  access: ProjectAccessContext;
 }) {
   const resolved = await resolveDrivePreviewRecord(input);
   const versionId = resolved.record.version.id;
@@ -653,6 +659,7 @@ export async function openDriveObjectPreviewContent(input: {
   documentId: string;
   versionId?: string | null;
   range?: string | null;
+  access: ProjectAccessContext;
 }) {
   const resolved = await resolveDrivePreviewRecord(input);
   const object = await getDriveObjectStream({

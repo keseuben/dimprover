@@ -3331,3 +3331,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A v0.1.39 kiadás publikus artifact-verifikációja után, de még fizikai Windows rollout előtt a smoke/materializer egy lezárt történelmi bridge párt (`task=blocked`, `session=closed`) újra RUNNING Grid sessionné alakított. Emiatt a v0.1.39 immutable artifact superseded státuszú, audit/rollback célra megmarad, de nem kerül felhasználói rolloutba.
 - A materializer v0.1.40-től kizárólag `claimed|in_progress|testing` task és `open|active` session kombinációt tekint aktívnak. Minden más kombináció no-op, session létrehozása nélkül.
 - A candidate smoke külön ellenőrzi az aktív és terminális bridge viselkedést. Desktop/backend verzió: 0.1.40 / 0.1.40-dev. DEV ONLY · PROD DENY.
+
+### DIMPRO Drive V0.7.7 – Folder ACL Core Phase 1A foundation
+
+- Elkészült a közös DIMPRO Drive mappaszintű ACL alaprétege a meglévő Project Core jogosultsági rendszer finomításaként; külön felhasználói vagy párhuzamos permission engine nem jött létre.
+- A Drive Core 0.7.0 séma `acl_inherit` mappajelzőt és `drive_core_folder_acl_entries` táblát készít elő. A Phase 1A kizárólag `folder.view` jogosultságot, valamint USER és ROLE principalokat kezel; a USER kulcsa a meglévő `project_core_memberships.id`, a ROLE a Project Core szerepköreit használja.
+- Az alapértelmezett `acl_inherit=true`, ezért ACL override nélküli meglévő projektek viselkedése változatlan marad. Explicit override esetén egyező ALLOW nélkül a hozzáférés tiltott, a DENY elsőbbséget élvez, és rejtett szülőn keresztül gyermekmappa nem tehető láthatóvá.
+- A Drive tree backend oldalon, szerializálás előtt szűri a mappákat, dokumentumokat és verziókat; a visszaadott summary kizárólag a látható tartalomból számolódik.
+- A dokumentum részletek, előnézet, előnézeti stream és letöltés minden kérésnél újraellenőrzi a dokumentum mappájának aktuális láthatóságát. A tiltott és nem létező közvetlen mappa-/dokumentumazonosító azonos 404-szerű not-found viselkedést kap az existence leak megelőzésére.
+- A mappa ZIP és a digitális dokumentációjegyzék már csak ACL-szűrt tree-ből épülhet, ezért rejtett almappa, fájl, fájlnév vagy kihagyási listaelem nem kerülhet a csomagba.
+- Elkészült a fail-closed Drive Folder ACL V0.7.0 migrációs gate és a V0.7.7 security contract. Jelszó/PIN védelem, ACL-kezelő API/UI, guest/personal Drive és a Phase 1B projekt-szintű kiegészítő enumerációk ebben a körben szándékosan nem készültek el.
+- DEV ONLY · PROD DENY. A migráció és a V0.7.7 DEV candidate aktiválása külön jóváhagyott lépés; a V0.7.6 aktív runtime és V0.7.5 rollback ebben a source patchben változatlan.

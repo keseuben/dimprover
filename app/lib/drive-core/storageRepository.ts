@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { ProjectAccessContext } from "@/app/lib/project-core/types";
+import { requireDriveDocumentAccess } from "./folderAccess";
 import { DriveCoreRepositoryError } from "./errors";
 import {
   DRIVE_OBJECT_STORAGE_BOOTSTRAP_ID,
@@ -609,17 +611,19 @@ export async function getDriveDownloadVersionRecord(input: {
   projectId: string;
   documentId: string;
   versionId?: string | null;
+  access: ProjectAccessContext;
 }) {
+  const accessRecord = await requireDriveDocumentAccess(input.projectId, input.documentId, input.access);
   const client = await requireReadyClient();
   const documentResult = await client
     .from("drive_core_documents")
-    .select("id,name,status,current_version_number,source")
+    .select("id,folder_id,name,status,current_version_number,source")
     .eq("project_id", input.projectId)
     .eq("id", input.documentId)
     .eq("status", "ACTIVE")
     .maybeSingle();
   if (documentResult.error) databaseError("A DRIVE dokumentum betöltése sikertelen.", documentResult.error);
-  if (!documentResult.data) return null;
+  if (!documentResult.data || String(documentResult.data.folder_id) !== accessRecord.folderId) return null;
 
   let query = client
     .from("drive_core_document_versions")

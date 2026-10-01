@@ -12,6 +12,14 @@ export {
   upsertDriveSyncCursor,
 } from "./databaseRepository";
 
+export {
+  canAccessDriveFolder,
+  listDriveTreeForAccess,
+  requireDriveDocumentAccess,
+  requireDriveFolderAccess,
+  resolveAccessibleDriveFolderIds,
+} from "./folderAccess";
+
 export { getDriveDropIncomingSourceDatabaseHealth } from "./storageRepository";
 
 export { openDriveBoxZip, openDriveFolderZip } from "./folderDownloadService";

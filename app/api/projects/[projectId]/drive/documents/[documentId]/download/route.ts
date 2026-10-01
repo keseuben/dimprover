@@ -19,6 +19,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       versionId: typeof body.versionId === "string" ? body.versionId : null,
       actorUserId: access.actor.userId,
       clientId: request.headers.get("x-dimpro-drive-client-id"),
+      access: access.access,
     });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

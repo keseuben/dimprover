@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
-import { listDriveTree } from "@/app/lib/drive-core/store";
+import { listDriveTreeForAccess } from "@/app/lib/drive-core/store";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
-    const tree = await listDriveTree(projectId);
+    const tree = await listDriveTreeForAccess(projectId, access.access);
     return NextResponse.json({
       ok: true,
       tree,

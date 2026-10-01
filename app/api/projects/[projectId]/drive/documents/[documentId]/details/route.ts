@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "document.read");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
-    const details = await getDriveDocumentWorkspaceDetails(projectId, documentId);
+    const details = await getDriveDocumentWorkspaceDetails(projectId, documentId, access.access);
     return NextResponse.json({ ok: true, details }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

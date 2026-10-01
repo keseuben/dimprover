@@ -17,6 +17,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       projectId,
       documentId,
       versionId: typeof body.versionId === "string" ? body.versionId : null,
+      access: access.access,
     });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

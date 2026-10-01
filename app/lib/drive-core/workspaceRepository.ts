@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
-import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
+import type { ProjectAccessContext, ProjectMembershipRole } from "@/app/lib/project-core/types";
+import { requireDriveDocumentAccess } from "./folderAccess";
 import type { DriveDocument, DriveDocumentVersion } from "./types";
 import {
   DRIVE_WORKSPACE_BOOTSTRAP_ID,
@@ -545,7 +546,8 @@ export async function listDriveEngineeringMetadata(projectId: string) {
   return (data || []).map((row) => mapMetadata(row as DbMetadata));
 }
 
-export async function getDriveDocumentWorkspaceDetails(projectId: string, documentId: string) {
+export async function getDriveDocumentWorkspaceDetails(projectId: string, documentId: string, access: ProjectAccessContext) {
+  await requireDriveDocumentAccess(projectId, documentId, access);
   const client = await requireReadyClient();
   const [documentResult, versionResult, metadataResult, noteResult, qrResult] = await Promise.all([
     client.from("drive_core_documents").select("*").eq("project_id", projectId).eq("id", documentId).neq("status", "DELETED").maybeSingle(),

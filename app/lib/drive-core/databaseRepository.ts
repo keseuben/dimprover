@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
 import { normalizeDriveFileName, normalizeDriveFolderName } from "./nameNormalizer";
 import {
@@ -21,8 +22,12 @@ import type {
 
 type DbFolder = {
   id: string; project_id: string; parent_id: string | null; name: string; path: string;
-  original_name?: string | null; display_name?: string | null;
+  original_name?: string | null; display_name?: string | null; acl_inherit?: boolean | null;
   sort_order: number; discipline?: string | null; topic?: string | null; status: DriveFolder["status"]; created_by: string; created_at: string; updated_at: string;
+};
+type DbFolderAclEntry = {
+  id: string; project_id: string; folder_id: string; principal_type: string; membership_id: string | null;
+  role: string | null; permission: string; effect: string;
 };
 type DbDocument = {
   id: string; project_id: string; folder_id: string; name: string; extension: string; mime_type: string;
@@ -199,7 +204,58 @@ async function requireReadyClient() {
   return getDatabaseClient();
 }
 
-export async function listDriveTree(projectId: string): Promise<DriveTree> {
+export async function listDriveFolderAccessRows(projectId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_folders")
+    .select("id,project_id,parent_id,acl_inherit,status")
+    .eq("project_id", projectId)
+    .neq("status", "ARCHIVED")
+    .order("path");
+  if (error) databaseError("A DRIVE mappahozzáférési adatok betöltése sikertelen.", error);
+  return ((data || []) as Array<{ id: string; project_id: string; parent_id: string | null; acl_inherit: boolean | null; status: "ACTIVE" | "ARCHIVED" }>).map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    parentId: row.parent_id,
+    aclInherit: row.acl_inherit === true,
+    status: row.status,
+  }));
+}
+
+export async function listDriveFolderAclEntries(projectId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_folder_acl_entries")
+    .select("id,project_id,folder_id,principal_type,membership_id,role,permission,effect")
+    .eq("project_id", projectId);
+  if (error) databaseError("A DRIVE mappajogosultságok betöltése sikertelen.", error);
+  return ((data || []) as DbFolderAclEntry[]).map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    folderId: row.folder_id,
+    principalType: row.principal_type as "USER" | "ROLE",
+    membershipId: row.membership_id,
+    role: row.role as ProjectMembershipRole | null,
+    permission: row.permission as "folder.view",
+    effect: row.effect as "ALLOW" | "DENY",
+  }));
+}
+
+export async function getDriveDocumentFolderAccessRecord(projectId: string, documentId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_documents")
+    .select("id,project_id,folder_id,status")
+    .eq("project_id", projectId)
+    .eq("id", documentId)
+    .neq("status", "DELETED")
+    .maybeSingle();
+  if (error) databaseError("A DRIVE dokumentum hozzáférési adata nem tölthető be.", error);
+  if (!data) return null;
+  return { documentId: String(data.id), projectId: String(data.project_id), folderId: String(data.folder_id) };
+}
+
+export async function listDriveTree(projectId: string, accessibleFolderIds?: ReadonlySet<string>): Promise<DriveTree> {
   const client = await requireReadyClient();
   const [folderResult, documentResult, versionResult, cursorResult] = await Promise.all([
     client.from("drive_core_folders").select("*").eq("project_id", projectId).neq("status", "ARCHIVED").order("path"),
@@ -212,16 +268,19 @@ export async function listDriveTree(projectId: string): Promise<DriveTree> {
   if (versionResult.error) databaseError("A dokumentumverziók betöltése sikertelen.", versionResult.error);
   if (cursorResult.error) databaseError("A DRIVE változáskurzor betöltése sikertelen.", cursorResult.error);
 
-  const versions = (versionResult.data || []).map((row) => mapVersion(row as DbVersion));
+  const folderRows = ((folderResult.data || []) as DbFolder[]).filter((row) => !accessibleFolderIds || accessibleFolderIds.has(row.id));
+  const visibleFolderIds = new Set(folderRows.map((row) => row.id));
+  const documentRows = ((documentResult.data || []) as DbDocument[]).filter((row) => visibleFolderIds.has(row.folder_id));
+  const visibleDocumentIds = new Set(documentRows.map((row) => row.id));
+  const versions = (versionResult.data || [])
+    .map((row) => mapVersion(row as DbVersion))
+    .filter((version) => visibleDocumentIds.has(version.documentId));
   const versionByDocument = new Map<string, DriveDocumentVersion>();
   for (const version of versions) {
     if (!versionByDocument.has(version.documentId)) versionByDocument.set(version.documentId, version);
   }
-  const documents = (documentResult.data || []).map((row) => {
-    const document = row as DbDocument;
-    return mapDocument(document, versionByDocument.get(document.id) || null);
-  });
-  const mappedFolders = (folderResult.data || []).map((row) => mapFolder(row as DbFolder));
+  const documents = documentRows.map((document) => mapDocument(document, versionByDocument.get(document.id) || null));
+  const mappedFolders = folderRows.map((row) => mapFolder(row));
   const folderById = new Map(mappedFolders.map((folder) => [folder.id, folder]));
   const displayPathCache = new Map<string, string>();
   const resolveDisplayPath = (folder: DriveFolder, visiting = new Set<string>()): string => {
@@ -241,7 +300,7 @@ export async function listDriveTree(projectId: string): Promise<DriveTree> {
     folders,
     documents,
     summary: {
-      folderCount: folderResult.data?.length || 0,
+      folderCount: folders.length,
       documentCount: documents.length,
       versionCount: versions.length,
       metadataOnlyCount: versions.filter((version) => version.status === "METADATA_ONLY").length,
