@@ -14,8 +14,8 @@ const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0;
 function check(label,fn){ fn(); n+=1; console.log("PASS "+String(n).padStart(2,"0")+" "+label); }
 
-check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.95"));
-check("backend version v0.1.72-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.95-dev"')));
+check("desktop version v0.1.72",()=>assert.equal(pkg.version,"0.1.96"));
+check("backend version v0.1.72-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.96-dev"')));
 check("client derives verified legacy source proof",()=>assert.ok(main.includes("function derivedVerifiedSourceProvenanceProofSha256(task)")));
 check("legacy proof requires VERIFIED source state",()=>assert.ok(main.includes('toUpperCase() !== "VERIFIED"')));
 check("client proof canonical fields present",()=>{
@@ -34,11 +34,16 @@ check("client proof canonical fields present",()=>{
 check("backend derives same verified source provenance proof",()=>assert.ok(work.includes("function derivedVerifiedSourceProvenanceProofSha256(session: WorkerSession)")));
 check("backend uses derived proof only as missing explicit proof fallback",()=>assert.ok(work.includes('ctx.sourceExecutionProof?.sha256, 64).toLowerCase() || derivedVerifiedSourceProvenanceProofSha256(session)')));
 check("clipboard copied and ACK wait suspend task pin",()=>assert.ok(main.includes('"HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT", "CLIPBOARD_COPIED", "ACK_WAIT"')));
-check("same project mismatch uses native confirmation",()=>{
-  assert.ok(main.includes("Csevegés átkötése szükséges"));
-  assert.ok(main.includes("Átkötés és rollover folytatása"));
+check("validated same-project mismatch routes through Continuation V2",()=>{
+  assert.ok(main.includes("async function startValidatedManualRebindContinuationV2"));
+  assert.ok(main.includes("return startValidatedManualRebindContinuationV2({ code, task, cell, view, pin, candidateConversationId:conversationId, candidateUrl })"));
+  assert.ok(main.includes('conversationRolloverMode:"MANUAL_REBIND_V2"'));
+  assert.ok(main.includes('conversationContinuationState:"ACK_WAIT"'));
 });
-check("confirmed mismatch reuses authoritative rebind",()=>assert.ok(main.includes("rebindCurrentTaskConversation(code, task.id)")));
+check("validated direct manual rebind is blocked server-side",()=>{
+  assert.ok(work.includes("DEVELOPER_GRID_VALIDATED_REBIND_REQUIRES_CONTINUATION_V2"));
+  assert.ok(work.includes("Használd a Continuation V2 candidate + ACK folyamatot"));
+});
 check("different project stays fail closed",()=>assert.ok(main.includes("ROLLOVER_PIN_PROJECT_MISMATCH")));
 check("rollover block state persists exact error",()=>{
   assert.ok(main.includes("function blockManualConversationRollover"));

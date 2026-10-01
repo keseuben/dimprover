@@ -6,8 +6,12 @@ const KINDS = new Set(["FILE", "TEST", "ERROR"]);
 const STATUSES = new Set(["RECORDED", "PASS", "FAIL", "BLOCKED"]);
 const RESULTS = new Set(["PASS", "FAIL", "BLOCKED"]);
 const WORKERS = new Set(["ARMINAI", "OUTMINAI", "BENJAMINAI", "JAZMINAI", "DEVMINAI", "BENAI"]);
+const ESTIMATE_CONFIDENCE = new Set(["ALACSONY", "KOZEPES", "MAGAS"]);
+const TIMEZONE = "Europe/Budapest";
 
 function text(value, max = 1000) { return String(value ?? "").trim().slice(0, max); }
+function finiteNumber(value) { const n = Number(value); return Number.isFinite(n) ? n : null; }
+function isoTime(value) { const raw = text(value, 120); return raw && Number.isFinite(Date.parse(raw)) ? raw : ""; }
 function record(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 
 function parseDeveloperGridStageReport(raw) {
@@ -28,7 +32,8 @@ function parseDeveloperGridStageReport(raw) {
   const head = text(row.head,80).toLowerCase();
   const result = text(row.result,40).toUpperCase();
   const stage = Number(row.stage);
-  if (Number(row.schemaVersion) !== 1) return { ok:false, code:"STAGE_REPORT_SCHEMA_INVALID", error:"Ismeretlen stage report schemaVersion." };
+  const schemaVersion = Number(row.schemaVersion);
+  if (![1,2].includes(schemaVersion)) return { ok:false, code:"STAGE_REPORT_SCHEMA_INVALID", error:"Ismeretlen stage report schemaVersion." };
   if (!WORKERS.has(workerCodeRaw)) return { ok:false, code:"STAGE_REPORT_WORKER_INVALID", error:"Ismeretlen stage report worker." };
   if (!taskId || !sessionId || !/^[0-9a-f]{40}$/.test(head)) return { ok:false, code:"STAGE_REPORT_IDENTITY_INVALID", error:"A stage report task/session/current HEAD azonosítója hiányos." };
   if (!RESULTS.has(result)) return { ok:false, code:"STAGE_REPORT_RESULT_INVALID", error:"Érvénytelen stage report result." };
@@ -50,7 +55,40 @@ function parseDeveloperGridStageReport(raw) {
       attributes: record(item.attributes),
     });
   }
-  return { ok:true, report:{ schemaVersion:1, workerCode, taskId, sessionId, head, stage, result, summary:text(row.summary,600), evidence } };
+  let timing = null;
+  if (schemaVersion === 2) {
+    const workUnit = text(row.workUnit, 500);
+    const startedAt = isoTime(row.startedAt);
+    const reportedAt = isoTime(row.reportedAt);
+    const finishedAt = isoTime(row.finishedAt);
+    const estimateCreatedAt = isoTime(row.estimateCreatedAt);
+    const timezone = text(row.timezone, 80);
+    const elapsedSeconds = finiteNumber(row.elapsedSeconds);
+    const estimatedSeconds = finiteNumber(row.estimatedSeconds);
+    const estimatedTotalSeconds = finiteNumber(row.estimatedTotalSeconds);
+    const revisedEstimatedSeconds = row.revisedEstimatedSeconds == null ? null : finiteNumber(row.revisedEstimatedSeconds);
+    const remainingEstimateSeconds = row.remainingEstimateSeconds == null ? null : finiteNumber(row.remainingEstimateSeconds);
+    const actualElapsedSeconds = finiteNumber(row.actualElapsedSeconds);
+    const estimateVarianceSeconds = finiteNumber(row.estimateVarianceSeconds);
+    const estimateConfidence = text(row.estimateConfidence, 40).toUpperCase();
+    if (!workUnit || !startedAt || !reportedAt || !finishedAt || !estimateCreatedAt || timezone !== TIMEZONE) {
+      return { ok:false, code:"STAGE_REPORT_TIMING_REQUIRED", error:"A V2 stage reporthoz workUnit + startedAt/reportedAt/finishedAt + estimateCreatedAt + Europe/Budapest időzóna kötelező." };
+    }
+    if (elapsedSeconds == null || elapsedSeconds < 0 || estimatedSeconds == null || estimatedSeconds <= 0 || estimatedTotalSeconds == null || estimatedTotalSeconds <= 0 || actualElapsedSeconds == null || actualElapsedSeconds < 0 || estimateVarianceSeconds == null) {
+      return { ok:false, code:"STAGE_REPORT_ESTIMATE_REQUIRED", error:"A V2 stage reporthoz pozitív részfeladat- és teljes becslés, tényleges eltelt idő és becslési eltérés kötelező." };
+    }
+    if (!ESTIMATE_CONFIDENCE.has(estimateConfidence)) return { ok:false, code:"STAGE_REPORT_ESTIMATE_CONFIDENCE_INVALID", error:"Az estimateConfidence csak ALACSONY, KOZEPES vagy MAGAS lehet." };
+    if (revisedEstimatedSeconds != null && revisedEstimatedSeconds <= 0) return { ok:false, code:"STAGE_REPORT_REVISED_ESTIMATE_INVALID", error:"A revisedEstimatedSeconds csak pozitív érték lehet." };
+    if (remainingEstimateSeconds != null && remainingEstimateSeconds < 0) return { ok:false, code:"STAGE_REPORT_REMAINING_ESTIMATE_INVALID", error:"A remainingEstimateSeconds nem lehet negatív." };
+    const startedMs = Date.parse(startedAt), reportedMs = Date.parse(reportedAt), finishedMs = Date.parse(finishedAt), estimateMs = Date.parse(estimateCreatedAt);
+    if (reportedMs < startedMs || finishedMs < startedMs || estimateMs > startedMs) return { ok:false, code:"STAGE_REPORT_TIME_ORDER_INVALID", error:"A stage report időrendje hibás; a becslésnek a munka kezdése előtt vagy legkésőbb annak pillanatában kell elkészülnie." };
+    const wallElapsed = Math.round((finishedMs - startedMs) / 1000);
+    if (Math.abs(wallElapsed - elapsedSeconds) > 5 || Math.abs(actualElapsedSeconds - elapsedSeconds) > 1) return { ok:false, code:"STAGE_REPORT_ELAPSED_MISMATCH", error:"Az elapsedSeconds nem egyezik a kezdés/befejezés alapján számított tényleges idővel." };
+    const effectiveEstimate = revisedEstimatedSeconds != null ? revisedEstimatedSeconds : estimatedSeconds;
+    if (Math.abs((actualElapsedSeconds - effectiveEstimate) - estimateVarianceSeconds) > 1) return { ok:false, code:"STAGE_REPORT_ESTIMATE_VARIANCE_MISMATCH", error:"Az estimateVarianceSeconds nem egyezik a tényleges és a hatályos becsült idő különbségével." };
+    timing = { workUnit, startedAt, reportedAt, finishedAt, elapsedSeconds, estimatedSeconds, estimatedTotalSeconds, estimateCreatedAt, estimateConfidence, revisedEstimatedSeconds, remainingEstimateSeconds, actualElapsedSeconds, estimateVarianceSeconds, timezone };
+  }
+  return { ok:true, report:{ schemaVersion, workerCode, taskId, sessionId, head, stage, result, summary:text(row.summary,600), evidence, ...(timing || {}) } };
 }
 
 

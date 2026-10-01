@@ -21,8 +21,8 @@ const live = read("desktop/benjadmin-developer-grid/src/live/benjadmin-live-clie
 let n = 0;
 function check(name, fn) { fn(); n += 1; console.log(`PASS ${String(n).padStart(2,"0")} ${name}`); }
 
-check("desktop version v0.1.72", () => assert.equal(pkg.version, "0.1.95"));
-check("backend version v0.1.72-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.95-dev"/));
+check("desktop version v0.1.72", () => assert.equal(pkg.version, "0.1.96"));
+check("backend version v0.1.72-dev", () => assert.match(types, /DEVELOPER_GRID_VERSION = "0\.1\.96-dev"/));
 check("surface type contract includes ChatGPT Codex Work", () => assert.match(types, /WorkerSurfaceType = "CHATGPT" \| "CODEX" \| "WORK"/));
 check("all four worker cells default to ChatGPT", () => assert.equal((defaults.match(/surfaceType: "CHATGPT"/g) || []).length, 4));
 check("config v14 persists normalized per-cell surface", () => { assert.match(defaults,/CONFIG_VERSION = 14/); assert.match(defaults,/normalizeWorkerSurfaceType/); assert.match(defaults,/surfaceType,/); });
@@ -36,7 +36,12 @@ check("Central Core sends selected surface with work-start", () => { assert.matc
 check("Codex uses Task Bridge while Work remains fail-closed", () => { assert.match(context,/startDeveloperGridTaskBridge/); assert.match(context,/OPENAI FIRST-PARTY · TASK BRIDGE/); assert.match(workStart,/CODEX_TASK_BRIDGE_REQUIRED/); assert.match(workStart,/WORK_SURFACE_PLANNED_V0159/); });
 check("unknown explicit surface fails closed instead of falling back to ChatGPT", () => assert.match(workStart,/DEVELOPER_GRID_SURFACE_INVALID/));
 check("work-start persists surface into authoritative development context", () => { assert.match(workStart,/surfaceType: input\.surfaceType/); assert.match(workStart,/DEVELOPER_GRID_SURFACE_MISMATCH/); });
-check("generic surface conversation provenance coexists with legacy ChatGPT fields", () => { for (const key of ["surfaceConversationId","surfaceConversationUrl","surfaceConversationTitle","surfaceConversationConfirmedAt"]) assert.match(types,new RegExp(key)); assert.match(workStart,/chatConversationId: chatConversationId \|\| null/); });
+check("generic surface conversation provenance coexists with legacy ChatGPT fields", () => {
+  for (const key of ["surfaceConversationId","surfaceConversationUrl","surfaceConversationTitle","surfaceConversationConfirmedAt","chatConversationId","chatConversationUrl"]) assert.match(types,new RegExp(key));
+  assert.match(workStart,/authoritativeChatConversationId = candidateOnlyRollover/);
+  assert.match(workStart,/chatConversationId: authoritativeChatConversationId \|\| null/);
+  assert.match(workStart,/conversationRolloverCandidateConversationId: surfaceConversationId/);
+});
 check("Conversation Memory keys RAW and derived state by surface", () => { assert.match(memory,/surfaceMemoryKey/); assert.match(memory,/DEVELOPER_GRID_RAW_SURFACE_MISMATCH/); assert.match(memory,/surfaceType:currentSurfaceType/); });
 check("legacy v0.1.40 ChatGPT memory remains readable and chain-continuable", () => { assert.match(memory,/if\(type==="CHATGPT"\)/); assert.match(memory,/rawMemoryFile/); assert.match(memory,/latestMemoryFile/); assert.match(memory,/surfaceType:latest\.surfaceType\|\|"CHATGPT"/); });
 check("desktop RAW chat capture remains ChatGPT-only; Codex uses Task Bridge artifacts", () => assert.match(main,/if \(surfaceType !== "CHATGPT"\) return null/));

@@ -9,8 +9,8 @@ const types=fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),"u
 const pkg=JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package.json"),"utf8"));
 let n=0; const check=(label,fn)=>{fn();n++;console.log("PASS "+String(n).padStart(2,"0")+" "+label);};
 
-check("desktop version v0.1.77",()=>assert.equal(pkg.version,"0.1.95"));
-check("backend version v0.1.77-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.95-dev"')));
+check("desktop version v0.1.77",()=>assert.equal(pkg.version,"0.1.96"));
+check("backend version v0.1.77-dev",()=>assert.ok(types.includes('DEVELOPER_GRID_VERSION = "0.1.96-dev"')));
 
 check("cell pin derives Central authoritative conversation separately",()=>{
   const a=main.indexOf("function conversationPinForCell");
@@ -28,13 +28,14 @@ check("Central authoritative conversation wins cell pin",()=>{
   assert.match(block,/const conversationId = String\(authoritativeConversationId \|\| localConversationId\)\.trim\(\)/);
 });
 
-check("stale local successor mismatch disables local transition suspension",()=>{
+check("legacy stale successor is ignored while Continuation V2 transition suspends pin",()=>{
   const a=main.indexOf("function conversationPinForCell");
   const b=main.indexOf("function clearConversationRebindCandidate",a);
   const block=main.slice(a,b);
   assert.match(block,/const localTargetsDifferentConversation = Boolean\(/);
   assert.match(block,/localConversationId !== authoritativeConversationId/);
-  assert.match(block,/&& \(!authoritativeConversationId \|\| !localTargetsDifferentConversation\)/);
+  assert.match(block,/const localContinuationV2 = Boolean\(/);
+  assert.match(block,/&& \(localContinuationV2 \|\| !authoritativeConversationId \|\| !localTargetsDifferentConversation\)/);
 });
 
 check("authoritative transition still suspends navigation guard",()=>{
@@ -42,8 +43,10 @@ check("authoritative transition still suspends navigation guard",()=>{
   assert.match(main,/if \(shouldSuspendForAuthoritativeTransition \|\| shouldSuspendForLocalTransition\)/);
 });
 
-check("conversation memory expected id is Central-first",()=>{
-  assert.match(main,/const expectedConversationId = authoritativeConversationId \|\| localConversationId/);
+check("conversation memory keeps Central authority but monitors V2 candidate during ACK_WAIT",()=>{
+  assert.match(main,/const continuationV2Candidate = Boolean\(/);
+  assert.match(main,/const expectedConversationId = continuationV2Candidate \? localCandidateConversationId : \(authoritativeConversationId \|\| localConversationId\)/);
+  assert.match(main,/monitoringCandidate:continuationV2Candidate/);
 });
 
 check("authoritative mismatch recovery is no longer gated out by manual clipboard",()=>{

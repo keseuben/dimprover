@@ -1,5 +1,5 @@
 export const DEVELOPER_GRID_SCHEMA_VERSION = 1 as const;
-export const DEVELOPER_GRID_VERSION = "0.1.95-dev" as const;
+export const DEVELOPER_GRID_VERSION = "0.1.96-dev" as const;
 
 export type GridEnvironment = "DEV";
 export type ChatLaunchMode = "EXISTING_CHAT" | "NEW_PROJECT_CHAT";
@@ -96,6 +96,29 @@ export type DevelopmentContext = {
   conversationRolloverOrphanRecovery?: boolean | null;
   conversationRolloverStartedAt?: string | null;
   conversationRolloverCompletedAt?: string | null;
+  conversationRolloverCandidateConversationId?: string | null;
+  conversationRolloverCandidateConversationUrl?: string | null;
+  conversationRolloverCandidateConversationTitle?: string | null;
+  conversationContinuationState?: "CURRENT" | "PREPARED" | "CANDIDATE" | "ACK_WAIT" | "VALIDATING" | "READY" | "BLOCKED" | null;
+  conversationContinuationProtocolVersion?: string | null;
+  conversationContinuationCapsuleId?: string | null;
+  conversationContinuationCapsuleSha256?: string | null;
+  conversationContinuationRulePackSha256?: string | null;
+  conversationContinuationSkillManifestSha256?: string | null;
+  currentWorkUnit?: string | null;
+  workUnitStartedAt?: string | null;
+  workUnitReportedAt?: string | null;
+  workUnitFinishedAt?: string | null;
+  workUnitElapsedSeconds?: number | null;
+  workUnitEstimatedSeconds?: number | null;
+  estimatedTotalSeconds?: number | null;
+  estimateCreatedAt?: string | null;
+  estimateConfidence?: "ALACSONY" | "KOZEPES" | "MAGAS" | null;
+  revisedEstimatedSeconds?: number | null;
+  remainingEstimateSeconds?: number | null;
+  actualElapsedSeconds?: number | null;
+  estimateVarianceSeconds?: number | null;
+  timeTrackingTimezone?: "Europe/Budapest" | null;
   bootAckState?: "WAITING" | "VALIDATED" | "BLOCKED" | null;
   bootAckValidatedAt?: string | null;
   bootAckSha256?: string | null;

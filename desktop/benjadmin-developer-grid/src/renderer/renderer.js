@@ -1488,6 +1488,16 @@ function taskInspectorDate(value) {
   return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("hu-HU");
 }
 
+function taskInspectorDuration(value, signed = false) {
+  if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "—";
+  const raw = Math.round(Number(value));
+  const sign = raw < 0 ? "−" : signed && raw > 0 ? "+" : "";
+  let seconds = Math.abs(raw);
+  const hours = Math.floor(seconds / 3600); seconds -= hours * 3600;
+  const minutes = Math.floor(seconds / 60); seconds -= minutes * 60;
+  return `${sign}${String(hours).padStart(2,"0")}:${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+}
+
 function taskInspectorRows(rows) {
   return `<dl class="task-inspector-kv">${rows.map(([label,value,mono=false]) => `<div><dt>${escapeHtml(label)}</dt><dd${mono ? ' class="is-mono"' : ""}>${escapeHtml(taskInspectorText(value))}</dd></div>`).join("")}</dl>`;
 }
@@ -1556,10 +1566,32 @@ function renderTaskInspector() {
         ["Handshake",task.sourceProofHandshakeStage], ["Scope lock",task.sourceProofActiveScopeLockCount], ["Worktree lease",task.sourceProofActiveWorktreeLeaseCount],
         ["BOOT ACK / coding",`${bootAckState || "—"} · codingAllowed=${bootCoding === true ? "true" : bootCoding === false ? "false" : "—"}`], ["Production access",task.sourceProofProductionAccess || "DENY"]
       ])),
+      taskInspectorSection("Időmérés / becslés", taskInspectorRows([
+        ["Aktuális részfeladat",task.currentWorkUnit || "—"],
+        ["Kezdés",taskInspectorDate(task.workUnitStartedAt)],
+        ["Utolsó állapotközlés",taskInspectorDate(task.workUnitReportedAt)],
+        ["Befejezés",taskInspectorDate(task.workUnitFinishedAt)],
+        ["Tényleges eltelt idő",taskInspectorDuration(task.actualElapsedSeconds ?? task.workUnitElapsedSeconds)],
+        ["Eredeti részfeladat-becslés",taskInspectorDuration(task.workUnitEstimatedSeconds)],
+        ["Eredeti teljes task becslés",taskInspectorDuration(task.estimatedTotalSeconds)],
+        ["Felülvizsgált részfeladat-becslés",taskInspectorDuration(task.revisedEstimatedSeconds)],
+        ["Hátralévő becslés",taskInspectorDuration(task.remainingEstimateSeconds)],
+        ["Eltérés a becsléstől",taskInspectorDuration(task.estimateVarianceSeconds,true)],
+        ["Becslés rögzítve",taskInspectorDate(task.estimateCreatedAt)],
+        ["Bizonytalanság",task.estimateConfidence || "—"],
+        ["Időzóna",task.timeTrackingTimezone || "Europe/Budapest"]
+      ]),"Az eredeti becslés nem írható felül; scope-változáskor külön felülvizsgált becslés rögzíthető."),
       taskInspectorSection("Conversation rollover", taskInspectorRows([
         ["Rollover állapot",launch.conversationRolloverState || task.conversationRolloverState || "NINCS"],
-        ["Előző conversation",launch.conversationRolloverPreviousConversationId || task.conversationRolloverPreviousConversationId,true],
-        ["Új conversation",launch.conversationRolloverConversationId || conversationId,true],
+        ["Continuation állapot",launch.conversationContinuationState || task.conversationContinuationState || "NINCS"],
+        ["Előző authoritative conversation",launch.conversationRolloverPreviousConversationId || task.conversationRolloverPreviousConversationId,true],
+        ["Candidate conversation",launch.conversationRolloverCandidateConversationId || task.conversationRolloverCandidateConversationId || launch.conversationRolloverConversationId || "—",true],
+        ["Aktuális authoritative conversation",conversationId,true],
+        ["Continuation protocol",launch.conversationContinuationProtocolVersion || task.conversationContinuationProtocolVersion || "—"],
+        ["Capsule ID",launch.conversationContinuationCapsuleId || task.conversationContinuationCapsuleId || "—",true],
+        ["Capsule SHA-256",launch.conversationContinuationCapsuleSha256 || task.conversationContinuationCapsuleSha256 || "—",true],
+        ["Rule Pack SHA-256",launch.conversationContinuationRulePackSha256 || task.conversationContinuationRulePackSha256 || "—",true],
+        ["Skill Manifest SHA-256",launch.conversationContinuationSkillManifestSha256 || task.conversationContinuationSkillManifestSha256 || "—",true],
         ["Befagyasztott Context",`${launch.conversationRolloverContextSnapshotId || task.conversationRolloverContextSnapshotId || "—"} · rev ${launch.conversationRolloverContextRevision || task.conversationRolloverContextRevision || "—"}`],
         ["Befagyasztott handoff",launch.conversationRolloverHandoffPackId || task.conversationRolloverHandoffPackId,true],
         ["Source HEAD",launch.conversationRolloverSourceHead || task.conversationRolloverSourceHead,true],

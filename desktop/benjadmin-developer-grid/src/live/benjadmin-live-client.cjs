@@ -329,7 +329,31 @@ function synthesizeSessionTask({ session, primaryTask, stateUpdatedAt, generated
     contextRevision: Number(context.contextRevision) || null,
     contextSnapshotSummary: context.contextSnapshotSummary || null,
     handoffPackId: context.handoffPackId || null,
-    handoffPackState: context.handoffPackState || null
+    handoffPackState: context.handoffPackState || null,
+    conversationRolloverState: context.conversationRolloverState || null,
+    conversationRolloverPreviousConversationId: context.conversationRolloverPreviousConversationId || null,
+    conversationRolloverCandidateConversationId: context.conversationRolloverCandidateConversationId || null,
+    conversationRolloverCandidateConversationUrl: context.conversationRolloverCandidateConversationUrl || null,
+    conversationContinuationState: context.conversationContinuationState || null,
+    conversationContinuationProtocolVersion: context.conversationContinuationProtocolVersion || null,
+    conversationContinuationCapsuleId: context.conversationContinuationCapsuleId || null,
+    conversationContinuationCapsuleSha256: context.conversationContinuationCapsuleSha256 || null,
+    conversationContinuationRulePackSha256: context.conversationContinuationRulePackSha256 || null,
+    conversationContinuationSkillManifestSha256: context.conversationContinuationSkillManifestSha256 || null,
+    currentWorkUnit: context.currentWorkUnit || null,
+    workUnitStartedAt: context.workUnitStartedAt || null,
+    workUnitReportedAt: context.workUnitReportedAt || null,
+    workUnitFinishedAt: context.workUnitFinishedAt || null,
+    workUnitElapsedSeconds: context.workUnitElapsedSeconds == null ? null : Number.isFinite(Number(context.workUnitElapsedSeconds)) ? Number(context.workUnitElapsedSeconds) : null,
+    workUnitEstimatedSeconds: context.workUnitEstimatedSeconds == null ? null : Number.isFinite(Number(context.workUnitEstimatedSeconds)) ? Number(context.workUnitEstimatedSeconds) : null,
+    estimatedTotalSeconds: context.estimatedTotalSeconds == null ? null : Number.isFinite(Number(context.estimatedTotalSeconds)) ? Number(context.estimatedTotalSeconds) : null,
+    estimateCreatedAt: context.estimateCreatedAt || null,
+    estimateConfidence: context.estimateConfidence || null,
+    revisedEstimatedSeconds: context.revisedEstimatedSeconds == null ? null : Number.isFinite(Number(context.revisedEstimatedSeconds)) ? Number(context.revisedEstimatedSeconds) : null,
+    remainingEstimateSeconds: context.remainingEstimateSeconds == null ? null : Number.isFinite(Number(context.remainingEstimateSeconds)) ? Number(context.remainingEstimateSeconds) : null,
+    actualElapsedSeconds: context.actualElapsedSeconds == null ? null : Number.isFinite(Number(context.actualElapsedSeconds)) ? Number(context.actualElapsedSeconds) : null,
+    estimateVarianceSeconds: context.estimateVarianceSeconds == null ? null : Number.isFinite(Number(context.estimateVarianceSeconds)) ? Number(context.estimateVarianceSeconds) : null,
+    timeTrackingTimezone: context.timeTrackingTimezone || null
   };
 }
 

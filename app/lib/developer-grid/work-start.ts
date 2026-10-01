@@ -1303,6 +1303,17 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
   const rolloverSourceProofSha256 = text(rawInput.conversationRolloverSourceProofSha256, 64).toLowerCase();
   const rolloverPromptMessageId = text(rawInput.conversationRolloverPromptMessageId, 220) || null;
   const rolloverAckSha256 = text(rawInput.conversationRolloverAckSha256, 64).toLowerCase() || null;
+  const continuationProtocolVersion = text(rawInput.conversationContinuationProtocolVersion, 120);
+  const continuationCapsuleId = text(rawInput.conversationContinuationCapsuleId, 320);
+  const continuationCapsuleSha256 = text(rawInput.conversationContinuationCapsuleSha256, 64).toLowerCase();
+  const continuationRulePackSha256 = text(rawInput.conversationContinuationRulePackSha256, 64).toLowerCase();
+  const continuationSkillManifestSha256 = text(rawInput.conversationContinuationSkillManifestSha256, 64).toLowerCase();
+  const continuationV2Requested = Boolean(continuationProtocolVersion || continuationCapsuleId || continuationCapsuleSha256 || continuationRulePackSha256 || continuationSkillManifestSha256);
+  const continuationV2Complete = continuationProtocolVersion === "BENJADMIN_CONTINUATION_PROTOCOL_V2"
+    && Boolean(continuationCapsuleId)
+    && /^[0-9a-f]{64}$/.test(continuationCapsuleSha256)
+    && /^[0-9a-f]{64}$/.test(continuationRulePackSha256)
+    && /^[0-9a-f]{64}$/.test(continuationSkillManifestSha256);
   const chatConversationUrl = surfaceType === "CHATGPT" ? surfaceConversationUrl : "";
   const chatConversationId = surfaceType === "CHATGPT" ? surfaceConversationId : "";
   const chatConversationTitle = surfaceType === "CHATGPT" ? surfaceConversationTitle : "";
@@ -1446,6 +1457,11 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     if (!validatedManualRebind && !preBootManualRebind) {
       const error = new Error("Kézi rebind csak validált BOOT ACK mellett vagy szigorúan ellenőrzött pre-BOOT WAITING állapotban végezhető.");
       Object.assign(error, { code: "DEVELOPER_GRID_MANUAL_REBIND_BOOT_ACK_REQUIRED", status: 409 });
+      throw error;
+    }
+    if (validatedManualRebind) {
+      const error = new Error("Validált futó task conversation-váltása közvetlen manualRebind módban tiltott. Használd a Continuation V2 candidate + ACK folyamatot.");
+      Object.assign(error, { code: "DEVELOPER_GRID_VALIDATED_REBIND_REQUIRES_CONTINUATION_V2", status: 409 });
       throw error;
     }
     if (preBootManualRebind) {
@@ -1593,9 +1609,27 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
         })
       : rolloverSourceProofSha256 === expectedProofSha256;
     const authoritativeConversationUrl = text(ctx.surfaceConversationUrl ?? ctx.chatConversationUrl, 1000);
-    const orphanProjectIdentityOk = !orphanRolloverRecovery
-      || (chatProjectKeyFromConversationUrl(authoritativeConversationUrl)
-        && chatProjectKeyFromConversationUrl(authoritativeConversationUrl) === chatProjectKeyFromConversationUrl(surfaceConversationUrl));
+    const authoritativeProjectKey = chatProjectKeyFromConversationUrl(authoritativeConversationUrl);
+    const successorProjectKey = chatProjectKeyFromConversationUrl(surfaceConversationUrl);
+    const projectIdentityOk = Boolean(authoritativeProjectKey && successorProjectKey && authoritativeProjectKey === successorProjectKey);
+    const frozenContinuationProtocolVersion = text(ctx.conversationContinuationProtocolVersion, 120);
+    const frozenContinuationCapsuleId = text(ctx.conversationContinuationCapsuleId, 320);
+    const frozenContinuationCapsuleSha256 = text(ctx.conversationContinuationCapsuleSha256, 64).toLowerCase();
+    const frozenContinuationRulePackSha256 = text(ctx.conversationContinuationRulePackSha256, 64).toLowerCase();
+    const frozenContinuationSkillManifestSha256 = text(ctx.conversationContinuationSkillManifestSha256, 64).toLowerCase();
+    const frozenContinuationV2 = Boolean(frozenContinuationProtocolVersion || frozenContinuationCapsuleId || frozenContinuationCapsuleSha256 || frozenContinuationRulePackSha256 || frozenContinuationSkillManifestSha256);
+    const continuationIdentityOk = frozenContinuationV2
+      ? continuationV2Complete
+        && continuationProtocolVersion === frozenContinuationProtocolVersion
+        && continuationCapsuleId === frozenContinuationCapsuleId
+        && continuationCapsuleSha256 === frozenContinuationCapsuleSha256
+        && continuationRulePackSha256 === frozenContinuationRulePackSha256
+        && continuationSkillManifestSha256 === frozenContinuationSkillManifestSha256
+      : (!continuationV2Requested || continuationV2Complete);
+    const frozenCandidateConversationId = text(ctx.conversationRolloverCandidateConversationId, 180);
+    const candidatePromotionOk = conversationRolloverState !== "READY"
+      || !frozenContinuationV2
+      || Boolean(frozenCandidateConversationId && frozenCandidateConversationId === surfaceConversationId);
     const rolloverIdentityMismatch = !frozenContextSnapshotId
       || rolloverContextSnapshotId !== frozenContextSnapshotId
       || rolloverContextRevision !== frozenContextRevision
@@ -1605,7 +1639,9 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       || rolloverSourceHead !== expectedHead
       || !/^[0-9a-f]{64}$/.test(rolloverSourceProofSha256)
       || !proofAccepted
-      || !orphanProjectIdentityOk;
+      || !projectIdentityOk
+      || !continuationIdentityOk
+      || !candidatePromotionOk;
     if (rolloverIdentityMismatch) {
       const error = new Error("A conversation rollover Context/Handoff/source identity eltér az authoritative aktív session állapotától.");
       Object.assign(error, { code: "DEVELOPER_GRID_ROLLOVER_IDENTITY_MISMATCH", status: 409 });
@@ -1618,23 +1654,31 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
     }
   }
   const confirmedAt = new Date().toISOString();
+  const candidateOnlyRollover = conversationRollover && conversationRolloverState !== "READY";
+  const currentContext = session.developmentContext;
+  const authoritativeSurfaceConversationId = candidateOnlyRollover ? text(currentContext.surfaceConversationId, 180) : surfaceConversationId;
+  const authoritativeSurfaceConversationUrl = candidateOnlyRollover ? text(currentContext.surfaceConversationUrl, 1000) : surfaceConversationUrl;
+  const authoritativeSurfaceConversationTitle = candidateOnlyRollover ? text(currentContext.surfaceConversationTitle, 500) : surfaceConversationTitle;
+  const authoritativeChatConversationId = candidateOnlyRollover ? text(currentContext.chatConversationId, 180) : chatConversationId;
+  const authoritativeChatConversationUrl = candidateOnlyRollover ? text(currentContext.chatConversationUrl, 1000) : chatConversationUrl;
+  const authoritativeChatConversationTitle = candidateOnlyRollover ? text(currentContext.chatConversationTitle, 500) : chatConversationTitle;
   const updated: WorkerSession = {
     ...session,
     developmentContext: {
       ...session.developmentContext,
       chatLaunchMode,
       surfaceType,
-      surfacePreviousConversationId,
-      surfaceConversationId,
-      surfaceConversationUrl,
-      surfaceConversationTitle,
-      surfaceConversationConfirmedAt: confirmedAt,
-      chatPreviousConversationId,
-      chatConversationId: chatConversationId || null,
-      chatConversationUrl: chatConversationUrl || null,
-      chatConversationTitle: chatConversationTitle || null,
-      chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null,
-      chatConversationConfirmedBy: confirmedBy,
+      surfacePreviousConversationId: candidateOnlyRollover ? currentContext.surfacePreviousConversationId ?? null : surfacePreviousConversationId,
+      surfaceConversationId: authoritativeSurfaceConversationId || null,
+      surfaceConversationUrl: authoritativeSurfaceConversationUrl || null,
+      surfaceConversationTitle: authoritativeSurfaceConversationTitle || null,
+      surfaceConversationConfirmedAt: candidateOnlyRollover ? currentContext.surfaceConversationConfirmedAt ?? null : confirmedAt,
+      chatPreviousConversationId: candidateOnlyRollover ? currentContext.chatPreviousConversationId ?? null : chatPreviousConversationId,
+      chatConversationId: authoritativeChatConversationId || null,
+      chatConversationUrl: authoritativeChatConversationUrl || null,
+      chatConversationTitle: authoritativeChatConversationTitle || null,
+      chatConversationConfirmedAt: candidateOnlyRollover ? currentContext.chatConversationConfirmedAt ?? null : (surfaceType === "CHATGPT" ? confirmedAt : null),
+      chatConversationConfirmedBy: candidateOnlyRollover ? currentContext.chatConversationConfirmedBy ?? null : confirmedBy,
       ...(manualRebind ? {
         conversationRolloverState: null,
         conversationRolloverReason: null,
@@ -1648,6 +1692,15 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
         conversationRolloverAckSha256: null,
         conversationRolloverStartedAt: null,
         conversationRolloverCompletedAt: null,
+        conversationRolloverCandidateConversationId: null,
+        conversationRolloverCandidateConversationUrl: null,
+        conversationRolloverCandidateConversationTitle: null,
+        conversationContinuationState: null,
+        conversationContinuationProtocolVersion: null,
+        conversationContinuationCapsuleId: null,
+        conversationContinuationCapsuleSha256: null,
+        conversationContinuationRulePackSha256: null,
+        conversationContinuationSkillManifestSha256: null,
       } : {}),
       ...(conversationRollover ? {
         conversationRolloverState: conversationRolloverState as "ACK_WAIT" | "READY" | "BLOCKED",
@@ -1663,6 +1716,15 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
         conversationRolloverOrphanRecovery: orphanRolloverRecovery,
         conversationRolloverStartedAt: session.developmentContext.conversationRolloverStartedAt || confirmedAt,
         conversationRolloverCompletedAt: conversationRolloverState === "READY" ? confirmedAt : null,
+        conversationRolloverCandidateConversationId: surfaceConversationId,
+        conversationRolloverCandidateConversationUrl: surfaceConversationUrl,
+        conversationRolloverCandidateConversationTitle: surfaceConversationTitle,
+        conversationContinuationState: conversationRolloverState === "READY" ? "READY" : conversationRolloverState === "BLOCKED" ? "BLOCKED" : "ACK_WAIT",
+        conversationContinuationProtocolVersion: continuationProtocolVersion || null,
+        conversationContinuationCapsuleId: continuationCapsuleId || null,
+        conversationContinuationCapsuleSha256: continuationCapsuleSha256 || null,
+        conversationContinuationRulePackSha256: continuationRulePackSha256 || null,
+        conversationContinuationSkillManifestSha256: continuationSkillManifestSha256 || null,
       } : {}),
       resolvedAt: confirmedAt,
     },
@@ -1687,16 +1749,21 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       workItem: updated.developmentContext.workItem,
       workStageIndex: updated.developmentContext.workStageIndex || 1,
       previousConversationId: (conversationRollover || manualRebind) ? surfacePreviousConversationId : null,
-      conversationId: surfaceConversationId,
+      conversationId: candidateOnlyRollover ? authoritativeSurfaceConversationId : surfaceConversationId,
+      candidateConversationId: conversationRollover ? surfaceConversationId : null,
+      continuationState: conversationRollover ? (conversationRolloverState === "READY" ? "READY" : "ACK_WAIT") : null,
       contextSnapshotId: conversationRollover ? rolloverContextSnapshotId : null,
       handoffPackId: conversationRollover ? rolloverHandoffPackId : null,
       orphanRolloverRecovery: conversationRollover ? orphanRolloverRecovery : false,
     },
   });
   return {
-    taskId, workerCode, chatLaunchMode, surfaceType, surfaceConversationId, surfaceConversationUrl, surfaceConversationTitle,
-    surfaceConversationConfirmedAt: confirmedAt, chatConversationId: chatConversationId || null, chatConversationUrl: chatConversationUrl || null, chatConversationTitle: chatConversationTitle || null,
-    chatConversationConfirmedAt: surfaceType === "CHATGPT" ? confirmedAt : null, chatConversationConfirmedBy: confirmedBy,
+    taskId, workerCode, chatLaunchMode, surfaceType,
+    surfaceConversationId: authoritativeSurfaceConversationId || null, surfaceConversationUrl: authoritativeSurfaceConversationUrl || null, surfaceConversationTitle: authoritativeSurfaceConversationTitle || null,
+    surfaceConversationConfirmedAt: candidateOnlyRollover ? currentContext.surfaceConversationConfirmedAt ?? null : confirmedAt,
+    chatConversationId: authoritativeChatConversationId || null, chatConversationUrl: authoritativeChatConversationUrl || null, chatConversationTitle: authoritativeChatConversationTitle || null,
+    chatConversationConfirmedAt: candidateOnlyRollover ? currentContext.chatConversationConfirmedAt ?? null : (surfaceType === "CHATGPT" ? confirmedAt : null),
+    chatConversationConfirmedBy: candidateOnlyRollover ? currentContext.chatConversationConfirmedBy ?? null : confirmedBy,
     manualRebind,
     legacySurfaceBind,
     orphanRolloverRecovery,
@@ -1709,6 +1776,12 @@ export async function bindDeveloperGridConversation(rawInput: Record<string, unk
       handoffPackId: rolloverHandoffPackId,
       sourceHead: rolloverSourceHead,
       sourceProofSha256: rolloverSourceProofSha256,
+      candidateConversationId: surfaceConversationId,
+      continuationProtocolVersion: continuationProtocolVersion || null,
+      continuationCapsuleId: continuationCapsuleId || null,
+      continuationCapsuleSha256: continuationCapsuleSha256 || null,
+      rulePackSha256: continuationRulePackSha256 || null,
+      skillManifestSha256: continuationSkillManifestSha256 || null,
     } : null,
     revision: next.revision, productionAccess: "DENY" as const,
   };

@@ -1,5 +1,7 @@
 "use strict";
 
+const { CONTINUATION_PROTOCOL_VERSION, buildContinuationCapsule } = require("./continuation-contract.cjs");
+
 const ROLLOVER_PROMPT_MARKER = "BENJADMIN_PROMPT_KIND: CONVERSATION_ROLLOVER_V1";
 const ROLLOVER_ACK_MARKER = "BENJADMIN_CONVERSATION_ROLLOVER_ACK_V1";
 const ROLLOVER_STATES = Object.freeze({
@@ -52,6 +54,7 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
   const context = memory?.context || {};
   const handoff = memory?.handoff || {};
   const code = backendWorkerCode(workerCode);
+  const capsule = buildContinuationCapsule({ task, workerCode:code, previousConversationId, previousConversationUrl, memory, sourceProofSha256 });
   const summary = text(context.summary || handoff.summary || task?.contextSnapshotSummary || "Nincs Context Snapshot összefoglaló.", 12000);
   const blockers = Array.isArray(context.unresolvedBlockers) ? context.unresolvedBlockers.map((item) => text(item?.summary || item, 500)).filter(Boolean) : [];
   return [
@@ -64,6 +67,10 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
     `Previous title: ${text(previousConversationTitle, 500) || "—"}`,
     `Previous URL: ${text(previousConversationUrl, 1200) || "—"}`,
     `Human Handoff MD: ${text(humanHandoffId, 260) || "—"} · ${text(humanHandoffFileName, 500) || "—"}`,
+    `Continuation Protocol: ${CONTINUATION_PROTOCOL_VERSION}`,
+    `Continuation Capsule: ${capsule.id} · ${capsule.capsuleSha256}`,
+    `Rule Pack: ${capsule.policy.rulePackId} · ${capsule.policy.rulePackSha256}`,
+    `Skill Manifest: ${capsule.skills.skillManifestId} · ${capsule.skills.skillManifestSha256}`,
     `Context Snapshot: ${text(context.id, 260)} · revision ${Number(context.revision || 0)}`,
     `Handoff Pack: ${text(handoff.id, 260)}`,
     `Stage: ${Number(context.stage || task?.workStageIndex || 1)}/6 · ${text(context.stageLabel || "")}`,
@@ -103,6 +110,11 @@ function buildConversationRolloverPrompt({ task, workerCode, previousConversatio
       handoffPackId:text(handoff.id,260),
       sourceHead:text(context.sourceHead || task?.sourceHead,64),
       sourceProofSha256:text(sourceProofSha256,64),
+      continuationProtocolVersion:CONTINUATION_PROTOCOL_VERSION,
+      continuationCapsuleId:capsule.id,
+      continuationCapsuleSha256:capsule.capsuleSha256,
+      rulePackSha256:capsule.policy.rulePackSha256,
+      skillManifestSha256:capsule.skills.skillManifestSha256,
       productionAccess:"DENY",
       sameTask:true,
       newTaskLaunch:false,
@@ -123,11 +135,20 @@ function promptLine(source, label) {
   return line ? String(line).trim().slice(prefix.length).trim() : "";
 }
 
+function contractRefLine(source, label) {
+  const raw = promptLine(source, label);
+  const match = raw.match(/^([^\s·]+)\s*·\s*([0-9a-f]{64})$/i);
+  return match ? { id:String(match[1] || ""), sha256:String(match[2] || "").toLowerCase() } : { id:"", sha256:"" };
+}
+
 function parseConversationRolloverPrompt(body) {
   const source = String(body || "");
   if (!source.includes(ROLLOVER_PROMPT_MARKER)) return { ok:false, code:"ROLLOVER_PROMPT_MARKER_MISSING" };
   const contextLine = promptLine(source, "Context Snapshot");
   const contextMatch = contextLine.match(/^([^\s·]+)\s*·\s*revision\s+(\d+)$/i);
+  const capsuleRef = contractRefLine(source, "Continuation Capsule");
+  const rulePackRef = contractRefLine(source, "Rule Pack");
+  const skillManifestRef = contractRefLine(source, "Skill Manifest");
   const prompt = {
     workerCode:backendWorkerCode(promptLine(source, "Worker")),
     taskId:promptLine(source, "Task"),
@@ -138,13 +159,26 @@ function parseConversationRolloverPrompt(body) {
     handoffPackId:promptLine(source, "Handoff Pack"),
     sourceHead:promptLine(source, "HEAD").toLowerCase(),
     sourceProofSha256:promptLine(source, "Source proof").toLowerCase(),
+    continuationProtocolVersion:promptLine(source, "Continuation Protocol"),
+    continuationCapsuleId:capsuleRef.id,
+    continuationCapsuleSha256:capsuleRef.sha256,
+    rulePackId:rulePackRef.id,
+    rulePackSha256:rulePackRef.sha256,
+    skillManifestId:skillManifestRef.id,
+    skillManifestSha256:skillManifestRef.sha256,
     productionAccess:/DEV ONLY\s*·\s*PROD DENY\./i.test(source) ? "DENY" : "",
   };
   const required = ["workerCode","taskId","sessionId","previousConversationId","contextSnapshotId","handoffPackId","sourceHead","sourceProofSha256","productionAccess"];
+  const continuationV2 = Boolean(prompt.continuationProtocolVersion || prompt.continuationCapsuleId || prompt.continuationCapsuleSha256 || prompt.rulePackSha256 || prompt.skillManifestSha256);
+  if (continuationV2) required.push("continuationProtocolVersion","continuationCapsuleId","continuationCapsuleSha256","rulePackId","rulePackSha256","skillManifestId","skillManifestSha256");
   const missing = required.filter((field) => !String(prompt[field] ?? "").trim());
   if (!Number.isInteger(prompt.contextRevision) || prompt.contextRevision < 1) missing.push("contextRevision");
   if (!/^[0-9a-f]{40}$/.test(prompt.sourceHead)) missing.push("sourceHeadFormat");
   if (!/^[0-9a-f]{64}$/.test(prompt.sourceProofSha256)) missing.push("sourceProofSha256Format");
+  if (continuationV2 && !/^[0-9a-f]{64}$/.test(prompt.continuationCapsuleSha256)) missing.push("continuationCapsuleSha256Format");
+  if (continuationV2 && !/^[0-9a-f]{64}$/.test(prompt.rulePackSha256)) missing.push("rulePackSha256Format");
+  if (continuationV2 && !/^[0-9a-f]{64}$/.test(prompt.skillManifestSha256)) missing.push("skillManifestSha256Format");
+  if (continuationV2 && prompt.continuationProtocolVersion !== CONTINUATION_PROTOCOL_VERSION) missing.push("continuationProtocolVersion");
   return missing.length ? { ok:false, code:"ROLLOVER_PROMPT_IDENTITY_INCOMPLETE", missing, prompt } : { ok:true, prompt };
 }
 
@@ -162,6 +196,11 @@ function validateConversationRolloverPrompt(body, expected) {
   same("contextRevision", Number(prompt.contextRevision || 0), Number(expected.contextRevision || 0));
   same("handoffPackId", prompt.handoffPackId, expected.handoffPackId);
   same("sourceHead", String(prompt.sourceHead || "").toLowerCase(), String(expected.sourceHead || "").toLowerCase());
+  if (expected.continuationProtocolVersion) same("continuationProtocolVersion", prompt.continuationProtocolVersion, expected.continuationProtocolVersion);
+  if (expected.continuationCapsuleId) same("continuationCapsuleId", prompt.continuationCapsuleId, expected.continuationCapsuleId);
+  if (expected.continuationCapsuleSha256) same("continuationCapsuleSha256", prompt.continuationCapsuleSha256, expected.continuationCapsuleSha256);
+  if (expected.rulePackSha256) same("rulePackSha256", prompt.rulePackSha256, expected.rulePackSha256);
+  if (expected.skillManifestSha256) same("skillManifestSha256", prompt.skillManifestSha256, expected.skillManifestSha256);
   if (Array.isArray(expected.acceptedSourceProofSha256) && expected.acceptedSourceProofSha256.length) {
     const accepted = expected.acceptedSourceProofSha256.map((item) => String(item || "").toLowerCase()).filter((item) => /^[0-9a-f]{64}$/.test(item));
     if (!accepted.includes(String(prompt.sourceProofSha256 || "").toLowerCase())) mismatches.push("sourceProofSha256");
@@ -241,6 +280,15 @@ function validateConversationRolloverAck(body, expected) {
   same("handoffPackId", ack.handoffPackId, expected.handoffPackId);
   same("sourceHead", String(ack.sourceHead || "").toLowerCase(), String(expected.sourceHead || "").toLowerCase());
   same("sourceProofSha256", String(ack.sourceProofSha256 || "").toLowerCase(), String(expected.sourceProofSha256 || "").toLowerCase());
+  const continuationExpected = Boolean(expected.continuationProtocolVersion || expected.continuationCapsuleId || expected.continuationCapsuleSha256 || expected.rulePackSha256 || expected.skillManifestSha256);
+  const continuationProvided = Boolean(ack.continuationProtocolVersion || ack.continuationCapsuleId || ack.continuationCapsuleSha256 || ack.rulePackSha256 || ack.skillManifestSha256);
+  if (continuationExpected || continuationProvided) {
+    same("continuationProtocolVersion", ack.continuationProtocolVersion, expected.continuationProtocolVersion || CONTINUATION_PROTOCOL_VERSION);
+    same("continuationCapsuleId", ack.continuationCapsuleId, expected.continuationCapsuleId);
+    same("continuationCapsuleSha256", String(ack.continuationCapsuleSha256 || "").toLowerCase(), String(expected.continuationCapsuleSha256 || "").toLowerCase());
+    same("rulePackSha256", String(ack.rulePackSha256 || "").toLowerCase(), String(expected.rulePackSha256 || "").toLowerCase());
+    same("skillManifestSha256", String(ack.skillManifestSha256 || "").toLowerCase(), String(expected.skillManifestSha256 || "").toLowerCase());
+  }
   if (String(ack.productionAccess || "").toUpperCase() !== "DENY") mismatches.push("productionAccess");
   if (ack.sameTask !== true) mismatches.push("sameTask");
   if (ack.newTaskLaunch !== false) mismatches.push("newTaskLaunch");
@@ -248,7 +296,8 @@ function validateConversationRolloverAck(body, expected) {
     const allowedFields = new Set([
       "schemaVersion", "taskId", "sessionId", "workerCode", "previousConversationId",
       "contextSnapshotId", "contextRevision", "handoffPackId", "sourceHead",
-      "sourceProofSha256", "productionAccess", "sameTask", "newTaskLaunch",
+      "sourceProofSha256", "continuationProtocolVersion", "continuationCapsuleId", "continuationCapsuleSha256",
+      "rulePackSha256", "skillManifestSha256", "productionAccess", "sameTask", "newTaskLaunch",
     ]);
     for (const field of Object.keys(ack)) if (!allowedFields.has(field)) mismatches.push(`unexpected:${field}`);
   }

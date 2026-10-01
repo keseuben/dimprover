@@ -12,6 +12,8 @@ const allowedKinds = new Set<GridEvidenceKind>(["FILE", "TEST", "ERROR"]);
 const allowedStatuses = new Set<GridEvidenceStatus>(["RECORDED", "PASS", "FAIL", "BLOCKED"]);
 const workers = new Set<WorkerCode>(["ARMINAI", "OUTMINAI", "BENJAMINAI", "JAZMINAI", "DEVMINAI"]);
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
+const finiteNumber = (value: unknown) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
+const isoTime = (value: unknown) => { const raw = text(value, 120); return raw && Number.isFinite(Date.parse(raw)) ? raw : ""; };
 
 function fail(code: string, message: string, status = 409): never {
   throw Object.assign(new Error(message), { code, status });
@@ -25,6 +27,21 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   const reportedHead = text(rawInput.head, 80).toLowerCase();
   const reportedStage = Number(rawInput.stage);
   const reportedResult = text(rawInput.result, 40).toUpperCase();
+  const reportSchemaVersion = Number(rawInput.schemaVersion || 1);
+  const workUnit = text(rawInput.workUnit, 500);
+  const workUnitStartedAt = isoTime(rawInput.startedAt);
+  const workUnitReportedAt = isoTime(rawInput.reportedAt);
+  const workUnitFinishedAt = isoTime(rawInput.finishedAt);
+  const timeTrackingTimezone = text(rawInput.timezone, 80);
+  const workUnitElapsedSeconds = finiteNumber(rawInput.elapsedSeconds);
+  const workUnitEstimatedSeconds = finiteNumber(rawInput.estimatedSeconds);
+  const estimatedTotalSeconds = finiteNumber(rawInput.estimatedTotalSeconds);
+  const estimateCreatedAt = isoTime(rawInput.estimateCreatedAt);
+  const estimateConfidence = text(rawInput.estimateConfidence, 40).toUpperCase();
+  const revisedEstimatedSeconds = rawInput.revisedEstimatedSeconds == null ? null : finiteNumber(rawInput.revisedEstimatedSeconds);
+  const remainingEstimateSeconds = rawInput.remainingEstimateSeconds == null ? null : finiteNumber(rawInput.remainingEstimateSeconds);
+  const actualElapsedSeconds = finiteNumber(rawInput.actualElapsedSeconds);
+  const estimateVarianceSeconds = finiteNumber(rawInput.estimateVarianceSeconds);
   const task = await getDeveloperGridTaskById(taskId);
   if (!task) fail("DEVELOPER_GRID_EVIDENCE_TASK_MISMATCH", "A worker evidence task nem található a Central Core authoritative taskállapotában.");
   if (!workers.has(workerCode)) fail("DEVELOPER_GRID_EVIDENCE_WORKER_INVALID", "Ismeretlen Developer Grid evidence worker.", 400);
@@ -39,6 +56,32 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
   if (reportedStage > previousStage + 1) fail("DEVELOPER_GRID_STAGE_SKIP_BLOCKED", `Stage átugrás tiltva: ${previousStage}/6 → ${reportedStage}/6.`);
   if (reportedStage > previousStage && reportedResult !== "PASS") fail("DEVELOPER_GRID_STAGE_ADVANCE_PASS_REQUIRED", "A következő fejlesztési fázisba csak PASS stage report után lehet továbblépni.");
   if (previousStage >= 4 && reportedStage > previousStage) fail("DEVELOPER_GRID_STAGE_CENTRAL_GATE_REQUIRED", "A 4→5, 5→6 és lezárási átmenetet kizárólag a Central Core Review/Build/Closure kapuja végezheti.");
+  if (![1,2].includes(reportSchemaVersion)) fail("DEVELOPER_GRID_STAGE_REPORT_SCHEMA_INVALID", "A stage report schemaVersion csak 1 vagy 2 lehet.", 400);
+  if (reportSchemaVersion === 2) {
+    if (!workUnit || !workUnitStartedAt || !workUnitReportedAt || !workUnitFinishedAt || !estimateCreatedAt || timeTrackingTimezone !== "Europe/Budapest") {
+      fail("DEVELOPER_GRID_STAGE_TIMING_REQUIRED", "A V2 stage reporthoz workUnit, kezdés/jelentés/befejezés, becslés időpontja és Europe/Budapest időzóna kötelező.", 400);
+    }
+    if (workUnitElapsedSeconds == null || workUnitElapsedSeconds < 0 || workUnitEstimatedSeconds == null || workUnitEstimatedSeconds <= 0 || estimatedTotalSeconds == null || estimatedTotalSeconds <= 0 || actualElapsedSeconds == null || actualElapsedSeconds < 0 || estimateVarianceSeconds == null) {
+      fail("DEVELOPER_GRID_STAGE_ESTIMATE_REQUIRED", "A V2 stage reporthoz pozitív részfeladat- és teljes becslés, tényleges eltelt idő és becslési eltérés kötelező.", 400);
+    }
+    if (!["ALACSONY","KOZEPES","MAGAS"].includes(estimateConfidence)) fail("DEVELOPER_GRID_STAGE_ESTIMATE_CONFIDENCE_INVALID", "Érvénytelen becslési bizonytalanság.", 400);
+    if (revisedEstimatedSeconds != null && revisedEstimatedSeconds <= 0) fail("DEVELOPER_GRID_STAGE_REVISED_ESTIMATE_INVALID", "A revisedEstimatedSeconds csak pozitív lehet.", 400);
+    if (remainingEstimateSeconds != null && remainingEstimateSeconds < 0) fail("DEVELOPER_GRID_STAGE_REMAINING_ESTIMATE_INVALID", "A remainingEstimateSeconds nem lehet negatív.", 400);
+    const startMs = Date.parse(workUnitStartedAt), reportMs = Date.parse(workUnitReportedAt), finishMs = Date.parse(workUnitFinishedAt), estimateMs = Date.parse(estimateCreatedAt);
+    if (reportMs < startMs || finishMs < startMs || estimateMs > startMs) fail("DEVELOPER_GRID_STAGE_TIME_ORDER_INVALID", "A stage report időrendje hibás.", 400);
+    const wallElapsed = Math.round((finishMs - startMs) / 1000);
+    if (Math.abs(wallElapsed - workUnitElapsedSeconds) > 5 || Math.abs(actualElapsedSeconds - workUnitElapsedSeconds) > 1) fail("DEVELOPER_GRID_STAGE_ELAPSED_MISMATCH", "A tényleges eltelt idő nem egyezik a kezdés/befejezés időpontjaival.", 400);
+    const effectiveEstimate = revisedEstimatedSeconds != null ? revisedEstimatedSeconds : workUnitEstimatedSeconds;
+    if (Math.abs((actualElapsedSeconds - effectiveEstimate) - estimateVarianceSeconds) > 1) fail("DEVELOPER_GRID_STAGE_ESTIMATE_VARIANCE_MISMATCH", "A becslési eltérés számítása hibás.", 400);
+    if (session.developmentContext.currentWorkUnit === workUnit) {
+      const originalEstimate = Number(session.developmentContext.workUnitEstimatedSeconds || 0);
+      if (originalEstimate > 0 && originalEstimate !== workUnitEstimatedSeconds) fail("DEVELOPER_GRID_ORIGINAL_ESTIMATE_IMMUTABLE", "Az eredeti részfeladat-becslés utólag nem írható át.");
+      const originalEstimateCreatedAt = text(session.developmentContext.estimateCreatedAt, 120);
+      if (originalEstimateCreatedAt && originalEstimateCreatedAt !== estimateCreatedAt) fail("DEVELOPER_GRID_ESTIMATE_CREATED_AT_IMMUTABLE", "Az eredeti becslés időpontja utólag nem írható át.");
+    }
+    const originalTotalEstimate = Number(session.developmentContext.estimatedTotalSeconds || 0);
+    if (originalTotalEstimate > 0 && originalTotalEstimate !== estimatedTotalSeconds) fail("DEVELOPER_GRID_TOTAL_ESTIMATE_IMMUTABLE", "A teljes task eredeti becsült ideje utólag nem írható át.");
+  }
 
   const entries = Array.isArray(rawInput.entries) ? rawInput.entries.slice(0, 60) : [];
   if (!entries.length) fail("DEVELOPER_GRID_EVIDENCE_ENTRIES_REQUIRED", "Legalább egy evidence bejegyzés szükséges.", 400);
@@ -57,7 +100,23 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     fail("DEVELOPER_GRID_STAGE_BLOCKING_EVIDENCE", "FAIL/BLOCKED evidence mellett stage előrelépés tiltva.");
   }
 
-  let authoritativeSession = { ...session, developmentContext: { ...session.developmentContext, workStageIndex: reportedStage, resolvedAt: new Date().toISOString() } };
+  const timingPatch = reportSchemaVersion === 2 ? {
+    currentWorkUnit: workUnit,
+    workUnitStartedAt,
+    workUnitReportedAt,
+    workUnitFinishedAt,
+    workUnitElapsedSeconds,
+    workUnitEstimatedSeconds,
+    estimatedTotalSeconds: session.developmentContext.estimatedTotalSeconds ?? estimatedTotalSeconds,
+    estimateCreatedAt,
+    estimateConfidence: estimateConfidence as "ALACSONY" | "KOZEPES" | "MAGAS",
+    revisedEstimatedSeconds,
+    remainingEstimateSeconds,
+    actualElapsedSeconds,
+    estimateVarianceSeconds,
+    timeTrackingTimezone: "Europe/Budapest" as const,
+  } : {};
+  let authoritativeSession = { ...session, developmentContext: { ...session.developmentContext, ...timingPatch, workStageIndex: reportedStage, resolvedAt: new Date().toISOString() } };
   if (reportedHead !== session.sourceProvenance.head.toLowerCase()) {
     const advanced = await verifySourceHeadAdvance(session.sourceProvenance, reportedHead);
     authoritativeSession = { ...authoritativeSession, sourceProvenance: advanced };
@@ -72,7 +131,7 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
     await appendGridEvent({
       kind: "analysis", origin: "LIVE", workerCode, taskId, projectId: task.projectId, productionAccess: "DENY",
       developmentContext: authoritativeSession.developmentContext, branch: authoritativeSession.sourceProvenance.branch, worktree: authoritativeSession.sourceProvenance.worktree, head: authoritativeSession.sourceProvenance.head,
-      delta: { eventType: "WORK_STAGE_ADVANCED", summary: `Fejlesztési szakasz előrehaladt: ${previousStage}/6 → ${reportedStage}/6.`, status: "PASS", severity: "INFO", sessionId, workStageIndex: reportedStage, sanitized: true },
+      delta: { eventType: "WORK_STAGE_ADVANCED", summary: `Fejlesztési szakasz előrehaladt: ${previousStage}/6 → ${reportedStage}/6.`, status: "PASS", severity: "INFO", sessionId, workStageIndex: reportedStage, ...(reportSchemaVersion === 2 ? { workUnit, startedAt:workUnitStartedAt, reportedAt:workUnitReportedAt, finishedAt:workUnitFinishedAt, elapsedSeconds:workUnitElapsedSeconds, estimatedSeconds:workUnitEstimatedSeconds, estimatedTotalSeconds, estimateConfidence, revisedEstimatedSeconds, remainingEstimateSeconds, estimateVarianceSeconds, timezone:timeTrackingTimezone } : {}), sanitized: true },
     });
   }
 
@@ -98,9 +157,9 @@ export async function ingestDeveloperGridWorkerEvidence(rawInput: Record<string,
       head: authoritativeSession.sourceProvenance.head,
       summary: row.summary,
       occurredAt: row.occurredAt,
-      attributes: row.attributes,
+      attributes: { ...(row.attributes && typeof row.attributes === "object" && !Array.isArray(row.attributes) ? row.attributes as Record<string, unknown> : {}), ...(reportSchemaVersion === 2 ? { workUnit, startedAt:workUnitStartedAt, reportedAt:workUnitReportedAt, finishedAt:workUnitFinishedAt, elapsedSeconds:workUnitElapsedSeconds, estimatedSeconds:workUnitEstimatedSeconds, estimatedTotalSeconds, estimateCreatedAt, estimateConfidence, revisedEstimatedSeconds, remainingEstimateSeconds, actualElapsedSeconds, estimateVarianceSeconds, timezone:timeTrackingTimezone } : {}) },
     }));
   }
   const memory = await refreshDerivedConversationMemory(taskId, sessionId).catch(() => null);
-  return { taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, memory, productionAccess: "DENY" as const };
+  return { taskId, sessionId, workerCode, sourceHead: authoritativeSession.sourceProvenance.head, baseHead: authoritativeSession.sourceProvenance.baseHead, stage: reportedStage, count: evidence.length, evidence, memory, timing: reportSchemaVersion === 2 ? timingPatch : null, productionAccess: "DENY" as const };
 }

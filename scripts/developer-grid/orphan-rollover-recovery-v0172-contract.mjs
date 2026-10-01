@@ -28,12 +28,20 @@ const expected={taskId:TASK,sessionId:SESSION,workerCode:"JAZMINAI",previousConv
 let n=0;
 const check=async(label,fn)=>{await fn();n+=1;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.95"));
-await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.95-dev"/));
-await check("real rev13 rollover bootstrap parses exactly", async()=>{
+await check("desktop version v0.1.72", async()=>assert.equal(pkg.version,"0.1.96"));
+await check("backend version v0.1.72-dev", async()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.96-dev"/));
+await check("real rev13 rollover bootstrap parses exact legacy identity plus V2 contract", async()=>{
   const p=rollover.parseConversationRolloverPrompt(prompt);
   assert.equal(p.ok,true);
-  assert.deepEqual(p.prompt,{workerCode:"JAZMINAI",taskId:TASK,sessionId:SESSION,previousConversationId:PREV,contextSnapshotId:SNAP,contextRevision:13,handoffPackId:HANDOFF,sourceHead:HEAD,sourceProofSha256:OLD_PROOF,productionAccess:"DENY"});
+  assert.deepEqual({
+    workerCode:p.prompt.workerCode, taskId:p.prompt.taskId, sessionId:p.prompt.sessionId, previousConversationId:p.prompt.previousConversationId,
+    contextSnapshotId:p.prompt.contextSnapshotId, contextRevision:p.prompt.contextRevision, handoffPackId:p.prompt.handoffPackId,
+    sourceHead:p.prompt.sourceHead, sourceProofSha256:p.prompt.sourceProofSha256, productionAccess:p.prompt.productionAccess,
+  },{workerCode:"JAZMINAI",taskId:TASK,sessionId:SESSION,previousConversationId:PREV,contextSnapshotId:SNAP,contextRevision:13,handoffPackId:HANDOFF,sourceHead:HEAD,sourceProofSha256:OLD_PROOF,productionAccess:"DENY"});
+  assert.equal(p.prompt.continuationProtocolVersion,"BENJADMIN_CONTINUATION_PROTOCOL_V2");
+  assert.match(p.prompt.continuationCapsuleSha256,/^[0-9a-f]{64}$/);
+  assert.match(p.prompt.rulePackSha256,/^[0-9a-f]{64}$/);
+  assert.match(p.prompt.skillManifestSha256,/^[0-9a-f]{64}$/);
 });
 await check("real rev13 rollover bootstrap validates exact identity", async()=>assert.equal(rollover.validateConversationRolloverPrompt(prompt,expected).validated,true));
 await check("wrong previous conversation is rejected", async()=>{
@@ -69,7 +77,7 @@ await check("future recovery persists previous proof on authoritative session", 
   assert.match(types,/executionAuthorityPreviousSourceProofSha256\?: string \| null/);
   assert.match(workStart,/executionAuthorityPreviousSourceProofSha256:expectedPreviousProofSha256/);
 });
-await check("orphan successor must remain in same ChatGPT Project", async()=>assert.match(workStart,/orphanProjectIdentityOk/));
+await check("orphan successor must remain in same ChatGPT Project", async()=>assert.match(workStart,/projectIdentityOk = Boolean\(authoritativeProjectKey && successorProjectKey && authoritativeProjectKey === successorProjectKey\)/));
 await check("desktop derives successor id from current visible conversation", async()=>{
   assert.match(main,/currentConversationId:currentId/);
   assert.match(main,/String\(capture\.conversationId \|\| ""\) !== currentConversationId/);

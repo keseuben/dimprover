@@ -16,6 +16,7 @@ const { getConversationInfo, captureLatestAssistantText, captureLatestAssistantM
 const { captureConversationTranscript } = require("./context-workspace/chatgpt-transcript.cjs");
 const { ROLLOVER_PROMPT_MARKER, ROLLOVER_ACK_MARKER, ROLLOVER_STATES, detectConversationLimit, chatProjectRootFromConversationUrl, buildConversationRolloverPrompt, parseConversationRolloverPrompt, validateConversationRolloverPrompt, parseConversationRolloverAck, validateConversationRolloverAck } = require("./context-workspace/conversation-rollover.cjs");
 const { ROLLOVER_REACK_PROMPT_MARKER, ROLLOVER_REACK_KEY_MARKER, buildConversationRolloverReAckPrompt } = require("./context-workspace/rollover-reack.cjs");
+const { buildContinuationCapsule } = require("./context-workspace/continuation-contract.cjs");
 const { validateBootAcknowledgement } = require("./task-launch/boot-ack.cjs");
 const { parseTaskLaunchDraftIdentity, shouldReplaceStaleTaskLaunchDraft } = require("./task-launch/draft-recovery.cjs");
 const { buildStageActionPrompt } = require("./stage-actions-prompt-builder.cjs");
@@ -721,8 +722,9 @@ function conversationPinForCell(cell) {
   );
   const rolloverState = authoritativeRolloverState || localRolloverState;
   const shouldSuspendForAuthoritativeTransition = transitionStates.includes(authoritativeRolloverState);
+  const localContinuationV2 = Boolean(record.conversationContinuationProtocolVersion && record.conversationContinuationCapsuleId);
   const shouldSuspendForLocalTransition = transitionStates.includes(localRolloverState)
-    && (!authoritativeConversationId || !localTargetsDifferentConversation);
+    && (localContinuationV2 || !authoritativeConversationId || !localTargetsDifferentConversation);
   if (shouldSuspendForAuthoritativeTransition || shouldSuspendForLocalTransition) {
     return {
       taskId:String(task.id || ""),
@@ -2954,6 +2956,176 @@ async function bindLegacyCurrentTaskConversation(workerCode, task, cell, view, c
   return { ok:true, binding, message:"A jelenlegi ChatGPT csevegés authoritative módon a legacy taskhoz rögzítve." };
 }
 
+async function startValidatedManualRebindContinuationV2({ code, task, cell, view, pin, candidateConversationId, candidateUrl }) {
+  const taskId = String(task?.id || "");
+  const previousConversationId = String(pin?.conversationId || "");
+  const previousConversationUrl = String(pin?.conversationUrl || "");
+  const block = async (errorCode, message) => {
+    publishTaskLaunchPatch(task, code, {
+      conversationRolloverState:ROLLOVER_STATES.BLOCKED,
+      conversationRolloverMode:"MANUAL_REBIND_V2",
+      conversationRolloverReason:"MANUAL_CONTINUATION",
+      conversationRolloverPreviousConversationId:previousConversationId || null,
+      conversationRolloverCandidateConversationId:candidateConversationId || null,
+      conversationRolloverCandidateConversationUrl:candidateUrl || null,
+      conversationContinuationState:"BLOCKED",
+      conversationRolloverErrorCode:String(errorCode || "CONTINUATION_V2_REBIND_BLOCKED"),
+      conversationRolloverError:String(message || "Continuation V2 rebind blokkolva."),
+      conversationRolloverBlockedAt:new Date().toISOString(),
+    }, "manual-rebind-continuation-v2-blocked");
+    if (candidateUrl && view && !view.webContents.isDestroyed()) await view.webContents.loadURL(candidateUrl).catch(() => undefined);
+    return { ok:false, code:String(errorCode || "CONTINUATION_V2_REBIND_BLOCKED"), error:String(message || "Continuation V2 rebind blokkolva.") };
+  };
+
+  if (!taskId || !task?.sessionId || !previousConversationId || !previousConversationUrl || !candidateConversationId || !candidateUrl) {
+    return block("CONTINUATION_V2_IDENTITY_REQUIRED", "A Continuation V2 rebindhez task/session/előző és candidate conversation identity szükséges.");
+  }
+  if (!sameChatProjectConversation(previousConversationUrl, candidateUrl)) {
+    return block("CONTINUATION_V2_PROJECT_MISMATCH", "A candidate csevegés nem ugyanabban a ChatGPT Projectben van.");
+  }
+  const sourceProofSha256 = resolvedExecutionProofSha256(task);
+  if (!/^[0-9a-f]{64}$/.test(sourceProofSha256)) {
+    return block("CONTINUATION_V2_SOURCE_PROOF_REQUIRED", "A source proof nem igazolható; a rebind fail-closed.");
+  }
+
+  try {
+    await view.webContents.loadURL(previousConversationUrl);
+    const oldComposerReady = await waitForChatComposer(view, 15000);
+    if (!oldComposerReady || chatConversationIdFromUrl(view.webContents.getURL()) !== previousConversationId) {
+      return block("CONTINUATION_V2_PREDECESSOR_RESTORE_FAILED", "Az authoritative előző csevegés nem volt biztonságosan visszaállítható.");
+    }
+    const capture = await captureConversationTranscript(view);
+    if (!capture?.ok || capture.generating || String(capture.conversationId || "") !== previousConversationId || !Array.isArray(capture.messages) || !capture.messages.length) {
+      return block("CONTINUATION_V2_PREDECESSOR_CAPTURE_NOT_READY", "Az authoritative előző csevegés transcriptje nem menthető vagy még generálás alatt van.");
+    }
+    const memory = await saveDeveloperGridConversationMemory({
+      baseUrl:config.benjadminBaseUrl,
+      deviceToken:readDeviceToken(),
+      input:{
+        taskId,
+        sessionId:String(task.sessionId),
+        workerCode:code === "BENAI" ? "BENJAMINAI" : code,
+        surfaceType:"CHATGPT",
+        conversationId:previousConversationId,
+        conversationUrl:previousConversationUrl,
+        conversationTitle:String(capture.conversationTitle || ""),
+        capturedAt:capture.capturedAt,
+        messages:capture.messages,
+      },
+    });
+    const context = memory?.context || null;
+    const handoff = memory?.handoff || null;
+    const sourceHead = String(context?.sourceHead || task?.sourceHead || "").toLowerCase();
+    const identityOk = Boolean(
+      context?.id && Number(context?.revision || 0) > 0 && handoff?.id
+      && /^[0-9a-f]{40}$/.test(sourceHead)
+      && sourceHead === String(task?.sourceHead || "").toLowerCase()
+      && String(context.productionAccess || "DENY").toUpperCase() === "DENY"
+      && String(task?.bootAckState || task?.chatLaunch?.bootAckState || "").toUpperCase() === "VALIDATED"
+      && (task?.bootAckCodingAllowed === true || task?.chatLaunch?.bootAckCodingAllowed === true)
+    );
+    if (!identityOk) {
+      return block("CONTINUATION_V2_FROZEN_MEMORY_INVALID", "Context Snapshot / Handoff / HEAD / BOOT ACK identity nem fagyasztható biztonságosan.");
+    }
+
+    const previousInfo = await getConversationInfo(view, cell, config.cells || []).catch(() => ({ chatTitle:"" }));
+    const previousConversationTitle = String(previousInfo?.chatTitle || capture.conversationTitle || "");
+    const humanHandoff = await saveManualRolloverHumanHandoff({ task, workerCode:code, memory, previousConversationId, previousConversationUrl, previousConversationTitle });
+    const prompt = buildConversationRolloverPrompt({
+      task, workerCode:code, previousConversationId, previousConversationUrl, previousConversationTitle,
+      humanHandoffId:String(humanHandoff?.id || ""), humanHandoffFileName:String(humanHandoff?.fileName || ""),
+      memory, sourceProofSha256,
+    });
+    const promptSha256 = createHash("sha256").update(prompt).digest("hex");
+    const continuationPatch = continuationRecordPatchFromPrompt(prompt);
+    const frozen = publishTaskLaunchPatch(task, code, {
+      ...continuationPatch,
+      conversationRolloverState:ROLLOVER_STATES.HANDOFF_SAVED,
+      conversationRolloverMode:"MANUAL_REBIND_V2",
+      conversationRolloverReason:"MANUAL_CONTINUATION",
+      conversationRolloverPreviousConversationId:previousConversationId,
+      conversationRolloverPreviousConversationUrl:previousConversationUrl,
+      conversationRolloverPreviousConversationTitle:previousConversationTitle,
+      conversationRolloverContextSnapshotId:String(context.id),
+      conversationRolloverContextRevision:Number(context.revision || 0),
+      conversationRolloverHandoffPackId:String(handoff.id),
+      conversationRolloverSourceHead:sourceHead,
+      conversationRolloverSourceProofSha256:sourceProofSha256,
+      conversationRolloverPromptSha256:promptSha256,
+      conversationRolloverHumanHandoffId:String(humanHandoff?.id || ""),
+      conversationRolloverHumanHandoffFileName:String(humanHandoff?.fileName || ""),
+      conversationRolloverCandidateConversationId:candidateConversationId,
+      conversationRolloverCandidateConversationUrl:candidateUrl,
+      conversationRolloverStartedAt:new Date().toISOString(),
+      conversationRolloverErrorCode:null,
+      conversationRolloverError:null,
+    }, "manual-rebind-continuation-v2-frozen");
+
+    await view.webContents.loadURL(candidateUrl);
+    const candidateComposerReady = await waitForChatComposer(view, 15000);
+    if (!candidateComposerReady || chatConversationIdFromUrl(view.webContents.getURL()) !== candidateConversationId) {
+      return block("CONTINUATION_V2_CANDIDATE_RESTORE_FAILED", "A candidate csevegés nem volt biztonságosan visszaállítható.");
+    }
+    const insertion = await insertWorkerTaskPrompt(view, prompt, ROLLOVER_PROMPT_MARKER);
+    if (insertion?.inserted !== true || insertion?.verifiedMarker !== true) {
+      return block("CONTINUATION_V2_BOOTSTRAP_INSERT_FAILED", insertion?.reason || "A Continuation V2 bootstrap nem volt igazolható a candidate composerben.");
+    }
+    const sent = await sendPreparedChatPrompt(view, ROLLOVER_PROMPT_MARKER);
+    if (sent?.sent !== true || sent?.verified !== true) {
+      return block("CONTINUATION_V2_BOOTSTRAP_SEND_FAILED", sent?.reason || "A Continuation V2 bootstrap elküldése nem igazolható.");
+    }
+    const transcriptVerification = await verifyPromptMarkerInTranscript(view, ROLLOVER_PROMPT_MARKER, 15000);
+    if (transcriptVerification?.verified !== true || String(transcriptVerification.conversationId || candidateConversationId) !== candidateConversationId) {
+      return block("CONTINUATION_V2_BOOTSTRAP_TRANSCRIPT_MISSING", transcriptVerification?.reason || "A candidate USER bootstrap transcriptje nem igazolható.");
+    }
+    const candidateInfo = await getConversationInfo(view, cell, config.cells || []).catch(() => ({ chatTitle:"" }));
+    const bindingRecord = { ...frozen, conversationRolloverPromptMessageId:transcriptVerification.messageId || null };
+    const binding = await bindDeveloperGridConversation({
+      baseUrl:config.benjadminBaseUrl,
+      deviceToken:readDeviceToken(),
+      input:conversationRolloverBindingInput({
+        task, workerCode:code, previousConversationId,
+        conversationId:candidateConversationId,
+        conversationUrl:candidateUrl,
+        conversationTitle:candidateInfo?.chatTitle || "",
+        record:bindingRecord,
+        state:ROLLOVER_STATES.ACK_WAIT,
+      }),
+    });
+    const ackWait = publishTaskLaunchPatch(task, code, {
+      ...bindingRecord,
+      conversationRolloverState:ROLLOVER_STATES.ACK_WAIT,
+      conversationRolloverConversationId:candidateConversationId,
+      conversationRolloverConversationUrl:candidateUrl,
+      conversationRolloverConversationTitle:candidateInfo?.chatTitle || "",
+      conversationRolloverCandidateConversationId:candidateConversationId,
+      conversationRolloverCandidateConversationUrl:candidateUrl,
+      conversationRolloverCandidateConversationTitle:candidateInfo?.chatTitle || "",
+      conversationRolloverTranscriptVerified:true,
+      conversationRolloverTranscriptCapturedAt:transcriptVerification.capturedAt || null,
+      conversationRolloverBindingRevision:binding?.revision || null,
+      conversationContinuationState:"ACK_WAIT",
+    }, "manual-rebind-continuation-v2-ack-wait");
+    const refreshState = chatRefreshCell(cell.id);
+    refreshState.conversationGuardState = "SUSPENDED";
+    refreshState.conversationGuardError = "Continuation V2 ACK-ra vár; a predecessor marad authoritative.";
+    emitChatRefreshState();
+    if (latestLiveSnapshot) send("live:snapshot", enrichSnapshotWithTaskLaunch(latestLiveSnapshot));
+    send("context:refresh", { reason:"manual-rebind-continuation-v2-ack-wait", taskId, workerCode:code, previousConversationId, candidateConversationId });
+    return {
+      ok:true,
+      state:ROLLOVER_STATES.ACK_WAIT,
+      binding,
+      chatLaunch:ackWait,
+      previousConversationId,
+      candidateConversationId,
+      message:"Continuation V2 bootstrap elküldve. Az új csevegés CANDIDATE/ACK_WAIT; csak valid ACK után válhat authoritative csevegéssé.",
+    };
+  } catch (error) {
+    return block(error?.code || "CONTINUATION_V2_REBIND_FAILED", error instanceof Error ? error.message : "A Continuation V2 rebind sikertelen.");
+  }
+}
+
 async function rebindCurrentTaskConversation(workerCode, taskId) {
   if (!unlocked) return { ok:false, error:"A Developer Grid zárolva van." };
   const code = String(workerCode || "").toUpperCase();
@@ -2985,6 +3157,12 @@ async function rebindCurrentTaskConversation(workerCode, taskId) {
       || refreshState.rebindConversationId !== conversationId) {
     return { ok:false, code:"MANUAL_REBIND_PENDING_REQUIRED", error:"A csevegőváltás nincs megerősítésre váró állapotban. Nyisd meg újra a kívánt beszélgetést." };
   }
+  const validatedRunningTask = String(task?.bootAckState || task?.chatLaunch?.bootAckState || "").toUpperCase() === "VALIDATED"
+    && (task?.bootAckCodingAllowed === true || task?.chatLaunch?.bootAckCodingAllowed === true);
+  if (validatedRunningTask) {
+    return startValidatedManualRebindContinuationV2({ code, task, cell, view, pin, candidateConversationId:conversationId, candidateUrl });
+  }
+
   const info = await getConversationInfo(view, cell, config.cells || []);
   const record = loadTaskLaunchRecords()[id] || {};
   const chatLaunchMode = String(record.chatLaunchMode || task.chatLaunchMode || "EXISTING_CHAT").toUpperCase() === "NEW_PROJECT_CHAT"
@@ -3686,7 +3864,7 @@ async function processCapturedStageReport({ body, workerCode, task, baselineResp
   }
   const result = await submitDeveloperGridEvidence({
     baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken(),
-    input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, result:report.result, summary:report.summary, entries:report.evidence },
+    input:{ taskId:report.taskId, sessionId:report.sessionId, workerCode:report.workerCode, head:report.head, stage:report.stage, result:report.result, summary:report.summary, schemaVersion:report.schemaVersion, workUnit:report.workUnit, startedAt:report.startedAt, reportedAt:report.reportedAt, finishedAt:report.finishedAt, timezone:report.timezone, elapsedSeconds:report.elapsedSeconds, estimatedSeconds:report.estimatedSeconds, estimatedTotalSeconds:report.estimatedTotalSeconds, estimateCreatedAt:report.estimateCreatedAt, estimateConfidence:report.estimateConfidence, revisedEstimatedSeconds:report.revisedEstimatedSeconds, remainingEstimateSeconds:report.remainingEstimateSeconds, actualElapsedSeconds:report.actualElapsedSeconds, estimateVarianceSeconds:report.estimateVarianceSeconds, entries:report.evidence },
   }).catch((error) => ({ error:error instanceof Error ? error.message : "STAGE_REPORT_EVIDENCE_FAILED" }));
   if (checkpointPending) {
     const negativeEvidence = report.evidence.some((item) => item.kind === "ERROR" || item.status === "FAIL" || item.status === "BLOCKED");
@@ -3729,6 +3907,34 @@ function rolloverPendingState(value) {
   return ["HANDOFF_SAVED", "NAVIGATING", "CONTINUATION_SENT", "CLIPBOARD_COPIED", "ACK_WAIT"].includes(String(value || "").toUpperCase());
 }
 
+function continuationContractFromRecord(record = {}) {
+  return {
+    continuationProtocolVersion:String(record.conversationContinuationProtocolVersion || ""),
+    continuationCapsuleId:String(record.conversationContinuationCapsuleId || ""),
+    continuationCapsuleSha256:String(record.conversationContinuationCapsuleSha256 || "").toLowerCase(),
+    rulePackSha256:String(record.conversationContinuationRulePackSha256 || "").toLowerCase(),
+    skillManifestSha256:String(record.conversationContinuationSkillManifestSha256 || "").toLowerCase(),
+  };
+}
+
+function continuationRecordPatchFromPrompt(prompt) {
+  const parsed = parseConversationRolloverPrompt(prompt);
+  if (!parsed?.ok || !parsed.prompt?.continuationProtocolVersion || !parsed.prompt?.continuationCapsuleId) {
+    const error = new Error("CONVERSATION_CONTINUATION_V2_CONTRACT_INVALID");
+    error.code = parsed?.code || "CONVERSATION_CONTINUATION_V2_CONTRACT_INVALID";
+    throw error;
+  }
+  const identity = parsed.prompt;
+  return {
+    conversationContinuationProtocolVersion:String(identity.continuationProtocolVersion || ""),
+    conversationContinuationCapsuleId:String(identity.continuationCapsuleId || ""),
+    conversationContinuationCapsuleSha256:String(identity.continuationCapsuleSha256 || "").toLowerCase(),
+    conversationContinuationRulePackSha256:String(identity.rulePackSha256 || "").toLowerCase(),
+    conversationContinuationSkillManifestSha256:String(identity.skillManifestSha256 || "").toLowerCase(),
+    conversationContinuationState:"PREPARED",
+  };
+}
+
 async function waitForConversationIdChange(view, previousConversationId, timeoutMs = 25000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -3762,6 +3968,11 @@ function conversationRolloverBindingInput({ task, workerCode, previousConversati
     conversationRolloverSourceProofSha256:String(record.conversationRolloverSourceProofSha256 || resolvedExecutionProofSha256(task)).toLowerCase(),
     conversationRolloverPromptMessageId:record.conversationRolloverPromptMessageId || null,
     conversationRolloverAckSha256:ackSha256 || null,
+    conversationContinuationProtocolVersion:String(record.conversationContinuationProtocolVersion || ""),
+    conversationContinuationCapsuleId:String(record.conversationContinuationCapsuleId || ""),
+    conversationContinuationCapsuleSha256:String(record.conversationContinuationCapsuleSha256 || "").toLowerCase(),
+    conversationContinuationRulePackSha256:String(record.conversationContinuationRulePackSha256 || "").toLowerCase(),
+    conversationContinuationSkillManifestSha256:String(record.conversationContinuationSkillManifestSha256 || "").toLowerCase(),
     productionAccess:"DENY",
   };
 }
@@ -3772,6 +3983,7 @@ function markConversationRolloverBlocked(task, workerCode, code, detail = "") {
     conversationRolloverError:String(code || "CONVERSATION_ROLLOVER_BLOCKED"),
     conversationRolloverErrorDetail:String(detail || "").slice(0, 1200),
     conversationRolloverBlockedAt:new Date().toISOString(),
+    conversationContinuationState:"BLOCKED",
   }, "conversation-rollover-blocked");
 }
 
@@ -3887,6 +4099,7 @@ async function processConversationRolloverAck({ view, body, workerCode, task, ob
     handoffPackId:String(record.conversationRolloverHandoffPackId || ""),
     sourceHead:String(record.conversationRolloverSourceHead || task?.sourceHead || "").toLowerCase(),
     sourceProofSha256:String(record.conversationRolloverSourceProofSha256 || resolvedExecutionProofSha256(task)).toLowerCase(),
+    ...continuationContractFromRecord(record),
   };
   const validation = validateConversationRolloverAck(body, expected);
   if (!validation?.validated) {
@@ -3930,6 +4143,9 @@ async function processConversationRolloverAck({ view, body, workerCode, task, ob
     conversationRolloverCompletedAt:new Date().toISOString(),
     conversationRolloverError:null,
     conversationRolloverBindingRevision:binding?.revision || null,
+    conversationContinuationState:"READY",
+    surfaceConversationId:currentConversationId,
+    chatSessionId:currentConversationId,
   }, "conversation-rollover-ready");
 
   let continuation = { sent:false, verified:false, reason:"not-attempted" };
@@ -4095,10 +4311,12 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
       task,
       workerCode,
       previousConversationId,
+      previousConversationUrl,
       memory,
       sourceProofSha256,
     });
-    publishTaskLaunchPatch(task, workerCode, { conversationRolloverState:ROLLOVER_STATES.NAVIGATING }, "conversation-rollover-navigating");
+    const continuationRecord = publishTaskLaunchPatch(task, workerCode, continuationRecordPatchFromPrompt(prompt), "conversation-rollover-continuity-v2-prepared");
+    publishTaskLaunchPatch(task, workerCode, { conversationRolloverState:ROLLOVER_STATES.NAVIGATING, conversationContinuationState:"PREPARED" }, "conversation-rollover-navigating");
     await view.webContents.loadURL(projectRoot);
     const composerReady = await waitForChatComposer(view, 15000);
     if (!composerReady) throw new Error("ROLLOVER_PROJECT_COMPOSER_TIMEOUT");
@@ -4116,6 +4334,7 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
     const info = await getConversationInfo(view, null, config?.cells).catch(() => ({ chatTitle:"" }));
     const bindingRecord = {
       ...frozen,
+      ...continuationRecord,
       conversationRolloverPromptMessageId:transcriptVerification.messageId || null,
     };
     const binding = await bindDeveloperGridConversation({
@@ -4141,8 +4360,10 @@ async function handleConversationRollover({ view, workerCode, task, capture, mem
       conversationRolloverTranscriptVerified:true,
       conversationRolloverTranscriptCapturedAt:transcriptVerification.capturedAt || null,
       conversationRolloverBindingRevision:binding?.revision || null,
-      surfaceConversationId:newConversationId,
-      chatSessionId:newConversationId,
+      conversationRolloverCandidateConversationId:newConversationId,
+      conversationRolloverCandidateConversationUrl:changed.url || view.webContents.getURL(),
+      conversationRolloverCandidateConversationTitle:info?.chatTitle || "",
+      conversationContinuationState:"ACK_WAIT",
     }, "conversation-rollover-ack-wait");
     return { started:true, state:ROLLOVER_STATES.ACK_WAIT, previousConversationId, newConversationId };
   } catch (error) {
@@ -4183,6 +4404,8 @@ function buildManualRolloverHandoffMarkdown(input) {
   const blockers = Array.isArray(pack.blockers) ? pack.blockers : [];
   const evidenceBlockers = Array.isArray(evidenceSummary.blockers) ? evidenceSummary.blockers : [];
   const tests = Array.isArray(evidenceSummary.tests) ? evidenceSummary.tests : [];
+  const sourceProofSha256 = resolvedExecutionProofSha256(task);
+  const capsule = buildContinuationCapsule({ task, workerCode, previousConversationId:String(input.previousConversationId || ""), previousConversationUrl:String(input.previousConversationUrl || ""), memory, sourceProofSha256 });
   const nextStep = String(pack.nextStep || context.nextStageLabel || "Az aktuális task folytatása az authoritative Central Core állapot alapján.");
   return [
     "# BENJADMIN Conversation Rollover – bővített átadó",
@@ -4209,6 +4432,25 @@ function buildManualRolloverHandoffMarkdown(input) {
     "- Előző conversation URL: " + String(input.previousConversationUrl || ""),
     "- Rollover mód: MANUAL_CLIPBOARD",
     "- Új task / TASK_LAUNCH: TILTVA",
+    "- Continuation protocol: " + String(capsule.protocolVersion || ""),
+    "- Continuation Capsule: " + String(capsule.id || ""),
+    "- Capsule SHA-256: " + String(capsule.capsuleSha256 || ""),
+    "- Rule Pack SHA-256: " + String(capsule.policy?.rulePackSha256 || ""),
+    "- Skill Manifest SHA-256: " + String(capsule.skills?.skillManifestSha256 || ""),
+    "",
+    "## Időmérés és becslés",
+    "- Időzóna: Europe/Budapest",
+    "- Aktuális részfeladat: " + String(context.currentWorkUnit || task.currentWorkUnit || "—"),
+    "- Kezdés: " + String(context.workUnitStartedAt || task.workUnitStartedAt || "—"),
+    "- Utolsó állapotközlés: " + String(context.workUnitReportedAt || task.workUnitReportedAt || "—"),
+    "- Befejezés: " + String(context.workUnitFinishedAt || task.workUnitFinishedAt || "—"),
+    "- Tényleges eltelt idő [s]: " + String(context.actualElapsedSeconds ?? task.actualElapsedSeconds ?? "—"),
+    "- Eredeti részfeladat-becslés [s]: " + String(context.workUnitEstimatedSeconds ?? task.workUnitEstimatedSeconds ?? "—"),
+    "- Eredeti teljes task becslés [s]: " + String(context.estimatedTotalSeconds ?? task.estimatedTotalSeconds ?? "—"),
+    "- Felülvizsgált részfeladat-becslés [s]: " + String(context.revisedEstimatedSeconds ?? task.revisedEstimatedSeconds ?? "—"),
+    "- Hátralévő becslés [s]: " + String(context.remainingEstimateSeconds ?? task.remainingEstimateSeconds ?? "—"),
+    "- Eltérés a becsléstől [s]: " + String(context.estimateVarianceSeconds ?? task.estimateVarianceSeconds ?? "—"),
+    "- Becslési bizonytalanság: " + String(context.estimateConfidence || task.estimateConfidence || "—"),
     "",
     "## Aktuális Context Snapshot",
     String(context.summary || "Nincs Context Snapshot összefoglaló."),
@@ -4324,41 +4566,12 @@ async function prepareManualConversationRollover(workerCode) {
     }
   }
 
-  let pin = conversationPinForCell(cell);
+  const pin = conversationPinForCell(cell);
   if (pin && !pin.suspended && pin.conversationId && pin.conversationId !== previousConversationId) {
     if (!sameChatProjectConversation(pin.conversationUrl, previousConversationUrl)) {
       return blockManualConversationRollover(task, code, "ROLLOVER_PIN_PROJECT_MISMATCH", "A megnyitott csevegés nem ugyanahhoz a ChatGPT Projekthez tartozik, mint a task authoritative csevegése. Automatikus átkötés tiltva.");
     }
-    const owner = shellWindow && !shellWindow.isDestroyed() ? shellWindow : undefined;
-    const confirm = await dialog.showMessageBox(owner, {
-      type:"warning",
-      buttons:["Átkötés és rollover folytatása","Mégse"],
-      defaultId:1,
-      cancelId:1,
-      noLink:true,
-      title:"Csevegés átkötése szükséges",
-      message:"A megnyitott csevegés eltér a task jelenlegi authoritative csevegésétől.",
-      detail:"Ugyanazon ChatGPT Projecten belül vagy. Ha folytatod, a jelenlegi csevegés authoritative módon ehhez a meglévő taskhoz kötődik, majd elkészül a rollover átadó. Új task, session vagy TASK_LAUNCH nem készül.",
-    });
-    if (confirm.response !== 0) {
-      return blockManualConversationRollover(task, code, "ROLLOVER_REBIND_CANCELLED", "A csevegés átkötését megszakítottad.");
-    }
-    const refreshState = chatRefreshCell(cell.id);
-    refreshState.conversationGuardState = "REBIND_PENDING";
-    refreshState.rebindTaskId = String(task.id);
-    refreshState.rebindPreviousConversationId = String(pin.conversationId);
-    refreshState.rebindConversationId = previousConversationId;
-    refreshState.rebindConversationUrl = previousConversationUrl;
-    refreshState.rebindDetectedAt = new Date().toISOString();
-    emitChatRefreshState();
-    const rebound = await rebindCurrentTaskConversation(code, task.id);
-    if (!rebound?.ok) {
-      return blockManualConversationRollover(task, code, rebound?.code || "ROLLOVER_REBIND_FAILED", rebound?.error || "A jelenlegi csevegés authoritative átkötése sikertelen.");
-    }
-    pin = conversationPinForCell(cell);
-    if (!pin || pin.suspended || pin.conversationId !== previousConversationId) {
-      return blockManualConversationRollover(task, code, "ROLLOVER_REBIND_NOT_VERIFIED", "Az átkötés után az authoritative conversation pin nem igazolható.");
-    }
+    return blockManualConversationRollover(task, code, "ROLLOVER_AUTHORITATIVE_CHAT_REQUIRED", "A kézi rollover csomagot az authoritative régi csevegésben kell elkészíteni. A CSEVEGŐ ÁTKÖTÉSE gomb a candidate csevegésben már a biztonságos Continuation V2 folyamatot indítja.");
   }
 
   const capture = await captureConversationTranscript(view);
@@ -4409,7 +4622,9 @@ async function prepareManualConversationRollover(workerCode) {
   const humanHandoff = await saveManualRolloverHumanHandoff({ task, workerCode:code, memory, previousConversationId, previousConversationUrl, previousConversationTitle });
   const prompt = buildConversationRolloverPrompt({ task, workerCode:code, previousConversationId, previousConversationUrl, previousConversationTitle, humanHandoffId:String(humanHandoff?.id || ""), humanHandoffFileName:String(humanHandoff?.fileName || ""), memory, sourceProofSha256 });
   const promptSha256 = createHash("sha256").update(prompt).digest("hex");
+  const continuationPatch = continuationRecordPatchFromPrompt(prompt);
   const record = publishTaskLaunchPatch(task, code, {
+    ...continuationPatch,
     conversationRolloverState:ROLLOVER_STATES.HANDOFF_SAVED,
     conversationRolloverMode:"MANUAL_CLIPBOARD",
     conversationRolloverReason:"MANUAL_CONTINUATION",
@@ -4521,8 +4736,10 @@ async function observeManualConversationRollover(input) {
     conversationRolloverTranscriptVerified:true,
     conversationRolloverTranscriptCapturedAt:capture.capturedAt || null,
     conversationRolloverBindingRevision:binding?.revision || null,
-    surfaceConversationId:currentConversationId,
-    chatSessionId:currentConversationId,
+    conversationRolloverCandidateConversationId:currentConversationId,
+    conversationRolloverCandidateConversationUrl:currentUrl,
+    conversationRolloverCandidateConversationTitle:info?.chatTitle || capture?.conversationTitle || "",
+    conversationContinuationState:"ACK_WAIT",
   }, "manual-conversation-rollover-ack-wait");
   return { observed:true, bound:true, state:ROLLOVER_STATES.ACK_WAIT, binding };
 }
@@ -4613,6 +4830,7 @@ async function recoverLocalFrozenRolloverIdentity({ workerCode, task, currentCon
       handoffPackId,
       sourceHead,
       sourceProofSha256,
+      ...continuationContractFromRecord(record),
       productionAccess:"DENY",
     },
     evidenceMode:"LOCAL_FROZEN_MEMORY_USER_REBIND",
@@ -4647,6 +4865,7 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     ? []
     : assistantMessages.filter((item) => parseConversationRolloverAck(item.text)?.ok);
   let ackEvidenceMessage = markedAckMessage || null;
+  const frozenRolloverRecord = loadTaskLaunchRecords()[String(task?.id || "")] || {};
 
   const expected = {
     taskId:String(task?.id || ""),
@@ -4657,6 +4876,7 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     contextRevision:Number(task?.contextRevision || 0),
     handoffPackId:String(task?.handoffPackId || ""),
     sourceHead:String(task?.sourceHead || "").toLowerCase(),
+    ...continuationContractFromRecord(frozenRolloverRecord),
   };
 
   let validation = null;
@@ -4696,6 +4916,11 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
         handoffPackId:String(ack.handoffPackId || ""),
         sourceHead:String(ack.sourceHead || "").toLowerCase(),
         sourceProofSha256:ackProofSha256,
+        continuationProtocolVersion:String(ack.continuationProtocolVersion || ""),
+        continuationCapsuleId:String(ack.continuationCapsuleId || ""),
+        continuationCapsuleSha256:String(ack.continuationCapsuleSha256 || "").toLowerCase(),
+        rulePackSha256:String(ack.rulePackSha256 || "").toLowerCase(),
+        skillManifestSha256:String(ack.skillManifestSha256 || "").toLowerCase(),
         productionAccess:String(ack.productionAccess || "").toUpperCase(),
       };
       evidenceMode = "ASSISTANT_ACK";
@@ -4749,6 +4974,11 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     conversationRolloverHandoffPackId:String(identity.handoffPackId || ""),
     conversationRolloverSourceHead:String(identity.sourceHead || "").toLowerCase(),
     conversationRolloverSourceProofSha256:String(identity.sourceProofSha256 || "").toLowerCase(),
+    conversationContinuationProtocolVersion:String(identity.continuationProtocolVersion || ""),
+    conversationContinuationCapsuleId:String(identity.continuationCapsuleId || ""),
+    conversationContinuationCapsuleSha256:String(identity.continuationCapsuleSha256 || "").toLowerCase(),
+    conversationContinuationRulePackSha256:String(identity.rulePackSha256 || "").toLowerCase(),
+    conversationContinuationSkillManifestSha256:String(identity.skillManifestSha256 || "").toLowerCase(),
     conversationRolloverPromptMessageId:markerMessage?.messageId || null,
     conversationRolloverAckEvidenceMessageId:ackEvidenceMessage?.messageId || null,
   };
@@ -4779,8 +5009,10 @@ async function recoverOrphanConversationRollover({ view, workerCode, task, curre
     conversationRolloverAckSha256:null,
     conversationRolloverCompletedAt:null,
     conversationRolloverError:null,
-    surfaceConversationId:currentConversationId,
-    chatSessionId:currentConversationId,
+    conversationRolloverCandidateConversationId:currentConversationId,
+    conversationRolloverCandidateConversationUrl:currentUrl,
+    conversationRolloverCandidateConversationTitle:info?.chatTitle || capture?.conversationTitle || "",
+    conversationContinuationState:"ACK_WAIT",
   }, "conversation-rollover-orphan-recovered");
 
   send("context:refresh", {
@@ -4848,9 +5080,16 @@ function conversationMemoryTaskForWorker(workerCode) {
     || local.chatSessionId
     || ""
   ).trim();
-  const expectedConversationId = authoritativeConversationId || localConversationId;
+  const localRolloverState = String(local.conversationRolloverState || "").toUpperCase();
+  const localCandidateConversationId = String(local.conversationRolloverCandidateConversationId || local.conversationRolloverConversationId || "").trim();
+  const continuationV2Candidate = Boolean(
+    localRolloverState === ROLLOVER_STATES.ACK_WAIT
+    && localCandidateConversationId
+    && local.conversationContinuationProtocolVersion
+  );
+  const expectedConversationId = continuationV2Candidate ? localCandidateConversationId : (authoritativeConversationId || localConversationId);
   if (!expectedConversationId) return null;
-  return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId };
+  return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId, monitoringCandidate:continuationV2Candidate };
 }
 
 async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false) {
@@ -4882,7 +5121,8 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
 
   if (currentId
     && live.authoritativeConversationId
-    && currentId !== live.authoritativeConversationId) {
+    && currentId !== live.authoritativeConversationId
+    && !(live.monitoringCandidate && currentId === live.expectedConversationId)) {
     if (manualClipboardActive) {
       const manualRollover = await observeManualConversationRollover({
         view,
@@ -4989,6 +5229,7 @@ async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false
       handoffPackId:String(localRolloverRecord.conversationRolloverHandoffPackId || ""),
       sourceHead:String(localRolloverRecord.conversationRolloverSourceHead || live.task.sourceHead || "").toLowerCase(),
       sourceProofSha256:String(localRolloverRecord.conversationRolloverSourceProofSha256 || "").toLowerCase(),
+      ...continuationContractFromRecord(localRolloverRecord),
       productionAccess:"DENY",
     };
     await requestConversationRolloverReAck({

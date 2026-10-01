@@ -9,12 +9,14 @@ const types = fs.readFileSync(path.join(root,"app/lib/developer-grid/types.ts"),
 const pkg = JSON.parse(fs.readFileSync(path.join(root,"desktop/benjadmin-developer-grid/package.json"),"utf8"));
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-check("desktop version v0.1.73",()=>assert.equal(pkg.version,"0.1.95"));
-check("backend version v0.1.73-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.95-dev"/));
+check("desktop version v0.1.73",()=>assert.equal(pkg.version,"0.1.96"));
+check("backend version v0.1.73-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.96-dev"/));
 check("memory identity keeps authoritative and local conversation ids separate",()=>{
   assert.match(main,/const authoritativeConversationId = String\(/);
   assert.match(main,/const localConversationId = String\(/);
-  assert.match(main,/const expectedConversationId = authoritativeConversationId \|\| localConversationId/);
+  assert.match(main,/const localCandidateConversationId = String\(/);
+  assert.match(main,/const continuationV2Candidate = Boolean\(/);
+  assert.match(main,/const expectedConversationId = continuationV2Candidate \? localCandidateConversationId : \(authoritativeConversationId \|\| localConversationId\)/);
 });
 check("authoritative orphan detection runs even when local expected equals current successor",()=>{
   const a=main.indexOf("if (currentId\n    && live.authoritativeConversationId");

@@ -539,6 +539,16 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - PROD DENY változatlan.
 - Regression contract: `central-core-recovery-v0194-contract.mjs` · 7/7 PASS.
 
+## v0.1.96 · Conversation Continuity V2 + kötelező fejlesztési időmérés
+
+- A successor ChatGPT csevegés `ACK_WAIT` alatt csak **CANDIDATE**; az előző conversation marad authoritative a teljes Continuation Capsule ACK validációig.
+- Új `BENJADMIN_CONTINUATION_CAPSULE_V1`, hash-elt `BENJADMIN_DEVELOPMENT_RULE_PACK_V1` és `BENJADMIN_SKILL_MANIFEST_V1` rögzíti a task/session/source/scope/rule/skill folytonosságot.
+- Validált futó task közvetlen `manualRebind` művelete tiltott; a `CSEVEGŐ ÁTKÖTÉSE` Continuation V2 candidate + ACK folyamaton halad. A szigorú pre-BOOT recovery útvonal megmarad.
+- A stage report V2 kötelezően kezeli a `startedAt`, `reportedAt`, `finishedAt`, `elapsedSeconds`, `estimatedSeconds`, `estimatedTotalSeconds`, `estimateCreatedAt`, `estimateConfidence`, `revisedEstimatedSeconds`, `remainingEstimateSeconds`, `actualElapsedSeconds`, `estimateVarianceSeconds` és `Europe/Budapest` mezőket.
+- Az eredeti részfeladat- és teljes task-becslés immutable; scope-változás esetén csak külön revised estimate rögzíthető.
+- A Task Inspector külön mutatja az authoritative/candidate conversationt, Continuation Capsule/Rule Pack/Skill Manifest hash-eket és az időmérés/becslés adatokat.
+- DEV ONLY · PROD DENY.
+
 ## v0.1.95 · Pre-BOOT manual conversation rebind deadlock fix
 
 - A `CSEVEGŐ ÁTKÖTÉSE` korábban deadlockba került: a desktop helyesen `REBIND_PENDING` állapotot adott, de a backend `manualRebind` csak VALIDATED BOOT ACK után engedte az átkötést, miközben a Launch Packet / BOOT ACK már az új csevegést igényelte.
