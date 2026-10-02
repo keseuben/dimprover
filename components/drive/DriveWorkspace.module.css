@@ -3311,3 +3311,42 @@
   .boxCardTop { grid-template-columns: 28px minmax(0,1fr) auto; }
   .boxLifecycleBadge { grid-column: 2 / -1; justify-self: start; }
 }
+
+/* V0.7.14 – nézetfüggő táblázati állapotszínezés */
+.rowSimpleAvailable td { background: #f7fcf9; }
+.rowSimpleAvailable:hover td { background: #f0f9f4; }
+.rowSimpleQuarantine td { background: #fff7e6; }
+.rowSimpleQuarantine:hover td { background: #fff2d6; }
+.rowSimpleRejected td { background: #fff0f0; color: #7a3d3d; }
+.rowSimpleRejected:hover td { background: #ffe7e7; }
+.rowSimpleProcessing td { background: #f3f6fa; }
+.rowSimpleProcessing:hover td { background: #edf2f7; }
+
+.rowEngineeringWorking td { background: #f8fafc; }
+.rowEngineeringWorking:hover td { background: #f2f6f9; }
+.rowEngineeringCurrent td { background: #eef6ff; }
+.rowEngineeringCurrent:hover td { background: #e7f2ff; }
+.rowEngineeringApprovedCurrent td { background: #edf9f1; }
+.rowEngineeringApprovedCurrent:hover td { background: #e6f5eb; }
+.rowEngineeringArchive td { background: #f1f3f5; color: #66717d; }
+.rowEngineeringArchive:hover td { background: #ebedef; }
+
+.rowReviewPending td { background: #f8fafc; }
+.rowReviewPending:hover td { background: #f2f6f9; }
+.rowReviewInProgress td { background: #eef6ff; }
+.rowReviewInProgress:hover td { background: #e7f2ff; }
+.rowReviewReturned td { background: #fff4e8; }
+.rowReviewReturned:hover td { background: #ffedd9; }
+.rowReviewApproved td { background: #edf9f1; }
+.rowReviewApproved:hover td { background: #e6f5eb; }
+.rowReviewArchive td { background: #f1f3f5; color: #66717d; }
+.rowReviewArchive:hover td { background: #ebedef; }
+
+.legendSimpleAvailable { background: #f7fcf9; border-color: #cfe9d9 !important; }
+.legendSimpleQuarantine { background: #fff7e6; border-color: #efd49a !important; }
+.legendSimpleRejected { background: #fff0f0; border-color: #efc1c1 !important; }
+.legendSimpleProcessing { background: #f3f6fa; border-color: #d8e0e8 !important; }
+.legendEngineeringWorking { background: #f8fafc; border-color: #dce4eb !important; }
+.legendEngineeringCurrent { background: #eef6ff; border-color: #c6ddf8 !important; }
+.legendEngineeringApproved { background: #edf9f1; border-color: #c7e9d2 !important; }
+.legendEngineeringArchive { background: #f1f3f5; border-color: #d9dde1 !important; }

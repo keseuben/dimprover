@@ -222,17 +222,36 @@ function lifecycleVisual(metadata: DriveEngineeringMetadata | undefined) {
   return { kind: "working" as const, title: lifecycle || "Munkaközi terv", Icon: Clock3 };
 }
 
-function lifecycleRowClass(metadata: DriveEngineeringMetadata | undefined) {
+function simpleRowStatusClass(document: DriveDocument) {
+  const status = (document.currentVersion?.status || "").toUpperCase();
+  if (status === "QUARANTINED") return styles.rowSimpleQuarantine;
+  if (status === "REJECTED") return styles.rowSimpleRejected;
+  if (status === "STAGED" || status === "METADATA_ONLY") return styles.rowSimpleProcessing;
+  if (status === "AVAILABLE") return styles.rowSimpleAvailable;
+  return "";
+}
+
+function engineeringRowStatusClass(metadata: DriveEngineeringMetadata | undefined) {
   const lifecycle = reviewMetadataValue(metadata, "lifecycleStatus").toLocaleLowerCase("hu-HU");
-  if (lifecycle.includes("arch")) return styles.rowLifecycleArchive;
+  if (lifecycle.includes("arch")) return styles.rowEngineeringArchive;
   if (lifecycle.includes("aktu")) {
     const manager = reviewMetadataValue(metadata, "projectManagerApproval");
     const investor = reviewMetadataValue(metadata, "investorProjectManagerApproval");
     return isApprovedReviewValue(investor) || isApprovedReviewValue(manager)
-      ? styles.rowLifecycleApprovedCurrent
-      : styles.rowLifecycleCurrent;
+      ? styles.rowEngineeringApprovedCurrent
+      : styles.rowEngineeringCurrent;
   }
-  return "";
+  return styles.rowEngineeringWorking;
+}
+
+function reviewRowStatusClass(metadata: DriveEngineeringMetadata | undefined) {
+  const lifecycle = reviewMetadataValue(metadata, "lifecycleStatus").toLocaleLowerCase("hu-HU");
+  if (lifecycle.includes("arch")) return styles.rowReviewArchive;
+  const approval = approvalVisual(metadata);
+  if (approval.kind === "returned") return styles.rowReviewReturned;
+  if (approval.kind === "review") return styles.rowReviewInProgress;
+  if (approval.kind === "customer" || approval.kind === "manager" || approval.kind === "investor") return styles.rowReviewApproved;
+  return styles.rowReviewPending;
 }
 
 function approvalFocus(kind: ReturnType<typeof approvalVisual>["kind"]) {
@@ -952,7 +971,7 @@ export default function FileGridPanel({
                 Mappa
               </button>
               <button type="button" disabled={!canAnyBulkReview || busy || !selectedIds.length} onClick={() => { resetBulkForm(); setBulkScope("selection"); }} title="Kijelölt fájlok csoportos ellenőrzése">Kijelöltek</button>
-              <span className={styles.reviewLegendCompact} title="✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat">Jelmagyarázat ⓘ</span>
+              <span className={styles.reviewLegendCompact} title="✓ megfelelő · ⚠ javítandó · ↩ visszaadva · ◷ folyamatban · + új · ● módosult · ↪ áthelyezve · ✕ nem található · — nincs adat · Sor: szürke várakozó · kék ellenőrzés alatt · narancs visszaadva · zöld jóváhagyott · szürke archív">Jelmagyarázat ⓘ</span>
             </div>
             <div className={styles.reviewCompactFilters}>
               <input aria-label="Keresés" className={styles.reviewSearch} value={reviewSearch} onChange={(event) => setReviewSearch(event.target.value)} placeholder="Keresés…" />
@@ -964,17 +983,21 @@ export default function FileGridPanel({
               <button type="button" className={styles.reviewReset} disabled={!reviewSearch && reviewDiscipline === "all" && reviewTopic === "all" && reviewStatus === "all" && reviewApprovalStage === "all" && reviewLifecycle === "all"} onClick={() => { setReviewSearch(""); setReviewDiscipline("all"); setReviewTopic("all"); setReviewStatus("all"); setReviewApprovalStage("all"); setReviewLifecycle("all"); }} title="Szűrők törlése">×</button>
             </div>
           </>
+        ) : viewMode === "simple" ? (
+          <div className={styles.fileStatusLegend} aria-label="Fájlállapot jelmagyarázat">
+            <span className={styles.fileStatusLegendTitle}>Fájlállapot</span>
+            <span><i className={styles.legendSimpleAvailable} /> elérhető</span>
+            <span><i className={styles.legendSimpleQuarantine} /> biztonsági ellenőrzés</span>
+            <span><i className={styles.legendSimpleRejected} /> elutasítva</span>
+            <span><i className={styles.legendSimpleProcessing} /> feldolgozás / metaadat</span>
+          </div>
         ) : (
-          <div className={styles.fileStatusLegend} aria-label="Tervállapot jelmagyarázat">
-            <span className={styles.fileStatusLegendTitle}>Tervállapot</span>
-            <span><i className={styles.legendSwatchPending} /> ellenőrzésre vár</span>
-            <span><i className={styles.legendSwatchReview} /> ellenőrzés alatt</span>
-            <span><i className={styles.legendSwatchReturned} /> visszaadva</span>
-            <span><i className={styles.legendSwatchApproved} /> jóváhagyási szint</span>
-            <span className={styles.fileStatusLegendDivider}>|</span>
-            <span><i className={styles.legendRowCurrent} /> aktuális</span>
-            <span><i className={styles.legendRowApproved} /> jóváhagyott aktuális</span>
-            <span><i className={styles.legendRowArchive} /> archív</span>
+          <div className={styles.fileStatusLegend} aria-label="Műszaki tervállapot jelmagyarázat">
+            <span className={styles.fileStatusLegendTitle}>Műszaki tervállapot</span>
+            <span><i className={styles.legendEngineeringWorking} /> munkaközi</span>
+            <span><i className={styles.legendEngineeringCurrent} /> aktuális</span>
+            <span><i className={styles.legendEngineeringApproved} /> jóváhagyott aktuális</span>
+            <span><i className={styles.legendEngineeringArchive} /> archív</span>
           </div>
         )}
       </div>
@@ -1076,7 +1099,7 @@ export default function FileGridPanel({
                   onCancel={onCancelNewFolder}
                 />
                 {sortedReviewRows.map((row) => (
-                  <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + lifecycleRowClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                  <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + reviewRowStatusClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                     <td className={styles.reviewSelectCell}>
                       <input
                         type="checkbox"
@@ -1191,7 +1214,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${simpleRowStatusClass(document)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                       <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
@@ -1266,7 +1289,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${lifecycleRowClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${engineeringRowStatusClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}

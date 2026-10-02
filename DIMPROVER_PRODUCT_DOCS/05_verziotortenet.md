@@ -3398,3 +3398,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Compare V2.0 30/30 PASS, Compare V2.1 45/45 PASS, issue-access 19/19 PASS, public issue page 8/8 PASS, document-flow API/UI PASS, V0.7.13 ACL contract 18/18 PASS, célzott TypeScript PASS.
 - A projectkapu-drive-compare-v010 contract egy meglévő Projectkapu BrowserViewMode baseline-elváráson bukik; ebben a blokkban components/project-gate forrás nem módosult, ezért külön Projectkapu regresszióként kezelendő.
 - DEV ONLY · PROD DENY. Runtime- és adatbázis-állapot változatlan.
+
+### DIMPRO Drive V0.7.14 – Nézetfüggő állapotszínezés
+
+- Az Egyszerű, Mérnöki és Tervellenőrzés táblanézet többé nem ugyanazt a lifecycle alapú sorszínezést használja; mindhárom nézet saját, szakmailag releváns státuszlogikát kapott.
+- Egyszerű nézetben a jelenlegi fájlverzió technikai állapota dominál: AVAILABLE, QUARANTINED, REJECTED, illetve STAGED / METADATA_ONLY külön visszafogott sorszínt kap.
+- Mérnöki nézetben a terv életciklusa dominál: Munkaközi, Aktuális, jóváhagyott Aktuális és Archív állapot különül el. A jóváhagyott aktuális tervet projektvezetői vagy beruházói projektvezetői jóváhagyás emeli ki.
+- Tervellenőrzés nézetben az ellenőrzési/jóváhagyási állapot dominál: várakozó, ellenőrzés alatt, visszaadott és jóváhagyott sorok különülnek el; az Archív életciklus elsőbbséget élvez.
+- A Simple és Engineering nézet saját jelmagyarázatot kapott. A Review kompakt jelmagyarázat tooltipje a sorszínezés jelentését is tartalmazza.
+- A kijelölt dokumentum kék selection háttere továbbra is elsőbbséget élvez az állapotszínezéssel szemben.
+- V0.7.14 contract: 21/21 PASS. V0.7.6 sort/resize 36/36 PASS; V0.7.4 inline folder/tree 25/25 PASS; V0.6.4 fullscreen/details/drag 20/20 PASS; V0.7.2 external drag-drop 11/11 PASS; célzott TypeScript PASS; git diff --check PASS.
+- DEV ONLY · PROD DENY. Backend, adatbázis és aktív Drive runtime nem változott ebben a source blokkban.
