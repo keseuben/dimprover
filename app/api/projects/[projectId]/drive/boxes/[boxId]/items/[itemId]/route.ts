@@ -12,7 +12,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "document.write");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
-    const result = await removeDriveBoxItem(projectId, boxId, itemId, access.actor.userId);
+    const result = await removeDriveBoxItem(projectId, boxId, itemId, access.actor.userId, access.access);
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

@@ -1001,8 +1001,12 @@ export async function ensureDriveQrCode(
 }
 
 
-export async function listDriveBoxes(projectId: string) {
-  const client = await requireReadyClient();
+export async function listDriveBoxes(projectId: string, access: ProjectAccessContext) {
+  const [client, tree] = await Promise.all([
+    requireReadyClient(),
+    listDriveTreeForAccess(projectId, access),
+  ]);
+  const visibleDocumentIds = new Set(tree.documents.map((document) => document.id));
   const [boxResult, itemResult] = await Promise.all([
     client.from("drive_core_boxes").select("*").eq("project_id", projectId).eq("status", "ACTIVE").order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
     client.from("drive_core_box_items").select("*").eq("project_id", projectId).order("sort_order", { ascending: true }).order("added_at", { ascending: true }),
@@ -1033,7 +1037,8 @@ export async function listDriveBoxes(projectId: string) {
     databaseError("A CsomagBOX életciklus nem tölthető be.", lifecycleProbe.error);
   }
 
-  const rawItems = (itemResult.data || []) as DbBoxItem[];
+  const rawItems = ((itemResult.data || []) as DbBoxItem[])
+    .filter((item) => visibleDocumentIds.has(item.document_id));
   const versionIds = [...new Set(rawItems.map((item) => item.version_id).filter((value): value is string => Boolean(value)))];
   const versionMap = new Map<string, DbVersion>();
   if (versionIds.length) {
@@ -1074,8 +1079,8 @@ export async function listDriveBoxes(projectId: string) {
   };
 }
 
-export async function getDriveBoxPackageSource(projectId: string, boxId: string) {
-  const listed = await listDriveBoxes(projectId);
+export async function getDriveBoxPackageSource(projectId: string, boxId: string, access: ProjectAccessContext) {
+  const listed = await listDriveBoxes(projectId, access);
   const box = listed.boxes.find((entry) => entry.id === boxId);
   if (!box) throw new DriveCoreRepositoryError("A CsomagBOX nem található.", "DRIVE_BOX_NOT_FOUND", 404);
 
@@ -1221,8 +1226,19 @@ export async function moveDriveBoxItemToFolder(
   itemId: string,
   input: Record<string, unknown>,
   actorUserId: string,
+  access: ProjectAccessContext,
 ) {
   const client = await requireReadyClient();
+  const itemResult = await client
+    .from("drive_core_box_items")
+    .select("document_id")
+    .eq("project_id", projectId)
+    .eq("box_id", boxId)
+    .eq("id", itemId)
+    .maybeSingle();
+  if (itemResult.error) databaseError("A CsomagBOX elem nem ellenőrizhető.", itemResult.error);
+  if (!itemResult.data?.document_id) throw new DriveCoreRepositoryError("A CsomagBOX elem nem található.", "DRIVE_BOX_ITEM_NOT_FOUND", 404);
+  await requireDriveDocumentAccess(projectId, String(itemResult.data.document_id), access);
   const folderId = typeof input.folderId === "string" && input.folderId.trim() ? input.folderId.trim() : null;
   const { data, error } = await client.rpc("drive_workspace_move_box_item_atomic", {
     p_project_id: projectId,
@@ -1243,8 +1259,19 @@ export async function removeDriveBoxItem(
   boxId: string,
   itemId: string,
   actorUserId: string,
+  access: ProjectAccessContext,
 ) {
   const client = await requireReadyClient();
+  const itemResult = await client
+    .from("drive_core_box_items")
+    .select("document_id")
+    .eq("project_id", projectId)
+    .eq("box_id", boxId)
+    .eq("id", itemId)
+    .maybeSingle();
+  if (itemResult.error) databaseError("A CsomagBOX elem nem ellenőrizhető.", itemResult.error);
+  if (!itemResult.data?.document_id) throw new DriveCoreRepositoryError("A CsomagBOX elem nem található.", "DRIVE_BOX_ITEM_NOT_FOUND", 404);
+  await requireDriveDocumentAccess(projectId, String(itemResult.data.document_id), access);
   const { data, error } = await client.rpc("drive_workspace_remove_box_item_atomic", {
     p_project_id: projectId,
     p_box_id: boxId,

@@ -17,7 +17,7 @@ function check(name, fn) {
 }
 
 check("History endpoint requires document.read",()=>assert.match(route,/requireProjectPermission\(request, projectId, "document\.read"\)/));
-check("History endpoint validates BOX exists",()=>assert.match(route,/listed\.boxes\.some\(\(box\) => box\.id === boxId\)/));
+check("History endpoint validates BOX exists",()=>assert.match(route,/listed\.boxes\.find\(\(entry\) => entry\.id === boxId\)/));
 check("History reuses project audit log",()=>assert.match(route,/listProjectAuditEvents\(projectId, 100\)/));
 check("History filters direct BOX events",()=>assert.match(route,/event\.entityType === "box" && event\.entityId === boxId/));
 check("History filters child events through metadata boxId",()=>assert.match(route,/event\.metadata\?\.boxId/));

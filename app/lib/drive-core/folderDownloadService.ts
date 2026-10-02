@@ -371,8 +371,9 @@ export async function openDriveBoxZip(input: {
   projectCode?: string;
   projectName?: string;
   clientId?: string | null;
+  access: ProjectAccessContext;
 }) {
-  const source = await getDriveBoxPackageSource(input.projectId, input.boxId);
+  const source = await getDriveBoxPackageSource(input.projectId, input.boxId, input.access);
   const box = source.box;
   if (source.entries.length > DRIVE_FOLDER_ZIP_MAX_FILES) {
     throw new DriveCoreRepositoryError(

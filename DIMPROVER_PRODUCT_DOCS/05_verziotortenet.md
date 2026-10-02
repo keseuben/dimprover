@@ -3367,3 +3367,12 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - CsomagBOX-ba dokumentum csak aktuálisan látható Drive dokumentumból adható; a dokumentum-ACL ellenőrzés a közös workspace repository-ban, az atomic Box insert előtt fut.
 - A meglévő CsomagBOX panel, belső mappák, ZIP, lifecycle és history működés regressziós contractjai változatlanul PASS állapotúak.
 - DEV ONLY · PROD DENY. Adatbázis-migráció vagy runtime-csere ebben a source blokkban nem történt.
+
+### DIMPRO Drive V0.7.11 – CsomagBOX Folder ACL olvasás és export guardok
+
+- A CsomagBOX lista a ProjectAccessContext alapján ACL-szűrt Drive tree-t használ, és már a repository-ban eltávolítja a rejtett dokumentumokhoz tartozó Box-itemeket a verziólekérés előtt.
+- A CsomagBOX ZIP ugyanazt az access-aware Box-forrást használja, ezért rejtett dokumentum nem kerülhet exportcsomagba akkor sem, ha korábban már Box-itemként szerepelt.
+- Box-item áthelyezés és eltávolítás előtt a repository szerveroldalon feloldja az item dokumentumazonosítóját, majd `requireDriveDocumentAccess` ellenőrzést futtat.
+- A Box history ACL-szűrt Box-listából képezi a látható dokumentumhalmazt; dokumentumhoz kötött history event csak látható dokumentum esetén jelenik meg, feloldhatatlan `box_item` event fail-closed rejtve marad.
+- A meglévő Box panel/folder/ZIP/lifecycle/history contractok és a célzott TypeScript ellenőrzés PASS.
+- DEV ONLY · PROD DENY. Runtime- vagy adatbázis-módosítás nem történt.

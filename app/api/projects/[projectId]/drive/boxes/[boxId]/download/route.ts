@@ -29,6 +29,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       projectCode: access.access.project.code,
       projectName: access.access.project.name,
       clientId: request.headers.get("x-dimpro-drive-client-id"),
+      access: access.access,
     });
     const nodeStream = archive.stream as unknown as Readable;
     const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;

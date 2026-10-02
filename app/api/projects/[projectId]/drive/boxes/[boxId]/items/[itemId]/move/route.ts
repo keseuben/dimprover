@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
 
   try {
-    const result = await moveDriveBoxItemToFolder(projectId, boxId, itemId, input, access.actor.userId);
+    const result = await moveDriveBoxItemToFolder(projectId, boxId, itemId, input, access.actor.userId, access.access);
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

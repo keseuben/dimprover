@@ -31,14 +31,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   try {
-    const listed = await listDriveBoxes(projectId);
-    if (!listed.boxes.some((box) => box.id === boxId)) {
+    const listed = await listDriveBoxes(projectId, access.access);
+    const box = listed.boxes.find((entry) => entry.id === boxId);
+    if (!box) {
       return NextResponse.json({ ok: false, error: "A CsomagBOX nem található." }, { status: 404 });
     }
+    const visibleDocumentIds = new Set(box.items.map((item) => item.documentId));
 
     const auditEvents = await listProjectAuditEvents(projectId, 100);
     const events = auditEvents
       .filter((event) => belongsToBox(event, boxId))
+      .filter((event) => {
+        const documentId = typeof event.metadata?.documentId === "string" ? event.metadata.documentId.trim() : "";
+        if (documentId) return visibleDocumentIds.has(documentId);
+        return event.entityType !== "box_item";
+      })
       .map((event) => ({
         id: event.id,
         eventType: event.eventType,
