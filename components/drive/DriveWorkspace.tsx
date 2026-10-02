@@ -212,7 +212,7 @@ export default function DriveWorkspace({
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [projectSettings, setProjectSettings] = useState<DriveProjectSettings | null>(null);
   const [reviewFocus, setReviewFocus] = useState("");
-  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "scales" | "numbering" } | null>(null);
+  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "planTitle" | "scales" | "numbering" } | null>(null);
   const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -1390,7 +1390,7 @@ export default function DriveWorkspace({
 
   const openReviewDetail = useCallback((document: DriveDocument, field: string) => {
     setSelectedDocumentId(document.id);
-    if (field === "planNo" || field === "scales" || field === "numbering") {
+    if (field === "planNo" || field === "planTitle" || field === "scales" || field === "numbering") {
       setDetailsFocus({ documentId: document.id, field });
       setReviewFocus("");
       if (layoutMode === "one") setLayoutMode("two");

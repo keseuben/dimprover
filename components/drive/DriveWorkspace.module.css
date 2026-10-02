@@ -236,7 +236,7 @@
 .folderTreeTogglePlaceholder { pointer-events: none; }
 .folderTreeSelect { min-width: 0; flex: 1 1 auto; border: 0; background: transparent; color: #31445c; min-height: 31px; border-radius: 7px; display: flex; align-items: center; gap: 7px; text-align: left; font-size: var(--drive-font-sm); font-weight: 700; cursor: pointer; padding: 0 8px 0 3px; }
 .folderTreeSelect:hover { background: #f1f6fa; }
-.folderTreeLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folderTreeLabel { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folderActive { background: #ddecff; color: #0f5dd5; }
 .folderCount { margin-left: auto; color: #7c8fa4; font-size: var(--drive-font-xs); flex: 0 0 auto; }
 
@@ -245,6 +245,8 @@
 .filePanelTitle { min-width: 0; }
 .filePanelTitle strong { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .filePanelTitle span { display: block; margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
+.filePanelTitleMain { font-size: 11px; font-weight: 800; color: #263e57; }
+.filePanelSubtitle { margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
 .fileFolderNav { min-height: 42px; display: grid; grid-template-columns: auto minmax(220px, 420px) 32px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #e6edf3; background: #fbfdff; }
 .fileFolderNavLabel { display: flex; align-items: center; gap: 6px; color: #35516d; white-space: nowrap; }
 .fileFolderNavLabel strong { font-size: var(--drive-font-xs); }
@@ -341,8 +343,26 @@
 .folderUpIcon { width: 23px; height: 23px; border-radius: 5px; display: grid; place-items: center; background: #e6f0fb; color: #1765c7; flex: 0 0 auto; }
 .fileNameCell { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .fileNameCell strong { overflow: hidden; text-overflow: ellipsis; }
-.fileDisplayNameExplicit { color: #111827; }
-.fileDisplayNameFallback { color: #5f6b76; font-weight: 700 !important; }
+.overflowTooltipText { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.displayNameValue { min-width: 0; max-width: 100%; flex: 1 1 auto; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.displayNameText { min-width: 0; flex: 1 1 auto; color: #33465d; font-weight: 600; }
+.missingDisplayNameButton {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #7b8ea1;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+.missingDisplayNameButton:hover { background: #edf4fb; color: #1765c7; }
+.missingDisplayNameButton:focus-visible { outline: 2px solid #75a9e8; outline-offset: 1px; }
+.fileDisplayNameExplicit,
+.fileDisplayNameFallback { color: #33465d; font-weight: 600 !important; }
 .fileRawName { color: #52677c; font-size: var(--drive-font-xs); }
 .fileIcon { width: 21px; height: 24px; border-radius: 4px; background: #ffe9e9; color: #e64545; display: grid; place-items: center; flex: 0 0 auto; font-size: var(--drive-font-xs); font-weight: 900; }
 .fileIconDoc { background: #e8f6ff; color: #2484c5; }
@@ -383,6 +403,7 @@
 .detailsHeaderIcon { width: 32px; height: 36px; border-radius: 6px; background: #ffe6e6; color: #e64141; display: grid; place-items: center; font-size: var(--drive-font-xs); font-weight: 900; }
 .detailsHeaderText { min-width: 0; }
 .detailsHeaderText strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detailsHeaderTitle { font-size: 13px; font-weight: 800; color: #263e57; }
 .detailsHeaderText span { display: block; margin-top: 3px; color: #5f748a; font-size: var(--drive-font-sm); }
 .detailsTabs { display: flex; gap: 2px; padding: 0 9px; border-bottom: 1px solid #edf1f5; overflow-x: auto; }
 .detailsTabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 9px 8px 8px; color: #566d84; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; white-space: nowrap; }
@@ -676,6 +697,7 @@
 .commanderFolderRow:hover { background: #f3f8fd; }
 .commanderFolderRow svg { color: #3d83ce; }
 .commanderFolderRow strong { font-size: var(--drive-font-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commanderFolderNameText { min-width: 0; flex: 1 1 auto; font-size: var(--drive-font-xs); font-weight: 800; }
 .commanderFolderRow span { font-size: var(--drive-font-xs); color: #8394a6; }
 .commanderFileRow { min-height: 36px; display: grid; grid-template-columns: 18px 14px 24px minmax(0,1fr) 54px 26px; align-items: center; gap: 4px; border-bottom: 1px solid #eef2f6; padding: 0 5px; cursor: default; color: #3c5268; }
 .commanderFileRow:hover { background: #f8fbfe; }
@@ -687,6 +709,7 @@
 .commanderFileIconImage { background: #f1ecff; color: #7354c8; }
 .commanderFileName { min-width: 0; }
 .commanderFileName strong { display: block; font-size: var(--drive-font-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.commanderFileNameText { font-size: var(--drive-font-xs); font-weight: 800; color: #304960; }
 .commanderFileName span { display: block; margin-top: 2px; color: #8393a3; font-size: var(--drive-font-xs); }
 .commanderRevision { justify-self: end; color: #60778e; font-size: var(--drive-font-xs); font-weight: 800; }
 .commanderMoveButton { width: 24px; height: 24px; border: 1px solid #cadbeb; background: #f6faff; color: #1767cf; border-radius: 6px; display: grid; place-items: center; cursor: pointer; }
@@ -1489,6 +1512,10 @@
 .reviewTable th:first-child { z-index: 4; background: #fbfcfe; }
 .reviewTable td:not(:first-child),
 .reviewTable th:not(:first-child) { text-align: center; }
+.reviewNameHeader { text-align: left !important; }
+.reviewNameHeader .sortableHeaderButton { justify-content: flex-start; text-align: left; }
+.reviewNameCell { text-align: left !important; }
+.reviewNameCell .tableFolderName { justify-content: flex-start; text-align: left; }
 .reviewName {
   max-width: 100%;
   border: 0;
@@ -1503,9 +1530,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.reviewNameExplicit { color: #111827; }
-.reviewNameFallback { color: #5f6b76; font-weight: 700; }
-.reviewName:hover { color: #1765d7; text-decoration: underline; }
+.reviewNameExplicit,
+.reviewNameFallback { color: #33465d; font-weight: 600; }
+.reviewName:hover { color: #33465d; text-decoration: none; }
 .reviewFileName {
   color: #52677c !important;
   text-align: left !important;
@@ -3627,6 +3654,7 @@
 .tableFolderRowSelected td { background: #e8f2ff !important; }
 .tableFolderName { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .tableFolderName strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tableFolderNameText { min-width: 0; flex: 1 1 auto; font-weight: 700; }
 .tableFolderIcon,
 .folderTreeSecurityIcon { flex: 0 0 auto; display: inline-grid; place-items: center; }
 .tableFolderIcon svg,

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, HardDrive, Pin } from "lucide-react";
 import type { DriveFolder } from "./driveTypes";
+import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
 
 type Props = {
@@ -175,7 +176,7 @@ export default function FolderTreePanel({
             onClick={() => onSelectFolder("all")}
           >
             <HardDrive size={14} />
-            <span className={styles.folderTreeLabel}>Dokumentumtár</span>
+            <OverflowTooltipText text="Dokumentumtár" className={styles.folderTreeLabel} />
             <span className={styles.folderCount}>{totalDocumentCount}</span>
           </button>
         </div>
@@ -214,7 +215,7 @@ export default function FolderTreePanel({
                 title={(folder.displayPath || folder.path) + " · " + security.title}
               >
                 <span className={styles.folderTreeSecurityIcon + " " + security.className}><Folder size={13} /></span>
-                <span className={styles.folderTreeLabel}>{folder.displayName || folder.name}</span>
+                <OverflowTooltipText text={folder.displayName || folder.name} className={styles.folderTreeLabel} />
                 <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
               </button>
             </div>

@@ -5,6 +5,7 @@ import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck
 import type { DriveDocument, DriveDocumentDetails, DriveMetadataOptionKey, DriveMetadataOptions, DriveProjectSettings } from "./driveTypes";
 import { DEFAULT_DRIVE_METADATA_OPTIONS } from "@/app/lib/drive-core/metadataOptions";
 import DriveDocumentViewer from "./DriveDocumentViewer";
+import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
 
 type MetadataForm = {
@@ -106,7 +107,7 @@ type Props = {
   inheritedDiscipline?: string;
   inheritedTopic?: string;
   reviewFocus?: string;
-  detailsFocus?: "planNo" | "scales" | "numbering" | "";
+  detailsFocus?: "planNo" | "planTitle" | "scales" | "numbering" | "";
 };
 
 function formatAuditDate(value: unknown) {
@@ -528,9 +529,11 @@ export default function DetailsPanel({
     if (!detailsFocus || tab !== "details" || !document) return;
     const targetId = detailsFocus === "planNo"
       ? "drive-meta-planNo"
-      : detailsFocus === "numbering"
-        ? "drive-numbering-editor"
-        : "drive-meta-scale-0";
+      : detailsFocus === "planTitle"
+        ? "drive-meta-planTitle"
+        : detailsFocus === "numbering"
+          ? "drive-numbering-editor"
+          : "drive-meta-scale-0";
     const frame = requestAnimationFrame(() => {
       const target = globalThis.document?.getElementById(targetId) as HTMLElement | null;
       target?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -639,7 +642,10 @@ export default function DetailsPanel({
       <header className={styles.detailsHeader}>
         <div className={styles.detailsHeaderIcon}>{document.extension?.toUpperCase().slice(0, 4) || "FILE"}</div>
         <div className={styles.detailsHeaderText}>
-          <strong>{metadata.planTitle || fileNameWithoutExtensionForDisplay(document.currentVersion?.originalName || document.name)}</strong>
+          <OverflowTooltipText
+            text={metadata.planTitle || fileNameWithoutExtensionForDisplay(document.currentVersion?.originalName || document.name)}
+            className={styles.detailsHeaderTitle}
+          />
           <span>{document.extension?.toUpperCase() || "FILE"} · {document.currentVersion?.revisionCode || "R00"} · V{String(document.currentVersion?.versionNumber || document.currentVersionNumber).padStart(2, "0")}</span>
         </div>
       </header>

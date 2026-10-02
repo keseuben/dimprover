@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { DriveDocument, DriveFolder } from "./driveTypes";
+import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
 
 type Props = {
@@ -141,7 +142,7 @@ function CommanderPane({
           {folders.map((entry) => <option key={entry.id} value={entry.id}>{folderLabel(entry)}</option>)}
         </select>
       </header>
-      <div className={styles.commanderPath}>{folder?.displayPath || folder?.path || "Dokumentumtár"}</div>
+      <div className={styles.commanderPath}><OverflowTooltipText text={folder?.displayPath || folder?.path || "Dokumentumtár"} /></div>
       <div className={styles.commanderList}>
         <div className={styles.commanderListInner} style={{ zoom: tableZoom / 100 }}>
         {folder?.parentId && (
@@ -151,7 +152,7 @@ function CommanderPane({
         )}
         {childFolders.map((child) => (
           <button key={child.id} type="button" className={styles.commanderFolderRow} onDoubleClick={() => onFolderChange(child.id)} onClick={() => onFolderChange(child.id)}>
-            <Folder size={13} /><strong>{child.displayName || child.name}</strong><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
+            <Folder size={13} /><OverflowTooltipText text={child.displayName || child.name} className={styles.commanderFolderNameText} /><span>Mappa · {directDocumentCounts.get(child.id) || 0} fájl</span>
           </button>
         ))}
         {paneDocuments.map((document) => {
@@ -182,7 +183,7 @@ function CommanderPane({
               />
               <GripVertical size={11} className={styles.commanderGrip} />
               <span className={commanderFileIconClass(document.extension)}>{fileIcon(document.extension)}</span>
-              <div className={styles.commanderFileName}><strong>{document.name}</strong><span>{document.extension.toUpperCase() || "FILE"} · {formatBytes(document.currentVersion?.sizeBytes || 0)}</span></div>
+              <div className={styles.commanderFileName}><OverflowTooltipText text={document.name} className={styles.commanderFileNameText} /><span>{document.extension.toUpperCase() || "FILE"} · {formatBytes(document.currentVersion?.sizeBytes || 0)}</span></div>
               <span className={styles.commanderRevision}>{document.currentVersion?.revisionCode || `V${document.currentVersionNumber}`}</span>
               {canMoveAcross && (
                 <button

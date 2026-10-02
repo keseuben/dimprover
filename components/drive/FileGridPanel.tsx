@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
+import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
 
 type Props = {
@@ -101,6 +102,40 @@ function displayDocumentName(document: DriveDocument, metadata?: DriveEngineerin
         : "";
   const originalName = document.currentVersion?.originalName || document.name;
   return { explicit, value: explicit || fileNameWithoutExtension(originalName) };
+}
+
+function DisplayNameValue({
+  document,
+  metadata,
+  canWrite,
+  onEdit,
+}: {
+  document: DriveDocument;
+  metadata?: DriveEngineeringMetadata;
+  canWrite: boolean;
+  onEdit: () => void;
+}) {
+  const displayName = displayDocumentName(document, metadata);
+  return (
+    <span className={styles.displayNameValue}>
+      <OverflowTooltipText text={displayName.value} className={styles.displayNameText} />
+      {!displayName.explicit && canWrite && (
+        <button
+          type="button"
+          className={styles.missingDisplayNameButton}
+          title="Egyedi név megadása"
+          aria-label={displayName.value + " – egyedi név megadása"}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onEdit();
+          }}
+        >
+          <Pencil size={11} />
+        </button>
+      )}
+    </span>
+  );
 }
 
 function normalizePlanScale(value: unknown) {
@@ -367,8 +402,8 @@ function FolderTableRow({
     return (
       <tr {...commonProps}>
         <td className={styles.reviewSelectCell} />
-        <td><div className={styles.tableFolderName}>{icon}<strong>{name}</strong></div></td>
-        <td className={styles.fileRawName}>{folder.name}</td>
+        <td><div className={styles.tableFolderName}>{icon}<OverflowTooltipText text={name} className={styles.tableFolderNameText} /></div></td>
+        <td className={styles.fileRawName}><OverflowTooltipText text={folder.name} /></td>
         <td>—</td>
         <td>Mappa</td>
         <td>—</td>
@@ -387,9 +422,9 @@ function FolderTableRow({
         <td className={styles.reviewSelectCell} />
         <td className={styles.statusIconColumn}>{icon}</td>
         <td>—</td>
-        <td><div className={styles.tableFolderName}><strong>{name}</strong></div></td>
+        <td><div className={styles.tableFolderName}><OverflowTooltipText text={name} className={styles.tableFolderNameText} /></div></td>
         <td>—</td>
-        <td className={styles.fileRawName}>{folder.name}</td>
+        <td className={styles.fileRawName}><OverflowTooltipText text={folder.name} /></td>
         <td>—</td>
         <td>Mappa</td>
         <td>inode/directory</td>
@@ -408,13 +443,13 @@ function FolderTableRow({
       <td className={styles.reviewSelectCell} />
       <td className={styles.statusIconColumn}>{icon}</td>
       <td>—</td>
-      <td><div className={styles.tableFolderName}><strong>{name}</strong></div></td>
+      <td className={styles.reviewNameCell}><div className={styles.tableFolderName}><OverflowTooltipText text={name} className={styles.tableFolderNameText} /></div></td>
       <td>—</td>
-      <td className={styles.reviewFileName}>{folder.name}</td>
+      <td className={styles.reviewFileName}><OverflowTooltipText text={folder.name} /></td>
       <td>—</td>
       <td>—</td>
-      <td>{folder.discipline || "—"}</td>
-      <td>{folder.topic || "—"}</td>
+      <td><OverflowTooltipText text={folder.discipline || "—"} /></td>
+      <td><OverflowTooltipText text={folder.topic || "—"} /></td>
       {Array.from({ length: 12 }, (_, index) => <td key={index}>—</td>)}
     </tr>
   );
@@ -857,8 +892,8 @@ export default function FileGridPanel({
       approvalStage: approval.kind,
       approvalTitle: approval.title,
       lifecycle,
-      explicitName: value("planTitle") || value("drawingTitle"),
-      displayName: (value("displayName") || value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.name),
+      explicitName: value("displayName") || value("planTitle") || value("drawingTitle"),
+      displayName: (value("displayName") || value("planTitle") || value("drawingTitle")) || fileNameWithoutExtension(document.currentVersion?.originalName || document.name),
       planNo: metadata?.planNo || "",
       effectiveDiscipline: metadata?.discipline || inherited?.discipline || "",
       effectiveTopic: value("topic") || inherited?.topic || "",
@@ -1035,8 +1070,8 @@ export default function FileGridPanel({
     <section className={styles.filePanel}>
       <header className={styles.filePanelTop}>
         <div className={styles.filePanelTitle}>
-          <strong>{title}</strong>
-          <span>{subtitle}</span>
+          <OverflowTooltipText text={title} className={styles.filePanelTitleMain} />
+          <OverflowTooltipText text={subtitle} className={styles.filePanelSubtitle} />
         </div>
         <div className={styles.viewToggle}>
           <button type="button" className={viewMode === "simple" ? styles.viewToggleActive : ""} onClick={() => onViewModeChange("simple")}>
@@ -1076,7 +1111,7 @@ export default function FileGridPanel({
         >
           <FolderUp size={14} />
         </button>
-        <span className={styles.fileFolderPath}>{currentFolder?.displayPath || currentFolder?.path || "Dokumentumtár / összes fájl"}</span>
+        <OverflowTooltipText text={currentFolder?.displayPath || currentFolder?.path || "Dokumentumtár / összes fájl"} className={styles.fileFolderPath} />
       </div>
 
       <div className={styles.fileSelectionBar}>
@@ -1198,7 +1233,7 @@ export default function FileGridPanel({
                   <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható tervek kijelölése" /></th>
                   <SortableResizableHeader label="" className={styles.statusIconColumn} title="Állapotjelzők és fájltípus" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "statusIcons", event)} />
                   <SortableResizableHeader label="Tervszám" title="Tervszám" sortState={sortState} onSort={toggleSort} resizeLabel="Tervszám oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "planNo", event)} />
-                  <SortableResizableHeader label="Név" title="Megjelenített tervnév" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "name", event)} />
+                  <SortableResizableHeader label="Név" className={styles.reviewNameHeader} title="Megjelenített tervnév" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "name", event)} />
                   <SortableResizableHeader label="Lépték" title="Tervlépték" sortState={sortState} onSort={toggleSort} resizeLabel="Lépték oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "scale", event)} />
                   <SortableResizableHeader label="Fájlnév" className={styles.reviewFileNameHeader} title="Eredeti fájlnév" sortKey="fileName" sortState={sortState} onSort={toggleSort} resizeLabel="Fájlnév oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "fileName", event)} />
                   <SortableResizableHeader label="Feltöltő" title="Feltöltő" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltő oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("review", "uploader", event)} />
@@ -1281,22 +1316,15 @@ export default function FileGridPanel({
                       </div>
                     </td>
                     <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
-                    <td>
-                      <button
-                        type="button"
-                        className={styles.reviewName + " " + (row.explicitName ? styles.reviewNameExplicit : styles.reviewNameFallback)}
-                        title={row.displayName}
-                        onClick={() => openDetail(row.document, "checked")}
-                      >
-                        {row.displayName}
-                      </button>
+                    <td className={styles.reviewNameCell}>
+                      <DisplayNameValue document={row.document} metadata={metadataByDocument[row.document.id]} canWrite={canWrite} onEdit={() => openDetail(row.document, "planTitle")} />
                     </td>
                     <td><button type="button" className={styles.metadataCellButton} title={row.scale.title} onClick={() => openDetail(row.document, "scales")}>{row.scale.text}</button></td>
-                    <td className={styles.reviewFileName} title={row.document.name}>{row.document.name}</td>
-                    <td>{uploaderLabel(row.document.currentVersion?.createdBy)}</td>
+                    <td className={styles.reviewFileName}><OverflowTooltipText text={row.document.name} /></td>
+                    <td><OverflowTooltipText text={uploaderLabel(row.document.currentVersion?.createdBy)} /></td>
                     <td title={formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}>{formatDate(row.document.currentVersion?.createdAt || row.document.updatedAt)}</td>
-                    <td>{row.effectiveDiscipline || "—"}</td>
-                    <td>{row.effectiveTopic || "—"}</td>
+                    <td><OverflowTooltipText text={row.effectiveDiscipline || "—"} /></td>
+                    <td><OverflowTooltipText text={row.effectiveTopic || "—"} /></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.checked || "Nincs ellenőrzési adat"} onClick={() => openDetail(row.document, "checked")}>{reviewMark(row.checked)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.result || "Nincs eredmény"} onClick={() => openDetail(row.document, "result")}>{reviewMark(row.result)}</button></td>
                     <td><button type="button" className={styles.reviewSymbol} title={row.observations || "Nincs észrevétel"} onClick={() => openDetail(row.document, "observations")}>{row.observationCount || "—"}</button></td>
@@ -1385,9 +1413,9 @@ export default function FileGridPanel({
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd a fájlt CsomagBOX-ba"
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></div></td>
-                      <td className={styles.fileRawName} title={document.name}>{document.name}</td>
-                      <td>{uploaderLabel(version?.createdBy)}</td>
+                      ><FileKindIcon extension={document.extension} /></span><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
+                      <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
+                      <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
                       <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
@@ -1472,15 +1500,15 @@ export default function FileGridPanel({
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
                       ><FileKindIcon extension={document.extension} /></span></div></td>
                       <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
-                      <td><strong className={displayName.explicit ? styles.fileDisplayNameExplicit : styles.fileDisplayNameFallback}>{displayName.value}</strong></td>
+                      <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></td>
                       <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
-                      <td className={styles.fileRawName} title={document.name}>{document.name}</td>
-                      <td>{uploaderLabel(version?.createdBy)}</td>
+                      <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
+                      <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
-                      <td title={document.mimeType}>{document.mimeType || "–"}</td>
+                      <td><OverflowTooltipText text={document.mimeType || "–"} /></td>
                       <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
                       <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{versionLabel(version?.versionNumber || document.currentVersionNumber)}</button></td>
-                      <td>{document.source}</td>
+                      <td><OverflowTooltipText text={document.source} /></td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
                       <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{versionStatusLabel(version?.status)}</span></td>
