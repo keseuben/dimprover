@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
@@ -20,6 +20,8 @@ type Props = {
   metadataByDocument?: Record<string, DriveEngineeringMetadata>;
   folders?: DriveFolder[];
   selectedFolderId?: string;
+  allFilesMode?: boolean;
+  onAllFilesModeChange?: (value: boolean) => void;
   currentFolder?: DriveFolder | null;
   onFolderChange?: (folderId: string) => void;
   onNavigateParent?: () => void;
@@ -672,6 +674,8 @@ export default function FileGridPanel({
   metadataByDocument = {},
   folders = [],
   selectedFolderId = "all",
+  allFilesMode = false,
+  onAllFilesModeChange,
   currentFolder = null,
   onFolderChange,
   onNavigateParent,
@@ -939,6 +943,7 @@ export default function FileGridPanel({
   }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
 
   const childFolders = useMemo(() => {
+    if (allFilesMode) return [];
     const targetParentId = selectedFolderId === "all" ? null : selectedFolderId;
     return folders
       .filter((folder) => folder.parentId === targetParentId)
@@ -947,7 +952,7 @@ export default function FileGridPanel({
         if (order) return order;
         return compareTableText(a.displayName || a.name, b.displayName || b.name);
       });
-  }, [folders, selectedFolderId]);
+  }, [allFilesMode, folders, selectedFolderId]);
 
   const sortedDocuments = useMemo(() => {
     return [...documents].sort((a, b) => {
@@ -1094,13 +1099,24 @@ export default function FileGridPanel({
           onChange={(event) => onFolderChange?.(event.target.value)}
           aria-label="Aktív mappa"
         >
-          <option value="all">Dokumentumtár / összes fájl</option>
+          <option value="all">Dokumentumtár</option>
           {folderOptions.map((folder) => (
             <option key={folder.id} value={folder.id}>
               {(folder.displayPath || folder.path).split("/").filter(Boolean).join(" / ")}
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          className={`${styles.fileFolderAllFilesButton} ${allFilesMode ? styles.fileFolderAllFilesButtonActive : ""}`}
+          disabled={!currentFolder || !onAllFilesModeChange}
+          aria-pressed={allFilesMode}
+          title={currentFolder ? "A kiválasztott mappa és minden almappája összes fájlja" : "Az Összes fájl nézethez válassz ki egy mappát"}
+          onClick={() => onAllFilesModeChange?.(!allFilesMode)}
+        >
+          <Files size={13} />
+          <span>Összes fájl</span>
+        </button>
         <button
           type="button"
           className={styles.fileFolderUpButton}
@@ -1111,7 +1127,7 @@ export default function FileGridPanel({
         >
           <FolderUp size={14} />
         </button>
-        <OverflowTooltipText text={currentFolder?.displayPath || currentFolder?.path || "Dokumentumtár / összes fájl"} className={styles.fileFolderPath} />
+        <OverflowTooltipText text={(currentFolder?.displayPath || currentFolder?.path || "Dokumentumtár") + (allFilesMode ? " / összes fájl" : "")} className={styles.fileFolderPath} />
       </div>
 
       <div className={styles.fileSelectionBar}>
@@ -1255,7 +1271,7 @@ export default function FileGridPanel({
                 </tr>
               </thead>
               <tbody>
-                {currentFolder && onNavigateParent && (
+                {!allFilesMode && currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
                     <td colSpan={22}>
                       <div className={styles.folderUpCell}>
@@ -1266,7 +1282,7 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
-                <InlineNewFolderRow
+                {!allFilesMode && <InlineNewFolderRow
                   open={newFolderEditorOpen}
                   colSpan={22}
                   name={newFolderName}
@@ -1274,7 +1290,7 @@ export default function FileGridPanel({
                   onNameChange={onNewFolderNameChange}
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
-                />
+                />}
                 {childFolders.map((folder) => (
                   <FolderTableRow
                     key={folder.id}
@@ -1341,7 +1357,7 @@ export default function FileGridPanel({
                 ))}
               </tbody>
             </table>
-            {!reviewRows.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető terv</strong>A jelenlegi tervellenőrzési szűrésre nincs találat.</div>}
+            {!reviewRows.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető terv</strong>{allFilesMode ? "A kiválasztott mappában és almappáiban nincs a szűrésnek megfelelő fájl." : "A jelenlegi tervellenőrzési szűrésre nincs találat."}</div>}
           </div>
         </div>
       ) : (
@@ -1367,7 +1383,7 @@ export default function FileGridPanel({
                 <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "status", event)} />
               </tr></thead>
               <tbody>
-                {currentFolder && onNavigateParent && (
+                {!allFilesMode && currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
                     <td colSpan={11}>
                       <div className={styles.folderUpCell}>
@@ -1378,7 +1394,7 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
-                <InlineNewFolderRow
+                {!allFilesMode && <InlineNewFolderRow
                   open={newFolderEditorOpen}
                   colSpan={11}
                   name={newFolderName}
@@ -1386,7 +1402,7 @@ export default function FileGridPanel({
                   onNameChange={onNewFolderNameChange}
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
-                />
+                />}
                 {childFolders.map((folder) => (
                   <FolderTableRow
                     key={folder.id}
@@ -1453,7 +1469,7 @@ export default function FileGridPanel({
                 <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "status", event)} />
               </tr></thead>
               <tbody>
-                {currentFolder && onNavigateParent && (
+                {!allFilesMode && currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
                     <td colSpan={15}>
                       <div className={styles.folderUpCell}>
@@ -1464,7 +1480,7 @@ export default function FileGridPanel({
                     </td>
                   </tr>
                 )}
-                <InlineNewFolderRow
+                {!allFilesMode && <InlineNewFolderRow
                   open={newFolderEditorOpen}
                   colSpan={15}
                   name={newFolderName}
@@ -1472,7 +1488,7 @@ export default function FileGridPanel({
                   onNameChange={onNewFolderNameChange}
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
-                />
+                />}
                 {childFolders.map((folder) => (
                   <FolderTableRow
                     key={folder.id}
@@ -1518,7 +1534,7 @@ export default function FileGridPanel({
               </tbody>
             </table>
           )}
-          {!documents.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető fájl</strong>A kiválasztott mappában vagy keresésben nincs találat.</div>}
+          {!documents.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető fájl</strong>{allFilesMode ? "A kiválasztott mappában és almappáiban nincs fájl." : "A kiválasztott mappában vagy keresésben nincs találat."}</div>}
         </div>
       )}
     </section>

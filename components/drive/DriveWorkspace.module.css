@@ -247,11 +247,29 @@
 .filePanelTitle span { display: block; margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
 .filePanelTitleMain { font-size: 11px; font-weight: 800; color: #263e57; }
 .filePanelSubtitle { margin-top: 2px; color: #718397; font-size: var(--drive-font-xs); }
-.fileFolderNav { min-height: 42px; display: grid; grid-template-columns: auto minmax(220px, 420px) 32px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #e6edf3; background: #fbfdff; }
+.fileFolderNav { min-height: 42px; display: grid; grid-template-columns: auto minmax(220px, 420px) auto 32px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #e6edf3; background: #fbfdff; }
 .fileFolderNavLabel { display: flex; align-items: center; gap: 6px; color: #35516d; white-space: nowrap; }
 .fileFolderNavLabel strong { font-size: var(--drive-font-xs); }
 .fileFolderNav select { width: 100%; height: 30px; border: 1px solid #d5e0e9; background: #fff; color: #294159; border-radius: 7px; padding: 0 8px; font-size: var(--drive-font-xs); outline: none; }
 .fileFolderNav select:focus { border-color: #8db9f3; box-shadow: 0 0 0 2px rgba(17,103,238,.06); }
+.fileFolderAllFilesButton {
+  min-height: 30px;
+  border: 1px solid #d1deea;
+  border-radius: 7px;
+  background: #fff;
+  color: #526a82;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fileFolderAllFilesButton:hover:not(:disabled) { background: #edf5ff; border-color: #98bce4; color: #1765c7; }
+.fileFolderAllFilesButtonActive { background: #e7f1ff; border-color: #79a8e7; color: #0f5fc8; box-shadow: inset 0 0 0 1px rgba(15,95,200,.05); }
+.fileFolderAllFilesButton:disabled { background: #f5f7f9; color: #a0aeba; cursor: default; }
 .fileFolderUpButton { width: 30px; height: 30px; border: 1px solid #d1deea; border-radius: 7px; background: #fff; color: #1765c7; display: grid; place-items: center; cursor: pointer; }
 .fileFolderUpButton:hover:not(:disabled) { background: #edf5ff; border-color: #98bce4; }
 .fileFolderUpButton:disabled { color: #a8b5c2; background: #f5f7f9; cursor: default; }

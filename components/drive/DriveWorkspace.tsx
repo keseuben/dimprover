@@ -195,6 +195,7 @@ export default function DriveWorkspace({
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState("all");
+  const [allFilesInFolderMode, setAllFilesInFolderMode] = useState(false);
   const [newFolderEditorOpen, setNewFolderEditorOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("Új mappa");
   const [newFolderSaving, setNewFolderSaving] = useState(false);
@@ -378,6 +379,7 @@ export default function DriveWorkspace({
     setMembershipDisplayName("");
     setReviewFocus("");
     setSelectedFolderId("all");
+    setAllFilesInFolderMode(false);
     setSelectedDocumentId("");
     void load();
   }, [load, projectId]);
@@ -429,17 +431,50 @@ export default function DriveWorkspace({
     return counts;
   }, [tree]);
 
+  const selectedFolderScopeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!tree || selectedFolderId === "all") return ids;
+    ids.add(selectedFolderId);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const folder of tree.folders) {
+        if (folder.parentId && ids.has(folder.parentId) && !ids.has(folder.id)) {
+          ids.add(folder.id);
+          changed = true;
+        }
+      }
+    }
+    return ids;
+  }, [selectedFolderId, tree]);
+
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return (tree?.documents || []).filter((document) => {
-      const folderMatch = selectedFolderId === "all" || document.folderId === selectedFolderId;
+      const folderMatch = selectedFolderId === "all"
+        ? !document.folderId
+        : allFilesInFolderMode
+          ? selectedFolderScopeIds.has(document.folderId)
+          : document.folderId === selectedFolderId;
       const queryMatch = !normalized || [document.name, document.description, document.extension, document.source, document.currentVersion?.revisionCode || ""]
         .join(" ")
         .toLocaleLowerCase("hu-HU")
         .includes(normalized);
       return folderMatch && queryMatch;
     });
-  }, [query, selectedFolderId, tree]);
+  }, [allFilesInFolderMode, query, selectedFolderId, selectedFolderScopeIds, tree]);
+
+  const visibleFolderCount = useMemo(() => {
+    if (!tree || allFilesInFolderMode) return 0;
+    const parentId = selectedFolderId === "all" ? null : selectedFolderId;
+    return tree.folders.filter((folder) => folder.parentId === parentId).length;
+  }, [allFilesInFolderMode, selectedFolderId, tree]);
+
+  const fileGridSubtitle = `${visibleDocuments.length} fájl · ${visibleFolderCount} mappa${allFilesInFolderMode ? " · almappákkal együtt" : ""}`;
+
+  useEffect(() => {
+    if (selectedFolderId === "all" && allFilesInFolderMode) setAllFilesInFolderMode(false);
+  }, [allFilesInFolderMode, selectedFolderId]);
 
   useEffect(() => {
     if (previousSelectedFolderIdRef.current === selectedFolderId) return;
@@ -451,6 +486,7 @@ export default function DriveWorkspace({
 
   function openNewFolderEditor() {
     if (!canWrite || newFolderSaving) return;
+    setAllFilesInFolderMode(false);
     setError("");
     setNotice("");
     setNewFolderName("Új mappa");
@@ -574,6 +610,7 @@ export default function DriveWorkspace({
       const info = await getFolderPasswordInfo(targetFolderId);
       if (!info.status.locked) {
         setSelectedDocumentId("");
+        setAllFilesInFolderMode(false);
         setSelectedFolderId(targetFolderId);
         return;
       }
@@ -634,6 +671,7 @@ export default function DriveWorkspace({
       setFolderPasswordDialog(null);
       await load();
       setSelectedDocumentId("");
+      setAllFilesInFolderMode(false);
       setSelectedFolderId(dialog.targetFolderId);
       setNotice("Jelszóvédett mappa feloldva.");
     } catch (caught) {
@@ -1353,6 +1391,8 @@ export default function DriveWorkspace({
   function selectFolder(folderId: string) {
     if (folderId === "all") {
       setSelectedDocumentId("");
+      setSelectedDocumentIds([]);
+      setAllFilesInFolderMode(false);
       setSelectedFolderId("all");
       return;
     }
@@ -1366,7 +1406,23 @@ export default function DriveWorkspace({
       return;
     }
     setSelectedDocumentId("");
+    setSelectedDocumentIds([]);
+    setAllFilesInFolderMode(false);
     setSelectedFolderId(folderId);
+  }
+
+  function setFolderFileScope(allFiles: boolean) {
+    if (selectedFolderId === "all") {
+      setAllFilesInFolderMode(false);
+      return;
+    }
+    setSelectedDocumentId("");
+    setSelectedDocumentIds([]);
+    if (allFiles) {
+      setNewFolderEditorOpen(false);
+      setNewFolderName("Új mappa");
+    }
+    setAllFilesInFolderMode(allFiles);
   }
 
   const effectiveFolderClassification = useMemo(() => {
@@ -1828,7 +1884,8 @@ export default function DriveWorkspace({
 
   const folderHidden = layoutMode !== "three";
   const detailsHidden = layoutMode === "one";
-  const title = selectedFolder?.displayName || selectedFolder?.name || "Teljes dokumentumtár";
+  const titleBase = selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
+  const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
 
   return (
@@ -2323,7 +2380,7 @@ export default function DriveWorkspace({
         <section className={`${styles.fullTableOverlay} ${fullTableInspectorOpen && fullTableInspectorLayout === "bottom" ? styles.fullTableOverlayBottomInspector : ""}`} data-drive-full-table="0.2.0">
           <TableFullscreenBar
             title={title}
-            subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+            subtitle={fileGridSubtitle}
             layoutMode={layoutMode}
             onLayoutModeChange={(next) => { setLayoutMode(next); closeTableFullscreen(); }}
             zoom={tableZoom}
@@ -2352,7 +2409,7 @@ export default function DriveWorkspace({
           <div className={styles.fullTableBody}>
             <FileGridPanel
               title={title}
-              subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+              subtitle={fileGridSubtitle}
               documents={visibleDocuments}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
@@ -2364,6 +2421,8 @@ export default function DriveWorkspace({
               metadataByDocument={metadataByDocument}
               folders={tree?.folders || []}
               selectedFolderId={selectedFolderId}
+              allFilesMode={allFilesInFolderMode}
+              onAllFilesModeChange={setFolderFileScope}
               currentFolder={selectedFolder}
               onFolderChange={selectFolder}
               onNavigateParent={() => {
@@ -2499,7 +2558,7 @@ export default function DriveWorkspace({
             />
             <FileGridPanel
               title={title}
-              subtitle={`${visibleDocuments.length} fájl · ${tree?.folders.length || 0} mappa`}
+              subtitle={fileGridSubtitle}
               documents={visibleDocuments}
               selectedDocumentId={selectedDocumentId}
               viewMode={viewMode}
@@ -2511,6 +2570,8 @@ export default function DriveWorkspace({
               metadataByDocument={metadataByDocument}
               folders={tree?.folders || []}
               selectedFolderId={selectedFolderId}
+              allFilesMode={allFilesInFolderMode}
+              onAllFilesModeChange={setFolderFileScope}
               currentFolder={selectedFolder}
               onFolderChange={selectFolder}
               onNavigateParent={() => {
