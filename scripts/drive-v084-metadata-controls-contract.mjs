@@ -22,9 +22,9 @@ const check = (label, fn) => {
   console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`);
 };
 
-check("Drive Core schema marker is 0.8.4", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.4"/));
-check("Drive Core migration count is 6", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 6/));
-check("Drive Core bootstrap id is V084 metadata controls", () => assert.match(schema, /drive-core-v084-metadata-controls-20261002/));
+check("Current Drive Core schema retains V084 and has advanced to 0.8.6", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.6"/));
+check("Current Drive Core migration count is 7", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 7/));
+check("V084 migration preserves its metadata-controls bootstrap marker", () => assert.match(sql, /drive-core-v084-metadata-controls-20261002/));
 check("schema readiness includes project settings and numbering audit columns", () => {
   assert.match(schema, /drive_core_project_settings/);
   for (const field of ["numbering_origin","numbering_correction_reason","numbering_corrected_by","numbering_corrected_at"]) assert.match(schema, new RegExp(field));

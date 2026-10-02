@@ -6,6 +6,8 @@ import {
   Building2,
   HelpCircle,
   Loader2,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import BoxShelf from "./BoxShelf";
 import BottomInspectorResizeHandle from "./BottomInspectorResizeHandle";
@@ -70,6 +72,45 @@ type TreePayload = {
   permissions?: DrivePermission[];
   membershipRole?: ProjectMembershipRole;
   membershipDisplayName?: string;
+};
+
+type FolderPasswordGateStatus = {
+  folderId: string;
+  passwordProtected: boolean;
+  passwordUnlocked: boolean;
+  unlockExpiresAt: number | null;
+  unlockTtlMinutes: number | null;
+  locked: boolean;
+  gateFolderId: string | null;
+  inheritedLock: boolean;
+};
+
+type FolderPasswordPublicConfig = {
+  projectId: string;
+  folderId: string;
+  passwordVersion: number;
+  unlockTtlMinutes: number;
+  maxAttempts: number;
+  lockoutMinutes: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type FolderPasswordDialogState = {
+  mode: "unlock" | "manage";
+  targetFolderId: string;
+  gateFolderId: string;
+  folderName: string;
+  password: string;
+  confirmPassword: string;
+  unlockTtlMinutes: number;
+  protected: boolean;
+  passwordUnlocked: boolean;
+  inheritedLock: boolean;
+  error: string;
+  busy: boolean;
 };
 
 type UploadInitPayload = {
@@ -196,6 +237,7 @@ export default function DriveWorkspace({
     accessExpiresAt: string | null;
     accessLinkError: string | null;
   } | null>(null);
+  const [folderPasswordDialog, setFolderPasswordDialog] = useState<FolderPasswordDialogState | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
@@ -209,6 +251,7 @@ export default function DriveWorkspace({
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
   const canConfigureDataLists = effectivePermissions.includes("project.update");
+  const canManageFolderPassword = effectivePermissions.includes("project.update");
   const securityReady = Boolean(health?.security?.ready);
 
   const closeTableFullscreen = useCallback(() => {
@@ -477,6 +520,183 @@ export default function DriveWorkspace({
       setError(caught instanceof Error ? caught.message : "A mappa átnevezése sikertelen.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function getFolderPasswordInfo(folderId: string) {
+    const response = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(folderId)}/password`,
+      { credentials: "same-origin", cache: "no-store" },
+    );
+    const payload = await response.json().catch(() => ({})) as {
+      ok?: boolean;
+      error?: string;
+      status?: FolderPasswordGateStatus;
+      config?: FolderPasswordPublicConfig | null;
+    };
+    if (!response.ok || !payload.ok || !payload.status) {
+      throw new Error(payload.error || "A mappavédelem állapota nem tölthető be.");
+    }
+    return { status: payload.status, config: payload.config || null };
+  }
+
+  async function openFolderPasswordManageDialog(folder: DriveFolder) {
+    if (!canManageFolderPassword) return;
+    setBusy(true);
+    setError("");
+    try {
+      const info = await getFolderPasswordInfo(folder.id);
+      setFolderPasswordDialog({
+        mode: "manage",
+        targetFolderId: folder.id,
+        gateFolderId: info.status.gateFolderId || folder.id,
+        folderName: folder.displayName || folder.name,
+        password: "",
+        confirmPassword: "",
+        unlockTtlMinutes: info.config?.unlockTtlMinutes || 120,
+        protected: info.status.passwordProtected,
+        passwordUnlocked: info.status.passwordUnlocked,
+        inheritedLock: info.status.inheritedLock,
+        error: "",
+        busy: false,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappavédelem állapota nem tölthető be.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openFolderPasswordUnlockDialog(folder: DriveFolder, targetFolderId = folder.id) {
+    setBusy(true);
+    setError("");
+    try {
+      const info = await getFolderPasswordInfo(targetFolderId);
+      if (!info.status.locked) {
+        setSelectedDocumentId("");
+        setSelectedFolderId(targetFolderId);
+        return;
+      }
+      const gateFolder = tree?.folders.find((item) => item.id === info.status.gateFolderId) || folder;
+      setFolderPasswordDialog({
+        mode: "unlock",
+        targetFolderId,
+        gateFolderId: info.status.gateFolderId || folder.id,
+        folderName: gateFolder.displayName || gateFolder.name,
+        password: "",
+        confirmPassword: "",
+        unlockTtlMinutes: info.config?.unlockTtlMinutes || info.status.unlockTtlMinutes || 120,
+        protected: true,
+        passwordUnlocked: false,
+        inheritedLock: info.status.inheritedLock,
+        error: "",
+        busy: false,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A mappavédelem állapota nem tölthető be.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitFolderUnlock() {
+    const dialog = folderPasswordDialog;
+    if (!dialog || dialog.mode !== "unlock" || dialog.busy) return;
+    if (dialog.password.length < 8) {
+      setFolderPasswordDialog((current) => current ? { ...current, error: "Add meg a mappajelszót." } : current);
+      return;
+    }
+    setFolderPasswordDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.targetFolderId)}/password/unlock`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ password: dialog.password }),
+        },
+      );
+      const payload = await response.json().catch(() => ({})) as {
+        ok?: boolean;
+        error?: string;
+        attemptsRemaining?: number;
+        lockedUntil?: string | null;
+      };
+      if (!response.ok || !payload.ok) {
+        const suffix = typeof payload.attemptsRemaining === "number" && payload.attemptsRemaining > 0
+          ? ` · Még ${payload.attemptsRemaining} próbálkozás`
+          : payload.lockedUntil
+            ? ` · Zárolva: ${new Date(payload.lockedUntil).toLocaleString("hu-HU")}`
+            : "";
+        throw new Error((payload.error || "A mappa feloldása sikertelen.") + suffix);
+      }
+      setFolderPasswordDialog(null);
+      await load();
+      setSelectedDocumentId("");
+      setSelectedFolderId(dialog.targetFolderId);
+      setNotice("Jelszóvédett mappa feloldva.");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A mappa feloldása sikertelen.";
+      setFolderPasswordDialog((current) => current ? { ...current, busy: false, error: message, password: "" } : current);
+    }
+  }
+
+  async function saveFolderPasswordProtection() {
+    const dialog = folderPasswordDialog;
+    if (!dialog || dialog.mode !== "manage" || dialog.busy) return;
+    if (dialog.password.length < 8 || dialog.password.length > 128) {
+      setFolderPasswordDialog((current) => current ? { ...current, error: "A jelszó 8–128 karakter hosszú legyen." } : current);
+      return;
+    }
+    if (dialog.password !== dialog.confirmPassword) {
+      setFolderPasswordDialog((current) => current ? { ...current, error: "A két jelszó nem egyezik." } : current);
+      return;
+    }
+    setFolderPasswordDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.targetFolderId)}/password`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            password: dialog.password,
+            unlockTtlMinutes: dialog.unlockTtlMinutes,
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappavédelem mentése sikertelen.");
+      setFolderPasswordDialog(null);
+      setSelectedFolderId("all");
+      setSelectedDocumentId("");
+      await load();
+      setNotice("Mappajelszó-védelem mentve. A korábbi feloldások érvénytelenítve.");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A mappavédelem mentése sikertelen.";
+      setFolderPasswordDialog((current) => current ? { ...current, busy: false, error: message } : current);
+    }
+  }
+
+  async function clearFolderPasswordProtection() {
+    const dialog = folderPasswordDialog;
+    if (!dialog || dialog.mode !== "manage" || !dialog.protected || dialog.busy) return;
+    setFolderPasswordDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.targetFolderId)}/password`,
+        { method: "DELETE", credentials: "same-origin" },
+      );
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappavédelem törlése sikertelen.");
+      setFolderPasswordDialog(null);
+      await load();
+      setNotice("Mappajelszó-védelem törölve.");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "A mappavédelem törlése sikertelen.";
+      setFolderPasswordDialog((current) => current ? { ...current, busy: false, error: message } : current);
     }
   }
 
@@ -1131,6 +1351,20 @@ export default function DriveWorkspace({
   }
 
   function selectFolder(folderId: string) {
+    if (folderId === "all") {
+      setSelectedDocumentId("");
+      setSelectedFolderId("all");
+      return;
+    }
+    const folder = tree?.folders.find((item) => item.id === folderId);
+    if (!folder) {
+      setError("A kiválasztott mappa már nem érhető el.");
+      return;
+    }
+    if (folder.securityState === "PASSWORD" && !folder.passwordUnlocked) {
+      void openFolderPasswordUnlockDialog(folder, folderId);
+      return;
+    }
     setSelectedDocumentId("");
     setSelectedFolderId(folderId);
   }
@@ -1705,6 +1939,142 @@ export default function DriveWorkspace({
         aria-label="Új verzió fájljának kiválasztása"
       />
 
+      {folderPasswordDialog && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label={folderPasswordDialog.mode === "unlock" ? "Jelszóvédett mappa feloldása" : "Mappavédelem beállítása"}>
+          <form
+            className={`${styles.projectCreatePanel} ${styles.folderPasswordDialogPanel}`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (folderPasswordDialog.mode === "unlock") void submitFolderUnlock();
+              else void saveFolderPasswordProtection();
+            }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Mappavédelem</small>
+                <strong>{folderPasswordDialog.mode === "unlock" ? "Jelszóvédett mappa feloldása" : "Mappavédelem"}</strong>
+                <span>{folderPasswordDialog.folderName}</span>
+              </div>
+              <button type="button" disabled={folderPasswordDialog.busy} onClick={() => setFolderPasswordDialog(null)} aria-label="Bezárás">×</button>
+            </header>
+
+            {folderPasswordDialog.mode === "unlock" ? (
+              <>
+                <div className={styles.folderPasswordInfo}>
+                  <Lock size={18} />
+                  <div>
+                    <strong>A mappa tartalma zárolt.</strong>
+                    <span>{folderPasswordDialog.inheritedLock ? "A hozzáférést egy szülőmappa jelszavas védelme korlátozza." : "A tartalom megnyitásához add meg a mappajelszót."}</span>
+                  </div>
+                </div>
+                <label>
+                  Mappajelszó
+                  <input
+                    autoFocus
+                    type="password"
+                    minLength={8}
+                    maxLength={128}
+                    autoComplete="current-password"
+                    value={folderPasswordDialog.password}
+                    onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, password: event.target.value, error: "" } : current)}
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <div className={styles.folderPasswordInfo}>
+                  {folderPasswordDialog.protected ? <ShieldCheck size={18} /> : <Lock size={18} />}
+                  <div>
+                    <strong>{folderPasswordDialog.protected ? "A mappa jelenleg jelszóval védett." : "Jelszavas védelem beállítása"}</strong>
+                    <span>Az ACL-jogosultságok továbbra is elsődlegesek. A jelszó csak további hozzáférési korlátozás.</span>
+                  </div>
+                </div>
+                <div className={styles.projectCreateGrid}>
+                  <label>
+                    {folderPasswordDialog.protected ? "Új jelszó" : "Jelszó"}
+                    <input
+                      type="password"
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      value={folderPasswordDialog.password}
+                      onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, password: event.target.value, error: "" } : current)}
+                    />
+                  </label>
+                  <label>
+                    Jelszó ismét
+                    <input
+                      type="password"
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      value={folderPasswordDialog.confirmPassword}
+                      onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, confirmPassword: event.target.value, error: "" } : current)}
+                    />
+                  </label>
+                  <label>
+                    Feloldás érvényessége
+                    <select
+                      value={folderPasswordDialog.unlockTtlMinutes}
+                      onChange={(event) => setFolderPasswordDialog((current) => current ? { ...current, unlockTtlMinutes: Number(event.target.value) } : current)}
+                    >
+                      <option value={30}>30 perc</option>
+                      <option value={60}>1 óra</option>
+                      <option value={120}>2 óra</option>
+                      <option value={480}>8 óra</option>
+                      <option value={1440}>24 óra</option>
+                    </select>
+                  </label>
+                </div>
+                <div className={styles.revisionIssueHint}>
+                  <strong>Biztonsági szabály</strong>
+                  <span>A jelszó nem kerül olvasható formában eltárolásra. Jelszócsere minden korábbi feloldást érvénytelenít.</span>
+                </div>
+              </>
+            )}
+
+            {folderPasswordDialog.error && <div className={`${styles.notice} ${styles.noticeError}`}>{folderPasswordDialog.error}</div>}
+
+            <footer>
+              {folderPasswordDialog.mode === "unlock" && canManageFolderPassword && (
+                <button
+                  type="button"
+                  disabled={folderPasswordDialog.busy}
+                  onClick={() => {
+                    const folder = tree?.folders.find((item) => item.id === folderPasswordDialog.gateFolderId);
+                    if (folder) void openFolderPasswordManageDialog(folder);
+                  }}
+                >
+                  Védelem kezelése
+                </button>
+              )}
+              {folderPasswordDialog.mode === "manage" && folderPasswordDialog.protected && (
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  disabled={folderPasswordDialog.busy}
+                  onClick={() => void clearFolderPasswordProtection()}
+                >
+                  Védelem törlése
+                </button>
+              )}
+              <button type="button" disabled={folderPasswordDialog.busy} onClick={() => setFolderPasswordDialog(null)}>Mégsem</button>
+              <button
+                type="submit"
+                disabled={
+                  folderPasswordDialog.busy
+                  || folderPasswordDialog.password.length < 8
+                  || (folderPasswordDialog.mode === "manage" && folderPasswordDialog.password !== folderPasswordDialog.confirmPassword)
+                }
+              >
+                {folderPasswordDialog.busy ? <Loader2 className={styles.spin} size={16} /> : null}
+                {folderPasswordDialog.mode === "unlock" ? "Mappa feloldása" : folderPasswordDialog.protected ? "Jelszó módosítása" : "Védelem bekapcsolása"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
       {revisionDialogOpen && selectedDocument?.currentVersion && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Új hivatalos dokumentumrevízió">
           <form
@@ -1930,6 +2300,17 @@ export default function DriveWorkspace({
         {canWrite && selectedFolder && (
           <button type="button" className={styles.folderRenameButton} onClick={() => void renameSelectedFolder()} disabled={busy}>
             Mappa átnevezése
+          </button>
+        )}
+        {canManageFolderPassword && selectedFolder && (
+          <button
+            type="button"
+            className={styles.folderProtectionButton}
+            onClick={() => void openFolderPasswordManageDialog(selectedFolder)}
+            disabled={busy}
+          >
+            {selectedFolder.securityState === "PASSWORD" ? <ShieldCheck size={13} /> : <Lock size={13} />}
+            Mappavédelem
           </button>
         )}
       </div>

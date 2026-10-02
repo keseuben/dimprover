@@ -59,9 +59,8 @@ check("Phase 1A permission is folder.view only", () => {
   assert.match(migration, /permission = 'folder\.view'/i);
   assert.match(access, /DriveFolderAclPermission = "folder\.view"/);
 });
-check("Phase 1A ACL still has no password credential gate PIN or GROUP principal", () => {
+check("V070 Phase 1A migration itself has no password PIN or GROUP ACL layer", () => {
   assert.doesNotMatch(migration, /password|\bpin\b|principal_type[^\n]*GROUP/i);
-  assert.doesNotMatch(access, /password_hash|passwordHash|verifyPassword|unlockSession|\bpin\b|"GROUP"/i);
 });
 check("ACL table is RLS protected and direct user roles revoked", () => {
   assert.match(migration, /alter table public\.drive_core_folder_acl_entries enable row level security/i);
@@ -73,9 +72,9 @@ check("principal shape and unique effective principal indexes exist", () => {
   assert.match(migration, /drive_core_folder_acl_role_permission_unique/);
 });
 check("Drive Core current marker has advanced while V070 Folder ACL remains part of schema", () => {
-  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.4"/);
-  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 6/);
-  assert.match(schema, /drive-core-v084-metadata-controls-20261002/);
+  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.6"/);
+  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 7/);
+  assert.match(schema, /drive-core-v086-folder-password-gate-20261002/);
   assert.match(schema, /"drive_core_folder_acl_entries"/);
 });
 check("ACL only refines active project document.read access", () => {
@@ -121,7 +120,8 @@ check("tree access path filters folders before serialization", () => {
   assert.match(repo, /folderRows[\s\S]*accessibleFolderIds\.has\(row\.id\)/);
 });
 check("tree filters documents by visible folder IDs", () => {
-  assert.match(repo, /documentRows[\s\S]*visibleFolderIds\.has\(row\.folder_id\)/);
+  assert.match(repo, /const contentFolderIds = documentAccessibleFolderIds \|\| visibleFolderIds/);
+  assert.match(repo, /documentRows[\s\S]*contentFolderIds\.has\(row\.folder_id\)/);
 });
 check("tree filters versions by visible document IDs", () => {
   assert.match(repo, /visibleDocumentIds\.has\(version\.documentId\)/);

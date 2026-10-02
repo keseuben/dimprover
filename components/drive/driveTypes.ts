@@ -47,6 +47,7 @@ export type DriveFolder = {
   topic?: string;
   aclInherit?: boolean;
   securityState?: "NORMAL" | "RESTRICTED" | "CUSTOM" | "PASSWORD";
+  passwordUnlocked?: boolean;
 };
 
 export type DriveNumberingOrigin = "SYSTEM" | "IMPORTED" | "CORRECTED";

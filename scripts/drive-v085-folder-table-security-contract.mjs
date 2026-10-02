@@ -30,9 +30,10 @@ check("database folder mapping serializes ACL inherit", () => {
   assert.match(repo, /aclInherit: row\.acl_inherit === true/);
 });
 
-check("database tree accepts server-derived folder security states", () => {
+check("database tree accepts and serializes server-derived folder security states", () => {
   assert.match(repo, /folderSecurityStates\?: ReadonlyMap<string, DriveFolder\["securityState"\]>/);
-  assert.match(repo, /securityState: folderSecurityStates\?\.get\(folder\.id\) \|\| folder\.securityState/);
+  assert.match(repo, /const securityState = folderSecurityStates\?\.get\(folder\.id\) \|\| folder\.securityState/);
+  assert.match(repo, /securityState,/);
 });
 
 check("security-state resolver uses authoritative ACL rows", () => {
@@ -53,9 +54,13 @@ check("non-inherited non-user ACL folders are RESTRICTED", () => {
   assert.match(access, /\? "CUSTOM" : "RESTRICTED"/);
 });
 
-check("ACL-filtered tree receives folder security states", () => {
-  assert.match(access, /Promise\.all\(\[[\s\S]*?resolveAccessibleDriveFolderIds[\s\S]*?resolveDriveFolderSecurityStates/);
-  assert.match(access, /listDriveTree\(projectId, accessibleFolderIds, folderSecurityStates\)/);
+check("ACL-filtered tree receives folder security states and password visibility sets", () => {
+  assert.match(access, /const accessibleFolderIds = await resolveAccessibleDriveFolderIds\(projectId, access\)/);
+  assert.match(access, /resolveDriveFolderSecurityStates\(projectId\)/);
+  assert.match(access, /resolvePasswordVisibility\(projectId, accessibleFolderIds\)/);
+  assert.match(access, /passwordVisibility\.visibleFolderIds/);
+  assert.match(access, /passwordVisibility\.contentAccessibleFolderIds/);
+  assert.match(access, /passwordVisibility\.unlockedPasswordFolderIds/);
 });
 
 check("table derives direct child folders from current folder", () => {

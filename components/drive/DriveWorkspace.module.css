@@ -3637,3 +3637,79 @@
 .folderSecurityPassword { color: #b84d39; }
 .folderStatusText { font-size: var(--drive-font-xs); font-weight: 800; color: #6c7d8e; overflow: hidden; text-overflow: ellipsis; }
 .folderTreeSecurityIcon { width: 16px; height: 16px; }
+
+/* Drive V0.8.6 – folder password gate */
+.folderProtectionButton {
+  border: 1px solid #c6d5e2;
+  border-radius: 6px;
+  background: #fff8f5;
+  color: #9c513c;
+  min-height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  cursor: pointer;
+}
+.folderProtectionButton:hover:not(:disabled) {
+  border-color: #d39a87;
+  background: #fff0eb;
+}
+.folderPasswordDialogPanel {
+  width: min(560px, calc(100vw - 28px));
+}
+.folderPasswordInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e2e9ef;
+  border-radius: 9px;
+  background: #f8fafc;
+  padding: 11px 12px;
+  color: #526a80;
+}
+.folderPasswordInfo > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #a5553f;
+}
+.folderPasswordInfo > div {
+  display: grid;
+  gap: 3px;
+}
+.folderPasswordInfo strong {
+  color: #304b63;
+  font-size: var(--drive-font-sm);
+}
+.folderPasswordInfo span {
+  color: #6f8192;
+  font-size: var(--drive-font-xs);
+  line-height: 1.45;
+}
+.projectCreatePanel select {
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid #d4e0e9;
+  border-radius: 8px;
+  background: #fbfdff;
+  color: #253c53;
+  padding: 9px 10px;
+  font: inherit;
+  outline: none;
+}
+.projectCreatePanel select:focus {
+  border-color: #8bb7ef;
+  box-shadow: 0 0 0 3px rgba(17,103,238,.08);
+}
+.projectCreatePanel footer .dangerButton {
+  margin-right: auto;
+  border-color: #e3b5aa;
+  background: #fff6f4;
+  color: #b34532;
+}
+.projectCreatePanel footer .dangerButton:hover:not(:disabled) {
+  border-color: #ce7d69;
+  background: #ffebe6;
+}

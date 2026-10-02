@@ -23,7 +23,12 @@ type VisibleFolderRow = {
 function folderSecurityVisual(folder: DriveFolder) {
   switch (folder.securityState) {
     case "PASSWORD":
-      return { className: styles.folderSecurityPassword, title: "Jelszóval védett mappa" };
+      return {
+        className: styles.folderSecurityPassword,
+        title: folder.passwordUnlocked
+          ? "Jelszóval védett mappa · feloldva ebben a munkamenetben"
+          : "Jelszóval védett mappa · feloldás szükséges",
+      };
     case "CUSTOM":
       return { className: styles.folderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
     case "RESTRICTED":

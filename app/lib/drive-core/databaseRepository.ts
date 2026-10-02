@@ -67,7 +67,7 @@ type DbSyncCursor = {
   last_sync_at: string; metadata: Record<string, unknown> | null; created_at: string; updated_at: string;
 };
 
-function getDatabaseClient(): SupabaseClient {
+export function getDatabaseClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceKey || serviceKey.includes("<") || serviceKey.includes(">")) {
@@ -124,7 +124,7 @@ function mapFolder(row: DbFolder): DriveFolder {
     safeName: row.name,
     displayPath: row.display_name || row.original_name || row.name,
     sortOrder: Number(row.sort_order || 0), discipline: row.discipline || "", topic: row.topic || "",
-    aclInherit: row.acl_inherit === true, securityState: "NORMAL", status: row.status, createdBy: row.created_by,
+    aclInherit: row.acl_inherit === true, securityState: "NORMAL", passwordUnlocked: false, status: row.status, createdBy: row.created_by,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -297,6 +297,8 @@ export async function listDriveTree(
   projectId: string,
   accessibleFolderIds?: ReadonlySet<string>,
   folderSecurityStates?: ReadonlyMap<string, DriveFolder["securityState"]>,
+  documentAccessibleFolderIds?: ReadonlySet<string>,
+  passwordUnlockedFolderIds?: ReadonlySet<string>,
 ): Promise<DriveTree> {
   const client = await requireReadyClient();
   const [folderResult, documentResult, versionResult, cursorResult] = await Promise.all([
@@ -312,7 +314,8 @@ export async function listDriveTree(
 
   const folderRows = ((folderResult.data || []) as DbFolder[]).filter((row) => !accessibleFolderIds || accessibleFolderIds.has(row.id));
   const visibleFolderIds = new Set(folderRows.map((row) => row.id));
-  const documentRows = ((documentResult.data || []) as DbDocument[]).filter((row) => visibleFolderIds.has(row.folder_id));
+  const contentFolderIds = documentAccessibleFolderIds || visibleFolderIds;
+  const documentRows = ((documentResult.data || []) as DbDocument[]).filter((row) => contentFolderIds.has(row.folder_id));
   const visibleDocumentIds = new Set(documentRows.map((row) => row.id));
   const versions = (versionResult.data || [])
     .map((row) => mapVersion(row as DbVersion))
@@ -336,11 +339,15 @@ export async function listDriveTree(
     visiting.delete(folder.id);
     return value;
   };
-  const folders = mappedFolders.map((folder) => ({
-    ...folder,
-    displayPath: resolveDisplayPath(folder),
-    securityState: folderSecurityStates?.get(folder.id) || folder.securityState,
-  }));
+  const folders = mappedFolders.map((folder) => {
+    const securityState = folderSecurityStates?.get(folder.id) || folder.securityState;
+    return {
+      ...folder,
+      displayPath: resolveDisplayPath(folder),
+      securityState,
+      passwordUnlocked: securityState === "PASSWORD" && Boolean(passwordUnlockedFolderIds?.has(folder.id)),
+    };
+  });
   return {
     projectId,
     folders,

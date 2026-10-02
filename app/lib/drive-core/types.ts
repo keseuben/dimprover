@@ -97,6 +97,7 @@ export type DriveFolder = {
   topic: string;
   aclInherit: boolean;
   securityState: "NORMAL" | "RESTRICTED" | "CUSTOM" | "PASSWORD";
+  passwordUnlocked: boolean;
   status: DriveFolderStatus;
   createdBy: string;
   createdAt: string;

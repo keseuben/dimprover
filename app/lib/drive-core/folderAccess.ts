@@ -6,6 +6,11 @@ import {
   listDriveFolderAclEntries,
   listDriveTree,
 } from "./databaseRepository";
+import {
+  listDriveFolderPasswordRecords,
+  type DriveFolderPasswordRecord,
+} from "./folderPasswordRepository";
+import { getCurrentDriveFolderUnlockGrants } from "./folderPasswordSession";
 import type { DriveTree } from "./types";
 
 export type DriveFolderAclPermission = "folder.view";
@@ -33,6 +38,17 @@ export type DriveFolderAclEntry = {
   effect: DriveFolderAclEffect;
 };
 
+export type DriveFolderPasswordGateStatus = {
+  folderId: string;
+  passwordProtected: boolean;
+  passwordUnlocked: boolean;
+  unlockExpiresAt: number | null;
+  unlockTtlMinutes: number | null;
+  locked: boolean;
+  gateFolderId: string | null;
+  inheritedLock: boolean;
+};
+
 const PROJECT_ROLES = new Set<ProjectMembershipRole>([
   "OWNER",
   "PROJECT_MANAGER",
@@ -54,6 +70,15 @@ function notFoundDocument(): never {
     "A DRIVE dokumentum nem található.",
     "DRIVE_DOCUMENT_NOT_FOUND",
     404,
+  );
+}
+
+function passwordRequired(folderId: string): never {
+  throw new DriveCoreRepositoryError(
+    "A mappa jelszóval védett. A tartalom megnyitásához feloldás szükséges.",
+    "DRIVE_FOLDER_PASSWORD_REQUIRED",
+    423,
+    { folderId },
   );
 }
 
@@ -190,12 +215,88 @@ export async function resolveAccessibleDriveFolderIds(
   return accessible;
 }
 
+function grantMatches(
+  password: DriveFolderPasswordRecord,
+  grant: { passwordVersion: number; expiresAt: number } | undefined,
+) {
+  return Boolean(
+    grant
+    && grant.passwordVersion === password.passwordVersion
+    && grant.expiresAt > Date.now(),
+  );
+}
+
+async function resolvePasswordVisibility(
+  projectId: string,
+  accessibleFolderIds: ReadonlySet<string>,
+) {
+  const [folderRows, passwordRows, grants] = await Promise.all([
+    listDriveFolderAccessRows(projectId),
+    listDriveFolderPasswordRecords(projectId),
+    getCurrentDriveFolderUnlockGrants(projectId),
+  ]);
+
+  const folders = new Map<string, DriveFolderAccessRow>();
+  for (const row of folderRows) {
+    if (isValidFolderRow(projectId, row)) folders.set(row.id, row);
+  }
+  const passwords = new Map(
+    passwordRows
+      .filter((row) => folders.has(row.folderId))
+      .map((row) => [row.folderId, row] as const),
+  );
+
+  const lockedGate = (folderId: string, includeSelf: boolean) => {
+    let currentId: string | null = includeSelf ? folderId : folders.get(folderId)?.parentId || null;
+    const visiting = new Set<string>();
+
+    while (currentId) {
+      if (visiting.has(currentId)) return currentId;
+      visiting.add(currentId);
+
+      const folder = folders.get(currentId);
+      if (!folder) return currentId;
+
+      const password = passwords.get(currentId);
+      if (password && !grantMatches(password, grants.get(currentId))) return currentId;
+      currentId = folder.parentId;
+    }
+    return null;
+  };
+
+  const visibleFolderIds = new Set<string>();
+  const contentAccessibleFolderIds = new Set<string>();
+  const unlockedPasswordFolderIds = new Set<string>();
+
+  for (const folderId of accessibleFolderIds) {
+    if (!folders.has(folderId)) continue;
+    if (!lockedGate(folderId, false)) visibleFolderIds.add(folderId);
+    if (!lockedGate(folderId, true)) contentAccessibleFolderIds.add(folderId);
+
+    const password = passwords.get(folderId);
+    if (password && grantMatches(password, grants.get(folderId))) {
+      unlockedPasswordFolderIds.add(folderId);
+    }
+  }
+
+  return {
+    folders,
+    passwords,
+    grants,
+    visibleFolderIds,
+    contentAccessibleFolderIds,
+    unlockedPasswordFolderIds,
+    lockedGate,
+  };
+}
+
 export async function resolveDriveFolderSecurityStates(
   projectId: string,
 ): Promise<Map<string, DriveFolderSecurityState>> {
-  const [folderRows, aclEntries] = await Promise.all([
+  const [folderRows, aclEntries, passwordRows] = await Promise.all([
     listDriveFolderAccessRows(projectId),
     listDriveFolderAclEntries(projectId),
+    listDriveFolderPasswordRecords(projectId),
   ]);
 
   const entriesByFolder = new Map<string, DriveFolderAclEntry[]>();
@@ -205,10 +306,15 @@ export async function resolveDriveFolderSecurityStates(
     bucket.push(entry);
     entriesByFolder.set(entry.folderId, bucket);
   }
+  const passwordFolderIds = new Set(passwordRows.map((row) => row.folderId));
 
   const states = new Map<string, DriveFolderSecurityState>();
   for (const folder of folderRows) {
     if (folder.projectId !== projectId || folder.status !== "ACTIVE") continue;
+    if (passwordFolderIds.has(folder.id)) {
+      states.set(folder.id, "PASSWORD");
+      continue;
+    }
     if (folder.aclInherit) {
       states.set(folder.id, "NORMAL");
       continue;
@@ -219,6 +325,62 @@ export async function resolveDriveFolderSecurityStates(
   return states;
 }
 
+export async function getDriveFolderPasswordGateStatus(
+  projectId: string,
+  folderId: string,
+): Promise<DriveFolderPasswordGateStatus> {
+  const [folderRows, passwordRows, grants] = await Promise.all([
+    listDriveFolderAccessRows(projectId),
+    listDriveFolderPasswordRecords(projectId),
+    getCurrentDriveFolderUnlockGrants(projectId),
+  ]);
+
+  const folders = new Map<string, DriveFolderAccessRow>();
+  for (const row of folderRows) {
+    if (isValidFolderRow(projectId, row)) folders.set(row.id, row);
+  }
+  if (!folders.has(folderId)) notFoundFolder();
+
+  const passwords = new Map(passwordRows.map((row) => [row.folderId, row] as const));
+  const chain: string[] = [];
+  let currentId: string | null = folderId;
+  const visiting = new Set<string>();
+
+  while (currentId) {
+    if (visiting.has(currentId)) notFoundFolder();
+    visiting.add(currentId);
+    const folder = folders.get(currentId);
+    if (!folder) notFoundFolder();
+    chain.push(currentId);
+    currentId = folder.parentId;
+  }
+  chain.reverse();
+
+  let gateFolderId: string | null = null;
+  for (const id of chain) {
+    const password = passwords.get(id);
+    if (password && !grantMatches(password, grants.get(id))) {
+      gateFolderId = id;
+      break;
+    }
+  }
+
+  const directPassword = passwords.get(folderId) || null;
+  const directGrant = directPassword ? grants.get(folderId) : undefined;
+  const passwordUnlocked = Boolean(directPassword && grantMatches(directPassword, directGrant));
+
+  return {
+    folderId,
+    passwordProtected: Boolean(directPassword),
+    passwordUnlocked,
+    unlockExpiresAt: passwordUnlocked ? directGrant?.expiresAt || null : null,
+    unlockTtlMinutes: directPassword?.unlockTtlMinutes || null,
+    locked: Boolean(gateFolderId),
+    gateFolderId,
+    inheritedLock: Boolean(gateFolderId && gateFolderId !== folderId),
+  };
+}
+
 export async function canAccessDriveFolder(
   projectId: string,
   folderId: string,
@@ -227,10 +389,12 @@ export async function canAccessDriveFolder(
 ) {
   if (permission !== "folder.view") return false;
   const accessible = await resolveAccessibleDriveFolderIds(projectId, access);
-  return accessible.has(folderId);
+  if (!accessible.has(folderId)) return false;
+  const passwordState = await resolvePasswordVisibility(projectId, accessible);
+  return passwordState.contentAccessibleFolderIds.has(folderId);
 }
 
-export async function requireDriveFolderAccess(
+export async function requireDriveFolderAclAccess(
   projectId: string,
   folderId: string,
   access: ProjectAccessContext,
@@ -239,6 +403,18 @@ export async function requireDriveFolderAccess(
   if (permission !== "folder.view") notFoundFolder();
   const accessible = await resolveAccessibleDriveFolderIds(projectId, access);
   if (!accessible.has(folderId)) notFoundFolder();
+  return { folderId, permission } as const;
+}
+
+export async function requireDriveFolderAccess(
+  projectId: string,
+  folderId: string,
+  access: ProjectAccessContext,
+  permission: DriveFolderAclPermission = "folder.view",
+) {
+  await requireDriveFolderAclAccess(projectId, folderId, access, permission);
+  const status = await getDriveFolderPasswordGateStatus(projectId, folderId);
+  if (status.locked) passwordRequired(status.gateFolderId || folderId);
   return { folderId, permission } as const;
 }
 
@@ -258,6 +434,9 @@ export async function requireDriveDocumentAccess(
   const accessible = await resolveAccessibleDriveFolderIds(projectId, access);
   if (!accessible.has(document.folderId)) notFoundDocument();
 
+  const status = await getDriveFolderPasswordGateStatus(projectId, document.folderId);
+  if (status.locked) passwordRequired(status.gateFolderId || document.folderId);
+
   return document;
 }
 
@@ -265,9 +444,17 @@ export async function listDriveTreeForAccess(
   projectId: string,
   access: ProjectAccessContext,
 ): Promise<DriveTree> {
-  const [accessibleFolderIds, folderSecurityStates] = await Promise.all([
-    resolveAccessibleDriveFolderIds(projectId, access),
+  const accessibleFolderIds = await resolveAccessibleDriveFolderIds(projectId, access);
+  const [folderSecurityStates, passwordVisibility] = await Promise.all([
     resolveDriveFolderSecurityStates(projectId),
+    resolvePasswordVisibility(projectId, accessibleFolderIds),
   ]);
-  return listDriveTree(projectId, accessibleFolderIds, folderSecurityStates);
+
+  return listDriveTree(
+    projectId,
+    passwordVisibility.visibleFolderIds,
+    folderSecurityStates,
+    passwordVisibility.contentAccessibleFolderIds,
+    passwordVisibility.unlockedPasswordFolderIds,
+  );
 }
