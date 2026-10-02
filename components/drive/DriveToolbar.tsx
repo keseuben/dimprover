@@ -46,6 +46,8 @@ type Props = {
   onToggleBoxShelf: () => void;
   compareActive: boolean;
   onToggleCompare: () => void;
+  canIssueSelected: boolean;
+  onIssueSelected: () => void;
 };
 
 export default function DriveToolbar({
@@ -76,6 +78,8 @@ export default function DriveToolbar({
   onToggleBoxShelf,
   compareActive,
   onToggleCompare,
+  canIssueSelected,
+  onIssueSelected,
 }: Props) {
   return (
     <div className={styles.toolbar}>
@@ -163,7 +167,14 @@ export default function DriveToolbar({
       <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló – az 5. napi fejlesztésben aktiválódik" aria-label="AI Dokumentumvizsgáló">
         <BrainCircuit size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Kiadás – workflow előkészítve" aria-label="Kiadás">
+      <button
+        type="button"
+        className={`${styles.toolButton} ${styles.toolIconOnly} ${canIssueSelected ? "" : styles.toolDisabled}`}
+        disabled={!canIssueSelected}
+        onClick={onIssueSelected}
+        title={canIssueSelected ? "Kijelölt dokumentumverzió formális kiadása" : "Kiadáshoz jelölj ki egy kiadható dokumentumverziót"}
+        aria-label="Formális dokumentumkiadás"
+      >
         <PackageCheck size={16} />
       </button>
       <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás – workflow előkészítve" aria-label="Megosztás">

@@ -3437,3 +3437,16 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A revízió modal egyértelműen `Kiadási státusz: NOT_ISSUED` állapotot jelez. A revízió létrehozása nem állít be hamis `KIADOTT/ISSUED` értéket; a formális kiadás továbbra is külön, címzettekkel auditált Document Flow művelet.
 - V0.8.1 UI contract: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Browser upload proxy: 13/13 PASS. V0.7.14 státuszszínezés: 21/21 PASS. V0.7.6 sort/resize: 36/36 PASS. V0.7.4 mappafa: 25/25 PASS. V0.7.2 drag&drop: 11/11 PASS. Célzott TypeScript PASS; git diff --check PASS.
 - DEV ONLY · PROD DENY. DB-migráció és runtime-aktiválás ebben a blokkban nem történt.
+
+### DIMPRO Drive V0.8.2 – Formális dokumentumkiadás UI
+
+- A korábban előkészített `Kiadás` toolbar művelet valós, `document.issue` jogosultsághoz kötött formális dokumentumkiadási felületté vált. Új kiadási motort nem vezet be: a meglévő Document Flow `/issue` API és atomi adatbázis-workflow használatos.
+- A kiadási modal a kijelölt dokumentum aktuális verzióját kezeli, és előre visszaellenőrzi a három authoritative előfeltételt: fájlállapot `AVAILABLE`, review döntés `APPROVED`, üzleti státusz `ERVENYES`.
+- A címzettlista az aktuális projekt aktív tagságából épül; projekttagok checkboxszal választhatók. Emellett külső e-mail címzettek soronként `email | név | szervezet` formátumban adhatók meg, kliensoldali e-mail-validálással és címzett-duplikáció szűréssel.
+- Formális kiadáshoz kötelező a kiadás célja és legalább egy címzett. Opcionális kiadási megjegyzés tárolható.
+- A művelet pontosan a kijelölt dokumentum aktuális verziójának `/issue` endpointját hívja. A backend továbbra is `document.issue` projektjogosultságot és Folder ACL dokumentum-hozzáférést ellenőriz.
+- Sikeres kiadáskor a UI az authoritative `KIA-xxxxx` kiadási számot, a címzettszámot, a hozzáférési linkeket és azok lejáratát jeleníti meg. A címzetti linkek új lapon, `noopener noreferrer` védelemmel nyílnak.
+- Ha a formális kiadás sikerült, de a címzetti hozzáférési link generálása külön hibázik, a UI ezt külön figyelmeztetésként mutatja; a már auditált kiadást nem próbálja kliensoldalon visszagörgetni.
+- A governance `KIADOTT / ISSUED` állapotot kizárólag a meglévő atomi Document Flow kiadási RPC állítja be. A Drive UI nem módosít közvetlenül üzleti vagy kiadási státuszt.
+- V0.8.2 contract: 34/34 PASS. V0.8.1 verzió/revízió UI: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Issue access: 19/19 PASS. Document Flow API/UI PASS. V0.7.13 Compare/Issue ACL: 18/18 PASS. V0.7.14 státuszszínezés: 21/21 PASS. Célzott TypeScript PASS; git diff --check PASS.
+- DEV ONLY · PROD DENY. Adatbázis-migráció és runtime-aktiválás ebben a source blokkban nem történt.

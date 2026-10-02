@@ -19,6 +19,7 @@ import TableFullscreenBar from "./TableFullscreenBar";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import ProjectAccessMenu from "@/components/project-gate/ProjectAccessMenu";
 import { projectRoleLabel } from "@/app/lib/project-core/permissions";
+import type { ProjectMembership } from "@/app/lib/project-core/types";
 import { hasExternalDriveFiles, prepareDroppedDriveUpload } from "./externalFileDrop";
 import type {
   DriveBox,
@@ -27,8 +28,10 @@ import type {
   DriveCompareSeed,
   DriveDocument,
   DriveDocumentDetails,
+  DriveDocumentGovernance,
   DriveHealth,
   DriveEngineeringMetadata,
+  DriveIssueAccessLink,
   DriveFolder,
   DriveLayoutMode,
   DrivePermission,
@@ -87,6 +90,28 @@ function formatBytes(value: number) {
 function localIsoDateValue() {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+
+function parseExternalIssueRecipients(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const [emailPart = "", namePart = "", organizationPart = ""] = line.split("|").map((part) => part.trim());
+      const email = emailPart.toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error(`A(z) ${index + 1}. külső címzett e-mail-címe érvénytelen.`);
+      }
+      return {
+        type: "EMAIL" as const,
+        userId: null,
+        email,
+        name: namePart.slice(0, 240),
+        organization: organizationPart.slice(0, 240),
+      };
+    });
 }
 
 const browserPreviewExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
@@ -153,6 +178,21 @@ export default function DriveWorkspace({
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
   const [revisionReason, setRevisionReason] = useState("");
   const [revisionDate, setRevisionDate] = useState(localIsoDateValue());
+  const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+  const [issueLoading, setIssueLoading] = useState(false);
+  const [issueMembers, setIssueMembers] = useState<ProjectMembership[]>([]);
+  const [issueSelectedMemberIds, setIssueSelectedMemberIds] = useState<string[]>([]);
+  const [issueExternalRecipients, setIssueExternalRecipients] = useState("");
+  const [issuePurpose, setIssuePurpose] = useState("");
+  const [issueNote, setIssueNote] = useState("");
+  const [issueGovernance, setIssueGovernance] = useState<DriveDocumentGovernance | null>(null);
+  const [issueResult, setIssueResult] = useState<{
+    issueNumber: string;
+    recipientCount: number;
+    accessLinks: DriveIssueAccessLink[];
+    accessExpiresAt: string | null;
+    accessLinkError: string | null;
+  } | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
@@ -164,6 +204,7 @@ export default function DriveWorkspace({
   const canDelete = effectivePermissions.includes("document.delete");
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
+  const canIssue = effectivePermissions.includes("document.issue");
   const securityReady = Boolean(health?.security?.ready);
 
   const closeTableFullscreen = useCallback(() => {
@@ -1300,6 +1341,173 @@ export default function DriveWorkspace({
     setCompareActive(true);
   }
 
+  async function openIssueDialog() {
+    const document = selectedDocument;
+    const version = document?.currentVersion;
+    if (!canIssue || !document || !version) {
+      setError("Formális kiadáshoz jelölj ki egy dokumentumverziót, amelyhez van kiadási jogosultságod.");
+      return;
+    }
+    if (!health?.documentFlow?.ready) {
+      setError(health?.documentFlow?.nextStep || "A Document Flow kiadási motor jelenleg nem áll készen.");
+      return;
+    }
+
+    setIssueDialogOpen(true);
+    setIssueLoading(true);
+    setIssueSelectedMemberIds([]);
+    setIssueExternalRecipients("");
+    setIssuePurpose("");
+    setIssueNote("");
+    setIssueGovernance(null);
+    setIssueResult(null);
+    setError("");
+    try {
+      const [membershipResponse, flowResponse] = await Promise.all([
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/memberships`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/document-flow`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }),
+      ]);
+      const membershipPayload = await membershipResponse.json() as {
+        ok?: boolean;
+        error?: string;
+        memberships?: ProjectMembership[];
+      };
+      const flowPayload = await flowResponse.json() as {
+        ok?: boolean;
+        error?: string;
+        governance?: DriveDocumentGovernance[];
+      };
+      if (!membershipResponse.ok || !membershipPayload.ok) {
+        throw new Error(membershipPayload.error || "A projekt címzettlistája nem tölthető be.");
+      }
+      if (!flowResponse.ok || !flowPayload.ok) {
+        throw new Error(flowPayload.error || "A dokumentum kiadási állapota nem tölthető be.");
+      }
+      setIssueMembers((membershipPayload.memberships || []).filter((member) => member.status === "ACTIVE"));
+      setIssueGovernance((flowPayload.governance || []).find((item) => item.versionId === version.id) || null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A formális kiadás előkészítése sikertelen.");
+    } finally {
+      setIssueLoading(false);
+    }
+  }
+
+  function closeIssueDialog() {
+    if (issueLoading) return;
+    setIssueDialogOpen(false);
+    setIssueResult(null);
+  }
+
+  function toggleIssueMember(memberId: string) {
+    setIssueSelectedMemberIds((current) =>
+      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
+    );
+  }
+
+  async function submitFormalIssue() {
+    const document = selectedDocument;
+    const version = document?.currentVersion;
+    if (!canIssue || !document || !version) {
+      setError("A kijelölt dokumentumverzió már nem adható ki.");
+      return;
+    }
+    if (version.status !== "AVAILABLE" || issueGovernance?.reviewDecision !== "APPROVED" || issueGovernance.businessStatus !== "ERVENYES") {
+      setError("Formális kiadás csak AVAILABLE + APPROVED + ERVENYES dokumentumverzióból készíthető.");
+      return;
+    }
+    const purpose = issuePurpose.trim();
+    if (!purpose) {
+      setError("A formális kiadás célja kötelező.");
+      return;
+    }
+
+    let externalRecipients: ReturnType<typeof parseExternalIssueRecipients>;
+    try {
+      externalRecipients = parseExternalIssueRecipients(issueExternalRecipients);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A külső címzettek listája érvénytelen.");
+      return;
+    }
+
+    const memberRecipients = issueMembers
+      .filter((member) => issueSelectedMemberIds.includes(member.id))
+      .map((member) => ({
+        type: "PROJECT_MEMBER" as const,
+        userId: member.userId,
+        email: member.email || null,
+        name: member.displayName || member.email || member.userId,
+        organization: member.organizationName || "",
+      }));
+    const seen = new Set<string>();
+    const recipients = [...memberRecipients, ...externalRecipients].filter((recipient) => {
+      const key = recipient.type === "PROJECT_MEMBER"
+        ? `user:${recipient.userId || ""}`
+        : `email:${recipient.email || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (!recipients.length) {
+      setError("A formális kiadáshoz legalább egy címzettet válassz ki vagy adj meg.");
+      return;
+    }
+
+    setIssueLoading(true);
+    setError("");
+    setNotice("Formális dokumentumkiadás létrehozása…");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/versions/${encodeURIComponent(version.id)}/issue`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            purpose,
+            note: issueNote.trim(),
+            recipients,
+          }),
+        },
+      );
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        issue?: { issueNumber?: string };
+        governance?: DriveDocumentGovernance;
+        recipientCount?: number;
+        accessLinks?: DriveIssueAccessLink[];
+        accessExpiresAt?: string | null;
+        accessLinkError?: string | null;
+      };
+      if (!response.ok || !payload.ok || !payload.issue?.issueNumber) {
+        throw new Error(payload.error || "A dokumentum formális kiadása sikertelen.");
+      }
+      if (payload.governance) setIssueGovernance(payload.governance);
+      setIssueResult({
+        issueNumber: payload.issue.issueNumber,
+        recipientCount: Number(payload.recipientCount || recipients.length),
+        accessLinks: payload.accessLinks || [],
+        accessExpiresAt: payload.accessExpiresAt || null,
+        accessLinkError: payload.accessLinkError || null,
+      });
+      setNotice(`Dokumentum formálisan kiadva: ${payload.issue.issueNumber} · ${Number(payload.recipientCount || recipients.length)} címzett.`);
+      await Promise.all([load(), loadDetails(document.id)]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A dokumentum formális kiadása sikertelen.");
+      setNotice("");
+    } finally {
+      setIssueLoading(false);
+    }
+  }
+
   function toggleCompare() {
     if (compareActive) {
       setCompareActive(false);
@@ -1417,6 +1625,8 @@ export default function DriveWorkspace({
         onToggleBoxShelf={() => setBoxShelfOpen((current) => !current)}
         compareActive={compareActive}
         onToggleCompare={toggleCompare}
+        canIssueSelected={Boolean(canIssue && selectedDocument?.currentVersion && health?.documentFlow?.ready)}
+        onIssueSelected={() => void openIssueDialog()}
       />
       <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
       <input
@@ -1499,6 +1709,143 @@ export default function DriveWorkspace({
                 {busy ? <Loader2 className={styles.spin} size={16} /> : null}
                 Revízió feltöltése
               </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {issueDialogOpen && selectedDocument?.currentVersion && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Formális dokumentumkiadás">
+          <form
+            className={`${styles.projectCreatePanel} ${styles.issueDialogPanel}`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!issueResult) void submitFormalIssue();
+            }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Document Flow</small>
+                <strong>Formális dokumentumkiadás</strong>
+                <span>{selectedDocument.name} · V{selectedDocument.currentVersion.versionNumber} · {selectedDocument.currentVersion.revisionCode}</span>
+              </div>
+              <button type="button" disabled={issueLoading} onClick={closeIssueDialog} aria-label="Bezárás">×</button>
+            </header>
+
+            <div className={styles.issueReadinessGrid}>
+              <div data-ready={selectedDocument.currentVersion.status === "AVAILABLE" ? "true" : "false"}>
+                <span>Fájlállapot</span>
+                <strong>{selectedDocument.currentVersion.status}</strong>
+              </div>
+              <div data-ready={issueGovernance?.reviewDecision === "APPROVED" ? "true" : "false"}>
+                <span>Review</span>
+                <strong>{issueGovernance?.reviewDecision || "—"}</strong>
+              </div>
+              <div data-ready={issueGovernance?.businessStatus === "ERVENYES" ? "true" : "false"}>
+                <span>Üzleti státusz</span>
+                <strong>{issueGovernance?.businessStatus || "—"}</strong>
+              </div>
+            </div>
+
+            {issueLoading && !issueResult ? (
+              <div className={styles.issueLoading}><Loader2 className={styles.spin} size={18} /> Kiadási adatok betöltése…</div>
+            ) : issueResult ? (
+              <div className={styles.issueResultBox}>
+                <strong>{issueResult.issueNumber} · ISSUED / KIADOTT</strong>
+                <span>{issueResult.recipientCount} címzett · auditált formális kiadás</span>
+                {issueResult.accessExpiresAt && <small>Hozzáférési linkek lejárata: {new Date(issueResult.accessExpiresAt).toLocaleString("hu-HU")}</small>}
+                {issueResult.accessLinks.length > 0 && (
+                  <div className={styles.issueAccessLinks}>
+                    {issueResult.accessLinks.map((link) => (
+                      <a key={link.recipientId} href={link.url} target="_blank" rel="noopener noreferrer">
+                        {link.name || link.email || link.recipientId}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {issueResult.accessLinkError && <small className={styles.issueAccessWarning}>{issueResult.accessLinkError}</small>}
+              </div>
+            ) : (
+              <>
+                <label>
+                  Kiadás célja
+                  <input
+                    required
+                    maxLength={1000}
+                    value={issuePurpose}
+                    onChange={(event) => setIssuePurpose(event.target.value)}
+                    placeholder="pl. Kivitelezésre kiadott terv"
+                  />
+                </label>
+                <label>
+                  Kiadási megjegyzés
+                  <textarea
+                    rows={3}
+                    maxLength={4000}
+                    value={issueNote}
+                    onChange={(event) => setIssueNote(event.target.value)}
+                    placeholder="Opcionális kiadási megjegyzés"
+                  />
+                </label>
+
+                <section className={styles.issueRecipientSection}>
+                  <header>
+                    <strong>Projekt címzettjei</strong>
+                    <span>{issueSelectedMemberIds.length} kijelölve</span>
+                  </header>
+                  <div className={styles.issueMemberList}>
+                    {issueMembers.map((member) => (
+                      <label key={member.id} className={styles.issueMemberRow}>
+                        <input
+                          type="checkbox"
+                          checked={issueSelectedMemberIds.includes(member.id)}
+                          onChange={() => toggleIssueMember(member.id)}
+                        />
+                        <span>
+                          <strong>{member.displayName || member.email || member.userId}</strong>
+                          <small>{[member.organizationName, member.email, projectRoleLabel(member.role)].filter(Boolean).join(" · ")}</small>
+                        </span>
+                      </label>
+                    ))}
+                    {!issueMembers.length && <div className={styles.issueEmptyRecipients}>Nincs aktív projekttag a címzettlistában.</div>}
+                  </div>
+                </section>
+
+                <label>
+                  Külső e-mail címzettek
+                  <textarea
+                    rows={4}
+                    value={issueExternalRecipients}
+                    onChange={(event) => setIssueExternalRecipients(event.target.value)}
+                    placeholder={"Egy címzett soronként:\nemail@ceg.hu | Név | Szervezet"}
+                  />
+                </label>
+
+                <div className={styles.revisionIssueHint}>
+                  <strong>A kiadás auditált és címzetthez kötött művelet.</strong>
+                  <span>Sikeres kiadás után a verzió governance állapota ISSUED / KIADOTT lesz, és a címzettekhez külön hozzáférési link készülhet.</span>
+                </div>
+              </>
+            )}
+
+            <footer>
+              <button type="button" disabled={issueLoading} onClick={closeIssueDialog}>{issueResult ? "Bezárás" : "Mégsem"}</button>
+              {!issueResult && (
+                <button
+                  type="submit"
+                  disabled={
+                    issueLoading
+                    || !issuePurpose.trim()
+                    || (issueSelectedMemberIds.length === 0 && !issueExternalRecipients.trim())
+                    || selectedDocument.currentVersion.status !== "AVAILABLE"
+                    || issueGovernance?.reviewDecision !== "APPROVED"
+                    || issueGovernance?.businessStatus !== "ERVENYES"
+                  }
+                >
+                  {issueLoading ? <Loader2 className={styles.spin} size={16} /> : null}
+                  Formális kiadás
+                </button>
+              )}
             </footer>
           </form>
         </div>

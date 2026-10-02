@@ -3394,3 +3394,109 @@
 @media (max-width: 620px) {
   .revisionUploadSummary { grid-template-columns: 1fr; }
 }
+
+/* Drive V0.8.2 – formális Document Flow kiadási párbeszéd */
+.issueDialogPanel { max-width: 760px; }
+.issueReadinessGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.issueReadinessGrid > div {
+  border: 1px solid #e2b8b8;
+  background: #fff4f4;
+  border-radius: 9px;
+  padding: 9px 11px;
+  display: grid;
+  gap: 3px;
+}
+.issueReadinessGrid > div[data-ready="true"] {
+  border-color: #b9dec6;
+  background: #f0faf3;
+}
+.issueReadinessGrid span {
+  color: #748596;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+}
+.issueReadinessGrid strong {
+  color: #29445f;
+  font-size: var(--drive-font-sm);
+}
+.issueLoading,
+.issueEmptyRecipients {
+  border: 1px dashed #cbd8e4;
+  border-radius: 9px;
+  padding: 12px;
+  color: #6c7f91;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issueRecipientSection {
+  border: 1px solid #d8e3ec;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.issueRecipientSection > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 11px;
+  background: #f5f8fb;
+  border-bottom: 1px solid #d8e3ec;
+}
+.issueRecipientSection > header span {
+  color: #718396;
+  font-size: var(--drive-font-xs);
+}
+.issueMemberList {
+  max-height: 190px;
+  overflow: auto;
+  display: grid;
+}
+.issueMemberRow {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border-bottom: 1px solid #edf1f5;
+  cursor: pointer;
+}
+.issueMemberRow:last-child { border-bottom: 0; }
+.issueMemberRow:hover { background: #f7fbff; }
+.issueMemberRow input { width: auto !important; margin: 0; }
+.issueMemberRow > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.issueMemberRow strong { color: #29445f; }
+.issueMemberRow small { color: #708295; }
+.issueResultBox {
+  border: 1px solid #b9dec6;
+  border-radius: 10px;
+  background: #f0faf3;
+  padding: 14px;
+  display: grid;
+  gap: 7px;
+}
+.issueResultBox > strong { color: #24643c; font-size: var(--drive-font-md); }
+.issueResultBox > span,
+.issueResultBox > small { color: #54705d; }
+.issueAccessLinks {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+}
+.issueAccessLinks a {
+  color: #1f5f9d;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.issueAccessLinks a:hover { text-decoration: underline; }
+.issueAccessWarning { color: #9a5b1f !important; }
+@media (max-width: 720px) {
+  .issueReadinessGrid { grid-template-columns: 1fr; }
+}
