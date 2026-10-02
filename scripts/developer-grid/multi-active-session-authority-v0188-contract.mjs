@@ -18,7 +18,7 @@ const client=read("desktop/benjadmin-developer-grid/src/context-workspace/contex
 const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
-check("desktop v0.1.98",()=>assert.equal(pkg.version,"0.1.98"));
+check("desktop v0.1.99",()=>assert.equal(pkg.version,"0.1.99"));
 check("task resolver exists",()=>assert.match(work,/export async function getDeveloperGridTaskById/));
 check("BOOT ACK resolves task by id",()=>assert.match(work,/const authoritativeTask = await getDeveloperGridTaskById\(taskId\)/));
 check("BOOT ACK does not require global pointer",()=>assert.doesNotMatch(work.slice(work.indexOf("export async function recordDeveloperGridBootAck"),work.indexOf("function normalizeSurfaceType")),/!state\.task \|\| state\.task\.id !== taskId/));
@@ -35,4 +35,4 @@ check("launch recovery resolves task by id",()=>assert.match(work,/const task = 
 check("launch recovery route forwards identity",()=>assert.match(route,/recoverDeveloperGridLaunchExecution\(body as Record<string, unknown>\)/));
 check("desktop recovery client forwards identity",()=>assert.match(client,/RECOVER_LAUNCH_EXECUTION.*\.\.\.\(input \|\| \{\}\)/s));
 check("desktop resume uses recovered exact task session",()=>assert.match(main,/recoveredTask\.id !== task\?\.id \|\| recoveredSession\.id !== session\?\.id/));
-console.log("Developer Grid v0.1.98 multi-active session authority contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.99 multi-active session authority contract PASS · "+n+"/"+n);

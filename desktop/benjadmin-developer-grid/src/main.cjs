@@ -34,6 +34,7 @@ const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
 const CHAT_PARTITION_PREFIX = "persist:benjadmin-developer-grid-chatgpt-cell-";
 const CHAT_COOKIE_SYNC_SUPPRESS_MS = 5000;
 const CHAT_AUTH_REFRESH_DELAY_MS = 900;
+const CHAT_AUTH_REFRESH_COOLDOWN_MS = 60_000;
 const APP_BAR_HEIGHT = 44;
 const CELL_HEADER_HEIGHT = 108;
 const DEVELOPER_FOOTER_HEIGHT = 42;
@@ -66,6 +67,7 @@ let chatSessionPartitions = new Map();
 let chatCookieSyncSuppressions = new Map();
 let chatCookieSyncListeners = [];
 let chatAuthRefreshTimers = new Map();
+let chatAuthRefreshLastReloadAt = new Map();
 let liveClient = null;
 let reporterKeyMemory = "";
 let deviceTokenMemory = "";
@@ -1263,6 +1265,16 @@ function isSharedChatAuthCookie(cookie) {
     || domain === "openai.com"
     || domain.endsWith(".openai.com");
 }
+function isChatAuthRefreshTriggerCookie(cookie) {
+  if (!isSharedChatAuthCookie(cookie)) return false;
+  const name = String(cookie?.name || "").toLowerCase().trim();
+  if (!name) return false;
+  return name.includes("session")
+    || name.includes("auth")
+    || /(^|[_-])access([_-]?token)?($|[_-])/.test(name)
+    || /(^|[_-])refresh([_-]?token)?($|[_-])/.test(name);
+}
+
 
 function isChatAuthPopupUrl(value) {
   try {
@@ -1320,7 +1332,9 @@ async function applyChatCookieToPartition(partition, cookie) {
   suppressChatCookieEvent(partition, cookie);
   try {
     await targetSession.cookies.set(normalized);
-    scheduleChatAuthRefreshForPartition(partition);
+    if (isChatAuthRefreshTriggerCookie(cookie)) {
+      scheduleChatAuthRefreshForPartition(partition, "auth-cookie-sync");
+    }
   } catch {
     chatCookieSyncSuppressions.delete(chatCookieFingerprint(partition, cookie));
   }
@@ -1357,12 +1371,17 @@ async function chatViewShowsLoggedOutState(view) {
 function scheduleChatAuthRefreshForPartition(partition, reason = "auth-cookie-sync") {
   const chatId = chatIdForPartition(partition);
   if (!chatId) return;
+  const now = Date.now();
+  const lastReloadAt = Number(chatAuthRefreshLastReloadAt.get(chatId) || 0);
+  if (lastReloadAt > 0 && now - lastReloadAt < CHAT_AUTH_REFRESH_COOLDOWN_MS) return;
   const previous = chatAuthRefreshTimers.get(chatId);
   if (previous) clearTimeout(previous);
   const timer = setTimeout(async () => {
     chatAuthRefreshTimers.delete(chatId);
     const view = chatViews.get(chatId);
     if (!view || view.webContents.isDestroyed()) return;
+    const latestReloadAt = Number(chatAuthRefreshLastReloadAt.get(chatId) || 0);
+    if (latestReloadAt > 0 && Date.now() - latestReloadAt < CHAT_AUTH_REFRESH_COOLDOWN_MS) return;
     const loggedOut = await chatViewShowsLoggedOutState(view);
     if (!loggedOut || view.webContents.isLoading()) return;
     const currentUrl = String(view.webContents.getURL() || "");
@@ -1370,6 +1389,7 @@ function scheduleChatAuthRefreshForPartition(partition, reason = "auth-cookie-sy
       const state = chatRefreshCell(chatId);
       state.lastReason = reason;
       state.error = "";
+      chatAuthRefreshLastReloadAt.set(chatId, Date.now());
       markGridChatNavigationIntent(chatId, "AUTH_SYNC_RELOAD", reason, currentUrl);
       view.webContents.reload();
       send("live:connection", { kind:"chat-auth-sync", cellId:chatId, ok:true, code:"CHAT_AUTH_SYNC_REFRESHED", reason, url:currentUrl });
@@ -7488,6 +7508,7 @@ app.on("will-quit", () => {
   chatCookieSyncListeners = [];
   for (const timer of chatAuthRefreshTimers.values()) clearTimeout(timer);
   chatAuthRefreshTimers.clear();
+  chatAuthRefreshLastReloadAt.clear();
   globalShortcut.unregisterAll();
 });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

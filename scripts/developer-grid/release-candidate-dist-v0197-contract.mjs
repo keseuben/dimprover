@@ -11,7 +11,7 @@ const marker=fs.readFileSync(path.join(root,"scripts/developer-grid/write-window
 const session=fs.readFileSync(path.join(root,"scripts/developer-grid/write-package-session-marker.mjs"),"utf8");
 const engine=fs.readFileSync(path.join(root,"scripts/developer-grid/release-artifact-engine.mjs"),"utf8");
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`)};
-check("desktop v0.1.98",()=>assert.equal(pkg.version,"0.1.98"));
+check("desktop v0.1.99",()=>assert.equal(pkg.version,"0.1.99"));
 check("root .next resolves",()=>assert.equal(resolveDeveloperGridReleaseDist(root,path.join(root,".next")),fs.realpathSync.native(path.join(root,".next"))));
 check("subdir inside .next resolves",()=>assert.equal(resolveDeveloperGridReleaseDist(root,path.join(root,".next","standalone")),fs.realpathSync.native(path.join(root,".next","standalone"))));
 check("outside .next is denied",()=>assert.throws(()=>resolveDeveloperGridReleaseDist(root,root),/RELEASE_DIST_OUTSIDE_NEXT_DENIED|\/srv\//));
@@ -21,4 +21,4 @@ check("DEV ZIP supports explicit release dist",()=>assert.match(zip,/BENJADMIN_D
 check("Windows marker resolves release dist",()=>assert.match(marker,/resolveDeveloperGridReleaseDist/));
 check("Package session marker resolves release dist",()=>assert.match(session,/resolveDeveloperGridReleaseDist/));
 check("Release artifact engine resolves release dist",()=>assert.match(engine,/resolveDeveloperGridReleaseDist/));
-console.log(`Developer Grid v0.1.98 candidate-dist release contract PASS · ${n}/${n}`);
+console.log(`Developer Grid v0.1.99 candidate-dist release contract PASS · ${n}/${n}`);

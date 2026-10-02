@@ -22,4 +22,4 @@ check("workspace retarget verifies target commit", () => assert.ok(workspace.inc
 check("retarget rollback paths exist", () => assert.ok((workStart.match(/targetCommit:previousHead/g) || []).length >= 3));
 check("retarget emits audited live event", () => assert.ok(workStart.includes("SOURCE_BASELINE_RETARGETED_PRE_BOOT")));
 
-console.log(`Developer Grid v0.1.98 pre-BOOT source retarget contract PASS · ${n}/${n}`);
+console.log(`Developer Grid v0.1.99 pre-BOOT source retarget contract PASS · ${n}/${n}`);

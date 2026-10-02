@@ -24,8 +24,8 @@ const expected={taskId:TASK,sessionId:SESSION,workerCode:"JAZMINAI",previousConv
 
 let n=0; const check=(label,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${label}`);};
 
-check("desktop version v0.1.74",()=>assert.equal(pkg.version,"0.1.98"));
-check("backend version v0.1.74-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.98-dev"/));
+check("desktop version v0.1.74",()=>assert.equal(pkg.version,"0.1.99"));
+check("backend version v0.1.74-dev",()=>assert.match(types,/DEVELOPER_GRID_VERSION = "0\.1\.99-dev"/));
 check("physical rev13 markerless assistant ACK remains strict-valid",()=>{
   const v=rollover.validateConversationRolloverAck(ackBody,expected);
   assert.equal(v.validated,true);

@@ -573,3 +573,12 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - A már VALIDATED BOOT ACK utáni normál kézi rebind szabályai változatlanok: Context Snapshot + Handoff Pack continuity továbbra is kötelező.
 - Új regression contract: `preboot-manual-rebind-v0195-contract.mjs` · 12/12 PASS.
 - DEV ONLY · PROD DENY.
+
+
+## v0.1.99 · ChatGPT auth-cookie reload-loop hotfix
+
+- A worker-partíciók közötti ChatGPT/OpenAI cookie-szinkron megmarad, de automatikus cella-reloadot már csak session/auth/access-token/refresh-token jellegű cookie-változás ütemezhet.
+- Gyorsan változó, nem hitelesítési cookie-k nem indíthatnak auth-refresh reloadot.
+- Cellánként 60 másodperces hard cooldown védi a ChatGPT WebContentsView-t ismételt auth-reload ciklustól.
+- A meglévő fail-closed szabály megmarad: reload csak láthatóan kijelentkezett és éppen nem töltődő ChatGPT felületen engedélyezett.
+- Célzott regresszió: `chat-auth-reload-loop-v0199-contract.mjs`.
