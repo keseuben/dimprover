@@ -212,7 +212,7 @@ export default function FolderTreePanel({
                 type="button"
                 className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")}
                 onClick={() => onSelectFolder(folder.id)}
-                title={(folder.displayPath || folder.path) + " · " + security.title}
+                aria-label={(folder.displayPath || folder.path) + ". " + security.title}
               >
                 <span className={styles.folderTreeSecurityIcon + " " + security.className}><Folder size={13} /></span>
                 <OverflowTooltipText text={folder.displayName || folder.name} className={styles.folderTreeLabel} />

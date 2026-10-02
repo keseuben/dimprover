@@ -395,7 +395,7 @@ function FolderTableRow({
       }
     },
     tabIndex: 0,
-    title: security.title + " · Kattintás: kijelölés · Dupla kattintás: megnyitás",
+    "aria-label": name + " mappa. " + security.title + ". Enter vagy dupla kattintás: megnyitás.",
   };
 
   if (view === "simple") {
@@ -1286,7 +1286,7 @@ export default function FileGridPanel({
                   />
                 ))}
                 {sortedReviewRows.map((row) => (
-                  <tr key={row.document.id} className={`${selectedDocumentId === row.document.id ? styles.fileSelected : ""} ${selectedSet.has(row.document.id) ? styles.reviewRowSelected : ""} ${reviewRowStatusClass(metadataByDocument[row.document.id])}`} onClick={() => selectDocumentRow(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                  <tr key={row.document.id} className={`${selectedDocumentId === row.document.id ? styles.fileSelected : ""} ${selectedSet.has(row.document.id) ? styles.reviewRowSelected : ""} ${reviewRowStatusClass(metadataByDocument[row.document.id])}`} onClick={() => selectDocumentRow(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)}>
                     <td className={styles.reviewSelectCell}>
                       <input
                         type="checkbox"
@@ -1404,7 +1404,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)}>
                       <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
@@ -1489,7 +1489,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${engineeringRowStatusClass(metadata)}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${engineeringRowStatusClass(metadata)}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)}>
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}

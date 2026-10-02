@@ -169,7 +169,7 @@ function CommanderPane({
               }}
               onClick={() => onSelectDocument(document)}
               onDoubleClick={() => onOpenDocument(document)}
-              title="Kattintás: kijelölés · Dupla kattintás: megnyitás · Húzás: áthelyezés"
+              aria-label={document.name + ". Kattintás: kijelölés. Dupla kattintás: megnyitás. Húzás: áthelyezés."}
             >
               <input
                 type="checkbox"

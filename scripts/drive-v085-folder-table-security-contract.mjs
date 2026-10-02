@@ -74,10 +74,11 @@ check("folder rows exist in all three table views", () => {
   }
 });
 
-check("folder row single click selects and double click opens", () => {
+check("folder row single click selects and double click opens without overriding child tooltips", () => {
   assert.match(grid, /onClick: onSelect/);
   assert.match(grid, /onDoubleClick: onOpen/);
-  assert.match(grid, /Kattintás: kijelölés · Dupla kattintás: megnyitás/);
+  assert.match(grid, /"aria-label": name \+ " mappa\. " \+ security\.title/);
+  assert.doesNotMatch(grid, /title: security\.title \+ " · Kattintás:/);
 });
 
 check("folder row keyboard Enter opens folder", () => {

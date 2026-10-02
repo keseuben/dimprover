@@ -105,6 +105,22 @@ check("overflow tooltip covers Commander path folder and file names", () => {
   assert.match(commander, /commanderFileNameText/);
 });
 
+
+check("file and folder rows do not carry parent native instruction tooltips", () => {
+  assert.doesNotMatch(grid, /title="Kattintás: kijelölés · Dupla kattintás: megnyitás/);
+  assert.doesNotMatch(grid, /title: security\.title \+ " · Kattintás:/);
+});
+
+check("folder tree parent button does not override label tooltip", () => {
+  assert.doesNotMatch(tree, /title=\{\(folder\.displayPath \|\| folder\.path\) \+ " · " \+ security\.title\}/);
+  assert.match(tree, /aria-label=\{\(folder\.displayPath \|\| folder\.path\) \+ "\. " \+ security\.title\}/);
+});
+
+check("Commander row instruction moved from native title to aria-label", () => {
+  assert.doesNotMatch(commander, /title="Kattintás: kijelölés · Dupla kattintás: megnyitás · Húzás: áthelyezés"/);
+  assert.match(commander, /aria-label=\{document\.name \+ "\. Kattintás:/);
+});
+
 console.log(JSON.stringify({
   ok: true,
   contract: "DIMPRO Drive V0.8.7 Name + Overflow Tooltip UX",
