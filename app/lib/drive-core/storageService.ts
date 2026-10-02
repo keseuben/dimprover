@@ -14,6 +14,7 @@ import {
 } from "./s3ObjectStorage";
 import { getDriveObjectStorageConfig, getDriveObjectStorageSafeStatus } from "./storageConfig";
 import { requireDriveCleanSecurityScan } from "./securityScanRepository";
+import { requireDriveDocumentAccess, requireDriveFolderAccess } from "./folderAccess";
 import {
   abortDriveUploadSessionRecord,
   createDriveUploadSessionRecord,
@@ -55,6 +56,30 @@ function normalizeSha256(value: unknown) {
 function normalizeSource(value: unknown): DriveDocumentSource {
   if (value === "DESKTOP" || value === "DROP" || value === "SYSTEM") return value;
   return "WEB";
+}
+
+async function requireDriveUploadSessionAccess(
+  projectId: string,
+  session: Pick<DriveUploadSession, "uploadKind" | "documentId" | "folderId" | "finalizedDocumentId" | "status">,
+  access: ProjectAccessContext,
+) {
+  if (session.status === "FINALIZED" && session.finalizedDocumentId) {
+    await requireDriveDocumentAccess(projectId, session.finalizedDocumentId, access);
+    return;
+  }
+  if (session.uploadKind === "NEW_VERSION" && session.documentId) {
+    await requireDriveDocumentAccess(projectId, session.documentId, access);
+    return;
+  }
+  if (session.folderId) {
+    await requireDriveFolderAccess(projectId, session.folderId, access);
+    return;
+  }
+  throw new DriveCoreRepositoryError(
+    "A feltöltési munkamenet célmappája vagy dokumentuma nem azonosítható.",
+    "DRIVE_UPLOAD_ACCESS_TARGET_MISSING",
+    409,
+  );
 }
 
 export async function getDriveObjectStorageHealth() {
@@ -101,6 +126,7 @@ export async function initDriveObjectUpload(input: {
   projectId: string;
   body: Record<string, unknown>;
   actorUserId: string;
+  access: ProjectAccessContext;
   clientId?: string | null;
 }) {
   const config = getDriveObjectStorageConfig();
@@ -122,6 +148,11 @@ export async function initDriveObjectUpload(input: {
   const uploadKind = documentId ? "NEW_VERSION" as const : "NEW_DOCUMENT" as const;
   if (uploadKind === "NEW_DOCUMENT" && !folderId) {
     throw new DriveCoreRepositoryError("Új dokumentum feltöltéséhez célmappa szükséges.", "DRIVE_UPLOAD_FOLDER_REQUIRED", 400);
+  }
+  if (uploadKind === "NEW_VERSION" && documentId) {
+    await requireDriveDocumentAccess(input.projectId, documentId, input.access);
+  } else if (folderId) {
+    await requireDriveFolderAccess(input.projectId, folderId, input.access);
   }
   const rawOriginalName = typeof (input.body.originalName || input.body.fileName || input.body.name) === "string"
     ? String(input.body.originalName || input.body.fileName || input.body.name).slice(0, 2000)
@@ -265,6 +296,7 @@ export async function uploadDriveObjectThroughServer(input: {
   projectId: string;
   uploadId: string;
   actorUserId: string;
+  access: ProjectAccessContext;
   contentLength: number;
   contentType?: string | null;
   body: AsyncIterable<Uint8Array>;
@@ -282,6 +314,7 @@ export async function uploadDriveObjectThroughServer(input: {
   if (session.createdBy !== input.actorUserId) {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet más felhasználóhoz tartozik.", "DRIVE_UPLOAD_ACTOR_MISMATCH", 403);
   }
+  await requireDriveUploadSessionAccess(input.projectId, session, input.access);
   if (session.status !== "INITIATED") {
     throw new DriveCoreRepositoryError("A feltöltési munkamenet már nem fogad fájlt.", "DRIVE_UPLOAD_INVALID_STATE", 409);
   }
@@ -331,9 +364,14 @@ export async function completeDriveObjectUpload(input: {
   projectId: string;
   uploadId: string;
   actorUserId: string;
+  access: ProjectAccessContext;
 }) {
   const session = await getDriveUploadSessionRecord(input.projectId, input.uploadId);
   if (!session) throw new DriveCoreRepositoryError("A feltöltési munkamenet nem található.", "DRIVE_UPLOAD_NOT_FOUND", 404);
+  if (session.createdBy !== input.actorUserId) {
+    throw new DriveCoreRepositoryError("A feltöltési munkamenet más felhasználóhoz tartozik.", "DRIVE_UPLOAD_ACTOR_MISMATCH", 403);
+  }
+  await requireDriveUploadSessionAccess(input.projectId, session, input.access);
   if (session.status === "FINALIZED") {
     return { ok: true as const, alreadyFinalized: true, session };
   }
@@ -416,6 +454,9 @@ export async function completeDriveObjectUpload(input: {
       409,
     );
   }
+
+  // Az ACL a feltöltés közben megváltozhatott; közvetlenül a finalizálás előtt újraellenőrizzük.
+  await requireDriveUploadSessionAccess(input.projectId, session, input.access);
 
   let result;
   try {

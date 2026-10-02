@@ -42,6 +42,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       projectId,
       uploadId,
       actorUserId: access.actor.userId,
+      access: access.access,
       contentLength,
       contentType: request.headers.get("content-type"),
       body: requestBodyChunks(request.body),

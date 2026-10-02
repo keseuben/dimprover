@@ -19,7 +19,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const access = await requireProjectPermission(request, projectId, "document.write");
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   try {
-    const result = await completeDriveObjectUpload({ projectId, uploadId, actorUserId: access.actor.userId });
+    const result = await completeDriveObjectUpload({ projectId, uploadId, actorUserId: access.actor.userId, access: access.access });
     let documentFlow: Record<string, unknown> | null = null;
     let securityScan: Record<string, unknown> | null = null;
     let namingMetadata: Record<string, unknown> | null = null;

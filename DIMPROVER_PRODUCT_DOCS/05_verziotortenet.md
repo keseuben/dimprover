@@ -3342,3 +3342,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A mappa ZIP és a digitális dokumentációjegyzék már csak ACL-szűrt tree-ből épülhet, ezért rejtett almappa, fájl, fájlnév vagy kihagyási listaelem nem kerülhet a csomagba.
 - Elkészült a fail-closed Drive Folder ACL V0.7.0 migrációs gate és a V0.7.7 security contract. Jelszó/PIN védelem, ACL-kezelő API/UI, guest/personal Drive és a Phase 1B projekt-szintű kiegészítő enumerációk ebben a körben szándékosan nem készültek el.
 - DEV ONLY · PROD DENY. A migráció és a V0.7.7 DEV candidate aktiválása külön jóváhagyott lépés; a V0.7.6 aktív runtime és V0.7.5 rollback ebben a source patchben változatlan.
+
+### DIMPRO Drive V0.7.8 – Folder ACL Phase 1B mutation recheck foundation
+
+- A mappaszintű ACL ellenőrzés bekerült a Drive közös mutációs útvonalaiba is: gyermekmappa-létrehozásnál a szülőmappa, dokumentum-létrehozásnál a célmappa, dokumentum-áthelyezésnél pedig a forrásdokumentum és a célmappa aktuális láthatósága kötelező.
+- Az Object Storage upload init a NEW_DOCUMENT célmappát és a NEW_VERSION dokumentumot szerveroldalon újraellenőrzi, ezért kliensből megadott folder/document azonosítóval nem kerülhető meg a Folder ACL.
+- A böngészős upload proxy a fájltest fogadása előtt újraellenőrzi az upload session aktuális ACL-célját. A complete/finalize ág az initiating actor egyezését is megköveteli.
+- Az upload complete az ACL-t a munkamenet betöltésekor és közvetlenül a véglegesítő tranzakció előtt is újraellenőrzi, így a feltöltés közbeni ACL-változás nem eredményezhet jogosulatlan dokumentum- vagy verzió-finalizálást.
+- A Phase 1B továbbra is a Project Core jogosultságokra és a V0.7.7 `folder.view` ACL engine-re épül; külön permission engine, GROUP principal, jelszó/PIN és ACL-kezelő UI nem került be ebbe a blokkba.
+- A történeti Drive contractok current-schema elvárásai a már authoritative Drive Core 0.7.0 / migration 4 markerhez lettek igazítva; a migrációs gate-ek 0.6.0 kezdőállapot-ellenőrzése változatlan maradt.
+- DEV ONLY · PROD DENY. A Folder ACL adatbázis-migráció továbbra sincs alkalmazva; a migrációs preflight `DB_CREDENTIAL_REQUIRED` miatt fail-closed. A V0.7.6 aktív runtime és V0.7.5 rollback változatlan.
