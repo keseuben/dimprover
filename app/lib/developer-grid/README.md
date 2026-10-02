@@ -582,3 +582,17 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - Cellánként 60 másodperces hard cooldown védi a ChatGPT WebContentsView-t ismételt auth-reload ciklustól.
 - A meglévő fail-closed szabály megmarad: reload csak láthatóan kijelentkezett és éppen nem töltődő ChatGPT felületen engedélyezett.
 - Célzott regresszió: `chat-auth-reload-loop-v0199-contract.mjs`.
+
+## v0.1.100 · Chat-to-Grid automatic work start / auto rebind
+
+- A ChatGPT kódoló cellák transcript-monitorja a felhasználó fejlesztési utasításait (`kezdd el`, `folytasd`, `javítsd`, `fejleszd`, `vidd végig` és ezek angol megfelelői) automatikus Central Core work-start jelként tudja értelmezni.
+- A rövid folytatási utasítás csak akkor aktiválhat automatikus taskot, ha a csevegés közelmúltbeli kontextusa tényleges fejlesztési munkát igazol; általános beszélgetésből nem indulhat rejtett fejlesztési task.
+- Az automatikus út a worker identitását az aktuális kódoló cellából veszi. Rejtett worker-fallback továbbra sincs; a backend ugyanazt a STRICT explicit worker routingot használja.
+- Ha ugyanahhoz a csevegéshez már van CURRENT authoritative task/session, új task nem jön létre: a meglévő task és az 1→6 autopilot folytatódik.
+- Másik csevegéshez tartozó, nem stale aktív task automatikusan nem írható felül és nem köthető át. Ez az eset fail-closed marad.
+- Ha a worker korábbi authoritative taskja `SOURCE_BASELINE_MISMATCH` / stale állapotú, még 1/6 ELEMZÉS szakaszban van, `READY`, BOOT ACK-ja nem VALIDATED és `codingAllowed` nem true, az automatikus work-start a stale engine sessiont szabályosan lezárhatja és a Grid sessiont ended állapotba teheti. CURRENT vagy már BOOT ACK-validált munkát ez az út nem zárhat le.
+- Az új task a jelenlegi ChatGPT conversationt `EXISTING_CHAT` módban köti, a Launch Packetet alapértelmezetten automatikusan küldi, majd a meglévő BOOT ACK / Execution Bridge / stage / review / build / closure autopilot folytatja a munkát.
+- A Central Core `Mit fejlesszünk?` űrlap megmarad kézi fallback/admin felületként. Az új telepítések alapértelmezett Launch Packet módja `AUTO`; korábban explicit `MANUAL` értékre állított felhasználói beállítás megmarad.
+- A csevegési intentből képzett sourcePrompt a közelmúlt felhasználói fejlesztési utasításait is megőrzi, ezért egy rövid `folytasd` nem veszti el a feladat tényleges tartalmát.
+- Minden út DEV-only; `PROD DENY` változatlan.
+- Regression contract: `chat-auto-work-start-v01100-contract.mjs`.

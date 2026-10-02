@@ -28,6 +28,7 @@ const { SHORTCUT_DEFINITIONS, shortcutActionFromInput } = require("./shortcuts.c
 const { normalizeWorkerSurfaceType, isEmbeddedWorkerSurface, defaultWorkerSurfaceUrl } = require("./surfaces/worker-surface.cjs");
 const { workerSurfaceAdapter } = require("./surfaces/worker-surface-adapter.cjs");
 const { CHATGPT_DOM_ADAPTER_VERSION, composerSelectorLiteral, sendSelectorLiteral, stopSelectorLiteral, microphoneSelectorLiteral, conversationLinkSelectorLiteral, inspectChatGptDom, inspectChatRefreshSafety: inspectChatRefreshSafetyViaAdapter, scrollToLatestChatTurn } = require("./chatgpt/chatgpt-dom-adapter.cjs");
+const { detectChatDevelopmentIntent } = require("./chatgpt/auto-work-start.cjs");
 
 const APP_TITLE = "BENJADMIN Developer Grid";
 const CHAT_PARTITION = "persist:benjadmin-developer-grid-chatgpt";
@@ -101,6 +102,8 @@ const pendingChatRefreshReasons = new Map();
 const stageReportMonitorKeys = new Set();
 const internalReviewMonitorKeys = new Set();
 const developerGridAutopilotKeys = new Set();
+const autoWorkStartProcessingKeys = new Set();
+const autoWorkStartProcessedTurns = new Set();
 let chatRefreshTimer = null;
 let chatRefreshMaintenanceBusy = false;
 let deviceHeartbeatTimer = null;
@@ -5112,6 +5115,111 @@ function conversationMemoryTaskForWorker(workerCode) {
   return { task, presence, surfaceType, expectedConversationId, authoritativeConversationId, localConversationId, monitoringCandidate:continuationV2Candidate };
 }
 
+function rememberAutoWorkStartTurn(key) {
+  if (!key) return;
+  autoWorkStartProcessedTurns.add(key);
+  while (autoWorkStartProcessedTurns.size > 500) {
+    const first = autoWorkStartProcessedTurns.values().next().value;
+    if (!first) break;
+    autoWorkStartProcessedTurns.delete(first);
+  }
+}
+
+function activeWorkerTaskFromWork(activeWork, workerCode) {
+  const backendCode = String(workerCode || "").toUpperCase() === "BENAI" ? "BENJAMINAI" : String(workerCode || "").toUpperCase();
+  const pairs = Array.isArray(activeWork?.activeSessionTasks) ? activeWork.activeSessionTasks : [];
+  return pairs.find((item) => String(item?.session?.workerCode || "").toUpperCase() === backendCode) || null;
+}
+
+async function autoStartDeveloperGridWorkFromChat(workerCode) {
+  if (!unlocked || !readDeviceToken()) return { ok:false, reason:"LOCKED_OR_UNPAIRED" };
+  const code = String(workerCode || "").toUpperCase();
+  const cell = workerCellForCode(code);
+  if (!cell || normalizeWorkerSurfaceType(cell.surfaceType || "CHATGPT") !== "CHATGPT") return { ok:false, reason:"NOT_CHATGPT_WORKER" };
+  const view = chatViews.get(cell.id);
+  if (!view || view.webContents.isDestroyed()) return { ok:false, reason:"CHAT_VIEW_UNAVAILABLE" };
+  const currentUrl = String(view.webContents.getURL() || "");
+  const currentConversationId = chatConversationIdFromUrl(currentUrl);
+  if (!currentConversationId) return { ok:false, reason:"CONVERSATION_REQUIRED" };
+  const capture = await captureConversationTranscript(view).catch(() => null);
+  if (!capture?.ok || capture.generating || capture.conversationId !== currentConversationId || !Array.isArray(capture.messages)) {
+    return { ok:false, reason:capture?.generating ? "CHATGPT_GENERATING" : "TRANSCRIPT_UNAVAILABLE" };
+  }
+  const intent = detectChatDevelopmentIntent({ messages:capture.messages, conversationTitle:capture.conversationTitle || "" });
+  if (!intent?.triggered) return { ok:false, reason:intent?.reason || "NO_INTENT" };
+  const messageIdentity = String(intent.latestUserMessageId || "").trim()
+    || createHash("sha256").update(String(intent.latestUserText || "")).digest("hex").slice(0, 20);
+  const turnKey = `${code}:${currentConversationId}:${messageIdentity}`;
+  if (autoWorkStartProcessedTurns.has(turnKey)) return { ok:true, reason:"ALREADY_PROCESSED" };
+  if (autoWorkStartProcessingKeys.has(turnKey)) return { ok:true, reason:"IN_PROGRESS" };
+  autoWorkStartProcessingKeys.add(turnKey);
+  try {
+    const activeWork = await fetchDeveloperGridActiveWork({ baseUrl:config.benjadminBaseUrl, deviceToken:readDeviceToken() }).catch(() => null);
+    const pair = activeWorkerTaskFromWork(activeWork, code);
+    if (pair?.task && pair?.session) {
+      const context = pair.session.developmentContext || {};
+      const taskConversationId = String(context.surfaceConversationId || context.chatConversationId || "").trim();
+      const primaryTaskId = String(activeWork?.task?.id || "");
+      const primaryReconciliation = String(activeWork?.reconciliation?.state || "CURRENT").toUpperCase();
+      const sameConversation = Boolean(taskConversationId && taskConversationId === currentConversationId);
+      const primaryStale = primaryTaskId === String(pair.task.id || "") && primaryReconciliation !== "CURRENT";
+      if (sameConversation && !primaryStale) {
+        rememberAutoWorkStartTurn(turnKey);
+        void continueDeveloperGridAutopilot(code, pair.task.id).catch(() => undefined);
+        return { ok:true, reason:"EXISTING_TASK_CONTINUES", taskId:pair.task.id };
+      }
+      if (!primaryStale) {
+        rememberAutoWorkStartTurn(turnKey);
+        appendChatDiagnostic("AUTO_WORK_START_BLOCKED_ACTIVE_TASK", {
+          cellId:cell.id, workerCode:code, taskId:pair.task.id, conversationIdHash:createHash("sha256").update(currentConversationId).digest("hex").slice(0,16),
+          description:"Aktív, nem stale task másik csevegéshez tartozik; automatikus taskváltás fail-closed.",
+        });
+        return { ok:false, reason:"ACTIVE_TASK_DIFFERENT_CONVERSATION", taskId:pair.task.id };
+      }
+    }
+
+    const guards = captureWorkerConversationGuards();
+    const backendWorkerCode = code === "BENAI" ? "BENJAMINAI" : code;
+    const idempotencyKey = `chat-auto:${backendWorkerCode}:${currentConversationId}:${messageIdentity}`.slice(0, 160);
+    const work = await startDeveloperGridWork({
+      baseUrl:config.benjadminBaseUrl,
+      deviceToken:readDeviceToken(),
+      input:{
+        sourcePrompt:String(intent.sourcePrompt || intent.latestUserText || "").slice(0, 12000),
+        projectId:"project_dimprover",
+        moduleName:String(intent.moduleName || "DIMPRO / DIMPROVER").slice(0, 180),
+        preferredWorkerCode:backendWorkerCode,
+        chatLaunchMode:"EXISTING_CHAT",
+        surfaceType:"CHATGPT",
+        idempotencyKey,
+        autoRetireStalePreBoot:true,
+      },
+    });
+    preserveWorkerConversationsAfterWorkStart(guards);
+    const chatPlan = await initializeTaskChatPlan(work, "EXISTING_CHAT", guards);
+    const launchTask = launchTaskFromWork(work, chatPlan);
+    const launchWorkerCode = assignedWorkerCodeFromWork(work);
+    let taskLaunch = null;
+    if (work?.routingState === "ROUTED" && launchTask && launchWorkerCode && chatPlan?.conversationBound === true) {
+      taskLaunch = await prepareWorkerTaskLaunch(launchWorkerCode, launchTask.id, { autoSend:true, taskOverride:launchTask });
+    }
+    rememberAutoWorkStartTurn(turnKey);
+    appendChatDiagnostic("AUTO_WORK_START", {
+      cellId:cell.id,
+      workerCode:backendWorkerCode,
+      taskId:work?.task?.id || null,
+      description:`${intent.reason || "DEVELOPMENT_INTENT"} · ${intent.moduleName || "DIMPRO / DIMPROVER"} · ${work?.routingState || "UNKNOWN"} · ${taskLaunch?.mode || "NO_LAUNCH"}`,
+    });
+    send("context:refresh", { reason:"chat-auto-work-start", taskId:work?.task?.id || null, workerCode:backendWorkerCode });
+    return { ok:true, reason:"AUTO_WORK_STARTED", work, chatPlan, taskLaunch };
+  } catch (error) {
+    appendChatDiagnostic("AUTO_WORK_START_FAILED", { cellId:cell.id, workerCode:code, error:error instanceof Error ? error.message : "AUTO_WORK_START_FAILED" });
+    return { ok:false, reason:"AUTO_WORK_START_FAILED", error:error instanceof Error ? error.message : "AUTO_WORK_START_FAILED" };
+  } finally {
+    autoWorkStartProcessingKeys.delete(turnKey);
+  }
+}
+
 async function syncConversationMemoryForWorker(workerCode, forceSnapshot = false) {
   const code = String(workerCode || "").toUpperCase();
   const cell = workerCellForCode(code);
@@ -5488,6 +5596,7 @@ async function syncConversationMemoryOnce() {
   conversationMemoryBusy = true;
   try {
     for (const code of ["ARMINAI", "OUTMINAI", "BENAI", "JAZMINAI"]) {
+      await autoStartDeveloperGridWorkFromChat(code).catch(() => undefined);
       await syncConversationMemoryForWorker(code).catch(() => undefined);
       await continueDeveloperGridAutopilot(code).catch(() => undefined);
     }

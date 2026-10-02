@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { advanceDevEngineSession, advanceDevEngineTaskManualBridge, assertDevEngineOperation, autoRouteDevEngineTaskByAvailability, createDevEngineTask, ensureDeveloperGridCodingWorkerRegistry, getDevCenterEngineState, recoverClosedDevEngineTaskManualBridgeSession, startDevEngineTaskManualBridge } from "@/app/lib/dev-center/engine-repository";
 import { estimateDevelopmentMinutes } from "@/app/lib/dev-center/benai-dispatch";
-import { acquireScopeBundleAtomic } from "@/app/lib/dev-center/orchestration-repository";
+import { acquireScopeBundleAtomic, releaseSessionAtomic } from "@/app/lib/dev-center/orchestration-repository";
 import { resolveDeveloperConsoleRepositoryId } from "@/app/lib/dev-center/developer-console";
 import { listDevelopmentHandoffs } from "@/app/lib/dev-center/handoff-store";
 import { DEVELOPER_GRID_PROJECT_ID, getDeveloperGridFoundation } from "./foundation";
@@ -78,6 +78,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
   const moduleName = text(input.moduleName, 180) || "Developer Grid V1";
   const submoduleName = text(input.submoduleName, 180) || null;
   const idempotencyKey = text(input.idempotencyKey, WORK_START_IDEMPOTENCY_MAX);
+  const autoRetireStalePreBoot = input.autoRetireStalePreBoot === true;
   const rawChatLaunchMode = text(input.chatLaunchMode, 40).toUpperCase();
   const chatLaunchMode: ChatLaunchMode = rawChatLaunchMode === "NEW_PROJECT_CHAT" ? "NEW_PROJECT_CHAT" : "EXISTING_CHAT";
   const rawSurfaceType = text(input.surfaceType, 40).toUpperCase();
@@ -118,7 +119,7 @@ export function normalizeWorkStartInput(input: Record<string, unknown>) {
     Object.assign(error, { code: "DEVELOPER_GRID_WORK_IDEMPOTENCY_REQUIRED", status: 400 });
     throw error;
   }
-  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode };
+  return { sourcePrompt, projectId, moduleName, submoduleName, idempotencyKey, chatLaunchMode, surfaceType, preferredWorkerCode, autoRetireStalePreBoot };
 }
 
 export function workStartTaskId(idempotencyKey: string) {
@@ -465,6 +466,61 @@ export async function getDeveloperGridActiveWork() {
   };
 }
 
+async function retireStalePreBootWorkerSessionForAutoStart(input: ReturnType<typeof normalizeWorkStartInput>) {
+  if (!input.autoRetireStalePreBoot) return { retired:false as const, reason:"NOT_REQUESTED" };
+  const state = await readGridState();
+  const previous = state.sessions.find((session) => session.endedAt === null && session.workerCode === input.preferredWorkerCode) || null;
+  if (!previous) return { retired:false as const, reason:"NO_ACTIVE_SESSION" };
+  if (!state.task || state.task.id !== previous.taskId || state.task.status !== "READY") {
+    return { retired:false as const, reason:"ACTIVE_TASK_NOT_PREBOOT_READY", taskId:previous.taskId };
+  }
+  const context = previous.developmentContext || {};
+  if (Number(context.workStageIndex || 1) !== 1
+      || String(context.bootAckState || "").toUpperCase() === "VALIDATED"
+      || context.bootAckCodingAllowed === true) {
+    return { retired:false as const, reason:"PREBOOT_GUARD_DENIED", taskId:previous.taskId };
+  }
+  let staleCode = "";
+  try {
+    await verifyCurrentSourceExecutionState(previous.sourceProvenance, { requireClean:false });
+    return { retired:false as const, reason:"SOURCE_STILL_CURRENT", taskId:previous.taskId };
+  } catch (error) {
+    staleCode = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "SOURCE_EXECUTION_STALE") : "SOURCE_EXECUTION_STALE";
+  }
+  const engineSessionId = text(context.engineSessionId, 240);
+  if (!engineSessionId) return { retired:false as const, reason:"ENGINE_SESSION_MISSING", taskId:previous.taskId, staleCode };
+  const engineState = await getDevCenterEngineState();
+  const engineSession = engineState.sessions.find((session) => session.id === engineSessionId) || null;
+  if (engineSession && engineSession.status !== "closed") {
+    await releaseSessionAtomic(
+      engineSessionId,
+      `Developer Grid chat auto-start: stale pre-BOOT task retired before new task (${staleCode}).`,
+      false,
+    );
+  }
+  const endedAt = new Date().toISOString();
+  await upsertWorkerSession({ ...previous, endedAt });
+  await appendGridEvent({
+    kind:"analysis",
+    origin:"LIVE",
+    workerCode:previous.workerCode,
+    taskId:previous.taskId,
+    projectId:previous.developmentContext.projectId || DEVELOPER_GRID_PROJECT_ID,
+    developmentContext:previous.developmentContext,
+    productionAccess:"DENY",
+    delta:{
+      eventType:"STALE_PREBOOT_TASK_RETIRED_FOR_CHAT_AUTOSTART",
+      status:"PASS",
+      staleCode,
+      engineSessionId,
+      endedAt,
+      nextModuleName:input.moduleName,
+      summary:"A forráseltérés miatt elavult, még BOOT ACK előtti worker session felszabadítva az új csevegési fejlesztési task előtt.",
+    },
+  });
+  return { retired:true as const, reason:"STALE_PREBOOT_RETIRED", taskId:previous.taskId, sessionId:previous.id, engineSessionId, staleCode, endedAt };
+}
+
 export async function startDeveloperGridWork(rawInput: Record<string, unknown>) {
   const input = normalizeWorkStartInput(rawInput);
   const foundation = await getDeveloperGridFoundation();
@@ -477,6 +533,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
 
   const taskId = workStartTaskId(input.idempotencyKey);
   await ensureDeveloperGridCodingWorkerRegistry();
+  const stalePreBootRetirement = await retireStalePreBootWorkerSessionForAutoStart(input);
   const engineState = await getDevCenterEngineState();
   const continuity = await resolveContinuityContext(engineState, input, taskId);
   // Handoff/continuity kizárólag kontextust adhat. Worker-választást nem írhat felül.
@@ -666,6 +723,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
       surfaceType: input.surfaceType,
       preferredWorkerCode: input.preferredWorkerCode,
       routingState: "WAITING_FOR_WORKER" as const,
+      stalePreBootRetirement,
       productionAccess: "DENY" as const,
     };
   }
@@ -695,6 +753,7 @@ export async function startDeveloperGridWork(rawInput: Record<string, unknown>) 
     surfaceType: input.surfaceType,
     preferredWorkerCode: input.preferredWorkerCode,
     routingState: "ROUTED" as const,
+    stalePreBootRetirement,
     productionAccess: "DENY" as const,
   };
 }

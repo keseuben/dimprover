@@ -14,4 +14,4 @@ check("wrapper fails closed on hash mismatch",()=>assert.match(wrapper,/SAFE_DEL
 check("wrapper no longer executes local retention engine",()=>assert.doesNotMatch(wrapper,/node \"\$ROOT\/scripts\/dimpro-dev-storage-retention\.mjs\"/));
 check("prebuild still uses coordinated retention wrapper",()=>assert.match(prebuild,/dimpro-dev-storage-retention\.sh/));
 check("PROD is not a retention target",()=>assert.match(prebuild,/DEV-only/));
-console.log(`Developer Grid Safe Delete build preflight v0.1.99 contract PASS · ${n}/${n}`);
+console.log(`Developer Grid Safe Delete build preflight v0.1.100 contract PASS · ${n}/${n}`);

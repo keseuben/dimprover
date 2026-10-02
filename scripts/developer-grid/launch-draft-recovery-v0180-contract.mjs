@@ -39,4 +39,4 @@ check("ACK WAITING alone is not launch-send evidence",launchFlightBlocks.every(x
 check("pre-recovery generation is fail-closed without send evidence",main.includes('code:"CHATGPT_GENERATION_ACTIVE"') && main.includes("no launch send evidence exists"));
 check("stale draft clearing verifies empty composer",main.includes("STALE_TASK_LAUNCH_DRAFT_CLEAR_FAILED") && main.includes("composer-clear-not-observed") && main.includes("composer-restored-after-clear"));
 if(process.exitCode)process.exit(process.exitCode);
-console.log("Developer Grid v0.1.99 launch draft recovery contract PASS - "+checks.length+"/"+checks.length);
+console.log("Developer Grid v0.1.100 launch draft recovery contract PASS - "+checks.length+"/"+checks.length);
