@@ -3350,3 +3350,47 @@
 .legendEngineeringCurrent { background: #eef6ff; border-color: #c6ddf8 !important; }
 .legendEngineeringApproved { background: #edf9f1; border-color: #c7e9d2 !important; }
 .legendEngineeringArchive { background: #f1f3f5; border-color: #d9dde1 !important; }
+
+/* Drive V0.8.1 – verzió / revízió feltöltési párbeszéd */
+.revisionUploadSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.revisionUploadSummary > div {
+  border: 1px solid #d9e4ec;
+  border-radius: 9px;
+  background: #f8fbfe;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+.revisionUploadSummary span {
+  color: #6c8094;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+}
+.revisionUploadSummary strong {
+  color: #1d3854;
+  font-size: var(--drive-font-md);
+}
+.revisionIssueHint {
+  border: 1px solid #cddbea;
+  border-radius: 9px;
+  background: #f4f8fc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+.revisionIssueHint strong {
+  color: #315d8c;
+  font-size: var(--drive-font-xs);
+}
+.revisionIssueHint span {
+  color: #687d91;
+  font-size: var(--drive-font-xs);
+  line-height: 1.45;
+}
+@media (max-width: 620px) {
+  .revisionUploadSummary { grid-template-columns: 1fr; }
+}

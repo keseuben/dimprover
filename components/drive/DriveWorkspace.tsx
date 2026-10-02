@@ -84,6 +84,11 @@ function formatBytes(value: number) {
   return `${value} B`;
 }
 
+function localIsoDateValue() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
 const browserPreviewExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
 
 function nativeOfficeProtocol(extension: string) {
@@ -143,6 +148,11 @@ export default function DriveWorkspace({
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const versionFileInputRef = useRef<HTMLInputElement>(null);
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [revisionFile, setRevisionFile] = useState<File | null>(null);
+  const [revisionReason, setRevisionReason] = useState("");
+  const [revisionDate, setRevisionDate] = useState(localIsoDateValue());
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
   const splitDetailsInitializedRef = useRef(false);
@@ -511,6 +521,171 @@ export default function DriveWorkspace({
       return;
     }
     fileInputRef.current?.click();
+  }
+
+  function requestSelectedVersionUpload() {
+    if (!canWrite || !selectedDocument?.currentVersion) {
+      setError("Új verzió feltöltéséhez jelölj ki egy írható dokumentumot.");
+      return;
+    }
+    if (!health?.storage?.realObjectWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+    setError("");
+    versionFileInputRef.current?.click();
+  }
+
+  function openRevisionUploadDialog() {
+    if (!canWrite || !selectedDocument?.currentVersion) {
+      setError("Új revízió létrehozásához jelölj ki egy írható dokumentumot.");
+      return;
+    }
+    if (!health?.storage?.realObjectWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+    setRevisionFile(null);
+    setRevisionReason("");
+    setRevisionDate(localIsoDateValue());
+    setError("");
+    setRevisionDialogOpen(true);
+  }
+
+  function closeRevisionUploadDialog() {
+    if (busy) return;
+    setRevisionDialogOpen(false);
+    setRevisionFile(null);
+    setRevisionReason("");
+    setRevisionDate(localIsoDateValue());
+  }
+
+  async function uploadSelectedDocumentFile(
+    file: File,
+    versionKind: "VERSION" | "REVISION",
+    revision?: { reason: string; date: string },
+  ) {
+    const document = selectedDocument;
+    const currentVersion = document?.currentVersion;
+    if (!document || !currentVersion || !canWrite) {
+      setError("A kijelölt dokumentum már nem érhető el verziófeltöltéshez.");
+      return;
+    }
+    if (!health?.storage?.realObjectWriteEnabled) {
+      setError(health?.storage?.warning || "A privát Drive feltöltés jelenleg nem aktív.");
+      return;
+    }
+    const extension = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() || "" : "";
+    if (document.extension && extension !== document.extension.toLowerCase()) {
+      setError(`A kiválasztott fájl kiterjesztése .${extension || "—"}, a dokumentumé .${document.extension}. Verzió/revízió csak azonos fájltípusból készíthető.`);
+      return;
+    }
+    const reason = revision?.reason.trim() || "";
+    const date = revision?.date.trim() || "";
+    if (versionKind === "REVISION" && !reason) {
+      setError("Hivatalos revízióhoz a revízió oka kötelező.");
+      return;
+    }
+    if (versionKind === "REVISION" && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError("Hivatalos revízióhoz érvényes revíziódátum szükséges.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setNotice(versionKind === "REVISION" ? "Új hivatalos revízió feltöltésének előkészítése…" : "Új fájlverzió feltöltésének előkészítése…");
+    let abortUrl = "";
+    try {
+      const initResponse = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/uploads/init`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          documentId: document.id,
+          documentName: document.name,
+          originalName: file.name,
+          originalRelativePath: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          expectedCurrentVersion: currentVersion.versionNumber,
+          versionKind,
+          revisionReason: versionKind === "REVISION" ? reason : "",
+          revisionDate: versionKind === "REVISION" ? date : "",
+          changeNote: versionKind === "REVISION" ? `Hivatalos revízió: ${reason}` : "Új fájlverzió feltöltve.",
+          source: "WEB",
+        }),
+      });
+      const initPayload = await initResponse.json() as UploadInitPayload;
+      const uploadTarget = initPayload.browserUpload || initPayload.signedUpload;
+      if (!initResponse.ok || !initPayload.ok || !uploadTarget || !initPayload.completeUrl) {
+        throw new Error(initPayload.error || "A verziófeltöltési munkamenet nem hozható létre.");
+      }
+
+      abortUrl = initPayload.abortUrl || "";
+      setNotice(versionKind === "REVISION" ? "Revízió feltöltése a privát tárhelyre…" : "Verzió feltöltése a privát tárhelyre…");
+      const objectResponse = await fetch(uploadTarget.url, {
+        method: uploadTarget.method,
+        credentials: initPayload.browserUpload ? "same-origin" : "omit",
+        headers: uploadTarget.headers,
+        body: file,
+      });
+      if (!objectResponse.ok) throw new Error(`A privát tárhely feltöltése sikertelen (${objectResponse.status}).`);
+
+      setNotice("SHA-256 és biztonsági ellenőrzés…");
+      const completeResponse = await fetch(initPayload.completeUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const completePayload = await completeResponse.json() as {
+        ok?: boolean;
+        error?: string;
+        version?: {
+          versionNumber?: number;
+          revisionNumber?: number;
+          revisionCode?: string;
+          versionKind?: "INITIAL" | "VERSION" | "REVISION";
+          status?: string;
+        };
+        securityScan?: { scan?: { status?: string } };
+      };
+      if (!completeResponse.ok || !completePayload.ok) {
+        throw new Error(completePayload.error || "A verzió feltöltésének véglegesítése sikertelen.");
+      }
+
+      await load();
+      setSelectedDocumentId(document.id);
+      await loadDetails(document.id);
+      const created = completePayload.version;
+      const versionLabel = created?.versionNumber ? `V${created.versionNumber}` : `V${currentVersion.versionNumber + 1}`;
+      const revisionLabel = created?.revisionCode || `R${String(versionKind === "REVISION" ? currentVersion.revisionNumber + 1 : currentVersion.revisionNumber).padStart(2, "0")}`;
+      const securityLabel = completePayload.securityScan?.scan?.status === "CLEAN"
+        ? " · Biztonsági ellenőrzés rendben."
+        : " · Biztonsági ellenőrzés folyamatban.";
+      setNotice(`${versionKind === "REVISION" ? "Új revízió" : "Új verzió"} létrejött: ${versionLabel} · ${revisionLabel}${securityLabel}`);
+
+      if (versionKind === "REVISION") {
+        setRevisionDialogOpen(false);
+        setRevisionFile(null);
+        setRevisionReason("");
+        setRevisionDate(localIsoDateValue());
+      }
+    } catch (caught) {
+      if (abortUrl) {
+        await fetch(abortUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reason: "Web Drive verzió/revízió feltöltés megszakadt." }),
+        }).catch(() => undefined);
+      }
+      setError(caught instanceof Error ? caught.message : "A verzió vagy revízió feltöltése sikertelen.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+      if (versionFileInputRef.current) versionFileInputRef.current.value = "";
+    }
   }
 
   async function uploadFiles(files: File[], targetFolderOverride?: DriveFolder | null, originalRelativePaths?: string[]) {
@@ -1226,6 +1401,10 @@ export default function DriveWorkspace({
         canWrite={canWrite}
         onCreateFolder={openNewFolderEditor}
         onUpload={requestUpload}
+        canUploadSelectedVersion={Boolean(canWrite && selectedDocument?.currentVersion && health?.storage?.realObjectWriteEnabled)}
+        onUploadSelectedVersion={requestSelectedVersionUpload}
+        canUploadSelectedRevision={Boolean(canWrite && selectedDocument?.currentVersion && health?.storage?.realObjectWriteEnabled)}
+        onUploadSelectedRevision={openRevisionUploadDialog}
         canOpenSelected={isPotentiallyReadableVersion(selectedDocument)}
         canDownloadSelected={isPotentiallyReadableVersion(selectedDocument)}
         canDownloadFolder={Boolean(selectedFolder)}
@@ -1240,6 +1419,90 @@ export default function DriveWorkspace({
         onToggleCompare={toggleCompare}
       />
       <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) void uploadFiles(files); }} aria-label="Egy vagy több fájl feltöltése" />
+      <input
+        ref={versionFileInputRef}
+        type="file"
+        hidden
+        accept={selectedDocument?.extension ? `.${selectedDocument.extension}` : undefined}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void uploadSelectedDocumentFile(file, "VERSION");
+        }}
+        aria-label="Új verzió fájljának kiválasztása"
+      />
+
+      {revisionDialogOpen && selectedDocument?.currentVersion && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Új hivatalos dokumentumrevízió">
+          <form
+            className={styles.projectCreatePanel}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (revisionFile) void uploadSelectedDocumentFile(revisionFile, "REVISION", { reason: revisionReason, date: revisionDate });
+            }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Revíziókezelés</small>
+                <strong>Új hivatalos revízió</strong>
+                <span>{selectedDocument.name}</span>
+              </div>
+              <button type="button" disabled={busy} onClick={closeRevisionUploadDialog} aria-label="Bezárás">×</button>
+            </header>
+
+            <div className={styles.revisionUploadSummary}>
+              <div>
+                <span>Jelenlegi állapot</span>
+                <strong>V{selectedDocument.currentVersion.versionNumber} · {selectedDocument.currentVersion.revisionCode || `R${String(selectedDocument.currentVersion.revisionNumber).padStart(2, "0")}`}</strong>
+              </div>
+              <div>
+                <span>Létrejövő állapot</span>
+                <strong>V{selectedDocument.currentVersion.versionNumber + 1} · R{String(selectedDocument.currentVersion.revisionNumber + 1).padStart(2, "0")}</strong>
+              </div>
+            </div>
+
+            <label>
+              Revízió oka
+              <textarea
+                required
+                rows={3}
+                maxLength={1000}
+                value={revisionReason}
+                onChange={(event) => setRevisionReason(event.target.value)}
+                placeholder="Miért szükséges a hivatalos revízió?"
+              />
+            </label>
+
+            <div className={styles.projectCreateGrid}>
+              <label>
+                Revízió dátuma
+                <input type="date" required value={revisionDate} onChange={(event) => setRevisionDate(event.target.value)} />
+              </label>
+              <label>
+                Új revízió fájlja
+                <input
+                  type="file"
+                  required
+                  accept={selectedDocument.extension ? `.${selectedDocument.extension}` : undefined}
+                  onChange={(event) => setRevisionFile(event.target.files?.[0] || null)}
+                />
+              </label>
+            </div>
+
+            <div className={styles.revisionIssueHint}>
+              <strong>Kiadási státusz: NOT_ISSUED</strong>
+              <span>A revízió létrehozása nem jelent formális kiadást. Az ISSUED / KIADOTT állapot külön, címzettekkel auditált Document Flow kiadási művelet.</span>
+            </div>
+
+            <footer>
+              <button type="button" disabled={busy} onClick={closeRevisionUploadDialog}>Mégsem</button>
+              <button type="submit" disabled={busy || !revisionFile || !revisionReason.trim() || !revisionDate}>
+                {busy ? <Loader2 className={styles.spin} size={16} /> : null}
+                Revízió feltöltése
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
 
 {externalDragActive && (
   <div className={styles.externalDropOverlay} aria-live="polite">

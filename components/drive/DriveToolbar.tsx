@@ -30,6 +30,10 @@ type Props = {
   canWrite: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
+  canUploadSelectedVersion: boolean;
+  onUploadSelectedVersion: () => void;
+  canUploadSelectedRevision: boolean;
+  onUploadSelectedRevision: () => void;
   canOpenSelected: boolean;
   canDownloadSelected: boolean;
   canDownloadFolder: boolean;
@@ -56,6 +60,10 @@ export default function DriveToolbar({
   canWrite,
   onCreateFolder,
   onUpload,
+  canUploadSelectedVersion,
+  onUploadSelectedVersion,
+  canUploadSelectedRevision,
+  onUploadSelectedRevision,
   canOpenSelected,
   canDownloadSelected,
   canDownloadFolder,
@@ -88,6 +96,24 @@ export default function DriveToolbar({
         title={canWrite ? "Fájl feltöltése" : "Nincs írási jogosultságod"}
       >
         <UploadCloud size={14} /> <span>Feltöltés</span>
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        onClick={onUploadSelectedVersion}
+        disabled={!canUploadSelectedVersion}
+        title={canUploadSelectedVersion ? "Új fájlverzió feltöltése a kijelölt dokumentumhoz" : "Jelölj ki egy írható dokumentumot"}
+      >
+        <UploadCloud size={14} /> <span>Új verzió</span>
+      </button>
+      <button
+        type="button"
+        className={styles.toolButton}
+        onClick={onUploadSelectedRevision}
+        disabled={!canUploadSelectedRevision}
+        title={canUploadSelectedRevision ? "Új hivatalos revízió létrehozása a kijelölt dokumentumhoz" : "Jelölj ki egy írható dokumentumot"}
+      >
+        <PackageCheck size={14} /> <span>Új revízió</span>
       </button>
       <button
         type="button"

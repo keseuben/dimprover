@@ -3426,3 +3426,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A migration gate preflight jelenleg fail-closed `DB_CREDENTIAL_REQUIRED` eredménnyel áll meg. A DEV adatbázis továbbra is Drive Core 0.6.0, ezért előbb a V0.7.0 Folder ACL migrációt, majd a V0.8.0 revision-model migrációt kell szabályosan alkalmazni.
 - A DEV aktív runtime továbbra is V0.7.6, rollback V0.7.5. A 0.8.0 source ebben a blokkban nem került runtime-ra vagy PROD-ra.
 - DEV ONLY · PROD DENY.
+
+### DIMPRO Drive V0.8.1 – Új verzió / Új revízió feltöltési UI
+
+- A Drive toolbar külön `Új verzió` és `Új revízió` műveletet kapott a kijelölt dokumentumhoz. Mindkét művelet a meglévő stabil dokumentumazonosságot használja, nem hoz létre új dokumentumot.
+- Az `Új verzió` ugyanahhoz a dokumentumhoz indít Object Storage feltöltést `versionKind=VERSION` és `expectedCurrentVersion` optimistic-lock guard mellett. A revíziószám nem növekszik.
+- Az `Új revízió` külön modalban mutatja a jelenlegi és a létrejövő V/R állapotot; kötelező revízióokot, revíziódátumot és új fájlt kér, majd `versionKind=REVISION` feltöltést indít.
+- Verzió és revízió feltöltésnél a kiválasztott fájl kiterjesztésének meg kell egyeznie a stabil dokumentum fájltípusával.
+- Sikertelen kliensoldali feltöltésnél az upload session abortálásra kerül; sikeres complete után a ténylegesen létrejött V/R azonosító jelenik meg a felhasználónak.
+- A revízió modal egyértelműen `Kiadási státusz: NOT_ISSUED` állapotot jelez. A revízió létrehozása nem állít be hamis `KIADOTT/ISSUED` értéket; a formális kiadás továbbra is külön, címzettekkel auditált Document Flow művelet.
+- V0.8.1 UI contract: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Browser upload proxy: 13/13 PASS. V0.7.14 státuszszínezés: 21/21 PASS. V0.7.6 sort/resize: 36/36 PASS. V0.7.4 mappafa: 25/25 PASS. V0.7.2 drag&drop: 11/11 PASS. Célzott TypeScript PASS; git diff --check PASS.
+- DEV ONLY · PROD DENY. DB-migráció és runtime-aktiválás ebben a blokkban nem történt.
