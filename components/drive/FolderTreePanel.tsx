@@ -20,6 +20,19 @@ type VisibleFolderRow = {
   hasChildren: boolean;
 };
 
+function folderSecurityVisual(folder: DriveFolder) {
+  switch (folder.securityState) {
+    case "PASSWORD":
+      return { className: styles.folderSecurityPassword, title: "Jelszóval védett mappa" };
+    case "CUSTOM":
+      return { className: styles.folderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
+    case "RESTRICTED":
+      return { className: styles.folderSecurityRestricted, title: "Korlátozott mappajogosultság" };
+    default:
+      return { className: styles.folderSecurityNormal, title: "Normál mappa – projektjogosultság öröklése" };
+  }
+}
+
 export default function FolderTreePanel({
   folders,
   selectedFolderId,
@@ -164,6 +177,7 @@ export default function FolderTreePanel({
 
         {visibleRows.map(({ folder, depth, hasChildren }) => {
           const expanded = expandedFolderIds.has(folder.id);
+          const security = folderSecurityVisual(folder);
           return (
             <div
               key={folder.id}
@@ -192,9 +206,9 @@ export default function FolderTreePanel({
                 type="button"
                 className={styles.folderTreeSelect + (selectedFolderId === folder.id ? " " + styles.folderActive : "")}
                 onClick={() => onSelectFolder(folder.id)}
-                title={folder.displayPath || folder.path}
+                title={(folder.displayPath || folder.path) + " · " + security.title}
               >
-                <Folder size={13} />
+                <span className={styles.folderTreeSecurityIcon + " " + security.className}><Folder size={13} /></span>
                 <span className={styles.folderTreeLabel}>{folder.displayName || folder.name}</span>
                 <span className={styles.folderCount}>{documentCounts.get(folder.id) || 0}</span>
               </button>

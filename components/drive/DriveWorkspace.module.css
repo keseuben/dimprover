@@ -3618,3 +3618,22 @@
   .numberingEditGrid,
   .metadataSettingsGrid { grid-template-columns: 1fr; }
 }
+
+/* Drive folder table rows + ACL visual state */
+.tableFolderRow { cursor: pointer; }
+.tableFolderRow td { background: #fbfcfd; }
+.tableFolderRow:hover td { background: #f4f8fb; }
+.tableFolderRow:focus-visible { outline: 2px solid #75a9e8; outline-offset: -2px; }
+.tableFolderRowSelected td { background: #e8f2ff !important; }
+.tableFolderName { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.tableFolderName strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tableFolderIcon,
+.folderTreeSecurityIcon { flex: 0 0 auto; display: inline-grid; place-items: center; }
+.tableFolderIcon svg,
+.folderTreeSecurityIcon svg { fill: currentColor; fill-opacity: .14; stroke-width: 1.8; }
+.folderSecurityNormal { color: #c69227; }
+.folderSecurityRestricted { color: #c76b43; }
+.folderSecurityCustom { color: #6b5bb7; }
+.folderSecurityPassword { color: #b84d39; }
+.folderStatusText { font-size: var(--drive-font-xs); font-weight: 800; color: #6c7d8e; overflow: hidden; text-overflow: ellipsis; }
+.folderTreeSecurityIcon { width: 16px; height: 16px; }

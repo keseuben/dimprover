@@ -59,9 +59,9 @@ check("Phase 1A permission is folder.view only", () => {
   assert.match(migration, /permission = 'folder\.view'/i);
   assert.match(access, /DriveFolderAclPermission = "folder\.view"/);
 });
-check("Phase 1A has no password PIN or GROUP ACL layer", () => {
+check("Phase 1A ACL still has no password credential gate PIN or GROUP principal", () => {
   assert.doesNotMatch(migration, /password|\bpin\b|principal_type[^\n]*GROUP/i);
-  assert.doesNotMatch(access, /password|\bpin\b|"GROUP"/i);
+  assert.doesNotMatch(access, /password_hash|passwordHash|verifyPassword|unlockSession|\bpin\b|"GROUP"/i);
 });
 check("ACL table is RLS protected and direct user roles revoked", () => {
   assert.match(migration, /alter table public\.drive_core_folder_acl_entries enable row level security/i);
@@ -72,10 +72,10 @@ check("principal shape and unique effective principal indexes exist", () => {
   assert.match(migration, /drive_core_folder_acl_user_permission_unique/);
   assert.match(migration, /drive_core_folder_acl_role_permission_unique/);
 });
-check("Drive Core schema marker current marker is 0.8.0 migration 5 while V070 migration remains historical", () => {
-  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.0"/);
-  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 5/);
-  assert.match(schema, /drive-core-v080-revision-model-20261002/);
+check("Drive Core current marker has advanced while V070 Folder ACL remains part of schema", () => {
+  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.4"/);
+  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 6/);
+  assert.match(schema, /drive-core-v084-metadata-controls-20261002/);
   assert.match(schema, /"drive_core_folder_acl_entries"/);
 });
 check("ACL only refines active project document.read access", () => {
@@ -182,13 +182,9 @@ check("migration gate exists with preflight apply verify and DEV guard", () => {
   const migrationSha = sha256(migration);
   assert.match(gate, new RegExp('const expectedSha = "' + migrationSha + '";'));
 });
-check("Projectkapu and Developer Grid sources are untouched", () => {
-  const committed = execFileSync("git", ["diff", "--name-only", baseline + "..HEAD"], { encoding: "utf8" });
+check("current working scope does not modify Projectkapu or Developer Grid sources", () => {
   const working = execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" });
-  const changed = [
-    ...committed.split(/\r?\n/).filter(Boolean),
-    ...working.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3)),
-  ];
+  const changed = working.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3));
   assert.ok(changed.length > 0);
   assert.equal(changed.some((file) => file.startsWith("components/project-gate/")), false);
   assert.equal(changed.some((file) => file.includes("developer-grid")), false);

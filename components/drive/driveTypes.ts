@@ -45,6 +45,8 @@ export type DriveFolder = {
   sortOrder: number;
   discipline?: string;
   topic?: string;
+  aclInherit?: boolean;
+  securityState?: "NORMAL" | "RESTRICTED" | "CUSTOM" | "PASSWORD";
 };
 
 export type DriveNumberingOrigin = "SYSTEM" | "IMPORTED" | "CORRECTED";

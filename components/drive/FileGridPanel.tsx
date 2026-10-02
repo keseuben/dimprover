@@ -311,6 +311,110 @@ function ReviewStateIcons({
   );
 }
 
+function folderSecurityPresentation(folder: DriveFolder) {
+  switch (folder.securityState) {
+    case "PASSWORD":
+      return { className: styles.folderSecurityPassword, title: "Jelszóval védett mappa" };
+    case "CUSTOM":
+      return { className: styles.folderSecurityCustom, title: "Egyedi felhasználói mappajogosultság" };
+    case "RESTRICTED":
+      return { className: styles.folderSecurityRestricted, title: "Korlátozott mappajogosultság" };
+    default:
+      return { className: styles.folderSecurityNormal, title: "Normál mappa – projektjogosultság öröklése" };
+  }
+}
+
+function FolderTableRow({
+  folder,
+  view,
+  active,
+  onSelect,
+  onOpen,
+}: {
+  folder: DriveFolder;
+  view: TableViewKey;
+  active: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+}) {
+  const security = folderSecurityPresentation(folder);
+  const name = folder.displayName || folder.name;
+  const icon = (
+    <span className={`${styles.tableFolderIcon} ${security.className}`} title={security.title}>
+      <Folder size={16} />
+    </span>
+  );
+  const commonProps = {
+    className: `${styles.tableFolderRow} ${active ? styles.tableFolderRowSelected : ""}`,
+    onClick: onSelect,
+    onDoubleClick: onOpen,
+    onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onOpen();
+      }
+    },
+    tabIndex: 0,
+    title: security.title + " · Kattintás: kijelölés · Dupla kattintás: megnyitás",
+  };
+
+  if (view === "simple") {
+    return (
+      <tr {...commonProps}>
+        <td className={styles.reviewSelectCell} />
+        <td><div className={styles.tableFolderName}>{icon}<strong>{name}</strong></div></td>
+        <td className={styles.fileRawName}>{folder.name}</td>
+        <td>—</td>
+        <td>Mappa</td>
+        <td>—</td>
+        <td>Drive</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td><span className={styles.folderStatusText}>{security.title}</span></td>
+      </tr>
+    );
+  }
+
+  if (view === "engineering") {
+    return (
+      <tr {...commonProps}>
+        <td className={styles.reviewSelectCell} />
+        <td className={styles.statusIconColumn}>{icon}</td>
+        <td>—</td>
+        <td><div className={styles.tableFolderName}><strong>{name}</strong></div></td>
+        <td>—</td>
+        <td className={styles.fileRawName}>{folder.name}</td>
+        <td>—</td>
+        <td>Mappa</td>
+        <td>inode/directory</td>
+        <td>—</td>
+        <td>—</td>
+        <td>Drive</td>
+        <td>—</td>
+        <td>—</td>
+        <td><span className={styles.folderStatusText}>{security.title}</span></td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr {...commonProps}>
+      <td className={styles.reviewSelectCell} />
+      <td className={styles.statusIconColumn}>{icon}</td>
+      <td>—</td>
+      <td><div className={styles.tableFolderName}><strong>{name}</strong></div></td>
+      <td>—</td>
+      <td className={styles.reviewFileName}>{folder.name}</td>
+      <td>—</td>
+      <td>—</td>
+      <td>{folder.discipline || "—"}</td>
+      <td>{folder.topic || "—"}</td>
+      {Array.from({ length: 12 }, (_, index) => <td key={index}>—</td>)}
+    </tr>
+  );
+}
+
 type TableSortKey = "name" | "fileName" | "uploadedAt";
 type SortDirection = "asc" | "desc";
 type TableViewKey = "simple" | "engineering" | "review";
@@ -557,6 +661,7 @@ export default function FileGridPanel({
   const [reviewLifecycle, setReviewLifecycle] = useState("all");
   const [reviewSearch, setReviewSearch] = useState("");
   const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
+  const [activeFolderRowId, setActiveFolderRowId] = useState("");
   const selectedIds = selectedDocumentIds ?? internalSelectedIds;
   const setSelectedIds = (next: string[] | ((current: string[]) => string[])) => {
     const resolved = typeof next === "function" ? next(selectedIds) : next;
@@ -793,6 +898,17 @@ export default function FileGridPanel({
     });
   }, [allReviewRows, reviewApprovalStage, reviewDiscipline, reviewLifecycle, reviewSearch, reviewStatus, reviewTopic]);
 
+  const childFolders = useMemo(() => {
+    const targetParentId = selectedFolderId === "all" ? null : selectedFolderId;
+    return folders
+      .filter((folder) => folder.parentId === targetParentId)
+      .sort((a, b) => {
+        const order = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+        if (order) return order;
+        return compareTableText(a.displayName || a.name, b.displayName || b.name);
+      });
+  }, [folders, selectedFolderId]);
+
   const sortedDocuments = useMemo(() => {
     return [...documents].sort((a, b) => {
       if (sortState.key === "uploadedAt") return compareTableDates(a.updatedAt, b.updatedAt, sortState.direction);
@@ -848,10 +964,19 @@ export default function FileGridPanel({
   };
 
   useEffect(() => {
+    setActiveFolderRowId("");
+  }, [selectedFolderId]);
+
+  useEffect(() => {
     if (selectedDocumentIds) return;
     const available = new Set(documents.map((document) => document.id));
     setInternalSelectedIds((current) => current.filter((id) => available.has(id)));
   }, [documents, selectedDocumentIds]);
+
+  const selectDocumentRow = (document: DriveDocument) => {
+    setActiveFolderRowId("");
+    onSelectDocument(document);
+  };
 
   const toggleDocumentSelection = (documentId: string) => {
     setSelectedIds((current) => current.includes(documentId)
@@ -1110,8 +1235,18 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
+                {childFolders.map((folder) => (
+                  <FolderTableRow
+                    key={folder.id}
+                    folder={folder}
+                    view="review"
+                    active={activeFolderRowId === folder.id}
+                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onOpen={() => onFolderChange?.(folder.id)}
+                  />
+                ))}
                 {sortedReviewRows.map((row) => (
-                  <tr key={row.document.id} className={(selectedSet.has(row.document.id) ? styles.reviewRowSelected : "") + " " + reviewRowStatusClass(metadataByDocument[row.document.id])} onClick={() => onSelectDocument(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                  <tr key={row.document.id} className={`${selectedDocumentId === row.document.id ? styles.fileSelected : ""} ${selectedSet.has(row.document.id) ? styles.reviewRowSelected : ""} ${reviewRowStatusClass(metadataByDocument[row.document.id])}`} onClick={() => selectDocumentRow(row.document)} onDoubleClick={() => onOpenDocument?.(row.document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                     <td className={styles.reviewSelectCell}>
                       <input
                         type="checkbox"
@@ -1173,7 +1308,7 @@ export default function FileGridPanel({
                 ))}
               </tbody>
             </table>
-            {!reviewRows.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető terv</strong>A jelenlegi tervellenőrzési szűrésre nincs találat.</div>}
+            {!reviewRows.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető terv</strong>A jelenlegi tervellenőrzési szűrésre nincs találat.</div>}
           </div>
         </div>
       ) : (
@@ -1219,6 +1354,16 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
+                {childFolders.map((folder) => (
+                  <FolderTableRow
+                    key={folder.id}
+                    folder={folder}
+                    view="simple"
+                    active={activeFolderRowId === folder.id}
+                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onOpen={() => onFolderChange?.(folder.id)}
+                  />
+                ))}
                 {sortedDocuments.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
@@ -1226,7 +1371,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                       <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
@@ -1295,13 +1440,23 @@ export default function FileGridPanel({
                   onSave={onSaveNewFolder}
                   onCancel={onCancelNewFolder}
                 />
+                {childFolders.map((folder) => (
+                  <FolderTableRow
+                    key={folder.id}
+                    folder={folder}
+                    view="engineering"
+                    active={activeFolderRowId === folder.id}
+                    onSelect={() => setActiveFolderRowId(folder.id)}
+                    onOpen={() => onFolderChange?.(folder.id)}
+                  />
+                ))}
                 {sortedDocuments.map((document) => {
                   const version = document.currentVersion;
                   const selected = selectedDocumentId === document.id;
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${engineeringRowStatusClass(metadata)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${engineeringRowStatusClass(metadata)}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                                             <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
@@ -1330,7 +1485,7 @@ export default function FileGridPanel({
               </tbody>
             </table>
           )}
-          {!documents.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető fájl</strong>A kiválasztott mappában vagy keresésben nincs találat.</div>}
+          {!documents.length && !childFolders.length && <div className={styles.tableEmpty}><strong>Nincs megjeleníthető fájl</strong>A kiválasztott mappában vagy keresésben nincs találat.</div>}
         </div>
       )}
     </section>

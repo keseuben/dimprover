@@ -123,7 +123,8 @@ function mapFolder(row: DbFolder): DriveFolder {
     displayName: row.display_name || row.original_name || row.name,
     safeName: row.name,
     displayPath: row.display_name || row.original_name || row.name,
-    sortOrder: Number(row.sort_order || 0), discipline: row.discipline || "", topic: row.topic || "", status: row.status, createdBy: row.created_by,
+    sortOrder: Number(row.sort_order || 0), discipline: row.discipline || "", topic: row.topic || "",
+    aclInherit: row.acl_inherit === true, securityState: "NORMAL", status: row.status, createdBy: row.created_by,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -292,7 +293,11 @@ export async function getDriveDocumentFolderAccessRecord(projectId: string, docu
   return { documentId: String(data.id), projectId: String(data.project_id), folderId: String(data.folder_id) };
 }
 
-export async function listDriveTree(projectId: string, accessibleFolderIds?: ReadonlySet<string>): Promise<DriveTree> {
+export async function listDriveTree(
+  projectId: string,
+  accessibleFolderIds?: ReadonlySet<string>,
+  folderSecurityStates?: ReadonlyMap<string, DriveFolder["securityState"]>,
+): Promise<DriveTree> {
   const client = await requireReadyClient();
   const [folderResult, documentResult, versionResult, cursorResult] = await Promise.all([
     client.from("drive_core_folders").select("*").eq("project_id", projectId).neq("status", "ARCHIVED").order("path"),
@@ -331,7 +336,11 @@ export async function listDriveTree(projectId: string, accessibleFolderIds?: Rea
     visiting.delete(folder.id);
     return value;
   };
-  const folders = mappedFolders.map((folder) => ({ ...folder, displayPath: resolveDisplayPath(folder) }));
+  const folders = mappedFolders.map((folder) => ({
+    ...folder,
+    displayPath: resolveDisplayPath(folder),
+    securityState: folderSecurityStates?.get(folder.id) || folder.securityState,
+  }));
   return {
     projectId,
     folders,

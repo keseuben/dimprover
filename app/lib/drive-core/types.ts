@@ -95,6 +95,8 @@ export type DriveFolder = {
   sortOrder: number;
   discipline: string;
   topic: string;
+  aclInherit: boolean;
+  securityState: "NORMAL" | "RESTRICTED" | "CUSTOM" | "PASSWORD";
   status: DriveFolderStatus;
   createdBy: string;
   createdAt: string;

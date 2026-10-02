@@ -12,6 +12,8 @@ export type DriveFolderAclPermission = "folder.view";
 export type DriveFolderAclPrincipalType = "USER" | "ROLE";
 export type DriveFolderAclEffect = "ALLOW" | "DENY";
 
+export type DriveFolderSecurityState = "NORMAL" | "RESTRICTED" | "CUSTOM" | "PASSWORD";
+
 export type DriveFolderAccessRow = {
   id: string;
   projectId: string;
@@ -188,6 +190,35 @@ export async function resolveAccessibleDriveFolderIds(
   return accessible;
 }
 
+export async function resolveDriveFolderSecurityStates(
+  projectId: string,
+): Promise<Map<string, DriveFolderSecurityState>> {
+  const [folderRows, aclEntries] = await Promise.all([
+    listDriveFolderAccessRows(projectId),
+    listDriveFolderAclEntries(projectId),
+  ]);
+
+  const entriesByFolder = new Map<string, DriveFolderAclEntry[]>();
+  for (const entry of aclEntries) {
+    if (entry.projectId !== projectId) continue;
+    const bucket = entriesByFolder.get(entry.folderId) || [];
+    bucket.push(entry);
+    entriesByFolder.set(entry.folderId, bucket);
+  }
+
+  const states = new Map<string, DriveFolderSecurityState>();
+  for (const folder of folderRows) {
+    if (folder.projectId !== projectId || folder.status !== "ACTIVE") continue;
+    if (folder.aclInherit) {
+      states.set(folder.id, "NORMAL");
+      continue;
+    }
+    const entries = entriesByFolder.get(folder.id) || [];
+    states.set(folder.id, entries.some((entry) => entry.principalType === "USER") ? "CUSTOM" : "RESTRICTED");
+  }
+  return states;
+}
+
 export async function canAccessDriveFolder(
   projectId: string,
   folderId: string,
@@ -234,6 +265,9 @@ export async function listDriveTreeForAccess(
   projectId: string,
   access: ProjectAccessContext,
 ): Promise<DriveTree> {
-  const accessibleFolderIds = await resolveAccessibleDriveFolderIds(projectId, access);
-  return listDriveTree(projectId, accessibleFolderIds);
+  const [accessibleFolderIds, folderSecurityStates] = await Promise.all([
+    resolveAccessibleDriveFolderIds(projectId, access),
+    resolveDriveFolderSecurityStates(projectId),
+  ]);
+  return listDriveTree(projectId, accessibleFolderIds, folderSecurityStates);
 }
