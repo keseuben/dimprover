@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
 import type { ProjectAccessContext, ProjectMembershipRole } from "@/app/lib/project-core/types";
 import { listDriveTreeForAccess, requireDriveDocumentAccess, requireDriveFolderAccess } from "./folderAccess";
-import type { DriveDocument, DriveDocumentVersion } from "./types";
+import type { DriveDocument, DriveDocumentVersion, DriveVersionKind } from "./types";
 import {
   DRIVE_WORKSPACE_BOOTSTRAP_ID,
   DRIVE_WORKSPACE_MIGRATION_COUNT,
@@ -209,7 +209,11 @@ type DbVersion = {
   project_id: string;
   document_id: string;
   version_number: number | string;
+  revision_number?: number | string | null;
   revision_code: string;
+  version_kind?: string | null;
+  revision_reason?: string | null;
+  revision_date?: string | null;
   original_name: string;
   mime_type: string;
   size_bytes: number | string;
@@ -234,6 +238,7 @@ type DbDocument = {
   status: string;
   source: string;
   current_version_number: number | string;
+  export_alias?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -431,13 +436,28 @@ function mapBox(
   };
 }
 
+function packageRevisionNumber(row: DbVersion) {
+  if (row.revision_number != null) return Number(row.revision_number || 0);
+  const match = String(row.revision_code || "").match(/^R(\d+)$/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function packageVersionKind(row: DbVersion): DriveVersionKind {
+  if (row.version_kind === "INITIAL" || row.version_kind === "REVISION") return row.version_kind;
+  return Number(row.version_number || 0) === 1 ? "INITIAL" : "VERSION";
+}
+
 function mapPackageVersion(row: DbVersion): DriveDocumentVersion {
   return {
     id: row.id,
     projectId: row.project_id,
     documentId: row.document_id,
     versionNumber: Number(row.version_number || 0),
-    revisionCode: row.revision_code || "",
+    revisionNumber: packageRevisionNumber(row),
+    revisionCode: row.revision_code || ("R" + String(packageRevisionNumber(row)).padStart(2, "0")),
+    versionKind: packageVersionKind(row),
+    revisionReason: row.revision_reason || "",
+    revisionDate: row.revision_date || null,
     originalName: row.original_name,
     mimeType: row.mime_type,
     sizeBytes: Number(row.size_bytes || 0),
@@ -464,6 +484,7 @@ function mapPackageDocument(row: DbDocument, version: DriveDocumentVersion | nul
     status: row.status as DriveDocument["status"],
     source: row.source as DriveDocument["source"],
     currentVersionNumber: Number(row.current_version_number || 0),
+    exportAlias: row.export_alias || "",
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1044,7 +1065,7 @@ export async function listDriveBoxes(projectId: string, access: ProjectAccessCon
   if (versionIds.length) {
     const versionResult = await client
       .from("drive_core_document_versions")
-      .select("id,project_id,document_id,version_number,revision_code,original_name,mime_type,size_bytes,sha256,storage_provider,storage_bucket,storage_key,status,change_note,created_by,created_at")
+      .select("id,project_id,document_id,version_number,revision_number,revision_code,version_kind,revision_reason,revision_date,original_name,mime_type,size_bytes,sha256,storage_provider,storage_bucket,storage_key,status,change_note,created_by,created_at")
       .eq("project_id", projectId)
       .in("id", versionIds);
     if (versionResult.error) databaseError("A CsomagBOX dokumentumverziók nem tölthetők be.", versionResult.error);

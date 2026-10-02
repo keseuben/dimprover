@@ -72,10 +72,10 @@ check("principal shape and unique effective principal indexes exist", () => {
   assert.match(migration, /drive_core_folder_acl_user_permission_unique/);
   assert.match(migration, /drive_core_folder_acl_role_permission_unique/);
 });
-check("Drive Core schema marker advances exactly to 0.7.0 migration 4", () => {
-  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.7\.0"/);
-  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 4/);
-  assert.match(schema, /drive-core-v070-folder-acl-20261001/);
+check("Drive Core schema marker current marker is 0.8.0 migration 5 while V070 migration remains historical", () => {
+  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.0"/);
+  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 5/);
+  assert.match(schema, /drive-core-v080-revision-model-20261002/);
   assert.match(schema, /"drive_core_folder_acl_entries"/);
 });
 check("ACL only refines active project document.read access", () => {

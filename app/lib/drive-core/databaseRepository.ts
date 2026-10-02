@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
 import { normalizeDriveFileName, normalizeDriveFolderName } from "./nameNormalizer";
+import { normalizeDriveExportAlias } from "./exportNaming";
 import {
   DRIVE_CORE_BOOTSTRAP_ID,
   DRIVE_CORE_MIGRATION_COUNT,
@@ -16,6 +17,7 @@ import type {
   DriveDocumentSource,
   DriveDocumentVersion,
   DriveFolder,
+  DriveVersionKind,
   DriveSyncCursor,
   DriveTree,
 } from "./types";
@@ -32,10 +34,11 @@ type DbFolderAclEntry = {
 type DbDocument = {
   id: string; project_id: string; folder_id: string; name: string; extension: string; mime_type: string;
   description: string; status: DriveDocument["status"]; source: DriveDocumentSource; current_version_number: number;
-  created_by: string; created_at: string; updated_at: string;
+  export_alias?: string | null; created_by: string; created_at: string; updated_at: string;
 };
 type DbVersion = {
   id: string; project_id: string; document_id: string; version_number: number; revision_code: string;
+  revision_number?: number | string | null; version_kind?: string | null; revision_reason?: string | null; revision_date?: string | null;
   original_name: string; mime_type: string; size_bytes: number | string; sha256: string | null;
   storage_provider: DriveDocumentVersion["storageProvider"]; storage_bucket: string | null; storage_key: string | null;
   status: DriveDocumentVersion["status"]; change_note: string; created_by: string; created_at: string;
@@ -110,10 +113,22 @@ function mapFolder(row: DbFolder): DriveFolder {
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
+function legacyRevisionNumber(revisionCode: string | null | undefined) {
+  const match = String(revisionCode || "").trim().match(/^R(\d+)$/i);
+  return match ? Number(match[1]) : 0;
+}
+function driveVersionKind(value: string | null | undefined, versionNumber: number): DriveVersionKind {
+  if (value === "INITIAL" || value === "REVISION") return value;
+  return versionNumber === 1 ? "INITIAL" : "VERSION";
+}
 function mapVersion(row: DbVersion): DriveDocumentVersion {
+  const versionNumber = Number(row.version_number);
+  const revisionNumber = row.revision_number == null ? legacyRevisionNumber(row.revision_code) : Number(row.revision_number || 0);
   return {
     id: row.id, projectId: row.project_id, documentId: row.document_id,
-    versionNumber: Number(row.version_number), revisionCode: row.revision_code || "",
+    versionNumber, revisionNumber, revisionCode: row.revision_code || ("R" + String(revisionNumber).padStart(2, "0")),
+    versionKind: driveVersionKind(row.version_kind, versionNumber),
+    revisionReason: row.revision_reason || "", revisionDate: row.revision_date || null,
     originalName: row.original_name, mimeType: row.mime_type, sizeBytes: Number(row.size_bytes || 0),
     sha256: row.sha256, storageProvider: row.storage_provider, storageBucket: row.storage_bucket,
     storageKey: row.storage_key, status: row.status, changeNote: row.change_note || "",
@@ -125,7 +140,7 @@ function mapDocument(row: DbDocument, version: DriveDocumentVersion | null): Dri
     id: row.id, projectId: row.project_id, folderId: row.folder_id, name: row.name,
     extension: row.extension || "", mimeType: row.mime_type, description: row.description || "",
     status: row.status, source: row.source, currentVersionNumber: Number(row.current_version_number || 0),
-    createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at, currentVersion: version,
+    exportAlias: row.export_alias || "", createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at, currentVersion: version,
   };
 }
 function mapChange(row: DbChange): DriveChangeEvent {
@@ -382,11 +397,13 @@ export async function createDriveDocument(projectId: string, input: Record<strin
   const source = normalizeDocumentSource(input.source);
   const document = {
     id: documentId, folder_id: folderId, name, extension: extensionFromName(name), mime_type: mimeType,
-    description: normalizeText(input.description).slice(0, 2000), source, created_by: actorUserId,
+    description: normalizeText(input.description).slice(0, 2000), source,
+    export_alias: normalizeDriveExportAlias(input.exportAlias || rawOriginalName), created_by: actorUserId,
     created_at: now, updated_at: now,
   };
   const version = {
-    id: versionId, version_number: 1, revision_code: normalizeText(input.revisionCode, "V1").slice(0, 40),
+    id: versionId, version_number: 1, revision_code: "R00", version_kind: "INITIAL",
+    revision_reason: "", revision_date: now.slice(0, 10),
     original_name: normalizeFileName(rawOriginalName || name), mime_type: mimeType,
     size_bytes: normalizeInteger(input.sizeBytes, 0), sha256: normalizeSha256(input.sha256),
     storage_provider: "METADATA_ONLY", status: "METADATA_ONLY",
@@ -430,6 +447,12 @@ export async function addDriveDocumentVersion(
   if (!originalName) return { ok: false as const, error: "Az új verzió eredeti fájlneve kötelező." };
 
   const expectedCurrentVersion = normalizeInteger(input.expectedCurrentVersion, 0);
+  const versionKind = input.versionKind === "REVISION" ? "REVISION" : "VERSION";
+  const revisionReason = normalizeText(input.revisionReason).slice(0, 1000);
+  const revisionDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizeText(input.revisionDate)) ? normalizeText(input.revisionDate) : "";
+  if (versionKind === "REVISION" && !revisionReason) {
+    return { ok: false as const, error: "Új hivatalos revízióhoz a revízió oka kötelező." };
+  }
   const { data: currentDocument, error: currentDocumentError } = await client
     .from("drive_core_documents")
     .select("id,current_version_number,status")
@@ -450,7 +473,10 @@ export async function addDriveDocumentVersion(
   const version = {
     id: `drive-version-${randomUUID().slice(0, 12)}`,
     expected_current_version: expectedCurrentVersion,
-    revision_code: normalizeText(input.revisionCode).slice(0, 40),
+    revision_code: "",
+    version_kind: versionKind,
+    revision_reason: revisionReason,
+    revision_date: revisionDate,
     original_name: originalName,
     mime_type: normalizeText(input.mimeType, "application/octet-stream").slice(0, 160),
     size_bytes: normalizeInteger(input.sizeBytes, 0),

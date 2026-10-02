@@ -50,7 +50,11 @@ export type DriveFolder = {
 export type DriveVersion = {
   id: string;
   versionNumber: number;
+  revisionNumber: number;
   revisionCode: string;
+  versionKind: "INITIAL" | "VERSION" | "REVISION";
+  revisionReason: string;
+  revisionDate: string | null;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -72,6 +76,7 @@ export type DriveDocument = {
   description: string;
   source: string;
   currentVersionNumber: number;
+  exportAlias: string;
   updatedAt: string;
   currentVersion: DriveVersion | null;
 };

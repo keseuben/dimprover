@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ProjectAccessContext } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
 import { normalizeDriveFileName, normalizeDriveRelativePath } from "./nameNormalizer";
+import { normalizeDriveExportAlias } from "./exportNaming";
 import {
   buildDriveStorageKey,
   calculateDriveObjectSha256,
@@ -192,6 +193,13 @@ export async function initDriveObjectUpload(input: {
     );
   }
 
+  const versionKind = uploadKind === "NEW_DOCUMENT" ? "INITIAL" : input.body.versionKind === "REVISION" ? "REVISION" : "VERSION";
+  const revisionReason = normalizeText(input.body.revisionReason).slice(0, 1000);
+  const revisionDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizeText(input.body.revisionDate)) ? normalizeText(input.body.revisionDate) : "";
+  if (versionKind === "REVISION" && !revisionReason) {
+    throw new DriveCoreRepositoryError("Új hivatalos revízióhoz a revízió oka kötelező.", "DRIVE_REVISION_REASON_REQUIRED", 400);
+  }
+
   const now = new Date();
   const uploadId = `drive-upload-${randomUUID().slice(0, 16)}`;
   const expiresAt = new Date(now.getTime() + Math.max(config.signedUrlTtlSeconds + 300, 1_200) * 1000).toISOString();
@@ -226,7 +234,10 @@ export async function initDriveObjectUpload(input: {
     completedAt: null,
     metadata: {
       description: normalizeText(input.body.description).slice(0, 2000),
-      revisionCode: normalizeText(input.body.revisionCode).slice(0, 40),
+      versionKind,
+      revisionReason,
+      revisionDate,
+      exportAlias: uploadKind === "NEW_DOCUMENT" ? normalizeDriveExportAlias(input.body.exportAlias || documentName) : "",
       changeNote: normalizeText(input.body.changeNote).slice(0, 1000),
       originalFileName: normalizedFileName.originalFileName,
       safeFileName: normalizedFileName.safeFileName,

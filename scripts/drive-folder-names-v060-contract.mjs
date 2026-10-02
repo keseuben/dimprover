@@ -21,10 +21,10 @@ const zip = readFileSync("app/lib/drive-core/folderDownloadService.ts", "utf8");
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log("PASS " + name); };
 
-check("Drive Core runtime marker follows current V070 ACL baseline", () => {
-  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.7\.0"/);
-  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 4/);
-  assert.match(schema, /DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v070-folder-acl-20261001"/);
+check("Drive Core runtime marker follows current V080 revision-model baseline", () => {
+  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.0"/);
+  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 5/);
+  assert.match(schema, /DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v080-revision-model-20261002"/);
 });
 check("folder API model separates original display and technical names", () => {
   for (const source of [types, clientTypes]) {

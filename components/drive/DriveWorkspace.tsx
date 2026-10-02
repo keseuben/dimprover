@@ -552,7 +552,7 @@ export default function DriveWorkspace({
               originalRelativePath: originalRelativePaths?.[index] || file.name,
               mimeType: file.type || "application/octet-stream",
               sizeBytes: file.size,
-              revisionCode: "V1",
+              versionKind: "INITIAL",
               description: "Webes feltöltés a DIMPRO Drive Workspace felületéről.",
               changeNote: files.length > 1 ? "Web Drive tömeges feltöltés." : "Web Drive feltöltés.",
               source: "WEB",

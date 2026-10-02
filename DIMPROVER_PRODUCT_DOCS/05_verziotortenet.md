@@ -3409,3 +3409,20 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A kijelölt dokumentum kék selection háttere továbbra is elsőbbséget élvez az állapotszínezéssel szemben.
 - V0.7.14 contract: 21/21 PASS. V0.7.6 sort/resize 36/36 PASS; V0.7.4 inline folder/tree 25/25 PASS; V0.6.4 fullscreen/details/drag 20/20 PASS; V0.7.2 external drag-drop 11/11 PASS; célzott TypeScript PASS; git diff --check PASS.
 - DEV ONLY · PROD DENY. Backend, adatbázis és aktív Drive runtime nem változott ebben a source blokkban.
+
+### DIMPRO Drive Core 0.8.0 – stabil dokumentumazonosság, külön verzió és hivatalos revízió
+
+- A meglévő `DriveDocument.id` marad a stabil belső dokumentumazonosság; nem készült párhuzamos identity tábla vagy második dokumentummag.
+- A technikai fájlverzió és a hivatalos dokumentumrevízió külön adatmodellre vált: `version_number` minden új fájlállapotnál növekszik, míg `revision_number` csak hivatalos `REVISION` műveletnél lép tovább.
+- Új verziótípus: `INITIAL | VERSION | REVISION`. Az első dokumentumállapot V1 / R00 / INITIAL. Normál új verzió ugyanazon revízión belül növeli a verziószámot; hivatalos revízió a verziószám és a revíziószám növelése mellett kötelező revízióokot és revíziódátumot kezel.
+- A `revision_code` új rekordoknál kanonikus R00, R01, ... formátumú. A migráció a történeti `revision_code` szövegeket nem írja át destruktívan; csak már eleve R-szám formátumú régi értékből képez numerikus revíziót.
+- A dokumentum új, stabil `export_alias` mezőt kap. Az alias ASCII-safe, legfeljebb 40 karakteres, első generálás után dokumentumszinten tárolható és nem szükséges minden letöltésnél újragenerálni.
+- A webes Object Storage upload session külön `versionKind`, `revisionReason`, `revisionDate` és `exportAlias` metaadatot visz. A korábbi hamis `revisionCode: V1` kliens-default megszűnt.
+- A közvetlen dokumentumverzió POST útvonal Folder ACL dokumentum-hozzáférési guardot is kapott; rejtett dokumentumhoz nem készíthető verzió vagy revízió csak projekt-szintű `document.write` jogosultsággal.
+- A kiadási/ISSUED és üzleti dokumentumállapot továbbra is a Document Flow governance feladata. A Drive Core 0.8.0 nem vezet be párhuzamos `issue_status` vagy `business_status` mezőt a verziótáblában.
+- Új additív migrációs forrás: `supabase/migrations/20261002_drive_revision_model_v080.sql`. SHA-256: `c01770241d36520bee4ecbb7460c892ff180ddd56ab2f8060b1e4c4dade6ea1b`.
+- Új guarded migration gate: `scripts/drive-revision-v080-migration-gate.mjs`. Gate SHA-256: `96298fe27a96f14edb21c406f01f9212a39c2f4d764e4985ebee20b34e65fb64`. A gate exact DEV Supabase-refet, exact migrációs SHA-t, explicit jóváhagyást, migrációs operation lockot, pre-apply backupot, post-apply row-count és integritás-ellenőrzést követel.
+- V0.8.0 revision model contract: 28/28 PASS. Migration gate contract: 18/18 PASS. Backend és UI célzott TypeScript: PASS. A korábbi Drive Core current-marker contractok 0.8.0 / migration 5 markerre lettek igazítva.
+- A migration gate preflight jelenleg fail-closed `DB_CREDENTIAL_REQUIRED` eredménnyel áll meg. A DEV adatbázis továbbra is Drive Core 0.6.0, ezért előbb a V0.7.0 Folder ACL migrációt, majd a V0.8.0 revision-model migrációt kell szabályosan alkalmazni.
+- A DEV aktív runtime továbbra is V0.7.6, rollback V0.7.5. A 0.8.0 source ebben a blokkban nem került runtime-ra vagy PROD-ra.
+- DEV ONLY · PROD DENY.

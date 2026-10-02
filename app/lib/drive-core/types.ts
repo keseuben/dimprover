@@ -78,6 +78,7 @@ export type DriveUploadSession = {
 export type DriveDocumentStatus = "ACTIVE" | "ARCHIVED" | "DELETED";
 export type DriveDocumentSource = "WEB" | "DESKTOP" | "DROP" | "SYSTEM";
 export type DriveVersionStatus = "METADATA_ONLY" | "STAGED" | "AVAILABLE" | "QUARANTINED" | "REJECTED";
+export type DriveVersionKind = "INITIAL" | "VERSION" | "REVISION";
 export type DriveStorageProvider = "METADATA_ONLY" | "LOCAL_PREVIEW" | "S3";
 
 export type DriveFolder = {
@@ -104,7 +105,11 @@ export type DriveDocumentVersion = {
   projectId: string;
   documentId: string;
   versionNumber: number;
+  revisionNumber: number;
   revisionCode: string;
+  versionKind: DriveVersionKind;
+  revisionReason: string;
+  revisionDate: string | null;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -129,6 +134,7 @@ export type DriveDocument = {
   status: DriveDocumentStatus;
   source: DriveDocumentSource;
   currentVersionNumber: number;
+  exportAlias: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

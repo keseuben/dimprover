@@ -49,7 +49,7 @@ check('Secrets remain server-side', storageConfig.includes('DIMPRO_DRIVE_S3_SECR
 const healthRoute = fs.readFileSync('app/api/projects/[projectId]/drive/health/route.ts', 'utf8');
 check('Core health remains separate', healthRoute.includes('getDriveCoreDatabaseHealth') && healthRoute.includes('getDriveObjectStorageHealth'));
 const coreSchema = fs.readFileSync('app/lib/drive-core/schema.ts', 'utf8');
-check('Drive Core current marker is 0.7.0', coreSchema.includes('DRIVE_CORE_SCHEMA_VERSION = "0.7.0"'));
+check('Drive Core current marker is 0.8.0', coreSchema.includes('DRIVE_CORE_SCHEMA_VERSION = "0.8.0"'));
 
 const report = { pass: checks.filter((item) => item.pass).length, total: checks.length, checks, sha256: actualSha };
 console.log(JSON.stringify(report, null, 2));

@@ -21,10 +21,10 @@ let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log(`PASS ${name}`); };
 const roleBase = permissions.indexOf("const ROLE_PERMISSIONS");
 
-check("Drive Core runtime expects current V0.7.0 marker", () => {
-  assert.match(coreSchema, /DRIVE_CORE_SCHEMA_VERSION = "0\.7\.0"/);
-  assert.match(coreSchema, /DRIVE_CORE_MIGRATION_COUNT = 4/);
-  assert.match(coreSchema, /DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v070-folder-acl-20261001"/);
+check("Drive Core runtime expects current V0.8.0 marker", () => {
+  assert.match(coreSchema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.0"/);
+  assert.match(coreSchema, /DRIVE_CORE_MIGRATION_COUNT = 5/);
+  assert.match(coreSchema, /DRIVE_CORE_BOOTSTRAP_ID = "drive-core-v080-revision-model-20261002"/);
 });
 
 check("document.delete exists in project permission type", () => assert.match(permissionTypes, /"document\.delete"/));
