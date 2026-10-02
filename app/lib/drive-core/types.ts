@@ -148,6 +148,7 @@ export type DriveChangeEntityType =
   | "box_folder"
   | "saved_view"
   | "compare_job"
+  | "compare_finding"
   | "ai_job";
 
 export type DriveChangeEvent = {

@@ -3376,3 +3376,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Box history ACL-szűrt Box-listából képezi a látható dokumentumhalmazt; dokumentumhoz kötött history event csak látható dokumentum esetén jelenik meg, feloldhatatlan `box_item` event fail-closed rejtve marad.
 - A meglévő Box panel/folder/ZIP/lifecycle/history contractok és a célzott TypeScript ellenőrzés PASS.
 - DEV ONLY · PROD DENY. Runtime- vagy adatbázis-módosítás nem történt.
+
+### DIMPRO Drive V0.7.12 – Folder ACL change feed szűrés
+
+- A projekt Drive változásfeed az ACL-szűrt tree aktuális mappa- és dokumentumhalmazával szűri a `drive_core_change_events` kimenetet.
+- Mappa- és dokumentumesemény csak látható célhoz kerülhet a klienshez; soft-delete dokumentumesemény a payloadban megőrzött `folderId` alapján továbbra is eljuthat a szinkron klienshez, ha a korábbi mappa látható.
+- `document_version`, metadata, note, QR és Box-item események csak bizonyítható, látható dokumentumkapcsolattal jelennek meg. Compare finding esetén minden payloadban szereplő bal/jobb dokumentumnak láthatónak kell lennie.
+- `sync`, Box és Box-folder projekt-szintű esemény megmarad. `saved_view`, `compare_job`, `ai_job` és ismeretlen jövőbeli entity dokumentum-láthatósági szerződés nélkül fail-closed rejtve marad.
+- A szűrés nem írja át a repository `nextCursor` és `hasMore` értékeit: a cursor a nyers batch szerint halad, így rejtett események nem okoznak végtelen újraolvasást.
+- A DriveChangeEntityType modell a DB-sémával összhangban kiegészült a már létező `compare_finding` entity típussal.
+- DEV ONLY · PROD DENY. Runtime- és adatbázis-állapot változatlan.
