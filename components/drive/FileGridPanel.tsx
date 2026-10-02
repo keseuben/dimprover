@@ -1111,12 +1111,13 @@ export default function FileGridPanel({
           className={`${styles.fileFolderAllFilesButton} ${allFilesMode ? styles.fileFolderAllFilesButtonActive : ""}`}
           disabled={!currentFolder || !onAllFilesModeChange}
           aria-pressed={allFilesMode}
-          title={currentFolder ? "A kiválasztott mappa és minden almappája összes fájlja" : "Az Összes fájl nézethez válassz ki egy mappát"}
+          title={currentFolder ? "Összes fájl – a kiválasztott mappa és minden almappája" : "Összes fájl – előbb válassz ki egy mappát"}
+          aria-label="Összes fájl"
           onClick={() => onAllFilesModeChange?.(!allFilesMode)}
         >
-          <Files size={13} />
-          <span>Összes fájl</span>
+          <Files size={14} />
         </button>
+        <span className={styles.fileFolderActionSeparator} aria-hidden="true" />
         <button
           type="button"
           className={styles.fileFolderUpButton}

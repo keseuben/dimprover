@@ -1,14 +1,18 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   BrainCircuit,
+  ChevronDown,
   Download,
   ExternalLink,
   FolderDown,
   FolderPlus,
   GitCompareArrows,
+  List,
   PackageCheck,
   Search,
+  Send,
   Share2,
   UploadCloud,
 } from "lucide-react";
@@ -81,80 +85,173 @@ export default function DriveToolbar({
   canIssueSelected,
   onIssueSelected,
 }: Props) {
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!actionMenuOpen) return;
+    const closeOnPointer = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) setActionMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnPointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnPointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [actionMenuOpen]);
+
+  const runMenuAction = (action: () => void) => {
+    setActionMenuOpen(false);
+    action();
+  };
+
   return (
     <div className={styles.toolbar}>
+      <div className={styles.toolbarActionMenuWrap} ref={actionMenuRef}>
+        <button
+          type="button"
+          className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolbarMenuButton}`}
+          onClick={() => setActionMenuOpen((current) => !current)}
+          title="Műveletek"
+          aria-label="Műveletek"
+          aria-haspopup="menu"
+          aria-expanded={actionMenuOpen}
+        >
+          <List size={16} />
+          <ChevronDown size={10} className={styles.toolbarMenuChevron} />
+        </button>
+
+        {actionMenuOpen && (
+          <div className={styles.toolbarActionMenu} role="menu" aria-label="Drive műveletek">
+            <button type="button" role="menuitem" disabled={!canWrite} onClick={() => runMenuAction(onCreateFolder)}>
+              <FolderPlus size={15} /><span>Új mappa</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canWrite} onClick={() => runMenuAction(onUpload)}>
+              <UploadCloud size={15} /><span>Feltöltés</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canUploadSelectedVersion} onClick={() => runMenuAction(onUploadSelectedVersion)}>
+              <UploadCloud size={15} /><span>Új verzió</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canUploadSelectedRevision} onClick={() => runMenuAction(onUploadSelectedRevision)}>
+              <PackageCheck size={15} /><span>Új revízió</span>
+            </button>
+            <div className={styles.toolbarMenuSeparator} />
+            <button type="button" role="menuitem" disabled={!canOpenSelected} onClick={() => runMenuAction(onOpenSelected)}>
+              <ExternalLink size={15} /><span>Megnyitás</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canDownloadSelected} onClick={() => runMenuAction(onDownloadSelected)}>
+              <Download size={15} /><span>Letöltés</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canDownloadFolder} onClick={() => runMenuAction(onDownloadFolder)}>
+              <FolderDown size={15} /><span>Mappa ZIP</span>
+            </button>
+            <div className={styles.toolbarMenuSeparator} />
+            <button type="button" role="menuitem" onClick={() => runMenuAction(onToggleBoxShelf)}>
+              <PackageCheck size={15} /><span>CsomagBOX{boxCount > 0 ? ` (${boxCount})` : ""}</span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.open("https://drop.dimpro.hu", "_blank", "noopener,noreferrer"))}>
+              <Send size={15} /><span>DROP küldés</span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => runMenuAction(onToggleCompare)}>
+              <GitCompareArrows size={15} /><span>{compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}</span>
+            </button>
+            <button type="button" role="menuitem" disabled>
+              <BrainCircuit size={15} /><span>AI Dokumentumvizsgáló</span>
+            </button>
+            <button type="button" role="menuitem" disabled={!canIssueSelected} onClick={() => runMenuAction(onIssueSelected)}>
+              <PackageCheck size={15} /><span>Formális dokumentumkiadás</span>
+            </button>
+            <button type="button" role="menuitem" disabled>
+              <Share2 size={15} /><span>Megosztás</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       <button
         type="button"
-        className={`${styles.toolButton} ${styles.toolPrimary}`}
+        className={`${styles.toolButton} ${styles.toolPrimary} ${styles.toolIconOnly}`}
         onClick={onCreateFolder}
         disabled={!canWrite}
-        title={canWrite ? "Új mappa létrehozása" : "Nincs írási jogosultságod"}
+        title={canWrite ? "Új mappa" : "Új mappa – nincs írási jogosultságod"}
+        aria-label="Új mappa"
       >
-        <FolderPlus size={14} /> <span>Új mappa</span>
+        <FolderPlus size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onUpload}
         disabled={!canWrite}
-        title={canWrite ? "Fájl feltöltése" : "Nincs írási jogosultságod"}
+        title={canWrite ? "Feltöltés" : "Feltöltés – nincs írási jogosultságod"}
+        aria-label="Feltöltés"
       >
-        <UploadCloud size={14} /> <span>Feltöltés</span>
+        <UploadCloud size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onUploadSelectedVersion}
         disabled={!canUploadSelectedVersion}
-        title={canUploadSelectedVersion ? "Új fájlverzió feltöltése a kijelölt dokumentumhoz" : "Jelölj ki egy írható dokumentumot"}
+        title={canUploadSelectedVersion ? "Új verzió" : "Új verzió – jelölj ki egy írható dokumentumot"}
+        aria-label="Új verzió"
       >
-        <UploadCloud size={14} /> <span>Új verzió</span>
+        <UploadCloud size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onUploadSelectedRevision}
         disabled={!canUploadSelectedRevision}
-        title={canUploadSelectedRevision ? "Új hivatalos revízió létrehozása a kijelölt dokumentumhoz" : "Jelölj ki egy írható dokumentumot"}
+        title={canUploadSelectedRevision ? "Új revízió" : "Új revízió – jelölj ki egy írható dokumentumot"}
+        aria-label="Új revízió"
       >
-        <PackageCheck size={14} /> <span>Új revízió</span>
+        <PackageCheck size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onOpenSelected}
         disabled={!canOpenSelected}
-        title={canOpenSelected ? "Kijelölt fájl megnyitása (dupla kattintással is)" : "Jelölj ki egy megnyitható fájlt"}
+        title={canOpenSelected ? "Megnyitás" : "Megnyitás – jelölj ki egy megnyitható fájlt"}
+        aria-label="Megnyitás"
       >
-        <ExternalLink size={14} /> <span>Megnyitás</span>
+        <ExternalLink size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onDownloadSelected}
         disabled={!canDownloadSelected}
-        title={canDownloadSelected ? "Kijelölt fájl letöltése" : "Jelölj ki egy letölthető fájlt"}
+        title={canDownloadSelected ? "Letöltés" : "Letöltés – jelölj ki egy letölthető fájlt"}
+        aria-label="Letöltés"
       >
-        <Download size={14} /> <span>Letöltés</span>
+        <Download size={16} />
       </button>
       <button
         type="button"
-        className={styles.toolButton}
+        className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onDownloadFolder}
         disabled={!canDownloadFolder}
-        title={canDownloadFolder ? "Kiválasztott mappa és almappái letöltése ZIP-ben" : "ZIP letöltéshez válassz ki egy mappát"}
+        title={canDownloadFolder ? "Mappa ZIP" : "Mappa ZIP – válassz ki egy mappát"}
+        aria-label="Mappa ZIP"
       >
-        <FolderDown size={14} /> <span>Mappa ZIP</span>
+        <FolderDown size={16} />
       </button>
       <button
         type="button"
-        className={`${styles.toolButton} ${boxShelfOpen ? styles.toolActive : ""}`}
+        className={`${styles.toolButton} ${styles.toolIconOnly} ${boxShelfOpen ? styles.toolActive : ""}`}
         onClick={onToggleBoxShelf}
-        title={boxReady ? "CsomagBOX polc megnyitása / elrejtése" : "A CsomagBOX felület megnyitható; az adatmotor a Workspace SQL után aktiválódik"}
+        title={boxReady ? "CsomagBOX" : "CsomagBOX – az adatmotor még nem aktív"}
+        aria-label="CsomagBOX"
       >
-        <PackageCheck size={14} /> <span>CsomagBOX</span>{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}
+        <PackageCheck size={16} />{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}
       </button>
-      <DropActionButton />
+      <DropActionButton iconOnly />
       <button
         type="button"
         className={`${styles.toolButton} ${styles.toolIconOnly} ${compareActive ? styles.toolActive : ""}`}
@@ -164,7 +261,7 @@ export default function DriveToolbar({
       >
         <GitCompareArrows size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló – az 5. napi fejlesztésben aktiválódik" aria-label="AI Dokumentumvizsgáló">
+      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolPurple} ${styles.toolDisabled}`} disabled title="AI Dokumentumvizsgáló" aria-label="AI Dokumentumvizsgáló">
         <BrainCircuit size={16} />
       </button>
       <button
@@ -172,12 +269,12 @@ export default function DriveToolbar({
         className={`${styles.toolButton} ${styles.toolIconOnly} ${canIssueSelected ? "" : styles.toolDisabled}`}
         disabled={!canIssueSelected}
         onClick={onIssueSelected}
-        title={canIssueSelected ? "Kijelölt dokumentumverzió formális kiadása" : "Kiadáshoz jelölj ki egy kiadható dokumentumverziót"}
+        title={canIssueSelected ? "Formális dokumentumkiadás" : "Formális dokumentumkiadás – jelölj ki egy kiadható dokumentumverziót"}
         aria-label="Formális dokumentumkiadás"
       >
         <PackageCheck size={16} />
       </button>
-      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás – workflow előkészítve" aria-label="Megosztás">
+      <button type="button" className={`${styles.toolButton} ${styles.toolIconOnly} ${styles.toolDisabled}`} disabled title="Megosztás" aria-label="Megosztás">
         <Share2 size={16} />
       </button>
 

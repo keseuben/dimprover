@@ -19,9 +19,9 @@ const store = readFileSync('app/lib/drive-core/store.ts', 'utf8');
 let pass = 0;
 const check = (name, fn) => { fn(); pass += 1; console.log(`PASS ${name}`); };
 
-check('toolbar exposes file open', () => assert.match(toolbar, /> <span>Megnyitás<\/span>/));
-check('toolbar exposes file download', () => assert.match(toolbar, /> <span>Letöltés<\/span>/));
-check('toolbar exposes folder ZIP download', () => assert.match(toolbar, /> <span>Mappa ZIP<\/span>/));
+check('toolbar exposes file open', () => { assert.match(toolbar, /onClick=\{onOpenSelected\}/); assert.match(toolbar, /aria-label="Megnyitás"/); });
+check('toolbar exposes file download', () => { assert.match(toolbar, /onClick=\{onDownloadSelected\}/); assert.match(toolbar, /aria-label="Letöltés"/); });
+check('toolbar exposes folder ZIP download', () => { assert.match(toolbar, /onClick=\{onDownloadFolder\}/); assert.match(toolbar, /aria-label="Mappa ZIP"/); });
 check('PDF and raster files use browser preview path', () => assert.match(workspace, /browserPreviewExtensions/));
 check('Word native protocol is supported', () => assert.match(workspace, /return "ms-word"/));
 check('Excel native protocol is supported', () => assert.match(workspace, /return "ms-excel"/));

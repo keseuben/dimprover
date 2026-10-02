@@ -3,17 +3,18 @@
 import { Send } from "lucide-react";
 import styles from "./DriveWorkspace.module.css";
 
-export default function DropActionButton() {
+export default function DropActionButton({ iconOnly = false }: { iconOnly?: boolean }) {
   return (
     <div className={styles.dropWrap}>
       <button
         type="button"
-        className={`${styles.toolButton} ${styles.dropButton}`}
+        className={`${styles.toolButton} ${styles.dropButton} ${iconOnly ? styles.toolIconOnly : ""}`}
         onClick={() => window.open("https://drop.dimpro.hu", "_blank", "noopener,noreferrer")}
-        aria-label="DIMPRO Drop megnyitása új lapon"
+        title="DROP küldés"
+        aria-label="DROP küldés"
       >
-        <Send size={14} />
-        <span>DROP küldés</span>
+        <Send size={iconOnly ? 16 : 14} />
+        {!iconOnly && <span>DROP küldés</span>}
       </button>
       <div className={styles.dropDescription} role="tooltip">
         <strong>DIMPRO Drop</strong>

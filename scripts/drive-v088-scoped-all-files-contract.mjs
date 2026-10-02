@@ -71,10 +71,12 @@ check("root selector is plain Dokumentumtár without global all-files label", ()
   assert.doesNotMatch(grid, /Dokumentumtár \/ összes fájl/);
 });
 
-check("all-files control is separate and unavailable at root", () => {
+check("all-files control is separate, icon-only, and unavailable at root", () => {
   assert.match(grid, /fileFolderAllFilesButton/);
   assert.match(grid, /disabled=\{!currentFolder \|\| !onAllFilesModeChange\}/);
-  assert.match(grid, /<span>Összes fájl<\/span>/);
+  assert.match(grid, /aria-label="Összes fájl"/);
+  assert.match(grid, /<Files size=\{14\} \/>/);
+  assert.doesNotMatch(grid, /<span>Összes fájl<\/span>/);
 });
 
 check("all-files mode hides child folder rows", () => {

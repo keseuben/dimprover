@@ -347,43 +347,91 @@ export default function BoxShelf({
                     </span>
                   )}
                 </div>
-                <div className={styles.boxCardStats}>{box.items.length} fájl · {formatBytes(totalBytes)}</div>
-                <div className={styles.boxCardActions}>
-                  <button type="button" onClick={() => setExpandedBoxId(expanded ? "" : box.id)}>{expanded ? "Bezárás" : "Megnyitás"}</button>
-                  <button type="button" onClick={() => setHistoryBoxId(historyBoxId === box.id ? "" : box.id)} title="CsomagBOX előzmények">
-                    <History size={11} /> Előzmények
+                <div className={styles.boxCardStats}>
+                  <span>{box.items.length} fájl · {formatBytes(totalBytes)}</span>
+                  <span className={styles.boxCardStatsActions}>
+                    {selectedDocument && canWrite && databaseReady && !selectedIncluded && (
+                      <button
+                        type="button"
+                        className={styles.boxCardMiniAction}
+                        onClick={() => void onAddDocument(box.id, selectedDocument)}
+                        disabled={busy}
+                        title="Kijelölt fájl hozzáadása"
+                        aria-label="Kijelölt fájl hozzáadása"
+                      >
+                        <Plus size={10} />
+                      </button>
+                    )}
+                    {selectedIncluded && <span className={styles.boxIncludedBadge} title="A kijelölt fájl már benne van a CsomagBOX-ban">✓</span>}
+                  </span>
+                </div>
+                <div className={styles.boxCardActions} aria-label={box.name + " műveletei"}>
+                  <button
+                    type="button"
+                    className={styles.boxCardActionIcon}
+                    onClick={() => setExpandedBoxId(expanded ? "" : box.id)}
+                    title={expanded ? "CsomagBOX bezárása" : "CsomagBOX megnyitása"}
+                    aria-label={expanded ? "CsomagBOX bezárása" : "CsomagBOX megnyitása"}
+                  >
+                    {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </button>
-                  {box.lifecycleFeatureReady && canWrite && onSetLifecycle && (
+                  <button
+                    type="button"
+                    className={styles.boxCardActionIcon}
+                    onClick={() => setHistoryBoxId(historyBoxId === box.id ? "" : box.id)}
+                    title="Előzmények"
+                    aria-label="Előzmények"
+                  >
+                    <History size={13} />
+                  </button>
+                  <span
+                    className={styles.boxLifecycleActionWrap}
+                    title={"Állapot: " + lifecycleConfig[box.lifecycleStatus].label}
+                    data-disabled={!box.lifecycleFeatureReady || !canWrite || !onSetLifecycle || busy ? "true" : "false"}
+                  >
+                    <PackageCheck size={13} className={styles.boxLifecycleActionIconGlyph} />
                     <select
-                      className={styles.boxLifecycleSelect}
+                      className={styles.boxLifecycleCompactSelect}
                       value={box.lifecycleStatus}
-                      onChange={(event) => void onSetLifecycle(box.id, event.target.value as DriveBoxLifecycleStatus)}
-                      disabled={busy}
-                      title="CsomagBOX állapot"
-                      aria-label={`${box.name} állapota`}
+                      onChange={(event) => void onSetLifecycle?.(box.id, event.target.value as DriveBoxLifecycleStatus)}
+                      disabled={!box.lifecycleFeatureReady || !canWrite || !onSetLifecycle || busy}
+                      aria-label={"Állapot: " + lifecycleConfig[box.lifecycleStatus].label}
                     >
                       {lifecycleTargets(box.lifecycleStatus).map((status) => (
                         <option key={status} value={status}>{lifecycleConfig[status].label}</option>
                       ))}
                     </select>
-                  )}
-                  {box.folderFeatureReady && canWrite && onCreateFolder && (
-                    <button type="button" onClick={() => void promptNewFolder(box.id)} disabled={busy} title="Új mappa a CsomagBOX-ban">
-                      <FolderPlus size={11} /> Mappa
-                    </button>
-                  )}
-                  {box.items.length > 0 && canWrite && onDownloadBox && (
-                    <button type="button" onClick={() => promptDownloadBox(box)} title="CsomagBOX letöltése ZIP fájlként">
-                      <Download size={11} /> ZIP
-                    </button>
-                  )}
-                  {box.purpose === "COMPARE" && box.items.length >= 2 && (
-                    <button type="button" onClick={() => onOpenCompareBox(box)}>Összevetés</button>
-                  )}
-                  {selectedDocument && canWrite && databaseReady && !selectedIncluded && (
-                    <button type="button" onClick={() => void onAddDocument(box.id, selectedDocument)} disabled={busy}>+ Kijelölt fájl</button>
-                  )}
-                  {selectedIncluded && <span className={styles.boxIncludedBadge}>Kijelölt fájl benne</span>}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.boxCardActionIcon}
+                    disabled={!box.folderFeatureReady || !canWrite || !onCreateFolder || busy}
+                    onClick={() => void promptNewFolder(box.id)}
+                    title="Új mappa a CsomagBOX-ban"
+                    aria-label="Új mappa a CsomagBOX-ban"
+                  >
+                    <FolderPlus size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.boxCardActionIcon}
+                    disabled={!box.items.length || !canWrite || !onDownloadBox}
+                    onClick={() => promptDownloadBox(box)}
+                    title="CsomagBOX letöltése ZIP fájlként"
+                    aria-label="CsomagBOX letöltése ZIP fájlként"
+                  >
+                    <Download size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.boxCardActionIcon}
+                    disabled={box.purpose !== "COMPARE" || box.items.length < 2}
+                    onClick={() => onOpenCompareBox(box)}
+                    title="Összevetés"
+                    aria-label="Összevetés"
+                  >
+                    <GitCompareArrows size={13} />
+                  </button>
                 </div>
                 {historyBoxId === box.id && (
                   <BoxHistoryPanel projectId={projectId} boxId={box.id} onClose={() => setHistoryBoxId("")} />
