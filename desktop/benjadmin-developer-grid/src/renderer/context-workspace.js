@@ -13,7 +13,18 @@
   const state = { config:null, tab:"resources", snapshot:{resources:[],handoffs:[],bindings:{},handoffRecords:{},resourceHealth:{}}, activeWork:{task:null,sessions:[],revision:0,updatedAt:"",reconciliation:null}, memory:null, workStartDraft:"", workStartProjectId:"project_dimprover", workStartModuleName:"Developer Grid V1", workStartWorkerCode:"", workStartChatMode:"EXISTING_CHAT", workLaunchDispatchMode:"AUTO", workStartAllowedPaths:"", taskBridge:null, taskBridgeBusy:false, workStartBusy:false, workResumeBusy:false, workStartKey:"", workStartStatus:"KÉSZ", workStartNotice:"", workStartNoticeTone:"info", navSection:"work", systemHealth:null, buildRuns:{schemaVersion:1,revision:0,runs:[],updatedAt:""}, buildBusy:false, evidence:{evidence:[],summary:null}, reviewGate:null, buildGate:null, closureGate:null, windowsE2E:null, vguard:null, reviewBusy:false, query:"", module:"all", documentType:"all", required:"all", priority:"all", worker:"all", status:"all", group:"module", busy:false, notice:"" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const fmtDate = v => { const d=new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString("hu-HU",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "—"; };
-  try { const savedLaunchMode=localStorage.getItem("benjadminWorkLaunchDispatchMode"); if(savedLaunchMode==="MANUAL"||savedLaunchMode==="AUTO") state.workLaunchDispatchMode=savedLaunchMode; } catch {}
+  try {
+    const migrationKey="benjadminWorkLaunchDispatchAutoMigrationV01100";
+    const migrated=localStorage.getItem(migrationKey)==="done";
+    if(!migrated){
+      state.workLaunchDispatchMode="AUTO";
+      localStorage.setItem("benjadminWorkLaunchDispatchMode","AUTO");
+      localStorage.setItem(migrationKey,"done");
+    }else{
+      const savedLaunchMode=localStorage.getItem("benjadminWorkLaunchDispatchMode");
+      if(savedLaunchMode==="MANUAL"||savedLaunchMode==="AUTO") state.workLaunchDispatchMode=savedLaunchMode;
+    }
+  } catch {}
   const workerDisplayName = code => ({ARMINAI:"ÁrminAI",OUTMINAI:"OutminAI",BENJAMINAI:"BenjáminAI",BENAI:"BenjáminAI",JAZMINAI:"JázminAI"}[String(code||"").toUpperCase()]||String(code||"AI"));
   const fmtDuration = m => { const n=Math.max(0,Number(m)||0), h=Math.floor(n/60); return h ? `${h} ó ${n%60} p` : `${n} p`; };
   const fmtBytes = v => Number(v)>=1048576 ? `${(Number(v)/1048576).toFixed(1)} MB` : Number(v)>=1024 ? `${Math.round(Number(v)/1024)} KB` : `${Number(v)||0} B`;

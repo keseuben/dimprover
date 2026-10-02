@@ -64,6 +64,8 @@ check("backend closes stale engine session and Grid session",()=>{
 });
 check("manual Central Core composer remains fallback while AUTO is default",()=>{
   assert.match(ui,/workLaunchDispatchMode:"AUTO"/);
+  assert.match(ui,/benjadminWorkLaunchDispatchAutoMigrationV01100/);
+  assert.match(ui,/localStorage\.setItem\("benjadminWorkLaunchDispatchMode","AUTO"\)/);
   assert.match(ui,/KÉZI KÖZPONTI KÜLDÉS · FALLBACK/);
   assert.match(ui,/AUTOMATIKUS KÜLDÉS · ALAPÉRTELMEZETT/);
   assert.match(ui,/Automatikus Chat-to-Grid vezérlés/);
