@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { resolveDeveloperGridReleaseDist } from "./release-dist.mjs";
 
 const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
 
@@ -48,6 +49,7 @@ export function createWindowsArtifactMarker({
   expectedBranch,
   version,
   buildId,
+  releaseDist = "",
 } = {}) {
   if (!/^[0-9a-f]{40}$/.test(String(expectedCommit || ""))) fail("WINDOWS_MARKER_EXPECTED_COMMIT_INVALID");
   if (!expectedBranch) fail("WINDOWS_MARKER_EXPECTED_BRANCH_INVALID");
@@ -63,8 +65,9 @@ export function createWindowsArtifactMarker({
   const pkg = readJson(path.join(desktop, "package.json"), "WINDOWS_MARKER_PACKAGE_INVALID");
   if (pkg.version !== version) fail("WINDOWS_MARKER_VERSION_MISMATCH");
 
-  const actualBuildId = fs.readFileSync(path.join(root, ".next", "BUILD_ID"), "utf8").trim();
-  const releaseMeta = readJson(path.join(root, ".next", ".dimpro-release.json"), "WINDOWS_MARKER_RELEASE_META_INVALID");
+  const distRoot = resolveDeveloperGridReleaseDist(root, releaseDist);
+  const actualBuildId = fs.readFileSync(path.join(distRoot, "BUILD_ID"), "utf8").trim();
+  const releaseMeta = readJson(path.join(distRoot, ".dimpro-release.json"), "WINDOWS_MARKER_RELEASE_META_INVALID");
   if (actualBuildId !== buildId || releaseMeta.buildId !== buildId || releaseMeta.gitCommit !== expectedCommit || releaseMeta.gitBranch !== expectedBranch) {
     fail("WINDOWS_MARKER_BUILD_PROVENANCE_MISMATCH");
   }
@@ -107,6 +110,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
       expectedBranch: arg("expected-branch"),
       version: arg("version"),
       buildId: arg("build-id"),
+      releaseDist: arg("release-dist"),
     });
     console.log(JSON.stringify({ ok: true, markerFile: result.markerFile, gitCommit: result.marker.gitCommit, buildId: result.marker.buildId, exe: result.marker.exe }, null, 2));
   } catch (error) {

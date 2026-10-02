@@ -4,6 +4,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { resolveDeveloperGridReleaseDist } from "./release-dist.mjs";
 
 export const RELEASE_ENGINE_SCHEMA_VERSION = 1;
 export const EXPECTED_HOST = "dimpro-dev";
@@ -308,11 +309,12 @@ async function inspectRelease(root, sourcePolicy = resolveReleaseSourcePolicy())
   if (sourceVersion !== `${version}-dev`) {
     fail("VERSION_CONTRACT_MISMATCH", `${sourceVersion || "NINCS"} != ${version}-dev`);
   }
-  const buildId = text(fs.readFileSync(requireFile(path.join(root, ".next/BUILD_ID"), "BUILD_ID_MISSING"), "utf8"));
+  const releaseDist = resolveDeveloperGridReleaseDist(root);
+  const buildId = text(fs.readFileSync(requireFile(path.join(releaseDist, "BUILD_ID"), "BUILD_ID_MISSING"), "utf8"));
   if (!buildId) fail("BUILD_ID_MISSING", "Üres BUILD_ID.");
-  const releaseMeta = readJson(path.join(root, ".next/.dimpro-release.json"), "RELEASE_METADATA_MISSING");
+  const releaseMeta = readJson(path.join(releaseDist, ".dimpro-release.json"), "RELEASE_METADATA_MISSING");
   validateReleaseMetadata({ buildId, head: identity.head, branch: identity.branch, releaseMeta });
-  requireFile(path.join(root, ".next/standalone/server.js"), "STANDALONE_RUNTIME_MISSING");
+  requireFile(path.join(releaseDist, "standalone/server.js"), "STANDALONE_RUNTIME_MISSING");
   const names = releaseFileNames(version);
   const exeFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist", names.exe), "WINDOWS_EXE_MISSING");
   const zipFile = requireFile(path.join(root, "desktop/benjadmin-developer-grid/dist-dev", names.zip), "DEV_ZIP_MISSING");
@@ -338,6 +340,7 @@ async function inspectRelease(root, sourcePolicy = resolveReleaseSourcePolicy())
     sourceWorktree: identity.worktree,
     sourceRepository: identity.repository,
     buildId,
+    releaseDist: path.relative(root, releaseDist).replaceAll("\\", "/"),
     buildGeneratedAt: text(releaseMeta.generatedAt) || null,
     releaseMetadata: "VERIFIED",
     standalone: "VERIFIED",

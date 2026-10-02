@@ -3,6 +3,10 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="$(git -C "$ROOT" rev-parse --show-toplevel)"
 VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$ROOT/package.json")"
+RELEASE_DIST="${BENJADMIN_DEV_RELEASE_DIST:-$REPO/.next}"
+RELEASE_DIST="$(readlink -f "$RELEASE_DIST")"
+NEXT_ROOT="$(readlink -f "$REPO/.next")"
+case "$RELEASE_DIST" in "$NEXT_ROOT"|"$NEXT_ROOT"/*) ;; *) echo "BLOCKED · RELEASE_DIST_OUTSIDE_NEXT_DENIED" >&2; exit 48 ;; esac
 NAME="BENJADMIN-Developer-Grid-v${VERSION}-DEV"
 OUT_DIR="${1:-$ROOT/dist-dev}"
 TMP="$(mktemp -d)"
@@ -19,7 +23,7 @@ BENJADMIN Developer Grid v${VERSION} DEV
 DEV ONLY · PROD DENY
 Commit: $(git -C "$REPO" rev-parse HEAD)
 Branch: $(git -C "$REPO" branch --show-current)
-Build ID: $(cat "$REPO/.next/BUILD_ID" 2>/dev/null || echo NINCS)
+Build ID: $(cat "$RELEASE_DIST/BUILD_ID" 2>/dev/null || echo NINCS)
 Desktop build: cd desktop/benjadmin-developer-grid && npm ci && npm run check && npm run dist:win
 TXT
 python3 - "$STAGE" "$OUT_DIR/${NAME}.zip" <<'PYZIP'
@@ -35,8 +39,8 @@ PYZIP
 sha256sum "$OUT_DIR/${NAME}.zip" > "$OUT_DIR/${NAME}.zip.sha256"
 HEAD="$(git -C "$REPO" rev-parse HEAD)"
 BRANCH="$(git -C "$REPO" branch --show-current)"
-BUILD_ID="$(cat "$REPO/.next/BUILD_ID" 2>/dev/null || true)"
+BUILD_ID="$(cat "$RELEASE_DIST/BUILD_ID" 2>/dev/null || true)"
 [[ -n "$BUILD_ID" ]] || { echo "BLOCKED · BUILD_ID_MISSING" >&2; exit 48; }
-node "$REPO/scripts/developer-grid/write-package-session-marker.mjs" --root="$REPO" --expected-commit="$HEAD" --expected-branch="$BRANCH" --version="$VERSION" --build-id="$BUILD_ID" --zip-file="$OUT_DIR/${NAME}.zip"
+node "$REPO/scripts/developer-grid/write-package-session-marker.mjs" --root="$REPO" --expected-commit="$HEAD" --expected-branch="$BRANCH" --version="$VERSION" --build-id="$BUILD_ID" --zip-file="$OUT_DIR/${NAME}.zip" --release-dist="$RELEASE_DIST"
 echo "$OUT_DIR/${NAME}.zip"
 cat "$OUT_DIR/${NAME}.zip.sha256"

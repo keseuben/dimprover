@@ -30,9 +30,13 @@ node "$STORAGE_ADMISSION" --operation windows-package || fail "WINDOWS_STORAGE_A
 
 VERSION="$(node -p "require('$DESKTOP/package.json').version")"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "WINDOWS_VERSION_INVALID" 47
-BUILD_ID="$(cat "$ROOT/.next/BUILD_ID" 2>/dev/null || true)"
+RELEASE_DIST="${BENJADMIN_DEV_RELEASE_DIST:-$ROOT/.next}"
+RELEASE_DIST="$(readlink -f "$RELEASE_DIST")"
+NEXT_ROOT="$(readlink -f "$ROOT/.next")"
+case "$RELEASE_DIST" in "$NEXT_ROOT"|"$NEXT_ROOT"/*) ;; *) fail "RELEASE_DIST_OUTSIDE_NEXT_DENIED" 48 ;; esac
+BUILD_ID="$(cat "$RELEASE_DIST/BUILD_ID" 2>/dev/null || true)"
 [[ -n "$BUILD_ID" ]] || fail "BUILD_ID_MISSING" 48
-node - "$ROOT/.next/.dimpro-release.json" "$HEAD" "$EXPECTED_BRANCH" "$BUILD_ID" <<'NODE' || exit 49
+node - "$RELEASE_DIST/.dimpro-release.json" "$HEAD" "$EXPECTED_BRANCH" "$BUILD_ID" <<'NODE' || exit 49
 const fs = require("node:fs");
 const [file, head, branch, buildId] = process.argv.slice(2);
 let meta;
@@ -56,5 +60,5 @@ export DIMPRO_OPERATION_TASK="${DIMPRO_OPERATION_TASK:-Developer Grid v${VERSION
 export DIMPRO_WORKER_CODE="OUTMINAI"
 
 "$ROOT/scripts/dimpro-coordinated-operation.sh" build -- \
-  bash -lc 'set -Eeuo pipefail; ROOT="$1"; HEAD="$2"; BRANCH="$3"; VERSION="$4"; BUILD_ID="$5"; DESKTOP="$ROOT/desktop/benjadmin-developer-grid"; rm -f "$DESKTOP/dist/.dimpro-windows-artifact.json"; cd "$DESKTOP"; npm run dist:win; node "$ROOT/scripts/developer-grid/write-windows-artifact-marker.mjs" --root="$ROOT" --expected-commit="$HEAD" --expected-branch="$BRANCH" --version="$VERSION" --build-id="$BUILD_ID"' \
-  _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$VERSION" "$BUILD_ID"
+  bash -lc 'set -Eeuo pipefail; ROOT="$1"; HEAD="$2"; BRANCH="$3"; VERSION="$4"; BUILD_ID="$5"; RELEASE_DIST="$6"; DESKTOP="$ROOT/desktop/benjadmin-developer-grid"; cd "$DESKTOP"; npm run dist:win; node "$ROOT/scripts/developer-grid/write-windows-artifact-marker.mjs" --root="$ROOT" --release-dist="$RELEASE_DIST" --expected-commit="$HEAD" --expected-branch="$BRANCH" --version="$VERSION" --build-id="$BUILD_ID"' \
+  _ "$ROOT" "$HEAD" "$EXPECTED_BRANCH" "$VERSION" "$BUILD_ID" "$RELEASE_DIST"

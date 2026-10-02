@@ -539,6 +539,14 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - PROD DENY változatlan.
 - Regression contract: `central-core-recovery-v0194-contract.mjs` · 7/7 PASS.
 
+## v0.1.97 · Candidate-dist aware release pipeline
+
+- Windows EXE, DEV ZIP és release artifact pipeline explicit `BENJADMIN_DEV_RELEASE_DIST` forrást támogat.
+- A release dist kizárólag a canonical worktree `.next/**` fáján belül lehet; path/symlink escape fail-closed.
+- A Windows/package session marker és release engine ugyanazt a candidate BUILD_ID + `.dimpro-release.json` provenance-t ellenőrzi.
+- A Windows packaging nem végez előzetes ad-hoc marker törlést.
+- DEV ONLY · PROD DENY.
+
 ## v0.1.96 · Conversation Continuity V2 + kötelező fejlesztési időmérés
 
 - A successor ChatGPT csevegés `ACK_WAIT` alatt csak **CANDIDATE**; az előző conversation marad authoritative a teljes Continuation Capsule ACK validációig.

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { resolveDeveloperGridReleaseDist } from "./release-dist.mjs";
 
 const CANONICAL_ROOT = "/srv/dimpro-dev/worktrees/benjadmin-developer-grid-v013-outminai-20260905";
 const CANONICAL_BRANCH = "feature/benjadmin-developer-grid-v013-outminai-20260905";
@@ -12,7 +13,7 @@ function git(root, args) { return execFileSync("git", ["-C", root, ...args], { e
 function readJson(file, code) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { fail(code, file); } }
 function sha256(file) { const h = crypto.createHash("sha256"); const fd = fs.openSync(file, "r"); const b = Buffer.allocUnsafe(1024 * 1024); try { let n; do { n = fs.readSync(fd, b, 0, b.length, null); if (n) h.update(b.subarray(0, n)); } while (n); } finally { fs.closeSync(fd); } return h.digest("hex"); }
 
-export function createPackageSessionMarker({ root = CANONICAL_ROOT, expectedCommit, expectedBranch = CANONICAL_BRANCH, version, buildId, zipFile: explicitZipFile = "" } = {}) {
+export function createPackageSessionMarker({ root = CANONICAL_ROOT, expectedCommit, expectedBranch = CANONICAL_BRANCH, version, buildId, zipFile: explicitZipFile = "", releaseDist = "" } = {}) {
   if (!/^[0-9a-f]{40}$/.test(String(expectedCommit || ""))) fail("PACKAGE_SESSION_EXPECTED_COMMIT_INVALID");
   if (!expectedBranch) fail("PACKAGE_SESSION_EXPECTED_BRANCH_INVALID");
   if (!/^\d+\.\d+\.\d+$/.test(String(version || ""))) fail("PACKAGE_SESSION_VERSION_INVALID");
@@ -27,8 +28,9 @@ export function createPackageSessionMarker({ root = CANONICAL_ROOT, expectedComm
   const pkg = readJson(path.join(desktop, "package.json"), "PACKAGE_SESSION_PACKAGE_INVALID");
   if (pkg.version !== version) fail("PACKAGE_SESSION_VERSION_MISMATCH");
 
-  const actualBuildId = fs.readFileSync(path.join(root, ".next", "BUILD_ID"), "utf8").trim();
-  const releaseMeta = readJson(path.join(root, ".next", ".dimpro-release.json"), "PACKAGE_SESSION_RELEASE_META_INVALID");
+  const distRoot = resolveDeveloperGridReleaseDist(root, releaseDist);
+  const actualBuildId = fs.readFileSync(path.join(distRoot, "BUILD_ID"), "utf8").trim();
+  const releaseMeta = readJson(path.join(distRoot, ".dimpro-release.json"), "PACKAGE_SESSION_RELEASE_META_INVALID");
   if (actualBuildId !== buildId || releaseMeta.buildId !== buildId || releaseMeta.gitCommit !== expectedCommit || releaseMeta.gitBranch !== expectedBranch) fail("PACKAGE_SESSION_BUILD_PROVENANCE_MISMATCH");
 
   const windowsMarker = readJson(path.join(desktop, "dist", ".dimpro-windows-artifact.json"), "PACKAGE_SESSION_WINDOWS_MARKER_MISSING");
@@ -65,7 +67,7 @@ export function createPackageSessionMarker({ root = CANONICAL_ROOT, expectedComm
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
   try {
-    const result = createPackageSessionMarker({ root: arg("root") || CANONICAL_ROOT, expectedCommit: arg("expected-commit"), expectedBranch: arg("expected-branch") || CANONICAL_BRANCH, version: arg("version"), buildId: arg("build-id"), zipFile: arg("zip-file") });
+    const result = createPackageSessionMarker({ root: arg("root") || CANONICAL_ROOT, expectedCommit: arg("expected-commit"), expectedBranch: arg("expected-branch") || CANONICAL_BRANCH, version: arg("version"), buildId: arg("build-id"), zipFile: arg("zip-file"), releaseDist: arg("release-dist") });
     console.log(JSON.stringify({ ok: true, markerFile: result.markerFile, packageSessionId: result.marker.packageSessionId, gitCommit: result.marker.gitCommit, buildId: result.marker.buildId, exe: result.marker.exe, devZip: result.marker.devZip }, null, 2));
   } catch (error) { console.error(`BLOCKED · ${error?.code || "PACKAGE_SESSION_MARKER_FAILED"}`); process.exitCode = 1; }
 }
