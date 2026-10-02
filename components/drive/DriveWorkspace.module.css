@@ -610,7 +610,7 @@
 .boxComposerBody input:focus,.boxComposerBody select:focus { border-color: #86b3f1; box-shadow: 0 0 0 2px rgba(17,103,238,0.07); }
 .boxComposerCreate { height: 31px; border: 1px solid #1167ee; background: #1167ee; color: white; border-radius: 7px; padding: 0 12px; font-size: var(--drive-font-xs); font-weight: 900; cursor: pointer; }
 .boxComposerCreate:disabled { opacity: .45; cursor: not-allowed; }
-.boxCards { display: flex; align-items: flex-start; gap: 8px; margin-top: 5px; overflow-x: auto; overflow-y: visible; padding: 0 0 3px; }
+.boxCards { min-width: 0; flex: 1 1 auto; display: flex; align-items: flex-start; gap: 8px; margin-top: 0; overflow-x: auto; overflow-y: visible; padding: 0 0 3px; }
 .boxCard { position: relative; min-width: 198px; max-width: 244px; min-height: 82px; border: 1px solid #b8d4ff; border-radius: 8px; background: linear-gradient(145deg,#fbfdff,#edf5ff); padding: 6px 7px; display: flex; flex-direction: column; gap: 4px; transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; }
 .boxCard:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgba(20,50,85,0.08); }
 .boxCardBlue { border-color: #9fc3ff; background: linear-gradient(145deg,#fbfdff,#edf5ff); }
@@ -3009,6 +3009,33 @@
 .boxShelfPanel .boxShelfHeader { flex: 0 0 auto; }
 .boxShelfPanel .boxComposer { flex: 0 0 auto; }
 .boxShelfPanel .boxComposerBody { grid-template-columns: 1fr; }
+.boxShelfPanel .boxShelfContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.boxShelfPanel .boxLifecycleFilters {
+  flex: 0 0 auto;
+  width: 100%;
+  max-height: none;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 2px;
+}
+.boxShelfPanel .boxLifecycleFilters button {
+  width: auto;
+  min-width: max-content;
+  min-height: 23px;
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+
 .boxShelfPanel .boxCards {
   flex: 1 1 auto;
   min-height: 0;
@@ -3365,37 +3392,64 @@
 .boxItemFolderSelect:disabled { opacity: .55; cursor: default; }
 
 /* Drive V0.6.9 · CsomagBOX lifecycle / history */
-.boxLifecycleFilters {
+.boxShelfContent {
+  min-width: 0;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 5px;
+}
+.boxLifecycleFilters {
+  flex: 0 0 88px;
+  width: 88px;
+  max-height: 108px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 3px;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 2px 0 0;
 }
 .boxLifecycleFilters button {
-  flex: 0 0 auto;
-  min-height: 26px;
+  width: 100%;
+  min-height: 19px;
   border: 1px solid #d5e0e9;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #fff;
   color: #5b7084;
-  padding: 3px 8px;
+  padding: 1px 4px 1px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   font-size: var(--drive-font-xs);
   font-weight: 800;
+  line-height: 1.05;
   cursor: pointer;
+}
+.boxLifecycleFilters button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .boxLifecycleFilters button:hover { border-color: #9dbbd5; background: #f3f8fc; color: #315f87; }
 .boxLifecycleFilters button b {
-  min-width: 16px;
+  min-width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  margin-left: 3px;
-  padding: 1px 4px;
+  margin: 0;
+  padding: 0 3px;
   border-radius: 999px;
   background: #edf3f8;
   color: #526c83;
-  font-size: var(--drive-font-xs);
+  font-size: 9px;
+  line-height: 1;
 }
 .boxLifecycleFilters .boxLifecycleFilterActive {
   border-color: #4387c5;

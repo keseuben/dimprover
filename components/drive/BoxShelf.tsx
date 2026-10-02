@@ -303,26 +303,27 @@ export default function BoxShelf({
         </div>
       )}
 
-      {open && lifecycleFeatureReady && (
-        <nav className={styles.boxLifecycleFilters} aria-label="CsomagBOX állapotszűrő">
-          <button type="button" className={lifecycleFilter === "ALL" ? styles.boxLifecycleFilterActive : ""} onClick={() => setLifecycleFilter("ALL")}>
-            Mind <b>{boxes.length}</b>
-          </button>
-          {lifecycleOrder.map((status) => (
-            <button
-              type="button"
-              key={status}
-              className={lifecycleFilter === status ? styles.boxLifecycleFilterActive : ""}
-              onClick={() => setLifecycleFilter(status)}
-            >
-              {lifecycleConfig[status].shortLabel} <b>{lifecycleCounts[status]}</b>
-            </button>
-          ))}
-        </nav>
-      )}
-
       {open && (
-        <div className={styles.boxCards}>
+        <div className={styles.boxShelfContent}>
+          {lifecycleFeatureReady && (
+            <nav className={styles.boxLifecycleFilters} aria-label="CsomagBOX állapotszűrő">
+              <button type="button" className={lifecycleFilter === "ALL" ? styles.boxLifecycleFilterActive : ""} onClick={() => setLifecycleFilter("ALL")}>
+                <span>Mind</span><b>{boxes.length}</b>
+              </button>
+              {lifecycleOrder.map((status) => (
+                <button
+                  type="button"
+                  key={status}
+                  className={lifecycleFilter === status ? styles.boxLifecycleFilterActive : ""}
+                  onClick={() => setLifecycleFilter(status)}
+                >
+                  <span>{lifecycleConfig[status].shortLabel}</span><b>{lifecycleCounts[status]}</b>
+                </button>
+              ))}
+            </nav>
+          )}
+
+          <div className={styles.boxCards}>
           {visibleBoxes.map((box) => {
             const config = purposeConfig[box.purpose] || purposeConfig.GENERAL;
             const Icon = config.icon;
@@ -512,6 +513,7 @@ export default function BoxShelf({
               <Plus size={22} /><span>Új CsomagBOX</span>
             </button>
           )}
+          </div>
         </div>
       )}
     </section>

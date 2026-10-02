@@ -107,6 +107,27 @@ check("selected-document add action moved outside six-icon strip", () => {
   assert.match(box, /title="Kijelölt fájl hozzáadása"/);
 });
 
+
+check("CsomagBOX lifecycle filters sit before cards in one shelf content row", () => {
+  assert.match(box, /boxShelfContent[\s\S]*?boxLifecycleFilters[\s\S]*?boxCards/);
+  assert.match(css, /\.boxShelfContent {[\s\S]*?display: flex;[\s\S]*?gap: 8px;/);
+});
+
+check("shelf lifecycle filters are a compact left column", () => {
+  assert.match(css, /\.boxLifecycleFilters {[\s\S]*?flex: 0 0 88px;[\s\S]*?width: 88px;[\s\S]*?grid-template-columns: 1fr;/);
+  assert.match(css, /\.boxLifecycleFilters button {[\s\S]*?min-height: 19px;/);
+});
+
+check("CsomagBOX cards use all remaining shelf width", () => {
+  assert.match(css, /\.boxCards {[^}]*min-width: 0;[^}]*flex: 1 1 auto;/);
+  assert.match(css, /\.boxCards {[^}]*margin-top: 0;/);
+});
+
+check("panel variant keeps lifecycle filters horizontal", () => {
+  assert.match(css, /\.boxShelfPanel \.boxShelfContent {[\s\S]*?flex-direction: column;/);
+  assert.match(css, /\.boxShelfPanel \.boxLifecycleFilters {[\s\S]*?flex-direction: row;/);
+});
+
 console.log(JSON.stringify({
   ok: true,
   contract: "DIMPRO Drive V0.8.9 Compact Toolbar + CsomagBOX",
