@@ -4,6 +4,7 @@ import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
 import { normalizeDriveFileName, normalizeDriveFolderName } from "./nameNormalizer";
 import { normalizeDriveExportAlias } from "./exportNaming";
+import { normalizeDriveMetadataOptions } from "./metadataOptions";
 import {
   DRIVE_CORE_BOOTSTRAP_ID,
   DRIVE_CORE_MIGRATION_COUNT,
@@ -17,6 +18,9 @@ import type {
   DriveDocumentSource,
   DriveDocumentVersion,
   DriveFolder,
+  DriveMetadataOptions,
+  DriveNumberingOrigin,
+  DriveProjectSettings,
   DriveVersionKind,
   DriveSyncCursor,
   DriveTree,
@@ -39,10 +43,20 @@ type DbDocument = {
 type DbVersion = {
   id: string; project_id: string; document_id: string; version_number: number; revision_code: string;
   revision_number?: number | string | null; version_kind?: string | null; revision_reason?: string | null; revision_date?: string | null;
+  numbering_origin?: string | null; numbering_correction_reason?: string | null;
+  numbering_corrected_by?: string | null; numbering_corrected_at?: string | null;
   original_name: string; mime_type: string; size_bytes: number | string; sha256: string | null;
   storage_provider: DriveDocumentVersion["storageProvider"]; storage_bucket: string | null; storage_key: string | null;
   status: DriveDocumentVersion["status"]; change_note: string; created_by: string; created_at: string;
 };
+type DbProjectSettings = {
+  project_id: string;
+  metadata_options: Record<string, unknown> | null;
+  updated_by: string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type DbChange = {
   sequence: number | string; id: string; project_id: string; event_type: string;
   entity_type: DriveChangeEvent["entityType"]; entity_id: string; payload: Record<string, unknown> | null;
@@ -121,6 +135,10 @@ function driveVersionKind(value: string | null | undefined, versionNumber: numbe
   if (value === "INITIAL" || value === "REVISION") return value;
   return versionNumber === 1 ? "INITIAL" : "VERSION";
 }
+function driveNumberingOrigin(value: string | null | undefined): DriveNumberingOrigin {
+  if (value === "IMPORTED" || value === "CORRECTED") return value;
+  return "SYSTEM";
+}
 function mapVersion(row: DbVersion): DriveDocumentVersion {
   const versionNumber = Number(row.version_number);
   const revisionNumber = row.revision_number == null ? legacyRevisionNumber(row.revision_code) : Number(row.revision_number || 0);
@@ -129,6 +147,10 @@ function mapVersion(row: DbVersion): DriveDocumentVersion {
     versionNumber, revisionNumber, revisionCode: row.revision_code || ("R" + String(revisionNumber).padStart(2, "0")),
     versionKind: driveVersionKind(row.version_kind, versionNumber),
     revisionReason: row.revision_reason || "", revisionDate: row.revision_date || null,
+    numberingOrigin: driveNumberingOrigin(row.numbering_origin),
+    numberingCorrectionReason: row.numbering_correction_reason || "",
+    numberingCorrectedBy: row.numbering_corrected_by || null,
+    numberingCorrectedAt: row.numbering_corrected_at || null,
     originalName: row.original_name, mimeType: row.mime_type, sizeBytes: Number(row.size_bytes || 0),
     sha256: row.sha256, storageProvider: row.storage_provider, storageBucket: row.storage_bucket,
     storageKey: row.storage_key, status: row.status, changeNote: row.change_note || "",
@@ -510,6 +532,89 @@ export async function addDriveDocumentVersion(
   const result = data as { document: DbDocument; version: DbVersion };
   const mappedVersion = mapVersion(result.version);
   return { ok: true as const, document: mapDocument(result.document, mappedVersion), version: mappedVersion };
+}
+
+function mapProjectSettings(projectId: string, row: DbProjectSettings | null): DriveProjectSettings {
+  return {
+    projectId,
+    metadataOptions: normalizeDriveMetadataOptions(row?.metadata_options),
+    updatedBy: row?.updated_by || "",
+    createdAt: row?.created_at || null,
+    updatedAt: row?.updated_at || null,
+  };
+}
+
+export async function getDriveProjectSettings(projectId: string) {
+  const client = await requireReadyClient();
+  const { data, error } = await client
+    .from("drive_core_project_settings")
+    .select("project_id,metadata_options,updated_by,created_at,updated_at")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) databaseError("A DRIVE projektbeállítások nem tölthetők be.", error);
+  return mapProjectSettings(projectId, data as DbProjectSettings | null);
+}
+
+export async function updateDriveProjectSettings(projectId: string, metadataOptions: DriveMetadataOptions | unknown, actorUserId: string) {
+  const client = await requireReadyClient();
+  const normalized = normalizeDriveMetadataOptions(metadataOptions);
+  const { data, error } = await client.rpc("drive_core_upsert_project_settings_atomic", {
+    p_project_id: projectId,
+    p_metadata_options: normalized,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) databaseError("A DRIVE projekt metaadat-listái nem menthetők.", error);
+  return mapProjectSettings(projectId, data as DbProjectSettings);
+}
+
+export async function updateDriveVersionNumbering(input: {
+  projectId: string;
+  documentId: string;
+  versionId: string;
+  mode: "IMPORT" | "CORRECT";
+  versionNumber: number;
+  revisionNumber: number;
+  reason: string;
+  actorUserId: string;
+}) {
+  const client = await requireReadyClient();
+  const { data, error } = await client.rpc("drive_core_update_version_numbering_atomic", {
+    p_project_id: input.projectId,
+    p_document_id: input.documentId,
+    p_version_id: input.versionId,
+    p_mode: input.mode,
+    p_version_number: normalizeInteger(input.versionNumber, 0, 1, 9999),
+    p_revision_number: normalizeInteger(input.revisionNumber, 0, 0, 9999),
+    p_reason: normalizeText(input.reason).slice(0, 1000),
+    p_actor_user_id: input.actorUserId,
+  });
+  if (error) {
+    const marker = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toUpperCase();
+    const conflict = [
+      "DRIVE_NUMBERING_CURRENT_VERSION_REQUIRED",
+      "DRIVE_NUMBERING_ISSUED_VERSION_LOCKED",
+      "DRIVE_NUMBERING_ACTIVE_UPLOAD_CONFLICT",
+      "DRIVE_NUMBERING_IMPORT_INITIAL_ONLY",
+      "DRIVE_NUMBERING_VERSION_CONFLICT",
+    ].find((value) => marker.includes(value));
+    if (conflict) {
+      throw new DriveCoreRepositoryError(
+        conflict === "DRIVE_NUMBERING_ISSUED_VERSION_LOCKED"
+          ? "A már formálisan kiadott dokumentumverzió számozása nem módosítható. Készíts új revíziót."
+          : conflict === "DRIVE_NUMBERING_IMPORT_INITIAL_ONLY"
+            ? "Importált kezdő számozás csak az egyetlen, kezdeti dokumentumverzión állítható be."
+            : conflict === "DRIVE_NUMBERING_VERSION_CONFLICT"
+              ? "Ez a verziószám már foglalt ennél a dokumentumnál."
+              : "A számozás most nem módosítható, mert a dokumentum állapota időközben megváltozott.",
+        conflict,
+        409,
+      );
+    }
+    databaseError("A dokumentum verzió-/revíziószámozása nem módosítható.", error);
+  }
+  const result = data as { document: DbDocument; version: DbVersion };
+  const version = mapVersion(result.version);
+  return { document: mapDocument(result.document, version), version };
 }
 
 export async function listDriveChanges(projectId: string, cursor = 0, limit = 100) {

@@ -67,6 +67,10 @@ type DriveVersion = {
   versionKind: "INITIAL" | "VERSION" | "REVISION";
   revisionReason: string;
   revisionDate: string | null;
+  numberingOrigin: "SYSTEM" | "IMPORTED" | "CORRECTED";
+  numberingCorrectionReason: string;
+  numberingCorrectedBy: string | null;
+  numberingCorrectedAt: string | null;
   originalName: string;
   mimeType: string;
   sizeBytes: number;

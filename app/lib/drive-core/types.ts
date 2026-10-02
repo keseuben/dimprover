@@ -79,6 +79,7 @@ export type DriveDocumentStatus = "ACTIVE" | "ARCHIVED" | "DELETED";
 export type DriveDocumentSource = "WEB" | "DESKTOP" | "DROP" | "SYSTEM";
 export type DriveVersionStatus = "METADATA_ONLY" | "STAGED" | "AVAILABLE" | "QUARANTINED" | "REJECTED";
 export type DriveVersionKind = "INITIAL" | "VERSION" | "REVISION";
+export type DriveNumberingOrigin = "SYSTEM" | "IMPORTED" | "CORRECTED";
 export type DriveStorageProvider = "METADATA_ONLY" | "LOCAL_PREVIEW" | "S3";
 
 export type DriveFolder = {
@@ -110,6 +111,10 @@ export type DriveDocumentVersion = {
   versionKind: DriveVersionKind;
   revisionReason: string;
   revisionDate: string | null;
+  numberingOrigin: DriveNumberingOrigin;
+  numberingCorrectionReason: string;
+  numberingCorrectedBy: string | null;
+  numberingCorrectedAt: string | null;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -139,6 +144,26 @@ export type DriveDocument = {
   createdAt: string;
   updatedAt: string;
   currentVersion: DriveDocumentVersion | null;
+};
+
+export type DriveMetadataOptionKey =
+  | "discipline"
+  | "documentType"
+  | "issueStatus"
+  | "approvalStatus"
+  | "building"
+  | "level"
+  | "zone"
+  | "topic";
+
+export type DriveMetadataOptions = Record<DriveMetadataOptionKey, string[]>;
+
+export type DriveProjectSettings = {
+  projectId: string;
+  metadataOptions: DriveMetadataOptions;
+  updatedBy: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type DriveChangeEntityType =

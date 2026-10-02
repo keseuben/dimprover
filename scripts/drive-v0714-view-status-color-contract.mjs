@@ -6,12 +6,17 @@ const css = fs.readFileSync("components/drive/DriveWorkspace.module.css", "utf8"
 let pass = 0;
 const check = (label, fn) => { fn(); pass += 1; console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`); };
 
-check("Simple view has dedicated row status resolver", () => assert.match(panel, /function simpleRowStatusClass\(document: DriveDocument\)/));
-check("Simple view maps AVAILABLE", () => assert.match(panel, /status === "AVAILABLE"\) return styles\.rowSimpleAvailable/));
-check("Simple view maps QUARANTINED", () => assert.match(panel, /status === "QUARANTINED"\) return styles\.rowSimpleQuarantine/));
-check("Simple view maps REJECTED", () => assert.match(panel, /status === "REJECTED"\) return styles\.rowSimpleRejected/));
-check("Simple view maps processing states", () => assert.match(panel, /status === "STAGED" \|\| status === "METADATA_ONLY"/));
-check("Simple row renderer uses file status resolver", () => assert.match(panel, /simpleRowStatusClass\(document\)/));
+check("Simple view has no file-status row coloring resolver", () => assert.doesNotMatch(panel, /function simpleRowStatusClass\(/));
+check("Simple row renderer does not use file-status row classes", () => {
+  for (const className of ["rowSimpleAvailable", "rowSimpleQuarantine", "rowSimpleRejected", "rowSimpleProcessing"]) {
+    assert.doesNotMatch(panel, new RegExp(`styles\\.${className}`));
+  }
+});
+check("Simple view keeps status color inside the status badge", () => {
+  assert.match(panel, /styles\.statusBadge/);
+  assert.match(panel, /styles\.statusAvailable/);
+  assert.match(panel, /styles\.statusQuarantine/);
+});
 
 check("Engineering view has dedicated lifecycle resolver", () => assert.match(panel, /function engineeringRowStatusClass\(metadata: DriveEngineeringMetadata \| undefined\)/));
 check("Engineering maps working current approved archive", () => {
@@ -37,8 +42,8 @@ check("Simple legend is file-status specific", () => assert.match(panel, /aria-l
 check("Engineering legend is lifecycle specific", () => assert.match(panel, /aria-label="Műszaki tervállapot jelmagyarázat"/));
 check("Review legend explains row color semantics", () => assert.match(panel, /Sor: szürke várakozó · kék ellenőrzés alatt · narancs visszaadva · zöld jóváhagyott · szürke archív/));
 
-check("Simple CSS defines four status row classes", () => {
-  for (const className of ["rowSimpleAvailable", "rowSimpleQuarantine", "rowSimpleRejected", "rowSimpleProcessing"]) assert.match(css, new RegExp(`\\.${className} td`));
+check("Simple CSS no longer defines file-status row background classes", () => {
+  for (const className of ["rowSimpleAvailable", "rowSimpleQuarantine", "rowSimpleRejected", "rowSimpleProcessing"]) assert.doesNotMatch(css, new RegExp(`\\.${className} td`));
 });
 check("Engineering CSS defines four lifecycle row classes", () => {
   for (const className of ["rowEngineeringWorking", "rowEngineeringCurrent", "rowEngineeringApprovedCurrent", "rowEngineeringArchive"]) assert.match(css, new RegExp(`\\.${className} td`));
@@ -56,7 +61,7 @@ check("Status coloring stays client-side only", () => {
 
 console.log(JSON.stringify({
   ok: true,
-  contract: "DIMPRO Drive V0.7.14 view-dependent status coloring",
+  contract: "DIMPRO Drive V0.8.4 view-dependent status coloring",
   pass,
   fail: 0,
   productionAccess: "DENY",

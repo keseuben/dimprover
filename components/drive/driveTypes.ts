@@ -47,6 +47,8 @@ export type DriveFolder = {
   topic?: string;
 };
 
+export type DriveNumberingOrigin = "SYSTEM" | "IMPORTED" | "CORRECTED";
+
 export type DriveVersion = {
   id: string;
   versionNumber: number;
@@ -55,6 +57,10 @@ export type DriveVersion = {
   versionKind: "INITIAL" | "VERSION" | "REVISION";
   revisionReason: string;
   revisionDate: string | null;
+  numberingOrigin: DriveNumberingOrigin;
+  numberingCorrectionReason: string;
+  numberingCorrectedBy: string | null;
+  numberingCorrectedAt: string | null;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -112,6 +118,26 @@ export type DriveEngineeringMetadata = {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DriveMetadataOptionKey =
+  | "discipline"
+  | "documentType"
+  | "issueStatus"
+  | "approvalStatus"
+  | "building"
+  | "level"
+  | "zone"
+  | "topic";
+
+export type DriveMetadataOptions = Record<DriveMetadataOptionKey, string[]>;
+
+export type DriveProjectSettings = {
+  projectId: string;
+  metadataOptions: DriveMetadataOptions;
+  updatedBy: string;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type DriveFileNote = {

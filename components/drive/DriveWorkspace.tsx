@@ -34,7 +34,9 @@ import type {
   DriveIssueAccessLink,
   DriveFolder,
   DriveLayoutMode,
+  DriveMetadataOptions,
   DrivePermission,
+  DriveProjectSettings,
   DriveStorageQuota,
   DriveTree,
   DriveViewMode,
@@ -167,8 +169,9 @@ export default function DriveWorkspace({
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
+  const [projectSettings, setProjectSettings] = useState<DriveProjectSettings | null>(null);
   const [reviewFocus, setReviewFocus] = useState("");
-  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "scales" } | null>(null);
+  const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "scales" | "numbering" } | null>(null);
   const [boxShelfOpen, setBoxShelfOpen] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
@@ -205,6 +208,7 @@ export default function DriveWorkspace({
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
+  const canConfigureDataLists = effectivePermissions.includes("project.update");
   const securityReady = Boolean(health?.security?.ready);
 
   const closeTableFullscreen = useCallback(() => {
@@ -284,16 +288,18 @@ export default function DriveWorkspace({
     setLoading(true);
     setError("");
     try {
-      const [healthResponse, treeResponse, metadataResponse, storageResponse] = await Promise.all([
+      const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse] = await Promise.all([
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/health`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/settings`, { credentials: "same-origin", cache: "no-store" }),
       ]);
       const healthPayload = await healthResponse.json() as DriveHealth;
       const treePayload = await treeResponse.json() as TreePayload;
       const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
       const storagePayload = await storageResponse.json().catch(() => ({})) as { ok?: boolean; storage?: DriveStorageQuota };
+      const settingsPayload = await settingsResponse.json().catch(() => ({})) as { ok?: boolean; settings?: DriveProjectSettings };
       if (!healthResponse.ok || !healthPayload.ok) throw new Error(healthPayload.error || "A Drive rendszerállapot nem tölthető be.");
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setHealth(healthPayload);
@@ -303,6 +309,7 @@ export default function DriveWorkspace({
       setMembershipRole(treePayload.membershipRole || "");
       setMembershipDisplayName(treePayload.membershipDisplayName || "");
       setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
+      setProjectSettings(settingsResponse.ok && settingsPayload.ok && settingsPayload.settings ? settingsPayload.settings : null);
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       setSelectedDocumentId((current) => {
@@ -323,6 +330,7 @@ export default function DriveWorkspace({
     setBoxes([]);
     setDetails(null);
     setMetadataByDocument({});
+    setProjectSettings(null);
     setMembershipRole("");
     setMembershipDisplayName("");
     setReviewFocus("");
@@ -935,6 +943,62 @@ export default function DriveWorkspace({
     finally { setBusy(false); }
   }
 
+  async function saveVersionNumbering(input: {
+    mode: "IMPORT" | "CORRECT";
+    versionNumber: number;
+    revisionNumber: number;
+    reason: string;
+  }) {
+    const document = selectedDocument;
+    const version = document?.currentVersion;
+    if (!document || !version || !canWrite) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/versions/${encodeURIComponent(version.id)}/numbering`,
+        {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A verzió-/revíziószámozás mentése sikertelen.");
+      setNotice(input.mode === "IMPORT"
+        ? "A hozott dokumentum kezdő verzió-/revíziószámozása mentve és auditálva."
+        : "A verzió-/revíziószámozás korrekciója mentve és auditálva.");
+      await Promise.all([load(), loadDetails(document.id)]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A verzió-/revíziószámozás mentése sikertelen.");
+      throw caught;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProjectSettings(metadataOptions: DriveMetadataOptions) {
+    if (!canConfigureDataLists) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/settings`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ metadataOptions }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; settings?: DriveProjectSettings };
+      if (!response.ok || !payload.ok || !payload.settings) throw new Error(payload.error || "A Drive adatlisták mentése sikertelen.");
+      setProjectSettings(payload.settings);
+      setNotice("A Drive metaadat-listák mentve és auditálva.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A Drive adatlisták mentése sikertelen.");
+      throw caught;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveNote(note: string) {
     if (!selectedDocument || !canWrite) return;
     setBusy(true); setError("");
@@ -1092,7 +1156,7 @@ export default function DriveWorkspace({
 
   const openReviewDetail = useCallback((document: DriveDocument, field: string) => {
     setSelectedDocumentId(document.id);
-    if (field === "planNo" || field === "scales") {
+    if (field === "planNo" || field === "scales" || field === "numbering") {
       setDetailsFocus({ documentId: document.id, field });
       setReviewFocus("");
       if (layoutMode === "one") setLayoutMode("two");
@@ -1983,6 +2047,10 @@ export default function DriveWorkspace({
                 canWrite={canWrite}
                 canComment={canComment}
                 canApprove={canApprove}
+                canConfigureDataLists={canConfigureDataLists}
+                projectSettings={projectSettings}
+                onSaveNumbering={saveVersionNumbering}
+                onSaveProjectSettings={saveProjectSettings}
                 canDelete={canDelete}
                 membershipRole={membershipRole}
                 membershipDisplayName={membershipDisplayName}
@@ -2127,6 +2195,10 @@ export default function DriveWorkspace({
               canWrite={canWrite}
               canComment={canComment}
               canApprove={canApprove}
+              canConfigureDataLists={canConfigureDataLists}
+              projectSettings={projectSettings}
+              onSaveNumbering={saveVersionNumbering}
+              onSaveProjectSettings={saveProjectSettings}
               canDelete={canDelete}
               membershipRole={membershipRole}
               membershipDisplayName={membershipDisplayName}

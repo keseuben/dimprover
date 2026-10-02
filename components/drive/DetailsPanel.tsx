@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Download, FileSearch2, Lock, Mic, Plus, QrCode, Save, ShieldCheck, Square, StickyNote, Trash2, UploadCloud, UserCheck, X } from "lucide-react";
-import type { DriveDocument, DriveDocumentDetails } from "./driveTypes";
+import type { DriveDocument, DriveDocumentDetails, DriveMetadataOptionKey, DriveMetadataOptions, DriveProjectSettings } from "./driveTypes";
+import { DEFAULT_DRIVE_METADATA_OPTIONS } from "@/app/lib/drive-core/metadataOptions";
 import DriveDocumentViewer from "./DriveDocumentViewer";
 import styles from "./DriveWorkspace.module.css";
 
@@ -83,6 +84,10 @@ type Props = {
   canWrite: boolean;
   canComment: boolean;
   canApprove: boolean;
+  canConfigureDataLists?: boolean;
+  projectSettings?: DriveProjectSettings | null;
+  onSaveNumbering?: (input: { mode: "IMPORT" | "CORRECT"; versionNumber: number; revisionNumber: number; reason: string }) => Promise<void>;
+  onSaveProjectSettings?: (metadataOptions: DriveMetadataOptions) => Promise<void>;
   canDelete?: boolean;
   membershipRole?: "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER" | "";
   membershipDisplayName?: string;
@@ -97,11 +102,11 @@ type Props = {
   onDownload: () => Promise<void>;
   onDelete?: () => Promise<void>;
   responsiveClassName?: string;
-  focusTab?: "details" | "review" | "versions" | "notes";
+  focusTab?: "details" | "review" | "versions" | "notes" | "settings";
   inheritedDiscipline?: string;
   inheritedTopic?: string;
   reviewFocus?: string;
-  detailsFocus?: "planNo" | "scales" | "";
+  detailsFocus?: "planNo" | "scales" | "numbering" | "";
 };
 
 function formatAuditDate(value: unknown) {
@@ -418,6 +423,45 @@ function ObservationEditor({
   );
 }
 
+const metadataOptionLabels: Record<DriveMetadataOptionKey, string> = {
+  discipline: "Szakág",
+  documentType: "Dokumentumtípus",
+  issueStatus: "Kiadás",
+  approvalStatus: "Jóváhagyás",
+  building: "Épület",
+  level: "Szint",
+  zone: "Zóna",
+  topic: "Témakör felülírás",
+};
+
+const metadataOptionKeys = Object.keys(metadataOptionLabels) as DriveMetadataOptionKey[];
+
+function selectOptionsWithCurrent(options: string[], current: string) {
+  const values = [...options];
+  if (current && !values.includes(current)) values.unshift(current);
+  return values;
+}
+
+function numberingOriginLabel(origin: string | undefined) {
+  if (origin === "IMPORTED") return "Importált kezdőérték";
+  if (origin === "CORRECTED") return "Kézi korrekció";
+  return "DIMPRO automatikus számozás";
+}
+
+function numberingOriginClass(origin: string | undefined) {
+  if (origin === "IMPORTED") return styles.numberingImported;
+  if (origin === "CORRECTED") return styles.numberingCorrected;
+  return styles.numberingSystem;
+}
+
+function versionSelectValues() {
+  return Array.from({ length: 99 }, (_, index) => index + 1);
+}
+
+function revisionSelectValues() {
+  return Array.from({ length: 100 }, (_, index) => index);
+}
+
 const emptyMetadata: MetadataForm = {
   planNo: "",
   discipline: "",
@@ -442,6 +486,10 @@ export default function DetailsPanel({
   canWrite,
   canComment,
   canApprove,
+  canConfigureDataLists = false,
+  projectSettings = null,
+  onSaveNumbering = async () => undefined,
+  onSaveProjectSettings = async () => undefined,
   canDelete = false,
   membershipRole = "",
   membershipDisplayName = "",
@@ -462,8 +510,13 @@ export default function DetailsPanel({
   reviewFocus = "",
   detailsFocus = "",
 }: Props) {
-  const [tab, setTab] = useState<"details" | "review" | "versions" | "notes">("details");
+  const [tab, setTab] = useState<"details" | "review" | "versions" | "notes" | "settings">("details");
   const [metadata, setMetadata] = useState<MetadataForm>(emptyMetadata);
+  const [numberingMode, setNumberingMode] = useState<"NONE" | "IMPORT" | "CORRECT">("NONE");
+  const [numberingVersion, setNumberingVersion] = useState(1);
+  const [numberingRevision, setNumberingRevision] = useState(0);
+  const [numberingReason, setNumberingReason] = useState("");
+  const [settingsDraft, setSettingsDraft] = useState<DriveMetadataOptions>(DEFAULT_DRIVE_METADATA_OPTIONS);
   const [review, setReview] = useState<ReviewForm>(emptyReview);
   const [note, setNote] = useState("");
   const [reviewSection, setReviewSection] = useState<ReviewSectionKey>("technical");
@@ -473,12 +526,16 @@ export default function DetailsPanel({
   useEffect(() => { if (detailsFocus) setTab("details"); }, [detailsFocus]);
   useEffect(() => {
     if (!detailsFocus || tab !== "details" || !document) return;
-    const targetId = detailsFocus === "planNo" ? "drive-meta-planNo" : "drive-meta-scale-0";
+    const targetId = detailsFocus === "planNo"
+      ? "drive-meta-planNo"
+      : detailsFocus === "numbering"
+        ? "drive-numbering-editor"
+        : "drive-meta-scale-0";
     const frame = requestAnimationFrame(() => {
-      const target = globalThis.document?.getElementById(targetId) as HTMLInputElement | null;
+      const target = globalThis.document?.getElementById(targetId) as HTMLElement | null;
       target?.scrollIntoView({ block: "center", behavior: "smooth" });
       target?.focus({ preventScroll: true });
-      target?.select?.();
+      if (target instanceof HTMLInputElement) target.select();
     });
     return () => cancelAnimationFrame(frame);
   }, [detailsFocus, document?.id, tab]);
@@ -541,7 +598,16 @@ export default function DetailsPanel({
       openObservationCount: String(technicalObservationItems.length),
     });
     setNote(details?.notes?.[0]?.note || "");
+    const currentVersion = document?.currentVersion;
+    setNumberingVersion(currentVersion?.versionNumber || 1);
+    setNumberingRevision(currentVersion?.revisionNumber || 0);
+    setNumberingReason(currentVersion?.numberingCorrectionReason || "");
+    setNumberingMode("NONE");
   }, [details?.document.id, details?.metadata, details?.notes]);
+
+  useEffect(() => {
+    setSettingsDraft(projectSettings?.metadataOptions || DEFAULT_DRIVE_METADATA_OPTIONS);
+  }, [projectSettings]);
 
   const activeQr = useMemo(() => details?.qrCodes.find((qr) => qr.status === "ACTIVE") || null, [details?.qrCodes]);
   const reviewExtra = (details?.metadata?.extra || {}) as Record<string, unknown>;
@@ -574,7 +640,7 @@ export default function DetailsPanel({
         <div className={styles.detailsHeaderIcon}>{document.extension?.toUpperCase().slice(0, 4) || "FILE"}</div>
         <div className={styles.detailsHeaderText}>
           <strong>{metadata.planTitle || fileNameWithoutExtensionForDisplay(document.currentVersion?.originalName || document.name)}</strong>
-          <span>{document.extension?.toUpperCase() || "FILE"} · {document.currentVersion?.revisionCode || `V${document.currentVersionNumber}`}</span>
+          <span>{document.extension?.toUpperCase() || "FILE"} · {document.currentVersion?.revisionCode || "R00"} · V{String(document.currentVersion?.versionNumber || document.currentVersionNumber).padStart(2, "0")}</span>
         </div>
       </header>
 
@@ -583,6 +649,7 @@ export default function DetailsPanel({
         <button type="button" className={tab === "review" ? styles.detailsTabActive : ""} onClick={() => setTab("review")}>Tervellenőrzés</button>
         <button type="button" className={tab === "versions" ? styles.detailsTabActive : ""} onClick={() => setTab("versions")}>Verziók ({details?.versions.length || 0})</button>
         <button type="button" className={tab === "notes" ? styles.detailsTabActive : ""} onClick={() => setTab("notes")}>Megjegyzések</button>
+        <button type="button" className={tab === "settings" ? styles.detailsTabActive : ""} onClick={() => setTab("settings")}>Listák</button>
       </div>
 
       <div className={`${styles.detailsBody} ${tab === "details" ? styles.detailsBodyStructured : ""}`}>
@@ -601,19 +668,79 @@ export default function DetailsPanel({
               <div><span>DIMPRO technikai fájlnév</span><strong>{typeof details?.metadata?.extra?.safeFileName === "string" ? details.metadata.extra.safeFileName : document.name}</strong></div>
             </div>
 
+            <section id="drive-numbering-editor" tabIndex={-1} className={styles.numberingEditor} data-details-focused={detailsFocus === "numbering" ? "true" : undefined}>
+              <header className={styles.numberingEditorHead}>
+                <div>
+                  <strong>Verzió és revízió</strong>
+                  <span className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>{numberingOriginLabel(document.currentVersion?.numberingOrigin)}</span>
+                </div>
+                {document.currentVersion?.numberingCorrectedAt && <small>{formatAuditDate(document.currentVersion.numberingCorrectedAt)}</small>}
+              </header>
+              <div className={styles.numberingCurrent}>
+                <strong className={numberingOriginClass(document.currentVersion?.numberingOrigin)}>
+                  {document.currentVersion?.revisionCode || "R00"} · V{String(document.currentVersion?.versionNumber || document.currentVersionNumber).padStart(2, "0")}
+                </strong>
+                {document.currentVersion?.numberingCorrectionReason && <span>{document.currentVersion.numberingCorrectionReason}</span>}
+              </div>
+
+              {numberingMode === "NONE" ? (
+                <div className={styles.numberingActions}>
+                  {canWrite && details?.versions.length === 1 && document.currentVersion?.versionKind === "INITIAL" && (
+                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("IMPORT"); setNumberingReason(""); }}>
+                      Hozott számozás beállítása
+                    </button>
+                  )}
+                  {canApprove && (
+                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => { setNumberingMode("CORRECT"); setNumberingReason(""); }}>
+                      Számozás korrekciója
+                    </button>
+                  )}
+                  {!canApprove && document.currentVersion?.numberingOrigin === "SYSTEM" && (
+                    <span className={styles.numberingLocked}><Lock size={11} /> Automatikusan kezelt számozás</span>
+                  )}
+                </div>
+              ) : (
+                <div className={styles.numberingEditGrid}>
+                  <label>
+                    Verzió
+                    <select value={numberingVersion} disabled={busy} onChange={(event) => setNumberingVersion(Number(event.target.value))}>
+                      {versionSelectValues().map((value) => <option key={value} value={value}>V{String(value).padStart(2, "0")}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Revízió
+                    <select value={numberingRevision} disabled={busy} onChange={(event) => setNumberingRevision(Number(event.target.value))}>
+                      {revisionSelectValues().map((value) => <option key={value} value={value}>R{String(value).padStart(2, "0")}</option>)}
+                    </select>
+                  </label>
+                  <label className={styles.numberingReasonField}>
+                    {numberingMode === "CORRECT" ? "Korrekció indoka *" : "Import megjegyzés"}
+                    <input value={numberingReason} disabled={busy} maxLength={1000} onChange={(event) => setNumberingReason(event.target.value)} placeholder={numberingMode === "CORRECT" ? "Miért szükséges a számozás javítása?" : "Opcionális megjegyzés"} />
+                  </label>
+                  <div className={styles.numberingActions}>
+                    <button
+                      type="button"
+                      className={`${styles.smallButton} ${styles.smallPrimary}`}
+                      disabled={busy || (numberingMode === "CORRECT" && !numberingReason.trim())}
+                      onClick={() => void onSaveNumbering({
+                        mode: numberingMode,
+                        versionNumber: numberingVersion,
+                        revisionNumber: numberingRevision,
+                        reason: numberingReason.trim(),
+                      }).then(() => setNumberingMode("NONE")).catch(() => undefined)}
+                    >
+                      <Save size={12} /> Számozás mentése
+                    </button>
+                    <button type="button" className={styles.smallButton} disabled={busy} onClick={() => setNumberingMode("NONE")}>Mégsem</button>
+                  </div>
+                </div>
+              )}
+            </section>
+
             <div className={styles.metaGrid}>
               {([
                 ["planNo", "Tervszám"],
                 ["planTitle", "Egyedi megjelenítési név / tervlap neve"],
-                ["discipline", "Szakág"],
-                ["documentType", "Dokumentumtípus"],
-                ["revision", "Revízió"],
-                ["issueStatus", "Kiadás"],
-                ["approvalStatus", "Jóváhagyás"],
-                ["building", "Épület"],
-                ["level", "Szint"],
-                ["zone", "Zóna"],
-                ["topic", "Témakör felülírás"],
               ] as Array<[MetadataTextKey, string]>).map(([key, label]) => (
                 <div className={styles.metaItem} key={key} data-details-focused={detailsFocus === key ? "true" : undefined}>
                   <label htmlFor={`drive-meta-${key}`}>{label}</label>
@@ -624,6 +751,22 @@ export default function DetailsPanel({
                     onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}
                     placeholder="–"
                   />
+                </div>
+              ))}
+              {metadataOptionKeys.map((key) => (
+                <div className={styles.metaItem} key={key}>
+                  <label htmlFor={`drive-meta-${key}`}>{metadataOptionLabels[key]}</label>
+                  <select
+                    id={`drive-meta-${key}`}
+                    value={metadata[key]}
+                    disabled={!canWrite}
+                    onChange={(event) => setMetadata((current) => ({ ...current, [key]: event.target.value }))}
+                  >
+                    <option value="">—</option>
+                    {selectOptionsWithCurrent(projectSettings?.metadataOptions[key] || DEFAULT_DRIVE_METADATA_OPTIONS[key], metadata[key]).map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
               ))}
             </div>
@@ -933,6 +1076,37 @@ export default function DetailsPanel({
               </article>
             ))}
             {!details?.versions.length && <div className={styles.infoBox}>Nincs verzióadat.</div>}
+          </div>
+        ) : tab === "settings" ? (
+          <div className={styles.metadataSettings}>
+            <div className={styles.infoBox}>
+              <strong>Projekt metaadat-listák</strong><br />
+              Ezek az értékek jelennek meg a Részletek lapon a legördülő mezőkben. Egy sor = egy választható érték.
+            </div>
+            <div className={styles.metadataSettingsGrid}>
+              {metadataOptionKeys.map((key) => (
+                <label key={key}>
+                  <strong>{metadataOptionLabels[key]}</strong>
+                  <textarea
+                    rows={6}
+                    value={settingsDraft[key].join("\n")}
+                    readOnly={!canConfigureDataLists}
+                    onChange={(event) => setSettingsDraft((current) => ({
+                      ...current,
+                      [key]: event.target.value.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+                    }))}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className={styles.detailsActions}>
+              <button type="button" className={`${styles.smallButton} ${styles.smallPrimary}`} disabled={!canConfigureDataLists || busy} onClick={() => void onSaveProjectSettings(settingsDraft)}>
+                <Save size={12} /> Listák mentése
+              </button>
+              <button type="button" className={styles.smallButton} disabled={!canConfigureDataLists || busy} onClick={() => setSettingsDraft(DEFAULT_DRIVE_METADATA_OPTIONS)}>
+                Alaplista visszaállítása
+              </button>
+            </div>
           </div>
         ) : (
           <>

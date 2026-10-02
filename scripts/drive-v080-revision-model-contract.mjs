@@ -13,9 +13,9 @@ const flowMigration = read("supabase/migrations/20260925_drive_document_flow_v01
 let pass = 0;
 const check = (label, fn) => { fn(); pass += 1; console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`); };
 
-check("Drive Core marker advances to 0.8.0", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.0"/));
-check("Drive Core migration count advances to 5", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 5/));
-check("Drive Core bootstrap id is V080 revision model", () => assert.match(schema, /drive-core-v080-revision-model-20261002/));
+check("Current Drive Core schema retains V080 and has advanced to V084", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.4"/));
+check("Current Drive Core migration count has advanced to 6", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 6/));
+check("V080 migration preserves its revision-model bootstrap marker", () => assert.match(sql, /drive-core-v080-revision-model-20261002/));
 check("V080 migration requires V070 predecessor", () => assert.match(sql, /v_schema_version\s*=.*0\.7\.0[\s\S]*?v_migration_count\s*=\s*4[\s\S]*?drive-core-v070-folder-acl-20261001/));
 check("documents gain stable export alias", () => assert.match(sql, /add column if not exists export_alias text not null default/));
 check("export alias is ASCII-safe and bounded", () => assert.match(sql, /drive_core_documents_export_alias_check[\s\S]*?length\(export_alias\) between 1 and 40[\s\S]*?A-Za-z0-9/));

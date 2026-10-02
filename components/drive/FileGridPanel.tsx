@@ -222,13 +222,25 @@ function lifecycleVisual(metadata: DriveEngineeringMetadata | undefined) {
   return { kind: "working" as const, title: lifecycle || "Munkaközi terv", Icon: Clock3 };
 }
 
-function simpleRowStatusClass(document: DriveDocument) {
-  const status = (document.currentVersion?.status || "").toUpperCase();
-  if (status === "QUARANTINED") return styles.rowSimpleQuarantine;
-  if (status === "REJECTED") return styles.rowSimpleRejected;
-  if (status === "STAGED" || status === "METADATA_ONLY") return styles.rowSimpleProcessing;
-  if (status === "AVAILABLE") return styles.rowSimpleAvailable;
-  return "";
+function versionLabel(value: number | undefined) {
+  return "V" + String(Math.max(0, Number(value || 0))).padStart(2, "0");
+}
+
+function revisionLabel(document: DriveDocument) {
+  const version = document.currentVersion;
+  if (!version) return "R00";
+  return version.revisionCode || ("R" + String(Math.max(0, Number(version.revisionNumber || 0))).padStart(2, "0"));
+}
+
+function numberingPresentation(document: DriveDocument) {
+  switch (document.currentVersion?.numberingOrigin) {
+    case "IMPORTED":
+      return { className: styles.numberingImported, title: "Importált kezdőérték" };
+    case "CORRECTED":
+      return { className: styles.numberingCorrected, title: "Kézi korrekció" };
+    default:
+      return { className: styles.numberingSystem, title: "DIMPRO automatikusan létrehozta" };
+  }
 }
 
 function engineeringRowStatusClass(metadata: DriveEngineeringMetadata | undefined) {
@@ -1214,7 +1226,7 @@ export default function FileGridPanel({
                   const metadata = metadataByDocument[document.id];
                   const displayName = displayDocumentName(document, metadata);
                   return (
-                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""} ${simpleRowStatusClass(document)}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
+                    <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => onSelectDocument(document)} onDoubleClick={() => onOpenDocument?.(document)} title="Kattintás: kijelölés · Dupla kattintás: megnyitás · A fájlikont húzd CsomagBOX-ba">
                       <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
                       <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
                         className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
@@ -1227,7 +1239,7 @@ export default function FileGridPanel({
                       <td className={styles.fileRawName} title={document.name}>{document.name}</td>
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
-                      <td>{version?.revisionCode || `V${document.currentVersionNumber}`}</td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
                       <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td>{formatDate(document.updatedAt)}</td>
@@ -1306,8 +1318,8 @@ export default function FileGridPanel({
                       <td>{uploaderLabel(version?.createdBy)}</td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
                       <td title={document.mimeType}>{document.mimeType || "–"}</td>
-                      <td>{version?.revisionCode || "–"}</td>
-                      <td>V{document.currentVersionNumber}</td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{revisionLabel(document)}</button></td>
+                      <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{versionLabel(version?.versionNumber || document.currentVersionNumber)}</button></td>
                       <td>{document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>

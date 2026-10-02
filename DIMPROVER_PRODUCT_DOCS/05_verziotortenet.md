@@ -3464,3 +3464,21 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Futási példa PASS: `G-101_Foldszinti-gep-alaprajz_V07_R01_KIV.pdf`; fallback PASS: `DOK_Altalanos-terv_V01_R00_NA.pdf`.
 - V0.8.3 contract 24/24 PASS; folder ZIP/download 26/26 PASS; dokumentációjegyzék 15/15 PASS; CsomagBOX ZIP 31/31 PASS; lifecycle 29/29 PASS; history 18/18 PASS; Box ACL 14/14 PASS; célzott TypeScript PASS; git diff --check PASS.
 - DEV ONLY · PROD DENY. DB-migráció és runtime-aktiválás ebben a source blokkban nem történt.
+
+### DIMPRO Drive V0.8.4 – Verzió/revízió eredet, kézi korrekció és projekt metaadat-listák
+
+- Az Egyszerű nézetben megszűnt a fájlállapot szerinti teljes sorszínezés. A fájl biztonsági/feldolgozási állapotát kizárólag az Állapot oszlop badge-e színezi; a kijelölési kiemelés változatlanul megmarad.
+- A Mérnöki nézet Revízió és Verzió oszlopa az új modellből jeleníti meg az adatot `Rxx` / `Vxx` formában. A Revízió és Verzió cellák kattinthatók, és az adott dokumentum Adatok paneljét közvetlenül a Verzió és revízió szerkesztőblokkra fókuszálják.
+- A verzió-/revíziószámozás eredete explicit és auditálható: `SYSTEM` = DIMPRO automatikus számozás, `IMPORTED` = hozott dokumentum kézzel megadott kezdőértéke, `CORRECTED` = utólagos, indokolt korrekció.
+- A rendszer által automatikusan létrehozott V/R érték kék/cián szöveggel, az importált érték normál sötét szöveggel, a korrigált érték visszafogott narancs szöveggel jelenik meg. A teljes cella nem kap háttérszínt.
+- Hozott dokumentum egyetlen `INITIAL` verzióján dokumentumírási jogosultsággal kézzel megadható a kezdő V/R érték. A későbbi automatikus verziózás ebből a számozásból folytatódik.
+- Rendszerkezelt számozás korrekciójához `document.approve` jogosultság és kötelező korrekciós indok szükséges. Formálisan már `ISSUED` verzió számozása nem írható át; ilyen esetben új revízió készítendő.
+- A számozásmódosítás atomikus RPC-n keresztül történik, megtartja a stabil `version_id` kapcsolatokat, tiltja a verziószám-ütközést és az aktív feltöltési konfliktust, valamint projekt-audit és Drive change event készül róla.
+- A Részletek panel legacy szabad szöveges „Revízió” mezője kikerült a látható metaadatmezők közül, hogy ne legyen párhuzamos revíziófogalom.
+- A Szakág, Dokumentumtípus, Kiadás, Jóváhagyás, Épület, Szint, Zóna és Témakör mezők legördülő listává váltak.
+- Az Adatok panel új `Listák` fület kapott. Projekt-szinten szerkeszthetők a legördülők értékei; alapértelmezett mintalisták állnak rendelkezésre és egy kattintással visszaállíthatók.
+- A listabeállítások a `drive_core_project_settings` Drive Core rekordban tárolódnak, `project.update` jogosultsággal módosíthatók és auditáltak.
+- Új DB schema cél: `0.8.4`, migration count `6`, bootstrap `drive-core-v084-metadata-controls-20261002`.
+- V0.8.4 contract: 44/44 PASS. V0.8.3 export naming: 24/24 PASS. V0.8.2 formal issue: 34/34 PASS. V0.8.1 version/revision UI: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Nézetfüggő állapotszínezés: 18/18 PASS. ACL: 18/18 PASS. Issue access: 19/19 PASS. Teljes TypeScript: PASS. `git diff --check`: PASS.
+- V0.8.4 DB preflight: PASS a DEV 0.8.0 sémán; migráció még nincs alkalmazva ebben a source checkpointban.
+- DEV ONLY · PROD DENY.
