@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
+import { getAuthSessionByToken, hasAuthPermission } from "@/app/lib/dimpro-auth/repository";
+import { DIMPRO_AUTH_SESSION_COOKIE } from "@/app/lib/dimpro-auth/security";
 import {
   isDriveDevAccessConfigured,
   isProjectGateDevAccessConfigured,
@@ -399,6 +401,45 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const isDriveProtectedApi = isDimproAppHost && (
+    pathname.startsWith("/api/drive/") ||
+    pathname === "/api/projects" ||
+    pathname.startsWith("/api/projects/")
+  );
+  if (isDimproAppHost && (isDrivePage || isDriveProtectedApi)) {
+    const token = request.cookies.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
+    let session = null;
+    try {
+      session = token ? await getAuthSessionByToken(token, false) : null;
+    } catch (error) {
+      console.warn("DIMPRO Drive auth session hiba:", error instanceof Error ? error.message : "Ismeretlen auth hiba");
+    }
+    if (!session) {
+      if (isDriveProtectedApi) {
+        return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401, headers: { "cache-control": "no-store" } });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    let allowed = false;
+    try {
+      allowed = await hasAuthPermission({ userId: session.user.id, permissionCode: "drive.access", productCode: "DRIVE" });
+    } catch (error) {
+      console.warn("DIMPRO Drive authz hiba:", error instanceof Error ? error.message : "Ismeretlen authz hiba");
+    }
+    if (!allowed) {
+      if (isDriveProtectedApi) {
+        return NextResponse.json({ ok: false, error: "AUTH_FORBIDDEN" }, { status: 403, headers: { "cache-control": "no-store" } });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/account/modules";
+      url.searchParams.set("access", "drive-forbidden");
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (
     isLoginPage ||
     isDimproInvitationPage ||
@@ -418,6 +459,28 @@ export async function proxy(request: NextRequest) {
     isEventPublicPage ||
     isTeamsMeetingAssistantPage
   ) {
+    return response;
+  }
+
+  if (isDimproAppHost) {
+    const dimproAuthToken = request.cookies.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
+    let dimproSession = null;
+    if (dimproAuthToken) {
+      try {
+        dimproSession = await getAuthSessionByToken(dimproAuthToken, false);
+      } catch (error) {
+        console.warn(
+          "DIMPRO AUTH session ellenőrzési hiba a proxyban:",
+          error instanceof Error ? error.message : "Ismeretlen auth hiba",
+        );
+      }
+    }
+    if (!dimproSession) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
     return response;
   }
 

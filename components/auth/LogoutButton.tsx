@@ -13,10 +13,16 @@ export default function LogoutButton({
   const supabase = createClient();
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    const host = window.location.hostname.toLowerCase();
+    const usesDimproAuth = host === "dimpro.hu" || host.endsWith(".dimpro.hu");
+    if (usesDimproAuth) {
+      await fetch("/api/dimpro-auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
+    } else {
+      await supabase.auth.signOut();
+    }
 
     localStorage.removeItem("dimprover_login_started_at");
-
+    localStorage.removeItem("dimpro_login_started_at");
     window.location.href = "/login";
   }
 

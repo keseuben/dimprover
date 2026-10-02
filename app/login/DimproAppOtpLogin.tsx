@@ -143,6 +143,7 @@ export function DimproAppOtpLogin() {
       const data = (await response.json().catch(() => null)) as {
         ok?: boolean;
         error?: string;
+        message?: string;
       } | null;
 
       if (!response.ok || !data?.ok) {
@@ -158,10 +159,10 @@ export function DimproAppOtpLogin() {
       window.localStorage.setItem("dimpro_last_login_email", cleanEmail);
       setCodeSent(true);
       setCode("");
-      setCooldown(60);
+      setCooldown(30);
       setMessageTone("success");
       setMessage(
-        "A hatjegyű belépési kódot elküldtük. Nézd meg a Beérkezett, Promóciók és Spam mappát is.",
+        data?.message || "Ha az e-mail-címhez aktív DIMPRO-fiók tartozik, elküldtük a hatjegyű belépési kódot.",
       );
       window.setTimeout(() => codeInputRef.current?.focus(), 80);
     } catch {

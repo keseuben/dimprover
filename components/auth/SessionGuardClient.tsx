@@ -23,14 +23,22 @@ export default function SessionGuardClient() {
     if (pathname.startsWith("/teams/meeting-assistant")) return;
 
     async function logout() {
-      if (window.location.hostname === "projektkapu.dev.dimpro.hu") {
+      const host = window.location.hostname.toLowerCase();
+      if (host === "projektkapu.dev.dimpro.hu") {
         await fetch("/api/project-gate/dev-access/session", {
           method: "DELETE",
           credentials: "same-origin",
         }).catch(() => undefined);
+      } else if (host === "dimpro.hu" || host.endsWith(".dimpro.hu")) {
+        await fetch("/api/dimpro-auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+        }).catch(() => undefined);
+      } else {
+        await supabase.auth.signOut();
       }
-      await supabase.auth.signOut();
       localStorage.removeItem("dimprover_login_started_at");
+      localStorage.removeItem("dimpro_login_started_at");
       window.location.href = "/login";
     }
 
