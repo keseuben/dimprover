@@ -58,4 +58,4 @@ check("manual rebind still enforces PROD DENY", () => {
   assert.ok(workStart.includes("Kézi conversation rebind PROD hozzáféréssel tiltott."));
 });
 
-console.log("Developer Grid v0.1.97 pre-BOOT manual rebind contract PASS · " + n + "/" + n);
+console.log("Developer Grid v0.1.98 pre-BOOT manual rebind contract PASS · " + n + "/" + n);

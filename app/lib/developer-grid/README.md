@@ -539,6 +539,13 @@ Aktív ChatGPT-válaszgenerálás alatt a Grid nem szúrhat be és nem küldhet 
 - PROD DENY változatlan.
 - Regression contract: `central-core-recovery-v0194-contract.mjs` · 7/7 PASS.
 
+## v0.1.98 · Desktop build dependency security refresh
+
+- A Desktop build-tool lockfile kompatibilis, javított `brace-expansion` patch verziókat használ: 1.1.21, 2.1.7 és 5.0.12.
+- `npm audit --audit-level=moderate`: 0 vulnerability.
+- A közvetlen Electron 43.6.0 és electron-builder 26.15.3 verzió változatlan.
+- DEV ONLY · PROD DENY.
+
 ## v0.1.97 · Candidate-dist aware release pipeline
 
 - Windows EXE, DEV ZIP és release artifact pipeline explicit `BENJADMIN_DEV_RELEASE_DIST` forrást támogat.

@@ -23,4 +23,4 @@ check("raw ACK fallback excludes Launch Packet template by requiring real work-s
 check("raw ACK fallback requires coding decision and source proof", main.includes('Coding') && main.includes('Source') && main.includes('[a-f0-9]{64}'));
 check("raw ACK fallback preserves Central Core validator path", main.includes('recordDeveloperGridBootAck({') && main.includes('validateBootAcknowledgement(text, expected)'));
 if (process.exitCode) process.exit(process.exitCode);
-console.log(`Developer Grid v0.1.97 native send + ACK capture contract PASS · ${checks.length}/${checks.length}`);
+console.log(`Developer Grid v0.1.98 native send + ACK capture contract PASS · ${checks.length}/${checks.length}`);

@@ -10,7 +10,7 @@ const hb=read("app/lib/developer-grid/session-heartbeat.ts");
 const main=read("desktop/benjadmin-developer-grid/src/main.cjs");
 const pkg=JSON.parse(read("desktop/benjadmin-developer-grid/package.json"));
 let n=0; const check=(name,fn)=>{fn();n++;console.log("PASS",name);};
-check("desktop v0.1.97",()=>assert.equal(pkg.version,"0.1.97"));
+check("desktop v0.1.98",()=>assert.equal(pkg.version,"0.1.98"));
 check("active work exposes all active sessions",()=>assert.match(work,/allActiveSessions,/));
 check("active work exposes task-session pairs",()=>assert.match(work,/activeSessionTasks,/));
 check("heartbeat allows READY tasks",()=>assert.match(hb,/\["READY", "RUNNING", "REVIEW"\]/));
@@ -20,4 +20,4 @@ check("heartbeat reports PRE_ACK_KEEPALIVE",()=>assert.match(hb,/PRE_ACK_KEEPALI
 check("desktop iterates activeSessionTasks",()=>assert.match(main,/Array\.isArray\(activeWork\?\.activeSessionTasks\)/));
 check("desktop includes WAITING and VALIDATED",()=>assert.match(main,/\["WAITING", "VALIDATED"\]\.includes\(pairBootAck\)/));
 check("desktop emits multiSession heartbeat state",()=>assert.match(main,/multiSession:true/));
-console.log("Developer Grid v0.1.97 multi-session heartbeat contract PASS · "+n+"/"+n);
+console.log("Developer Grid v0.1.98 multi-session heartbeat contract PASS · "+n+"/"+n);
