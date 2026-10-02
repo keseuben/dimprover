@@ -3352,3 +3352,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Phase 1B továbbra is a Project Core jogosultságokra és a V0.7.7 `folder.view` ACL engine-re épül; külön permission engine, GROUP principal, jelszó/PIN és ACL-kezelő UI nem került be ebbe a blokkba.
 - A történeti Drive contractok current-schema elvárásai a már authoritative Drive Core 0.7.0 / migration 4 markerhez lettek igazítva; a migrációs gate-ek 0.6.0 kezdőállapot-ellenőrzése változatlan maradt.
 - DEV ONLY · PROD DENY. A Folder ACL adatbázis-migráció továbbra sincs alkalmazva; a migrációs preflight `DB_CREDENTIAL_REQUIRED` miatt fail-closed. A V0.7.6 aktív runtime és V0.7.5 rollback változatlan.
+
+### DIMPRO Drive V0.7.9 – Folder ACL Phase 1B enumeration filters
+
+- A projekt-szintű mérnöki metadata listázás a már ACL-szűrt Drive tree látható dokumentumazonosítói alapján szűri a kimenetet, ezért rejtett mappában lévő dokumentum metaadata nem kerülhet a klienshez.
+- A Document Flow projekt-szintű governance és issue listája ugyanilyen látható dokumentum-ID készletet használ, így rejtett dokumentum életciklus- vagy kiadási rekordja sem kerülhet a JSON-válaszba.
+- A Project Core `document.read` kapu megmaradt; a Folder ACL továbbra is csak finomítja a projektjogosultságot, nem helyettesíti azt.
+- DEV ONLY · PROD DENY. Adatbázis-migráció és runtime-aktiválás ebben a source blokkban nem történt.
