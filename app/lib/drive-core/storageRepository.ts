@@ -52,6 +52,8 @@ type DbDownloadVersion = {
   project_id: string;
   document_id: string;
   version_number: number;
+  revision_number: number;
+  revision_code: string;
   original_name: string;
   mime_type: string;
   size_bytes: number | string;
@@ -617,7 +619,7 @@ export async function getDriveDownloadVersionRecord(input: {
   const client = await requireReadyClient();
   const documentResult = await client
     .from("drive_core_documents")
-    .select("id,folder_id,name,status,current_version_number,source")
+    .select("id,folder_id,name,extension,status,current_version_number,source,export_alias")
     .eq("project_id", input.projectId)
     .eq("id", input.documentId)
     .eq("status", "ACTIVE")
@@ -627,7 +629,7 @@ export async function getDriveDownloadVersionRecord(input: {
 
   let query = client
     .from("drive_core_document_versions")
-    .select("id,project_id,document_id,version_number,original_name,mime_type,size_bytes,storage_provider,storage_bucket,storage_key,status")
+    .select("id,project_id,document_id,version_number,revision_number,revision_code,original_name,mime_type,size_bytes,storage_provider,storage_bucket,storage_key,status")
     .eq("project_id", input.projectId)
     .eq("document_id", input.documentId);
   if (input.versionId) query = query.eq("id", input.versionId);
@@ -636,14 +638,30 @@ export async function getDriveDownloadVersionRecord(input: {
   if (versionResult.error) databaseError("A DRIVE dokumentumverzió betöltése sikertelen.", versionResult.error);
   if (!versionResult.data) return null;
   const version = versionResult.data as DbDownloadVersion;
+  const metadataResult = await client
+    .from("drive_core_document_metadata")
+    .select("plan_no,issue_status")
+    .eq("project_id", input.projectId)
+    .eq("document_id", input.documentId)
+    .maybeSingle();
+  if (metadataResult.error && !["PGRST205", "42P01"].includes(String(metadataResult.error.code || ""))) {
+    databaseError("A DRIVE exportnév metaadata nem tölthető be.", metadataResult.error);
+  }
+  const metadata = metadataResult.data as { plan_no?: string | null; issue_status?: string | null } | null;
   return {
     documentName: documentResult.data.name as string,
+    documentExtension: String(documentResult.data.extension || ""),
+    documentExportAlias: String(documentResult.data.export_alias || ""),
     documentSource: String(documentResult.data.source || "WEB"),
+    planNo: String(metadata?.plan_no || ""),
+    exportStatusCode: String(metadata?.issue_status || ""),
     version: {
       id: version.id,
       projectId: version.project_id,
       documentId: version.document_id,
       versionNumber: Number(version.version_number),
+      revisionNumber: Number(version.revision_number || 0),
+      revisionCode: version.revision_code || "",
       originalName: version.original_name,
       mimeType: version.mime_type,
       sizeBytes: Number(version.size_bytes || 0),

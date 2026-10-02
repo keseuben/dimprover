@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ProjectAccessContext } from "@/app/lib/project-core/types";
 import { DriveCoreRepositoryError } from "./errors";
+import { buildDriveExportFileName } from "./exportNaming";
 import { normalizeDriveFileName, normalizeDriveRelativePath } from "./nameNormalizer";
 import { normalizeDriveExportAlias } from "./exportNaming";
 import {
@@ -579,10 +580,19 @@ export async function initDriveObjectDownload(input: {
       versionId: record.version.id,
     });
   }
+  const exportFileName = buildDriveExportFileName({
+    planNo: record.planNo,
+    exportAlias: record.documentExportAlias,
+    documentName: record.documentName,
+    versionNumber: record.version.versionNumber,
+    revisionNumber: record.version.revisionNumber,
+    statusCode: record.exportStatusCode,
+    extension: record.documentExtension,
+  });
   const signed = await createDriveSignedGetUrl({
     storageKey: record.version.storageKey,
     bucket: record.version.storageBucket,
-    fileName: record.version.originalName || record.documentName,
+    fileName: exportFileName,
     mimeType: record.version.mimeType,
   });
   await logDriveDownloadRecord({
@@ -598,7 +608,7 @@ export async function initDriveObjectDownload(input: {
       documentId: input.documentId,
       versionId: record.version.id,
       versionNumber: record.version.versionNumber,
-      fileName: record.version.originalName || record.documentName,
+      fileName: exportFileName,
       mimeType: record.version.mimeType,
       sizeBytes: record.version.sizeBytes,
       method: signed.method,

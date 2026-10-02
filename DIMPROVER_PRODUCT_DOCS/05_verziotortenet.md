@@ -3450,3 +3450,17 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A governance `KIADOTT / ISSUED` állapotot kizárólag a meglévő atomi Document Flow kiadási RPC állítja be. A Drive UI nem módosít közvetlenül üzleti vagy kiadási státuszt.
 - V0.8.2 contract: 34/34 PASS. V0.8.1 verzió/revízió UI: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Issue access: 19/19 PASS. Document Flow API/UI PASS. V0.7.13 Compare/Issue ACL: 18/18 PASS. V0.7.14 státuszszínezés: 21/21 PASS. Célzott TypeScript PASS; git diff --check PASS.
 - DEV ONLY · PROD DENY. Adatbázis-migráció és runtime-aktiválás ebben a source blokkban nem történt.
+
+### DIMPRO Drive V0.8.3 – Stabil export fájlnév
+
+- A közvetlen dokumentumletöltés, a mappa-ZIP és a CsomagBOX-ZIP ugyanazt a közös exportnév-képző motort használja.
+- Az alapértelmezett exportnév: `<Tervszám>_<RövidNév>_V<verzió>_R<revízió>_<státuszkód>.<ext>`, például `G-101_Foldszinti-gep-alaprajz_V07_R01_KIV.pdf`.
+- A Tervszám a mérnöki metaadat `planNo` mezőből, a RövidNév a dokumentum stabil `exportAlias` mezőjéből, a V/R érték a dokumentumverzióból, a státuszkód pedig a műszaki metaadat `issueStatus` mezőjéből származik.
+- Hiányzó tervszám esetén `DOK`, hiányzó műszaki státuszkód esetén semleges `NA` jelölés használatos; a rendszer nem talál ki kiadási státuszt.
+- A névképző Unicode normalizálást és Windows-kompatibilis ASCII-safe tokenizálást használ. A verzió- és revíziószám kétjegyű: `V01`, `R00`.
+- A tárolt objektum immutable marad: a storage key és az eredeti fájl nem kerül átnevezésre. Az exportnév kizárólag a signed download `Content-Disposition`, az audit és a ZIP-bejegyzés neve.
+- A letöltési repository szerveroldalról oldja fel a tervszámot, export aliast, revíziót és műszaki státuszkódot; a kliens nem adhat meg tetszőleges exportnevet.
+- A digitális dokumentációjegyzék továbbra is megőrzi a teljes emberi megjelenítési nevet, a tényleges ZIP exportútvonalat, verziót, revíziókódot és SHA-256 hash-t.
+- Futási példa PASS: `G-101_Foldszinti-gep-alaprajz_V07_R01_KIV.pdf`; fallback PASS: `DOK_Altalanos-terv_V01_R00_NA.pdf`.
+- V0.8.3 contract 24/24 PASS; folder ZIP/download 26/26 PASS; dokumentációjegyzék 15/15 PASS; CsomagBOX ZIP 31/31 PASS; lifecycle 29/29 PASS; history 18/18 PASS; Box ACL 14/14 PASS; célzott TypeScript PASS; git diff --check PASS.
+- DEV ONLY · PROD DENY. DB-migráció és runtime-aktiválás ebben a source blokkban nem történt.

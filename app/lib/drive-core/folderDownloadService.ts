@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import type { ProjectAccessContext } from "@/app/lib/project-core/types";
 import { listDriveTreeForAccess, requireDriveFolderAccess } from "./folderAccess";
 import { DriveCoreRepositoryError } from "./errors";
+import { buildDriveExportFileName } from "./exportNaming";
 import { DIGITAL_DOCUMENTATION_REGISTER_FILE_NAME, buildDigitalDocumentationRegister } from "./documentationRegister";
 import { getDriveBoxPackageSource, listDriveEngineeringMetadata, setDriveBoxLifecycle, type DriveBoxFolder, type DriveEngineeringMetadata } from "./workspaceRepository";
 import {
@@ -195,12 +196,21 @@ export async function openDriveFolderZip(input: {
       );
     }
     const folderPath = folderPaths.get(document.folderId) || ensureDriveSafeFolderName(root.name);
-    const technicalFileName = ensureDriveSafeFileName(document.name || version.originalName);
+    const metadata = metadataByDocument.get(document.id) || null;
+    const exportFileName = buildDriveExportFileName({
+      planNo: metadata?.planNo,
+      exportAlias: document.exportAlias,
+      documentName: document.name,
+      versionNumber: version.versionNumber,
+      revisionNumber: version.revisionNumber,
+      statusCode: metadata?.issueStatus,
+      extension: document.extension,
+    });
     accepted.push({
       document,
       version,
-      zipName: uniqueZipEntryName(folderPath, technicalFileName, usedNames),
-      metadata: metadataByDocument.get(document.id) || null,
+      zipName: uniqueZipEntryName(folderPath, exportFileName, usedNames),
+      metadata,
     });
   }
 
@@ -454,12 +464,21 @@ export async function openDriveBoxZip(input: {
       currentVersionNumber: version.versionNumber,
     };
     const folderPath = folderPaths.get(virtualFolderId) || rootName;
-    const technicalFileName = ensureDriveSafeFileName(document.name || version.originalName);
+    const metadata = metadataByDocument.get(document.id) || null;
+    const exportFileName = buildDriveExportFileName({
+      planNo: metadata?.planNo,
+      exportAlias: document.exportAlias,
+      documentName: document.name,
+      versionNumber: version.versionNumber,
+      revisionNumber: version.revisionNumber,
+      statusCode: metadata?.issueStatus,
+      extension: document.extension,
+    });
     accepted.push({
       document: virtualDocument,
       version,
-      zipName: uniqueZipEntryName(folderPath, technicalFileName, usedNames),
-      metadata: metadataByDocument.get(document.id) || null,
+      zipName: uniqueZipEntryName(folderPath, exportFileName, usedNames),
+      metadata,
     });
   }
 
