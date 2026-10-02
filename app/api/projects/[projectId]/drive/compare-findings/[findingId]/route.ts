@@ -14,7 +14,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
   try {
-    const result = await updateDriveCompareFinding(projectId, findingId, input, access.actor.userId, access.actor.displayName || access.actor.userId);
+    const result = await updateDriveCompareFinding(projectId, findingId, input, access.actor.userId, access.actor.displayName || access.actor.userId, access.access);
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
@@ -27,7 +27,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   const expectedVersion = Number(new URL(request.url).searchParams.get("expectedVersion") || 0);
   try {
-    const result = await deleteDriveCompareFinding(projectId, findingId, Number.isFinite(expectedVersion) ? Math.round(expectedVersion) : 0, access.actor.userId, access.actor.displayName || access.actor.userId);
+    const result = await deleteDriveCompareFinding(projectId, findingId, Number.isFinite(expectedVersion) ? Math.round(expectedVersion) : 0, access.actor.userId, access.actor.displayName || access.actor.userId, access.access);
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

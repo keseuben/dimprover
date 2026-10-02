@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       leftVersionId: url.searchParams.get("leftVersionId") || undefined,
       rightVersionId: url.searchParams.get("rightVersionId") || undefined,
       pageNumber: Number.isFinite(pageNumber) && pageNumber > 0 ? Math.round(pageNumber) : undefined,
-    });
+    }, access.access);
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
   try {
-    const result = await createDriveCompareFinding(projectId, input, access.actor.userId, access.actor.displayName || access.actor.userId);
+    const result = await createDriveCompareFinding(projectId, input, access.actor.userId, access.actor.displayName || access.actor.userId, access.access);
     return NextResponse.json(result, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

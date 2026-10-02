@@ -21,6 +21,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       projectId,
       issueId,
       origin: request.nextUrl.origin,
+      access: access.access,
     });
     return NextResponse.json(
       { ok: true, ...result },

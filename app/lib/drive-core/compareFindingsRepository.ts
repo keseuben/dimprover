@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
+import type { ProjectAccessContext } from "@/app/lib/project-core/types";
+import { listDriveTreeForAccess, requireDriveDocumentAccess } from "./folderAccess";
 import type { DriveAutoAlignmentSource } from "@/components/drive/driveAutoAlignment";
 
 export type DriveCompareFindingStatus = "REVIEW" | "ACCEPTED_DIFFERENCE" | "FIX_REQUIRED";
@@ -130,6 +132,31 @@ export async function getDriveCompareFindingsHealth() {
   }
 }
 
+export async function requireDriveCompareFindingAccess(
+  projectId: string,
+  findingId: string,
+  access: ProjectAccessContext,
+) {
+  const client = getClient();
+  const result = await client
+    .from("drive_core_compare_findings")
+    .select("id,left_document_id,right_document_id")
+    .eq("project_id", projectId)
+    .eq("id", findingId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (result.error) dbError("Az eltérési tétel hozzáférése nem ellenőrizhető.", result.error);
+  const row = result.data as { id?: string; left_document_id?: string; right_document_id?: string } | null;
+  if (!row?.id || !row.left_document_id || !row.right_document_id) {
+    throw new DriveCoreRepositoryError("Az eltérési tétel nem található.", "DRIVE_COMPARE_FINDING_NOT_FOUND", 404);
+  }
+  await Promise.all([
+    requireDriveDocumentAccess(projectId, row.left_document_id, access),
+    requireDriveDocumentAccess(projectId, row.right_document_id, access),
+  ]);
+  return { leftDocumentId: row.left_document_id, rightDocumentId: row.right_document_id };
+}
+
 async function linksFor(client: SupabaseClient, projectId: string, findingIds: string[]) {
   if (!findingIds.length) return new Map<string, DbLink[]>();
   const [outbound, inbound] = await Promise.all([
@@ -163,7 +190,7 @@ async function linksFor(client: SupabaseClient, projectId: string, findingIds: s
   return map;
 }
 
-export async function listDriveCompareFindings(projectId: string, input: { leftVersionId?: string; rightVersionId?: string; pageNumber?: number }) {
+export async function listDriveCompareFindings(projectId: string, input: { leftVersionId?: string; rightVersionId?: string; pageNumber?: number }, access: ProjectAccessContext) {
   const client = getClient();
   let query = client.from("drive_core_compare_findings").select("*").eq("project_id", projectId).is("deleted_at", null).order("updated_at", { ascending: false }).limit(250);
   if (input.leftVersionId) query = query.eq("left_version_id", input.leftVersionId);
@@ -172,15 +199,22 @@ export async function listDriveCompareFindings(projectId: string, input: { leftV
   const result = await query;
   if (result.error) dbError("Az eltérési jegyzék nem tölthető be.", result.error);
   const rows = (result.data || []) as DbFinding[];
-  const linkMap = await linksFor(client, projectId, rows.map((row) => row.id));
-  return { ok: true as const, findings: rows.map((row) => mapFinding(row, linkMap.get(row.id) || [])) };
+  const tree = await listDriveTreeForAccess(projectId, access);
+  const visibleDocumentIds = new Set(tree.documents.map((document) => document.id));
+  const visibleRows = rows.filter((row) => visibleDocumentIds.has(row.left_document_id) && visibleDocumentIds.has(row.right_document_id));
+  const linkMap = await linksFor(client, projectId, visibleRows.map((row) => row.id));
+  return { ok: true as const, findings: visibleRows.map((row) => mapFinding(row, linkMap.get(row.id) || [])) };
 }
 
-export async function createDriveCompareFinding(projectId: string, input: Record<string, unknown>, actorUserId: string, actorName: string) {
+export async function createDriveCompareFinding(projectId: string, input: Record<string, unknown>, actorUserId: string, actorName: string, access: ProjectAccessContext) {
   const client = getClient();
   const leftDocumentId = text(input.leftDocumentId, 160); const leftVersionId = text(input.leftVersionId, 160);
   const rightDocumentId = text(input.rightDocumentId, 160); const rightVersionId = text(input.rightVersionId, 160);
   if (!leftDocumentId || !leftVersionId || !rightDocumentId || !rightVersionId) throw new DriveCoreRepositoryError("Az A/B dokumentum- és verzióazonosító kötelező.", "DRIVE_COMPARE_VERSIONS_REQUIRED", 400);
+  await Promise.all([
+    requireDriveDocumentAccess(projectId, leftDocumentId, access),
+    requireDriveDocumentAccess(projectId, rightDocumentId, access),
+  ]);
   const zoneX = normalized(input.zoneX, "x"), zoneY = normalized(input.zoneY, "y"), zoneWidth = normalized(input.zoneWidth, "width"), zoneHeight = normalized(input.zoneHeight, "height");
   if (zoneWidth <= 0 || zoneHeight <= 0 || zoneX + zoneWidth > 1.002 || zoneY + zoneHeight > 1.002) throw new DriveCoreRepositoryError("Az eltérési zóna kívül esik a terv normalizált területén.", "DRIVE_COMPARE_ZONE_INVALID", 400);
   const payload = {
@@ -198,8 +232,9 @@ export async function createDriveCompareFinding(projectId: string, input: Record
   return { ok: true as const, finding: mapFinding(result.data as DbFinding) };
 }
 
-export async function updateDriveCompareFinding(projectId: string, findingId: string, input: Record<string, unknown>, actorUserId: string, actorName: string) {
+export async function updateDriveCompareFinding(projectId: string, findingId: string, input: Record<string, unknown>, actorUserId: string, actorName: string, access: ProjectAccessContext) {
   const client = getClient();
+  await requireDriveCompareFindingAccess(projectId, findingId, access);
   const expectedVersion = integer(input.expectedVersion, 0);
   if (expectedVersion < 1) throw new DriveCoreRepositoryError("A módosításhoz érvényes verziószám szükséges.", "DRIVE_COMPARE_EXPECTED_VERSION_REQUIRED", 400);
   const patch: Record<string, unknown> = {};
@@ -214,8 +249,9 @@ export async function updateDriveCompareFinding(projectId: string, findingId: st
   return { ok: true as const, finding: mapFinding(result.data as DbFinding) };
 }
 
-export async function deleteDriveCompareFinding(projectId: string, findingId: string, expectedVersion: number, actorUserId: string, actorName: string) {
+export async function deleteDriveCompareFinding(projectId: string, findingId: string, expectedVersion: number, actorUserId: string, actorName: string, access: ProjectAccessContext) {
   const client = getClient();
+  await requireDriveCompareFindingAccess(projectId, findingId, access);
   if (expectedVersion < 1) throw new DriveCoreRepositoryError("A törléshez érvényes verziószám szükséges.", "DRIVE_COMPARE_EXPECTED_VERSION_REQUIRED", 400);
   const result = await client.rpc("drive_compare_findings_delete_atomic", { p_project_id: projectId, p_finding_id: findingId, p_expected_version: expectedVersion, p_actor_user_id: actorUserId, p_actor_name: actorName });
   if (result.error) dbError("Az eltérési tétel archiválása sikertelen.", result.error);

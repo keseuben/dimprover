@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
 import { issueDriveDocumentVersion } from "@/app/lib/drive-core/documentFlowRepository";
 import { createDriveIssueAccessLinks } from "@/app/lib/drive-core/issueAccess";
+import { requireDriveDocumentAccess } from "@/app/lib/drive-core/store";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 
 type RouteContext = {
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    await requireDriveDocumentAccess(projectId, documentId, access.access);
     const result = await issueDriveDocumentVersion({
       projectId,
       documentId,
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         projectId,
         issueId: result.issue.id,
         origin: request.nextUrl.origin,
+        access: access.access,
       });
       accessLinks = accessResult.links;
       accessExpiresAt = accessResult.expiresAt;

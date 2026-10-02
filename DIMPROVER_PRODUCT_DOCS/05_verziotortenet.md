@@ -3386,3 +3386,15 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A szűrés nem írja át a repository `nextCursor` és `hasMore` értékeit: a cursor a nyers batch szerint halad, így rejtett események nem okoznak végtelen újraolvasást.
 - A DriveChangeEntityType modell a DB-sémával összhangban kiegészült a már létező `compare_finding` entity típussal.
 - DEV ONLY · PROD DENY. Runtime- és adatbázis-állapot változatlan.
+
+### DIMPRO Drive V0.7.13 – Compare Finding és dokumentumkiadás Folder ACL guardok
+
+- A Compare Findings listája csak olyan findingot ad vissza, amelynek bal és jobb dokumentuma egyaránt látható az ACL-szűrt Drive tree-ben.
+- Compare finding létrehozás előtt mindkét dokumentum szerveroldali hozzáférés-ellenőrzést kap.
+- Compare finding update/delete előtt a finding szerveroldalon feloldásra kerül, és a tárolt bal/jobb dokumentum azonosítók alapján fut a két ACL guard.
+- Compare→Issue konverzió előtt ugyanaz a finding ACL guard fut, külön Drive-hibahatárral.
+- Dokumentumkiadási recipient-link csak olyan issue mögött készülhet, amelynek dokumentuma aktuálisan látható; az issueId→documentId feloldás szerveroldali.
+- A közvetlen dokumentum-verzió kiadás route a kiadás előtt dokumentum ACL guardot futtat, és ugyanazt a ProjectAccessContextot adja tovább a recipient-link generátornak.
+- Compare V2.0 30/30 PASS, Compare V2.1 45/45 PASS, issue-access 19/19 PASS, public issue page 8/8 PASS, document-flow API/UI PASS, V0.7.13 ACL contract 18/18 PASS, célzott TypeScript PASS.
+- A projectkapu-drive-compare-v010 contract egy meglévő Projectkapu BrowserViewMode baseline-elváráson bukik; ebben a blokkban components/project-gate forrás nem módosult, ezért külön Projectkapu regresszióként kezelendő.
+- DEV ONLY · PROD DENY. Runtime- és adatbázis-állapot változatlan.

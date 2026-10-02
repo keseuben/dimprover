@@ -1,6 +1,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
+import type { ProjectAccessContext } from "@/app/lib/project-core/types";
+import { requireDriveDocumentAccess } from "./folderAccess";
 import { createDriveSignedGetUrl } from "./s3ObjectStorage";
 
 const TOKEN_VERSION = 1;
@@ -172,8 +174,23 @@ export async function createDriveIssueAccessLinks(input: {
   projectId: string;
   issueId: string;
   origin: string;
+  access: ProjectAccessContext;
 }) {
   const client = db();
+  const issueResult = await client
+    .from("drive_core_document_issues")
+    .select("id,document_id")
+    .eq("project_id", input.projectId)
+    .eq("id", input.issueId)
+    .maybeSingle();
+  if (issueResult.error) {
+    throw new DriveCoreRepositoryError("A dokumentumkiadás nem tölthető be.", issueResult.error.code || "DRIVE_ISSUE_ACCESS_ISSUE_QUERY_FAILED", 500);
+  }
+  const issue = issueResult.data as { id?: string; document_id?: string } | null;
+  if (!issue?.id || !issue.document_id) {
+    throw new DriveCoreRepositoryError("A dokumentumkiadás nem található.", "DRIVE_ISSUE_ACCESS_ISSUE_NOT_FOUND", 404);
+  }
+  await requireDriveDocumentAccess(input.projectId, issue.document_id, input.access);
   const result = await client
     .from("drive_core_document_issue_recipients")
     .select("id,project_id,issue_id,recipient_type,user_id,email,name,organization,permission,access_expires_at,downloaded_at")
