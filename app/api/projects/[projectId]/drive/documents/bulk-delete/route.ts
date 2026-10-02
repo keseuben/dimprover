@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import { driveCoreErrorResponse } from "@/app/lib/drive-core/api";
-import { softDeleteDriveDocuments } from "@/app/lib/drive-core/store";
+import { listDriveTreeForAccess, requireDriveDocumentAccess, softDeleteDriveDocuments } from "@/app/lib/drive-core/store";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 export const dynamic = "force-dynamic";
@@ -20,10 +20,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 
   const documentIds = Array.isArray(input.documentIds)
-    ? input.documentIds.filter((value): value is string => typeof value === "string")
+    ? [...new Set(input.documentIds
+      .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+      .map((value) => value.trim()))]
     : [];
 
   try {
+    if (documentIds.length) {
+      const tree = await listDriveTreeForAccess(projectId, access.access);
+      const visibleDocumentIds = new Set(tree.documents.map((document) => document.id));
+      const hiddenDocumentId = documentIds.find((documentId) => !visibleDocumentIds.has(documentId));
+      if (hiddenDocumentId) await requireDriveDocumentAccess(projectId, hiddenDocumentId, access.access);
+    }
     const result = await softDeleteDriveDocuments(projectId, documentIds, access.actor.userId);
     return NextResponse.json(result, {
       status: result.ok ? 200 : 400,

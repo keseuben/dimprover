@@ -3359,3 +3359,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - A Document Flow projekt-szintű governance és issue listája ugyanilyen látható dokumentum-ID készletet használ, így rejtett dokumentum életciklus- vagy kiadási rekordja sem kerülhet a JSON-válaszba.
 - A Project Core `document.read` kapu megmaradt; a Folder ACL továbbra is csak finomítja a projektjogosultságot, nem helyettesíti azt.
 - DEV ONLY · PROD DENY. Adatbázis-migráció és runtime-aktiválás ebben a source blokkban nem történt.
+
+### DIMPRO Drive V0.7.10 – Folder ACL Phase 1B bulk és CsomagBOX guardok
+
+- A csoportos tervellenőrzés célhalmaza most az ACL-szűrt Drive tree-ből épül. A folder scope és az opcionális leszármazott-bejárás rejtett gyermekmappát nem jár be, explicit rejtett dokumentumazonosító pedig not-found jelleggel fail-closed.
+- A bulk delete a Project Core `document.delete` kapu mellett a teljes beküldött dokumentumhalmazt az ACL-szűrt tree látható dokumentumaihoz méri, és tiltott azonosítónál dokumentum-hozzáférési guardon bukik.
+- CsomagBOX-ba dokumentum csak aktuálisan látható Drive dokumentumból adható; a dokumentum-ACL ellenőrzés a közös workspace repository-ban, az atomic Box insert előtt fut.
+- A meglévő CsomagBOX panel, belső mappák, ZIP, lifecycle és history működés regressziós contractjai változatlanul PASS állapotúak.
+- DEV ONLY · PROD DENY. Adatbázis-migráció vagy runtime-csere ebben a source blokkban nem történt.

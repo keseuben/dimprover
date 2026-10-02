@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const input = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!input) return NextResponse.json({ ok: false, error: "Érvénytelen JSON kérés." }, { status: 400 });
   try {
-    const result = await addDriveBoxItem(projectId, boxId, input, access.actor.userId);
+    const result = await addDriveBoxItem(projectId, boxId, input, access.actor.userId, access.access);
     return NextResponse.json(result, { status: result.idempotent ? 200 : 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     return driveCoreErrorResponse(error);

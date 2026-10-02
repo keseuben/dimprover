@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       userId: access.actor.userId,
       displayName: access.actor.displayName,
       role: access.access.membership.role,
-    });
+    }, access.access);
     if (!result.ok) return NextResponse.json(result, { status: 400 });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

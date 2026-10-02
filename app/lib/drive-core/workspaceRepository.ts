@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DriveCoreRepositoryError } from "./errors";
 import type { ProjectAccessContext, ProjectMembershipRole } from "@/app/lib/project-core/types";
-import { requireDriveDocumentAccess } from "./folderAccess";
+import { listDriveTreeForAccess, requireDriveDocumentAccess, requireDriveFolderAccess } from "./folderAccess";
 import type { DriveDocument, DriveDocumentVersion } from "./types";
 import {
   DRIVE_WORKSPACE_BOOTSTRAP_ID,
@@ -745,6 +745,7 @@ export async function bulkUpdateDriveReviewMetadata(
   projectId: string,
   input: Record<string, unknown>,
   actor: DriveAuditActor,
+  access: ProjectAccessContext,
 ) {
   const client = await requireReadyClient();
   const explicitIds = Array.isArray(input.documentIds)
@@ -757,30 +758,35 @@ export async function bulkUpdateDriveReviewMetadata(
     : {};
   assertReviewFieldPermissions(fields, actor);
 
+  const tree = await listDriveTreeForAccess(projectId, access);
+  const visibleDocumentIds = new Set(tree.documents.map((document) => document.id));
+  const hiddenExplicitId = explicitIds.find((documentId) => !visibleDocumentIds.has(documentId));
+  if (hiddenExplicitId) {
+    await requireDriveDocumentAccess(projectId, hiddenExplicitId, access);
+  }
+
   const targetIds = new Set(explicitIds);
   if (folderId) {
-    const [folderResult, documentResult] = await Promise.all([
-      client.from("drive_core_folders").select("id,parent_id").eq("project_id", projectId).neq("status", "ARCHIVED"),
-      client.from("drive_core_documents").select("id,folder_id").eq("project_id", projectId).neq("status", "DELETED"),
-    ]);
-    if (folderResult.error) databaseError("A DRIVE mappák nem tölthetők be a csoportos ellenőrzéshez.", folderResult.error);
-    if (documentResult.error) databaseError("A DRIVE dokumentumok nem tölthetők be a csoportos ellenőrzéshez.", documentResult.error);
+    const visibleFolderIds = new Set(tree.folders.map((folder) => folder.id));
+    if (!visibleFolderIds.has(folderId)) {
+      await requireDriveFolderAccess(projectId, folderId, access);
+    }
 
     const folderIds = new Set<string>([folderId]);
     if (includeDescendants) {
       let changed = true;
       while (changed) {
         changed = false;
-        for (const row of (folderResult.data || []) as Array<{ id: string; parent_id: string | null }>) {
-          if (row.parent_id && folderIds.has(row.parent_id) && !folderIds.has(row.id)) {
-            folderIds.add(row.id);
+        for (const folder of tree.folders) {
+          if (folder.parentId && folderIds.has(folder.parentId) && !folderIds.has(folder.id)) {
+            folderIds.add(folder.id);
             changed = true;
           }
         }
       }
     }
-    for (const row of (documentResult.data || []) as Array<{ id: string; folder_id: string }>) {
-      if (folderIds.has(row.folder_id)) targetIds.add(row.id);
+    for (const document of tree.documents) {
+      if (folderIds.has(document.folderId)) targetIds.add(document.id);
     }
   }
 
@@ -1146,11 +1152,13 @@ export async function addDriveBoxItem(
   boxId: string,
   input: Record<string, unknown>,
   actorUserId: string,
+  access: ProjectAccessContext,
 ) {
   const client = await requireReadyClient();
   const documentId = typeof input.documentId === "string" ? input.documentId.trim() : "";
   const versionId = typeof input.versionId === "string" && input.versionId.trim() ? input.versionId.trim() : null;
   if (!documentId) throw new DriveCoreRepositoryError("A dokumentum azonosító kötelező.", "DRIVE_BOX_DOCUMENT_REQUIRED", 400);
+  await requireDriveDocumentAccess(projectId, documentId, access);
   const { data, error } = await client.rpc("drive_workspace_add_box_item_atomic", {
     p_project_id: projectId,
     p_box_id: boxId,
