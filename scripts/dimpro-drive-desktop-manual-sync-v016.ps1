@@ -72,8 +72,8 @@ function Request-DriveDesktopAccessToken {
     'x-dimpro-drive-client-id' = (Get-DriveClientId)
   }
   try {
-    $bodyBytes = [Text.Encoding]::UTF8.GetBytes('{}')
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 30
+    [byte[]]$bodyBytes = [Text.Encoding]::UTF8.GetBytes('{}')
+    $response = Invoke-DriveUtf8JsonRequest -Method 'POST' -Uri $uri -Headers $headers -BodyBytes $bodyBytes -TimeoutSec 30
   } finally {
     $bridgeToken = $null
   }
@@ -113,7 +113,7 @@ function Get-DriveHeaders {
 
 function Invoke-DriveGet([string]$Path) {
   $uri = $ServerUrl.TrimEnd('/') + $Path
-  return Invoke-RestMethod -Method Get -Uri $uri -Headers (Get-DriveHeaders) -TimeoutSec 30
+  return Invoke-DriveUtf8JsonRequest -Method 'GET' -Uri $uri -Headers (Get-DriveHeaders) -TimeoutSec 30
 }
 
 
@@ -154,6 +154,62 @@ function Get-HttpErrorSummary($ErrorRecord) {
   }
 }
 
+function ConvertFrom-DriveUtf8JsonResponse($Response) {
+  if ($null -eq $Response) { throw 'DRIVE_HTTP_RESPONSE_MISSING' }
+  $stream = Get-ObjectPropertyValue $Response 'RawContentStream' $null
+  if ($null -eq $stream) { throw 'DRIVE_HTTP_RESPONSE_STREAM_MISSING' }
+  if ($stream.CanSeek) { $stream.Position = 0 }
+  $memory = New-Object System.IO.MemoryStream
+  try {
+    $stream.CopyTo($memory)
+    [byte[]]$bytes = $memory.ToArray()
+  } finally {
+    $memory.Dispose()
+  }
+  if ($null -eq $bytes -or $bytes.Length -eq 0) { return $null }
+  try {
+    $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+    $jsonText = $utf8.GetString($bytes)
+  } catch {
+    throw 'DRIVE_HTTP_RESPONSE_UTF8_INVALID'
+  }
+  if (-not $jsonText -or -not $jsonText.Trim()) { return $null }
+  try {
+    return ($jsonText | ConvertFrom-Json)
+  } catch {
+    throw 'DRIVE_HTTP_RESPONSE_JSON_INVALID'
+  }
+}
+
+function Invoke-DriveUtf8JsonRequest {
+  param(
+    [Parameter(Mandatory=$true)][ValidateSet('GET','POST')][string]$Method,
+    [Parameter(Mandatory=$true)][string]$Uri,
+    [Parameter(Mandatory=$true)][hashtable]$Headers,
+    [byte[]]$BodyBytes = $null,
+    [int]$TimeoutSec = 30
+  )
+  $params = @{
+    Method = $Method
+    Uri = $Uri
+    Headers = $Headers
+    UseBasicParsing = $true
+    TimeoutSec = $TimeoutSec
+  }
+  if ($null -ne $BodyBytes) {
+    $params['ContentType'] = 'application/json; charset=utf-8'
+    $params['Body'] = $BodyBytes
+  }
+  try {
+    $webResponse = Invoke-WebRequest @params
+    return ConvertFrom-DriveUtf8JsonResponse $webResponse
+  } catch {
+    $summary = Get-HttpErrorSummary $_
+    if ($summary) { throw ('DRIVE_HTTP_REQUEST_FAILED ' + $summary) }
+    throw
+  }
+}
+
 function ConvertTo-HeaderHashtable($InputObject) {
   $headers = @{}
   if ($null -eq $InputObject) { return $headers }
@@ -167,25 +223,13 @@ function Invoke-DrivePostJson([string]$Path, $Body) {
   $uri = if ($Path.StartsWith('https://')) { $Path } else { $ServerUrl.TrimEnd('/') + $Path }
   $json = $Body | ConvertTo-Json -Depth 12 -Compress
   [byte[]]$bodyBytes = [Text.Encoding]::UTF8.GetBytes([string]$json)
-  try {
-    return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
-  } catch {
-    $summary = Get-HttpErrorSummary $_
-    if ($summary) { throw ('DRIVE_HTTP_POST_FAILED ' + $summary) }
-    throw
-  }
+  return Invoke-DriveUtf8JsonRequest -Method 'POST' -Uri $uri -Headers (Get-DriveHeaders) -BodyBytes $bodyBytes -TimeoutSec 60
 }
 
 function Invoke-DrivePostEmpty([string]$Path) {
   $uri = if ($Path.StartsWith('https://')) { $Path } else { $ServerUrl.TrimEnd('/') + $Path }
   [byte[]]$bodyBytes = [Text.Encoding]::UTF8.GetBytes('{}')
-  try {
-    return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
-  } catch {
-    $summary = Get-HttpErrorSummary $_
-    if ($summary) { throw ('DRIVE_HTTP_POST_FAILED ' + $summary) }
-    throw
-  }
+  return Invoke-DriveUtf8JsonRequest -Method 'POST' -Uri $uri -Headers (Get-DriveHeaders) -BodyBytes $bodyBytes -TimeoutSec 60
 }
 
 function Read-ApplyPlan([string]$Path) {
