@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getDimproAuthConfig } from "@/app/lib/dimpro-auth/config";
 import { appSessionCookieOptions, decodeSsoFlowCookie, DIMPRO_APP_SESSION_COOKIE, DIMPRO_SSO_FLOW_COOKIE, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
 import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 import { listAuthorizedExternalProjectIds } from "@/app/lib/dimpro-auth/repository";
+import { dimproSessionCookieMaxAge } from "@/app/lib/dimpro-auth/session-policy";
 import { activateProjectMembership } from "@/app/lib/project-core/store";
 
 export const dynamic = "force-dynamic";
@@ -39,13 +39,19 @@ export async function GET(request: NextRequest) {
     }),
     cache: "no-store",
   });
-  const payload = await tokenResponse.json().catch(() => null) as { ok?: boolean; app_session_token?: string; error?: string; user?: { id?: string; email?: string; displayName?: string | null } } | null;
-  if (!tokenResponse.ok || !payload?.ok || !payload.app_session_token) {
+  const payload = await tokenResponse.json().catch(() => null) as {
+    ok?: boolean;
+    app_session_token?: string;
+    absolute_expires_at?: string;
+    error?: string;
+    user?: { id?: string; email?: string; displayName?: string | null };
+  } | null;
+  if (!tokenResponse.ok || !payload?.ok || !payload.app_session_token || !payload.absolute_expires_at) {
     cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
     return noLeak(NextResponse.json({ ok: false, error: payload?.error || "AUTH_SSO_EXCHANGE_FAILED" }, { status: 400 }));
   }
 
-  cookieStore.set(DIMPRO_APP_SESSION_COOKIE, payload.app_session_token, appSessionCookieOptions(getDimproAuthConfig().sessionAbsoluteSeconds));
+  cookieStore.set(DIMPRO_APP_SESSION_COOKIE, payload.app_session_token, appSessionCookieOptions(dimproSessionCookieMaxAge(payload.absolute_expires_at)));
   cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
 
   const userId = payload.user?.id?.trim() || "";

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getDimproAuthConfig } from "@/app/lib/dimpro-auth/config";
 import { verifyLoginOtp } from "@/app/lib/dimpro-auth/repository";
+import { dimproSessionCookieMaxAge } from "@/app/lib/dimpro-auth/session-policy";
 import {
   DIMPRO_AUTH_SESSION_COOKIE,
   getDimproAuthRequestIp,
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       correlationId,
     });
     const cookieStore = await cookies();
-    cookieStore.set(DIMPRO_AUTH_SESSION_COOKIE, result.token, sessionCookieOptions(getDimproAuthConfig().sessionAbsoluteSeconds));
+    cookieStore.set(DIMPRO_AUTH_SESSION_COOKIE, result.token, sessionCookieOptions(dimproSessionCookieMaxAge(result.absoluteExpiresAt)));
     return NextResponse.json({
       ok: true,
       email: result.user.email,
