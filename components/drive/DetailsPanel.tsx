@@ -1094,7 +1094,7 @@ export default function DetailsPanel({
                 <label key={key}>
                   <strong>{metadataOptionLabels[key]}</strong>
                   <textarea
-                    rows={6}
+                    rows={4}
                     value={settingsDraft[key].join("\n")}
                     readOnly={!canConfigureDataLists}
                     onChange={(event) => setSettingsDraft((current) => ({

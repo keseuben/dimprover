@@ -567,6 +567,43 @@
   padding: 7px 14px 9px;
   transition: height 160ms ease, padding 160ms ease, box-shadow 160ms ease;
 }
+.boxShelfResizeHandle {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 50%;
+  width: 92px;
+  height: 16px;
+  transform: translateX(-50%);
+  border: 1px solid #ccd8e3;
+  border-radius: 999px;
+  background: rgba(255,255,255,.98);
+  color: #74879a;
+  box-shadow: 0 2px 8px rgba(25,48,72,.12);
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+}
+.boxShelfResizeHandle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 42px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #9cafc0;
+}
+.boxShelfResizeHandle:hover,
+.boxShelfResizeHandle:focus-visible {
+  border-color: #8eadd0;
+  background: #f6faff;
+  outline: none;
+}
+.boxShelfResizeHandle:hover::after,
+.boxShelfResizeHandle:focus-visible::after { background: #1765d7; }
+
 .boxShelfCollapsed {
   height: 38px;
   min-height: 38px;
@@ -3774,26 +3811,29 @@
 }
 .metadataSettings {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 7px;
+  padding: 8px;
 }
 .metadataSettingsGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: 6px 8px;
 }
 .metadataSettingsGrid label {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 .metadataSettingsGrid strong {
   color: #40586e;
-  font-size: var(--drive-font-xs);
+  font-size: 9px;
+  line-height: 1.15;
 }
 .metadataSettings textarea {
-  min-height: 118px;
+  min-height: 84px;
   resize: vertical;
-  line-height: 1.4;
+  padding: 5px 6px;
+  font-size: 10px;
+  line-height: 1.2;
 }
 @media (max-width: 760px) {
   .numberingEditGrid,
@@ -3838,6 +3878,9 @@
 .folderProtectionButton:hover:not(:disabled) {
   border-color: #d39a87;
   background: #fff0eb;
+}
+.folderRenameDialogPanel {
+  width: min(460px, calc(100vw - 28px));
 }
 .folderPasswordDialogPanel {
   width: min(560px, calc(100vw - 28px));

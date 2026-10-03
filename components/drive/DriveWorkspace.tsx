@@ -98,6 +98,14 @@ type FolderPasswordPublicConfig = {
   updatedAt: string;
 };
 
+type FolderRenameDialogState = {
+  folderId: string;
+  originalName: string;
+  displayName: string;
+  error: string;
+  busy: boolean;
+};
+
 type FolderPasswordDialogState = {
   mode: "unlock" | "manage";
   targetFolderId: string;
@@ -209,6 +217,7 @@ export default function DriveWorkspace({
   const [fullTableInspectorLayout, setFullTableInspectorLayout] = useState<"side" | "bottom">("side");
   const [tableZoom, setTableZoom] = useState(100);
   const [splitDetailsHeight, setSplitDetailsHeight] = useState(390);
+  const [boxShelfHeight, setBoxShelfHeight] = useState(154);
   const [viewMode, setViewMode] = useState<DriveViewMode>("engineering");
   const [metadataByDocument, setMetadataByDocument] = useState<Record<string, DriveEngineeringMetadata>>({});
   const [projectSettings, setProjectSettings] = useState<DriveProjectSettings | null>(null);
@@ -238,6 +247,7 @@ export default function DriveWorkspace({
     accessExpiresAt: string | null;
     accessLinkError: string | null;
   } | null>(null);
+  const [folderRenameDialog, setFolderRenameDialog] = useState<FolderRenameDialogState | null>(null);
   const [folderPasswordDialog, setFolderPasswordDialog] = useState<FolderPasswordDialogState | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
@@ -532,15 +542,38 @@ export default function DriveWorkspace({
     }
   }
 
-  async function renameSelectedFolder() {
+  function renameSelectedFolder() {
     if (!selectedFolder || !canWrite) return;
     const currentName = selectedFolder.displayName || selectedFolder.name;
-    const displayName = window.prompt("Mappa megjelenítési neve:", currentName)?.trim();
-    if (!displayName || displayName === currentName) return;
-    setBusy(true); setError(""); setNotice("");
+    setFolderRenameDialog({
+      folderId: selectedFolder.id,
+      originalName: currentName,
+      displayName: currentName,
+      error: "",
+      busy: false,
+    });
+  }
+
+  async function submitFolderRename() {
+    const dialog = folderRenameDialog;
+    if (!dialog || dialog.busy) return;
+
+    const displayName = dialog.displayName.trim();
+    if (!displayName) {
+      setFolderRenameDialog((current) => current ? { ...current, error: "A mappa neve kötelező." } : current);
+      return;
+    }
+    if (displayName === dialog.originalName) {
+      setFolderRenameDialog(null);
+      return;
+    }
+
+    setFolderRenameDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    setError("");
+    setNotice("");
     try {
       const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(selectedFolder.id)}/display-name`,
+        `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.folderId)}/display-name`,
         {
           method: "PUT",
           credentials: "same-origin",
@@ -548,14 +581,15 @@ export default function DriveWorkspace({
           body: JSON.stringify({ displayName }),
         },
       );
-      const payload = await response.json() as { ok?: boolean; error?: string };
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappa átnevezése sikertelen.");
-      setNotice(`Mappa megjelenítési neve módosítva: ${displayName}`);
+
+      setFolderRenameDialog(null);
+      setNotice(`Mappa átnevezve: ${displayName}`);
       await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A mappa átnevezése sikertelen.");
-    } finally {
-      setBusy(false);
+      const message = caught instanceof Error ? caught.message : "A mappa átnevezése sikertelen.";
+      setFolderRenameDialog((current) => current ? { ...current, busy: false, error: message } : current);
     }
   }
 
@@ -705,8 +739,19 @@ export default function DriveWorkspace({
           }),
         },
       );
-      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappavédelem mentése sikertelen.");
+      const payload = await response.json().catch(() => ({})) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+        status?: FolderPasswordGateStatus;
+      };
+      if (!response.ok || !payload.ok) {
+        const codeSuffix = payload.code ? ` · ${payload.code}` : "";
+        throw new Error((payload.error || "A mappavédelem mentése sikertelen.") + codeSuffix);
+      }
+      if (!payload.status?.passwordProtected || !payload.status.locked || payload.status.gateFolderId !== dialog.targetFolderId) {
+        throw new Error("A szerver nem igazolta vissza a mappajelszó-védelem aktiválását.");
+      }
       setFolderPasswordDialog(null);
       setSelectedFolderId("all");
       setSelectedDocumentId("");
@@ -727,8 +772,11 @@ export default function DriveWorkspace({
         `/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.targetFolderId)}/password`,
         { method: "DELETE", credentials: "same-origin" },
       );
-      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A mappavédelem törlése sikertelen.");
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; code?: string };
+      if (!response.ok || !payload.ok) {
+        const codeSuffix = payload.code ? ` · ${payload.code}` : "";
+        throw new Error((payload.error || "A mappavédelem törlése sikertelen.") + codeSuffix);
+      }
       setFolderPasswordDialog(null);
       await load();
       setNotice("Mappajelszó-védelem törölve.");
@@ -1341,7 +1389,7 @@ export default function DriveWorkspace({
       const download = await requestDownloadLink(document);
       const protocol = nativeOfficeProtocol(extension);
       if (protocol) {
-        window.location.href = protocol + ":ofe|u|" + download.url;
+        window.location.assign(protocol + ":ofe|u|" + download.url);
         setNotice("Megnyitás a Windows alkalmazásban: " + (download.fileName || document.name) + ". Ha az alkalmazás nem indul el, használd a Letöltés gombot.");
         return;
       }
@@ -1892,6 +1940,7 @@ export default function DriveWorkspace({
 
 <div
   className={`${styles.workspaceWrap} ${layoutMode === "split" ? styles.workspaceWrapSplit : ""} ${boxShelfOpen ? styles.workspaceWrapShelfOpen : styles.workspaceWrapShelfCollapsed}`}
+      style={boxShelfOpen ? { paddingBottom: `${boxShelfHeight + 36}px` } : undefined}
   onDragEnter={handleExternalDragEnter}
   onDragOver={handleExternalDragOver}
   onDragLeave={handleExternalDragLeave}
@@ -1995,6 +2044,41 @@ export default function DriveWorkspace({
         }}
         aria-label="Új verzió fájljának kiválasztása"
       />
+
+      {folderRenameDialog && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Mappa átnevezése">
+          <form
+            className={`${styles.projectCreatePanel} ${styles.folderRenameDialogPanel}`}
+            onSubmit={(event) => { event.preventDefault(); void submitFolderRename(); }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Mappa</small>
+                <strong>Mappa átnevezése</strong>
+                <span>Az új név azonnal megjelenik a mappafában és a fájltáblában.</span>
+              </div>
+              <button type="button" disabled={folderRenameDialog.busy} onClick={() => setFolderRenameDialog(null)} aria-label="Bezárás">×</button>
+            </header>
+            <label>
+              Mappa neve
+              <input
+                autoFocus
+                value={folderRenameDialog.displayName}
+                maxLength={240}
+                onChange={(event) => setFolderRenameDialog((current) => current ? { ...current, displayName: event.target.value, error: "" } : current)}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </label>
+            {folderRenameDialog.error && <div className={`${styles.notice} ${styles.noticeError}`}>{folderRenameDialog.error}</div>}
+            <footer>
+              <button type="button" disabled={folderRenameDialog.busy} onClick={() => setFolderRenameDialog(null)}>Mégsem</button>
+              <button type="submit" disabled={folderRenameDialog.busy || !folderRenameDialog.displayName.trim()}>
+                {folderRenameDialog.busy ? "Mentés…" : "Átnevezés"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
 
       {folderPasswordDialog && (
         <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label={folderPasswordDialog.mode === "unlock" ? "Jelszóvédett mappa feloldása" : "Mappavédelem beállítása"}>
@@ -2603,7 +2687,17 @@ export default function DriveWorkspace({
                 role="separator"
                 aria-orientation="horizontal"
                 aria-label="Részletező panel magasságának módosítása"
-                title="Húzd fel vagy le a részletező panel méretezéséhez"
+                title="Húzd fel vagy le a részletező panel méretezéséhez · dupla kattintás: 50%"
+                onDoubleClick={() => {
+                  const measuredHeight = browserRef.current?.getBoundingClientRect().height || 0;
+                  const workspaceHeight = measuredHeight > 0 ? measuredHeight : Math.max(500, window.innerHeight - 260);
+                  const minDetailsHeight = 250;
+                  const minMainHeight = 220;
+                  const resizeHandleHeight = 10;
+                  const maxDetailsHeight = Math.max(minDetailsHeight, workspaceHeight - minMainHeight - resizeHandleHeight);
+                  const halfDetailsHeight = Math.round((workspaceHeight - resizeHandleHeight) / 2);
+                  setSplitDetailsHeight(Math.max(minDetailsHeight, Math.min(maxDetailsHeight, halfDetailsHeight)));
+                }}
                 onPointerDown={(event) => {
                   event.preventDefault();
                   const startY = event.clientY;
@@ -2684,6 +2778,9 @@ export default function DriveWorkspace({
         onDownloadBox={downloadBoxArchive}
         onSetLifecycle={setBoxLifecycle}
         onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
+        shelfHeight={boxShelfHeight}
+        onShelfHeightChange={setBoxShelfHeight}
+        onResetShelfHeight={() => setBoxShelfHeight(Math.max(118, Math.round(window.innerHeight * 0.5)))}
       />
     </div>
   );

@@ -50,6 +50,9 @@ type Props = {
   onDownloadBox?: (box: DriveBox, archiveName: string) => void;
   onSetLifecycle?: (boxId: string, nextStatus: DriveBoxLifecycleStatus) => Promise<void>;
   onOpenCompareBox: (box: DriveBox) => void;
+  shelfHeight?: number;
+  onShelfHeightChange?: (height: number) => void;
+  onResetShelfHeight?: () => void;
 };
 
 const lifecycleConfig: Record<DriveBoxLifecycleStatus, { label: string; shortLabel: string }> = {
@@ -167,6 +170,9 @@ export default function BoxShelf({
   onDownloadBox,
   onSetLifecycle,
   onOpenCompareBox,
+  shelfHeight,
+  onShelfHeightChange,
+  onResetShelfHeight,
 }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [expandedBoxId, setExpandedBoxId] = useState("");
@@ -241,7 +247,59 @@ export default function BoxShelf({
   }
 
   return (
-    <section className={`${styles.boxShelf} ${variant === "panel" ? styles.boxShelfPanel : ""} ${open ? "" : styles.boxShelfCollapsed}`} aria-label={variant === "panel" ? "CsomagBOX panel" : "CsomagBOX polc"}>
+    <section
+      className={`${styles.boxShelf} ${variant === "panel" ? styles.boxShelfPanel : ""} ${open ? "" : styles.boxShelfCollapsed}`}
+      aria-label={variant === "panel" ? "CsomagBOX panel" : "CsomagBOX polc"}
+      style={variant === "shelf" && open && shelfHeight ? { height: `${shelfHeight}px`, maxHeight: "72vh" } : undefined}
+    >
+      {variant === "shelf" && open && onShelfHeightChange && (
+        <button
+          type="button"
+          className={styles.boxShelfResizeHandle}
+          title="CsomagBOX magasságának állítása · dupla kattintás: 50%"
+          aria-label="CsomagBOX magasságának állítása"
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onResetShelfHeight?.();
+          }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            const handle = event.currentTarget;
+            const shelf = handle.closest(`.${styles.boxShelf}`) as HTMLElement | null;
+            if (!shelf) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            handle.setPointerCapture(event.pointerId);
+            const startY = event.clientY;
+            const startHeight = shelf.getBoundingClientRect().height;
+            const minHeight = 118;
+            const maxHeight = Math.max(minHeight, Math.round(window.innerHeight * 0.72));
+
+            const onMove = (moveEvent: PointerEvent) => {
+              const next = Math.min(maxHeight, Math.max(minHeight, startHeight + startY - moveEvent.clientY));
+              onShelfHeightChange(Math.round(next));
+            };
+            const onEnd = () => {
+              document.body.style.cursor = "";
+              document.body.style.userSelect = "";
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onEnd);
+              window.removeEventListener("pointercancel", onEnd);
+              if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+            };
+
+            document.body.style.cursor = "ns-resize";
+            document.body.style.userSelect = "none";
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onEnd, { once: true });
+            window.addEventListener("pointercancel", onEnd, { once: true });
+          }}
+        >
+          <span />
+        </button>
+      )}
       <header
         className={styles.boxShelfHeader}
         role="button"
