@@ -14,6 +14,7 @@ import BottomInspectorResizeHandle from "./BottomInspectorResizeHandle";
 import CommanderPanel from "./CommanderPanel";
 import CompareWorkspace from "./CompareWorkspace";
 import DetailsPanel from "./DetailsPanel";
+import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel from "./FolderTreePanel";
@@ -2099,7 +2100,7 @@ export default function DriveWorkspace({
   }
 
   if (loading && !tree) {
-    return <div className={styles.loadingState}><div><Loader2 className={styles.spin} size={28} /><strong>DIMPRO Drive betöltése</strong><span>Projektmappák, jogosultságok és Workspace 1.0 ellenőrzése…</span></div></div>;
+    return <DrivePremiumLoader />;
   }
 
   const browserClass = [
