@@ -16,8 +16,6 @@ export type DimproAuthConfig = {
   ssoWindowMinutes: number;
   ssoAuthorizeIpMaxRequests: number;
   ssoTokenIpMaxRequests: number;
-  sessionAbsoluteSeconds: number;
-  sessionInactivitySeconds: number;
   sessionTouchIntervalSeconds: number;
   dbSslMode: "verify-full";
 };
@@ -109,8 +107,6 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     ssoWindowMinutes: boundedInteger("DIMPRO_AUTH_SSO_WINDOW_MINUTES", 10, 1, 60),
     ssoAuthorizeIpMaxRequests: boundedInteger("DIMPRO_AUTH_SSO_AUTHORIZE_IP_MAX_REQUESTS", 60, 5, 500),
     ssoTokenIpMaxRequests: boundedInteger("DIMPRO_AUTH_SSO_TOKEN_IP_MAX_REQUESTS", 120, 5, 1000),
-    sessionAbsoluteSeconds: boundedInteger("DIMPRO_AUTH_SESSION_ABSOLUTE_SECONDS", 14 * 86400, 300, 30 * 86400),
-    sessionInactivitySeconds: boundedInteger("DIMPRO_AUTH_SESSION_INACTIVITY_SECONDS", 24 * 3600, 300, 14 * 86400),
     sessionTouchIntervalSeconds: boundedInteger("DIMPRO_AUTH_SESSION_TOUCH_INTERVAL_SECONDS", 5 * 60, 30, 3600),
     dbSslMode: "verify-full",
   };

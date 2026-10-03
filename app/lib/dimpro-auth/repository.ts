@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { authQuery, withAuthTransaction } from "./db";
 import { getDimproAuthConfig } from "./config";
+import { getDimproAuthSessionPolicy } from "./session-policy";
 import {
   DIMPRO_AUTH_PURPOSE_LOGIN,
   createDimproAuthSessionToken,
@@ -241,7 +242,6 @@ export async function verifyLoginOtp(input: {
   userAgent: string;
   correlationId: string;
 }) {
-  const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
     const auditLoginFailure = async (result: string, userId?: string | null, metadata: Record<string, unknown> = {}) => {
       await appendAudit(client, {
@@ -326,8 +326,13 @@ export async function verifyLoginOtp(input: {
     }
 
     const token = createDimproAuthSessionToken();
-    const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);
-    const inactivityExpiresAt = new Date(Date.now() + config.sessionInactivitySeconds * 1000);
+    const sessionPolicy = getDimproAuthSessionPolicy(row.security_level);
+    const sessionNow = Date.now();
+    const absoluteExpiresAt = new Date(sessionNow + sessionPolicy.absoluteSeconds * 1000);
+    const inactivityExpiresAt = new Date(Math.min(
+      sessionNow + sessionPolicy.inactivitySeconds * 1000,
+      absoluteExpiresAt.getTime(),
+    ));
     const session = await client.query<{ id: string }>(
       `INSERT INTO auth_sessions(user_id,token_hash,security_level,user_session_version,absolute_expires_at,inactivity_expires_at,ip_created,user_agent,correlation_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9) RETURNING id`,
@@ -367,7 +372,8 @@ export async function getAuthSessionByToken(token: string, touch = true): Promis
   const lastSeen = new Date(row.last_seen_at).getTime();
   let inactivityExpiresAt = new Date(row.inactivity_expires_at);
   if (touch && now - lastSeen >= config.sessionTouchIntervalSeconds * 1000) {
-    const proposed = new Date(now + config.sessionInactivitySeconds * 1000);
+    const sessionPolicy = getDimproAuthSessionPolicy(row.security_level);
+    const proposed = new Date(now + sessionPolicy.inactivitySeconds * 1000);
     const absolute = new Date(row.absolute_expires_at);
     inactivityExpiresAt = proposed.getTime() > absolute.getTime() ? absolute : proposed;
     await authQuery(
@@ -580,6 +586,8 @@ type AuthorizationCodeRow = {
   environment: "DEV" | "PROD";
   user_id: string;
   auth_session_id: string;
+  auth_session_absolute_expires_at: Date | string;
+  auth_session_inactivity_expires_at: Date | string;
   auth_session_valid: boolean;
   redirect_uri: string;
   code_challenge: string;
@@ -786,6 +794,8 @@ export async function exchangeAuthorizationCode(input: {
     }
     const codeResult = await client.query<AuthorizationCodeRow>(
       `SELECT ac.id,ac.client_id AS client_db_id,c.client_id,c.product_code,c.required_permission_code,c.environment,ac.user_id,ac.auth_session_id,ac.redirect_uri,ac.code_challenge,ac.code_challenge_method,ac.expires_at,ac.consumed_at,
+              s.absolute_expires_at AS auth_session_absolute_expires_at,
+              s.inactivity_expires_at AS auth_session_inactivity_expires_at,
               (s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now() AND s.user_session_version=u.session_version) AS auth_session_valid
          FROM auth_authorization_codes ac
          JOIN auth_clients c ON c.id=ac.client_id
@@ -857,8 +867,17 @@ export async function exchangeAuthorizationCode(input: {
       throw new DimproAuthError("Client permission denied during exchange.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.", { commitTransaction: true });
     }
     const appToken = createAppSessionToken();
-    const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);
-    const inactivityExpiresAt = new Date(Date.now() + config.sessionInactivitySeconds * 1000);
+    const sessionPolicy = getDimproAuthSessionPolicy(user.security_level);
+    const sessionNow = Date.now();
+    const parentAbsoluteExpiresAt = new Date(code.auth_session_absolute_expires_at);
+    const absoluteExpiresAt = new Date(Math.min(
+      sessionNow + sessionPolicy.absoluteSeconds * 1000,
+      parentAbsoluteExpiresAt.getTime(),
+    ));
+    const inactivityExpiresAt = new Date(Math.min(
+      sessionNow + sessionPolicy.inactivitySeconds * 1000,
+      absoluteExpiresAt.getTime(),
+    ));
     const appSession = await client.query<{ id: string }>(
       `INSERT INTO auth_app_sessions(client_id,user_id,auth_session_id,token_hash,user_session_version,absolute_expires_at,inactivity_expires_at,ip_created,user_agent,correlation_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::inet,$9,$10) RETURNING id`,
@@ -912,7 +931,8 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
   const lastSeen = new Date(row.last_seen_at).getTime();
   let inactivityExpiresAt = new Date(row.inactivity_expires_at);
   if (touch && now - lastSeen >= config.sessionTouchIntervalSeconds * 1000) {
-    const proposed = new Date(now + config.sessionInactivitySeconds * 1000);
+    const sessionPolicy = getDimproAuthSessionPolicy(row.security_level);
+    const proposed = new Date(now + sessionPolicy.inactivitySeconds * 1000);
     const absolute = new Date(row.absolute_expires_at);
     inactivityExpiresAt = proposed.getTime() > absolute.getTime() ? absolute : proposed;
     await authQuery(
@@ -923,7 +943,8 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
   if (touch) {
     const parentLastSeen = new Date(row.parent_last_seen_at).getTime();
     if (now - parentLastSeen >= config.sessionTouchIntervalSeconds * 1000) {
-      const parentProposed = new Date(now + config.sessionInactivitySeconds * 1000);
+      const sessionPolicy = getDimproAuthSessionPolicy(row.security_level);
+      const parentProposed = new Date(now + sessionPolicy.inactivitySeconds * 1000);
       const parentAbsolute = new Date(row.parent_absolute_expires_at);
       const parentInactivityExpiresAt = parentProposed.getTime() > parentAbsolute.getTime() ? parentAbsolute : parentProposed;
       await authQuery(
