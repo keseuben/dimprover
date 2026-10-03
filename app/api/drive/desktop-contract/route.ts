@@ -18,11 +18,12 @@ export async function GET(request: NextRequest) {
     clientId: auth.clientId,
     clientTargets: ["DIMPRO Drive Desktop", "DIMPRO Fájlműhely", "DIMPROVER webes admin előnézet"],
     auth: {
-      currentModes: ["license-admin-header", "drive-dev-token"],
-      productionDirection: "A végleges desktop kliens licenc tokennel és gépazonosítóval kér rövid életű Drive hozzáférési tokent.",
+      currentModes: ["desktop-access", "license-admin-header", "drive-dev-token"],
+      productionDirection: "A desktop kliens rövid életű Drive access tokent használ; DEV-ben a Windows Bridge device tokenből kérhető, később központi DIMPRO identity/licenc bootstrap adja ki.",
       requiredHeaders: [
         "x-dimpro-drive-client-id",
-        "x-dimpro-license-admin-key vagy x-dimpro-drive-dev-token fejlesztői módban",
+        "Authorization: Bearer <short-lived-drive-access-token>",
+        "x-dimpro-license-admin-key vagy x-dimpro-drive-dev-token csak fejlesztői fallback módban",
       ],
     },
     baseUrls: {
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
           cleanupEndpoint: "POST /api/projects/[projectId]/drive/storage/cleanup",
         },
       },
+      desktopAccessToken: "POST /api/drive/desktop-access/token",
       projectList: "GET /api/projects",
       health: "GET /api/projects/[projectId]/drive/health",
       tree: "GET /api/projects/[projectId]/drive/tree",
@@ -129,6 +131,7 @@ export async function GET(request: NextRequest) {
     },
     workflows: {
       projectGateManualSync: [
+        "POST /api/drive/desktop-access/token",
         "GET /api/projects",
         "GET /api/projects/[projectId]/drive/health",
         "GET /api/projects/[projectId]/drive/tree",
