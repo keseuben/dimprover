@@ -33,7 +33,7 @@
   box-shadow: 0 26px 70px rgba(28,67,105,.10), 0 9px 28px rgba(42,145,88,.07), inset 0 1px 0 rgba(255,255,255,.94);
 }
 .loaderCardComplete .logoCore {
-  border-color: rgba(52, 157, 99, .26);
+  border-color: rgba(52, 157, 99, .17);
   box-shadow: 0 14px 38px rgba(33,91,151,.10), 0 0 0 5px rgba(53,161,100,.045), inset 0 1px 0 #fff;
 }
 .loaderCardComplete .percentRing {
@@ -93,12 +93,12 @@
 .innerOrbit { inset: 43px; border: 1px solid rgba(64,132,198,.16); box-shadow: inset 0 0 24px rgba(61,133,204,.05); animation: innerBreath 3s ease-in-out infinite; }
 .orbitNode { width: 8px; height: 8px; position: absolute; border-radius: 2px; transform: rotate(30deg); background: linear-gradient(135deg, #8ac1f2, #2d79c3); box-shadow: 0 0 10px rgba(45,121,195,.28); }
 .node1 { left: 122px; top: -5px; }.node2 { right: 15px; top: 58px; }.node3 { right: 15px; bottom: 58px; }.node4 { left: 122px; bottom: -5px; }.node5 { left: 15px; bottom: 58px; }.node6 { left: 15px; top: 58px; }
-.logoCore { width: 160px; height: 160px; position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 26px; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.97), rgba(237,245,252,.93) 72%); border: 1px solid rgba(57,124,193,.18); box-shadow: 0 14px 38px rgba(33,91,151,.12), inset 0 1px 0 #fff, inset 0 0 24px rgba(70,145,216,.07); }
+.logoCore { width: 160px; height: 160px; position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 26px; background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.97), rgba(237,245,252,.93) 72%); border: 1px solid rgba(57,124,193,.11); box-shadow: 0 14px 38px rgba(33,91,151,.10), inset 0 1px 0 rgba(255,255,255,.92), inset 0 0 24px rgba(70,145,216,.05); }
 .logo { width: 132px; height: 132px; object-fit: contain; position: relative; z-index: 2; filter: drop-shadow(0 8px 14px rgba(29,98,166,.16)); animation: logoFloat 3.1s ease-in-out infinite; }
 .logoScan { position: absolute; z-index: 3; left: 12px; right: 12px; height: 1px; top: 15%; background: linear-gradient(90deg, transparent, rgba(33,135,222,.68), transparent); box-shadow: 0 0 8px rgba(33,135,222,.34); animation: scanCore 2.9s ease-in-out infinite; }
-.percentRing { position: absolute; right: -14px; bottom: 20px; min-width: 54px; height: 29px; display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; border-radius: 999px; border: 1px solid rgba(45,113,179,.17); background: rgba(248,252,255,.92); box-shadow: 0 5px 15px rgba(44,95,145,.08); color: #1d5f9f; font-variant-numeric: tabular-nums; }
+.percentRing { position: absolute; right: -17px; bottom: 20px; min-width: 54px; height: 29px; display: inline-flex; align-items: baseline; justify-content: center; gap: 2px; border-radius: 999px; border: 1px solid rgba(45,113,179,.17); background: rgba(248,252,255,.92); box-shadow: 0 5px 15px rgba(44,95,145,.08); color: #1d5f9f; font-variant-numeric: tabular-nums; }
 .percentRing strong { font-size: 14px; font-weight: 950; }.percentRing span { font-size: 9px; font-weight: 900; color: #7690a8; }
-.heading { text-align: center; margin-top: -4px; }
+.heading { text-align: center; margin-top: 4px; }
 .productLabel { display: inline-block; color: #1769ad; font-size: 10px; font-weight: 950; letter-spacing: .2em; }
 .heading h2 { margin: 6px 0 0; color: #203b56; font-size: 18px; line-height: 1.25; font-weight: 900; letter-spacing: -.015em; }
 .heading p { min-height: 18px; margin: 7px 0 0; color: #70869c; font-size: 11px; line-height: 1.4; font-weight: 700; }
@@ -135,10 +135,10 @@
   }
   .loaderComposition { gap: 17px; }
   .loaderCard { min-height: 430px; padding-top: 18px; padding-bottom: 16px; }
-  .visualStage { width: 228px; height: 228px; margin-top: -3px; margin-bottom: -5px; }
+  .visualStage { width: 228px; height: 228px; margin-top: -3px; margin-bottom: 0; }
   .logoCore { width: 146px; height: 146px; }
   .logo { width: 118px; height: 118px; }
-  .percentRing { right: -10px; bottom: 18px; }
+  .percentRing { right: -12px; bottom: 18px; }
   .progressBlock { margin-top: 10px; }
   .bootSteps { margin-top: 11px; }
   .systemFooter { margin-top: 10px; padding-top: 9px; }
@@ -165,11 +165,11 @@
     height: 196px;
     transform: scale(.92);
     margin-top: -12px;
-    margin-bottom: -15px;
+    margin-bottom: -7px;
   }
   .logoCore { width: 132px; height: 132px; }
   .logo { width: 104px; height: 104px; }
-  .percentRing { right: -8px; bottom: 16px; }
+  .percentRing { right: -10px; bottom: 16px; }
   .heading h2 { margin-top: 3px; font-size: 17px; }
   .heading p { margin-top: 4px; min-height: 15px; }
   .progressBlock { margin-top: 7px; }

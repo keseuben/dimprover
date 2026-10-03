@@ -18,7 +18,7 @@ check("orbit nodes are redistributed for 252px stage", () => {
   assert.match(css, /\.node4 \{ left: 122px; bottom: -5px; \}/);
 });
 check("percentage bubble moves outward on desktop", () => {
-  assert.match(css, /\.percentRing \{ position: absolute; right: -14px; bottom: 20px/);
+  assert.match(css, /\.percentRing \{ position: absolute; right: -17px; bottom: 20px/);
 });
 check("900px-height laptop keeps larger logo proportions", () => {
   assert.match(css, /max-height: 900px[\s\S]*?visualStage \{ width: 228px; height: 228px/);
@@ -26,7 +26,7 @@ check("900px-height laptop keeps larger logo proportions", () => {
   assert.match(css, /max-height: 900px[\s\S]*?logo \{ width: 118px; height: 118px/);
 });
 check("900px-height laptop percentage bubble stays outside core", () => {
-  assert.match(css, /max-height: 900px[\s\S]*?percentRing \{ right: -10px; bottom: 18px; \}/);
+  assert.match(css, /max-height: 900px[\s\S]*?percentRing \{ right: -12px; bottom: 18px; \}/);
 });
 check("760px-height laptop remains compact and readable", () => {
   assert.match(css, /max-height: 760px[\s\S]*?visualStage[\s\S]*?width: 196px;[\s\S]*?height: 196px/);
@@ -34,7 +34,7 @@ check("760px-height laptop remains compact and readable", () => {
   assert.match(css, /max-height: 760px[\s\S]*?logo \{ width: 104px; height: 104px/);
 });
 check("760px-height percentage bubble remains slightly outside", () => {
-  assert.match(css, /max-height: 760px[\s\S]*?percentRing \{ right: -8px; bottom: 16px; \}/);
+  assert.match(css, /max-height: 760px[\s\S]*?percentRing \{ right: -10px; bottom: 16px; \}/);
 });
 check("wordmark and completion hold remain present", () => {
   assert.match(loader, /DIGITÁLIS PROJEKTMUNKATÉR/);
