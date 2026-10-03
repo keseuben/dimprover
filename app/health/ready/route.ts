@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const db = await getAuthDatabaseHealth();
-    const ready = db.database && db.migrationCount >= 3;
+    const ready = db.database && db.migrationCount >= 4;
     return NextResponse.json(
       { ok: ready, service: "dimpro-auth", ready, database: db.database, migrationCount: db.migrationCount },
       { status: ready ? 200 : 503, headers: { "cache-control": "no-store" } },

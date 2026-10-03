@@ -11,9 +11,9 @@ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Érvényes --email
 if(!allowed.has(action))throw new Error(`Érvényes --action szükséges: ${[...allowed].join(", ")}.`);
 requireDevAuthEnvironment();
 if(process.env.DIMPRO_AUTH_ADMIN_CONFIRM!=="APPLY_DEV_AUTH_ADMIN_CHANGE")throw new Error("DIMPRO_AUTH_ADMIN_CONFIRM=APPLY_DEV_AUTH_ADMIN_CHANGE szükséges.");
-const connectionString=process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
-if(!connectionString)throw new Error("DIMPRO_AUTH_DATABASE_URL szükséges.");
-assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_app_dev");
+const connectionString=process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim();
+if(!connectionString)throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL szükséges.");
+assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_migrator_dev");
 const ssl=await strictDevAuthPgSsl();
 const client=new pg.Client({connectionString,ssl,application_name:"dimpro-auth-dev-user-admin"});
 const correlationId=randomUUID();

@@ -10,7 +10,7 @@ export async function GET() {
       getAuthDatabaseHealth(),
       getAuthClient("dimpro-drive-dev", "https://drive.dev.dimpro.hu/api/dimpro-auth/callback"),
     ]);
-    const sessionRepository = db.database && db.migrationCount >= 3;
+    const sessionRepository = db.database && db.migrationCount >= 4;
     const internalSso = Boolean(driveClient);
     const ready = sessionRepository && internalSso;
     return NextResponse.json(

@@ -57,7 +57,7 @@ export DIMPRO_AUTH_BACKUP_CONFIRMED=YES
 node scripts/dimpro-auth/activate-dev.mjs --apply-migrations
 ```
 
-Elvárt postcondition: `migrationCount=3`.
+Elvárt postcondition: `migrationCount=4`.
 
 Első pilot felhasználó ugyanebben a kontrollált körben opcionálisan:
 
@@ -71,3 +71,10 @@ node scripts/dimpro-auth/activate-dev.mjs --apply-migrations --bootstrap-email '
 A DB/runtime aktiválás után: `drive.dev.dimpro.hu` → `auth.dev.dimpro.hu` → OTP e-mail → egyszer használatos code → Drive app session. Kötelező negatív tesztek: hibás/lejárt OTP, 5 próbálkozás, code replay, state mismatch, PKCE mismatch, permission revoke, logout-all, inactivity/absolute expiry.
 
 PROD aktiválást ez a runbook nem végez és nem engedélyez.
+
+## Least-privilege runtime DB role
+
+- A runtime DB role nem kap általános CRUD/default privilege-et.
+- `004_auth_v022_runtime_privileges.sql` explicit, táblánkénti jogokat ad: policy/authz katalógusok csak SELECT; `auth_users` csak SELECT + `email_verified_at/updated_at` oszlopszintű UPDATE; challenge/session/SSO state SELECT+INSERT+UPDATE; audit csak SELECT+INSERT.
+- DELETE és authz/admin módosítás a runtime role számára nincs engedélyezve.
+- Pilot user/bootstrap admin műveletek a nem-runtime migrator credentialt használják, explicit confirmation mellett.

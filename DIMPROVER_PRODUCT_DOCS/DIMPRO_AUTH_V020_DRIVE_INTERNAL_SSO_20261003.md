@@ -49,6 +49,7 @@ A health válaszok nem tartalmaznak DB URL-t, titkot vagy stack trace-t.
 - `001_auth_v010_core.sql`
 - `002_auth_v020_internal_sso.sql`
 - `003_auth_v021_session_version.sql`
+- `004_auth_v022_runtime_privileges.sql`
 
 Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A runtime és a migráció külön PostgreSQL role-t/connection stringet használ (`dimpro_auth_app_dev` vs. `dimpro_auth_migrator_dev`). PROD továbbra is DENY.
 
@@ -56,7 +57,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 35/35 PASS.
+- AUTH V0.2.1 security contract: 37/37 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -124,3 +125,10 @@ A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált 
 - Az IP-kezelés csak szintaktikailag érvényes IPv4/IPv6 címet fogad el, elsőként a reverse proxy `x-real-ip` értékét használja; X-Forwarded-For esetén a proxyhoz legközelebbi, utolsó érvényes címet veszi.
 - Böngészős mutációknál HTTPS same-origin Origin ellenőrzés történik, a `Sec-Fetch-Site` cross-site/same-site kérések origin hiányában is elutasíthatók.
 - Audit e-mail azonosító többé nem nyers SHA-256, hanem külön `DIMPRO_AUTH_AUDIT_PEPPER` HMAC; OTP/session/audit/SSO négy külön secret.
+
+## Least-privilege runtime DB role
+
+- A runtime DB role nem kap általános CRUD/default privilege-et.
+- `004_auth_v022_runtime_privileges.sql` explicit, táblánkénti jogokat ad: policy/authz katalógusok csak SELECT; `auth_users` csak SELECT + `email_verified_at/updated_at` oszlopszintű UPDATE; challenge/session/SSO state SELECT+INSERT+UPDATE; audit csak SELECT+INSERT.
+- DELETE és authz/admin módosítás a runtime role számára nincs engedélyezve.
+- Pilot user/bootstrap admin műveletek a nem-runtime migrator credentialt használják, explicit confirmation mellett.

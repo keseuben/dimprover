@@ -11,9 +11,9 @@ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Érvényes --emai
 if(!["SIMPLE","STAFF","PROJECT_MANAGER","ORG_ADMIN","SUPERADMIN"].includes(level)) throw new Error("Érvénytelen --level.");
 if(process.env.DIMPRO_AUTH_BOOTSTRAP_CONFIRM!=="BOOTSTRAP_DEV_AUTH_USER") throw new Error("DIMPRO_AUTH_BOOTSTRAP_CONFIRM=BOOTSTRAP_DEV_AUTH_USER szükséges.");
 requireDevAuthEnvironment();
-const connectionString=process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
-if(!connectionString) throw new Error("DIMPRO_AUTH_DATABASE_URL szükséges.");
-assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_app_dev");
+const connectionString=process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim();
+if(!connectionString) throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL szükséges.");
+assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_migrator_dev");
 const ssl=await strictDevAuthPgSsl();
 const client=new pg.Client({connectionString,ssl,application_name:"dimpro-auth-bootstrap"});
 await client.connect();

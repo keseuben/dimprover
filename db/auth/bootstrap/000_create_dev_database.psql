@@ -53,13 +53,9 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SELECT format('ALTER SCHEMA public OWNER TO %I', :'migration_role') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'app_role') \gexec
 
--- Existing objects (if this script is re-run after migrations).
-SELECT format('GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO %I', :'app_role') \gexec
-SELECT format('GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'app_role') \gexec
-
--- Future objects created by the dedicated migration role.
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO %I', :'migration_role', :'app_role') \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE,SELECT ON SEQUENCES TO %I', :'migration_role', :'app_role') \gexec
+-- Runtime table privileges are intentionally NOT granted here.
+-- Migration 004_auth_v022_runtime_privileges.sql grants only the exact runtime
+-- DML required by the application. No broad default privileges are used.
 
 SELECT current_database() AS database_name, current_user AS bootstrap_user;
 \echo 'DIMPRO AUTH DEV database bootstrap complete.'

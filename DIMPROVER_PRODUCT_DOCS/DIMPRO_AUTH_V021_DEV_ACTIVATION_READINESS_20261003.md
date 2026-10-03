@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 35/35 PASS.
+- AUTH V0.2.1 security contract: 37/37 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -35,7 +35,7 @@ Dátum: 2026-10-03
 4. `DIMPRO Internal PostgreSQL CA` authoritative root CA telepítése az auth runtime hostra.
 5. Külön migrator/runtime connection string secret.
 6. OTP/session/SSO pepper secret generálás és titkos secret-store beállítás.
-7. Migráció 001→002→003 backup után.
+7. Migráció 001→002→003→004 backup után.
 8. Első DEV user bootstrap `--grant-drive` kapcsolóval.
 9. Fizikai E2E: `drive.dev.dimpro.hu` → `auth.dev.dimpro.hu` → e-mail OTP → code exchange → Drive app session.
 
@@ -82,3 +82,10 @@ Dátum: 2026-10-03
 - Az IP-kezelés csak szintaktikailag érvényes IPv4/IPv6 címet fogad el, elsőként a reverse proxy `x-real-ip` értékét használja; X-Forwarded-For esetén a proxyhoz legközelebbi, utolsó érvényes címet veszi.
 - Böngészős mutációknál HTTPS same-origin Origin ellenőrzés történik, a `Sec-Fetch-Site` cross-site/same-site kérések origin hiányában is elutasíthatók.
 - Audit e-mail azonosító többé nem nyers SHA-256, hanem külön `DIMPRO_AUTH_AUDIT_PEPPER` HMAC; OTP/session/audit/SSO négy külön secret.
+
+## Least-privilege runtime DB role
+
+- A runtime DB role nem kap általános CRUD/default privilege-et.
+- `004_auth_v022_runtime_privileges.sql` explicit, táblánkénti jogokat ad: policy/authz katalógusok csak SELECT; `auth_users` csak SELECT + `email_verified_at/updated_at` oszlopszintű UPDATE; challenge/session/SSO state SELECT+INSERT+UPDATE; audit csak SELECT+INSERT.
+- DELETE és authz/admin módosítás a runtime role számára nincs engedélyezve.
+- Pilot user/bootstrap admin műveletek a nem-runtime migrator credentialt használják, explicit confirmation mellett.
