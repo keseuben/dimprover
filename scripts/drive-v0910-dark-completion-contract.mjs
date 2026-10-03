@@ -6,7 +6,7 @@ const buildInfo = fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
 let pass=0; const check=(label,fn)=>{fn();pass+=1;console.log("PASS "+String(pass).padStart(2,"0")+" "+label);};
 const dark = 'html[data-drive-theme="dark"]';
 const need=(token)=>{assert.ok(css.includes(dark) && css.includes(token),"missing dark completion token "+token);};
-check("V0.9.10 development version is active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.10"/));
+check("Drive dark-completion series uses shared 0.9.x version source",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/));
 check("selection and compact status bars are dark",()=>{for(const t of [".fileSelectionBar",".fileCompactControls",".fileStatusLegend"]) need(t);});
 check("review matrix table and sticky cells are dark",()=>{for(const t of [".reviewTable th",".reviewTable td",".reviewTable th:first-child",".reviewTable td:first-child"]) need(t);});
 check("review grouped headers have dark engineering tones",()=>{for(const t of [".reviewGroupTechnical",".reviewGroupCustomer",".reviewGroupManager",".reviewGroupInvestor",".reviewGroupLifecycle"]) need(t);});
