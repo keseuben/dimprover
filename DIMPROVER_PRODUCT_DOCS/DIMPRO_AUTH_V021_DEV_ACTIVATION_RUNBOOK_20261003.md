@@ -57,7 +57,7 @@ export DIMPRO_AUTH_BACKUP_CONFIRMED=YES
 node scripts/dimpro-auth/activate-dev.mjs --apply-migrations
 ```
 
-Elvárt postcondition: `migrationCount=4`.
+Elvárt postcondition: `migrationCount=5`.
 
 Első pilot felhasználó ugyanebben a kontrollált körben opcionálisan:
 
@@ -223,3 +223,8 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A központi `noreply@dimpro.hu` profil marad az AUTH feladója.
 - A tárgysor formátuma: `DIMPRO belépési kód: 123456`, tehát az aktuális egyszer használatos kód már a tárgyban is megjelenik.
 - A levéltörzsben a kód továbbra is jól látható, a DB-ben továbbra sem tároljuk olvasható formában.
+
+## AUTH V0.3 invitation migration
+
+- `005_auth_v030_invitations_and_scopes.sql`: invitation-only onboarding, külön personal/project Drive entitlement, projekt-scope meghívás és runtime SECURITY DEFINER műveletek.
+- Elvárt postcondition: `migrationCount=5`.

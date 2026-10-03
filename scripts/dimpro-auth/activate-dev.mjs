@@ -52,6 +52,7 @@ console.log(JSON.stringify({
 run("contract-v010","scripts/dimpro-auth/auth-v010-contract.mjs");
 run("contract-v020","scripts/dimpro-auth/auth-v020-sso-contract.mjs");
 run("contract-v021","scripts/dimpro-auth/auth-v021-security-contract.mjs");
+run("contract-v030","scripts/dimpro-auth/auth-v030-invitation-contract.mjs");
 
 if(mode==="plan"){
   console.log(JSON.stringify({
@@ -59,7 +60,7 @@ if(mode==="plan"){
     next:[
       "DB pg_hba + dimpro_auth_dev roles/database bootstrap on db.dimpro.hu",
       "authoritative DIMPRO Internal PostgreSQL CA install",
-      "DEV runtime/migrator URLs + independent OTP/session/SSO secrets",
+      "DEV runtime/migrator URLs + independent OTP/session/audit/SSO/invitation secrets",
       "node scripts/dimpro-auth/activate-dev.mjs --preflight",
       "backup confirmation",
       "node scripts/dimpro-auth/activate-dev.mjs --apply-migrations",
@@ -88,7 +89,7 @@ run("migration-apply","scripts/dimpro-auth/migrate.mjs",["--apply"]);
 const after=run("db-readiness-after","scripts/dimpro-auth/db-readiness.mjs");
 let readiness=null;
 try{readiness=JSON.parse(after.slice(after.indexOf("{")));}catch{}
-if(!readiness||Number(readiness.migrationCount)!==4)fail(`Migráció utáni migrationCount nem 4: ${readiness?.migrationCount??"ismeretlen"}`);
+if(!readiness||Number(readiness.migrationCount)!==5)fail(`Migráció utáni migrationCount nem 5: ${readiness?.migrationCount??"ismeretlen"}`);
 
 if(bootstrapEmail){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bootstrapEmail))fail("A --bootstrap-email értéke nem érvényes e-mail.");
@@ -99,7 +100,7 @@ if(bootstrapEmail){
 console.log(JSON.stringify({
   ok:true,
   stage:"DEV_DATABASE_ACTIVATED",
-  migrationCount:4,
+  migrationCount:5,
   bootstrapUserCreated:Boolean(bootstrapEmail),
   productionAccess:"DENY",
   next:"Deploy AUTH DEV runtime secrets/config, then execute physical email + browser E2E.",

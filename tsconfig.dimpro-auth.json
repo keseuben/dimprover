@@ -7,6 +7,7 @@
     "app/api/dimpro-auth/**/*.ts",
     "app/health/**/*.ts",
     "app/auth/apps/**/*.tsx",
+    "app/auth-invite/**/*.tsx",
     "app/login/DimproAppOtpLogin.tsx",
     "app/login/page.tsx",
     "components/auth/LogoutButton.tsx",

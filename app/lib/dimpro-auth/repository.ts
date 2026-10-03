@@ -432,6 +432,77 @@ export async function hasAuthPermission(input: { userId: string; permissionCode:
   return Boolean(result.rows[0]?.allowed);
 }
 
+export async function hasProjectAuthPermission(input: {
+  userId: string;
+  projectId: string;
+  permissionCode: string;
+  productCode?: string | null;
+}) {
+  const productCode = input.productCode?.trim().toUpperCase() || null;
+  const result = await authQuery<{ allowed: boolean }>(
+    `SELECT EXISTS(
+       SELECT 1
+         FROM auth_access_grants g
+         JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+         JOIN auth_permissions p ON p.id=rp.permission_id
+         LEFT JOIN auth_products product ON product.id=g.product_id
+         JOIN auth_projects project ON project.id=g.project_id AND project.status='ACTIVE'
+        WHERE g.user_id=$1
+          AND g.project_id=$2
+          AND p.code=$3
+          AND g.revoked_at IS NULL
+          AND g.valid_from<=now()
+          AND (g.valid_until IS NULL OR g.valid_until>=now())
+          AND ($4::text IS NULL OR (product.status='ACTIVE' AND product.code=$4))
+     ) AS allowed`,
+    [input.userId, input.projectId, input.permissionCode, productCode],
+  );
+  return Boolean(result.rows[0]?.allowed);
+}
+
+export async function hasPersonalDriveAccess(userId: string) {
+  const result = await authQuery<{ allowed: boolean }>(
+    `SELECT EXISTS(
+       SELECT 1
+         FROM auth_access_grants g
+         JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+         JOIN auth_permissions p ON p.id=rp.permission_id
+         JOIN auth_products product ON product.id=g.product_id AND product.status='ACTIVE'
+        WHERE g.user_id=$1
+          AND product.code='DRIVE'
+          AND p.code='drive.personal.access'
+          AND g.project_id IS NULL
+          AND g.revoked_at IS NULL
+          AND g.valid_from<=now()
+          AND (g.valid_until IS NULL OR g.valid_until>=now())
+     ) AS allowed`,
+    [userId],
+  );
+  return Boolean(result.rows[0]?.allowed);
+}
+
+export async function listAuthorizedProjectIds(userId: string, productCode = "DRIVE") {
+  const normalizedProduct = productCode.trim().toUpperCase();
+  const result = await authQuery<{ project_id: string }>(
+    `SELECT DISTINCT g.project_id
+       FROM auth_access_grants g
+       JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+       JOIN auth_permissions p ON p.id=rp.permission_id
+       JOIN auth_products product ON product.id=g.product_id AND product.status='ACTIVE'
+       JOIN auth_projects project ON project.id=g.project_id AND project.status='ACTIVE'
+      WHERE g.user_id=$1
+        AND product.code=$2
+        AND p.code='drive.project.access'
+        AND g.project_id IS NOT NULL
+        AND g.revoked_at IS NULL
+        AND g.valid_from<=now()
+        AND (g.valid_until IS NULL OR g.valid_until>=now())
+      ORDER BY g.project_id`,
+    [userId, normalizedProduct],
+  );
+  return result.rows.map((row) => row.project_id);
+}
+
 type AuthClientRow = {
   id: string;
   client_id: string;

@@ -38,6 +38,20 @@ export function hashDimproAuthSessionToken(token: string) {
     .digest();
 }
 
+export function createDimproAuthInvitationToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function isValidDimproAuthInvitationToken(token: string) {
+  return /^[A-Za-z0-9_-]{43}$/.test(token);
+}
+
+export function hashDimproAuthInvitationToken(token: string) {
+  return createHmac("sha256", getDimproAuthConfig().invitationPepper)
+    .update(`dimpro-auth-invitation:v1:${token}`, "utf8")
+    .digest();
+}
+
 export function hashDimproAuthEmailForAudit(email: string) {
   return createHmac("sha256", getDimproAuthConfig().auditPepper)
     .update(`dimpro-auth-email-audit:v1:${normalizeDimproAuthEmail(email)}`, "utf8")

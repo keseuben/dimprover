@@ -5,6 +5,7 @@ export type DimproAuthConfig = {
   sessionPepper: string;
   auditPepper: string;
   ssoStateSecret: string;
+  invitationPepper: string;
   otpTtlSeconds: number;
   otpMaxAttempts: number;
   otpResendCooldownSeconds: number;
@@ -86,8 +87,9 @@ export function getDimproAuthConfig(): DimproAuthConfig {
   const sessionPepper = requiredSecret("DIMPRO_AUTH_SESSION_PEPPER");
   const auditPepper = requiredSecret("DIMPRO_AUTH_AUDIT_PEPPER");
   const ssoStateSecret = requiredSecret("DIMPRO_AUTH_SSO_STATE_SECRET");
-  if (new Set([otpPepper, sessionPepper, auditPepper, ssoStateSecret]).size !== 4) {
-    throw new Error("A DIMPRO AUTH OTP/session/audit/SSO titkoknak egymástól függetlennek kell lenniük.");
+  const invitationPepper = requiredSecret("DIMPRO_AUTH_INVITATION_PEPPER");
+  if (new Set([otpPepper, sessionPepper, auditPepper, ssoStateSecret, invitationPepper]).size !== 5) {
+    throw new Error("A DIMPRO AUTH OTP/session/audit/SSO/invitation titkoknak egymástól függetlennek kell lenniük.");
   }
   return {
     environment,
@@ -96,6 +98,7 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     sessionPepper,
     auditPepper,
     ssoStateSecret,
+    invitationPepper,
     otpTtlSeconds: exactInteger("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 * 60),
     otpMaxAttempts: exactInteger("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5),
     otpResendCooldownSeconds: exactInteger("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30),

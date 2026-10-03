@@ -82,6 +82,7 @@ export async function proxy(request: NextRequest) {
   const host = hostHeader.replace(/:\d+$/, "");
   const isLoginPage = pathname.startsWith("/login");
   const isDimproInvitationPage = pathname.startsWith("/account/meghivas");
+  const isDimproAuthInvitationPage = pathname.startsWith("/auth-invite/");
   const isLegacyMeetingAssistantPath = pathname.startsWith("/jegyzokonyvek/ertekezleti-kisero");
   const isDevEnvironment = host === "dev.dimpro.hu" || host === "dev.dimprover.hu" || host.endsWith(".dev.dimpro.hu");
   const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu" || host === "app.dev.dimpro.hu";
@@ -489,7 +490,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (isDimproAuthHost && (isLoginPage || pathname.startsWith("/api/dimpro-auth/"))) {
+  if (isDimproAuthHost && (isLoginPage || isDimproAuthInvitationPage || pathname.startsWith("/api/dimpro-auth/"))) {
     return applyDimproAuthSecurityHeaders(response);
   }
 

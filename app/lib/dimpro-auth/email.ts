@@ -31,3 +31,36 @@ export async function sendDimproAuthOtpEmail(input: { email: string; displayName
     </div>`;
   return sendDimproMail({ profileId: "noreply", to: [input.email], subject, text, html });
 }
+
+export async function sendDimproProjectInvitationEmail(input: {
+  to: string;
+  inviteeName?: string | null;
+  projectName: string;
+  invitationUrl: string;
+  expiresAt: string;
+}) {
+  const recipientName = input.inviteeName?.trim() || "Meghívott";
+  const expires = new Intl.DateTimeFormat("hu-HU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Budapest",
+  }).format(new Date(input.expiresAt));
+  const subject = `DIMPRO projektmeghívás: ${input.projectName}`;
+  const text = [
+    `Kedves ${recipientName}!`,
+    "",
+    `Meghívást kaptál a(z) ${input.projectName} projekthez a DIMPRO rendszerben.`,
+    `Meghívás elfogadása: ${input.invitationUrl}`,
+    `A meghívó lejárata: ${expires}`,
+    "",
+    "A belépés a központi DIMPRO AUTH felületen, e-mailben küldött egyszer használatos kóddal történik.",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f5f7fa;color:#172033;padding:24px"><div style="max-width:620px;margin:auto;background:#fff;border:1px solid #dfe5ec;border-radius:14px;padding:28px"><div style="font-size:13px;font-weight:800;letter-spacing:.12em;color:#697586">DIMPRO</div><h1 style="font-size:24px;margin:10px 0 18px">Projektmeghívás</h1><p>Kedves ${escapeHtml(recipientName)}!</p><p>Meghívást kaptál a(z) <strong>${escapeHtml(input.projectName)}</strong> projekthez a DIMPRO rendszerben.</p><p style="margin:28px 0"><a href="${escapeHtml(input.invitationUrl)}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;font-weight:800;padding:14px 20px;border-radius:10px">Meghívás elfogadása</a></p><p style="font-size:13px;color:#697586">A meghívó lejárata: ${escapeHtml(expires)}</p><p style="font-size:13px;color:#697586">A belépés a központi DIMPRO AUTH felületen, e-mailben küldött egyszer használatos kóddal történik.</p></div></body></html>`;
+  await sendDimproMail({
+    profileId: "noreply",
+    to: [input.to],
+    subject,
+    text,
+    html,
+  });
+}

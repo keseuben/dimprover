@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 26/26 PASS.
 - AUTH V0.2 SSO contract: 38/38 PASS.
-- AUTH V0.2.1 security contract: 55/55 PASS.
+- AUTH V0.2.1 security contract: 56/56 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -35,7 +35,7 @@ Dátum: 2026-10-03
 4. `DIMPRO Internal PostgreSQL CA` authoritative root CA telepítése az auth runtime hostra.
 5. Külön migrator/runtime connection string secret.
 6. OTP/session/SSO pepper secret generálás és titkos secret-store beállítás.
-7. Migráció 001→002→003→004 backup után.
+7. Migráció 001→002→003→004→005 backup után.
 8. Első DEV user bootstrap `--grant-drive` kapcsolóval.
 9. Fizikai E2E: `drive.dev.dimpro.hu` → `auth.dev.dimpro.hu` → e-mail OTP → code exchange → Drive app session.
 
@@ -234,3 +234,8 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A központi `noreply@dimpro.hu` profil marad az AUTH feladója.
 - A tárgysor formátuma: `DIMPRO belépési kód: 123456`, tehát az aktuális egyszer használatos kód már a tárgyban is megjelenik.
 - A levéltörzsben a kód továbbra is jól látható, a DB-ben továbbra sem tároljuk olvasható formában.
+
+## AUTH V0.3 invitation migration
+
+- `005_auth_v030_invitations_and_scopes.sql`: invitation-only onboarding, külön personal/project Drive entitlement, projekt-scope meghívás és runtime SECURITY DEFINER műveletek.
+- Elvárt postcondition: `migrationCount=5`.
