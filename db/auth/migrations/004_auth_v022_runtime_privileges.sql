@@ -1,5 +1,3 @@
-BEGIN;
-
 -- Runtime least privilege. The migration role owns the schema; the application
 -- role receives only the DML it actually needs. The role name is derived from
 -- the environment-specific migrator role (dev/prod), so this migration remains
@@ -47,5 +45,3 @@ BEGIN
   EXECUTE format('GRANT USAGE ON SEQUENCE %s TO %I', audit_sequence, app_role);
 END;
 $$;
-
-COMMIT;

@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 35/35 PASS.
-- AUTH V0.2.1 security contract: 48/48 PASS.
+- AUTH V0.2.1 security contract: 49/49 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -164,3 +164,10 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - `scripts/dimpro-auth/render-nginx-dev.mjs` csak explicit TLS cert/key útvonal és loopback `http://127.0.0.1:<port>` upstream mellett renderel. Külső upstream, alacsony/érvénytelen port vagy relatív cert útvonal fail-closed.
 - A proxy felülírja az `X-Real-IP` értéket `$remote_addr`-ra, és beállítja a `Host`, `X-Forwarded-For`, `X-Forwarded-Proto=https`, `X-Forwarded-Host` fejléceket.
 - Ez **előkészített konfiguráció**, nem került telepítésre a 213.160.68.32 DEV ingressre. Aktiválás előtt a `login.dev.dimpro.hu` nevet tartalmazó új/megújított tanúsítvány és `nginx -t` ellenőrzés szükséges.
+
+## Atomic migration ledger
+
+- A migration SQL fájlok már nem tartalmaznak saját `BEGIN/COMMIT` blokkot; a `migrate.mjs` futtató nyit tranzakciót minden egyes migrációhoz.
+- A séma-módosítás és az `auth_schema_migrations` checksum/ledger bejegyzés **ugyanabban a tranzakcióban** történik.
+- Ha a SQL vagy a ledger insert hibázik, teljes `ROLLBACK` történik; nem maradhat alkalmazott, de nem naplózott migráció.
+- Mivel AUTH migráció még nem került APPLY-ra a cél DB-n, az 001–004 checksumok a mostani pre-activation forrásállapothoz lettek újraszámolva. Az első éles/DEV APPLY után ezek a fájlok immutable-ként kezelendők.

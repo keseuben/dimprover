@@ -1,5 +1,3 @@
-BEGIN;
-
 ALTER TABLE auth_users
   ADD COLUMN IF NOT EXISTS session_version integer NOT NULL DEFAULT 1 CHECK (session_version > 0);
 
@@ -99,5 +97,3 @@ DROP TRIGGER IF EXISTS auth_role_permissions_session_version ON auth_role_permis
 CREATE TRIGGER auth_role_permissions_session_version
 AFTER INSERT OR UPDATE OR DELETE ON auth_role_permissions
 FOR EACH ROW EXECUTE FUNCTION auth_bump_role_users_session_version();
-
-COMMIT;

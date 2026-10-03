@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS auth_schema_migrations (
   version integer PRIMARY KEY,
   name text NOT NULL UNIQUE,
@@ -150,5 +148,3 @@ INSERT INTO auth_role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM auth_roles r CROSS JOIN auth_permissions p
 WHERE r.code='DRIVE_USER' AND p.code='drive.access'
 ON CONFLICT DO NOTHING;
-
-COMMIT;

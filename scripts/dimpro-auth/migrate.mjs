@@ -38,12 +38,20 @@ try {
       continue;
     }
     const sql = await readFile(path.join(migrationDir, item.file), "utf8");
-    await client.query(sql);
-    await client.query(
-      "INSERT INTO auth_schema_migrations(version,name,checksum_sha256) VALUES ($1,$2,$3) ON CONFLICT (version) DO NOTHING",
-      [version, item.file, item.sha256],
-    );
-    console.log(`APPLIED ${item.file}`);
+    await client.query("BEGIN");
+    try {
+      await client.query(sql);
+      const recorded = await client.query(
+        "INSERT INTO auth_schema_migrations(version,name,checksum_sha256) VALUES ($1,$2,$3) RETURNING version",
+        [version, item.file, item.sha256],
+      );
+      if (recorded.rowCount !== 1) throw new Error(`Migration ledger insert failed: ${item.file}`);
+      await client.query("COMMIT");
+      console.log(`APPLIED ${item.file}`);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    }
   }
 } finally {
   await client.end();

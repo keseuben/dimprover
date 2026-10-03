@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS auth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id text NOT NULL UNIQUE CHECK (client_id ~ '^dimpro-[a-z0-9-]{3,80}$'),
@@ -110,5 +108,3 @@ BEGIN
   ON CONFLICT DO NOTHING;
 END;
 $$;
-
-COMMIT;
