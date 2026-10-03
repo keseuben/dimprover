@@ -350,7 +350,7 @@ function Get-DriveChangeSnapshot([string]$ProjectIdValue, [long]$StartCursor) {
     nextCursor = $cursorValue
     count = $all.Count
     pages = $pageCount
-    changes = @($all)
+    changes = $all.ToArray()
   }
 }
 
@@ -519,7 +519,7 @@ function New-ManualSyncPlan {
     localRoot = (Resolve-Path -LiteralPath $LocalRootValue).Path
     sourceCursor = [long]$StartCursor
     conflictCount = $conflictCount
-    operations = @($operations)
+    operations = $operations.ToArray()
     review = [ordered]@{
       required = $true
       operationCount = $operations.Count
@@ -534,9 +534,9 @@ function New-ManualSyncPlan {
     folders = $folders
     documents = $documents
     manifest = $manifest
-    operations = @($operations)
-    conflicts = @($conflicts)
-    unchanged = @($unchanged)
+    operations = $operations.ToArray()
+    conflicts = $conflicts.ToArray()
+    unchanged = $unchanged.ToArray()
     applyPlan = $applyPlan
     latestCursor = $latestCursor
   }
