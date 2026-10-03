@@ -24,9 +24,10 @@ export async function POST(request: NextRequest) {
   }
   const body = await request.json().catch(() => null);
   const email = normalizeDimproAuthEmail(body && typeof body === "object" ? (body as { email?: unknown }).email : "");
-  const token = body && typeof body === "object" && typeof (body as { token?: unknown }).token === "string"
-    ? String((body as { token: string }).token).replace(/\D/g, "").slice(0, 6)
+  const rawToken = body && typeof body === "object" && typeof (body as { token?: unknown }).token === "string"
+    ? String((body as { token: string }).token).trim()
     : "";
+  const token = /^\d{6}$/.test(rawToken) ? rawToken : "";
   if (!isValidDimproAuthEmail(email) || token.length !== 6) {
     return NextResponse.json({ ok: false, error: "A belépési kód hibás vagy lejárt.", correlationId }, { status: 400, headers: { "cache-control": "no-store" } });
   }

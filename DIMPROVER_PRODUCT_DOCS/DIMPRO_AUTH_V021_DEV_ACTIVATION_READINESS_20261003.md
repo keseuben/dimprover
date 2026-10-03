@@ -21,7 +21,7 @@ Dátum: 2026-10-03
 - SMTP `noreply` profil konfiguráció + TLS/authentication verify: PASS. Küldés nem történt.
 
 ## Teszt
-- AUTH V0.1 contract: 22/22 PASS.
+- AUTH V0.1 contract: 25/25 PASS.
 - AUTH V0.2 SSO contract: 35/35 PASS.
 - AUTH V0.2.1 security contract: 50/50 PASS.
 - Célzott ESLint: PASS.
@@ -178,3 +178,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A migration ledger létezését `to_regclass` ellenőrzi; általános SQL hibát többé nem nyel el `catch` úgy, mintha a ledger csak nem létezne.
 - Üres ledger esetén a 001 migrációnak kell elsőnek lennie; eltérő állapot fail-closed.
 - A lock felszabadítása `finally` ágban történik.
+
+## OTP input and level gating
+
+- Az OTP policy pontosan 5 perc / 5 hibás próbálkozás / 30 másodperc újraküldési idő; ezek a kötelező értékek környezeti változóval nem gyengíthetők.
+- A verify API kizárólag pontosan hat számjegyet fogad el; tetszőleges szövegből nem tisztít ki „használható” kódot.
+- `STAFF`, `PROJECT_MANAGER`, `ORG_ADMIN`, `SUPERADMIN` felhasználónak a SIMPLE e-mail OTP ág nem küld kódot; a publikus válasz továbbra is account-enumeration ellen védett.

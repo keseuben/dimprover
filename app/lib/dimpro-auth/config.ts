@@ -39,6 +39,16 @@ function boundedInteger(name: string, fallback: number, min: number, max: number
   return parsed;
 }
 
+function exactInteger(name: string, expected: number) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return expected;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed !== expected) {
+    throw new Error(`${name} kötelező értéke ${expected}; biztonsági policy nem gyengíthető környezeti változóval.`);
+  }
+  return parsed;
+}
+
 export function getDimproAuthConfig(): DimproAuthConfig {
   const rawEnvironment = process.env.DIMPRO_AUTH_ENVIRONMENT?.trim().toUpperCase();
   if (rawEnvironment !== "DEV" && rawEnvironment !== "PROD") {
@@ -86,9 +96,9 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     sessionPepper,
     auditPepper,
     ssoStateSecret,
-    otpTtlSeconds: boundedInteger("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 * 60, 60, 15 * 60),
-    otpMaxAttempts: boundedInteger("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5, 1, 10),
-    otpResendCooldownSeconds: boundedInteger("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30, 5, 300),
+    otpTtlSeconds: exactInteger("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 * 60),
+    otpMaxAttempts: exactInteger("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5),
+    otpResendCooldownSeconds: exactInteger("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30),
     otpEmailWindowMinutes: boundedInteger("DIMPRO_AUTH_OTP_EMAIL_WINDOW_MINUTES", 15, 1, 120),
     otpEmailWindowMaxRequests: boundedInteger("DIMPRO_AUTH_OTP_EMAIL_WINDOW_MAX_REQUESTS", 5, 1, 50),
     otpIpWindowMinutes: boundedInteger("DIMPRO_AUTH_OTP_IP_WINDOW_MINUTES", 15, 1, 120),

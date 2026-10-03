@@ -33,4 +33,7 @@ check("Drive permission is enforced server-side",()=>{const proxy=read("proxy.ts
 check("bootstrap user requires explicit confirmation",()=>{const b=read("scripts/dimpro-auth/bootstrap-user.mjs");assert.match(b,/BOOTSTRAP_DEV_AUTH_USER/);assert.match(b,/--grant-drive/)});
 check("mutation origin check exists",()=>assert.match(security,/validateSameOriginMutation/));
 check("migration apply is explicit guarded",()=>{const m=read("scripts/dimpro-auth/migrate.mjs");assert.match(m,/--apply/);assert.match(m,/APPLY_DEV_AUTH_MIGRATIONS/);assert.match(m,/DIMPRO_AUTH_MIGRATION_DATABASE_URL/)});
+check("mandatory OTP policy cannot be weakened by environment overrides",()=>{const c=read("app/lib/dimpro-auth/config.ts");assert.match(c,/otpTtlSeconds: exactInteger\("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 \* 60\)/);assert.match(c,/otpMaxAttempts: exactInteger\("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5\)/);assert.match(c,/otpResendCooldownSeconds: exactInteger\("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30\)/);assert.match(c,/biztonsági policy nem gyengíthető/)});
+check("elevated security-level users are not sent SIMPLE email OTP",()=>{assert.match(repo,/userRow\.security_level === "SIMPLE"/);assert.match(repo,/deliverable: Boolean\(user\)/)});
+check("OTP verification accepts exactly six digits and does not sanitize arbitrary text",()=>{const route=read("app/api/dimpro-auth/verify-otp/route.ts");assert.match(route,/\^\\d\{6\}\$\/.test\(rawToken\)/);assert.doesNotMatch(route,/replace\(\/\\D\/g/)});
 console.log(`DIMPRO AUTH V0.1 contract PASS · ${n}/${n}`);

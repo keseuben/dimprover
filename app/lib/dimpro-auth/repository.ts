@@ -151,7 +151,12 @@ export async function issueLoginOtp(input: {
       [input.email],
     );
     const userRow = userResult.rows[0] || null;
-    const user = userRow && userRow.status === "ACTIVE" && userRow.login_enabled ? userFromRow(userRow) : null;
+    const user = userRow
+      && userRow.status === "ACTIVE"
+      && userRow.login_enabled
+      && userRow.security_level === "SIMPLE"
+      ? userFromRow(userRow)
+      : null;
 
     const latest = await client.query<{ created_at: Date }>(
       `SELECT created_at FROM auth_email_challenges
