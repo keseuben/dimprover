@@ -63,3 +63,18 @@ A Windows kliens a DPAPI-val védett BENJADMIN Bridge device tokenből kér röv
 - fizikai Windows PowerShell 5.1 acceptance: következő kapu.
 
 PROD: DENY.
+
+## V0.1.5 FIX1 physical Windows PowerShell 5.1 acceptance – PASS
+
+Runtime: Windows PowerShell `5.1.22621.6133`
+
+Result:
+- `POWERSHELL_PARSE_PASS`
+- main script SHA-256: `c291d582dfccb45ed91176b721db47430bfa71a6661a6c136cef24e7f751b623`
+- `STATIC_GUARD_PASS`
+- `EXACT_APPLY_CONTRACT_PASS`
+- `DELETE_OPERATION_DENY_PASS`
+- `PROBE_SKIPPED`
+- `DIMPRO_DRIVE_DESKTOP_V015_FIX1_WINDOWS_ACCEPTANCE_PASS`
+
+FIX1 source commit: `2d64728d85cde30e7cabda4031480d8b31a2ea2b`.
