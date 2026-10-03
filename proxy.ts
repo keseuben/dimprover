@@ -105,7 +105,8 @@ export async function proxy(request: NextRequest) {
     isProjectGateHost && (pathname === "/kiadas" || pathname === "/projektkapu/kiadas");
   const projectGateDevAccessConfigured = isProjectGateHost && isProjectGateDevAccessConfigured(host);
   const projectGateDevSession = projectGateDevAccessConfigured && requestHasProjectGateDevAccess(request);
-  const driveDevAccessConfigured = isDriveHost && isDriveDevAccessConfigured(host);
+  const driveCentralSsoConfig = isDriveHost ? resolveDriveSsoConfig(host) : null;
+  const driveDevAccessConfigured = isDriveHost && !driveCentralSsoConfig && isDriveDevAccessConfigured(host);
   const driveDevSession = driveDevAccessConfigured && requestHasDriveDevAccess(request);
   const isProjectGateBrandHost = host === "door.dimpro.hu" || host === "www.door.dimpro.hu";
   let projectGateRewriteUrl: URL | null = null;
@@ -213,6 +214,14 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/drive";
     url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
+
+  if (isDriveHost && isLoginPage && driveCentralSsoConfig) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/api/dimpro-auth/start";
+    url.search = "";
+    url.searchParams.set("return_to", "/drive");
     return NextResponse.redirect(url, 307);
   }
 
@@ -451,7 +460,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/projects/")
   );
   if (isDriveHost && (isDrivePage || isDriveProtectedApi)) {
-    const driveConfig = resolveDriveSsoConfig(host);
+    const driveConfig = driveCentralSsoConfig;
     const token = request.cookies.get(DIMPRO_APP_SESSION_COOKIE)?.value?.trim() || "";
     let session = null;
     try {

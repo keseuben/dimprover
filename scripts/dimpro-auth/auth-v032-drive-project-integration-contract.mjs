@@ -12,6 +12,7 @@ const callback=read("app/api/dimpro-auth/callback/route.ts");
 const store=read("app/lib/project-core/store.ts");
 const dbRepo=read("app/lib/project-core/databaseRepository.ts");
 const fileRepo=read("app/lib/project-core/fileRepository.ts");
+const proxy=read("proxy.ts");
 check("Drive browser auth resolves central app session before legacy token or Supabase",()=>{assert.match(notification,/getDimproAppSessionContext/);const a=notification.indexOf('const appSession = await getDimproAppSessionContext');const b=notification.indexOf('const driveAuth = await isDriveApiAuthorized');const c=notification.indexOf('const webSession = await getWebSessionContext');assert.ok(a>=0&&b>a&&c>b)});
 check("central app session aliases never include shared DEV aliases",()=>{const block=notification.split('async function getDimproAppSessionContext')[1].split('async function getWebSessionContext')[0];assert.match(block,/userAliases: uniqueUserIds\(\[session\.user\.id, session\.user\.email\]\)/);assert.doesNotMatch(block,/DEV_WEB_USER_ID|DEV_DESKTOP_USER_ID/)});
 check("project invitation requires Project Core manage-members permission",()=>{assert.match(invite,/requireProjectPermission\(request, projectId, "project\.manage_members"\)/);assert.match(invite,/registerAuthProjectScope/)});
@@ -21,4 +22,6 @@ check("project access revoke checks Project Core permission then exact central s
 check("SSO callback activates only central-granted external projects",()=>{assert.match(callback,/listAuthorizedExternalProjectIds\(userId, "DRIVE"\)/);assert.match(callback,/activateProjectMembership\(projectId, email, userId\)/)});
 check("Project Core activation facade is common to DB and file repositories",()=>{assert.match(store,/activateProjectMembership/);assert.match(dbRepo,/export async function activateProjectMembership/);assert.match(fileRepo,/export async function activateProjectMembership/)});
 check("Project Core membership activation is INVITED to ACTIVE and binds central identity",()=>{assert.match(dbRepo,/status: "ACTIVE"/);assert.match(dbRepo,/user_id: userId/);assert.match(dbRepo,/\.eq\("status", "INVITED"\)/);assert.match(fileRepo,/membership\.status = "ACTIVE"/);assert.match(fileRepo,/membership\.userId = userId/)});
+check("central SSO disables legacy Drive DEV password gate",()=>{assert.match(proxy,/driveCentralSsoConfig = isDriveHost \? resolveDriveSsoConfig\(host\) : null/);assert.match(proxy,/driveDevAccessConfigured = isDriveHost && !driveCentralSsoConfig/)});
+check("Drive login path redirects into central SSO",()=>{assert.match(proxy,/isDriveHost && isLoginPage && driveCentralSsoConfig/);assert.match(proxy,/url\.pathname = "\/api\/dimpro-auth\/start"/);assert.match(proxy,/url\.searchParams\.set\("return_to", "\/drive"\)/)});
 console.log(`DIMPRO AUTH V0.3.2 Drive project integration contract PASS · ${n}/${n}`);
