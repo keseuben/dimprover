@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 25/25 PASS.
 - AUTH V0.2 SSO contract: 38/38 PASS.
-- AUTH V0.2.1 security contract: 54/54 PASS.
+- AUTH V0.2.1 security contract: 55/55 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -222,3 +222,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A root-only `bootstrap.env` fájlból olvassa a külön app/migrator jelszavakat, majd a PostgreSQL helyi peer-auth admin útvonalon futtatja a DEV bootstrap SQL-t.
 - A script `dimpro_auth_prod` hivatkozásra fail-closed és `PRODUCTION_ACCESS=DENY` állapotot jelent.
 - A runner elő van készítve, de ebben a végrehajtási csatornában még nem futott le.
+
+## Migration 003 PostgreSQL syntax fix
+
+- Az első DEV APPLY során az 001 és 002 migráció sikeresen commitolt, a 003 tranzakció PostgreSQL kulcsszóütközés miatt rollbackelt.
+- A `current_role` PL/pgSQL változó `target_role_id` névre, a kapcsolódó változó pedig `previous_role_id` névre került.
+- A 003 + 004 migrációt ugyanazon DEV adatbázison teljes tranzakcióban lefuttattuk és `ROLLBACK`-kel zártuk: SQL/PLpgSQL validáció PASS, tartós módosítás nélkül.

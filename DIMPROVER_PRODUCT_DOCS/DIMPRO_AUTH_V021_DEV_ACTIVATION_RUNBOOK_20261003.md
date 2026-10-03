@@ -211,3 +211,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A root-only `bootstrap.env` fájlból olvassa a külön app/migrator jelszavakat, majd a PostgreSQL helyi peer-auth admin útvonalon futtatja a DEV bootstrap SQL-t.
 - A script `dimpro_auth_prod` hivatkozásra fail-closed és `PRODUCTION_ACCESS=DENY` állapotot jelent.
 - A runner elő van készítve, de ebben a végrehajtási csatornában még nem futott le.
+
+## Migration 003 PostgreSQL syntax fix
+
+- Az első DEV APPLY során az 001 és 002 migráció sikeresen commitolt, a 003 tranzakció PostgreSQL kulcsszóütközés miatt rollbackelt.
+- A `current_role` PL/pgSQL változó `target_role_id` névre, a kapcsolódó változó pedig `previous_role_id` névre került.
+- A 003 + 004 migrációt ugyanazon DEV adatbázison teljes tranzakcióban lefuttattuk és `ROLLBACK`-kel zártuk: SQL/PLpgSQL validáció PASS, tartós módosítás nélkül.

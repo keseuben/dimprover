@@ -61,31 +61,31 @@ FOR EACH ROW EXECUTE FUNCTION auth_bump_grant_user_session_version();
 CREATE OR REPLACE FUNCTION auth_bump_role_users_session_version()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
-  current_role uuid;
-  previous_role uuid;
+  target_role_id uuid;
+  previous_role_id uuid;
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    previous_role := OLD.role_id;
+    previous_role_id := OLD.role_id;
   ELSE
-    current_role := NEW.role_id;
-    IF TG_OP = 'UPDATE' THEN previous_role := OLD.role_id; END IF;
+    target_role_id := NEW.role_id;
+    IF TG_OP = 'UPDATE' THEN previous_role_id := OLD.role_id; END IF;
   END IF;
 
-  IF current_role IS NOT NULL THEN
+  IF target_role_id IS NOT NULL THEN
     UPDATE auth_users u
        SET session_version=u.session_version+1,updated_at=now()
      WHERE EXISTS (
        SELECT 1 FROM auth_access_grants g
-        WHERE g.user_id=u.id AND g.role_id=current_role AND g.revoked_at IS NULL
+        WHERE g.user_id=u.id AND g.role_id=target_role_id AND g.revoked_at IS NULL
      );
   END IF;
 
-  IF previous_role IS NOT NULL AND previous_role IS DISTINCT FROM current_role THEN
+  IF previous_role_id IS NOT NULL AND previous_role_id IS DISTINCT FROM target_role_id THEN
     UPDATE auth_users u
        SET session_version=u.session_version+1,updated_at=now()
      WHERE EXISTS (
        SELECT 1 FROM auth_access_grants g
-        WHERE g.user_id=u.id AND g.role_id=previous_role AND g.revoked_at IS NULL
+        WHERE g.user_id=u.id AND g.role_id=previous_role_id AND g.revoked_at IS NULL
      );
   END IF;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
