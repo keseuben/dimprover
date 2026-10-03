@@ -6,7 +6,7 @@ function escapeHtml(value: string) {
 
 export async function sendDimproAuthOtpEmail(input: { email: string; displayName?: string | null; code: string; expiresMinutes: number }) {
   const name = input.displayName?.trim() || "DIMPRO felhasználó";
-  const subject = "DIMPRO belépési kód";
+  const subject = `DIMPRO belépési kód: ${input.code}`;
   const text = [
     `Kedves ${name}!`,
     "",

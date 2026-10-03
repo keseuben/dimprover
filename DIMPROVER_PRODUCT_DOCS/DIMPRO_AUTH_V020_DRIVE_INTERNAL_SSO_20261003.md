@@ -55,7 +55,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 ## Tesztállapot
 
-- AUTH V0.1 contract: 25/25 PASS.
+- AUTH V0.1 contract: 26/26 PASS.
 - AUTH V0.2 internal SSO contract: 38/38 PASS.
 - AUTH V0.2.1 security contract: 53/53 PASS.
 - Célzott ESLint: PASS.
@@ -258,3 +258,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - Migration role: `dimpro_auth_migrator_dev` is allowed only from `213.160.68.24/32` (authoritative source/control node).
 - Both rules are database-specific (`dimpro_auth_dev`), `hostssl` + `scram-sha-256`; no broad `all/all` rule is permitted.
 - PROD database/roles remain outside this DEV activation path.
+
+## OTP e-mail tárgysor
+
+- A központi `noreply@dimpro.hu` profil marad az AUTH feladója.
+- A tárgysor formátuma: `DIMPRO belépési kód: 123456`, tehát az aktuális egyszer használatos kód már a tárgyban is megjelenik.
+- A levéltörzsben a kód továbbra is jól látható, a DB-ben továbbra sem tároljuk olvasható formában.

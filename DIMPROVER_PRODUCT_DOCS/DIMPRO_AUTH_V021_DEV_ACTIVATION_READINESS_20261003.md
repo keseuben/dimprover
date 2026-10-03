@@ -21,7 +21,7 @@ Dátum: 2026-10-03
 - SMTP `noreply` profil konfiguráció + TLS/authentication verify: PASS. Küldés nem történt.
 
 ## Teszt
-- AUTH V0.1 contract: 25/25 PASS.
+- AUTH V0.1 contract: 26/26 PASS.
 - AUTH V0.2 SSO contract: 38/38 PASS.
 - AUTH V0.2.1 security contract: 55/55 PASS.
 - Célzott ESLint: PASS.
@@ -228,3 +228,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - Az első DEV APPLY során az 001 és 002 migráció sikeresen commitolt, a 003 tranzakció PostgreSQL kulcsszóütközés miatt rollbackelt.
 - A `current_role` PL/pgSQL változó `target_role_id` névre, a kapcsolódó változó pedig `previous_role_id` névre került.
 - A 003 + 004 migrációt ugyanazon DEV adatbázison teljes tranzakcióban lefuttattuk és `ROLLBACK`-kel zártuk: SQL/PLpgSQL validáció PASS, tartós módosítás nélkül.
+
+## OTP e-mail tárgysor
+
+- A központi `noreply@dimpro.hu` profil marad az AUTH feladója.
+- A tárgysor formátuma: `DIMPRO belépési kód: 123456`, tehát az aktuális egyszer használatos kód már a tárgyban is megjelenik.
+- A levéltörzsben a kód továbbra is jól látható, a DB-ben továbbra sem tároljuk olvasható formában.
