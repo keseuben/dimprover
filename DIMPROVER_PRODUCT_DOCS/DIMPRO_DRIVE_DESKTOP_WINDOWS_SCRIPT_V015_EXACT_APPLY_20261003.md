@@ -111,3 +111,62 @@ DEV runtime notes:
 - intended next isolated Desktop candidate port: 3320.
 - release `100e89256554` prepared on DEV host.
 - candidate start is blocked in this execution channel because root-only `.env.local` runtime secrets cannot be sourced by the remote execution safety gate. No nginx cutover performed.
+
+## V0.1.5 FIX1 + Drive V0.9.3 DEV cutover – PASS
+
+Latest authoritative Drive base merged: `d1b367bc83812b037ab403d602d9a206a60cbf8f` (`feat(drive): hold ready loader and add wordmark`).
+
+Integrated source: `403627e061fffc6db9294169dec1bf3c46ffe071`.
+
+Validation after merge:
+- Drive V0.9.2 Premium Loader contract: 14/14 PASS.
+- Drive V0.9.3 Completion Hold + Wordmark contract: 16/16 PASS.
+- Desktop access contract: 12/12 PASS.
+- Windows V0.1.5 exact Apply contract: 23/23 PASS.
+- Drive Core schema: 0.9.1.
+
+Remote build:
+- run: `drive-desktop-v015-v093-403627e0-001`
+- runner: `build01`
+- Build ID: `Xc9dkxVcu8E2M-aSBPXuB`
+- artifact SHA-256: `580efc88bb76a243a001f5977ef836a65ee7f10d7ab6857528124ec2d4876fb6`
+- status: PASS
+- production access: DENY
+
+DEV candidate runtime:
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/403627e061ff`
+- PM2: `dimpro-drive-pilot-v015-v093-403627e0-p3322`
+- port: 3322
+- restart count at cutover: 0
+- localhost login: 200
+- authenticated desktop contract: PASS
+- project list: PASS
+- database ready: true
+- expected/actual Drive Core schema: 0.9.1 / 0.9.1
+- object storage configured: true
+- real object write: true
+- real object download: true
+- activationSafe: true
+
+DEV nginx cutover:
+- `drive.dev.dimpro.hu` upstream: 3320 -> 3322
+- public candidate header: `403627e0 DEV`
+- `X-DIMPRO-Production-Access: DENY`
+- nginx config test: PASS
+- rollback runtime retained online: `dimpro-drive-pilot-v093-readyhold-wordmark-d1b367bc` on port 3320
+- rollback nginx backup: `/etc/nginx/dimpro-backups/dimpro-dev.conf.before-drive-v015-v093-403627e0-20261003T164638Z`
+- PM2 state saved after cutover.
+
+Public HTTPS smoke after cutover:
+- `/drive`: redirect to `/login` as expected.
+- desktop contract: PASS.
+- `desktop-access` mode advertised: true.
+- project count: 2.
+- health: PASS.
+- database ready: true.
+- schema match: true.
+- storage configured: true.
+- real upload/download: true / true.
+- activationSafe: true.
+
+Next physical gate: Windows PowerShell 5.1 Bridge-backed `-RunProbe` from the approved V0.1.5 FIX1 package. Apply remains blocked until physical Probe PASS.
