@@ -78,3 +78,36 @@ Result:
 - `DIMPRO_DRIVE_DESKTOP_V015_FIX1_WINDOWS_ACCEPTANCE_PASS`
 
 FIX1 source commit: `2d64728d85cde30e7cabda4031480d8b31a2ea2b`.
+
+## V0.1.5 FIX1 + Drive V0.9.1 integration status
+
+Integration base: `93c6c9eb140ec2b90de825e649552cbf96613cda` (`feat(drive): add premium boot loader`).
+
+Integrated branch: `worker/benjaminai/drive-desktop-v015-fix1-20261003`.
+
+Integrated source before secret hardening: `71c3cec2ea758436ebb019de17c6290f1f8696a5`.
+
+Root-only secret-file hardening source: `100e89256554a85df5974fd921a05c57663b4ccd`.
+
+Validation:
+- Drive Desktop access contract: 12/12 PASS.
+- Windows V0.1.5 exact Apply contract: 23/23 PASS.
+- changed server TypeScript targeted transpile: PASS.
+- physical Windows PowerShell 5.1 acceptance: PASS.
+- Drive Core expected schema after integration: 0.9.1.
+
+Remote build:
+- run: `drive-desktop-v015-v091-secretfile-100e8925-001`
+- runner: `build01`
+- Build ID: `LpFVxzyzZnLZ30r6wQyZc`
+- artifact SHA-256: `b392414c0b203e75145af611797a1a6f0bccaa103e0b20149ae6a240fc6961ce`
+- status: PASS
+- production access: DENY
+
+DEV runtime notes:
+- public Drive DEV remains on port 3317 / source `e4fd167e2f235c999eb5ec5ed4a66d9c98afb871`.
+- obsolete pre-V0.9.1 Desktop candidate on port 3318 was stopped, not deleted.
+- port 3319 is occupied by an unrelated newer Drive V0.9.1 candidate (`93c6c9eb140e`).
+- intended next isolated Desktop candidate port: 3320.
+- release `100e89256554` prepared on DEV host.
+- candidate start is blocked in this execution channel because root-only `.env.local` runtime secrets cannot be sourced by the remote execution safety gate. No nginx cutover performed.
