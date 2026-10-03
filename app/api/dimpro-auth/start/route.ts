@@ -1,28 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createPkceChallenge, createPkceVerifier, createSsoState, DIMPRO_SSO_FLOW_COOKIE, encodeSsoFlowCookie, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
+import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function resolveDriveConfig(host: string) {
-  const normalized = host.toLowerCase().replace(/:\d+$/, "");
-  if (normalized === "drive.dev.dimpro.hu") {
-    return {
-      clientId: "dimpro-drive-dev",
-      authOrigin: "https://auth.dev.dimpro.hu",
-      redirectUri: "https://drive.dev.dimpro.hu/api/dimpro-auth/callback",
-    };
-  }
-  if (normalized === "localhost" || normalized === "127.0.0.1") {
-    return {
-      clientId: "dimpro-drive-dev",
-      authOrigin: process.env.DIMPRO_AUTH_DEV_ORIGIN?.trim() || "https://auth.dev.dimpro.hu",
-      redirectUri: process.env.DIMPRO_AUTH_DEV_DRIVE_REDIRECT_URI?.trim() || "https://drive.dev.dimpro.hu/api/dimpro-auth/callback",
-    };
-  }
-  return null;
-}
 
 function safeReturnTo(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.length > 500) return "/drive";
@@ -30,7 +12,7 @@ function safeReturnTo(value: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const config = resolveDriveConfig(request.headers.get("host") || "");
+  const config = resolveDriveSsoConfig(request.headers.get("host"));
   if (!config) return NextResponse.json({ ok: false, error: "AUTH_SSO_HOST_NOT_ALLOWED" }, { status: 404 });
 
   const state = createSsoState();

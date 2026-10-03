@@ -14,9 +14,7 @@ export type DimproSsoFlowCookie = {
 };
 
 function ssoSecret() {
-  const explicit = process.env.DIMPRO_AUTH_SSO_STATE_SECRET?.trim();
-  if (explicit && explicit.length >= 32 && !explicit.includes("<") && !explicit.includes(">")) return explicit;
-  return getDimproAuthConfig().sessionPepper;
+  return getDimproAuthConfig().ssoStateSecret;
 }
 
 function safeEqual(left: string, right: string) {

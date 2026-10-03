@@ -4,6 +4,7 @@ export type DimproAuthConfig = {
   otpPepper: string;
   sessionPepper: string;
   auditPepper: string;
+  ssoStateSecret: string;
   otpTtlSeconds: number;
   otpMaxAttempts: number;
   otpResendCooldownSeconds: number;
@@ -32,7 +33,10 @@ function boundedInteger(name: string, fallback: number, min: number, max: number
   const raw = process.env[name]?.trim();
   if (!raw) return fallback;
   const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} csak ${min} és ${max} közötti egész szám lehet.`);
+  }
+  return parsed;
 }
 
 export function getDimproAuthConfig(): DimproAuthConfig {
@@ -59,12 +63,20 @@ export function getDimproAuthConfig(): DimproAuthConfig {
   if (sslMode !== "verify-full") {
     throw new Error("DIMPRO_AUTH_DB_SSL_MODE=verify-full kötelező a DIMPRO AUTH runtime-hoz.");
   }
+  const otpPepper = requiredSecret("DIMPRO_AUTH_OTP_PEPPER");
+  const sessionPepper = requiredSecret("DIMPRO_AUTH_SESSION_PEPPER");
+  const auditPepper = requiredSecret("DIMPRO_AUTH_AUDIT_PEPPER");
+  const ssoStateSecret = requiredSecret("DIMPRO_AUTH_SSO_STATE_SECRET");
+  if (new Set([otpPepper, sessionPepper, auditPepper, ssoStateSecret]).size !== 4) {
+    throw new Error("A DIMPRO AUTH OTP/session/audit/SSO titkoknak egymástól függetlennek kell lenniük.");
+  }
   return {
     environment,
     databaseUrl,
-    otpPepper: requiredSecret("DIMPRO_AUTH_OTP_PEPPER"),
-    sessionPepper: requiredSecret("DIMPRO_AUTH_SESSION_PEPPER"),
-    auditPepper: requiredSecret("DIMPRO_AUTH_AUDIT_PEPPER"),
+    otpPepper,
+    sessionPepper,
+    auditPepper,
+    ssoStateSecret,
     otpTtlSeconds: boundedInteger("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 * 60, 60, 15 * 60),
     otpMaxAttempts: boundedInteger("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5, 1, 10),
     otpResendCooldownSeconds: boundedInteger("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30, 5, 300),

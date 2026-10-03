@@ -2,24 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getDimproAuthConfig } from "@/app/lib/dimpro-auth/config";
 import { appSessionCookieOptions, decodeSsoFlowCookie, DIMPRO_APP_SESSION_COOKIE, DIMPRO_SSO_FLOW_COOKIE, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
+import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function resolveConfig(host: string) {
-  const normalized = host.toLowerCase().replace(/:\d+$/, "");
-  if (normalized === "drive.dev.dimpro.hu") {
-    return {
-      clientId: "dimpro-drive-dev",
-      authOrigin: "https://auth.dev.dimpro.hu",
-      redirectUri: "https://drive.dev.dimpro.hu/api/dimpro-auth/callback",
-    };
-  }
-  return null;
-}
-
 export async function GET(request: NextRequest) {
-  const config = resolveConfig(request.headers.get("host") || "");
+  const config = resolveDriveSsoConfig(request.headers.get("host"));
   if (!config) return NextResponse.json({ ok: false, error: "AUTH_SSO_HOST_NOT_ALLOWED" }, { status: 404 });
   const cookieStore = await cookies();
   const flow = decodeSsoFlowCookie(cookieStore.get(DIMPRO_SSO_FLOW_COOKIE)?.value || "");

@@ -4,6 +4,7 @@ import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authoriz
 import { getAppSessionByToken, getAuthSessionByToken, hasAuthPermission } from "@/app/lib/dimpro-auth/repository";
 import { DIMPRO_AUTH_SESSION_COOKIE } from "@/app/lib/dimpro-auth/security";
 import { DIMPRO_APP_SESSION_COOKIE } from "@/app/lib/dimpro-auth/sso";
+import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 import {
   isDriveDevAccessConfigured,
   isProjectGateDevAccessConfigured,
@@ -420,7 +421,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isDrivePage && !isLicenseHost && !isDevEnvironment) {
+  if (isDrivePage && !isLicenseHost && !isDevEnvironment && !isDriveHost) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.hostname = "license.dimpro.hu";
@@ -440,10 +441,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/projects/")
   );
   if (isDriveHost && (isDrivePage || isDriveProtectedApi)) {
+    const driveConfig = resolveDriveSsoConfig(host);
     const token = request.cookies.get(DIMPRO_APP_SESSION_COOKIE)?.value?.trim() || "";
     let session = null;
     try {
-      session = token ? await getAppSessionByToken(token, "dimpro-drive-dev", false) : null;
+      session = token && driveConfig ? await getAppSessionByToken(token, driveConfig.clientId, false) : null;
     } catch (error) {
       console.warn("DIMPRO Drive app session hiba:", error instanceof Error ? error.message : "Ismeretlen auth hiba");
     }

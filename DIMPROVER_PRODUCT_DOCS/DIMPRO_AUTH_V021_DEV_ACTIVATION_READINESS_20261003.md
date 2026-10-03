@@ -22,8 +22,8 @@ Dátum: 2026-10-03
 
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
-- AUTH V0.2 SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 37/37 PASS.
+- AUTH V0.2 SSO contract: 33/33 PASS.
+- AUTH V0.2.1 security contract: 40/40 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -89,3 +89,16 @@ Dátum: 2026-10-03
 - `004_auth_v022_runtime_privileges.sql` explicit, táblánkénti jogokat ad: policy/authz katalógusok csak SELECT; `auth_users` csak SELECT + `email_verified_at/updated_at` oszlopszintű UPDATE; challenge/session/SSO state SELECT+INSERT+UPDATE; audit csak SELECT+INSERT.
 - DELETE és authz/admin módosítás a runtime role számára nincs engedélyezve.
 - Pilot user/bootstrap admin műveletek a nem-runtime migrator credentialt használják, explicit confirmation mellett.
+
+## Centralized Drive SSO environment mapping
+
+- A Drive SSO kliens-konfiguráció egyetlen `client-config.ts` forrásból jön: DEV `dimpro-drive-dev` / `auth.dev.dimpro.hu`, PROD `dimpro-drive-prod` / `auth.dimpro.hu`.
+- Start, callback, session, logout, proxy és AUTH health ugyanazt a host→environment→client mappinget használja.
+- A SSO seed a cél AUTH adatbázis neve alapján választ DEV vagy PROD kliens/redirect értéket; idegen adatbázisnévnél fail-closed.
+- A PROD Drive host többé nem esik bele a régi licenc-host redirectbe; tényleges PROD aktiválás továbbra is külön engedélyhez kötött.
+
+## Secret separation hardening
+
+- `DIMPRO_AUTH_SSO_STATE_SECRET` kötelező runtime secret; nincs session-pepper fallback.
+- OTP, session, audit és SSO secret runtime szinten is négy külön érték kell legyen, nem csak aktiválási preflightban.
+- Explicit hibás biztonsági numerikus konfiguráció nem clamping/fallback útvonalra kerül, hanem fail-closed indulási hibát okoz.

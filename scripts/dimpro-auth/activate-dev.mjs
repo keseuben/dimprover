@@ -88,7 +88,7 @@ run("migration-apply","scripts/dimpro-auth/migrate.mjs",["--apply"]);
 const after=run("db-readiness-after","scripts/dimpro-auth/db-readiness.mjs");
 let readiness=null;
 try{readiness=JSON.parse(after.slice(after.indexOf("{")));}catch{}
-if(!readiness||Number(readiness.migrationCount)!==4)fail(`Migráció utáni migrationCount nem 3: ${readiness?.migrationCount??"ismeretlen"}`);
+if(!readiness||Number(readiness.migrationCount)!==4)fail(`Migráció utáni migrationCount nem 4: ${readiness?.migrationCount??"ismeretlen"}`);
 
 if(bootstrapEmail){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bootstrapEmail))fail("A --bootstrap-email értéke nem érvényes e-mail.");

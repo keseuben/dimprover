@@ -72,19 +72,43 @@ CREATE TABLE IF NOT EXISTS auth_app_sessions (
 CREATE INDEX IF NOT EXISTS auth_app_sessions_active_idx
   ON auth_app_sessions(client_id,user_id,revoked_at,absolute_expires_at);
 
-INSERT INTO auth_clients(client_id,name,product_code,required_permission_code,environment,status)
-VALUES ('dimpro-drive-dev','DIMPRO Drive DEV','DRIVE','drive.access','DEV','ACTIVE')
-ON CONFLICT (client_id) DO UPDATE SET
-  name=EXCLUDED.name,
-  product_code=EXCLUDED.product_code,
-  required_permission_code=EXCLUDED.required_permission_code,
-  environment=EXCLUDED.environment,
-  status='ACTIVE',
-  updated_at=now();
+DO $$
+DECLARE
+  auth_environment text;
+  drive_client_id text;
+  drive_client_name text;
+  drive_redirect_uri text;
+  drive_client_db_id uuid;
+BEGIN
+  IF current_database()='dimpro_auth_dev' THEN
+    auth_environment := 'DEV';
+    drive_client_id := 'dimpro-drive-dev';
+    drive_client_name := 'DIMPRO Drive DEV';
+    drive_redirect_uri := 'https://drive.dev.dimpro.hu/api/dimpro-auth/callback';
+  ELSIF current_database()='dimpro_auth_prod' THEN
+    auth_environment := 'PROD';
+    drive_client_id := 'dimpro-drive-prod';
+    drive_client_name := 'DIMPRO Drive';
+    drive_redirect_uri := 'https://drive.dimpro.hu/api/dimpro-auth/callback';
+  ELSE
+    RAISE EXCEPTION 'Unsupported DIMPRO AUTH database for SSO client seed: %', current_database();
+  END IF;
 
-INSERT INTO auth_client_redirect_uris(client_id,redirect_uri)
-SELECT id,'https://drive.dev.dimpro.hu/api/dimpro-auth/callback'
-FROM auth_clients WHERE client_id='dimpro-drive-dev'
-ON CONFLICT DO NOTHING;
+  INSERT INTO auth_clients(client_id,name,product_code,required_permission_code,environment,status)
+  VALUES (drive_client_id,drive_client_name,'DRIVE','drive.access',auth_environment,'ACTIVE')
+  ON CONFLICT (client_id) DO UPDATE SET
+    name=EXCLUDED.name,
+    product_code=EXCLUDED.product_code,
+    required_permission_code=EXCLUDED.required_permission_code,
+    environment=EXCLUDED.environment,
+    status='ACTIVE',
+    updated_at=now()
+  RETURNING id INTO drive_client_db_id;
+
+  INSERT INTO auth_client_redirect_uris(client_id,redirect_uri)
+  VALUES (drive_client_db_id,drive_redirect_uri)
+  ON CONFLICT DO NOTHING;
+END;
+$$;
 
 COMMIT;
