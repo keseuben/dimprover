@@ -1,8 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
 
 const TOKEN_PREFIX = "dpat1";
 const DEFAULT_TTL_SECONDS = 600;
 const MAX_TTL_SECONDS = 900;
+const DEFAULT_SECRET_FILE = "/srv/dimpro-dev/secrets/drive/desktop-access-secret";
 
 export type DriveDesktopAccessClaims = {
   v: 1;
@@ -20,11 +22,19 @@ export class DriveDesktopAccessTokenError extends Error {
 }
 
 function accessSecret() {
-  const secret = process.env.DIMPRO_DRIVE_DESKTOP_ACCESS_SECRET?.trim() || "";
-  if (secret.length < 32) {
+  let secret = process.env.DIMPRO_DRIVE_DESKTOP_ACCESS_SECRET?.trim() || "";
+  if (!secret) {
+    const secretFile = process.env.DIMPRO_DRIVE_DESKTOP_ACCESS_SECRET_FILE?.trim() || DEFAULT_SECRET_FILE;
+    try {
+      secret = fs.readFileSync(secretFile, "utf8").trim();
+    } catch {
+      secret = "";
+    }
+  }
+  if (secret.length < 32 || secret.length > 256) {
     throw new DriveDesktopAccessTokenError(
       "DRIVE_DESKTOP_ACCESS_SECRET_NOT_CONFIGURED",
-      "DIMPRO Drive Desktop access secret nincs konfigurálva.",
+      "DIMPRO Drive Desktop access secret nincs megfelelően konfigurálva.",
     );
   }
   return secret;
