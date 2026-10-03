@@ -90,7 +90,8 @@ BEGIN
         WHERE g.user_id=u.id AND g.role_id=previous_role AND g.revoked_at IS NULL
      );
   END IF;
-  RETURN COALESCE(NEW, OLD);
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
 END;
 $$;
 

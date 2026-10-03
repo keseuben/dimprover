@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 25/25 PASS.
-- AUTH V0.2.1 security contract: 21/21 PASS.
+- AUTH V0.2.1 security contract: 26/26 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
