@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { DimproAppOtpLogin } from "./DimproAppOtpLogin";
 import { DimproverOtpLogin } from "./DimproverOtpLogin";
 import { ProjectGateCodeLogin } from "./ProjectGateCodeLogin";
@@ -13,6 +14,11 @@ function isDriveDevDomain(host: string) {
   const normalizedHost = host.toLowerCase().split(":")[0];
   const enabled = process.env.DRIVE_DEV_PASSWORD_AUTH_ENABLED?.trim().toLowerCase() === "true";
   return normalizedHost === "drive.dev.dimpro.hu" && enabled;
+}
+
+function isDriveDomain(host: string) {
+  const normalizedHost = host.toLowerCase().split(":")[0];
+  return normalizedHost === "drive.dev.dimpro.hu" || normalizedHost === "drive.dimpro.hu";
 }
 
 function isDimproDomain(host: string) {
@@ -35,6 +41,10 @@ export default async function LoginPage() {
 
   if (isDriveDevDomain(host)) {
     return <ProjectGateCodeLogin mode="drive" />;
+  }
+
+  if (isDriveDomain(host)) {
+    redirect("/api/dimpro-auth/start?return_to=%2Fdrive");
   }
 
   if (isDimproDomain(host)) {

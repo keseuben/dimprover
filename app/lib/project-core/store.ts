@@ -29,6 +29,10 @@ export function listProjectMemberships(projectId: string) {
   return getProjectCoreRepository().listProjectMemberships(projectId);
 }
 
+export function activateProjectMembership(projectId: string, email: string, userId: string) {
+  return getProjectCoreRepository().activateProjectMembership(projectId, email, userId);
+}
+
 export function changeProjectLifecycle(projectId: string, nextStatus: ProjectLifecycleStatus, actorUserId: string) {
   return getProjectCoreRepository().changeProjectLifecycle(projectId, nextStatus, actorUserId);
 }

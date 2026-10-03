@@ -171,6 +171,39 @@ export async function getProjectAccess(
   return { project, membership, permissions: permissionsForRole(membership.role) };
 }
 
+export async function activateProjectMembership(projectId: string, emailRaw: string, userId: string) {
+  const state = await getProjectCoreState();
+  const email = emailRaw.trim().toLowerCase();
+  const membership = state.memberships.find((item) =>
+    item.projectId === projectId
+    && (item.status === "INVITED" || item.status === "ACTIVE")
+    && (
+      item.userId.toLowerCase() === userId.toLowerCase()
+      || item.userId.toLowerCase() === email
+      || item.email?.toLowerCase() === email
+    )
+  );
+  if (!membership) return null;
+  if (membership.status === "ACTIVE") return membership;
+  const now = nowIso();
+  membership.userId = userId;
+  membership.email = membership.email || email;
+  membership.status = "ACTIVE";
+  membership.acceptedAt = now;
+  membership.updatedAt = now;
+  state.auditEvents.unshift(auditEvent({
+    projectId,
+    actorUserId: userId,
+    eventType: "MEMBERSHIP_ACCEPTED",
+    entityType: "membership",
+    entityId: membership.id,
+    summary: `Projektmeghívás elfogadva: ${membership.displayName}`,
+  }));
+  state.updatedAt = now;
+  await writeState(state);
+  return membership;
+}
+
 export async function listAccessibleProjects(userAliases: string[]): Promise<ProjectListItem[]> {
   const state = await getProjectCoreState();
   return state.projects

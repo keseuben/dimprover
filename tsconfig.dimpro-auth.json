@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false, "plugins": [] },
+  "include": [
+    "next-env.d.ts",
+    "app/lib/dimpro-auth/**/*.ts",
+    "app/lib/notifications/notificationAuth.ts",
+    "app/lib/project-core/auth.ts",
+    "app/lib/project-core/store.ts",
+    "app/lib/project-core/repository.ts",
+    "app/lib/project-core/databaseRepository.ts",
+    "app/lib/project-core/fileRepository.ts",
+    "app/api/dimpro-auth/**/*.ts",
+    "app/health/**/*.ts",
+    "app/auth/apps/**/*.tsx",
+    "app/auth-invite/**/*.tsx",
+    "app/login/DimproAppOtpLogin.tsx",
+    "app/login/page.tsx",
+    "components/auth/LogoutButton.tsx",
+    "components/auth/SessionGuardClient.tsx",
+    "proxy.ts"
+  ],
+  "exclude": ["node_modules", ".next", "backups", "v_260512"]
+}

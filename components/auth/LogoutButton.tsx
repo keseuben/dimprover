@@ -1,7 +1,6 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { createClient } from "@/app/lib/supabase/client";
 
 type LogoutButtonProps = {
   collapsed?: boolean;
@@ -10,13 +9,19 @@ type LogoutButtonProps = {
 export default function LogoutButton({
   collapsed = false,
 }: LogoutButtonProps) {
-  const supabase = createClient();
-
   async function handleLogout() {
-    await supabase.auth.signOut();
+    const host = window.location.hostname.toLowerCase();
+    if (host === "projektkapu.dev.dimpro.hu") {
+      await fetch("/api/project-gate/dev-access/session", { method: "DELETE", credentials: "same-origin" }).catch(() => undefined);
+    } else if (host === "dimpro.hu" || host.endsWith(".dimpro.hu")) {
+      await fetch("/api/dimpro-auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
+    } else {
+      const { createClient } = await import("@/app/lib/supabase/client");
+      await createClient().auth.signOut();
+    }
 
     localStorage.removeItem("dimprover_login_started_at");
-
+    localStorage.removeItem("dimpro_login_started_at");
     window.location.href = "/login";
   }
 

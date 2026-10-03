@@ -2,14 +2,12 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/app/lib/supabase/client";
 import { useSessionTimer } from "./useSessionTimer";
 
 const THIRTY_MINUTES = 30 * 60;
 
 export default function SessionGuardClient() {
   const pathname = usePathname();
-  const supabase = createClient();
 
   const remainingSeconds = useSessionTimer(
     (state) => state.remainingSeconds
@@ -23,14 +21,23 @@ export default function SessionGuardClient() {
     if (pathname.startsWith("/teams/meeting-assistant")) return;
 
     async function logout() {
-      if (window.location.hostname === "projektkapu.dev.dimpro.hu") {
+      const host = window.location.hostname.toLowerCase();
+      if (host === "projektkapu.dev.dimpro.hu") {
         await fetch("/api/project-gate/dev-access/session", {
           method: "DELETE",
           credentials: "same-origin",
         }).catch(() => undefined);
+      } else if (host === "dimpro.hu" || host.endsWith(".dimpro.hu")) {
+        await fetch("/api/dimpro-auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+        }).catch(() => undefined);
+      } else {
+        const { createClient } = await import("@/app/lib/supabase/client");
+        await createClient().auth.signOut();
       }
-      await supabase.auth.signOut();
       localStorage.removeItem("dimprover_login_started_at");
+      localStorage.removeItem("dimpro_login_started_at");
       window.location.href = "/login";
     }
 
@@ -59,7 +66,7 @@ export default function SessionGuardClient() {
       window.removeEventListener("click", resetTimer);
       window.removeEventListener("scroll", resetTimer);
     };
-  }, [pathname, remainingSeconds, setRemainingSeconds, supabase.auth]);
+  }, [pathname, remainingSeconds, setRemainingSeconds]);
 
   return null;
 }

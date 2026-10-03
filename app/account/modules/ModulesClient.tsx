@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
-import { createClient } from "@/app/lib/supabase/client";
 import { dimproModules } from "@/app/lib/dimpro/modules";
+
+type AuthSessionUser = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  securityLevel: "SIMPLE" | "STAFF" | "PROJECT_MANAGER" | "ORG_ADMIN" | "SUPERADMIN";
+};
+
+type AuthSessionResponse = {
+  ok: boolean;
+  authenticated: boolean;
+  session?: { user: AuthSessionUser };
+  error?: string;
+};
 
 type ProductAccess = {
   product_code: string;
@@ -51,52 +63,38 @@ function getModuleStatus(moduleCode: string, accessState: ProductAccessResponse 
 
 export function ModulesClient() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [message, setMessage] = useState("Session ellenőrzése...");
   const [accessState, setAccessState] = useState<ProductAccessResponse | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    async function loadUser() {
-      const { data, error } = await supabase.auth.getUser();
-      if (!active) return;
-
-      if (error || !data.user) {
-        setUser(null);
-        setMessage("Nincs aktív Supabase session. A modulok teszt módban látszanak, de éles hozzáféréshez bejelentkezés szükséges.");
-        return;
-      }
-
-      setUser(data.user);
-      setMessage("Aktív DIMPRO session. A product access ellenőrzés planning módban fut.");
-    }
-
-    async function loadAccess() {
+    async function loadSession() {
       try {
-        const response = await fetch("/api/dimpro-account/session-product-access", { cache: "no-store" });
-        const payload = (await response.json()) as ProductAccessResponse;
+        const response = await fetch("/api/dimpro-auth/session", { cache: "no-store", credentials: "same-origin" });
+        const payload = (await response.json().catch(() => null)) as AuthSessionResponse | null;
         if (!active) return;
-        setAccessState(payload);
-        if (payload.message) setMessage(payload.message);
+        if (!response.ok || !payload?.ok || !payload.authenticated || !payload.session?.user) {
+          setUser(null);
+          setMessage(payload?.error || "Nincs aktív DIMPRO session. Jelentkezz be újra.");
+          return;
+        }
+        setUser(payload.session.user);
+        setMessage(`Aktív DIMPRO AUTH session · ${payload.session.user.securityLevel}`);
       } catch {
         if (!active) return;
-        setAccessState(null);
-        setMessage("A product access API jelenleg nem érhető el. Planning módban ez nem zárja le a felületet.");
+        setUser(null);
+        setMessage("A DIMPRO AUTH session ellenőrzése jelenleg nem érhető el.");
       }
     }
 
-    loadUser();
-    loadAccess();
-
-    return () => {
-      active = false;
-    };
-  }, [supabase]);
+    loadSession();
+    return () => { active = false; };
+  }, []);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    await fetch("/api/dimpro-auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
     setUser(null);
     setAccessState(null);
     router.push("/login");
@@ -134,8 +132,8 @@ export function ModulesClient() {
             <p className="mt-4 text-base leading-7 text-slate-600">{message}</p>
 
             <div className="mt-6 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3"><span className="font-semibold text-slate-500">Email</span><span className="max-w-[58%] truncate text-right font-black text-slate-950">{user?.email ?? accessState?.emailMasked ?? "-"}</span></div>
-              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3"><span className="font-semibold text-slate-500">DIMPRO user</span><span className="max-w-[58%] truncate text-right font-black text-slate-950">{accessState?.accountUser?.fullName ?? accessState?.accountUser?.emailMasked ?? "-"}</span></div>
+              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3"><span className="font-semibold text-slate-500">Email</span><span className="max-w-[58%] truncate text-right font-black text-slate-950">{user?.email ?? "-"}</span></div>
+              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3"><span className="font-semibold text-slate-500">DIMPRO user</span><span className="max-w-[58%] truncate text-right font-black text-slate-950">{user?.displayName ?? user?.email ?? "-"}</span></div>
               <div className="flex justify-between gap-4 border-b border-slate-200 pb-3"><span className="font-semibold text-slate-500">ARUTER access</span><span className={`max-w-[58%] truncate text-right font-black ${aruterStatus.tone}`}>{aruterStatus.label}</span></div>
               <div className="flex justify-between gap-4"><span className="font-semibold text-slate-500">Access mód</span><span className="font-black text-amber-700">planning</span></div>
             </div>

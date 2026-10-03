@@ -405,6 +405,34 @@ export async function listProjectMemberships(projectId: string) {
   return (data || []).map((row) => mapMembership(row as DbMembership));
 }
 
+export async function activateProjectMembership(projectId: string, emailRaw: string, userId: string) {
+  const client = await requireReadyClient();
+  const email = emailRaw.trim().toLowerCase();
+  const { data: rows, error } = await client
+    .from("project_core_memberships")
+    .select("*")
+    .eq("project_id", projectId)
+    .in("status", ["INVITED", "ACTIVE"]);
+  if (error) databaseError("A projekttagság aktiválása előtti ellenőrzés sikertelen.", error);
+  const row = ((rows || []) as DbMembership[]).find((item) =>
+    item.user_id.toLowerCase() === userId.toLowerCase()
+    || item.user_id.toLowerCase() === email
+    || item.email?.toLowerCase() === email
+  );
+  if (!row) return null;
+  if (row.status === "ACTIVE") return mapMembership(row);
+  const now = new Date().toISOString();
+  const { data, error: updateError } = await client
+    .from("project_core_memberships")
+    .update({ user_id: userId, email: row.email || email, status: "ACTIVE", accepted_at: now, updated_at: now })
+    .eq("id", row.id)
+    .eq("status", "INVITED")
+    .select("*")
+    .maybeSingle();
+  if (updateError) databaseError("A projekttagság aktiválása sikertelen.", updateError);
+  return data ? mapMembership(data as DbMembership) : null;
+}
+
 export async function changeProjectLifecycle(projectId: string, nextStatus: ProjectLifecycleStatus, actorUserId: string) {
   const client = await requireReadyClient();
   const { data: current, error: currentError } = await client.from("project_core_projects").select("*").eq("id", projectId).neq("status", "DELETED").maybeSingle();
