@@ -428,16 +428,16 @@ function New-ManualSyncPlan {
     $localByPath[$key] = $local
   }
 
-  $allKeys = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList ([StringComparer]::OrdinalIgnoreCase)
-  foreach ($key in $localByPath.Keys) { [void]$allKeys.Add($key) }
-  foreach ($key in $remoteByPath.Keys) { [void]$allKeys.Add($key) }
+  $allKeys = @{}
+  foreach ($key in $localByPath.Keys) { $allKeys[[string]$key] = $true }
+  foreach ($key in $remoteByPath.Keys) { $allKeys[[string]$key] = $true }
 
   $operations = New-Object System.Collections.Generic.List[object]
   $conflicts = New-Object System.Collections.Generic.List[object]
   $unchanged = New-Object System.Collections.Generic.List[object]
   foreach ($collision in $remoteCollisions) { $conflicts.Add($collision) }
 
-  foreach ($key in @($allKeys | Sort-Object)) {
+  foreach ($key in @($allKeys.Keys | Sort-Object)) {
     $hasLocal = $localByPath.ContainsKey($key)
     $hasRemote = $remoteByPath.ContainsKey($key)
     $local = if ($hasLocal) { $localByPath[$key] } else { $null }
