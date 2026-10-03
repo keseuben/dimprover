@@ -170,3 +170,30 @@ Public HTTPS smoke after cutover:
 - activationSafe: true.
 
 Next physical gate: Windows PowerShell 5.1 Bridge-backed `-RunProbe` from the approved V0.1.5 FIX1 package. Apply remains blocked until physical Probe PASS.
+
+## Physical Windows Bridge bootstrap gate
+
+The first Bridge-backed `-RunProbe` reached the intended fail-closed gate on Windows PowerShell 5.1 because `%LOCALAPPDATA%\\DIMPRO\\BenjAdminBridge\\device-token.dpapi` did not exist yet.
+
+This is not a Drive Desktop parser/runtime defect. The existing BENJADMIN Windows Bridge P8.1 enrollment flow is the authoritative bootstrap:
+1. install verified P8.1 agent package;
+2. create one-time pairing in `/admin/dev-console/chatgrid-pairing`;
+3. run `PAIR.ps1` with PairingId + PairingCode;
+4. approve the pending device in the BENJADMIN UI;
+5. agent stores the one-time device token with Windows DPAPI CurrentUser protection;
+6. run one heartbeat;
+7. rerun Drive Desktop V0.1.5 FIX1 `-RunProbe -AuthMode Bridge`.
+
+Bridge readiness verified on DEV:
+- foundationReady=true;
+- bridgeEnabled=true;
+- pairingEnabled=true;
+- pairing secret configured=true;
+- one-time pairing lifetime=600 seconds;
+- outbound HTTPS only;
+- no inbound port;
+- executionEnabled=false;
+- PROD execution denied.
+
+P8.1 package contracts: 44/44 PASS + hardening 30/30 PASS.
+Windows ZIP SHA-256: `ec8015c0d848a8dc28b8751ef70fcfddd30402c7b1a673f33fe7c821c3d831ec`.
