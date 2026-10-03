@@ -5,7 +5,7 @@ const css=fs.readFileSync("components/drive/DriveWorkspace.module.css","utf8");
 const buildInfo=fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
 let pass=0; const check=(label,fn)=>{fn();pass++;console.log("PASS "+String(pass).padStart(2,"0")+" "+label);};
 const need=(token)=>assert.ok(css.includes(token),"missing "+token);
-check("V0.9.11 development version is active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.11"/));
+check("Drive residual-dark series uses shared 0.9.x version source",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/));
 check("empty details state is dark",()=>{need('html[data-drive-theme="dark"]') ; need(".loadingState"); need("background: #0d1a28");});
 check("Commander root and panes are dark",()=>{for(const t of [".commanderWorkspace",".commanderHeader",".commanderColumns",".commanderPane",".commanderPaneHeader",".commanderList",".commanderPaneFooter"]) need(t);});
 check("Commander rows and controls are dark",()=>{for(const t of [".commanderFolderRow",".commanderFileRow",".commanderFileSelected",".commanderFileChecked",".commanderMoveButton",".commanderDeleteButton"]) need(t);});

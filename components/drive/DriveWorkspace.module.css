@@ -5311,3 +5311,133 @@
 :global(html[data-drive-theme="dark"]) .visualCompareOverlayViewport {
   background: #fff;
 }
+
+/* DIMPRO Drive V0.9.12 – legacy DetailsPanel cards + top header contrast */
+:global(html[data-drive-theme="dark"]) .headerAction {
+  color: #b8cad9;
+}
+:global(html[data-drive-theme="dark"]) .headerAction svg {
+  color: #9fb4c5;
+}
+:global(html[data-drive-theme="dark"]) .headerAction:hover {
+  background: #173049;
+  color: #f1f7fb;
+}
+:global(html[data-drive-theme="dark"]) .headerAction:hover svg {
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .headerAction:focus-visible {
+  outline: 2px solid #4a91ff;
+  outline-offset: 2px;
+  background: #173049;
+  color: #f1f7fb;
+}
+
+:global(html[data-drive-theme="dark"]) .fileNameAuditBox {
+  border-color: #2f4457;
+  background: #101f2d;
+  color: #c7d6e2;
+}
+:global(html[data-drive-theme="dark"]) .fileNameAuditBox span {
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .fileNameAuditBox strong {
+  color: #dce7f1;
+}
+
+:global(html[data-drive-theme="dark"]) .numberingEditor {
+  border-color: #30465a;
+  background: #101f2d;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .numberingEditor[data-details-focused="true"] {
+  border-color: #4e8fc3;
+  background: #132a40;
+  box-shadow: 0 0 0 2px rgba(78,159,200,.14);
+}
+:global(html[data-drive-theme="dark"]) .numberingEditorHead strong {
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .numberingEditorHead span,
+:global(html[data-drive-theme="dark"]) .numberingEditorHead small,
+:global(html[data-drive-theme="dark"]) .numberingCurrent span,
+:global(html[data-drive-theme="dark"]) .numberingLocked,
+:global(html[data-drive-theme="dark"]) .numberingEditGrid label {
+  color: #91a6b8;
+}
+:global(html[data-drive-theme="dark"]) .numberingCurrent strong {
+  color: #79c3ed;
+}
+:global(html[data-drive-theme="dark"]) .numberingEditGrid select,
+:global(html[data-drive-theme="dark"]) .numberingEditGrid input,
+:global(html[data-drive-theme="dark"]) .metadataSettings textarea,
+:global(html[data-drive-theme="dark"]) .metaItem select {
+  border-color: #334a5e;
+  background: #0b1825;
+  color: #dce7f1;
+}
+
+:global(html[data-drive-theme="dark"]) .scaleEditor {
+  border-color: #30465a;
+  background: #101f2d;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .scaleEditor[data-details-focused="true"] {
+  border-color: #4e8fc3;
+  background: #132a40;
+  box-shadow: 0 0 0 2px rgba(78,159,200,.14);
+}
+:global(html[data-drive-theme="dark"]) .scaleEditorHead strong,
+:global(html[data-drive-theme="dark"]) .scaleEditorRow > span {
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .scaleEditorHead span {
+  color: #91a6b8;
+}
+:global(html[data-drive-theme="dark"]) .scaleEditorHead button,
+:global(html[data-drive-theme="dark"]) .scaleRemove {
+  border-color: #344b60;
+  background: #142331;
+  color: #c6d5e1;
+}
+:global(html[data-drive-theme="dark"]) .scaleEditorHead button:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .scaleEditorRow input {
+  border-color: #334a5e;
+  background: #0b1825;
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .scaleRemove {
+  color: #ff969c;
+}
+:global(html[data-drive-theme="dark"]) .scaleRemove:hover:not(:disabled) {
+  border-color: #8b4b55;
+  background: #472229;
+  color: #ffb0b5;
+}
+
+:global(html[data-drive-theme="dark"]) .metaItem[data-details-focused="true"] {
+  background: #132a40;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.14);
+}
+:global(html[data-drive-theme="dark"]) .metaItem input,
+:global(html[data-drive-theme="dark"]) .metaItem textarea {
+  border-color: #334a5e;
+  background: #0b1825;
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .metaItem input:focus,
+:global(html[data-drive-theme="dark"]) .metaItem textarea:focus {
+  border-color: #5a91c4;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.15);
+}
+
+:global(html[data-drive-theme="dark"]) .metadataSettings {
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .metadataSettingsGrid strong {
+  color: #aebfcd;
+}
