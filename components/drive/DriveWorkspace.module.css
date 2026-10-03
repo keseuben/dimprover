@@ -69,6 +69,8 @@
 
 .railButton:hover,
 .railLink:hover { background: rgba(255,255,255,0.08); color: white; transform: translateY(-1px); }
+.railDisabled { opacity: .35; cursor: default; }
+.railDisabled:hover { background: transparent; color: #c7d7e8; transform: none; }
 .railActive { background: linear-gradient(145deg, #176bff, #1b82ff); color: white; box-shadow: 0 6px 18px rgba(23, 107, 255, 0.3); }
 .railSpacer { flex: 1; }
 .railVersion { font-size: var(--drive-font-xs); color: #839bb2; writing-mode: vertical-rl; transform: rotate(180deg); margin: 6px 0; }
@@ -92,10 +94,12 @@
 }
 .shellBoardClosed .board { opacity: 0; pointer-events: none; transform: translateX(calc(-100% - 10px)); }
 .shellBoardOpen .board,.shellBoardPinned .board { opacity: 1; pointer-events: auto; transform: translateX(0); }
-.boardInner { width: var(--board-width); height: 100%; display: flex; flex-direction: column; padding: 14px 12px 18px; }
+.boardInner { width: var(--board-width); height: 100%; display: flex; flex-direction: column; padding: 14px 12px 18px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .boardHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 13px; border-bottom: 1px solid rgba(148,163,184,0.16); }
 .boardTitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.boardTitleMeta { min-width: 0; display: grid; gap: 1px; }
 .boardTitle strong { font-size: 14px; white-space: nowrap; }
+.boardTitleMeta small { color: #7f9ab3; font-size: 8px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
 .boardHeaderActions { display: flex; align-items: center; gap: 3px; }
 .boardPin,.boardClose { border: 0; background: transparent; color: #9fb5c9; cursor: pointer; padding: 5px; border-radius: 7px; display: grid; place-items: center; }
 .boardPin:hover,.boardClose:hover { background: rgba(255,255,255,0.08); color: white; }
@@ -106,13 +110,17 @@
 .boardNav a:hover,
 .boardNav button:hover { background: rgba(255,255,255,0.07); color: white; }
 .boardNav .boardActive { background: rgba(20,115,255,0.2); color: #9bc4ff; }
+.boardNav .boardNavDisabled { opacity: .46; cursor: default; }
+.boardNav .boardNavDisabled:hover { background: transparent; color: #d7e4ef; }
+.boardNav .boardNavDisabled small { margin-left: auto; color: #718ba3; font-size: 8px; font-weight: 800; }
 .boardSectionLabel { font-size: var(--drive-font-xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: #7894ae; padding: 12px 8px 5px; }
 .projectSelect { width: 100%; border: 1px solid rgba(148,163,184,0.22); background: rgba(255,255,255,0.06); color: white; border-radius: 9px; padding: 9px 10px; font-size: 11px; outline: none; }
 .projectSelect option { color: #172033; }
 .storageCard { margin-top: auto; border-top: 1px solid rgba(148,163,184,0.16); padding-top: 14px; }
 .storageRow { display: flex; justify-content: space-between; gap: 8px; font-size: var(--drive-font-sm); color: #aac0d2; }
 .storageBar { margin-top: 8px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
-.storageBarFill { width: 27%; height: 100%; background: linear-gradient(90deg, #1e6cff, #28b7d8); border-radius: inherit; }
+.storageBarFill { height: 100%; background: linear-gradient(90deg, #1e6cff, #28b7d8); border-radius: inherit; transition: width 180ms ease; }
+.storageError { margin-top: 6px; color: #e7a6a6; font-size: 9px; line-height: 1.35; }
 .storageButton { width: 100%; margin-top: 10px; border: 1px solid rgba(52,139,255,0.55); background: rgba(17,103,238,0.08); color: #7db7ff; border-radius: 8px; padding: 8px; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; }
 
 .main { min-width: 0; display: flex; flex-direction: column; min-height: 100vh; background: #f7fafc; }
@@ -3318,7 +3326,7 @@
 }
 
 .statusIconColumn {
-  min-width: 104px;
+  min-width: 124px;
   text-align: left !important;
   padding-left: 7px !important;
   padding-right: 7px !important;
@@ -3960,6 +3968,24 @@
 .versionStatusRejected { background: #d94b4b; }
 .versionStatusStaged { background: #4d8fd8; }
 .versionStatusMetadata { background: #9aa9b8; }
+
+.favoriteToggle {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #8da0b3;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+.favoriteToggle:hover:not(:disabled) { background: #fff7d6; color: #e0a000; }
+.favoriteToggle:disabled { opacity: .45; cursor: wait; }
+.favoriteToggleActive { color: #f0b400; }
+.favoriteToggleActive svg { fill: currentColor; }
 
 .boxInlineMarker {
   min-width: 10px;

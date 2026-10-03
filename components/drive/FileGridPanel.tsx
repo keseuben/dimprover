@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Star, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
@@ -17,6 +17,9 @@ type Props = {
   onOpenDocument?: (document: DriveDocument) => void;
   onRefresh: () => void;
   boxColorsByDocument?: Record<string, string[]>;
+  favoriteDocumentIds?: string[];
+  favoriteBusyDocumentIds?: string[];
+  onToggleFavorite?: (document: DriveDocument) => void;
   metadataByDocument?: Record<string, DriveEngineeringMetadata>;
   folders?: DriveFolder[];
   selectedFolderId?: string;
@@ -216,6 +219,27 @@ function BoxInlineMarker({ tokens }: { tokens: string[] }) {
       <Package size={11} />
       <small>{tokens.length}</small>
     </span>
+  );
+}
+
+function FavoriteToggle({ favorite, busy, onToggle, label }: { favorite: boolean; busy: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      className={`${styles.favoriteToggle} ${favorite ? styles.favoriteToggleActive : ""}`}
+      disabled={busy}
+      title={favorite ? "Eltávolítás a kedvencek közül" : "Hozzáadás a kedvencekhez"}
+      aria-label={`${label} – ${favorite ? "eltávolítás a kedvencek közül" : "hozzáadás a kedvencekhez"}`}
+      aria-pressed={favorite}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle();
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      <Star size={13} />
+    </button>
   );
 }
 
@@ -615,7 +639,7 @@ type ColumnWidthsByView = Record<TableViewKey, Record<string, number>>;
 
 const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
-  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
+  { id: "statusIcons", defaultWidth: 132, minWidth: 124 },
   { id: "name", defaultWidth: 260, minWidth: 160 },
   { id: "fileName", defaultWidth: 220, minWidth: 140 },
   { id: "uploader", defaultWidth: 120, minWidth: 90 },
@@ -630,7 +654,7 @@ const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
 
 const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
-  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
+  { id: "statusIcons", defaultWidth: 132, minWidth: 124 },
   { id: "planNo", defaultWidth: 100, minWidth: 90 },
   { id: "name", defaultWidth: 240, minWidth: 160 },
   { id: "scale", defaultWidth: 90, minWidth: 75 },
@@ -648,7 +672,7 @@ const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
 
 const REVIEW_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
-  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
+  { id: "statusIcons", defaultWidth: 132, minWidth: 124 },
   { id: "planNo", defaultWidth: 110, minWidth: 80 },
   { id: "name", defaultWidth: 280, minWidth: 160 },
   { id: "scale", defaultWidth: 92, minWidth: 70 },
@@ -814,6 +838,9 @@ export default function FileGridPanel({
   onOpenDocument,
   onRefresh,
   boxColorsByDocument = {},
+  favoriteDocumentIds = [],
+  favoriteBusyDocumentIds = [],
+  onToggleFavorite,
   metadataByDocument = {},
   folders = [],
   selectedFolderId = "all",
@@ -858,6 +885,8 @@ export default function FileGridPanel({
   const [activeFolderRowId, setActiveFolderRowId] = useState("");
   const [rowActionMenu, setRowActionMenu] = useState("");
   const selectedIds = selectedDocumentIds ?? internalSelectedIds;
+  const favoriteSet = useMemo(() => new Set(favoriteDocumentIds), [favoriteDocumentIds]);
+  const favoriteBusySet = useMemo(() => new Set(favoriteBusyDocumentIds), [favoriteBusyDocumentIds]);
   const setSelectedIds = (next: string[] | ((current: string[]) => string[])) => {
     const resolved = typeof next === "function" ? next(selectedIds) : next;
     if (onSelectionChange) onSelectionChange(resolved);
@@ -1490,6 +1519,7 @@ export default function FileGridPanel({
                         >
                           <FileKindIcon extension={row.document.extension} />
                         </span>
+                        <FavoriteToggle favorite={favoriteSet.has(row.document.id)} busy={favoriteBusySet.has(row.document.id)} label={row.displayName} onToggle={() => onToggleFavorite?.(row.document)} />
                         <BoxInlineMarker tokens={boxColorsByDocument[row.document.id] || []} />
                       </div>
                     </td>
@@ -1602,6 +1632,7 @@ export default function FileGridPanel({
                             title="Húzd a fájlt CsomagBOX-ba"
                             aria-label={`${displayName.value} CsomagBOX-ba húzása`}
                           ><FileKindIcon extension={document.extension} /></span>
+                          <FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} />
                           <BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} />
                         </div>
                       </td>
@@ -1706,7 +1737,7 @@ export default function FileGridPanel({
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd a fájlt CsomagBOX-ba"
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
+                      ><FileKindIcon extension={document.extension} /></span><FavoriteToggle favorite={favoriteSet.has(document.id)} busy={favoriteBusySet.has(document.id)} label={displayName.value} onToggle={() => onToggleFavorite?.(document)} /><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
                       <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
                       <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></td>
                       <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>

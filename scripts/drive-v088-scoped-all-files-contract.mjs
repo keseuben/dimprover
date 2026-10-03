@@ -100,7 +100,7 @@ check("workspace title and subtitle identify recursive scope", () => {
 });
 
 check("folder count is zero in all-files mode", () => {
-  assert.match(workspace, /if \(!tree \|\| allFilesInFolderMode\) return 0/);
+  assert.match(workspace, /if \(!tree \|\| allFilesInFolderMode \|\| favoriteOnly\) return 0/);
 });
 
 check("all-files button has active and disabled visual states", () => {

@@ -4,28 +4,35 @@ import Link from "next/link";
 import {
   Archive,
   Box,
-  CheckSquare2,
   ChevronsLeft,
-  FileCheck2,
+  Clock3,
   FolderKanban,
   FolderOpen,
-  MessageSquareText,
+  Home,
+  Inbox,
   PackageCheck,
   Pin,
   Plus,
   Settings,
-  UploadCloud,
+  Star,
 } from "lucide-react";
-import type { DriveProject } from "./driveTypes";
+import { DRIVE_VERSION_DISPLAY, type DriveNavigationTarget } from "./driveBuildInfo";
+import type { DriveProject, DriveStorageQuota } from "./driveTypes";
 import styles from "./DriveWorkspace.module.css";
+
+type DriveProvisionedFolder = {
+  id: string;
+  name?: string;
+  path?: string;
+};
 
 type DriveProvisioningInfo = {
   version: string;
   projectId: string;
   ready: boolean;
   folderCount: number;
-  incomingDropFolder: unknown | null;
-  pilotFolder: unknown | null;
+  incomingDropFolder: DriveProvisionedFolder | null;
+  pilotFolder: DriveProvisionedFolder | null;
 };
 
 type DriveProvisioningStatus = "checking" | "ready" | "repair-required" | "error";
@@ -34,12 +41,14 @@ type Props = {
   projects: DriveProject[];
   selectedProjectId: string;
   pinned: boolean;
+  activeTarget: DriveNavigationTarget;
   onProjectChange: (projectId: string) => void;
   onCreateProject: () => void;
   onClose: () => void;
   onTogglePinned: () => void;
   onHoverEnter: () => void;
   onHoverLeave: () => void;
+  onNavigate: (target: DriveNavigationTarget) => void;
   provisioning?: DriveProvisioningInfo | null;
   provisioningStatus?: DriveProvisioningStatus;
   provisioningError?: string | null;
@@ -47,18 +56,31 @@ type Props = {
   provisioningRepairBusy?: boolean;
   canRepairProvisioning?: boolean;
   onRepairProvisioning?: () => void | Promise<void>;
+  storageQuota?: DriveStorageQuota | null;
+  storageLoading?: boolean;
+  storageError?: string | null;
 };
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(0)} KB`;
+  return `${value} B`;
+}
 
 export default function FloatingProjectBoard({
   projects,
   selectedProjectId,
   pinned,
+  activeTarget,
   onProjectChange,
   onCreateProject,
   onClose,
   onTogglePinned,
   onHoverEnter,
   onHoverLeave,
+  onNavigate,
   provisioning = null,
   provisioningStatus = "checking",
   provisioningError = null,
@@ -66,19 +88,38 @@ export default function FloatingProjectBoard({
   provisioningRepairBusy = false,
   canRepairProvisioning = false,
   onRepairProvisioning,
+  storageQuota = null,
+  storageLoading = false,
+  storageError = null,
 }: Props) {
+  const storagePercent = storageQuota ? Math.max(0, Math.min(100, storageQuota.usagePercent)) : 0;
+  const storageValue = storageLoading
+    ? "Betöltés…"
+    : storageError
+      ? "Nem elérhető"
+      : storageQuota
+        ? `${formatBytes(storageQuota.occupiedBytes)} / ${formatBytes(storageQuota.quotaBytes)}`
+        : "—";
+
+  const navClass = (target: DriveNavigationTarget) =>
+    activeTarget === target ? styles.boardActive : "";
+
   return (
     <aside
       className={styles.board}
       aria-label="DIMPRO Drive navigációs board"
       onMouseEnter={onHoverEnter}
       onMouseLeave={onHoverLeave}
+      data-drive-navigation-surface="true"
     >
       <div className={styles.boardInner}>
         <header className={styles.boardHeader}>
           <div className={styles.boardTitle}>
             <FolderKanban size={17} />
-            <strong>DIMPRO Drive</strong>
+            <div className={styles.boardTitleMeta}>
+              <strong>DIMPRO Drive</strong>
+              <small>{DRIVE_VERSION_DISPLAY}</small>
+            </div>
           </div>
           <div className={styles.boardHeaderActions}>
             <button
@@ -147,17 +188,17 @@ export default function FloatingProjectBoard({
           ) : null}
 
           {provisioningStatus === "repair-required" ? (
-            <div className={styles.provisioningMessage + " " + styles.provisioningWarning}>
+            <div className={`${styles.provisioningMessage} ${styles.provisioningWarning}`}>
               A Drive projektkörnyezet javítást igényel.
             </div>
           ) : null}
 
           {provisioningStatus === "error" && provisioningError ? (
-            <div className={styles.provisioningMessage + " " + styles.provisioningError}>{provisioningError}</div>
+            <div className={`${styles.provisioningMessage} ${styles.provisioningError}`}>{provisioningError}</div>
           ) : null}
 
           {provisioningNotice ? (
-            <div className={styles.provisioningMessage + " " + styles.provisioningSuccess}>{provisioningNotice}</div>
+            <div className={`${styles.provisioningMessage} ${styles.provisioningSuccess}`}>{provisioningNotice}</div>
           ) : null}
 
           {canRepairProvisioning && (provisioningStatus === "repair-required" || provisioningStatus === "error") ? (
@@ -167,27 +208,52 @@ export default function FloatingProjectBoard({
           ) : null}
         </section>
 
+        <span className={styles.boardSectionLabel}>Drive</span>
         <div className={styles.boardNav}>
-          <Link href="/drive"><FolderOpen size={16} /> Drive</Link>
-          <Link href="/projektkapu"><FolderKanban size={16} /> Projektkapu</Link>
-          <button type="button" className={styles.boardActive}><FolderOpen size={16} /> Dokumentumtár</button>
-          <button type="button"><UploadCloud size={16} /> Fájlkapu</button>
-          <button type="button"><PackageCheck size={16} /> Kiadások</button>
-          <button type="button"><Box size={16} /> Csomagok</button>
+          <button type="button" className={styles.boardNavDisabled} disabled title="Kezdőlap – hamarosan">
+            <Home size={16} /> <span>Kezdőlap</span><small>hamarosan</small>
+          </button>
+          <button type="button" className={navClass("documents")} onClick={() => onNavigate("documents")}>
+            <FolderOpen size={16} /> Dokumentumtár
+          </button>
+          <button type="button" className={styles.boardNavDisabled} disabled title="Legutóbbi – hamarosan">
+            <Clock3 size={16} /> <span>Legutóbbi</span><small>hamarosan</small>
+          </button>
+          <button type="button" className={navClass("favorites")} onClick={() => onNavigate("favorites")}>
+            <Star size={16} /> Kedvencek
+          </button>
+          <button type="button" className={navClass("incoming")} onClick={() => onNavigate("incoming")}>
+            <Inbox size={16} /> Beérkező Drop
+          </button>
+          <button type="button" className={styles.boardNavDisabled} disabled title="Kiadások – külön Drive nézet hamarosan">
+            <PackageCheck size={16} /> <span>Kiadások</span><small>hamarosan</small>
+          </button>
+          <button type="button" className={navClass("boxes")} onClick={() => onNavigate("boxes")}>
+            <Box size={16} /> CsomagBOX
+          </button>
+          <button type="button" className={styles.boardNavDisabled} disabled title="Lomtár nézet – hamarosan">
+            <Archive size={16} /> <span>Lomtár</span><small>hamarosan</small>
+          </button>
         </div>
 
-        <span className={styles.boardSectionLabel}>Projektmunka</span>
+        <span className={styles.boardSectionLabel}>Rendszer</span>
         <div className={styles.boardNav}>
-          <Link href="/projektkapu"><MessageSquareText size={16} /> Egyeztetések</Link>
-          <Link href="/projektkapu"><FileCheck2 size={16} /> Jóváhagyások</Link>
-          <Link href="/projektkapu"><CheckSquare2 size={16} /> Feladatok</Link>
-          <Link href="/projektkapu"><Archive size={16} /> Projektarchívum</Link>
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>
 
         <div className={styles.storageCard}>
-          <div className={styles.storageRow}><span>Tárhely</span><strong>68.4 GB / 250 GB</strong></div>
-          <div className={styles.storageBar}><div className={styles.storageBarFill} /></div>
+          <div className={styles.storageRow}><span>Tárhely</span><strong>{storageValue}</strong></div>
+          <div
+            className={styles.storageBar}
+            role="progressbar"
+            aria-label="Drive tárhelyhasználat"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(storagePercent)}
+          >
+            <div className={styles.storageBarFill} style={{ width: `${storagePercent}%` }} />
+          </div>
+          {storageError ? <div className={styles.storageError}>{storageError}</div> : null}
           <button type="button" className={styles.storageButton}>Tárhely bővítése</button>
         </div>
       </div>
