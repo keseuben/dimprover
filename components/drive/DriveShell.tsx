@@ -5,7 +5,9 @@ import { AlertTriangle, Loader2, Plus, X } from "lucide-react";
 import DriveNavigationRail from "./DriveNavigationRail";
 import DriveWorkspace from "./DriveWorkspace";
 import FloatingProjectBoard from "./FloatingProjectBoard";
-import type { DriveProject } from "./driveTypes";
+import type { DriveProject, DriveStorageQuota } from "./driveTypes";
+import { type DriveNavigationRequest, type DriveNavigationTarget } from "./driveBuildInfo";
+import { DRIVE_THEME_STORAGE_KEY, normalizeDriveTheme, type DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveWorkspaceOption = {
@@ -35,8 +37,8 @@ type DriveProvisioningInfo = {
   projectId: string;
   ready: boolean;
   folderCount: number;
-  incomingDropFolder: unknown | null;
-  pilotFolder: unknown | null;
+  incomingDropFolder: { id: string; name?: string; path?: string } | null;
+  pilotFolder: { id: string; name?: string; path?: string } | null;
 };
 
 type DriveProvisioningStatus = "checking" | "ready" | "repair-required" | "error";
@@ -72,6 +74,7 @@ export default function DriveShell({
   const [error, setError] = useState("");
   const [boardOpen, setBoardOpen] = useState(false);
   const [boardPinned, setBoardPinned] = useState(false);
+  const [theme, setTheme] = useState<DriveTheme>("light");
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
   const [notice, setNotice] = useState("");
@@ -81,7 +84,32 @@ export default function DriveShell({
   const [provisioningNotice, setProvisioningNotice] = useState<string | null>(null);
   const [provisioningRepairBusy, setProvisioningRepairBusy] = useState(false);
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
+  const [storageQuota, setStorageQuota] = useState<DriveStorageQuota | null>(null);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
+  const [activeNavigation, setActiveNavigation] = useState<DriveNavigationTarget>("documents");
+  const [navigationRequest, setNavigationRequest] = useState<DriveNavigationRequest>({ id: 0, target: "documents" });
   const boardOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const stored = normalizeDriveTheme(
+      document.documentElement.dataset.driveTheme || window.localStorage.getItem(DRIVE_THEME_STORAGE_KEY),
+    );
+    setTheme(stored);
+    document.documentElement.dataset.driveTheme = stored;
+    document.documentElement.style.colorScheme = stored;
+  }, []);
+
+  const handleThemeChange = useCallback((nextTheme: DriveTheme) => {
+    setTheme(nextTheme);
+    document.documentElement.dataset.driveTheme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    try {
+      window.localStorage.setItem(DRIVE_THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // Theme persistence is best-effort; the active theme still applies for this session.
+    }
+  }, []);
   const boardCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadProjects = useCallback(async () => {
@@ -209,6 +237,30 @@ export default function DriveShell({
     });
   }, [cancelBoardTimers]);
 
+  const closeBoardImmediately = useCallback(() => {
+    cancelBoardTimers();
+    setBoardPinned(false);
+    setBoardOpen(false);
+  }, [cancelBoardTimers]);
+
+  useEffect(() => {
+    if (!boardOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-drive-navigation-surface="true"]')) return;
+      closeBoardImmediately();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeBoardImmediately();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [boardOpen, closeBoardImmediately]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
@@ -225,6 +277,58 @@ export default function DriveShell({
   );
 
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
+
+  const handleDriveNavigation = useCallback((target: DriveNavigationTarget) => {
+    setActiveNavigation(target);
+    setNavigationRequest((current) => ({
+      id: current.id + 1,
+      target,
+      folderId: target === "incoming" ? provisioning?.incomingDropFolder?.id : undefined,
+    }));
+    closeBoardImmediately();
+  }, [closeBoardImmediately, provisioning?.incomingDropFolder?.id]);
+
+  const handleProjectChange = useCallback((projectId: string) => {
+    setSelectedProjectId(projectId);
+    setActiveNavigation("documents");
+    setNavigationRequest((current) => ({ id: current.id + 1, target: "documents" }));
+    closeBoardImmediately();
+  }, [closeBoardImmediately]);
+
+  const handleStorageQuotaChange = useCallback((quota: DriveStorageQuota | null) => {
+    setStorageQuota(quota);
+    if (quota) setStorageError(null);
+  }, []);
+
+  useEffect(() => {
+    const projectId = selectedProject?.id;
+    setStorageQuota(null);
+    setStorageError(null);
+    if (!projectId) {
+      setStorageLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setStorageLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; storage?: DriveStorageQuota };
+        if (!response.ok || !payload.ok || !payload.storage) throw new Error(payload.error || "A tárhelyadat nem tölthető be.");
+        if (!controller.signal.aborted) setStorageQuota(payload.storage);
+      } catch (caught) {
+        if (controller.signal.aborted || (caught instanceof DOMException && caught.name === "AbortError")) return;
+        setStorageError(caught instanceof Error ? caught.message : "A tárhelyadat nem tölthető be.");
+      } finally {
+        if (!controller.signal.aborted) setStorageLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [selectedProject?.id, workspaceRevision]);
 
   useEffect(() => {
     const projectId = selectedProject?.id;
@@ -298,18 +402,26 @@ export default function DriveShell({
   }
 
   return (
-    <div className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}>
+    <div
+      className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}
+      data-theme={theme}
+    >
       <DriveNavigationRail
         boardOpen={boardOpen}
         onToggleBoard={toggleBoard}
+        activeTarget={activeNavigation}
         onHoverOpen={openBoardSoon}
         onHoverLeave={closeBoardSoon}
+        onNavigate={handleDriveNavigation}
       />
       <FloatingProjectBoard
         projects={projects}
         selectedProjectId={selectedProject?.id || ""}
         pinned={boardPinned}
-        onProjectChange={setSelectedProjectId}
+        activeTarget={activeNavigation}
+        theme={theme}
+        onThemeChange={handleThemeChange}
+        onProjectChange={handleProjectChange}
         onCreateProject={() => {
           cancelBoardTimers();
           setBoardPinned(true);
@@ -324,6 +436,7 @@ export default function DriveShell({
         onTogglePinned={toggleBoardPinned}
         onHoverEnter={keepBoardOpen}
         onHoverLeave={closeBoardSoon}
+        onNavigate={handleDriveNavigation}
         provisioning={provisioning}
         provisioningStatus={provisioningStatus}
         provisioningError={provisioningError}
@@ -331,6 +444,9 @@ export default function DriveShell({
         provisioningRepairBusy={provisioningRepairBusy}
         canRepairProvisioning={canRepairProvisioning}
         onRepairProvisioning={handleRepairProvisioning}
+        storageQuota={storageQuota}
+        storageLoading={storageLoading}
+        storageError={storageError}
       />
       <main className={styles.main}>
         {showCreateProject && (
@@ -390,7 +506,9 @@ export default function DriveShell({
             permissions={selectedProject.permissions}
             workspaceOptions={workspaceOptions}
             selectedWorkspaceId={selectedProjectId}
-            onWorkspaceChange={setSelectedProjectId}
+            onWorkspaceChange={handleProjectChange}
+            navigationRequest={navigationRequest}
+            onStorageQuotaChange={handleStorageQuotaChange}
           />
         )}
       </main>

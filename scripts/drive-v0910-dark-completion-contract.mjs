@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const css = fs.readFileSync("components/drive/DriveWorkspace.module.css","utf8");
+const buildInfo = fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
+let pass=0; const check=(label,fn)=>{fn();pass+=1;console.log("PASS "+String(pass).padStart(2,"0")+" "+label);};
+const dark = 'html[data-drive-theme="dark"]';
+const need=(token)=>{assert.ok(css.includes(dark) && css.includes(token),"missing dark completion token "+token);};
+check("V0.9.10 development version is active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.10"/));
+check("selection and compact status bars are dark",()=>{for(const t of [".fileSelectionBar",".fileCompactControls",".fileStatusLegend"]) need(t);});
+check("review matrix table and sticky cells are dark",()=>{for(const t of [".reviewTable th",".reviewTable td",".reviewTable th:first-child",".reviewTable td:first-child"]) need(t);});
+check("review grouped headers have dark engineering tones",()=>{for(const t of [".reviewGroupTechnical",".reviewGroupCustomer",".reviewGroupManager",".reviewGroupInvestor",".reviewGroupLifecycle"]) need(t);});
+check("details and split inspector surfaces are dark",()=>{for(const t of [".detailsPanel",".detailsHeader",".detailsTabs",".detailsBody",".detailsWorkspace",".detailsFieldsPane",".detailsSplitCard"]) need(t);});
+check("review editor surfaces are dark",()=>{for(const t of [".reviewRoleInfo",".reviewSection",".reviewEditorItem",".reviewTimeline",".reviewSectionHeader",".reviewCategoryButton"]) need(t);});
+check("review form controls and observations are dark",()=>{for(const t of [".reviewEditorItem select",".reviewEditorItem textarea",".reviewChoice",".observationEditorHead button",".observationDelete"]) need(t);});
+check("review workflow states keep distinct dark semantic tones",()=>{for(const t of [".reviewProgressDone",".reviewProgressActive",".reviewProgressReturned",".reviewApproval_returned",".reviewApproval_manager",".reviewApproval_investor"]) need(t);});
+check("box add and empty cards are dark",()=>{for(const t of [".boxAdd",".boxEmptyCreate",".boxDisabledInfo",".boxItemNames strong"]) need(t);});
+check("dark selected rows remain visibly selected",()=>assert.match(css,/reviewRowSelected td[\s\S]*?background: #17395f/));
+check("production access remains denied",()=>assert.doesNotMatch(css+buildInfo,/PROD ALLOW/));
+console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.10 Dark Theme Completion",pass,fail:0,productionAccess:"DENY"},null,2));

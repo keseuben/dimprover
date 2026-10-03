@@ -199,3 +199,135 @@
   .footerDivider { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .outerOrbit,.middleOrbit,.innerOrbit,.logo,.logoScan,.progressShimmer,.brandPulse i,.bootStepActive .stepIcon,.ambientGlow { animation: none !important; } }
+
+/* DIMPRO Drive V0.9.9 – premium loader dark mode */
+:global(html[data-drive-theme="dark"]) .root {
+  color: #dbe8f3;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(31,126,215,.18), transparent 36%),
+    linear-gradient(180deg, #07111c 0%, #091522 55%, #0b1825 100%);
+}
+:global(html[data-drive-theme="dark"]) .blueprint {
+  opacity: .78;
+  background-image:
+    linear-gradient(rgba(87,151,211,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(87,151,211,.07) 1px, transparent 1px),
+    linear-gradient(rgba(87,151,211,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(87,151,211,.035) 1px, transparent 1px);
+}
+:global(html[data-drive-theme="dark"]) .blueprint::before,
+:global(html[data-drive-theme="dark"]) .blueprint::after {
+  border-color: rgba(74,145,214,.13);
+}
+:global(html[data-drive-theme="dark"]) .ambientGlow {
+  background: radial-gradient(circle, rgba(24,116,211,.24), rgba(38,111,180,.08) 46%, transparent 74%);
+}
+:global(html[data-drive-theme="dark"]) .loaderCard {
+  border-color: rgba(102,153,202,.30);
+  background: linear-gradient(180deg, rgba(13,29,44,.94), rgba(10,23,36,.90));
+  box-shadow: 0 28px 74px rgba(0,0,0,.42), 0 7px 20px rgba(0,0,0,.22), inset 0 1px 0 rgba(157,197,232,.06);
+}
+:global(html[data-drive-theme="dark"]) .loaderCard::before {
+  border-color: rgba(86,151,216,.12);
+}
+:global(html[data-drive-theme="dark"]) .loaderCardComplete {
+  border-color: rgba(75,183,124,.35);
+  box-shadow: 0 28px 74px rgba(0,0,0,.42), 0 8px 30px rgba(39,159,93,.10), inset 0 1px 0 rgba(255,255,255,.04);
+}
+:global(html[data-drive-theme="dark"]) .brandLine { color: #829bb1; }
+:global(html[data-drive-theme="dark"]) .brandKicker { color: #9cb8cf; }
+:global(html[data-drive-theme="dark"]) .outerOrbit { border-color: rgba(75,150,222,.28); }
+:global(html[data-drive-theme="dark"]) .outerOrbit::before,
+:global(html[data-drive-theme="dark"]) .middleOrbit { border-color: rgba(79,159,235,.31); }
+:global(html[data-drive-theme="dark"]) .innerOrbit {
+  border-color: rgba(78,151,220,.25);
+  box-shadow: inset 0 0 28px rgba(41,129,212,.10);
+}
+:global(html[data-drive-theme="dark"]) .orbitNode {
+  background: linear-gradient(135deg,#79c2ff,#2d7fd0);
+  box-shadow: 0 0 13px rgba(66,154,235,.45);
+}
+:global(html[data-drive-theme="dark"]) .logoCore {
+  background: radial-gradient(circle at 50% 28%, rgba(25,48,70,.98), rgba(10,26,41,.97) 72%);
+  border-color: rgba(73,145,214,.28);
+  box-shadow: 0 16px 42px rgba(0,0,0,.34), inset 0 1px 0 rgba(157,202,240,.08), inset 0 0 28px rgba(46,135,219,.10);
+}
+:global(html[data-drive-theme="dark"]) .loaderCardComplete .logoCore {
+  border-color: rgba(75,181,123,.30);
+  box-shadow: 0 16px 42px rgba(0,0,0,.34), 0 0 0 5px rgba(51,167,102,.06), inset 0 1px 0 rgba(255,255,255,.06);
+}
+:global(html[data-drive-theme="dark"]) .logo {
+  filter: drop-shadow(0 8px 18px rgba(40,139,228,.28));
+}
+:global(html[data-drive-theme="dark"]) .percentRing {
+  border-color: rgba(81,153,220,.30);
+  background: rgba(12,31,48,.96);
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+  color: #79bbff;
+}
+:global(html[data-drive-theme="dark"]) .percentRing span { color: #8aa3ba; }
+:global(html[data-drive-theme="dark"]) .loaderCardComplete .percentRing {
+  color: #78d6a1;
+  border-color: rgba(72,181,121,.34);
+  background: rgba(14,43,30,.96);
+}
+:global(html[data-drive-theme="dark"]) .productLabel { color: #63aff3; }
+:global(html[data-drive-theme="dark"]) .loaderCardComplete .productLabel { color: #74d19e; }
+:global(html[data-drive-theme="dark"]) .heading h2 { color: #e5eef6; }
+:global(html[data-drive-theme="dark"]) .heading p { color: #94aabd; }
+:global(html[data-drive-theme="dark"]) .progressTrack {
+  border-color: #2a4155;
+  background: #122436;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,.30);
+}
+:global(html[data-drive-theme="dark"]) .progressGrid {
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent 27px, rgba(107,151,190,.16) 28px, transparent 29px);
+}
+:global(html[data-drive-theme="dark"]) .progressFill {
+  background: linear-gradient(90deg,#1769bd,#269ce7 54%,#68c5ee);
+  box-shadow: 0 0 18px rgba(41,148,224,.30);
+}
+:global(html[data-drive-theme="dark"]) .progressMeta { color: #758da3; }
+:global(html[data-drive-theme="dark"]) .progressMeta strong { color: #78b8f1; }
+:global(html[data-drive-theme="dark"]) .bootStep {
+  border-color: #2a3e50;
+  background: rgba(15,31,45,.90);
+  color: #7f94a6;
+}
+:global(html[data-drive-theme="dark"]) .stepIcon {
+  background: #172b3d;
+  color: #8499ab;
+}
+:global(html[data-drive-theme="dark"]) .bootStepActive {
+  border-color: #3d76a9;
+  background: #132c44;
+  color: #84c1f5;
+  box-shadow: 0 6px 16px rgba(0,0,0,.16);
+}
+:global(html[data-drive-theme="dark"]) .bootStepActive .stepIcon {
+  background: #173c5d;
+  color: #6eb7ef;
+}
+:global(html[data-drive-theme="dark"]) .bootStepDone {
+  border-color: #2e5e47;
+  background: #112b20;
+  color: #75c99a;
+}
+:global(html[data-drive-theme="dark"]) .bootStepDone .stepIcon {
+  background: #183a2a;
+  color: #68cd91;
+}
+:global(html[data-drive-theme="dark"]) .systemFooter {
+  border-top-color: rgba(118,155,189,.18);
+  color: #71889b;
+}
+:global(html[data-drive-theme="dark"]) .footerDivider { background: #2a3c4c; }
+:global(html[data-drive-theme="dark"]) .driveWordmarkMain strong {
+  color: #d9e9f7;
+  text-shadow: 0 8px 26px rgba(0,0,0,.24);
+}
+:global(html[data-drive-theme="dark"]) .driveWordmarkMain span { color: #7595b0; }
+:global(html[data-drive-theme="dark"]) .driveWordmark small { color: #6f879b; }
+:global(html[data-drive-theme="dark"]) .driveWordmarkReady .driveWordmarkMain strong { color: #8cd4af; }
+:global(html[data-drive-theme="dark"]) .driveWordmarkReady .driveWordmarkMain span { color: #6e9a84; }
+:global(html[data-drive-theme="dark"]) .driveWordmarkReady small { color: #6c8e7e; }

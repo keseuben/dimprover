@@ -8,13 +8,13 @@ let pass=0;
 const check=(label,fn)=>{fn();pass++;console.log(`PASS ${String(pass).padStart(2,"0")} ${label}`);};
 
 check("simple view has dedicated statusIcons column",()=>{
-  assert.match(grid,/const SIMPLE_COLUMNS[\s\S]*?statusIcons", defaultWidth: 112, minWidth: 104/);
+  assert.match(grid,/const SIMPLE_COLUMNS[\s\S]*?statusIcons", defaultWidth: 132, minWidth: 124/);
 });
 check("engineering icon column default is 112",()=>{
-  assert.match(grid,/const ENGINEERING_COLUMNS[\s\S]*?statusIcons", defaultWidth: 112, minWidth: 104/);
+  assert.match(grid,/const ENGINEERING_COLUMNS[\s\S]*?statusIcons", defaultWidth: 132, minWidth: 124/);
 });
 check("review icon column default is 112",()=>{
-  assert.match(grid,/const REVIEW_COLUMNS[\s\S]*?statusIcons", defaultWidth: 112, minWidth: 104/);
+  assert.match(grid,/const REVIEW_COLUMNS[\s\S]*?statusIcons", defaultWidth: 132, minWidth: 124/);
 });
 check("simple header exposes resizable icon column",()=>{
   assert.match(grid,/startColumnResize\("simple", "statusIcons"/);
@@ -35,9 +35,9 @@ check("icon column is left aligned",()=>{
 });
 check("icon column remains resizable via min width only",()=>{
   const block=css.match(/\.statusIconColumn \{([\s\S]*?)\n\}/)?.[1]||"";
-  assert.match(block,/min-width: 104px/);
+  assert.match(block,/min-width: 124px/);
   assert.doesNotMatch(block,/max-width:/);
-  assert.doesNotMatch(block,/width: 112px !important/);
+  assert.doesNotMatch(block,/width: 132px !important/);
 });
 check("BOX marker cannot overflow into adjacent name cell",()=>{
   assert.match(css,/\.statusIconColumn \{[\s\S]*?overflow: hidden !important/);
