@@ -303,6 +303,16 @@ export async function verifyLoginOtp(input: {
       await auditLoginFailure("USER_NOT_ACTIVE", challenge.user_id);
       throw new DimproAuthError("User is not active.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.", { commitTransaction: true });
     }
+    if (row.security_level !== "SIMPLE") {
+      await auditLoginFailure("STRONG_AUTH_REQUIRED", row.id, { securityLevel: row.security_level });
+      throw new DimproAuthError(
+        "Strong authentication is required for this security level.",
+        "AUTH_STRONG_AUTH_REQUIRED",
+        403,
+        "Ehhez a fiókhoz erősebb hitelesítés szükséges; az e-mail-kódos belépés nem engedélyezett.",
+        { commitTransaction: true },
+      );
+    }
 
     await client.query(`UPDATE auth_email_challenges SET consumed_at=now() WHERE id=$1`, [challenge.id]);
     if (!row.email_verified_at) {

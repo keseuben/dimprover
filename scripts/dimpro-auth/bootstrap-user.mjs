@@ -8,7 +8,7 @@ const displayName=arg("display-name") || null;
 const level=(arg("level")||"SIMPLE").toUpperCase();
 const grantDrive=process.argv.includes("--grant-drive");
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Érvényes --email szükséges.");
-if(!["SIMPLE","STAFF","PROJECT_MANAGER","ORG_ADMIN","SUPERADMIN"].includes(level)) throw new Error("Érvénytelen --level.");
+if(level!=="SIMPLE") throw new Error("AUTH V0.1 bootstrap kizárólag SIMPLE biztonsági szintet enged; magasabb szinthez erős hitelesítés szükséges.");
 if(process.env.DIMPRO_AUTH_BOOTSTRAP_CONFIRM!=="BOOTSTRAP_DEV_AUTH_USER") throw new Error("DIMPRO_AUTH_BOOTSTRAP_CONFIRM=BOOTSTRAP_DEV_AUTH_USER szükséges.");
 requireDevAuthEnvironment();
 const connectionString=process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim();
@@ -30,6 +30,9 @@ try{
       WHERE r.code='DRIVE_USER' AND p.code='DRIVE'
         AND NOT EXISTS(SELECT 1 FROM auth_access_grants g WHERE g.user_id=$1 AND g.role_id=r.id AND g.product_id=p.id AND g.revoked_at IS NULL)`,[user.id]);
   }
+  await client.query(`INSERT INTO auth_audit_events(event_type,user_id,method,result,correlation_id,metadata)
+    VALUES('ADMIN_USER_BOOTSTRAP',$1,'DEV_BOOTSTRAP_SCRIPT','SUCCESS',gen_random_uuid()::text,$2::jsonb)`,
+    [user.id,JSON.stringify({securityLevel:level,driveAccessRequested:grantDrive})]);
   await client.query("COMMIT");
   console.log(JSON.stringify({ok:true,user,driveAccessGranted:grantDrive},null,2));
 }catch(error){await client.query("ROLLBACK").catch(()=>undefined);throw error;}finally{await client.end();}

@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 35/35 PASS.
-- AUTH V0.2.1 security contract: 44/44 PASS.
+- AUTH V0.2.1 security contract: 46/46 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -141,3 +141,9 @@ A probe nem végez módosítást és nem aktivál candidate-et. Az aktív hostok
 - A Drive SSO indító és callback válaszok `Cache-Control: no-store` és `Referrer-Policy: no-referrer` fejlécet kapnak.
 - A callback hiba- és sikerágai ugyanazon `noLeak` fejléc-politikát használják, ezért az egyszer használatos `code` és `state` nem kerülhet normál referrer láncba.
 - A callback `X-Content-Type-Options: nosniff` fejlécet is ad.
+
+## Security-level downgrade protection
+
+- Az AUTH V0.1 e-mail OTP kizárólag `SIMPLE` biztonsági szintű felhasználót hitelesít. `STAFF`, `PROJECT_MANAGER`, `ORG_ADMIN` és `SUPERADMIN` szintnél `AUTH_STRONG_AUTH_REQUIRED` fail-closed válasz készül, amíg a passkey/2FA réteg nincs aktiválva.
+- Ez nem korlátozza a Drive termékjogosultságot: a pilot felhasználó lehet `SIMPLE` biztonsági szintű, miközben `DRIVE_USER`/`drive.access` jogosultsága van.
+- A DEV bootstrap script magasabb biztonsági szint létrehozását elutasítja, és a bootstrap műveletet `ADMIN_USER_BOOTSTRAP` audit eseménnyel naplózza.
