@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 27/27 PASS.
+- AUTH V0.2.1 security contract: 29/29 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -99,3 +99,10 @@ A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált 
 - Alapérték: 10 perces ablak, authorize 60/IP, token exchange 120/IP; környezeti változókkal szűkíthető.
 - Tiltáskor is audit esemény készül, így az ismételt támadási kísérletek nem maradnak láthatatlanok.
 - Inaktív termék nem adhat jogosultságot és SSO kliens sem használható hozzá.
+
+## Runtime environment hardening
+
+- `DIMPRO_AUTH_ENVIRONMENT` explicit `DEV`/`PROD`; hiánya fail-closed.
+- DEV runtime kizárólag `db.dimpro.hu/dimpro_auth_dev` + `dimpro_auth_app_dev`, PROD runtime kizárólag `dimpro_auth_prod` + `dimpro_auth_app_prod` kapcsolattal indulhat.
+- Aktiválási preflight ellenőrzi a külön runtime/migrator role-t, `verify-full` TLS-t, CA tanúsítványt és az OTP/session/SSO titkok egymástól való függetlenségét.
+- DEV pilot user-admin script kizárólag explicit confirmation mellett fut, PROD módot elutasít, és minden módosítást auditál.

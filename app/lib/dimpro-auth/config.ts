@@ -1,4 +1,5 @@
 export type DimproAuthConfig = {
+  environment: "DEV" | "PROD";
   databaseUrl: string;
   otpPepper: string;
   sessionPepper: string;
@@ -34,12 +35,28 @@ function boundedInteger(name: string, fallback: number, min: number, max: number
 }
 
 export function getDimproAuthConfig(): DimproAuthConfig {
+  const rawEnvironment = process.env.DIMPRO_AUTH_ENVIRONMENT?.trim().toUpperCase();
+  if (rawEnvironment !== "DEV" && rawEnvironment !== "PROD") {
+    throw new Error("DIMPRO_AUTH_ENVIRONMENT kötelező és csak DEV vagy PROD lehet.");
+  }
+  const environment = rawEnvironment as "DEV" | "PROD";
   const databaseUrl = process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
   if (!databaseUrl || !/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
     throw new Error("DIMPRO_AUTH_DATABASE_URL nincs beállítva.");
   }
+  let parsedDatabaseUrl: URL;
+  try { parsedDatabaseUrl = new URL(databaseUrl); }
+  catch { throw new Error("DIMPRO_AUTH_DATABASE_URL nem érvényes PostgreSQL URL."); }
+  const expectedDatabase = environment === "DEV" ? "dimpro_auth_dev" : "dimpro_auth_prod";
+  const expectedUser = environment === "DEV" ? "dimpro_auth_app_dev" : "dimpro_auth_app_prod";
+  const databaseName = decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, ""));
+  const databaseUser = decodeURIComponent(parsedDatabaseUrl.username);
+  if (parsedDatabaseUrl.hostname !== "db.dimpro.hu" || databaseName !== expectedDatabase || databaseUser !== expectedUser) {
+    throw new Error(`DIMPRO AUTH ${environment} adatbázis-kapcsolat eltér a kötelező host/database/runtime-role kötéstől.`);
+  }
   const sslMode = process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase();
   return {
+    environment,
     databaseUrl,
     otpPepper: requiredSecret("DIMPRO_AUTH_OTP_PEPPER"),
     sessionPepper: requiredSecret("DIMPRO_AUTH_SESSION_PEPPER"),
