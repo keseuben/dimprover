@@ -73,6 +73,13 @@ function userFromRow(row: UserRow): DimproAuthUser {
   };
 }
 
+async function lockAuthRateKey(client: PoolClient, scope: string, value: string) {
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+    [`dimpro-auth:${scope}:${value}`],
+  );
+}
+
 async function appendAudit(client: PoolClient | null, input: {
   eventType: string;
   userId?: string | null;
@@ -136,6 +143,8 @@ export async function issueLoginOtp(input: {
 }) {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
+    await lockAuthRateKey(client, "otp-email", input.email);
+    if (input.ip) await lockAuthRateKey(client, "otp-ip", input.ip);
     const userResult = await client.query<UserRow>(
       `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
          FROM auth_users WHERE email_normalized=$1 LIMIT 1 FOR SHARE`,
@@ -486,40 +495,54 @@ export async function createAuthorizationRequest(input: {
   correlationId: string;
 }) {
   const config = getDimproAuthConfig();
-  if (input.ip) {
-    const recent = await authQuery<{ count: string }>(
-      `SELECT count(*)::text AS count FROM auth_audit_events
-       WHERE event_type='SSO_AUTHORIZE_REQUEST' AND ip_address=$1::inet
-         AND created_at >= now() - ($2::text || ' minutes')::interval`,
-      [input.ip, config.ssoWindowMinutes],
-    );
-    if (Number(recent.rows[0]?.count || 0) >= config.ssoAuthorizeIpMaxRequests) {
-      await recordAuthAuditEvent({
-        eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "RATE_LIMIT_IP",
-        ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId },
-      });
-      throw new DimproAuthError("SSO authorize IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési kérés történt. Próbáld újra később.");
+  return withAuthTransaction(async (client) => {
+    if (input.ip) {
+      await lockAuthRateKey(client, "sso-authorize-ip", input.ip);
+      const recent = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM auth_audit_events
+         WHERE event_type='SSO_AUTHORIZE_REQUEST' AND ip_address=$1::inet
+           AND created_at >= now() - ($2::text || ' minutes')::interval`,
+        [input.ip, config.ssoWindowMinutes],
+      );
+      if (Number(recent.rows[0]?.count || 0) >= config.ssoAuthorizeIpMaxRequests) {
+        await appendAudit(client, {
+          eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "RATE_LIMIT_IP",
+          ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId },
+        });
+        throw new DimproAuthError("SSO authorize IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési kérés történt. Próbáld újra később.", { commitTransaction: true });
+      }
     }
-  }
-  const client = await getAuthClient(input.clientId, input.redirectUri, input.environment);
-  if (!client) {
-    await recordAuthAuditEvent({
-      eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "CLIENT_INVALID",
-      ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, environment: input.environment },
+
+    const clientResult = await client.query<AuthClientRow>(
+      `SELECT c.id,c.client_id,c.product_code,c.required_permission_code,c.environment,c.status
+         FROM auth_clients c
+         JOIN auth_products client_product ON client_product.code=c.product_code AND client_product.status='ACTIVE'
+        WHERE c.client_id=$1 AND c.status='ACTIVE' AND c.environment=$3
+          AND EXISTS(SELECT 1 FROM auth_client_redirect_uris r WHERE r.client_id=c.id AND r.redirect_uri=$2)
+        LIMIT 1`,
+      [input.clientId, input.redirectUri, input.environment],
+    );
+    const authClient = clientResult.rows[0] || null;
+    if (!authClient) {
+      await appendAudit(client, {
+        eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "CLIENT_INVALID",
+        ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, environment: input.environment },
+      });
+      throw new DimproAuthError("Unknown client or redirect URI.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás visszatérési címe nem engedélyezett.", { commitTransaction: true });
+    }
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const created = await client.query<{ id: string }>(
+      `INSERT INTO auth_authorization_requests(client_id,redirect_uri,state,code_challenge,code_challenge_method,requested_ip,user_agent,expires_at)
+       VALUES ($1,$2,$3,$4,'S256',$5::inet,$6,$7) RETURNING id`,
+      [authClient.id, input.redirectUri, input.state, input.codeChallenge, input.ip, input.userAgent, expiresAt],
+    );
+    await appendAudit(client, {
+      eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "ACCEPTED",
+      ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, requestId: created.rows[0]!.id, environment: input.environment },
     });
-    throw new DimproAuthError("Unknown client or redirect URI.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás visszatérési címe nem engedélyezett.");
-  }
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  const created = await authQuery<{ id: string }>(
-    `INSERT INTO auth_authorization_requests(client_id,redirect_uri,state,code_challenge,code_challenge_method,requested_ip,user_agent,expires_at)
-     VALUES ($1,$2,$3,$4,'S256',$5::inet,$6,$7) RETURNING id`,
-    [client.id, input.redirectUri, input.state, input.codeChallenge, input.ip, input.userAgent, expiresAt],
-  );
-  await recordAuthAuditEvent({
-    eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "ACCEPTED",
-    ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, requestId: created.rows[0]!.id, environment: input.environment },
+    return { requestId: created.rows[0]!.id, expiresAt };
   });
-  return { requestId: created.rows[0]!.id, expiresAt };
 }
 
 export async function issueAuthorizationCodeFromRequest(input: {
@@ -616,6 +639,7 @@ export async function exchangeAuthorizationCode(input: {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
     if (input.ip) {
+      await lockAuthRateKey(client, "sso-token-ip", input.ip);
       const recent = await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM auth_audit_events
          WHERE event_type='SSO_TOKEN_EXCHANGE' AND ip_address=$1::inet
