@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
+import { assertDevAuthDatabaseUrl, requireDevAuthEnvironment, strictDevAuthPgSsl } from "./strict-dev-db.mjs";
 import path from "node:path";
 import pg from "pg";
 
@@ -17,24 +18,14 @@ if (!apply) {
   console.log(JSON.stringify({ ok: true, mode: "dry-run", migrationDir, migrations: manifest }, null, 2));
   process.exit(0);
 }
+requireDevAuthEnvironment();
 const connectionString = process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim();
 if (!connectionString) throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL szükséges az --apply futtatáshoz.");
 if (process.env.DIMPRO_AUTH_MIGRATION_CONFIRM !== "APPLY_DEV_AUTH_MIGRATIONS") {
   throw new Error("DIMPRO_AUTH_MIGRATION_CONFIRM=APPLY_DEV_AUTH_MIGRATIONS szükséges.");
 }
-const sslMode = process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase() || "verify-full";
-let ssl = false;
-if (sslMode !== "disable") {
-  if (sslMode === "require") {
-    ssl = { rejectUnauthorized: false };
-  } else {
-    const caFile = process.env.DIMPRO_AUTH_DB_CA_FILE?.trim();
-    const caInline = process.env.DIMPRO_AUTH_DB_CA_PEM?.trim();
-    const ca = caInline ? caInline.replace(/\\n/g, "\n") : caFile ? await readFile(caFile, "utf8") : "";
-    if (!ca) throw new Error("DIMPRO_AUTH_DB_CA_FILE vagy DIMPRO_AUTH_DB_CA_PEM szükséges verify-full módban.");
-    ssl = { rejectUnauthorized: true, ca };
-  }
-}
+assertDevAuthDatabaseUrl(connectionString, "dimpro_auth_migrator_dev");
+const ssl = await strictDevAuthPgSsl();
 const client = new pg.Client({ connectionString, ssl, application_name: "dimpro-auth-migrator" });
 await client.connect();
 try {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import pg from "pg";
+import { assertDevAuthDatabaseUrl, requireDevAuthEnvironment, strictDevAuthPgSsl } from "./strict-dev-db.mjs";
 
 function arg(name){const i=process.argv.indexOf(`--${name}`);return i>=0?String(process.argv[i+1]||"").trim():"";}
 const email=arg("email").toLowerCase();
@@ -9,9 +10,11 @@ const grantDrive=process.argv.includes("--grant-drive");
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Érvényes --email szükséges.");
 if(!["SIMPLE","STAFF","PROJECT_MANAGER","ORG_ADMIN","SUPERADMIN"].includes(level)) throw new Error("Érvénytelen --level.");
 if(process.env.DIMPRO_AUTH_BOOTSTRAP_CONFIRM!=="BOOTSTRAP_DEV_AUTH_USER") throw new Error("DIMPRO_AUTH_BOOTSTRAP_CONFIRM=BOOTSTRAP_DEV_AUTH_USER szükséges.");
+requireDevAuthEnvironment();
 const connectionString=process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
 if(!connectionString) throw new Error("DIMPRO_AUTH_DATABASE_URL szükséges.");
-const ssl=process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase()==="disable"?false:{rejectUnauthorized:false};
+assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_app_dev");
+const ssl=await strictDevAuthPgSsl();
 const client=new pg.Client({connectionString,ssl,application_name:"dimpro-auth-bootstrap"});
 await client.connect();
 try{

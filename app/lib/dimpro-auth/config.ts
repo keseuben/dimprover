@@ -16,7 +16,7 @@ export type DimproAuthConfig = {
   sessionAbsoluteSeconds: number;
   sessionInactivitySeconds: number;
   sessionTouchIntervalSeconds: number;
-  dbSslMode: "disable" | "require" | "verify-full";
+  dbSslMode: "verify-full";
 };
 
 function requiredSecret(name: string, minimumLength = 32) {
@@ -54,7 +54,10 @@ export function getDimproAuthConfig(): DimproAuthConfig {
   if (parsedDatabaseUrl.hostname !== "db.dimpro.hu" || databaseName !== expectedDatabase || databaseUser !== expectedUser) {
     throw new Error(`DIMPRO AUTH ${environment} adatbázis-kapcsolat eltér a kötelező host/database/runtime-role kötéstől.`);
   }
-  const sslMode = process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase();
+  const sslMode = (process.env.DIMPRO_AUTH_DB_SSL_MODE || "verify-full").trim().toLowerCase();
+  if (sslMode !== "verify-full") {
+    throw new Error("DIMPRO_AUTH_DB_SSL_MODE=verify-full kötelező a DIMPRO AUTH runtime-hoz.");
+  }
   return {
     environment,
     databaseUrl,
@@ -73,6 +76,6 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     sessionAbsoluteSeconds: boundedInteger("DIMPRO_AUTH_SESSION_ABSOLUTE_SECONDS", 14 * 86400, 300, 30 * 86400),
     sessionInactivitySeconds: boundedInteger("DIMPRO_AUTH_SESSION_INACTIVITY_SECONDS", 24 * 3600, 300, 14 * 86400),
     sessionTouchIntervalSeconds: boundedInteger("DIMPRO_AUTH_SESSION_TOUCH_INTERVAL_SECONDS", 5 * 60, 30, 3600),
-    dbSslMode: sslMode === "disable" ? "disable" : sslMode === "require" ? "require" : "verify-full",
+    dbSslMode: "verify-full",
   };
 }

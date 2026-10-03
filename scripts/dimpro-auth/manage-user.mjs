@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import pg from "pg";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { assertDevAuthDatabaseUrl, requireDevAuthEnvironment, strictDevAuthPgSsl } from "./strict-dev-db.mjs";
 
 function arg(name){const i=process.argv.indexOf(`--${name}`);return i>=0?String(process.argv[i+1]||"").trim():"";}
 const email=arg("email").toLowerCase();
@@ -9,24 +9,12 @@ const action=arg("action").toLowerCase();
 const allowed=new Set(["enable","disable","grant-drive","revoke-drive","revoke-sessions"]);
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Érvényes --email szükséges.");
 if(!allowed.has(action))throw new Error(`Érvényes --action szükséges: ${[...allowed].join(", ")}.`);
-if((process.env.DIMPRO_AUTH_ENVIRONMENT||"").trim().toUpperCase()!=="DEV")throw new Error("A manage-user script kizárólag DIMPRO_AUTH_ENVIRONMENT=DEV módban futtatható.");
+requireDevAuthEnvironment();
 if(process.env.DIMPRO_AUTH_ADMIN_CONFIRM!=="APPLY_DEV_AUTH_ADMIN_CHANGE")throw new Error("DIMPRO_AUTH_ADMIN_CONFIRM=APPLY_DEV_AUTH_ADMIN_CHANGE szükséges.");
 const connectionString=process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
 if(!connectionString)throw new Error("DIMPRO_AUTH_DATABASE_URL szükséges.");
-const url=new URL(connectionString);
-if(url.hostname!=="db.dimpro.hu"||decodeURIComponent(url.pathname.replace(/^\//,""))!=="dimpro_auth_dev"||decodeURIComponent(url.username)!=="dimpro_auth_app_dev")throw new Error("Csak a dimpro_auth_dev / dimpro_auth_app_dev runtime kapcsolat engedélyezett.");
-const sslMode=(process.env.DIMPRO_AUTH_DB_SSL_MODE||"verify-full").trim().toLowerCase();
-let ssl=false;
-if(sslMode!=="disable"){
-  if(sslMode==="require")ssl={rejectUnauthorized:false};
-  else{
-    const caFile=process.env.DIMPRO_AUTH_DB_CA_FILE?.trim();
-    const caInline=process.env.DIMPRO_AUTH_DB_CA_PEM?.trim();
-    const ca=caInline?caInline.replace(/\\n/g,"\n"):caFile?await readFile(caFile,"utf8"):"";
-    if(!ca)throw new Error("DIMPRO_AUTH_DB_CA_FILE vagy DIMPRO_AUTH_DB_CA_PEM szükséges verify-full módban.");
-    ssl={rejectUnauthorized:true,ca};
-  }
-}
+assertDevAuthDatabaseUrl(connectionString,"dimpro_auth_app_dev");
+const ssl=await strictDevAuthPgSsl();
 const client=new pg.Client({connectionString,ssl,application_name:"dimpro-auth-dev-user-admin"});
 const correlationId=randomUUID();
 await client.connect();

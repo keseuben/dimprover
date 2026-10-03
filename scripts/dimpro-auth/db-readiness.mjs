@@ -1,21 +1,12 @@
 #!/usr/bin/env node
 import pg from "pg";
-import { readFile } from "node:fs/promises";
+import { assertDevAuthDatabaseUrl, requireDevAuthEnvironment, strictDevAuthPgSsl } from "./strict-dev-db.mjs";
 
+requireDevAuthEnvironment();
 const connectionString=process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim() || process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
 if(!connectionString) throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL vagy DIMPRO_AUTH_DATABASE_URL szükséges.");
-const sslMode=(process.env.DIMPRO_AUTH_DB_SSL_MODE||"verify-full").trim().toLowerCase();
-let ssl=false;
-if(sslMode!=="disable"){
-  if(sslMode==="require") ssl={rejectUnauthorized:false};
-  else {
-    const caFile=process.env.DIMPRO_AUTH_DB_CA_FILE?.trim();
-    const caInline=process.env.DIMPRO_AUTH_DB_CA_PEM?.trim();
-    const ca=caInline?caInline.replace(/\\n/g,"\n"):caFile?await readFile(caFile,"utf8"):"";
-    if(!ca) throw new Error("DIMPRO_AUTH_DB_CA_FILE vagy DIMPRO_AUTH_DB_CA_PEM szükséges verify-full módban.");
-    ssl={rejectUnauthorized:true,ca};
-  }
-}
+assertDevAuthDatabaseUrl(connectionString,["dimpro_auth_migrator_dev","dimpro_auth_app_dev"]);
+const ssl=await strictDevAuthPgSsl();
 const client=new pg.Client({connectionString,ssl,application_name:"dimpro-auth-readiness"});
 await client.connect();
 try{

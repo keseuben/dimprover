@@ -14,14 +14,11 @@ function loadDatabaseCa() {
 
 function createPool() {
   const config = getDimproAuthConfig();
-  const ssl = config.dbSslMode === "disable"
-    ? false
-    : config.dbSslMode === "verify-full"
-      ? { rejectUnauthorized: true, ca: loadDatabaseCa() || undefined }
-      : { rejectUnauthorized: false };
-  if (config.dbSslMode === "verify-full" && !loadDatabaseCa()) {
+  const ca = loadDatabaseCa();
+  if (!ca) {
     throw new Error("DIMPRO_AUTH_DB_CA_FILE vagy DIMPRO_AUTH_DB_CA_PEM szükséges verify-full módban.");
   }
+  const ssl = { rejectUnauthorized: true, ca };
   return new Pool({
     connectionString: config.databaseUrl,
     max: 10,
