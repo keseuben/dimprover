@@ -22,7 +22,7 @@ Dátum: 2026-10-03
 
 ## Teszt
 - AUTH V0.1 contract: 25/25 PASS.
-- AUTH V0.2 SSO contract: 37/37 PASS.
+- AUTH V0.2 SSO contract: 38/38 PASS.
 - AUTH V0.2.1 security contract: 53/53 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
@@ -203,3 +203,8 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - `tsconfig.dimpro-auth.json` külön TypeScript projektként ellenőrzi az AUTH library/API/health/launcher/login/session-guard/proxy forrásokat.
 - `npx tsc -p tsconfig.dimpro-auth.json --pretty false`: PASS.
 - Ez külön bizonyítja az AUTH típushelyességet; a teljes monorepóban maradó 4 `pilotFolder` TS2741 hiba a Drive egy korábbi, AUTH-tól független állapota.
+
+## Central login entry consistency
+
+- `app.dimpro.hu/login` és `app.dev.dimpro.hu/login` közvetlenül a központi `login.dimpro.hu` / `login.dev.dimpro.hu` belépési címre irányít.
+- Ez megakadályozza, hogy az app host a saját hostján renderelje a központi OTP UI-t, amelynek API-i szándékosan csak az AUTH hoston engedélyezettek.

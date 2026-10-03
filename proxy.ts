@@ -392,6 +392,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (isDimproAppHost && isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.protocol = "https:";
+    url.hostname = isDevEnvironment ? "login.dev.dimpro.hu" : "login.dimpro.hu";
+    url.port = "";
+    url.pathname = "/login";
+    return NextResponse.redirect(url, 307);
+  }
+
   if (isDimproHost && isLoginPage) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
