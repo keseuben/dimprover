@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 35/35 PASS.
-- AUTH V0.2.1 security contract: 46/46 PASS.
+- AUTH V0.2.1 security contract: 47/47 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -147,3 +147,13 @@ A probe nem végez módosítást és nem aktivál candidate-et. Az aktív hostok
 - Az AUTH V0.1 e-mail OTP kizárólag `SIMPLE` biztonsági szintű felhasználót hitelesít. `STAFF`, `PROJECT_MANAGER`, `ORG_ADMIN` és `SUPERADMIN` szintnél `AUTH_STRONG_AUTH_REQUIRED` fail-closed válasz készül, amíg a passkey/2FA réteg nincs aktiválva.
 - Ez nem korlátozza a Drive termékjogosultságot: a pilot felhasználó lehet `SIMPLE` biztonsági szintű, miközben `DRIVE_USER`/`drive.access` jogosultsága van.
 - A DEV bootstrap script magasabb biztonsági szint létrehozását elutasítja, és a bootstrap műveletet `ADMIN_USER_BOOTSTRAP` audit eseménnyel naplózza.
+
+## DEV TLS / SNI activation gate
+
+A `scripts/dimpro-auth/tls-readiness.mjs` read-only ellenőrzés DNS, TLS SNI és certificate SAN lefedettséget vizsgál az `auth.dev`, `login.dev` és `drive.dev` hostokon. A 2026-10-03-i eredmény 2/3 PASS:
+
+- `auth.dev.dimpro.hu`: TLS 1.3 PASS, SAN lefedett;
+- `drive.dev.dimpro.hu`: TLS 1.3 PASS, SAN lefedett;
+- `login.dev.dimpro.hu`: FAIL, `ERR_SSL_TLSV1_UNRECOGNIZED_NAME`.
+
+A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazza többek között az `auth.dev.dimpro.hu` és `drive.dev.dimpro.hu` neveket, de a `login.dev.dimpro.hu` nevet nem. Ezért a friendly login host aktiválásához **két feltétel** szükséges a 213.160.68.32 DEV ingressen: `login.dev.dimpro.hu` TLS vhost/SNI binding és olyan tanúsítvány, amelynek SAN listája ezt a hostnevet is tartalmazza. A script PROD hostot nem érint.
