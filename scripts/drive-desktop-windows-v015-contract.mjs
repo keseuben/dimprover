@@ -18,7 +18,9 @@ const checks=[
 ['server mutation gate',/V015_SERVER_MUTATION_APPROVAL_REQUIRED/.test(s)],
 ['local mutation gate',/V015_LOCAL_MUTATION_APPROVAL_REQUIRED/.test(s)],
 ['plan schema gate',/V015_APPLY_PLAN_SCHEMA_UNSUPPORTED/.test(s)],
-['Bridge DPAPI',/ProtectedData\]::Unprotect/.test(s)],
+['Bridge DPAPI assembly',/Add-Type -AssemblyName System\.Security/.test(s)],
+['Bridge DPAPI full type',/System\.Security\.Cryptography\.ProtectedData\]::Unprotect/.test(s)&&/System\.Security\.Cryptography\.DataProtectionScope\]::CurrentUser/.test(s)],
+['Bridge DPAPI short type denied',!/\[Security\.Cryptography\.ProtectedData\]/.test(s)],
 ['desktop access exchange',/\/api\/drive\/desktop-access\/token/.test(s)],
 ['contract advertises desktop access',/currentModes: \["desktop-access"/.test(c)],
 ['contract exposes exchange endpoint',/desktopAccessToken: "POST \/api\/drive\/desktop-access\/token"/.test(c)],
@@ -29,5 +31,7 @@ const checks=[
 ['acceptance no LASTEXITCODE',!/LASTEXITCODE/.test(a)],
 ['acceptance exact apply marker',/EXACT_APPLY_CONTRACT_PASS/.test(a)],
 ['acceptance delete deny marker',/DELETE_OPERATION_DENY_PASS/.test(a)],
+['acceptance FIX4 marker',/V015_FIX4_WINDOWS_ACCEPTANCE_PASS/.test(a)],
+['acceptance DPAPI full type gate',/System\.Security\.Cryptography\.ProtectedData/.test(a)&&/short DPAPI type/.test(a)],
 ];
 let pass=0;for(const[n,o]of checks){console.log(`${o?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${n}`);if(o)pass++;else process.exitCode=1;}if(pass!==checks.length)throw new Error(`Windows V0.1.5 contract failed ${pass}/${checks.length}`);console.log(`DIMPRO Drive Desktop Windows V0.1.5 contract PASS ${pass}/${checks.length}`);

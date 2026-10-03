@@ -1,4 +1,4 @@
-﻿param(
+param(
   [ValidateSet('Probe','Plan','Apply')][string]$Mode = 'Probe',
   [ValidateSet('Bridge','DevToken')][string]$AuthMode = 'Bridge',
   [string]$ServerUrl = 'https://drive.dev.dimpro.hu',
@@ -15,6 +15,7 @@
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch { throw 'Windows DPAPI System.Security assembly could not be loaded.' }
 $script:DriveAuthHeaders = $null
 
 try { $serverUri = New-Object System.Uri($ServerUrl) }
@@ -47,10 +48,10 @@ function Get-BridgeDeviceToken {
   $encoded = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
   if (-not $encoded) { throw 'Windows Bridge device token file is empty.' }
   $protected = [Convert]::FromBase64String($encoded)
-  $bytes = [Security.Cryptography.ProtectedData]::Unprotect(
+  $bytes = [System.Security.Cryptography.ProtectedData]::Unprotect(
     $protected,
     $null,
-    [Security.Cryptography.DataProtectionScope]::CurrentUser
+    [System.Security.Cryptography.DataProtectionScope]::CurrentUser
   )
   try { return [Text.Encoding]::UTF8.GetString($bytes) }
   finally {
