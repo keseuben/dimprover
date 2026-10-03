@@ -37,5 +37,7 @@ check("authorize preserves server-side request id",()=>assert.match(authorize,/r
 check("callback validates returned state",()=>assert.match(callback,/flow\.state !== state/));
 check("callback exchanges code server-side",()=>assert.match(callback,/\/api\/dimpro-auth\/token/));
 check("Drive proxy uses product app session",()=>{assert.match(proxy,/DIMPRO_APP_SESSION_COOKIE/);assert.match(proxy,/getAppSessionByToken/);assert.match(proxy,/dimpro-drive-dev/)});
+check("SSO client requires a product permission",()=>{assert.match(migration,/required_permission_code/);assert.match(migration,/drive\.access/);assert.match(repo,/MISSING_PERMISSION/)});
+check("DEV and PROD clients are environment-bound",()=>{const authorize=read("app/api/dimpro-auth/authorize/route.ts");const token=read("app/api/dimpro-auth/token/route.ts");assert.match(authorize,/centralAuthEnvironment/);assert.match(token,/centralAuthEnvironment/);assert.match(repo,/code\.environment !== input\.environment/)});
 check("friendly login host redirects to auth host",()=>{assert.match(proxy,/login\.dev\.dimpro\.hu/);assert.match(proxy,/auth\.dev\.dimpro\.hu/)});
 console.log(`DIMPRO AUTH V0.2 internal SSO contract PASS · ${n}/${n}`);

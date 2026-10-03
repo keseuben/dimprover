@@ -411,6 +411,7 @@ type AuthClientRow = {
   id: string;
   client_id: string;
   product_code: string;
+  required_permission_code: string;
   environment: "DEV" | "PROD";
   status: "ACTIVE" | "DISABLED";
 };
@@ -419,6 +420,9 @@ type AuthorizationRequestRow = {
   id: string;
   client_db_id: string;
   client_id: string;
+  product_code: string;
+  required_permission_code: string;
+  environment: "DEV" | "PROD";
   redirect_uri: string;
   state: string;
   code_challenge: string;
@@ -431,6 +435,9 @@ type AuthorizationCodeRow = {
   id: string;
   client_db_id: string;
   client_id: string;
+  product_code: string;
+  required_permission_code: string;
+  environment: "DEV" | "PROD";
   user_id: string;
   auth_session_id: string;
   auth_session_valid: boolean;
@@ -450,17 +457,18 @@ type AppSessionRow = SessionRow & {
   parent_inactivity_expires_at: Date | string;
 };
 
-export async function getAuthClient(clientId: string, redirectUri?: string | null) {
+export async function getAuthClient(clientId: string, redirectUri?: string | null, environment?: "DEV" | "PROD" | null) {
   const result = await authQuery<AuthClientRow>(
-    `SELECT c.id,c.client_id,c.product_code,c.environment,c.status
+    `SELECT c.id,c.client_id,c.product_code,c.required_permission_code,c.environment,c.status
        FROM auth_clients c
       WHERE c.client_id=$1 AND c.status='ACTIVE'
         AND ($2::text IS NULL OR EXISTS(
           SELECT 1 FROM auth_client_redirect_uris r
            WHERE r.client_id=c.id AND r.redirect_uri=$2
         ))
+        AND ($3::text IS NULL OR c.environment=$3)
       LIMIT 1`,
-    [clientId, redirectUri || null],
+    [clientId, redirectUri || null, environment || null],
   );
   return result.rows[0] || null;
 }
@@ -470,10 +478,11 @@ export async function createAuthorizationRequest(input: {
   redirectUri: string;
   state: string;
   codeChallenge: string;
+  environment: "DEV" | "PROD";
   ip: string | null;
   userAgent: string;
 }) {
-  const client = await getAuthClient(input.clientId, input.redirectUri);
+  const client = await getAuthClient(input.clientId, input.redirectUri, input.environment);
   if (!client) {
     throw new DimproAuthError("Unknown client or redirect URI.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás visszatérési címe nem engedélyezett.");
   }
@@ -494,7 +503,7 @@ export async function issueAuthorizationCodeFromRequest(input: {
 }) {
   return withAuthTransaction(async (client) => {
     const request = await client.query<AuthorizationRequestRow>(
-      `SELECT r.id,r.client_id AS client_db_id,c.client_id,r.redirect_uri,r.state,r.code_challenge,r.code_challenge_method,r.expires_at,r.consumed_at
+      `SELECT r.id,r.client_id AS client_db_id,c.client_id,c.product_code,c.required_permission_code,c.environment,r.redirect_uri,r.state,r.code_challenge,r.code_challenge_method,r.expires_at,r.consumed_at
          FROM auth_authorization_requests r
          JOIN auth_clients c ON c.id=r.client_id
         WHERE r.id=$1 LIMIT 1 FOR UPDATE`,
@@ -503,6 +512,34 @@ export async function issueAuthorizationCodeFromRequest(input: {
     const row = request.rows[0] || null;
     if (!row || row.consumed_at || new Date(row.expires_at).getTime() <= Date.now()) {
       throw new DimproAuthError("Authorization request is invalid or expired.", "AUTH_SSO_REQUEST_INVALID", 400, "A belépési kérés lejárt. Indítsd újra a belépést.");
+    }
+    const permission = await client.query<{ allowed: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1
+           FROM auth_access_grants g
+           JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+           JOIN auth_permissions p ON p.id=rp.permission_id
+           JOIN auth_products product ON product.id=g.product_id
+          WHERE g.user_id=$1
+            AND p.code=$2
+            AND product.code=$3
+            AND g.revoked_at IS NULL
+            AND g.valid_from<=now()
+            AND (g.valid_until IS NULL OR g.valid_until>=now())
+       ) AS allowed`,
+      [input.authSession.user.id, row.required_permission_code, row.product_code],
+    );
+    if (!permission.rows[0]?.allowed) {
+      await client.query(`UPDATE auth_authorization_requests SET consumed_at=now() WHERE id=$1`, [row.id]);
+      await appendAudit(client, {
+        eventType: "SSO_AUTHORIZE",
+        userId: input.authSession.user.id,
+        method: "AUTHORIZATION_CODE",
+        result: "DENY",
+        correlationId: input.correlationId,
+        metadata: { clientId: row.client_id, requestId: row.id, reason: "MISSING_PERMISSION", permissionCode: row.required_permission_code },
+      });
+      throw new DimproAuthError("Client permission denied.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.");
     }
     const codeExpiresAt = new Date(Date.now() + 60 * 1000);
     await client.query(
@@ -546,11 +583,12 @@ export async function exchangeAuthorizationCode(input: {
   ip: string | null;
   userAgent: string;
   correlationId: string;
+  environment: "DEV" | "PROD";
 }) {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
     const codeResult = await client.query<AuthorizationCodeRow>(
-      `SELECT ac.id,ac.client_id AS client_db_id,c.client_id,ac.user_id,ac.auth_session_id,ac.redirect_uri,ac.code_challenge,ac.code_challenge_method,ac.expires_at,ac.consumed_at,
+      `SELECT ac.id,ac.client_id AS client_db_id,c.client_id,c.product_code,c.required_permission_code,c.environment,ac.user_id,ac.auth_session_id,ac.redirect_uri,ac.code_challenge,ac.code_challenge_method,ac.expires_at,ac.consumed_at,
               (s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now() AND s.user_session_version=u.session_version) AS auth_session_valid
          FROM auth_authorization_codes ac
          JOIN auth_clients c ON c.id=ac.client_id
@@ -567,6 +605,7 @@ export async function exchangeAuthorizationCode(input: {
       || code.consumed_at
       || new Date(code.expires_at).getTime() <= Date.now()
       || code.client_id !== input.clientId
+      || code.environment !== input.environment
       || code.redirect_uri !== input.redirectUri
       || code.code_challenge_method !== "S256"
       || createPkceChallenge(input.codeVerifier) !== code.code_challenge
@@ -584,8 +623,8 @@ export async function exchangeAuthorizationCode(input: {
       throw new DimproAuthError("Authorization code exchange failed.", "AUTH_SSO_CODE_INVALID", 400, "A belépési visszaigazolás érvénytelen vagy lejárt.");
     }
     const clientRow = await client.query<AuthClientRow>(
-      `SELECT id,client_id,product_code,environment,status FROM auth_clients WHERE id=$1 AND status='ACTIVE' LIMIT 1`,
-      [code.client_db_id],
+      `SELECT id,client_id,product_code,required_permission_code,environment,status FROM auth_clients WHERE id=$1 AND status='ACTIVE' AND environment=$2 LIMIT 1`,
+      [code.client_db_id, input.environment],
     );
     if (!clientRow.rows[0]) {
       throw new DimproAuthError("Client is disabled.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás jelenleg nem fogad belépést.");
@@ -598,6 +637,27 @@ export async function exchangeAuthorizationCode(input: {
     const user = userRow.rows[0] || null;
     if (!user) {
       throw new DimproAuthError("User disabled during code exchange.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.");
+    }
+    const permission = await client.query<{ allowed: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1
+           FROM auth_access_grants g
+           JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+           JOIN auth_permissions p ON p.id=rp.permission_id
+           JOIN auth_products product ON product.id=g.product_id
+          WHERE g.user_id=$1 AND p.code=$2 AND product.code=$3
+            AND g.revoked_at IS NULL AND g.valid_from<=now()
+            AND (g.valid_until IS NULL OR g.valid_until>=now())
+       ) AS allowed`,
+      [user.id, code.required_permission_code, code.product_code],
+    );
+    if (!permission.rows[0]?.allowed) {
+      await appendAudit(client, {
+        eventType: "SSO_TOKEN_EXCHANGE", userId: user.id, method: "AUTHORIZATION_CODE", result: "DENY",
+        ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
+        metadata: { clientId: input.clientId, reason: "MISSING_PERMISSION", permissionCode: code.required_permission_code },
+      });
+      throw new DimproAuthError("Client permission denied during exchange.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.");
     }
     const appToken = createAppSessionToken();
     const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);

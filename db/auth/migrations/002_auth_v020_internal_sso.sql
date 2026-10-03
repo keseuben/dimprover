@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS auth_clients (
   client_id text NOT NULL UNIQUE,
   name text NOT NULL,
   product_code text NOT NULL,
+  required_permission_code text NOT NULL REFERENCES auth_permissions(code),
   environment text NOT NULL CHECK (environment IN ('DEV','PROD')),
   status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED')),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -71,11 +72,12 @@ CREATE TABLE IF NOT EXISTS auth_app_sessions (
 CREATE INDEX IF NOT EXISTS auth_app_sessions_active_idx
   ON auth_app_sessions(client_id,user_id,revoked_at,absolute_expires_at);
 
-INSERT INTO auth_clients(client_id,name,product_code,environment,status)
-VALUES ('dimpro-drive-dev','DIMPRO Drive DEV','DRIVE','DEV','ACTIVE')
+INSERT INTO auth_clients(client_id,name,product_code,required_permission_code,environment,status)
+VALUES ('dimpro-drive-dev','DIMPRO Drive DEV','DRIVE','drive.access','DEV','ACTIVE')
 ON CONFLICT (client_id) DO UPDATE SET
   name=EXCLUDED.name,
   product_code=EXCLUDED.product_code,
+  required_permission_code=EXCLUDED.required_permission_code,
   environment=EXCLUDED.environment,
   status='ACTIVE',
   updated_at=now();

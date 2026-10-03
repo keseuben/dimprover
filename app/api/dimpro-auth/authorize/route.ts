@@ -7,9 +7,11 @@ import { DimproAuthError } from "@/app/lib/dimpro-auth/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function isCentralAuthHost(hostValue: string | null) {
+function centralAuthEnvironment(hostValue: string | null): "DEV" | "PROD" | null {
   const host = (hostValue || "").toLowerCase().replace(/:\d+$/, "");
-  return host === "auth.dev.dimpro.hu" || host === "auth.dimpro.hu" || host === "localhost" || host === "127.0.0.1";
+  if (host === "auth.dev.dimpro.hu" || host === "localhost" || host === "127.0.0.1") return "DEV";
+  if (host === "auth.dimpro.hu") return "PROD";
+  return null;
 }
 
 function validState(value: string) {
@@ -24,7 +26,8 @@ function validRequestId(value: string) {
 
 export async function GET(request: NextRequest) {
   const correlationId = newDimproAuthCorrelationId(request.headers);
-  if (!isCentralAuthHost(request.headers.get("host"))) {
+  const environment = centralAuthEnvironment(request.headers.get("host"));
+  if (!environment) {
     return NextResponse.json({ ok: false, error: "AUTH_HOST_NOT_ALLOWED", correlationId }, { status: 404, headers: { "cache-control": "no-store" } });
   }
   try {
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest) {
         redirectUri,
         state,
         codeChallenge,
+        environment,
         ip: getDimproAuthRequestIp(request.headers),
         userAgent: getDimproAuthUserAgent(request.headers),
       });
