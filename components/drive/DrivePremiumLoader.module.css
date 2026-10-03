@@ -16,8 +16,68 @@
 .blueprint::before { width: 620px; height: 620px; left: calc(50% - 310px); top: calc(50% - 325px); }
 .blueprint::after { width: 470px; height: 470px; left: calc(50% - 235px); top: calc(50% - 250px); }
 .ambientGlow { position: absolute; z-index: -2; width: 560px; height: 360px; border-radius: 50%; background: radial-gradient(circle, rgba(30,118,212,.12), rgba(82,157,226,.04) 42%, transparent 72%); filter: blur(18px); animation: ambientPulse 4.8s ease-in-out infinite; }
+.loaderComposition {
+  width: min(760px, calc(100vw - 56px));
+  display: grid;
+  justify-items: center;
+  gap: 25px;
+}
+
 .loaderCard { width: min(720px, calc(100vw - 80px)); min-height: 452px; position: relative; display: grid; justify-items: center; padding: 22px 34px 20px; border: 1px solid rgba(111,145,179,.24); border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.91), rgba(248,251,254,.86)); box-shadow: 0 26px 70px rgba(28,67,105,.10), 0 6px 18px rgba(28,67,105,.045), inset 0 1px 0 rgba(255,255,255,.94); backdrop-filter: blur(10px); }
 .loaderCard::before { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(56,121,188,.07); border-radius: 13px; pointer-events: none; }
+.loaderCardComplete {
+  border-color: rgba(60, 160, 105, .30);
+  box-shadow: 0 26px 70px rgba(28,67,105,.10), 0 9px 28px rgba(42,145,88,.07), inset 0 1px 0 rgba(255,255,255,.94);
+}
+.loaderCardComplete .logoCore {
+  border-color: rgba(52, 157, 99, .26);
+  box-shadow: 0 14px 38px rgba(33,91,151,.10), 0 0 0 5px rgba(53,161,100,.045), inset 0 1px 0 #fff;
+}
+.loaderCardComplete .percentRing {
+  color: #26784f;
+  border-color: rgba(49,153,94,.23);
+  background: rgba(245,253,248,.95);
+}
+.loaderCardComplete .productLabel { color: #2f835a; }
+
+.driveWordmark {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  transform: translateY(-1px);
+  user-select: none;
+}
+.driveWordmarkMain {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: .24em;
+  font-size: clamp(32px, 3.05vw, 44px);
+  line-height: .94;
+  letter-spacing: .115em;
+  white-space: nowrap;
+  text-shadow: 0 7px 20px rgba(33,81,126,.07);
+}
+.driveWordmarkMain strong {
+  color: #173f67;
+  font-weight: 950;
+}
+.driveWordmarkMain span {
+  color: #63839f;
+  font-weight: 580;
+}
+.driveWordmark small {
+  padding-left: .22em;
+  color: #8ca0b3;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .31em;
+  line-height: 1.3;
+}
+.driveWordmarkReady .driveWordmarkMain strong { color: #1d6847; }
+.driveWordmarkReady .driveWordmarkMain span { color: #6a917e; }
+.driveWordmarkReady small { color: #79a08e; }
+
 .brandLine { width: 100%; display: flex; justify-content: space-between; align-items: center; color: #7990a7; font-size: 9px; font-weight: 900; letter-spacing: .18em; }
 .brandKicker { color: #557692; }
 .brandPulse { display: inline-flex; align-items: center; gap: 7px; }
@@ -62,6 +122,6 @@
 @keyframes scanCore { 0% { top: 16%; opacity: 0; } 15% { opacity: .8; } 70% { opacity: .55; } 100% { top: 84%; opacity: 0; } }
 @keyframes progressSweep { to { transform: translateX(650px); } }
 @keyframes activeStepPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(37,121,190,.06); } 50% { box-shadow: 0 0 0 4px rgba(37,121,190,.08); } }
-@media (max-width: 880px) { .root { min-height: 500px; height: auto; padding: 24px 12px; } .loaderCard { width: min(640px, calc(100vw - 28px)); padding: 20px 20px 18px; } .bootSteps { grid-template-columns: repeat(3, minmax(0,1fr)); } .visualStage { transform: scale(.9); margin-top: -6px; margin-bottom: -8px; } }
-@media (max-width: 560px) { .brandLine { font-size: 7px; } .bootSteps { grid-template-columns: repeat(2, minmax(0,1fr)); } .systemFooter { flex-wrap: wrap; } .footerDivider { display: none; } }
+@media (max-width: 880px) { .root { min-height: 500px; height: auto; padding: 24px 12px; } .loaderComposition { width: min(660px, calc(100vw - 24px)); gap: 20px; } .loaderCard { width: min(640px, calc(100vw - 28px)); padding: 20px 20px 18px; } .bootSteps { grid-template-columns: repeat(3, minmax(0,1fr)); } .visualStage { transform: scale(.9); margin-top: -6px; margin-bottom: -8px; } }
+@media (max-width: 560px) { .brandLine { font-size: 7px; } .driveWordmarkMain { font-size: clamp(27px, 9vw, 34px); letter-spacing: .08em; } .driveWordmark small { font-size: 7px; letter-spacing: .20em; } .bootSteps { grid-template-columns: repeat(2, minmax(0,1fr)); } .systemFooter { flex-wrap: wrap; } .footerDivider { display: none; } }
 @media (prefers-reduced-motion: reduce) { .outerOrbit,.middleOrbit,.innerOrbit,.logo,.logoScan,.progressShimmer,.brandPulse i,.bootStepActive .stepIcon,.ambientGlow { animation: none !important; } }

@@ -40,7 +40,9 @@ function statusForProgress(progress: number) {
   return "Drive munkaterület végső összeállítása…";
 }
 
-export default function DrivePremiumLoader() {
+type Props = { complete?: boolean };
+
+export default function DrivePremiumLoader({ complete = false }: Props) {
   const [progress, setProgress] = useState(6);
   const [elapsedMs, setElapsedMs] = useState(0);
 
@@ -49,16 +51,22 @@ export default function DrivePremiumLoader() {
     const interval = window.setInterval(() => {
       const elapsed = performance.now() - startedAt;
       setElapsedMs(elapsed);
-      const target = progressTarget(elapsed);
+      const target = complete ? 100 : progressTarget(elapsed);
       setProgress((current) => {
         if (current >= target) return current;
         const distance = target - current;
-        const step = distance > 18 ? 2.2 : distance > 8 ? 1.35 : 0.7;
+        const step = complete
+          ? Math.max(4, Math.ceil(distance * 0.35))
+          : distance > 18
+            ? 2.2
+            : distance > 8
+              ? 1.35
+              : 0.7;
         return Math.min(target, Number((current + step).toFixed(1)));
       });
     }, 55);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [complete]);
 
   const roundedProgress = Math.round(progress);
   const currentStepIndex = useMemo(() => {
@@ -69,18 +77,19 @@ export default function DrivePremiumLoader() {
     return Math.min(index, BOOT_STEPS.length - 1);
   }, [progress]);
 
-  const status = statusForProgress(progress);
-  const slowHint = elapsedMs > 7000;
+  const status = complete ? "DIMPRO Drive készen áll." : statusForProgress(progress);
+  const slowHint = !complete && elapsedMs > 7000;
 
   return (
     <section className={styles.root} role="status" aria-live="polite" aria-label="DIMPRO Drive betöltése">
       <div className={styles.blueprint} aria-hidden="true" />
       <div className={styles.ambientGlow} aria-hidden="true" />
 
-      <div className={styles.loaderCard}>
+      <div className={styles.loaderComposition}>
+        <div className={[styles.loaderCard, complete ? styles.loaderCardComplete : ""].filter(Boolean).join(" ")}>
         <div className={styles.brandLine}>
           <span className={styles.brandKicker}>DIMPRO SYSTEM</span>
-          <span className={styles.brandPulse}><i /> SECURE BOOT</span>
+          <span className={styles.brandPulse}><i /> {complete ? "SYSTEM READY" : "SECURE BOOT"}</span>
         </div>
 
         <div className={styles.visualStage} aria-hidden="true">
@@ -108,7 +117,7 @@ export default function DrivePremiumLoader() {
 
         <div className={styles.heading}>
           <span className={styles.productLabel}>DIMPRO DRIVE</span>
-          <h2>Digitális projektmunkatér betöltése</h2>
+          <h2>{complete ? "DIMPRO Drive készen áll" : "Digitális projektmunkatér betöltése"}</h2>
           <p>{status}</p>
         </div>
 
@@ -127,7 +136,7 @@ export default function DrivePremiumLoader() {
             </span>
           </div>
           <div className={styles.progressMeta}>
-            <span>RENDSZERINDÍTÁS</span>
+            <span>{complete ? "RENDSZER KÉSZ" : "RENDSZERINDÍTÁS"}</span>
             <strong>{roundedProgress}%</strong>
           </div>
         </div>
@@ -135,8 +144,8 @@ export default function DrivePremiumLoader() {
         <div className={styles.bootSteps}>
           {BOOT_STEPS.map((step, index) => {
             const Icon = step.icon;
-            const done = progress >= step.threshold;
-            const active = !done && index === currentStepIndex;
+            const done = complete || progress >= step.threshold;
+            const active = !complete && !done && index === currentStepIndex;
             return (
               <div
                 key={step.key}
@@ -160,7 +169,16 @@ export default function DrivePremiumLoader() {
           <span><i className={styles.liveDot} /> DEV WORKSPACE</span>
           <span>Workspace 1.0</span>
           <span className={styles.footerDivider} />
-          <span>{slowHint ? "Kapcsolat ellenőrzése folyamatban…" : "Titkosított projektkapcsolat"}</span>
+          <span>{complete ? "Munkatér előkészítve" : slowHint ? "Kapcsolat ellenőrzése folyamatban…" : "Titkosított projektkapcsolat"}</span>
+        </div>
+        </div>
+
+        <div className={[styles.driveWordmark, complete ? styles.driveWordmarkReady : ""].filter(Boolean).join(" ")} aria-label="DIMPRO Drive">
+          <div className={styles.driveWordmarkMain}>
+            <strong>DIMPRO</strong>
+            <span>DRIVE</span>
+          </div>
+          <small>DIGITÁLIS PROJEKTMUNKATÉR</small>
         </div>
       </div>
     </section>

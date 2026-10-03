@@ -210,7 +210,10 @@ export default function DriveWorkspace({
   const [apiPermissions, setApiPermissions] = useState<DrivePermission[]>([]);
   const [membershipRole, setMembershipRole] = useState<ProjectMembershipRole | "">("");
   const [membershipDisplayName, setMembershipDisplayName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
+  const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
+  const bootLoaderVisibleRef = useRef(true);
+  const bootLoaderHoldTimerRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -301,6 +304,14 @@ export default function DriveWorkspace({
   }, [closeTableFullscreen, tableFullscreen]);
 
   useEffect(() => {
+    return () => {
+      if (bootLoaderHoldTimerRef.current !== null) {
+        window.clearTimeout(bootLoaderHoldTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (layoutMode !== "split" || splitDetailsInitializedRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       const measuredHeight = browserRef.current?.getBoundingClientRect().height || 0;
@@ -354,7 +365,6 @@ export default function DriveWorkspace({
   }, [projectId]);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError("");
     try {
       const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse] = await Promise.all([
@@ -385,14 +395,36 @@ export default function DriveWorkspace({
         if (current && treePayload.tree?.documents.some((document) => document.id === current)) return current;
         return treePayload.tree?.documents[0]?.id || "";
       });
+      if (bootLoaderVisibleRef.current) {
+        setBootLoaderComplete(true);
+        if (bootLoaderHoldTimerRef.current !== null) {
+          window.clearTimeout(bootLoaderHoldTimerRef.current);
+        }
+        bootLoaderHoldTimerRef.current = window.setTimeout(() => {
+          bootLoaderVisibleRef.current = false;
+          setBootLoaderVisible(false);
+          bootLoaderHoldTimerRef.current = null;
+        }, 1800);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A Drive betöltése sikertelen.");
+      if (bootLoaderVisibleRef.current) {
+        bootLoaderVisibleRef.current = false;
+        setBootLoaderVisible(false);
+        setBootLoaderComplete(false);
+      }
     } finally {
-      setLoading(false);
     }
   }, [loadBoxes, projectId]);
 
   useEffect(() => {
+    if (bootLoaderHoldTimerRef.current !== null) {
+      window.clearTimeout(bootLoaderHoldTimerRef.current);
+      bootLoaderHoldTimerRef.current = null;
+    }
+    bootLoaderVisibleRef.current = true;
+    setBootLoaderVisible(true);
+    setBootLoaderComplete(false);
     setTree(null);
     setHealth(null);
     setStorageQuota(null);
@@ -2099,8 +2131,8 @@ export default function DriveWorkspace({
     openCompare();
   }
 
-  if (loading && !tree) {
-    return <DrivePremiumLoader />;
+  if (bootLoaderVisible) {
+    return <DrivePremiumLoader complete={bootLoaderComplete} />;
   }
 
   const browserClass = [
