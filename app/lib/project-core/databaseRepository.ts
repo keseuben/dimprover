@@ -405,6 +405,104 @@ export async function listProjectMemberships(projectId: string) {
   return (data || []).map((row) => mapMembership(row as DbMembership));
 }
 
+export async function updateProjectMembershipRole(
+  projectId: string,
+  membershipId: string,
+  nextRole: ProjectMembershipRole,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  if (nextRole === "OWNER") return { ok: false as const, error: "A projektgazda szerepkör ezen a felületen nem adható át." };
+  const { data: current, error: currentError } = await client
+    .from("project_core_memberships")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .maybeSingle();
+  if (currentError) databaseError("A projekttagság betöltése sikertelen.", currentError);
+  if (!current) return { ok: false as const, error: "A projekttagság nem található." };
+  const row = current as DbMembership;
+  if (row.role === "OWNER") return { ok: false as const, error: "A projektgazda szerepköre védett." };
+  if (row.status !== "ACTIVE") return { ok: false as const, error: "Csak aktív projekttag szerepköre módosítható. A függő meghívást vond vissza és küldd újra." };
+  if (row.role === nextRole) return { ok: true as const, membership: mapMembership(row), previousRole: row.role };
+  const now = new Date().toISOString();
+  const { data: updated, error: updateError } = await client
+    .from("project_core_memberships")
+    .update({ role: nextRole, updated_at: now })
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .neq("role", "OWNER")
+    .eq("status", "ACTIVE")
+    .select("*")
+    .maybeSingle();
+  if (updateError) databaseError("A projekttag szerepkörének módosítása sikertelen.", updateError);
+  if (!updated) return { ok: false as const, error: "A projekttagság időközben megváltozott." };
+  const auditRow = {
+    id: `project-audit-${randomUUID().slice(0, 12)}`,
+    project_id: projectId,
+    actor_user_id: actorUserId,
+    event_type: "PROJECT_MEMBER_ROLE_CHANGED",
+    entity_type: "membership",
+    entity_id: membershipId,
+    summary: `Projekt-résztvevő szerepköre módosítva: ${row.display_name}`,
+    metadata: { previousRole: row.role, nextRole },
+    created_at: now,
+  };
+  const { error: auditError } = await client.from("project_core_audit_events").insert(auditRow);
+  if (auditError) {
+    await client.from("project_core_memberships").update({ role: row.role, updated_at: row.updated_at }).eq("id", membershipId).eq("project_id", projectId);
+    databaseError("A projekttag szerepkör-módosításának auditálása sikertelen; a módosítás visszaállítva.", auditError);
+  }
+  return { ok: true as const, membership: mapMembership(updated as DbMembership), previousRole: row.role };
+}
+
+export async function revokeProjectMembership(
+  projectId: string,
+  membershipId: string,
+  actorUserId: string,
+) {
+  const client = await requireReadyClient();
+  const { data: current, error: currentError } = await client
+    .from("project_core_memberships")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .maybeSingle();
+  if (currentError) databaseError("A projekttagság betöltése sikertelen.", currentError);
+  if (!current) return { ok: false as const, error: "A projekttagság nem található." };
+  const row = current as DbMembership;
+  if (row.role === "OWNER") return { ok: false as const, error: "A projektgazda hozzáférése ezen a felületen nem szüntethető meg." };
+  if (row.status === "REVOKED") return { ok: true as const, membership: mapMembership(row), previousStatus: row.status };
+  const now = new Date().toISOString();
+  const { data: updated, error: updateError } = await client
+    .from("project_core_memberships")
+    .update({ status: "REVOKED", updated_at: now })
+    .eq("project_id", projectId)
+    .eq("id", membershipId)
+    .neq("role", "OWNER")
+    .select("*")
+    .maybeSingle();
+  if (updateError) databaseError("A projekttagság visszavonása sikertelen.", updateError);
+  if (!updated) return { ok: false as const, error: "A projekttagság időközben megváltozott." };
+  const auditRow = {
+    id: `project-audit-${randomUUID().slice(0, 12)}`,
+    project_id: projectId,
+    actor_user_id: actorUserId,
+    event_type: "PROJECT_MEMBER_REVOKED",
+    entity_type: "membership",
+    entity_id: membershipId,
+    summary: `Projekt-hozzáférés megszüntetve: ${row.display_name}`,
+    metadata: { previousStatus: row.status, role: row.role },
+    created_at: now,
+  };
+  const { error: auditError } = await client.from("project_core_audit_events").insert(auditRow);
+  if (auditError) {
+    await client.from("project_core_memberships").update({ status: row.status, updated_at: row.updated_at }).eq("id", membershipId).eq("project_id", projectId);
+    databaseError("A projekttagság-visszavonás auditálása sikertelen; a módosítás visszaállítva.", auditError);
+  }
+  return { ok: true as const, membership: mapMembership(updated as DbMembership), previousStatus: row.status };
+}
+
 export async function activateProjectMembership(projectId: string, emailRaw: string, userId: string) {
   const client = await requireReadyClient();
   const email = emailRaw.trim().toLowerCase();

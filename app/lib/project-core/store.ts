@@ -1,5 +1,5 @@
 import { getProjectCoreRepository } from "./repository";
-import type { ProjectLifecycleStatus } from "./types";
+import type { ProjectLifecycleStatus, ProjectMembershipRole } from "./types";
 
 export function getProjectCoreState() {
   return getProjectCoreRepository().getProjectCoreState();
@@ -27,6 +27,14 @@ export function addProjectMembership(projectId: string, input: Record<string, un
 
 export function listProjectMemberships(projectId: string) {
   return getProjectCoreRepository().listProjectMemberships(projectId);
+}
+
+export function updateProjectMembershipRole(projectId: string, membershipId: string, role: ProjectMembershipRole, actorUserId: string) {
+  return getProjectCoreRepository().updateProjectMembershipRole(projectId, membershipId, role, actorUserId);
+}
+
+export function revokeProjectMembership(projectId: string, membershipId: string, actorUserId: string) {
+  return getProjectCoreRepository().revokeProjectMembership(projectId, membershipId, actorUserId);
 }
 
 export function activateProjectMembership(projectId: string, email: string, userId: string) {

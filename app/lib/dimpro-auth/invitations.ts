@@ -28,6 +28,7 @@ function invitationError(error: unknown): never {
     ["AUTH_INVITATION_USER_BLOCKED", "AUTH_INVITATION_USER_BLOCKED", 403, "A meghívott felhasználó jelenleg nem aktiválható."],
     ["AUTH_INVITATION_PROJECT_INVALID", "AUTH_INVITATION_PROJECT_INVALID", 404, "A projekt nem található vagy nem aktív."],
     ["AUTH_INVITATION_ROLE_INVALID", "AUTH_INVITATION_ROLE_INVALID", 400, "A meghívotti szerepkör nem engedélyezett."],
+    ["AUTH_PROJECT_ROLE_INVALID", "AUTH_PROJECT_ROLE_INVALID", 400, "A projekt-hozzáférési szerepkör nem engedélyezett."],
     ["AUTH_INVITATION_EMAIL_INVALID", "AUTH_INVITATION_EMAIL_INVALID", 400, "Érvényes meghívotti e-mail-cím szükséges."],
     ["AUTH_INVITATION_EXPIRY_INVALID", "AUTH_INVITATION_EXPIRY_INVALID", 400, "A meghívó lejárati ideje nem engedélyezett."],
     ["AUTH_INVITATION_EXPIRED", "AUTH_INVITATION_EXPIRED", 410, "A meghívó lejárt."],
@@ -124,6 +125,41 @@ export async function getProjectInvitation(rawToken: string): Promise<DimproProj
     status: expired ? "EXPIRED" : row.status,
     expiresAt: new Date(row.expires_at).toISOString(),
   };
+}
+
+export async function listProjectInvitationsByExternalProject(externalProjectId: string) {
+  const result = await authQuery<{
+    id: string; email_normalized: string; invited_user_id: string; project_id: string; project_name: string;
+    organization_id: string | null; role_code: DimproProjectInvitationRole; status: "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
+    expires_at: Date | string; created_at: Date | string;
+  }>(
+    `SELECT invitation.id,invitation.email_normalized,invitation.invited_user_id,invitation.project_id,project.name AS project_name,
+            invitation.organization_id,role.code AS role_code,invitation.status,invitation.expires_at,invitation.created_at
+       FROM auth_invitations invitation
+       JOIN auth_projects project ON project.id=invitation.project_id
+       JOIN auth_roles role ON role.id=invitation.role_id
+      WHERE project.external_project_id=$1
+      ORDER BY invitation.created_at DESC`,
+    [externalProjectId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id, email: row.email_normalized, userId: row.invited_user_id, projectId: row.project_id, projectName: row.project_name,
+    organizationId: row.organization_id, roleCode: row.role_code,
+    status: row.status === "PENDING" && new Date(row.expires_at).getTime() <= Date.now() ? "EXPIRED" as const : row.status,
+    expiresAt: new Date(row.expires_at).toISOString(), createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+export async function setProjectAccessRole(input: { actorUserId: string; targetUserId: string; projectId: string; roleCode: DimproProjectInvitationRole }) {
+  try {
+    const result = await authQuery<{ auth_set_project_access_role: string }>(
+      `SELECT auth_set_project_access_role($1,$2,$3,$4)`,
+      [input.actorUserId, input.targetUserId, input.projectId, input.roleCode],
+    );
+    return result.rows[0]?.auth_set_project_access_role || input.roleCode;
+  } catch (error) {
+    invitationError(error);
+  }
 }
 
 export async function acceptProjectInvitation(rawToken: string) {

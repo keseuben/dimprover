@@ -11,6 +11,8 @@ export type ProjectCoreRepository = Pick<typeof fileRepository,
   | "updateProject"
   | "addProjectMembership"
   | "listProjectMemberships"
+  | "updateProjectMembershipRole"
+  | "revokeProjectMembership"
   | "activateProjectMembership"
   | "changeProjectLifecycle"
   | "recordProjectAuditEvent"
