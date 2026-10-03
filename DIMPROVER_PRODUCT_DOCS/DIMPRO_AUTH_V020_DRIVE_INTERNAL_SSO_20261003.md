@@ -57,7 +57,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 25/25 PASS.
 - AUTH V0.2 internal SSO contract: 37/37 PASS.
-- AUTH V0.2.1 security contract: 52/52 PASS.
+- AUTH V0.2.1 security contract: 53/53 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -240,3 +240,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - `/health/live`, `/health/ready`, `/health/auth` és `/auth/apps` csak a technikai AUTH hoston használható.
 - A health endpointok termékhostról 404 fail-closed választ adnak; a launcher nem AUTH hoston `notFound()` ágra kerül.
 - A launcher DEV/PROD Drive linkje az AUTH hostból felismert környezet alapján készül, nem általános `.dev.dimpro.hu` suffix alapján.
+
+## Isolated AUTH TypeScript gate
+
+- `tsconfig.dimpro-auth.json` külön TypeScript projektként ellenőrzi az AUTH library/API/health/launcher/login/session-guard/proxy forrásokat.
+- `npx tsc -p tsconfig.dimpro-auth.json --pretty false`: PASS.
+- Ez külön bizonyítja az AUTH típushelyességet; a teljes monorepóban maradó 4 `pilotFolder` TS2741 hiba a Drive egy korábbi, AUTH-tól független állapota.

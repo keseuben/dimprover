@@ -186,3 +186,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - `/health/live`, `/health/ready`, `/health/auth` és `/auth/apps` csak a technikai AUTH hoston használható.
 - A health endpointok termékhostról 404 fail-closed választ adnak; a launcher nem AUTH hoston `notFound()` ágra kerül.
 - A launcher DEV/PROD Drive linkje az AUTH hostból felismert környezet alapján készül, nem általános `.dev.dimpro.hu` suffix alapján.
+
+## Isolated AUTH TypeScript gate
+
+- `tsconfig.dimpro-auth.json` külön TypeScript projektként ellenőrzi az AUTH library/API/health/launcher/login/session-guard/proxy forrásokat.
+- `npx tsc -p tsconfig.dimpro-auth.json --pretty false`: PASS.
+- Ez külön bizonyítja az AUTH típushelyességet; a teljes monorepóban maradó 4 `pilotFolder` TS2741 hiba a Drive egy korábbi, AUTH-tól független állapota.
