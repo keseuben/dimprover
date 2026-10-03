@@ -146,3 +146,10 @@ A `scripts/dimpro-auth/tls-readiness.mjs` read-only ellenőrzés DNS, TLS SNI é
 - `login.dev.dimpro.hu`: FAIL, `ERR_SSL_TLSV1_UNRECOGNIZED_NAME`.
 
 A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazza többek között az `auth.dev.dimpro.hu` és `drive.dev.dimpro.hu` neveket, de a `login.dev.dimpro.hu` nevet nem. Ezért a friendly login host aktiválásához **két feltétel** szükséges a 213.160.68.32 DEV ingressen: `login.dev.dimpro.hu` TLS vhost/SNI binding és olyan tanúsítvány, amelynek SAN listája ezt a hostnevet is tartalmazza. A script PROD hostot nem érint.
+
+## Prepared DEV nginx ingress template
+
+- `ops/nginx/dimpro-auth/dev-vhosts.conf.template` elkészült az `auth.dev.dimpro.hu` és `login.dev.dimpro.hu` DEV ingresshez; a Drive saját candidate vhostját szándékosan nem definiálja felül.
+- `scripts/dimpro-auth/render-nginx-dev.mjs` csak explicit TLS cert/key útvonal és loopback `http://127.0.0.1:<port>` upstream mellett renderel. Külső upstream, alacsony/érvénytelen port vagy relatív cert útvonal fail-closed.
+- A proxy felülírja az `X-Real-IP` értéket `$remote_addr`-ra, és beállítja a `Host`, `X-Forwarded-For`, `X-Forwarded-Proto=https`, `X-Forwarded-Host` fejléceket.
+- Ez **előkészített konfiguráció**, nem került telepítésre a 213.160.68.32 DEV ingressre. Aktiválás előtt a `login.dev.dimpro.hu` nevet tartalmazó új/megújított tanúsítvány és `nginx -t` ellenőrzés szükséges.
