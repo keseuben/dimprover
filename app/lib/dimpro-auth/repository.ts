@@ -696,3 +696,63 @@ export async function revokeAppSession(token: string, clientId: string, reason: 
     return true;
   });
 }
+
+export async function listAuthPermissions(userId: string) {
+  const result = await authQuery<{
+    permission_code: string;
+    product_code: string | null;
+    organization_id: string | null;
+    project_id: string | null;
+    role_code: string;
+    valid_until: Date | string | null;
+  }>(
+    `SELECT DISTINCT p.code AS permission_code,product.code AS product_code,g.organization_id,g.project_id,r.code AS role_code,g.valid_until
+       FROM auth_access_grants g
+       JOIN auth_roles r ON r.id=g.role_id
+       JOIN auth_role_permissions rp ON rp.role_id=r.id
+       JOIN auth_permissions p ON p.id=rp.permission_id
+       LEFT JOIN auth_products product ON product.id=g.product_id
+      WHERE g.user_id=$1
+        AND g.revoked_at IS NULL
+        AND g.valid_from<=now()
+        AND (g.valid_until IS NULL OR g.valid_until>=now())
+      ORDER BY product.code NULLS FIRST,p.code,r.code,g.project_id NULLS FIRST`,
+    [userId],
+  );
+  return result.rows.map((row) => ({
+    permissionCode: row.permission_code,
+    productCode: row.product_code,
+    organizationId: row.organization_id,
+    projectId: row.project_id,
+    roleCode: row.role_code,
+    validUntil: row.valid_until ? iso(row.valid_until) : null,
+  }));
+}
+
+export async function revokeAllUserSessions(userId: string, correlationId: string, reason = "USER_LOGOUT_ALL") {
+  return withAuthTransaction(async (client) => {
+    const authSessions = await client.query<{ id: string }>(
+      `UPDATE auth_sessions
+          SET revoked_at=COALESCE(revoked_at,now()),revoke_reason=COALESCE(revoke_reason,$2)
+        WHERE user_id=$1 AND revoked_at IS NULL
+      RETURNING id`,
+      [userId, reason.slice(0, 240)],
+    );
+    const appSessions = await client.query<{ id: string }>(
+      `UPDATE auth_app_sessions
+          SET revoked_at=COALESCE(revoked_at,now()),revoke_reason=COALESCE(revoke_reason,$2)
+        WHERE user_id=$1 AND revoked_at IS NULL
+      RETURNING id`,
+      [userId, reason.slice(0, 240)],
+    );
+    await appendAudit(client, {
+      eventType: "LOGOUT_ALL",
+      userId,
+      method: "SESSION",
+      result: "SUCCESS",
+      correlationId,
+      metadata: { authSessions: authSessions.rowCount || 0, appSessions: appSessions.rowCount || 0 },
+    });
+    return { authSessions: authSessions.rowCount || 0, appSessions: appSessions.rowCount || 0 };
+  });
+}
