@@ -204,3 +204,10 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - Migration role: `dimpro_auth_migrator_dev` is allowed only from `213.160.68.24/32` (authoritative source/control node).
 - Both rules are database-specific (`dimpro_auth_dev`), `hostssl` + `scram-sha-256`; no broad `all/all` rule is permitted.
 - PROD database/roles remain outside this DEV activation path.
+
+## DB administrator bootstrap runner
+
+- `scripts/dimpro-auth/db-admin-bootstrap-dev.sh` kizárólag `dimpro-db` hoston és explicit `DIMPRO_AUTH_DB_ADMIN_CONFIRM=BOOTSTRAP_DIMPRO_AUTH_DEV` megerősítéssel fut.
+- A root-only `bootstrap.env` fájlból olvassa a külön app/migrator jelszavakat, majd a PostgreSQL helyi peer-auth admin útvonalon futtatja a DEV bootstrap SQL-t.
+- A script `dimpro_auth_prod` hivatkozásra fail-closed és `PRODUCTION_ACCESS=DENY` állapotot jelent.
+- A runner elő van készítve, de ebben a végrehajtási csatornában még nem futott le.
