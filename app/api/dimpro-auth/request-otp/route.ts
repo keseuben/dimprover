@@ -1,96 +1,89 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { after, NextRequest, NextResponse } from "next/server";
+import { getDimproAuthConfig } from "@/app/lib/dimpro-auth/config";
+import { sendDimproAuthOtpEmail } from "@/app/lib/dimpro-auth/email";
+import { issueLoginOtp, recordAuthAuditEvent } from "@/app/lib/dimpro-auth/repository";
 import {
-  appendDimproLoginAttempt,
-  normalizeDimproEmail,
-} from "@/app/lib/dimpro/login-access";
-import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
+  createDimproAuthOtpCode,
+  getDimproAuthRequestIp,
+  getDimproAuthUserAgent,
+  isValidDimproAuthEmail,
+  newDimproAuthCorrelationId,
+  normalizeDimproAuthEmail,
+  validateSameOriginMutation,
+} from "@/app/lib/dimpro-auth/security";
+import { DimproAuthError } from "@/app/lib/dimpro-auth/types";
+import { resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error("A Supabase OTP szolgáltatás nincs beállítva.");
-  return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
+const PUBLIC_OK = "Ha az e-mail-címhez aktív DIMPRO-fiók tartozik, elküldtük a hatjegyű belépési kódot.";
 
 export async function POST(request: NextRequest) {
+  if (!resolveCentralDimproAuthEnvironmentFromHost(request.headers.get("host"))) {
+    return NextResponse.json({ ok: false, error: "AUTH_HOST_NOT_ALLOWED" }, { status: 404, headers: { "cache-control": "no-store" } });
+  }
+  const correlationId = newDimproAuthCorrelationId(request.headers);
+  if (!validateSameOriginMutation(request.headers)) {
+    return NextResponse.json({ ok: false, error: "A kérés eredete nem engedélyezett.", correlationId }, { status: 403, headers: { "cache-control": "no-store" } });
+  }
   const body = await request.json().catch(() => null);
-  const email = normalizeDimproEmail(body && typeof body === "object" ? (body as { email?: unknown }).email : "");
-  const authorization = await resolveDimproLoginAuthorization(email);
-  const allowed = authorization.allowed;
-
-  if (!allowed) {
-    await appendDimproLoginAttempt(request.headers, {
-      email: email || "missing-email",
-      allowed: false,
-      action: "request_otp",
-      result: "blocked",
-      message: `A központi DIMPRO belépési jogosultság nem aktív: ${authorization.reason}.`,
-    });
-
-    return NextResponse.json(
-      {
-        ok: false,
-        allowed: false,
-        error: "Ez az e-mail cím jelenleg nem jogosult a DIMPRO használatára. A próbálkozást naplóztuk.",
-      },
-      { status: 403, headers: { "cache-control": "no-store" } },
-    );
+  const email = normalizeDimproAuthEmail(body && typeof body === "object" ? (body as { email?: unknown }).email : "");
+  if (!isValidDimproAuthEmail(email)) {
+    return NextResponse.json({ ok: false, error: "Érvényes e-mail-cím szükséges.", correlationId }, { status: 400, headers: { "cache-control": "no-store" } });
   }
 
   try {
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const code = createDimproAuthOtpCode();
+    const challenge = await issueLoginOtp({
       email,
-      options: { shouldCreateUser: authorization.source !== "legacy_allowlist" },
+      code,
+      ip: getDimproAuthRequestIp(request.headers),
+      userAgent: getDimproAuthUserAgent(request.headers),
+      correlationId,
     });
-
-    if (error) {
-      await appendDimproLoginAttempt(request.headers, {
-        email,
-        allowed: true,
-        action: "request_otp",
-        result: "provider_error",
-        message: error.message.slice(0, 500),
+    if (challenge.user) {
+      const delivery = {
+        email: challenge.user.email,
+        displayName: challenge.user.displayName,
+        code,
+        expiresMinutes: Math.ceil(getDimproAuthConfig().otpTtlSeconds / 60),
+      };
+      after(async () => {
+        try {
+          await sendDimproAuthOtpEmail(delivery);
+          await recordAuthAuditEvent({
+            eventType: "OTP_DELIVERY",
+            userId: challenge.user?.id || null,
+            email,
+            method: "EMAIL_OTP",
+            result: "SUCCESS",
+            ip: getDimproAuthRequestIp(request.headers),
+            userAgent: getDimproAuthUserAgent(request.headers),
+            correlationId,
+          }).catch(() => undefined);
+        } catch (error) {
+          await recordAuthAuditEvent({
+            eventType: "OTP_DELIVERY",
+            userId: challenge.user?.id || null,
+            email,
+            method: "EMAIL_OTP",
+            result: "FAILURE",
+            ip: getDimproAuthRequestIp(request.headers),
+            userAgent: getDimproAuthUserAgent(request.headers),
+            correlationId,
+            metadata: { errorClass: error instanceof Error ? error.name : "UnknownError" },
+          }).catch(() => undefined);
+          console.error("DIMPRO AUTH OTP e-mail kézbesítési hiba", correlationId, error instanceof Error ? error.message : error);
+        }
       });
-      return NextResponse.json(
-        { ok: false, allowed: true, error: error.message },
-        { status: 400, headers: { "cache-control": "no-store" } },
-      );
     }
-
-    await appendDimproLoginAttempt(request.headers, {
-      email,
-      allowed: true,
-      action: "request_otp",
-      result: "otp_sent",
-    });
-
-    return NextResponse.json(
-      { ok: true, allowed: true },
-      { headers: { "cache-control": "no-store" } },
-    );
+    return NextResponse.json({ ok: true, message: PUBLIC_OK, correlationId }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ismeretlen OTP szolgáltatási hiba.";
-    await appendDimproLoginAttempt(request.headers, {
-      email,
-      allowed: true,
-      action: "request_otp",
-      result: "provider_error",
-      message: message.slice(0, 500),
-    });
-    return NextResponse.json(
-      { ok: false, allowed: true, error: message },
-      { status: 500, headers: { "cache-control": "no-store" } },
-    );
+    if (error instanceof DimproAuthError && ["AUTH_OTP_COOLDOWN", "AUTH_OTP_RATE_LIMIT"].includes(error.code)) {
+      return NextResponse.json({ ok: false, error: error.publicMessage, code: error.code, correlationId }, { status: error.status, headers: { "cache-control": "no-store" } });
+    }
+    console.error("DIMPRO AUTH request-otp hiba", correlationId, error instanceof Error ? error.message : error);
+    return NextResponse.json({ ok: false, error: "A belépési kód küldése jelenleg nem érhető el.", correlationId }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }

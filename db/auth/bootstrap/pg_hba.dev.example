@@ -1,0 +1,10 @@
+# DIMPRO AUTH DEV ONLY · PROD DENY
+# Add on db.dimpro.hu after the existing local/admin rules, then validate/reload PostgreSQL.
+# Runtime application server: 213.160.68.32/32 (auth.dev.dimpro.hu candidate runtime).
+# Migration/control server: 213.160.68.24/32 (authoritative DEV source/control node).
+# Restrict database + role + source IP independently; SSL and SCRAM are mandatory.
+
+hostssl  dimpro_auth_dev  dimpro_auth_app_dev       213.160.68.32/32  scram-sha-256
+hostssl  dimpro_auth_dev  dimpro_auth_migrator_dev  213.160.68.24/32  scram-sha-256
+
+# Do not add broad all/all, cross-environment or PROD rules here.

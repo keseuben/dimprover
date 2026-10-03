@@ -2,12 +2,15 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { isDriveApiAuthorized } from "@/app/lib/drive/driveApi";
+import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
+import { getAppSessionByToken } from "@/app/lib/dimpro-auth/repository";
+import { DIMPRO_APP_SESSION_COOKIE } from "@/app/lib/dimpro-auth/sso";
 import { DEV_DESKTOP_USER_ID, DEV_WEB_USER_ID, uniqueUserIds } from "./notificationAccess";
 import { isDriveDevAccessConfigured, requestHasSimpleDevAccess } from "@/app/lib/project-gate/devAccess";
 
 export type NotificationAuthContext = {
   ok: boolean;
-  mode: "web-session" | "desktop-token" | "admin" | "project-gate-dev" | "drive-dev" | "unauthorized";
+  mode: "dimpro-app-session" | "web-session" | "desktop-token" | "admin" | "project-gate-dev" | "drive-dev" | "unauthorized";
   userId: string;
   userAliases: string[];
   displayName: string;
@@ -26,6 +29,28 @@ function getSupabaseAnonKey() {
 
 function headerValue(request: NextRequest, name: string) {
   return request.headers.get(name)?.trim() || "";
+}
+
+async function getDimproAppSessionContext(request: NextRequest): Promise<NotificationAuthContext | null> {
+  const driveConfig = resolveDriveSsoConfig(request.headers.get("host"));
+  if (!driveConfig) return null;
+  const token = request.cookies.get(DIMPRO_APP_SESSION_COOKIE)?.value?.trim() || "";
+  if (!token) return null;
+  try {
+    const session = await getAppSessionByToken(token, driveConfig.clientId, true);
+    if (!session) return null;
+    return {
+      ok: true,
+      mode: "dimpro-app-session",
+      userId: session.user.id,
+      userAliases: uniqueUserIds([session.user.id, session.user.email]),
+      displayName: session.user.displayName || session.user.email,
+      email: session.user.email,
+      clientId: driveConfig.clientId,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function getWebSessionContext(): Promise<NotificationAuthContext | null> {
@@ -77,6 +102,9 @@ async function getWebSessionContext(): Promise<NotificationAuthContext | null> {
 }
 
 export async function resolveNotificationAuth(request: NextRequest): Promise<NotificationAuthContext> {
+  const appSession = await getDimproAppSessionContext(request);
+  if (appSession) return appSession;
+
   const driveAuth = await isDriveApiAuthorized(request.headers);
   if (driveAuth.ok) {
     const explicitUserId = headerValue(request, "x-dimpro-notification-user-id");
