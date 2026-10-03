@@ -4950,3 +4950,364 @@
   background: #173049;
   border-color: #5885ad;
 }
+
+/* DIMPRO Drive V0.9.11 – residual dark surfaces: Commander, empty states, compare/viewer chrome */
+:global(html[data-drive-theme="dark"]) .loadingState {
+  background: #0d1a28;
+  color: #91a6b8;
+}
+:global(html[data-drive-theme="dark"]) .loadingState strong {
+  color: #e0eaf2;
+}
+
+/* Commander */
+:global(html[data-drive-theme="dark"]) .commanderWorkspace {
+  background: #081522;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .commanderHeader {
+  border-color: #2b3e50;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .commanderHeader strong { color: #e1ebf3; }
+:global(html[data-drive-theme="dark"]) .commanderHeader span { color: #92a7b9; }
+:global(html[data-drive-theme="dark"]) .commanderHeaderActions > button {
+  border-color: #33495c;
+  background: #142331;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .commanderHeaderActions > button:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .commanderSelectAll { color: #b5c5d2; }
+:global(html[data-drive-theme="dark"]) .commanderDeleteButton {
+  border-color: #6a3940 !important;
+  background: #321b20 !important;
+  color: #ff969c !important;
+}
+:global(html[data-drive-theme="dark"]) .commanderDeleteButton:hover:not(:disabled) {
+  border-color: #8b4b55 !important;
+  background: #472229 !important;
+}
+:global(html[data-drive-theme="dark"]) .commanderReady {
+  background: #153725;
+  color: #91dcae !important;
+}
+:global(html[data-drive-theme="dark"]) .commanderWaiting {
+  background: #443219;
+  color: #ffd06b !important;
+}
+:global(html[data-drive-theme="dark"]) .commanderColumns {
+  background: #07131f;
+}
+:global(html[data-drive-theme="dark"]) .commanderDivider {
+  background: linear-gradient(90deg,#142331,#23394c,#142331);
+  border-color: #31475a;
+}
+:global(html[data-drive-theme="dark"]) .commanderPane {
+  background: #0b1724;
+}
+:global(html[data-drive-theme="dark"]) .commanderPaneHeader {
+  border-color: #293c4e;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .commanderPaneLabel { color: #bcd0df; }
+:global(html[data-drive-theme="dark"]) .commanderPaneHeader select {
+  border-color: #344b60;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .commanderPaneHeader select:focus {
+  border-color: #5a91c4;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.14);
+}
+:global(html[data-drive-theme="dark"]) .commanderPath {
+  border-color: #243748;
+  background: #0d1b29;
+  color: #91a5b7;
+}
+:global(html[data-drive-theme="dark"]) .commanderList {
+  background: #0b1724;
+}
+:global(html[data-drive-theme="dark"]) .commanderFolderRow {
+  border-color: #1d2f40;
+  color: #c6d6e2;
+}
+:global(html[data-drive-theme="dark"]) .commanderFolderRow:hover { background: #11283d; }
+:global(html[data-drive-theme="dark"]) .commanderFolderRow svg { color: #69adf0; }
+:global(html[data-drive-theme="dark"]) .commanderFolderRow span { color: #8296a8; }
+:global(html[data-drive-theme="dark"]) .commanderFileRow {
+  border-color: #1d2f40;
+  color: #c6d6e2;
+}
+:global(html[data-drive-theme="dark"]) .commanderFileRow:hover { background: #11283d; }
+:global(html[data-drive-theme="dark"]) .commanderFileSelected {
+  background: #17395f !important;
+}
+:global(html[data-drive-theme="dark"]) .commanderFileChecked {
+  box-shadow: inset 3px 0 0 #8d7bff;
+  background: #262440;
+}
+:global(html[data-drive-theme="dark"]) .commanderGrip { color: #6f8497; }
+:global(html[data-drive-theme="dark"]) .commanderFileIcon {
+  background: #173552;
+  color: #91c8ff;
+}
+:global(html[data-drive-theme="dark"]) .commanderFileIconImage {
+  background: #30264a;
+  color: #c8b5ff;
+}
+:global(html[data-drive-theme="dark"]) .commanderFileNameText { color: #dce7f1; }
+:global(html[data-drive-theme="dark"]) .commanderFileName span,
+:global(html[data-drive-theme="dark"]) .commanderRevision { color: #8fa4b6; }
+:global(html[data-drive-theme="dark"]) .commanderMoveButton {
+  border-color: #3d5b76;
+  background: #132b43;
+  color: #91c8ff;
+}
+:global(html[data-drive-theme="dark"]) .commanderMoveButton:hover {
+  border-color: #5988b1;
+  background: #193b5e;
+}
+:global(html[data-drive-theme="dark"]) .commanderEmpty {
+  color: #8ea3b5;
+}
+:global(html[data-drive-theme="dark"]) .commanderPaneFooter {
+  border-color: #293b4d;
+  background: #0f1d2b;
+  color: #8fa3b5;
+}
+:global(html[data-drive-theme="dark"]) .commanderPaneFooter strong { color: #f0c464; }
+:global(html[data-drive-theme="dark"]) .commanderNoFolders {
+  background: #0b1724;
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .commanderNoFolders strong { color: #dce7f1; }
+
+/* Compare workspace and document comparison chrome */
+:global(html[data-drive-theme="dark"]) .browserCompareActive,
+:global(html[data-drive-theme="dark"]) .compareWorkspace {
+  background: #081522;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .compareHeader,
+:global(html[data-drive-theme="dark"]) .compareSelectors {
+  border-color: #2a3d4f;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .compareHeadingIcon {
+  background: #173552;
+  color: #91c8ff;
+  border-color: #376995;
+}
+:global(html[data-drive-theme="dark"]) .compareHeading strong { color: #e1ebf3; }
+:global(html[data-drive-theme="dark"]) .compareHeading span,
+:global(html[data-drive-theme="dark"]) .compareSelectors label span { color: #91a6b8; }
+:global(html[data-drive-theme="dark"]) .compareSecondaryButton,
+:global(html[data-drive-theme="dark"]) .compareCloseButton,
+:global(html[data-drive-theme="dark"]) .compareDownloadButton {
+  border-color: #344b60;
+  background: #142331;
+  color: #c6d5e1;
+}
+:global(html[data-drive-theme="dark"]) .compareSecondaryButton:hover,
+:global(html[data-drive-theme="dark"]) .compareCloseButton:hover,
+:global(html[data-drive-theme="dark"]) .compareDownloadButton:hover {
+  border-color: #527798;
+  background: #1a334b;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .compareSelectors select {
+  border-color: #344b60;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .compareSelectorBadge {
+  background: #173552;
+  color: #9dccff;
+  border-color: #3c6e99;
+}
+:global(html[data-drive-theme="dark"]) .compareDocumentCard,
+:global(html[data-drive-theme="dark"]) .compareDiffPanel {
+  border-color: #2e4356;
+  background: #0f1d2b;
+  color: #cbd9e5;
+  box-shadow: 0 5px 16px rgba(0,0,0,.18);
+}
+:global(html[data-drive-theme="dark"]) .compareFileBadge {
+  background: #173552;
+  color: #9dccff;
+  border-color: #376995;
+}
+:global(html[data-drive-theme="dark"]) .compareDocumentTop strong,
+:global(html[data-drive-theme="dark"]) .compareQuickFacts strong,
+:global(html[data-drive-theme="dark"]) .compareDocumentSummary strong,
+:global(html[data-drive-theme="dark"]) .compareDiffHeader strong,
+:global(html[data-drive-theme="dark"]) .compareEmpty strong {
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .compareDocumentTop div span,
+:global(html[data-drive-theme="dark"]) .compareQuickFacts small,
+:global(html[data-drive-theme="dark"]) .compareDocumentSummary small,
+:global(html[data-drive-theme="dark"]) .compareDiffHeader span,
+:global(html[data-drive-theme="dark"]) .compareEmpty {
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .compareQuickFacts span,
+:global(html[data-drive-theme="dark"]) .compareDocumentSummary span {
+  border-color: #2c4053;
+  background: #101f2d;
+}
+:global(html[data-drive-theme="dark"]) .comparePreviewPlaceholder {
+  border-color: #3a566f;
+  background: linear-gradient(145deg,#0f1f2e,#0b1724);
+  color: #9eb2c3;
+}
+:global(html[data-drive-theme="dark"]) .comparePreviewPlaceholder strong { color: #d6e4ef; }
+:global(html[data-drive-theme="dark"]) .comparePreviewPlaceholder span { color: #8ea3b5; }
+:global(html[data-drive-theme="dark"]) .compareDiffHeader,
+:global(html[data-drive-theme="dark"]) .compareDiffRow,
+:global(html[data-drive-theme="dark"]) .compareDiffRow > * {
+  border-color: #26394a;
+}
+:global(html[data-drive-theme="dark"]) .compareDiffRow > strong,
+:global(html[data-drive-theme="dark"]) .compareDiffTableHead {
+  background: #132333;
+  color: #a8bac9;
+}
+:global(html[data-drive-theme="dark"]) .compareDiffRow > span { color: #c4d3df; }
+:global(html[data-drive-theme="dark"]) .compareDiffDifferent > span {
+  background: #403418;
+  color: #ffd172;
+}
+:global(html[data-drive-theme="dark"]) .compareDiffSame > span { background: #10251d; }
+
+/* Viewer chrome: document canvas/page intentionally remains white */
+:global(html[data-drive-theme="dark"]) .driveViewer {
+  border-color: #304559;
+  background: #0a1622;
+}
+:global(html[data-drive-theme="dark"]) .driveViewer:fullscreen {
+  background: #07121d;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerToolbar {
+  border-color: #2b3f52;
+  background: #101f2e;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerToolGroup,
+:global(html[data-drive-theme="dark"]) .driveViewerToolGroup strong,
+:global(html[data-drive-theme="dark"]) .driveViewerPage,
+:global(html[data-drive-theme="dark"]) .driveViewerZoom {
+  color: #a6b8c7;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerToolGroup button {
+  border-color: #344a5d;
+  background: #142331;
+  color: #b7c7d5;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerToolGroup button:hover {
+  border-color: #527798;
+  background: #1a334b;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerToolGroup .driveViewerToolActive {
+  border-color: #4b83ba;
+  background: #173754;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerStage {
+  background-color: #17232e;
+  background-image:
+    linear-gradient(45deg,rgba(255,255,255,.035) 25%,transparent 25%),
+    linear-gradient(-45deg,rgba(255,255,255,.035) 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,rgba(255,255,255,.035) 75%),
+    linear-gradient(-45deg,transparent 75%,rgba(255,255,255,.035) 75%);
+}
+:global(html[data-drive-theme="dark"]) .driveViewerLoading {
+  border-color: #3a5266;
+  background: rgba(15,31,45,.96);
+  color: #b9c9d6;
+  box-shadow: 0 5px 18px rgba(0,0,0,.28);
+}
+:global(html[data-drive-theme="dark"]) .driveViewerError {
+  border-color: #6b373d;
+  background: #35191d;
+  color: #ff9da2;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerError button {
+  border-color: #754047;
+  background: #402126;
+  color: #ffa6ab;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerHint {
+  border-color: #2c4052;
+  background: #0f1d2b;
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerUnsupported {
+  border-color: #3a5368;
+  background: linear-gradient(145deg,#101f2e,#0b1724);
+  color: #91a6b8;
+}
+:global(html[data-drive-theme="dark"]) .driveViewerUnsupported strong { color: #dce7f1; }
+
+/* Visual comparison top-level panels */
+:global(html[data-drive-theme="dark"]) .visualCompare {
+  border-color: #304559;
+  background: #0b1724;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareHeader,
+:global(html[data-drive-theme="dark"]) .visualCompareToolbar,
+:global(html[data-drive-theme="dark"]) .visualCompareAlignmentBar,
+:global(html[data-drive-theme="dark"]) .visualCompareFooter {
+  border-color: #2b3f52;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareModeSwitch {
+  border-color: #30475a;
+  background: #122231;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareModeSwitch button,
+:global(html[data-drive-theme="dark"]) .visualCompareToolGroup button,
+:global(html[data-drive-theme="dark"]) .visualCompareAlignmentCompact button,
+:global(html[data-drive-theme="dark"]) .visualCompareNudgeGrid button,
+:global(html[data-drive-theme="dark"]) .visualCompareAlignmentActions button {
+  border-color: #344b60;
+  background: #142331;
+  color: #b9c9d7;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareModeSwitch button:hover,
+:global(html[data-drive-theme="dark"]) .visualCompareToolGroup button:hover,
+:global(html[data-drive-theme="dark"]) .visualCompareAlignmentCompact button:hover,
+:global(html[data-drive-theme="dark"]) .visualCompareNudgeGrid button:hover,
+:global(html[data-drive-theme="dark"]) .visualCompareAlignmentActions button:hover {
+  border-color: #527798;
+  background: #1a334b;
+  color: #9dccff;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareModeSwitch .visualCompareModeActive {
+  background: #173754;
+  color: #9dccff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.28);
+}
+:global(html[data-drive-theme="dark"]) .visualComparePaneLabel,
+:global(html[data-drive-theme="dark"]) .visualCompareFooter {
+  color: #94a9bb;
+}
+:global(html[data-drive-theme="dark"]) .visualCompareUnsupported {
+  border-color: #3b5367;
+  background: #0f1f2e;
+  color: #91a6b8;
+}
+
+/* Keep actual rendered document surfaces white for engineering drawings */
+:global(html[data-drive-theme="dark"]) .driveViewerCanvas,
+:global(html[data-drive-theme="dark"]) .driveViewerImage,
+:global(html[data-drive-theme="dark"]) .visualCompareCanvas,
+:global(html[data-drive-theme="dark"]) .visualCompareImage,
+:global(html[data-drive-theme="dark"]) .visualCompareOverlayViewport {
+  background: #fff;
+}
