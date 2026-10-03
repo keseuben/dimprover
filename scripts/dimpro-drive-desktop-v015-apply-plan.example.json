@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "projectId": "REPLACE_WITH_DEV_PROJECT_ID",
+  "nextCursor": 0,
+  "operations": [
+    {
+      "kind": "UPLOAD_NEW",
+      "localPath": "C:\\DIMPRO-TEST\\upload-example.pdf",
+      "folderId": "REPLACE_WITH_DRIVE_FOLDER_ID",
+      "documentName": "upload-example.pdf",
+      "mimeType": "application/pdf",
+      "revisionCode": "Rev. 0",
+      "changeNote": "DIMPRO Drive Desktop V0.1.5 DEV acceptance"
+    },
+    {
+      "kind": "UPLOAD_VERSION",
+      "localPath": "C:\\DIMPRO-TEST\\version-example.pdf",
+      "documentId": "REPLACE_WITH_DRIVE_DOCUMENT_ID",
+      "expectedCurrentVersion": 1,
+      "mimeType": "application/pdf",
+      "revisionCode": "Rev. 0",
+      "changeNote": "DIMPRO Drive Desktop V0.1.5 DEV acceptance version"
+    },
+    {
+      "kind": "DOWNLOAD",
+      "documentId": "REPLACE_WITH_DRIVE_DOCUMENT_ID",
+      "versionId": "REPLACE_WITH_DRIVE_VERSION_ID",
+      "destinationPath": "C:\\DIMPRO-TEST\\download-example.pdf",
+      "sha256": "REPLACE_WITH_64_CHAR_SHA256_WHEN_AVAILABLE"
+    }
+  ]
+}
