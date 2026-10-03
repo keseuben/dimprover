@@ -57,7 +57,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 34/34 PASS.
-- AUTH V0.2.1 security contract: 43/43 PASS.
+- AUTH V0.2.1 security contract: 44/44 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -163,3 +163,18 @@ A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált 
 - Runtime és aktiválási ellenőrzés kizárólag `db.dimpro.hu:5432` host/portot, a környezethez tartozó adatbázist és role-t fogadja el.
 - Az URL-ben `sslmode`, `sslcert`, `sslkey`, `sslrootcert` paraméter nem engedélyezett, így a külön kötelező `verify-full` TLS beállítást connection-string paraméterrel nem lehet felülírni.
 - Üres DB-jelszó runtime/preflight szinten is fail-closed.
+
+## DEV HTTP deployment readiness probe
+
+A `scripts/dimpro-auth/http-readiness.mjs` kizárólag DEV hostokat ellenőriz és `productionAccess=DENY` állapotot jelent. Alapértelmezett `PRE_DB` módban a még nem aktivált DB miatt a readiness 503/`ready=false` választ várja; `--post-db` módban már 200/`ready=true` és legalább 4 migráció szükséges.
+
+A 2026-10-03-i read-only live futás 1/6 PASS eredményt adott, ezért ez **deployment drift**, nem forráskód-contract hiba:
+
+- `auth.dev.dimpro.hu/login`: HTTP 200, PASS;
+- `login.dev.dimpro.hu`: kapcsolat/fetch nem állt fel, vhost/TLS/routing ellenőrzendő;
+- `auth.dev.dimpro.hu/health/live`: 307 `/login`, a jelenlegi aktív candidate nem tartalmazza a kívánt health viselkedést;
+- `auth.dev.dimpro.hu/health/ready`: 307 `/login`, ugyanez a deployment drift;
+- `drive.dev.dimpro.hu/api/dimpro-auth/session`: HTTP 404, az aktív Drive candidate még nem tartalmazza az AUTH session route-ot;
+- `drive.dev.dimpro.hu/drive`: 307 `/login`, még a régi login-flow fut.
+
+A probe nem végez módosítást és nem aktivál candidate-et. Az aktív hostok jelenleg `213.160.68.32` címre oldódnak, miközben ez az AUTH forrás-worktree a `213.160.68.24` DEV VPS-en van. A candidate aktiválás külön, engedélyezett központi deployment csatornát igényel.
