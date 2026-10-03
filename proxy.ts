@@ -459,7 +459,18 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/projects" ||
     pathname.startsWith("/api/projects/")
   );
-  if (isDriveHost && (isDrivePage || isDriveProtectedApi)) {
+  const driveAuthorization = request.headers.get("authorization")?.trim() || "";
+  const isDriveDesktopAccessExchangeApi = isDriveHost && pathname === "/api/drive/desktop-access/token";
+  const isDriveDesktopBearer = /^Bearer\s+dpat1\./i.test(driveAuthorization);
+  const isDriveDesktopBearerApi = isDriveHost && isDriveDesktopBearer && (
+    pathname === "/api/drive/desktop-contract" ||
+    pathname === "/api/projects" ||
+    /^\/api\/projects\/[^/]+\/drive\/(?:health|tree|changes|sync\/cursor|uploads\/init)$/.test(pathname) ||
+    /^\/api\/projects\/[^/]+\/drive\/uploads\/[^/]+\/(?:complete|abort)$/.test(pathname) ||
+    /^\/api\/projects\/[^/]+\/drive\/documents\/[^/]+\/download$/.test(pathname)
+  );
+  const isDriveDesktopOwnAuthApi = isDriveDesktopAccessExchangeApi || isDriveDesktopBearerApi;
+  if (isDriveHost && (isDrivePage || isDriveProtectedApi) && !isDriveDesktopOwnAuthApi) {
     const driveConfig = driveCentralSsoConfig;
     const token = request.cookies.get(DIMPRO_APP_SESSION_COOKIE)?.value?.trim() || "";
     let session = null;
