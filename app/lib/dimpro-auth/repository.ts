@@ -102,6 +102,20 @@ async function appendAudit(client: PoolClient | null, input: {
   );
 }
 
+export async function recordAuthAuditEvent(input: {
+  eventType: string;
+  userId?: string | null;
+  email?: string | null;
+  method?: string | null;
+  result: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  correlationId: string;
+  metadata?: Record<string, unknown>;
+}) {
+  return appendAudit(null, input);
+}
+
 export async function getActiveAuthUserByEmail(email: string) {
   const result = await authQuery<UserRow>(
     `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
@@ -618,8 +632,13 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
        FROM auth_app_sessions s
        JOIN auth_clients c ON c.id=s.client_id
        JOIN auth_users u ON u.id=s.user_id
+       JOIN auth_sessions parent_session ON parent_session.id=s.auth_session_id
       WHERE s.token_hash=$1 AND c.client_id=$2 AND c.status='ACTIVE'
         AND s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now()
+        AND parent_session.revoked_at IS NULL
+        AND parent_session.absolute_expires_at>now()
+        AND parent_session.inactivity_expires_at>now()
+        AND parent_session.user_session_version=u.session_version
         AND u.status='ACTIVE' AND u.login_enabled=true
         AND s.user_session_version=u.session_version
       LIMIT 1`,

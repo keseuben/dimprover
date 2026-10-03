@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 25/25 PASS.
-- AUTH V0.2.1 security contract: 17/17 PASS.
+- AUTH V0.2.1 security contract: 21/21 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -65,3 +65,24 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 ## Aktiválási blokk
 
 A `db.dimpro.hu` authoritative DEV DB-hozzáférés ebből a végrehajtási csatornából továbbra sem hitelesített, ezért egyetlen migration sem lett APPLY módban futtatva, és runtime secret sem lett beállítva. E2E csak a DEV adatbázis, SMTP és auth runtime env aktiválása után indulhat.
+
+## SMTP readiness
+
+A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált és az SMTP `verify()` hitelesítés PASS állapotú 465/TLS kapcsolaton. Teszt e-mail küldése ebben a blokkban nem történt, ezért a recipient-delivery/relay útvonal még E2E ellenőrzendő.
+
+## DB hálózati readiness
+
+- `db.dimpro.hu:5432` elérhető és PostgreSQL kapcsolatot fogad.
+- TLS 1.3 kapcsolat létrejön; a szerver tanúsítványa `db.dimpro.hu`, a lánc belső `DIMPRO Internal PostgreSQL CA` gyökérre épül.
+- A DEV alkalmazásszerver (`213.160.68.24`) jelenlegi `dimproadmin` kapcsolatát a PostgreSQL `pg_hba.conf` elutasítja. Ezért a DEV AUTH migráció nem futott APPLY módban.
+- Aktiválás előtt a DB szerveren külön `pg_hba.conf` engedély szükséges legalább a `dimpro_auth_migrator_dev` és `dimpro_auth_app_dev` szerepköröknek a DEV alkalmazásszerver címéről, SSL-kényszerítéssel.
+- A belső PostgreSQL CA gyökértanúsítványt authoritative forrásból kell az alkalmazásszerverre telepíteni; hálózatról lekért tanúsítványt nem használunk trust anchor-ként.
+
+## Retention / audit
+
+- OTP challenge alapértelmezett megőrzés: 7 nap.
+- Authorization request/code: 1 nap.
+- Lezárt/lejárt session: 30 nap utómegőrzés.
+- Audit esemény: 365 nap.
+- Cleanup csak explicit `DIMPRO_AUTH_CLEANUP_CONFIRM=APPLY_DEV_AUTH_CLEANUP` + `--apply` mellett destruktív; alapelve fail-closed.
+- OTP e-mail kézbesítés SUCCESS/FAILURE külön audit eseményként rögzül.

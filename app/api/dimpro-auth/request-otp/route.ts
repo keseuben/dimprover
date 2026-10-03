@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { getDimproAuthConfig } from "@/app/lib/dimpro-auth/config";
 import { sendDimproAuthOtpEmail } from "@/app/lib/dimpro-auth/email";
-import { issueLoginOtp } from "@/app/lib/dimpro-auth/repository";
+import { issueLoginOtp, recordAuthAuditEvent } from "@/app/lib/dimpro-auth/repository";
 import {
   createDimproAuthOtpCode,
   getDimproAuthRequestIp,
@@ -48,7 +48,28 @@ export async function POST(request: NextRequest) {
       after(async () => {
         try {
           await sendDimproAuthOtpEmail(delivery);
+          await recordAuthAuditEvent({
+            eventType: "OTP_DELIVERY",
+            userId: challenge.user?.id || null,
+            email,
+            method: "EMAIL_OTP",
+            result: "SUCCESS",
+            ip: getDimproAuthRequestIp(request.headers),
+            userAgent: getDimproAuthUserAgent(request.headers),
+            correlationId,
+          }).catch(() => undefined);
         } catch (error) {
+          await recordAuthAuditEvent({
+            eventType: "OTP_DELIVERY",
+            userId: challenge.user?.id || null,
+            email,
+            method: "EMAIL_OTP",
+            result: "FAILURE",
+            ip: getDimproAuthRequestIp(request.headers),
+            userAgent: getDimproAuthUserAgent(request.headers),
+            correlationId,
+            metadata: { errorClass: error instanceof Error ? error.name : "UnknownError" },
+          }).catch(() => undefined);
           console.error("DIMPRO AUTH OTP e-mail kézbesítési hiba", correlationId, error instanceof Error ? error.message : error);
         }
       });

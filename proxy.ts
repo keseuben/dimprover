@@ -60,6 +60,17 @@ function applyDropSecurityHeaders(response: NextResponse) {
   return response;
 }
 
+function applyDimproAuthSecurityHeaders(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'");
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request,
@@ -215,17 +226,17 @@ export async function proxy(request: NextRequest) {
     url.hostname = host === "login.dev.dimpro.hu" ? "auth.dev.dimpro.hu" : "auth.dimpro.hu";
     url.port = "";
     url.pathname = pathname === "/" ? "/login" : pathname;
-    return NextResponse.redirect(url, 307);
+    return applyDimproAuthSecurityHeaders(NextResponse.redirect(url, 307));
   }
 
   if (isDimproAuthHost && pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url, 307);
+    return applyDimproAuthSecurityHeaders(NextResponse.redirect(url, 307));
   }
 
   if (isDimproAuthHost && pathname.startsWith("/health/")) {
-    return response;
+    return applyDimproAuthSecurityHeaders(response);
   }
 
   if (isProjectGateBrandHost) {
@@ -468,7 +479,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isDimproAuthHost && (isLoginPage || pathname.startsWith("/api/dimpro-auth/"))) {
-    return response;
+    return applyDimproAuthSecurityHeaders(response);
   }
 
   if (isDimproAuthHost && pathname.startsWith("/auth/")) {
@@ -483,9 +494,9 @@ export async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.search = "";
-      return NextResponse.redirect(url);
+      return applyDimproAuthSecurityHeaders(NextResponse.redirect(url));
     }
-    return response;
+    return applyDimproAuthSecurityHeaders(response);
   }
 
   if (
