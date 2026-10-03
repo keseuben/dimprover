@@ -106,7 +106,7 @@ export default function DrivePremiumLoader({ complete = false }: Props) {
 
           <div className={styles.logoCore}>
             <span className={styles.logoScan} />
-            <Image src="/dimprover-logo.png" alt="" width={104} height={104} priority className={styles.logo} />
+            <Image src="/dimprover-logo.png" alt="" width={132} height={132} priority className={styles.logo} />
           </div>
 
           <div className={styles.percentRing}>

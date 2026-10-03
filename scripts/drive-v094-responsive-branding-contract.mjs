@@ -27,12 +27,12 @@ check("Digitális projektmunkatér subtitle is larger and readable", () => {
   assert.match(css, /\.driveWordmark small[\s\S]*?font-size: 10px/);
   assert.match(loader, /DIGITÁLIS PROJEKTMUNKATÉR/);
 });
-check("central DIMPRO logo asset renders at 104px", () => {
-  assert.match(loader, /width=\{104\} height=\{104\}/);
-  assert.match(css, /\.logo \{ width: 104px; height: 104px/);
+check("central DIMPRO logo remains enlarged and has advanced beyond V094", () => {
+  assert.match(loader, /width=\{132\} height=\{132\}/);
+  assert.match(css, /\.logo \{ width: 132px; height: 132px/);
 });
-check("logo core is enlarged to 132px", () => assert.match(css, /\.logoCore \{ width: 132px; height: 132px/));
-check("visual orbit stage is enlarged to 228px", () => assert.match(css, /\.visualStage \{ width: 228px; height: 228px/));
+check("logo core remains enlarged and has advanced beyond V094", () => assert.match(css, /\.logoCore \{ width: 160px; height: 160px/));
+check("visual orbit stage remains enlarged and has advanced beyond V094", () => assert.match(css, /\.visualStage \{ width: 252px; height: 252px/));
 check("laptop height breakpoint exists at 900px", () => {
   assert.match(css, /@media \(max-height: 900px\) and \(min-width: 881px\)/);
   assert.match(css, /align-items: start/);
