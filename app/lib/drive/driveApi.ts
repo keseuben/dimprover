@@ -3,10 +3,11 @@ import { chmod, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/pr
 import path from "node:path";
 import { isLicenseAdminAuthorized } from "@/app/lib/license/admin-auth";
 import { createFileUploadedNotification } from "@/app/lib/notifications/notificationStore";
+import { verifyDriveDesktopAccessToken } from "@/app/lib/drive/desktopAccessToken";
 
 export type DriveApiAuth = {
   ok: boolean;
-  mode: "admin" | "dev-token" | "missing" | "invalid";
+  mode: "admin" | "desktop-access" | "dev-token" | "missing" | "invalid";
   clientId?: string;
 };
 
@@ -116,11 +117,20 @@ export async function isDriveApiAuthorized(headers: Headers): Promise<DriveApiAu
     };
   }
 
-  const expectedToken = await readOrCreateDevToken();
-  const receivedToken =
-    normalizeToken(headers.get("x-dimpro-drive-dev-token")) ||
-    normalizeToken(headers.get("authorization"));
+  const bearer = normalizeToken(headers.get("authorization"));
+  if (bearer.startsWith("dpat1.")) {
+    try {
+      const claims = verifyDriveDesktopAccessToken(bearer);
+      const requestedClientId = headers.get("x-dimpro-drive-client-id")?.trim() || claims.clientId;
+      if (requestedClientId !== claims.clientId) return { ok: false, mode: "invalid" };
+      return { ok: true, mode: "desktop-access", clientId: claims.clientId };
+    } catch {
+      return { ok: false, mode: "invalid" };
+    }
+  }
 
+  const expectedToken = await readOrCreateDevToken();
+  const receivedToken = normalizeToken(headers.get("x-dimpro-drive-dev-token")) || bearer;
   if (!receivedToken) return { ok: false, mode: "missing" };
   if (receivedToken !== expectedToken) return { ok: false, mode: "invalid" };
 
@@ -137,7 +147,7 @@ export function unauthorizedDriveResponse() {
     error: "Nincs jogosultság a DIMPRO Drive API használatához.",
     devTokenHint: getDriveDevTokenFilePath(),
     authHint:
-      "Fejlesztői módban x-dimpro-drive-dev-token vagy admin módban x-dimpro-license-admin-key header szükséges.",
+      "Drive Desktopnál rövid életű Bearer access token; fejlesztői módban x-dimpro-drive-dev-token vagy admin header használható.",
   };
 }
 
