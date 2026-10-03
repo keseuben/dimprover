@@ -26,6 +26,7 @@ const checks=[
 ['no stray nextCursor brace',!/nextCursor' \$null\}/.test(s)],
 ['no top-level exit 0',!/\bexit\s+0\b/i.test(s)],
 
+['acceptance no LASTEXITCODE',!/LASTEXITCODE/.test(a)],
 ['acceptance exact apply marker',/EXACT_APPLY_CONTRACT_PASS/.test(a)],
 ['acceptance delete deny marker',/DELETE_OPERATION_DENY_PASS/.test(a)],
 ];
