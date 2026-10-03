@@ -7,6 +7,7 @@ import DriveWorkspace from "./DriveWorkspace";
 import FloatingProjectBoard from "./FloatingProjectBoard";
 import type { DriveProject, DriveStorageQuota } from "./driveTypes";
 import { type DriveNavigationRequest, type DriveNavigationTarget } from "./driveBuildInfo";
+import { DRIVE_THEME_STORAGE_KEY, normalizeDriveTheme, type DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveWorkspaceOption = {
@@ -73,6 +74,7 @@ export default function DriveShell({
   const [error, setError] = useState("");
   const [boardOpen, setBoardOpen] = useState(false);
   const [boardPinned, setBoardPinned] = useState(false);
+  const [theme, setTheme] = useState<DriveTheme>("light");
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
   const [notice, setNotice] = useState("");
@@ -88,6 +90,26 @@ export default function DriveShell({
   const [activeNavigation, setActiveNavigation] = useState<DriveNavigationTarget>("documents");
   const [navigationRequest, setNavigationRequest] = useState<DriveNavigationRequest>({ id: 0, target: "documents" });
   const boardOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const stored = normalizeDriveTheme(
+      document.documentElement.dataset.driveTheme || window.localStorage.getItem(DRIVE_THEME_STORAGE_KEY),
+    );
+    setTheme(stored);
+    document.documentElement.dataset.driveTheme = stored;
+    document.documentElement.style.colorScheme = stored;
+  }, []);
+
+  const handleThemeChange = useCallback((nextTheme: DriveTheme) => {
+    setTheme(nextTheme);
+    document.documentElement.dataset.driveTheme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    try {
+      window.localStorage.setItem(DRIVE_THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // Theme persistence is best-effort; the active theme still applies for this session.
+    }
+  }, []);
   const boardCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadProjects = useCallback(async () => {
@@ -380,7 +402,10 @@ export default function DriveShell({
   }
 
   return (
-    <div className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}>
+    <div
+      className={`${styles.shell} ${boardOpen ? styles.shellBoardOpen : styles.shellBoardClosed} ${boardPinned ? styles.shellBoardPinned : ""}`}
+      data-theme={theme}
+    >
       <DriveNavigationRail
         boardOpen={boardOpen}
         onToggleBoard={toggleBoard}
@@ -394,6 +419,8 @@ export default function DriveShell({
         selectedProjectId={selectedProject?.id || ""}
         pinned={boardPinned}
         activeTarget={activeNavigation}
+        theme={theme}
+        onThemeChange={handleThemeChange}
         onProjectChange={handleProjectChange}
         onCreateProject={() => {
           cancelBoardTimers();

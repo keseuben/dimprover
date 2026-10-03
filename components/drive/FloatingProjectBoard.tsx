@@ -12,12 +12,15 @@ import {
   Inbox,
   PackageCheck,
   Pin,
+  Moon,
+  Sun,
   Plus,
   Settings,
   Star,
 } from "lucide-react";
 import { DRIVE_VERSION_DISPLAY, type DriveNavigationTarget } from "./driveBuildInfo";
 import type { DriveProject, DriveStorageQuota } from "./driveTypes";
+import type { DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveProvisionedFolder = {
@@ -42,6 +45,8 @@ type Props = {
   selectedProjectId: string;
   pinned: boolean;
   activeTarget: DriveNavigationTarget;
+  theme: DriveTheme;
+  onThemeChange: (theme: DriveTheme) => void;
   onProjectChange: (projectId: string) => void;
   onCreateProject: () => void;
   onClose: () => void;
@@ -74,6 +79,8 @@ export default function FloatingProjectBoard({
   selectedProjectId,
   pinned,
   activeTarget,
+  theme,
+  onThemeChange,
   onProjectChange,
   onCreateProject,
   onClose,
@@ -237,6 +244,29 @@ export default function FloatingProjectBoard({
         </div>
 
         <span className={styles.boardSectionLabel}>Rendszer</span>
+        <div className={styles.themeControl} role="group" aria-label="Drive megjelenési mód">
+          <span>Megjelenés</span>
+          <div className={styles.themeSwitch}>
+            <button
+              type="button"
+              className={theme === "light" ? styles.themeSwitchActive : ""}
+              aria-pressed={theme === "light"}
+              onClick={() => onThemeChange("light")}
+              title="Világos mód"
+            >
+              <Sun size={14} /> Világos
+            </button>
+            <button
+              type="button"
+              className={theme === "dark" ? styles.themeSwitchActive : ""}
+              aria-pressed={theme === "dark"}
+              onClick={() => onThemeChange("dark")}
+              title="Sötét mód"
+            >
+              <Moon size={14} /> Sötét
+            </button>
+          </div>
+        </div>
         <div className={styles.boardNav}>
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>

@@ -4110,3 +4110,387 @@
   font-weight: 700;
 }
 .trashDialogSummary strong { color: #263f58; font-size: 13px; }
+
+/* DIMPRO Drive V0.9.9 – persistent light/dark appearance */
+.themeControl {
+  display: grid;
+  gap: 7px;
+  padding: 5px 0 2px;
+}
+.themeControl > span {
+  color: #7894ae;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.themeSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 9px;
+  background: rgba(255,255,255,.045);
+}
+.themeSwitch button {
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #91a8bd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: var(--drive-font-xs);
+  font-weight: 850;
+  cursor: pointer;
+}
+.themeSwitch button:hover { background: rgba(255,255,255,.07); color: #f4f9ff; }
+.themeSwitch .themeSwitchActive {
+  background: rgba(36,128,255,.20);
+  color: #bcd8ff;
+  box-shadow: inset 0 0 0 1px rgba(83,153,255,.25);
+}
+
+:global(html[data-drive-theme="dark"]) .shell {
+  --navy: #041220;
+  --navy-2: #071f35;
+  --line: #26394b;
+  --soft: #132130;
+  --muted: #94a8bb;
+  --ink: #e7eef6;
+  --blue: #4a91ff;
+  --cyan: #2cb8d4;
+  background: #07121e;
+  color: var(--ink);
+}
+:global(html[data-drive-theme="dark"]) .main {
+  background: #08131f;
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .projectHeader,
+:global(html[data-drive-theme="dark"]) .toolbar,
+:global(html[data-drive-theme="dark"]) .breadcrumb {
+  background: #0d1a28;
+  border-color: #26394b;
+  color: #c8d7e5;
+}
+:global(html[data-drive-theme="dark"]) .projectIdentity h1 { color: #f0f5fa; }
+:global(html[data-drive-theme="dark"]) .projectMeta,
+:global(html[data-drive-theme="dark"]) .workspaceSelectorLabel,
+:global(html[data-drive-theme="dark"]) .breadcrumb { color: #93a8ba; }
+:global(html[data-drive-theme="dark"]) .projectIcon {
+  border-color: #2b4258;
+  background: #132334;
+  color: #c7daec;
+}
+:global(html[data-drive-theme="dark"]) .activeBadge {
+  background: #123727;
+  color: #71d49c;
+}
+:global(html[data-drive-theme="dark"]) .workspaceSelector,
+:global(html[data-drive-theme="dark"]) .searchBox {
+  border-color: #31475b;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .workspaceSelector:hover,
+:global(html[data-drive-theme="dark"]) .searchBox:focus-within {
+  border-color: #4e7397;
+  background: #14283a;
+}
+:global(html[data-drive-theme="dark"]) .searchBox input { color: #e0e9f2; }
+:global(html[data-drive-theme="dark"]) .searchBox input::placeholder { color: #758da4; }
+
+:global(html[data-drive-theme="dark"]) .toolButton,
+:global(html[data-drive-theme="dark"]) .smallButton,
+:global(html[data-drive-theme="dark"]) .layoutSwitcher button,
+:global(html[data-drive-theme="dark"]) .viewToggle button,
+:global(html[data-drive-theme="dark"]) .fileFolderUpButton,
+:global(html[data-drive-theme="dark"]) .fileFolderAllFilesButton,
+:global(html[data-drive-theme="dark"]) .boxShelfNewButton {
+  border-color: #30475b;
+  background: #122231;
+  color: #c8d7e5;
+}
+:global(html[data-drive-theme="dark"]) .toolButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .smallButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .layoutSwitcher button:hover,
+:global(html[data-drive-theme="dark"]) .viewToggle button:hover,
+:global(html[data-drive-theme="dark"]) .fileFolderUpButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .fileFolderAllFilesButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .boxShelfNewButton:hover {
+  border-color: #4b7195;
+  background: #183047;
+  color: #edf6ff;
+}
+:global(html[data-drive-theme="dark"]) .toolButton:disabled,
+:global(html[data-drive-theme="dark"]) .smallButton:disabled {
+  background: #111c28;
+  border-color: #263746;
+  color: #667b8e;
+}
+:global(html[data-drive-theme="dark"]) .toolPrimary {
+  background: linear-gradient(180deg,#267cff,#1761dc);
+  border-color: #267cff;
+  color: #fff;
+}
+:global(html[data-drive-theme="dark"]) .toolPurple {
+  background: linear-gradient(180deg,#8756df,#6534b5);
+  border-color: #925fe5;
+  color: #fff;
+}
+:global(html[data-drive-theme="dark"]) .toolActive,
+:global(html[data-drive-theme="dark"]) .layoutSwitcher .layoutActive,
+:global(html[data-drive-theme="dark"]) .viewToggle .viewToggleActive {
+  border-color: #4f90e8;
+  background: #153153;
+  color: #8bc0ff;
+}
+
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu,
+:global(html[data-drive-theme="dark"]) .rowActionMenu,
+:global(html[data-drive-theme="dark"]) .dropDescription {
+  border-color: #314559;
+  background: #101e2b;
+  color: #c2d0dd;
+  box-shadow: 0 14px 34px rgba(0,0,0,.34);
+}
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu button,
+:global(html[data-drive-theme="dark"]) .rowActionMenu button { color: #c8d7e4; }
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .rowActionMenu button:hover:not(:disabled) {
+  background: #193149;
+  color: #8fc4ff;
+}
+:global(html[data-drive-theme="dark"]) .toolbarMenuSeparator { background: #293c4e; }
+
+:global(html[data-drive-theme="dark"]) .browser,
+:global(html[data-drive-theme="dark"]) .panel,
+:global(html[data-drive-theme="dark"]) .filePanel,
+:global(html[data-drive-theme="dark"]) .detailsPanel,
+:global(html[data-drive-theme="dark"]) .reviewHost {
+  background: #0b1724;
+  border-color: #26394a;
+}
+:global(html[data-drive-theme="dark"]) .panelHeader,
+:global(html[data-drive-theme="dark"]) .fileFolderNav {
+  border-color: #25384a;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .panelHeader span,
+:global(html[data-drive-theme="dark"]) .filePanelTitle span,
+:global(html[data-drive-theme="dark"]) .filePanelSubtitle,
+:global(html[data-drive-theme="dark"]) .fileFolderPath { color: #8ea3b6; }
+:global(html[data-drive-theme="dark"]) .filePanelTitleMain,
+:global(html[data-drive-theme="dark"]) .displayNameText,
+:global(html[data-drive-theme="dark"]) .fileDisplayNameFallback,
+:global(html[data-drive-theme="dark"]) .tableFolderNameText { color: #dce7f1; }
+:global(html[data-drive-theme="dark"]) .fileRawName { color: #8ea4b8; }
+:global(html[data-drive-theme="dark"]) .folderRow,
+:global(html[data-drive-theme="dark"]) .folderTreeSelect { color: #c1d0dd; }
+:global(html[data-drive-theme="dark"]) .folderRow:hover,
+:global(html[data-drive-theme="dark"]) .folderTreeSelect:hover { background: #14283a; }
+:global(html[data-drive-theme="dark"]) .folderActive {
+  background: #15365a;
+  color: #8ec2ff;
+}
+
+:global(html[data-drive-theme="dark"]) .fileFolderNav select,
+:global(html[data-drive-theme="dark"]) .shell input,
+:global(html[data-drive-theme="dark"]) .shell textarea,
+:global(html[data-drive-theme="dark"]) .shell select {
+  border-color: #31475b;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .shell input::placeholder,
+:global(html[data-drive-theme="dark"]) .shell textarea::placeholder { color: #6f879e; }
+:global(html[data-drive-theme="dark"]) .shell select option {
+  background: #101f2e;
+  color: #dbe7f1;
+}
+
+:global(html[data-drive-theme="dark"]) .fileTable th {
+  background: #101f2e;
+  border-color: #293b4d;
+  color: #93a7ba;
+}
+:global(html[data-drive-theme="dark"]) .fileTable td {
+  border-color: #1c2d3e;
+  color: #cbd9e5;
+  background: #0b1724;
+}
+:global(html[data-drive-theme="dark"]) .fileRow:hover td,
+:global(html[data-drive-theme="dark"]) .tableFolderRow:hover td { background: #112437 !important; }
+:global(html[data-drive-theme="dark"]) .fileSelected td,
+:global(html[data-drive-theme="dark"]) .tableFolderRowSelected td { background: #16375b !important; }
+:global(html[data-drive-theme="dark"]) .folderUpRow td {
+  background: #0e1d2c !important;
+  color: #b8c9d8 !important;
+  border-color: #263a4d !important;
+}
+:global(html[data-drive-theme="dark"]) .folderUpRow:hover td { background: #142a3f !important; }
+:global(html[data-drive-theme="dark"]) .newFolderRow td {
+  background: #10243a !important;
+  border-color: #29445f !important;
+}
+:global(html[data-drive-theme="dark"]) .newFolderInput {
+  border-color: #4e7eac;
+  background: #0c1c2b;
+  color: #e4edf5;
+}
+:global(html[data-drive-theme="dark"]) .statusBadge { background: #172838; color: #aebfd0; }
+:global(html[data-drive-theme="dark"]) .statusAvailable { background: #123928; color: #72d79e; }
+:global(html[data-drive-theme="dark"]) .statusQuarantine { background: #403414; color: #ffd26b; }
+:global(html[data-drive-theme="dark"]) .favoriteToggle { color: #7f95a9; }
+:global(html[data-drive-theme="dark"]) .favoriteToggle:hover:not(:disabled) { background: #493b12; color: #ffd24f; }
+:global(html[data-drive-theme="dark"]) .favoriteToggleActive { color: #ffc62f; }
+:global(html[data-drive-theme="dark"]) .boxCountMarker { background: #17314a; color: #8cc3f5; }
+:global(html[data-drive-theme="dark"]) .rowQuickActions > button { color: #91a6b8; }
+:global(html[data-drive-theme="dark"]) .rowQuickActions > button:hover:not(:disabled) {
+  background: #1a334c;
+  color: #91c7ff;
+}
+:global(html[data-drive-theme="dark"]) .rowQuickActions > .rowTrashAction:hover:not(:disabled) {
+  background: #442127;
+  color: #ff8b92;
+}
+
+:global(html[data-drive-theme="dark"]) .detailsHeaderTitle { color: #e0e9f2; }
+:global(html[data-drive-theme="dark"]) .detailsHeaderText span,
+:global(html[data-drive-theme="dark"]) .metaItem label,
+:global(html[data-drive-theme="dark"]) .detailsTabs button { color: #93a7b9; }
+:global(html[data-drive-theme="dark"]) .detailsTabs .detailsTabActive {
+  border-bottom-color: #4b96ff;
+  color: #79b4ff;
+}
+:global(html[data-drive-theme="dark"]) .previewPlaceholder,
+:global(html[data-drive-theme="dark"]) .infoBox,
+:global(html[data-drive-theme="dark"]) .versionCard,
+:global(html[data-drive-theme="dark"]) .folderPasswordInfo {
+  border-color: #2d4255;
+  background: #101f2d;
+  color: #a7bacb;
+}
+:global(html[data-drive-theme="dark"]) .previewPlaceholder strong,
+:global(html[data-drive-theme="dark"]) .infoBox strong,
+:global(html[data-drive-theme="dark"]) .folderPasswordInfo strong { color: #d9e6f0; }
+
+:global(html[data-drive-theme="dark"]) .noticeError {
+  background: #35191d;
+  color: #ff9da2;
+  border-color: #633039;
+}
+:global(html[data-drive-theme="dark"]) .noticeSuccess,
+:global(html[data-drive-theme="dark"]) .shellNotice {
+  background: #102d21;
+  color: #78d6a0;
+  border-color: #28563e;
+}
+:global(html[data-drive-theme="dark"]) .noticeInfo {
+  background: #122a43;
+  color: #8bc3ff;
+  border-color: #284d71;
+}
+
+:global(html[data-drive-theme="dark"]) .boxShelf,
+:global(html[data-drive-theme="dark"]) .boxShelfContent,
+:global(html[data-drive-theme="dark"]) .boxComposer,
+:global(html[data-drive-theme="dark"]) .boxShelfPanel,
+:global(html[data-drive-theme="dark"]) .boxHistoryPanel {
+  background: #0d1b29;
+  border-color: #2a3e51;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .boxShelfHeader:hover,
+:global(html[data-drive-theme="dark"]) .boxShelfCollapsed .boxShelfHeader:hover { background: #14283a; }
+:global(html[data-drive-theme="dark"]) .boxShelfTitle span,
+:global(html[data-drive-theme="dark"]) .boxComposerHeading span { color: #8ca2b5; }
+:global(html[data-drive-theme="dark"]) .boxComposerBody input,
+:global(html[data-drive-theme="dark"]) .boxComposerBody select,
+:global(html[data-drive-theme="dark"]) .boxItemFolderSelect {
+  background: #101f2e;
+  border-color: #31475a;
+  color: #d7e4ee;
+}
+:global(html[data-drive-theme="dark"]) .boxCard,
+:global(html[data-drive-theme="dark"]) .boxCardBlue,
+:global(html[data-drive-theme="dark"]) .boxCardOrange,
+:global(html[data-drive-theme="dark"]) .boxCardPurple,
+:global(html[data-drive-theme="dark"]) .boxCardGreen,
+:global(html[data-drive-theme="dark"]) .boxCardCyan {
+  background: linear-gradient(145deg,#122335,#0d1a28);
+  color: #d7e3ed;
+  border-color: #35516b;
+}
+
+:global(html[data-drive-theme="dark"]) .projectCreatePanel,
+:global(html[data-drive-theme="dark"]) .issueDialogPanel,
+:global(html[data-drive-theme="dark"]) .folderRenameDialogPanel,
+:global(html[data-drive-theme="dark"]) .folderPasswordDialogPanel,
+:global(html[data-drive-theme="dark"]) .trashDialogPanel {
+  border-color: #30465a;
+  background: #0f1e2c;
+  color: #d6e2ec;
+  box-shadow: 0 26px 72px rgba(0,0,0,.50);
+}
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header strong { color: #e5edf5; }
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header span,
+:global(html[data-drive-theme="dark"]) .projectCreatePanel label { color: #9db0c1; }
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header button,
+:global(html[data-drive-theme="dark"]) .projectCreatePanel footer button {
+  border-color: #31475a;
+  background: #132231;
+  color: #c7d6e3;
+}
+:global(html[data-drive-theme="dark"]) .projectPilotHint {
+  border-color: #315d47;
+  background: #102b20;
+  color: #7bd4a1;
+}
+:global(html[data-drive-theme="dark"]) .trashDialogSummary span {
+  border-color: #304458;
+  background: #122130;
+  color: #a8bbcc;
+}
+:global(html[data-drive-theme="dark"]) .trashDialogSummary strong { color: #e2ebf3; }
+
+:global(html[data-drive-theme="dark"]) .fullTableOverlay { background: #08131f; }
+:global(html[data-drive-theme="dark"]) .fullTableBar,
+:global(html[data-drive-theme="dark"]) .fullTableInspectorPanel {
+  background: #0d1a28;
+  border-color: #293c4f;
+}
+:global(html[data-drive-theme="dark"]) .fullTableIdentity strong { color: #e3ecf4; }
+:global(html[data-drive-theme="dark"]) .compareDiffPanel,
+:global(html[data-drive-theme="dark"]) .visualCompareOverlayViewport,
+:global(html[data-drive-theme="dark"]) .visualCompareFindingsPanel {
+  background: #101f2e;
+  border-color: #304559;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader {
+  border-color: #2d3f50;
+  color: #b792ff !important;
+}
+
+:global(html[data-drive-theme="dark"]) .externalDropOverlay { background: rgba(4,13,23,.86); }
+:global(html[data-drive-theme="dark"]) .externalDropOverlay > div {
+  border-color: #3b5a74;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .externalDropOverlay strong { color: #dcecff; }
+:global(html[data-drive-theme="dark"]) .externalDropOverlay span { color: #95aabd; }
+
+@media (prefers-contrast: more) {
+  :global(html[data-drive-theme="dark"]) .shell {
+    --line: #3a5369;
+    --ink: #f5f9fc;
+  }
+  :global(html[data-drive-theme="dark"]) .fileTable td { color: #e8f0f7; }
+  :global(html[data-drive-theme="dark"]) .fileTable th { color: #b9cad8; }
+}

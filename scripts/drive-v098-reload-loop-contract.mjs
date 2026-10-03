@@ -4,7 +4,7 @@ const shell = fs.readFileSync("components/drive/DriveShell.tsx","utf8");
 const board = fs.readFileSync("components/drive/FloatingProjectBoard.tsx","utf8");
 const buildInfo = fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
 let pass=0; const check=(label,fn)=>{fn();pass+=1;console.log("PASS "+String(pass).padStart(2,"0")+" "+label);};
-check("V0.9.8 development version is active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.8"/));
+check("Drive development version remains on the shared 0.9.x source",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/));
 check("storage quota callback is stable",()=>{
   assert.match(shell,/const handleStorageQuotaChange = useCallback\(/);
   assert.match(shell,/onStorageQuotaChange=\{handleStorageQuotaChange\}/);
