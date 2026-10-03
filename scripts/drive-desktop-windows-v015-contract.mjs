@@ -24,6 +24,7 @@ const checks=[
 ['contract exposes exchange endpoint',/desktopAccessToken: "POST \/api\/drive\/desktop-access\/token"/.test(c)],
 ['no delete operation',!/kind.{0,8}DELETE/i.test(s)&&!/\/delete/.test(s)],
 ['no stray nextCursor brace',!/nextCursor' \$null\}/.test(s)],
+['no top-level exit 0',!/\bexit\s+0\b/i.test(s)],
 
 ['acceptance exact apply marker',/EXACT_APPLY_CONTRACT_PASS/.test(a)],
 ['acceptance delete deny marker',/DELETE_OPERATION_DENY_PASS/.test(a)],

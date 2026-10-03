@@ -6,7 +6,7 @@ param(
 )
 $ErrorActionPreference='Stop'; Set-StrictMode -Version Latest
 if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) { throw ('Missing Drive Desktop script: ' + $ScriptPath) }
-Write-Host 'DIMPRO Drive Desktop V0.1.5 FIX1 Windows acceptance'; Write-Host 'DEV ONLY - PROD DENY'; Write-Host ('PowerShell: ' + $PSVersionTable.PSVersion)
+Write-Host 'DIMPRO Drive Desktop V0.1.5 FIX2 Windows acceptance'; Write-Host 'DEV ONLY - PROD DENY'; Write-Host ('PowerShell: ' + $PSVersionTable.PSVersion)
 $tokens=$null; $errors=$null
 [void][System.Management.Automation.Language.Parser]::ParseFile($ScriptPath,[ref]$tokens,[ref]$errors)
 if($errors.Count -gt 0){foreach($e in $errors){Write-Host ('PARSE_ERROR: '+$e.Message)};throw ('POWERSHELL_PARSE_FAIL count='+$errors.Count)}
@@ -20,4 +20,4 @@ foreach($needle in $required){if($content.IndexOf($needle,[StringComparison]::Or
 if ($content -match '/delete' -or $content -match 'kind.{0,8}DELETE') { throw 'STATIC_GUARD_FAIL destructive delete operation' }
 Write-Host 'STATIC_GUARD_PASS'; Write-Host 'EXACT_APPLY_CONTRACT_PASS'; Write-Host 'DELETE_OPERATION_DENY_PASS'
 if($RunProbe){& $ScriptPath -Mode Probe -AuthMode $AuthMode -ServerUrl $ServerUrl; if($LASTEXITCODE -ne 0){throw ('PROBE_FAIL exit='+$LASTEXITCODE)};Write-Host 'PROBE_PASS'}else{Write-Host 'PROBE_SKIPPED'}
-Write-Host 'DIMPRO_DRIVE_DESKTOP_V015_FIX1_WINDOWS_ACCEPTANCE_PASS'
+Write-Host 'DIMPRO_DRIVE_DESKTOP_V015_FIX2_WINDOWS_ACCEPTANCE_PASS'

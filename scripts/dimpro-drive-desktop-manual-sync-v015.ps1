@@ -467,7 +467,7 @@ if ($Mode -eq 'Apply') {
     safety = [ordered]@{ devOnly = $true; explicitApply = $true; delete = $false }
     generatedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
-  exit 0
+  return
 }
 
 if ($Mode -eq 'Probe') {
@@ -488,7 +488,7 @@ if ($Mode -eq 'Probe') {
     safety = [ordered]@{ devOnly = $true; serverMutation = $false; localMutation = $false; delete = $false }
     generatedAt = (Get-Date).ToUniversalTime().ToString('o')
   })
-  exit 0
+  return
 }
 
 if (-not $ProjectId -or -not $ProjectId.Trim()) { throw 'Plan mode requires ProjectId.' }
