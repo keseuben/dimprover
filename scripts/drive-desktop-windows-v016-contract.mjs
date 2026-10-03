@@ -1,0 +1,41 @@
+import fs from 'node:fs';
+const s=fs.readFileSync(new URL('./dimpro-drive-desktop-manual-sync-v016.ps1',import.meta.url),'utf8');
+const a=fs.readFileSync(new URL('./dimpro-drive-desktop-manual-sync-v016-windows-acceptance.ps1',import.meta.url),'utf8');
+const c=fs.readFileSync(new URL('../app/api/drive/desktop-contract/route.ts',import.meta.url),'utf8');
+const checks=[
+['exact apply mode',/ValidateSet\('Probe','Plan','Apply'\)/.test(s)],
+['upload init',/drive\/uploads\/init/.test(s)],
+['signed PUT',/Invoke-PresignedPutFile/.test(s)],
+['upload complete',/completeUrl/.test(s)&&/Invoke-DrivePostEmpty/.test(s)],
+['upload abort fallback',/abortUrl/.test(s)],
+['download init',/drive\/documents\/.+\/download/.test(s)],
+['signed GET',/Invoke-PresignedGetFile/.test(s)],
+['download size verify',/DOWNLOAD_SIZE_MISMATCH/.test(s)],
+['cursor save',/drive\/sync\/cursor/.test(s)&&/cursorValue/.test(s)],
+['health write gate',/realObjectWriteEnabled/.test(s)],
+['health download gate',/realObjectDownloadEnabled/.test(s)],
+['explicit enable gate',/V016_APPLY_ENABLE_SWITCH_REQUIRED/.test(s)],
+['server mutation gate',/V016_SERVER_MUTATION_APPROVAL_REQUIRED/.test(s)],
+['local mutation gate',/V016_LOCAL_MUTATION_APPROVAL_REQUIRED/.test(s)],
+['plan schema gate',/V016_APPLY_PLAN_SCHEMA_UNSUPPORTED/.test(s)],
+['Bridge DPAPI assembly',/Add-Type -AssemblyName System\.Security/.test(s)],
+['Bridge DPAPI full type',/System\.Security\.Cryptography\.ProtectedData\]::Unprotect/.test(s)&&/System\.Security\.Cryptography\.DataProtectionScope\]::CurrentUser/.test(s)],
+['Bridge DPAPI short type denied',!/\[Security\.Cryptography\.ProtectedData\]/.test(s)],
+['desktop access exchange',/\/api\/drive\/desktop-access\/token/.test(s)],
+['contract advertises desktop access',/currentModes: \["desktop-access"/.test(c)],
+['contract exposes exchange endpoint',/desktopAccessToken: "POST \/api\/drive\/desktop-access\/token"/.test(c)],
+['no delete operation',!/kind.{0,8}DELETE/i.test(s)&&!/\/delete/.test(s)],
+['no stray nextCursor brace',!/nextCursor' \$null\}/.test(s)],
+['no top-level exit 0',!/\bexit\s+0\b/i.test(s)],
+
+['acceptance no LASTEXITCODE',!/LASTEXITCODE/.test(a)],
+['acceptance exact apply marker',/EXACT_APPLY_CONTRACT_PASS/.test(a)],
+['acceptance delete deny marker',/DELETE_OPERATION_DENY_PASS/.test(a)],
+['UTF-8 JSON bytes',/ConvertTo-Utf8JsonBytes/.test(s)&&/application\/json; charset=utf-8/.test(s)],
+['IDictionary safe property helper',/System\.Collections\.IDictionary/.test(s)&&/InputObject\.Contains\(\$Name\)/.test(s)],
+['LOCALAPPDATA fallback',/SpecialFolder\]::LocalApplicationData/.test(s)&&/LOCAL_APP_DATA_NOT_AVAILABLE/.test(s)],
+['no direct critical response ok',!/\$(?:response|init|complete|result|contract)\.ok\b/.test(s)],
+['acceptance V016 marker',/V016_WINDOWS_ACCEPTANCE_PASS/.test(a)],
+['acceptance DPAPI full type gate',/System\.Security\.Cryptography\.ProtectedData/.test(a)&&/short DPAPI type/.test(a)],
+];
+let pass=0;for(const[n,o]of checks){console.log(`${o?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${n}`);if(o)pass++;else process.exitCode=1;}if(pass!==checks.length)throw new Error(`Windows V0.1.6 contract failed ${pass}/${checks.length}`);console.log(`DIMPRO Drive Desktop Windows V0.1.6 contract PASS ${pass}/${checks.length}`);
