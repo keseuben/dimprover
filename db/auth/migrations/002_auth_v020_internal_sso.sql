@@ -2,9 +2,9 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS auth_clients (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id text NOT NULL UNIQUE,
+  client_id text NOT NULL UNIQUE CHECK (client_id ~ '^dimpro-[a-z0-9-]{3,80}$'),
   name text NOT NULL,
-  product_code text NOT NULL,
+  product_code text NOT NULL REFERENCES auth_products(code),
   required_permission_code text NOT NULL REFERENCES auth_permissions(code),
   environment text NOT NULL CHECK (environment IN ('DEV','PROD')),
   status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED')),

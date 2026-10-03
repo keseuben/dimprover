@@ -9,6 +9,9 @@ export type DimproAuthConfig = {
   otpEmailWindowMaxRequests: number;
   otpIpWindowMinutes: number;
   otpIpWindowMaxRequests: number;
+  ssoWindowMinutes: number;
+  ssoAuthorizeIpMaxRequests: number;
+  ssoTokenIpMaxRequests: number;
   sessionAbsoluteSeconds: number;
   sessionInactivitySeconds: number;
   sessionTouchIntervalSeconds: number;
@@ -47,6 +50,9 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     otpEmailWindowMaxRequests: boundedInteger("DIMPRO_AUTH_OTP_EMAIL_WINDOW_MAX_REQUESTS", 5, 1, 50),
     otpIpWindowMinutes: boundedInteger("DIMPRO_AUTH_OTP_IP_WINDOW_MINUTES", 15, 1, 120),
     otpIpWindowMaxRequests: boundedInteger("DIMPRO_AUTH_OTP_IP_WINDOW_MAX_REQUESTS", 20, 1, 200),
+    ssoWindowMinutes: boundedInteger("DIMPRO_AUTH_SSO_WINDOW_MINUTES", 10, 1, 60),
+    ssoAuthorizeIpMaxRequests: boundedInteger("DIMPRO_AUTH_SSO_AUTHORIZE_IP_MAX_REQUESTS", 60, 5, 500),
+    ssoTokenIpMaxRequests: boundedInteger("DIMPRO_AUTH_SSO_TOKEN_IP_MAX_REQUESTS", 120, 5, 1000),
     sessionAbsoluteSeconds: boundedInteger("DIMPRO_AUTH_SESSION_ABSOLUTE_SECONDS", 14 * 86400, 300, 30 * 86400),
     sessionInactivitySeconds: boundedInteger("DIMPRO_AUTH_SESSION_INACTIVITY_SECONDS", 24 * 3600, 300, 14 * 86400),
     sessionTouchIntervalSeconds: boundedInteger("DIMPRO_AUTH_SESSION_TOUCH_INTERVAL_SECONDS", 5 * 60, 30, 3600),

@@ -397,6 +397,7 @@ export async function hasAuthPermission(input: { userId: string; permissionCode:
          LEFT JOIN auth_products product ON product.id=g.product_id
         WHERE g.user_id=$1
           AND p.code=$2
+          AND ($3::text IS NULL OR product.status='ACTIVE')
           AND g.revoked_at IS NULL
           AND g.valid_from<=now()
           AND (g.valid_until IS NULL OR g.valid_until>=now())
@@ -461,6 +462,7 @@ export async function getAuthClient(clientId: string, redirectUri?: string | nul
   const result = await authQuery<AuthClientRow>(
     `SELECT c.id,c.client_id,c.product_code,c.required_permission_code,c.environment,c.status
        FROM auth_clients c
+       JOIN auth_products client_product ON client_product.code=c.product_code AND client_product.status='ACTIVE'
       WHERE c.client_id=$1 AND c.status='ACTIVE'
         AND ($2::text IS NULL OR EXISTS(
           SELECT 1 FROM auth_client_redirect_uris r
@@ -481,9 +483,30 @@ export async function createAuthorizationRequest(input: {
   environment: "DEV" | "PROD";
   ip: string | null;
   userAgent: string;
+  correlationId: string;
 }) {
+  const config = getDimproAuthConfig();
+  if (input.ip) {
+    const recent = await authQuery<{ count: string }>(
+      `SELECT count(*)::text AS count FROM auth_audit_events
+       WHERE event_type='SSO_AUTHORIZE_REQUEST' AND ip_address=$1::inet
+         AND created_at >= now() - ($2::text || ' minutes')::interval`,
+      [input.ip, config.ssoWindowMinutes],
+    );
+    if (Number(recent.rows[0]?.count || 0) >= config.ssoAuthorizeIpMaxRequests) {
+      await recordAuthAuditEvent({
+        eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "RATE_LIMIT_IP",
+        ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId },
+      });
+      throw new DimproAuthError("SSO authorize IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési kérés történt. Próbáld újra később.");
+    }
+  }
   const client = await getAuthClient(input.clientId, input.redirectUri, input.environment);
   if (!client) {
+    await recordAuthAuditEvent({
+      eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "CLIENT_INVALID",
+      ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, environment: input.environment },
+    });
     throw new DimproAuthError("Unknown client or redirect URI.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás visszatérési címe nem engedélyezett.");
   }
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -492,6 +515,10 @@ export async function createAuthorizationRequest(input: {
      VALUES ($1,$2,$3,$4,'S256',$5::inet,$6,$7) RETURNING id`,
     [client.id, input.redirectUri, input.state, input.codeChallenge, input.ip, input.userAgent, expiresAt],
   );
+  await recordAuthAuditEvent({
+    eventType: "SSO_AUTHORIZE_REQUEST", method: "AUTHORIZATION_CODE", result: "ACCEPTED",
+    ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId, requestId: created.rows[0]!.id, environment: input.environment },
+  });
   return { requestId: created.rows[0]!.id, expiresAt };
 }
 
@@ -521,6 +548,7 @@ export async function issueAuthorizationCodeFromRequest(input: {
            JOIN auth_permissions p ON p.id=rp.permission_id
            JOIN auth_products product ON product.id=g.product_id
           WHERE g.user_id=$1
+            AND product.status='ACTIVE'
             AND p.code=$2
             AND product.code=$3
             AND g.revoked_at IS NULL
@@ -587,6 +615,21 @@ export async function exchangeAuthorizationCode(input: {
 }) {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
+    if (input.ip) {
+      const recent = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM auth_audit_events
+         WHERE event_type='SSO_TOKEN_EXCHANGE' AND ip_address=$1::inet
+           AND created_at >= now() - ($2::text || ' minutes')::interval`,
+        [input.ip, config.ssoWindowMinutes],
+      );
+      if (Number(recent.rows[0]?.count || 0) >= config.ssoTokenIpMaxRequests) {
+        await appendAudit(client, {
+          eventType: "SSO_TOKEN_EXCHANGE", method: "AUTHORIZATION_CODE", result: "RATE_LIMIT_IP",
+          ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId },
+        });
+        throw new DimproAuthError("SSO token IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési visszaigazolás történt. Próbáld újra később.");
+      }
+    }
     const codeResult = await client.query<AuthorizationCodeRow>(
       `SELECT ac.id,ac.client_id AS client_db_id,c.client_id,c.product_code,c.required_permission_code,c.environment,ac.user_id,ac.auth_session_id,ac.redirect_uri,ac.code_challenge,ac.code_challenge_method,ac.expires_at,ac.consumed_at,
               (s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now() AND s.user_session_version=u.session_version) AS auth_session_valid
@@ -645,7 +688,7 @@ export async function exchangeAuthorizationCode(input: {
            JOIN auth_role_permissions rp ON rp.role_id=g.role_id
            JOIN auth_permissions p ON p.id=rp.permission_id
            JOIN auth_products product ON product.id=g.product_id
-          WHERE g.user_id=$1 AND p.code=$2 AND product.code=$3
+          WHERE g.user_id=$1 AND product.status='ACTIVE' AND p.code=$2 AND product.code=$3
             AND g.revoked_at IS NULL AND g.valid_from<=now()
             AND (g.valid_until IS NULL OR g.valid_until>=now())
        ) AS allowed`,
@@ -790,6 +833,7 @@ export async function listAuthPermissions(userId: string) {
        JOIN auth_permissions p ON p.id=rp.permission_id
        LEFT JOIN auth_products product ON product.id=g.product_id
       WHERE g.user_id=$1
+        AND (product.id IS NULL OR product.status='ACTIVE')
         AND g.revoked_at IS NULL
         AND g.valid_from<=now()
         AND (g.valid_until IS NULL OR g.valid_until>=now())

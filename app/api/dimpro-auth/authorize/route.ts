@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         environment,
         ip: getDimproAuthRequestIp(request.headers),
         userAgent: getDimproAuthUserAgent(request.headers),
+        correlationId,
       });
       requestId = created.requestId;
     } else if (!validRequestId(requestId)) {

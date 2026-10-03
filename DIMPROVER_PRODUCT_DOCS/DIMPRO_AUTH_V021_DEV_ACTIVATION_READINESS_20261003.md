@@ -22,7 +22,7 @@ Dátum: 2026-10-03
 
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
-- AUTH V0.2 SSO contract: 27/27 PASS.
+- AUTH V0.2 SSO contract: 31/31 PASS.
 - AUTH V0.2.1 security contract: 27/27 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
@@ -50,3 +50,10 @@ Dátum: 2026-10-03
 - Minden AUTH kliens kötelező `required_permission_code` mezőt kap; a Drive DEV kliens `drive.access` jogosultságot követel.
 - Authorization code csak aktív termékjogosultság mellett adható ki; a token exchange ugyanezt ismét ellenőrzi.
 - Az `auth.dev.dimpro.hu` kizárólag DEV klienst, az `auth.dimpro.hu` kizárólag PROD klienst fogad; környezetek közötti code exchange fail-closed.
+
+## SSO abuse protection
+
+- Authorization request és code-exchange IP-alapú, közös DB-audit eseményekből számolt rate limitet kapott.
+- Alapérték: 10 perces ablak, authorize 60/IP, token exchange 120/IP; környezeti változókkal szűkíthető.
+- Tiltáskor is audit esemény készül, így az ismételt támadási kísérletek nem maradnak láthatatlanok.
+- Inaktív termék nem adhat jogosultságot és SSO kliens sem használható hozzá.

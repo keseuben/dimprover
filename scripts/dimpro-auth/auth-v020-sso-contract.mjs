@@ -39,5 +39,9 @@ check("callback exchanges code server-side",()=>assert.match(callback,/\/api\/di
 check("Drive proxy uses product app session",()=>{assert.match(proxy,/DIMPRO_APP_SESSION_COOKIE/);assert.match(proxy,/getAppSessionByToken/);assert.match(proxy,/dimpro-drive-dev/)});
 check("SSO client requires a product permission",()=>{assert.match(migration,/required_permission_code/);assert.match(migration,/drive\.access/);assert.match(repo,/MISSING_PERMISSION/)});
 check("DEV and PROD clients are environment-bound",()=>{const authorize=read("app/api/dimpro-auth/authorize/route.ts");const token=read("app/api/dimpro-auth/token/route.ts");assert.match(authorize,/centralAuthEnvironment/);assert.match(token,/centralAuthEnvironment/);assert.match(repo,/code\.environment !== input\.environment/)});
+check("disabled product blocks SSO and permission use",()=>{assert.match(repo,/client_product\.status='ACTIVE'/);assert.ok((repo.match(/product\.status='ACTIVE'/g)||[]).length>=2)});
+check("Drive callback preserves a safe return query string",()=>{assert.match(callback,/new URL\(flow\.returnTo, request\.nextUrl\.origin\)/);assert.match(callback,/target\.search = destination\.search/)});
+check("SSO client identifiers and products are database constrained",()=>{assert.match(migration,/client_id ~ '\^dimpro-/);assert.match(migration,/REFERENCES auth_products\(code\)/)});
+check("SSO authorize and token exchange are IP rate limited",()=>{const config=read("app/lib/dimpro-auth/config.ts");assert.match(config,/DIMPRO_AUTH_SSO_AUTHORIZE_IP_MAX_REQUESTS/);assert.match(config,/DIMPRO_AUTH_SSO_TOKEN_IP_MAX_REQUESTS/);assert.match(repo,/SSO_AUTHORIZE_REQUEST/);assert.match(repo,/AUTH_SSO_RATE_LIMIT/);assert.match(repo,/ssoTokenIpMaxRequests/)});
 check("friendly login host redirects to auth host",()=>{assert.match(proxy,/login\.dev\.dimpro\.hu/);assert.match(proxy,/auth\.dev\.dimpro\.hu/)});
 console.log(`DIMPRO AUTH V0.2 internal SSO contract PASS · ${n}/${n}`);

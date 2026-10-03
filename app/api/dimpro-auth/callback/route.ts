@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
   cookieStore.set(DIMPRO_APP_SESSION_COOKIE, payload.app_session_token, appSessionCookieOptions(getDimproAuthConfig().sessionAbsoluteSeconds));
   cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
   const target = request.nextUrl.clone();
-  target.pathname = flow.returnTo;
-  target.search = "";
+  const destination = new URL(flow.returnTo, request.nextUrl.origin);
+  target.pathname = destination.pathname;
+  target.search = destination.search;
+  target.hash = "";
   return NextResponse.redirect(target);
 }
