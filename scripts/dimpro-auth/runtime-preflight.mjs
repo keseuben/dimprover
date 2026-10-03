@@ -18,9 +18,13 @@ for(const [kind,url,user] of [["runtime",runtime,expectedRuntimeUser],["migrator
   const db=decodeURIComponent(url.pathname.replace(/^\//,""));
   if(!/^postgres(ql)?:$/.test(url.protocol))throw new Error(`${kind}: csak PostgreSQL URL engedélyezett.`);
   if(url.hostname!=="db.dimpro.hu")throw new Error(`${kind}: kötelező host db.dimpro.hu.`);
+  if((url.port||"5432")!=="5432")throw new Error(`${kind}: kötelező port 5432.`);
   if(db!==expectedDatabase)throw new Error(`${kind}: várt adatbázis ${expectedDatabase}, kapott ${db||"(üres)"}.`);
   if(decodeURIComponent(url.username)!==user)throw new Error(`${kind}: várt role ${user}.`);
   if(!url.password)throw new Error(`${kind}: adatbázis-jelszó hiányzik.`);
+  for(const name of ["sslmode","sslcert","sslkey","sslrootcert"]){
+    if(url.searchParams.has(name))throw new Error(`${kind}: a DB URL nem tartalmazhat ${name} paramétert.`);
+  }
 }
 if(runtime.href===migrator.href)throw new Error("A runtime és migrator connection string nem lehet azonos.");
 

@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 34/34 PASS.
-- AUTH V0.2.1 security contract: 42/42 PASS.
+- AUTH V0.2.1 security contract: 43/43 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -114,3 +114,9 @@ Dátum: 2026-10-03
 - Az SSO `return_to` nem tetszőleges helyi útvonal: kizárólag a Drive workspace `/drive` vagy `/drive/...` útvonalai engedélyezettek.
 - A validáció URL-parserrel ellenőrzi a same-origin tulajdonságot, elutasítja a backslash/control karakteres, fragmentes és 500 karakternél hosszabb értékeket.
 - Ugyanez a validáció érvényes a start kérésnél és a HMAC-aláírt átmeneti SSO cookie visszaolvasásakor is.
+
+## DB connection-string hardening
+
+- Runtime és aktiválási ellenőrzés kizárólag `db.dimpro.hu:5432` host/portot, a környezethez tartozó adatbázist és role-t fogadja el.
+- Az URL-ben `sslmode`, `sslcert`, `sslkey`, `sslrootcert` paraméter nem engedélyezett, így a külön kötelező `verify-full` TLS beállítást connection-string paraméterrel nem lehet felülírni.
+- Üres DB-jelszó runtime/preflight szinten is fail-closed.

@@ -12,7 +12,11 @@ export function assertDevAuthDatabaseUrl(raw, allowedUsers) {
   try { url=new URL(raw); } catch { throw new Error("A DIMPRO AUTH DEV PostgreSQL connection string érvénytelen."); }
   if(!/^postgres(ql)?:$/.test(url.protocol)) throw new Error("Csak PostgreSQL connection string engedélyezett.");
   if(url.hostname!=="db.dimpro.hu") throw new Error("A DEV AUTH DB host kizárólag db.dimpro.hu lehet.");
+  if((url.port||"5432")!=="5432") throw new Error("A DEV AUTH DB port kizárólag 5432 lehet.");
   if(decodeURIComponent(url.pathname.replace(/^\//,""))!=="dimpro_auth_dev") throw new Error("A DEV AUTH adatbázis kizárólag dimpro_auth_dev lehet.");
+  for(const name of ["sslmode","sslcert","sslkey","sslrootcert"]){
+    if(url.searchParams.has(name)) throw new Error(`A DEV AUTH DB URL nem tartalmazhat ${name} paramétert; a TLS konfiguráció külön, verify-full módban kötelező.`);
+  }
   const users=Array.isArray(allowedUsers)?allowedUsers:[allowedUsers];
   const user=decodeURIComponent(url.username);
   if(!users.includes(user)) throw new Error(`Nem engedélyezett DEV AUTH DB role: ${user||"(üres)"}.`);

@@ -56,8 +56,17 @@ export function getDimproAuthConfig(): DimproAuthConfig {
   const expectedUser = environment === "DEV" ? "dimpro_auth_app_dev" : "dimpro_auth_app_prod";
   const databaseName = decodeURIComponent(parsedDatabaseUrl.pathname.replace(/^\//, ""));
   const databaseUser = decodeURIComponent(parsedDatabaseUrl.username);
-  if (parsedDatabaseUrl.hostname !== "db.dimpro.hu" || databaseName !== expectedDatabase || databaseUser !== expectedUser) {
-    throw new Error(`DIMPRO AUTH ${environment} adatbázis-kapcsolat eltér a kötelező host/database/runtime-role kötéstől.`);
+  const databasePort = parsedDatabaseUrl.port || "5432";
+  const forbiddenSslParameters = ["sslmode", "sslcert", "sslkey", "sslrootcert"].filter((name) => parsedDatabaseUrl.searchParams.has(name));
+  if (
+    parsedDatabaseUrl.hostname !== "db.dimpro.hu"
+    || databasePort !== "5432"
+    || databaseName !== expectedDatabase
+    || databaseUser !== expectedUser
+    || !parsedDatabaseUrl.password
+    || forbiddenSslParameters.length > 0
+  ) {
+    throw new Error(`DIMPRO AUTH ${environment} adatbázis-kapcsolat eltér a kötelező host/port/database/runtime-role/TLS kötéstől.`);
   }
   const sslMode = (process.env.DIMPRO_AUTH_DB_SSL_MODE || "verify-full").trim().toLowerCase();
   if (sslMode !== "verify-full") {
