@@ -452,7 +452,7 @@ if ($Mode -eq 'Apply') {
     }
   }
   $cursorResult = $null
-  $nextCursorValue = Get-ObjectPropertyValue $plan 'nextCursor' $null}
+  $nextCursorValue = Get-ObjectPropertyValue $plan 'nextCursor' $null
   if ($null -ne $nextCursorValue) {
     $cursorResult = Save-DesktopCursor $planProjectId ([long]$nextCursorValue) $results.Count
   }
