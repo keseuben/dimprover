@@ -133,9 +133,25 @@ function Get-ObjectPropertyValue {
   return $property.Value
 }
 
-function ConvertTo-Utf8JsonBytes($Body) {
-  $json = $Body | ConvertTo-Json -Depth 12 -Compress
-  return [Text.Encoding]::UTF8.GetBytes($json)
+function Get-HttpErrorSummary($ErrorRecord) {
+  try {
+    $response = $ErrorRecord.Exception.Response
+    if ($null -eq $response) { return '' }
+    $stream = $response.GetResponseStream()
+    if ($null -eq $stream) { return '' }
+    $reader = New-Object System.IO.StreamReader($stream, [Text.Encoding]::UTF8)
+    try { $raw = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    if (-not $raw) { return '' }
+    try {
+      $parsed = $raw | ConvertFrom-Json
+      $code = [string](Get-ObjectPropertyValue $parsed 'code' '')
+      $message = [string](Get-ObjectPropertyValue $parsed 'error' '')
+      if ($code -or $message) { return (($code + ': ' + $message).Trim(': ')) }
+    } catch { }
+    return $raw.Substring(0, [Math]::Min(500, $raw.Length))
+  } catch {
+    return ''
+  }
 }
 
 function ConvertTo-HeaderHashtable($InputObject) {
@@ -149,14 +165,27 @@ function ConvertTo-HeaderHashtable($InputObject) {
 
 function Invoke-DrivePostJson([string]$Path, $Body) {
   $uri = if ($Path.StartsWith('https://')) { $Path } else { $ServerUrl.TrimEnd('/') + $Path }
-  $bodyBytes = ConvertTo-Utf8JsonBytes $Body
-  return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
+  $json = $Body | ConvertTo-Json -Depth 12 -Compress
+  [byte[]]$bodyBytes = [Text.Encoding]::UTF8.GetBytes([string]$json)
+  try {
+    return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
+  } catch {
+    $summary = Get-HttpErrorSummary $_
+    if ($summary) { throw ('DRIVE_HTTP_POST_FAILED ' + $summary) }
+    throw
+  }
 }
 
 function Invoke-DrivePostEmpty([string]$Path) {
   $uri = if ($Path.StartsWith('https://')) { $Path } else { $ServerUrl.TrimEnd('/') + $Path }
-  $bodyBytes = [Text.Encoding]::UTF8.GetBytes('{}')
-  return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
+  [byte[]]$bodyBytes = [Text.Encoding]::UTF8.GetBytes('{}')
+  try {
+    return Invoke-RestMethod -Method Post -Uri $uri -Headers (Get-DriveHeaders) -ContentType 'application/json; charset=utf-8' -Body $bodyBytes -TimeoutSec 60
+  } catch {
+    $summary = Get-HttpErrorSummary $_
+    if ($summary) { throw ('DRIVE_HTTP_POST_FAILED ' + $summary) }
+    throw
+  }
 }
 
 function Read-ApplyPlan([string]$Path) {

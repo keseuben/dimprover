@@ -15,10 +15,12 @@ $sha=(Get-FileHash -LiteralPath $ScriptPath -Algorithm SHA256).Hash.ToLowerInvar
 $content=Get-Content -LiteralPath $ScriptPath -Raw
 $forbidden=@('Invoke-Expression','Start-Process','cmd.exe','powershell.exe -Command')
 foreach($needle in $forbidden){if($content.IndexOf($needle,[StringComparison]::OrdinalIgnoreCase)-ge 0){throw ('STATIC_GUARD_FAIL forbidden='+$needle)}}
-$required=@('Invoke-DesktopUpload','Invoke-DesktopDownload','Save-DesktopCursor','V016_APPLY_ENABLE_SWITCH_REQUIRED','V016_SERVER_MUTATION_APPROVAL_REQUIRED','V016_LOCAL_MUTATION_APPROVAL_REQUIRED','V016_APPLY_PLAN_FILE_REQUIRED','DRIVE_OBJECT_WRITE_NOT_READY','DRIVE_OBJECT_DOWNLOAD_NOT_READY','UPLOAD_COMPLETE_SHA256_MISMATCH','DOWNLOAD_SIZE_MISMATCH','Add-Type -AssemblyName System.Security','System.Security.Cryptography.ProtectedData]::Unprotect','System.Security.Cryptography.DataProtectionScope]::CurrentUser','/api/drive/desktop-access/token','ConvertTo-Utf8JsonBytes','application/json; charset=utf-8','System.Collections.IDictionary','LOCAL_APP_DATA_NOT_AVAILABLE')
+$required=@('Invoke-DesktopUpload','Invoke-DesktopDownload','Save-DesktopCursor','V016_APPLY_ENABLE_SWITCH_REQUIRED','V016_SERVER_MUTATION_APPROVAL_REQUIRED','V016_LOCAL_MUTATION_APPROVAL_REQUIRED','V016_APPLY_PLAN_FILE_REQUIRED','DRIVE_OBJECT_WRITE_NOT_READY','DRIVE_OBJECT_DOWNLOAD_NOT_READY','UPLOAD_COMPLETE_SHA256_MISMATCH','DOWNLOAD_SIZE_MISMATCH','Add-Type -AssemblyName System.Security','System.Security.Cryptography.ProtectedData]::Unprotect','System.Security.Cryptography.DataProtectionScope]::CurrentUser','/api/drive/desktop-access/token','application/json; charset=utf-8','System.Collections.IDictionary','LOCAL_APP_DATA_NOT_AVAILABLE','Get-HttpErrorSummary','DRIVE_HTTP_POST_FAILED')
 foreach($needle in $required){if($content.IndexOf($needle,[StringComparison]::Ordinal)-lt 0){throw ('STATIC_GUARD_FAIL missing='+$needle)}}
 if ($content -match '/delete' -or $content -match 'kind.{0,8}DELETE') { throw 'STATIC_GUARD_FAIL destructive delete operation' }
 if ($content -match '\[Security\.Cryptography\.ProtectedData\]') { throw 'STATIC_GUARD_FAIL short DPAPI type' }
+if ($content -match 'function\s+ConvertTo-Utf8JsonBytes') { throw 'STATIC_GUARD_FAIL enumerating byte helper' }
+if ($content -notmatch '\[byte\[\]\]\$bodyBytes\s*=\s*\[Text\.Encoding\]::UTF8\.GetBytes') { throw 'STATIC_GUARD_FAIL direct UTF8 byte body missing' }
 if ($content -match '(?m)^\s*exit\b') { throw 'STATIC_GUARD_FAIL top-level exit' }
 if ($content.IndexOf(('$LAST' + 'EXITCODE'),[StringComparison]::Ordinal)-ge 0) { throw ('STATIC_GUARD_FAIL ' + 'LAST' + 'EXITCODE') }
 Write-Host 'STATIC_GUARD_PASS'; Write-Host 'EXACT_APPLY_CONTRACT_PASS'; Write-Host 'DELETE_OPERATION_DENY_PASS'
