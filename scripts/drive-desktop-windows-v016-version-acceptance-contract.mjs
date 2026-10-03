@@ -4,6 +4,7 @@ const checks=[
 ['explicit confirm gate',/ConfirmDevMutation/.test(s)&&/CONFIRM_DEV_MUTATION_REQUIRED/.test(s)],
 ['DEV host allowlist',/drive\.dev\.dimpro\.hu/.test(s)&&/DEV_SERVER_REQUIRED/.test(s)],
 ['V016 main script',/dimpro-drive-desktop-manual-sync-v016\.ps1/.test(s)],
+['main script invocation exact', (s.match(/& \$mainScript `\n/g)||[]).length===2 && !/&mainScript/.test(s)],
 ['Bridge auth only',/-AuthMode Bridge/.test(s)],
 ['UPLOAD_VERSION only',/kind = 'UPLOAD_VERSION'/.test(s)&&!/kind = 'UPLOAD_NEW'/.test(s)],
 ['optimistic version lock',/expectedCurrentVersion = \$ExpectedCurrentVersion/.test(s)],

@@ -75,7 +75,7 @@ $uploadPlan = [ordered]@{
 }
 $uploadPlan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $uploadPlanPath -Encoding UTF8
 
-&mainScript `
+& $mainScript `
   -Mode Apply `
   -AuthMode Bridge `
   -ServerUrl $ServerUrl `
