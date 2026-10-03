@@ -39,6 +39,19 @@ export function createAuthorizationCode() {
   return randomBytes(32).toString("base64url");
 }
 
+export function isSafeDriveReturnTo(value: unknown): value is string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 500 || /[\\\u0000-\u001f\u007f]/.test(value)) return false;
+  try {
+    const base = new URL("https://drive.invalid/");
+    const target = new URL(value, base);
+    return target.origin === base.origin
+      && (target.pathname === "/drive" || target.pathname.startsWith("/drive/"))
+      && !target.hash;
+  } catch {
+    return false;
+  }
+}
+
 export function hashAuthorizationCode(code: string) {
   return createHmac("sha256", ssoSecret()).update(`dimpro-auth-code:v1:${code}`, "utf8").digest();
 }
@@ -69,9 +82,7 @@ export function decodeSsoFlowCookie(raw: string): DimproSsoFlowCookie | null {
       || !/^[A-Za-z0-9_-]{32,200}$/.test(flow.state)
       || !/^[A-Za-z0-9_-]{43,128}$/.test(flow.verifier)
       || !/^dimpro-[a-z0-9-]+$/.test(flow.clientId)
-      || typeof flow.returnTo !== "string"
-      || !flow.returnTo.startsWith("/")
-      || flow.returnTo.startsWith("//")
+      || !isSafeDriveReturnTo(flow.returnTo)
       || !Number.isSafeInteger(flow.createdAt)
       || Date.now() - flow.createdAt > 10 * 60 * 1000
     ) return null;

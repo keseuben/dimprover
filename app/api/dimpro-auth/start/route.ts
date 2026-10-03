@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createPkceChallenge, createPkceVerifier, createSsoState, DIMPRO_SSO_FLOW_COOKIE, encodeSsoFlowCookie, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
+import { createPkceChallenge, createPkceVerifier, createSsoState, DIMPRO_SSO_FLOW_COOKIE, encodeSsoFlowCookie, isSafeDriveReturnTo, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
 import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function safeReturnTo(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.length > 500) return "/drive";
-  return value;
+  return isSafeDriveReturnTo(value) ? value : "/drive";
 }
 
 export async function GET(request: NextRequest) {

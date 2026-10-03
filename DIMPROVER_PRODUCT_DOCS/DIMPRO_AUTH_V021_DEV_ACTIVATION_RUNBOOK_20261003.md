@@ -97,3 +97,9 @@ PROD aktiválást ez a runbook nem végez és nem engedélyez.
 - Az OTP e-mail/IP és SSO authorize/token rate-limit ellenőrzések tranzakciós advisory lockot használnak, ezért párhuzamos kérésekkel nem lehet a cooldown/limit számlálást egyszerű race conditionnel túllépni.
 - OTP esetén e-mail és IP kulcs külön lockot kap; SSO esetén authorize-IP és token-IP külön kulcsot kap.
 - A lockok csak a tranzakció élettartamáig élnek, így nem marad tartós zárolás hiba után.
+
+## Drive return target hardening
+
+- Az SSO `return_to` nem tetszőleges helyi útvonal: kizárólag a Drive workspace `/drive` vagy `/drive/...` útvonalai engedélyezettek.
+- A validáció URL-parserrel ellenőrzi a same-origin tulajdonságot, elutasítja a backslash/control karakteres, fragmentes és 500 karakternél hosszabb értékeket.
+- Ugyanez a validáció érvényes a start kérésnél és a HMAC-aláírt átmeneti SSO cookie visszaolvasásakor is.

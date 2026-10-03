@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 ## Tesztállapot
 
 - AUTH V0.1 contract: 22/22 PASS.
-- AUTH V0.2 internal SSO contract: 33/33 PASS.
+- AUTH V0.2 internal SSO contract: 34/34 PASS.
 - AUTH V0.2.1 security contract: 42/42 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
@@ -151,3 +151,9 @@ A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált 
 - Az OTP e-mail/IP és SSO authorize/token rate-limit ellenőrzések tranzakciós advisory lockot használnak, ezért párhuzamos kérésekkel nem lehet a cooldown/limit számlálást egyszerű race conditionnel túllépni.
 - OTP esetén e-mail és IP kulcs külön lockot kap; SSO esetén authorize-IP és token-IP külön kulcsot kap.
 - A lockok csak a tranzakció élettartamáig élnek, így nem marad tartós zárolás hiba után.
+
+## Drive return target hardening
+
+- Az SSO `return_to` nem tetszőleges helyi útvonal: kizárólag a Drive workspace `/drive` vagy `/drive/...` útvonalai engedélyezettek.
+- A validáció URL-parserrel ellenőrzi a same-origin tulajdonságot, elutasítja a backslash/control karakteres, fragmentes és 500 karakternél hosszabb értékeket.
+- Ugyanez a validáció érvényes a start kérésnél és a HMAC-aláírt átmeneti SSO cookie visszaolvasásakor is.
