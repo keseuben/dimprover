@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bearerToken, windowsBridgeApiError } from "@/app/lib/dev-center/terminal-hub/windows-bridge-api";
-import { authenticateWindowsBridgeDevice } from "@/app/lib/dev-center/terminal-hub/windows-bridge-pairing";
+import { authenticateWindowsBridgeDeviceForDriveDesktop } from "@/app/lib/dev-center/terminal-hub/windows-bridge-pairing";
 import { issueDriveDesktopAccessToken } from "@/app/lib/drive/desktopAccessToken";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
         { status: 401, headers: { "cache-control": "no-store" } },
       );
     }
-    const { device } = await authenticateWindowsBridgeDevice(bridgeToken);
+    const { device } = await authenticateWindowsBridgeDeviceForDriveDesktop(bridgeToken);
     const clientId = request.headers.get("x-dimpro-drive-client-id")?.trim() || `drive-desktop-${String(device.id)}`;
     const issued = issueDriveDesktopAccessToken({
       deviceId: String(device.id),

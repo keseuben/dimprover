@@ -2,6 +2,7 @@ import fs from 'node:fs';
 const token = fs.readFileSync(new URL('../app/lib/drive/desktopAccessToken.ts', import.meta.url), 'utf8');
 const route = fs.readFileSync(new URL('../app/api/drive/desktop-access/token/route.ts', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../app/lib/drive/driveApi.ts', import.meta.url), 'utf8');
+const pairing = fs.readFileSync(new URL('../app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts', import.meta.url), 'utf8');
 const checks = [
   ['token prefix', /TOKEN_PREFIX = "dpat1"/.test(token)],
   ['HMAC SHA256', /createHmac\("sha256"/.test(token)],
@@ -10,7 +11,10 @@ const checks = [
   ['secret file fallback', /DEFAULT_SECRET_FILE/.test(token) && /readFileSync/.test(token)],
   ['timing safe compare', /timingSafeEqual/.test(token)],
   ['expiry validation', /claims\.exp <= now/.test(token)],
-  ['bridge auth exchange', /authenticateWindowsBridgeDevice/.test(route)],
+  ['drive-specific bridge auth exchange', /authenticateWindowsBridgeDeviceForDriveDesktop/.test(route)],
+  ['drive auth verifier exported', /export async function authenticateWindowsBridgeDeviceForDriveDesktop/.test(pairing)],
+  ['generic bridge auth still gated', /export async function authenticateWindowsBridgeDevice[\s\S]{0,180}assertBridgeEnabled\(\)/.test(pairing)],
+  ['drive auth verifier uses active-token core', /authenticateWindowsBridgeDeviceForDriveDesktop[\s\S]{0,180}authenticateWindowsBridgeActiveDeviceToken/.test(pairing)],
   ['no-store response', /cache-control/.test(route)],
   ['desktop access auth mode', /"desktop-access"/.test(api)],
   ['bearer access verification', /verifyDriveDesktopAccessToken/.test(api)],
