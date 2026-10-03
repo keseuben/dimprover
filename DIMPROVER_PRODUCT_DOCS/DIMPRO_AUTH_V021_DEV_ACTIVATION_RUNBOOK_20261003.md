@@ -180,3 +180,9 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A `session` és `logout` végpont kettős szerepű: csak központi AUTH host vagy explicit Drive host engedélyezett.
 - A Drive `/login` többé nem rendereli közvetlenül a központi OTP UI-t; a Drive SSO start végpontjára irányít, amely ezután az AUTH hostra visz.
 - Ezzel az `__Host-dimpro_auth` cookie nem kerülhet véletlenül termékhostra.
+
+## Central-host-only health and launcher
+
+- `/health/live`, `/health/ready`, `/health/auth` és `/auth/apps` csak a technikai AUTH hoston használható.
+- A health endpointok termékhostról 404 fail-closed választ adnak; a launcher nem AUTH hoston `notFound()` ágra kerül.
+- A launcher DEV/PROD Drive linkje az AUTH hostból felismert környezet alapján készül, nem általános `.dev.dimpro.hu` suffix alapján.

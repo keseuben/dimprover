@@ -1,26 +1,28 @@
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAuthSessionByToken, hasAuthPermission } from "@/app/lib/dimpro-auth/repository";
 import { DIMPRO_AUTH_SESSION_COOKIE } from "@/app/lib/dimpro-auth/security";
+import { resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 
 export default async function DimproAuthAppsPage() {
+  const headerStore = await headers();
+  const environment = resolveCentralDimproAuthEnvironmentFromHost(headerStore.get("host"));
+  if (!environment) notFound();
+
   const cookieStore = await cookies();
   const token = cookieStore.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
   const session = token ? await getAuthSessionByToken(token, true).catch(() => null) : null;
   if (!session) redirect("/login");
 
-  const headerStore = await headers();
-  const host = (headerStore.get("host") || "").toLowerCase();
-  const isDev = host === "auth.dev.dimpro.hu" || host.endsWith(".dev.dimpro.hu");
   const driveAllowed = await hasAuthPermission({
     userId: session.user.id,
     permissionCode: "drive.access",
     productCode: "DRIVE",
   }).catch(() => false);
-  const driveUrl = isDev ? "https://drive.dev.dimpro.hu/drive" : "https://drive.dimpro.hu/drive";
+  const driveUrl = environment === "DEV" ? "https://drive.dev.dimpro.hu/drive" : "https://drive.dimpro.hu/drive";
 
   return (
     <main className="min-h-screen bg-[#f4faf8] px-6 py-10 text-slate-950">

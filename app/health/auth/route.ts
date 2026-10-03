@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthClient, getAuthDatabaseHealth } from "@/app/lib/dimpro-auth/repository";
-import { driveSsoConfigForEnvironment, resolveDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
+import { driveSsoConfigForEnvironment, resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {
-    const environment = resolveDimproAuthEnvironmentFromHost(request.headers.get("host"));
+    const environment = resolveCentralDimproAuthEnvironmentFromHost(request.headers.get("host"));
     if (!environment) throw new Error("AUTH_HOST_NOT_ALLOWED");
     const driveConfig = driveSsoConfigForEnvironment(environment);
     const [db, driveClient] = await Promise.all([
