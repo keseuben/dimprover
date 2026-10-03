@@ -15,7 +15,7 @@ fail() { echo "BLOCKED · $1" >&2; exit "${2:-1}"; }
 [[ "$(stat -c '%a' "$SECRETS_FILE")" == "600" ]] || fail "BOOTSTRAP_SECRET_MODE_INVALID" 44
 [[ "$SQL_FILE" != *prod* && "$SECRETS_FILE" != *prod* ]] || fail "PROD_DENY" 45
 
-grep -q "\\set db_name 'dimpro_auth_dev'" "$SQL_FILE" || fail "SQL_DEV_DATABASE_GUARD_MISSING" 46
+grep -Fq "\\set db_name 'dimpro_auth_dev'" "$SQL_FILE" || fail "SQL_DEV_DATABASE_GUARD_MISSING" 46
 if grep -qi 'dimpro_auth_prod' "$SQL_FILE"; then fail "PROD_REFERENCE_FORBIDDEN" 47; fi
 
 set -a
