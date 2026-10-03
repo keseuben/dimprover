@@ -260,3 +260,99 @@ Observed non-blocking defect:
 - UTF-8 text supplied in `description` is rendered with replacement characters in the server-side document details (`tesztf�jl`, `t�rl�s`, etc.). Binary/file integrity is unaffected; metadata request/response encoding needs a dedicated fix before general desktop release.
 
 Next acceptance gate should be controlled `UPLOAD_VERSION` on the same dedicated DEV acceptance document, followed by exact-version download and SHA-256 verification. This must remain DEV-only and requires a new explicit mutation confirmation.
+
+## V0.1.6 FIX2 physical Windows version acceptance – PASS
+
+Executed on physical Windows PowerShell `5.1.22621.6133` against `https://drive.dev.dimpro.hu` using Bridge auth.
+
+Static acceptance:
+- `POWERSHELL_PARSE_PASS`
+- `STATIC_GUARD_PASS`
+- `EXACT_APPLY_CONTRACT_PASS`
+- `DELETE_OPERATION_DENY_PASS`
+- `DIMPRO_DRIVE_DESKTOP_V016_WINDOWS_ACCEPTANCE_PASS`
+
+Live Bridge Probe:
+- `PROBE_PASS`
+- project count: 2
+- applyReadiness.ready: true
+- serverMutation: false
+- localMutation: false
+- delete: false
+
+Controlled `UPLOAD_VERSION -> exact DOWNLOAD` acceptance:
+- code: `DIMPRO_DRIVE_DESKTOP_V016_VERSION_ACCEPTANCE_PASS`
+- project: `d6-irodaepulet`
+- document: `drive-document-cde50a0b770f`
+- previousVersionNumber: 1
+- expectedNewVersionNumber: 2
+- created versionId: `drive-version-4fa294b0ff13`
+- UTF-8 changeNote: `V0.1.6 UTF-8 ellenőrzés – Árvíztűrő tükörfúrógép, őűŐŰ`
+- source SHA-256: `ed9849ac8c25e25614af05c29146833008d8af98ca49d3518fc99c3cc0175150`
+- download SHA-256: `ed9849ac8c25e25614af05c29146833008d8af98ca49d3518fc99c3cc0175150`
+- serverMutation: true
+- localMutation: true
+- delete: false
+
+Conclusion:
+- Windows PowerShell 5.1 request-side UTF-8 JSON byte handling: PASS.
+- Bridge -> Desktop short-lived token exchange: PASS.
+- AUTH V0.3.3 Desktop own-auth transport: PASS.
+- `UPLOAD_VERSION` optimistic version flow: PASS.
+- exact returned-version download: PASS.
+- byte integrity by SHA-256: PASS.
+- no delete operation used.
+
+## V0.1.6 FIX3 physical Windows UTF-8 response acceptance – PASS
+
+FIX3 source commit: `6a0e85942f37e6ad2d09981ec20444df18480dc8`.
+
+Physical Windows package main script SHA-256: `43d30fda66cb2c7f9b7766217087166f291865cf89d3897f2a70cc06965ce7fd`.
+
+Static acceptance:
+- `POWERSHELL_PARSE_PASS`
+- `STATIC_GUARD_PASS`
+- `EXACT_APPLY_CONTRACT_PASS`
+- `DELETE_OPERATION_DENY_PASS`
+- `DIMPRO_DRIVE_DESKTOP_V016_FIX3_WINDOWS_ACCEPTANCE_PASS`
+- `DIMPRO_DRIVE_DESKTOP_V016_WINDOWS_ACCEPTANCE_PASS`
+
+Read-only live Probe:
+- `PROBE_PASS`
+- project count: 2
+- applyReadiness.ready: true
+- serverMutation: false
+- localMutation: false
+- delete: false
+
+UTF-8 response decoding verified on physical Windows PowerShell 5.1. Previously mojibake-rendered values now render correctly:
+- `Szekszárd Zrt és Szajki Zrt - szarvasmarhatelep`
+- `Előkészítés`
+- `D6 Irodaépület`
+- `Koncepciós DIMPRO Projektkapu munkakörnyezet a D6 Core modulok fejlesztéséhez.`
+- `Tervezés és előkészítés`
+
+FIX3 transport rule:
+- JSON API response: `Invoke-WebRequest -UseBasicParsing -> RawContentStream -> strict UTF-8 -> ConvertFrom-Json`.
+- JSON API response decoding no longer relies on Windows PowerShell 5.1 `Invoke-RestMethod` automatic charset behavior.
+- signed binary upload/download paths remain unchanged.
+
+FIX3 contracts:
+- Windows V0.1.6 contract: 37/37 PASS.
+- V0.1.6 version acceptance contract: 17/17 PASS.
+- Desktop access contract: 15/15 PASS.
+- AUTH V0.3.3 session-policy contract: 15/15 PASS.
+
+V0.1.6 final acceptance status:
+- static Windows PowerShell 5.1: PASS
+- Bridge live Probe: PASS
+- request UTF-8: PASS
+- response UTF-8: PASS
+- upload new: PASS (V0.1.5 baseline)
+- upload version: PASS
+- exact version download: PASS
+- SHA-256 integrity: PASS
+- delete: DENY / unused
+- PROD access: DENY
+
+Next development level: real manual Desktop synchronization workflow built on `Probe -> Plan -> reviewed Apply`, while retaining fail-closed mutation gates and no-delete policy.
