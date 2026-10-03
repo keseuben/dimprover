@@ -63,8 +63,9 @@ Ez szándékosan külön van a projektmeghívástól.
 - Isolated AUTH TypeScript gate: PASS.
 - Targeted ESLint: PASS.
 - Migration 005 SQL transaction/ROLLBACK validation: PASS.
+- Migration 005 DEV APPLY: PASS; a migration ledger checksum a forrásfájllal egyezik.
 
-Következő DEV aktiválási lépés: migration 005 backup utáni APPLY, runtime invitation secret telepítése, majd Drive-integrációs project-scope enforcement és meghívás E2E.
+Következő DEV aktiválási lépés: V0.3.1 project-scope bridge (migration 006) APPLY, majd Drive-integrációs project-scope enforcement és meghívás E2E.
 
 ## Projekt-hozzáférés visszavonása
 

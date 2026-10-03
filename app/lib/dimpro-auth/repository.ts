@@ -503,6 +503,50 @@ export async function listAuthorizedProjectIds(userId: string, productCode = "DR
   return result.rows.map((row) => row.project_id);
 }
 
+export async function getAuthProjectScopeByExternalId(externalProjectId: string) {
+  const result = await authQuery<{ id: string; external_project_id: string; name: string; status: string }>(
+    `SELECT id,external_project_id,name,status
+       FROM auth_projects
+      WHERE external_project_id=$1
+      LIMIT 1`,
+    [externalProjectId.trim()],
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, externalProjectId: row.external_project_id, name: row.name, status: row.status } : null;
+}
+
+export async function listAuthorizedExternalProjectIds(userId: string, productCode = "DRIVE") {
+  const normalizedProduct = productCode.trim().toUpperCase();
+  const result = await authQuery<{ external_project_id: string }>(
+    `SELECT DISTINCT project.external_project_id
+       FROM auth_access_grants g
+       JOIN auth_role_permissions rp ON rp.role_id=g.role_id
+       JOIN auth_permissions p ON p.id=rp.permission_id
+       JOIN auth_products product ON product.id=g.product_id AND product.status='ACTIVE'
+       JOIN auth_projects project ON project.id=g.project_id AND project.status='ACTIVE'
+      WHERE g.user_id=$1
+        AND product.code=$2
+        AND p.code='drive.project.access'
+        AND project.external_project_id IS NOT NULL
+        AND g.revoked_at IS NULL
+        AND g.valid_from<=now()
+        AND (g.valid_until IS NULL OR g.valid_until>=now())
+      ORDER BY project.external_project_id`,
+    [userId, normalizedProduct],
+  );
+  return result.rows.map((row) => row.external_project_id);
+}
+
+export async function registerAuthProjectScope(input: { actorUserId: string; externalProjectId: string; projectName: string }) {
+  const result = await authQuery<{ project_id: string }>(
+    `SELECT auth_register_project_scope($1,$2,$3) AS project_id`,
+    [input.actorUserId, input.externalProjectId, input.projectName],
+  );
+  const projectId = result.rows[0]?.project_id;
+  if (!projectId) throw new Error("AUTH_PROJECT_SCOPE_REGISTER_EMPTY_RESULT");
+  return projectId;
+}
+
 type AuthClientRow = {
   id: string;
   client_id: string;

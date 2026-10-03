@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       getAuthDatabaseHealth(),
       getAuthClient(driveConfig.clientId, driveConfig.redirectUri, environment),
     ]);
-    const sessionRepository = db.database && db.migrationCount >= 5;
+    const sessionRepository = db.database && db.migrationCount >= 6;
     const internalSso = Boolean(driveClient);
     const ready = sessionRepository && internalSso;
     return NextResponse.json(

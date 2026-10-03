@@ -35,8 +35,8 @@ await probe("AUTH liveness", "https://auth.dev.dimpro.hu/health/live", (r, body)
     : `expected 200 dimpro-auth live JSON, got ${r.status}`,
 );
 await probe("AUTH readiness", "https://auth.dev.dimpro.hu/health/ready", (r, body) => {
-  if (mode === "POST_DB") return r.status === 200 && body?.ok === true && body?.ready === true && Number(body?.migrationCount) >= 5
-    ? true : `expected POST_DB ready=200/migrationCount>=5, got ${r.status}`;
+  if (mode === "POST_DB") return r.status === 200 && body?.ok === true && body?.ready === true && Number(body?.migrationCount) >= 6
+    ? true : `expected POST_DB ready=200/migrationCount>=6, got ${r.status}`;
   return r.status === 503 && body?.service === "dimpro-auth" && body?.ready === false
     ? true : `expected PRE_DB 503 JSON ready=false, got ${r.status}`;
 });
