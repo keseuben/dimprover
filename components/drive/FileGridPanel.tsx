@@ -541,7 +541,8 @@ function FolderTableRow({
     return (
       <tr {...commonProps}>
         <td className={styles.reviewSelectCell} />
-        <td><div className={styles.tableFolderName}>{icon}<OverflowTooltipText text={name} className={styles.tableFolderNameText} /></div></td>
+        <td className={styles.statusIconColumn}><div className={styles.statusIconStrip}>{icon}</div></td>
+        <td><div className={styles.tableFolderName}><OverflowTooltipText text={name} className={styles.tableFolderNameText} /></div></td>
         <td className={styles.fileRawName}><OverflowTooltipText text={folder.name} /></td>
         <td>—</td>
         <td>Mappa</td>
@@ -614,6 +615,7 @@ type ColumnWidthsByView = Record<TableViewKey, Record<string, number>>;
 
 const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
+  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
   { id: "name", defaultWidth: 260, minWidth: 160 },
   { id: "fileName", defaultWidth: 220, minWidth: 140 },
   { id: "uploader", defaultWidth: 120, minWidth: 90 },
@@ -628,7 +630,7 @@ const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
 
 const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
-  { id: "statusIcons", defaultWidth: 78, minWidth: 64 },
+  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
   { id: "planNo", defaultWidth: 100, minWidth: 90 },
   { id: "name", defaultWidth: 240, minWidth: 160 },
   { id: "scale", defaultWidth: 90, minWidth: 75 },
@@ -646,7 +648,7 @@ const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
 
 const REVIEW_COLUMNS: readonly TableColumnConfig[] = [
   { id: "select", defaultWidth: 34, minWidth: 34, resizable: false },
-  { id: "statusIcons", defaultWidth: 78, minWidth: 64 },
+  { id: "statusIcons", defaultWidth: 112, minWidth: 104 },
   { id: "planNo", defaultWidth: 110, minWidth: 80 },
   { id: "name", defaultWidth: 280, minWidth: 160 },
   { id: "scale", defaultWidth: 92, minWidth: 70 },
@@ -1531,6 +1533,7 @@ export default function FileGridPanel({
               </colgroup>
               <thead><tr>
                 <th className={styles.reviewSelectCell}><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} aria-label="Látható fájlok kijelölése" /></th>
+                <SortableResizableHeader label="" className={styles.statusIconColumn} title="Állapotjelzők, fájltípus és CsomagBOX" sortState={sortState} onSort={toggleSort} resizeLabel="Ikonoszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "statusIcons", event)} />
                 <SortableResizableHeader label="Név" sortKey="name" sortState={sortState} onSort={toggleSort} resizeLabel="Név oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "name", event)} />
                 <SortableResizableHeader label="Fájlnév" sortKey="fileName" sortState={sortState} onSort={toggleSort} resizeLabel="Fájlnév oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "fileName", event)} />
                 <SortableResizableHeader label="Feltöltő" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltő oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "uploader", event)} />
@@ -1545,7 +1548,7 @@ export default function FileGridPanel({
               <tbody>
                 {!allFilesMode && currentFolder && onNavigateParent && (
                   <tr className={styles.folderUpRow} onClick={onNavigateParent} title="Vissza a szülőmappába">
-                    <td colSpan={11}>
+                    <td colSpan={12}>
                       <div className={styles.folderUpCell}>
                         <span className={styles.folderUpIcon}><FolderUp size={15} /></span>
                         <strong>[..]</strong>
@@ -1556,7 +1559,7 @@ export default function FileGridPanel({
                 )}
                 {!allFilesMode && <InlineNewFolderRow
                   open={newFolderEditorOpen}
-                  colSpan={11}
+                  colSpan={12}
                   name={newFolderName}
                   saving={newFolderSaving}
                   onNameChange={onNewFolderNameChange}
@@ -1588,14 +1591,21 @@ export default function FileGridPanel({
                   return (
                     <tr key={document.id} className={`${styles.fileRow} ${selected ? styles.fileSelected : ""} ${selectedSet.has(document.id) ? styles.reviewRowSelected : ""}`} onClick={() => selectDocumentRow(document)} onDoubleClick={() => onOpenDocument?.(document)}>
                       <td className={styles.reviewSelectCell}><input type="checkbox" checked={selectedSet.has(document.id)} onChange={() => toggleDocumentSelection(document.id)} onClick={(event) => event.stopPropagation()} aria-label={displayName.value + " kijelölése"} /></td>
-                      <td><div className={styles.fileNameCell}><ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} /><span
-                        className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
-                        draggable
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onDragStart={(event) => beginDocumentDrag(event, document)}
-                        title="Húzd a fájlt CsomagBOX-ba"
-                        aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
+                      <td className={styles.statusIconColumn}>
+                        <div className={styles.statusIconStrip}>
+                          <ReviewStateIcons metadata={metadata} onApprovalClick={() => openDetail(document, approvalFocus(approvalVisual(metadata).kind))} onLifecycleClick={() => openDetail(document, "lifecycle")} />
+                          <span
+                            className={`${fileIconClass(document.extension)} ${styles.fileDragHandle}`}
+                            draggable
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onDragStart={(event) => beginDocumentDrag(event, document)}
+                            title="Húzd a fájlt CsomagBOX-ba"
+                            aria-label={`${displayName.value} CsomagBOX-ba húzása`}
+                          ><FileKindIcon extension={document.extension} /></span>
+                          <BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} />
+                        </div>
+                      </td>
+                      <td><div className={styles.fileNameCell}><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
                       <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
                       <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>

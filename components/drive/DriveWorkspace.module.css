@@ -3318,19 +3318,24 @@
 }
 
 .statusIconColumn {
-  width: 78px !important;
-  min-width: 78px;
-  max-width: 78px;
-  text-align: center !important;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
+  min-width: 104px;
+  text-align: left !important;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+  overflow: hidden !important;
+}
+.statusIconColumn .sortableHeaderButton {
+  justify-content: flex-start;
+  text-align: left;
 }
 .statusIconStrip {
-  display: inline-flex;
+  width: 100%;
+  display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .fileNameAuditBox {
