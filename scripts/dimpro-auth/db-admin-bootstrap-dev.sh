@@ -5,7 +5,7 @@ set -Eeuo pipefail
 EXPECTED_HOST="dimpro-db"
 CONFIRM="${DIMPRO_AUTH_DB_ADMIN_CONFIRM:-}"
 SECRETS_FILE="${DIMPRO_AUTH_DB_BOOTSTRAP_ENV:-/root/.dimpro-secrets/dimpro-auth/dev/bootstrap.env}"
-SQL_FILE="${DIMPRO_AUTH_DB_BOOTSTRAP_SQL:-/root/dimpro-auth-bootstrap/000_create_dev_database.psql}"
+SQL_FILE="${DIMPRO_AUTH_DB_BOOTSTRAP_SQL:-/var/lib/postgresql/dimpro-auth-bootstrap/000_create_dev_database.psql}"
 
 fail() { echo "BLOCKED · $1" >&2; exit "${2:-1}"; }
 [[ "${EUID}" -eq 0 ]] || fail "ROOT_REQUIRED" 40
