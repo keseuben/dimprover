@@ -86,11 +86,11 @@ check("folder row keyboard Enter opens folder", () => {
 });
 
 check("simple folder row preserves 11-column structure", () => {
-  assert.match(grid, /view === "simple"[\s\S]*?reviewSelectCell[\s\S]*?folderStatusText/);
+  assert.match(grid, /view === "simple"[\s\S]*?reviewSelectCell[\s\S]*?versionStatusCell[\s\S]*?rowActionsCell/);
 });
 
 check("engineering folder row preserves 15-column structure", () => {
-  assert.match(grid, /view === "engineering"[\s\S]*?inode\/directory[\s\S]*?folderStatusText/);
+  assert.match(grid, /view === "engineering"[\s\S]*?inode\/directory[\s\S]*?versionStatusCell[\s\S]*?rowActionsCell/);
 });
 
 check("review folder row preserves review table structure", () => {

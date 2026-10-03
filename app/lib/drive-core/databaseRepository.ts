@@ -474,6 +474,47 @@ export async function softDeleteDriveDocuments(projectId: string, documentIds: s
   return { ok: true as const, deletedIds: result.deletedIds || [], deletedCount: Number(result.deletedCount || 0), blockedIds: result.blockedIds || [], blockedCount: Number(result.blockedCount || 0) };
 }
 
+export async function softDeleteDriveFolderTree(projectId: string, folderId: string, actorUserId: string) {
+  const client = await requireReadyClient();
+  const normalizedFolderId = normalizeText(folderId);
+  if (!normalizedFolderId) return { ok: false as const, error: "A mappa azonosítója kötelező." };
+
+  const { data, error } = await client.rpc("drive_core_soft_delete_folder_tree_atomic", {
+    p_project_id: projectId,
+    p_folder_id: normalizedFolderId,
+    p_actor_user_id: actorUserId,
+  });
+  if (error) {
+    const message = String(error.message || "");
+    if (message.includes("DRIVE_FOLDER_DELETE_ISSUED_BLOCKED")) {
+      throw new DriveCoreRepositoryError(
+        "A mappa nem helyezhető Lomtárba, mert formálisan kiadott dokumentumot tartalmaz. Előbb vond vissza a kiadást.",
+        "DRIVE_FOLDER_DELETE_ISSUED_BLOCKED",
+        409,
+      );
+    }
+    if (message.includes("DRIVE_FOLDER_NOT_FOUND")) {
+      throw new DriveCoreRepositoryError("A DRIVE mappa nem található.", "DRIVE_FOLDER_NOT_FOUND", 404);
+    }
+    databaseError("A DRIVE mappa Lomtárba helyezése sikertelen.", error);
+  }
+  const result = (data || {}) as {
+    rootFolderId?: string;
+    archivedFolderIds?: string[];
+    archivedFolderCount?: number;
+    deletedDocumentIds?: string[];
+    deletedDocumentCount?: number;
+  };
+  return {
+    ok: true as const,
+    rootFolderId: result.rootFolderId || normalizedFolderId,
+    archivedFolderIds: result.archivedFolderIds || [],
+    archivedFolderCount: Number(result.archivedFolderCount || 0),
+    deletedDocumentIds: result.deletedDocumentIds || [],
+    deletedDocumentCount: Number(result.deletedDocumentCount || 0),
+  };
+}
+
 export async function addDriveDocumentVersion(
   projectId: string,
   documentId: string,

@@ -3938,3 +3938,144 @@
   border-color: #ce7d69;
   background: #ffebe6;
 }
+
+/* Drive V0.9.1 – compact status + inline BOX + row hover actions */
+.versionStatusHeader { text-align: center; }
+.versionStatusCell { text-align: center; padding-left: 4px !important; padding-right: 4px !important; }
+.versionStatusDot {
+  width: 9px;
+  height: 9px;
+  display: inline-block;
+  border-radius: 999px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px rgba(15,23,42,.11);
+}
+.versionStatusAvailable { background: #2fb46e; }
+.versionStatusQuarantine { background: #f0b429; }
+.versionStatusRejected { background: #d94b4b; }
+.versionStatusStaged { background: #4d8fd8; }
+.versionStatusMetadata { background: #9aa9b8; }
+
+.boxInlineMarker {
+  min-width: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.boxInlineMarker .boxDot { width: 6px; height: 6px; }
+.boxCountMarker {
+  min-width: 20px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 5px;
+  background: #edf4fb;
+  color: #356a9e;
+  flex: 0 0 auto;
+}
+.boxCountMarker small { font-size: 8px; line-height: 1; font-weight: 900; }
+
+.rowActionsHeader { width: 176px; min-width: 176px; padding: 0 !important; }
+.rowActionsCell {
+  position: relative;
+  width: 176px;
+  min-width: 176px;
+  padding: 0 4px !important;
+  overflow: visible !important;
+}
+.rowQuickActions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.fileRow:hover .rowQuickActions,
+.fileSelected .rowQuickActions,
+.tableFolderRow:hover .rowQuickActions,
+.tableFolderRowSelected .rowQuickActions,
+.rowActionsCell:focus-within .rowQuickActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.rowQuickActions > button {
+  width: 25px;
+  height: 25px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: #5d7185;
+  cursor: pointer;
+}
+.rowQuickActions > button:hover:not(:disabled),
+.rowQuickActions > button:focus-visible {
+  background: #eaf2fb;
+  color: #155ea8;
+  outline: none;
+}
+.rowQuickActions > button:disabled {
+  color: #c2cbd4;
+  cursor: not-allowed;
+  background: transparent;
+}
+.rowQuickActions > .rowTrashAction:hover:not(:disabled) {
+  background: #fff0f0;
+  color: #c53b3b;
+}
+.rowActionMenu {
+  position: absolute;
+  z-index: 40;
+  top: 28px;
+  right: 0;
+  width: 190px;
+  padding: 5px;
+  border: 1px solid #d9e2eb;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(25,45,65,.16);
+}
+.rowActionMenu button {
+  width: 100%;
+  min-height: 29px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #344b62;
+  padding: 5px 8px;
+  text-align: left;
+  font-size: var(--drive-font-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+.rowActionMenu button:hover:not(:disabled) { background: #eef5fc; }
+.rowActionMenu button:disabled { color: #aeb9c4; cursor: not-allowed; }
+.rowActionMenu .rowActionMenuDanger { color: #b93434; }
+
+.trashDialogPanel { width: min(520px, calc(100vw - 28px)); }
+.trashDialogSummary {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.trashDialogSummary span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid #dce5ee;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #5b7085;
+  padding: 6px 9px;
+  font-size: var(--drive-font-xs);
+  font-weight: 700;
+}
+.trashDialogSummary strong { color: #263f58; font-size: 13px; }

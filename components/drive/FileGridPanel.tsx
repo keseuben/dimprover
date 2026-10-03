@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, BadgeCheck, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, EllipsisVertical, ExternalLink, File, Files, FileSpreadsheet, FileText, Folder, FolderUp, Image as ImageIcon, MonitorUp, Package, PackagePlus, Pencil, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { DriveDocument, DriveEngineeringMetadata, DriveFolder, DriveViewMode } from "./driveTypes";
 import OverflowTooltipText from "./OverflowTooltipText";
 import styles from "./DriveWorkspace.module.css";
@@ -41,7 +41,14 @@ type Props = {
   selectedDocumentIds?: string[];
   onSelectionChange?: (documentIds: string[]) => void;
   canDelete?: boolean;
+  canDeleteFolder?: boolean;
   onDeleteSelected?: (documentIds: string[]) => Promise<void>;
+  onDeleteFolder?: (folder: DriveFolder) => Promise<void> | void;
+  onDownloadFolder?: (folder: DriveFolder) => void;
+  onOpenBrowserDocument?: (document: DriveDocument) => void;
+  onOpenWindowsDocument?: (document: DriveDocument) => void;
+  onOpenBoxDocument?: (document: DriveDocument) => void;
+  onDownloadDocument?: (document: DriveDocument) => void;
   newFolderEditorOpen?: boolean;
   newFolderName?: string;
   newFolderSaving?: boolean;
@@ -189,6 +196,124 @@ function boxDotClass(token: string) {
     case "slate": return `${styles.boxDot} ${styles.boxDotSlate}`;
     default: return `${styles.boxDot} ${styles.boxDotBlue}`;
   }
+}
+
+
+const browserRowPreviewExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"]);
+
+function BoxInlineMarker({ tokens }: { tokens: string[] }) {
+  if (!tokens.length) return null;
+  const title = `${tokens.length} CsomagBOX kapcsolat`;
+  if (tokens.length <= 2) {
+    return (
+      <span className={styles.boxInlineMarker} title={title} aria-label={title}>
+        {tokens.map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.boxCountMarker} title={title} aria-label={title}>
+      <Package size={11} />
+      <small>{tokens.length}</small>
+    </span>
+  );
+}
+
+function VersionStatusDot({ status }: { status: string | undefined }) {
+  const normalized = (status || "").toUpperCase();
+  const className = normalized === "AVAILABLE"
+    ? styles.versionStatusAvailable
+    : normalized === "QUARANTINED"
+      ? styles.versionStatusQuarantine
+      : normalized === "REJECTED"
+        ? styles.versionStatusRejected
+        : normalized === "STAGED"
+          ? styles.versionStatusStaged
+          : styles.versionStatusMetadata;
+  return <span className={`${styles.versionStatusDot} ${className}`} title={versionStatusLabel(status)} aria-label={versionStatusLabel(status)} />;
+}
+
+function FileRowActions({
+  document,
+  canDelete,
+  canWrite,
+  busy,
+  menuOpen,
+  onToggleMenu,
+  onOpenBrowser,
+  onOpenWindows,
+  onOpenBox,
+  onDownload,
+  onDelete,
+  onDetails,
+  onVersions,
+}: {
+  document: DriveDocument;
+  canDelete: boolean;
+  canWrite: boolean;
+  busy: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onOpenBrowser?: () => void;
+  onOpenWindows?: () => void;
+  onOpenBox?: () => void;
+  onDownload?: () => void;
+  onDelete?: () => void;
+  onDetails?: () => void;
+  onVersions?: () => void;
+}) {
+  const readable = Boolean(document.currentVersion) && !["REJECTED", "STAGED", "METADATA_ONLY"].includes(document.currentVersion?.status || "");
+  const browserReady = readable && browserRowPreviewExtensions.has((document.extension || "").toLowerCase());
+  return (
+    <div className={styles.rowQuickActions} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <button type="button" disabled={!browserReady || busy} title={browserReady ? "Megnyitás böngészőben" : "Ehhez a fájltípushoz nincs böngészős előnézet"} onClick={onOpenBrowser}><ExternalLink size={14} /></button>
+      <button type="button" disabled={!readable || busy} title="Megnyitás Windows alkalmazásban" onClick={onOpenWindows}><MonitorUp size={14} /></button>
+      <button type="button" disabled={!canWrite || busy} title={canWrite ? "CsomagBOX" : "Nincs jogosultságod CsomagBOX módosításához"} onClick={onOpenBox}><PackagePlus size={14} /></button>
+      <button type="button" disabled={!readable || busy} title="Letöltés" onClick={onDownload}><Download size={14} /></button>
+      <button type="button" className={styles.rowTrashAction} disabled={!canDelete || busy} title={canDelete ? "Lomtárba helyezés" : "Nincs jogosultságod a törléshez"} onClick={onDelete}><Trash2 size={14} /></button>
+      <button type="button" aria-expanded={menuOpen} title="További műveletek" onClick={onToggleMenu}><EllipsisVertical size={15} /></button>
+      {menuOpen && (
+        <div className={styles.rowActionMenu}>
+          <button type="button" onClick={onDetails}>Részletek</button>
+          <button type="button" onClick={onVersions}>Verziók és revíziók</button>
+          <button type="button" disabled={!canDelete || busy} className={styles.rowActionMenuDanger} onClick={onDelete}>Lomtárba helyezés</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FolderRowActions({
+  canDelete,
+  busy,
+  menuOpen,
+  onToggleMenu,
+  onOpen,
+  onDownload,
+  onDelete,
+}: {
+  canDelete: boolean;
+  busy: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onOpen: () => void;
+  onDownload?: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div className={styles.rowQuickActions} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <button type="button" disabled={busy} title="Mappa letöltése ZIP-ként" onClick={onDownload}><Download size={14} /></button>
+      <button type="button" className={styles.rowTrashAction} disabled={!canDelete || busy} title={canDelete ? "Mappa Lomtárba helyezése" : "Nincs jogosultságod a mappa törléséhez"} onClick={onDelete}><Trash2 size={14} /></button>
+      <button type="button" aria-expanded={menuOpen} title="További műveletek" onClick={onToggleMenu}><EllipsisVertical size={15} /></button>
+      {menuOpen && (
+        <div className={styles.rowActionMenu}>
+          <button type="button" onClick={onOpen}>Megnyitás</button>
+          <button type="button" onClick={onDownload}>ZIP letöltés</button>
+          <button type="button" disabled={!canDelete || busy} className={styles.rowActionMenuDanger} onClick={onDelete}>Lomtárba helyezés</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function fileIconClass(extension: string) {
@@ -372,12 +497,24 @@ function FolderTableRow({
   active,
   onSelect,
   onOpen,
+  canDeleteFolder = false,
+  busy = false,
+  actionMenuOpen = false,
+  onToggleActionMenu,
+  onDownload,
+  onDelete,
 }: {
   folder: DriveFolder;
   view: TableViewKey;
   active: boolean;
   onSelect: () => void;
   onOpen: () => void;
+  canDeleteFolder?: boolean;
+  busy?: boolean;
+  actionMenuOpen?: boolean;
+  onToggleActionMenu?: () => void;
+  onDownload?: () => void;
+  onDelete?: () => void;
 }) {
   const security = folderSecurityPresentation(folder);
   const name = folder.displayName || folder.name;
@@ -412,8 +549,10 @@ function FolderTableRow({
         <td>Drive</td>
         <td>—</td>
         <td>—</td>
-        <td>—</td>
-        <td><span className={styles.folderStatusText}>{security.title}</span></td>
+        <td className={styles.versionStatusCell} />
+        <td className={styles.rowActionsCell}>
+          <FolderRowActions canDelete={canDeleteFolder} busy={busy} menuOpen={actionMenuOpen} onToggleMenu={() => onToggleActionMenu?.()} onOpen={onOpen} onDownload={onDownload} onDelete={onDelete} />
+        </td>
       </tr>
     );
   }
@@ -434,8 +573,10 @@ function FolderTableRow({
         <td>—</td>
         <td>Drive</td>
         <td>—</td>
-        <td>—</td>
-        <td><span className={styles.folderStatusText}>{security.title}</span></td>
+        <td className={styles.versionStatusCell} />
+        <td className={styles.rowActionsCell}>
+          <FolderRowActions canDelete={canDeleteFolder} busy={busy} menuOpen={actionMenuOpen} onToggleMenu={() => onToggleActionMenu?.()} onOpen={onOpen} onDownload={onDownload} onDelete={onDelete} />
+        </td>
       </tr>
     );
   }
@@ -481,8 +622,8 @@ const SIMPLE_COLUMNS: readonly TableColumnConfig[] = [
   { id: "source", defaultWidth: 90, minWidth: 70 },
   { id: "size", defaultWidth: 90, minWidth: 70 },
   { id: "uploadedAt", defaultWidth: 125, minWidth: 110 },
-  { id: "box", defaultWidth: 60, minWidth: 50 },
-  { id: "status", defaultWidth: 110, minWidth: 90 },
+  { id: "status", defaultWidth: 38, minWidth: 34 },
+  { id: "actions", defaultWidth: 176, minWidth: 176, resizable: false },
 ];
 
 const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
@@ -499,8 +640,8 @@ const ENGINEERING_COLUMNS: readonly TableColumnConfig[] = [
   { id: "version", defaultWidth: 70, minWidth: 60 },
   { id: "source", defaultWidth: 85, minWidth: 70 },
   { id: "size", defaultWidth: 85, minWidth: 70 },
-  { id: "box", defaultWidth: 60, minWidth: 50 },
-  { id: "status", defaultWidth: 110, minWidth: 90 },
+  { id: "status", defaultWidth: 38, minWidth: 34 },
+  { id: "actions", defaultWidth: 176, minWidth: 176, resizable: false },
 ];
 
 const REVIEW_COLUMNS: readonly TableColumnConfig[] = [
@@ -690,7 +831,14 @@ export default function FileGridPanel({
   selectedDocumentIds,
   onSelectionChange,
   canDelete = false,
+  canDeleteFolder = false,
   onDeleteSelected,
+  onDeleteFolder,
+  onDownloadFolder,
+  onOpenBrowserDocument,
+  onOpenWindowsDocument,
+  onOpenBoxDocument,
+  onDownloadDocument,
   newFolderEditorOpen = false,
   newFolderName = "",
   newFolderSaving = false,
@@ -706,6 +854,7 @@ export default function FileGridPanel({
   const [reviewSearch, setReviewSearch] = useState("");
   const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
   const [activeFolderRowId, setActiveFolderRowId] = useState("");
+  const [rowActionMenu, setRowActionMenu] = useState("");
   const selectedIds = selectedDocumentIds ?? internalSelectedIds;
   const setSelectedIds = (next: string[] | ((current: string[]) => string[])) => {
     const resolved = typeof next === "function" ? next(selectedIds) : next;
@@ -1033,7 +1182,10 @@ export default function FileGridPanel({
     setSelectedIds((current) => {
       const next = new Set(current);
       const select = !visibleSelectionIds.every((id) => next.has(id));
-      for (const id of visibleSelectionIds) select ? next.add(id) : next.delete(id);
+      for (const id of visibleSelectionIds) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
       return [...next];
     });
   };
@@ -1300,6 +1452,12 @@ export default function FileGridPanel({
                     active={activeFolderRowId === folder.id}
                     onSelect={() => setActiveFolderRowId(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
+                    canDeleteFolder={canDeleteFolder}
+                    busy={busy}
+                    actionMenuOpen={rowActionMenu === `folder:${folder.id}`}
+                    onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
+                    onDownload={() => onDownloadFolder?.(folder)}
+                    onDelete={() => void onDeleteFolder?.(folder)}
                   />
                 ))}
                 {sortedReviewRows.map((row) => (
@@ -1330,6 +1488,7 @@ export default function FileGridPanel({
                         >
                           <FileKindIcon extension={row.document.extension} />
                         </span>
+                        <BoxInlineMarker tokens={boxColorsByDocument[row.document.id] || []} />
                       </div>
                     </td>
                     <td><button type="button" className={styles.metadataCellButton} title={row.planNo || "Tervszám megadása"} onClick={() => openDetail(row.document, "planNo")}>{row.planNo || "—"}</button></td>
@@ -1380,8 +1539,8 @@ export default function FileGridPanel({
                 <SortableResizableHeader label="Forrás" sortState={sortState} onSort={toggleSort} resizeLabel="Forrás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "source", event)} />
                 <SortableResizableHeader label="Méret" sortState={sortState} onSort={toggleSort} resizeLabel="Méret oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "size", event)} />
                 <SortableResizableHeader label="Feltöltve" sortKey="uploadedAt" sortState={sortState} onSort={toggleSort} resizeLabel="Feltöltve oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "uploadedAt", event)} />
-                <SortableResizableHeader label="BOX" sortState={sortState} onSort={toggleSort} resizeLabel="BOX oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "box", event)} />
-                <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "status", event)} />
+                <SortableResizableHeader label="" className={styles.versionStatusHeader} title="Fájlállapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("simple", "status", event)} />
+                <th className={styles.rowActionsHeader} aria-label="Gyorsműveletek" />
               </tr></thead>
               <tbody>
                 {!allFilesMode && currentFolder && onNavigateParent && (
@@ -1412,6 +1571,12 @@ export default function FileGridPanel({
                     active={activeFolderRowId === folder.id}
                     onSelect={() => setActiveFolderRowId(folder.id)}
                     onOpen={() => onFolderChange?.(folder.id)}
+                    canDeleteFolder={canDeleteFolder}
+                    busy={busy}
+                    actionMenuOpen={rowActionMenu === `folder:${folder.id}`}
+                    onToggleActionMenu={() => setRowActionMenu((current) => current === `folder:${folder.id}` ? "" : `folder:${folder.id}`)}
+                    onDownload={() => onDownloadFolder?.(folder)}
+                    onDelete={() => void onDeleteFolder?.(folder)}
                   />
                 ))}
                 {sortedDocuments.map((document) => {
@@ -1430,7 +1595,7 @@ export default function FileGridPanel({
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd a fájlt CsomagBOX-ba"
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
+                      ><FileKindIcon extension={document.extension} /></span><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></div></td>
                       <td className={styles.fileRawName}><OverflowTooltipText text={document.name} /></td>
                       <td><OverflowTooltipText text={uploaderLabel(version?.createdBy)} /></td>
                       <td>{document.extension?.toUpperCase() || "FILE"}</td>
@@ -1438,8 +1603,24 @@ export default function FileGridPanel({
                       <td><span className={`${styles.sourceDot} ${sourceClass}`} />{document.source === "WEB" ? "Web" : document.source}</td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
                       <td>{formatDate(document.updatedAt)}</td>
-                      <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
-                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{versionStatusLabel(version?.status)}</span></td>
+                      <td className={styles.versionStatusCell}><VersionStatusDot status={version?.status} /></td>
+                      <td className={styles.rowActionsCell}>
+                        <FileRowActions
+                          document={document}
+                          canDelete={canDelete}
+                          canWrite={canWrite}
+                          busy={busy}
+                          menuOpen={rowActionMenu === `document:${document.id}`}
+                          onToggleMenu={() => setRowActionMenu((current) => current === `document:${document.id}` ? "" : `document:${document.id}`)}
+                          onOpenBrowser={() => onOpenBrowserDocument?.(document)}
+                          onOpenWindows={() => onOpenWindowsDocument?.(document)}
+                          onOpenBox={() => onOpenBoxDocument?.(document)}
+                          onDownload={() => onDownloadDocument?.(document)}
+                          onDelete={() => void onDeleteSelected?.([document.id])}
+                          onDetails={() => { setRowActionMenu(""); onSelectDocument(document); }}
+                          onVersions={() => { setRowActionMenu(""); openDetail(document, "numbering"); }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -1466,8 +1647,8 @@ export default function FileGridPanel({
                 <SortableResizableHeader label="Verzió" sortState={sortState} onSort={toggleSort} resizeLabel="Verzió oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "version", event)} />
                 <SortableResizableHeader label="Forrás" sortState={sortState} onSort={toggleSort} resizeLabel="Forrás oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "source", event)} />
                 <SortableResizableHeader label="Méret" sortState={sortState} onSort={toggleSort} resizeLabel="Méret oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "size", event)} />
-                <SortableResizableHeader label="BOX" sortState={sortState} onSort={toggleSort} resizeLabel="BOX oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "box", event)} />
-                <SortableResizableHeader label="Állapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "status", event)} />
+                <SortableResizableHeader label="" className={styles.versionStatusHeader} title="Fájlállapot" sortState={sortState} onSort={toggleSort} resizeLabel="Állapot oszlop szélességének módosítása" onResizeStart={(event) => startColumnResize("engineering", "status", event)} />
+                <th className={styles.rowActionsHeader} aria-label="Gyorsműveletek" />
               </tr></thead>
               <tbody>
                 {!allFilesMode && currentFolder && onNavigateParent && (
@@ -1515,7 +1696,7 @@ export default function FileGridPanel({
                         onDragStart={(event) => beginDocumentDrag(event, document)}
                         title="Húzd a fájlt CsomagBOX-ba"
                         aria-label={`${displayName.value} CsomagBOX-ba húzása`}
-                      ><FileKindIcon extension={document.extension} /></span></div></td>
+                      ><FileKindIcon extension={document.extension} /></span><BoxInlineMarker tokens={boxColorsByDocument[document.id] || []} /></div></td>
                       <td><button type="button" className={styles.metadataCellButton} title={metadata?.planNo || "Tervszám megadása"} onClick={() => openDetail(document, "planNo")}>{metadata?.planNo || "—"}</button></td>
                       <td><DisplayNameValue document={document} metadata={metadata} canWrite={canWrite} onEdit={() => openDetail(document, "planTitle")} /></td>
                       <td><button type="button" className={styles.metadataCellButton} title={scaleSummary(metadata).title} onClick={() => openDetail(document, "scales")}>{scaleSummary(metadata).text}</button></td>
@@ -1527,8 +1708,24 @@ export default function FileGridPanel({
                       <td><button type="button" className={`${styles.numberingCellButton} ${numberingPresentation(document).className}`} title={numberingPresentation(document).title + " · Kattints a verzió/revízió beállításához"} onClick={(event) => { event.stopPropagation(); openDetail(document, "numbering"); }}>{versionLabel(version?.versionNumber || document.currentVersionNumber)}</button></td>
                       <td><OverflowTooltipText text={document.source} /></td>
                       <td>{formatBytes(version?.sizeBytes || 0)}</td>
-                      <td><div className={styles.boxDots}>{(boxColorsByDocument[document.id] || []).slice(0, 4).map((token, index) => <span key={`${token}-${index}`} className={boxDotClass(token)} />)}{(boxColorsByDocument[document.id] || []).length > 4 && <small>+{(boxColorsByDocument[document.id] || []).length - 4}</small>}</div></td>
-                      <td><span className={`${styles.statusBadge} ${version?.status === "AVAILABLE" ? styles.statusAvailable : version?.status === "QUARANTINED" ? styles.statusQuarantine : ""}`}>{versionStatusLabel(version?.status)}</span></td>
+                      <td className={styles.versionStatusCell}><VersionStatusDot status={version?.status} /></td>
+                      <td className={styles.rowActionsCell}>
+                        <FileRowActions
+                          document={document}
+                          canDelete={canDelete}
+                          canWrite={canWrite}
+                          busy={busy}
+                          menuOpen={rowActionMenu === `document:${document.id}`}
+                          onToggleMenu={() => setRowActionMenu((current) => current === `document:${document.id}` ? "" : `document:${document.id}`)}
+                          onOpenBrowser={() => onOpenBrowserDocument?.(document)}
+                          onOpenWindows={() => onOpenWindowsDocument?.(document)}
+                          onOpenBox={() => onOpenBoxDocument?.(document)}
+                          onDownload={() => onDownloadDocument?.(document)}
+                          onDelete={() => void onDeleteSelected?.([document.id])}
+                          onDetails={() => { setRowActionMenu(""); onSelectDocument(document); }}
+                          onVersions={() => { setRowActionMenu(""); openDetail(document, "numbering"); }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}

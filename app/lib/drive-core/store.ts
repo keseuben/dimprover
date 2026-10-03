@@ -6,6 +6,7 @@ export {
   updateDriveFolderDisplayName,
   setDriveFolderClassification,
   softDeleteDriveDocuments,
+  softDeleteDriveFolderTree,
   getDriveCoreDatabaseHealth,
   listDriveChanges,
   listDriveTree,

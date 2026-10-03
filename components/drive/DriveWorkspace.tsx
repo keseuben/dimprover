@@ -106,6 +106,18 @@ type FolderRenameDialogState = {
   busy: boolean;
 };
 
+type TrashDialogState = {
+  kind: "documents" | "folder";
+  documentIds: string[];
+  folderId: string | null;
+  title: string;
+  message: string;
+  folderCount: number;
+  documentCount: number;
+  busy: boolean;
+  error: string;
+};
+
 type FolderPasswordDialogState = {
   mode: "unlock" | "manage";
   targetFolderId: string;
@@ -248,6 +260,7 @@ export default function DriveWorkspace({
     accessLinkError: string | null;
   } | null>(null);
   const [folderRenameDialog, setFolderRenameDialog] = useState<FolderRenameDialogState | null>(null);
+  const [trashDialog, setTrashDialog] = useState<TrashDialogState | null>(null);
   const [folderPasswordDialog, setFolderPasswordDialog] = useState<FolderPasswordDialogState | null>(null);
   const previousSelectedFolderIdRef = useRef(selectedFolderId);
   const browserRef = useRef<HTMLDivElement>(null);
@@ -258,6 +271,7 @@ export default function DriveWorkspace({
   const effectivePermissions = useMemo(() => [...new Set([...permissions, ...apiPermissions])], [permissions, apiPermissions]);
   const canWrite = effectivePermissions.includes("document.write");
   const canDelete = effectivePermissions.includes("document.delete");
+  const canDeleteFolder = effectivePermissions.includes("folder.delete");
   const canComment = effectivePermissions.includes("document.comment");
   const canApprove = effectivePermissions.includes("document.approve");
   const canIssue = effectivePermissions.includes("document.issue");
@@ -1355,6 +1369,99 @@ export default function DriveWorkspace({
     return payload.download as { url: string; fileName?: string };
   }
 
+  async function openDocumentInBrowser(document: DriveDocument) {
+    if (!document.currentVersion) return;
+    const extension = (document.extension || "").toLowerCase();
+    if (!browserPreviewExtensions.has(extension)) {
+      setError("Ehhez a fájltípushoz nincs böngészős előnézet.");
+      return;
+    }
+
+    const previewWindow = window.open("", "_blank");
+    if (previewWindow) previewWindow.opener = null;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/drive/documents/" + encodeURIComponent(document.id) + "/preview", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ versionId: document.currentVersion.id }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string; preview?: { url?: string } };
+      if (!response.ok || !payload.ok || !payload.preview?.url) throw new Error(payload.error || "Az előnézet nem nyitható meg.");
+      if (previewWindow) previewWindow.location.href = payload.preview.url;
+      else window.open(payload.preview.url, "_blank", "noopener,noreferrer");
+      setNotice("Megnyitva böngészőben: " + document.name);
+    } catch (caught) {
+      previewWindow?.close();
+      setError(caught instanceof Error ? caught.message : "A böngészős megnyitás sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openDocumentInWindows(document: DriveDocument) {
+    if (!document.currentVersion) return;
+    const extension = (document.extension || "").toLowerCase();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const download = await requestDownloadLink(document);
+      const protocol = nativeOfficeProtocol(extension);
+      if (protocol) {
+        window.location.assign(protocol + ":ofe|u|" + download.url);
+        setNotice("Megnyitás Windows alkalmazásban: " + (download.fileName || document.name));
+        return;
+      }
+
+      const anchor = window.document.createElement("a");
+      anchor.href = download.url;
+      anchor.download = download.fileName || document.name;
+      anchor.rel = "noopener";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setNotice(
+        extension === "pdf"
+          ? "PDF letöltve Windows alkalmazásos megnyitáshoz. A közvetlen PDF→Windows átadás a DIMPRO Drive Desktop/Bridge protokoll bekötése után lesz egykattintásos."
+          : "Fájl letöltve Windows alkalmazásos megnyitáshoz: " + (download.fileName || document.name),
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A Windows alkalmazásos megnyitás sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadDocument(document: DriveDocument) {
+    setBusy(true);
+    setError("");
+    try {
+      const download = await requestDownloadLink(document);
+      const anchor = window.document.createElement("a");
+      anchor.href = download.url;
+      anchor.download = download.fileName || document.name;
+      anchor.rel = "noopener";
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setNotice("Letöltés indítva: " + (download.fileName || document.name));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "A letöltés sikertelen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openDocumentBox(document: DriveDocument) {
+    setSelectedDocumentId(document.id);
+    setBoxShelfOpen(true);
+    if (fullTableInspectorOpen && fullTableInspectorLayout === "side") setFullTableInspectorOpen(false);
+  }
+
   async function openDocument(document: DriveDocument | null = selectedDocument) {
     if (!document?.currentVersion) return;
     const extension = (document.extension || "").toLowerCase();
@@ -1406,17 +1513,20 @@ export default function DriveWorkspace({
 
   async function downloadSelected() {
     if (!selectedDocument) return;
-    setBusy(true);
+    await downloadDocument(selectedDocument);
+  }
+
+  function downloadFolder(folder: DriveFolder) {
     setError("");
-    try {
-      const download = await requestDownloadLink(selectedDocument);
-      window.location.assign(download.url);
-      setNotice("Letöltés indítva: " + (download.fileName || selectedDocument.name));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A letöltés sikertelen.");
-    } finally {
-      setBusy(false);
-    }
+    const url = "/api/projects/" + encodeURIComponent(projectId) + "/drive/folders/" + encodeURIComponent(folder.id) + "/download";
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = "";
+    anchor.rel = "noopener";
+    window.document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setNotice("Mappa ZIP letöltés indítva: " + (folder.displayName || folder.name));
   }
 
   function downloadSelectedFolder() {
@@ -1424,16 +1534,7 @@ export default function DriveWorkspace({
       setError("ZIP letöltéshez válassz ki egy konkrét mappát.");
       return;
     }
-    setError("");
-    const url = "/api/projects/" + encodeURIComponent(projectId) + "/drive/folders/" + encodeURIComponent(selectedFolder.id) + "/download";
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "";
-    anchor.rel = "noopener";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setNotice("Mappa ZIP letöltés indítva: " + (selectedFolder.displayName || selectedFolder.name));
+    downloadFolder(selectedFolder);
   }
 
   function selectFolder(folderId: string) {
@@ -1676,27 +1777,106 @@ export default function DriveWorkspace({
     finally { setBusy(false); }
   }
 
+  function folderTrashSummary(folderId: string) {
+    const folderIds = new Set<string>([folderId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const folder of tree?.folders || []) {
+        if (folder.parentId && folderIds.has(folder.parentId) && !folderIds.has(folder.id)) {
+          folderIds.add(folder.id);
+          changed = true;
+        }
+      }
+    }
+    const documentCount = (tree?.documents || []).filter((document) => folderIds.has(document.folderId)).length;
+    return { folderCount: folderIds.size, documentCount };
+  }
+
   async function deleteDocuments(documentIds: string[]) {
     if (!canDelete || !documentIds.length || busy) return;
     const uniqueIds = [...new Set(documentIds)];
-    const confirmed = window.confirm(`${uniqueIds.length} dokumentum lomtárba helyezése?\n\nA fájlok nem törlődnek fizikailag, a művelet auditálva lesz.`);
-    if (!confirmed) return;
-    setBusy(true); setError(""); setNotice("");
+    setTrashDialog({
+      kind: "documents",
+      documentIds: uniqueIds,
+      folderId: null,
+      title: uniqueIds.length === 1 ? "Dokumentum Lomtárba helyezése" : `${uniqueIds.length} dokumentum Lomtárba helyezése`,
+      message: "A fájlok nem törlődnek fizikailag. A művelet auditálva lesz.",
+      folderCount: 0,
+      documentCount: uniqueIds.length,
+      busy: false,
+      error: "",
+    });
+  }
+
+  function deleteFolder(folder: DriveFolder) {
+    if (!canDeleteFolder || busy) return;
+    const summary = folderTrashSummary(folder.id);
+    setTrashDialog({
+      kind: "folder",
+      documentIds: [],
+      folderId: folder.id,
+      title: "Mappa Lomtárba helyezése",
+      message: `${folder.displayName || folder.name} · a teljes almappastruktúra a Lomtárba kerül.`,
+      folderCount: summary.folderCount,
+      documentCount: summary.documentCount,
+      busy: false,
+      error: "",
+    });
+  }
+
+  async function confirmTrashDialog() {
+    const dialog = trashDialog;
+    if (!dialog || dialog.busy) return;
+    setTrashDialog((current) => current ? { ...current, busy: true, error: "" } : current);
+    setError("");
+    setNotice("");
+
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/bulk-delete`, {
-        method: "DELETE", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentIds: uniqueIds }),
-      });
-      const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedIds?: string[]; blockedCount?: number };
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
-      const deletedIds = payload.deletedIds || [];
-      setSelectedDocumentIds((current) => current.filter((id) => !deletedIds.includes(id)));
-      if (deletedIds.includes(selectedDocumentId)) { setSelectedDocumentId(""); setDetails(null); }
-      const blocked = Number(payload.blockedCount || 0);
-      setNotice(`${payload.deletedCount || 0} dokumentum lomtárba helyezve.${blocked ? ` ${blocked} formálisan kiadott dokumentum nem törölhető; előbb vissza kell vonni a kiadást.` : ""}`);
+      if (dialog.kind === "documents") {
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/bulk-delete`, {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ documentIds: dialog.documentIds }),
+        });
+        const payload = await response.json() as { ok?: boolean; error?: string; deletedIds?: string[]; deletedCount?: number; blockedCount?: number };
+        if (!response.ok || !payload.ok) throw new Error(payload.error || "A dokumentumok törlése sikertelen.");
+        const deletedIds = payload.deletedIds || [];
+        setSelectedDocumentIds((current) => current.filter((id) => !deletedIds.includes(id)));
+        if (deletedIds.includes(selectedDocumentId)) { setSelectedDocumentId(""); setDetails(null); }
+        const blocked = Number(payload.blockedCount || 0);
+        setNotice(`${payload.deletedCount || 0} dokumentum Lomtárba helyezve.${blocked ? ` ${blocked} formálisan kiadott dokumentum nem törölhető.` : ""}`);
+      } else {
+        if (!dialog.folderId) throw new Error("A mappa azonosítója hiányzik.");
+        const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/folders/${encodeURIComponent(dialog.folderId)}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        const payload = await response.json() as {
+          ok?: boolean;
+          error?: string;
+          code?: string;
+          archivedFolderCount?: number;
+          deletedDocumentCount?: number;
+        };
+        if (!response.ok || !payload.ok) {
+          const suffix = payload.code ? ` · ${payload.code}` : "";
+          throw new Error((payload.error || "A mappa Lomtárba helyezése sikertelen.") + suffix);
+        }
+        if (selectedFolderId === dialog.folderId) setSelectedFolderId("all");
+        setSelectedDocumentId("");
+        setSelectedDocumentIds([]);
+        setDetails(null);
+        setNotice(`${payload.archivedFolderCount || 0} mappa és ${payload.deletedDocumentCount || 0} dokumentum Lomtárba helyezve.`);
+      }
+
+      setTrashDialog(null);
       await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A dokumentumok törlése sikertelen.");
-    } finally { setBusy(false); }
+      const message = caught instanceof Error ? caught.message : "A Lomtár művelet sikertelen.";
+      setTrashDialog((current) => current ? { ...current, busy: false, error: message } : current);
+    }
   }
 
   async function moveDocument(document: DriveDocument, targetFolderId: string) {
@@ -2074,6 +2254,39 @@ export default function DriveWorkspace({
               <button type="button" disabled={folderRenameDialog.busy} onClick={() => setFolderRenameDialog(null)}>Mégsem</button>
               <button type="submit" disabled={folderRenameDialog.busy || !folderRenameDialog.displayName.trim()}>
                 {folderRenameDialog.busy ? "Mentés…" : "Átnevezés"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {trashDialog && (
+        <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label={trashDialog.title}>
+          <form
+            className={`${styles.projectCreatePanel} ${styles.trashDialogPanel}`}
+            onSubmit={(event) => { event.preventDefault(); void confirmTrashDialog(); }}
+          >
+            <header>
+              <div>
+                <small>DIMPRO Drive · Lomtár</small>
+                <strong>{trashDialog.title}</strong>
+                <span>{trashDialog.message}</span>
+              </div>
+              <button type="button" disabled={trashDialog.busy} onClick={() => setTrashDialog(null)} aria-label="Bezárás">×</button>
+            </header>
+            <div className={styles.trashDialogSummary}>
+              {trashDialog.folderCount > 0 && <span><strong>{trashDialog.folderCount}</strong> mappa</span>}
+              <span><strong>{trashDialog.documentCount}</strong> dokumentum</span>
+            </div>
+            <div className={styles.revisionIssueHint}>
+              <strong>Visszaállítható soft delete</strong>
+              <span>A fizikai fájlok most nem törlődnek. Formálisan kiadott dokumentumot tartalmazó mappafa törlése blokkolva lesz.</span>
+            </div>
+            {trashDialog.error && <div className={`${styles.notice} ${styles.noticeError}`}>{trashDialog.error}</div>}
+            <footer>
+              <button type="button" disabled={trashDialog.busy} onClick={() => setTrashDialog(null)}>Mégsem</button>
+              <button type="submit" className={styles.dangerButton} disabled={trashDialog.busy}>
+                {trashDialog.busy ? "Áthelyezés…" : "Lomtárba helyezés"}
               </button>
             </footer>
           </form>
@@ -2524,7 +2737,14 @@ export default function DriveWorkspace({
               selectedDocumentIds={selectedDocumentIds}
               onSelectionChange={setSelectedDocumentIds}
               canDelete={canDelete}
+              canDeleteFolder={canDeleteFolder}
               onDeleteSelected={deleteDocuments}
+              onDeleteFolder={deleteFolder}
+              onDownloadFolder={downloadFolder}
+              onOpenBrowserDocument={(document) => void openDocumentInBrowser(document)}
+              onOpenWindowsDocument={(document) => void openDocumentInWindows(document)}
+              onOpenBoxDocument={openDocumentBox}
+              onDownloadDocument={(document) => void downloadDocument(document)}
               newFolderEditorOpen={newFolderEditorOpen}
               newFolderName={newFolderName}
               newFolderSaving={newFolderSaving}
@@ -2673,7 +2893,14 @@ export default function DriveWorkspace({
               selectedDocumentIds={selectedDocumentIds}
               onSelectionChange={setSelectedDocumentIds}
               canDelete={canDelete}
+              canDeleteFolder={canDeleteFolder}
               onDeleteSelected={deleteDocuments}
+              onDeleteFolder={deleteFolder}
+              onDownloadFolder={downloadFolder}
+              onOpenBrowserDocument={(document) => void openDocumentInBrowser(document)}
+              onOpenWindowsDocument={(document) => void openDocumentInWindows(document)}
+              onOpenBoxDocument={openDocumentBox}
+              onDownloadDocument={(document) => void downloadDocument(document)}
               newFolderEditorOpen={newFolderEditorOpen}
               newFolderName={newFolderName}
               newFolderSaving={newFolderSaving}

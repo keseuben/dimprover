@@ -22,8 +22,8 @@ const check = (label, fn) => {
   console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`);
 };
 
-check("Current Drive Core schema retains V084 and has advanced to 0.8.6", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.6"/));
-check("Current Drive Core migration count is 7", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 7/));
+check("Current Drive Core schema retains V084 and has advanced beyond it", () => assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.9\.1"/));
+check("Current Drive Core migration count is 8", () => assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 8/));
 check("V084 migration preserves its metadata-controls bootstrap marker", () => assert.match(sql, /drive-core-v084-metadata-controls-20261002/));
 check("schema readiness includes project settings and numbering audit columns", () => {
   assert.match(schema, /drive_core_project_settings/);
@@ -73,10 +73,10 @@ check("simple view has no full-row file-state coloring", () => {
     assert.doesNotMatch(css, new RegExp(`\\.${className} td`));
   }
 });
-check("simple view keeps color in the status badge", () => {
-  assert.match(grid, /styles\.statusBadge/);
-  assert.match(grid, /styles\.statusAvailable/);
-  assert.match(grid, /styles\.statusQuarantine/);
+check("simple view keeps file state in a compact status indicator", () => {
+  assert.match(grid, /VersionStatusDot/);
+  assert.match(grid, /styles\.versionStatusAvailable/);
+  assert.match(grid, /styles\.versionStatusQuarantine/);
 });
 check("engineering revision and version cells are clickable", () => {
   const matches = grid.match(/openDetail\(document, "numbering"\)/g) || [];

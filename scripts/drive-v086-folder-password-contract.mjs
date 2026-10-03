@@ -22,10 +22,10 @@ const check = (label, fn) => {
   console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`);
 };
 
-check("schema marker advances to 0.8.6 migration 7", () => {
-  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.8\.6"/);
-  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 7/);
-  assert.match(schema, /drive-core-v086-folder-password-gate-20261002/);
+check("current schema preserves V086 and has advanced to 0.9.1", () => {
+  assert.match(schema, /DRIVE_CORE_SCHEMA_VERSION = "0\.9\.1"/);
+  assert.match(schema, /DRIVE_CORE_MIGRATION_COUNT = 8/);
+  assert.match(schema, /drive-core-v091-folder-trash-20261003/);
 });
 check("health schema includes password tables without selecting password hash", () => {
   assert.match(schema, /"drive_core_folder_passwords"/);
