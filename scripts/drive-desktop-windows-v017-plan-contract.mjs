@@ -14,7 +14,7 @@ const checks=[
 ['no remote folder creation',/V0\.1\.7 Phase 1 uses the stable technical Drive folder path and does not create remote folders automatically/.test(s)],
 ['change pagination',/limit=250/.test(s)&&/V017_CHANGE_PAGINATION_LIMIT/.test(s)&&/V017_CHANGE_CURSOR_STALLED/.test(s)],
 ['prepared apply plan',/PreparedApplyPlanPath/.test(s)&&/DIMPRO_DRIVE_DESKTOP_MANUAL_SYNC_V017/.test(s)],
-['conflict blocks prepared plan',/applyBlocked/.test(s)&&/manualPlan\.conflicts\.Count -gt 0/.test(s)],
+['conflict blocks prepared plan',/applyBlocked/.test(s)&&/Get-SafeCount \$manualPlan\.conflicts/.test(s)&&/-gt 0/.test(s)],
 ['conflict blocks apply',/V017_APPLY_PLAN_CONFLICTS_PRESENT/.test(s)],
 ['reviewed SHA required',/V017_REVIEWED_PLAN_SHA256_REQUIRED/.test(s)&&/ReviewedPlanSha256/.test(s)],
 ['reviewed SHA mismatch gate',/V017_REVIEWED_PLAN_SHA256_MISMATCH/.test(s)&&/Get-FileHash -LiteralPath \$Path -Algorithm SHA256/.test(s)],
@@ -24,7 +24,9 @@ const checks=[
 ['Bridge retained',/ProtectedData\]::Unprotect/.test(s)&&/desktop-access\/token/.test(s)],
 ['PS5.1 generic list arrays use ToArray',/changes = \$all\.ToArray\(\)/.test(s)&&/operations = \$operations\.ToArray\(\)/.test(s)&&/conflicts = \$conflicts\.ToArray\(\)/.test(s)&&/unchanged = \$unchanged\.ToArray\(\)/.test(s)&&!/@\(\$(all|operations|conflicts|unchanged)\)/.test(s)],
 ['PS5.1 unique keys avoid generic HashSet',/\$allKeys = @\{\}/.test(s)&&/\$allKeys\.Keys \| Sort-Object/.test(s)&&!/HashSet\[string\]/.test(s)],
-['acceptance V017 FIX2 marker',/DIMPRO_DRIVE_DESKTOP_V017_FIX2_WINDOWS_ACCEPTANCE_PASS/.test(a)],
+['PS5.1 empty manifest normalized',/\$manifest = @\(Get-LocalManifest \$LocalRootValue\)/.test(s)],
+['null scalar safe output counts',/function Get-SafeCount/.test(s)&&/localFileCount = Get-SafeCount \$manualPlan\.manifest/.test(s)&&/projectCount = Get-SafeCount \$items/.test(s)],
+['acceptance V017 FIX3 marker',/DIMPRO_DRIVE_DESKTOP_V017_FIX3_WINDOWS_ACCEPTANCE_PASS/.test(a)],
 ['acceptance V017 marker',/DIMPRO_DRIVE_DESKTOP_V017_WINDOWS_ACCEPTANCE_PASS/.test(a)],
 ];
 let pass=0;for(const[n,o]of checks){console.log(`${o?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${n}`);if(o)pass++;else process.exitCode=1;}if(pass!==checks.length)throw new Error(`V0.1.7 plan contract failed ${pass}/${checks.length}`);console.log(`DIMPRO Drive Desktop V0.1.7 Plan contract PASS ${pass}/${checks.length}`);
