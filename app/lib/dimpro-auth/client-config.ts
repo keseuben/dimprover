@@ -19,6 +19,14 @@ export function resolveDimproAuthEnvironmentFromHost(hostValue: string | null | 
   return null;
 }
 
+export function resolveCentralDimproAuthEnvironmentFromHost(hostValue: string | null | undefined): DimproAuthEnvironment | null {
+  const host = normalizedHost(hostValue);
+  if (host === "auth.dev.dimpro.hu") return "DEV";
+  if (host === "auth.dimpro.hu") return "PROD";
+  if (host === "localhost" || host === "127.0.0.1") return "DEV";
+  return null;
+}
+
 export function driveSsoConfigForEnvironment(environment: DimproAuthEnvironment): DimproDriveSsoConfig {
   if (environment === "PROD") {
     return {

@@ -13,11 +13,15 @@ import {
   validateSameOriginMutation,
 } from "@/app/lib/dimpro-auth/security";
 import { DimproAuthError } from "@/app/lib/dimpro-auth/types";
+import { resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  if (!resolveCentralDimproAuthEnvironmentFromHost(request.headers.get("host"))) {
+    return NextResponse.json({ ok: false, error: "AUTH_HOST_NOT_ALLOWED" }, { status: 404, headers: { "cache-control": "no-store" } });
+  }
   const correlationId = newDimproAuthCorrelationId(request.headers);
   if (!validateSameOriginMutation(request.headers)) {
     return NextResponse.json({ ok: false, error: "A kérés eredete nem engedélyezett.", correlationId }, { status: 403, headers: { "cache-control": "no-store" } });

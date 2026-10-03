@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 ## Tesztállapot
 
 - AUTH V0.1 contract: 25/25 PASS.
-- AUTH V0.2 internal SSO contract: 35/35 PASS.
+- AUTH V0.2 internal SSO contract: 37/37 PASS.
 - AUTH V0.2.1 security contract: 50/50 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
@@ -227,3 +227,10 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - Az OTP policy pontosan 5 perc / 5 hibás próbálkozás / 30 másodperc újraküldési idő; ezek a kötelező értékek környezeti változóval nem gyengíthetők.
 - A verify API kizárólag pontosan hat számjegyet fogad el; tetszőleges szövegből nem tisztít ki „használható” kódot.
 - `STAFF`, `PROJECT_MANAGER`, `ORG_ADMIN`, `SUPERADMIN` felhasználónak a SIMPLE e-mail OTP ág nem küld kódot; a publikus válasz továbbra is account-enumeration ellen védett.
+
+## AUTH host-bound API surface
+
+- A központi OTP, `/me`, `/me/permissions` és `logout-all` végpontok kizárólag az `auth.dev.dimpro.hu` / `auth.dimpro.hu` technikai AUTH hoston futhatnak; Drive vagy más termékhostról 404 fail-closed választ adnak.
+- A `session` és `logout` végpont kettős szerepű: csak központi AUTH host vagy explicit Drive host engedélyezett.
+- A Drive `/login` többé nem rendereli közvetlenül a központi OTP UI-t; a Drive SSO start végpontjára irányít, amely ezután az AUTH hostra visz.
+- Ezzel az `__Host-dimpro_auth` cookie nem kerülhet véletlenül termékhostra.

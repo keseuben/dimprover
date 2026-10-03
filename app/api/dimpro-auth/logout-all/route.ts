@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAuthSessionByToken, revokeAllUserSessions } from "@/app/lib/dimpro-auth/repository";
 import { readDimproAuthSessionToken } from "@/app/lib/dimpro-auth/http";
+import { resolveCentralDimproAuthEnvironmentFromHost } from "@/app/lib/dimpro-auth/client-config";
 import { DIMPRO_AUTH_SESSION_COOKIE, newDimproAuthCorrelationId, sessionCookieOptions, validateSameOriginMutation } from "@/app/lib/dimpro-auth/security";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  if (!resolveCentralDimproAuthEnvironmentFromHost(request.headers.get("host"))) {
+    return NextResponse.json({ ok: false, error: "AUTH_HOST_NOT_ALLOWED" }, { status: 404, headers: { "cache-control": "no-store" } });
+  }
   const correlationId = newDimproAuthCorrelationId(request.headers);
   if (!validateSameOriginMutation(request.headers)) {
     return NextResponse.json({ ok: false, error: "ORIGIN_DENIED", correlationId }, { status: 403, headers: { "cache-control": "no-store" } });
