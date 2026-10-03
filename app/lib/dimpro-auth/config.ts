@@ -3,6 +3,7 @@ export type DimproAuthConfig = {
   databaseUrl: string;
   otpPepper: string;
   sessionPepper: string;
+  auditPepper: string;
   otpTtlSeconds: number;
   otpMaxAttempts: number;
   otpResendCooldownSeconds: number;
@@ -63,6 +64,7 @@ export function getDimproAuthConfig(): DimproAuthConfig {
     databaseUrl,
     otpPepper: requiredSecret("DIMPRO_AUTH_OTP_PEPPER"),
     sessionPepper: requiredSecret("DIMPRO_AUTH_SESSION_PEPPER"),
+    auditPepper: requiredSecret("DIMPRO_AUTH_AUDIT_PEPPER"),
     otpTtlSeconds: boundedInteger("DIMPRO_AUTH_OTP_TTL_SECONDS", 5 * 60, 60, 15 * 60),
     otpMaxAttempts: boundedInteger("DIMPRO_AUTH_OTP_MAX_ATTEMPTS", 5, 1, 10),
     otpResendCooldownSeconds: boundedInteger("DIMPRO_AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30, 5, 300),

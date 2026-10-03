@@ -26,8 +26,9 @@ if(runtime.href===migrator.href)throw new Error("A runtime és migrator connecti
 
 const otp=secret("DIMPRO_AUTH_OTP_PEPPER");
 const session=secret("DIMPRO_AUTH_SESSION_PEPPER");
+const audit=secret("DIMPRO_AUTH_AUDIT_PEPPER");
 const sso=secret("DIMPRO_AUTH_SSO_STATE_SECRET");
-if(new Set([otp,session,sso]).size!==3)throw new Error("Az OTP/session/SSO titkoknak egymástól függetlennek kell lenniük.");
+if(new Set([otp,session,audit,sso]).size!==4)throw new Error("Az OTP/session/audit/SSO titkoknak egymástól függetlennek kell lenniük.");
 
 const sslMode=(process.env.DIMPRO_AUTH_DB_SSL_MODE||"").trim().toLowerCase();
 if(sslMode!=="verify-full")throw new Error("DIMPRO_AUTH_DB_SSL_MODE=verify-full kötelező az aktiválási preflightban.");
@@ -54,6 +55,6 @@ console.log(JSON.stringify({
   migratorRole:expectedMigratorUser,
   sslMode,
   ca:{subject:cert.subject,issuer:cert.issuer,validTo:cert.validTo,sha256:createHash("sha256").update(cert.raw).digest("hex")},
-  secrets:{otpDistinct:true,sessionDistinct:true,ssoDistinct:true},
+  secrets:{otpDistinct:true,sessionDistinct:true,auditDistinct:true,ssoDistinct:true},
   productionAccess:environment==="DEV"?"DENY":"SEPARATE_PROD_AUTHORITY_REQUIRED",
 },null,2));

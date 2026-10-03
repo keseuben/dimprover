@@ -56,7 +56,7 @@ Alkalmazás előtt kötelező a DEV DB backup és az explicit migration gate. A 
 
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 internal SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 32/32 PASS.
+- AUTH V0.2.1 security contract: 35/35 PASS.
 - Célzott ESLint: PASS.
 - Full repository TypeScript ellenőrzés futott; az AUTH fájlokra nem jelzett hibát. A teljes project exit code 2 négy már meglévő, AUTH-tól független Drive `pilotFolder` típushiba miatt.
 - Full production build emiatt jelenleg nem tekinthető bizonyított PASS-nak; a különálló AUTH változtatásokon új type/lint hiba nem látszik.
@@ -118,3 +118,9 @@ A DEV runtime mail profile ellenőrzés szerint a `noreply` profil konfigurált 
 - A DIMPRO AUTH runtime és minden DEV DB-műveleti script kizárólag `verify-full` TLS-sel működhet; `rejectUnauthorized=false`, `require` vagy `disable` downgrade nincs engedélyezve.
 - A közös `strict-dev-db.mjs` helper az exact `db.dimpro.hu / dimpro_auth_dev` adatbázist és a művelethez tartozó role-t is ellenőrzi.
 - A bootstrap, migráció, cleanup, readiness és pilot user-admin ugyanazt a fail-closed DB transport szabályt használja.
+
+## Request metadata hardening
+
+- Az IP-kezelés csak szintaktikailag érvényes IPv4/IPv6 címet fogad el, elsőként a reverse proxy `x-real-ip` értékét használja; X-Forwarded-For esetén a proxyhoz legközelebbi, utolsó érvényes címet veszi.
+- Böngészős mutációknál HTTPS same-origin Origin ellenőrzés történik, a `Sec-Fetch-Site` cross-site/same-site kérések origin hiányában is elutasíthatók.
+- Audit e-mail azonosító többé nem nyers SHA-256, hanem külön `DIMPRO_AUTH_AUDIT_PEPPER` HMAC; OTP/session/audit/SSO négy külön secret.
