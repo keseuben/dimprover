@@ -444,6 +444,10 @@ type AuthorizationCodeRow = {
 type AppSessionRow = SessionRow & {
   client_db_id: string;
   client_id: string;
+  auth_session_id: string;
+  parent_last_seen_at: Date | string;
+  parent_absolute_expires_at: Date | string;
+  parent_inactivity_expires_at: Date | string;
 };
 
 export async function getAuthClient(clientId: string, redirectUri?: string | null) {
@@ -627,7 +631,8 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
   if (!token || token.length < 32 || token.length > 200) return null;
   const config = getDimproAuthConfig();
   const result = await authQuery<AppSessionRow>(
-    `SELECT s.id,s.client_id AS client_db_id,c.client_id,s.user_id,u.security_level,s.created_at,s.last_seen_at,s.absolute_expires_at,s.inactivity_expires_at,
+    `SELECT s.id,s.client_id AS client_db_id,c.client_id,s.user_id,s.auth_session_id,u.security_level,s.created_at,s.last_seen_at,s.absolute_expires_at,s.inactivity_expires_at,
+            parent_session.last_seen_at AS parent_last_seen_at,parent_session.absolute_expires_at AS parent_absolute_expires_at,parent_session.inactivity_expires_at AS parent_inactivity_expires_at,
             u.email_original,u.email_normalized,u.display_name,u.status,u.session_version,u.email_verified_at
        FROM auth_app_sessions s
        JOIN auth_clients c ON c.id=s.client_id
@@ -657,6 +662,18 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
       `UPDATE auth_app_sessions SET last_seen_at=now(), inactivity_expires_at=$2 WHERE id=$1 AND revoked_at IS NULL`,
       [row.id, inactivityExpiresAt],
     );
+  }
+  if (touch) {
+    const parentLastSeen = new Date(row.parent_last_seen_at).getTime();
+    if (now - parentLastSeen >= config.sessionTouchIntervalSeconds * 1000) {
+      const parentProposed = new Date(now + config.sessionInactivitySeconds * 1000);
+      const parentAbsolute = new Date(row.parent_absolute_expires_at);
+      const parentInactivityExpiresAt = parentProposed.getTime() > parentAbsolute.getTime() ? parentAbsolute : parentProposed;
+      await authQuery(
+        `UPDATE auth_sessions SET last_seen_at=now(), inactivity_expires_at=$2 WHERE id=$1 AND revoked_at IS NULL`,
+        [row.auth_session_id, parentInactivityExpiresAt],
+      );
+    }
   }
   return {
     id: row.id,
