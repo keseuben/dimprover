@@ -180,7 +180,7 @@ export default function FloatingProjectBoard({
 
           {provisioning && provisioningStatus !== "checking" ? (
             <div className={styles.provisioningMeta}>
-              <div><span>Verzió</span><strong>{provisioning.version}</strong></div>
+              <div><span>Környezet séma</span><strong>{provisioning.version}</strong></div>
               <div><span>Mappák</span><strong>{provisioning.folderCount}</strong></div>
               <div><span>Beérkező Drop</span><strong>{provisioning.incomingDropFolder ? "Elérhető" : "Nincs"}</strong></div>
               {provisioning.pilotFolder ? <div><span>PILOT</span><strong>Elérhető</strong></div> : null}

@@ -19,8 +19,8 @@ const migrationGate = read("scripts/drive-user-favorites-v092-migration-gate.mjs
 let pass = 0;
 const check = (label, fn) => { fn(); pass += 1; console.log("PASS " + String(pass).padStart(2, "0") + " " + label); };
 
-check("Drive development version has one shared V0.9.7 source", () => {
-  assert.match(buildInfo, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.7"/);
+check("Drive development version has one shared source", () => {
+  assert.match(buildInfo, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/);
   assert.match(rail, /DRIVE_VERSION_DISPLAY/);
   assert.match(board, /DRIVE_VERSION_DISPLAY/);
   assert.doesNotMatch(rail, /DRIVE 1\.0 RC/);

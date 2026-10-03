@@ -273,6 +273,11 @@ export default function DriveShell({
     closeBoardImmediately();
   }, [closeBoardImmediately]);
 
+  const handleStorageQuotaChange = useCallback((quota: DriveStorageQuota | null) => {
+    setStorageQuota(quota);
+    if (quota) setStorageError(null);
+  }, []);
+
   useEffect(() => {
     const projectId = selectedProject?.id;
     setStorageQuota(null);
@@ -476,10 +481,7 @@ export default function DriveShell({
             selectedWorkspaceId={selectedProjectId}
             onWorkspaceChange={handleProjectChange}
             navigationRequest={navigationRequest}
-            onStorageQuotaChange={(quota) => {
-              setStorageQuota(quota);
-              if (quota) setStorageError(null);
-            }}
+            onStorageQuotaChange={handleStorageQuotaChange}
           />
         )}
       </main>
