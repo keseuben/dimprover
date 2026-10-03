@@ -2,14 +2,12 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/app/lib/supabase/client";
 import { useSessionTimer } from "./useSessionTimer";
 
 const THIRTY_MINUTES = 30 * 60;
 
 export default function SessionGuardClient() {
   const pathname = usePathname();
-  const supabase = createClient();
 
   const remainingSeconds = useSessionTimer(
     (state) => state.remainingSeconds
@@ -35,7 +33,8 @@ export default function SessionGuardClient() {
           credentials: "same-origin",
         }).catch(() => undefined);
       } else {
-        await supabase.auth.signOut();
+        const { createClient } = await import("@/app/lib/supabase/client");
+        await createClient().auth.signOut();
       }
       localStorage.removeItem("dimprover_login_started_at");
       localStorage.removeItem("dimpro_login_started_at");
@@ -67,7 +66,7 @@ export default function SessionGuardClient() {
       window.removeEventListener("click", resetTimer);
       window.removeEventListener("scroll", resetTimer);
     };
-  }, [pathname, remainingSeconds, setRemainingSeconds, supabase.auth]);
+  }, [pathname, remainingSeconds, setRemainingSeconds]);
 
   return null;
 }
