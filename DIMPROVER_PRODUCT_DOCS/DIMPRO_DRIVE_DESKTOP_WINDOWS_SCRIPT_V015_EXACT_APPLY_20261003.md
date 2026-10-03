@@ -229,3 +229,34 @@ Desktop access contract: 12/12 PASS.
 Desktop Windows V0.1.5 contract: 29/29 PASS.
 
 Next gate: controlled DEV `UPLOAD_NEW -> DOWNLOAD` acceptance using a dedicated test file. No delete operation is allowed.
+
+## V0.1.5 FIX4 physical Windows Apply Acceptance – PASS
+
+Executed on physical Windows PowerShell `5.1.22621.6133` against `https://drive.dev.dimpro.hu` using Bridge auth.
+
+Acceptance result:
+- code: `DIMPRO_DRIVE_DESKTOP_V015_APPLY_ACCEPTANCE_PASS`
+- project: `d6-irodaepulet`
+- folder: `drive-folder-03148ec117a64388d88a` (`99_Archivum`)
+- document: `drive-document-cde50a0b770f`
+- version: `drive-version-dad16b7f2b7d`
+- source SHA-256: `4455993068b7beef4ae7ab2b1a4aa7165b4a914f7fdf1d11926b992485137f52`
+- download SHA-256: `4455993068b7beef4ae7ab2b1a4aa7165b4a914f7fdf1d11926b992485137f52`
+- serverMutation: true
+- localMutation: true
+- delete: false
+
+Server-side read-back verification:
+- document source: `DESKTOP`
+- currentVersionNumber: 1
+- object storage provider: `S3`
+- version size: 206 bytes
+- stored SHA-256 matches the physical Windows source/download SHA-256
+- version status after complete: `QUARANTINED`
+- normalized revision code: `R00`
+- createdBy: `drive-desktop-desktop-a0b5dm2`
+
+Observed non-blocking defect:
+- UTF-8 text supplied in `description` is rendered with replacement characters in the server-side document details (`tesztf�jl`, `t�rl�s`, etc.). Binary/file integrity is unaffected; metadata request/response encoding needs a dedicated fix before general desktop release.
+
+Next acceptance gate should be controlled `UPLOAD_VERSION` on the same dedicated DEV acceptance document, followed by exact-version download and SHA-256 verification. This must remain DEV-only and requires a new explicit mutation confirmation.
