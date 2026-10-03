@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 30/30 PASS.
+- AUTH V0.2.1 security contract: 31/31 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
