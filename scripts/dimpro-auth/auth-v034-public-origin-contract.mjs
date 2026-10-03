@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
+const read=(p)=>fs.readFileSync(path.join(root,p),"utf8");
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const authorize=read("app/api/dimpro-auth/authorize/route.ts");
+const callback=read("app/api/dimpro-auth/callback/route.ts");
+const activation=read("scripts/dimpro-auth/activate-dev.mjs");
+check("authorize no longer clones internal request.nextUrl for login redirect",()=>{assert.doesNotMatch(authorize,/const loginUrl = request\.nextUrl\.clone\(\)/);assert.match(authorize,/x-forwarded-host/);assert.match(authorize,/https:\/\/auth\.dev\.dimpro\.hu/);assert.match(authorize,/https:\/\/auth\.dimpro\.hu/)});
+check("loopback development keeps direct localhost compatibility",()=>{assert.match(authorize,/normalizedHost === "localhost"/);assert.match(authorize,/normalizedHost === "127\.0\.0\.1"/);assert.match(authorize,/x-forwarded-proto/)});
+check("authorization request id is preserved on canonical login redirect",()=>assert.match(authorize,/loginUrl\.searchParams\.set\("ar", requestId\)/));
+check("Drive callback redirect derives from configured public redirect URI origin",()=>{assert.match(callback,/const driveOrigin = new URL\(config\.redirectUri\)\.origin/);assert.match(callback,/new URL\(flow\.returnTo, driveOrigin\)/);assert.doesNotMatch(callback,/request\.nextUrl\.origin/);assert.doesNotMatch(callback,/request\.nextUrl\.clone\(\)/)});
+check("DEV activation runs public-origin contract",()=>assert.match(activation,/contract-v034/));
+console.log(`DIMPRO AUTH V0.3.4 public-origin contract PASS · ${n}/${n}`);

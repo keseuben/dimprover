@@ -64,10 +64,7 @@ export async function GET(request: NextRequest) {
       console.warn("DIMPRO project membership SSO sync hiba:", error instanceof Error ? error.message : "Ismeretlen sync hiba");
     }
   }
-  const target = request.nextUrl.clone();
-  const destination = new URL(flow.returnTo, request.nextUrl.origin);
-  target.pathname = destination.pathname;
-  target.search = destination.search;
-  target.hash = "";
+  const driveOrigin = new URL(config.redirectUri).origin;
+  const target = new URL(flow.returnTo, driveOrigin);
   return noLeak(NextResponse.redirect(target));
 }

@@ -55,6 +55,7 @@ run("contract-v021","scripts/dimpro-auth/auth-v021-security-contract.mjs");
 run("contract-v030","scripts/dimpro-auth/auth-v030-invitation-contract.mjs");
 run("contract-v031","scripts/dimpro-auth/auth-v031-project-scope-contract.mjs");
 run("contract-v033","scripts/dimpro-auth/auth-v033-session-policy-contract.mjs");
+run("contract-v034","scripts/dimpro-auth/auth-v034-public-origin-contract.mjs");
 
 if(mode==="plan"){
   console.log(JSON.stringify({

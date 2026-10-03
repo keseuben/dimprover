@@ -60,9 +60,16 @@ export async function GET(request: NextRequest) {
     const authToken = request.cookies.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
     const session = authToken ? await getAuthSessionByToken(authToken, true) : null;
     if (!session) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.search = "";
+      const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || "";
+      const requestHost = forwardedHost || request.headers.get("host")?.trim() || "";
+      const normalizedHost = requestHost.toLowerCase().replace(/:\d+$/, "");
+      const isLoopback = normalizedHost === "localhost" || normalizedHost === "127.0.0.1";
+      const loginOrigin = isLoopback
+        ? `${(request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase() === "https" ? "https" : "http")}://${requestHost}`
+        : environment === "PROD"
+          ? "https://auth.dimpro.hu"
+          : "https://auth.dev.dimpro.hu";
+      const loginUrl = new URL("/login", loginOrigin);
       loginUrl.searchParams.set("ar", requestId);
       return NextResponse.redirect(loginUrl);
     }
