@@ -44,6 +44,7 @@ import type {
   DriveTree,
   DriveViewMode,
 } from "./driveTypes";
+import type { DriveNavigationRequest } from "./driveBuildInfo";
 import styles from "./DriveWorkspace.module.css";
 
 type DriveWorkspaceOption = {
@@ -62,6 +63,8 @@ type Props = {
   workspaceOptions?: DriveWorkspaceOption[];
   selectedWorkspaceId?: string;
   onWorkspaceChange?: (workspaceId: string) => void;
+  navigationRequest?: DriveNavigationRequest;
+  onStorageQuotaChange?: (quota: DriveStorageQuota | null) => void;
 };
 
 type ProjectMembershipRole = "OWNER" | "PROJECT_MANAGER" | "CONTRIBUTOR" | "REVIEWER" | "VIEWER";
@@ -202,6 +205,8 @@ export default function DriveWorkspace({
   workspaceOptions = [],
   selectedWorkspaceId = "",
   onWorkspaceChange,
+  navigationRequest,
+  onStorageQuotaChange,
 }: Props) {
   const [tree, setTree] = useState<DriveTree | null>(null);
   const [health, setHealth] = useState<DriveHealth | null>(null);
@@ -240,6 +245,9 @@ export default function DriveWorkspace({
   const [reviewFocus, setReviewFocus] = useState("");
   const [detailsFocus, setDetailsFocus] = useState<{ documentId: string; field: "planNo" | "planTitle" | "scales" | "numbering" } | null>(null);
   const [boxShelfOpen, setBoxShelfOpen] = useState(false);
+  const [favoriteDocumentIds, setFavoriteDocumentIds] = useState<string[]>([]);
+  const [favoriteBusyDocumentIds, setFavoriteBusyDocumentIds] = useState<string[]>([]);
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [compareActive, setCompareActive] = useState(false);
   const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -367,28 +375,33 @@ export default function DriveWorkspace({
   const load = useCallback(async () => {
     setError("");
     try {
-      const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse] = await Promise.all([
+      const [healthResponse, treeResponse, metadataResponse, storageResponse, settingsResponse, favoritesResponse] = await Promise.all([
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/health`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/tree`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/metadata`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/storage`, { credentials: "same-origin", cache: "no-store" }),
         fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/settings`, { credentials: "same-origin", cache: "no-store" }),
+        fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/favorites`, { credentials: "same-origin", cache: "no-store" }),
       ]);
       const healthPayload = await healthResponse.json() as DriveHealth;
       const treePayload = await treeResponse.json() as TreePayload;
       const metadataPayload = await metadataResponse.json() as { ok?: boolean; metadata?: DriveEngineeringMetadata[] };
       const storagePayload = await storageResponse.json().catch(() => ({})) as { ok?: boolean; storage?: DriveStorageQuota };
       const settingsPayload = await settingsResponse.json().catch(() => ({})) as { ok?: boolean; settings?: DriveProjectSettings };
+      const favoritesPayload = await favoritesResponse.json().catch(() => ({})) as { ok?: boolean; documentIds?: string[] };
       if (!healthResponse.ok || !healthPayload.ok) throw new Error(healthPayload.error || "A Drive rendszerállapot nem tölthető be.");
       if (!treeResponse.ok || !treePayload.ok || !treePayload.tree) throw new Error(treePayload.error || "A projekt dokumentumtára nem tölthető be.");
       setHealth(healthPayload);
-      setStorageQuota(storageResponse.ok && storagePayload.ok && storagePayload.storage ? storagePayload.storage : null);
+      const nextStorageQuota = storageResponse.ok && storagePayload.ok && storagePayload.storage ? storagePayload.storage : null;
+      setStorageQuota(nextStorageQuota);
+      onStorageQuotaChange?.(nextStorageQuota);
       setTree(treePayload.tree);
       setApiPermissions(treePayload.permissions || []);
       setMembershipRole(treePayload.membershipRole || "");
       setMembershipDisplayName(treePayload.membershipDisplayName || "");
       setMetadataByDocument(Object.fromEntries((metadataPayload.ok ? metadataPayload.metadata || [] : []).map((item) => [item.documentId, item])));
       setProjectSettings(settingsResponse.ok && settingsPayload.ok && settingsPayload.settings ? settingsPayload.settings : null);
+      setFavoriteDocumentIds(favoritesResponse.ok && favoritesPayload.ok ? favoritesPayload.documentIds || [] : []);
       if (healthPayload.workspace?.databaseReady) await loadBoxes(); else setBoxes([]);
       setSelectedFolderId((current) => current === "all" || treePayload.tree?.folders.some((folder) => folder.id === current) ? current : "all");
       setSelectedDocumentId((current) => {
@@ -415,7 +428,7 @@ export default function DriveWorkspace({
       }
     } finally {
     }
-  }, [loadBoxes, projectId]);
+  }, [loadBoxes, onStorageQuotaChange, projectId]);
 
   useEffect(() => {
     if (bootLoaderHoldTimerRef.current !== null) {
@@ -428,10 +441,14 @@ export default function DriveWorkspace({
     setTree(null);
     setHealth(null);
     setStorageQuota(null);
+    onStorageQuotaChange?.(null);
     setBoxes([]);
     setDetails(null);
     setMetadataByDocument({});
     setProjectSettings(null);
+    setFavoriteDocumentIds([]);
+    setFavoriteBusyDocumentIds([]);
+    setFavoriteOnly(false);
     setMembershipRole("");
     setMembershipDisplayName("");
     setReviewFocus("");
@@ -439,7 +456,7 @@ export default function DriveWorkspace({
     setAllFilesInFolderMode(false);
     setSelectedDocumentId("");
     void load();
-  }, [load, projectId]);
+  }, [load, onStorageQuotaChange, projectId]);
 
   const loadDetails = useCallback(async (documentId: string) => {
     if (!documentId) {
@@ -508,26 +525,31 @@ export default function DriveWorkspace({
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("hu-HU");
     return (tree?.documents || []).filter((document) => {
-      const folderMatch = selectedFolderId === "all"
-        ? !document.folderId
-        : allFilesInFolderMode
-          ? selectedFolderScopeIds.has(document.folderId)
-          : document.folderId === selectedFolderId;
+      const folderMatch = favoriteOnly
+        ? true
+        : selectedFolderId === "all"
+          ? !document.folderId
+          : allFilesInFolderMode
+            ? selectedFolderScopeIds.has(document.folderId)
+            : document.folderId === selectedFolderId;
       const queryMatch = !normalized || [document.name, document.description, document.extension, document.source, document.currentVersion?.revisionCode || ""]
         .join(" ")
         .toLocaleLowerCase("hu-HU")
         .includes(normalized);
-      return folderMatch && queryMatch;
+      const favoriteMatch = !favoriteOnly || favoriteDocumentIds.includes(document.id);
+      return folderMatch && queryMatch && favoriteMatch;
     });
-  }, [allFilesInFolderMode, query, selectedFolderId, selectedFolderScopeIds, tree]);
+  }, [allFilesInFolderMode, favoriteDocumentIds, favoriteOnly, query, selectedFolderId, selectedFolderScopeIds, tree]);
 
   const visibleFolderCount = useMemo(() => {
-    if (!tree || allFilesInFolderMode) return 0;
+    if (!tree || allFilesInFolderMode || favoriteOnly) return 0;
     const parentId = selectedFolderId === "all" ? null : selectedFolderId;
     return tree.folders.filter((folder) => folder.parentId === parentId).length;
-  }, [allFilesInFolderMode, selectedFolderId, tree]);
+  }, [allFilesInFolderMode, favoriteOnly, selectedFolderId, tree]);
 
-  const fileGridSubtitle = `${visibleDocuments.length} fájl · ${visibleFolderCount} mappa${allFilesInFolderMode ? " · almappákkal együtt" : ""}`;
+  const fileGridSubtitle = favoriteOnly
+    ? `${visibleDocuments.length} kedvenc fájl`
+    : `${visibleDocuments.length} fájl · ${visibleFolderCount} mappa${allFilesInFolderMode ? " · almappákkal együtt" : ""}`;
 
   useEffect(() => {
     if (selectedFolderId === "all" && allFilesInFolderMode) setAllFilesInFolderMode(false);
@@ -540,6 +562,56 @@ export default function DriveWorkspace({
     setNewFolderEditorOpen(false);
     setNewFolderName("Új mappa");
   }, [selectedFolderId, newFolderSaving]);
+
+  useEffect(() => {
+    if (!navigationRequest?.id) return;
+    if (navigationRequest.target === "favorites") {
+      setFavoriteOnly(true);
+      setSelectedFolderId("all");
+      setAllFilesInFolderMode(false);
+      setQuery("");
+      return;
+    }
+    setFavoriteOnly(false);
+    if (navigationRequest.target === "incoming" && navigationRequest.folderId) {
+      setSelectedFolderId(navigationRequest.folderId);
+      setAllFilesInFolderMode(false);
+      setQuery("");
+      return;
+    }
+    if (navigationRequest.target === "boxes") {
+      setBoxShelfOpen(true);
+      return;
+    }
+    if (navigationRequest.target === "documents") {
+      setSelectedFolderId("all");
+      setAllFilesInFolderMode(false);
+      setQuery("");
+    }
+  }, [navigationRequest]);
+
+  async function toggleFavorite(document: DriveDocument) {
+    if (favoriteBusyDocumentIds.includes(document.id)) return;
+    const nextFavorite = !favoriteDocumentIds.includes(document.id);
+    setFavoriteBusyDocumentIds((current) => [...current, document.id]);
+    setFavoriteDocumentIds((current) => nextFavorite ? [document.id, ...current.filter((id) => id !== document.id)] : current.filter((id) => id !== document.id));
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/favorites`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ documentId: document.id, favorite: nextFavorite }),
+      });
+      const payload = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; documentIds?: string[] };
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A kedvenc állapot nem menthető.");
+      if (payload.documentIds) setFavoriteDocumentIds(payload.documentIds);
+    } catch (caught) {
+      setFavoriteDocumentIds((current) => nextFavorite ? current.filter((id) => id !== document.id) : [document.id, ...current.filter((id) => id !== document.id)]);
+      setError(caught instanceof Error ? caught.message : "A kedvenc állapot nem menthető.");
+    } finally {
+      setFavoriteBusyDocumentIds((current) => current.filter((id) => id !== document.id));
+    }
+  }
 
   function openNewFolderEditor() {
     if (!canWrite || newFolderSaving) return;
@@ -2145,7 +2217,7 @@ export default function DriveWorkspace({
 
   const folderHidden = layoutMode !== "three";
   const detailsHidden = layoutMode === "one";
-  const titleBase = selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
+  const titleBase = favoriteOnly ? "Kedvencek" : selectedFolder?.displayName || selectedFolder?.name || "Dokumentumtár";
   const title = allFilesInFolderMode && selectedFolder ? titleBase + " · Összes fájl" : titleBase;
   const breadcrumbParts = (selectedFolder?.displayPath || selectedFolder?.path || "").split("/").filter(Boolean);
 
@@ -2748,13 +2820,16 @@ export default function DriveWorkspace({
               onOpenDocument={(document) => { closeTableFullscreen(); void openDocument(document); }}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
+              favoriteDocumentIds={favoriteDocumentIds}
+              favoriteBusyDocumentIds={favoriteBusyDocumentIds}
+              onToggleFavorite={(document) => void toggleFavorite(document)}
               metadataByDocument={metadataByDocument}
-              folders={tree?.folders || []}
+              folders={favoriteOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}
               allFilesMode={allFilesInFolderMode}
               onAllFilesModeChange={setFolderFileScope}
-              currentFolder={selectedFolder}
-              onFolderChange={selectFolder}
+              currentFolder={favoriteOnly ? null : selectedFolder}
+              onFolderChange={(folderId) => { setFavoriteOnly(false); selectFolder(folderId); }}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
                 selectFolder(selectedFolder.parentId || "all");
@@ -2904,13 +2979,16 @@ export default function DriveWorkspace({
               onOpenDocument={(document) => void openDocument(document)}
               onRefresh={() => void load()}
               boxColorsByDocument={boxColorsByDocument}
+              favoriteDocumentIds={favoriteDocumentIds}
+              favoriteBusyDocumentIds={favoriteBusyDocumentIds}
+              onToggleFavorite={(document) => void toggleFavorite(document)}
               metadataByDocument={metadataByDocument}
-              folders={tree?.folders || []}
+              folders={favoriteOnly ? [] : tree?.folders || []}
               selectedFolderId={selectedFolderId}
               allFilesMode={allFilesInFolderMode}
               onAllFilesModeChange={setFolderFileScope}
-              currentFolder={selectedFolder}
-              onFolderChange={selectFolder}
+              currentFolder={favoriteOnly ? null : selectedFolder}
+              onFolderChange={(folderId) => { setFavoriteOnly(false); selectFolder(folderId); }}
               onNavigateParent={() => {
                 if (!selectedFolder) return;
                 selectFolder(selectedFolder.parentId || "all");

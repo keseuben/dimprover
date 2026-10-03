@@ -69,6 +69,8 @@
 
 .railButton:hover,
 .railLink:hover { background: rgba(255,255,255,0.08); color: white; transform: translateY(-1px); }
+.railDisabled { opacity: .35; cursor: default; }
+.railDisabled:hover { background: transparent; color: #c7d7e8; transform: none; }
 .railActive { background: linear-gradient(145deg, #176bff, #1b82ff); color: white; box-shadow: 0 6px 18px rgba(23, 107, 255, 0.3); }
 .railSpacer { flex: 1; }
 .railVersion { font-size: var(--drive-font-xs); color: #839bb2; writing-mode: vertical-rl; transform: rotate(180deg); margin: 6px 0; }
@@ -92,10 +94,12 @@
 }
 .shellBoardClosed .board { opacity: 0; pointer-events: none; transform: translateX(calc(-100% - 10px)); }
 .shellBoardOpen .board,.shellBoardPinned .board { opacity: 1; pointer-events: auto; transform: translateX(0); }
-.boardInner { width: var(--board-width); height: 100%; display: flex; flex-direction: column; padding: 14px 12px 18px; }
+.boardInner { width: var(--board-width); height: 100%; display: flex; flex-direction: column; padding: 14px 12px 18px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .boardHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 13px; border-bottom: 1px solid rgba(148,163,184,0.16); }
 .boardTitle { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.boardTitleMeta { min-width: 0; display: grid; gap: 1px; }
 .boardTitle strong { font-size: 14px; white-space: nowrap; }
+.boardTitleMeta small { color: #7f9ab3; font-size: 8px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
 .boardHeaderActions { display: flex; align-items: center; gap: 3px; }
 .boardPin,.boardClose { border: 0; background: transparent; color: #9fb5c9; cursor: pointer; padding: 5px; border-radius: 7px; display: grid; place-items: center; }
 .boardPin:hover,.boardClose:hover { background: rgba(255,255,255,0.08); color: white; }
@@ -106,13 +110,17 @@
 .boardNav a:hover,
 .boardNav button:hover { background: rgba(255,255,255,0.07); color: white; }
 .boardNav .boardActive { background: rgba(20,115,255,0.2); color: #9bc4ff; }
+.boardNav .boardNavDisabled { opacity: .46; cursor: default; }
+.boardNav .boardNavDisabled:hover { background: transparent; color: #d7e4ef; }
+.boardNav .boardNavDisabled small { margin-left: auto; color: #718ba3; font-size: 8px; font-weight: 800; }
 .boardSectionLabel { font-size: var(--drive-font-xs); font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: #7894ae; padding: 12px 8px 5px; }
 .projectSelect { width: 100%; border: 1px solid rgba(148,163,184,0.22); background: rgba(255,255,255,0.06); color: white; border-radius: 9px; padding: 9px 10px; font-size: 11px; outline: none; }
 .projectSelect option { color: #172033; }
 .storageCard { margin-top: auto; border-top: 1px solid rgba(148,163,184,0.16); padding-top: 14px; }
 .storageRow { display: flex; justify-content: space-between; gap: 8px; font-size: var(--drive-font-sm); color: #aac0d2; }
 .storageBar { margin-top: 8px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
-.storageBarFill { width: 27%; height: 100%; background: linear-gradient(90deg, #1e6cff, #28b7d8); border-radius: inherit; }
+.storageBarFill { height: 100%; background: linear-gradient(90deg, #1e6cff, #28b7d8); border-radius: inherit; transition: width 180ms ease; }
+.storageError { margin-top: 6px; color: #e7a6a6; font-size: 9px; line-height: 1.35; }
 .storageButton { width: 100%; margin-top: 10px; border: 1px solid rgba(52,139,255,0.55); background: rgba(17,103,238,0.08); color: #7db7ff; border-radius: 8px; padding: 8px; font-size: var(--drive-font-sm); font-weight: 800; cursor: pointer; }
 
 .main { min-width: 0; display: flex; flex-direction: column; min-height: 100vh; background: #f7fafc; }
@@ -3318,7 +3326,7 @@
 }
 
 .statusIconColumn {
-  min-width: 104px;
+  min-width: 124px;
   text-align: left !important;
   padding-left: 7px !important;
   padding-right: 7px !important;
@@ -3961,6 +3969,24 @@
 .versionStatusStaged { background: #4d8fd8; }
 .versionStatusMetadata { background: #9aa9b8; }
 
+.favoriteToggle {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #8da0b3;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+.favoriteToggle:hover:not(:disabled) { background: #fff7d6; color: #e0a000; }
+.favoriteToggle:disabled { opacity: .45; cursor: wait; }
+.favoriteToggleActive { color: #f0b400; }
+.favoriteToggleActive svg { fill: currentColor; }
+
 .boxInlineMarker {
   min-width: 10px;
   display: inline-flex;
@@ -4084,3 +4110,843 @@
   font-weight: 700;
 }
 .trashDialogSummary strong { color: #263f58; font-size: 13px; }
+
+/* DIMPRO Drive V0.9.9 – persistent light/dark appearance */
+.themeControl {
+  display: grid;
+  gap: 7px;
+  padding: 5px 0 2px;
+}
+.themeControl > span {
+  color: #7894ae;
+  font-size: var(--drive-font-xs);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.themeSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 9px;
+  background: rgba(255,255,255,.045);
+}
+.themeSwitch button {
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #91a8bd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: var(--drive-font-xs);
+  font-weight: 850;
+  cursor: pointer;
+}
+.themeSwitch button:hover { background: rgba(255,255,255,.07); color: #f4f9ff; }
+.themeSwitch .themeSwitchActive {
+  background: rgba(36,128,255,.20);
+  color: #bcd8ff;
+  box-shadow: inset 0 0 0 1px rgba(83,153,255,.25);
+}
+
+:global(html[data-drive-theme="dark"]) .shell {
+  --navy: #041220;
+  --navy-2: #071f35;
+  --line: #26394b;
+  --soft: #132130;
+  --muted: #94a8bb;
+  --ink: #e7eef6;
+  --blue: #4a91ff;
+  --cyan: #2cb8d4;
+  background: #07121e;
+  color: var(--ink);
+}
+:global(html[data-drive-theme="dark"]) .main {
+  background: #08131f;
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .projectHeader,
+:global(html[data-drive-theme="dark"]) .toolbar,
+:global(html[data-drive-theme="dark"]) .breadcrumb {
+  background: #0d1a28;
+  border-color: #26394b;
+  color: #c8d7e5;
+}
+:global(html[data-drive-theme="dark"]) .projectIdentity h1 { color: #f0f5fa; }
+:global(html[data-drive-theme="dark"]) .projectMeta,
+:global(html[data-drive-theme="dark"]) .workspaceSelectorLabel,
+:global(html[data-drive-theme="dark"]) .breadcrumb { color: #93a8ba; }
+:global(html[data-drive-theme="dark"]) .projectIcon {
+  border-color: #2b4258;
+  background: #132334;
+  color: #c7daec;
+}
+:global(html[data-drive-theme="dark"]) .activeBadge {
+  background: #123727;
+  color: #71d49c;
+}
+:global(html[data-drive-theme="dark"]) .workspaceSelector,
+:global(html[data-drive-theme="dark"]) .searchBox {
+  border-color: #31475b;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .workspaceSelector:hover,
+:global(html[data-drive-theme="dark"]) .searchBox:focus-within {
+  border-color: #4e7397;
+  background: #14283a;
+}
+:global(html[data-drive-theme="dark"]) .searchBox input { color: #e0e9f2; }
+:global(html[data-drive-theme="dark"]) .searchBox input::placeholder { color: #758da4; }
+
+:global(html[data-drive-theme="dark"]) .toolButton,
+:global(html[data-drive-theme="dark"]) .smallButton,
+:global(html[data-drive-theme="dark"]) .layoutSwitcher button,
+:global(html[data-drive-theme="dark"]) .viewToggle button,
+:global(html[data-drive-theme="dark"]) .fileFolderUpButton,
+:global(html[data-drive-theme="dark"]) .fileFolderAllFilesButton,
+:global(html[data-drive-theme="dark"]) .boxShelfNewButton {
+  border-color: #30475b;
+  background: #122231;
+  color: #c8d7e5;
+}
+:global(html[data-drive-theme="dark"]) .toolButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .smallButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .layoutSwitcher button:hover,
+:global(html[data-drive-theme="dark"]) .viewToggle button:hover,
+:global(html[data-drive-theme="dark"]) .fileFolderUpButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .fileFolderAllFilesButton:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .boxShelfNewButton:hover {
+  border-color: #4b7195;
+  background: #183047;
+  color: #edf6ff;
+}
+:global(html[data-drive-theme="dark"]) .toolButton:disabled,
+:global(html[data-drive-theme="dark"]) .smallButton:disabled {
+  background: #111c28;
+  border-color: #263746;
+  color: #667b8e;
+}
+:global(html[data-drive-theme="dark"]) .toolPrimary {
+  background: linear-gradient(180deg,#267cff,#1761dc);
+  border-color: #267cff;
+  color: #fff;
+}
+:global(html[data-drive-theme="dark"]) .toolPurple {
+  background: linear-gradient(180deg,#8756df,#6534b5);
+  border-color: #925fe5;
+  color: #fff;
+}
+:global(html[data-drive-theme="dark"]) .toolActive,
+:global(html[data-drive-theme="dark"]) .layoutSwitcher .layoutActive,
+:global(html[data-drive-theme="dark"]) .viewToggle .viewToggleActive {
+  border-color: #4f90e8;
+  background: #153153;
+  color: #8bc0ff;
+}
+
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu,
+:global(html[data-drive-theme="dark"]) .rowActionMenu,
+:global(html[data-drive-theme="dark"]) .dropDescription {
+  border-color: #314559;
+  background: #101e2b;
+  color: #c2d0dd;
+  box-shadow: 0 14px 34px rgba(0,0,0,.34);
+}
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu button,
+:global(html[data-drive-theme="dark"]) .rowActionMenu button { color: #c8d7e4; }
+:global(html[data-drive-theme="dark"]) .toolbarActionMenu button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .rowActionMenu button:hover:not(:disabled) {
+  background: #193149;
+  color: #8fc4ff;
+}
+:global(html[data-drive-theme="dark"]) .toolbarMenuSeparator { background: #293c4e; }
+
+:global(html[data-drive-theme="dark"]) .browser,
+:global(html[data-drive-theme="dark"]) .panel,
+:global(html[data-drive-theme="dark"]) .filePanel,
+:global(html[data-drive-theme="dark"]) .detailsPanel,
+:global(html[data-drive-theme="dark"]) .reviewHost {
+  background: #0b1724;
+  border-color: #26394a;
+}
+:global(html[data-drive-theme="dark"]) .panelHeader,
+:global(html[data-drive-theme="dark"]) .fileFolderNav {
+  border-color: #25384a;
+  background: #0f1d2b;
+}
+:global(html[data-drive-theme="dark"]) .panelHeader span,
+:global(html[data-drive-theme="dark"]) .filePanelTitle span,
+:global(html[data-drive-theme="dark"]) .filePanelSubtitle,
+:global(html[data-drive-theme="dark"]) .fileFolderPath { color: #8ea3b6; }
+:global(html[data-drive-theme="dark"]) .filePanelTitleMain,
+:global(html[data-drive-theme="dark"]) .displayNameText,
+:global(html[data-drive-theme="dark"]) .fileDisplayNameFallback,
+:global(html[data-drive-theme="dark"]) .tableFolderNameText { color: #dce7f1; }
+:global(html[data-drive-theme="dark"]) .fileRawName { color: #8ea4b8; }
+:global(html[data-drive-theme="dark"]) .folderRow,
+:global(html[data-drive-theme="dark"]) .folderTreeSelect { color: #c1d0dd; }
+:global(html[data-drive-theme="dark"]) .folderRow:hover,
+:global(html[data-drive-theme="dark"]) .folderTreeSelect:hover { background: #14283a; }
+:global(html[data-drive-theme="dark"]) .folderActive {
+  background: #15365a;
+  color: #8ec2ff;
+}
+
+:global(html[data-drive-theme="dark"]) .fileFolderNav select,
+:global(html[data-drive-theme="dark"]) .shell input,
+:global(html[data-drive-theme="dark"]) .shell textarea,
+:global(html[data-drive-theme="dark"]) .shell select {
+  border-color: #31475b;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .shell input::placeholder,
+:global(html[data-drive-theme="dark"]) .shell textarea::placeholder { color: #6f879e; }
+:global(html[data-drive-theme="dark"]) .shell select option {
+  background: #101f2e;
+  color: #dbe7f1;
+}
+
+:global(html[data-drive-theme="dark"]) .fileTable th {
+  background: #101f2e;
+  border-color: #293b4d;
+  color: #93a7ba;
+}
+:global(html[data-drive-theme="dark"]) .fileTable td {
+  border-color: #1c2d3e;
+  color: #cbd9e5;
+  background: #0b1724;
+}
+:global(html[data-drive-theme="dark"]) .fileRow:hover td,
+:global(html[data-drive-theme="dark"]) .tableFolderRow:hover td { background: #112437 !important; }
+:global(html[data-drive-theme="dark"]) .fileSelected td,
+:global(html[data-drive-theme="dark"]) .tableFolderRowSelected td { background: #16375b !important; }
+:global(html[data-drive-theme="dark"]) .folderUpRow td {
+  background: #0e1d2c !important;
+  color: #b8c9d8 !important;
+  border-color: #263a4d !important;
+}
+:global(html[data-drive-theme="dark"]) .folderUpRow:hover td { background: #142a3f !important; }
+:global(html[data-drive-theme="dark"]) .newFolderRow td {
+  background: #10243a !important;
+  border-color: #29445f !important;
+}
+:global(html[data-drive-theme="dark"]) .newFolderInput {
+  border-color: #4e7eac;
+  background: #0c1c2b;
+  color: #e4edf5;
+}
+:global(html[data-drive-theme="dark"]) .statusBadge { background: #172838; color: #aebfd0; }
+:global(html[data-drive-theme="dark"]) .statusAvailable { background: #123928; color: #72d79e; }
+:global(html[data-drive-theme="dark"]) .statusQuarantine { background: #403414; color: #ffd26b; }
+:global(html[data-drive-theme="dark"]) .favoriteToggle { color: #7f95a9; }
+:global(html[data-drive-theme="dark"]) .favoriteToggle:hover:not(:disabled) { background: #493b12; color: #ffd24f; }
+:global(html[data-drive-theme="dark"]) .favoriteToggleActive { color: #ffc62f; }
+:global(html[data-drive-theme="dark"]) .boxCountMarker { background: #17314a; color: #8cc3f5; }
+:global(html[data-drive-theme="dark"]) .rowQuickActions > button { color: #91a6b8; }
+:global(html[data-drive-theme="dark"]) .rowQuickActions > button:hover:not(:disabled) {
+  background: #1a334c;
+  color: #91c7ff;
+}
+:global(html[data-drive-theme="dark"]) .rowQuickActions > .rowTrashAction:hover:not(:disabled) {
+  background: #442127;
+  color: #ff8b92;
+}
+
+:global(html[data-drive-theme="dark"]) .detailsHeaderTitle { color: #e0e9f2; }
+:global(html[data-drive-theme="dark"]) .detailsHeaderText span,
+:global(html[data-drive-theme="dark"]) .metaItem label,
+:global(html[data-drive-theme="dark"]) .detailsTabs button { color: #93a7b9; }
+:global(html[data-drive-theme="dark"]) .detailsTabs .detailsTabActive {
+  border-bottom-color: #4b96ff;
+  color: #79b4ff;
+}
+:global(html[data-drive-theme="dark"]) .previewPlaceholder,
+:global(html[data-drive-theme="dark"]) .infoBox,
+:global(html[data-drive-theme="dark"]) .versionCard,
+:global(html[data-drive-theme="dark"]) .folderPasswordInfo {
+  border-color: #2d4255;
+  background: #101f2d;
+  color: #a7bacb;
+}
+:global(html[data-drive-theme="dark"]) .previewPlaceholder strong,
+:global(html[data-drive-theme="dark"]) .infoBox strong,
+:global(html[data-drive-theme="dark"]) .folderPasswordInfo strong { color: #d9e6f0; }
+
+:global(html[data-drive-theme="dark"]) .noticeError {
+  background: #35191d;
+  color: #ff9da2;
+  border-color: #633039;
+}
+:global(html[data-drive-theme="dark"]) .noticeSuccess,
+:global(html[data-drive-theme="dark"]) .shellNotice {
+  background: #102d21;
+  color: #78d6a0;
+  border-color: #28563e;
+}
+:global(html[data-drive-theme="dark"]) .noticeInfo {
+  background: #122a43;
+  color: #8bc3ff;
+  border-color: #284d71;
+}
+
+:global(html[data-drive-theme="dark"]) .boxShelf,
+:global(html[data-drive-theme="dark"]) .boxShelfContent,
+:global(html[data-drive-theme="dark"]) .boxComposer,
+:global(html[data-drive-theme="dark"]) .boxShelfPanel,
+:global(html[data-drive-theme="dark"]) .boxHistoryPanel {
+  background: #0d1b29;
+  border-color: #2a3e51;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .boxShelfHeader:hover,
+:global(html[data-drive-theme="dark"]) .boxShelfCollapsed .boxShelfHeader:hover { background: #14283a; }
+:global(html[data-drive-theme="dark"]) .boxShelfTitle span,
+:global(html[data-drive-theme="dark"]) .boxComposerHeading span { color: #8ca2b5; }
+:global(html[data-drive-theme="dark"]) .boxComposerBody input,
+:global(html[data-drive-theme="dark"]) .boxComposerBody select,
+:global(html[data-drive-theme="dark"]) .boxItemFolderSelect {
+  background: #101f2e;
+  border-color: #31475a;
+  color: #d7e4ee;
+}
+:global(html[data-drive-theme="dark"]) .boxCard,
+:global(html[data-drive-theme="dark"]) .boxCardBlue,
+:global(html[data-drive-theme="dark"]) .boxCardOrange,
+:global(html[data-drive-theme="dark"]) .boxCardPurple,
+:global(html[data-drive-theme="dark"]) .boxCardGreen,
+:global(html[data-drive-theme="dark"]) .boxCardCyan {
+  background: linear-gradient(145deg,#122335,#0d1a28);
+  color: #d7e3ed;
+  border-color: #35516b;
+}
+
+:global(html[data-drive-theme="dark"]) .projectCreatePanel,
+:global(html[data-drive-theme="dark"]) .issueDialogPanel,
+:global(html[data-drive-theme="dark"]) .folderRenameDialogPanel,
+:global(html[data-drive-theme="dark"]) .folderPasswordDialogPanel,
+:global(html[data-drive-theme="dark"]) .trashDialogPanel {
+  border-color: #30465a;
+  background: #0f1e2c;
+  color: #d6e2ec;
+  box-shadow: 0 26px 72px rgba(0,0,0,.50);
+}
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header strong { color: #e5edf5; }
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header span,
+:global(html[data-drive-theme="dark"]) .projectCreatePanel label { color: #9db0c1; }
+:global(html[data-drive-theme="dark"]) .projectCreatePanel header button,
+:global(html[data-drive-theme="dark"]) .projectCreatePanel footer button {
+  border-color: #31475a;
+  background: #132231;
+  color: #c7d6e3;
+}
+:global(html[data-drive-theme="dark"]) .projectPilotHint {
+  border-color: #315d47;
+  background: #102b20;
+  color: #7bd4a1;
+}
+:global(html[data-drive-theme="dark"]) .trashDialogSummary span {
+  border-color: #304458;
+  background: #122130;
+  color: #a8bbcc;
+}
+:global(html[data-drive-theme="dark"]) .trashDialogSummary strong { color: #e2ebf3; }
+
+:global(html[data-drive-theme="dark"]) .fullTableOverlay { background: #08131f; }
+:global(html[data-drive-theme="dark"]) .fullTableBar,
+:global(html[data-drive-theme="dark"]) .fullTableInspectorPanel {
+  background: #0d1a28;
+  border-color: #293c4f;
+}
+:global(html[data-drive-theme="dark"]) .fullTableIdentity strong { color: #e3ecf4; }
+:global(html[data-drive-theme="dark"]) .compareDiffPanel,
+:global(html[data-drive-theme="dark"]) .visualCompareOverlayViewport,
+:global(html[data-drive-theme="dark"]) .visualCompareFindingsPanel {
+  background: #101f2e;
+  border-color: #304559;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader {
+  border-color: #2d3f50;
+  color: #b792ff !important;
+}
+
+:global(html[data-drive-theme="dark"]) .externalDropOverlay { background: rgba(4,13,23,.86); }
+:global(html[data-drive-theme="dark"]) .externalDropOverlay > div {
+  border-color: #3b5a74;
+  background: #101f2e;
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .externalDropOverlay strong { color: #dcecff; }
+:global(html[data-drive-theme="dark"]) .externalDropOverlay span { color: #95aabd; }
+
+@media (prefers-contrast: more) {
+  :global(html[data-drive-theme="dark"]) .shell {
+    --line: #3a5369;
+    --ink: #f5f9fc;
+  }
+  :global(html[data-drive-theme="dark"]) .fileTable td { color: #e8f0f7; }
+  :global(html[data-drive-theme="dark"]) .fileTable th { color: #b9cad8; }
+}
+
+/* DIMPRO Drive V0.9.10 – dark theme completion for review/details/status surfaces */
+:global(html[data-drive-theme="dark"]) .fileSelectionBar,
+:global(html[data-drive-theme="dark"]) .fileCompactControls,
+:global(html[data-drive-theme="dark"]) .fileStatusLegend {
+  background: #0f1d2b;
+  border-color: #2a3d4f;
+  color: #9db0c1;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar label,
+:global(html[data-drive-theme="dark"]) .fileStatusLegendTitle {
+  color: #d5e1eb;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar button,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions button,
+:global(html[data-drive-theme="dark"]) .reviewReset {
+  border-color: #31475a;
+  background: #122231;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewCompactActions button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewReset:hover:not(:disabled) {
+  border-color: #4d7193;
+  background: #193149;
+  color: #91c7ff;
+}
+:global(html[data-drive-theme="dark"]) .fileDeleteSelected {
+  border-color: #6a3940 !important;
+  background: #321b20 !important;
+  color: #ff969c !important;
+}
+:global(html[data-drive-theme="dark"]) .fileDeleteSelected:hover:not(:disabled) {
+  border-color: #8b4b55 !important;
+  background: #472229 !important;
+}
+:global(html[data-drive-theme="dark"]) .fileStatusLegendDivider { color: #52677a; }
+:global(html[data-drive-theme="dark"]) .legendSwatchPending {
+  background: #273543;
+  border-color: #46596b !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchReview,
+:global(html[data-drive-theme="dark"]) .legendRowCurrent {
+  background: #173552;
+  border-color: #376a9d !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchReturned {
+  background: #443219;
+  border-color: #73572a !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchApproved,
+:global(html[data-drive-theme="dark"]) .legendRowApproved {
+  background: #173726;
+  border-color: #356147 !important;
+}
+:global(html[data-drive-theme="dark"]) .legendRowArchive {
+  background: #222d38;
+  border-color: #43505d !important;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewHost,
+:global(html[data-drive-theme="dark"]) .reviewTableWrap {
+  background: #0b1724;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader,
+:global(html[data-drive-theme="dark"]) .reviewFilters,
+:global(html[data-drive-theme="dark"]) .reviewBulkBar {
+  background: #0f1d2b;
+  border-color: #293c4e;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader span,
+:global(html[data-drive-theme="dark"]) .reviewLegend,
+:global(html[data-drive-theme="dark"]) .reviewFilters label,
+:global(html[data-drive-theme="dark"]) .reviewBulkBar > span,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > span {
+  color: #94a9bb;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader strong,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > strong,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > strong span {
+  color: #82bdff;
+}
+:global(html[data-drive-theme="dark"]) .reviewFilters input,
+:global(html[data-drive-theme="dark"]) .reviewFilters select,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters input,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters select,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid select {
+  border-color: #31475a;
+  background: #101f2e;
+  color: #d8e5ef;
+}
+:global(html[data-drive-theme="dark"]) .reviewFilters input:focus,
+:global(html[data-drive-theme="dark"]) .reviewFilters select:focus,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters input:focus,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters select:focus,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid select:focus {
+  border-color: #5a91c4;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.16);
+}
+
+:global(html[data-drive-theme="dark"]) .reviewTable th,
+:global(html[data-drive-theme="dark"]) .reviewTable th:first-child {
+  background: #101f2e !important;
+  border-color: #2a3c4e;
+  color: #a7bacb;
+}
+:global(html[data-drive-theme="dark"]) .reviewTable td,
+:global(html[data-drive-theme="dark"]) .reviewTable td:first-child {
+  background: #0b1724;
+  border-color: #1e3041;
+  color: #cbd9e5;
+  box-shadow: none;
+}
+:global(html[data-drive-theme="dark"]) .reviewTable tbody tr:hover td,
+:global(html[data-drive-theme="dark"]) .reviewTable tbody tr:hover td:first-child {
+  background: #112437 !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewName,
+:global(html[data-drive-theme="dark"]) .reviewNameExplicit,
+:global(html[data-drive-theme="dark"]) .reviewNameFallback {
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .reviewName:hover { color: #9dccff; }
+:global(html[data-drive-theme="dark"]) .reviewFileName { color: #9db0c1 !important; }
+:global(html[data-drive-theme="dark"]) .reviewSymbol { color: #b7c8d6; }
+:global(html[data-drive-theme="dark"]) .reviewSymbol:hover {
+  border-color: #466580;
+  background: #173049;
+  color: #88c2ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewRowSelected td,
+:global(html[data-drive-theme="dark"]) .reviewRowSelected td:first-child,
+:global(html[data-drive-theme="dark"]) .fileSelected td {
+  background: #17395f !important;
+  color: #edf6ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewRowSelected:hover td {
+  background: #1b426d !important;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleApprovedCurrent td {
+  background: #122c21;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleApprovedCurrent:hover td { background: #173729; }
+:global(html[data-drive-theme="dark"]) .rowLifecycleCurrent td {
+  background: #11283f;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleCurrent:hover td { background: #16334f; }
+:global(html[data-drive-theme="dark"]) .rowLifecycleArchive td {
+  background: #151f29;
+  color: #8295a7;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleArchive:hover td { background: #1b2733; }
+
+:global(html[data-drive-theme="dark"]) .reviewGroupHeader th {
+  border-bottom-color: #395064;
+  color: #bfd0de;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupTechnical {
+  background: #17314a !important;
+  color: #9dccff !important;
+  border-left-color: #36678f !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupCustomer {
+  background: #163328 !important;
+  color: #8fd4ae !important;
+  border-left-color: #35644e !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupManager {
+  background: #2b2542 !important;
+  color: #c3afff !important;
+  border-left-color: #574b7b !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupInvestor {
+  background: #1d3327 !important;
+  color: #9dd1ac !important;
+  border-left-color: #3f654b !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupLifecycle {
+  background: #222d38 !important;
+  color: #b5c4d0 !important;
+  border-left-color: #465766 !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(8),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(14),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(17),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(18),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(19),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(8),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(14),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(17),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(18),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(19) {
+  border-left-color: #34495c;
+}
+
+:global(html[data-drive-theme="dark"]) .detailsPanel,
+:global(html[data-drive-theme="dark"]) .detailsHeader,
+:global(html[data-drive-theme="dark"]) .detailsTabs,
+:global(html[data-drive-theme="dark"]) .detailsBody,
+:global(html[data-drive-theme="dark"]) .detailsWorkspace,
+:global(html[data-drive-theme="dark"]) .detailsFieldsPane,
+:global(html[data-drive-theme="dark"]) .detailsSplitCard {
+  background: #0d1a28;
+  border-color: #2a3d4f;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .detailsPreviewPane {
+  background: #091522;
+  border-color: #2a3d4f;
+}
+:global(html[data-drive-theme="dark"]) .detailsHeaderTitle,
+:global(html[data-drive-theme="dark"]) .detailsHeaderText strong { color: #e6eef6; }
+:global(html[data-drive-theme="dark"]) .detailsHeaderText span { color: #98adbf; }
+:global(html[data-drive-theme="dark"]) .detailsTabs button { color: #9cafbf; }
+:global(html[data-drive-theme="dark"]) .detailsTabs .detailsTabActive {
+  color: #83beff;
+  border-bottom-color: #4a91ff;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo,
+:global(html[data-drive-theme="dark"]) .reviewSection,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem,
+:global(html[data-drive-theme="dark"]) .reviewTimeline {
+  background: #101f2d;
+  border-color: #2e4356;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo span,
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader small,
+:global(html[data-drive-theme="dark"]) .reviewAuditLine,
+:global(html[data-drive-theme="dark"]) .observationEditorHead span {
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo strong,
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader strong,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem label,
+:global(html[data-drive-theme="dark"]) .observationEditorHead strong {
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader,
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle {
+  background: #132333;
+  border-color: #304559;
+  color: #c8d7e4;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle:hover {
+  background: #183047;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle small { color: #8ea3b6; }
+:global(html[data-drive-theme="dark"]) .reviewTimelineTableWrap { border-color: #304559; }
+:global(html[data-drive-theme="dark"]) .reviewTimelineTable th {
+  background: #132333;
+  color: #a8bac9;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineTable td {
+  border-color: #26394a;
+  background: #0f1d2b;
+  color: #c5d4e0;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewEditorItem select,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem input,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem textarea,
+:global(html[data-drive-theme="dark"]) .observationItem textarea {
+  border-color: #334a5e;
+  background: #0b1825;
+  color: #e0e9f2;
+}
+:global(html[data-drive-theme="dark"]) .reviewEditorItem[data-review-focused="true"] {
+  background: #122b43;
+  outline-color: #4a91ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewSection select:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection input:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection textarea:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection textarea[readonly] {
+  background: #16222d;
+  color: #788b9d;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButton {
+  border-color: #304559;
+  background: #132230;
+  color: #9db0c1;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButton:hover {
+  border-color: #4c7192;
+  background: #193047;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButtonActive,
+:global(html[data-drive-theme="dark"]) .reviewCategoryButtonActive:hover {
+  border-color: #4d8fd5;
+  background: #17375a;
+  color: #93c8ff;
+  box-shadow: inset 0 -2px 0 #4a91ff;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewChoice {
+  border-color: #34495b;
+  background: #142331;
+  color: #c6d5e1;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoice:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="ok"] {
+  background: #153524;
+  border-color: #3d6d50;
+  color: #8addaa;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="warn"] {
+  background: #443219;
+  border-color: #775829;
+  color: #ffd06b;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="danger"] {
+  background: #402126;
+  border-color: #784047;
+  color: #ff989f;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="neutral"] {
+  background: #173653;
+  border-color: #416e98;
+  color: #96caff;
+}
+:global(html[data-drive-theme="dark"]) .observationEditorHead button,
+:global(html[data-drive-theme="dark"]) .observationDelete {
+  border-color: #34495b;
+  background: #142331;
+  color: #b8c9d7;
+}
+:global(html[data-drive-theme="dark"]) .observationEditorHead button:hover:not(:disabled) {
+  background: #1a334b;
+  border-color: #507494;
+}
+:global(html[data-drive-theme="dark"]) .observationIndex {
+  background: #173653;
+  color: #9accff;
+}
+:global(html[data-drive-theme="dark"]) .observationSource { color: #91a5b7; }
+:global(html[data-drive-theme="dark"]) .observationEmpty {
+  border-color: #3a4f62;
+  color: #8fa3b4;
+}
+:global(html[data-drive-theme="dark"]) .observationNotice {
+  background: #132b43;
+  border-color: #345877;
+  color: #9ac6ef;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewProgress::before,
+:global(html[data-drive-theme="dark"]) .reviewProgressLine {
+  background: #334759;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressStep,
+:global(html[data-drive-theme="dark"]) .reviewProgressPending {
+  background: #182634;
+  border-color: #35495b;
+  color: #91a4b4;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressDone {
+  background: #153525;
+  border-color: #38684b;
+  color: #8ad7a8;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressActive {
+  background: #173754;
+  border-color: #4677a3;
+  color: #9acbff;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.09);
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressReturned {
+  background: #44301a;
+  border-color: #72532b;
+  color: #ffd071;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewApproval_pending,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_working,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_archive {
+  background: #24313d;
+  border-color: #445565;
+  color: #a8b8c6;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_review,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_current {
+  background: #163552;
+  border-color: #3a6995;
+  color: #9ccaff;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_returned {
+  background: #453219;
+  border-color: #74572d;
+  color: #ffd06d;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_customer {
+  background: #123b41;
+  border-color: #2f6870;
+  color: #8cd9e3;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_manager {
+  background: #30264a;
+  border-color: #5b4d7c;
+  color: #c8b5ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_investor,
+:global(html[data-drive-theme="dark"]) .reviewPermissionActive {
+  background: #153725;
+  border-color: #39684b;
+  color: #91dcae;
+}
+:global(html[data-drive-theme="dark"]) .reviewPermissionLocked {
+  background: #232f3a;
+  border-color: #44515d;
+  color: #97a8b7;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewBulkEditor {
+  border-color: #30475a;
+  background: #102339;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+}
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead strong { color: #a7d0ff; }
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead span,
+:global(html[data-drive-theme="dark"]) .reviewBulkRecursive,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid label,
+:global(html[data-drive-theme="dark"]) .reviewBulkActions span { color: #95a9ba; }
+:global(html[data-drive-theme="dark"]) .reviewBulkBar button,
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead button,
+:global(html[data-drive-theme="dark"]) .reviewBulkActions button {
+  border-color: #33495c;
+  background: #142331;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .reviewBulkBar button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewBulkActions button:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+}
+
+:global(html[data-drive-theme="dark"]) .boxItemNames strong { color: #dbe7f1; }
+:global(html[data-drive-theme="dark"]) .boxItemNames small { color: #8fa4b7; }
+:global(html[data-drive-theme="dark"]) .boxAdd,
+:global(html[data-drive-theme="dark"]) .boxEmptyCreate,
+:global(html[data-drive-theme="dark"]) .boxDisabledInfo {
+  border-color: #3d5871;
+  background: #102031;
+  color: #9bc8f2;
+}
+:global(html[data-drive-theme="dark"]) .boxAdd:hover,
+:global(html[data-drive-theme="dark"]) .boxEmptyCreate:hover {
+  background: #173049;
+  border-color: #5885ad;
+}

@@ -58,7 +58,7 @@ check("large DIMPRO DRIVE wordmark renders below the card", () => {
   assert.match(loader, /DIGITÁLIS PROJEKTMUNKATÉR/);
 });
 check("wordmark is visually large, centered and brand weighted", () => {
-  assert.match(css, /\.driveWordmarkMain[\s\S]*?font-size: clamp\(32px, 3\.05vw, 44px\)/);
+  assert.match(css, /\.driveWordmarkMain[\s\S]*?font-size: clamp\(42px, 3\.55vw, 58px\)/);
   assert.match(css, /\.driveWordmarkMain strong[\s\S]*?font-weight: 950/);
   assert.match(css, /\.driveWordmarkMain span[\s\S]*?color: #63839f/);
 });
