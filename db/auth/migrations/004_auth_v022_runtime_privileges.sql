@@ -7,6 +7,7 @@ BEGIN;
 DO $$
 DECLARE
   app_role text;
+  audit_sequence text;
 BEGIN
   IF current_user !~ '^dimpro_auth_migrator_(dev|prod)$' THEN
     RAISE EXCEPTION 'DIMPRO AUTH privilege migration must run as an environment migrator role; current_user=%', current_user;
@@ -39,6 +40,11 @@ BEGIN
 
   -- Audit is append/read at runtime. Retention DELETE remains migrator-only.
   EXECUTE format('GRANT SELECT,INSERT ON TABLE auth_audit_events TO %I', app_role);
+  SELECT pg_get_serial_sequence('public.auth_audit_events','id') INTO audit_sequence;
+  IF audit_sequence IS NULL THEN
+    RAISE EXCEPTION 'DIMPRO AUTH audit identity sequence is missing';
+  END IF;
+  EXECUTE format('GRANT USAGE ON SEQUENCE %s TO %I', audit_sequence, app_role);
 END;
 $$;
 
