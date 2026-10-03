@@ -197,3 +197,35 @@ Bridge readiness verified on DEV:
 
 P8.1 package contracts: 44/44 PASS + hardening 30/30 PASS.
 Windows ZIP SHA-256: `ec8015c0d848a8dc28b8751ef70fcfddd30402c7b1a673f33fe7c821c3d831ec`.
+
+## V0.1.5 FIX4 physical Windows Bridge Probe – PASS
+
+Windows PowerShell: `5.1.22621.6133`
+
+Main script SHA-256: `140dbc669f5915497d32ce3c0d91cbbe5e77f7f3ff0e1219a1cb7c77d197eb43`
+
+Physical results:
+- `POWERSHELL_PARSE_PASS`
+- `STATIC_GUARD_PASS`
+- `EXACT_APPLY_CONTRACT_PASS`
+- `DELETE_OPERATION_DENY_PASS`
+- Bridge device identity present: true
+- Bridge DPAPI token present: true
+- Bridge heartbeat: PASS
+- live Bridge-backed desktop access token exchange: PASS
+- live read-only Probe: PASS
+- project count: 2
+- applyReadiness.ready: true
+- serverMutation: false
+- localMutation: false
+- delete: false
+- `PROBE_PASS`
+- `DIMPRO_DRIVE_DESKTOP_V015_FIX4_WINDOWS_ACCEPTANCE_PASS`
+
+Latest Drive UI source merged after Probe hardening: `19456f260089520f95dc1184a3fc92b2fcefa80f` (V0.9.6 loader polish).
+Integrated merge HEAD: `5a52865de233a6c955ab340e92a96c0caed1c9fd`.
+V0.9.2 through V0.9.6 UI contracts: PASS.
+Desktop access contract: 12/12 PASS.
+Desktop Windows V0.1.5 contract: 29/29 PASS.
+
+Next gate: controlled DEV `UPLOAD_NEW -> DOWNLOAD` acceptance using a dedicated test file. No delete operation is allowed.
