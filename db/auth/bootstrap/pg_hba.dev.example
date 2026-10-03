@@ -1,0 +1,9 @@
+# DIMPRO AUTH DEV ONLY · PROD DENY
+# Add on db.dimpro.hu after the existing local/admin rules, then validate/reload PostgreSQL.
+# DEV application server: 213.160.68.24/32
+# Restrict both role and database; SSL is mandatory.
+
+hostssl  dimpro_auth_dev  dimpro_auth_app_dev       213.160.68.24/32  scram-sha-256
+hostssl  dimpro_auth_dev  dimpro_auth_migrator_dev  213.160.68.24/32  scram-sha-256
+
+# Do not add a broad all/all rule for the application server.
