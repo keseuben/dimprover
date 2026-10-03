@@ -28,12 +28,24 @@ assertDevAuthDatabaseUrl(connectionString, "dimpro_auth_migrator_dev");
 const ssl = await strictDevAuthPgSsl();
 const client = new pg.Client({ connectionString, ssl, application_name: "dimpro-auth-migrator" });
 await client.connect();
+const migrationLockKey = "dimpro-auth:migrations:dev";
+let migrationLockHeld = false;
 try {
+  await client.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [migrationLockKey]);
+  migrationLockHeld = true;
+  const ledgerProbe = await client.query("SELECT to_regclass('public.auth_schema_migrations')::text AS ledger");
+  let ledgerExists = Boolean(ledgerProbe.rows[0]?.ledger);
+  const firstVersion = Number(manifest[0]?.file.match(/^(\d+)/)?.[1]);
+  if (!ledgerExists && firstVersion !== 1) throw new Error("AUTH migration ledger is missing and migration 001 is not first.");
+
   for (const item of manifest) {
     const version = Number(item.file.match(/^(\d+)/)?.[1]);
-    const exists = await client.query("SELECT checksum_sha256 FROM auth_schema_migrations WHERE version=$1", [version]).catch(() => ({ rows: [] }));
-    if (exists.rows[0]?.checksum_sha256) {
-      if (exists.rows[0].checksum_sha256 !== item.sha256) throw new Error(`Migration checksum mismatch: ${item.file}`);
+    if (!Number.isSafeInteger(version) || version < 1) throw new Error(`Invalid migration version: ${item.file}`);
+    const existing = ledgerExists
+      ? await client.query("SELECT checksum_sha256 FROM auth_schema_migrations WHERE version=$1", [version])
+      : { rows: [] };
+    if (existing.rows[0]?.checksum_sha256) {
+      if (existing.rows[0].checksum_sha256 !== item.sha256) throw new Error(`Migration checksum mismatch: ${item.file}`);
       console.log(`SKIP ${item.file}`);
       continue;
     }
@@ -47,6 +59,7 @@ try {
       );
       if (recorded.rowCount !== 1) throw new Error(`Migration ledger insert failed: ${item.file}`);
       await client.query("COMMIT");
+      ledgerExists = true;
       console.log(`APPLIED ${item.file}`);
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -54,5 +67,6 @@ try {
     }
   }
 } finally {
+  if (migrationLockHeld) await client.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [migrationLockKey]).catch(() => undefined);
   await client.end();
 }

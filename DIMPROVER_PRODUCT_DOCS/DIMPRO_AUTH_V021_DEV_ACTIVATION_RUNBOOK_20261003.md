@@ -160,3 +160,10 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 - A séma-módosítás és az `auth_schema_migrations` checksum/ledger bejegyzés **ugyanabban a tranzakcióban** történik.
 - Ha a SQL vagy a ledger insert hibázik, teljes `ROLLBACK` történik; nem maradhat alkalmazott, de nem naplózott migráció.
 - Mivel AUTH migráció még nem került APPLY-ra a cél DB-n, az 001–004 checksumok a mostani pre-activation forrásállapothoz lettek újraszámolva. Az első éles/DEV APPLY után ezek a fájlok immutable-ként kezelendők.
+
+## Serialized migration APPLY
+
+- A migrációs futtató session-szintű PostgreSQL advisory lockkal sorosítja a DEV APPLY futásokat, ezért két párhuzamos migrátor nem tud versenyhelyzetben egymásra futni.
+- A migration ledger létezését `to_regclass` ellenőrzi; általános SQL hibát többé nem nyel el `catch` úgy, mintha a ledger csak nem létezne.
+- Üres ledger esetén a 001 migrációnak kell elsőnek lennie; eltérő állapot fail-closed.
+- A lock felszabadítása `finally` ágban történik.
