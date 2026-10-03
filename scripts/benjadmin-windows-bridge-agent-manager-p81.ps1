@@ -5,6 +5,7 @@ param(
   [switch]$PurgeIdentity
 )
 $ErrorActionPreference = 'Stop'
+try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch { throw 'A Windows DPAPI System.Security assembly nem tölthető be.' }
 if (-not $IsWindows -and $PSVersionTable.PSVersion.Major -ge 6) { throw 'A BENJADMIN Windows Bridge agent manager kizárólag Windows rendszeren használható.' }
 if (-not $ServerUrl.StartsWith('https://')) { throw 'A Windows Bridge kizárólag HTTPS szerver URL-lel konfigurálható.' }
 
@@ -30,13 +31,43 @@ function Resolve-SourceAgent {
   return (Resolve-Path $candidate).Path
 }
 
+function Test-DpapiAvailable {
+  $plain = $null
+  $protected = $null
+  $roundTrip = $null
+  try {
+    $plain = [byte[]](68,73,77,80,82,79)
+    $protected = [System.Security.Cryptography.ProtectedData]::Protect(
+      $plain,
+      $null,
+      [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    $roundTrip = [System.Security.Cryptography.ProtectedData]::Unprotect(
+      $protected,
+      $null,
+      [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    if ($roundTrip.Length -ne $plain.Length) { return $false }
+    for ($i=0; $i -lt $plain.Length; $i++) {
+      if ($roundTrip[$i] -ne $plain[$i]) { return $false }
+    }
+    return $true
+  } catch {
+    return $false
+  } finally {
+    if ($plain) { [Array]::Clear($plain,0,$plain.Length) }
+    if ($roundTrip) { [Array]::Clear($roundTrip,0,$roundTrip.Length) }
+    if ($protected) { [Array]::Clear($protected,0,$protected.Length) }
+  }
+}
+
 function Run-SelfCheck {
   $checks = [ordered]@{}
   $checks.windows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
   $checks.httpsServer = $ServerUrl.StartsWith('https://')
   $checks.powershell = $PSVersionTable.PSVersion.ToString()
   $checks.powershellSupported = $PSVersionTable.PSVersion.Major -ge 5
-  $checks.dpapiAvailable = [bool]([type]::GetType('System.Security.Cryptography.ProtectedData, System.Security.Cryptography.ProtectedData', $false) -or ('System.Security.Cryptography.ProtectedData' -as [type]))
+  $checks.dpapiAvailable = Test-DpapiAvailable
   $checks.rootPresent = Test-Path $Root
   $checks.agentInstalled = Test-Path $AgentPath
   $checks.configPresent = Test-Path $ConfigPath

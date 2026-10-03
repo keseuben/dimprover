@@ -8,6 +8,7 @@ const route=read("app/api/dev/terminal-hub/windows-bridge/migration-readiness/ro
 const ui=read("components/admin/developer-console/WindowsBridgePanel.tsx");
 const css=read("components/admin/developer-console/DeveloperConsole.module.css");
 const manager=read("scripts/benjadmin-windows-bridge-agent-manager-p81.ps1");
+const agent=read("scripts/benjadmin-windows-bridge-agent-p81.ps1");
 let pass=0,fail=0;function check(n,o){if(o){pass++;console.log(`PASS ${n}`)}else{fail++;console.error(`FAIL ${n}`)}}
 check("Core pairing normalize külön modul",core.includes("normalizeWindowsBridgePairingCode"));
 check("Core HMAC SHA256",core.includes('createHmac("sha256"'));
@@ -31,6 +32,9 @@ check("UI migration blokk",ui.includes("DB MIGRATION READINESS")&&ui.includes("A
 check("UI migration blokk CSS",css.includes("BENJADMIN Windows Bridge P8.1 · DB migration readiness"));
 check("Hardening tipográfia min 12px",!/font-size:\s*(?:[0-9]|1[01])px/.test(css.slice(css.indexOf("BENJADMIN Windows Bridge P8.1 · DB migration readiness"))));
 check("Manager Install/SelfCheck/Uninstall",manager.includes("'Install','SelfCheck','Uninstall'"));
+check("Manager PowerShell 5.1 System.Security betöltés",manager.includes("Add-Type -AssemblyName System.Security"));
+check("Manager valódi DPAPI round-trip self-check",manager.includes("function Test-DpapiAvailable")&&manager.includes("ProtectedData]::Protect")&&manager.includes("ProtectedData]::Unprotect"));
+check("Agent PowerShell 5.1 DPAPI assembly és fully-qualified type",agent.includes("Add-Type -AssemblyName System.Security")&&agent.includes("System.Security.Cryptography.ProtectedData]::Protect")&&agent.includes("System.Security.Cryptography.ProtectedData]::Unprotect"));
 check("Manager csak HTTPS",manager.includes("kizárólag HTTPS"));
 check("Manager user-local root",manager.includes("LOCALAPPDATA")&&manager.includes("DIMPRO\\BenjAdminBridge"));
 check("Manager ACL current user",manager.includes("WindowsIdentity")&&manager.includes("SetAccessRuleProtection"));

@@ -6,6 +6,7 @@ param(
   [int]$HeartbeatSeconds = 30
 )
 $ErrorActionPreference = 'Stop'
+try { Add-Type -AssemblyName System.Security -ErrorAction Stop } catch { throw 'A Windows DPAPI System.Security assembly nem tölthető be.' }
 if (-not $ServerUrl.StartsWith('https://')) { throw 'A Windows Bridge agent kizárólag HTTPS szerver URL-lel indulhat.' }
 $Root = Join-Path $env:LOCALAPPDATA 'DIMPRO\BenjAdminBridge'
 $IdentityPath = Join-Path $Root 'identity.json'
@@ -21,13 +22,13 @@ function Get-Identity {
 function Save-Identity($Identity) { $Identity | ConvertTo-Json | Set-Content -Path $IdentityPath -Encoding UTF8 }
 function Protect-Token([string]$Token) {
   $bytes=[Text.Encoding]::UTF8.GetBytes($Token)
-  $protected=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+  $protected=[System.Security.Cryptography.ProtectedData]::Protect($bytes,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser)
   [Convert]::ToBase64String($protected) | Set-Content -Path $TokenPath -Encoding ASCII
 }
 function Unprotect-Token {
   if (-not (Test-Path $TokenPath)) { throw 'Nincs párosított Windows Bridge device token.' }
   $protected=[Convert]::FromBase64String((Get-Content $TokenPath -Raw).Trim())
-  $bytes=[Security.Cryptography.ProtectedData]::Unprotect($protected,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+  $bytes=[System.Security.Cryptography.ProtectedData]::Unprotect($protected,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser)
   return [Text.Encoding]::UTF8.GetString($bytes)
 }
 function Json-Post([string]$Path,$Body,[hashtable]$Headers=@{}) {
