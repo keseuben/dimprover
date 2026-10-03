@@ -22,7 +22,19 @@ if (!connectionString) throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL szük
 if (process.env.DIMPRO_AUTH_MIGRATION_CONFIRM !== "APPLY_DEV_AUTH_MIGRATIONS") {
   throw new Error("DIMPRO_AUTH_MIGRATION_CONFIRM=APPLY_DEV_AUTH_MIGRATIONS szükséges.");
 }
-const ssl = process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase() === "disable" ? false : { rejectUnauthorized: false };
+const sslMode = process.env.DIMPRO_AUTH_DB_SSL_MODE?.trim().toLowerCase() || "verify-full";
+let ssl = false;
+if (sslMode !== "disable") {
+  if (sslMode === "require") {
+    ssl = { rejectUnauthorized: false };
+  } else {
+    const caFile = process.env.DIMPRO_AUTH_DB_CA_FILE?.trim();
+    const caInline = process.env.DIMPRO_AUTH_DB_CA_PEM?.trim();
+    const ca = caInline ? caInline.replace(/\\n/g, "\n") : caFile ? await readFile(caFile, "utf8") : "";
+    if (!ca) throw new Error("DIMPRO_AUTH_DB_CA_FILE vagy DIMPRO_AUTH_DB_CA_PEM szükséges verify-full módban.");
+    ssl = { rejectUnauthorized: true, ca };
+  }
+}
 const client = new pg.Client({ connectionString, ssl, application_name: "dimpro-auth-migrator" });
 await client.connect();
 try {
