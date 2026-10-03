@@ -7,9 +7,9 @@ const workspace = fs.readFileSync("components/drive/DriveWorkspace.tsx", "utf8")
 let pass = 0;
 const check = (label, fn) => { fn(); pass += 1; console.log(`PASS ${String(pass).padStart(2, "0")} ${label}`); };
 
-check("premium loader is integrated into initial Drive load", () => {
+check("premium loader remains integrated into the Drive boot lifecycle", () => {
   assert.match(workspace, /import DrivePremiumLoader from "\.\/DrivePremiumLoader"/);
-  assert.match(workspace, /if \(loading && !tree\)[\s\S]*?<DrivePremiumLoader \/>/);
+  assert.match(workspace, /if \(bootLoaderVisible\)[\s\S]*?<DrivePremiumLoader complete=\{bootLoaderComplete\} \/>/);
 });
 check("legacy plain Drive loading spinner is removed", () => {
   assert.doesNotMatch(workspace, /return <div className=\{styles\.loadingState\}>/);
@@ -20,10 +20,10 @@ check("boot sequence exposes five engineering stages", () => {
   const stepsSource = loader.slice(loader.indexOf("const BOOT_STEPS"), loader.indexOf("];", loader.indexOf("const BOOT_STEPS")) + 2);
   assert.equal((stepsSource.match(/threshold:/g) || []).length, 5);
 });
-check("progress starts low and fail-safe caps at 92 while backend is loading", () => {
+check("progress starts low and fail-safe caps at 92 until completion mode", () => {
   assert.match(loader, /useState\(6\)/);
   assert.match(loader, /return 92/);
-  assert.doesNotMatch(loader, /return 100/);
+  assert.match(loader, /complete \? 100 : progressTarget\(elapsed\)/);
 });
 check("percentage is exposed visually and accessibly", () => {
   assert.match(loader, /role="progressbar"/);
