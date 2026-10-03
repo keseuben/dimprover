@@ -23,12 +23,20 @@ export class DimproAuthError extends Error {
   readonly code: string;
   readonly status: number;
   readonly publicMessage: string;
+  readonly commitTransaction: boolean;
 
-  constructor(message: string, code: string, status = 400, publicMessage = "A hitelesítési művelet nem sikerült.") {
+  constructor(
+    message: string,
+    code: string,
+    status = 400,
+    publicMessage = "A hitelesítési művelet nem sikerült.",
+    options: { commitTransaction?: boolean } = {},
+  ) {
     super(message);
     this.name = "DimproAuthError";
     this.code = code;
     this.status = status;
     this.publicMessage = publicMessage;
+    this.commitTransaction = options.commitTransaction === true;
   }
 }

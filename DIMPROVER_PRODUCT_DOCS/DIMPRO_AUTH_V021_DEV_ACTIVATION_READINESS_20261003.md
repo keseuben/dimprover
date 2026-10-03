@@ -23,7 +23,7 @@ Dátum: 2026-10-03
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
 - AUTH V0.2 SSO contract: 31/31 PASS.
-- AUTH V0.2.1 security contract: 29/29 PASS.
+- AUTH V0.2.1 security contract: 30/30 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
 - Full repository TypeScript: AUTH változtatásokra nincs hiba; 4 korábbi, AUTH-tól független Drive `pilotFolder` TS2741 hiba marad.
@@ -64,3 +64,9 @@ Dátum: 2026-10-03
 - DEV runtime kizárólag `db.dimpro.hu/dimpro_auth_dev` + `dimpro_auth_app_dev`, PROD runtime kizárólag `dimpro_auth_prod` + `dimpro_auth_app_prod` kapcsolattal indulhat.
 - Aktiválási preflight ellenőrzi a külön runtime/migrator role-t, `verify-full` TLS-t, CA tanúsítványt és az OTP/session/SSO titkok egymástól való függetlenségét.
 - DEV pilot user-admin script kizárólag explicit confirmation mellett fut, PROD módot elutasít, és minden módosítást auditál.
+
+## Transaction denial persistence
+
+- Hibás OTP, próbálkozási limit és SSO-deny esetén a számláló/audit módosítások explicit commitot kapnak akkor is, ha a publikus API hibát ad vissza.
+- Nem várt adatbázis- vagy programhiba továbbra is rollbacket okoz.
+- Ez biztosítja, hogy az OTP max-próbálkozás és az audit/rate-limit ne legyen megkerülhető rollback miatt.

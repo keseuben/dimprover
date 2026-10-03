@@ -50,6 +50,21 @@ export async function withAuthTransaction<T>(run: (client: PoolClient) => Promis
     await client.query("COMMIT");
     return result;
   } catch (error) {
+    const commitTransaction = Boolean(
+      error
+      && typeof error === "object"
+      && "commitTransaction" in error
+      && (error as { commitTransaction?: unknown }).commitTransaction === true
+    );
+    if (commitTransaction) {
+      try {
+        await client.query("COMMIT");
+      } catch (commitError) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw commitError;
+      }
+      throw error;
+    }
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally {

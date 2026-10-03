@@ -157,7 +157,7 @@ export async function issueLoginOtp(input: {
           eventType: "OTP_REQUEST", userId: user?.id, email: input.email, method: "EMAIL_OTP", result: "COOLDOWN",
           ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
         });
-        throw new DimproAuthError("OTP resend cooldown active.", "AUTH_OTP_COOLDOWN", 429, "Várj röviden az új kód kérése előtt.");
+        throw new DimproAuthError("OTP resend cooldown active.", "AUTH_OTP_COOLDOWN", 429, "Várj röviden az új kód kérése előtt.", { commitTransaction: true });
       }
     }
 
@@ -171,7 +171,7 @@ export async function issueLoginOtp(input: {
         eventType: "OTP_REQUEST", userId: user?.id, email: input.email, method: "EMAIL_OTP", result: "RATE_LIMIT_EMAIL",
         ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
       });
-      throw new DimproAuthError("OTP email rate limit exceeded.", "AUTH_OTP_RATE_LIMIT", 429, "Túl sok kódkérés történt. Próbáld újra később.");
+      throw new DimproAuthError("OTP email rate limit exceeded.", "AUTH_OTP_RATE_LIMIT", 429, "Túl sok kódkérés történt. Próbáld újra később.", { commitTransaction: true });
     }
 
     if (input.ip) {
@@ -185,7 +185,7 @@ export async function issueLoginOtp(input: {
           eventType: "OTP_REQUEST", userId: user?.id, email: input.email, method: "EMAIL_OTP", result: "RATE_LIMIT_IP",
           ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
         });
-        throw new DimproAuthError("OTP IP rate limit exceeded.", "AUTH_OTP_RATE_LIMIT", 429, "Túl sok kódkérés történt. Próbáld újra később.");
+        throw new DimproAuthError("OTP IP rate limit exceeded.", "AUTH_OTP_RATE_LIMIT", 429, "Túl sok kódkérés történt. Próbáld újra később.", { commitTransaction: true });
       }
     }
 
@@ -256,11 +256,11 @@ export async function verifyLoginOtp(input: {
         ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
       });
       await auditLoginFailure("INVALID_OR_EXPIRED", challenge?.user_id);
-      throw new DimproAuthError("OTP missing, expired or invalidated.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.");
+      throw new DimproAuthError("OTP missing, expired or invalidated.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.", { commitTransaction: true });
     }
     if (challenge.attempts >= challenge.max_attempts) {
       await auditLoginFailure("ATTEMPTS_EXCEEDED", challenge.user_id, { attempts: challenge.attempts });
-      throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.");
+      throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.", { commitTransaction: true });
     }
 
     const valid = verifyDimproAuthOtpHash(challenge.code_hash, input.email, challenge.purpose, input.code);
@@ -273,15 +273,15 @@ export async function verifyLoginOtp(input: {
       });
       await auditLoginFailure(attempts >= challenge.max_attempts ? "ATTEMPTS_EXCEEDED" : "INVALID_CODE", challenge.user_id, { attempts });
       if (attempts >= challenge.max_attempts) {
-        throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.");
+        throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.", { commitTransaction: true });
       }
-      throw new DimproAuthError("OTP mismatch.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.");
+      throw new DimproAuthError("OTP mismatch.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.", { commitTransaction: true });
     }
 
     if (!challenge.user_id) {
       await client.query(`UPDATE auth_email_challenges SET attempts=attempts+1 WHERE id=$1`, [challenge.id]);
       await auditLoginFailure("UNKNOWN_USER_CHALLENGE");
-      throw new DimproAuthError("Unknown user challenge cannot authenticate.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.");
+      throw new DimproAuthError("Unknown user challenge cannot authenticate.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.", { commitTransaction: true });
     }
 
     const userResult = await client.query<UserRow>(
@@ -292,7 +292,7 @@ export async function verifyLoginOtp(input: {
     const row = userResult.rows[0] || null;
     if (!row || row.status !== "ACTIVE" || !row.login_enabled) {
       await auditLoginFailure("USER_NOT_ACTIVE", challenge.user_id);
-      throw new DimproAuthError("User is not active.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.");
+      throw new DimproAuthError("User is not active.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.", { commitTransaction: true });
     }
 
     await client.query(`UPDATE auth_email_challenges SET consumed_at=now() WHERE id=$1`, [challenge.id]);
@@ -567,7 +567,7 @@ export async function issueAuthorizationCodeFromRequest(input: {
         correlationId: input.correlationId,
         metadata: { clientId: row.client_id, requestId: row.id, reason: "MISSING_PERMISSION", permissionCode: row.required_permission_code },
       });
-      throw new DimproAuthError("Client permission denied.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.");
+      throw new DimproAuthError("Client permission denied.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.", { commitTransaction: true });
     }
     const codeExpiresAt = new Date(Date.now() + 60 * 1000);
     await client.query(
@@ -627,7 +627,7 @@ export async function exchangeAuthorizationCode(input: {
           eventType: "SSO_TOKEN_EXCHANGE", method: "AUTHORIZATION_CODE", result: "RATE_LIMIT_IP",
           ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { clientId: input.clientId },
         });
-        throw new DimproAuthError("SSO token IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési visszaigazolás történt. Próbáld újra később.");
+        throw new DimproAuthError("SSO token IP rate limit exceeded.", "AUTH_SSO_RATE_LIMIT", 429, "Túl sok belépési visszaigazolás történt. Próbáld újra később.", { commitTransaction: true });
       }
     }
     const codeResult = await client.query<AuthorizationCodeRow>(
@@ -663,7 +663,7 @@ export async function exchangeAuthorizationCode(input: {
         correlationId: input.correlationId,
         metadata: { clientId: input.clientId },
       });
-      throw new DimproAuthError("Authorization code exchange failed.", "AUTH_SSO_CODE_INVALID", 400, "A belépési visszaigazolás érvénytelen vagy lejárt.");
+      throw new DimproAuthError("Authorization code exchange failed.", "AUTH_SSO_CODE_INVALID", 400, "A belépési visszaigazolás érvénytelen vagy lejárt.", { commitTransaction: true });
     }
     const clientRow = await client.query<AuthClientRow>(
       `SELECT id,client_id,product_code,required_permission_code,environment,status FROM auth_clients WHERE id=$1 AND status='ACTIVE' AND environment=$2 LIMIT 1`,
@@ -700,7 +700,7 @@ export async function exchangeAuthorizationCode(input: {
         ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
         metadata: { clientId: input.clientId, reason: "MISSING_PERMISSION", permissionCode: code.required_permission_code },
       });
-      throw new DimproAuthError("Client permission denied during exchange.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.");
+      throw new DimproAuthError("Client permission denied during exchange.", "AUTH_SSO_PERMISSION_DENIED", 403, "Ehhez az alkalmazáshoz nincs aktív hozzáférésed.", { commitTransaction: true });
     }
     const appToken = createAppSessionToken();
     const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);
