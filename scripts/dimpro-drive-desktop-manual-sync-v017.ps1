@@ -135,6 +135,13 @@ function Get-ObjectPropertyValue {
   return $property.Value
 }
 
+function Get-SafeCount($Value) {
+  if ($null -eq $Value) { return 0 }
+  if ($Value -is [System.Array]) { return [int]$Value.Length }
+  if ($Value -is [System.Collections.ICollection]) { return [int]$Value.Count }
+  return 1
+}
+
 function Get-HttpErrorSummary($ErrorRecord) {
   try {
     $response = $ErrorRecord.Exception.Response
@@ -418,7 +425,7 @@ function New-ManualSyncPlan {
     }
   }
 
-  $manifest = Get-LocalManifest $LocalRootValue
+  $manifest = @(Get-LocalManifest $LocalRootValue)
   $localByPath = @{}
   foreach ($local in $manifest) {
     $relativePath = Get-NormalizedRelativePath ([string](Get-ObjectPropertyValue $local 'relativePath' ''))
@@ -892,7 +899,7 @@ if ($Mode -eq 'Probe') {
     serverUrl = $ServerUrl
     contractVersion = [string](Get-ObjectPropertyValue $contract 'version' '')
     contractMode = [string](Get-ObjectPropertyValue $contract 'mode' '')
-    projectCount = $items.Count
+    projectCount = Get-SafeCount $items
     projects = $items
     applyReadiness = $applyReadiness
     safety = [ordered]@{ devOnly = $true; serverMutation = $false; localMutation = $false; delete = $false }
@@ -913,7 +920,7 @@ $manualPlan = New-ManualSyncPlan $projectIdValue $resolvedLocalRoot $Cursor $tre
 
 $preparedPath = ''
 $preparedSha = ''
-$applyBlocked = ($manualPlan.conflicts.Count -gt 0)
+$applyBlocked = ((Get-SafeCount $manualPlan.conflicts) -gt 0)
 if ($PreparedApplyPlanPath -and $PreparedApplyPlanPath.Trim()) {
   if ($applyBlocked) {
     $preparedPath = $PreparedApplyPlanPath
@@ -938,14 +945,14 @@ Write-Result ([ordered]@{
   health = $health
   applyReadiness = $applyReadiness
   summary = [ordered]@{
-    localFileCount = $manualPlan.manifest.Count
-    remoteFolderCount = $manualPlan.folders.Count
-    remoteDocumentCount = $manualPlan.documents.Count
-    unchangedCount = $manualPlan.unchanged.Count
-    operationCount = $manualPlan.operations.Count
+    localFileCount = Get-SafeCount $manualPlan.manifest
+    remoteFolderCount = Get-SafeCount $manualPlan.folders
+    remoteDocumentCount = Get-SafeCount $manualPlan.documents
+    unchangedCount = Get-SafeCount $manualPlan.unchanged
+    operationCount = Get-SafeCount $manualPlan.operations
     uploadCount = @($manualPlan.operations | Where-Object { ([string]$_.kind).StartsWith('UPLOAD') }).Count
     downloadCount = @($manualPlan.operations | Where-Object { ([string]$_.kind) -eq 'DOWNLOAD' }).Count
-    conflictCount = $manualPlan.conflicts.Count
+    conflictCount = Get-SafeCount $manualPlan.conflicts
     changeCount = [int](Get-ObjectPropertyValue $changeSnapshot 'count' 0)
     changePages = [int](Get-ObjectPropertyValue $changeSnapshot 'pages' 0)
   }
