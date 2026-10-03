@@ -32,5 +32,5 @@ check("Drive permission seed exists",()=>{assert.match(migration,/drive\.access/
 check("Drive permission is enforced server-side",()=>{const proxy=read("proxy.ts");assert.match(proxy,/hasAuthPermission/);assert.match(proxy,/permissionCode: "drive\.access"/);assert.match(proxy,/AUTH_FORBIDDEN/)});
 check("bootstrap user requires explicit confirmation",()=>{const b=read("scripts/dimpro-auth/bootstrap-user.mjs");assert.match(b,/BOOTSTRAP_DEV_AUTH_USER/);assert.match(b,/--grant-drive/)});
 check("mutation origin check exists",()=>assert.match(security,/validateSameOriginMutation/));
-check("migration apply is explicit guarded",()=>{const m=read("scripts/dimpro-auth/migrate.mjs");assert.match(m,/--apply/);assert.match(m,/APPLY_DEV_AUTH_MIGRATIONS/)});
+check("migration apply is explicit guarded",()=>{const m=read("scripts/dimpro-auth/migrate.mjs");assert.match(m,/--apply/);assert.match(m,/APPLY_DEV_AUTH_MIGRATIONS/);assert.match(m,/DIMPRO_AUTH_MIGRATION_DATABASE_URL/)});
 console.log(`DIMPRO AUTH V0.1 contract PASS · ${n}/${n}`);

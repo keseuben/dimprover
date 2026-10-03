@@ -210,8 +210,15 @@ export function DimproAppOtpLogin() {
       window.localStorage.setItem("dimpro_last_login_email", cleanEmail);
 
       setMessageTone("success");
-      setMessage("Sikeres belépés. A DIMPRO modulválasztó megnyitása...");
-      router.push("/account/modules");
+      const params = new URLSearchParams(window.location.search);
+      const authorizationRequest = params.get("ar")?.trim() || "";
+      if (/^[0-9a-f-]{36}$/i.test(authorizationRequest)) {
+        setMessage("Sikeres belépés. Visszatérés a DIMPRO alkalmazáshoz...");
+        window.location.assign(`/api/dimpro-auth/authorize?request_id=${encodeURIComponent(authorizationRequest)}`);
+        return;
+      }
+      setMessage("Sikeres belépés. A DIMPRO alkalmazásközpont megnyitása...");
+      router.push("/auth/apps");
       router.refresh();
     } catch {
       setMessageTone("error");

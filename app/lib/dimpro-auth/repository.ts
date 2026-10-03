@@ -10,6 +10,12 @@ import {
   verifyDimproAuthOtpHash,
 } from "./security";
 import { DimproAuthError, type DimproAuthSession, type DimproAuthUser, type DimproAuthUserLevel } from "./types";
+import {
+  createAppSessionToken,
+  createPkceChallenge,
+  hashAppSessionToken,
+  hashAuthorizationCode,
+} from "./sso";
 
 type UserRow = {
   id: string;
@@ -19,6 +25,7 @@ type UserRow = {
   status: "ACTIVE" | "SUSPENDED" | "DISABLED";
   security_level: DimproAuthUserLevel;
   login_enabled: boolean;
+  session_version: number;
   email_verified_at: Date | string | null;
 };
 
@@ -39,6 +46,7 @@ type SessionRow = {
   id: string;
   user_id: string;
   security_level: DimproAuthUserLevel;
+  session_version: number;
   created_at: Date | string;
   last_seen_at: Date | string;
   absolute_expires_at: Date | string;
@@ -96,7 +104,7 @@ async function appendAudit(client: PoolClient | null, input: {
 
 export async function getActiveAuthUserByEmail(email: string) {
   const result = await authQuery<UserRow>(
-    `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,email_verified_at
+    `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
        FROM auth_users WHERE email_normalized=$1 LIMIT 1`,
     [email],
   );
@@ -115,7 +123,7 @@ export async function issueLoginOtp(input: {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
     const userResult = await client.query<UserRow>(
-      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,email_verified_at
+      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
          FROM auth_users WHERE email_normalized=$1 LIMIT 1 FOR SHARE`,
       [input.email],
     );
@@ -207,6 +215,19 @@ export async function verifyLoginOtp(input: {
 }) {
   const config = getDimproAuthConfig();
   return withAuthTransaction(async (client) => {
+    const auditLoginFailure = async (result: string, userId?: string | null, metadata: Record<string, unknown> = {}) => {
+      await appendAudit(client, {
+        eventType: "LOGIN_FAILURE",
+        userId: userId || null,
+        email: input.email,
+        method: "EMAIL_OTP",
+        result,
+        ip: input.ip,
+        userAgent: input.userAgent,
+        correlationId: input.correlationId,
+        metadata,
+      });
+    };
     const challengeResult = await client.query<ChallengeRow>(
       `SELECT id,user_id,email_normalized,purpose,code_hash,expires_at,attempts,max_attempts,consumed_at,invalidated_at
        FROM auth_email_challenges
@@ -220,9 +241,11 @@ export async function verifyLoginOtp(input: {
         eventType: "OTP_VERIFY", userId: challenge?.user_id, email: input.email, method: "EMAIL_OTP", result: "INVALID_OR_EXPIRED",
         ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId,
       });
+      await auditLoginFailure("INVALID_OR_EXPIRED", challenge?.user_id);
       throw new DimproAuthError("OTP missing, expired or invalidated.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.");
     }
     if (challenge.attempts >= challenge.max_attempts) {
+      await auditLoginFailure("ATTEMPTS_EXCEEDED", challenge.user_id, { attempts: challenge.attempts });
       throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.");
     }
 
@@ -234,6 +257,7 @@ export async function verifyLoginOtp(input: {
         eventType: "OTP_VERIFY", userId: challenge.user_id, email: input.email, method: "EMAIL_OTP", result: "INVALID_CODE",
         ip: input.ip, userAgent: input.userAgent, correlationId: input.correlationId, metadata: { attempts },
       });
+      await auditLoginFailure(attempts >= challenge.max_attempts ? "ATTEMPTS_EXCEEDED" : "INVALID_CODE", challenge.user_id, { attempts });
       if (attempts >= challenge.max_attempts) {
         throw new DimproAuthError("OTP attempt limit reached.", "AUTH_OTP_ATTEMPTS_EXCEEDED", 429, "A kódhoz tartozó próbálkozási keret elfogyott. Kérj új kódot.");
       }
@@ -242,16 +266,18 @@ export async function verifyLoginOtp(input: {
 
     if (!challenge.user_id) {
       await client.query(`UPDATE auth_email_challenges SET attempts=attempts+1 WHERE id=$1`, [challenge.id]);
+      await auditLoginFailure("UNKNOWN_USER_CHALLENGE");
       throw new DimproAuthError("Unknown user challenge cannot authenticate.", "AUTH_OTP_INVALID", 400, "A belépési kód hibás vagy lejárt.");
     }
 
     const userResult = await client.query<UserRow>(
-      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,email_verified_at
+      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
        FROM auth_users WHERE id=$1 LIMIT 1 FOR SHARE`,
       [challenge.user_id],
     );
     const row = userResult.rows[0] || null;
     if (!row || row.status !== "ACTIVE" || !row.login_enabled) {
+      await auditLoginFailure("USER_NOT_ACTIVE", challenge.user_id);
       throw new DimproAuthError("User is not active.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.");
     }
 
@@ -265,9 +291,9 @@ export async function verifyLoginOtp(input: {
     const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);
     const inactivityExpiresAt = new Date(Date.now() + config.sessionInactivitySeconds * 1000);
     const session = await client.query<{ id: string }>(
-      `INSERT INTO auth_sessions(user_id,token_hash,security_level,absolute_expires_at,inactivity_expires_at,ip_created,user_agent,correlation_id)
-       VALUES ($1,$2,$3,$4,$5,$6::inet,$7,$8) RETURNING id`,
-      [row.id, hashDimproAuthSessionToken(token), row.security_level, absoluteExpiresAt, inactivityExpiresAt, input.ip, input.userAgent, input.correlationId],
+      `INSERT INTO auth_sessions(user_id,token_hash,security_level,user_session_version,absolute_expires_at,inactivity_expires_at,ip_created,user_agent,correlation_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9) RETURNING id`,
+      [row.id, hashDimproAuthSessionToken(token), row.security_level, row.session_version, absoluteExpiresAt, inactivityExpiresAt, input.ip, input.userAgent, input.correlationId],
     );
     await appendAudit(client, {
       eventType: "LOGIN_SUCCESS", userId: row.id, email: input.email, method: "EMAIL_OTP", result: "SUCCESS",
@@ -288,11 +314,12 @@ export async function getAuthSessionByToken(token: string, touch = true): Promis
   const config = getDimproAuthConfig();
   const result = await authQuery<SessionRow>(
     `SELECT s.id,s.user_id,s.security_level,s.created_at,s.last_seen_at,s.absolute_expires_at,s.inactivity_expires_at,
-            u.email_original,u.email_normalized,u.display_name,u.status,u.email_verified_at
+            u.email_original,u.email_normalized,u.display_name,u.status,u.session_version,u.email_verified_at
        FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.revoked_at IS NULL
         AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now()
         AND u.status='ACTIVE' AND u.login_enabled=true
+        AND s.user_session_version=u.session_version
       LIMIT 1`,
     [hashDimproAuthSessionToken(token)],
   );
@@ -364,4 +391,289 @@ export async function hasAuthPermission(input: { userId: string; permissionCode:
     [input.userId, input.permissionCode, productCode],
   );
   return Boolean(result.rows[0]?.allowed);
+}
+
+type AuthClientRow = {
+  id: string;
+  client_id: string;
+  product_code: string;
+  environment: "DEV" | "PROD";
+  status: "ACTIVE" | "DISABLED";
+};
+
+type AuthorizationRequestRow = {
+  id: string;
+  client_db_id: string;
+  client_id: string;
+  redirect_uri: string;
+  state: string;
+  code_challenge: string;
+  code_challenge_method: "S256";
+  expires_at: Date | string;
+  consumed_at: Date | string | null;
+};
+
+type AuthorizationCodeRow = {
+  id: string;
+  client_db_id: string;
+  client_id: string;
+  user_id: string;
+  auth_session_id: string;
+  auth_session_valid: boolean;
+  redirect_uri: string;
+  code_challenge: string;
+  code_challenge_method: "S256";
+  expires_at: Date | string;
+  consumed_at: Date | string | null;
+};
+
+type AppSessionRow = SessionRow & {
+  client_db_id: string;
+  client_id: string;
+};
+
+export async function getAuthClient(clientId: string, redirectUri?: string | null) {
+  const result = await authQuery<AuthClientRow>(
+    `SELECT c.id,c.client_id,c.product_code,c.environment,c.status
+       FROM auth_clients c
+      WHERE c.client_id=$1 AND c.status='ACTIVE'
+        AND ($2::text IS NULL OR EXISTS(
+          SELECT 1 FROM auth_client_redirect_uris r
+           WHERE r.client_id=c.id AND r.redirect_uri=$2
+        ))
+      LIMIT 1`,
+    [clientId, redirectUri || null],
+  );
+  return result.rows[0] || null;
+}
+
+export async function createAuthorizationRequest(input: {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+  codeChallenge: string;
+  ip: string | null;
+  userAgent: string;
+}) {
+  const client = await getAuthClient(input.clientId, input.redirectUri);
+  if (!client) {
+    throw new DimproAuthError("Unknown client or redirect URI.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás visszatérési címe nem engedélyezett.");
+  }
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const created = await authQuery<{ id: string }>(
+    `INSERT INTO auth_authorization_requests(client_id,redirect_uri,state,code_challenge,code_challenge_method,requested_ip,user_agent,expires_at)
+     VALUES ($1,$2,$3,$4,'S256',$5::inet,$6,$7) RETURNING id`,
+    [client.id, input.redirectUri, input.state, input.codeChallenge, input.ip, input.userAgent, expiresAt],
+  );
+  return { requestId: created.rows[0]!.id, expiresAt };
+}
+
+export async function issueAuthorizationCodeFromRequest(input: {
+  requestId: string;
+  authSession: DimproAuthSession;
+  rawCode: string;
+  correlationId: string;
+}) {
+  return withAuthTransaction(async (client) => {
+    const request = await client.query<AuthorizationRequestRow>(
+      `SELECT r.id,r.client_id AS client_db_id,c.client_id,r.redirect_uri,r.state,r.code_challenge,r.code_challenge_method,r.expires_at,r.consumed_at
+         FROM auth_authorization_requests r
+         JOIN auth_clients c ON c.id=r.client_id
+        WHERE r.id=$1 LIMIT 1 FOR UPDATE`,
+      [input.requestId],
+    );
+    const row = request.rows[0] || null;
+    if (!row || row.consumed_at || new Date(row.expires_at).getTime() <= Date.now()) {
+      throw new DimproAuthError("Authorization request is invalid or expired.", "AUTH_SSO_REQUEST_INVALID", 400, "A belépési kérés lejárt. Indítsd újra a belépést.");
+    }
+    const codeExpiresAt = new Date(Date.now() + 60 * 1000);
+    await client.query(
+      `INSERT INTO auth_authorization_codes(code_hash,client_id,user_id,auth_session_id,redirect_uri,code_challenge,code_challenge_method,expires_at,correlation_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        hashAuthorizationCode(input.rawCode),
+        row.client_db_id,
+        input.authSession.user.id,
+        input.authSession.id,
+        row.redirect_uri,
+        row.code_challenge,
+        row.code_challenge_method,
+        codeExpiresAt,
+        input.correlationId,
+      ],
+    );
+    await client.query(`UPDATE auth_authorization_requests SET consumed_at=now() WHERE id=$1`, [row.id]);
+    await appendAudit(client, {
+      eventType: "SSO_AUTHORIZE",
+      userId: input.authSession.user.id,
+      method: "AUTHORIZATION_CODE",
+      result: "SUCCESS",
+      correlationId: input.correlationId,
+      metadata: { clientId: row.client_id, requestId: row.id },
+    });
+    return {
+      clientId: row.client_id,
+      redirectUri: row.redirect_uri,
+      state: row.state,
+      expiresAt: codeExpiresAt,
+    };
+  });
+}
+
+export async function exchangeAuthorizationCode(input: {
+  clientId: string;
+  redirectUri: string;
+  rawCode: string;
+  codeVerifier: string;
+  ip: string | null;
+  userAgent: string;
+  correlationId: string;
+}) {
+  const config = getDimproAuthConfig();
+  return withAuthTransaction(async (client) => {
+    const codeResult = await client.query<AuthorizationCodeRow>(
+      `SELECT ac.id,ac.client_id AS client_db_id,c.client_id,ac.user_id,ac.auth_session_id,ac.redirect_uri,ac.code_challenge,ac.code_challenge_method,ac.expires_at,ac.consumed_at,
+              (s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now() AND s.user_session_version=u.session_version) AS auth_session_valid
+         FROM auth_authorization_codes ac
+         JOIN auth_clients c ON c.id=ac.client_id
+         JOIN auth_sessions s ON s.id=ac.auth_session_id
+         JOIN auth_users u ON u.id=ac.user_id
+        WHERE ac.code_hash=$1
+        LIMIT 1 FOR UPDATE`,
+      [hashAuthorizationCode(input.rawCode)],
+    );
+    const code = codeResult.rows[0] || null;
+    if (
+      !code
+      || !code.auth_session_valid
+      || code.consumed_at
+      || new Date(code.expires_at).getTime() <= Date.now()
+      || code.client_id !== input.clientId
+      || code.redirect_uri !== input.redirectUri
+      || code.code_challenge_method !== "S256"
+      || createPkceChallenge(input.codeVerifier) !== code.code_challenge
+    ) {
+      await appendAudit(client, {
+        eventType: "SSO_TOKEN_EXCHANGE",
+        userId: code?.user_id,
+        method: "AUTHORIZATION_CODE",
+        result: "DENY",
+        ip: input.ip,
+        userAgent: input.userAgent,
+        correlationId: input.correlationId,
+        metadata: { clientId: input.clientId },
+      });
+      throw new DimproAuthError("Authorization code exchange failed.", "AUTH_SSO_CODE_INVALID", 400, "A belépési visszaigazolás érvénytelen vagy lejárt.");
+    }
+    const clientRow = await client.query<AuthClientRow>(
+      `SELECT id,client_id,product_code,environment,status FROM auth_clients WHERE id=$1 AND status='ACTIVE' LIMIT 1`,
+      [code.client_db_id],
+    );
+    if (!clientRow.rows[0]) {
+      throw new DimproAuthError("Client is disabled.", "AUTH_SSO_CLIENT_INVALID", 400, "Az alkalmazás jelenleg nem fogad belépést.");
+    }
+    const userRow = await client.query<UserRow>(
+      `SELECT id,email_original,email_normalized,display_name,status,security_level,login_enabled,session_version,email_verified_at
+         FROM auth_users WHERE id=$1 AND status='ACTIVE' AND login_enabled=true LIMIT 1`,
+      [code.user_id],
+    );
+    const user = userRow.rows[0] || null;
+    if (!user) {
+      throw new DimproAuthError("User disabled during code exchange.", "AUTH_USER_NOT_ACTIVE", 403, "A fiók jelenleg nem használható belépésre.");
+    }
+    const appToken = createAppSessionToken();
+    const absoluteExpiresAt = new Date(Date.now() + config.sessionAbsoluteSeconds * 1000);
+    const inactivityExpiresAt = new Date(Date.now() + config.sessionInactivitySeconds * 1000);
+    const appSession = await client.query<{ id: string }>(
+      `INSERT INTO auth_app_sessions(client_id,user_id,auth_session_id,token_hash,user_session_version,absolute_expires_at,inactivity_expires_at,ip_created,user_agent,correlation_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::inet,$9,$10) RETURNING id`,
+      [code.client_db_id, user.id, code.auth_session_id, hashAppSessionToken(appToken), user.session_version, absoluteExpiresAt, inactivityExpiresAt, input.ip, input.userAgent, input.correlationId],
+    );
+    await client.query(`UPDATE auth_authorization_codes SET consumed_at=now() WHERE id=$1`, [code.id]);
+    await appendAudit(client, {
+      eventType: "SSO_TOKEN_EXCHANGE",
+      userId: user.id,
+      method: "AUTHORIZATION_CODE",
+      result: "SUCCESS",
+      ip: input.ip,
+      userAgent: input.userAgent,
+      correlationId: input.correlationId,
+      metadata: { clientId: input.clientId, appSessionId: appSession.rows[0]!.id },
+    });
+    return {
+      appSessionToken: appToken,
+      user: userFromRow(user),
+      absoluteExpiresAt,
+      inactivityExpiresAt,
+    };
+  });
+}
+
+export async function getAppSessionByToken(token: string, clientId: string, touch = true): Promise<DimproAuthSession | null> {
+  if (!token || token.length < 32 || token.length > 200) return null;
+  const config = getDimproAuthConfig();
+  const result = await authQuery<AppSessionRow>(
+    `SELECT s.id,s.client_id AS client_db_id,c.client_id,s.user_id,u.security_level,s.created_at,s.last_seen_at,s.absolute_expires_at,s.inactivity_expires_at,
+            u.email_original,u.email_normalized,u.display_name,u.status,u.session_version,u.email_verified_at
+       FROM auth_app_sessions s
+       JOIN auth_clients c ON c.id=s.client_id
+       JOIN auth_users u ON u.id=s.user_id
+      WHERE s.token_hash=$1 AND c.client_id=$2 AND c.status='ACTIVE'
+        AND s.revoked_at IS NULL AND s.absolute_expires_at>now() AND s.inactivity_expires_at>now()
+        AND u.status='ACTIVE' AND u.login_enabled=true
+        AND s.user_session_version=u.session_version
+      LIMIT 1`,
+    [hashAppSessionToken(token), clientId],
+  );
+  const row = result.rows[0] || null;
+  if (!row) return null;
+  const now = Date.now();
+  const lastSeen = new Date(row.last_seen_at).getTime();
+  let inactivityExpiresAt = new Date(row.inactivity_expires_at);
+  if (touch && now - lastSeen >= config.sessionTouchIntervalSeconds * 1000) {
+    const proposed = new Date(now + config.sessionInactivitySeconds * 1000);
+    const absolute = new Date(row.absolute_expires_at);
+    inactivityExpiresAt = proposed.getTime() > absolute.getTime() ? absolute : proposed;
+    await authQuery(
+      `UPDATE auth_app_sessions SET last_seen_at=now(), inactivity_expires_at=$2 WHERE id=$1 AND revoked_at IS NULL`,
+      [row.id, inactivityExpiresAt],
+    );
+  }
+  return {
+    id: row.id,
+    user: userFromRow({ ...row, login_enabled: true }),
+    createdAt: iso(row.created_at),
+    lastSeenAt: touch ? new Date().toISOString() : iso(row.last_seen_at),
+    absoluteExpiresAt: iso(row.absolute_expires_at),
+    inactivityExpiresAt: inactivityExpiresAt.toISOString(),
+  };
+}
+
+export async function revokeAppSession(token: string, clientId: string, reason: string, correlationId: string, revokeCentralSession = false) {
+  if (!token) return false;
+  return withAuthTransaction(async (client) => {
+    const current = await client.query<{ id: string; user_id: string; auth_session_id: string }>(
+      `SELECT s.id,s.user_id,s.auth_session_id FROM auth_app_sessions s JOIN auth_clients c ON c.id=s.client_id
+       WHERE s.token_hash=$1 AND c.client_id=$2 AND s.revoked_at IS NULL LIMIT 1 FOR UPDATE`,
+      [hashAppSessionToken(token), clientId],
+    );
+    const row = current.rows[0];
+    if (!row) return false;
+    await client.query(`UPDATE auth_app_sessions SET revoked_at=now(),revoke_reason=$2 WHERE id=$1`, [row.id, reason.slice(0, 240)]);
+    if (revokeCentralSession) {
+      await client.query(
+        `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,now()),revoke_reason=COALESCE(revoke_reason,$2) WHERE id=$1`,
+        [row.auth_session_id, `APP_LOGOUT:${reason}`.slice(0, 240)],
+      );
+    }
+    await appendAudit(client, {
+      eventType: "SESSION_REVOKE",
+      userId: row.user_id,
+      method: "APP_SESSION",
+      result: "SUCCESS",
+      correlationId,
+      metadata: { clientId, appSessionId: row.id, centralSessionRevoked: revokeCentralSession, reason: reason.slice(0, 240) },
+    });
+    return true;
+  });
 }

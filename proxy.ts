@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { resolveDimproLoginAuthorization } from "@/app/lib/dimpro/login-authorization";
-import { getAuthSessionByToken, hasAuthPermission } from "@/app/lib/dimpro-auth/repository";
+import { getAppSessionByToken, getAuthSessionByToken, hasAuthPermission } from "@/app/lib/dimpro-auth/repository";
 import { DIMPRO_AUTH_SESSION_COOKIE } from "@/app/lib/dimpro-auth/security";
+import { DIMPRO_APP_SESSION_COOKIE } from "@/app/lib/dimpro-auth/sso";
 import {
   isDriveDevAccessConfigured,
   isProjectGateDevAccessConfigured,
@@ -72,6 +73,8 @@ export async function proxy(request: NextRequest) {
   const isLegacyMeetingAssistantPath = pathname.startsWith("/jegyzokonyvek/ertekezleti-kisero");
   const isDevEnvironment = host === "dev.dimpro.hu" || host === "dev.dimprover.hu" || host.endsWith(".dev.dimpro.hu");
   const isDimproAppHost = host === "app.dimpro.hu" || host === "www.app.dimpro.hu" || host === "app.dev.dimpro.hu";
+  const isDimproAuthHost = host === "auth.dimpro.hu" || host === "auth.dev.dimpro.hu";
+  const isDimproLoginHost = host === "login.dimpro.hu" || host === "login.dev.dimpro.hu";
   const isDriveHost = host === "drive.dimpro.hu" || host === "www.drive.dimpro.hu" || host === "drive.dev.dimpro.hu";
   const isDimproHost = host === "dimpro.hu" || host === "www.dimpro.hu";
   const isDimproPublicHome = isDimproHost && pathname === "/";
@@ -204,6 +207,25 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     return NextResponse.redirect(url);
+  }
+
+  if (isDimproLoginHost) {
+    const url = request.nextUrl.clone();
+    url.protocol = "https:";
+    url.hostname = host === "login.dev.dimpro.hu" ? "auth.dev.dimpro.hu" : "auth.dimpro.hu";
+    url.port = "";
+    url.pathname = pathname === "/" ? "/login" : pathname;
+    return NextResponse.redirect(url, 307);
+  }
+
+  if (isDimproAuthHost && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url, 307);
+  }
+
+  if (isDimproAuthHost && pathname.startsWith("/health/")) {
+    return response;
   }
 
   if (isProjectGateBrandHost) {
@@ -361,7 +383,7 @@ export async function proxy(request: NextRequest) {
   if (isDimproHost && isLoginPage) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
-    url.hostname = "app.dimpro.hu";
+    url.hostname = "login.dimpro.hu";
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
@@ -401,26 +423,27 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const isDriveProtectedApi = isDimproAppHost && (
+  const isDriveProtectedApi = isDriveHost && (
     pathname.startsWith("/api/drive/") ||
     pathname === "/api/projects" ||
     pathname.startsWith("/api/projects/")
   );
-  if (isDimproAppHost && (isDrivePage || isDriveProtectedApi)) {
-    const token = request.cookies.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
+  if (isDriveHost && (isDrivePage || isDriveProtectedApi)) {
+    const token = request.cookies.get(DIMPRO_APP_SESSION_COOKIE)?.value?.trim() || "";
     let session = null;
     try {
-      session = token ? await getAuthSessionByToken(token, false) : null;
+      session = token ? await getAppSessionByToken(token, "dimpro-drive-dev", false) : null;
     } catch (error) {
-      console.warn("DIMPRO Drive auth session hiba:", error instanceof Error ? error.message : "Ismeretlen auth hiba");
+      console.warn("DIMPRO Drive app session hiba:", error instanceof Error ? error.message : "Ismeretlen auth hiba");
     }
     if (!session) {
       if (isDriveProtectedApi) {
         return NextResponse.json({ ok: false, error: "AUTH_REQUIRED" }, { status: 401, headers: { "cache-control": "no-store" } });
       }
       const url = request.nextUrl.clone();
-      url.pathname = "/login";
+      url.pathname = "/api/dimpro-auth/start";
       url.search = "";
+      url.searchParams.set("return_to", pathname + request.nextUrl.search);
       return NextResponse.redirect(url);
     }
     let allowed = false;
@@ -434,10 +457,35 @@ export async function proxy(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "AUTH_FORBIDDEN" }, { status: 403, headers: { "cache-control": "no-store" } });
       }
       const url = request.nextUrl.clone();
-      url.pathname = "/account/modules";
+      url.protocol = "https:";
+      url.hostname = host === "drive.dev.dimpro.hu" ? "auth.dev.dimpro.hu" : "auth.dimpro.hu";
+      url.port = "";
+      url.pathname = "/login";
+      url.search = "";
       url.searchParams.set("access", "drive-forbidden");
       return NextResponse.redirect(url);
     }
+  }
+
+  if (isDimproAuthHost && (isLoginPage || pathname.startsWith("/api/dimpro-auth/"))) {
+    return response;
+  }
+
+  if (isDimproAuthHost && pathname.startsWith("/auth/")) {
+    const token = request.cookies.get(DIMPRO_AUTH_SESSION_COOKIE)?.value?.trim() || "";
+    let session = null;
+    try {
+      session = token ? await getAuthSessionByToken(token, false) : null;
+    } catch (error) {
+      console.warn("DIMPRO AUTH workspace session hiba:", error instanceof Error ? error.message : "Ismeretlen auth hiba");
+    }
+    if (!session) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
   }
 
   if (

@@ -17,8 +17,8 @@ if (!apply) {
   console.log(JSON.stringify({ ok: true, mode: "dry-run", migrationDir, migrations: manifest }, null, 2));
   process.exit(0);
 }
-const connectionString = process.env.DIMPRO_AUTH_DATABASE_URL?.trim();
-if (!connectionString) throw new Error("DIMPRO_AUTH_DATABASE_URL szükséges az --apply futtatáshoz.");
+const connectionString = process.env.DIMPRO_AUTH_MIGRATION_DATABASE_URL?.trim();
+if (!connectionString) throw new Error("DIMPRO_AUTH_MIGRATION_DATABASE_URL szükséges az --apply futtatáshoz.");
 if (process.env.DIMPRO_AUTH_MIGRATION_CONFIRM !== "APPLY_DEV_AUTH_MIGRATIONS") {
   throw new Error("DIMPRO_AUTH_MIGRATION_CONFIRM=APPLY_DEV_AUTH_MIGRATIONS szükséges.");
 }
