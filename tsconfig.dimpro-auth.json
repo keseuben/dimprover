@@ -4,6 +4,12 @@
   "include": [
     "next-env.d.ts",
     "app/lib/dimpro-auth/**/*.ts",
+    "app/lib/notifications/notificationAuth.ts",
+    "app/lib/project-core/auth.ts",
+    "app/lib/project-core/store.ts",
+    "app/lib/project-core/repository.ts",
+    "app/lib/project-core/databaseRepository.ts",
+    "app/lib/project-core/fileRepository.ts",
     "app/api/dimpro-auth/**/*.ts",
     "app/health/**/*.ts",
     "app/auth/apps/**/*.tsx",
