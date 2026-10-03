@@ -32,11 +32,14 @@ const checks=[
 ['acceptance exact apply marker',/EXACT_APPLY_CONTRACT_PASS/.test(a)],
 ['acceptance delete deny marker',/DELETE_OPERATION_DENY_PASS/.test(a)],
 ['UTF-8 JSON direct bytes',/\[byte\[\]\]\$bodyBytes\s*=\s*\[Text\.Encoding\]::UTF8\.GetBytes/.test(s)&&/application\/json; charset=utf-8/.test(s)&&!/function\s+ConvertTo-Utf8JsonBytes/.test(s)],
-['HTTP error detail reader',/function Get-HttpErrorSummary/.test(s)&&/DRIVE_HTTP_POST_FAILED/.test(s)],
+['HTTP error detail reader',/function Get-HttpErrorSummary/.test(s)&&/DRIVE_HTTP_REQUEST_FAILED/.test(s)],
+['UTF-8 response raw stream',/function ConvertFrom-DriveUtf8JsonResponse/.test(s)&&/RawContentStream/.test(s)&&/System\.Text\.UTF8Encoding\(\$false, \$true\)/.test(s)],
+['JSON APIs avoid Invoke-RestMethod',!/Invoke-RestMethod/.test(s)&&/function Invoke-DriveUtf8JsonRequest/.test(s)&&/Invoke-WebRequest @params/.test(s)],
+['UTF-8 response failure gates',/DRIVE_HTTP_RESPONSE_UTF8_INVALID/.test(s)&&/DRIVE_HTTP_RESPONSE_JSON_INVALID/.test(s)],
 ['IDictionary safe property helper',/System\.Collections\.IDictionary/.test(s)&&/InputObject\.Contains\(\$Name\)/.test(s)],
 ['LOCALAPPDATA fallback',/SpecialFolder\]::LocalApplicationData/.test(s)&&/LOCAL_APP_DATA_NOT_AVAILABLE/.test(s)],
 ['no direct critical response ok',!/\$(?:response|init|complete|result|contract)\.ok\b/.test(s)],
-['acceptance V016 marker',/V016_WINDOWS_ACCEPTANCE_PASS/.test(a)],
+['acceptance V016 FIX3 marker',/V016_FIX3_WINDOWS_ACCEPTANCE_PASS/.test(a)&&/V016_WINDOWS_ACCEPTANCE_PASS/.test(a)],
 ['acceptance DPAPI full type gate',/System\.Security\.Cryptography\.ProtectedData/.test(a)&&/short DPAPI type/.test(a)],
 ];
 let pass=0;for(const[n,o]of checks){console.log(`${o?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${n}`);if(o)pass++;else process.exitCode=1;}if(pass!==checks.length)throw new Error(`Windows V0.1.6 contract failed ${pass}/${checks.length}`);console.log(`DIMPRO Drive Desktop Windows V0.1.6 contract PASS ${pass}/${checks.length}`);
