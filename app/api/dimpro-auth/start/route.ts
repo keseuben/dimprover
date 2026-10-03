@@ -35,5 +35,8 @@ export async function GET(request: NextRequest) {
   target.searchParams.set("state", state);
   target.searchParams.set("code_challenge", challenge);
   target.searchParams.set("code_challenge_method", "S256");
-  return NextResponse.redirect(target);
+  const response = NextResponse.redirect(target);
+  response.headers.set("cache-control", "no-store, max-age=0");
+  response.headers.set("referrer-policy", "no-referrer");
+  return response;
 }

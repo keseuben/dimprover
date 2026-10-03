@@ -22,7 +22,7 @@ Dátum: 2026-10-03
 
 ## Teszt
 - AUTH V0.1 contract: 22/22 PASS.
-- AUTH V0.2 SSO contract: 34/34 PASS.
+- AUTH V0.2 SSO contract: 35/35 PASS.
 - AUTH V0.2.1 security contract: 44/44 PASS.
 - Célzott ESLint: PASS.
 - `git diff --check`: PASS.
@@ -135,3 +135,9 @@ A 2026-10-03-i read-only live futás 1/6 PASS eredményt adott, ezért ez **depl
 - `drive.dev.dimpro.hu/drive`: 307 `/login`, még a régi login-flow fut.
 
 A probe nem végez módosítást és nem aktivál candidate-et. Az aktív hostok jelenleg `213.160.68.32` címre oldódnak, miközben ez az AUTH forrás-worktree a `213.160.68.24` DEV VPS-en van. A candidate aktiválás külön, engedélyezett központi deployment csatornát igényel.
+
+## SSO redirect leak protection
+
+- A Drive SSO indító és callback válaszok `Cache-Control: no-store` és `Referrer-Policy: no-referrer` fejlécet kapnak.
+- A callback hiba- és sikerágai ugyanazon `noLeak` fejléc-politikát használják, ezért az egyszer használatos `code` és `state` nem kerülhet normál referrer láncba.
+- A callback `X-Content-Type-Options: nosniff` fejlécet is ad.
