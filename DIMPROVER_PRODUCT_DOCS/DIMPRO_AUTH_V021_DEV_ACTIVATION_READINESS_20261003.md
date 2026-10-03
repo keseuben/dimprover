@@ -208,3 +208,10 @@ A jelenlegi `dev.dimpro.hu` Let's Encrypt tanúsítvány SAN listája tartalmazz
 
 - `app.dimpro.hu/login` és `app.dev.dimpro.hu/login` közvetlenül a központi `login.dimpro.hu` / `login.dev.dimpro.hu` belépési címre irányít.
 - Ez megakadályozza, hogy az app host a saját hostján renderelje a központi OTP UI-t, amelynek API-i szándékosan csak az AUTH hoston engedélyezettek.
+
+## DEV DB source-IP split
+
+- Runtime application role: `dimpro_auth_app_dev` is allowed only from `213.160.68.32/32` (active DEV runtime/ingress host).
+- Migration role: `dimpro_auth_migrator_dev` is allowed only from `213.160.68.24/32` (authoritative source/control node).
+- Both rules are database-specific (`dimpro_auth_dev`), `hostssl` + `scram-sha-256`; no broad `all/all` rule is permitted.
+- PROD database/roles remain outside this DEV activation path.
