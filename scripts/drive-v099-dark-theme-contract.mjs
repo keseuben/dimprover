@@ -20,7 +20,7 @@ function luminance(hex) {
 }
 function contrast(a, b) { let x = luminance(a), y = luminance(b); if (x < y) [x, y] = [y, x]; return (x + 0.05) / (y + 0.05); }
 
-check("V0.9.9 development version is active", () => assert.match(buildInfo, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.9"/));
+check("Drive dark-theme series uses shared 0.9.x version source", () => assert.match(buildInfo, /DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/));
 check("theme storage key and normalization are centralized", () => {
   assert.match(theme, /DRIVE_THEME_STORAGE_KEY = "dimpro-drive-theme"/);
   assert.match(theme, /value === "dark" \? "dark" : "light"/);

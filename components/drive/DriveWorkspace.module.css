@@ -4494,3 +4494,459 @@
   :global(html[data-drive-theme="dark"]) .fileTable td { color: #e8f0f7; }
   :global(html[data-drive-theme="dark"]) .fileTable th { color: #b9cad8; }
 }
+
+/* DIMPRO Drive V0.9.10 – dark theme completion for review/details/status surfaces */
+:global(html[data-drive-theme="dark"]) .fileSelectionBar,
+:global(html[data-drive-theme="dark"]) .fileCompactControls,
+:global(html[data-drive-theme="dark"]) .fileStatusLegend {
+  background: #0f1d2b;
+  border-color: #2a3d4f;
+  color: #9db0c1;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar label,
+:global(html[data-drive-theme="dark"]) .fileStatusLegendTitle {
+  color: #d5e1eb;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar button,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions button,
+:global(html[data-drive-theme="dark"]) .reviewReset {
+  border-color: #31475a;
+  background: #122231;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .fileSelectionBar button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewCompactActions button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewReset:hover:not(:disabled) {
+  border-color: #4d7193;
+  background: #193149;
+  color: #91c7ff;
+}
+:global(html[data-drive-theme="dark"]) .fileDeleteSelected {
+  border-color: #6a3940 !important;
+  background: #321b20 !important;
+  color: #ff969c !important;
+}
+:global(html[data-drive-theme="dark"]) .fileDeleteSelected:hover:not(:disabled) {
+  border-color: #8b4b55 !important;
+  background: #472229 !important;
+}
+:global(html[data-drive-theme="dark"]) .fileStatusLegendDivider { color: #52677a; }
+:global(html[data-drive-theme="dark"]) .legendSwatchPending {
+  background: #273543;
+  border-color: #46596b !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchReview,
+:global(html[data-drive-theme="dark"]) .legendRowCurrent {
+  background: #173552;
+  border-color: #376a9d !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchReturned {
+  background: #443219;
+  border-color: #73572a !important;
+}
+:global(html[data-drive-theme="dark"]) .legendSwatchApproved,
+:global(html[data-drive-theme="dark"]) .legendRowApproved {
+  background: #173726;
+  border-color: #356147 !important;
+}
+:global(html[data-drive-theme="dark"]) .legendRowArchive {
+  background: #222d38;
+  border-color: #43505d !important;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewHost,
+:global(html[data-drive-theme="dark"]) .reviewTableWrap {
+  background: #0b1724;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader,
+:global(html[data-drive-theme="dark"]) .reviewFilters,
+:global(html[data-drive-theme="dark"]) .reviewBulkBar {
+  background: #0f1d2b;
+  border-color: #293c4e;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader span,
+:global(html[data-drive-theme="dark"]) .reviewLegend,
+:global(html[data-drive-theme="dark"]) .reviewFilters label,
+:global(html[data-drive-theme="dark"]) .reviewBulkBar > span,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > span {
+  color: #94a9bb;
+}
+:global(html[data-drive-theme="dark"]) .reviewHeader strong,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > strong,
+:global(html[data-drive-theme="dark"]) .reviewCompactActions > strong span {
+  color: #82bdff;
+}
+:global(html[data-drive-theme="dark"]) .reviewFilters input,
+:global(html[data-drive-theme="dark"]) .reviewFilters select,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters input,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters select,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid select {
+  border-color: #31475a;
+  background: #101f2e;
+  color: #d8e5ef;
+}
+:global(html[data-drive-theme="dark"]) .reviewFilters input:focus,
+:global(html[data-drive-theme="dark"]) .reviewFilters select:focus,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters input:focus,
+:global(html[data-drive-theme="dark"]) .reviewCompactFilters select:focus,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid select:focus {
+  border-color: #5a91c4;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.16);
+}
+
+:global(html[data-drive-theme="dark"]) .reviewTable th,
+:global(html[data-drive-theme="dark"]) .reviewTable th:first-child {
+  background: #101f2e !important;
+  border-color: #2a3c4e;
+  color: #a7bacb;
+}
+:global(html[data-drive-theme="dark"]) .reviewTable td,
+:global(html[data-drive-theme="dark"]) .reviewTable td:first-child {
+  background: #0b1724;
+  border-color: #1e3041;
+  color: #cbd9e5;
+  box-shadow: none;
+}
+:global(html[data-drive-theme="dark"]) .reviewTable tbody tr:hover td,
+:global(html[data-drive-theme="dark"]) .reviewTable tbody tr:hover td:first-child {
+  background: #112437 !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewName,
+:global(html[data-drive-theme="dark"]) .reviewNameExplicit,
+:global(html[data-drive-theme="dark"]) .reviewNameFallback {
+  color: #dce7f1;
+}
+:global(html[data-drive-theme="dark"]) .reviewName:hover { color: #9dccff; }
+:global(html[data-drive-theme="dark"]) .reviewFileName { color: #9db0c1 !important; }
+:global(html[data-drive-theme="dark"]) .reviewSymbol { color: #b7c8d6; }
+:global(html[data-drive-theme="dark"]) .reviewSymbol:hover {
+  border-color: #466580;
+  background: #173049;
+  color: #88c2ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewRowSelected td,
+:global(html[data-drive-theme="dark"]) .reviewRowSelected td:first-child,
+:global(html[data-drive-theme="dark"]) .fileSelected td {
+  background: #17395f !important;
+  color: #edf6ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewRowSelected:hover td {
+  background: #1b426d !important;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleApprovedCurrent td {
+  background: #122c21;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleApprovedCurrent:hover td { background: #173729; }
+:global(html[data-drive-theme="dark"]) .rowLifecycleCurrent td {
+  background: #11283f;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleCurrent:hover td { background: #16334f; }
+:global(html[data-drive-theme="dark"]) .rowLifecycleArchive td {
+  background: #151f29;
+  color: #8295a7;
+}
+:global(html[data-drive-theme="dark"]) .rowLifecycleArchive:hover td { background: #1b2733; }
+
+:global(html[data-drive-theme="dark"]) .reviewGroupHeader th {
+  border-bottom-color: #395064;
+  color: #bfd0de;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupTechnical {
+  background: #17314a !important;
+  color: #9dccff !important;
+  border-left-color: #36678f !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupCustomer {
+  background: #163328 !important;
+  color: #8fd4ae !important;
+  border-left-color: #35644e !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupManager {
+  background: #2b2542 !important;
+  color: #c3afff !important;
+  border-left-color: #574b7b !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupInvestor {
+  background: #1d3327 !important;
+  color: #9dd1ac !important;
+  border-left-color: #3f654b !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewGroupLifecycle {
+  background: #222d38 !important;
+  color: #b5c4d0 !important;
+  border-left-color: #465766 !important;
+}
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(8),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(14),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(17),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(18),
+:global(html[data-drive-theme="dark"]) .reviewColumnHeader th:nth-child(19),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(8),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(14),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(17),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(18),
+:global(html[data-drive-theme="dark"]) .reviewTable td:nth-child(19) {
+  border-left-color: #34495c;
+}
+
+:global(html[data-drive-theme="dark"]) .detailsPanel,
+:global(html[data-drive-theme="dark"]) .detailsHeader,
+:global(html[data-drive-theme="dark"]) .detailsTabs,
+:global(html[data-drive-theme="dark"]) .detailsBody,
+:global(html[data-drive-theme="dark"]) .detailsWorkspace,
+:global(html[data-drive-theme="dark"]) .detailsFieldsPane,
+:global(html[data-drive-theme="dark"]) .detailsSplitCard {
+  background: #0d1a28;
+  border-color: #2a3d4f;
+  color: #cbd9e5;
+}
+:global(html[data-drive-theme="dark"]) .detailsPreviewPane {
+  background: #091522;
+  border-color: #2a3d4f;
+}
+:global(html[data-drive-theme="dark"]) .detailsHeaderTitle,
+:global(html[data-drive-theme="dark"]) .detailsHeaderText strong { color: #e6eef6; }
+:global(html[data-drive-theme="dark"]) .detailsHeaderText span { color: #98adbf; }
+:global(html[data-drive-theme="dark"]) .detailsTabs button { color: #9cafbf; }
+:global(html[data-drive-theme="dark"]) .detailsTabs .detailsTabActive {
+  color: #83beff;
+  border-bottom-color: #4a91ff;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo,
+:global(html[data-drive-theme="dark"]) .reviewSection,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem,
+:global(html[data-drive-theme="dark"]) .reviewTimeline {
+  background: #101f2d;
+  border-color: #2e4356;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo span,
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader small,
+:global(html[data-drive-theme="dark"]) .reviewAuditLine,
+:global(html[data-drive-theme="dark"]) .observationEditorHead span {
+  color: #8fa4b6;
+}
+:global(html[data-drive-theme="dark"]) .reviewRoleInfo strong,
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader strong,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem label,
+:global(html[data-drive-theme="dark"]) .observationEditorHead strong {
+  color: #dbe7f1;
+}
+:global(html[data-drive-theme="dark"]) .reviewSectionHeader,
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle {
+  background: #132333;
+  border-color: #304559;
+  color: #c8d7e4;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle:hover {
+  background: #183047;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineToggle small { color: #8ea3b6; }
+:global(html[data-drive-theme="dark"]) .reviewTimelineTableWrap { border-color: #304559; }
+:global(html[data-drive-theme="dark"]) .reviewTimelineTable th {
+  background: #132333;
+  color: #a8bac9;
+}
+:global(html[data-drive-theme="dark"]) .reviewTimelineTable td {
+  border-color: #26394a;
+  background: #0f1d2b;
+  color: #c5d4e0;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewEditorItem select,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem input,
+:global(html[data-drive-theme="dark"]) .reviewEditorItem textarea,
+:global(html[data-drive-theme="dark"]) .observationItem textarea {
+  border-color: #334a5e;
+  background: #0b1825;
+  color: #e0e9f2;
+}
+:global(html[data-drive-theme="dark"]) .reviewEditorItem[data-review-focused="true"] {
+  background: #122b43;
+  outline-color: #4a91ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewSection select:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection input:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection textarea:disabled,
+:global(html[data-drive-theme="dark"]) .reviewSection textarea[readonly] {
+  background: #16222d;
+  color: #788b9d;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButton {
+  border-color: #304559;
+  background: #132230;
+  color: #9db0c1;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButton:hover {
+  border-color: #4c7192;
+  background: #193047;
+}
+:global(html[data-drive-theme="dark"]) .reviewCategoryButtonActive,
+:global(html[data-drive-theme="dark"]) .reviewCategoryButtonActive:hover {
+  border-color: #4d8fd5;
+  background: #17375a;
+  color: #93c8ff;
+  box-shadow: inset 0 -2px 0 #4a91ff;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewChoice {
+  border-color: #34495b;
+  background: #142331;
+  color: #c6d5e1;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoice:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="ok"] {
+  background: #153524;
+  border-color: #3d6d50;
+  color: #8addaa;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="warn"] {
+  background: #443219;
+  border-color: #775829;
+  color: #ffd06b;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="danger"] {
+  background: #402126;
+  border-color: #784047;
+  color: #ff989f;
+}
+:global(html[data-drive-theme="dark"]) .reviewChoiceActive[data-tone="neutral"] {
+  background: #173653;
+  border-color: #416e98;
+  color: #96caff;
+}
+:global(html[data-drive-theme="dark"]) .observationEditorHead button,
+:global(html[data-drive-theme="dark"]) .observationDelete {
+  border-color: #34495b;
+  background: #142331;
+  color: #b8c9d7;
+}
+:global(html[data-drive-theme="dark"]) .observationEditorHead button:hover:not(:disabled) {
+  background: #1a334b;
+  border-color: #507494;
+}
+:global(html[data-drive-theme="dark"]) .observationIndex {
+  background: #173653;
+  color: #9accff;
+}
+:global(html[data-drive-theme="dark"]) .observationSource { color: #91a5b7; }
+:global(html[data-drive-theme="dark"]) .observationEmpty {
+  border-color: #3a4f62;
+  color: #8fa3b4;
+}
+:global(html[data-drive-theme="dark"]) .observationNotice {
+  background: #132b43;
+  border-color: #345877;
+  color: #9ac6ef;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewProgress::before,
+:global(html[data-drive-theme="dark"]) .reviewProgressLine {
+  background: #334759;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressStep,
+:global(html[data-drive-theme="dark"]) .reviewProgressPending {
+  background: #182634;
+  border-color: #35495b;
+  color: #91a4b4;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressDone {
+  background: #153525;
+  border-color: #38684b;
+  color: #8ad7a8;
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressActive {
+  background: #173754;
+  border-color: #4677a3;
+  color: #9acbff;
+  box-shadow: 0 0 0 2px rgba(74,145,255,.09);
+}
+:global(html[data-drive-theme="dark"]) .reviewProgressReturned {
+  background: #44301a;
+  border-color: #72532b;
+  color: #ffd071;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewApproval_pending,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_working,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_archive {
+  background: #24313d;
+  border-color: #445565;
+  color: #a8b8c6;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_review,
+:global(html[data-drive-theme="dark"]) .reviewLifecycle_current {
+  background: #163552;
+  border-color: #3a6995;
+  color: #9ccaff;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_returned {
+  background: #453219;
+  border-color: #74572d;
+  color: #ffd06d;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_customer {
+  background: #123b41;
+  border-color: #2f6870;
+  color: #8cd9e3;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_manager {
+  background: #30264a;
+  border-color: #5b4d7c;
+  color: #c8b5ff;
+}
+:global(html[data-drive-theme="dark"]) .reviewApproval_investor,
+:global(html[data-drive-theme="dark"]) .reviewPermissionActive {
+  background: #153725;
+  border-color: #39684b;
+  color: #91dcae;
+}
+:global(html[data-drive-theme="dark"]) .reviewPermissionLocked {
+  background: #232f3a;
+  border-color: #44515d;
+  color: #97a8b7;
+}
+
+:global(html[data-drive-theme="dark"]) .reviewBulkEditor {
+  border-color: #30475a;
+  background: #102339;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+}
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead strong { color: #a7d0ff; }
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead span,
+:global(html[data-drive-theme="dark"]) .reviewBulkRecursive,
+:global(html[data-drive-theme="dark"]) .reviewBulkGrid label,
+:global(html[data-drive-theme="dark"]) .reviewBulkActions span { color: #95a9ba; }
+:global(html[data-drive-theme="dark"]) .reviewBulkBar button,
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead button,
+:global(html[data-drive-theme="dark"]) .reviewBulkActions button {
+  border-color: #33495c;
+  background: #142331;
+  color: #c4d3df;
+}
+:global(html[data-drive-theme="dark"]) .reviewBulkBar button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewBulkEditorHead button:hover:not(:disabled),
+:global(html[data-drive-theme="dark"]) .reviewBulkActions button:hover:not(:disabled) {
+  border-color: #527798;
+  background: #1a334b;
+}
+
+:global(html[data-drive-theme="dark"]) .boxItemNames strong { color: #dbe7f1; }
+:global(html[data-drive-theme="dark"]) .boxItemNames small { color: #8fa4b7; }
+:global(html[data-drive-theme="dark"]) .boxAdd,
+:global(html[data-drive-theme="dark"]) .boxEmptyCreate,
+:global(html[data-drive-theme="dark"]) .boxDisabledInfo {
+  border-color: #3d5871;
+  background: #102031;
+  color: #9bc8f2;
+}
+:global(html[data-drive-theme="dark"]) .boxAdd:hover,
+:global(html[data-drive-theme="dark"]) .boxEmptyCreate:hover {
+  background: #173049;
+  border-color: #5885ad;
+}
