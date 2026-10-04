@@ -204,6 +204,51 @@ export async function activateProjectMembership(projectId: string, emailRaw: str
   return membership;
 }
 
+export async function updateProjectMembershipRole(
+  projectId: string,
+  membershipId: string,
+  nextRole: ProjectMembershipRole,
+  actorUserId: string,
+) {
+  const state = await getProjectCoreState();
+  const membership = state.memberships.find((item) => item.projectId === projectId && item.id === membershipId);
+  if (!membership) return { ok: false as const, error: "A projekttagság nem található." };
+  if (membership.role === "OWNER") return { ok: false as const, error: "A projektgazda szerepköre védett." };
+  if (nextRole === "OWNER") return { ok: false as const, error: "A projektgazda szerepkör ezen a felületen nem adható át." };
+  if (membership.status !== "ACTIVE") return { ok: false as const, error: "Csak aktív projekttag szerepköre módosítható." };
+  const previousRole = membership.role;
+  if (previousRole === nextRole) return { ok: true as const, membership, previousRole };
+  const now = nowIso();
+  membership.role = nextRole;
+  membership.updatedAt = now;
+  state.auditEvents.unshift(auditEvent({
+    projectId, actorUserId, eventType: "PROJECT_MEMBER_ROLE_CHANGED", entityType: "membership", entityId: membership.id,
+    summary: `Projekt-résztvevő szerepköre módosítva: ${membership.displayName}`, metadata: { previousRole, nextRole },
+  }));
+  state.updatedAt = now;
+  await writeState(state);
+  return { ok: true as const, membership, previousRole };
+}
+
+export async function revokeProjectMembership(projectId: string, membershipId: string, actorUserId: string) {
+  const state = await getProjectCoreState();
+  const membership = state.memberships.find((item) => item.projectId === projectId && item.id === membershipId);
+  if (!membership) return { ok: false as const, error: "A projekttagság nem található." };
+  if (membership.role === "OWNER") return { ok: false as const, error: "A projektgazda hozzáférése ezen a felületen nem szüntethető meg." };
+  const previousStatus = membership.status;
+  if (previousStatus === "REVOKED") return { ok: true as const, membership, previousStatus };
+  const now = nowIso();
+  membership.status = "REVOKED";
+  membership.updatedAt = now;
+  state.auditEvents.unshift(auditEvent({
+    projectId, actorUserId, eventType: "PROJECT_MEMBER_REVOKED", entityType: "membership", entityId: membership.id,
+    summary: `Projekt-hozzáférés megszüntetve: ${membership.displayName}`, metadata: { previousStatus, role: membership.role },
+  }));
+  state.updatedAt = now;
+  await writeState(state);
+  return { ok: true as const, membership, previousStatus };
+}
+
 export async function listAccessibleProjects(userAliases: string[]): Promise<ProjectListItem[]> {
   const state = await getProjectCoreState();
   return state.projects

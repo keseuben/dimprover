@@ -1,10 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireProjectPermission } from "@/app/lib/project-core/auth";
 import { projectCoreErrorResponse } from "@/app/lib/project-core/api";
-import { addProjectMembership, listProjectMemberships } from "@/app/lib/project-core/store";
+import {
+  addProjectMembership,
+  listProjectMemberships,
+  revokeProjectMembership,
+  updateProjectMembershipRole,
+} from "@/app/lib/project-core/store";
+import type { ProjectMembershipRole } from "@/app/lib/project-core/types";
 import { getProjectDriveProvisioningState, provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
 import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
+import {
+  getActiveAuthUserByEmail,
+  getAuthProjectScopeByExternalId,
+  registerAuthProjectScope,
+} from "@/app/lib/dimpro-auth/repository";
+import {
+  replaceProjectAccessRole,
+  revokeProjectAccess,
+  type DimproProjectInvitationRole,
+} from "@/app/lib/dimpro-auth/invitations";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 
@@ -17,6 +33,30 @@ type IdentitySyncFailure = {
   error: string;
   code: string;
 };
+
+const editableRoles: ProjectMembershipRole[] = ["PROJECT_MANAGER", "CONTRIBUTOR", "REVIEWER", "VIEWER"];
+
+function normalizeRole(value: unknown): Exclude<ProjectMembershipRole, "OWNER"> | null {
+  return editableRoles.includes(value as ProjectMembershipRole)
+    ? value as Exclude<ProjectMembershipRole, "OWNER">
+    : null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function authRoleForProjectRole(role: ProjectMembershipRole): DimproProjectInvitationRole {
+  return role === "PROJECT_MANAGER" ? "DRIVE_PROJECT_MANAGER" : "DRIVE_PROJECT_MEMBER";
+}
+
+async function resolveCanonicalAuthUserId(userId: string, email: string | null | undefined) {
+  if (isUuid(userId)) return userId;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return null;
+  const authUser = await getActiveAuthUserByEmail(normalizedEmail);
+  return authUser && isUuid(authUser.id) ? authUser.id : null;
+}
 
 async function syncIdentityMemberships(projectId: string, actorUserId: string) {
   try {
@@ -74,7 +114,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
   try {
     const memberships = await listProjectMemberships(projectId);
-    return NextResponse.json({ ok: true, memberships });
+    return NextResponse.json({
+      ok: true,
+      memberships,
+      access: {
+        canManageMembers: accessResult.access.permissions.includes("project.manage_members"),
+        actorRole: accessResult.access.membership.role,
+        actorMembershipId: accessResult.access.membership.id,
+      },
+    });
   } catch (error) {
     return projectCoreErrorResponse(error);
   }
@@ -97,6 +145,177 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!result.ok) return NextResponse.json(result, { status: 400 });
     const identityProvisioning = await syncIdentityMemberships(projectId, accessResult.actor.userId);
     return NextResponse.json({ ...result, identityProvisioning }, { status: 201 });
+  } catch (error) {
+    return projectCoreErrorResponse(error);
+  }
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { projectId } = await context.params;
+  const accessResult = await requireProjectPermission(request, projectId, "project.manage_members");
+  if (!accessResult.ok) {
+    return NextResponse.json({ ok: false, error: accessResult.error }, { status: accessResult.status });
+  }
+  const body = await request.json().catch(() => null) as { membershipId?: unknown; role?: unknown } | null;
+  const membershipId = typeof body?.membershipId === "string" ? body.membershipId.trim() : "";
+  const nextRole = normalizeRole(body?.role);
+  if (!membershipId || !nextRole) {
+    return NextResponse.json({ ok: false, error: "Érvénytelen projekttagság vagy szerepkör." }, { status: 400 });
+  }
+
+  try {
+    const memberships = await listProjectMemberships(projectId);
+    const target = memberships.find((item) => item.id === membershipId);
+    if (!target) return NextResponse.json({ ok: false, error: "A projekttagság nem található." }, { status: 404 });
+    if (target.role === "OWNER") {
+      return NextResponse.json({ ok: false, error: "A projektgazda szerepköre védett." }, { status: 409 });
+    }
+    if (target.id === accessResult.access.membership.id) {
+      return NextResponse.json({ ok: false, error: "A saját projektszerepköröd ezen a kezelőn nem módosítható." }, { status: 409 });
+    }
+    if (target.status !== "ACTIVE") {
+      return NextResponse.json({ ok: false, error: "Csak aktív projekttag szerepköre módosítható." }, { status: 409 });
+    }
+
+    const previousAuthRole = authRoleForProjectRole(target.role);
+    const nextAuthRole = authRoleForProjectRole(nextRole);
+    let authRoleChanged = false;
+    let authProjectId: string | null = null;
+
+    let targetAuthUserId: string | null = null;
+    if (previousAuthRole !== nextAuthRole) {
+      targetAuthUserId = await resolveCanonicalAuthUserId(target.userId, target.email);
+      if (!targetAuthUserId) {
+        return NextResponse.json({
+          ok: false,
+          error: "A projekttag aktív központi AUTH felhasználója nem oldható fel biztonságosan. Ellenőrizd az e-mail-címet vagy hívd meg újra.",
+        }, { status: 409 });
+      }
+      if (!isUuid(accessResult.actor.userId)) {
+        return NextResponse.json({
+          ok: false,
+          error: "A jogosultságkezeléshez központi DIMPRO AUTH munkamenet szükséges.",
+        }, { status: 409 });
+      }
+      await registerAuthProjectScope({
+        actorUserId: accessResult.actor.userId,
+        externalProjectId: projectId,
+        projectName: accessResult.access.project.name,
+      });
+      const authProject = await getAuthProjectScopeByExternalId(projectId);
+      if (!authProject || authProject.status !== "ACTIVE") {
+        return NextResponse.json({ ok: false, error: "A projekt központi AUTH scope-ja nem található." }, { status: 409 });
+      }
+      authProjectId = authProject.id;
+      await replaceProjectAccessRole({
+        actorUserId: accessResult.actor.userId,
+        targetUserId: targetAuthUserId,
+        targetEmail: target.email || "",
+        targetDisplayName: target.displayName,
+        projectId: authProject.id,
+        roleCode: nextAuthRole,
+      });
+      authRoleChanged = true;
+    }
+
+    const result = await updateProjectMembershipRole(projectId, membershipId, nextRole, accessResult.actor.userId);
+    if (!result.ok) {
+      if (authRoleChanged && authProjectId) {
+        await replaceProjectAccessRole({
+          actorUserId: accessResult.actor.userId,
+          targetUserId: targetAuthUserId!,
+          targetEmail: target.email || "",
+          targetDisplayName: target.displayName,
+          projectId: authProjectId,
+          roleCode: previousAuthRole,
+        }).catch(() => undefined);
+      }
+      return NextResponse.json(result, { status: 409 });
+    }
+
+    const identityProvisioning = await syncIdentityMemberships(projectId, accessResult.actor.userId);
+    return NextResponse.json({ ...result, identityProvisioning });
+  } catch (error) {
+    return projectCoreErrorResponse(error);
+  }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { projectId } = await context.params;
+  const accessResult = await requireProjectPermission(request, projectId, "project.manage_members");
+  if (!accessResult.ok) {
+    return NextResponse.json({ ok: false, error: accessResult.error }, { status: accessResult.status });
+  }
+  const body = await request.json().catch(() => null) as { membershipId?: unknown } | null;
+  const membershipId = typeof body?.membershipId === "string" ? body.membershipId.trim() : "";
+  if (!membershipId) {
+    return NextResponse.json({ ok: false, error: "Hiányzik a projekttagság azonosítója." }, { status: 400 });
+  }
+
+  try {
+    const memberships = await listProjectMemberships(projectId);
+    const target = memberships.find((item) => item.id === membershipId);
+    if (!target) return NextResponse.json({ ok: false, error: "A projekttagság nem található." }, { status: 404 });
+    if (target.role === "OWNER") {
+      return NextResponse.json({ ok: false, error: "A projektgazda hozzáférése ezen a felületen nem szüntethető meg." }, { status: 409 });
+    }
+    if (target.id === accessResult.access.membership.id) {
+      return NextResponse.json({ ok: false, error: "A saját projekthozzáférésed ezen a kezelőn nem szüntethető meg." }, { status: 409 });
+    }
+    if (target.status === "INVITED") {
+      return NextResponse.json({
+        ok: false,
+        error: "A függő meghívást a Függő meghívások résznél kell visszavonni.",
+      }, { status: 409 });
+    }
+
+    let revokedAuth = false;
+    let authProjectId: string | null = null;
+    let targetAuthUserId: string | null = null;
+    if (target.status === "ACTIVE") {
+      targetAuthUserId = await resolveCanonicalAuthUserId(target.userId, target.email);
+      if (!targetAuthUserId) {
+        return NextResponse.json({
+          ok: false,
+          error: "A projekttag aktív központi AUTH felhasználója nem oldható fel biztonságosan. A hozzáférés nem szüntethető meg féloldalasan.",
+        }, { status: 409 });
+      }
+      if (!isUuid(accessResult.actor.userId)) {
+        return NextResponse.json({
+          ok: false,
+          error: "A jogosultságkezeléshez központi DIMPRO AUTH munkamenet szükséges.",
+        }, { status: 409 });
+      }
+      await registerAuthProjectScope({
+        actorUserId: accessResult.actor.userId,
+        externalProjectId: projectId,
+        projectName: accessResult.access.project.name,
+      });
+      const authProject = await getAuthProjectScopeByExternalId(projectId);
+      if (authProject?.status === "ACTIVE") {
+        authProjectId = authProject.id;
+        const revokedCount = await revokeProjectAccess(accessResult.actor.userId, targetAuthUserId, authProject.id);
+        revokedAuth = revokedCount > 0;
+      }
+    }
+
+    const result = await revokeProjectMembership(projectId, membershipId, accessResult.actor.userId);
+    if (!result.ok) {
+      if (revokedAuth && authProjectId) {
+        await replaceProjectAccessRole({
+          actorUserId: accessResult.actor.userId,
+          targetUserId: targetAuthUserId!,
+          targetEmail: target.email || "",
+          targetDisplayName: target.displayName,
+          projectId: authProjectId,
+          roleCode: authRoleForProjectRole(target.role),
+        }).catch(() => undefined);
+      }
+      return NextResponse.json(result, { status: 409 });
+    }
+
+    const identityProvisioning = await syncIdentityMemberships(projectId, accessResult.actor.userId);
+    return NextResponse.json({ ...result, identityProvisioning });
   } catch (error) {
     return projectCoreErrorResponse(error);
   }

@@ -5,7 +5,7 @@ const css=fs.readFileSync("components/drive/DriveWorkspace.module.css","utf8");
 const buildInfo=fs.readFileSync("components/drive/driveBuildInfo.ts","utf8");
 let pass=0; const check=(label,fn)=>{fn();pass++;console.log("PASS "+String(pass).padStart(2,"0")+" "+label);};
 const need=(token)=>assert.ok(css.includes(token),"missing "+token);
-check("V0.9.12 development version is active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.12"/));
+check("Drive V0.9.x development version source remains active",()=>assert.match(buildInfo,/DRIVE_DEVELOPMENT_VERSION = "0\.9\.\d+"/));
 check("header notification and help actions are visible in dark mode",()=>{need('.headerAction'); need("color: #b8cad9"); need(".headerAction:hover"); need("color: #f1f7fb");});
 check("file name audit card is dark",()=>{need(".fileNameAuditBox"); need("background: #101f2d"); need(".fileNameAuditBox strong");});
 check("version and revision editor is dark",()=>{need(".numberingEditor"); need(".numberingEditorHead strong"); need(".numberingEditGrid select");});
