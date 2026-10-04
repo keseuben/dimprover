@@ -3504,3 +3504,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.4.4: a Drive SSO start/callback cookie-k explicit a visszaadott `NextResponse` objektumra kerülnek, így a `__Host-dimpro_app` app-session cookie a callback redirecttel együtt kerül kiadásra.
 - V0.4.4 source: `f65fe8f5653e5af59c96d04cd26547c2d3abfaef`; build ID `MOdqGa9JjpmsNucoWLDyV`; artifact SHA-256 `171ec930fa843c24872e002a22775f15c555151c6568fb79d2b264180270007f`.
 - DEV: AUTH `3367`, Drive `3368`; PROD DENY; korábbi runtime-ok rollbackként megőrizve.
+
+### Drive SSO V0.4.5–V0.4.6 – redirect cache + legacy page gate javítás
+
+- V0.4.5: a Drive auth 307 redirectek explicit no-store/no-cache fejléceket kaptak.
+- V0.4.6: a Drive page central SSO hoston nem ellenőrzi többé a régi `DRIVE_DEV_ACCESS_COOKIE` jelszavas kaput; a legacy fallback csak nem-SSO hoston marad.
+- A szerver access log alapján a korábbi loop konkrét útvonala: callback SUCCESS → `/drive` → `/login` → új SSO.
+- Source: `63b55aa03384da4cc67029295bb46d3eb3291780`; build ID `S0Q8kSLGruMWmmlpSSEIn`; SHA-256 `2f9529ea0cacc6846df66e301d566cab9dc9162a82ce49c50b3cf72e1b3e4076`.
+- DEV Drive: `127.0.0.1:3370`; rollback `3369`; AUTH továbbra is V0.4.4 `3367`; PROD DENY.
