@@ -286,6 +286,100 @@ function Get-LocalPathFromRelative([string]$Root, [string]$RelativePath) {
   return Join-Path $Root $relative
 }
 
+function Assert-SafeSyncRelativePath([string]$RelativePath) {
+  $value = [string]$RelativePath
+  if (-not $value -or -not $value.Trim()) { throw 'V017_PLAN_RELATIVE_PATH_REQUIRED' }
+  $windowsValue = $value.Replace('/', '\\')
+  if ([IO.Path]::IsPathRooted($windowsValue)) { throw ('V017_PLAN_RELATIVE_PATH_ROOTED: ' + $value) }
+  $normalized = Get-NormalizedRelativePath $value
+  if (-not $normalized) { throw 'V017_PLAN_RELATIVE_PATH_REQUIRED' }
+  foreach ($segment in $normalized.Split('/')) {
+    if (-not $segment -or $segment -eq '.' -or $segment -eq '..') { throw ('V017_PLAN_RELATIVE_PATH_TRAVERSAL: ' + $value) }
+  }
+  return $normalized
+}
+
+function Get-CanonicalFullPath([string]$Path) {
+  if (-not $Path -or -not $Path.Trim()) { throw 'V017_LOCAL_PATH_REQUIRED' }
+  return [IO.Path]::GetFullPath($Path)
+}
+
+function Test-PathWithinRoot([string]$Root, [string]$Candidate) {
+  $rootFull = Get-CanonicalFullPath $Root
+  $candidateFull = Get-CanonicalFullPath $Candidate
+  $separator = [IO.Path]::DirectorySeparatorChar
+  $prefix = if ($rootFull.EndsWith([string]$separator)) { $rootFull } else { $rootFull + $separator }
+  return $candidateFull.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-ApplyPlanSafety($Plan) {
+  $planKind = [string](Get-ObjectPropertyValue $Plan 'planKind' '')
+  if ($planKind -ne 'DIMPRO_DRIVE_DESKTOP_MANUAL_SYNC_V017') { throw 'V017_APPLY_PLAN_KIND_INVALID' }
+  $localRootRaw = [string](Get-ObjectPropertyValue $Plan 'localRoot' '')
+  if (-not $localRootRaw -or -not (Test-Path -LiteralPath $localRootRaw -PathType Container)) { throw 'V017_APPLY_PLAN_LOCAL_ROOT_INVALID' }
+  $localRootFull = (Resolve-Path -LiteralPath $localRootRaw).Path
+  $operations = @(Get-ObjectPropertyValue $Plan 'operations' @())
+  $review = Get-ObjectPropertyValue $Plan 'review' $null
+  if ($null -eq $review -or -not [bool](Get-ObjectPropertyValue $review 'required' $false)) { throw 'V017_APPLY_PLAN_REVIEW_REQUIRED' }
+  $declaredOperationCount = [int](Get-ObjectPropertyValue $review 'operationCount' -1)
+  if ($declaredOperationCount -ne $operations.Count) { throw ('V017_APPLY_PLAN_OPERATION_COUNT_MISMATCH declared=' + $declaredOperationCount + ' actual=' + $operations.Count) }
+  if ($operations.Count -gt 5000) { throw 'V017_APPLY_PLAN_OPERATION_LIMIT_EXCEEDED' }
+
+  $seenRelativePaths = @{}
+  $seenLocalPaths = @{}
+  foreach ($operation in $operations) {
+    $kind = ([string](Get-ObjectPropertyValue $operation 'kind' '')).ToUpperInvariant()
+    if ($kind -ne 'DOWNLOAD' -and $kind -ne 'UPLOAD_NEW' -and $kind -ne 'UPLOAD_VERSION') { throw ('V017_OPERATION_KIND_UNSUPPORTED: ' + $kind) }
+    $relativePath = Assert-SafeSyncRelativePath ([string](Get-ObjectPropertyValue $operation 'relativePath' ''))
+    $relativeKey = $relativePath.ToLowerInvariant()
+    if ($seenRelativePaths.ContainsKey($relativeKey)) { throw ('V017_APPLY_PLAN_DUPLICATE_RELATIVE_PATH: ' + $relativePath) }
+    $seenRelativePaths[$relativeKey] = $true
+
+    $expectedPath = Get-LocalPathFromRelative $localRootFull $relativePath
+    $expectedFull = Get-CanonicalFullPath $expectedPath
+    if (-not (Test-PathWithinRoot $localRootFull $expectedFull)) { throw ('V017_APPLY_PLAN_PATH_ESCAPES_ROOT: ' + $relativePath) }
+
+    if ($kind -eq 'DOWNLOAD') {
+      $destinationPath = [string](Get-ObjectPropertyValue $operation 'destinationPath' '')
+      if (-not $destinationPath) { throw 'V017_DOWNLOAD_DESTINATION_REQUIRED' }
+      $destinationFull = Get-CanonicalFullPath $destinationPath
+      if (-not (Test-PathWithinRoot $localRootFull $destinationFull)) { throw ('V017_DOWNLOAD_DESTINATION_ESCAPES_ROOT: ' + $destinationPath) }
+      if (-not $destinationFull.Equals($expectedFull, [StringComparison]::OrdinalIgnoreCase)) { throw ('V017_DOWNLOAD_DESTINATION_PATH_MISMATCH: ' + $relativePath) }
+      if ($seenLocalPaths.ContainsKey($destinationFull.ToLowerInvariant())) { throw ('V017_APPLY_PLAN_DUPLICATE_LOCAL_PATH: ' + $destinationFull) }
+      $seenLocalPaths[$destinationFull.ToLowerInvariant()] = $true
+      $documentId = [string](Get-ObjectPropertyValue $operation 'documentId' '')
+      $versionId = [string](Get-ObjectPropertyValue $operation 'versionId' '')
+      $sha256 = ([string](Get-ObjectPropertyValue $operation 'sha256' '')).ToLowerInvariant()
+      if (-not $documentId) { throw 'V017_DOWNLOAD_DOCUMENT_ID_REQUIRED' }
+      if (-not $versionId) { throw 'V017_DOWNLOAD_VERSION_ID_REQUIRED' }
+      if ($sha256 -notmatch '^[0-9a-f]{64}$') { throw 'V017_DOWNLOAD_SHA256_REQUIRED' }
+      if (Test-Path -LiteralPath $destinationFull -PathType Leaf) { throw ('V017_DOWNLOAD_TARGET_ALREADY_EXISTS: ' + $destinationFull) }
+      continue
+    }
+
+    $localPath = [string](Get-ObjectPropertyValue $operation 'localPath' '')
+    if (-not $localPath -or -not (Test-Path -LiteralPath $localPath -PathType Leaf)) { throw ('V017_UPLOAD_LOCAL_FILE_NOT_FOUND: ' + $localPath) }
+    $localFull = (Resolve-Path -LiteralPath $localPath).Path
+    if (-not (Test-PathWithinRoot $localRootFull $localFull)) { throw ('V017_UPLOAD_LOCAL_PATH_ESCAPES_ROOT: ' + $localFull) }
+    if (-not $localFull.Equals($expectedFull, [StringComparison]::OrdinalIgnoreCase)) { throw ('V017_UPLOAD_LOCAL_PATH_MISMATCH: ' + $relativePath) }
+    if ($seenLocalPaths.ContainsKey($localFull.ToLowerInvariant())) { throw ('V017_APPLY_PLAN_DUPLICATE_LOCAL_PATH: ' + $localFull) }
+    $seenLocalPaths[$localFull.ToLowerInvariant()] = $true
+    $plannedSha = ([string](Get-ObjectPropertyValue $operation 'sha256' '')).ToLowerInvariant()
+    $plannedSize = [int64](Get-ObjectPropertyValue $operation 'sizeBytes' -1)
+    if ($plannedSha -notmatch '^[0-9a-f]{64}$') { throw 'V017_UPLOAD_PLANNED_SHA256_REQUIRED' }
+    if ($plannedSize -lt 0) { throw 'V017_UPLOAD_PLANNED_SIZE_REQUIRED' }
+    $current = Get-Item -LiteralPath $localFull
+    if ([int64]$current.Length -ne $plannedSize) { throw ('V017_UPLOAD_FILE_CHANGED_SIZE: ' + $relativePath) }
+    $currentSha = Get-FileSha256 $localFull
+    if ($currentSha -ne $plannedSha) { throw ('V017_UPLOAD_FILE_CHANGED_SHA256: ' + $relativePath) }
+  }
+
+  return [pscustomobject]@{
+    localRoot = $localRootFull
+    operationCount = $operations.Count
+  }
+}
+
 function Test-WindowsSafeLeafName([string]$Name) {
   $value = [string]$Name
   if (-not $value -or -not $value.Trim()) { return $false }
@@ -491,6 +585,8 @@ function New-ManualSyncPlan {
         folderId = [string](Get-ObjectPropertyValue $folder 'id' '')
         documentName = Get-RelativeLeafName $relativePath
         mimeType = Get-MimeTypeFromPath $localPath
+        sha256 = ([string](Get-ObjectPropertyValue $local 'sha256' '')).ToLowerInvariant()
+        sizeBytes = [int64](Get-ObjectPropertyValue $local 'sizeBytes' 0)
         description = 'DIMPRO Drive Desktop V0.1.7 manual sync upload'
         changeNote = 'DIMPRO Drive Desktop V0.1.7 manual sync'
       })
@@ -845,6 +941,7 @@ if ($Mode -eq 'Apply') {
   $reviewedPlanSha256 = Assert-ReviewedApplyPlan $ApplyPlanPath $ReviewedPlanSha256
   $planConflictCount = [int](Get-ObjectPropertyValue $plan 'conflictCount' 0)
   if ($planConflictCount -gt 0) { throw ('V017_APPLY_PLAN_CONFLICTS_PRESENT: ' + $planConflictCount) }
+  $planSafety = Assert-ApplyPlanSafety $plan
   $planProjectId = ([string](Get-ObjectPropertyValue $plan 'projectId' '')).Trim()
   if ($ProjectId -and $ProjectId.Trim() -and $ProjectId.Trim() -ne $planProjectId) { throw 'V017_PROJECT_ID_MISMATCH' }
   $operations = @(Get-ObjectPropertyValue $plan 'operations' @())
@@ -877,6 +974,7 @@ if ($Mode -eq 'Apply') {
     version = '0.1.7'
     projectId = $planProjectId
     reviewedPlanSha256 = $reviewedPlanSha256
+    validatedLocalRoot = [string](Get-ObjectPropertyValue $planSafety 'localRoot' '')
     operationCount = $results.Count
     operations = $results
     cursor = $cursorResult

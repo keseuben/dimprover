@@ -26,7 +26,14 @@ const checks=[
 ['PS5.1 unique keys avoid generic HashSet',/\$allKeys = @\{\}/.test(s)&&/\$allKeys\.Keys \| Sort-Object/.test(s)&&!/HashSet\[string\]/.test(s)],
 ['PS5.1 empty manifest normalized',/\$manifest = @\(Get-LocalManifest \$LocalRootValue\)/.test(s)],
 ['null scalar safe output counts',/function Get-SafeCount/.test(s)&&/localFileCount = Get-SafeCount \$manualPlan\.manifest/.test(s)&&/projectCount = Get-SafeCount \$items/.test(s)],
-['acceptance V017 FIX3 marker',/DIMPRO_DRIVE_DESKTOP_V017_FIX3_WINDOWS_ACCEPTANCE_PASS/.test(a)],
+['upload plan binds SHA and size',/sha256 = \(\[string\]\(Get-ObjectPropertyValue \$local 'sha256' ''\)\)\.ToLowerInvariant\(\)/.test(s)&&/sizeBytes = \[int64\]\(Get-ObjectPropertyValue \$local 'sizeBytes' 0\)/.test(s)],
+['apply plan kind and review gates',/V017_APPLY_PLAN_KIND_INVALID/.test(s)&&/V017_APPLY_PLAN_REVIEW_REQUIRED/.test(s)&&/V017_APPLY_PLAN_OPERATION_COUNT_MISMATCH/.test(s)],
+['apply relative traversal denied',/Assert-SafeSyncRelativePath/.test(s)&&/V017_PLAN_RELATIVE_PATH_TRAVERSAL/.test(s)&&/V017_PLAN_RELATIVE_PATH_ROOTED/.test(s)],
+['download destination locked to local root',/V017_DOWNLOAD_DESTINATION_ESCAPES_ROOT/.test(s)&&/V017_DOWNLOAD_DESTINATION_PATH_MISMATCH/.test(s)&&/Test-PathWithinRoot/.test(s)],
+['upload source locked to local root and plan hash',/V017_UPLOAD_LOCAL_PATH_ESCAPES_ROOT/.test(s)&&/V017_UPLOAD_LOCAL_PATH_MISMATCH/.test(s)&&/V017_UPLOAD_FILE_CHANGED_SHA256/.test(s)&&/V017_UPLOAD_FILE_CHANGED_SIZE/.test(s)],
+['duplicate local paths denied',/V017_APPLY_PLAN_DUPLICATE_LOCAL_PATH/.test(s)&&/V017_APPLY_PLAN_DUPLICATE_RELATIVE_PATH/.test(s)],
+['apply invokes safety gate',/\$planSafety = Assert-ApplyPlanSafety \$plan/.test(s)],
+['acceptance V017 PHASE2 marker',/DIMPRO_DRIVE_DESKTOP_V017_PHASE2_WINDOWS_ACCEPTANCE_PASS/.test(a)],
 ['acceptance V017 marker',/DIMPRO_DRIVE_DESKTOP_V017_WINDOWS_ACCEPTANCE_PASS/.test(a)],
 ];
 let pass=0;for(const[n,o]of checks){console.log(`${o?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${n}`);if(o)pass++;else process.exitCode=1;}if(pass!==checks.length)throw new Error(`V0.1.7 plan contract failed ${pass}/${checks.length}`);console.log(`DIMPRO Drive Desktop V0.1.7 Plan contract PASS ${pass}/${checks.length}`);
