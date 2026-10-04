@@ -356,3 +356,27 @@ V0.1.6 final acceptance status:
 - PROD access: DENY
 
 Next development level: real manual Desktop synchronization workflow built on `Probe -> Plan -> reviewed Apply`, while retaining fail-closed mutation gates and no-delete policy.
+
+
+## V0.1.7 Phase 2 FIX2 – Desktop security-scan auth transport correction
+
+Physical Windows evidence on 2026-10-04:
+- V0.1.7 Phase 2 FIX2 static Windows acceptance: PASS.
+- Bridge-backed live Probe: PASS.
+- reviewed `ScanPlan` reached the Drive host but was rejected by the central proxy with `AUTH_REQUIRED`.
+
+Root cause:
+- the short-lived `dpat1` Desktop bearer was valid and accepted by the Drive API auth layer, but `proxy.ts` Desktop own-auth route allowlist did not include the exact version security-scan endpoint;
+- the request therefore never reached the route-level `document.read` / `document.approve` authorization.
+
+Correction:
+- allow exact Desktop bearer transport for `/api/projects/{projectId}/drive/documents/{documentId}/versions/{versionId}/security-scan`;
+- this is transport-only: the route still independently enforces Project Core permissions;
+- no generic `/api/projects/*` bypass was added;
+- no cookie/session check was weakened for browser traffic;
+- PROD remains DENY for this DEV acceptance workflow.
+
+Acceptance requirement after deployment:
+1. existing Bridge Probe remains PASS;
+2. reviewed security scan returns 5/5 `CLEAN` with exact SHA-256 matches;
+3. only then may restart-safe DOWNLOAD Apply continue.

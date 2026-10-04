@@ -3,6 +3,7 @@ const token = fs.readFileSync(new URL('../app/lib/drive/desktopAccessToken.ts', 
 const route = fs.readFileSync(new URL('../app/api/drive/desktop-access/token/route.ts', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../app/lib/drive/driveApi.ts', import.meta.url), 'utf8');
 const pairing = fs.readFileSync(new URL('../app/lib/dev-center/terminal-hub/windows-bridge-pairing.ts', import.meta.url), 'utf8');
+const proxy = fs.readFileSync(new URL('../proxy.ts', import.meta.url), 'utf8');
 const checks = [
   ['token prefix', /TOKEN_PREFIX = "dpat1"/.test(token)],
   ['HMAC SHA256', /createHmac\("sha256"/.test(token)],
@@ -19,6 +20,7 @@ const checks = [
   ['desktop access auth mode', /"desktop-access"/.test(api)],
   ['bearer access verification', /verifyDriveDesktopAccessToken/.test(api)],
   ['client binding', /requestedClientId !== claims\.clientId/.test(api)],
+  ['desktop bearer security scan proxy pass-through', proxy.includes('/^\\/api\\/projects\\/[^/]+\\/drive\\/documents\\/[^/]+\\/versions\\/[^/]+\\/security-scan$/.test(pathname)') && /isDriveDesktopBearerApi/.test(proxy)],
 ];
 let pass=0;
 for (const [name,ok] of checks){console.log(`${ok?'PASS':'FAIL'} ${String(pass+1).padStart(2,'0')} ${name}`); if(ok) pass++; else process.exitCode=1;}
