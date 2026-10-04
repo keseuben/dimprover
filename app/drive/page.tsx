@@ -10,7 +10,7 @@ import DriveShell from "@/components/drive/DriveShell";
 
 export default async function DrivePage() {
   const headerStore = await headers();
-  const host = headerStore.get("x-forwarded-host") || headerStore.get("host") || "";
+  const host = headerStore.get("host") || headerStore.get("x-forwarded-host") || "";
 
   const centralSsoConfigured = Boolean(resolveDriveSsoConfig(host));
 
