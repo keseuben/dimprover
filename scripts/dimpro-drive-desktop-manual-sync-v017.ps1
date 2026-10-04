@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('Probe','Plan','Apply')][string]$Mode = 'Probe',
+  [ValidateSet('Probe','Plan','ScanPlan','Apply')][string]$Mode = 'Probe',
   [ValidateSet('Bridge','DevToken')][string]$AuthMode = 'Bridge',
   [string]$ServerUrl = 'https://drive.dev.dimpro.hu',
   [string]$ProjectId = '',
@@ -8,6 +8,7 @@ param(
   [string]$ClientId = '',
   [string]$OutputPath = '',
   [switch]$EnableApply,
+  [switch]$EnableSecurityScan,
   [switch]$AllowServerMutation,
   [switch]$AllowLocalMutation,
   [string]$ApplyPlanPath = '',
@@ -734,6 +735,52 @@ function Invoke-DesktopUpload($Operation, [string]$ProjectIdValue) {
   }
 }
 
+function Invoke-DesktopSecurityScan($Operation, [string]$ProjectIdValue) {
+  $kind = ([string](Get-ObjectPropertyValue $Operation 'kind' '')).ToUpperInvariant()
+  if ($kind -ne 'DOWNLOAD') { throw ('V017_SECURITY_SCAN_OPERATION_NOT_DOWNLOAD: ' + $kind) }
+  $documentId = [string](Get-ObjectPropertyValue $Operation 'documentId' '')
+  $versionId = [string](Get-ObjectPropertyValue $Operation 'versionId' '')
+  $expectedSha = ([string](Get-ObjectPropertyValue $Operation 'sha256' '')).ToLowerInvariant()
+  if (-not $documentId) { throw 'V017_SECURITY_SCAN_DOCUMENT_ID_REQUIRED' }
+  if (-not $versionId) { throw 'V017_SECURITY_SCAN_VERSION_ID_REQUIRED' }
+  if ($expectedSha -notmatch '^[0-9a-f]{64}$') { throw 'V017_SECURITY_SCAN_EXPECTED_SHA_REQUIRED' }
+
+  $projectEscaped = [uri]::EscapeDataString($ProjectIdValue)
+  $documentEscaped = [uri]::EscapeDataString($documentId)
+  $versionEscaped = [uri]::EscapeDataString($versionId)
+  $path = '/api/projects/' + $projectEscaped + '/drive/documents/' + $documentEscaped + '/versions/' + $versionEscaped + '/security-scan'
+  $statusResult = Invoke-DriveGet $path
+  $status = ([string](Get-ObjectPropertyValue $statusResult 'status' 'PENDING')).ToUpperInvariant()
+  $scan = Get-ObjectPropertyValue $statusResult 'scan' $null
+  $alreadyClean = $status -eq 'CLEAN'
+
+  if (-not $alreadyClean) {
+    $scanResult = Invoke-DrivePostEmpty $path
+    if (-not [bool](Get-ObjectPropertyValue $scanResult 'ok' $false)) { throw 'V017_SECURITY_SCAN_RESPONSE_INVALID' }
+    $scan = Get-ObjectPropertyValue $scanResult 'scan' $null
+    $status = ([string](Get-ObjectPropertyValue $scan 'status' '')).ToUpperInvariant()
+  }
+
+  if ($status -ne 'CLEAN' -or $null -eq $scan) { throw ('V017_SECURITY_SCAN_NOT_CLEAN: ' + $status) }
+  $scanSha = ([string](Get-ObjectPropertyValue $scan 'sha256' '')).ToLowerInvariant()
+  if ($scanSha -notmatch '^[0-9a-f]{64}$') { throw 'V017_SECURITY_SCAN_SHA_REQUIRED' }
+  if ($scanSha -ne $expectedSha) { throw ('V017_SECURITY_SCAN_SHA_MISMATCH expected=' + $expectedSha + ' actual=' + $scanSha) }
+
+  return [ordered]@{
+    kind = 'SECURITY_SCAN'
+    documentId = $documentId
+    versionId = $versionId
+    status = $status
+    sha256 = $scanSha
+    alreadyClean = $alreadyClean
+    engine = [string](Get-ObjectPropertyValue $scan 'engine' '')
+    engineVersion = [string](Get-ObjectPropertyValue $scan 'engineVersion' '')
+    signatureVersion = [string](Get-ObjectPropertyValue $scan 'signatureVersion' '')
+    scannerSource = [string](Get-ObjectPropertyValue $scan 'scannerSource' '')
+    ok = $true
+  }
+}
+
 function Invoke-DesktopDownload($Operation, [string]$ProjectIdValue) {
   $documentId = [string](Get-ObjectPropertyValue $Operation 'documentId' '')
   $destinationPath = [string](Get-ObjectPropertyValue $Operation 'destinationPath' '')
@@ -932,6 +979,62 @@ if (-not [bool](Get-ObjectPropertyValue $contract 'ok' $false)) { throw 'DIMPRO 
 
 
 $applyReadiness = Get-ApplyReadiness $contract
+
+if ($Mode -eq 'ScanPlan') {
+  if (-not $EnableSecurityScan) { throw 'V017_SECURITY_SCAN_ENABLE_SWITCH_REQUIRED' }
+  if (-not $AllowServerMutation) { throw 'V017_SECURITY_SCAN_SERVER_MUTATION_APPROVAL_REQUIRED' }
+  $plan = Read-ApplyPlan $ApplyPlanPath
+  $reviewedPlanSha256 = Assert-ReviewedApplyPlan $ApplyPlanPath $ReviewedPlanSha256
+  $planConflictCount = [int](Get-ObjectPropertyValue $plan 'conflictCount' 0)
+  if ($planConflictCount -gt 0) { throw ('V017_SECURITY_SCAN_PLAN_CONFLICTS_PRESENT: ' + $planConflictCount) }
+  $planSafety = Assert-ApplyPlanSafety $plan
+  $planProjectId = ([string](Get-ObjectPropertyValue $plan 'projectId' '')).Trim()
+  if ($ProjectId -and $ProjectId.Trim() -and $ProjectId.Trim() -ne $planProjectId) { throw 'V017_PROJECT_ID_MISMATCH' }
+  $operations = @(Get-ObjectPropertyValue $plan 'operations' @())
+  if ($operations.Count -eq 0) { throw 'V017_SECURITY_SCAN_PLAN_EMPTY' }
+  foreach ($operation in $operations) {
+    $kind = ([string](Get-ObjectPropertyValue $operation 'kind' '')).ToUpperInvariant()
+    if ($kind -ne 'DOWNLOAD') { throw ('V017_SECURITY_SCAN_PLAN_DOWNLOAD_ONLY: ' + $kind) }
+  }
+
+  $projectEscaped = [uri]::EscapeDataString($planProjectId)
+  $health = Invoke-DriveGet ('/api/projects/' + $projectEscaped + '/drive/health')
+  $security = Get-ObjectPropertyValue $health 'security' $null
+  if ($null -eq $security -or -not [bool](Get-ObjectPropertyValue $security 'ready' $false)) {
+    $errorCode = [string](Get-ObjectPropertyValue $security 'errorCode' 'DRIVE_SECURITY_SCANNER_NOT_READY')
+    throw ('V017_SECURITY_SCANNER_NOT_READY: ' + $errorCode)
+  }
+
+  $results = @()
+  foreach ($operation in $operations) {
+    $results += Invoke-DesktopSecurityScan $operation $planProjectId
+  }
+  $cleanCount = @($results | Where-Object { ([string](Get-ObjectPropertyValue $_ 'status' '')).ToUpperInvariant() -eq 'CLEAN' }).Count
+  if ($cleanCount -ne $operations.Count) { throw ('V017_SECURITY_SCAN_CLEAN_COUNT_MISMATCH expected=' + $operations.Count + ' actual=' + $cleanCount) }
+
+  Write-Result ([ordered]@{
+    ok = $true
+    mode = 'ScanPlan'
+    version = '0.1.7'
+    projectId = $planProjectId
+    clientId = Get-DriveClientId
+    reviewedPlanSha256 = $reviewedPlanSha256
+    validatedLocalRoot = [string](Get-ObjectPropertyValue $planSafety 'localRoot' '')
+    scanCount = $results.Count
+    cleanCount = $cleanCount
+    scans = $results
+    security = [ordered]@{
+      ready = [bool](Get-ObjectPropertyValue $security 'ready' $false)
+      mode = [string](Get-ObjectPropertyValue $security 'mode' '')
+      engine = [string](Get-ObjectPropertyValue $security 'engine' '')
+      engineVersion = [string](Get-ObjectPropertyValue $security 'engineVersion' '')
+      signatureVersion = [string](Get-ObjectPropertyValue $security 'signatureVersion' '')
+    }
+    safety = [ordered]@{ devOnly = $true; serverMutation = 'SECURITY_SCAN_METADATA'; localMutation = $false; delete = $false }
+    generatedAt = (Get-Date).ToUniversalTime().ToString('o')
+  })
+  return
+}
 
 if ($Mode -eq 'Apply') {
   if (-not $EnableApply) { throw 'V017_APPLY_ENABLE_SWITCH_REQUIRED' }
