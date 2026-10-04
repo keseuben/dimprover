@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const api=read("app/api/drive/workspaces/route.ts"),login=read("app/login/DimproAppOtpLogin.tsx"),loginPage=read("app/login/page.tsx"),proxy=read("proxy.ts"),repo=read("app/lib/dimpro-auth/repository.ts");
+check("workspace API is protected by existing Drive API proxy scope",()=>assert.match(proxy,/pathname\.startsWith\("\/api\/drive\/"\)/));
+check("workspace API resolves central actor and accessible projects",()=>{assert.match(api,/resolveProjectCoreAuth/);assert.match(api,/listAccessibleProjects\(auth\.actor\.userAliases\)/)});
+check("personal workspace requires exact personal Drive entitlement",()=>{assert.match(api,/hasPersonalDriveAccess\(auth\.actor\.userId\)/);assert.match(repo,/p\.code='drive\.personal\.access'[\s\S]*g\.project_id IS NULL/)});
+check("personal and project workspaces are distinct types",()=>{assert.match(api,/type: "PERSONAL"/);assert.match(api,/type: "PROJECT"/);assert.match(api,/id: `personal:\$\{auth\.actor\.userId\}`/);assert.match(api,/id: `project:\$\{project\.id\}`/)});
+check("personal workspace is not disguised as project",()=>{assert.match(api,/projectId: null/);assert.match(api,/storageScope: "USER_ROOT"/);assert.match(api,/browsing: "LIMITED_ROOT"/);assert.match(api,/folderTree: false/)});
+check("project workspaces keep full project capabilities",()=>{assert.match(api,/storageScope: "PROJECT"/);assert.match(api,/browsing: "FULL"/);assert.match(api,/folderTree: true/);assert.match(api,/permissions: project\.permissions/)});
+check("central AUTH login exposes personal Drive registration only on AUTH host",()=>{assert.match(login,/showDriveRegistration/);assert.match(login,/Saját Drive igénylése/);assert.match(loginPage,/isDimproAuthDomain/);assert.match(loginPage,/showDriveRegistration=\{isDimproAuthDomain\(host\)\}/)});
+console.log(`DIMPRO AUTH V0.4.1 workspaces contract PASS · ${n}/${n}`);
