@@ -142,3 +142,34 @@ Integráció előtt és merge után PASS:
 ## 10. Következő fejlesztési lépés
 
 A következő nagy feladat a Saját Drive tényleges, első osztályú böngészhető tárolómotorának kialakítása. A jelenlegi `USER_ROOT` tartalomréteg nem kezel még teljes mappafát, ezért a projektalapú Drive Core-t nem szabad hamis személyes projekttel újrahasznosítani. A következő fázisnak valódi personal-workspace storage/provisioning modellt kell adnia, amely ugyanazon közös fájlmotorra épülhet, de nem szivárogtat projekt-szemantikát.
+
+## 11. AUTH V0.4.3–V0.4.4 SSO hotfixek
+
+2026-10-04-én a böngészős Drive SSO E2E során két külön hibát sikerült reprodukálni és javítani.
+
+### V0.4.3 – PostgreSQL sorzár-szűkítés
+
+Az SSO authorization-code kiadás és exchange lekérdezései JOIN mellett általános `FOR UPDATE` zárat használtak. PostgreSQL emiatt a csak olvasandó JOIN-táblákat is zárolni próbálta, ami least-privilege runtime szerepkör mellett hibát okozott. A javítás kizárólag a ténylegesen módosítandó sorokat zárolja:
+
+- authorization request: `FOR UPDATE OF r`;
+- authorization code: `FOR UPDATE OF ac`;
+- app-session revoke: `FOR UPDATE OF s`.
+
+A runtime szerepkörhöz nem került új, felesleges UPDATE jogosultság.
+
+### V0.4.4 – redirect response cookie-k explicit kötése
+
+A Drive callback sikeresen létrehozta az `auth_app_sessions` rekordokat, de böngészőben redirect loop alakult ki. A callback és start route-ok cookie-kezelése explicit módon a ténylegesen visszaadott `NextResponse` objektumhoz lett kötve:
+
+- `__Host-dimpro_sso` a start redirect response-on;
+- `__Host-dimpro_app` a callback redirect response-on;
+- flow-cookie törlés a saját hiba/siker response-on.
+
+Új contractok:
+
+- `auth-v043-sso-row-lock-contract.mjs` → `5/5 PASS`;
+- `auth-v044-response-cookie-contract.mjs` → `6/6 PASS`.
+
+V0.4.4 runtime source: `f65fe8f5653e5af59c96d04cd26547c2d3abfaef`. Build ID: `MOdqGa9JjpmsNucoWLDyV`. Artifact SHA-256: `171ec930fa843c24872e002a22775f15c555151c6568fb79d2b264180270007f`.
+
+DEV aktiválás: AUTH `127.0.0.1:3367`, Drive `127.0.0.1:3368`. Korábbi V0.4.3 runtime-ok rollbackként futva megmaradtak. PROD továbbra is DENY.

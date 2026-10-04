@@ -3497,3 +3497,10 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Rollbackként a korábbi `61826450` Drive runtime `127.0.0.1:3361` porton futva megmaradt.
 - AUTH és Drive integrációs contractok, Project Access Administration, Desktop V0.1.7 contractok, targeted ESLint és `git diff --check` PASS.
 - DEV ONLY · PROD DENY.
+
+### AUTH V0.4.3–V0.4.4 – SSO authorize és Drive redirect-loop javítás
+
+- V0.4.3: a JOIN + `FOR UPDATE` lekérdezések sorzárása a ténylegesen módosítandó táblákra szűkült (`OF r`, `OF ac`, `OF s`), így a least-privilege runtime szerepkör mellett megszűnt az authorization-code 503 hiba.
+- V0.4.4: a Drive SSO start/callback cookie-k explicit a visszaadott `NextResponse` objektumra kerülnek, így a `__Host-dimpro_app` app-session cookie a callback redirecttel együtt kerül kiadásra.
+- V0.4.4 source: `f65fe8f5653e5af59c96d04cd26547c2d3abfaef`; build ID `MOdqGa9JjpmsNucoWLDyV`; artifact SHA-256 `171ec930fa843c24872e002a22775f15c555151c6568fb79d2b264180270007f`.
+- DEV: AUTH `3367`, Drive `3368`; PROD DENY; korábbi runtime-ok rollbackként megőrizve.
