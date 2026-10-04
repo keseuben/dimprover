@@ -12,6 +12,7 @@ import { getProjectDriveProvisioningState, provisionProjectDrive } from "@/app/l
 import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
 import {
+  getActiveAuthUserByEmail,
   getAuthProjectScopeByExternalId,
   registerAuthProjectScope,
 } from "@/app/lib/dimpro-auth/repository";
@@ -47,6 +48,14 @@ function isUuid(value: string) {
 
 function authRoleForProjectRole(role: ProjectMembershipRole): DimproProjectInvitationRole {
   return role === "PROJECT_MANAGER" ? "DRIVE_PROJECT_MANAGER" : "DRIVE_PROJECT_MEMBER";
+}
+
+async function resolveCanonicalAuthUserId(userId: string, email: string | null | undefined) {
+  if (isUuid(userId)) return userId;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return null;
+  const authUser = await getActiveAuthUserByEmail(normalizedEmail);
+  return authUser && isUuid(authUser.id) ? authUser.id : null;
 }
 
 async function syncIdentityMemberships(projectId: string, actorUserId: string) {
@@ -170,11 +179,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     let authRoleChanged = false;
     let authProjectId: string | null = null;
 
+    let targetAuthUserId: string | null = null;
     if (previousAuthRole !== nextAuthRole) {
-      if (!isUuid(target.userId)) {
+      targetAuthUserId = await resolveCanonicalAuthUserId(target.userId, target.email);
+      if (!targetAuthUserId) {
         return NextResponse.json({
           ok: false,
-          error: "A projekttag központi AUTH azonosítója hiányzik; a szerepkör nem módosítható biztonságosan.",
+          error: "A projekttag aktív központi AUTH felhasználója nem oldható fel biztonságosan. Ellenőrizd az e-mail-címet vagy hívd meg újra.",
         }, { status: 409 });
       }
       if (!isUuid(accessResult.actor.userId)) {
@@ -195,7 +206,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       authProjectId = authProject.id;
       await setProjectAccessRole({
         actorUserId: accessResult.actor.userId,
-        targetUserId: target.userId,
+        targetUserId: targetAuthUserId,
         projectId: authProject.id,
         roleCode: nextAuthRole,
       });
@@ -207,7 +218,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       if (authRoleChanged && authProjectId) {
         await setProjectAccessRole({
           actorUserId: accessResult.actor.userId,
-          targetUserId: target.userId,
+          targetUserId: targetAuthUserId!,
           projectId: authProjectId,
           roleCode: previousAuthRole,
         }).catch(() => undefined);
@@ -250,7 +261,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     let revokedAuth = false;
     let authProjectId: string | null = null;
-    if (target.status === "ACTIVE" && isUuid(target.userId)) {
+    let targetAuthUserId: string | null = null;
+    if (target.status === "ACTIVE") {
+      targetAuthUserId = await resolveCanonicalAuthUserId(target.userId, target.email);
+      if (!targetAuthUserId) {
+        return NextResponse.json({
+          ok: false,
+          error: "A projekttag aktív központi AUTH felhasználója nem oldható fel biztonságosan. A hozzáférés nem szüntethető meg féloldalasan.",
+        }, { status: 409 });
+      }
       if (!isUuid(accessResult.actor.userId)) {
         return NextResponse.json({
           ok: false,
@@ -265,7 +284,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const authProject = await getAuthProjectScopeByExternalId(projectId);
       if (authProject?.status === "ACTIVE") {
         authProjectId = authProject.id;
-        const revokedCount = await revokeProjectAccess(accessResult.actor.userId, target.userId, authProject.id);
+        const revokedCount = await revokeProjectAccess(accessResult.actor.userId, targetAuthUserId, authProject.id);
         revokedAuth = revokedCount > 0;
       }
     }
@@ -275,7 +294,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       if (revokedAuth && authProjectId) {
         await setProjectAccessRole({
           actorUserId: accessResult.actor.userId,
-          targetUserId: target.userId,
+          targetUserId: targetAuthUserId!,
           projectId: authProjectId,
           roleCode: authRoleForProjectRole(target.role),
         }).catch(() => undefined);
