@@ -47,12 +47,13 @@ export async function POST(request: NextRequest) {
   const auth = await driveSession(request).catch(() => null);
   if (!auth) return NextResponse.json({ ok: false, error: "AUTH_REQUIRED", correlationId }, { status: 401, headers: { "cache-control": "no-store" } });
 
-  const body = await request.json().catch(() => null) as { email?: unknown; displayName?: unknown; projectId?: unknown; role?: unknown; expiresInDays?: unknown } | null;
+  const body = await request.json().catch(() => null) as { email?: unknown; displayName?: unknown; organizationName?: unknown; projectId?: unknown; role?: unknown; expiresInDays?: unknown } | null;
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const projectId = externalProjectId(body?.projectId);
   const displayName = typeof body?.displayName === "string" ? body.displayName.trim().slice(0, 160) : "";
+  const organizationName = typeof body?.organizationName === "string" ? body.organizationName.trim().slice(0, 160) : "";
   const expiresInDays = typeof body?.expiresInDays === "number" ? body.expiresInDays : undefined;
-  if (!email || !projectId) return NextResponse.json({ ok: false, error: "AUTH_INVITATION_INPUT_INVALID", correlationId }, { status: 400, headers: { "cache-control": "no-store" } });
+  if (!email || !projectId || !organizationName) return NextResponse.json({ ok: false, error: "AUTH_INVITATION_INPUT_INVALID", message: "E-mail-cím, szervezet és projekt szükséges.", correlationId }, { status: 400, headers: { "cache-control": "no-store" } });
 
   try {
     const projectAccess = await requireProjectPermission(request, projectId, "project.manage_members");
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
       const membershipResult = await addProjectMembership(projectId, {
         email: normalizedEmail,
         displayName: displayName || normalizedEmail,
+        organizationName,
         role: projectCoreRole(body?.role),
         activateImmediately: false,
       }, auth.session.user.id);
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
         ip: getDimproAuthRequestIp(request.headers),
         userAgent: getDimproAuthUserAgent(request.headers),
         correlationId,
-        metadata: { invitationId: created.invitation.id, externalProjectId: projectId, authProjectId, roleCode: created.invitation.roleCode, delivery: "SUCCESS" },
+        metadata: { invitationId: created.invitation.id, externalProjectId: projectId, authProjectId, roleCode: created.invitation.roleCode, organizationName, delivery: "SUCCESS" },
       });
     } catch (error) {
       await revokeProjectInvitation(auth.session.user.id, created.invitation.id).catch(() => false);
