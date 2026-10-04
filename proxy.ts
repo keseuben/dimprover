@@ -72,6 +72,14 @@ function applyDimproAuthSecurityHeaders(response: NextResponse) {
   return response;
 }
 
+function applyDriveAuthRedirectHeaders(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request,
@@ -215,7 +223,7 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/drive";
     url.search = "";
-    return NextResponse.redirect(url, 307);
+    return applyDriveAuthRedirectHeaders(NextResponse.redirect(url, 307));
   }
 
   if (isDriveHost && isLoginPage && driveCentralSsoConfig) {
@@ -223,7 +231,7 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/api/dimpro-auth/start";
     url.search = "";
     url.searchParams.set("return_to", "/drive");
-    return NextResponse.redirect(url, 307);
+    return applyDriveAuthRedirectHeaders(NextResponse.redirect(url, 307));
   }
 
   if (isBenjadminHost && pathname === "/login") {
@@ -488,7 +496,7 @@ export async function proxy(request: NextRequest) {
       url.pathname = "/api/dimpro-auth/start";
       url.search = "";
       url.searchParams.set("return_to", pathname + request.nextUrl.search);
-      return NextResponse.redirect(url);
+      return applyDriveAuthRedirectHeaders(NextResponse.redirect(url));
     }
     let allowed = false;
     try {
@@ -507,7 +515,7 @@ export async function proxy(request: NextRequest) {
       url.pathname = "/login";
       url.search = "";
       url.searchParams.set("access", "drive-forbidden");
-      return NextResponse.redirect(url);
+      return applyDriveAuthRedirectHeaders(NextResponse.redirect(url));
     }
   }
 
