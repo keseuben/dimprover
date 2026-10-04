@@ -6,7 +6,7 @@ import { assertDevAuthDatabaseUrl, requireDevAuthEnvironment, strictDevAuthPgSsl
 function arg(name){const i=process.argv.indexOf(`--${name}`);return i>=0?String(process.argv[i+1]||"").trim():"";}
 const email=arg("email").toLowerCase();
 const action=arg("action").toLowerCase();
-const allowed=new Set(["enable","disable","grant-drive","revoke-drive","grant-personal-drive","revoke-personal-drive","revoke-sessions"]);
+const allowed=new Set(["enable","disable","grant-drive","revoke-drive","grant-personal-drive","revoke-personal-drive","approve-personal-drive-registration","revoke-sessions"]);
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error("Érvényes --email szükséges.");
 if(!allowed.has(action))throw new Error(`Érvényes --action szükséges: ${[...allowed].join(", ")}.`);
 requireDevAuthEnvironment();
@@ -48,6 +48,17 @@ try{
     const r=await client.query(`UPDATE auth_access_grants g SET revoked_at=now()
       FROM auth_roles r,auth_products p
       WHERE g.user_id=$1 AND g.role_id=r.id AND g.product_id=p.id AND r.code='DRIVE_PERSONAL_USER' AND p.code='DRIVE' AND g.project_id IS NULL AND g.revoked_at IS NULL`,[user.id]);affected=r.rowCount||0;
+  }else if(action==="approve-personal-drive-registration"){
+    const pending=await client.query(`SELECT id,status FROM auth_drive_registration_requests WHERE user_id=$1 AND email_normalized=$2 AND status='EMAIL_VERIFIED' ORDER BY updated_at DESC LIMIT 1 FOR UPDATE`,[user.id,email]);
+    const registration=pending.rows[0];
+    if(!registration)throw new Error("Nincs jóváhagyható, e-mailben igazolt Saját Drive igénylés.");
+    await client.query(`UPDATE auth_users SET status='ACTIVE',login_enabled=true,updated_at=now() WHERE id=$1`,[user.id]);
+    const grant=await client.query(`INSERT INTO auth_access_grants(user_id,role_id,product_id)
+      SELECT $1,r.id,p.id FROM auth_roles r CROSS JOIN auth_products p
+       WHERE r.code='DRIVE_PERSONAL_USER' AND p.code='DRIVE' AND p.status='ACTIVE'
+      ON CONFLICT (user_id,role_id,product_id,organization_id,project_id) WHERE revoked_at IS NULL DO NOTHING RETURNING id`,[user.id]);
+    await client.query(`UPDATE auth_drive_registration_requests SET status='APPROVED',decided_at=now(),decided_by='DEV_ADMIN_SCRIPT',updated_at=now() WHERE id=$1`,[registration.id]);
+    affected=(grant.rowCount||0)+1;
   }else if(action==="revoke-sessions"){
     const a=await client.query(`UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,now()),revoke_reason=COALESCE(revoke_reason,'DEV_ADMIN_REVOKE') WHERE user_id=$1 AND revoked_at IS NULL`,[user.id]);
     const b=await client.query(`UPDATE auth_app_sessions SET revoked_at=COALESCE(revoked_at,now()),revoke_reason=COALESCE(revoke_reason,'DEV_ADMIN_REVOKE') WHERE user_id=$1 AND revoked_at IS NULL`,[user.id]);
