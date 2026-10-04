@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const read=(p)=>fs.readFileSync(p,"utf8");
+const members=read("app/api/projects/[projectId]/memberships/route.ts");
+const inviteRoute=read("app/api/dimpro-auth/invitations/project/route.ts");
+const invitations=read("app/lib/dimpro-auth/invitations.ts");
+const repo=read("app/lib/dimpro-auth/repository.ts");
+const menu=read("components/project-gate/ProjectAccessMenu.tsx");
+const ready=read("app/health/ready/route.ts");
+const activate=read("scripts/dimpro-auth/activate-dev.mjs");
+const migrationFiles=fs.readdirSync("db/auth/migrations").filter((n)=>/^\d+_.*\.sql$/.test(n)).sort();
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("AUTH session mapping uses canonical auth user id",()=>{const hits=(repo.match(/user: userFromRow\(\{ \.\.\.row, id: row\.user_id, login_enabled: true \}\)/g)||[]).length;assert.equal(hits,2)});
+check("project invitation requires organization in API",()=>assert.match(inviteRoute,/!email \|\| !projectId \|\| !organizationName/));
+check("project invitation requires organization in UI",()=>{assert.match(menu,/Szervezet \*/);assert.match(menu,/inviteEmail\.trim\(\) \|\| !inviteOrganization\.trim\(\)/)});
+check("role switch uses existing revoke invite accept primitives",()=>{assert.match(invitations,/replaceProjectAccessRole/);assert.match(invitations,/revokeProjectAccess/);assert.match(invitations,/createProjectInvitation/);assert.match(invitations,/acceptProjectInvitation/);assert.doesNotMatch(invitations,/auth_set_project_access_role/)});
+check("role replacement verifies exact target identity and scope",()=>{assert.match(invitations,/created\.invitation\.userId !== input\.targetUserId/);assert.match(invitations,/accepted\.projectId !== input\.projectId/);assert.match(invitations,/accepted\.roleCode !== input\.roleCode/)});
+check("membership API blocks self role mutation and self revoke",()=>{const hits=(members.match(/target\.id === accessResult\.access\.membership\.id/g)||[]).length;assert.equal(hits,2)});
+check("membership role change compensates through replacement helper",()=>{assert.match(members,/previousAuthRole/);const hits=(members.match(/replaceProjectAccessRole\(/g)||[]).length;assert.ok(hits>=3)});
+check("AUTH schema baseline remains six migrations",()=>{assert.equal(migrationFiles.length,6);assert.equal(migrationFiles.at(-1),"006_auth_v031_project_scope_bridge.sql");assert.match(ready,/migrationCount >= 6/);assert.match(activate,/migrationCount\)!==6/);assert.match(activate,/migrationCount:6/)});
+check("superseded v035 migration is not active",()=>{assert.ok(fs.existsSync("db/auth/proposals/007_auth_v035_project_member_admin.superseded.sql"));assert.ok(!fs.existsSync("db/auth/migrations/007_auth_v035_project_member_admin.sql"))});
+check("production access remains denied",()=>assert.doesNotMatch(members+inviteRoute+invitations+repo,/PROD ALLOW/));
+console.log(JSON.stringify({ok:true,contract:"DIMPRO Drive V0.9.13 + AUTH V0.3.7 compatibility",pass:n,fail:0,productionAccess:"DENY"},null,2));

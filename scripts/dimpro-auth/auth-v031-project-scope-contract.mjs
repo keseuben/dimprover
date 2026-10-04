@@ -16,5 +16,5 @@ check("project scope bridge is security-definer and runtime gets execute only",(
 check("project scope registration is auditable",()=>{assert.match(migration,/PROJECT_SCOPE_REGISTER/);assert.match(migration,/PROJECT_CORE_BRIDGE/);assert.match(migration,/externalProjectId/)});
 check("repository exposes external project lookup and authorized external project ids",()=>{assert.match(repo,/getAuthProjectScopeByExternalId/);assert.match(repo,/listAuthorizedExternalProjectIds/);assert.match(repo,/registerAuthProjectScope/)});
 check("repository authorized external projects require explicit project grants",()=>{assert.match(repo,/p\.code='drive\.project\.access'/);assert.match(repo,/project\.external_project_id IS NOT NULL/);assert.match(repo,/g\.revoked_at IS NULL/)});
-check("DEV activation preserves V0.3.1 contract and current migration gate",()=>{assert.match(activation,/contract-v031/);assert.match(activation,/migrationCount\)!==7/);assert.match(activation,/migrationCount:7/);assert.match(ready,/migrationCount >= 7/)});
+check("DEV activation preserves V0.3.1 contract and current migration gate",()=>{assert.match(activation,/contract-v031/);assert.match(activation,/migrationCount\)!==6/);assert.match(activation,/migrationCount:6/);assert.match(ready,/migrationCount >= 6/)});
 console.log(`DIMPRO AUTH V0.3.1 project-scope contract PASS · ${n}/${n}`);

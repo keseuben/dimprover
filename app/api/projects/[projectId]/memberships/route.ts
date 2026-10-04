@@ -17,8 +17,8 @@ import {
   registerAuthProjectScope,
 } from "@/app/lib/dimpro-auth/repository";
 import {
+  replaceProjectAccessRole,
   revokeProjectAccess,
-  setProjectAccessRole,
   type DimproProjectInvitationRole,
 } from "@/app/lib/dimpro-auth/invitations";
 
@@ -170,6 +170,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (target.role === "OWNER") {
       return NextResponse.json({ ok: false, error: "A projektgazda szerepköre védett." }, { status: 409 });
     }
+    if (target.id === accessResult.access.membership.id) {
+      return NextResponse.json({ ok: false, error: "A saját projektszerepköröd ezen a kezelőn nem módosítható." }, { status: 409 });
+    }
     if (target.status !== "ACTIVE") {
       return NextResponse.json({ ok: false, error: "Csak aktív projekttag szerepköre módosítható." }, { status: 409 });
     }
@@ -204,9 +207,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ ok: false, error: "A projekt központi AUTH scope-ja nem található." }, { status: 409 });
       }
       authProjectId = authProject.id;
-      await setProjectAccessRole({
+      await replaceProjectAccessRole({
         actorUserId: accessResult.actor.userId,
         targetUserId: targetAuthUserId,
+        targetEmail: target.email || "",
+        targetDisplayName: target.displayName,
         projectId: authProject.id,
         roleCode: nextAuthRole,
       });
@@ -216,9 +221,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const result = await updateProjectMembershipRole(projectId, membershipId, nextRole, accessResult.actor.userId);
     if (!result.ok) {
       if (authRoleChanged && authProjectId) {
-        await setProjectAccessRole({
+        await replaceProjectAccessRole({
           actorUserId: accessResult.actor.userId,
           targetUserId: targetAuthUserId!,
+          targetEmail: target.email || "",
+          targetDisplayName: target.displayName,
           projectId: authProjectId,
           roleCode: previousAuthRole,
         }).catch(() => undefined);
@@ -251,6 +258,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (!target) return NextResponse.json({ ok: false, error: "A projekttagság nem található." }, { status: 404 });
     if (target.role === "OWNER") {
       return NextResponse.json({ ok: false, error: "A projektgazda hozzáférése ezen a felületen nem szüntethető meg." }, { status: 409 });
+    }
+    if (target.id === accessResult.access.membership.id) {
+      return NextResponse.json({ ok: false, error: "A saját projekthozzáférésed ezen a kezelőn nem szüntethető meg." }, { status: 409 });
     }
     if (target.status === "INVITED") {
       return NextResponse.json({
@@ -292,9 +302,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const result = await revokeProjectMembership(projectId, membershipId, accessResult.actor.userId);
     if (!result.ok) {
       if (revokedAuth && authProjectId) {
-        await setProjectAccessRole({
+        await replaceProjectAccessRole({
           actorUserId: accessResult.actor.userId,
           targetUserId: targetAuthUserId!,
+          targetEmail: target.email || "",
+          targetDisplayName: target.displayName,
           projectId: authProjectId,
           roleCode: authRoleForProjectRole(target.role),
         }).catch(() => undefined);

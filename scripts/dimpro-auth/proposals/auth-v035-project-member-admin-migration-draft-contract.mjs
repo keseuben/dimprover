@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");
 const read=(p)=>fs.readFileSync(path.join(root,p),"utf8");
 let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
-const migration=read("db/auth/migrations/007_auth_v035_project_member_admin.sql");
+const migration=read("db/auth/proposals/007_auth_v035_project_member_admin.superseded.sql");
 const invitations=read("app/lib/dimpro-auth/invitations.ts");
 const members=read("app/api/projects/[projectId]/memberships/route.ts");
 const inviteRoute=read("app/api/dimpro-auth/invitations/project/route.ts");

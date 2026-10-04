@@ -150,18 +150,6 @@ export async function listProjectInvitationsByExternalProject(externalProjectId:
   }));
 }
 
-export async function setProjectAccessRole(input: { actorUserId: string; targetUserId: string; projectId: string; roleCode: DimproProjectInvitationRole }) {
-  try {
-    const result = await authQuery<{ auth_set_project_access_role: string }>(
-      `SELECT auth_set_project_access_role($1,$2,$3,$4)`,
-      [input.actorUserId, input.targetUserId, input.projectId, input.roleCode],
-    );
-    return result.rows[0]?.auth_set_project_access_role || input.roleCode;
-  } catch (error) {
-    invitationError(error);
-  }
-}
-
 export async function acceptProjectInvitation(rawToken: string) {
   if (!isValidDimproAuthInvitationToken(rawToken)) {
     throw new DimproAuthError("Invalid invitation token.", "AUTH_INVITATION_TOKEN_INVALID", 400, "A meghívóazonosító érvénytelen.");
@@ -212,4 +200,43 @@ export async function revokeProjectAccess(actorUserId: string, targetUserId: str
   } catch (error) {
     invitationError(error);
   }
+}
+
+export async function replaceProjectAccessRole(input: {
+  actorUserId: string;
+  targetUserId: string;
+  targetEmail: string;
+  targetDisplayName?: string | null;
+  projectId: string;
+  roleCode: DimproProjectInvitationRole;
+}) {
+  const email = normalizeDimproAuthEmail(input.targetEmail);
+  await revokeProjectAccess(input.actorUserId, input.targetUserId, input.projectId);
+  const created = await createProjectInvitation({
+    inviterUserId: input.actorUserId,
+    email,
+    displayName: input.targetDisplayName || null,
+    projectId: input.projectId,
+    roleCode: input.roleCode,
+    expiresInDays: 1,
+  });
+  if (created.invitation.userId !== input.targetUserId) {
+    await revokeProjectInvitation(input.actorUserId, created.invitation.id).catch(() => false);
+    throw new DimproAuthError(
+      "Role replacement resolved a different AUTH user.",
+      "AUTH_PROJECT_MEMBER_IDENTITY_MISMATCH",
+      409,
+      "A projekttag központi AUTH azonosítása megváltozott; a szerepkörváltás megszakadt.",
+    );
+  }
+  const accepted = await acceptProjectInvitation(created.rawToken);
+  if (accepted.userId !== input.targetUserId || accepted.projectId !== input.projectId || accepted.roleCode !== input.roleCode) {
+    throw new DimproAuthError(
+      "Role replacement acceptance scope mismatch.",
+      "AUTH_PROJECT_ROLE_REPLACEMENT_MISMATCH",
+      409,
+      "A szerepkörváltás központi AUTH ellenőrzése nem egyezett; a művelet megszakadt.",
+    );
+  }
+  return { roleCode: accepted.roleCode, invitationId: accepted.invitationId };
 }

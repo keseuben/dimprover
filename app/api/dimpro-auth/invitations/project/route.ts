@@ -149,9 +149,9 @@ export async function POST(request: NextRequest) {
   const organizationName = typeof body?.organizationName === "string" ? body.organizationName.trim().slice(0, 160) : "";
   const expiresInDays = typeof body?.expiresInDays === "number" ? body.expiresInDays : undefined;
   const memberRole = projectCoreRole(body?.role);
-  if (!email || !projectId) {
+  if (!email || !projectId || !organizationName) {
     return NextResponse.json(
-      { ok: false, error: "AUTH_INVITATION_INPUT_INVALID", correlationId },
+      { ok: false, error: "AUTH_INVITATION_INPUT_INVALID", message: "E-mail-cím, szervezet és projekt szükséges.", correlationId },
       { status: 400, headers: { "cache-control": "no-store" } },
     );
   }

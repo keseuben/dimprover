@@ -239,8 +239,8 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   }
 
   async function submitInvite() {
-    if (!inviteEmail.trim()) {
-      setError("A meghíváshoz e-mail-cím szükséges.");
+    if (!inviteEmail.trim() || !inviteOrganization.trim()) {
+      setError("A meghíváshoz e-mail-cím és szervezet szükséges.");
       return;
     }
     setBusy("invite");
@@ -427,8 +427,8 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                   <input value={inviteName} onChange={(event) => setInviteName(event.target.value)} placeholder="Név" />
                 </label>
                 <label>
-                  <span>Szervezet</span>
-                  <div className={styles.inputIcon}><Building2 size={13} /><input value={inviteOrganization} onChange={(event) => setInviteOrganization(event.target.value)} placeholder="Cég / szervezet" /></div>
+                  <span>Szervezet *</span>
+                  <div className={styles.inputIcon}><Building2 size={13} /><input required value={inviteOrganization} onChange={(event) => setInviteOrganization(event.target.value)} placeholder="Cég / szervezet" /></div>
                 </label>
                 <label>
                   <span>Szerepkör</span>
@@ -488,7 +488,7 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                       </div>
                     </div>
                     <small>{secondaryLine(member)}</small>
-                    {access?.canManageMembers && !isOwner ? (
+                    {access?.canManageMembers && !isOwner && !isSelf ? (
                       <div className={styles.roleEditor}>
                         <label>
                           <span>Szerepkör módosítása</span>
@@ -514,7 +514,8 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                       <span className={styles.role}>{projectRoleLabel(member.role)}</span>
                     )}
                     <p>{rolePermissionSummary(member.role)}</p>
-                    {access?.canManageMembers && !isOwner && (
+                    {isSelf && !isOwner && <p>A saját projektszerepköröd ezen a kezelőn nem módosítható.</p>}
+                    {access?.canManageMembers && !isOwner && !isSelf && (
                       <div className={styles.memberActions}>
                         {confirmRemove === member.id ? (
                           <>
