@@ -5,13 +5,16 @@ import {
   DRIVE_DEV_ACCESS_COOKIE,
   verifyProjectGateDevAccessToken,
 } from "@/app/lib/project-gate/devAccess";
+import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 import DriveShell from "@/components/drive/DriveShell";
 
 export default async function DrivePage() {
   const headerStore = await headers();
   const host = headerStore.get("x-forwarded-host") || headerStore.get("host") || "";
 
-  if (isDriveDevAccessConfigured(host)) {
+  const centralSsoConfigured = Boolean(resolveDriveSsoConfig(host));
+
+  if (!centralSsoConfigured && isDriveDevAccessConfigured(host)) {
     const cookieStore = await cookies();
     const token = cookieStore.get(DRIVE_DEV_ACCESS_COOKIE)?.value;
     if (!verifyProjectGateDevAccessToken(token)) redirect("/login");
