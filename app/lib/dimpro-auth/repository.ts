@@ -694,7 +694,7 @@ export async function issueAuthorizationCodeFromRequest(input: {
       `SELECT r.id,r.client_id AS client_db_id,c.client_id,c.product_code,c.required_permission_code,c.environment,r.redirect_uri,r.state,r.code_challenge,r.code_challenge_method,r.expires_at,r.consumed_at
          FROM auth_authorization_requests r
          JOIN auth_clients c ON c.id=r.client_id
-        WHERE r.id=$1 LIMIT 1 FOR UPDATE`,
+        WHERE r.id=$1 LIMIT 1 FOR UPDATE OF r`,
       [input.requestId],
     );
     const row = request.rows[0] || null;
@@ -802,7 +802,7 @@ export async function exchangeAuthorizationCode(input: {
          JOIN auth_sessions s ON s.id=ac.auth_session_id
          JOIN auth_users u ON u.id=ac.user_id
         WHERE ac.code_hash=$1
-        LIMIT 1 FOR UPDATE`,
+        LIMIT 1 FOR UPDATE OF ac`,
       [hashAuthorizationCode(input.rawCode)],
     );
     const code = codeResult.rows[0] || null;
@@ -968,7 +968,7 @@ export async function revokeAppSession(token: string, clientId: string, reason: 
   return withAuthTransaction(async (client) => {
     const current = await client.query<{ id: string; user_id: string; auth_session_id: string }>(
       `SELECT s.id,s.user_id,s.auth_session_id FROM auth_app_sessions s JOIN auth_clients c ON c.id=s.client_id
-       WHERE s.token_hash=$1 AND c.client_id=$2 AND s.revoked_at IS NULL LIMIT 1 FOR UPDATE`,
+       WHERE s.token_hash=$1 AND c.client_id=$2 AND s.revoked_at IS NULL LIMIT 1 FOR UPDATE OF s`,
       [hashAppSessionToken(token), clientId],
     );
     const row = current.rows[0];

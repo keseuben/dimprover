@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { createPkceChallenge, createPkceVerifier, createSsoState, DIMPRO_SSO_FLOW_COOKIE, encodeSsoFlowCookie, isSafeDriveReturnTo, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
 import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 
@@ -18,15 +17,14 @@ export async function GET(request: NextRequest) {
   const verifier = createPkceVerifier();
   const challenge = createPkceChallenge(verifier);
   const returnTo = safeReturnTo(request.nextUrl.searchParams.get("return_to"));
-  const cookieStore = await cookies();
-  cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, encodeSsoFlowCookie({
+  const flowCookie = encodeSsoFlowCookie({
     version: 1,
     clientId: config.clientId,
     state,
     verifier,
     returnTo,
     createdAt: Date.now(),
-  }), transientSsoCookieOptions());
+  });
 
   const target = new URL("/api/dimpro-auth/authorize", config.authOrigin);
   target.searchParams.set("client_id", config.clientId);
@@ -36,6 +34,7 @@ export async function GET(request: NextRequest) {
   target.searchParams.set("code_challenge", challenge);
   target.searchParams.set("code_challenge_method", "S256");
   const response = NextResponse.redirect(target);
+  response.cookies.set(DIMPRO_SSO_FLOW_COOKIE, flowCookie, transientSsoCookieOptions());
   response.headers.set("cache-control", "no-store, max-age=0");
   response.headers.set("referrer-policy", "no-referrer");
   return response;

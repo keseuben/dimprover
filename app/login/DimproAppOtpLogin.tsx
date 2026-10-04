@@ -70,7 +70,7 @@ function getFriendlyAuthError(message: string) {
   return "A belépési művelet nem sikerült. Próbáld újra néhány perc múlva.";
 }
 
-export function DimproAppOtpLogin() {
+export function DimproAppOtpLogin({ showDriveRegistration = false }: { showDriveRegistration?: boolean }) {
   const router = useRouter();
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -446,6 +446,17 @@ export function DimproAppOtpLogin() {
                   {loading && codeSent ? "Belépés..." : "Belépés"}
                   <ArrowRight className="h-5 w-5" />
                 </button>
+
+                {showDriveRegistration ? (
+                  <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-sm text-slate-700">
+                    <p className="font-semibold text-slate-900">Még nincs saját DIMPRO Drive tárhelyed?</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Az igénylés külön e-mail-ellenőrzéssel indul; a tárhely csak jóváhagyott jogosultság vagy aktív csomag után kapcsolódik a fiókhoz.</p>
+                    <Link href="/register/drive" className="mt-3 inline-flex items-center gap-2 rounded-xl border border-teal-300 bg-white px-4 py-2 text-xs font-bold text-teal-800 transition hover:bg-teal-50">
+                      Saját Drive igénylése
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                ) : null}
 
                 <div
                   className={

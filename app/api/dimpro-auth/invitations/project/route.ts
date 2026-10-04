@@ -239,6 +239,7 @@ export async function POST(request: NextRequest) {
           authProjectId,
           roleCode: created.invitation.roleCode,
           projectCoreRole: memberRole,
+          organizationName,
           delivery: "SUCCESS",
         },
       });

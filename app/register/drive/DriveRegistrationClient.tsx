@@ -1,0 +1,26 @@
+"use client";
+import Link from "next/link";
+import { FormEvent, useState } from "react";
+import { CheckCircle2, HardDrive, Loader2, Mail, ShieldCheck } from "lucide-react";
+
+type Step="details"|"verify"|"done";
+export default function DriveRegistrationClient(){
+  const [step,setStep]=useState<Step>("details");
+  const [email,setEmail]=useState("");
+  const [displayName,setDisplayName]=useState("");
+  const [organizationName,setOrganizationName]=useState("");
+  const [code,setCode]=useState("");
+  const [registrationId,setRegistrationId]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState("A saját Drive igényléshez először igazoljuk az e-mail-címedet.");
+  const [error,setError]=useState(false);
+  async function requestCode(event:FormEvent){
+    event.preventDefault();setBusy(true);setError(false);
+    try{const response=await fetch("/api/dimpro-auth/registration/drive/request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email,displayName,organizationName})});const data=await response.json();if(!response.ok||!data?.ok)throw new Error(data?.message||"A regisztráció nem indítható.");setRegistrationId(data.registrationId);setStep("verify");setMessage(data.message||"Kód elküldve.");}catch(e){setError(true);setMessage(e instanceof Error?e.message:"A regisztráció nem indítható.");}finally{setBusy(false);}
+  }
+  async function verify(event:FormEvent){
+    event.preventDefault();setBusy(true);setError(false);
+    try{const response=await fetch("/api/dimpro-auth/registration/drive/verify",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({registrationId,email,code})});const data=await response.json();if(!response.ok||!data?.ok)throw new Error(data?.message||"A kód ellenőrzése nem sikerült.");setStep("done");setMessage(data.message||"Az e-mail-cím igazolva.");}catch(e){setError(true);setMessage(e instanceof Error?e.message:"A kód ellenőrzése nem sikerült.");}finally{setBusy(false);}
+  }
+  return <main className="min-h-screen bg-[#f4faf8] px-5 py-10 text-slate-900"><div className="mx-auto max-w-xl"><div className="mb-6 flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-teal-700 text-white"><HardDrive size={24}/></div><div><p className="text-xs font-bold uppercase tracking-[.18em] text-teal-700">DIMPRO Drive</p><h1 className="text-2xl font-semibold">Saját Drive igénylése</h1></div></div><section className="rounded-[2rem] border border-teal-100 bg-white p-6 shadow-xl shadow-teal-900/5"><div className={`mb-5 rounded-2xl border p-4 text-sm ${error?"border-rose-200 bg-rose-50 text-rose-800":"border-teal-100 bg-teal-50 text-teal-900"}`}>{message}</div>{step==="details"?<form onSubmit={requestCode} className="space-y-4"><label className="block text-sm font-semibold">Név<input required minLength={2} value={displayName} onChange={e=>setDisplayName(e.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-teal-500"/></label><label className="block text-sm font-semibold">E-mail-cím<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-teal-500"/></label><label className="block text-sm font-semibold">Szervezet <span className="font-normal text-slate-400">(opcionális)</span><input value={organizationName} onChange={e=>setOrganizationName(e.target.value)} className="mt-2 h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-teal-500" placeholder="pl. Minta Kft."/></label><button disabled={busy} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 font-bold text-white disabled:opacity-50">{busy?<Loader2 className="animate-spin" size={18}/>:<Mail size={18}/>} E-mail ellenőrző kód kérése</button></form>:null}{step==="verify"?<form onSubmit={verify} className="space-y-4"><div className="rounded-xl bg-slate-50 p-4 text-sm"><strong>{email}</strong><br/><span className="text-slate-500">Erre a címre küldtük a hatjegyű kódot.</span></div><label className="block text-sm font-semibold">Regisztrációs kód<input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} className="mt-2 h-14 w-full rounded-xl border border-slate-200 px-4 text-center font-mono text-2xl tracking-[.22em] outline-none focus:border-teal-500"/></label><button disabled={busy||code.length!==6} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 font-bold text-white disabled:opacity-50">{busy?<Loader2 className="animate-spin" size={18}/>:<ShieldCheck size={18}/>} E-mail igazolása</button></form>:null}{step==="done"?<div className="text-center"><CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600"/><h2 className="mt-4 text-xl font-semibold">Igénylés rögzítve</h2><p className="mt-2 text-sm leading-6 text-slate-600">Az e-mail-címed igazolt. A Saját Drive hozzáférés csak jóváhagyott jogosultság vagy aktív csomag után kapcsolódik a DIMPRO-fiókodhoz.</p><Link href="/login" className="mt-6 inline-flex h-11 items-center rounded-xl border border-slate-200 px-5 text-sm font-bold">Vissza a belépéshez</Link></div>:null}</section></div></main>;
+}

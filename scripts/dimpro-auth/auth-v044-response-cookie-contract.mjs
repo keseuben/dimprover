@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const callback=read("app/api/dimpro-auth/callback/route.ts"),start=read("app/api/dimpro-auth/start/route.ts");
+check("callback reads flow cookie from request",()=>assert.match(callback,/request\.cookies\.get\(DIMPRO_SSO_FLOW_COOKIE\)/));
+check("callback success writes app cookie onto returned redirect response",()=>{assert.match(callback,/const response = noLeak\(NextResponse\.redirect\(target\)\)/);assert.match(callback,/response\.cookies\.set\([\s\S]{0,120}DIMPRO_APP_SESSION_COOKIE/)});
+check("callback clears flow cookie on returned success response",()=>assert.match(callback,/response\.cookies\.set\(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions\(0\)\)/));
+check("callback failure clears flow cookie on its own returned response",()=>{const matches=callback.match(/response\.cookies\.set\(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions\(0\)\)/g)||[];assert.ok(matches.length>=3)});
+check("callback no longer mutates detached cookies store",()=>{assert.doesNotMatch(callback,/from "next\/headers"/);assert.doesNotMatch(callback,/cookieStore\.set/)});
+check("start writes flow cookie directly to redirect response",()=>{assert.match(start,/response\.cookies\.set\(DIMPRO_SSO_FLOW_COOKIE, flowCookie, transientSsoCookieOptions\(\)\)/);assert.doesNotMatch(start,/from "next\/headers"/)});
+console.log(`DIMPRO AUTH V0.4.4 response-cookie contract PASS · ${n}/${n}`);

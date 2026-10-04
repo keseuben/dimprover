@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { appSessionCookieOptions, decodeSsoFlowCookie, DIMPRO_APP_SESSION_COOKIE, DIMPRO_SSO_FLOW_COOKIE, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
 import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
 import { listAuthorizedExternalProjectIds } from "@/app/lib/dimpro-auth/repository";
@@ -19,13 +18,13 @@ function noLeak(response: NextResponse) {
 export async function GET(request: NextRequest) {
   const config = resolveDriveSsoConfig(request.headers.get("host"));
   if (!config) return noLeak(NextResponse.json({ ok: false, error: "AUTH_SSO_HOST_NOT_ALLOWED" }, { status: 404 }));
-  const cookieStore = await cookies();
-  const flow = decodeSsoFlowCookie(cookieStore.get(DIMPRO_SSO_FLOW_COOKIE)?.value || "");
+  const flow = decodeSsoFlowCookie(request.cookies.get(DIMPRO_SSO_FLOW_COOKIE)?.value || "");
   const code = request.nextUrl.searchParams.get("code")?.trim() || "";
   const state = request.nextUrl.searchParams.get("state")?.trim() || "";
   if (!flow || flow.clientId !== config.clientId || flow.state !== state || !code) {
-    cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
-    return noLeak(NextResponse.json({ ok: false, error: "AUTH_SSO_STATE_INVALID" }, { status: 400 }));
+    const response = noLeak(NextResponse.json({ ok: false, error: "AUTH_SSO_STATE_INVALID" }, { status: 400 }));
+    response.cookies.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
+    return response;
   }
 
   const tokenResponse = await fetch(new URL("/api/dimpro-auth/token", config.authOrigin), {
@@ -47,12 +46,10 @@ export async function GET(request: NextRequest) {
     user?: { id?: string; email?: string; displayName?: string | null };
   } | null;
   if (!tokenResponse.ok || !payload?.ok || !payload.app_session_token || !payload.absolute_expires_at) {
-    cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
-    return noLeak(NextResponse.json({ ok: false, error: payload?.error || "AUTH_SSO_EXCHANGE_FAILED" }, { status: 400 }));
+    const response = noLeak(NextResponse.json({ ok: false, error: payload?.error || "AUTH_SSO_EXCHANGE_FAILED" }, { status: 400 }));
+    response.cookies.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
+    return response;
   }
-
-  cookieStore.set(DIMPRO_APP_SESSION_COOKIE, payload.app_session_token, appSessionCookieOptions(dimproSessionCookieMaxAge(payload.absolute_expires_at)));
-  cookieStore.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
 
   const userId = payload.user?.id?.trim() || "";
   const email = payload.user?.email?.trim().toLowerCase() || "";
@@ -66,5 +63,12 @@ export async function GET(request: NextRequest) {
   }
   const driveOrigin = new URL(config.redirectUri).origin;
   const target = new URL(flow.returnTo, driveOrigin);
-  return noLeak(NextResponse.redirect(target));
+  const response = noLeak(NextResponse.redirect(target));
+  response.cookies.set(
+    DIMPRO_APP_SESSION_COOKIE,
+    payload.app_session_token,
+    appSessionCookieOptions(dimproSessionCookieMaxAge(payload.absolute_expires_at)),
+  );
+  response.cookies.set(DIMPRO_SSO_FLOW_COOKIE, "", transientSsoCookieOptions(0));
+  return response;
 }

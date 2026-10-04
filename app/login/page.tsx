@@ -21,6 +21,12 @@ function isDriveDomain(host: string) {
   return normalizedHost === "drive.dev.dimpro.hu" || normalizedHost === "drive.dimpro.hu";
 }
 
+
+function isDimproAuthDomain(host: string) {
+  const normalizedHost = host.toLowerCase().split(":")[0];
+  return normalizedHost === "auth.dev.dimpro.hu" || normalizedHost === "auth.dimpro.hu";
+}
+
 function isDimproDomain(host: string) {
   const normalizedHost = host.toLowerCase().split(":")[0];
   return (
@@ -48,7 +54,7 @@ export default async function LoginPage() {
   }
 
   if (isDimproDomain(host)) {
-    return <DimproAppOtpLogin />;
+    return <DimproAppOtpLogin showDriveRegistration={isDimproAuthDomain(host)} />;
   }
 
   return <DimproverOtpLogin />;

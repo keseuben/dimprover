@@ -117,7 +117,6 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
   const [draftRoles, setDraftRoles] = useState<Record<string, EditableRole>>({});
   const [confirmRemove, setConfirmRemove] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName] = useState("");
   const [inviteOrganization, setInviteOrganization] = useState("");
   const [inviteRole, setInviteRole] = useState<EditableRole>("VIEWER");
   const [inviteDays, setInviteDays] = useState(7);
@@ -250,7 +249,6 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
         body: JSON.stringify({
           projectId,
           email: inviteEmail.trim(),
-          displayName: inviteName.trim(),
           organizationName: inviteOrganization.trim(),
           role: inviteRole,
           expiresInDays: inviteDays,
@@ -258,7 +256,6 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
       });
       setSuccess("A projektmeghívás elküldve.");
       setInviteEmail("");
-      setInviteName("");
       setInviteOrganization("");
       setInviteRole("VIEWER");
       setInviteDays(7);
@@ -421,10 +418,6 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
                 <label className={styles.fieldWide}>
                   <span>E-mail-cím *</span>
                   <div className={styles.inputIcon}><Mail size={13} /><input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="nev@ceg.hu" /></div>
-                </label>
-                <label>
-                  <span>Név</span>
-                  <input value={inviteName} onChange={(event) => setInviteName(event.target.value)} placeholder="Név" />
                 </label>
                 <label>
                   <span>Szervezet *</span>

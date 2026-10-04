@@ -81,6 +81,10 @@ export async function GET(request: NextRequest) {
     callback.searchParams.set("state", issued.state);
     return NextResponse.redirect(callback);
   } catch (error) {
+    if (!(error instanceof DimproAuthError)) {
+      const errorCode = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "") : "";
+      console.error("DIMPRO AUTH authorize failure", { correlationId, errorClass: error instanceof Error ? error.name : typeof error, errorCode, message: error instanceof Error ? error.message : String(error) });
+    }
     const status = error instanceof DimproAuthError ? error.status : 503;
     const message = error instanceof DimproAuthError ? error.publicMessage : "A központi belépési szolgáltatás jelenleg nem érhető el.";
     return NextResponse.json({ ok: false, error: message, correlationId }, { status, headers: { "cache-control": "no-store" } });
