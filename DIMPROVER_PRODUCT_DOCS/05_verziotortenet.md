@@ -3482,3 +3482,18 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.8.4 contract: 44/44 PASS. V0.8.3 export naming: 24/24 PASS. V0.8.2 formal issue: 34/34 PASS. V0.8.1 version/revision UI: 23/23 PASS. V0.8.0 revision model: 28/28 PASS. Nézetfüggő állapotszínezés: 18/18 PASS. ACL: 18/18 PASS. Issue access: 19/19 PASS. Teljes TypeScript: PASS. `git diff --check`: PASS.
 - V0.8.4 DB preflight: PASS a DEV 0.8.0 sémán; migráció még nincs alkalmazva ebben a source checkpointban.
 - DEV ONLY · PROD DENY.
+
+### DIMPRO Drive V0.9.13 + AUTH V0.4.2 – Saját Drive regisztráció, workspace és projekt-hozzáférés DEV aktiválás
+
+- A központi AUTH új, elkülönített Saját Drive regisztrációs flow-t kapott `DRIVE_REGISTRATION` OTP-céllal. Az e-mail igazolása nem grantol automatikusan Drive tárhelyet; a személyes hozzáférés külön entitlement/licenc/admin jóváhagyáshoz kötött.
+- Új AUTH migráció: `007_auth_v040_drive_registration.sql`; a DEV AUTH adatbázis aktuális migrationCount értéke 7.
+- A központi login AUTH hoston megjeleníti a `Saját Drive igénylése` útvonalat; a normál login továbbra sem nyitott signup.
+- Új protected `/api/drive/workspaces` szerződés külön `PERSONAL` és `PROJECT` munkateret ad ugyanazon identity alatt. A Saját Drive nem hamis projekt; jelenleg `USER_ROOT / LIMITED_ROOT` képességgel szerepel.
+- A Drive Projekt-hozzáférések adminfelület megtartotta a V0.9.13 gazdag tagkezelését, és központi AUTH meghívásra állt át. Meghívási input: e-mail + szervezet + szerepkör; külön névmező nincs.
+- Támogatott Project Core szerepek: Projektvezető, Közreműködő, Ellenőrző, Megtekintő. Csak a Projektvezető kap központi `DRIVE_PROJECT_MANAGER` grantot.
+- Az integráció a jelenlegi Drive `61826450` és az AUTH V0.4.2 ág egyesítésével készült; merge commit: `b019cd8f6615a09ca753c80d25b9ef66953dbed8`.
+- Integrált build: `JpQkuDcVbPs3E862kUhPv`, SHA-256 `6411f8b6ce6a0cd903d2af2c3f3237e49c89832bd590aa49bd3498dac539d1fd`, build PASS.
+- DEV Drive aktiválva: `drive.dev.dimpro.hu` → `127.0.0.1:3364`; header `b019cd8f DRIVE V0.9.13 AUTH V0.4.2 DESKTOP V0.1.7 DEV`.
+- Rollbackként a korábbi `61826450` Drive runtime `127.0.0.1:3361` porton futva megmaradt.
+- AUTH és Drive integrációs contractok, Project Access Administration, Desktop V0.1.7 contractok, targeted ESLint és `git diff --check` PASS.
+- DEV ONLY · PROD DENY.
