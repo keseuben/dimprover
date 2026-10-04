@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const menu=read("components/project-gate/ProjectAccessMenu.tsx"),workspace=read("components/drive/DriveWorkspace.tsx"),invite=read("app/api/dimpro-auth/invitations/project/route.ts");
+check("Drive passes project member-management permission into access menu",()=>assert.match(workspace,/canManageMembers=\{effectivePermissions\.includes\("project\.manage_members"\)\}/));
+check("invite UI is visible only to member managers",()=>{assert.match(menu,/canManageMembers/);assert.match(menu,/canManageMembers \? \(/)});
+check("invite form collects email organization and role",()=>{assert.match(menu,/E-mail-cím/);assert.match(menu,/Szervezet/);assert.match(menu,/Jogosultság/);assert.match(menu,/PROJECT_MANAGER/);assert.match(menu,/CONTRIBUTOR/);assert.match(menu,/REVIEWER/);assert.match(menu,/VIEWER/)});
+check("invite UI calls central AUTH invitation endpoint",()=>{assert.match(menu,/\/api\/dimpro-auth\/invitations\/project/);assert.match(menu,/JSON\.stringify\(\{ projectId, email, organizationName, role: inviteRole \}\)/)});
+check("successful invite refreshes Project Core membership list",()=>{assert.match(menu,/await loadMemberships\(\)/);assert.match(menu,/A projektmeghívó e-mail elküldve/)});
+check("central invitation preserves detailed Project Core role",()=>{assert.match(invite,/value === "CONTRIBUTOR"/);assert.match(invite,/return "CONTRIBUTOR"/);assert.match(invite,/value === "REVIEWER"/);assert.match(invite,/return "REVIEWER"/);assert.match(invite,/return "VIEWER"/)});
+check("only project manager maps to privileged central AUTH manager role",()=>{const roleBlock=invite.split('function role')[1].split('function projectCoreRole')[0];assert.match(roleBlock,/PROJECT_MANAGER/);assert.match(roleBlock,/DRIVE_PROJECT_MANAGER/);assert.match(roleBlock,/DRIVE_PROJECT_MEMBER/)});
+console.log(`DIMPRO AUTH V0.4.2 project invitation UI contract PASS · ${n}/${n}`);

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ShieldCheck, Users, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Loader2, MailPlus, ShieldCheck, Users, X } from "lucide-react";
 import { permissionsForRole, projectRoleLabel } from "@/app/lib/project-core/permissions";
 import type { ProjectMembership, ProjectMembershipRole, ProjectPermission } from "@/app/lib/project-core/types";
 import styles from "./ProjectAccessMenu.module.css";
@@ -10,6 +10,7 @@ type Props = {
   projectId: string;
   fallbackCount?: number;
   compact?: boolean;
+  canManageMembers?: boolean;
 };
 
 type MembershipPayload = {
@@ -42,36 +43,43 @@ function secondaryLine(member: ProjectMembership) {
   return values.length ? values.join(" · ") : member.userId;
 }
 
-export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compact = false }: Props) {
+export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compact = false, canManageMembers = false }: Props) {
   const [memberships, setMemberships] = useState<ProjectMembership[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteOrganization, setInviteOrganization] = useState("");
+  const [inviteRole, setInviteRole] = useState<ProjectMembershipRole>("VIEWER");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteError, setInviteError] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const loadMemberships = useCallback(async (signal?: AbortSignal) => {
+    setLoaded(false);
+    setError("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/memberships`, {
+        signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
+      });
+      const payload = await response.json() as MembershipPayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekthozzáférések nem tölthetők be.");
+      setMemberships(payload.memberships || []);
+      setLoaded(true);
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setError(caught instanceof Error ? caught.message : "A projekthozzáférések nem tölthetők be.");
+      setLoaded(true);
+    }
+  }, [projectId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoaded(false);
-    setError("");
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/memberships`, {
-      signal: controller.signal,
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
-      .then(async (response) => {
-        const payload = await response.json() as MembershipPayload;
-        if (!response.ok || !payload.ok) throw new Error(payload.error || "A projekthozzáférések nem tölthetők be.");
-        setMemberships(payload.memberships || []);
-        setLoaded(true);
-      })
-      .catch((caught: unknown) => {
-        if (caught instanceof DOMException && caught.name === "AbortError") return;
-        setError(caught instanceof Error ? caught.message : "A projekthozzáférések nem tölthetők be.");
-        setLoaded(true);
-      });
+    void loadMemberships(controller.signal);
     return () => controller.abort();
-  }, [projectId]);
+  }, [loadMemberships]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +106,39 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
     [memberships],
   );
   const activeCount = loaded && !error ? activeMembers.length : fallbackCount;
+
+  async function submitInvitation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageMembers || inviteBusy) return;
+    const email = inviteEmail.trim().toLowerCase();
+    const organizationName = inviteOrganization.trim();
+    if (!email.includes("@") || !organizationName) {
+      setInviteError("E-mail-cím és szervezet megadása kötelező.");
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError("");
+    setInviteMessage("");
+    try {
+      const response = await fetch("/api/dimpro-auth/invitations/project", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ projectId, email, organizationName, role: inviteRole }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || "A projektmeghívó nem küldhető el.");
+      setInviteEmail("");
+      setInviteOrganization("");
+      setInviteRole("VIEWER");
+      setInviteMessage("A projektmeghívó e-mail elküldve.");
+      await loadMemberships();
+    } catch (caught) {
+      setInviteError(caught instanceof Error ? caught.message : "A projektmeghívó nem küldhető el.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
 
   return (
     <div className={styles.root} ref={rootRef} data-project-access-menu="0.1.0">
@@ -127,6 +168,30 @@ export default function ProjectAccessMenu({ projectId, fallbackCount = 0, compac
           </header>
 
           <div className={styles.body}>
+            {canManageMembers ? (
+              <section className={styles.inviteSection}>
+                <button type="button" className={styles.inviteToggle} onClick={() => { setInviteOpen((current) => !current); setInviteError(""); setInviteMessage(""); }}>
+                  <MailPlus size={14} /> {inviteOpen ? "Meghívó bezárása" : "Résztvevő meghívása"}
+                </button>
+                {inviteOpen ? (
+                  <form className={styles.inviteForm} onSubmit={submitInvitation}>
+                    <label>E-mail-cím<input type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="nev@ceg.hu" /></label>
+                    <label>Szervezet<input required value={inviteOrganization} onChange={(event) => setInviteOrganization(event.target.value)} placeholder="pl. Partner Kft." /></label>
+                    <label>Jogosultság<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as ProjectMembershipRole)}>
+                      <option value="PROJECT_MANAGER">Projektvezető</option>
+                      <option value="CONTRIBUTOR">Közreműködő</option>
+                      <option value="REVIEWER">Ellenőrző</option>
+                      <option value="VIEWER">Megtekintő</option>
+                    </select></label>
+                    {inviteError ? <div className={styles.inviteError}>{inviteError}</div> : null}
+                    {inviteMessage ? <div className={styles.inviteSuccess}>{inviteMessage}</div> : null}
+                    <button type="submit" className={styles.inviteSubmit} disabled={inviteBusy || !inviteEmail.trim() || !inviteOrganization.trim()}>
+                      {inviteBusy ? <Loader2 size={14} className={styles.spin} /> : <MailPlus size={14} />} Meghívó e-mail küldése
+                    </button>
+                  </form>
+                ) : null}
+              </section>
+            ) : null}
             {error && <div className={styles.message}>{error}</div>}
             {!loaded && !error && <div className={styles.message}>Jogosultságok betöltése…</div>}
             {loaded && !error && activeMembers.map((member) => (

@@ -2274,7 +2274,7 @@ export default function DriveWorkspace({
         <div className={styles.headerActions}>
           <button type="button" className={styles.headerAction}><Bell size={14} /> Értesítések</button>
           <button type="button" className={styles.headerAction}><HelpCircle size={14} /> Súgó</button>
-          <ProjectAccessMenu projectId={projectId} compact />
+          <ProjectAccessMenu projectId={projectId} compact canManageMembers={effectivePermissions.includes("project.manage_members")} />
           <div className={styles.userPill}>
             <span className={styles.avatar}>{(membershipDisplayName || "D").trim().charAt(0).toUpperCase() || "D"}</span>
             <div>

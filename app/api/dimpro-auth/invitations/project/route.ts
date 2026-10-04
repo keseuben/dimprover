@@ -24,11 +24,14 @@ function uuid(value: unknown) {
 
 
 function role(value: unknown): DimproProjectInvitationRole {
-  return value === "manager" || value === "DRIVE_PROJECT_MANAGER" ? "DRIVE_PROJECT_MANAGER" : "DRIVE_PROJECT_MEMBER";
+  return value === "manager" || value === "PROJECT_MANAGER" || value === "DRIVE_PROJECT_MANAGER" ? "DRIVE_PROJECT_MANAGER" : "DRIVE_PROJECT_MEMBER";
 }
 
 function projectCoreRole(value: unknown) {
-  return value === "manager" || value === "DRIVE_PROJECT_MANAGER" ? "PROJECT_MANAGER" : "VIEWER";
+  if (value === "manager" || value === "PROJECT_MANAGER" || value === "DRIVE_PROJECT_MANAGER") return "PROJECT_MANAGER";
+  if (value === "CONTRIBUTOR") return "CONTRIBUTOR";
+  if (value === "REVIEWER") return "REVIEWER";
+  return "VIEWER";
 }
 
 async function driveSession(request: NextRequest) {

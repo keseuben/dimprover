@@ -216,3 +216,21 @@
 :global([data-theme="dark"]) .memberIcon { background: rgba(23,107,255,.16); color: #82b5ff; }
 :global([data-theme="dark"]) .role { background: #203a52; color: #b8d6ef; }
 :global([data-theme="dark"]) .footer { background: #102338; }
+
+.inviteSection { margin: 2px 2px 8px; padding: 8px; border: 1px solid #d9e7ef; border-radius: 10px; background: #f8fbfd; }
+.inviteToggle { width: 100%; min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #a7d8d1; border-radius: 8px; background: #effcf9; color: #0f766e; font-size: 11px; font-weight: 900; cursor: pointer; }
+.inviteForm { display: grid; gap: 8px; margin-top: 9px; }
+.inviteForm label { display: grid; gap: 4px; color: #52697d; font-size: 10px; font-weight: 800; }
+.inviteForm input, .inviteForm select { width: 100%; min-height: 34px; border: 1px solid #ccd9e4; border-radius: 8px; background: #fff; padding: 6px 9px; color: #263e56; font: inherit; font-size: 11px; outline: none; }
+.inviteForm input:focus, .inviteForm select:focus { border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,.1); }
+.inviteSubmit { min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 8px; background: #0f766e; color: #fff; font-size: 11px; font-weight: 900; cursor: pointer; }
+.inviteSubmit:disabled { cursor: not-allowed; opacity: .45; }
+.inviteError, .inviteSuccess { border-radius: 8px; padding: 7px 8px; font-size: 10px; font-weight: 700; line-height: 1.4; }
+.inviteError { border: 1px solid #fecdd3; background: #fff1f2; color: #9f1239; }
+.inviteSuccess { border: 1px solid #a7f3d0; background: #ecfdf5; color: #047857; }
+.spin { animation: projectAccessSpin .8s linear infinite; }
+@keyframes projectAccessSpin { to { transform: rotate(360deg); } }
+:global([data-theme="dark"]) .inviteSection { border-color: #314861; background: #0d2033; }
+:global([data-theme="dark"]) .inviteToggle { border-color: #296c68; background: #123b39; color: #8de4d7; }
+:global([data-theme="dark"]) .inviteForm label { color: #a8bacb; }
+:global([data-theme="dark"]) .inviteForm input, :global([data-theme="dark"]) .inviteForm select { border-color: #3a5269; background: #10283d; color: #e2edf6; }
