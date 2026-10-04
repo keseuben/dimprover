@@ -383,7 +383,7 @@ export async function getAuthSessionByToken(token: string, touch = true): Promis
   }
   return {
     id: row.id,
-    user: userFromRow({ ...row, login_enabled: true }),
+    user: userFromRow({ ...row, id: row.user_id, login_enabled: true }),
     createdAt: iso(row.created_at),
     lastSeenAt: touch ? new Date().toISOString() : iso(row.last_seen_at),
     absoluteExpiresAt: iso(row.absolute_expires_at),
@@ -955,7 +955,7 @@ export async function getAppSessionByToken(token: string, clientId: string, touc
   }
   return {
     id: row.id,
-    user: userFromRow({ ...row, login_enabled: true }),
+    user: userFromRow({ ...row, id: row.user_id, login_enabled: true }),
     createdAt: iso(row.created_at),
     lastSeenAt: touch ? new Date().toISOString() : iso(row.last_seen_at),
     absoluteExpiresAt: iso(row.absolute_expires_at),
