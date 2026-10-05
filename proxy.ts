@@ -518,6 +518,10 @@ export async function proxy(request: NextRequest) {
       url.searchParams.set("access", "drive-forbidden");
       return applyDriveAuthRedirectHeaders(NextResponse.redirect(url));
     }
+
+    // Central Drive SSO is authoritative for Drive pages and protected Drive APIs.
+    // Do not fall through into legacy Supabase or other host-level auth layers.
+    return response;
   }
 
   if (isDimproAuthHost && (isLoginPage || isDimproAuthInvitationPage || isDimproAuthDriveRegistrationPage || pathname.startsWith("/api/dimpro-auth/"))) {
