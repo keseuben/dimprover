@@ -3520,3 +3520,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.4.7-től a Drive page is a tényleges `Host` fejlécet tekinti authoritative-nak, és csak fallbackként használ `X-Forwarded-Host` értéket.
 - Source: `09d5856f2486c9069c41f826258d8f931481bdab`; build ID `Xd6pScM7ZxirM9OFZLNTH`; SHA-256 `98bf2bb854adb584fa5c79c95d1cfe8ef4aa3de0158e9ab4a4dad0e8aff18d2e`.
 - DEV Drive upstream: `127.0.0.1:3371`; rollback `3370`; AUTH továbbra is V0.4.4 `3367`; PROD DENY.
+
+### Drive SSO V0.4.8 – single authoritative auth gate + Desktop scanfix integráció
+
+- A DrivePage-ből teljesen kikerült a második, legacy DEV cookie-alapú hitelesítési gate.
+- A Drive hitelesítés authoritative helye a proxy: central SSO esetén app-session + `drive.access`; legacy DEV fallback csak central SSO hiányában.
+- A korábbi hibás flow konkrét app-sessionjén a DB `drive.access=TRUE` értéket igazolt, így a proxy authz nem volt a `/login` redirect oka.
+- Új single-auth-gate contract: `5/5 PASS`; korábbi SSO/cookie/cache/session contractok PASS.
+- A javítás integrálva lett a BenjaminAI `01fd976a` Desktop scan/download restart-safe ággal; merge commit `12f62a7d39a5263860deeb8a3ee4074b81cce963`.
+- Integrált build ID `QCWId8ANOj8Sr1wV85kRQ`; SHA-256 `f196cc8e126ca76cee3ca31907880000df111496f7ae711353b17e4c88dee513`.
+- DEV Drive: `127.0.0.1:3373`; rollback `3372`; AUTH V0.4.4 változatlan; PROD DENY.

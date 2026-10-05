@@ -193,3 +193,22 @@ V0.4.6-tól, ha `resolveDriveSsoConfig(host)` central SSO-t jelez, a Drive page 
 V0.4.6 source commit: `63b55aa03384da4cc67029295bb46d3eb3291780`. Build ID: `S0Q8kSLGruMWmmlpSSEIn`. Artifact SHA-256: `2f9529ea0cacc6846df66e301d566cab9dc9162a82ce49c50b3cf72e1b3e4076`.
 
 DEV Drive upstream: `127.0.0.1:3370`; header: `63b55aa0 DRIVE V0.9.13 AUTH V0.4.4 SSO PAGEFIX DEV`. A V0.4.5 cachefix runtime `127.0.0.1:3369` rollbackként online maradt. PROD DENY.
+
+## 13. V0.4.8 – Drive single authoritative auth gate
+
+A 2026-10-04-i böngészős E2E naplók bizonyították, hogy az első callback sikeres volt, az `auth_app_sessions` rekord létrejött, és a konkrét app-sessionhöz `drive.access = TRUE` tartozott. A callback után mégis `/drive → /login` redirect történt.
+
+A végleges architekturális javítás: a Drive hitelesítésnek egyetlen authoritative kapuja marad, a `proxy.ts`.
+
+- Central SSO hoston: `__Host-dimpro_app` session + `drive.access` permission ellenőrzés a proxyban.
+- Legacy DEV mód csak akkor aktív, ha nincs central SSO konfiguráció.
+- `app/drive/page.tsx` többé nem tartalmaz saját auth redirectet, host-alapú auth döntést, `DRIVE_DEV_ACCESS_COOKIE` ellenőrzést vagy `/login` redirectet.
+- A DrivePage kizárólag rendereli a Drive UI-t; ha a proxy beengedte a kérést, a page nem végez második, versengő hitelesítést.
+
+Új contract: `auth-v048-drive-single-auth-gate-contract.mjs` → `5/5 PASS`.
+
+A V0.4.8 javítást a közben live-ra került BenjaminAI Desktop scan-auth ággal (`01fd976ace0b828e74ec085c8f368287465079ac`) egyesítettük. Az integrált merge commit: `12f62a7d39a5263860deeb8a3ee4074b81cce963`.
+
+Integrált build ID: `QCWId8ANOj8Sr1wV85kRQ`. Artifact SHA-256: `f196cc8e126ca76cee3ca31907880000df111496f7ae711353b17e4c88dee513`.
+
+DEV Drive upstream: `127.0.0.1:3373`. Header: `12f62a7d DRIVE V0.9.13 AUTH V0.4.4 SSO SINGLE-GATE + DESKTOP SCAN AUTH DEV`. A korábbi `01fd976a` scanfix runtime `127.0.0.1:3372` porton rollbackként online maradt. PROD DENY.
