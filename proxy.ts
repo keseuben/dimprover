@@ -476,7 +476,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/projects" ||
     /^\/api\/projects\/[^/]+\/drive\/(?:health|tree|changes|sync\/cursor|uploads\/init)$/.test(pathname) ||
     /^\/api\/projects\/[^/]+\/drive\/uploads\/[^/]+\/(?:complete|abort)$/.test(pathname) ||
-    /^\/api\/projects\/[^/]+\/drive\/documents\/[^/]+\/download$/.test(pathname)
+    /^\/api\/projects\/[^/]+\/drive\/documents\/[^/]+\/download$/.test(pathname) ||
+    /^\/api\/projects\/[^/]+\/drive\/documents\/[^/]+\/versions\/[^/]+\/security-scan$/.test(pathname)
   );
   const isDriveDesktopOwnAuthApi = isDriveDesktopAccessExchangeApi || isDriveDesktopBearerApi;
   if (isDriveHost && (isDrivePage || isDriveProtectedApi) && !isDriveDesktopOwnAuthApi) {

@@ -41,9 +41,12 @@ foreach ($operation in $operations) {
   if ($kind -ne 'DOWNLOAD') { throw ('V017_DOWNLOAD_APPLY_NON_DOWNLOAD_OPERATION: ' + $kind) }
   $destinationPath = [string](Get-PropertyValue $operation 'destinationPath' '')
   if (-not $destinationPath) { throw 'V017_DOWNLOAD_APPLY_DESTINATION_REQUIRED' }
-  if (Test-Path -LiteralPath $destinationPath -PathType Leaf) { throw ('V017_DOWNLOAD_APPLY_TARGET_ALREADY_EXISTS: ' + $destinationPath) }
   $sha = ([string](Get-PropertyValue $operation 'sha256' '')).ToLowerInvariant()
   if ($sha -notmatch '^[0-9a-f]{64}$') { throw 'V017_DOWNLOAD_APPLY_EXPECTED_SHA_REQUIRED' }
+  if (Test-Path -LiteralPath $destinationPath -PathType Leaf) {
+    $existingSha = (Get-FileHash -LiteralPath $destinationPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($existingSha -ne $sha) { throw ('V017_DOWNLOAD_APPLY_TARGET_HASH_CONFLICT: ' + $destinationPath) }
+  }
 }
 
 $mainScript = Join-Path $PSScriptRoot 'dimpro-drive-desktop-manual-sync-v017.ps1'
@@ -83,8 +86,14 @@ foreach ($operation in $operations) {
   $destination = [IO.Path]::GetFullPath([string](Get-PropertyValue $operation 'destinationPath' ''))
   $planByDestination[$destination.ToLowerInvariant()] = $operation
 }
+$downloadedCount = 0
+$alreadyPresentVerifiedCount = 0
 foreach ($downloadResult in $resultOperations) {
   if ([string](Get-PropertyValue $downloadResult 'kind' '') -ne 'DOWNLOAD') { throw 'V017_DOWNLOAD_APPLY_RESULT_NON_DOWNLOAD' }
+  $status = [string](Get-PropertyValue $downloadResult 'status' '')
+  if ($status -eq 'DOWNLOADED') { $downloadedCount += 1 }
+  elseif ($status -eq 'ALREADY_PRESENT_VERIFIED') { $alreadyPresentVerifiedCount += 1 }
+  else { throw ('V017_DOWNLOAD_APPLY_RESULT_STATUS_INVALID: ' + $status) }
   $destination = [IO.Path]::GetFullPath([string](Get-PropertyValue $downloadResult 'destinationPath' ''))
   if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) { throw ('V017_DOWNLOAD_APPLY_FILE_MISSING: ' + $destination) }
   $key = $destination.ToLowerInvariant()
@@ -107,6 +116,8 @@ $summary = [ordered]@{
   localRoot = $localRoot
   resultPath = $resultPath
   downloadCount = $ExpectedDownloadCount
+  newlyDownloadedCount = $downloadedCount
+  alreadyPresentVerifiedCount = $alreadyPresentVerifiedCount
   cursorSaved = $true
   serverMutation = 'ACCEPTANCE_CURSOR_ONLY'
   documentMutation = $false

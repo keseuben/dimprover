@@ -354,7 +354,10 @@ function Assert-ApplyPlanSafety($Plan) {
       if (-not $documentId) { throw 'V017_DOWNLOAD_DOCUMENT_ID_REQUIRED' }
       if (-not $versionId) { throw 'V017_DOWNLOAD_VERSION_ID_REQUIRED' }
       if ($sha256 -notmatch '^[0-9a-f]{64}$') { throw 'V017_DOWNLOAD_SHA256_REQUIRED' }
-      if (Test-Path -LiteralPath $destinationFull -PathType Leaf) { throw ('V017_DOWNLOAD_TARGET_ALREADY_EXISTS: ' + $destinationFull) }
+      if (Test-Path -LiteralPath $destinationFull -PathType Leaf) {
+        $existingSha = Get-FileSha256 $destinationFull
+        if ($existingSha -ne $sha256) { throw ('V017_DOWNLOAD_TARGET_HASH_CONFLICT: ' + $destinationFull) }
+      }
       continue
     }
 
@@ -373,6 +376,57 @@ function Assert-ApplyPlanSafety($Plan) {
     if ([int64]$current.Length -ne $plannedSize) { throw ('V017_UPLOAD_FILE_CHANGED_SIZE: ' + $relativePath) }
     $currentSha = Get-FileSha256 $localFull
     if ($currentSha -ne $plannedSha) { throw ('V017_UPLOAD_FILE_CHANGED_SHA256: ' + $relativePath) }
+  }
+
+  return [pscustomobject]@{
+    localRoot = $localRootFull
+    operationCount = $operations.Count
+  }
+}
+
+function Assert-ScanPlanSafety($Plan) {
+  $planKind = [string](Get-ObjectPropertyValue $Plan 'planKind' '')
+  if ($planKind -ne 'DIMPRO_DRIVE_DESKTOP_MANUAL_SYNC_V017') { throw 'V017_SCAN_PLAN_KIND_INVALID' }
+  $localRootRaw = [string](Get-ObjectPropertyValue $Plan 'localRoot' '')
+  if (-not $localRootRaw -or -not (Test-Path -LiteralPath $localRootRaw -PathType Container)) { throw 'V017_SCAN_PLAN_LOCAL_ROOT_INVALID' }
+  $localRootFull = (Resolve-Path -LiteralPath $localRootRaw).Path
+  $operations = @(Get-ObjectPropertyValue $Plan 'operations' @())
+  $review = Get-ObjectPropertyValue $Plan 'review' $null
+  if ($null -eq $review -or -not [bool](Get-ObjectPropertyValue $review 'required' $false)) { throw 'V017_SCAN_PLAN_REVIEW_REQUIRED' }
+  $declaredOperationCount = [int](Get-ObjectPropertyValue $review 'operationCount' -1)
+  if ($declaredOperationCount -ne $operations.Count) { throw ('V017_SCAN_PLAN_OPERATION_COUNT_MISMATCH declared=' + $declaredOperationCount + ' actual=' + $operations.Count) }
+  if ($operations.Count -eq 0) { throw 'V017_SECURITY_SCAN_PLAN_EMPTY' }
+  if ($operations.Count -gt 5000) { throw 'V017_SCAN_PLAN_OPERATION_LIMIT_EXCEEDED' }
+
+  $seenRelativePaths = @{}
+  $seenLocalPaths = @{}
+  foreach ($operation in $operations) {
+    $kind = ([string](Get-ObjectPropertyValue $operation 'kind' '')).ToUpperInvariant()
+    if ($kind -ne 'DOWNLOAD') { throw ('V017_SECURITY_SCAN_PLAN_DOWNLOAD_ONLY: ' + $kind) }
+    $relativePath = Assert-SafeSyncRelativePath ([string](Get-ObjectPropertyValue $operation 'relativePath' ''))
+    $relativeKey = $relativePath.ToLowerInvariant()
+    if ($seenRelativePaths.ContainsKey($relativeKey)) { throw ('V017_SCAN_PLAN_DUPLICATE_RELATIVE_PATH: ' + $relativePath) }
+    $seenRelativePaths[$relativeKey] = $true
+
+    $expectedPath = Get-LocalPathFromRelative $localRootFull $relativePath
+    $expectedFull = Get-CanonicalFullPath $expectedPath
+    if (-not (Test-PathWithinRoot $localRootFull $expectedFull)) { throw ('V017_SCAN_PLAN_PATH_ESCAPES_ROOT: ' + $relativePath) }
+
+    $destinationPath = [string](Get-ObjectPropertyValue $operation 'destinationPath' '')
+    if (-not $destinationPath) { throw 'V017_SCAN_DOWNLOAD_DESTINATION_REQUIRED' }
+    $destinationFull = Get-CanonicalFullPath $destinationPath
+    if (-not (Test-PathWithinRoot $localRootFull $destinationFull)) { throw ('V017_SCAN_DOWNLOAD_DESTINATION_ESCAPES_ROOT: ' + $destinationPath) }
+    if (-not $destinationFull.Equals($expectedFull, [StringComparison]::OrdinalIgnoreCase)) { throw ('V017_SCAN_DOWNLOAD_DESTINATION_PATH_MISMATCH: ' + $relativePath) }
+    $destinationKey = $destinationFull.ToLowerInvariant()
+    if ($seenLocalPaths.ContainsKey($destinationKey)) { throw ('V017_SCAN_PLAN_DUPLICATE_LOCAL_PATH: ' + $destinationFull) }
+    $seenLocalPaths[$destinationKey] = $true
+
+    $documentId = [string](Get-ObjectPropertyValue $operation 'documentId' '')
+    $versionId = [string](Get-ObjectPropertyValue $operation 'versionId' '')
+    $sha256 = ([string](Get-ObjectPropertyValue $operation 'sha256' '')).ToLowerInvariant()
+    if (-not $documentId) { throw 'V017_SCAN_DOWNLOAD_DOCUMENT_ID_REQUIRED' }
+    if (-not $versionId) { throw 'V017_SCAN_DOWNLOAD_VERSION_ID_REQUIRED' }
+    if ($sha256 -notmatch '^[0-9a-f]{64}$') { throw 'V017_SCAN_DOWNLOAD_SHA256_REQUIRED' }
   }
 
   return [pscustomobject]@{
@@ -805,12 +859,32 @@ function Invoke-DesktopDownload($Operation, [string]$ProjectIdValue) {
   $signedMethod = [string](Get-ObjectPropertyValue $downloadInfo 'method' '')
   if (-not $signedUrl) { throw 'DOWNLOAD_INIT_RESPONSE_INVALID' }
   if ($signedMethod -ne 'GET') { throw 'DOWNLOAD_SIGNED_METHOD_INVALID' }
+  $expectedSize = Get-ObjectPropertyValue $downloadInfo 'sizeBytes' $null
+  if (Test-Path -LiteralPath $destinationPath -PathType Leaf) {
+    if (-not $expectedSha) { throw 'DOWNLOAD_EXISTING_TARGET_EXPECTED_SHA_REQUIRED' }
+    $existingSha = Get-FileSha256 $destinationPath
+    if ($existingSha -ne $expectedSha.ToLowerInvariant()) { throw ('DOWNLOAD_EXISTING_TARGET_HASH_CONFLICT: ' + $destinationPath) }
+    $existing = Get-Item -LiteralPath $destinationPath
+    if ($null -ne $expectedSize -and [int64]$existing.Length -ne [int64]$expectedSize) { throw 'DOWNLOAD_EXISTING_TARGET_SIZE_MISMATCH' }
+    return [ordered]@{
+      kind = 'DOWNLOAD'
+      status = 'ALREADY_PRESENT_VERIFIED'
+      downloaded = $false
+      documentId = $documentId
+      versionId = [string](Get-ObjectPropertyValue $downloadInfo 'versionId' '')
+      destinationPath = $destinationPath
+      sizeBytes = [int64]$existing.Length
+      sha256 = $existingSha
+      ok = $true
+    }
+  }
   Invoke-PresignedGetFile $signedUrl $destinationPath $expectedSha @{}
   $downloaded = Get-Item -LiteralPath $destinationPath
-  $expectedSize = Get-ObjectPropertyValue $downloadInfo 'sizeBytes' $null
   if ($null -ne $expectedSize -and [int64]$downloaded.Length -ne [int64]$expectedSize) { throw 'DOWNLOAD_SIZE_MISMATCH' }
   return [ordered]@{
     kind = 'DOWNLOAD'
+    status = 'DOWNLOADED'
+    downloaded = $true
     documentId = $documentId
     versionId = [string](Get-ObjectPropertyValue $downloadInfo 'versionId' '')
     destinationPath = $destinationPath
@@ -987,15 +1061,10 @@ if ($Mode -eq 'ScanPlan') {
   $reviewedPlanSha256 = Assert-ReviewedApplyPlan $ApplyPlanPath $ReviewedPlanSha256
   $planConflictCount = [int](Get-ObjectPropertyValue $plan 'conflictCount' 0)
   if ($planConflictCount -gt 0) { throw ('V017_SECURITY_SCAN_PLAN_CONFLICTS_PRESENT: ' + $planConflictCount) }
-  $planSafety = Assert-ApplyPlanSafety $plan
+  $planSafety = Assert-ScanPlanSafety $plan
   $planProjectId = ([string](Get-ObjectPropertyValue $plan 'projectId' '')).Trim()
   if ($ProjectId -and $ProjectId.Trim() -and $ProjectId.Trim() -ne $planProjectId) { throw 'V017_PROJECT_ID_MISMATCH' }
   $operations = @(Get-ObjectPropertyValue $plan 'operations' @())
-  if ($operations.Count -eq 0) { throw 'V017_SECURITY_SCAN_PLAN_EMPTY' }
-  foreach ($operation in $operations) {
-    $kind = ([string](Get-ObjectPropertyValue $operation 'kind' '')).ToUpperInvariant()
-    if ($kind -ne 'DOWNLOAD') { throw ('V017_SECURITY_SCAN_PLAN_DOWNLOAD_ONLY: ' + $kind) }
-  }
 
   $projectEscaped = [uri]::EscapeDataString($planProjectId)
   $health = Invoke-DriveGet ('/api/projects/' + $projectEscaped + '/drive/health')
