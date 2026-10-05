@@ -380,3 +380,43 @@ Acceptance requirement after deployment:
 1. existing Bridge Probe remains PASS;
 2. reviewed security scan returns 5/5 `CLEAN` with exact SHA-256 matches;
 3. only then may restart-safe DOWNLOAD Apply continue.
+
+
+## V0.1.7 Phase 2 FIX2 – DEV deployment evidence 2026-10-05
+
+Integrated source after the current Drive V0.9.13 / AUTH V0.4.4 SSO HOSTFIX line was merged:
+- source commit: `01fd976ace0b828e74ec085c8f368287465079ac`;
+- source branch: `worker/benjaminai/drive-desktop-v015-fix1-20261003`;
+- BUILD-01 run: `drive-v017-scan-auth-01fd976a-20261005-b1`;
+- build ID: `CXb0i535hLDf8T9B7R2Oa`;
+- artifact SHA-256: `97b20435a0a0ff1a8a4774642d59715c1da1c4c94ce22193525bdd3e2f991460`;
+- BUILD-01 result: PASS;
+- Next production build and TypeScript phase completed successfully.
+
+DEV deployment:
+- release: `/srv/dimpro-dev/candidates/drive-pilot/releases/01fd976ace0b`;
+- runtime: `/srv/dimpro-dev/runtime/drive-v0913-auth044-scanfix-01fd976a`;
+- PM2 candidate: `dimpro-drive-v0913-auth044-scanfix-01fd976a-p3372`;
+- candidate port: `3372`;
+- previous public rollback candidate: `09d5856f / 3371`, intentionally kept online;
+- nginx backup before cutover: `/srv/dimpro-dev/coordination/backups/dimpro-dev.conf.before-drive-scanfix-20261005T203345`;
+- public `drive.dev.dimpro.hu` upstream changed from `3371` to `3372`;
+- nginx config test: PASS;
+- nginx reload: PASS;
+- PM2 state saved after successful cutover.
+
+Public smoke after cutover:
+- `/drive` -> `307` central SSO redirect;
+- redirect target -> `/api/dimpro-auth/start?return_to=%2Fdrive`;
+- central authorize callback resolves to `https://drive.dev.dimpro.hu/api/dimpro-auth/callback`;
+- cache policy remains `no-store`;
+- unauthenticated Drive health remains `401 AUTH_REQUIRED`;
+- public candidate header: `01fd976a DRIVE V0.9.13 AUTH V0.4.4 SSO HOSTFIX + DESKTOP SCAN AUTH DEV`;
+- `X-DIMPRO-Production-Access: DENY`;
+- candidate PM2 status: online, zero restarts at cutover smoke;
+- rollback candidate `09d5856f / 3371`: online, zero restarts.
+
+Remaining physical acceptance gate:
+1. rerun Windows Bridge-backed V0.1.7 security scan acceptance against the same reviewed plan;
+2. require `scanCount = 5` and `cleanCount = 5` with exact SHA-256 matches;
+3. only after that PASS, run the restart-safe DOWNLOAD Apply acceptance.
