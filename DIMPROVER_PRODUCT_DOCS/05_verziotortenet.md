@@ -3504,3 +3504,19 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.4.4: a Drive SSO start/callback cookie-k explicit a visszaadott `NextResponse` objektumra kerülnek, így a `__Host-dimpro_app` app-session cookie a callback redirecttel együtt kerül kiadásra.
 - V0.4.4 source: `f65fe8f5653e5af59c96d04cd26547c2d3abfaef`; build ID `MOdqGa9JjpmsNucoWLDyV`; artifact SHA-256 `171ec930fa843c24872e002a22775f15c555151c6568fb79d2b264180270007f`.
 - DEV: AUTH `3367`, Drive `3368`; PROD DENY; korábbi runtime-ok rollbackként megőrizve.
+
+### Drive SSO V0.4.5–V0.4.6 – redirect cache + legacy page gate javítás
+
+- V0.4.5: a Drive auth 307 redirectek explicit no-store/no-cache fejléceket kaptak.
+- V0.4.6: a Drive page central SSO hoston nem ellenőrzi többé a régi `DRIVE_DEV_ACCESS_COOKIE` jelszavas kaput; a legacy fallback csak nem-SSO hoston marad.
+- A szerver access log alapján a korábbi loop konkrét útvonala: callback SUCCESS → `/drive` → `/login` → új SSO.
+- Source: `63b55aa03384da4cc67029295bb46d3eb3291780`; build ID `S0Q8kSLGruMWmmlpSSEIn`; SHA-256 `2f9529ea0cacc6846df66e301d566cab9dc9162a82ce49c50b3cf72e1b3e4076`.
+- DEV Drive: `127.0.0.1:3370`; rollback `3369`; AUTH továbbra is V0.4.4 `3367`; PROD DENY.
+
+### Drive SSO V0.4.7 – page/proxy host-feloldás egységesítése
+
+- A Drive proxy central SSO döntése a `Host` fejlécet használta, miközben a `DrivePage` előbb az `X-Forwarded-Host` fejlécet olvasta.
+- Ez proxy/edge környezetben eltérő host-értelmezést okozhatott: a proxy elfogadta a central app-sessiont, miközben a page visszaeshetett a legacy DEV password gate-re és `/login` redirectet adott.
+- V0.4.7-től a Drive page is a tényleges `Host` fejlécet tekinti authoritative-nak, és csak fallbackként használ `X-Forwarded-Host` értéket.
+- Source: `09d5856f2486c9069c41f826258d8f931481bdab`; build ID `Xd6pScM7ZxirM9OFZLNTH`; SHA-256 `98bf2bb854adb584fa5c79c95d1cfe8ef4aa3de0158e9ab4a4dad0e8aff18d2e`.
+- DEV Drive upstream: `127.0.0.1:3371`; rollback `3370`; AUTH továbbra is V0.4.4 `3367`; PROD DENY.

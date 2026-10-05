@@ -173,3 +173,23 @@ A Drive callback sikeresen létrehozta az `auth_app_sessions` rekordokat, de bö
 V0.4.4 runtime source: `f65fe8f5653e5af59c96d04cd26547c2d3abfaef`. Build ID: `MOdqGa9JjpmsNucoWLDyV`. Artifact SHA-256: `171ec930fa843c24872e002a22775f15c555151c6568fb79d2b264180270007f`.
 
 DEV aktiválás: AUTH `127.0.0.1:3367`, Drive `127.0.0.1:3368`. Korábbi V0.4.3 runtime-ok rollbackként futva megmaradtak. PROD továbbra is DENY.
+
+## 12. V0.4.5–V0.4.6 Drive SSO redirect-loop lezárás
+
+A böngészős E2E napló alapján a callback első kérése már sikeresen lefutott (`SSO_AUTHORIZE=SUCCESS`, `SSO_TOKEN_EXCHANGE=SUCCESS`), majd a böngésző visszatért `/drive`-ra. A loopot két Drive-oldali örökölt viselkedés tartotta fenn.
+
+### V0.4.5 – auth redirect cache tiltása
+
+Minden Drive authentication redirect explicit `Cache-Control: no-store, no-cache, max-age=0, must-revalidate`, `Pragma: no-cache`, `Expires: 0` fejlécet kap. Ez megakadályozza a session nélküli 307 válasz böngésző/edge újrahasználatát.
+
+### V0.4.6 – legacy DEV password gate kikapcsolása central SSO alatt
+
+Az `app/drive/page.tsx` korábban a proxy által már elfogadott central app-session után is ellenőrizte a régi `DRIVE_DEV_ACCESS_COOKIE` cookie-t, és annak hiányában `/login`-ra redirectelt. Ez hozta létre a ciklust:
+
+`callback SUCCESS → /drive → /login → SSO start → authorize → callback`.
+
+V0.4.6-tól, ha `resolveDriveSsoConfig(host)` central SSO-t jelez, a Drive page **nem** futtatja a legacy DEV password gate-et. A legacy fallback csak nem-SSO hoston marad meg.
+
+V0.4.6 source commit: `63b55aa03384da4cc67029295bb46d3eb3291780`. Build ID: `S0Q8kSLGruMWmmlpSSEIn`. Artifact SHA-256: `2f9529ea0cacc6846df66e301d566cab9dc9162a82ce49c50b3cf72e1b3e4076`.
+
+DEV Drive upstream: `127.0.0.1:3370`; header: `63b55aa0 DRIVE V0.9.13 AUTH V0.4.4 SSO PAGEFIX DEV`. A V0.4.5 cachefix runtime `127.0.0.1:3369` rollbackként online maradt. PROD DENY.
