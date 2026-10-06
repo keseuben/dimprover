@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const src=readFileSync('components/viewers/pdfDocumentEngine.ts','utf8');
+let pass=0; const check=(n,f)=>{f();pass++;console.log(`PASS ${pass}: ${n}`)};
+check('render task has cancellable shared type',()=>{assert.match(src,/export type SharedPdfRenderTask/);assert.match(src,/cancel\?: \(\) => void/)});
+check('active render task is tracked per canvas',()=>{assert.match(src,/new WeakMap<HTMLCanvasElement, SharedPdfRenderTask>/)});
+check('previous canvas render is cancelled',()=>{assert.match(src,/previous\.cancel\?\.\(\)/)});
+check('previous render promise is settled before reuse',()=>{assert.match(src,/await previous\.promise/)});
+check('render waits for previous canvas task before resizing',()=>{assert.match(src,/await settlePreviousCanvasRender\(input\.canvas\);[\s\S]*canvas\.width/)});
+check('new render task is registered',()=>{assert.match(src,/activeCanvasRenderTasks\.set\(canvas, task\)/)});
+check('completed render task is removed conditionally',()=>{assert.match(src,/activeCanvasRenderTasks\.get\(canvas\) === task\) activeCanvasRenderTasks\.delete\(canvas\)/)});
+console.log(`DRIVE_PDF_RENDER_CANVAS_GUARD ${pass}/7 PASS`);

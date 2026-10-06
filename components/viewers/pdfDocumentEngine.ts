@@ -11,9 +11,14 @@ export type SharedPdfTextItem = {
   height?: number;
 };
 
+export type SharedPdfRenderTask = {
+  promise: Promise<void>;
+  cancel?: () => void;
+};
+
 export type SharedPdfPage = {
   getViewport: (options: { scale: number; rotation?: number }) => SharedPdfViewport;
-  render: (options: { canvasContext: CanvasRenderingContext2D; canvas: HTMLCanvasElement; viewport: SharedPdfViewport }) => { promise: Promise<void>; cancel?: () => void };
+  render: (options: { canvasContext: CanvasRenderingContext2D; canvas: HTMLCanvasElement; viewport: SharedPdfViewport }) => SharedPdfRenderTask;
   getTextContent: () => Promise<{ items: SharedPdfTextItem[] }>;
   getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[] }>;
 };
@@ -60,6 +65,15 @@ export type SharedPdfVectorSegment = {
 };
 
 let sharedPdfModulePromise: Promise<SharedPdfJsModule> | null = null;
+const activeCanvasRenderTasks = new WeakMap<HTMLCanvasElement, SharedPdfRenderTask>();
+
+async function settlePreviousCanvasRender(canvas: HTMLCanvasElement) {
+  const previous = activeCanvasRenderTasks.get(canvas);
+  if (!previous) return;
+  try { previous.cancel?.(); } catch {}
+  try { await previous.promise; } catch {}
+  if (activeCanvasRenderTasks.get(canvas) === previous) activeCanvasRenderTasks.delete(canvas);
+}
 
 export async function loadSharedPdfJs(): Promise<SharedPdfJsModule> {
   if (!sharedPdfModulePromise) {
@@ -87,6 +101,7 @@ export async function renderSharedPdfPage(input: {
   rotation?: number;
   maximumPixelDimension?: number;
 }) {
+  await settlePreviousCanvasRender(input.canvas);
   const baseViewport = input.page.getViewport({ scale: input.scale || 1, rotation: input.rotation || 0 });
   const maximumPixelDimension = input.maximumPixelDimension || 3200;
   const dimensionScale = Math.min(1, maximumPixelDimension / Math.max(baseViewport.width, baseViewport.height));
@@ -103,8 +118,13 @@ export async function renderSharedPdfPage(input: {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.restore();
   const task = input.page.render({ canvasContext: context, canvas, viewport });
-  await task.promise;
-  return viewport;
+  activeCanvasRenderTasks.set(canvas, task);
+  try {
+    await task.promise;
+    return viewport;
+  } finally {
+    if (activeCanvasRenderTasks.get(canvas) === task) activeCanvasRenderTasks.delete(canvas);
+  }
 }
 
 export type SharedPdfPageAnalysis = {
