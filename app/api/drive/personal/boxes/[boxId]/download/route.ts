@@ -1,0 +1,8 @@
+import { Readable } from "node:stream";
+import { type NextRequest } from "next/server";
+import { resolvePersonalDriveContentActor } from "@/app/lib/content-core/personalAuth";
+import { personalBoxErrorResponse } from "@/app/lib/content-core/personalBoxApi";
+import { openPersonalDriveBoxZip } from "@/app/lib/content-core/personalBoxDownload";
+type C={params:Promise<{boxId:string}>}; export const dynamic="force-dynamic";export const runtime="nodejs";export const maxDuration=300;
+function safe(value:string){return value.replace(/[\r\n"\\/]/g,"_").slice(0,180)||"DIMPRO_CsomagBOX.zip"}
+export async function GET(request:NextRequest,context:C){const access=await resolvePersonalDriveContentActor(request);if(!access.ok)return access.response;const{boxId}=await context.params;try{const archive=await openPersonalDriveBoxZip({userId:access.contentUserId,boxId,archiveName:request.nextUrl.searchParams.get("name")?.trim()||undefined,actorUserId:access.contentUserId});const web=Readable.toWeb(archive.stream as unknown as Readable) as ReadableStream<Uint8Array>;return new Response(web,{status:200,headers:{"content-type":"application/zip","content-disposition":`attachment; filename*=UTF-8''${encodeURIComponent(safe(archive.fileName))}`,"cache-control":"private, no-store, max-age=0","x-content-type-options":"nosniff","x-dimpro-drive-zip-files":String(archive.sourceFileCount),"x-dimpro-drive-zip-skipped":String(archive.skippedFileCount),"x-dimpro-drive-download-package-id":archive.packageId,"x-dimpro-drive-document-register":archive.registerFileName,"x-dimpro-drive-package-source":"PERSONAL_CsomagBOX"}})}catch(error){return personalBoxErrorResponse(error,"PERSONAL_BOX_DOWNLOAD_FAILED")}}

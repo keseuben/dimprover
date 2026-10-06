@@ -4,14 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, HardDrive, HelpCircle } from "lucide-react";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
 import BottomInspectorResizeHandle from "./BottomInspectorResizeHandle";
+import BoxShelf from "./BoxShelf";
 import CommanderPanel from "./CommanderPanel";
+import CompareWorkspace from "./CompareWorkspace";
 import DrivePremiumLoader from "./DrivePremiumLoader";
 import DriveToolbar from "./DriveToolbar";
 import FileGridPanel from "./FileGridPanel";
 import FolderTreePanel, { type DriveLinkedProjectItem } from "./FolderTreePanel";
 import PersonalDriveDetailsPanel, { type PersonalDriveDetailsItem } from "./PersonalDriveDetailsPanel";
 import TableFullscreenBar from "./TableFullscreenBar";
-import type { DriveDocument, DriveFolder, DriveLayoutMode, DriveViewMode, DriveVersion } from "./driveTypes";
+import type { DriveBox, DriveBoxLifecycleStatus, DriveCompareSeed, DriveDocument, DriveFolder, DriveLayoutMode, DriveViewMode, DriveVersion } from "./driveTypes";
 import type { DriveWorkspaceOption } from "./driveWorkspaceTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -33,6 +35,7 @@ type PersonalDriveFolder = {
 type ContentPayload = { ok?: boolean; error?: string; items?: PersonalDriveItem[] };
 type FolderPayload = { ok?: boolean; ready?: boolean; error?: string; folders?: PersonalDriveFolder[] };
 type ProjectLinksPayload = { ok?: boolean; error?: string; linkedProjects?: DriveLinkedProjectItem[]; availableProjects?: DriveLinkedProjectItem[] };
+type BoxesPayload = { ok?: boolean; error?: string; boxes?: DriveBox[]; folderFeatureReady?: boolean; lifecycleFeatureReady?: boolean };
 
 type PersonalFolderRenameDialog = {
   folderId: string;
@@ -155,6 +158,12 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [availableProjects, setAvailableProjects] = useState<DriveLinkedProjectItem[]>([]);
   const [projectLinksDialogOpen, setProjectLinksDialogOpen] = useState(false);
   const [projectLinksBusyId, setProjectLinksBusyId] = useState("");
+  const [boxes, setBoxes] = useState<DriveBox[]>([]);
+  const [boxCoreReady, setBoxCoreReady] = useState(false);
+  const [boxShelfOpen, setBoxShelfOpen] = useState(false);
+  const [boxShelfHeight, setBoxShelfHeight] = useState(220);
+  const [compareActive, setCompareActive] = useState(false);
+  const [compareSeedItems, setCompareSeedItems] = useState<DriveCompareSeed[]>([]);
   const [busy, setBusy] = useState(false);
   const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
   const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
@@ -185,17 +194,20 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const load = useCallback(async () => {
     setError("");
     try {
-      const [contentResponse, folderResponse, projectLinksResponse] = await Promise.all([
+      const [contentResponse, folderResponse, projectLinksResponse, boxesResponse] = await Promise.all([
         fetch("/api/drive/personal/content", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/folders", { credentials: "same-origin", cache: "no-store" }),
         fetch("/api/drive/personal/project-links", { credentials: "same-origin", cache: "no-store" }),
+        fetch("/api/drive/personal/boxes", { credentials: "same-origin", cache: "no-store" }),
       ]);
       const contentPayload = await contentResponse.json() as ContentPayload;
       const folderPayload = await folderResponse.json() as FolderPayload;
       const projectLinksPayload = await projectLinksResponse.json() as ProjectLinksPayload;
+      const boxesPayload = await boxesResponse.json() as BoxesPayload;
       if (!contentResponse.ok || !contentPayload.ok) throw new Error(contentPayload.error || "A Saját Drive tartalma nem tölthető be.");
       if (!folderResponse.ok || !folderPayload.ok) throw new Error(folderPayload.error || "A Saját Drive mappái nem tölthetők be.");
       if (!projectLinksResponse.ok || !projectLinksPayload.ok) throw new Error(projectLinksPayload.error || "A kapcsolt projektek nem tölthetők be.");
+      if (!boxesResponse.ok || !boxesPayload.ok) throw new Error(boxesPayload.error || "A Saját Drive CsomagBOX nem tölthető be.");
       const nextItems = contentPayload.items || [];
       const nextFolders = folderPayload.folders || [];
       setItems(nextItems);
@@ -203,6 +215,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       setFolderCoreReady(folderPayload.ready === true);
       setLinkedProjects(projectLinksPayload.linkedProjects || []);
       setAvailableProjects(projectLinksPayload.availableProjects || []);
+      setBoxes(boxesPayload.boxes || []);
+      setBoxCoreReady(true);
       setSelectedFolderId((current) => current !== "all" && !nextFolders.some((folder) => folder.id === current) ? "all" : current);
       setSelectedDocumentId((current) => nextItems.some((item) => item.id === current) ? current : "");
       setSelectedDocumentIds((current) => current.filter((id) => nextItems.some((item) => item.id === id)));
@@ -229,13 +243,19 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     try {
       const storedView = window.localStorage.getItem("dimpro-drive-personal-view");
       const storedLayout = window.localStorage.getItem("dimpro-drive-personal-layout");
+      const storedBoxOpen = window.localStorage.getItem("dimpro-drive-personal-box-open");
+      const storedBoxHeight = Number(window.localStorage.getItem("dimpro-drive-personal-box-height") || "");
       if (storedView === "simple" || storedView === "engineering") setViewMode(storedView);
       if (["three", "two", "one", "split", "commander"].includes(storedLayout || "")) setLayoutMode(storedLayout as DriveLayoutMode);
+      if (storedBoxOpen === "1") setBoxShelfOpen(true);
+      if (Number.isFinite(storedBoxHeight) && storedBoxHeight >= 118) setBoxShelfHeight(storedBoxHeight);
     } catch {}
   }, []);
 
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-view", viewMode); } catch {} }, [viewMode]);
   useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-layout", layoutMode); } catch {} }, [layoutMode]);
+  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-open", boxShelfOpen ? "1" : "0"); } catch {} }, [boxShelfOpen]);
+  useEffect(() => { try { window.localStorage.setItem("dimpro-drive-personal-box-height", String(Math.round(boxShelfHeight))); } catch {} }, [boxShelfHeight]);
 
   useEffect(() => {
     bootLoaderVisibleRef.current = true;
@@ -400,6 +420,84 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     finally { setProjectLinksBusyId(""); }
   }, [projectLinksBusyId, refreshProjectLinks]);
 
+  const refreshBoxes = useCallback(async () => {
+    const response = await fetch("/api/drive/personal/boxes", { credentials: "same-origin", cache: "no-store" });
+    const payload = await response.json() as BoxesPayload;
+    if (!response.ok || !payload.ok) throw new Error(payload.error || "A Saját Drive CsomagBOX nem tölthető be.");
+    setBoxes(payload.boxes || []); setBoxCoreReady(true);
+  }, []);
+
+  const createBox = useCallback(async (input: { name:string; purpose:string; colorToken:string; iconKey:string; note:string }) => {
+    setBusy(true); setError("");
+    try { const response=await fetch("/api/drive/personal/boxes",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(input)}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A CsomagBOX nem hozható létre."); await refreshBoxes(); setNotice("CsomagBOX létrehozva."); }
+    catch(caught){setError(caught instanceof Error?caught.message:"A CsomagBOX nem hozható létre.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const addDocumentToBox = useCallback(async (boxId:string, document:DriveDocument) => {
+    setBusy(true); setError("");
+    try { const response=await fetch(`/api/drive/personal/boxes/${encodeURIComponent(boxId)}/items`,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({documentId:document.id,versionId:document.currentVersion?.id||null})}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A fájl nem adható a CsomagBOX-hoz."); await refreshBoxes(); }
+    catch(caught){setError(caught instanceof Error?caught.message:"A fájl nem adható a CsomagBOX-hoz.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const removeBoxItem = useCallback(async (boxId:string,itemId:string) => {
+    setBusy(true); setError(""); try { const response=await fetch(`/api/drive/personal/boxes/${encodeURIComponent(boxId)}/items/${encodeURIComponent(itemId)}`,{method:"DELETE",credentials:"same-origin"}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A fájl nem távolítható el a CsomagBOX-ból."); await refreshBoxes(); } catch(caught){setError(caught instanceof Error?caught.message:"A fájl nem távolítható el a CsomagBOX-ból.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const createBoxFolder = useCallback(async (boxId:string,parentId:string|null,name:string) => {
+    setBusy(true); setError(""); try { const response=await fetch(`/api/drive/personal/boxes/${encodeURIComponent(boxId)}/folders`,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({parentId,name})}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A CsomagBOX mappa nem hozható létre."); await refreshBoxes(); } catch(caught){setError(caught instanceof Error?caught.message:"A CsomagBOX mappa nem hozható létre.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const moveBoxItem = useCallback(async (boxId:string,itemId:string,folderId:string|null) => {
+    setBusy(true); setError(""); try { const response=await fetch(`/api/drive/personal/boxes/${encodeURIComponent(boxId)}/items/${encodeURIComponent(itemId)}/move`,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({folderId})}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A CsomagBOX elem nem helyezhető át."); await refreshBoxes(); } catch(caught){setError(caught instanceof Error?caught.message:"A CsomagBOX elem nem helyezhető át.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const setBoxLifecycle = useCallback(async (boxId:string,nextStatus:DriveBoxLifecycleStatus) => {
+    setBusy(true); setError(""); try { const response=await fetch(`/api/drive/personal/boxes/${encodeURIComponent(boxId)}/lifecycle`,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({nextStatus})}); const payload=await response.json() as {ok?:boolean;error?:string}; if(!response.ok||!payload.ok)throw new Error(payload.error||"A CsomagBOX állapot nem módosítható."); await refreshBoxes(); } catch(caught){setError(caught instanceof Error?caught.message:"A CsomagBOX állapot nem módosítható.");throw caught;} finally{setBusy(false)}
+  },[refreshBoxes]);
+
+  const downloadBoxArchive = useCallback((box: DriveBox, archiveName: string) => {
+    const normalized = archiveName.trim();
+    if (!normalized) return;
+    const url = `/api/drive/personal/boxes/${encodeURIComponent(box.id)}/download?name=${encodeURIComponent(normalized)}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${normalized.replace(/\.zip$/i, "") || "DIMPRO_CsomagBOX"}.zip`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setNotice(`ZIP csomag előkészítése: ${normalized}`);
+  }, []);
+
+  const openCompare = useCallback((seedItems?: DriveCompareSeed[]) => {
+    const validSeeds: DriveCompareSeed[] = [];
+    for (const seed of seedItems || []) {
+      if (!seed.documentId || !documents.some((document) => document.id === seed.documentId)) continue;
+      const key = `${seed.documentId}::${seed.versionId || "current"}`;
+      if (validSeeds.some((item) => `${item.documentId}::${item.versionId || "current"}` === key)) continue;
+      validSeeds.push({ documentId: seed.documentId, versionId: seed.versionId || null });
+      if (validSeeds.length >= 2) break;
+    }
+    if (validSeeds.length >= 2) {
+      setCompareSeedItems(validSeeds);
+    } else {
+      const selected = documents.find((document) => document.id === selectedDocumentId) || null;
+      const fallback = documents.find((document) => document.id !== selected?.id) || null;
+      setCompareSeedItems([
+        selected ? { documentId: selected.id, versionId: selected.currentVersion?.id || null } : null,
+        fallback ? { documentId: fallback.id, versionId: fallback.currentVersion?.id || null } : null,
+      ].filter((item): item is DriveCompareSeed => Boolean(item)));
+    }
+    setCompareActive(true);
+    setBoxShelfOpen(false);
+  }, [documents, selectedDocumentId]);
+
+  const openDocumentBox = useCallback((document: DriveDocument) => {
+    setSelectedDocumentId(document.id);
+    setBoxShelfOpen(true);
+    if (fullTableInspectorOpen && fullTableInspectorLayout === "side") setFullTableInspectorOpen(false);
+  }, [fullTableInspectorLayout, fullTableInspectorOpen]);
+
   const moveItem = useCallback(async (item: PersonalDriveItem, folderId: string | null) => {
     if (!folderCoreReady || (item.folderId || null) === folderId) return;
     setBusy(true); setError(""); setNotice("");
@@ -473,6 +571,7 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
     canDelete={false}
     canDeleteFolder={false}
     onOpenBrowserDocument={(document) => void openDocument(document)}
+    onOpenBoxDocument={openDocumentBox}
     onDownloadDocument={(document) => { const item = itemById.get(document.id); if (item) void downloadItem(item).catch((caught) => setError(caught instanceof Error ? caught.message : "A fájl nem tölthető le.")); }}
     newFolderEditorOpen={newFolderEditorOpen}
     newFolderName={newFolderName}
@@ -536,8 +635,8 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         onTableZoomChange={setTableZoom}
         canWrite={folderCoreReady}
         canUpload={false}
-        boxEnabled={false}
-        compareEnabled={false}
+        boxEnabled={boxCoreReady}
+        compareEnabled={documents.length >= 2}
         onCreateFolder={() => { setNewFolderName(""); setNewFolderEditorOpen(true); }}
         onUpload={() => undefined}
         canUploadSelectedVersion={false}
@@ -550,12 +649,12 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
         onOpenSelected={() => { if (selectedDocument) void openDocument(selectedDocument); }}
         onDownloadSelected={() => { if (selectedItem) void downloadItem(selectedItem).catch((caught) => setError(caught instanceof Error ? caught.message : "A fájl nem tölthető le.")); }}
         onDownloadFolder={() => undefined}
-        boxCount={0}
-        boxShelfOpen={false}
-        boxReady={false}
-        onToggleBoxShelf={() => undefined}
-        compareActive={false}
-        onToggleCompare={() => undefined}
+        boxCount={boxes.length}
+        boxShelfOpen={boxShelfOpen}
+        boxReady={boxCoreReady}
+        onToggleBoxShelf={() => setBoxShelfOpen((current) => !current)}
+        compareActive={compareActive}
+        onToggleCompare={() => compareActive ? setCompareActive(false) : openCompare()}
         canIssueSelected={false}
         onIssueSelected={() => undefined}
       />
@@ -572,18 +671,73 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
 
       {tableFullscreen ? <section className={`${styles.fullTableOverlay} ${fullTableInspectorOpen && fullTableInspectorLayout === "bottom" ? styles.fullTableOverlayBottomInspector : ""}`}>
         <TableFullscreenBar title={title} subtitle={subtitle} layoutMode={layoutMode} onLayoutModeChange={(next) => { setLayoutMode(next); closeTableFullscreen(); }} zoom={tableZoom} onZoomChange={setTableZoom} onToggleFullscreen={closeTableFullscreen} inspectorOpen={fullTableInspectorOpen} inspectorDisabled={!selectedItem} inspectorLayout={fullTableInspectorLayout} onToggleInspector={() => setFullTableInspectorOpen((current) => !current)} onInspectorLayoutChange={(next) => { setFullTableInspectorLayout(next); if (!fullTableInspectorOpen) setFullTableInspectorOpen(true); }} />
-        <div className={styles.fullTableBody}>{grid()}</div>
+        <div className={styles.fullTableBody}>
+          {grid()}
+          {boxShelfOpen ? (
+            <aside className={styles.fullTableBoxPanel} aria-label="CsomagBOX">
+              <BoxShelf
+                projectId="personal"
+                variant="panel"
+                open
+                onOpenChange={setBoxShelfOpen}
+                boxes={boxes}
+                documents={documents}
+                metadataByDocument={{}}
+                selectedDocument={selectedDocument}
+                canWrite={boxCoreReady}
+                databaseReady={boxCoreReady}
+                busy={busy}
+                onCreateBox={createBox}
+                onAddDocument={addDocumentToBox}
+                onRemoveItem={removeBoxItem}
+                onCreateFolder={createBoxFolder}
+                onMoveItem={moveBoxItem}
+                onDownloadBox={downloadBoxArchive}
+                onSetLifecycle={setBoxLifecycle}
+                historyEndpointForBox={(boxId) => `/api/drive/personal/boxes/${encodeURIComponent(boxId)}/history`}
+                onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
+              />
+            </aside>
+          ) : null}
+        </div>
         {fullTableInspectorOpen ? <aside className={`${styles.fullTableInspector} ${fullTableInspectorLayout === "bottom" ? styles.fullTableInspectorBottom : styles.fullTableInspectorSide}`}>{fullTableInspectorLayout === "bottom" ? <BottomInspectorResizeHandle /> : null}<button type="button" className={styles.fullTableInspectorClose} onClick={() => setFullTableInspectorOpen(false)} aria-label="Dokumentumadatok bezárása">×</button><PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.fullTableInspectorPanel} ${fullTableInspectorLayout === "bottom" ? `${styles.detailsSplitCard} ${styles.fullTableInspectorPanelBottom}` : ""}`} /></aside> : null}
       </section> : null}
 
-      <div ref={browserRef} className={browserClass} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}>
-        {layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete={false} /> : <>
+      <div ref={browserRef} className={`${browserClass} ${compareActive ? styles.browserCompareActive : ""}`} style={layoutMode === "split" ? { gridTemplateRows: `minmax(220px,1fr) 10px ${splitDetailsHeight}px` } : undefined}>
+        {compareActive ? (
+          <CompareWorkspace projectId="personal" workspaceType="PERSONAL" documents={documents} boxes={boxes} seedItems={compareSeedItems} onClose={() => setCompareActive(false)} />
+        ) : layoutMode === "commander" ? <CommanderPanel folders={commanderFolders} documents={documents} selectedDocumentId={selectedDocumentId} canWrite={folderCoreReady} moveReady={folderCoreReady} busy={busy} onSelectDocument={(document) => setSelectedDocumentId(document.id)} onOpenDocument={(document) => void openDocument(document)} onMoveDocument={moveDocument} tableZoom={tableZoom} selectedDocumentIds={selectedDocumentIds} onSelectionChange={setSelectedDocumentIds} canDelete={false} /> : <>
           <FolderTreePanel folders={driveFolders} selectedFolderId={selectedFolderId} documentCounts={folderDocumentCounts} totalDocumentCount={documents.length} onSelectFolder={(folderId) => { setSelectedFolderId(folderId); setAllFilesMode(false); }} linkedProjects={linkedProjects} onOpenLinkedProject={(project) => onWorkspaceChange(`project:${project.id}`)} onManageLinkedProjects={() => setProjectLinksDialogOpen(true)} responsiveClassName={`${styles.folderPanelResponsive} ${folderHidden ? styles.hiddenPanel : ""}`} />
           {grid()}
           {layoutMode === "split" ? <div className={styles.splitResizeHandle} role="separator" aria-orientation="horizontal" onDoubleClick={() => setSplitDetailsHeight(Math.max(250, Math.round((browserRef.current?.getBoundingClientRect().height || 660) / 2)))} onPointerDown={(event) => { event.preventDefault(); const startY = event.clientY; const startHeight = splitDetailsHeight; const onMove = (moveEvent: PointerEvent) => setSplitDetailsHeight(Math.max(250, Math.min(Math.max(300, window.innerHeight - 300), startHeight + startY - moveEvent.clientY))); const onUp = () => { document.body.style.cursor = ""; document.body.style.userSelect = ""; window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); }; document.body.style.cursor = "row-resize"; document.body.style.userSelect = "none"; window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp, { once: true }); }}><span /></div> : null}
           <PersonalDriveDetailsPanel item={selectedItem} folderName={folderNameForSelectedItem} onDownload={downloadItem} responsiveClassName={`${styles.detailsResponsive} ${layoutMode === "split" ? styles.detailsSplitCard : ""} ${detailsHidden ? styles.hiddenPanel : ""}`} />
         </>}
       </div>
+
+      <BoxShelf
+        projectId="personal"
+        open={boxShelfOpen}
+        onOpenChange={setBoxShelfOpen}
+        boxes={boxes}
+        documents={documents}
+        metadataByDocument={{}}
+        selectedDocument={selectedDocument}
+        canWrite={boxCoreReady}
+        databaseReady={boxCoreReady}
+        busy={busy}
+        onCreateBox={createBox}
+        onAddDocument={addDocumentToBox}
+        onRemoveItem={removeBoxItem}
+        onCreateFolder={createBoxFolder}
+        onMoveItem={moveBoxItem}
+        onDownloadBox={downloadBoxArchive}
+        onSetLifecycle={setBoxLifecycle}
+        historyEndpointForBox={(boxId) => `/api/drive/personal/boxes/${encodeURIComponent(boxId)}/history`}
+        onOpenCompareBox={(box) => openCompare(box.items.map((item) => ({ documentId: item.documentId, versionId: item.versionId })))}
+        shelfHeight={boxShelfHeight}
+        onShelfHeightChange={setBoxShelfHeight}
+        onResetShelfHeight={() => setBoxShelfHeight(Math.max(118, Math.round(window.innerHeight * 0.5)))}
+      />
     </div>
   );
 }

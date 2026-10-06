@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock3, Loader2, PackageCheck, RefreshCcw, X } from "lucide-react";
 import styles from "./DriveWorkspace.module.css";
 
@@ -16,8 +16,9 @@ export type DriveBoxHistoryEvent = {
 };
 
 type Props = {
-  projectId: string;
+  projectId?: string;
   boxId: string;
+  endpoint?: string;
   onClose: () => void;
 };
 
@@ -62,19 +63,20 @@ function detailText(event: DriveBoxHistoryEvent) {
   return "";
 }
 
-export default function BoxHistoryPanel({ projectId, boxId, onClose }: Props) {
+export default function BoxHistoryPanel({ projectId, boxId, endpoint: endpointOverride, onClose }: Props) {
   const [events, setEvents] = useState<DriveBoxHistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const endpoint = useMemo(
-    () => `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/history`,
-    [boxId, projectId],
+    () => endpointOverride || (projectId ? `/api/projects/${encodeURIComponent(projectId)}/drive/boxes/${encodeURIComponent(boxId)}/history` : ""),
+    [boxId, endpointOverride, projectId],
   );
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    if (!endpoint) { setLoading(false); setError("A CsomagBOX előzmény endpoint hiányzik."); return; }
     try {
       const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store" });
       const payload = await response.json() as { ok?: boolean; error?: string; events?: DriveBoxHistoryEvent[] };
@@ -85,9 +87,9 @@ export default function BoxHistoryPanel({ projectId, boxId, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [endpoint]);
 
-  useEffect(() => { void load(); }, [endpoint]);
+  useEffect(() => { void load(); }, [load]);
 
   return (
     <section className={styles.boxHistoryPanel} aria-label="CsomagBOX előzmények">
