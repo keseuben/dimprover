@@ -611,6 +611,7 @@ export async function initDriveObjectDownload(input: {
       fileName: exportFileName,
       mimeType: record.version.mimeType,
       sizeBytes: record.version.sizeBytes,
+      sha256: record.version.sha256,
       method: signed.method,
       url: signed.url,
       expiresAt: signed.expiresAt,

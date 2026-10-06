@@ -10,6 +10,7 @@ import {
   FolderPlus,
   GitCompareArrows,
   List,
+  MonitorUp,
   PackageCheck,
   Search,
   Send,
@@ -42,9 +43,11 @@ type Props = {
   canUploadSelectedRevision: boolean;
   onUploadSelectedRevision: () => void;
   canOpenSelected: boolean;
+  canOpenWindowsSelected?: boolean;
   canDownloadSelected: boolean;
   canDownloadFolder: boolean;
   onOpenSelected: () => void;
+  onOpenWindowsSelected?: () => void;
   onDownloadSelected: () => void;
   onDownloadFolder: () => void;
   boxCount: number;
@@ -77,9 +80,11 @@ export default function DriveToolbar({
   canUploadSelectedRevision,
   onUploadSelectedRevision,
   canOpenSelected,
+  canOpenWindowsSelected = false,
   canDownloadSelected,
   canDownloadFolder,
   onOpenSelected,
+  onOpenWindowsSelected,
   onDownloadSelected,
   onDownloadFolder,
   boxCount,
@@ -149,6 +154,11 @@ export default function DriveToolbar({
             <button type="button" role="menuitem" disabled={!canOpenSelected} onClick={() => runMenuAction(onOpenSelected)}>
               <ExternalLink size={15} /><span>Megnyitás</span>
             </button>
+            {onOpenWindowsSelected && (
+              <button type="button" role="menuitem" disabled={!canOpenWindowsSelected} onClick={() => runMenuAction(onOpenWindowsSelected)}>
+                <MonitorUp size={15} /><span>Megnyitás Windowsban</span>
+              </button>
+            )}
             <button type="button" role="menuitem" disabled={!canDownloadSelected} onClick={() => runMenuAction(onDownloadSelected)}>
               <Download size={15} /><span>Letöltés</span>
             </button>
@@ -228,6 +238,18 @@ export default function DriveToolbar({
       >
         <ExternalLink size={16} />
       </button>
+      {onOpenWindowsSelected && (
+        <button
+          type="button"
+          className={`${styles.toolButton} ${styles.toolIconOnly}`}
+          onClick={onOpenWindowsSelected}
+          disabled={!canOpenWindowsSelected}
+          title={canOpenWindowsSelected ? "Megnyitás Windowsban" : "Megnyitás Windowsban – jelölj ki egy megnyitható fájlt"}
+          aria-label="Megnyitás Windowsban"
+        >
+          <MonitorUp size={16} />
+        </button>
+      )}
       <button
         type="button"
         className={`${styles.toolButton} ${styles.toolIconOnly}`}

@@ -470,3 +470,70 @@ Non-blocking terminology cleanup for a later patch:
 - this label is narrower than the complete transport behavior because download-init can create audit/download metadata while document content remains immutable;
 - recommended future label: `DOWNLOAD_AUDIT_AND_ACCEPTANCE_CURSOR`;
 - this is a reporting/contract wording cleanup only and does not invalidate the physical PASS.
+
+## V0.1.8 – Windows Open Handler / partial workfiles architecture
+
+V0.1.8 deliberately separates **Windows file opening** from future **Drive Desktop Sync**.
+
+### Product rule
+
+`Megnyitás Windowsban` must NOT mirror the complete DIMPRO Drive project tree and must NOT imply that a project is synchronized locally.
+
+The user selects one **Helyi munkafájlok** root. Only documents explicitly opened from Drive are written below that root. V0.1.8 may use one shallow per-project bucket for collision avoidance and readability, for example:
+
+`<user root>\D6-001 D6 Irodaépület - DIMPRO MUNKAFÁJLOK\G-101_....dwg`
+
+No remote subfolder hierarchy is reproduced. Empty Drive folders are never created locally by the Open Handler. Full or selective Drive folder synchronization remains a separate future `DIMPRO Drive Desktop Sync` feature.
+
+### Web-to-Windows flow
+
+1. Browser user chooses `Megnyitás Windowsban` for a readable document version.
+2. Web API requires `document.read`, an exact version with a valid SHA-256 identity, and issues a 90-second opaque `dimpro-drive` open ticket.
+3. Only the SHA-256 hash of the ticket is stored server-side.
+4. Browser invokes `dimpro-drive://open-file?ticket=...`; no server URL is carried in the custom URI.
+5. The Windows handler reads the already paired Bridge token from DPAPI storage and exchanges it for the short-lived Drive Desktop `dpat1` token.
+6. `/api/drive/desktop-open/redeem` accepts only `desktop-access` auth, atomically consumes the ticket, rechecks project `document.read`, binds the ticket issuer to the Desktop identity aliases, and uses the normal Drive download initializer.
+7. The normal download initializer keeps the existing security-scan gate and returns a short-lived signed GET URL plus exact file SHA-256 and size.
+8. The Windows handler writes only into the configured workfiles root, verifies size and SHA-256, updates a local workfile index, and launches the file through the Windows default file association.
+
+### Local workfile safety
+
+- Workfiles are **not automatically deleted**.
+- The index explicitly records `PARTIAL_WORKFILES_NOT_SYNC` semantics.
+- If the local file hash still equals the previously downloaded server hash and the server has a newer version, V0.1.8 may safely refresh the local file.
+- If the local file hash differs from the previously downloaded server hash, the state becomes `LOCAL_MODIFIED`; the handler opens the local file and does **not** overwrite it.
+- If both the local file and server version changed, the handler warns that conflict handling is required before any later upload/sync action.
+- New downloads are written to a temporary sibling file, size/SHA-256 verified, and only then moved into the final path.
+- Unknown filename collisions do not overwrite existing files; a document-id suffix is used.
+
+### Protocol and trust boundary
+
+- URI scheme: `dimpro-drive`.
+- Registration is per-user under `HKCU:\Software\Classes\dimpro-drive`; no administrator rights are required.
+- The URI may contain only the opaque open ticket. URI-provided server override is denied.
+- V0.1.8 DEV handler accepts only `https://drive.dev.dimpro.hu`; arbitrary HTTPS hosts are rejected so the Bridge token cannot be redirected to another service.
+- Existing BENJADMIN Windows Bridge heartbeat behavior remains unchanged: no remote terminal command execution is enabled and no inbound port is opened.
+- PROD remains DENY.
+
+### Implementation files
+
+- `app/lib/drive/openTicketStore.ts`
+- `app/api/projects/[projectId]/drive/documents/[documentId]/open-ticket/route.ts`
+- `app/api/drive/desktop-open/redeem/route.ts`
+- `scripts/dimpro-drive-desktop-open-handler-v018.ps1`
+- `scripts/dimpro-drive-desktop-open-handler-manager-v018.ps1`
+- `scripts/dimpro-drive-desktop-v018-windows-acceptance.ps1`
+- `scripts/drive-desktop-open-v018-contract.mjs`
+- `scripts/drive-desktop-open-v018-windows-acceptance-contract.mjs`
+
+### Static acceptance at implementation checkpoint
+
+- V0.1.8 Windows Open Handler contract: **34/34 PASS**.
+- V0.1.8 Windows acceptance contract: **8/8 PASS**.
+- Existing Drive V0.4.5 open/download/ZIP regression: **26/26 PASS**.
+- Existing Desktop access contract: **16/16 PASS**.
+- Existing V0.1.7 Plan contract: **47/47 PASS**.
+- Existing V0.1.7 security scan acceptance contract: **15/15 PASS**.
+- Existing V0.1.7 restart-safe Download Apply acceptance contract: **16/16 PASS**.
+
+Physical Windows installation/open acceptance is still required before V0.1.8 may be closed.
