@@ -322,3 +322,47 @@ V0.6.0 alkalmazásfunkciók:
 Runtime source commit: `59e13dea48cb128c05e8337a1a7e2f04fec8e08c`. Build ID: `ETEOvFeKW3HlhLHvCSAop`. Artifact SHA-256: `7110cd1e1fa1fb678044116e5411871487e096126de7c8678206cc93364e02d0`.
 
 DEV aktiválás: Drive `127.0.0.1:3378`; publikus header: `59e13dea DRIVE V0.9.13 AUTH V0.6.0 PERSONAL FOLDERS + SIMPLE+ENGINEERING + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. V0.5.2 `3377` rollbackként online maradt. AUTH V0.4.4 változatlan. PROD DENY.
+
+## 18. V0.6.1 – Saját Drive közös projekt-Drive felület
+
+A V0.6.1 megszünteti a Saját Drive külön, egyszerűsített munkafelületének runtime-irányát. A személyes munkatér ugyanazokat a közös Drive UI komponenseket használja, mint a projekt Drive, capability-alapú eltérésekkel.
+
+Közös komponensek és nézetek:
+
+- `DriveToolbar`;
+- `FolderTreePanel`;
+- `FileGridPanel`;
+- 1 / 2 / 3 paneles nézet;
+- fekvő osztott nézet;
+- Commander nézet;
+- teljes ablakos táblázat;
+- táblázat zoom;
+- resizable oszlopok;
+- közös mappafa és inline új mappa sor;
+- közös kiválasztási és fájltábla logika;
+- közös részletező/előnézeti panelhely.
+
+A Saját Drive capability eltérései:
+
+- `Egyszerű` és `Mérnöki` nézet aktív;
+- `Tervellenőrzés` nem jelenik meg;
+- projekt ACL / résztvevőkezelés / formális projektkiadás nem kerül át;
+- személyes feltöltés, CsomagBOX, összehasonlítás és egyes projekt-backendhez kötött műveletek helye megmaradhat, de amíg nincs PERSONAL backend, fail-safe disabled állapotúak;
+- projekt Drive-ban ugyanezek a közös komponensek a meglévő handlerek miatt változatlanul aktívak maradnak.
+
+Új személyes preview API:
+
+`GET /api/drive/personal/content/[refId]/preview`
+
+A preview exact személyes entitlement + owner scope alapján működik, és csak `security_status=clean` + `virus_scan_status=clean` fájlt ad ki rövid életű signed inline URL-lel.
+
+A személyes mappa átnevezés a projekt Drive műveleti mintáját követi: kiválasztott mappa → `Mappa átnevezése` → közös dialógus-stílus, személyes owner-scoped PATCH endpointtal.
+
+V0.6.1 contract: `auth-v061-personal-shared-surface-contract.mjs` → `18/18 PASS`. A V0.6.0, V0.5.2, V0.5.1, V0.5.0, SSO, workspace, Drive compatibility és Desktop regressziók PASS; targeted ESLint és TypeScript PASS.
+
+Source commit: `3e8bf7672fb209cf4f9f81e644321eb93f35b159`.
+Build ID: `1vvwHF49TX5Cg_drne7O3`.
+Artifact SHA-256: `3dd41a8784fb55c1ebdf7bede00844402eb87957e8efe421d8b923d3f2813c0f`.
+
+DEV aktiválás: Drive `127.0.0.1:3379`; publikus header: `3e8bf767 DRIVE V0.9.13 AUTH V0.6.1 SHARED PERSONAL SURFACE + PERSONAL FOLDERS + SSO TERMINAL + DESKTOP SCAN AUTH DEV`.
+Rollback: V0.6.0 `59e13dea / 3378` online maradt. AUTH V0.4.4 változatlan. PROD DENY.

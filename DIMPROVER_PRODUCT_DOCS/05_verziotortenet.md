@@ -3568,3 +3568,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Runtime source `59e13dea48cb128c05e8337a1a7e2f04fec8e08c`; build `ETEOvFeKW3HlhLHvCSAop`; SHA-256 `7110cd1e1fa1fb678044116e5411871487e096126de7c8678206cc93364e02d0`.
 - Migration gate direct/pooler allowlist tooling commit `25f32ecf3`.
 - DEV Drive `3378`; V0.5.2 rollback `3377`; AUTH V0.4.4 változatlan; PROD DENY.
+
+### Drive AUTH V0.6.1 – közös Saját Drive felület
+
+- A Saját Drive ugyanazt a közös Drive UI-vázat használja, mint a projekt Drive: toolbar, FolderTree, FileGrid, 1/2/3 panel, split, Commander, full-table, zoom, resizable oszlopok, inspector/preview.
+- PERSONAL nézetek: Egyszerű + Mérnöki; Tervellenőrzés nincs.
+- Projekt-only vagy még nem PERSONAL-backendelt funkciók capability alapján disabled állapotúak, nem esnek vissza projekt API-kra.
+- Új owner-scoped, clean-only személyes inline preview endpoint.
+- Személyes mappa átnevezés a projekt Drive dialógusmintájával.
+- Contract `18/18 PASS`; TypeScript, lint és releváns SSO/Drive/Desktop regressziók PASS.
+- Source `3e8bf7672fb209cf4f9f81e644321eb93f35b159`; build `1vvwHF49TX5Cg_drne7O3`; SHA-256 `3dd41a8784fb55c1ebdf7bede00844402eb87957e8efe421d8b923d3f2813c0f`.
+- DEV Drive `3379`; rollback V0.6.0 `3378`; AUTH V0.4.4; PROD DENY.
