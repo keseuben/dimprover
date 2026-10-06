@@ -316,9 +316,11 @@ function Invoke-OpenFlow([string]$RawUri) {
   $projectFolder = Get-ProjectWorkFolder $workRoot $open
   $targetPath = $null
   $previousServerSha = ''
+  $baseServerSha = ''
   if ($entry) {
     $targetPath = Assert-PathWithinRoot $workRoot ([string]$entry.localPath)
-    $previousServerSha = ([string](Get-ObjectPropertyValue $entry 'serverSha256' '')).ToLowerInvariant()
+    $previousServerSha = ([string](Get-ObjectPropertyValue $entry 'remoteSha256' (Get-ObjectPropertyValue $entry 'serverSha256' ''))).ToLowerInvariant()
+    $baseServerSha = ([string](Get-ObjectPropertyValue $entry 'baseServerSha256' $previousServerSha)).ToLowerInvariant()
   } else {
     $initialTarget = Assert-PathWithinRoot $workRoot (Join-Path $projectFolder $fileName)
     if (Test-Path -LiteralPath $initialTarget -PathType Leaf) {
@@ -336,13 +338,14 @@ function Invoke-OpenFlow([string]$RawUri) {
     $localSha = Get-FileSha256 $targetPath
     if ($localSha -eq $expectedSha) {
       $stateLabel = 'SERVER_CURRENT'
-    } elseif ($entry -and $previousServerSha -match '^[a-f0-9]{64}$' -and $localSha -eq $previousServerSha) {
-      $localSha = Download-VerifiedFile $open $targetPath $expectedSha $expectedSize $previousServerSha
+    } elseif ($entry -and $baseServerSha -match '^[a-f0-9]{64}$' -and $localSha -eq $baseServerSha) {
+      $localSha = Download-VerifiedFile $open $targetPath $expectedSha $expectedSize $baseServerSha
       $stateLabel = 'SERVER_UPDATED'
       $downloaded = $true
+      $baseServerSha = $expectedSha
     } elseif ($entry) {
       $stateLabel = 'LOCAL_MODIFIED'
-      $remoteChanged = $previousServerSha -match '^[a-f0-9]{64}$' -and $previousServerSha -ne $expectedSha
+      $remoteChanged = $baseServerSha -match '^[a-f0-9]{64}$' -and $baseServerSha -ne $expectedSha
       $message = 'A helyi munkafájl módosult, ezért a DIMPRO Drive Desktop nem írta felül. A helyi példány nyílik meg.'
       if ($remoteChanged) { $message += "`r`n`r`nFigyelem: közben a Drive szerververziója is megváltozott. Feltöltés/szinkron előtt konfliktuskezelés szükséges." }
       Show-DriveMessage $message 'DIMPRO Drive Desktop – helyi módosítás' 'Warning'
@@ -364,7 +367,8 @@ function Invoke-OpenFlow([string]$RawUri) {
     documentId = $documentId
     versionId = $versionId
     localPath = $targetPath
-    serverSha256 = $expectedSha
+    remoteSha256 = $expectedSha
+    baseServerSha256 = if ($stateLabel -eq 'LOCAL_MODIFIED' -and $baseServerSha) { $baseServerSha } else { $expectedSha }
     localSha256AtOpen = if ($localSha) { $localSha } else { Get-FileSha256 $targetPath }
     sizeBytes = (Get-Item -LiteralPath $targetPath).Length
     state = $stateLabel

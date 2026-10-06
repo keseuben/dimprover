@@ -93,7 +93,12 @@ check("local modification is never overwritten", () => {
   assert.match(files.handler, /nem írta felül/);
   assert.match(files.handler, /DRIVE_DESKTOP_LOCAL_FILE_CHANGED_DURING_DOWNLOAD/);
 });
-check("clean prior local copy may receive newer server version", () => assert.match(files.handler, /localSha -eq \$previousServerSha/));
+check("clean prior local copy may receive newer server version", () => assert.match(files.handler, /localSha -eq \$baseServerSha/));
+
+check("local edit preserves baseline separately from latest remote hash", () => {
+  assert.match(files.handler, /remoteSha256 = \$expectedSha/);
+  assert.match(files.handler, /baseServerSha256 = if \(\$stateLabel -eq 'LOCAL_MODIFIED'/);
+});
 check("workfiles are never auto-deleted", () => {
   assert.match(files.handler, /autoDelete = \$false/);
   assert.match(files.handler, /fullDriveSync = \$false/);

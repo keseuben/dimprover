@@ -500,7 +500,9 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 
 - Workfiles are **not automatically deleted**.
 - The index explicitly records `PARTIAL_WORKFILES_NOT_SYNC` semantics.
-- If the local file hash still equals the previously downloaded server hash and the server has a newer version, V0.1.8 may safely refresh the local file.
+- The local index keeps **two hashes**: `baseServerSha256` = the last server hash actually downloaded/accepted as the local baseline, and `remoteSha256` = the latest server hash observed during the current open.
+- If the local file hash still equals `baseServerSha256` and the server has a newer version, V0.1.8 may safely refresh the local file and advance the baseline.
+- If the local file is modified, `baseServerSha256` is preserved even when `remoteSha256` changes, so the original editing baseline is not lost.
 - If the local file hash differs from the previously downloaded server hash, the state becomes `LOCAL_MODIFIED`; the handler opens the local file and does **not** overwrite it.
 - If both the local file and server version changed, the handler warns that conflict handling is required before any later upload/sync action.
 - New downloads are written to a temporary sibling file, size/SHA-256 verified, and only then moved into the final path.
@@ -513,6 +515,7 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 - The URI may contain only the opaque open ticket. URI-provided server override is denied.
 - V0.1.8 DEV handler accepts only `https://drive.dev.dimpro.hu`; arbitrary HTTPS hosts are rejected so the Bridge token cannot be redirected to another service.
 - Existing BENJADMIN Windows Bridge heartbeat behavior remains unchanged: no remote terminal command execution is enabled and no inbound port is opened.
+- **DEV limitation:** the current `dpat1` token contains device/agent/client identity but no canonical DIMPRO user claim. DEV alias compatibility allows the present single-user physical acceptance flow, but this must not be treated as final multi-user identity binding. Before production or general multi-user rollout, the Bridge device must be explicitly bound to a canonical DIMPRO user and that user identity must be carried/verified by the Desktop access token or equivalent server-side device ownership mapping.
 - PROD remains DENY.
 
 ### Implementation files
@@ -528,7 +531,7 @@ No remote subfolder hierarchy is reproduced. Empty Drive folders are never creat
 
 ### Static acceptance at implementation checkpoint
 
-- V0.1.8 Windows Open Handler contract: **34/34 PASS**.
+- V0.1.8 Windows Open Handler contract: **35/35 PASS**.
 - V0.1.8 Windows acceptance contract: **8/8 PASS**.
 - Existing Drive V0.4.5 open/download/ZIP regression: **26/26 PASS**.
 - Existing Desktop access contract: **16/16 PASS**.
