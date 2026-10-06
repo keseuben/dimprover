@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const proxy=fs.readFileSync(path.join(root,"proxy.ts"),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const driveStart=proxy.indexOf('if (isDriveHost && (isDrivePage || isDriveProtectedApi) && !isDriveDesktopOwnAuthApi)');
+const authHostStart=proxy.indexOf('if (isDimproAuthHost && (isLoginPage || isDimproAuthInvitationPage', driveStart);
+assert.ok(driveStart>=0 && authHostStart>driveStart,'Drive central SSO block boundaries missing');
+const driveBlock=proxy.slice(driveStart,authHostStart);
+check("Drive central SSO validates app session",()=>assert.match(driveBlock,/getAppSessionByToken\(token, driveConfig\.clientId, false\)/));
+check("Drive central SSO validates drive access",()=>assert.match(driveBlock,/permissionCode: "drive\.access", productCode: "DRIVE"/));
+check("missing session still starts SSO",()=>assert.match(driveBlock,/url\.pathname = "\/api\/dimpro-auth\/start"/));
+check("forbidden session remains fail closed",()=>assert.match(driveBlock,/AUTH_FORBIDDEN|drive-forbidden/));
+check("successful Drive central SSO terminates proxy chain",()=>assert.match(driveBlock,/Central Drive SSO is authoritative[\s\S]*return response;\s*}\s*$/));
+const legacy=proxy.slice(authHostStart);
+check("legacy Supabase auth remains outside Drive central SSO block",()=>assert.match(legacy,/createServerClient\(/));
+console.log(`DIMPRO AUTH V0.4.9 Drive terminal central-SSO contract PASS · ${n}/${n}`);

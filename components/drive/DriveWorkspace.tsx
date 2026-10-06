@@ -45,14 +45,9 @@ import type {
   DriveViewMode,
 } from "./driveTypes";
 import type { DriveNavigationRequest } from "./driveBuildInfo";
+import type { DriveWorkspaceOption } from "./driveWorkspaceTypes";
 import styles from "./DriveWorkspace.module.css";
 
-type DriveWorkspaceOption = {
-  id: string;
-  label: string;
-  code?: string | null;
-  kind: "PROJECT";
-};
 
 type Props = {
   projectId: string;

@@ -5441,3 +5441,159 @@
 :global(html[data-drive-theme="dark"]) .metadataSettingsGrid strong {
   color: #aebfcd;
 }
+
+/* DIMPRO Drive · Personal USER_ROOT workspace */
+.personalWorkspace { min-height: 100%; background: var(--drive-canvas, #f5f8fb); color: var(--drive-text, #153047); }
+.personalDriveBody { padding: 18px 20px 28px; display: flex; flex-direction: column; gap: 14px; }
+.personalDriveIntro { display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid #d6e2ec; background: #fff; border-radius: 10px; padding: 14px 16px; }
+.personalDriveIntro > div { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.personalDriveIntro > div > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.personalDriveIntro strong { color: #183650; font-size: 14px; }
+.personalDriveIntro span { color: #657b90; font-size: 12px; line-height: 1.45; }
+.personalDriveIntro button, .personalDriveDownload { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; border: 1px solid #c7d8e6; border-radius: 7px; background: #f9fbfd; color: #244763; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0 11px; }
+.personalDriveIntro button:hover:not(:disabled), .personalDriveDownload:hover:not(:disabled) { background: #edf6fb; border-color: #9fc7dc; }
+.personalDriveIntro button:disabled, .personalDriveDownload:disabled { opacity: .5; cursor: not-allowed; }
+.personalDriveNotice { display: flex; align-items: flex-start; gap: 9px; border: 1px solid #c9e6e2; border-radius: 9px; background: #f3fbfa; color: #375e60; padding: 10px 12px; font-size: 12px; line-height: 1.45; }
+.personalDriveNotice svg { flex: 0 0 auto; margin-top: 1px; color: #218b86; }
+.personalDriveError { border: 1px solid #edc8c8; border-radius: 8px; background: #fff5f5; color: #a33c3c; padding: 10px 12px; font-size: 12px; }
+.personalDriveEmpty { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed #ccd9e4; border-radius: 10px; background: #fbfdff; color: #6a7f91; text-align: center; padding: 30px; }
+.personalDriveEmpty strong { color: #284760; font-size: 14px; }
+.personalDriveEmpty span { max-width: 560px; font-size: 12px; line-height: 1.5; }
+.personalDriveTableWrap { overflow: auto; border: 1px solid #d5e0e9; border-radius: 10px; background: #fff; }
+.personalDriveTable { width: 100%; border-collapse: collapse; min-width: 850px; font-size: 12px; }
+.personalDriveTable th { position: sticky; top: 0; z-index: 1; background: #f4f8fb; color: #5a7185; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; text-align: left; border-bottom: 1px solid #d7e2eb; padding: 10px 12px; white-space: nowrap; }
+.personalDriveTable td { border-bottom: 1px solid #edf2f6; padding: 10px 12px; color: #415a6f; vertical-align: middle; }
+.personalDriveTable tbody tr:last-child td { border-bottom: 0; }
+.personalDriveTable tbody tr:hover { background: #f8fbfd; }
+.personalDriveFileName { display: flex; align-items: center; gap: 8px; min-width: 240px; }
+.personalDriveFileName svg { flex: 0 0 auto; color: #2589c6; }
+.personalDriveFileName span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.personalDriveFileName strong { color: #1e405a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
+.personalDriveFileName small { color: #7a8ea0; font-size: 10px; }
+.personalDriveSecurityOk, .personalDriveSecurityWait { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 7px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.personalDriveSecurityOk { background: #e9f7f1; color: #237253; }
+.personalDriveSecurityWait { background: #fff4df; color: #8c6427; }
+
+:global(html[data-drive-theme="dark"]) .personalWorkspace { background: #081521; color: #c8d6e2; }
+:global(html[data-drive-theme="dark"]) .personalDriveIntro,
+:global(html[data-drive-theme="dark"]) .personalDriveTableWrap { background: #0d1e2c; border-color: #20394d; }
+:global(html[data-drive-theme="dark"]) .personalDriveIntro strong,
+:global(html[data-drive-theme="dark"]) .personalDriveEmpty strong,
+:global(html[data-drive-theme="dark"]) .personalDriveFileName strong { color: #d7e5ef; }
+:global(html[data-drive-theme="dark"]) .personalDriveIntro span,
+:global(html[data-drive-theme="dark"]) .personalDriveEmpty,
+:global(html[data-drive-theme="dark"]) .personalDriveTable td { color: #91a8b9; }
+:global(html[data-drive-theme="dark"]) .personalDriveNotice { background: #0e292b; border-color: #205057; color: #a7cccc; }
+:global(html[data-drive-theme="dark"]) .personalDriveEmpty { background: #0b1a27; border-color: #294054; }
+:global(html[data-drive-theme="dark"]) .personalDriveTable th { background: #102433; color: #8fa8ba; border-color: #263e51; }
+:global(html[data-drive-theme="dark"]) .personalDriveTable td { border-color: #1a3041; }
+:global(html[data-drive-theme="dark"]) .personalDriveTable tbody tr:hover { background: #102534; }
+:global(html[data-drive-theme="dark"]) .personalDriveIntro button,
+:global(html[data-drive-theme="dark"]) .personalDriveDownload { background: #122a3b; border-color: #2d4d64; color: #c2d7e6; }
+
+.personalEngineeringHint { display: flex; align-items: flex-start; gap: 10px; border: 1px solid #cbdceb; background: #f7fbfe; border-radius: 8px; padding: 9px 12px; font-size: 11px; line-height: 1.45; color: #5a7185; }
+.personalEngineeringHint strong { flex: 0 0 auto; color: #244763; font-size: 11px; }
+:global(html[data-drive-theme="dark"]) .personalEngineeringHint { background: #0d2130; border-color: #29465b; color: #8fa9bb; }
+:global(html[data-drive-theme="dark"]) .personalEngineeringHint strong { color: #c9dce9; }
+
+/* DIMPRO Drive · Personal folder core */
+.personalDriveWorkspaceGrid { display: grid; grid-template-columns: minmax(210px, 270px) minmax(0, 1fr); gap: 12px; align-items: stretch; min-height: 340px; }
+.personalFolderTree { min-width: 0; border: 1px solid #d5e0e9; border-radius: 10px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.personalFolderTreeHeader { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px 7px 12px; border-bottom: 1px solid #e4ebf1; background: #f7fafc; }
+.personalFolderTreeHeader strong { font-size: 11px; color: #38546a; text-transform: uppercase; letter-spacing: .04em; }
+.personalFolderTreeHeader button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #cbd9e5; border-radius: 6px; background: #fff; color: #2e5873; min-height: 28px; padding: 0 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.personalFolderRoot, .personalFolderRow { min-height: 34px; display: flex; align-items: center; width: 100%; border: 0; border-bottom: 1px solid #eef3f7; background: transparent; color: #3d586d; }
+.personalFolderRoot { gap: 7px; padding: 0 10px; cursor: pointer; text-align: left; font-size: 12px; font-weight: 700; }
+.personalFolderRowSelected { background: #e9f5fb !important; color: #155d86 !important; }
+.personalFolderChevron { flex: 0 0 22px; width: 22px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: #6a8295; cursor: pointer; padding: 0; }
+.personalFolderChevron:disabled { cursor: default; opacity: .45; }
+.personalFolderChevronSpacer { width: 12px; height: 12px; display: block; }
+.personalFolderMain { flex: 1 1 auto; min-width: 0; min-height: 32px; display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; padding: 0 4px; }
+.personalFolderMain > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.personalFolderEdit { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: #7790a2; cursor: pointer; opacity: 0; }
+.personalFolderRow:hover .personalFolderEdit, .personalFolderEdit:focus-visible { opacity: 1; }
+.personalFolderInlineInput, .personalFolderCreateRow input { min-width: 0; width: 100%; height: 26px; border: 1px solid #75b5d7; border-radius: 5px; background: #fff; color: #24455e; padding: 0 7px; font-size: 12px; outline: none; }
+.personalFolderInlineActions { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
+.personalFolderInlineActions button, .personalFolderCreateRow button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #527083; cursor: pointer; }
+.personalFolderInlineActions button:hover:not(:disabled), .personalFolderCreateRow button:hover:not(:disabled) { background: #e9f3f8; color: #14678f; }
+.personalFolderCreateRow { display: grid; grid-template-columns: 18px minmax(0,1fr) 26px 26px; align-items: center; gap: 3px; padding: 5px 7px 5px 12px; border-bottom: 1px solid #e6edf3; background: #f9fcfe; color: #5c778a; }
+.personalFolderTreeRows { min-height: 80px; max-height: 520px; overflow: auto; }
+.personalFolderTreeEmpty { display: block; padding: 18px 12px; color: #899aa8; font-size: 11px; text-align: center; }
+.personalFilesPane { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.personalFolderBreadcrumb { min-height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #d8e3eb; border-radius: 8px; background: #fbfdff; color: #6d8293; font-size: 11px; }
+.personalFolderBreadcrumb strong { color: #294b64; font-weight: 800; }
+.personalFolderBreadcrumb span:last-child { margin-left: auto; color: #8496a4; }
+.personalFileActions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 220px; }
+.personalFileActions select { max-width: 160px; height: 30px; border: 1px solid #cbd9e4; border-radius: 6px; background: #fff; color: #405f75; padding: 0 7px; font-size: 10px; }
+:global(html[data-drive-theme="dark"]) .personalFolderTree { background: #0d1e2c; border-color: #20394d; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader { background: #102433; border-color: #263e51; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader strong { color: #a7bfd0; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader button,
+:global(html[data-drive-theme="dark"]) .personalFolderInlineInput,
+:global(html[data-drive-theme="dark"]) .personalFolderCreateRow input,
+:global(html[data-drive-theme="dark"]) .personalFileActions select { background: #102535; border-color: #2d4b60; color: #c1d4e2; }
+:global(html[data-drive-theme="dark"]) .personalFolderRoot,
+:global(html[data-drive-theme="dark"]) .personalFolderRow { border-color: #1a3041; color: #a8bdcc; }
+:global(html[data-drive-theme="dark"]) .personalFolderRowSelected { background: #12344a !important; color: #b8e0f3 !important; }
+:global(html[data-drive-theme="dark"]) .personalFolderCreateRow { background: #0f2231; border-color: #263e51; }
+:global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb { background: #0d1e2c; border-color: #20394d; color: #839bad; }
+:global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb strong { color: #c4d8e6; }
+@media (max-width: 920px) { .personalDriveWorkspaceGrid { grid-template-columns: 1fr; } .personalFolderTreeRows { max-height: 240px; } }
+
+/* DIMPRO Drive · Personal shared inspector */
+.personalPreviewStage { min-height: 0; height: 100%; display: grid; place-items: center; background: #f4f7fa; border: 1px solid #dce5ec; border-radius: 8px; overflow: hidden; }
+.personalPreviewImage { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.personalPreviewFrame { width: 100%; height: 100%; min-height: 360px; border: 0; background: #fff; }
+.personalDetailsGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; width: 100%; }
+.personalDetailsGrid > div { min-width: 0; border: 1px solid #dce5ec; border-radius: 7px; background: #fbfdff; padding: 8px 9px; }
+.personalDetailsGrid span { display: block; color: #71879a; font-size: 10px; margin-bottom: 4px; }
+.personalDetailsGrid strong { display: block; color: #29465c; font-size: 11px; overflow-wrap: anywhere; }
+.personalDetailsWide { grid-column: 1 / -1; }
+.personalDetailsActions { display: flex; gap: 7px; padding: 8px 12px; border-top: 1px solid #e5edf3; }
+.personalDetailsActions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; border: 1px solid #cad8e3; border-radius: 6px; background: #fff; color: #395b72; font-size: 10px; font-weight: 800; padding: 0 9px; cursor: pointer; }
+.personalDetailsActions button:disabled { opacity: .45; cursor: default; }
+:global(html[data-drive-theme="dark"]) .personalPreviewStage { background: #0a1a27; border-color: #223d50; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid > div { background: #0e2231; border-color: #29465a; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid span { color: #8ca4b5; }
+:global(html[data-drive-theme="dark"]) .personalDetailsGrid strong { color: #c4d7e4; }
+:global(html[data-drive-theme="dark"]) .personalDetailsActions { border-color: #223b4e; }
+:global(html[data-drive-theme="dark"]) .personalDetailsActions button { background: #102535; border-color: #2d4b60; color: #c2d5e2; }
+
+/* DIMPRO Drive · linked projects in personal workspace */
+.linkedProjectsSection { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2eaf0; }
+.linkedProjectsHeader { min-height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px 4px 10px; }
+.linkedProjectsHeader > span { display: inline-flex; align-items: center; gap: 5px; color: #607b8e; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+.linkedProjectsHeader button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; border: 1px solid #cedbe5; border-radius: 5px; background: #fff; color: #35617c; padding: 0 6px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.linkedProjectRow { width: 100%; min-height: 38px; display: grid; grid-template-columns: 20px minmax(0,1fr) 16px; align-items: center; gap: 4px; border: 0; border-top: 1px solid #eef3f6; background: transparent; color: #34566e; padding: 4px 8px 4px 12px; text-align: left; cursor: pointer; }
+.linkedProjectRow:hover { background: #edf7fc; }
+.linkedProjectText { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.linkedProjectText strong, .linkedProjectText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linkedProjectText strong { font-size: 10px; font-weight: 800; }
+.linkedProjectText small { color: #8094a3; font-size: 9px; }
+.linkedProjectsEmpty { padding: 10px 12px 12px; color: #8a9aa6; font-size: 9px; }
+.projectLinksDialogPanel { width: min(720px, calc(100vw - 36px)); max-height: min(720px, calc(100vh - 42px)); }
+.projectLinksDialogBody { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; overflow: auto; }
+.projectLinksColumn { min-width: 0; border: 1px solid #dbe5ec; border-radius: 8px; overflow: hidden; background: #fbfdff; }
+.projectLinksColumn > header { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; background: #f4f8fb; border-bottom: 1px solid #e0e8ee; }
+.projectLinksColumn > header strong { color: #35556b; font-size: 10px; text-transform: uppercase; letter-spacing: .035em; }
+.projectLinksColumn > header span { color: #7990a1; font-size: 10px; }
+.projectLinksList { max-height: 390px; overflow: auto; }
+.projectLinkCard { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 9px 10px; border-bottom: 1px solid #eaf0f4; }
+.projectLinkCard:last-child { border-bottom: 0; }
+.projectLinkCardText { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.projectLinkCardText strong { color: #2d4e64; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectLinkCardText span { color: #8093a1; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectLinkCard button { min-height: 28px; border: 1px solid #cbd9e4; border-radius: 6px; background: #fff; color: #2d6280; padding: 0 8px; font-size: 9px; font-weight: 800; cursor: pointer; }
+.projectLinkCard button:disabled { opacity: .5; cursor: default; }
+.projectLinkRemove button { color: #a24848; border-color: #e2c4c4; }
+.projectLinksEmptyState { padding: 24px 12px; text-align: center; color: #8598a6; font-size: 10px; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsSection { border-color: #22394a; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsHeader > span { color: #8fa8ba; }
+:global(html[data-drive-theme="dark"]) .linkedProjectsHeader button, :global(html[data-drive-theme="dark"]) .projectLinkCard button { background: #102535; border-color: #2d4b60; color: #b8d3e3; }
+:global(html[data-drive-theme="dark"]) .linkedProjectRow { border-color: #1b3142; color: #a9c3d4; }
+:global(html[data-drive-theme="dark"]) .linkedProjectRow:hover { background: #123047; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn { background: #0e2130; border-color: #294457; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn > header { background: #102636; border-color: #294457; }
+:global(html[data-drive-theme="dark"]) .projectLinksColumn > header strong, :global(html[data-drive-theme="dark"]) .projectLinkCardText strong { color: #c1d5e2; }
+:global(html[data-drive-theme="dark"]) .projectLinkCard { border-color: #21394b; }
+@media (max-width: 760px) { .projectLinksDialogBody { grid-template-columns: 1fr; } }

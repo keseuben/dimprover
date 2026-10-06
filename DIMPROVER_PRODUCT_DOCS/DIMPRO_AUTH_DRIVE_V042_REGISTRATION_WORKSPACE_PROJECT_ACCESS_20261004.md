@@ -193,3 +193,176 @@ V0.4.6-tól, ha `resolveDriveSsoConfig(host)` central SSO-t jelez, a Drive page 
 V0.4.6 source commit: `63b55aa03384da4cc67029295bb46d3eb3291780`. Build ID: `S0Q8kSLGruMWmmlpSSEIn`. Artifact SHA-256: `2f9529ea0cacc6846df66e301d566cab9dc9162a82ce49c50b3cf72e1b3e4076`.
 
 DEV Drive upstream: `127.0.0.1:3370`; header: `63b55aa0 DRIVE V0.9.13 AUTH V0.4.4 SSO PAGEFIX DEV`. A V0.4.5 cachefix runtime `127.0.0.1:3369` rollbackként online maradt. PROD DENY.
+
+## 13. V0.4.8 – Drive single authoritative auth gate
+
+A 2026-10-04-i böngészős E2E naplók bizonyították, hogy az első callback sikeres volt, az `auth_app_sessions` rekord létrejött, és a konkrét app-sessionhöz `drive.access = TRUE` tartozott. A callback után mégis `/drive → /login` redirect történt.
+
+A végleges architekturális javítás: a Drive hitelesítésnek egyetlen authoritative kapuja marad, a `proxy.ts`.
+
+- Central SSO hoston: `__Host-dimpro_app` session + `drive.access` permission ellenőrzés a proxyban.
+- Legacy DEV mód csak akkor aktív, ha nincs central SSO konfiguráció.
+- `app/drive/page.tsx` többé nem tartalmaz saját auth redirectet, host-alapú auth döntést, `DRIVE_DEV_ACCESS_COOKIE` ellenőrzést vagy `/login` redirectet.
+- A DrivePage kizárólag rendereli a Drive UI-t; ha a proxy beengedte a kérést, a page nem végez második, versengő hitelesítést.
+
+Új contract: `auth-v048-drive-single-auth-gate-contract.mjs` → `5/5 PASS`.
+
+A V0.4.8 javítást a közben live-ra került BenjaminAI Desktop scan-auth ággal (`01fd976ace0b828e74ec085c8f368287465079ac`) egyesítettük. Az integrált merge commit: `12f62a7d39a5263860deeb8a3ee4074b81cce963`.
+
+Integrált build ID: `QCWId8ANOj8Sr1wV85kRQ`. Artifact SHA-256: `f196cc8e126ca76cee3ca31907880000df111496f7ae711353b17e4c88dee513`.
+
+DEV Drive upstream: `127.0.0.1:3373`. Header: `12f62a7d DRIVE V0.9.13 AUTH V0.4.4 SSO SINGLE-GATE + DESKTOP SCAN AUTH DEV`. A korábbi `01fd976a` scanfix runtime `127.0.0.1:3372` porton rollbackként online maradt. PROD DENY.
+
+## 14. V0.4.9 – terminal central SSO proxy ág
+
+A böngészős E2E napló alapján a central SSO authorize és token exchange sikeres volt, az app-session létrejött, és a konkrét sessionhöz `drive.access = TRUE` tartozott. A tényleges redirect-loop oka a Drive proxy vezérlési láncában volt: sikeres central SSO ellenőrzés után a kérés továbbfutott a legacy Supabase auth-rétegbe, amely Supabase session hiányában `/login` redirectet adott.
+
+A V0.4.9 javítás sikeres central Drive SSO + `drive.access` ellenőrzés után azonnali `return response`-szal terminálja a Drive auth-láncot. A legacy Supabase auth többé nem kaphatja meg ugyanazt a már central SSO-val hitelesített Drive kérést.
+
+Contract: `auth-v049-drive-proxy-terminal-sso-contract.mjs` → `6/6 PASS`.
+
+Source commit: `9f45b8bf9ec0b49901ecccf7806c60334df44afd`. Build ID: `TLFlNLDXd43zn4HIVsWGp`. Artifact SHA-256: `b4377b153fcab88d17c4cd10bf7c6835757aedf9b581d4d9832ed8c25e2b82bb`.
+
+A böngészős E2E a javítás után sikeres volt: a Drive felület betöltött, és az SSO redirect-loop megszűnt.
+
+## 15. V0.5.0 – első osztályú Saját Drive munkatér
+
+A DriveShell a korábbi `/api/projects` lista helyett a közös `/api/drive/workspaces` contractot használja. A személyes Drive és a projektmunkaterek külön típusok maradnak; a Saját Drive nem álprojekt.
+
+Fő működés:
+
+- `PERSONAL` workspace ID: `personal:<userId>`;
+- `PROJECT` workspace ID: `project:<projectId>`;
+- személyes jogosultság esetén a Saját Drive az elsődleges/alapértelmezett munkatér;
+- projekt létrehozása után a `project:<id>` munkatér kerül kiválasztásra;
+- projekt-specifikus provisioning, ACL, Beérkező Drop, Kedvencek és CsomagBOX nem fut személyes módban;
+- a projekt-Drive meglévő motorja változatlanul projektmunkatérként működik.
+
+A személyes Drive jelenlegi backend-képessége szándékosan `USER_ROOT` szintű. A teljes személyes mappafa még nincs aktiválva, ezért a UI ezt egyértelműen jelzi és nem imitál projektmappafát.
+
+Új személyes tartalom API-k:
+
+- `GET /api/drive/personal/content` – kizárólag exact `drive.personal.access` entitlement után, owner-scoped USER tartalomreferenciák;
+- `GET /api/drive/personal/content/[refId]/download` – exact tulajdonosi ellenőrzés, csak `security_status=clean` és `virus_scan_status=clean` tartalomhoz, szerveroldali signed GET URL-lel.
+
+A Content Core lekérdezés `owner_type=USER` + exact `owner_user_id` alapján történik. Storage key nem kerül ki a listázó API válaszában.
+
+Új UI: `PersonalDriveWorkspace`, amely a tényleges USER_ROOT tartalmakat mutatja név, forrás, méret, módosítási idő és biztonsági státusz szerint. Üres USER_ROOT esetén külön személyes Drive üres állapot jelenik meg, nem a korábbi „Nincs elérhető projekt” üzenet.
+
+Contract: `auth-v050-personal-workspace-ui-contract.mjs` → `10/10 PASS`. TypeScript PASS 4 GB heap mellett; targeted ESLint PASS; teljes AUTH/Drive/Desktop regressziós csomag PASS.
+
+V0.5.0 source commit: `711b7e1bc7d52e1113faf05f56ec7e5cfc45ed8b`. Build ID: `tmnNr9d2QZO_det4YRogW`. Artifact SHA-256: `f53b3e11011eb856f8cadf9fe07df2a2d4e8864034fdd786cc6b8ae2b3d4a5e4`.
+
+DEV aktiválás: Drive `127.0.0.1:3375`; publikus header: `711b7e1b DRIVE V0.9.13 AUTH V0.5.0 PERSONAL USER_ROOT + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. Előző `9f45b8bf / 3374` runtime rollbackként online maradt. AUTH továbbra is V0.4.4 `3367`. PROD DENY.
+
+## 16. V0.5.2 – Saját Drive nézet-capability modell
+
+A Saját Drive és a Projekt Drive közös nézetváltó komponenst használ, de workspace capability szerint eltérő nézetkészlettel.
+
+- PERSONAL: `simple`, `engineering`;
+- PROJECT: `simple`, `engineering`, `review`;
+- a `Tervellenőrzés` projekt-only funkció marad;
+- a Saját Drive Mérnöki nézet támogatja a személyes tervdokumentumok későbbi műszaki metaadatait;
+- hiányzó tervszám/revízió/lépték nem kerül kitalálásra, `—` jelenik meg.
+
+A premium loader V0.5.2-ben READY állapotot csak tényleges 100%-nál jelez; 75%-nál már nem jelenhet meg `SYSTEM READY` / `DIMPRO Drive készen áll`.
+
+Source commit: `ba635548074b898fcf088739a924ac269c5a5cdb`. Build ID: `KIARgM_qtoC3rt0YFSjQA`. Artifact SHA-256: `dd358640c57a16663b7321abe0a7de0a534f2badc88d17f03ffff34a17622340`.
+
+## 17. V0.6.0 – Saját Drive personal folder core
+
+A Content Core korábban fenntartott `dimpro_content_refs.folder_id` mezőjére építve elkészült a külön, felhasználói tulajdonú személyes folder core. Ez nem projektmappa és nem használ projekt ACL-t.
+
+Új tábla: `public.dimpro_content_personal_folders`.
+
+Fő invariánsok:
+
+- exact `owner_user_id` tulajdonosi scope;
+- stabil UUID mappaazonosító;
+- `parent_id` csak ugyanazon tulajdonos mappájára mutathat;
+- aktív testvérmappák neve case-insensitive egyedi;
+- safe mappanév validáció;
+- soft-trash életciklus előkészítve;
+- RLS aktív;
+- `anon` és `authenticated` közvetlen tábla-hozzáférés tiltva;
+- `service_role` szerveroldali hozzáférés.
+
+A base Content Core `0.1.0` marker változatlan maradt. A personal folder add-on külön marker:
+
+`content-personal-folders · 0.1.0 · content-personal-folders-v010-20261006`.
+
+DEV migráció:
+
+- migration SHA-256: `44857a6d9bd6307b665d6d4cfc1533d9855c4574606b1891ce7273aae98c971c`;
+- canonical direct DEV target: `db.pbgyuznivqvestuksvif.supabase.co`;
+- guarded preflight: PASS;
+- guarded apply: PASS;
+- külön verify: PASS;
+- PostgREST schema visibility: PASS;
+- meglévő content object/ref sorok apply előtt és után: `0 / 0`;
+- új folder tábla induló sorai: `0`;
+- backup: `/srv/dimpro-dev/backups/content-personal-folders-v010/20261006T111341Z/content-core-before-personal-folders-v010.dump`;
+- backup SHA-256: `79345ec61be4eb5164820a8d02487ef81f69d39f8cdefa64f1674b44ecb24040`;
+- PROD DENY.
+
+A migration gate támogatja a canonical Supabase pooler és direct DEV targetet is, allowlistelt host/user párral és élő kapcsolati credential-próbával. Tooling fix commit: `25f32ecf3`.
+
+V0.6.0 alkalmazásfunkciók:
+
+- hierarchikus, lenyitható/összecsukható Saját Drive mappafa;
+- gyökér és tetszőleges mélységű almappák;
+- inline `Új mappa` névbevitel Enter mentés / Esc megszakítás logikával;
+- inline mappa-átnevezés;
+- a fájllista az aktuális mappa közvetlen tartalmát mutatja;
+- fájl célmappája módosítható exact owner-scope ellenőrzéssel;
+- Egyszerű + Mérnöki nézet megmarad;
+- Tervellenőrzés továbbra is projekt-only;
+- destructive mappatörlés ebben a foundation fázisban nincs bekapcsolva.
+
+Runtime source commit: `59e13dea48cb128c05e8337a1a7e2f04fec8e08c`. Build ID: `ETEOvFeKW3HlhLHvCSAop`. Artifact SHA-256: `7110cd1e1fa1fb678044116e5411871487e096126de7c8678206cc93364e02d0`.
+
+DEV aktiválás: Drive `127.0.0.1:3378`; publikus header: `59e13dea DRIVE V0.9.13 AUTH V0.6.0 PERSONAL FOLDERS + SIMPLE+ENGINEERING + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. V0.5.2 `3377` rollbackként online maradt. AUTH V0.4.4 változatlan. PROD DENY.
+
+## 18. V0.6.1 – Saját Drive közös projekt-Drive felület
+
+A V0.6.1 megszünteti a Saját Drive külön, egyszerűsített munkafelületének runtime-irányát. A személyes munkatér ugyanazokat a közös Drive UI komponenseket használja, mint a projekt Drive, capability-alapú eltérésekkel.
+
+Közös komponensek és nézetek:
+
+- `DriveToolbar`;
+- `FolderTreePanel`;
+- `FileGridPanel`;
+- 1 / 2 / 3 paneles nézet;
+- fekvő osztott nézet;
+- Commander nézet;
+- teljes ablakos táblázat;
+- táblázat zoom;
+- resizable oszlopok;
+- közös mappafa és inline új mappa sor;
+- közös kiválasztási és fájltábla logika;
+- közös részletező/előnézeti panelhely.
+
+A Saját Drive capability eltérései:
+
+- `Egyszerű` és `Mérnöki` nézet aktív;
+- `Tervellenőrzés` nem jelenik meg;
+- projekt ACL / résztvevőkezelés / formális projektkiadás nem kerül át;
+- személyes feltöltés, CsomagBOX, összehasonlítás és egyes projekt-backendhez kötött műveletek helye megmaradhat, de amíg nincs PERSONAL backend, fail-safe disabled állapotúak;
+- projekt Drive-ban ugyanezek a közös komponensek a meglévő handlerek miatt változatlanul aktívak maradnak.
+
+Új személyes preview API:
+
+`GET /api/drive/personal/content/[refId]/preview`
+
+A preview exact személyes entitlement + owner scope alapján működik, és csak `security_status=clean` + `virus_scan_status=clean` fájlt ad ki rövid életű signed inline URL-lel.
+
+A személyes mappa átnevezés a projekt Drive műveleti mintáját követi: kiválasztott mappa → `Mappa átnevezése` → közös dialógus-stílus, személyes owner-scoped PATCH endpointtal.
+
+V0.6.1 contract: `auth-v061-personal-shared-surface-contract.mjs` → `18/18 PASS`. A V0.6.0, V0.5.2, V0.5.1, V0.5.0, SSO, workspace, Drive compatibility és Desktop regressziók PASS; targeted ESLint és TypeScript PASS.
+
+Source commit: `3e8bf7672fb209cf4f9f81e644321eb93f35b159`.
+Build ID: `1vvwHF49TX5Cg_drne7O3`.
+Artifact SHA-256: `3dd41a8784fb55c1ebdf7bede00844402eb87957e8efe421d8b923d3f2813c0f`.
+
+DEV aktiválás: Drive `127.0.0.1:3379`; publikus header: `3e8bf767 DRIVE V0.9.13 AUTH V0.6.1 SHARED PERSONAL SURFACE + PERSONAL FOLDERS + SSO TERMINAL + DESKTOP SCAN AUTH DEV`.
+Rollback: V0.6.0 `59e13dea / 3378` online maradt. AUTH V0.4.4 változatlan. PROD DENY.

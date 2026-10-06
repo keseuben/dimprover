@@ -32,6 +32,9 @@ type Props = {
   tableZoom?: number;
   onTableZoomChange?: (value: number) => void;
   canWrite: boolean;
+  canUpload?: boolean;
+  boxEnabled?: boolean;
+  compareEnabled?: boolean;
   onCreateFolder: () => void;
   onUpload: () => void;
   canUploadSelectedVersion: boolean;
@@ -64,6 +67,9 @@ export default function DriveToolbar({
   tableZoom = 100,
   onTableZoomChange,
   canWrite,
+  canUpload = canWrite,
+  boxEnabled = true,
+  compareEnabled = true,
   onCreateFolder,
   onUpload,
   canUploadSelectedVersion,
@@ -130,7 +136,7 @@ export default function DriveToolbar({
             <button type="button" role="menuitem" disabled={!canWrite} onClick={() => runMenuAction(onCreateFolder)}>
               <FolderPlus size={15} /><span>Új mappa</span>
             </button>
-            <button type="button" role="menuitem" disabled={!canWrite} onClick={() => runMenuAction(onUpload)}>
+            <button type="button" role="menuitem" disabled={!canUpload} onClick={() => runMenuAction(onUpload)}>
               <UploadCloud size={15} /><span>Feltöltés</span>
             </button>
             <button type="button" role="menuitem" disabled={!canUploadSelectedVersion} onClick={() => runMenuAction(onUploadSelectedVersion)}>
@@ -150,13 +156,13 @@ export default function DriveToolbar({
               <FolderDown size={15} /><span>Mappa ZIP</span>
             </button>
             <div className={styles.toolbarMenuSeparator} />
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onToggleBoxShelf)}>
+            <button type="button" role="menuitem" disabled={!boxEnabled} onClick={() => runMenuAction(onToggleBoxShelf)}>
               <PackageCheck size={15} /><span>CsomagBOX{boxCount > 0 ? ` (${boxCount})` : ""}</span>
             </button>
             <button type="button" role="menuitem" onClick={() => runMenuAction(() => window.open("https://drop.dimpro.hu", "_blank", "noopener,noreferrer"))}>
               <Send size={15} /><span>DROP küldés</span>
             </button>
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onToggleCompare)}>
+            <button type="button" role="menuitem" disabled={!compareEnabled} onClick={() => runMenuAction(onToggleCompare)}>
               <GitCompareArrows size={15} /><span>{compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}</span>
             </button>
             <button type="button" role="menuitem" disabled>
@@ -186,8 +192,8 @@ export default function DriveToolbar({
         type="button"
         className={`${styles.toolButton} ${styles.toolIconOnly}`}
         onClick={onUpload}
-        disabled={!canWrite}
-        title={canWrite ? "Feltöltés" : "Feltöltés – nincs írási jogosultságod"}
+        disabled={!canUpload}
+        title={canUpload ? "Feltöltés" : "Feltöltés – ebben a munkatérben még nem aktív"}
         aria-label="Feltöltés"
       >
         <UploadCloud size={16} />
@@ -246,7 +252,8 @@ export default function DriveToolbar({
         type="button"
         className={`${styles.toolButton} ${styles.toolIconOnly} ${boxShelfOpen ? styles.toolActive : ""}`}
         onClick={onToggleBoxShelf}
-        title={boxReady ? "CsomagBOX" : "CsomagBOX – az adatmotor még nem aktív"}
+        disabled={!boxEnabled}
+        title={!boxEnabled ? "CsomagBOX – a személyes backend bekötése folyamatban" : boxReady ? "CsomagBOX" : "CsomagBOX – az adatmotor még nem aktív"}
         aria-label="CsomagBOX"
       >
         <PackageCheck size={16} />{boxCount > 0 && <small className={styles.toolCountBadge}>{boxCount}</small>}
@@ -256,7 +263,8 @@ export default function DriveToolbar({
         type="button"
         className={`${styles.toolButton} ${styles.toolIconOnly} ${compareActive ? styles.toolActive : ""}`}
         onClick={onToggleCompare}
-        title={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
+        disabled={!compareEnabled}
+        title={!compareEnabled ? "Összehasonlítás – a személyes backend bekötése folyamatban" : compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
         aria-label={compareActive ? "Összehasonlítás bezárása" : "Összehasonlítás"}
       >
         <GitCompareArrows size={16} />

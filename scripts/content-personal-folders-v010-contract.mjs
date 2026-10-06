@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const sql=fs.readFileSync("supabase/migrations/20261006123000_dimpro_content_personal_folders_v010.sql","utf8");
+let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("base Content Core marker remains required and unchanged",()=>{assert.match(sql,/content-core-user-drive-v010-20260818/);assert.doesNotMatch(sql,/update public\.dimpro_content_schema_meta/i)});
+check("personal folder table is additive",()=>assert.match(sql,/create table if not exists public\.dimpro_content_personal_folders/));
+check("folder ownership is exact user scope",()=>assert.match(sql,/owner_user_id uuid not null references public\.dimpro_users/));
+check("parent ownership cannot cross users",()=>assert.match(sql,/foreign key \(owner_user_id,parent_id\)[\s\S]*references public\.dimpro_content_personal_folders\(owner_user_id,id\)/));
+check("safe folder names reject slash backslash dot and control",()=>{assert.match(sql,/btrim\(name\) not in \('\.','\.\.'\)/);assert.match(sql,/name !~ '\[\\\\\/\]'/);assert.match(sql,/\[:cntrl:\]/)});
+check("active sibling names are unique at root and child levels",()=>{assert.match(sql,/dimpro_content_personal_folders_root_name_unique/);assert.match(sql,/dimpro_content_personal_folders_child_name_unique/)});
+check("folder lifecycle is soft trash",()=>{assert.match(sql,/status in \('ACTIVE','TRASHED'\)/);assert.match(sql,/trashed_at/)});
+check("personal folder schema has independent marker",()=>{assert.match(sql,/content-personal-folders','0\.1\.0',1,'content-personal-folders-v010-20261006/)});
+check("RLS and server-only grants are enforced",()=>{assert.match(sql,/enable row level security/);assert.match(sql,/revoke all[\s\S]*from authenticated/);assert.match(sql,/grant all[\s\S]*to service_role/)});
+check("content ref folder comment declares USER mapping without project coupling",()=>{assert.match(sql,/For owner_type USER/);assert.match(sql,/PROJECT ownership remains independent/)});
+console.log(`DIMPRO Content Personal Folders V0.1.0 contract PASS · ${n}/${n}`);

@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const route=read("app/api/drive/internal/personal-sample-seed/route.ts"), storage=read("app/lib/drive-core/s3ObjectStorage.ts");
+check("seed route is loopback only",()=>{assert.match(route,/127\\\.0\\\.0\\\.1/);assert.match(route,/localhost/)});
+check("seed route is DEV and production-deny only",()=>{assert.match(route,/DIMPRO_PRODUCTION_ACCESS/);assert.match(route,/=== "DENY"/);assert.match(route,/DIMPRO_AUTH_ENVIRONMENT/);assert.match(route,/=== "DEV"/)});
+check("seed resolves exact active personal Drive grant",()=>{assert.match(route,/DRIVE_PERSONAL_USER/);assert.match(route,/g\.project_id IS NULL/);assert.match(route,/result\.rows\.length !== 1/)});
+check("seed uses canonical personal identity",()=>assert.match(route,/ensurePersonalDriveCanonicalUser/));
+check("seed contains three PDF fixtures",()=>{assert.match(route,/A-101_Foldszinti_alaprajz_REV00\.pdf/);assert.match(route,/G-201_Gepeszeti_alaprajz_REV01\.pdf/);assert.match(route,/V-301_Villamos_alaprajz_REV02\.pdf/)});
+check("seed hashes each immutable PDF",()=>assert.match(route,/createHash\("sha256"\)/));
+check("seed uses personal object storage prefix",()=>{assert.match(route,/buildPersonalDriveStorageKey/);assert.match(storage,/return `users\/\$\{user\}\/objects\//)});
+check("seed uses shared content object and user reference core",()=>{assert.match(route,/upsertContentObject/);assert.match(route,/ensureUserContentRef/);assert.match(route,/sourceSystem: "IMPORT"/)});
+check("seed never creates or targets a project",()=>{assert.doesNotMatch(route,/owner_project_id/);assert.doesNotMatch(route,/projectId:/)});
+console.log(`DIMPRO AUTH V0.6.4 personal sample seed contract PASS · ${n}/${n}`);

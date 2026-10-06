@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const repo=read("app/lib/content-core/personalProjectLinks.ts"),route=read("app/api/drive/personal/project-links/route.ts"),ui=read("components/drive/PersonalDriveWorkspace.tsx"),tree=read("components/drive/FolderTreePanel.tsx");
+check("links use existing entity-link core without new project clone",()=>{assert.match(repo,/project_core_entity_links/);assert.match(repo,/SOURCE_TYPE = "personal_drive"/);assert.match(repo,/TARGET_TYPE = "project"/);assert.match(repo,/RELATION_TYPE = "RELATES_TO"/)});
+check("link source is canonical personal Drive owner",()=>{assert.match(route,/userId: access\.contentUserId/);assert.match(route,/resolvePersonalDriveContentActor/)});
+check("link target is a real project foreign-key scope",()=>{assert.match(repo,/project_id: input\.projectId/);assert.match(repo,/target_id: input\.projectId/)});
+check("only currently accessible projects can be attached",()=>{assert.match(route,/listAccessibleProjects\(access\.actor\.userAliases\)/);assert.match(route,/access\.projects\.find\(\(candidate\) => candidate\.id === projectId\)/);assert.match(route,/PERSONAL_PROJECT_LINK_PROJECT_FORBIDDEN/)});
+check("lost project access hides stale links from personal UI",()=>{assert.match(route,/access\.projects\.filter\(\(project\) => linkedIds\.has\(project\.id\)\)/)});
+check("detach is exact owner plus exact target scoped",()=>{assert.match(repo,/\.eq\("source_id", input\.userId\)/);assert.match(repo,/\.eq\("target_id", input\.projectId\)/)});
+check("link identity is deterministic and idempotent",()=>{assert.match(repo,/createHash\("sha256"\)/);assert.match(repo,/23505/);assert.match(repo,/created: false/)});
+check("linked project API never copies content objects or refs",()=>{assert.doesNotMatch(route,/dimpro_content_objects|dimpro_content_refs|ensureUserContentRef|upsertContentObject/);assert.doesNotMatch(repo,/dimpro_content_objects|dimpro_content_refs/)});
+check("shared folder tree exposes optional linked project section",()=>{assert.match(tree,/linkedProjects\?: DriveLinkedProjectItem\[\]/);assert.match(tree,/Kapcsolt projektek/);assert.match(tree,/onManageLinkedProjects/)});
+check("project Drive remains unchanged when linked-project props are absent",()=>assert.match(tree,/linkedProjects = \[\]/));
+check("personal workspace loads linked projects with folders and content",()=>{assert.match(ui,/api\/drive\/personal\/project-links/);assert.match(ui,/Promise\.all/)});
+check("personal workspace provides attach and detach actions",()=>{assert.match(ui,/method: "POST"/);assert.match(ui,/method: "DELETE"/);assert.match(ui,/Csatolás/);assert.match(ui,/Leválasztás/)});
+check("clicking a linked project opens the real project workspace",()=>assert.match(ui,/onWorkspaceChange\(`project:\$\{project\.id\}`\)/));
+check("UI explicitly states that linking does not copy files",()=>assert.match(ui,/projektfájlok nem másolódnak át/));
+console.log(`DIMPRO AUTH V0.6.5 personal linked projects contract PASS · ${n}/${n}`);
