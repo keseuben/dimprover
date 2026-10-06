@@ -3615,3 +3615,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Source `f2b4a3ed900eb20d1c1304b977bc8bf241c48cc0`, build `2aWPn8q01rbTJ5Ycklfs6`, artifact SHA-256 `cc40f2bc05c85f0e1c2f82e44aa537a485b9aa5b7f9eb88391b021db91021c06`, DEV 3387.
 - Fullscreen stability 6/6, PDF canvas guard 7/7, ProjectGate compare 10/10 PASS; TypeScript/ESLint/build PASS.
 - PROD DENY.
+
+### Drive PERSONAL V0.6.6 – determinisztikus Compare V1
+
+- AI nélküli összehasonlítási eredménypanel került a közös vizuális compare motorba.
+- Tervazonosító, lépték, oldalszám, PDF tartalomtípus, PDF-szöveg diff és vektorgeometriai számlálók alapján szabályalapú kompatibilitási eredményt ad.
+- Státuszok: `Valószínű revíziópár`, `Ellenőrzendő`, `Eltérő tervlap`; részletes A-only/B-only szövegdiff lenyitható.
+- A felület egyértelműen jelzi: AI nélkül, nem szakmai tervjóváhagyás.
+- Source `6e16db6f45f314fb785fa4ff7a08238d4ac0c901`, build `9BFKy9I7kt4BnDpAjsNTm`, artifact SHA-256 `8f4cd61d9542b5de1da0bdde171f0bc5db3add55f0227e9ba46fdd93dc22214e`, DEV 3388.
+- Core 7/7, UI 8/8, fullscreen 6/6, PDF guard 7/7, ProjectGate compare 10/10, ACL 18/18, Personal BOX 14/14 PASS; TypeScript/ESLint/build PASS.
+- PROD DENY.

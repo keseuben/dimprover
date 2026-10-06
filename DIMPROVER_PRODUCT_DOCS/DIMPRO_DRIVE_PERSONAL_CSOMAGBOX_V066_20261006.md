@@ -127,3 +127,21 @@ Javítás:
 - 4 px alatti méretzaj nem indít új PDF renderelést.
 
 Contract: fullscreen stability 6/6 PASS, PDF canvas guard 7/7 PASS, ProjectGate compare 10/10 PASS, TypeScript/ESLint PASS. Integrált source `f2b4a3ed900eb20d1c1304b977bc8bf241c48cc0`, build `2aWPn8q01rbTJ5Ycklfs6`, artifact SHA-256 `cc40f2bc05c85f0e1c2f82e44aa537a485b9aa5b7f9eb88391b021db91021c06`, DEV runtime 3387. PROD DENY.
+
+## Determinisztikus összehasonlítási eredmény V1 – 2026-10-06
+
+A vizuális compare közös AI nélküli eredménypanelt kapott. A motor automatikusan elemzi az aktuális PDF-oldalpárt és visszaellenőrizhető szabályok alapján jelzi az összehasonlíthatóságot.
+
+V1 jelek:
+- tervazonosító felismerése fájlnévből vagy PDF-szövegből;
+- lépték felismerése `M 1:n`, `LÉPTÉK 1:n` vagy `1:n` alakból;
+- oldalszám és PDF tartalomtípus;
+- egyedi PDF-szöveg egyezés, hozzáadott és törölt szövegelemek;
+- vektorszakasz- és kontúrdarabszám eltérés;
+- `Valószínű revíziópár`, `Ellenőrzendő`, `Eltérő tervlap` státusz és kompatibilitási jelző.
+
+A panel kifejezetten jelzi, hogy az eredmény szabályalapú, nem AI-vélemény és nem szakmai tervjóváhagyás. A részletes diff lenyitható, fullscreenben korlátozott magasságú.
+
+Contractok: deterministic core 7/7 PASS, UI 8/8 PASS, fullscreen stability 6/6 PASS, PDF canvas guard 7/7 PASS, ProjectGate compare 10/10 PASS, Compare/Issue ACL 18/18 PASS, Personal BOX 14/14 PASS, TypeScript/ESLint/build PASS.
+
+Source `6e16db6f45f314fb785fa4ff7a08238d4ac0c901`, build `9BFKy9I7kt4BnDpAjsNTm`, artifact SHA-256 `8f4cd61d9542b5de1da0bdde171f0bc5db3add55f0227e9ba46fdd93dc22214e`, DEV runtime 3388. PROD DENY.
