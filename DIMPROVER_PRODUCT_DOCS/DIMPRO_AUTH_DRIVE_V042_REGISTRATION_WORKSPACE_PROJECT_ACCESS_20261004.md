@@ -254,3 +254,71 @@ Contract: `auth-v050-personal-workspace-ui-contract.mjs` → `10/10 PASS`. TypeS
 V0.5.0 source commit: `711b7e1bc7d52e1113faf05f56ec7e5cfc45ed8b`. Build ID: `tmnNr9d2QZO_det4YRogW`. Artifact SHA-256: `f53b3e11011eb856f8cadf9fe07df2a2d4e8864034fdd786cc6b8ae2b3d4a5e4`.
 
 DEV aktiválás: Drive `127.0.0.1:3375`; publikus header: `711b7e1b DRIVE V0.9.13 AUTH V0.5.0 PERSONAL USER_ROOT + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. Előző `9f45b8bf / 3374` runtime rollbackként online maradt. AUTH továbbra is V0.4.4 `3367`. PROD DENY.
+
+## 16. V0.5.2 – Saját Drive nézet-capability modell
+
+A Saját Drive és a Projekt Drive közös nézetváltó komponenst használ, de workspace capability szerint eltérő nézetkészlettel.
+
+- PERSONAL: `simple`, `engineering`;
+- PROJECT: `simple`, `engineering`, `review`;
+- a `Tervellenőrzés` projekt-only funkció marad;
+- a Saját Drive Mérnöki nézet támogatja a személyes tervdokumentumok későbbi műszaki metaadatait;
+- hiányzó tervszám/revízió/lépték nem kerül kitalálásra, `—` jelenik meg.
+
+A premium loader V0.5.2-ben READY állapotot csak tényleges 100%-nál jelez; 75%-nál már nem jelenhet meg `SYSTEM READY` / `DIMPRO Drive készen áll`.
+
+Source commit: `ba635548074b898fcf088739a924ac269c5a5cdb`. Build ID: `KIARgM_qtoC3rt0YFSjQA`. Artifact SHA-256: `dd358640c57a16663b7321abe0a7de0a534f2badc88d17f03ffff34a17622340`.
+
+## 17. V0.6.0 – Saját Drive personal folder core
+
+A Content Core korábban fenntartott `dimpro_content_refs.folder_id` mezőjére építve elkészült a külön, felhasználói tulajdonú személyes folder core. Ez nem projektmappa és nem használ projekt ACL-t.
+
+Új tábla: `public.dimpro_content_personal_folders`.
+
+Fő invariánsok:
+
+- exact `owner_user_id` tulajdonosi scope;
+- stabil UUID mappaazonosító;
+- `parent_id` csak ugyanazon tulajdonos mappájára mutathat;
+- aktív testvérmappák neve case-insensitive egyedi;
+- safe mappanév validáció;
+- soft-trash életciklus előkészítve;
+- RLS aktív;
+- `anon` és `authenticated` közvetlen tábla-hozzáférés tiltva;
+- `service_role` szerveroldali hozzáférés.
+
+A base Content Core `0.1.0` marker változatlan maradt. A personal folder add-on külön marker:
+
+`content-personal-folders · 0.1.0 · content-personal-folders-v010-20261006`.
+
+DEV migráció:
+
+- migration SHA-256: `44857a6d9bd6307b665d6d4cfc1533d9855c4574606b1891ce7273aae98c971c`;
+- canonical direct DEV target: `db.pbgyuznivqvestuksvif.supabase.co`;
+- guarded preflight: PASS;
+- guarded apply: PASS;
+- külön verify: PASS;
+- PostgREST schema visibility: PASS;
+- meglévő content object/ref sorok apply előtt és után: `0 / 0`;
+- új folder tábla induló sorai: `0`;
+- backup: `/srv/dimpro-dev/backups/content-personal-folders-v010/20261006T111341Z/content-core-before-personal-folders-v010.dump`;
+- backup SHA-256: `79345ec61be4eb5164820a8d02487ef81f69d39f8cdefa64f1674b44ecb24040`;
+- PROD DENY.
+
+A migration gate támogatja a canonical Supabase pooler és direct DEV targetet is, allowlistelt host/user párral és élő kapcsolati credential-próbával. Tooling fix commit: `25f32ecf3`.
+
+V0.6.0 alkalmazásfunkciók:
+
+- hierarchikus, lenyitható/összecsukható Saját Drive mappafa;
+- gyökér és tetszőleges mélységű almappák;
+- inline `Új mappa` névbevitel Enter mentés / Esc megszakítás logikával;
+- inline mappa-átnevezés;
+- a fájllista az aktuális mappa közvetlen tartalmát mutatja;
+- fájl célmappája módosítható exact owner-scope ellenőrzéssel;
+- Egyszerű + Mérnöki nézet megmarad;
+- Tervellenőrzés továbbra is projekt-only;
+- destructive mappatörlés ebben a foundation fázisban nincs bekapcsolva.
+
+Runtime source commit: `59e13dea48cb128c05e8337a1a7e2f04fec8e08c`. Build ID: `ETEOvFeKW3HlhLHvCSAop`. Artifact SHA-256: `7110cd1e1fa1fb678044116e5411871487e096126de7c8678206cc93364e02d0`.
+
+DEV aktiválás: Drive `127.0.0.1:3378`; publikus header: `59e13dea DRIVE V0.9.13 AUTH V0.6.0 PERSONAL FOLDERS + SIMPLE+ENGINEERING + SSO TERMINAL + DESKTOP SCAN AUTH DEV`. V0.5.2 `3377` rollbackként online maradt. AUTH V0.4.4 változatlan. PROD DENY.

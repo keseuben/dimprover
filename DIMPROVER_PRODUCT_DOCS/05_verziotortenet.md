@@ -3548,3 +3548,23 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - V0.5.0 contract `10/10 PASS`; TypeScript, lint és teljes regressziós csomag PASS.
 - Source `711b7e1bc7d52e1113faf05f56ec7e5cfc45ed8b`; build ID `tmnNr9d2QZO_det4YRogW`; SHA-256 `f53b3e11011eb856f8cadf9fe07df2a2d4e8864034fdd786cc6b8ae2b3d4a5e4`.
 - DEV Drive `3375`; rollback `3374`; AUTH V0.4.4 `3367`; PROD DENY.
+
+### Drive AUTH V0.5.2 – PERSONAL Simple + Engineering capability
+
+- Saját Drive: Egyszerű + Mérnöki nézet.
+- Projekt Drive: Egyszerű + Mérnöki + Tervellenőrzés.
+- Tervellenőrzés nem került át a személyes munkatérbe.
+- Premium loader READY állapot csak 100%-nál.
+- Source `ba635548074b898fcf088739a924ac269c5a5cdb`; build `KIARgM_qtoC3rt0YFSjQA`; SHA-256 `dd358640c57a16663b7321abe0a7de0a534f2badc88d17f03ffff34a17622340`.
+
+### Drive AUTH V0.6.0 – PERSONAL folder core
+
+- Új `dimpro_content_personal_folders` additív személyes mappamag exact user ownership-pal.
+- Same-owner parent FK, safe folder names, sibling-name uniqueness, RLS és server-only table access.
+- Guarded DEV migration preflight/apply/verify PASS; PostgREST visibility PASS.
+- Backup SHA-256 `79345ec61be4eb5164820a8d02487ef81f69d39f8cdefa64f1674b44ecb24040`.
+- UI: Windows-szerű hierarchikus mappafa, inline új mappa, inline átnevezés, mappánkénti fájllista, owner-scoped fájláthelyezés.
+- Destructive mappatörlés még nincs aktiválva.
+- Runtime source `59e13dea48cb128c05e8337a1a7e2f04fec8e08c`; build `ETEOvFeKW3HlhLHvCSAop`; SHA-256 `7110cd1e1fa1fb678044116e5411871487e096126de7c8678206cc93364e02d0`.
+- Migration gate direct/pooler allowlist tooling commit `25f32ecf3`.
+- DEV Drive `3378`; V0.5.2 rollback `3377`; AUTH V0.4.4 változatlan; PROD DENY.
