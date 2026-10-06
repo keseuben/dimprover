@@ -24,7 +24,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ref
       mimeType: item.object.mime_type,
       disposition: "inline",
     });
-    return NextResponse.json({ ok: true, preview }, { headers: { "cache-control": "no-store" } });
+    const fileName = item.ref.display_name || item.object.original_name || item.object.display_name;
+    const mimeType = item.object.mime_type || "application/octet-stream";
+    const extension = fileName.toLowerCase().split(".").pop() || "";
+    const kind = mimeType === "application/pdf" || extension === "pdf" ? "PDF" : /^image\//i.test(mimeType) ? "IMAGE" : null;
+    return NextResponse.json({ ok: true, preview: { ...preview, mimeType, fileName, kind } }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const status = error instanceof DimproIdentityError ? error.status : 500;
     const code = error instanceof DimproIdentityError ? error.code : "PERSONAL_DRIVE_PREVIEW_FAILED";

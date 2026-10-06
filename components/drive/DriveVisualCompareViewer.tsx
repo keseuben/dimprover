@@ -179,6 +179,7 @@ type PreviewPayload = {
 
 type Props = {
   projectId: string;
+  workspaceType?: "PROJECT" | "PERSONAL";
   leftDocument: DriveDocument;
   rightDocument: DriveDocument;
 };
@@ -642,7 +643,7 @@ function DifferenceZoneInspector({ candidate, zone, zoneIndex, leftCanvasRef, ri
   return <canvas ref={canvasRef} width={360} height={200} className={styles.visualCompareDifferenceInspectorCanvas} data-difference-inspector={zoneIndex + 1} aria-label={`Eltérési zóna ${zoneIndex + 1} nagyított előnézete`} />;
 }
 
-export default function DriveVisualCompareViewer({ projectId, leftDocument, rightDocument }: Props) {
+export default function DriveVisualCompareViewer({ projectId, workspaceType = "PROJECT", leftDocument, rightDocument }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const leftCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -658,6 +659,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   const leftKind = useMemo(() => documentKind(leftDocument), [leftDocument]);
   const rightKind = useMemo(() => documentKind(rightDocument), [rightDocument]);
   const compatible = leftKind !== "UNSUPPORTED" && rightKind !== "UNSUPPORTED" && leftKind === rightKind;
+  const projectWorkflowEnabled = workspaceType === "PROJECT";
   const compareFindingContextKey = `${projectId}:${leftDocument.id}:${leftDocument.currentVersion?.id || "none"}:${rightDocument.id}:${rightDocument.currentVersion?.id || "none"}`;
 
   const [mode, setMode] = useState<CompareMode>("SIDE_BY_SIDE");
@@ -746,6 +748,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }), [compareFindingContextKey, leftDocument.name, leftDocument.currentVersion?.versionNumber, leftDocument.currentVersion?.revisionCode, rightDocument.name, rightDocument.currentVersion?.versionNumber, rightDocument.currentVersion?.revisionCode]);
 
   const loadCompareFindings = useCallback(async () => {
+    if (!projectWorkflowEnabled) { setCompareFindings([]); setCompareFindingsMessage(""); return; }
     const leftVersionId = leftDocument.currentVersion?.id;
     const rightVersionId = rightDocument.currentVersion?.id;
     setFocusedCompareFindingId(null);
@@ -767,7 +770,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
     } finally {
       setCompareFindingsLoading(false);
     }
-  }, [projectId, leftDocument.currentVersion?.id, rightDocument.currentVersion?.id, mapServerCompareFinding]);
+  }, [projectId, projectWorkflowEnabled, leftDocument.currentVersion?.id, rightDocument.currentVersion?.id, mapServerCompareFinding]);
 
   useEffect(() => {
     setCompareFindings([]);
@@ -777,6 +780,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }, [compareFindingContextKey, loadCompareFindings]);
 
   useEffect(() => {
+    if (!projectWorkflowEnabled) { setProjectMembers([]); return; }
     let cancelled = false;
     void (async () => {
       try {
@@ -788,13 +792,25 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, projectWorkflowEnabled]);
 
   const fetchPreview = useCallback(async (side: Side, document: DriveDocument) => {
     const versionId = document.currentVersion?.id;
     const previewStatus = document.currentVersion?.status;
     if (!versionId || (previewStatus !== "AVAILABLE" && previewStatus !== "QUARANTINED")) {
       throw new Error(`${side === "left" ? "A" : "B"} dokumentum aktuális verziója nem előnézhető.`);
+    }
+    if (workspaceType === "PERSONAL") {
+      const response = await fetch(`/api/drive/personal/content/${encodeURIComponent(document.id)}/preview`, { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as { ok?: boolean; error?: string; preview?: Partial<PreviewPayload> & { url?: string } };
+      if (!response.ok || !payload.ok || !payload.preview?.url) throw new Error(payload.error || `${side === "left" ? "A" : "B"} dokumentum előnézete nem tölthető be.`);
+      return {
+        url: payload.preview.url,
+        mimeType: payload.preview.mimeType || document.mimeType,
+        fileName: payload.preview.fileName || document.name,
+        expiresAt: payload.preview.expiresAt || new Date(Date.now() + 5 * 60_000).toISOString(),
+        kind: payload.preview.kind === "IMAGE" ? "IMAGE" : "PDF",
+      } satisfies PreviewPayload;
     }
     const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/preview`, {
       method: "POST",
@@ -807,7 +823,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
       throw new Error(payload.error || `${side === "left" ? "A" : "B"} dokumentum előnézete nem tölthető be.`);
     }
     return payload.preview;
-  }, [projectId]);
+  }, [projectId, workspaceType]);
 
   const reload = useCallback(async () => {
     if (!compatible) {
@@ -1126,6 +1142,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }
 
   async function addSelectedDifferenceToFindings() {
+    if (!projectWorkflowEnabled) return;
     const zone = activeDifferenceZones[selectedDifferenceZoneIndex];
     const suggestion = autoAlignmentSuggestion;
     const leftCanvas = leftCanvasRef.current;
@@ -1196,6 +1213,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }
 
   async function persistCompareFinding(id: string, patch: Partial<Pick<CompareFinding, "status" | "priority" | "note" | "assigneeUserId" | "dueAt">>) {
+    if (!projectWorkflowEnabled) return;
     const currentFinding = compareFindings.find((finding) => finding.id === id);
     if (!currentFinding || compareFindingsSavingId) return;
     setCompareFindingsSavingId(id);
@@ -1220,6 +1238,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }
 
   async function convertCompareFindingToIssue(finding: CompareFinding) {
+    if (!projectWorkflowEnabled) return;
     const existingIssue = finding.links.find((link) => link.targetType === "issue");
     if (existingIssue) {
       setCompareFindingsMessage(`${finding.zoneLabel} már kapcsolódik hibajegyhez: ${existingIssue.targetLabel || existingIssue.targetId}.`);
@@ -1253,6 +1272,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
   }
 
   async function removeCompareFinding(id: string) {
+    if (!projectWorkflowEnabled) return;
     const finding = compareFindings.find((item) => item.id === id);
     if (!finding || compareFindingsSavingId) return;
     setCompareFindingsSavingId(id);
@@ -1759,7 +1779,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
                   <div className={styles.visualCompareDifferenceHeatmapHeader}>
                     <div><strong>Eltérés hőtérkép</strong><span>A nagyobb százalék több eltérő rajzi vonalat jelez az adott zónában.</span></div>
                     <div className={styles.visualCompareDifferenceHeatmapActions}>
-                      <button type="button" onClick={addSelectedDifferenceToFindings} data-add-compare-finding disabled={!activeDifferenceZone || Boolean(compareFindingsSavingId)}><Plus size={11} /> Δ{Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1)) + 1} jegyzékbe</button>
+                      {projectWorkflowEnabled ? <button type="button" onClick={addSelectedDifferenceToFindings} data-add-compare-finding disabled={!activeDifferenceZone || Boolean(compareFindingsSavingId)}><Plus size={11} /> Δ{Math.min(selectedDifferenceZoneIndex, Math.max(0, activeDifferenceZones.length - 1)) + 1} jegyzékbe</button> : null}
                       <button type="button" onClick={() => setDifferenceHeatmapEnabled((current) => !current)} className={differenceHeatmapEnabled ? styles.visualCompareToolActive : ""} data-difference-heatmap-toggle aria-pressed={differenceHeatmapEnabled}>{differenceHeatmapEnabled ? "Hőtérkép ki" : "Hőtérkép be"}</button>
                     </div>
                   </div>
@@ -1811,7 +1831,7 @@ export default function DriveVisualCompareViewer({ projectId, leftDocument, righ
         </div>
       )}
 
-      {(compareFindings.length > 0 || autoAlignmentSuggestion) && (
+      {projectWorkflowEnabled && (compareFindings.length > 0 || autoAlignmentSuggestion) && (
         <div className={styles.visualCompareFindingsPanel} data-compare-findings-count={compareFindings.length}>
           <div className={styles.visualCompareFindingsHeader}>
             <div><ClipboardList size={14} /><span><strong>Eltérési jegyzék V2.1</strong><small>Tartós, projektizolált review-lista · nincs automatikus hibaminősítés; hibajegy csak emberi JAVÍTANDÓ döntés után készül.</small></span></div>

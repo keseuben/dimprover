@@ -49,6 +49,7 @@ type Props = {
   onMoveItem?: (boxId: string, itemId: string, folderId: string | null) => Promise<void>;
   onDownloadBox?: (box: DriveBox, archiveName: string) => void;
   onSetLifecycle?: (boxId: string, nextStatus: DriveBoxLifecycleStatus) => Promise<void>;
+  historyEndpointForBox?: (boxId: string) => string;
   onOpenCompareBox: (box: DriveBox) => void;
   shelfHeight?: number;
   onShelfHeightChange?: (height: number) => void;
@@ -169,6 +170,7 @@ export default function BoxShelf({
   onMoveItem,
   onDownloadBox,
   onSetLifecycle,
+  historyEndpointForBox,
   onOpenCompareBox,
   shelfHeight,
   onShelfHeightChange,
@@ -493,7 +495,7 @@ export default function BoxShelf({
                   </button>
                 </div>
                 {historyBoxId === box.id && (
-                  <BoxHistoryPanel projectId={projectId} boxId={box.id} onClose={() => setHistoryBoxId("")} />
+                  <BoxHistoryPanel projectId={projectId} boxId={box.id} endpoint={historyEndpointForBox?.(box.id)} onClose={() => setHistoryBoxId("")} />
                 )}
                 {expanded && (
                   <div className={styles.boxItemList}>

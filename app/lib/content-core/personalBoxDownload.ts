@@ -1,0 +1,25 @@
+import { randomBytes } from "node:crypto";
+import { Readable } from "node:stream";
+import JSZip from "jszip";
+import { ensureDriveSafeFileName, ensureDriveSafeFolderName } from "@/app/lib/drive-core/nameNormalizer";
+import { getDriveObjectStream } from "@/app/lib/drive-core/s3ObjectStorage";
+import { DimproIdentityError } from "@/app/lib/identity-core/types";
+import { getPersonalDriveBoxPackageSource, logPersonalDriveBoxDownload } from "./personalBoxes";
+
+const MAX_FILES=500; const MAX_BYTES=2*1024*1024*1024; const REGISTER="DIMPRO_Dokumentaciojegyzek.txt";
+function packageId(){const day=new Date().toISOString().slice(0,10).replaceAll("-","");return `PBOX-${day}-${randomBytes(3).toString("hex").toUpperCase()}`}
+function uniqueName(folder:string,fileName:string,used:Set<string>){const safe=ensureDriveSafeFileName(fileName);let candidate=folder?`${folder}/${safe}`:safe;let n=2;while(used.has(candidate.toLowerCase())){const dot=safe.lastIndexOf(".");const stem=dot>0?safe.slice(0,dot):safe;const ext=dot>0?safe.slice(dot):"";candidate=folder?`${folder}/${stem}_${n}${ext}`:`${stem}_${n}${ext}`;n++}used.add(candidate.toLowerCase());return candidate}
+function folderPaths(box:{folders:Array<{id:string;parentId:string|null;name:string}>},root:string){const byId=new Map(box.folders.map(f=>[f.id,f]));const cache=new Map<string,string>();const resolve=(id:string)=>{if(cache.has(id))return cache.get(id)!;const f=byId.get(id);if(!f)return root;const seen=new Set<string>();const parts:string[]=[];let cur=box.folders.find(x=>x.id===id);while(cur&&!seen.has(cur.id)){seen.add(cur.id);parts.unshift(ensureDriveSafeFolderName(cur.name));cur=cur.parentId?byId.get(cur.parentId):undefined}const value=[root,...parts].join("/");cache.set(id,value);return value};for(const f of box.folders)resolve(f.id);return cache}
+function lazyObject(storageKey:string,bucket:string){return Readable.from((async function*(){const object=await getDriveObjectStream({storageKey,bucket});for await(const chunk of object.body)yield chunk})())}
+
+export async function openPersonalDriveBoxZip(input:{userId:string;boxId:string;archiveName?:string;actorUserId:string}){
+  const source=await getPersonalDriveBoxPackageSource(input.userId,input.boxId);if(!source.entries.length)throw new DimproIdentityError("A CsomagBOX üres.","PERSONAL_BOX_EMPTY",409);if(source.entries.length>MAX_FILES)throw new DimproIdentityError("A CsomagBOX túl sok fájlt tartalmaz.","PERSONAL_BOX_ZIP_TOO_MANY_FILES",413);
+  const total=source.entries.reduce((sum,e)=>sum+Number(e.object.size_bytes||0),0);if(total>MAX_BYTES)throw new DimproIdentityError("A CsomagBOX túl nagy ZIP csomaghoz.","PERSONAL_BOX_ZIP_TOO_LARGE",413);
+  const root=ensureDriveSafeFolderName((input.archiveName||source.box.name||"DIMPRO_CsomagBOX").replace(/\.zip$/i,"").trim()||"DIMPRO_CsomagBOX");const paths=folderPaths(source.box,root);const zip=new JSZip();zip.folder(root);for(const path of paths.values())zip.folder(path);
+  const used=new Set<string>();const accepted:Array<{zipName:string;name:string;sha256:string;size:number;mime:string}>=[];const skipped:Array<{name:string;reason:string}>=[];
+  for(const entry of source.entries){const name=entry.ref.display_name||entry.object.original_name||entry.object.display_name;if(entry.object.security_status!=="clean"||entry.object.virus_scan_status!=="clean"){skipped.push({name,reason:"Biztonsági ellenőrzés nem CLEAN"});continue}if(!entry.object.storage_key||!entry.object.storage_bucket){skipped.push({name,reason:"Hiányzó storage hivatkozás"});continue}const folder=entry.item.folderId?(paths.get(entry.item.folderId)||root):root;const zipName=uniqueName(folder,name,used);zip.file(zipName,lazyObject(entry.object.storage_key,entry.object.storage_bucket),{binary:true,compression:"STORE",date:new Date(entry.object.created_at),createFolders:true});accepted.push({zipName,name,sha256:entry.object.sha256,size:Number(entry.object.size_bytes||0),mime:entry.object.mime_type})}
+  if(!accepted.length)throw new DimproIdentityError("A CsomagBOX-ban nincs biztonságosan letölthető fájl.","PERSONAL_BOX_ZIP_NO_CLEAN_FILES",409);
+  const id=packageId();const lines=["DIMPRO – SAJÁT DRIVE CSOMAGBOX DIGITÁLIS JEGYZÉK","",`Csomagazonosító: ${id}`,`CsomagBOX: ${source.box.name}`,`Létrehozva: ${new Date().toLocaleString("hu-HU")}`,`Fájlok: ${accepted.length}`,`Kihagyva: ${skipped.length}`,""];accepted.forEach((f,i)=>{lines.push(`${i+1}. ${f.zipName}`,`   Eredeti név: ${f.name}`,`   Méret: ${f.size} byte`,`   MIME: ${f.mime}`,`   SHA-256: ${f.sha256}`,"")});if(skipped.length){lines.push("KIHAGYOTT FÁJLOK:");skipped.forEach((x,i)=>lines.push(`${i+1}. ${x.name} – ${x.reason}`))}zip.file(`${root}/${REGISTER}`,lines.join("\n"));
+  await logPersonalDriveBoxDownload(input.userId,input.boxId,input.actorUserId,{packageId:id,packageName:`${root}.zip`,fileCount:accepted.length,skippedCount:skipped.length});
+  return{fileName:`${root}.zip`,packageId:id,sourceFileCount:accepted.length,skippedFileCount:skipped.length,registerFileName:REGISTER,stream:zip.generateNodeStream({streamFiles:true,compression:"STORE",platform:"UNIX"})};
+}

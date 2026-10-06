@@ -24,6 +24,7 @@ import styles from "./DriveWorkspace.module.css";
 
 type Props = {
   projectId: string;
+  workspaceType?: "PROJECT" | "PERSONAL";
   documents: DriveDocument[];
   boxes: DriveBox[];
   seedItems: DriveCompareSeed[];
@@ -121,6 +122,7 @@ function normalizeSeeds(seedItems: DriveCompareSeed[], documents: DriveDocument[
 
 export default function CompareWorkspace({
   projectId,
+  workspaceType = "PROJECT",
   documents,
   boxes,
   seedItems,
@@ -172,6 +174,22 @@ export default function CompareWorkspace({
     setLoadingSide((current) => current && current !== side ? "both" : side);
     setError("");
     try {
+      if (workspaceType === "PERSONAL") {
+        const document = documents.find((item) => item.id === documentId) || null;
+        if (!document) throw new Error("A személyes dokumentum nem található.");
+        const details: DriveDocumentDetails = {
+          projectId: "personal",
+          document: {
+            id: document.id, folderId: document.folderId, name: document.name, extension: document.extension, mimeType: document.mimeType,
+            description: document.description, source: document.source, currentVersionNumber: document.currentVersionNumber, exportAlias: document.exportAlias, updatedAt: document.updatedAt,
+            projectId: "personal", status: "ACTIVE", createdBy: "", createdAt: document.currentVersion?.createdAt || document.updatedAt,
+          },
+          versions: document.currentVersion ? [document.currentVersion] : [],
+          metadata: null, notes: [], qrCodes: [],
+        };
+        if (side === "left") setLeftDetails(details); else setRightDetails(details);
+        return;
+      }
       const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(documentId)}/details`, {
         credentials: "same-origin",
         cache: "no-store",
@@ -185,7 +203,7 @@ export default function CompareWorkspace({
     } finally {
       setLoadingSide("");
     }
-  }, [projectId]);
+  }, [documents, projectId, workspaceType]);
 
   useEffect(() => { void loadDetails("left", leftId); }, [leftId, loadDetails]);
   useEffect(() => { void loadDetails("right", rightId); }, [loadDetails, rightId]);
@@ -265,12 +283,11 @@ export default function CompareWorkspace({
     setDownloadBusy(side);
     setError("");
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/download`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ versionId: version.id }),
-      });
+      const response = workspaceType === "PERSONAL"
+        ? await fetch(`/api/drive/personal/content/${encodeURIComponent(document.id)}/download`, { credentials: "same-origin", cache: "no-store" })
+        : await fetch(`/api/projects/${encodeURIComponent(projectId)}/drive/documents/${encodeURIComponent(document.id)}/download`, {
+            method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ versionId: version.id }),
+          });
       const payload = await response.json() as { ok?: boolean; error?: string; download?: { url?: string } };
       if (!response.ok || !payload.ok || !payload.download?.url) throw new Error(payload.error || "A dokumentumverzió nem nyitható meg a tárhelyről.");
       window.open(payload.download.url, "_blank", "noopener,noreferrer");
@@ -346,7 +363,7 @@ export default function CompareWorkspace({
         </div>
       ) : (
         <>
-          <DriveVisualCompareViewer projectId={projectId} leftDocument={leftCompareDocument!} rightDocument={rightCompareDocument!} />
+          <DriveVisualCompareViewer projectId={projectId} workspaceType={workspaceType} leftDocument={leftCompareDocument!} rightDocument={rightCompareDocument!} />
 
           <div className={styles.compareDocumentGrid}>
             {([
