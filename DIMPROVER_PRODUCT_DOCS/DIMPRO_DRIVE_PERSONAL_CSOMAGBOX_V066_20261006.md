@@ -102,3 +102,16 @@ Publikus smoke:
 ## Nyitott ellenőrzés
 
 A szerveroldali és publikus smoke PASS. A bejelentkezett böngészős E2E-t a felhasználói sessionnel kell fizikailag ellenőrizni: CsomagBOX megnyitás, BOX létrehozás, személyes fájl BOX-ba helyezése, mappa/lifecycle/history/ZIP és vizuális összehasonlítás.
+
+## PDF render guard javítás – 2026-10-06
+
+A PERSONAL vizuális compare böngészős E2E során PDF.js canvas race jelentkezett: `Cannot use the same canvas during multiple render() operations.`
+
+Javítás:
+- a közös `pdfDocumentEngine` canvasonként legfeljebb egy aktív render taskot tart;
+- új render előtt az előző task `cancel()` hívást kap, majd a promise rendeződik;
+- a guard a PERSONAL compare, a projekt compare és a normál PDF preview közös motorját stabilizálja.
+
+Ellenőrzések: PDF canvas guard 7/7 PASS, PERSONAL CsomagBOX 14/14 PASS, ProjectGate compare 10/10 PASS, Compare/Issue ACL 18/18 PASS, Windows Open V0.1.8 36/36 PASS, Windows acceptance 8/8 PASS, TypeScript/ESLint PASS.
+
+Integrált source: `1b3517caf9368eb0d1a55530ef4f8b0352387c63`. Build ID: `ydKhzJs9p-nPqyDVZzkWy`. Artifact SHA-256: `fb0d439e6b2b7e7c2dda893d1d495fdc5611d9065cd730c38e009166bc089693`. DEV runtime: `dimpro-drive-v0913-auth044-pdfrender-1b3517caf-p3386`, publikus upstream `3386`; korábbi `9a0a4b51` / 3385 online rollback. PROD DENY.

@@ -3596,3 +3596,13 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - App contract 14/14, SQL 13/13, migration-order 3/3, ProjectGate compare 10/10, ProjectGate BOX 13/13, history 18/18, compact BOX 19/19, panel/folder 13/13, compare/issue ACL 18/18 PASS; lint/TypeScript/build PASS.
 - Publikus smoke: `/drive` 307 central SSO, Personal BOX API auth nélkül 401, PM2 error log 0 byte.
 - DEV ONLY · PROD DENY. Bejelentkezett böngészős E2E még szükséges.
+
+### Drive PERSONAL V0.6.6 hotfix – PDF canvas render race
+
+- Böngészős compare E2E során PDF.js ugyanazon canvas párhuzamos renderelését jelezte.
+- A közös PDF motor canvasonként serializálja a render taskokat; új render előtt az előző task megszakad és rendeződik.
+- Integrált source `1b3517caf9368eb0d1a55530ef4f8b0352387c63`, amely tartalmazza a `9a0a4b51` Windows Open V0.1.8 live forrást is.
+- Build `ydKhzJs9p-nPqyDVZzkWy`; artifact SHA-256 `fb0d439e6b2b7e7c2dda893d1d495fdc5611d9065cd730c38e009166bc089693`.
+- DEV runtime `dimpro-drive-v0913-auth044-pdfrender-1b3517caf-p3386`; rollback `9a0a4b51` / 3385 online.
+- PDF guard 7/7, PERSONAL BOX 14/14, compare 10/10, ACL 18/18, Windows Open 36/36 + 8/8 PASS; TypeScript/ESLint/build PASS.
+- PROD DENY; böngészős hiba-megszűnés fizikai újratesztje szükséges.
