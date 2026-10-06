@@ -13,12 +13,20 @@ type BootStep = {
   icon: typeof Network;
 };
 
-const BOOT_STEPS: BootStep[] = [
+const PROJECT_BOOT_STEPS: BootStep[] = [
   { key: "connection", label: "Kapcsolat és rendszerállapot", shortLabel: "Kapcsolat", threshold: 16, icon: Network },
   { key: "permissions", label: "Jogosultságok ellenőrzése", shortLabel: "Jogosultságok", threshold: 32, icon: ShieldCheck },
   { key: "workspace", label: "Workspace előkészítése", shortLabel: "Workspace", threshold: 50, icon: Layers3 },
   { key: "tree", label: "Projektmappák és dokumentumtár", shortLabel: "Dokumentumtár", threshold: 70, icon: FolderTree },
   { key: "metadata", label: "Metaadatok és nézeti rétegek", shortLabel: "Metaadatok", threshold: 88, icon: Database },
+];
+
+const PERSONAL_BOOT_STEPS: BootStep[] = [
+  { key: "connection", label: "Kapcsolat és rendszerállapot", shortLabel: "Kapcsolat", threshold: 16, icon: Network },
+  { key: "permissions", label: "Személyes Drive jogosultság ellenőrzése", shortLabel: "Jogosultságok", threshold: 32, icon: ShieldCheck },
+  { key: "workspace", label: "Saját Drive munkatér előkészítése", shortLabel: "Saját Drive", threshold: 50, icon: Layers3 },
+  { key: "content", label: "USER_ROOT tartalom betöltése", shortLabel: "Tartalom", threshold: 70, icon: FolderTree },
+  { key: "metadata", label: "Fájlmetaadatok és biztonsági állapot", shortLabel: "Metaadatok", threshold: 88, icon: Database },
 ];
 
 function progressTarget(elapsedMs: number) {
@@ -31,18 +39,26 @@ function progressTarget(elapsedMs: number) {
   return 92;
 }
 
-function statusForProgress(progress: number) {
+function statusForProgress(progress: number, workspaceType: "PROJECT" | "PERSONAL") {
   if (progress < 16) return "Biztonságos kapcsolat inicializálása…";
-  if (progress < 32) return "Projektjogosultságok és hozzáférési szabályok ellenőrzése…";
-  if (progress < 50) return "DIMPRO Workspace 1.0 környezet előkészítése…";
-  if (progress < 70) return "Projektmappák és dokumentumtár betöltése…";
-  if (progress < 88) return "Műszaki metaadatok és CsomagBOX kapcsolatok szinkronizálása…";
+  if (progress < 32) return workspaceType === "PERSONAL"
+    ? "Személyes Drive jogosultság ellenőrzése…"
+    : "Projektjogosultságok és hozzáférési szabályok ellenőrzése…";
+  if (progress < 50) return workspaceType === "PERSONAL"
+    ? "Saját Drive munkatér előkészítése…"
+    : "DIMPRO Workspace 1.0 környezet előkészítése…";
+  if (progress < 70) return workspaceType === "PERSONAL"
+    ? "USER_ROOT tartalom betöltése…"
+    : "Projektmappák és dokumentumtár betöltése…";
+  if (progress < 88) return workspaceType === "PERSONAL"
+    ? "Fájlmetaadatok és biztonsági állapot ellenőrzése…"
+    : "Műszaki metaadatok és CsomagBOX kapcsolatok szinkronizálása…";
   return "Drive munkaterület végső összeállítása…";
 }
 
-type Props = { complete?: boolean };
+type Props = { complete?: boolean; workspaceType?: "PROJECT" | "PERSONAL" };
 
-export default function DrivePremiumLoader({ complete = false }: Props) {
+export default function DrivePremiumLoader({ complete = false, workspaceType = "PROJECT" }: Props) {
   const [progress, setProgress] = useState(6);
   const [elapsedMs, setElapsedMs] = useState(0);
 
@@ -69,15 +85,16 @@ export default function DrivePremiumLoader({ complete = false }: Props) {
   }, [complete]);
 
   const roundedProgress = Math.round(progress);
+  const bootSteps = workspaceType === "PERSONAL" ? PERSONAL_BOOT_STEPS : PROJECT_BOOT_STEPS;
   const currentStepIndex = useMemo(() => {
     let index = 0;
-    for (let i = 0; i < BOOT_STEPS.length; i += 1) {
-      if (progress >= BOOT_STEPS[i].threshold) index = Math.min(i + 1, BOOT_STEPS.length - 1);
+    for (let i = 0; i < bootSteps.length; i += 1) {
+      if (progress >= bootSteps[i].threshold) index = Math.min(i + 1, bootSteps.length - 1);
     }
-    return Math.min(index, BOOT_STEPS.length - 1);
-  }, [progress]);
+    return Math.min(index, bootSteps.length - 1);
+  }, [bootSteps, progress]);
 
-  const status = complete ? "DIMPRO Drive készen áll." : statusForProgress(progress);
+  const status = complete ? "DIMPRO Drive készen áll." : statusForProgress(progress, workspaceType);
   const slowHint = !complete && elapsedMs > 7000;
 
   return (
@@ -117,7 +134,7 @@ export default function DrivePremiumLoader({ complete = false }: Props) {
 
         <div className={styles.heading}>
           <span className={styles.productLabel}>DIMPRO DRIVE</span>
-          <h2>{complete ? "DIMPRO Drive készen áll" : "Digitális projektmunkatér betöltése"}</h2>
+          <h2>{complete ? "DIMPRO Drive készen áll" : workspaceType === "PERSONAL" ? "Személyes Drive betöltése" : "Digitális projektmunkatér betöltése"}</h2>
           <p>{status}</p>
         </div>
 
@@ -142,7 +159,7 @@ export default function DrivePremiumLoader({ complete = false }: Props) {
         </div>
 
         <div className={styles.bootSteps}>
-          {BOOT_STEPS.map((step, index) => {
+          {bootSteps.map((step, index) => {
             const Icon = step.icon;
             const done = complete || progress >= step.threshold;
             const active = !complete && !done && index === currentStepIndex;
@@ -169,7 +186,7 @@ export default function DrivePremiumLoader({ complete = false }: Props) {
           <span><i className={styles.liveDot} /> DEV WORKSPACE</span>
           <span>Workspace 1.0</span>
           <span className={styles.footerDivider} />
-          <span>{complete ? "Munkatér előkészítve" : slowHint ? "Kapcsolat ellenőrzése folyamatban…" : "Titkosított projektkapcsolat"}</span>
+          <span>{complete ? "Munkatér előkészítve" : slowHint ? "Kapcsolat ellenőrzése folyamatban…" : workspaceType === "PERSONAL" ? "Titkosított személyes Drive kapcsolat" : "Titkosított projektkapcsolat"}</span>
         </div>
         </div>
 

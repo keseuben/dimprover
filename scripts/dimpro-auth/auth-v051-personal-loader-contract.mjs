@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const loader=read("components/drive/DrivePremiumLoader.tsx"), personal=read("components/drive/PersonalDriveWorkspace.tsx"), project=read("components/drive/DriveWorkspace.tsx");
+check("premium loader supports PERSONAL and PROJECT modes",()=>assert.match(loader,/workspaceType\?: "PROJECT" \| "PERSONAL"/));
+check("personal loader has personal boot steps",()=>{assert.match(loader,/Személyes Drive jogosultság ellenőrzése/);assert.match(loader,/USER_ROOT tartalom betöltése/);assert.match(loader,/Fájlmetaadatok és biztonsági állapot/)});
+check("personal loader keeps percentage progress UI",()=>{assert.match(loader,/roundedProgress/);assert.match(loader,/progressTrack/);assert.match(loader,/progressFill/)});
+check("personal workspace renders premium loader before workspace",()=>assert.match(personal,/return <DrivePremiumLoader complete=\{bootLoaderComplete\} workspaceType="PERSONAL"/));
+check("personal successful load completes loader",()=>assert.match(personal,/setBootLoaderComplete\(true\)/));
+check("personal loader holds ready state before hiding",()=>{assert.match(personal,/setTimeout\(\(\) =>/);assert.match(personal,/1800/);assert.match(personal,/setBootLoaderVisible\(false\)/)});
+check("personal loader timers are cleaned up",()=>assert.match(personal,/window\.clearTimeout\(bootLoaderHoldTimerRef\.current\)/));
+check("project workspace still uses shared premium loader",()=>assert.match(project,/return <DrivePremiumLoader complete=\{bootLoaderComplete\} \/>/));
+console.log(`DIMPRO AUTH V0.5.1 personal premium-loader contract PASS · ${n}/${n}`);

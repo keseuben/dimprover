@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Download, FileText, HardDrive, HelpCircle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import HeaderLogoutIconButton from "@/components/auth/HeaderLogoutIconButton";
+import DrivePremiumLoader from "./DrivePremiumLoader";
 import type { DriveWorkspaceOption } from "./driveWorkspaceTypes";
 import styles from "./DriveWorkspace.module.css";
 
@@ -57,6 +58,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloadBusyId, setDownloadBusyId] = useState("");
+  const [bootLoaderVisible, setBootLoaderVisible] = useState(true);
+  const [bootLoaderComplete, setBootLoaderComplete] = useState(false);
+  const bootLoaderVisibleRef = useRef(true);
+  const bootLoaderHoldTimerRef = useRef<number | null>(null);
 
   const loadContent = useCallback(async () => {
     setLoading(true);
@@ -66,14 +71,39 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       const payload = await response.json() as ContentPayload;
       if (!response.ok || !payload.ok) throw new Error(payload.error || "A Saját Drive tartalma nem tölthető be.");
       setItems(payload.items || []);
+      if (bootLoaderVisibleRef.current) {
+        setBootLoaderComplete(true);
+        if (bootLoaderHoldTimerRef.current !== null) window.clearTimeout(bootLoaderHoldTimerRef.current);
+        bootLoaderHoldTimerRef.current = window.setTimeout(() => {
+          bootLoaderVisibleRef.current = false;
+          setBootLoaderVisible(false);
+          bootLoaderHoldTimerRef.current = null;
+        }, 1800);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "A Saját Drive tartalma nem tölthető be.");
+      if (bootLoaderVisibleRef.current) {
+        bootLoaderVisibleRef.current = false;
+        setBootLoaderVisible(false);
+        setBootLoaderComplete(false);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadContent(); }, [loadContent]);
+  useEffect(() => {
+    bootLoaderVisibleRef.current = true;
+    setBootLoaderVisible(true);
+    setBootLoaderComplete(false);
+    void loadContent();
+    return () => {
+      if (bootLoaderHoldTimerRef.current !== null) {
+        window.clearTimeout(bootLoaderHoldTimerRef.current);
+        bootLoaderHoldTimerRef.current = null;
+      }
+    };
+  }, [loadContent]);
 
   const totalBytes = useMemo(() => items.reduce((sum, item) => sum + Math.max(0, Number(item.sizeBytes) || 0), 0), [items]);
 
@@ -94,6 +124,10 @@ export default function PersonalDriveWorkspace({ workspaceName, userEmail, works
       setDownloadBusyId("");
     }
   }, []);
+
+  if (bootLoaderVisible) {
+    return <DrivePremiumLoader complete={bootLoaderComplete} workspaceType="PERSONAL" />;
+  }
 
   return (
     <div className={styles.personalWorkspace}>
