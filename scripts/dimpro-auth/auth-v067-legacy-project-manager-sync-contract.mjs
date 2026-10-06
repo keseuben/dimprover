@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const src=fs.readFileSync("app/api/dimpro-auth/callback/route.ts","utf8");
+let n=0; const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("callback sync starts only from centrally authorized external project ids",()=>assert.match(src,/listAuthorizedExternalProjectIds\(input\.userId, "DRIVE"\)/));
+check("existing invited or active membership is activated before repair",()=>assert.match(src,/const activated = await activateProjectMembership/));
+check("repair requires exact active auth project scope",()=>{assert.match(src,/getAuthProjectScopeByExternalId\(projectId\)/);assert.match(src,/authProject\.status !== "ACTIVE"/)});
+check("repair requires exact DRIVE project manager grant",()=>{assert.match(src,/permission\.projectId === authProject\.id/);assert.match(src,/permission\.roleCode === "DRIVE_PROJECT_MANAGER"/);assert.match(src,/permission\.permissionCode === "project\.members\.invite"/)});
+check("repair refuses duplicate active non-revoked membership",()=>assert.match(src,/const alreadyLinked = memberships\.some/));
+check("repair is limited to legacy dev-web-user active owner projects",()=>{assert.match(src,/membership\.role === "OWNER"/);assert.match(src,/membership\.userId === "dev-web-user"/);assert.match(src,/membership\.status === "ACTIVE"/)});
+check("repair materializes active project manager not owner",()=>{assert.match(src,/role: "PROJECT_MANAGER"/);assert.match(src,/activateImmediately: true/);assert.doesNotMatch(src,/role: "OWNER"/)});
+check("repair uses canonical auth user id and email",()=>{assert.match(src,/userId: input\.userId/);assert.match(src,/email: input\.email/)});
+console.log(`DIMPRO AUTH V0.6.7 legacy project manager sync PASS · ${n}/${n}`);

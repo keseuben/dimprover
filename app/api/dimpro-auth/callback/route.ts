@@ -1,12 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appSessionCookieOptions, decodeSsoFlowCookie, DIMPRO_APP_SESSION_COOKIE, DIMPRO_SSO_FLOW_COOKIE, transientSsoCookieOptions } from "@/app/lib/dimpro-auth/sso";
 import { resolveDriveSsoConfig } from "@/app/lib/dimpro-auth/client-config";
-import { listAuthorizedExternalProjectIds } from "@/app/lib/dimpro-auth/repository";
+import { getAuthProjectScopeByExternalId, listAuthPermissions, listAuthorizedExternalProjectIds } from "@/app/lib/dimpro-auth/repository";
 import { dimproSessionCookieMaxAge } from "@/app/lib/dimpro-auth/session-policy";
-import { activateProjectMembership } from "@/app/lib/project-core/store";
+import { activateProjectMembership, addProjectMembership, listProjectMemberships } from "@/app/lib/project-core/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+
+async function syncAuthorizedProjectMemberships(input: {
+  userId: string;
+  email: string;
+  displayName: string | null;
+}) {
+  const projectIds = await listAuthorizedExternalProjectIds(input.userId, "DRIVE");
+  if (!projectIds.length) return;
+  const permissions = await listAuthPermissions(input.userId);
+
+  for (const projectId of projectIds) {
+    const activated = await activateProjectMembership(projectId, input.email, input.userId);
+    if (activated) continue;
+
+    const authProject = await getAuthProjectScopeByExternalId(projectId);
+    if (!authProject || authProject.status !== "ACTIVE") continue;
+    const exactManagerGrant = permissions.some((permission) =>
+      permission.productCode === "DRIVE"
+      && permission.projectId === authProject.id
+      && permission.roleCode === "DRIVE_PROJECT_MANAGER"
+      && permission.permissionCode === "project.members.invite"
+    );
+    if (!exactManagerGrant) continue;
+
+    const memberships = await listProjectMemberships(projectId);
+    const alreadyLinked = memberships.some((membership) =>
+      membership.status !== "REVOKED"
+      && (membership.userId.toLowerCase() === input.userId.toLowerCase()
+        || membership.userId.toLowerCase() === input.email
+        || membership.email?.toLowerCase() === input.email)
+    );
+    if (alreadyLinked) continue;
+    const legacyOwner = memberships.find((membership) =>
+      membership.status === "ACTIVE"
+      && membership.role === "OWNER"
+      && membership.userId === "dev-web-user"
+    );
+    if (!legacyOwner) continue;
+
+    const created = await addProjectMembership(projectId, {
+      userId: input.userId,
+      email: input.email,
+      displayName: input.displayName?.trim() || input.email,
+      role: "PROJECT_MANAGER",
+      activateImmediately: true,
+    }, input.userId);
+    if (!created.ok) throw new Error(`LEGACY_PROJECT_MANAGER_SYNC_FAILED:${projectId}:${created.error}`);
+  }
+}
 
 function noLeak(response: NextResponse) {
   response.headers.set("cache-control", "no-store, max-age=0");
@@ -55,8 +105,11 @@ export async function GET(request: NextRequest) {
   const email = payload.user?.email?.trim().toLowerCase() || "";
   if (userId && email) {
     try {
-      const projectIds = await listAuthorizedExternalProjectIds(userId, "DRIVE");
-      await Promise.all(projectIds.map((projectId) => activateProjectMembership(projectId, email, userId)));
+      await syncAuthorizedProjectMemberships({
+        userId,
+        email,
+        displayName: payload.user?.displayName?.trim() || null,
+      });
     } catch (error) {
       console.warn("DIMPRO project membership SSO sync hiba:", error instanceof Error ? error.message : "Ismeretlen sync hiba");
     }
