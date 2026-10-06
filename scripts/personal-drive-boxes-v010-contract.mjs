@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';
+const sql=fs.readFileSync('supabase/migrations/20261006183000_dimpro_personal_drive_boxes_v010.sql','utf8');let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,'0')} ${name}`)};
+check('four personal BOX tables',()=>{for(const t of ['dimpro_personal_drive_boxes','dimpro_personal_drive_box_folders','dimpro_personal_drive_box_items','dimpro_personal_drive_box_events'])assert.match(sql,new RegExp(`create table if not exists public\\.${t}`))});
+check('boxes are canonical user owned',()=>assert.match(sql,/owner_user_id uuid not null references public\.dimpro_users\(id\)/));
+check('items reference personal content refs not project documents',()=>{assert.match(sql,/content_ref_id uuid not null references public\.dimpro_content_refs\(id\)/);assert.doesNotMatch(sql,/drive_core_documents\(id\)/)});
+check('owner plus box integrity is database enforced',()=>{assert.match(sql,/dimpro_personal_drive_boxes_owner_id_unique/);assert.match(sql,/dimpro_personal_drive_box_items_owner_box_fk/);assert.match(sql,/dimpro_personal_drive_box_folders_owner_box_fk/);assert.match(sql,/dimpro_personal_drive_box_events_owner_box_fk/)});
+check('owner plus folder integrity is database enforced',()=>{assert.match(sql,/dimpro_personal_drive_box_items_owner_box_folder_fk/);assert.match(sql,/dimpro_personal_drive_box_folders_parent_scope_fk/)});
+check('box lifecycle mirrors common Drive lifecycle',()=>assert.match(sql,/lifecycle_status in \('DRAFT','READY','SENT','ARCHIVED'\)/));
+check('box purposes mirror common CsomagBOX',()=>assert.match(sql,/purpose in \('GENERAL','DROP','COMPARE','AI_ANALYSIS','ISSUE','MEETING'\)/));
+check('atomic functions cover full mutable BOX core',()=>{for(const fn of ['create_box_atomic','add_box_item_atomic','remove_box_item_atomic','create_box_folder_atomic','move_box_item_atomic','set_box_lifecycle_atomic'])assert.match(sql,new RegExp(`dimpro_personal_drive_${fn}`))});
+check('add item validates exact USER owner ref',()=>{assert.match(sql,/owner_type='USER' and owner_user_id=p_owner_user_id and status='ACTIVE'/);assert.match(sql,/dimpro_personal_drive_box_item_scope_guard/);assert.match(sql,/PERSONAL_BOX_CONTENT_REF_OWNER_MISMATCH/)});
+check('item add is idempotent per box and content ref',()=>{assert.match(sql,/scope_unique unique\(box_id,content_ref_id\)/);assert.match(sql,/idempotent',true/)});
+check('RLS and service-role only table access',()=>{assert.match(sql,/enable row level security/);assert.match(sql,/revoke all on public\.dimpro_personal_drive_boxes[\s\S]*from public, anon, authenticated/);assert.match(sql,/grant select,insert,update,delete[\s\S]*to service_role/)});
+check('atomic RPCs are revoked from public clients',()=>assert.match(sql,/revoke all on function public\.dimpro_personal_drive_create_box_atomic[\s\S]*from public,anon,authenticated/));
+check('personal box schema marker is additive',()=>assert.match(sql,/personal-drive-boxes-v010-20261006/));
+console.log(`DIMPRO Personal Drive CsomagBOX V0.1.0 SQL contract PASS · ${n}/${n}`);
