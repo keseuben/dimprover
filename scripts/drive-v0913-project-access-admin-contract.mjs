@@ -19,9 +19,9 @@ check("active membership roles can be saved and access revoked",()=>{assert.matc
 check("pending invitations can be resent and revoked",()=>{assert.match(menu,/resendInvitation/);assert.match(menu,/revokeInvitation/);assert.match(menu,/Újraküldés/);assert.match(menu,/Visszavonás/);});
 check("owner is visibly and functionally protected",()=>{assert.match(menu,/Projektgazda/);assert.match(members,/target\.role === "OWNER"/);});
 check("membership GET returns actor management capability",()=>{assert.match(members,/canManageMembers/);assert.match(members,/actorMembershipId/);assert.match(members,/actorRole/);});
-check("membership role changes synchronize AUTH and compensate on Project Core failure",()=>{assert.match(members,/replaceProjectAccessRole/);assert.match(members,/previousAuthRole/);assert.match(members,/catch\(\(\) => undefined\)/);});
+check("membership role changes use atomic AUTH sync and compensate on Project Core failure",()=>{assert.match(members,/setProjectAccessRole/);assert.match(members,/previousAuthRole/);assert.match(members,/catch\(\(\) => undefined\)/);});
 check("legacy memberships resolve canonical AUTH user by e-mail before manager grant or revoke",()=>{assert.match(members,/getActiveAuthUserByEmail/);assert.match(members,/resolveCanonicalAuthUserId/);assert.match(members,/targetAuthUserId/);});
-check("role replacement uses existing AUTH invite accept revoke functions without schema migration",()=>{assert.match(members,/replaceProjectAccessRole/);assert.doesNotMatch(members,/auth_set_project_access_role/);});
+check("role replacement uses atomic exact-scope AUTH helper",()=>{assert.match(members,/setProjectAccessRole/);assert.doesNotMatch(members,/replaceProjectAccessRole/);});
 check("self role change and self revoke are denied",()=>{const hits=(members.match(/target\.id === accessResult\.access\.membership\.id/g)||[]).length;assert.equal(hits,2);assert.match(menu,/saját projektszerepköröd/i);});
 check("invite organization is mandatory in API and UI",()=>{assert.match(invite,/!email \|\| !projectId \|\| !organizationName/);assert.match(menu,/Szervezet \*/);});
 check("membership revoke removes AUTH project access and protects pending flow",()=>{assert.match(members,/revokeProjectAccess/);assert.match(members,/függő meghívást/);});

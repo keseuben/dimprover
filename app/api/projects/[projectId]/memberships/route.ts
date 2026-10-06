@@ -17,7 +17,7 @@ import {
   registerAuthProjectScope,
 } from "@/app/lib/dimpro-auth/repository";
 import {
-  replaceProjectAccessRole,
+  setProjectAccessRole,
   revokeProjectAccess,
   type DimproProjectInvitationRole,
 } from "@/app/lib/dimpro-auth/invitations";
@@ -207,11 +207,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ ok: false, error: "A projekt központi AUTH scope-ja nem található." }, { status: 409 });
       }
       authProjectId = authProject.id;
-      await replaceProjectAccessRole({
+      await setProjectAccessRole({
         actorUserId: accessResult.actor.userId,
         targetUserId: targetAuthUserId,
-        targetEmail: target.email || "",
-        targetDisplayName: target.displayName,
         projectId: authProject.id,
         roleCode: nextAuthRole,
       });
@@ -221,11 +219,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const result = await updateProjectMembershipRole(projectId, membershipId, nextRole, accessResult.actor.userId);
     if (!result.ok) {
       if (authRoleChanged && authProjectId) {
-        await replaceProjectAccessRole({
+        await setProjectAccessRole({
           actorUserId: accessResult.actor.userId,
           targetUserId: targetAuthUserId!,
-          targetEmail: target.email || "",
-          targetDisplayName: target.displayName,
           projectId: authProjectId,
           roleCode: previousAuthRole,
         }).catch(() => undefined);
@@ -302,11 +298,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const result = await revokeProjectMembership(projectId, membershipId, accessResult.actor.userId);
     if (!result.ok) {
       if (revokedAuth && authProjectId) {
-        await replaceProjectAccessRole({
+        await setProjectAccessRole({
           actorUserId: accessResult.actor.userId,
           targetUserId: targetAuthUserId!,
-          targetEmail: target.email || "",
-          targetDisplayName: target.displayName,
           projectId: authProjectId,
           roleCode: authRoleForProjectRole(target.role),
         }).catch(() => undefined);

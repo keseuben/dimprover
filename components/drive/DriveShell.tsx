@@ -113,6 +113,11 @@ export default function DriveShell({
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canCreateProject) {
+      setError("A projekt-only meghívotti hozzáférés nem jogosít új projekt létrehozására.");
+      setShowCreateProject(false);
+      return;
+    }
     setSavingProject(true);
     setError("");
     setNotice("");
@@ -269,6 +274,7 @@ export default function DriveShell({
     [workspaces],
   );
 
+  const canCreateProject = workspaces.some((workspace) => workspace.type === "PERSONAL");
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
 
   const handleDriveNavigation = useCallback((target: DriveNavigationTarget) => {
@@ -416,6 +422,7 @@ export default function DriveShell({
         theme={theme}
         onThemeChange={handleThemeChange}
         onWorkspaceChange={handleWorkspaceChange}
+        canCreateProject={canCreateProject}
         onCreateProject={() => {
           cancelBoardTimers();
           setBoardPinned(true);
@@ -443,7 +450,7 @@ export default function DriveShell({
         storageError={storageError}
       />
       <main className={styles.main}>
-        {showCreateProject && (
+        {showCreateProject && canCreateProject && (
           <div className={styles.projectCreateOverlay} role="dialog" aria-modal="true" aria-label="Új DIMPRO Drive projekt">
             <form className={styles.projectCreatePanel} onSubmit={createProject}>
               <header>

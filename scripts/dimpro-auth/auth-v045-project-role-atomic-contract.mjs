@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const read=(p)=>fs.readFileSync(p,"utf8");
+const migration=read("db/auth/migrations/008_auth_v045_project_access_role_atomic.sql");
+const invitations=read("app/lib/dimpro-auth/invitations.ts");
+const members=read("app/api/projects/[projectId]/memberships/route.ts");
+const ready=read("app/health/ready/route.ts");
+const activate=read("scripts/dimpro-auth/activate-dev.mjs");
+let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("migration 008 defines exact project role RPC",()=>{assert.match(migration,/auth_set_project_access_role/);assert.match(migration,/grant_row\.project_id=p_project_id/);assert.match(migration,/p_target_user_id/)});
+check("only Drive member and manager roles are accepted",()=>assert.match(migration,/p_role_code NOT IN \('DRIVE_PROJECT_MEMBER','DRIVE_PROJECT_MANAGER'\)/));
+check("actor must have project invite permission on same scope",()=>{assert.match(migration,/permission\.code='project\.members\.invite'/);assert.match(migration,/grant_row\.user_id=p_actor_user_id/);assert.match(migration,/grant_row\.project_id=p_project_id/)});
+check("role mutation is security definer and runtime execute only",()=>{assert.match(migration,/SECURITY DEFINER/);assert.match(migration,/REVOKE ALL ON FUNCTION public\.auth_set_project_access_role/);assert.match(migration,/GRANT EXECUTE ON FUNCTION public\.auth_set_project_access_role/)});
+check("role mutation revokes competing exact-scope grant before ensuring requested role",()=>{assert.match(migration,/current_role\.code IN \('DRIVE_PROJECT_MEMBER','DRIVE_PROJECT_MANAGER'\)/);assert.match(migration,/current_role\.id<>v_role_id/);assert.match(migration,/INSERT INTO public\.auth_access_grants/)});
+check("runtime helper calls only atomic RPC",()=>{assert.match(invitations,/setProjectAccessRole/);assert.match(invitations,/SELECT auth_set_project_access_role\(\$1,\$2,\$3,\$4\)/);const block=invitations.split('export async function setProjectAccessRole')[1];assert.doesNotMatch(block,/createProjectInvitation|acceptProjectInvitation|revokeProjectAccess/)});
+check("membership route uses atomic helper for change and compensation",()=>{const hits=(members.match(/setProjectAccessRole\(/g)||[]).length;assert.ok(hits>=3);assert.doesNotMatch(members,/replaceProjectAccessRole/)});
+check("AUTH current migration baseline is eight",()=>{assert.match(ready,/migrationCount >= 8/);assert.match(activate,/migrationCount\)!==8/);assert.match(activate,/migrationCount:8/)});
+console.log(`DIMPRO AUTH V0.4.5 atomic project role contract PASS · ${n}/${n}`);

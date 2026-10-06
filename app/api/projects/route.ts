@@ -6,6 +6,7 @@ import { normalizeDriveCoreError } from "@/app/lib/drive-core/errors";
 import { DRIVE_PROJECT_PROVISIONING_VERSION, provisionProjectDrive } from "@/app/lib/drive-core/projectProvisioning";
 import { provisionProjectIdentityBridge } from "@/app/lib/identity-core/projectProvisioning";
 import { DimproIdentityError } from "@/app/lib/identity-core/types";
+import { hasPersonalDriveAccess } from "@/app/lib/dimpro-auth/repository";
 
 export async function GET(request: NextRequest) {
   const authResult = await resolveProjectCoreAuth(request);
@@ -24,6 +25,15 @@ export async function POST(request: NextRequest) {
   const authResult = await resolveProjectCoreAuth(request);
   if (!authResult.ok) {
     return NextResponse.json({ ok: false, error: authResult.error }, { status: authResult.status });
+  }
+
+  const canCreateProject = await hasPersonalDriveAccess(authResult.actor.userId).catch(() => false);
+  if (!canCreateProject) {
+    return NextResponse.json({
+      ok: false,
+      error: "PROJECT_CREATE_ENTITLEMENT_REQUIRED",
+      message: "A projekt-only meghívotti hozzáférés nem jogosít új projekt létrehozására.",
+    }, { status: 403, headers: { "cache-control": "no-store" } });
   }
 
   let input: Record<string, unknown>;

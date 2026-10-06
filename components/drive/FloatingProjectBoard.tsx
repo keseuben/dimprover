@@ -50,6 +50,7 @@ type Props = {
   theme: DriveTheme;
   onThemeChange: (theme: DriveTheme) => void;
   onWorkspaceChange: (workspaceId: string) => void;
+  canCreateProject: boolean;
   onCreateProject: () => void;
   onClose: () => void;
   onTogglePinned: () => void;
@@ -85,6 +86,7 @@ export default function FloatingProjectBoard({
   theme,
   onThemeChange,
   onWorkspaceChange,
+  canCreateProject,
   onCreateProject,
   onClose,
   onTogglePinned,
@@ -159,9 +161,11 @@ export default function FloatingProjectBoard({
             <option key={workspace.id} value={workspace.id}>{workspace.label}{workspace.code ? " · " + workspace.code : ""}</option>
           ))}
         </select>
-        <button type="button" className={styles.projectCreateButton} onClick={onCreateProject}>
-          <Plus size={14} /> Új projekt
-        </button>
+        {canCreateProject ? (
+          <button type="button" className={styles.projectCreateButton} onClick={onCreateProject}>
+            <Plus size={14} /> Új projekt
+          </button>
+        ) : null}
 
         {projectMode ? <section className={styles.provisioningCard} aria-label="Drive projektkörnyezet">
           <div className={styles.provisioningCardHeader}>

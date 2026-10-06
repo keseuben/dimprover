@@ -202,41 +202,21 @@ export async function revokeProjectAccess(actorUserId: string, targetUserId: str
   }
 }
 
-export async function replaceProjectAccessRole(input: {
+export async function setProjectAccessRole(input: {
   actorUserId: string;
   targetUserId: string;
-  targetEmail: string;
-  targetDisplayName?: string | null;
   projectId: string;
   roleCode: DimproProjectInvitationRole;
 }) {
-  const email = normalizeDimproAuthEmail(input.targetEmail);
-  await revokeProjectAccess(input.actorUserId, input.targetUserId, input.projectId);
-  const created = await createProjectInvitation({
-    inviterUserId: input.actorUserId,
-    email,
-    displayName: input.targetDisplayName || null,
-    projectId: input.projectId,
-    roleCode: input.roleCode,
-    expiresInDays: 1,
-  });
-  if (created.invitation.userId !== input.targetUserId) {
-    await revokeProjectInvitation(input.actorUserId, created.invitation.id).catch(() => false);
-    throw new DimproAuthError(
-      "Role replacement resolved a different AUTH user.",
-      "AUTH_PROJECT_MEMBER_IDENTITY_MISMATCH",
-      409,
-      "A projekttag központi AUTH azonosítása megváltozott; a szerepkörváltás megszakadt.",
+  try {
+    const result = await authQuery<{ role_code: DimproProjectInvitationRole }>(
+      `SELECT auth_set_project_access_role($1,$2,$3,$4) AS role_code`,
+      [input.actorUserId, input.targetUserId, input.projectId, input.roleCode],
     );
+    const roleCode = result.rows[0]?.role_code;
+    if (roleCode !== input.roleCode) throw new Error("AUTH_PROJECT_ROLE_UPDATE_EMPTY_RESULT");
+    return { roleCode };
+  } catch (error) {
+    invitationError(error);
   }
-  const accepted = await acceptProjectInvitation(created.rawToken);
-  if (accepted.userId !== input.targetUserId || accepted.projectId !== input.projectId || accepted.roleCode !== input.roleCode) {
-    throw new DimproAuthError(
-      "Role replacement acceptance scope mismatch.",
-      "AUTH_PROJECT_ROLE_REPLACEMENT_MISMATCH",
-      409,
-      "A szerepkörváltás központi AUTH ellenőrzése nem egyezett; a művelet megszakadt.",
-    );
-  }
-  return { roleCode: accepted.roleCode, invitationId: accepted.invitationId };
 }

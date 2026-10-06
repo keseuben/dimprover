@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let createdMembershipId: string | null = null;
   try {
     const projectAccess = await requireProjectPermission(request, projectId, "project.manage_members");
     if (!projectAccess.ok) {
@@ -184,7 +185,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let createdMembershipId: string | null = null;
     if (!existingMembership) {
       const membershipResult = await addProjectMembership(projectId, {
         email: normalizedEmail,
@@ -269,6 +269,9 @@ export async function POST(request: NextRequest) {
       { status: 201, headers: { "cache-control": "no-store" } },
     );
   } catch (error) {
+    if (createdMembershipId) {
+      await revokeProjectMembership(projectId, createdMembershipId, auth.session.user.id).catch(() => undefined);
+    }
     if (error instanceof DimproAuthError) {
       return NextResponse.json(
         { ok: false, error: error.code, message: error.publicMessage, correlationId },
