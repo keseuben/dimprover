@@ -10,11 +10,28 @@ const migrationRel="supabase/migrations/20261006123000_dimpro_content_personal_f
 const migration=join(root,migrationRel);
 const expectedSha="44857a6d9bd6307b665d6d4cfc1533d9855c4574606b1891ce7273aae98c971c";
 const expectedRef="pbgyuznivqvestuksvif";
-const db={host:"aws-0-eu-central-1.pooler.supabase.com",port:"5432",database:"postgres",user:"postgres."+expectedRef};
+const poolerTarget={host:"aws-0-eu-central-1.pooler.supabase.com",port:"5432",database:"postgres",user:"postgres."+expectedRef,mode:"POOLER"};
+const directTarget={host:`db.${expectedRef}.supabase.co`,port:"5432",database:"postgres",user:"postgres",mode:"DIRECT"};
+const requestedHost=String(process.env.CONTENT_PERSONAL_FOLDERS_V010_DB_HOST||"").trim();
+const requestedUser=String(process.env.CONTENT_PERSONAL_FOLDERS_V010_DB_USER||"").trim();
+const requestedPort=String(process.env.CONTENT_PERSONAL_FOLDERS_V010_DB_PORT||"5432").trim();
+const requestedDatabase=String(process.env.CONTENT_PERSONAL_FOLDERS_V010_DB_NAME||"postgres").trim();
+const targetCandidates=[poolerTarget,directTarget];
+const db=targetCandidates.find((target)=>
+  (!requestedHost||target.host===requestedHost)
+  && (!requestedUser||target.user===requestedUser)
+  && target.port===requestedPort
+  && target.database===requestedDatabase
+) || poolerTarget;
 const approvalPhrase="DEV_ONLY_CONTENT_PERSONAL_FOLDERS_V010_APPLY_APPROVED";
 const backupRoot=process.env.CONTENT_PERSONAL_FOLDERS_V010_BACKUP_ROOT?.trim()||"/srv/dimpro-dev/backups/content-personal-folders-v010";
 
 function fail(code,message,details={}){console.error(JSON.stringify({ok:false,mode,code,message,...details},null,2));process.exit(2)}
+function assertTargetAllowlist(){
+  const matched=targetCandidates.some((target)=>target.host===db.host&&target.port===db.port&&target.database===db.database&&target.user===db.user);
+  if(!matched)fail("DEV_TARGET_NOT_ALLOWLISTED","A PostgreSQL cél nincs a canonical DEV allowlistben.",{host:db.host,port:db.port,database:db.database,user:db.user});
+  if(requestedHost&&db.host!==requestedHost)fail("DEV_TARGET_REQUEST_INVALID","A kért DB host/user kombináció nem canonical DEV cél.",{requestedHost,requestedUser});
+}
 function sha(file){return createHash("sha256").update(readFileSync(file)).digest("hex")}
 function run(command,args,options={}){const r=spawnSync(command,args,{cwd:root,encoding:"utf8",env:{...process.env},maxBuffer:32*1024*1024,...options});return{ok:!r.error&&r.status===0,status:r.status,stdout:(r.stdout||"").trim(),stderr:(r.stderr||"").trim()}}
 function requireCommand(c){const r=spawnSync(c,["--version"],{encoding:"utf8"});if(r.error||r.status!==0)fail("TOOL_MISSING",`${c} nem érhető el.`)}
@@ -81,9 +98,10 @@ function stamp(){return new Date().toISOString().replace(/[-:]/g,"").replace(/\.
 if(!["preflight","apply","verify"].includes(mode))fail("MODE_INVALID","Használat: preflight | apply | verify");
 if(!existsSync(migration))fail("MIGRATION_MISSING","A personal folder migráció hiányzik.");
 for(const c of ["psql","pg_dump","pg_restore"])requireCommand(c);
+assertTargetAllowlist();
 credentialReady();
 const actualSha=sha(migration);if(actualSha!==expectedSha)fail("MIGRATION_SHA_MISMATCH","A personal folder migráció SHA-256 eltér.",{expectedSha,actualSha});
-const id=identity();if(id.database!==db.database||id.user!=="postgres"||Number(id.port)!==5432)fail("DEV_TARGET_MISMATCH","Nem a canonical DEV Supabase PostgreSQL cél aktív.",{identity:id,projectRef:expectedRef});
+const id=identity();if(id.database!==db.database||id.user!=="postgres"||Number(id.port)!==5432)fail("DEV_TARGET_MISMATCH","Nem a canonical DEV Supabase PostgreSQL cél aktív.",{identity:id,projectRef:expectedRef,targetMode:db.mode,host:db.host});
 if(process.env.PROD_SUPABASE_PROJECT_REF===expectedRef)fail("PROD_TARGET_BLOCKED","A DEV és PROD Supabase project ref nem lehet azonos.");
 const beforeProbe=probe(),beforeBase=baseMarker(),beforeAddon=addonMarker();
 if(!baseReady(beforeProbe,beforeBase))fail("CONTENT_CORE_BASELINE_REQUIRED","A Content Core 0.1.0 baseline nem megfelelő.",{schema:beforeProbe,marker:beforeBase});
@@ -93,7 +111,7 @@ if(mode==="preflight"){
   if((beforeProbe.folderMeta||beforeProbe.folders)&&!targetReady(beforeProbe,beforeAddon))fail("PARTIAL_SCHEMA","Részleges personal folder schema található; automatikus apply tiltva.",{schema:beforeProbe,marker:beforeAddon});
   const already=targetReady(beforeProbe,beforeAddon);
   const integ=already?integrity():null;if(integ)assertIntegrity(integ);
-  console.log(JSON.stringify({ok:true,mode,projectRef:expectedRef,productionAccess:"DENY",migration:migrationRel,migrationSha256:actualSha,alreadyApplied:already,baseMarker:beforeBase,addonMarker:beforeAddon,rowCounts:beforeCounts,integrity:integ,requiredApproval:approvalPhrase,destructiveActionsPerformed:false},null,2));process.exit(0)
+  console.log(JSON.stringify({ok:true,mode,projectRef:expectedRef,productionAccess:"DENY",targetMode:db.mode,host:db.host,migration:migrationRel,migrationSha256:actualSha,alreadyApplied:already,baseMarker:beforeBase,addonMarker:beforeAddon,rowCounts:beforeCounts,integrity:integ,requiredApproval:approvalPhrase,destructiveActionsPerformed:false},null,2));process.exit(0)
 }
 if(mode==="verify"){
   if(!targetReady(beforeProbe,beforeAddon))fail("TARGET_NOT_READY","A personal folder core még nincs alkalmazva.",{schema:beforeProbe,marker:beforeAddon});
@@ -117,4 +135,4 @@ const afterProbe=probe(),afterBase=baseMarker(),afterAddon=addonMarker(),afterCo
 if(!baseReady(afterProbe,afterBase)||!targetReady(afterProbe,afterAddon))fail("POST_VERIFY_FAILED","A migráció utáni marker/schema ellenőrzés sikertelen.",{backupDir:dir,schema:afterProbe,baseMarker:afterBase,addonMarker:afterAddon});
 for(const key of ['baseMeta','objects','refs'])if(Number(afterCounts[key])!==Number(beforeCounts[key]))fail("BASE_ROW_COUNT_CHANGED","A Content Core meglévő sorainak száma megváltozott.",{key,before:beforeCounts,after:afterCounts,backupDir:dir});
 const integ=integrity();assertIntegrity(integ);if(Number(integ.folderRows)!==0)fail("NEW_TABLE_NOT_EMPTY","A personal folder tábla nem üres induláskor.",{integrity:integ,backupDir:dir});
-const report={ok:true,mode,projectRef:expectedRef,productionAccess:"DENY",migration:migrationRel,migrationSha256:actualSha,backup:{directory:dir,file:basename(dump),sha256:dumpSha,listingVerified:true},baseMarker:afterBase,addonMarker:afterAddon,beforeCounts,afterCounts,integrity:integ,completedAt:new Date().toISOString()};writeFileSync(join(dir,"migration-report.json"),JSON.stringify(report,null,2)+"\n",{mode:0o600});console.log(JSON.stringify(report,null,2));
+const report={ok:true,mode,projectRef:expectedRef,productionAccess:"DENY",targetMode:db.mode,host:db.host,migration:migrationRel,migrationSha256:actualSha,backup:{directory:dir,file:basename(dump),sha256:dumpSha,listingVerified:true},baseMarker:afterBase,addonMarker:afterAddon,beforeCounts,afterCounts,integrity:integ,completedAt:new Date().toISOString()};writeFileSync(join(dir,"migration-report.json"),JSON.stringify(report,null,2)+"\n",{mode:0o600});console.log(JSON.stringify(report,null,2));

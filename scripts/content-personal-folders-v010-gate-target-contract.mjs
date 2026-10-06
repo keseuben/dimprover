@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";import fs from "node:fs";
+const gate=fs.readFileSync("scripts/content-personal-folders-v010-migration-gate.mjs","utf8");
+let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+check("pooler target remains canonical",()=>{assert.match(gate,/aws-0-eu-central-1\.pooler\.supabase\.com/);assert.match(gate,/postgres\."\+expectedRef|"postgres\."\+expectedRef/)});
+check("direct target is exact DEV project host",()=>assert.match(gate,/db\.\$\{expectedRef\}\.supabase\.co/));
+check("target selection is allowlisted",()=>{assert.match(gate,/targetCandidates=\[poolerTarget,directTarget\]/);assert.match(gate,/DEV_TARGET_NOT_ALLOWLISTED/);assert.match(gate,/DEV_TARGET_REQUEST_INVALID/)});
+check("pgpass candidate must pass live connection test",()=>{assert.match(gate,/select 1;/);assert.match(gate,/test\.ok&&test\.stdout==="1"/)});
+check("explicit password remains optional secure env path",()=>assert.match(gate,/CONTENT_PERSONAL_FOLDERS_V010_DB_PASSWORD\|\|process\.env\.SUPABASE_DB_PASSWORD\|\|process\.env\.PGPASSWORD/));
+check("production stays denied",()=>assert.match(gate,/productionAccess:"DENY"/));
+console.log(`DIMPRO Content Personal Folders V0.1.0 gate target contract PASS · ${n}/${n}`);
