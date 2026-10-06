@@ -19,7 +19,8 @@ import {
   Star,
 } from "lucide-react";
 import { DRIVE_VERSION_DISPLAY, type DriveNavigationTarget } from "./driveBuildInfo";
-import type { DriveProject, DriveStorageQuota } from "./driveTypes";
+import type { DriveStorageQuota } from "./driveTypes";
+import type { DriveWorkspaceOption, DriveWorkspaceType } from "./driveWorkspaceTypes";
 import type { DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
 
@@ -41,13 +42,14 @@ type DriveProvisioningInfo = {
 type DriveProvisioningStatus = "checking" | "ready" | "repair-required" | "error";
 
 type Props = {
-  projects: DriveProject[];
-  selectedProjectId: string;
+  workspaceOptions: DriveWorkspaceOption[];
+  selectedWorkspaceId: string;
+  selectedWorkspaceType: DriveWorkspaceType;
   pinned: boolean;
   activeTarget: DriveNavigationTarget;
   theme: DriveTheme;
   onThemeChange: (theme: DriveTheme) => void;
-  onProjectChange: (projectId: string) => void;
+  onWorkspaceChange: (workspaceId: string) => void;
   onCreateProject: () => void;
   onClose: () => void;
   onTogglePinned: () => void;
@@ -75,13 +77,14 @@ function formatBytes(value: number) {
 }
 
 export default function FloatingProjectBoard({
-  projects,
-  selectedProjectId,
+  workspaceOptions,
+  selectedWorkspaceId,
+  selectedWorkspaceType,
   pinned,
   activeTarget,
   theme,
   onThemeChange,
-  onProjectChange,
+  onWorkspaceChange,
   onCreateProject,
   onClose,
   onTogglePinned,
@@ -99,6 +102,7 @@ export default function FloatingProjectBoard({
   storageLoading = false,
   storageError = null,
 }: Props) {
+  const projectMode = selectedWorkspaceType === "PROJECT";
   const storagePercent = storageQuota ? Math.max(0, Math.min(100, storageQuota.usagePercent)) : 0;
   const storageValue = storageLoading
     ? "Betöltés…"
@@ -144,22 +148,22 @@ export default function FloatingProjectBoard({
           </div>
         </header>
 
-        <span className={styles.boardSectionLabel}>Projekt</span>
+        <span className={styles.boardSectionLabel}>Munkatér</span>
         <select
           className={styles.projectSelect}
-          value={selectedProjectId}
-          onChange={(event) => onProjectChange(event.target.value)}
-          aria-label="Drive projekt kiválasztása"
+          value={selectedWorkspaceId}
+          onChange={(event) => onWorkspaceChange(event.target.value)}
+          aria-label="Drive munkatér kiválasztása"
         >
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>{project.name}</option>
+          {workspaceOptions.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>{workspace.label}{workspace.code ? " · " + workspace.code : ""}</option>
           ))}
         </select>
         <button type="button" className={styles.projectCreateButton} onClick={onCreateProject}>
           <Plus size={14} /> Új projekt
         </button>
 
-        <section className={styles.provisioningCard} aria-label="Drive projektkörnyezet">
+        {projectMode ? <section className={styles.provisioningCard} aria-label="Drive projektkörnyezet">
           <div className={styles.provisioningCardHeader}>
             <strong>Drive projektkörnyezet</strong>
             <span className={styles.provisioningStatusBadge + " " + (
@@ -213,7 +217,16 @@ export default function FloatingProjectBoard({
               {provisioningRepairBusy ? "Javítás…" : "Javítás / újrapróbálás"}
             </button>
           ) : null}
-        </section>
+        </section> : (
+          <section className={styles.provisioningCard} aria-label="Saját Drive környezet">
+            <div className={styles.provisioningCardHeader}><strong>Saját Drive</strong><span className={`${styles.provisioningStatusBadge} ${styles.provisioningStatusReady}`}>Aktív</span></div>
+            <div className={styles.provisioningMeta}>
+              <div><span>Tulajdon</span><strong>Személyes</strong></div>
+              <div><span>Tárolási kör</span><strong>USER_ROOT</strong></div>
+              <div><span>Mappafa</span><strong>Következő fázis</strong></div>
+            </div>
+          </section>
+        )}
 
         <span className={styles.boardSectionLabel}>Drive</span>
         <div className={styles.boardNav}>
@@ -226,16 +239,16 @@ export default function FloatingProjectBoard({
           <button type="button" className={styles.boardNavDisabled} disabled title="Legutóbbi – hamarosan">
             <Clock3 size={16} /> <span>Legutóbbi</span><small>hamarosan</small>
           </button>
-          <button type="button" className={navClass("favorites")} onClick={() => onNavigate("favorites")}>
+          <button type="button" className={projectMode ? navClass("favorites") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("favorites")} title={projectMode ? "Kedvencek" : "Személyes Kedvencek – későbbi fázis"}>
             <Star size={16} /> Kedvencek
           </button>
-          <button type="button" className={navClass("incoming")} onClick={() => onNavigate("incoming")}>
+          <button type="button" className={projectMode ? navClass("incoming") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("incoming")} title={projectMode ? "Beérkező Drop" : "A személyes Beérkező Drop későbbi fázis"}>
             <Inbox size={16} /> Beérkező Drop
           </button>
           <button type="button" className={styles.boardNavDisabled} disabled title="Kiadások – külön Drive nézet hamarosan">
             <PackageCheck size={16} /> <span>Kiadások</span><small>hamarosan</small>
           </button>
-          <button type="button" className={navClass("boxes")} onClick={() => onNavigate("boxes")}>
+          <button type="button" className={projectMode ? navClass("boxes") : styles.boardNavDisabled} disabled={!projectMode} onClick={() => projectMode && onNavigate("boxes")} title={projectMode ? "CsomagBOX" : "A személyes CsomagBOX későbbi fázis"}>
             <Box size={16} /> CsomagBOX
           </button>
           <button type="button" className={styles.boardNavDisabled} disabled title="Lomtár nézet – hamarosan">
@@ -271,21 +284,16 @@ export default function FloatingProjectBoard({
           <Link href="/beallitasok"><Settings size={16} /> Beállítások</Link>
         </div>
 
-        <div className={styles.storageCard}>
-          <div className={styles.storageRow}><span>Tárhely</span><strong>{storageValue}</strong></div>
-          <div
-            className={styles.storageBar}
-            role="progressbar"
-            aria-label="Drive tárhelyhasználat"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(storagePercent)}
-          >
-            <div className={styles.storageBarFill} style={{ width: `${storagePercent}%` }} />
+        {projectMode ? (
+          <div className={styles.storageCard}>
+            <div className={styles.storageRow}><span>Tárhely</span><strong>{storageValue}</strong></div>
+            <div className={styles.storageBar} role="progressbar" aria-label="Drive tárhelyhasználat" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(storagePercent)}>
+              <div className={styles.storageBarFill} style={{ width: `${storagePercent}%` }} />
+            </div>
+            {storageError ? <div className={styles.storageError}>{storageError}</div> : null}
+            <button type="button" className={styles.storageButton}>Tárhely bővítése</button>
           </div>
-          {storageError ? <div className={styles.storageError}>{storageError}</div> : null}
-          <button type="button" className={styles.storageButton}>Tárhely bővítése</button>
-        </div>
+        ) : null}
       </div>
     </aside>
   );

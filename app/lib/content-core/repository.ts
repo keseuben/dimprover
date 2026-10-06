@@ -109,6 +109,57 @@ export async function upsertContentObject(input: {
   return result.data as ContentObjectRow;
 }
 
+export async function listUserContentItems(input: { userId: string; limit?: number }) {
+  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit || 200)));
+  const refsResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_refs")
+    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
+    .eq("owner_type", "USER")
+    .eq("owner_user_id", input.userId)
+    .eq("status", "ACTIVE")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (refsResult.error) dbError("A Saját Drive tartalomjegyzéke nem olvasható.", refsResult.error);
+  const refs = (refsResult.data || []) as ContentRefRow[];
+  if (refs.length === 0) return [];
+
+  const objectIds = [...new Set(refs.map((ref) => ref.content_object_id))];
+  const objectsResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_objects")
+    .select("id,sha256,size_bytes,mime_type,original_name,display_name,storage_provider,storage_bucket,storage_key,security_status,virus_scan_status,source_system,source_object_id,status,created_at,updated_at")
+    .in("id", objectIds)
+    .eq("status", "ACTIVE");
+  if (objectsResult.error) dbError("A Saját Drive tartalomobjektumai nem olvashatók.", objectsResult.error);
+  const objects = new Map(((objectsResult.data || []) as ContentObjectRow[]).map((object) => [object.id, object]));
+  return refs.flatMap((ref) => {
+    const object = objects.get(ref.content_object_id);
+    return object ? [{ ref, object }] : [];
+  });
+}
+
+export async function getUserContentItemByRefId(input: { userId: string; refId: string }) {
+  const refResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_refs")
+    .select("id,content_object_id,owner_type,owner_user_id,owner_project_id,folder_id,source_system,source_ref,display_name,retained_independently,status,created_at,updated_at")
+    .eq("id", input.refId)
+    .eq("owner_type", "USER")
+    .eq("owner_user_id", input.userId)
+    .eq("status", "ACTIVE")
+    .maybeSingle();
+  if (refResult.error) dbError("A Saját Drive fájlhivatkozása nem olvasható.", refResult.error);
+  const ref = (refResult.data || null) as ContentRefRow | null;
+  if (!ref) return null;
+  const objectResult = await getDimproIdentitySupabaseClient()
+    .from("dimpro_content_objects")
+    .select("id,sha256,size_bytes,mime_type,original_name,display_name,storage_provider,storage_bucket,storage_key,security_status,virus_scan_status,source_system,source_object_id,status,created_at,updated_at")
+    .eq("id", ref.content_object_id)
+    .eq("status", "ACTIVE")
+    .maybeSingle();
+  if (objectResult.error) dbError("A Saját Drive tartalomobjektuma nem olvasható.", objectResult.error);
+  const object = (objectResult.data || null) as ContentObjectRow | null;
+  return object ? { ref, object } : null;
+}
+
 export async function findUserContentRef(input: { userId: string; sourceSystem: string; sourceRef: string }) {
   const result = await getDimproIdentitySupabaseClient()
     .from("dimpro_content_refs")

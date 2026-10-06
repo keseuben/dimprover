@@ -4,33 +4,13 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AlertTriangle, Loader2, Plus, X } from "lucide-react";
 import DriveNavigationRail from "./DriveNavigationRail";
 import DriveWorkspace from "./DriveWorkspace";
+import PersonalDriveWorkspace from "./PersonalDriveWorkspace";
 import FloatingProjectBoard from "./FloatingProjectBoard";
 import type { DriveProject, DriveStorageQuota } from "./driveTypes";
+import type { DriveWorkspaceOption, DriveWorkspaceRecord, DriveWorkspacesPayload } from "./driveWorkspaceTypes";
 import { type DriveNavigationRequest, type DriveNavigationTarget } from "./driveBuildInfo";
 import { DRIVE_THEME_STORAGE_KEY, normalizeDriveTheme, type DriveTheme } from "./driveTheme";
 import styles from "./DriveWorkspace.module.css";
-
-type DriveWorkspaceOption = {
-  id: string;
-  label: string;
-  code?: string | null;
-  kind: "PROJECT";
-};
-
-type ProjectsPayload = {
-  ok?: boolean;
-  error?: string;
-  projects?: Array<{
-    id: string;
-    code: string;
-    name: string;
-    description?: string;
-    status: string;
-    currentPhase?: string;
-    progressPercent?: number;
-    permissions?: DriveProject["permissions"];
-  }>;
-};
 
 type DriveProvisioningInfo = {
   version: string;
@@ -68,8 +48,9 @@ export default function DriveShell({
   pilotProjectName?: string;
   pilotMode?: boolean;
 }) {
-  const [projects, setProjects] = useState<DriveProject[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [workspaces, setWorkspaces] = useState<DriveWorkspaceRecord[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [workspaceUserEmail, setWorkspaceUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [boardOpen, setBoardOpen] = useState(false);
@@ -112,27 +93,19 @@ export default function DriveShell({
   }, []);
   const boardCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadProjects = useCallback(async () => {
+  const loadWorkspaces = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/projects", { credentials: "same-origin", cache: "no-store" });
-      const payload = await response.json() as ProjectsPayload;
-      if (!response.ok || !payload.ok) throw new Error(payload.error || "A projektlista nem tölthető be.");
-      const normalized = (payload.projects || []).map((project) => ({
-        id: project.id,
-        code: project.code,
-        name: project.name,
-        description: project.description,
-        status: project.status,
-        currentPhase: project.currentPhase,
-        progressPercent: project.progressPercent,
-        permissions: project.permissions || [],
-      }));
-      setProjects(normalized);
-      setSelectedProjectId((current) => normalized.some((project) => project.id === current) ? current : normalized[0]?.id || "");
+      const response = await fetch("/api/drive/workspaces", { credentials: "same-origin", cache: "no-store" });
+      const payload = await response.json() as DriveWorkspacesPayload;
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "A Drive munkaterek nem tölthetők be.");
+      const normalized = (payload.workspaces || []).filter((workspace) => workspace?.id && (workspace.type === "PERSONAL" || workspace.type === "PROJECT"));
+      setWorkspaces(normalized);
+      setWorkspaceUserEmail(payload.user?.email || null);
+      setSelectedWorkspaceId((current) => normalized.some((workspace) => workspace.id === current) ? current : normalized[0]?.id || "");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "A projektlista nem tölthető be.");
+      setError(caught instanceof Error ? caught.message : "A Drive munkaterek nem tölthetők be.");
     } finally {
       setLoading(false);
     }
@@ -160,8 +133,8 @@ export default function DriveShell({
       if (!response.ok || !payload.ok || !payload.project) {
         throw new Error(payload.error || "A Drive projekt nem hozható létre.");
       }
-      await loadProjects();
-      setSelectedProjectId(payload.project.id);
+      await loadWorkspaces();
+      setSelectedWorkspaceId(`project:${payload.project.id}`);
       setShowCreateProject(false);
       const pilotNote = payload.driveProvisioning?.pilotFolder ? " A PILOT mappa létrejött." : "";
       setNotice(`A Drive projekt létrejött: ${payload.project.name}.${pilotNote}`);
@@ -172,7 +145,7 @@ export default function DriveShell({
     }
   }
 
-  useEffect(() => { void loadProjects(); }, [loadProjects]);
+  useEffect(() => { void loadWorkspaces(); }, [loadWorkspaces]);
 
   useEffect(() => () => {
     if (boardOpenTimer.current) clearTimeout(boardOpenTimer.current);
@@ -261,19 +234,39 @@ export default function DriveShell({
     };
   }, [boardOpen, closeBoardImmediately]);
 
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || workspaces[0] || null,
+    [workspaces, selectedWorkspaceId],
+  );
+
+  const projects = useMemo<DriveProject[]>(
+    () => workspaces
+      .filter((workspace) => workspace.type === "PROJECT" && Boolean(workspace.projectId))
+      .map((workspace) => ({
+        id: workspace.projectId as string,
+        code: workspace.code || "",
+        name: workspace.name,
+        status: workspace.status,
+        permissions: workspace.permissions || [],
+      })),
+    [workspaces],
+  );
+
   const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
-    [projects, selectedProjectId],
+    () => selectedWorkspace?.type === "PROJECT" && selectedWorkspace.projectId
+      ? projects.find((project) => project.id === selectedWorkspace.projectId) || null
+      : null,
+    [projects, selectedWorkspace],
   );
 
   const workspaceOptions = useMemo<DriveWorkspaceOption[]>(
-    () => projects.map((project) => ({
-      id: project.id,
-      label: project.name,
-      code: project.code || null,
-      kind: "PROJECT",
+    () => workspaces.map((workspace) => ({
+      id: workspace.id,
+      label: workspace.name,
+      code: workspace.code || null,
+      kind: workspace.type,
     })),
-    [projects],
+    [workspaces],
   );
 
   const canRepairProvisioning = Boolean(selectedProject?.permissions?.includes("project.update"));
@@ -288,8 +281,8 @@ export default function DriveShell({
     closeBoardImmediately();
   }, [closeBoardImmediately, provisioning?.incomingDropFolder?.id]);
 
-  const handleProjectChange = useCallback((projectId: string) => {
-    setSelectedProjectId(projectId);
+  const handleWorkspaceChange = useCallback((workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId);
     setActiveNavigation("documents");
     setNavigationRequest((current) => ({ id: current.id + 1, target: "documents" }));
     closeBoardImmediately();
@@ -415,13 +408,14 @@ export default function DriveShell({
         onNavigate={handleDriveNavigation}
       />
       <FloatingProjectBoard
-        projects={projects}
-        selectedProjectId={selectedProject?.id || ""}
+        workspaceOptions={workspaceOptions}
+        selectedWorkspaceId={selectedWorkspace?.id || ""}
+        selectedWorkspaceType={selectedWorkspace?.type || "PROJECT"}
         pinned={boardPinned}
         activeTarget={activeNavigation}
         theme={theme}
         onThemeChange={handleThemeChange}
-        onProjectChange={handleProjectChange}
+        onWorkspaceChange={handleWorkspaceChange}
         onCreateProject={() => {
           cancelBoardTimers();
           setBoardPinned(true);
@@ -491,12 +485,21 @@ export default function DriveShell({
         )}
         {notice && <div className={styles.shellNotice}>{notice}</div>}
         {loading ? (
-          <div className={styles.loadingState}><div><Loader2 className={styles.spin} size={28} /><strong>DIMPRO Drive indítása</strong><span>Elérhető projektek és jogosultságok betöltése…</span></div></div>
+          <div className={styles.loadingState}><div><Loader2 className={styles.spin} size={28} /><strong>DIMPRO Drive indítása</strong><span>Saját és projekt munkaterek betöltése…</span></div></div>
         ) : error ? (
           <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>A Drive nem indítható</strong><span>{error}</span></div></div>
-        ) : !selectedProject ? (
-          <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>Nincs elérhető projekt</strong><span>Hozz létre új Drive projektet a jobb oldali board „Új projekt” gombjával.</span></div></div>
-        ) : (
+        ) : !selectedWorkspace ? (
+          <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>Nincs elérhető Drive munkatér</strong><span>Saját Drive jogosultság vagy projektmeghívás szükséges.</span></div></div>
+        ) : selectedWorkspace.type === "PERSONAL" ? (
+          <PersonalDriveWorkspace
+            key={selectedWorkspace.id + ":" + workspaceRevision}
+            workspaceName={selectedWorkspace.name}
+            userEmail={workspaceUserEmail}
+            workspaceOptions={workspaceOptions}
+            selectedWorkspaceId={selectedWorkspace.id}
+            onWorkspaceChange={handleWorkspaceChange}
+          />
+        ) : selectedProject ? (
           <DriveWorkspace
             key={selectedProject.id + ":" + workspaceRevision}
             projectId={selectedProject.id}
@@ -505,11 +508,13 @@ export default function DriveShell({
             projectStatus={selectedProject.status}
             permissions={selectedProject.permissions}
             workspaceOptions={workspaceOptions}
-            selectedWorkspaceId={selectedProjectId}
-            onWorkspaceChange={handleProjectChange}
+            selectedWorkspaceId={selectedWorkspace.id}
+            onWorkspaceChange={handleWorkspaceChange}
             navigationRequest={navigationRequest}
             onStorageQuotaChange={handleStorageQuotaChange}
           />
+        ) : (
+          <div className={styles.loadingState}><div><AlertTriangle size={28} /><strong>A projektmunkatér nem tölthető be</strong><span>A munkatér projektkapcsolata hiányos.</span></div></div>
         )}
       </main>
     </div>

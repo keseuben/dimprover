@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";import fs from "node:fs";import path from "node:path";import {fileURLToPath} from "node:url";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");let n=0;const check=(name,fn)=>{fn();n++;console.log(`PASS ${String(n).padStart(2,"0")} ${name}`)};
+const shell=read("components/drive/DriveShell.tsx"), personal=read("components/drive/PersonalDriveWorkspace.tsx"), board=read("components/drive/FloatingProjectBoard.tsx"), list=read("app/api/drive/personal/content/route.ts"), download=read("app/api/drive/personal/content/[refId]/download/route.ts"), repo=read("app/lib/content-core/repository.ts");
+check("DriveShell loads unified workspace API",()=>assert.match(shell,/fetch\("\/api\/drive\/workspaces"/));
+check("DriveShell renders PERSONAL separately from PROJECT",()=>{assert.match(shell,/selectedWorkspace\.type === "PERSONAL"/);assert.match(shell,/<PersonalDriveWorkspace/);assert.match(shell,/<DriveWorkspace/)});
+check("project creation selects project-prefixed workspace id",()=>assert.match(shell,/setSelectedWorkspaceId\(`project:\$\{payload\.project\.id\}`\)/));
+check("workspace options preserve PERSONAL vs PROJECT kind",()=>assert.match(shell,/kind: workspace\.type/));
+check("personal workspace exposes honest USER_ROOT limitation",()=>{assert.match(personal,/USER_ROOT/);assert.match(personal,/mappafa még nincs aktiválva/)});
+check("personal content API requires exact personal entitlement",()=>{assert.match(list,/hasPersonalDriveAccess\(auth\.actor\.userId\)/);assert.match(download,/hasPersonalDriveAccess\(auth\.actor\.userId\)/)});
+check("personal list is owner-scoped",()=>{assert.match(repo,/\.eq\("owner_type", "USER"\)/);assert.match(repo,/\.eq\("owner_user_id", input\.userId\)/)});
+check("personal download is owner-scoped and clean-only",()=>{assert.match(download,/getUserContentItemByRefId\(\{ userId: auth\.actor\.userId, refId \}\)/);assert.match(download,/security_status !== "clean"/);assert.match(download,/virus_scan_status !== "clean"/)});
+check("board selector is workspace-based",()=>{assert.match(board,/workspaceOptions/);assert.match(board,/selectedWorkspaceType/);assert.match(board,/>Munkatér</)});
+check("personal board disables project-only navigation",()=>{assert.match(board,/disabled=\{!projectMode\}/);assert.match(board,/Személyes Kedvencek/);assert.match(board,/személyes Beérkező Drop/)});
+console.log(`DIMPRO AUTH V0.5.0 personal workspace UI contract PASS · ${n}/${n}`);
