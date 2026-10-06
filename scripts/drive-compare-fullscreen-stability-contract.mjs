@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const viewer=readFileSync('components/drive/DriveVisualCompareViewer.tsx','utf8');
+const css=readFileSync('components/drive/DriveWorkspace.module.css','utf8');
+let pass=0; const check=(n,f)=>{f();pass++;console.log(`PASS ${pass}: ${n}`)};
+check('stage width keeps stable previous measurement',()=>assert.match(viewer,/stableStageWidthRef = useRef\(0\)/));
+check('resize observer is requestAnimationFrame coalesced',()=>{assert.match(viewer,/requestAnimationFrame\(commitWidth\)/);assert.match(viewer,/cancelAnimationFrame\(frame\)/)});
+check('sub-4px resize noise does not rerender PDFs',()=>assert.match(viewer,/Math\.abs\(measured - stableStageWidthRef\.current\) < 4/));
+check('fullscreen split stage owns no scrollbar',()=>assert.match(css,/\.visualCompare:fullscreen \.visualCompareStageSplit \{[^}]*overflow: hidden/));
+check('fullscreen panes consume stable stage height',()=>assert.match(css,/\.visualCompare:fullscreen \.visualCompareStageSplit \.visualComparePane \{[^}]*height: 100%/));
+check('pane reserves scrollbar width',()=>assert.match(css,/\.visualComparePane \{[^}]*scrollbar-gutter: stable/));
+console.log(`DRIVE_COMPARE_FULLSCREEN_STABILITY ${pass}/6 PASS`);

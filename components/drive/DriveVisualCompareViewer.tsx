@@ -655,6 +655,7 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
   const leftPdfRef = useRef<SharedPdfDocument | null>(null);
   const rightPdfRef = useRef<SharedPdfDocument | null>(null);
   const renderRunRef = useRef(0);
+  const stableStageWidthRef = useRef(0);
 
   const leftKind = useMemo(() => documentKind(leftDocument), [leftDocument]);
   const rightKind = useMemo(() => documentKind(rightDocument), [rightDocument]);
@@ -895,11 +896,25 @@ export default function DriveVisualCompareViewer({ projectId, workspaceType = "P
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    const update = () => setStageWidth(stage.clientWidth);
-    update();
-    const observer = new ResizeObserver(update);
+    let frame = 0;
+    const commitWidth = () => {
+      frame = 0;
+      const measured = Math.max(0, Math.round(stage.getBoundingClientRect().width));
+      if (!measured || Math.abs(measured - stableStageWidthRef.current) < 4) return;
+      stableStageWidthRef.current = measured;
+      setStageWidth(measured);
+    };
+    const schedule = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(commitWidth);
+    };
+    schedule();
+    const observer = new ResizeObserver(schedule);
     observer.observe(stage);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, []);
 
   useEffect(() => {
