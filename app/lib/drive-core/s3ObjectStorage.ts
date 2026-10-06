@@ -55,6 +55,15 @@ export function buildDriveStorageKey(input: { projectId: string; uploadId: strin
   return `projects/${project}/objects/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${objectName}`;
 }
 
+export function buildPersonalDriveStorageKey(input: { userId: string; uploadId: string; fileName: string }) {
+  const now = new Date();
+  const user = safeSegment(input.userId, "user");
+  const upload = safeSegment(input.uploadId, "upload");
+  const extension = extensionFromFileName(input.fileName);
+  const objectName = extension ? `${upload}.${extension}` : upload;
+  return `users/${user}/objects/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${objectName}`;
+}
+
 export async function createDriveSignedPutUrl(input: {
   storageKey: string;
   mimeType: string;
