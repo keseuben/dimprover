@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       sizeBytes: object.size_bytes,
       sha256: object.sha256,
       sourceSystem: ref.source_system,
+      folderId: ref.folder_id,
       retainedIndependently: ref.retained_independently,
       securityStatus: object.security_status,
       virusScanStatus: object.virus_scan_status,

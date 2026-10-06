@@ -5495,3 +5495,47 @@
 .personalEngineeringHint strong { flex: 0 0 auto; color: #244763; font-size: 11px; }
 :global(html[data-drive-theme="dark"]) .personalEngineeringHint { background: #0d2130; border-color: #29465b; color: #8fa9bb; }
 :global(html[data-drive-theme="dark"]) .personalEngineeringHint strong { color: #c9dce9; }
+
+/* DIMPRO Drive · Personal folder core */
+.personalDriveWorkspaceGrid { display: grid; grid-template-columns: minmax(210px, 270px) minmax(0, 1fr); gap: 12px; align-items: stretch; min-height: 340px; }
+.personalFolderTree { min-width: 0; border: 1px solid #d5e0e9; border-radius: 10px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+.personalFolderTreeHeader { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 9px 7px 12px; border-bottom: 1px solid #e4ebf1; background: #f7fafc; }
+.personalFolderTreeHeader strong { font-size: 11px; color: #38546a; text-transform: uppercase; letter-spacing: .04em; }
+.personalFolderTreeHeader button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #cbd9e5; border-radius: 6px; background: #fff; color: #2e5873; min-height: 28px; padding: 0 8px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.personalFolderRoot, .personalFolderRow { min-height: 34px; display: flex; align-items: center; width: 100%; border: 0; border-bottom: 1px solid #eef3f7; background: transparent; color: #3d586d; }
+.personalFolderRoot { gap: 7px; padding: 0 10px; cursor: pointer; text-align: left; font-size: 12px; font-weight: 700; }
+.personalFolderRowSelected { background: #e9f5fb !important; color: #155d86 !important; }
+.personalFolderChevron { flex: 0 0 22px; width: 22px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: #6a8295; cursor: pointer; padding: 0; }
+.personalFolderChevron:disabled { cursor: default; opacity: .45; }
+.personalFolderChevronSpacer { width: 12px; height: 12px; display: block; }
+.personalFolderMain { flex: 1 1 auto; min-width: 0; min-height: 32px; display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; padding: 0 4px; }
+.personalFolderMain > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.personalFolderEdit { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: #7790a2; cursor: pointer; opacity: 0; }
+.personalFolderRow:hover .personalFolderEdit, .personalFolderEdit:focus-visible { opacity: 1; }
+.personalFolderInlineInput, .personalFolderCreateRow input { min-width: 0; width: 100%; height: 26px; border: 1px solid #75b5d7; border-radius: 5px; background: #fff; color: #24455e; padding: 0 7px; font-size: 12px; outline: none; }
+.personalFolderInlineActions { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
+.personalFolderInlineActions button, .personalFolderCreateRow button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #527083; cursor: pointer; }
+.personalFolderInlineActions button:hover:not(:disabled), .personalFolderCreateRow button:hover:not(:disabled) { background: #e9f3f8; color: #14678f; }
+.personalFolderCreateRow { display: grid; grid-template-columns: 18px minmax(0,1fr) 26px 26px; align-items: center; gap: 3px; padding: 5px 7px 5px 12px; border-bottom: 1px solid #e6edf3; background: #f9fcfe; color: #5c778a; }
+.personalFolderTreeRows { min-height: 80px; max-height: 520px; overflow: auto; }
+.personalFolderTreeEmpty { display: block; padding: 18px 12px; color: #899aa8; font-size: 11px; text-align: center; }
+.personalFilesPane { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.personalFolderBreadcrumb { min-height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #d8e3eb; border-radius: 8px; background: #fbfdff; color: #6d8293; font-size: 11px; }
+.personalFolderBreadcrumb strong { color: #294b64; font-weight: 800; }
+.personalFolderBreadcrumb span:last-child { margin-left: auto; color: #8496a4; }
+.personalFileActions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 220px; }
+.personalFileActions select { max-width: 160px; height: 30px; border: 1px solid #cbd9e4; border-radius: 6px; background: #fff; color: #405f75; padding: 0 7px; font-size: 10px; }
+:global(html[data-drive-theme="dark"]) .personalFolderTree { background: #0d1e2c; border-color: #20394d; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader { background: #102433; border-color: #263e51; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader strong { color: #a7bfd0; }
+:global(html[data-drive-theme="dark"]) .personalFolderTreeHeader button,
+:global(html[data-drive-theme="dark"]) .personalFolderInlineInput,
+:global(html[data-drive-theme="dark"]) .personalFolderCreateRow input,
+:global(html[data-drive-theme="dark"]) .personalFileActions select { background: #102535; border-color: #2d4b60; color: #c1d4e2; }
+:global(html[data-drive-theme="dark"]) .personalFolderRoot,
+:global(html[data-drive-theme="dark"]) .personalFolderRow { border-color: #1a3041; color: #a8bdcc; }
+:global(html[data-drive-theme="dark"]) .personalFolderRowSelected { background: #12344a !important; color: #b8e0f3 !important; }
+:global(html[data-drive-theme="dark"]) .personalFolderCreateRow { background: #0f2231; border-color: #263e51; }
+:global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb { background: #0d1e2c; border-color: #20394d; color: #839bad; }
+:global(html[data-drive-theme="dark"]) .personalFolderBreadcrumb strong { color: #c4d8e6; }
+@media (max-width: 920px) { .personalDriveWorkspaceGrid { grid-template-columns: 1fr; } .personalFolderTreeRows { max-height: 240px; } }

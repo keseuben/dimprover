@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasPersonalDriveAccess } from "@/app/lib/dimpro-auth/repository";
+import { getPersonalFolderCoreReadiness } from "@/app/lib/content-core/repository";
 import { resolveProjectCoreAuth } from "@/app/lib/project-core/auth";
 import { listAccessibleProjects } from "@/app/lib/project-core/store";
 import { normalizeProjectCoreError } from "@/app/lib/project-core/errors";
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
       listAccessibleProjects(auth.actor.userAliases),
       hasPersonalDriveAccess(auth.actor.userId),
     ]);
+    const personalFolderCore = personalDrive ? await getPersonalFolderCoreReadiness() : { ready: false };
     const workspaces = [
       ...(personalDrive ? [{
         id: `personal:${auth.actor.userId}`,
@@ -26,8 +28,8 @@ export async function GET(request: NextRequest) {
         status: "ACTIVE" as const,
         access: "OWNER" as const,
         storageScope: "USER_ROOT" as const,
-        browsing: "LIMITED_ROOT" as const,
-        capabilities: { userRootContent: true, folderTree: false, projectFeatures: false },
+        browsing: personalFolderCore.ready ? "FULL" as const : "LIMITED_ROOT" as const,
+        capabilities: { userRootContent: true, folderTree: personalFolderCore.ready, projectFeatures: false },
       }] : []),
       ...projects.map((project) => ({
         id: `project:${project.id}`,
