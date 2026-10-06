@@ -399,3 +399,32 @@ DEV runtime:
 - PROD DENY.
 
 Contractok: external guest 9/9 PASS, atomic role 8/8 PASS, invitation 25/25 PASS, Drive project integration 16/16 PASS, invite UI 8/8 PASS, project access admin 19/19 PASS, AUTH compatibility 10/10 PASS, security 56/56 PASS, TypeScript/ESLint/build PASS.
+
+## Legacy projektvezető SSO szinkron V0.6.7 – 2026-10-06
+
+Régi DEV pilot projektek esetén előfordult, hogy a Project Core aktív OWNER még `dev-web-user` identityhez tartozott, miközben a valódi központi AUTH felhasználó már exact `DRIVE_PROJECT_MANAGER` projektgranttel rendelkezett. Emiatt a projekt nem jelent meg a valódi user Drive munkaterei között.
+
+V0.6.7-től az SSO callback fail-closed legacy reconciliationt végez:
+- csak központilag engedélyezett external project ID-kből indul;
+- előbb normál `INVITED → ACTIVE` tagságaktiválást próbál;
+- legacy repair csak exact aktív AUTH project scope + `DRIVE_PROJECT_MANAGER` + `project.members.invite` esetén lehetséges;
+- csak olyan projektnél fut, ahol aktív OWNER `user_id = dev-web-user`;
+- ha a központi usernek már van nem visszavont Project Core tagsága, nem készít duplikációt;
+- új OWNER-t nem készít: aktív `PROJECT_MANAGER` tagságot materializál a központi UUID/e-mail identityre;
+- a régi OWNER sor változatlanul megmarad.
+
+Szekszárd DEV projekt authoritative AUTH scope:
+- external project ID: `project-2e0556c5-1cc`;
+- auth project ID: `8b62068b-1b4b-43cc-914a-ba0b4a95c1a5`;
+- központi user: `keseruben@gmail.com` / `2f99c2eb-c777-4ae3-8fff-6d37bea9a94b`;
+- exact `DRIVE_PROJECT_MANAGER` grant létrejött a hivatalos `auth_register_project_scope(...)` bridge-dzsel.
+
+Release:
+- source `2f5ba3cd4907b0ba5fb608dfd162498a076d2060`;
+- build `1VsTANAwbEjuFDwPkhL2R`;
+- artifact SHA-256 `0092b85f92f67e286baad4aa037f7ec2e87e58aeaf43e8172c4aa0d6dea6e38a`;
+- DEV runtime `dimpro-drive-v0913-auth067-legacysync-2f5ba3cd4-p3390`, port 3390;
+- rollback 3389 online;
+- PROD DENY.
+
+Contractok: V0.6.7 legacy manager sync 8/8 PASS, V0.3.2 Drive project integration 16/16 PASS, V0.6.6 external guest 9/9 PASS, atomic role 8/8 PASS, project access admin 19/19 PASS, AUTH compatibility 10/10 PASS, TypeScript/ESLint/build PASS.

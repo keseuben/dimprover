@@ -3636,3 +3636,11 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - DB backup a migráció előtt: `/var/backups/dimpro-auth/dimpro_auth_dev_before_008_20261006T202654Z.dump`, SHA-256 `57b426bb12ebdd359026cdc19516d889fe7086fa4e0d842ceb6f41b522038a4b`.
 - Aktív Drive DEV source `91af6c0ce6d67ffb1a0936169de8b32d2dabe1b8`, build `a2g_UI-EVVWDIEJyw8kY1`, artifact SHA-256 `9c31a103e8e5c14430fb2eb7c2899cce9169a7654b63e25271c11d892adcf0dc`, port 3389.
 - 3388 rollback online; PROD DENY.
+
+### AUTH/Drive V0.6.7 – legacy project manager SSO reconciliation
+
+- Régi `dev-web-user` OWNER-rel rendelkező DEV projektekhez a központi exact `DRIVE_PROJECT_MANAGER` grant alapján az SSO callback aktív `PROJECT_MANAGER` Project Core tagságot tud materializálni.
+- A repair csak exact project scope, manager role és `project.members.invite` permission esetén fut; duplikált tagságot és OWNER-átírást nem végez.
+- Szekszárd projekt AUTH scope regisztrálva a központi `keseruben@gmail.com` identityhez.
+- Source `2f5ba3cd4907b0ba5fb608dfd162498a076d2060`, build `1VsTANAwbEjuFDwPkhL2R`, artifact SHA-256 `0092b85f92f67e286baad4aa037f7ec2e87e58aeaf43e8172c4aa0d6dea6e38a`, DEV 3390.
+- Rollback 3389 online; PROD DENY.
