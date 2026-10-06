@@ -67,14 +67,14 @@ BEGIN
 
   UPDATE public.auth_access_grants grant_row
      SET revoked_at=now()
-    FROM public.auth_roles current_role
-   WHERE grant_row.role_id=current_role.id
+    FROM public.auth_roles existing_role
+   WHERE grant_row.role_id=existing_role.id
      AND grant_row.user_id=p_target_user_id
      AND grant_row.product_id=v_product_id
      AND grant_row.project_id=p_project_id
      AND grant_row.revoked_at IS NULL
-     AND current_role.code IN ('DRIVE_PROJECT_MEMBER','DRIVE_PROJECT_MANAGER')
-     AND current_role.id<>v_role_id;
+     AND existing_role.code IN ('DRIVE_PROJECT_MEMBER','DRIVE_PROJECT_MANAGER')
+     AND existing_role.id<>v_role_id;
 
   -- Expired/future-dated grants still participate in the active-scope unique index
   -- while revoked_at is null. Revoke an unusable same-role row before inserting a
