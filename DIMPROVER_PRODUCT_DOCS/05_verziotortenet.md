@@ -3625,3 +3625,14 @@ A Developer Grid foundation alapértelmezett authoritative forrása a `feature/b
 - Source `6e16db6f45f314fb785fa4ff7a08238d4ac0c901`, build `9BFKy9I7kt4BnDpAjsNTm`, artifact SHA-256 `8f4cd61d9542b5de1da0bdde171f0bc5db3add55f0227e9ba46fdd93dc22214e`, DEV 3388.
 - Core 7/7, UI 8/8, fullscreen 6/6, PDF guard 7/7, ProjectGate compare 10/10, ACL 18/18, Personal BOX 14/14 PASS; TypeScript/ESLint/build PASS.
 - PROD DENY.
+
+### AUTH/Drive V0.6.6 – külsős projektmegosztás hardening
+
+- Projekt-only meghívott továbbra sem kap Saját Drive hozzáférést; exact `drive.project.access` scope marad az authoritative kapu.
+- Meghívás előtti/utáni részfolyamatok kompenzációs rollbacket kaptak, így AUTH-hiba vagy e-mailkézbesítési hiba nem hagy új aktív vagy függő hozzáférést féloldalasan.
+- Projekt-only külsős új projektet nem hozhat létre; a szerver és a Drive UI egyaránt blokkolja.
+- Új AUTH migration 008: atomi `auth_set_project_access_role(...)` exact-scope szerepkörváltás; a korábbi revoke + technikai meghívó + auto-accept láncot kiváltja.
+- DEV AUTH migrationCount 8, migration SHA-256 `1f140ec9460842d95a0acac81a4ad8a7e6689b47c2386567a2599645ef76105c`.
+- DB backup a migráció előtt: `/var/backups/dimpro-auth/dimpro_auth_dev_before_008_20261006T202654Z.dump`, SHA-256 `57b426bb12ebdd359026cdc19516d889fe7086fa4e0d842ceb6f41b522038a4b`.
+- Aktív Drive DEV source `91af6c0ce6d67ffb1a0936169de8b32d2dabe1b8`, build `a2g_UI-EVVWDIEJyw8kY1`, artifact SHA-256 `9c31a103e8e5c14430fb2eb7c2899cce9169a7654b63e25271c11d892adcf0dc`, port 3389.
+- 3388 rollback online; PROD DENY.

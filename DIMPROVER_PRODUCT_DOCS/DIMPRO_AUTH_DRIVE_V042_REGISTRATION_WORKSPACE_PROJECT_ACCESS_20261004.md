@@ -366,3 +366,36 @@ Artifact SHA-256: `3dd41a8784fb55c1ebdf7bede00844402eb87957e8efe421d8b923d3f2813
 
 DEV aktiválás: Drive `127.0.0.1:3379`; publikus header: `3e8bf767 DRIVE V0.9.13 AUTH V0.6.1 SHARED PERSONAL SURFACE + PERSONAL FOLDERS + SSO TERMINAL + DESKTOP SCAN AUTH DEV`.
 Rollback: V0.6.0 `59e13dea / 3378` online maradt. AUTH V0.4.4 változatlan. PROD DENY.
+
+## Külsős projektmeghívás hardening V0.6.6 – 2026-10-06
+
+A projekt-only külsős hozzáférés authoritative szabályai:
+- a meghívás Project Core oldalon kizárólag `INVITED` tagságot készít;
+- az AUTH meghívás elfogadása exact projekt scope-ú `drive.project.access` grantet ad, személyes `drive.personal.access` grantet nem;
+- az SSO callback csak a központilag ténylegesen engedélyezett külső projektazonosítókat aktiválja `INVITED → ACTIVE` állapotra és a központi user ID-hoz köti;
+- a projekt-only meghívott munkatérlistájában nincs Saját Drive; a Drive Shell az első elérhető projektmunkateret választja;
+- projekt-only felhasználó új projektet nem hozhat létre. Átmeneti fail-closed szabály szerint projektlétrehozás csak külön Saját Drive entitlement mellett engedélyezett; később ez külön csomag-/`project.create` entitlementre cserélhető;
+- meghíváskészítés közbeni AUTH-hiba esetén az új Project Core `INVITED` tagság kompenzációsan visszavonódik, így nem marad szellemtag;
+- e-mail kézbesítési hiba esetén az AUTH meghívás és az új Project Core meghívott tagság is visszavonódik;
+- aktív tag eltávolítása exact AUTH projektgrant visszavonással és Project Core tagság-visszavonással történik;
+- `PROJECT_MANAGER ↔ normál projekttag` AUTH szerepkörváltás a 008 migráció `auth_set_project_access_role(...)` SECURITY DEFINER függvényével egyetlen PostgreSQL tranzakcióban történik;
+- `CONTRIBUTOR`, `REVIEWER`, `VIEWER` központi AUTH szinten `DRIVE_PROJECT_MEMBER`, a részletes dokumentum-/projektműveleti jogokat a Project Core szerepkör adja;
+- mappa ACL és jelszóvédelem a Project Core `document.read` alapjog után további, fail-closed réteg marad.
+
+AUTH DB:
+- migration `008_auth_v045_project_access_role_atomic.sql`;
+- SHA-256 `1f140ec9460842d95a0acac81a4ad8a7e6689b47c2386567a2599645ef76105c`;
+- DEV migrationCount `8`;
+- `dimpro_auth_app_dev` EXECUTE: igen;
+- PUBLIC EXECUTE: nem;
+- migráció előtti teljes DEV backup: `/var/backups/dimpro-auth/dimpro_auth_dev_before_008_20261006T202654Z.dump`, SHA-256 `57b426bb12ebdd359026cdc19516d889fe7086fa4e0d842ceb6f41b522038a4b`.
+
+DEV runtime:
+- source `91af6c0ce6d67ffb1a0936169de8b32d2dabe1b8`;
+- build `a2g_UI-EVVWDIEJyw8kY1`;
+- artifact SHA-256 `9c31a103e8e5c14430fb2eb7c2899cce9169a7654b63e25271c11d892adcf0dc`;
+- Drive port `3389`;
+- rollback `3388` online;
+- PROD DENY.
+
+Contractok: external guest 9/9 PASS, atomic role 8/8 PASS, invitation 25/25 PASS, Drive project integration 16/16 PASS, invite UI 8/8 PASS, project access admin 19/19 PASS, AUTH compatibility 10/10 PASS, security 56/56 PASS, TypeScript/ESLint/build PASS.
